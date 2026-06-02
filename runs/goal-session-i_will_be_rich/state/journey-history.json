@@ -1,0 +1,87 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "Watch a ticker and see the live tape cockpit",
+      "status": "failing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_rich-iter-0",
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Buyer-control scenario is identified",
+      "status": "failing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_rich-iter-0",
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Seller-control scenario is identified",
+      "status": "failing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_rich-iter-0",
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Bid absorption is detected (price impact, not aggression)",
+      "status": "failing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_rich-iter-0",
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "Ask absorption is detected (price impact, not aggression)",
+      "status": "failing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_rich-iter-0",
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Unclear / choppy tape is reported as unclear",
+      "status": "failing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_rich-iter-0",
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "Tape-state transitions are announced in the event log and observations",
+      "status": "failing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_rich-iter-0",
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "REST and the live UI agree (single source of truth)",
+      "status": "failing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_rich-iter-0",
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "Stop watching a ticker",
+      "status": "failing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_rich-iter-0",
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-06-02T18:59:36Z"
+}

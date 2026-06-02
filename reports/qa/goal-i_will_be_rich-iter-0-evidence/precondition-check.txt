@@ -1,0 +1,22 @@
+Precondition check — goal-i_will_be_rich-iter-0 (baseline, verify-only)
+Date: 2026-06-02
+Agent: browser-qa-agent
+
+Frontend URL probed: http://localhost:3650
+  curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:3650
+  => HTTP 000 (connection refused — no listener on :3650)
+
+Frontend application directory:
+  /home/dennisccy/Git/tapeology/apps/frontend  => DOES NOT EXIST
+  /home/dennisccy/Git/tapeology/apps           => DOES NOT EXIST
+  node_modules                                 => N/A (no frontend app scaffolded)
+
+Conclusion:
+  Frontend is not running because no frontend application exists yet. This is the
+  expected greenfield baseline for iteration 0 (verify-only) — the iter spec confirms
+  the repository contains no product implementation, only the incredible_auto_dev/
+  dev-chain framework subtree. There is no app to npm-install or start.
+
+  No browser automation was attempted (Chrome MCP not exercised). All nine Must-have
+  user journeys (J-01..J-09) are recorded as SKIPPED. This is the correct, honest
+  baseline signal, not a defect to fix this iteration.
