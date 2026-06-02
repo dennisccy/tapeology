@@ -1,0 +1,28 @@
+# UT-08 REST cross-check evidence (captured 2026-06-02T21:41:55Z)
+## GET http://localhost:8650/tape/SIM-BUYER/state
+{
+    "ticker": "SIM-BUYER",
+    "scenario": "buyer_control",
+    "tape_state": "buyer_control",
+    "confidence": 0.8882575757575817,
+    "warm": true,
+    "stream_status": "closed",
+    "timestamp": 2499.5
+}
+
+## GET http://localhost:8650/tape/SIM-BUYER/features (30s primary window)
+{
+  "ticker": "SIM-BUYER",
+  "primary_window": "30s",
+  "30s": {
+    "trade_speed": 2.033333333333333,
+    "volume_speed": 513.3333333333334,
+    "aggressive_buy_ratio": 0.9545454545454546,
+    "aggressive_sell_ratio": 0.045454545454545456,
+    "net_aggressive_volume": 14000.0,
+    "buy_price_impact": 0.39000000000000057,
+    "sell_price_impact": -0.11999999999999034,
+    "average_spread": 0.019999999999998585,
+    "large_print_count": 8.0
+  }
+}

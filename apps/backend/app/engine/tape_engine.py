@@ -51,7 +51,7 @@ class TapeEngine:
     def process_event(self, event: Event) -> EngineSnapshot:
         if isinstance(event, QuoteEvent):
             self._market.update_quote(event)
-            self._features.add_quote(event.timestamp, event.ask - event.bid)
+            self._features.add_quote(event.timestamp, self._market.spread)
         elif isinstance(event, TradeEvent):
             # The quote already in MarketState is the one in effect at this trade's ts,
             # because events arrive in logical-timestamp order (quote before trade).

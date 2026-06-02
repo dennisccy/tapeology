@@ -4,21 +4,21 @@
       "id": "J-01",
       "name": "Watch a ticker and see the live tape cockpit",
       "status": "partial",
-      "last_verified_iter": "goal-i_will_be_rich-iter-1",
+      "last_verified_iter": "goal-i_will_be_rich-iter-2",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-1-qa.md",
-      "notes": "Backend half verified live (all panel-feeding endpoints + WS serve correct values; production build clean; six panels built/wired per source review). In-browser render & live-WS-update NOT verified — browser-qa-agent SKIPPED all 18 UI tests (frontend dev server HTTP 500, corrupted Next .next cache). No journey screenshot exists. Must be browser-verified next iteration."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-2-evidence/UT-02-result.png",
+      "notes": "MAJOR ADVANCE over iter-1's backend-only partial: the cockpit is now FULLY browser-rendered (HTTP 200, iter-1 500-trap closed) and ALL data/behavior assertions are screenshot-proven — six panels populate with live numeric values, spread=ask-bid (0.02), and values update over WebSocket WITHOUT a page reload (Last 115.19->122.62, Bid 115.18->122.60 across captures; href constant). On scenario end (stream_status:closed) the UI correctly FROZE the final snapshot (no fabricated post-stream updates). Blocked from `passing` ONLY by a real, root-caused CSS color-semantics defect: .text-emerald-400 / .bg-emerald-500 are absent from the served Tailwind bundle (dynamic-only classes from lib/format.ts never safelisted), so the headline 'Buyer Control' state color and the confidence-bar fill render colorless (slate/transparent) instead of green — degrading the at-a-glance cockpit's stated design-direction color language. Promote to `passing` after the safelist fix + browser re-verify shows the color layer green."
     },
     "J-02": {
       "id": "J-02",
       "name": "Buyer-control scenario is identified",
       "status": "partial",
-      "last_verified_iter": "goal-i_will_be_rich-iter-1",
+      "last_verified_iter": "goal-i_will_be_rich-iter-2",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-1-qa.md",
-      "notes": "Backend verified live: buyer_control @ conf 0.863, buy_price_impact +0.44, aggressive_buy_ratio 0.913, event_log=['Tape state changed to buyer_control']; scenario + price-impact-guard unit tests pass. UI read of the same NOT verified in browser (browser QA SKIPPED)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-2-evidence/UT-05-result.png",
+      "notes": "Data/behavior fully browser-proven (screenshot-backed): tape state settles on buyer_control @ confidence 0.888 (>= threshold); aggressive_buy_ratio 0.955 (high); buy_price_impact +0.390 (POSITIVE — price-impact guard intact, NOT relaxed); Event Log shows exactly 'Tape state changed to buyer_control'. Blocked from `passing` ONLY by the shared emerald CSS defect: the browser sub-test UT-06 FAILED on its explicit color assertion (the 'Buyer Control' headline and the positive buy_price_impact value compute slate-200 rgb(226,232,240), not emerald). The classification substance is correct; only the green color layer is broken. Promote after the safelist fix + browser re-verify."
     },
     "J-03": {
       "id": "J-03",
@@ -27,7 +27,8 @@
       "last_verified_iter": "goal-i_will_be_rich-iter-0",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
+      "notes": "Not built yet. NOTE: the emerald CSS defect's sibling (bg-rose-500 confidence-bar fill — also a dynamic-only format.ts class) will be latent for seller_control's bar unless the safelist fix covers it; fix the color layer before building J-03."
     },
     "J-04": {
       "id": "J-04",
@@ -36,7 +37,8 @@
       "last_verified_iter": "goal-i_will_be_rich-iter-0",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
+      "notes": "Not built yet. COLOR-CRITICAL: absorption is shown in amber/neutral (text-amber-400 / bg-amber-500) — both dynamic-only format.ts classes, latent-broken by the same root cause as the emerald defect. The safelist fix MUST include amber before this journey lands, or absorption will render colorless and be visually indistinguishable from control."
     },
     "J-05": {
       "id": "J-05",
@@ -45,7 +47,8 @@
       "last_verified_iter": "goal-i_will_be_rich-iter-0",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
+      "notes": "Not built yet. COLOR-CRITICAL (same as J-04): amber absorption color is latent-broken; safelist fix must cover text-amber-400 / bg-amber-500."
     },
     "J-06": {
       "id": "J-06",
@@ -54,7 +57,8 @@
       "last_verified_iter": "goal-i_will_be_rich-iter-0",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
+      "notes": "Not built yet. unclear is shown in amber/neutral — latent-broken by the same dynamic-Tailwind root cause; safelist fix must cover amber."
     },
     "J-07": {
       "id": "J-07",
@@ -63,17 +67,18 @@
       "last_verified_iter": "goal-i_will_be_rich-iter-0",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
+      "notes": "Not built yet. The 'Tape state changed to buyer_control' transition line already renders in the Event Log (seen in iter-2 screenshots), but the full cross-state transition taxonomy (cold-start unclear -> resolved state, absorption messages) is unverified."
     },
     "J-08": {
       "id": "J-08",
       "name": "REST and the live UI agree (single source of truth)",
-      "status": "partial",
-      "last_verified_iter": "goal-i_will_be_rich-iter-1",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-2",
+      "last_passing_iter": "goal-i_will_be_rich-iter-2",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-1-qa.md",
-      "notes": "REST half verified live: /state and /summary agree from one snapshot, spread=ask-bid produced once in MarketState; UI-renders-verbatim confirmed by source + coherence audit Part A. Live UI-vs-REST browser comparison NOT executed (browser QA SKIPPED)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-2-evidence/UT-08-result.png",
+      "notes": "FIRST FULLY-GREEN Must-have journey. Browser-proven exact agreement between the UI and GET /tape/SIM-BUYER/state + /features across 11 metrics (tape_state buyer_control; confidence UI 0.888 == REST 0.8882; aggressive_buy_ratio 0.955==0.9545; net_aggressive_volume 14000; buy_price_impact 0.390; sell_price_impact -0.120; average_spread 0.020; trade_speed 2.03/s; etc.), UI 30s window == REST primary_window. Clean UT-08 PASS, no caveat. The emerald CSS defect is provably irrelevant to value agreement (a colorless number is the same number). Reinforced this iteration: the tape_engine.py:54 cleanup removed the duplicate inline ask-bid so spread now has exactly one canonical producer (MarketState.spread) — coherence Part A PASS. Evidence also: UT-08-rest-json.txt, TC-10-rest-state.json, TC-10-rest-features.json."
     },
     "J-09": {
       "id": "J-09",
@@ -82,9 +87,10 @@
       "last_verified_iter": "goal-i_will_be_rich-iter-0",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
+      "notes": "Not built yet (no DELETE /watch UI). The deferred stream-status-dot coherence advisory (drive the top-bar dot from snapshot.stream_status instead of client connStatus) MUST be folded into this iteration or J-04/J-05 — it was reconfirmed open in iter-2 (REST stream_status:closed while dot still read 'live')."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-06-02T20:50:21Z"
+  "updated_at": "2026-06-02T22:06:18Z"
 }

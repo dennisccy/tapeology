@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-i_will_be_rich-iter-2",
+  "base_url": "http://localhost:3650",
+  "iteration": 2,
+  "default_timeout_ms": 10000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open Tapeology",
+      "narration": "Open Tapeology and you land on a clean cockpit that is waiting for a ticker. Nothing is invented yet — until you choose something to watch, it honestly says there is no ticker.",
+      "point_out": "The centered \"No ticker watched\" prompt with the \"Try: SIM-BUYER\" hint, and the footer line reminding you this is descriptive only — not trading advice.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Enter a ticker",
+      "narration": "Type SIM-BUYER into the ticker box — the built-in scenario we will read live off the tape.",
+      "point_out": "The ticker box now reads SIM-BUYER, ready to watch.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "Watch the live tape",
+      "narration": "Click Watch and the whole cockpit comes alive — six panels fill at once with real, live numbers streaming straight from the engine.",
+      "point_out": "Quote (bid, ask, spread, last), Recent Trades, Features, Tape State, Observations, and the Event Log all populate together — no spinner, no placeholder dashes.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Watching" }
+    },
+    {
+      "n": 4,
+      "title": "The tape reads Buyer Control",
+      "narration": "Give it a moment and the tape resolves to Buyer Control at high confidence. Notice the numbers climbed on their own — no page reload — arriving continuously over the live stream.",
+      "point_out": "Tape State reads \"Buyer Control\" with the confidence bar nearly full; the Features panel shows a high aggressive-buy ratio and a positive buy price impact (genuine control, not just noise); the Event Log records \"Tape state changed to buyer_control\".",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "timeout_ms": 15000,
+      "action": { "type": "wait_for", "ms": 4000 },
+      "expect": { "text": "Buyer Control" }
+    },
+    {
+      "n": 5,
+      "title": "One source of truth",
+      "narration": "Every number on screen is read straight from the engine — open the same ticker's data endpoint and the state, confidence, and features match exactly. There is never a second, disagreeing copy.",
+      "point_out": "The on-screen tape state, confidence, and feature values mirror the API readings for SIM-BUYER one for one.",
+      "journey": "J-08",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "wait_for", "ms": 600 }
+    },
+    {
+      "n": 6,
+      "title": "Try an unknown ticker",
+      "narration": "Now the honesty test: type NOPE_UNKNOWN, a ticker that does not exist, and try to watch it.",
+      "point_out": "The ticker box now reads NOPE_UNKNOWN.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "NOPE_UNKNOWN" }
+    },
+    {
+      "n": 7,
+      "title": "Honest about bad input",
+      "narration": "Tapeology refuses to fake it. An unknown ticker gets a clear message and the cockpit stays calm — no crash, no blank screen, and crucially no made-up tape.",
+      "point_out": "A red message under the top bar explains the ticker is not known; the idle prompt returns and you can immediately try a valid ticker again.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "not a known simulated ticker" }
+    }
+  ]
+}

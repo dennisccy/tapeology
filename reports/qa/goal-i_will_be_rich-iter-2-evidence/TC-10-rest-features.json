@@ -1,0 +1,61 @@
+{
+    "ticker": "SIM-BUYER",
+    "primary_window": "30s",
+    "windows": {
+        "10s": {
+            "trade_speed": 2.1,
+            "volume_speed": 530.0,
+            "aggressive_buy_ratio": 1.0,
+            "aggressive_sell_ratio": 0.0,
+            "net_aggressive_volume": 5300.0,
+            "buy_price_impact": 0.09000000000000341,
+            "sell_price_impact": 0.0,
+            "average_spread": 0.01999999999999805,
+            "large_print_count": 3.0
+        },
+        "30s": {
+            "trade_speed": 2.033333333333333,
+            "volume_speed": 553.3333333333334,
+            "aggressive_buy_ratio": 0.9879518072289156,
+            "aggressive_sell_ratio": 0.012048192771084338,
+            "net_aggressive_volume": 16200.0,
+            "buy_price_impact": 0.28000000000000114,
+            "sell_price_impact": -0.01999999999999602,
+            "average_spread": 0.019999999999999282,
+            "large_print_count": 11.0
+        },
+        "60s": {
+            "trade_speed": 2.0166666666666666,
+            "volume_speed": 563.3333333333334,
+            "aggressive_buy_ratio": 0.9585798816568047,
+            "aggressive_sell_ratio": 0.04142011834319527,
+            "net_aggressive_volume": 31000.0,
+            "buy_price_impact": 0.6799999999999642,
+            "sell_price_impact": -0.13999999999997215,
+            "average_spread": 0.019999999999999074,
+            "large_print_count": 23.0
+        },
+        "180s": {
+            "trade_speed": 2.0055555555555555,
+            "volume_speed": 538.3333333333334,
+            "aggressive_buy_ratio": 0.9411764705882353,
+            "aggressive_sell_ratio": 0.058823529411764705,
+            "net_aggressive_volume": 85500.0,
+            "buy_price_impact": 2.359999999999957,
+            "sell_price_impact": -0.6999999999999602,
+            "average_spread": 0.019999999999999563,
+            "large_print_count": 67.0
+        },
+        "300s": {
+            "trade_speed": 2.0033333333333334,
+            "volume_speed": 567.3333333333334,
+            "aggressive_buy_ratio": 0.9435957696827262,
+            "aggressive_sell_ratio": 0.0564042303172738,
+            "net_aggressive_volume": 151000.0,
+            "buy_price_impact": 3.899999999999963,
+            "sell_price_impact": -1.1999999999999602,
+            "average_spread": 0.01999999999999971,
+            "large_print_count": 130.0
+        }
+    }
+}
