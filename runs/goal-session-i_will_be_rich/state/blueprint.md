@@ -1,6 +1,6 @@
 # Tapeology — Coherence Blueprint
 
-> Goal session: `i_will_be_rich` · Status: **DRAFT (baseline iter 0) — awaiting human approval before any feature is built.**
+> Goal session: `i_will_be_rich` · Status: **APPROVED — human-approved after baseline iter 0 (`state/blueprint.approved` present); in force from iteration 1. Additive edits only thereafter.**
 > Source: `docs/goal.md` (Product Shape, Must-have journeys, Key Capabilities, Canonical values).
 
 **Governing principle.** Tapeology is a single-ticker **tape cockpit**. Every tape state,

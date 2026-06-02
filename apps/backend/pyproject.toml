@@ -1,0 +1,9 @@
+[project]
+name = "tapeology-backend"
+version = "0.1.0"
+description = "Tapeology — single-ticker tape-reading engine and API (Phase 1, simulated)."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

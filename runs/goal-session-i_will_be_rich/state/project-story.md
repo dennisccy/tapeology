@@ -1,15 +1,17 @@
 # Project story so far
 
-Tapeology is a real-time tape-reading tool for US stocks: you give it one ticker, and it watches the live order flow and tells you what the tape is doing right now — and how confident it is.
+Tapeology is a real-time tape-reading tool for a single US stock: you give it one ticker and it watches the live order flow and tells you what the tape is doing right now — whether buyers or sellers are in control, whether aggression is being quietly absorbed, or whether it's simply unclear — and how confident it is.
 
 ## How it has grown
 
-The project has just begun. In this first round, the team took stock of the starting point and confirmed it is a clean slate — none of the product has been built yet. They also drafted and locked down the blueprint for how it will be laid out: a single live "tape cockpit" screen that shows one stock at a time, with one trustworthy source for every number on it, so the same stock can never show two different readings. That blueprint is now waiting for a person to approve it before any building starts.
+The project began by taking stock of a clean slate and locking down a blueprint: a single live "tape cockpit" screen showing one stock at a time, with one trustworthy source for every number, so the same stock can never show two different readings — a blueprint a person then approved before any building started.
 
-Right now there is nothing for a user to try. The next round will build the foundation so someone can watch a stock and get a live read — whether buyers or sellers are in control, whether the tape is just choppy and unclear, and (the heart of the idea) whether heavy buying or selling is actually moving the price or is quietly being absorbed. That foundation is the next milestone the team is targeting.
+This round delivered the first real build — the whole foundation, end to end. You can now watch a built-in sample stock ("SIM-BUYER"): type its name, click Watch, and the screen fills with a live read of the trading activity — current buy/sell prices, a running list of recent trades, named tape measurements, plain-language notes, an event log, and an overall call of who's in control with a confidence score, all updating on their own without reloading. For the buyer sample, the screen settles on "Buyer Control." Crucially, the system was built honest from the start: it only says buyers are in control when aggressive buying is genuinely pushing the price up — heavy buying that isn't moving the price won't be mislabeled — and it refuses to invent data, returning a clear error for a stock it doesn't recognize rather than faking numbers.
+
+Right now this first read is fully proven on the engine side, but the on-screen version still needs one more automated browser check before it's confirmed — a stuck developer tool blocked that check this round, so it's the very next thing on the list. After that, the team will teach the system to recognize the mirror case — when sellers are in control — and then the subtler "absorption" cases at the heart of the idea, where heavy trading is quietly soaked up without moving the price.
 
 ## What it can do today
 
-The product is at its starting line — there is nothing for a user to do yet. The first capability being built is watching a single stock and reading its live tape state: whether buyers or sellers are in control, whether aggressive trading is being absorbed, or whether the tape is simply unclear.
+The product lets a user watch one built-in sample stock and see a live read of its trading activity — current buy/sell prices, recent trades, named tape measurements, plain-language observations, an event log, and an overall "who's in control" call with a confidence score — and for the buyer sample it correctly reads "Buyer Control," with everything updating live and no fabricated data. This first read is proven on the engine side and awaiting a final on-screen confirmation.
 
-_Last updated: 2026-06-02 after iteration 0._
+_Last updated: 2026-06-02 after iteration 1._

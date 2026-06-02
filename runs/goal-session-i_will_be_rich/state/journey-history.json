@@ -3,20 +3,22 @@
     "J-01": {
       "id": "J-01",
       "name": "Watch a ticker and see the live tape cockpit",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "status": "partial",
+      "last_verified_iter": "goal-i_will_be_rich-iter-1",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-1-qa.md",
+      "notes": "Backend half verified live (all panel-feeding endpoints + WS serve correct values; production build clean; six panels built/wired per source review). In-browser render & live-WS-update NOT verified — browser-qa-agent SKIPPED all 18 UI tests (frontend dev server HTTP 500, corrupted Next .next cache). No journey screenshot exists. Must be browser-verified next iteration."
     },
     "J-02": {
       "id": "J-02",
       "name": "Buyer-control scenario is identified",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "status": "partial",
+      "last_verified_iter": "goal-i_will_be_rich-iter-1",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-1-qa.md",
+      "notes": "Backend verified live: buyer_control @ conf 0.863, buy_price_impact +0.44, aggressive_buy_ratio 0.913, event_log=['Tape state changed to buyer_control']; scenario + price-impact-guard unit tests pass. UI read of the same NOT verified in browser (browser QA SKIPPED)."
     },
     "J-03": {
       "id": "J-03",
@@ -66,11 +68,12 @@
     "J-08": {
       "id": "J-08",
       "name": "REST and the live UI agree (single source of truth)",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "status": "partial",
+      "last_verified_iter": "goal-i_will_be_rich-iter-1",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt"
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-1-qa.md",
+      "notes": "REST half verified live: /state and /summary agree from one snapshot, spread=ask-bid produced once in MarketState; UI-renders-verbatim confirmed by source + coherence audit Part A. Live UI-vs-REST browser comparison NOT executed (browser QA SKIPPED)."
     },
     "J-09": {
       "id": "J-09",
@@ -83,5 +86,5 @@
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-06-02T18:59:36Z"
+  "updated_at": "2026-06-02T20:50:21Z"
 }
