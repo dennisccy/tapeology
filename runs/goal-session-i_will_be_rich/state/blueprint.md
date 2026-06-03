@@ -68,7 +68,11 @@ absorption triplet `absorption_score` / `bid_refresh_score` / `ask_refresh_score
 remaining `spread_change` / `liquidity_imbalance` (+ later `liquidity_pull_score`) follow in their
 owning iterations — same producer, same endpoint, no new row. All five tape states (`buyer_control`
 / `seller_control` / `bid_absorption` / `ask_absorption` / `unclear`) are already-enumerated values
-of the Tape-state row, produced once by `TapeStateClassifier` and served by `/state`.
+of the Tape-state row, produced once by `TapeStateClassifier` and served by `/state`. As of **iter-6**
+the `unclear` state is demonstrated against an **actively-driven** `SIM-CHOP` stream (mixed two-sided
+aggression, wide/jittery spread, no clean price impact) — completing the five-state taxonomy on driven
+data; this adds only provider scenario data + tests (no new contract row, no classifier/config change,
+no nav change).
 
 **Singularity rules (coherence guardrails).**
 - Tape state, confidence, and each feature have exactly **one producer** (the engine). REST, WS,

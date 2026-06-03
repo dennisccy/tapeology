@@ -4,93 +4,93 @@
       "id": "J-01",
       "name": "Watch a ticker and see the live tape cockpit",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-5",
-      "last_passing_iter": "goal-i_will_be_rich-iter-5",
+      "last_verified_iter": "goal-i_will_be_rich-iter-6",
+      "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-5-evidence/TC-05-buyer-control.png",
-      "notes": "Held PASSING — re-verified iter-5 as a required-still-passing regression guard after the absorption pair landed. SIM-BUYER still renders all six panels live over WebSocket (Quote bid 116.07/ask 116.09/spread 0.02=ask-bid/last 116.07; recent trades with price/size/side; 30s features; tape state Buyer Control @ 0.874; observations; event log) with no reload (status Live). The two new absorption gates are inserted AFTER the control gates and BEFORE unclear and are mutually exclusive with control on the impact condition, so buyer classification is unperturbed (absorption_score reads 0.000 on SIM-BUYER). Evidence: TC-05-buyer-control.png (also UT-07)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-11-cold-transition-buyer.png",
+      "notes": "Held PASSING — re-verified iter-6 as a required-still-passing regression guard during the chop/transition work (frontend byte-untouched; git diff apps/frontend == 0 lines). SIM-BUYER renders all six panels live (Tape State 'Buyer Control', Quote bid 100.74/ask 100.76/spread 0.02=ask-bid/last 100.76, Recent Trades with price/size/side, 30s Features, Observations, Event Log) with a 'Live' dot and no reload. The chop work touched only simulated.py (provider data) + tests, so the cockpit render path is unperturbed. Evidence: TC-11-cold-transition-buyer.png (also UT-14, UT-12-14-sim-buyer.png)."
     },
     "J-02": {
       "id": "J-02",
       "name": "Buyer-control scenario is identified",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-5",
-      "last_passing_iter": "goal-i_will_be_rich-iter-5",
+      "last_verified_iter": "goal-i_will_be_rich-iter-6",
+      "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-5-evidence/TC-05-buyer-control.png",
-      "notes": "Held PASSING — re-verified iter-5; the keystone NO-MISROUTE guard. SIM-BUYER stays buyer_control @ 0.874 (>= reasonable_confidence): aggressive_buy_ratio 0.946 high, buy_price_impact positive (price walked up to 116.07), headline green emerald (text-emerald-400 rgb(52,211,153) per UT-07), NOT amber, NOT 'Ask Absorption', absorption_score 0.000. The ask_absorption gate (buy_impact < min_buy_price_impact) is the exact complement of the buyer gate (buy_impact >= min_buy_price_impact), so a real upward walk routes to control and cannot also be absorption (unit guard: test_high_buy_aggression_with_real_rise_is_buyer_not_ask_absorption). Evidence: TC-05-buyer-control.png, UT-07-buyer.png."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-11-cold-transition-buyer.png",
+      "notes": "Held PASSING — re-verified iter-6; the keystone NO-MISROUTE guard. SIM-BUYER stays buyer_control @ 0.870 (>= reasonable_confidence 0.60): aggressive_buy_ratio 0.925 high, buy_price_impact +0.460 POSITIVE (price walked up to 100.76), headline emerald (text-emerald-400 rgb(52,211,153), computed-style), NOT amber/absorption, absorption_score 0.000. The contrast this iter is decisive: buyer +0.460 impact -> control; chop 0.000 impact + balanced ratios -> unclear; bidabs/askabs high one-sided aggression + flat price -> absorption. Price-impact-not-aggression positively reconfirmed three ways on screen. Classifier.py byte-untouched. Evidence: TC-11-cold-transition-buyer.png, UT-12-14-sim-buyer.png."
     },
     "J-03": {
       "id": "J-03",
       "name": "Seller-control scenario is identified",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-5",
-      "last_passing_iter": "goal-i_will_be_rich-iter-5",
+      "last_verified_iter": "goal-i_will_be_rich-iter-6",
+      "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-5-evidence/TC-06-seller-control.png",
-      "notes": "Held PASSING — re-verified iter-5; the keystone NO-MISROUTE guard and the live contrast that proves the whole product thesis. SIM-SELLER stays seller_control @ 0.899 (>= threshold): aggressive_sell_ratio 0.971 high, sell_price_impact NEGATIVE (price fell to ~80.82), headline rose (text-rose-400 rgb(251,113,133) per UT-08), NOT amber, NOT 'Bid Absorption', bid_refresh_score 0.055 low, absorption_score 0.000. Contrast with SIM-BIDABS (same high sell ratio 1.000 but sell_price_impact 0.000 flat + bid_refresh_score 1.000 -> bid_absorption): identical aggression, price-impact/refresh alone drives control vs absorption. bid_absorption gate (sell_impact > max_sell_price_impact) is the exact complement of the seller gate (sell_impact <= max_sell_price_impact). Evidence: TC-06-seller-control.png, UT-08-seller.png."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-11-cold-transition-seller-confirmed.png",
+      "notes": "Held PASSING — re-verified iter-6; the keystone mirror NO-MISROUTE guard. SIM-SELLER stays seller_control @ 0.885 (>= threshold): aggressive_sell_ratio 0.949 high, sell_price_impact -0.400 NEGATIVE (price fell to 98.94), headline rose (text-rose-400 rgb(251,113,133), computed-style), NOT amber/absorption, bid_refresh_score 0.038 low, absorption_score 0.000. Event log 'Tape state changed to seller_control' captured on the cold-start first watch (also serves J-07). Classifier.py byte-untouched. Evidence: TC-11-cold-transition-seller-confirmed.png, UT-13-15-sim-seller.png."
     },
     "J-04": {
       "id": "J-04",
       "name": "Bid absorption is detected (price impact, not aggression)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-5",
-      "last_passing_iter": "goal-i_will_be_rich-iter-5",
+      "last_verified_iter": "goal-i_will_be_rich-iter-6",
+      "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-5-evidence/TC-01-bidabs-resolved.png",
-      "notes": "PROMOTED failing -> PASSING in iter-5 (full depth) — the DEFINING price-impact case and the most safety-critical anti-goal in the product, now positively demonstrated. Net-new backend (confirmed by diff inspection, not forward-carried notes): STATE_BID_ABSORPTION gate inserted after seller_control / before unclear, keyed on aggressive_sell_ratio >= floor AND sell_price_impact > max_sell_price_impact (FLAT — the EXACT complement of seller_control's <= condition, so the two are mutually exclusive on impact) AND bid_refresh_score >= min_bid_refresh_score (real refresh evidence, not mere absence of impact) AND stable spread; _absorption_confidence (side-neutral, rewards flatness); bid_refresh_score/absorption_score features (bid/ask price series threaded into _Window/add_quote additively, existing 9 features byte-identical); _bid_absorption_stream() (sells hit a bid HELD at 100.00 => sell_price_impact ~0); config thresholds (min_bid_refresh_score=0.55, absorption_flat_band=0.05, refresh_scale=0.45) — no magic numbers. Browser-verified on SIM-BIDABS: headline amber 'Bid Absorption' (text-amber-400 rgb(251,191,36), bar bg-amber-500 rgb(245,158,11) @92%, via getComputedStyle + base-selector probe, NOT eyeballed/grep), confidence 0.917 (>= threshold); aggressive_sell_ratio 1.000 high while last price 100.00 does NOT fall (sell_price_impact 0.000); absorption_score 1.000 + bid_refresh_score 1.000 elevated; event log 'Bid refreshing at 100.00' (concrete price, no placeholder) + 'Large sell print absorbed' + 'Tape state changed to bid_absorption'; observations 'Heavy sell volume being absorbed'/'Price holding despite sell prints'; live over WS, no reload; NOT seller_control, NOT unclear. Guard tests: test_bid_absorption_on_flat_impact_with_refresh, test_high_sell_aggression_with_real_drop_is_seller_not_bid_absorption (precedence), test_bid_absorption_requires_refresh_evidence_not_mere_flat_impact (no-fabrication), test_wide_spread_blocks_bid_absorption; scenario+determinism tests green. Coherence PASS. Evidence: TC-01-bidabs-resolved.png, UT-02-bidabs.png, UT-04-05-features-eventlog.png."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/UT-16-sim-bidabs-amber.png",
+      "notes": "Held PASSING — re-verified iter-6 regression guard. SIM-BIDABS reads amber 'Bid Absorption' (text-amber-400 rgb(251,191,36), computed-style) @ 0.917 (>= threshold): aggressive_sell_ratio 1.000 high WHILE last price holds at 100.00 (sell_price_impact ~0, no fall) -> bid_absorption NOT seller_control — the defining price-impact case intact. The chop work (provider data + tests only) did not perturb the absorption gates. Dot reads 'closed' (bounded stream exhausted) but the persisted snapshot is the correct bid_absorption read. Evidence: UT-16-sim-bidabs-amber.png."
     },
     "J-05": {
       "id": "J-05",
       "name": "Ask absorption is detected (price impact, not aggression)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-5",
-      "last_passing_iter": "goal-i_will_be_rich-iter-5",
+      "last_verified_iter": "goal-i_will_be_rich-iter-6",
+      "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-5-evidence/TC-03-askabs-resolved.png",
-      "notes": "PROMOTED failing -> PASSING in iter-5 (full depth) — the strict buy/ask mirror of J-04. Net-new backend: STATE_ASK_ABSORPTION gate keyed on aggressive_buy_ratio >= floor AND buy_price_impact < min_buy_price_impact (FLAT — exact complement of buyer_control's >= condition) AND ask_refresh_score >= min_ask_refresh_score AND stable spread; ask_refresh_score feature; _ask_absorption_stream() (buys lift an ask HELD at 100.02 => buy_price_impact ~0); config min_ask_refresh_score=0.55. Browser-verified on SIM-ASKABS: headline amber 'Ask Absorption' (text-amber-400 rgb(251,191,36), bar bg-amber-500 rgb(245,158,11), computed-style + base-selector probe), confidence 0.917; aggressive_buy_ratio 1.000 high while last price 100.02 does NOT rise (buy_price_impact 0.000); absorption_score 1.000 + ask_refresh_score 1.000 elevated; event log 'Ask refreshing at 100.02' + 'Large buy print absorbed' + 'Tape state changed to ask_absorption'; observations 'Heavy buy volume being absorbed'/'Price stalling despite buy prints'; live amber over WS; NOT buyer_control, NOT unclear. Guard tests: test_ask_absorption_on_flat_impact_with_refresh, test_high_buy_aggression_with_real_rise_is_buyer_not_ask_absorption, test_ask_absorption_requires_refresh_evidence_not_mere_flat_impact, test_wide_spread_blocks_ask_absorption; scenario+determinism green. Coherence PASS. Evidence: TC-03-askabs-resolved.png, UT-03-askabs.png."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-12-regression-askabs.png",
+      "notes": "Held PASSING — re-verified iter-6 regression guard. SIM-ASKABS reads amber 'Ask Absorption' (text-amber-400 rgb(251,191,36), computed-style) @ 0.917 (>= threshold): aggressive_buy_ratio 1.000 high WHILE buy_price_impact 0.000 flat (last 100.02 does not rise), absorption_score 1.000 + ask_refresh_score 1.000 elevated -> ask_absorption NOT buyer_control. Event log 'Ask refreshing at 100.02' / 'Large buy print absorbed' / 'Tape state changed to ask_absorption'; observations 'Heavy buy volume being absorbed' / 'Price stalling despite buy prints'; 'Live' dot. Evidence: TC-12-regression-askabs.png, UT-17-sim-askabs-amber.png."
     },
     "J-06": {
       "id": "J-06",
       "name": "Unclear / choppy tape is reported as unclear",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-5",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-6",
+      "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-5-evidence/UT-09-chop-unclear.png",
-      "notes": "Still FAILING — the NEXT target (full depth). The unclear state and its amber render are fully proven: iter-5 UT-09 shows SIM-CHOP (registered but SILENT — confirmed in this iter's diff: simulated.py stream() still emits zero events for SIM-CHOP) honestly holds 'Unclear' amber @ confidence 0.100 with 'Warming up' and Quote '—' (no fabricated prices), matching REST. BUT J-06's acceptance needs an ACTIVELY choppy stream (mixed two-sided aggression, wide/jittery spread, low trade_speed, no clean price impact) that resolves to unclear with low confidence by mixed signals — not mere silence. Net-new provider work: author _chop_stream() + wire into stream(); a deterministic scenario test; and CRITICALLY assert the choppy stream does NOT transiently trip ANY of the now-FOUR active gates (buyer/seller control, bid/ask absorption) in ANY of the 5 rolling windows. Honest-uncertainty critical anti-goal. Recommend FULL depth (net-new provider code on a critical anti-goal with an enlarged false-fire surface)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-10-sim-chop-unclear.png",
+      "notes": "PROMOTED failing -> PASSING in iter-6 (full depth) — the FIFTH and final MVP tape state and the honest-uncertainty CRITICAL anti-goal, now positively demonstrated against a DRIVEN choppy stream (distinct from iter-5's honest-unclear-on-silence). Net-new provider work (confirmed by diff, not forward-carried notes): _chop_stream() authored + wired into stream() via 'elif SIM-CHOP' (it previously emitted ZERO events). NO classifier/config change (classifier.py + config.py byte-untouched, 0 diff lines — the spec's red-flag guard honored: chop reads unclear purely through the existing fallback + four gate preconditions). Chop shape constants (_CHOP_*) live in simulated.py as scenario DATA, not config (no-magic-numbers honored). Every TradeEvent carries Side.UNKNOWN — aggressor classification deferred to the engine (reinforces single-source-of-truth). Browser-verified on SIM-CHOP: amber 'Unclear' headline (text-amber-400 rgb(251,191,36), bar bg-amber-500 rgb(245,158,11), ~20% width, via getComputedStyle + base-selector probe, NOT eyeballed/grep), confidence 0.200 (== unclear_confidence, < reasonable_confidence 0.60 — warmed, not cold-start 0.10); UI asserts NO side and NO absorption; observation 'Mixed or weak evidence — no clear side in control'; Event Log 'No events yet' (no spurious transition — correct honest behavior); all Recent Trades 100.00 mixed BUY/SELL/UNKNOWN; 30s features buy_ratio 0.500 / sell_ratio 0.500 (<0.60), avg_spread 0.148 (>0.06), buy/sell impact 0.000, bid/ask refresh 0.118/0.103 (<0.55) — past EVERY gate precondition. KEYSTONE TESTS (I ran the suite: 61 passed): test_sim_chop_never_misfires_a_resolved_state_step_through (state is STATE_UNCLEAR and NOT any of the four resolved states at EVERY tick over 600 events, cold AND warm), test_sim_chop_all_windows_deny_every_gate (every window incl. noise-prone 10s: both ratios < floor, spread > max_stable, both refresh < floor, impact past neither cutoff), test_sim_chop_settles_on_unclear (warm, event_count >= 40, conf == 0.20, no transition line), test_sim_chop_is_deterministic. Coherence PASS. Evidence: TC-10-sim-chop-unclear.png, UT-02-sim-chop-fullpage.png, UT-03-sim-chop-amber-features.png."
     },
     "J-07": {
       "id": "J-07",
       "name": "Tape-state transitions are announced in the event log and observations",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-5",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-6",
+      "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-5-evidence/UT-04-05-features-eventlog.png",
-      "notes": "Still FAILING but materially ADVANCED. Transition lines now render across FOUR states: 'Tape state changed to buyer_control' (J-02), '...seller_control' (J-03), and this iter '...bid_absorption' / '...ask_absorption' (UT-05), plus absorption observations/messages ('Large sell/buy print absorbed', 'Bid/Ask refreshing at <price>') with concrete prices and live append over WS. Remaining for J-07: verify the full cross-state taxonomy from a COLD start (initial unclear -> resolved state at the transition tick) and observations updating live on transition, ideally chained across multiple distinct states now that 4 are reachable. Best folded into the J-06 iteration (lean verification add-on) once an active SIM-CHOP exists, or its own lean pass."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-11-cold-transition-buyer.png",
+      "notes": "PROMOTED failing -> PASSING in iter-6 — the cold-start transition taxonomy closed out across TWO distinct resolving states. From a cold first watch on a fresh backend: SIM-BUYER event log appended 'Tape state changed to buyer_control' with observations updating live ('Buyer aggression increasing', 'Price lifting on buy prints'); SIM-SELLER event log appended 'Tape state changed to seller_control' (headline rose 'Seller Control'). Both captured by the functional-QA agent on the cold-start watch with the 'Live' dot showing; the lines persist in the event log thereafter (the browser-qa-agent later re-observed them as persisted because the bounded streams had exhausted — the live append is corroborated by the QA agent's contemporaneous live capture, TC-11-cold-transition-*.png). SIM-CHOP correctly produces NO transition line (cold-start unclear -> warmed unclear is not a state change — honest behavior, asserted in tests). The full cross-state transition vocabulary is now demonstrated (buyer/seller control + bid/ask absorption from prior iters). Evidence: TC-11-cold-transition-buyer.png, TC-11-cold-transition-seller-confirmed.png."
     },
     "J-08": {
       "id": "J-08",
       "name": "REST and the live UI agree (single source of truth)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-5",
-      "last_passing_iter": "goal-i_will_be_rich-iter-5",
+      "last_verified_iter": "goal-i_will_be_rich-iter-6",
+      "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-5-evidence/UT-02-bidabs.png",
-      "notes": "Held GREEN — re-verified iter-5 across the new absorption state and its new features. UT-11/TC-07: with SIM-BIDABS resolved, on-screen Bid refresh score 1.000 == GET /tape/SIM-BIDABS/features bid_refresh_score 1.0; Absorption score 1.000 == REST 1.0; tape_state 'Bid Absorption' == /state bid_absorption; confidence 0.917 == /state 0.9166...; /summary stream_status/tape_state/confidence all agree. One engine value per metric; no UI-side recomputation. Coherence PASS confirms the absorption triplet rides the single '14 core features' contract row (one producer FeatureEngine, one endpoint /features re-exposed read-only by /summary + WS) and the absorption states ride the single Tape-state row. The stream-status-dot consolidation this iter strengthens single-source-of-truth: the dot now reads canonical snapshot.stream_status instead of a parallel client connStatus. Proven green iter-2 (buyer), held iter-3/iter-4 (seller), extended to absorption iter-5. Evidence: UT-02-bidabs.png (UT-11), QA TC-07."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/UT-19-sim-chop-unclear-final.png",
+      "notes": "Held GREEN — re-verified iter-6, extended to the FIFTH (unclear) state. On SIM-CHOP the UI 'Unclear' / confidence 0.200 == GET /tape/SIM-CHOP/state (unclear / 0.2), and every UI 30s feature readout exactly == /features (aggressive_buy 0.500, aggressive_sell 0.500, average_spread 0.152, buy/sell impact 0.000, bid_refresh 0.114, ask_refresh 0.143); /summary agrees. One engine value per metric, no UI-side recomputation. Structurally reinforced this iter: classifier.py + config.py byte-untouched, and the chop provider emits Side.UNKNOWN (it does NOT pre-classify the aggressor side — it defers to the canonical engine classifier rather than short-circuiting the contract). Coherence Step-1 data-contract check PASS. Proven green iter-2 (buyer) -> held across seller/absorption iters -> now the unclear read. Evidence: UT-19-sim-chop-unclear-final.png, QA TC-07/TC-10."
     },
     "J-09": {
       "id": "J-09",
       "name": "Stop watching a ticker",
       "status": "failing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-0",
+      "last_verified_iter": "goal-i_will_be_rich-iter-6",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
-      "notes": "Still FAILING — no DELETE /watch UI control exists in the cockpit (the DELETE /watch/{ticker} endpoint is specified in goal.md but the UI lacks the button). GROUNDWORK LANDED iter-5: the thrice-deferred stream-status-dot consolidation is done — the top-bar dot now reads canonical snapshot.stream_status (connecting/live/stale/closed) instead of the parallel client connStatus, verified closed-state read matches /summary (UT-06, dot rose 'closed' rgb(244,63,94), no false 'live'). NOTE a real testing gotcha for this teardown journey: bounded sim streams run to exhaustion and WatchManager.watch() returns the EXISTING (now-closed) engine rather than restarting, so a second QA pass over the same ticker sees stream_status=closed — the live emerald dot could not be browser-observed in the iter-5 browser run (backend restart denied as a shared service). J-09 verification will need a FRESH backend / fresh ticker to observe the live->idle teardown transition. Remaining: add the Stop control wired to DELETE /watch, and assert the stream closes + cockpit returns to idle/empty + re-watching starts fresh."
+      "notes": "Still FAILING — the LAST remaining Must-have journey (8 of 9 now passing). Re-confirmed failing iter-6 by diff inspection: apps/frontend was byte-untouched (0 diff lines), so no Stop / DELETE /watch UI control exists in the cockpit yet (explicitly OUT OF SCOPE for iter-6; the dev handoff names J-09 as the suggested next phase). The stream-status-dot groundwork landed iter-5 (top-bar dot reads canonical snapshot.stream_status). NEW concrete gotcha surfaced this iter (directly informs J-09 verification): the live -> idle teardown can only be observed on a still-LIVE stream, but (a) bounded sim streams run to exhaustion and watch() returns the EXISTING closed engine on re-watch, and (b) the harness PERMISSION LAYER blocks a backend restart (the browser-qa-agent tried and was denied). So J-09's teardown verification must arrange a fresh-backend / fresh-ticker observation, or use the new DELETE /watch endpoint itself to tear down a live engine. Remaining work: add the Stop control wired to DELETE /watch/{ticker} (verify the endpoint exists by code inspection per lesson iter-4), assert the stream closes + cockpit returns to idle/empty + re-watching starts a fresh read."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-06-03T02:17:01Z"
+  "updated_at": "2026-06-03T04:30:41Z"
 }

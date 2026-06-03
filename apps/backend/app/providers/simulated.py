@@ -1,11 +1,11 @@
 """Deterministic, seedable simulated provider (Phase-1 data source).
 
-``SIM-BUYER`` / ``SIM-SELLER`` (directional control) and ``SIM-BIDABS`` / ``SIM-ASKABS``
-(absorption) are driven to their target states; ``SIM-CHOP`` is reserved in the registry (so
-it is *known*, not fabricated) but not driven to its state yet (J-06). Same seed => identical
-stream (determinism anti-goal): all randomness comes from a seeded ``random.Random`` and every
-event carries a logical timestamp, never wall-clock. Wall-clock is used only by the feeder to
-*pace delivery* in live mode.
+All five reserved sim tickers are now driven to their target reads:
+``SIM-BUYER`` / ``SIM-SELLER`` (directional control), ``SIM-BIDABS`` / ``SIM-ASKABS``
+(absorption), and ``SIM-CHOP`` (the honest non-call: a genuinely choppy stream that warms
+up and still reads ``unclear``). Same seed => identical stream (determinism anti-goal): all
+randomness comes from a seeded ``random.Random`` and every event carries a logical timestamp,
+never wall-clock. Wall-clock is used only by the feeder to *pace delivery* in live mode.
 
 The numbers below are scenario *shape* (the data the simulator emits), not engine
 thresholds — engine/classifier thresholds live in ``app.config``.
@@ -18,7 +18,7 @@ from typing import Iterator
 
 from .base import Event, QuoteEvent, Side, TradeEvent
 
-# Reserved sim tickers -> target tape state. SIM-BUYER and SIM-SELLER resolve this iteration.
+# Reserved sim tickers -> target tape state. All five are now driven to their read.
 SIM_SCENARIOS: dict[str, str] = {
     "SIM-BUYER": "buyer_control",
     "SIM-SELLER": "seller_control",
@@ -53,6 +53,38 @@ _MAX_TICKS = 5000          # bounded stream
 _ABS_BID = 100.00
 _ABS_ASK = 100.02          # spread 0.02 (narrow / stable); the quote never moves
 
+# --- Choppy / unclear scenario shape (SIM-CHOP) — the honest non-call ----------------------
+# A genuinely choppy tape: balanced two-sided aggression at a WIDE, jittery spread, around a
+# price that goes NOWHERE. By DEFENSE IN DEPTH every rolling window denies all four gates AT
+# ONCE — each condition alone makes every gate impossible, so no single window's noise can trip
+# one:
+#   * the aggressive side strictly ALTERNATES at a CONSTANT size, so both aggressive_buy_ratio
+#     and aggressive_sell_ratio stay ~0.50 (below their 0.60 floors) in every window;
+#   * the spread is always >= _CHOP_SPREAD_MIN = 0.10 > max_stable_spread (0.06), so the
+#     average spread is wide in every window;
+#   * the QUOTE's near side jitters (the ask backs off BELOW the center on buy ticks, the bid
+#     above it on sell ticks), so on the matching prints the bid keeps dropping below its prior
+#     high and the ask rising above its prior low — both refresh scores stay below 0.55.
+# Crucially EVERY aggressive print lands at exactly _CHOP_CENTER (the buy lifts an ask placed
+# at/under the center; the sell hits a bid placed at/over it), so successive prints are at the
+# SAME price and the per-side price impact is ~ZERO — no fabricated decisive progress on either
+# side (a genuinely choppy tape shows smaller impact than even a real directional one). Because
+# the impact is zero by construction regardless of trade density, the stream can be dense (small
+# _CHOP_DT) so even the short 10s window stays well-populated and its refresh score stays low.
+# The engine warms up on real data and still honestly declines to call a side: the inverse,
+# equally-earned counterpart to the four resolved states (NOT the cold-start silence of an
+# undriven ticker). These are scenario DATA (simulator shape), never engine thresholds.
+_CHOP_CENTER = 100.00          # every aggressive print lands here; the price never progresses
+_CHOP_QUOTE_JITTER = 0.10      # the near quote backs off from center by uniform(0, this) — wide
+                               # enough that the matching side keeps failing to refresh (low
+                               # refresh in EVERY window, even the noise-prone 10s)
+_CHOP_SPREAD_MIN = 0.10        # min spread (> max_stable_spread 0.06) — hangs off the far side
+_CHOP_SPREAD_MAX = 0.20        # max spread (wide and jittery)
+_CHOP_SIZE = 200               # constant size => volume ratio == count ratio (robust balance)
+_CHOP_P_MID_PRINT = 0.08       # share of prints landing mid-spread (Side.UNKNOWN, no clean aggressor)
+_CHOP_DT = 0.2                 # logical seconds per tick — dense enough that even the short 10s
+                               # window holds plenty of prints, so its refresh score stays low too
+
 
 class SimulatedProvider:
     def __init__(self, ticker: str, scenario: str, seed: int = DEFAULT_SEED) -> None:
@@ -69,8 +101,8 @@ class SimulatedProvider:
             yield from self._bid_absorption_stream()
         elif self.ticker == "SIM-ASKABS":
             yield from self._ask_absorption_stream()
-        # SIM-CHOP still produces no events this iteration: the engine stays an honest
-        # cold-start `unclear` rather than fabricating a resolved state (J-06 builds it).
+        elif self.ticker == "SIM-CHOP":
+            yield from self._chop_stream()
 
     def _buyer_control_stream(self) -> Iterator[Event]:
         rng = random.Random(self.seed)
@@ -142,6 +174,51 @@ class SimulatedProvider:
             yield QuoteEvent(self.ticker, t, bid, ask, _QUOTE_SIZE, _QUOTE_SIZE)
             yield TradeEvent(self.ticker, t, ask, rng.choice(_MAJORITY_SIZES), Side.UNKNOWN)
             t += _LOGICAL_DT
+
+    def _chop_stream(self) -> Iterator[Event]:
+        # Genuinely choppy / unclear tape (see the _CHOP_* shape notes above). The aggressive
+        # side strictly ALTERNATES (a deterministic toggle, not the RNG), so the buy/sell volume
+        # stays balanced and BOTH ratios stay sub-floor in every window. Each tick the near side
+        # of the quote backs off from the center by a jittery amount and the wide spread hangs
+        # off the far side: on a BUY tick the ask sits at/under the center (spread below it), on
+        # a SELL tick the bid sits at/over the center (spread above it). The aggressive print
+        # lands at exactly the center, so it lifts that ask (=> BUY) or hits that bid (=> SELL)
+        # while EVERY print is at the SAME price — per-side price impact is ~zero (no progress).
+        # The jittering near side means the quote never holds a level, so neither bid nor ask
+        # "refreshes". A mid-spread minority prints strictly inside the quote (Side.UNKNOWN — no
+        # clean aggressor). Unclear by genuinely MIXED signals, not by an empty/cold stream.
+        rng = random.Random(self.seed)
+        t = 0.0
+        next_aggressor = Side.BUY
+        for _ in range(_MAX_TICKS):
+            backoff = rng.uniform(0.0, _CHOP_QUOTE_JITTER)
+            spread = rng.uniform(_CHOP_SPREAD_MIN, _CHOP_SPREAD_MAX)
+            is_mid = rng.random() < _CHOP_P_MID_PRINT
+
+            if is_mid:
+                # Mid-spread tick: a WIDE quote straddling the center, print AT the center =>
+                # strictly between bid and ask => Side.UNKNOWN (no clean aggressor). The print is
+                # still at the center, so it adds no price impact; the pending side is untouched,
+                # so the buy/sell alternation stays balanced.
+                bid = round(_CHOP_CENTER - spread / 2, 2)
+                ask = round(_CHOP_CENTER + spread / 2, 2)
+                yield QuoteEvent(self.ticker, t, bid, ask, _QUOTE_SIZE, _QUOTE_SIZE)
+                yield TradeEvent(self.ticker, t, _CHOP_CENTER, _CHOP_SIZE, Side.UNKNOWN)
+            elif next_aggressor is Side.BUY:
+                ask = round(_CHOP_CENTER - backoff, 2)   # near side at/under the center
+                bid = round(ask - spread, 2)             # wide spread below
+                yield QuoteEvent(self.ticker, t, bid, ask, _QUOTE_SIZE, _QUOTE_SIZE)
+                # Lift the offer at the center: center >= ask => engine tags it Side.BUY.
+                yield TradeEvent(self.ticker, t, _CHOP_CENTER, _CHOP_SIZE, Side.UNKNOWN)
+                next_aggressor = Side.SELL
+            else:
+                bid = round(_CHOP_CENTER + backoff, 2)   # near side at/over the center
+                ask = round(bid + spread, 2)             # wide spread above
+                yield QuoteEvent(self.ticker, t, bid, ask, _QUOTE_SIZE, _QUOTE_SIZE)
+                # Hit the bid at the center: center <= bid => engine tags it Side.SELL.
+                yield TradeEvent(self.ticker, t, _CHOP_CENTER, _CHOP_SIZE, Side.UNKNOWN)
+                next_aggressor = Side.BUY
+            t += _CHOP_DT
 
 
 def is_sim_ticker(ticker: str) -> bool:

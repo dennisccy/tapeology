@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-i_will_be_rich-iter-6",
+  "base_url": "http://localhost:3650",
+  "iteration": 6,
+  "default_timeout_ms": 15000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the tape cockpit",
+      "narration": "This is Tapeology — a live read of one stock's order flow that tells you who is in control of the tape. It opens clean, with nothing watched yet, so you just type a ticker to begin.",
+      "point_out": "The Tapeology header with the ticker box and the green Watch button, and the calm 'No ticker watched' idle screen — no panels populated yet.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Type the choppy sample ticker",
+      "narration": "Let's start with the honest case. We enter SIM-CHOP — a deliberately messy, two-sided tape with no clear winner.",
+      "point_out": "SIM-CHOP typed into the ticker box, ready to watch.",
+      "journey": "J-06",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-CHOP" }
+    },
+    {
+      "n": 3,
+      "title": "Watch SIM-CHOP settle on \"Unclear\"",
+      "narration": "We hit Watch and the cockpit fills with live data — but instead of forcing a call, it honestly reads 'Unclear' at low confidence. When the tape is genuinely choppy, the product says so rather than faking a direction. This is the honesty the whole tool is built around.",
+      "point_out": "The amber 'Unclear' headline, the low confidence reading (0.200), balanced buy/sell pressure near 0.50 with 0.0 price impact, and the 'Mixed or weak evidence — no clear side in control' note. No buyer, seller, or absorption call is made.",
+      "journey": "J-06",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "0.200" }
+    },
+    {
+      "n": 4,
+      "title": "Switch to the buyer sample",
+      "narration": "Now the opposite — a clean, decisive tape. We type SIM-BUYER into the same box.",
+      "point_out": "SIM-BUYER entered in the ticker box, replacing the previous ticker.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 5,
+      "title": "Watch SIM-BUYER announce \"Buyer Control\"",
+      "narration": "The cockpit reads 'Buyer Control' in green and announces the change live in the event log the moment it resolves — aggressive buying is genuinely lifting the price.",
+      "point_out": "The green 'Buyer Control' headline with a high confidence bar, and the 'Tape state changed to buyer_control' line appearing in the Event Log — the live transition.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Buyer Control" }
+    },
+    {
+      "n": 6,
+      "title": "Switch to the seller sample",
+      "narration": "Next we flip to the mirror case and type SIM-SELLER.",
+      "point_out": "SIM-SELLER entered in the ticker box.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-SELLER" }
+    },
+    {
+      "n": 7,
+      "title": "Watch SIM-SELLER flip to \"Seller Control\"",
+      "narration": "The read flips to 'Seller Control' in red — sellers are pressing and the price is dropping — with its own live transition note in the log.",
+      "point_out": "The red 'Seller Control' headline and the 'Tape state changed to seller_control' line in the Event Log.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Seller Control" }
+    },
+    {
+      "n": 8,
+      "title": "Switch to the bid-absorption sample",
+      "narration": "Now the product's signature call. We type SIM-BIDABS — heavy selling that meets a price which simply refuses to fall.",
+      "point_out": "SIM-BIDABS entered in the ticker box.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-BIDABS" }
+    },
+    {
+      "n": 9,
+      "title": "Watch SIM-BIDABS read \"Bid Absorption\"",
+      "narration": "Despite a flood of selling, the price holds — so the cockpit reads 'Bid Absorption' in amber. The call rests on whether the price actually moved, not on how much aggression there was: pressure being soaked up, not control.",
+      "point_out": "The amber 'Bid Absorption' headline; the price holding at 100.00 while heavy sells print, and notes like 'Heavy sell volume being absorbed' / 'Bid refreshing at 100.00'.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Bid Absorption" }
+    },
+    {
+      "n": 10,
+      "title": "Switch to the ask-absorption sample",
+      "narration": "The mirror of absorption. We type SIM-ASKABS — heavy buying that fails to lift the price.",
+      "point_out": "SIM-ASKABS entered in the ticker box.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-ASKABS" }
+    },
+    {
+      "n": 11,
+      "title": "Watch SIM-ASKABS read \"Ask Absorption\"",
+      "narration": "Heavy buying that stalls at the ask reads as 'Ask Absorption' in amber — buyers being absorbed rather than taking control. That completes the full set of five tape situations the cockpit can recognise.",
+      "point_out": "The amber 'Ask Absorption' headline; the price stalling at 100.02 despite buy prints, and notes like 'Heavy buy volume being absorbed'.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Ask Absorption" }
+    },
+    {
+      "n": 12,
+      "title": "Try an unknown ticker",
+      "narration": "Finally, the honesty guardrail. We type a ticker the system doesn't recognise — NOPE-XYZ.",
+      "point_out": "NOPE-XYZ entered in the ticker box.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "NOPE-XYZ" }
+    },
+    {
+      "n": 13,
+      "title": "Unknown ticker is refused, not faked",
+      "narration": "Instead of inventing a tape, the cockpit refuses cleanly with a plain error and stays idle. It never fabricates a reading for a stock it doesn't know.",
+      "point_out": "The rose error line \"'NOPE-XYZ' is not a known simulated ticker\" under the header, and the empty cockpit — no panels and no fabricated tape state.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "is not a known simulated ticker" }
+    }
+  ]
+}

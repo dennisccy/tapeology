@@ -220,3 +220,49 @@ def test_wide_spread_blocks_ask_absorption():
     result = clf.classify(_ask_absorption_features(average_spread=0.50), trade_count=60)
     assert result.state == STATE_UNCLEAR
     assert result.state != STATE_ASK_ABSORPTION
+
+
+# --- Unclear / chop (J-06) — warmed-up but genuinely mixed two-sided, no clean read ---------
+
+def _chop_features(**overrides) -> dict[str, float]:
+    """Balanced two-sided aggression with a wide spread, no price progress, no refresh — the
+    unit mirror of the SIM-CHOP stream: neither ratio reaches its floor, the spread is wide, the
+    impacts are ~zero and the quote never refreshed."""
+    base = _features(
+        aggressive_buy_ratio=0.50,
+        aggressive_sell_ratio=0.50,
+        buy_price_impact=0.0,
+        sell_price_impact=0.0,
+        average_spread=0.20,          # wide — above max_stable_spread
+        absorption_score=0.0,
+        bid_refresh_score=0.0,
+        ask_refresh_score=0.0,
+    )
+    base.update(overrides)
+    return base
+
+
+def test_chop_balanced_two_sided_is_warmed_unclear():
+    # Warmed up (not cold start) but genuinely mixed => the honest warmed `unclear` at low
+    # confidence, and explicitly NONE of the four resolved states.
+    result = clf.classify(_chop_features(), trade_count=60)
+    assert result.state == STATE_UNCLEAR
+    assert result.confidence == CONFIG.unclear_confidence
+    assert result.confidence < CONFIG.reasonable_confidence
+    for resolved in (
+        STATE_BUYER_CONTROL, STATE_SELLER_CONTROL, STATE_BID_ABSORPTION, STATE_ASK_ABSORPTION
+    ):
+        assert result.state != resolved
+
+
+def test_chop_balanced_ratios_alone_deny_every_gate():
+    # The load-bearing lever, isolated: mixed two-sided aggression (both ratios sub-floor) denies
+    # every gate on its own — even handed a STABLE narrow spread AND full refresh on both sides,
+    # the read is still unclear, because no gate's one-sided ratio precondition is met.
+    result = clf.classify(
+        _chop_features(average_spread=0.02, bid_refresh_score=1.0, ask_refresh_score=1.0),
+        trade_count=60,
+    )
+    assert result.state == STATE_UNCLEAR
+    assert result.state != STATE_BID_ABSORPTION
+    assert result.state != STATE_ASK_ABSORPTION
