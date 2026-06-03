@@ -1,8 +1,8 @@
 """Deterministic, seedable simulated provider (Phase-1 data source).
 
-Only ``SIM-BUYER`` is driven to its target state this iteration; the other sim tickers are
-reserved in the registry (so they are *known*, not fabricated) but are not driven to their
-states yet. Same seed => identical stream (determinism anti-goal): all randomness comes
+Only ``SIM-BUYER`` and ``SIM-SELLER`` are driven to their target states this iteration; the
+other sim tickers are reserved in the registry (so they are *known*, not fabricated) but are
+not driven to their states yet. Same seed => identical stream (determinism anti-goal): all randomness comes
 from a seeded ``random.Random`` and every event carries a logical timestamp, never
 wall-clock. Wall-clock is used only by the feeder to *pace delivery* in live mode.
 
@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .base import Event, QuoteEvent, Side, TradeEvent
 
-# Reserved sim tickers -> target tape state. Only SIM-BUYER resolves this iteration.
+# Reserved sim tickers -> target tape state. SIM-BUYER and SIM-SELLER resolve this iteration.
 SIM_SCENARIOS: dict[str, str] = {
     "SIM-BUYER": "buyer_control",
     "SIM-SELLER": "seller_control",
@@ -28,16 +28,18 @@ SIM_SCENARIOS: dict[str, str] = {
 
 DEFAULT_SEED = 7
 
-# --- SIM-BUYER scenario shape -----------------------------------------------------------
+# --- Directional-control scenario shape (SIM-BUYER and its SIM-SELLER mirror share it) ---
+# These are side-neutral magnitudes; the seller stream reuses them so buyer/seller confidence
+# stay calibrated identically (see _seller_control_stream for the role mapping).
 _START_BID = 100.00
 _START_ASK = 100.02          # spread held at 0.02 (narrow / stable)
 _PRICE_TICK = 0.01
 _LOGICAL_DT = 0.5            # logical seconds between ticks
 _QUOTE_SIZE = 800
-_P_SELL = 0.12              # minority of prints are aggressive sells
-_P_LIFT_ON_BUY = 0.5       # chance a buy tick lifts the offer (=> price progress)
-_BUY_SIZES = (100, 200, 300, 600)   # 600 >= large_print_size
-_SELL_SIZES = (100, 200)
+_P_MINORITY = 0.12         # minority share of prints (the non-controlling side)
+_P_QUOTE_MOVE = 0.5        # chance a controlling-side tick moves the quote (=> price progress)
+_MAJORITY_SIZES = (100, 200, 300, 600)   # controlling side; 600 >= large_print_size
+_MINORITY_SIZES = (100, 200)
 _MAX_TICKS = 5000          # bounded stream
 
 
@@ -50,25 +52,53 @@ class SimulatedProvider:
     def stream(self) -> Iterator[Event]:
         if self.ticker == "SIM-BUYER":
             yield from self._buyer_control_stream()
-        # Reserved scenarios produce no events this iteration: the engine stays an honest
-        # cold-start `unclear` rather than fabricating a resolved state.
+        elif self.ticker == "SIM-SELLER":
+            yield from self._seller_control_stream()
+        # The remaining reserved scenarios produce no events this iteration: the engine stays
+        # an honest cold-start `unclear` rather than fabricating a resolved state.
 
     def _buyer_control_stream(self) -> Iterator[Event]:
         rng = random.Random(self.seed)
         bid, ask = _START_BID, _START_ASK
         t = 0.0
         for _ in range(_MAX_TICKS):
-            is_buy = rng.random() >= _P_SELL
-            if is_buy and rng.random() < _P_LIFT_ON_BUY:
+            is_buy = rng.random() >= _P_MINORITY
+            if is_buy and rng.random() < _P_QUOTE_MOVE:
                 # Aggressive buyers consume the offer and lift the quote one tick.
                 bid = round(bid + _PRICE_TICK, 2)
                 ask = round(ask + _PRICE_TICK, 2)
 
             yield QuoteEvent(self.ticker, t, bid, ask, _QUOTE_SIZE, _QUOTE_SIZE)
             if is_buy:
-                yield TradeEvent(self.ticker, t, ask, rng.choice(_BUY_SIZES), Side.UNKNOWN)
+                yield TradeEvent(self.ticker, t, ask, rng.choice(_MAJORITY_SIZES), Side.UNKNOWN)
             else:
-                yield TradeEvent(self.ticker, t, bid, rng.choice(_SELL_SIZES), Side.UNKNOWN)
+                yield TradeEvent(self.ticker, t, bid, rng.choice(_MINORITY_SIZES), Side.UNKNOWN)
+            t += _LOGICAL_DT
+
+    def _seller_control_stream(self) -> Iterator[Event]:
+        # Strict mirror of _buyer_control_stream: the MAJORITY of prints are aggressive sells
+        # that hit the bid, and on a controlling-side tick (same probability the buyer stream
+        # lifts) the quote drops one tick — so sell_price_impact is genuinely NEGATIVE (real
+        # downward price progress, what separates seller_control from bid_absorption). Same
+        # seed + shared shape => the price path is the buyer's reflection, so seller confidence
+        # lands the same comfortable margin above reasonable_confidence.
+        rng = random.Random(self.seed)
+        bid, ask = _START_BID, _START_ASK
+        t = 0.0
+        for _ in range(_MAX_TICKS):
+            is_sell = rng.random() >= _P_MINORITY
+            if is_sell and rng.random() < _P_QUOTE_MOVE:
+                # Aggressive sellers hit the bid and drop the quote one tick.
+                bid = round(bid - _PRICE_TICK, 2)
+                ask = round(ask - _PRICE_TICK, 2)
+
+            yield QuoteEvent(self.ticker, t, bid, ask, _QUOTE_SIZE, _QUOTE_SIZE)
+            if is_sell:
+                # Prints at the bid => engine tags it Side.SELL; the falling bid makes the
+                # cumulative sell_price_impact negative.
+                yield TradeEvent(self.ticker, t, bid, rng.choice(_MAJORITY_SIZES), Side.UNKNOWN)
+            else:
+                yield TradeEvent(self.ticker, t, ask, rng.choice(_MINORITY_SIZES), Side.UNKNOWN)
             t += _LOGICAL_DT
 
 

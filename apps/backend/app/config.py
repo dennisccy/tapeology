@@ -29,6 +29,13 @@ class Config:
     max_stable_spread: float = 0.06          # average spread at/below this counts as stable
     min_trade_speed: float = 0.50            # trades per second
 
+    # --- seller_control gate thresholds -----------------------------------------------
+    # The negative mirror of the buyer gate (max_stable_spread / min_trade_speed are
+    # side-neutral and shared). seller_control requires real DOWNWARD price progress, so
+    # its impact cutoff is NEGATIVE — price impact, not raw aggression.
+    min_aggressive_sell_ratio: float = 0.60  # share of directional volume that is sells
+    max_sell_price_impact: float = -0.02     # MUST be negative: price actually fell
+
     # --- Warm-up ----------------------------------------------------------------------
     # Below this many processed trades the read is an honest cold-start ``unclear``. Set so
     # the first directional call lands with comfortable margin above ``reasonable_confidence``

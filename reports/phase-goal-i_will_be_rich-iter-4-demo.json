@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-i_will_be_rich-iter-4",
+  "base_url": "http://localhost:3650",
+  "iteration": 4,
+  "default_timeout_ms": 15000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the live tape cockpit",
+      "narration": "Tapeology opens to a single live cockpit that watches one stock at a time. Before you pick a stock it sits quietly at idle, with no invented numbers, just a prompt to start watching.",
+      "point_out": "The ticker box and green Watch button in the header, the 'idle' status in the top-right, and the empty 'No ticker watched' state.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Enter the down-tape sample stock",
+      "narration": "Let's start with the brand-new ability this round adds: reading a market where sellers are in charge. Type the built-in down-tape sample, SIM-SELLER, into the ticker box.",
+      "point_out": "SIM-SELLER typed into the ticker box, ready to watch.",
+      "journey": "J-03",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "SIM-SELLER" }
+    },
+    {
+      "n": 3,
+      "title": "Sellers in control, shown in rose",
+      "narration": "Click Watch and the cockpit fills itself live and settles on 'Seller Control' — the first time the product reads a down-tape. It only makes this call because aggressive selling is genuinely pushing the price down, not merely because sell volume is high.",
+      "point_out": "The rose 'Seller Control' headline with high confidence, a high Aggressive sell ratio, a negative Sell price impact, the three seller observations, and 'Tape state changed to seller_control' in the Event Log.",
+      "journey": "J-03",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Seller Control" }
+    },
+    {
+      "n": 4,
+      "title": "Back to a fresh cockpit",
+      "narration": "Now let's confirm the older up-tape reading still works exactly as before. We reload to a clean cockpit first.",
+      "point_out": "The cockpit returns to its empty 'No ticker watched' state, ready for the next stock.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 5,
+      "title": "Enter the up-tape sample stock",
+      "narration": "This time we'll watch the up-tape sample, SIM-BUYER, where aggressive buyers are lifting the price.",
+      "point_out": "SIM-BUYER typed into the ticker box.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 6,
+      "title": "Buyers in control, still shown in green",
+      "narration": "Click Watch and the cockpit settles on 'Buyer Control' in green — the up-tape reading is untouched by the new seller logic. The same screen now speaks both directions in its own color: rose for sellers, green for buyers.",
+      "point_out": "The green 'Buyer Control' headline, a positive Buy price impact, and 'Tape state changed to buyer_control' in the Event Log — the buyer read is intact.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Buyer Control" }
+    },
+    {
+      "n": 7,
+      "title": "Back to a fresh cockpit",
+      "narration": "One last check — the product's honesty promise. Let's reset and try a stock the system doesn't recognise.",
+      "point_out": "A clean, empty cockpit again.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 8,
+      "title": "Enter an unknown ticker",
+      "narration": "Type a made-up ticker, NOPE123, that isn't one of the built-in sample stocks.",
+      "point_out": "NOPE123 entered in the ticker box.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "NOPE123" }
+    },
+    {
+      "n": 9,
+      "title": "Unknown stocks are refused, never faked",
+      "narration": "Click Watch and the cockpit refuses politely: it shows a clear error and reads nothing at all, rather than inventing a fake tape state to look busy. No data is ever fabricated.",
+      "point_out": "The rose error line under the header and the cockpit staying empty — no made-up 'control' reading for a stock it doesn't know.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "is not a known simulated ticker" }
+    }
+  ]
+}

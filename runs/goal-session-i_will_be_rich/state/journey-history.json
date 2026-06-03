@@ -4,31 +4,31 @@
       "id": "J-01",
       "name": "Watch a ticker and see the live tape cockpit",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-3",
-      "last_passing_iter": "goal-i_will_be_rich-iter-3",
+      "last_verified_iter": "goal-i_will_be_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-3-evidence/UT-J-01-J-02-cockpit-green.png",
-      "notes": "PROMOTED partial -> passing in iter-3. All six panels render live values on SIM-BUYER (Quote bid 122.60/ask 122.62/spread 0.02=ask-bid/last 122.62; 15 recent trades with price/size/side; 30s features incl. trade_speed 2.03/s, aggressive_buy_ratio 0.955, net_aggressive_volume 14000, buy_price_impact +0.390, sell_price_impact -0.120; tape state Buyer Control @ 0.888; 3 observations; event log) and the UI's own WebSocket opened and received 577 live frames (connStatus 'live', no page reload). The iter-2 blocker -- the colorless cockpit -- is RESOLVED: the iter-3 fix (adding ./lib to tailwind content globs) emits the 8 dynamic format.ts color classes as base utilities; the color layer now computes emerald, verified by getComputedStyle + a document.styleSheets base-selector probe (NOT by eye). Evidence: UT-J-01-J-02-cockpit-green.png, UT-J-01-idle-before-watch.png."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-4-evidence/UT-05-buyer-control.png",
+      "notes": "Held PASSING — re-verified iter-4 as a required-still-passing regression guard after the seller_control branch landed. SIM-BUYER still renders all six panels live (Quote bid 119.53/ask 119.55/spread 0.02=ask-bid/last 119.55; recent trades with price/size/side; 30s features; tape state Buyer Control @ 0.871; observations; event log 'Tape state changed to buyer_control') populated entirely over WebSocket with no page reload (status Live). The new seller gate is mutually exclusive with the buyer gate and left buyer classification byte-identical (guarded by the unchanged buyer determinism + 0.8542 confidence unit tests). Evidence: UT-05-buyer-control.png."
     },
     "J-02": {
       "id": "J-02",
       "name": "Buyer-control scenario is identified",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-3",
-      "last_passing_iter": "goal-i_will_be_rich-iter-3",
+      "last_verified_iter": "goal-i_will_be_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-3-evidence/UT-J-01-J-02-cockpit-green.png",
-      "notes": "PROMOTED partial -> passing in iter-3. Data/behavior re-verified (guard intact): tape state buyer_control @ confidence 0.888 (>= 0.60 threshold); aggressive_buy_ratio 0.955 high; buy_price_impact +0.390 POSITIVE (price-impact guard NOT relaxed -- backend untouched this iteration); event log shows 'Tape state changed to buyer_control'. The iter-2 color blocker is fixed: all four color-gate elements -- (a) 'Buyer Control' headline (text-emerald-400), (b) confidence-bar fill (bg-emerald-500), (c) BUY trade-side cell, (d) positive buy_price_impact -- compute emerald (rgb(52,211,153) / bar rgb(16,185,129)), explicitly NOT slate rgb(226,232,240) (the iter-2 colorless value), measured via getComputedStyle. SELL cells and negative sell_price_impact correctly compute rose, confirming side/sign semantics render. By design the numeric confidence readout 0.888 stays neutral slate (not a defect)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-4-evidence/UT-05-buyer-control.png",
+      "notes": "Held PASSING — re-verified iter-4. buyer_control @ confidence 0.871 (>= 0.60); aggressive_buy_ratio 0.928 high; buy_price_impact positive (price-impact guard intact — buyer branch untouched, only the local gate var renamed gate->buyer_gate); event log 'Tape state changed to buyer_control'. Color layer still green: headline computes emerald rgb(52,211,153), confidence-bar fill rgb(16,185,129), measured via getComputedStyle (NOT eye), explicitly NOT rose rgb(251,113,133) and NOT slate rgb(226,232,240) — the new seller branch did not bleed rose into the buyer read. Evidence: UT-05-buyer-control.png, TC-12-sim-buyer-buyer-control.png."
     },
     "J-03": {
       "id": "J-03",
       "name": "Seller-control scenario is identified",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-0",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
-      "notes": "Not yet browser-verified as a journey, BUT substantially de-risked and likely next. Backend already built + unit-proven: SIM-SELLER / seller_control wired in apps/backend/app/providers/simulated.py and covered by deterministic tests in tests/test_scenario.py + tests/test_api.py (part of the green 24/24). The prior color blocker is RESOLVED -- the rose confidence-bar fill (bg-rose-500) and seller state color (text-rose-400) are now confirmed present as base utilities in the served bundle (iter-3 latent-class guard), so the seller bar is no longer latent-broken. Remaining work is a browser-verify pass (lean): watch SIM-SELLER, assert seller_control @ confidence >= threshold, high aggressive_sell_ratio, NEGATIVE sell_price_impact (mirror price-impact guard), the first on-screen rose render (measure via base-selector probe), and 'Tape state changed to seller_control'."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-4-evidence/TC-11-sim-seller-seller-control.png",
+      "notes": "PROMOTED failing -> PASSING in iter-4 (first new-scenario journey since the iter-1 foundation). NOTE: the seller path was NOT pre-built despite the iter-3 journey-history note claiming so — iter-4 decomposer's code inspection found classifier.py had only buyer_control+unclear, simulated.py only _buyer_control_stream(), and SIM-SELLER emitted zero events (it would have hung at cold-start unclear). So this was net-new backend work: STATE_SELLER_CONTROL gate + _seller_confidence/_seller_observations + config thresholds (min_aggressive_sell_ratio=0.60, max_sell_price_impact=-0.02 NEGATIVE) + _seller_control_stream() + 7 new deterministic tests, all at full depth. Browser-verified on SIM-SELLER: tape state Seller Control @ confidence 0.892 (>= 0.60); aggressive_sell_ratio 0.961 high; sell_price_impact -0.370 NEGATIVE (the keystone mirror price-impact guard — code-confirmed sell_impact <= -0.02 AND 3 guard unit tests reject zero/positive impact as control); descending SELL prints; observations 'Seller aggression increasing'/'Price falling on sell prints'/'Spread stable and narrow'; event log 'Tape state changed to seller_control'; live over WS, no reload. First on-screen rose render via dynamic stateColor('seller_control') measured: headline text-rose-400 rgb(251,113,133), bar fill bg-rose-500 rgb(244,63,94), via getComputedStyle + base-selector stylesheet probe (NOT eye), explicitly NOT slate rgb(226,232,240). Backend 31/31 green; coherence PASS (rides the existing Tape-state contract row, one producer/one endpoint). Evidence: TC-11-sim-seller-seller-control.png, UT-02-seller-control.png, UT-03-color-probe.png."
     },
     "J-04": {
       "id": "J-04",
@@ -38,7 +38,7 @@
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
-      "notes": "Not built/verified yet. The amber color blocker is RESOLVED at the bundle level -- text-amber-400 / bg-amber-500 are now confirmed present as base utilities in the served stylesheet (iter-3 latent-class guard), so absorption will no longer render colorless/indistinguishable from control. This is the DEFINING price-impact case (high aggressive sell volume + no meaningful price drop => bid_absorption, NOT seller_control); the critical anti-goal makes it higher-stakes than J-03 -- likely a FULL-depth iteration. Fold in the deferred stream-status-dot consolidation here (drive the top-bar dot from snapshot.stream_status) since absorption/no-data exercises stale/closed states."
+      "notes": "Not built/verified yet — the NEXT target (full depth). This is the DEFINING price-impact case and the most safety-critical anti-goal surface: high aggressive SELL volume WITHOUT a meaningful price drop => bid_absorption, NOT seller_control. seller_control (J-03, iter-4) is now built with its negative-impact guard, which is exactly the prerequisite that makes the absorption-vs-control distinction testable (the difference is whether the quote actually fell). Net-new backend work: absorption features (absorption_score, bid_refresh_score), the bid_absorption classifier branch, a SIM-BIDABS stream (sells hit a bid that REFRESHES at the same price => ~0 sell impact), config cutoffs, and deterministic guard tests asserting absorption (not seller_control) is reached. Amber color path (text-amber-400/bg-amber-500) confirmed present in the served bundle (iter-3 latent-class guard). FOLD IN the deferred stream-status-dot consolidation here (drive the top-bar dot from snapshot.stream_status, not client connStatus) — absorption/no-data exercises stale/closed states."
     },
     "J-05": {
       "id": "J-05",
@@ -48,7 +48,7 @@
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
-      "notes": "Not built/verified yet. Mirror of J-04 (high aggressive BUY volume + no meaningful price rise => ask_absorption, NOT buyer_control). Amber color blocker RESOLVED at the bundle level (text-amber-400 / bg-amber-500 present as base utilities, iter-3 latent-class guard). Critical price-impact anti-goal -- pair with J-04, likely FULL depth."
+      "notes": "Not built/verified yet — the mirror of J-04, to pair with or immediately follow it (full depth). High aggressive BUY volume WITHOUT a meaningful price rise => ask_absorption, NOT buyer_control. Now that buyer_control (J-02) and seller_control (J-03) both exist with their price-impact guards, ask_absorption is a clean extension (ask refreshes at the same price => ~0 buy impact). Needs ask_refresh_score + the ask_absorption branch + a SIM-ASKABS stream + guard tests. Amber color path confirmed in-bundle (iter-3 latent-class guard). Critical price-impact anti-goal."
     },
     "J-06": {
       "id": "J-06",
@@ -58,7 +58,7 @@
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
-      "notes": "Not built/verified yet. unclear is shown in amber/neutral -- amber color blocker RESOLVED at the bundle level (text-amber-400 / bg-amber-500 present, iter-3 latent-class guard). Honest-uncertainty anti-goal: SIM-CHOP must read unclear with low confidence, not a forced directional call."
+      "notes": "Not built/verified yet (a SIM-CHOP scenario emitting mixed/choppy flow does not exist; the ticker is reserved-and-silent). The unclear state itself already renders correctly in amber — iter-4 UT-07 showed SIM-BIDABS (silent) honestly holds 'Unclear' amber rgb(251,191,36) @ conf 0.100 'Warming up' with an empty event log (no over-fire) — but J-06's acceptance needs an actively choppy stream that resolves to unclear with low confidence by mixed signals/wide spread/low trade_speed, not merely a silent provider. Honest-uncertainty anti-goal. Likely lean once SIM-CHOP is authored, after J-04/J-05."
     },
     "J-07": {
       "id": "J-07",
@@ -68,17 +68,17 @@
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
-      "notes": "Not built/verified yet. The 'Tape state changed to buyer_control' transition line renders in the Event Log (re-confirmed in iter-3 screenshot), but the full cross-state transition taxonomy (cold-start unclear -> resolved state, absorption messages, observations updating live on transition) is unverified. Best verified once seller/absorption scenarios are live (J-03/J-04/J-05)."
+      "notes": "Not fully verified yet. Both directional transition lines now render in the Event Log — 'Tape state changed to buyer_control' (J-02) and 'Tape state changed to seller_control' (J-03, iter-4) — and the state-generic emitter is proven on two states. Remaining for J-07: verify the full cross-state taxonomy from a COLD start (initial unclear -> resolved state at the transition tick), absorption messages ('Large sell/buy print absorbed', 'Bid/Ask refreshing at <price>'), and observations updating live on transition. Best verified once absorption scenarios (J-04/J-05) are live so multiple distinct transitions can be chained."
     },
     "J-08": {
       "id": "J-08",
       "name": "REST and the live UI agree (single source of truth)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-3",
-      "last_passing_iter": "goal-i_will_be_rich-iter-3",
+      "last_verified_iter": "goal-i_will_be_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-3-evidence/UT-J-01-J-02-cockpit-green.png",
-      "notes": "Stays GREEN -- re-verified in iter-3 as the required-still-passing guard proving the color-only change altered no engine value. Exact UI == REST agreement across 15 metrics vs GET /tape/SIM-BUYER/state + /features (tape_state buyer_control; confidence UI 0.888 == REST 0.8882575...; bid 122.60; ask 122.62; spread 0.02 = ask-bid; last 122.62; trade_speed 2.03; volume_speed 513.3; aggressive_buy_ratio 0.955; aggressive_sell_ratio 0.045; net_aggressive_volume 14000; buy_price_impact 0.390; sell_price_impact -0.120; average_spread 0.020; large_print_count 8). One engine value per metric, no UI-side recomputation -- a colorless number and a green number are the same number. First fully-green journey (iter-2), held green iter-3."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-4-qa.md",
+      "notes": "Held GREEN — re-verified iter-4 as the required-still-passing single-source-of-truth guard, now also across the new seller state. TC-13: with SIM-SELLER stabilized, UI state 'Seller Control' / confidence 0.848 == REST GET /tape/SIM-SELLER/state tape_state=seller_control / confidence=0.8476259 (matches to display precision @ 3dp). One engine value per metric; no UI-side recomputation. Coherence PASS confirms seller_control is produced once by TapeStateClassifier and served by the one canonical /state endpoint (re-exposed read-only by /summary + WS), with no new/parallel producing path. First proven green iter-2 (buyer), held iter-3, extended to the seller state iter-4."
     },
     "J-09": {
       "id": "J-09",
@@ -88,9 +88,9 @@
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
-      "notes": "Not built yet -- no DELETE /watch UI control exists (iter-3 QA explicitly noted 'no UI stop control / DELETE /watch route to force a fresh cold replay'); the DELETE /watch/{ticker} endpoint is specified in goal.md but the cockpit lacks the button to invoke it. The deferred stream-status-dot coherence advisory (drive the top-bar dot from snapshot.stream_status instead of client connStatus) MUST be folded into this iteration or J-04/J-05 -- reconfirmed open (REST stream_status:closed while the dot still read 'live')."
+      "notes": "Not built yet — no DELETE /watch UI control exists in the cockpit (the DELETE /watch/{ticker} endpoint is specified in goal.md but the UI lacks the button to invoke it). The deferred stream-status-dot coherence advisory (drive the top-bar dot from snapshot.stream_status instead of client connStatus) MUST land before this teardown journey or with J-04/J-05 — still open (REST stream_status:closed while the dot can still read 'live'). The iter-4 QA restart had to reset engine state via start-backend.sh precisely because there is no UI stop/teardown control."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-06-02T22:52:33Z"
+  "updated_at": "2026-06-03T00:27:11Z"
 }
