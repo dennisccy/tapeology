@@ -36,6 +36,24 @@ class Config:
     min_aggressive_sell_ratio: float = 0.60  # share of directional volume that is sells
     max_sell_price_impact: float = -0.02     # MUST be negative: price actually fell
 
+    # --- absorption gate thresholds (bid_absorption / ask_absorption) -----------------
+    # The keystone case: high one-sided aggression but the quote HOLDS, so the matching
+    # price impact is flat (NOT past the control cutoff) and the quote refreshes. The flat-
+    # impact condition reuses the control cutoffs directly (bid_absorption needs
+    # sell_price_impact ABOVE max_sell_price_impact; ask_absorption needs buy_price_impact
+    # BELOW min_buy_price_impact) — so the absorption and control gates are mutually
+    # exclusive on the impact condition and cannot both fire.
+    #
+    # Positive evidence the quote actually refreshed (held its level under aggression).
+    # Mere absence of impact is NOT enough — absorption requires real refresh evidence, so a
+    # silent/cold provider stays honest `unclear` (no fabricated absorption).
+    min_bid_refresh_score: float = 0.55
+    min_ask_refresh_score: float = 0.55
+    # Half-width of the "price is flat" band (impact magnitude). absorption_score and the
+    # absorption-confidence flatness component ramp from 1.0 at zero impact to 0.0 here.
+    # Wider than the control cutoff magnitude (|0.02|) so there is a graded near-zero region.
+    absorption_flat_band: float = 0.05
+
     # --- Warm-up ----------------------------------------------------------------------
     # Below this many processed trades the read is an honest cold-start ``unclear``. Set so
     # the first directional call lands with comfortable margin above ``reasonable_confidence``
@@ -56,6 +74,10 @@ class Config:
     ratio_scale: float = 0.40
     impact_scale: float = 0.30
     speed_scale: float = 1.50
+    # How far refresh above its floor earns a full absorption-confidence component (the
+    # absorption confidence rewards a refreshing quote + flat impact, where the directional
+    # confidence rewards impact magnitude + speed).
+    refresh_scale: float = 0.45
     # The spread component is scored against ``max_stable_spread`` directly.
 
     # Component weights for the buyer_control confidence (must sum to 1.0).

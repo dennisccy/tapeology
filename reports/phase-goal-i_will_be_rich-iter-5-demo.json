@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-i_will_be_rich-iter-5",
+  "base_url": "http://localhost:3650",
+  "iteration": 5,
+  "default_timeout_ms": 20000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the tape cockpit",
+      "narration": "This is Tapeology's single-screen cockpit for reading one stock's live order flow. Top-left is the wordmark, the center is where you type a ticker and press Watch, and a status dot top-right honestly tracks whether the stream is live or closed.",
+      "point_out": "The 'idle' status and the 'No ticker watched' empty state — nothing is being watched yet.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Type the buyer-driven sample",
+      "narration": "We start with the built-in sample stock SIM-BUYER, where aggressive buying is genuinely lifting the price.",
+      "point_out": "The ticker field now reads SIM-BUYER, ready to watch.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "Buyers are in control",
+      "narration": "Press Watch and the cockpit fills with a live read — quote, recent trades, named measurements, observations and an event log — and calls 'Buyer Control' in green with a confidence score, because the aggressive buying is actually moving the price up.",
+      "point_out": "The green 'Buyer Control' headline with its confidence bar, and all six panels populated live without any page reload.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Buyer Control" }
+    },
+    {
+      "n": 4,
+      "title": "Now the seller-driven sample",
+      "narration": "Next we watch SIM-SELLER, the mirror case where heavy selling is pushing the price down.",
+      "point_out": "The ticker field now reads SIM-SELLER.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-SELLER" }
+    },
+    {
+      "n": 5,
+      "title": "Sellers are in control",
+      "narration": "The cockpit recognises sellers are in control and shows 'Seller Control' in red — but only because the selling is genuinely driving the price lower.",
+      "point_out": "The red 'Seller Control' headline; the price is actually falling on the sell prints, which is what earns the directional call.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Seller Control" }
+    },
+    {
+      "n": 6,
+      "title": "The same heavy selling — absorbed",
+      "narration": "Now the headline new read. SIM-BIDABS has the very same heavy selling as SIM-SELLER, but here the bid keeps refreshing and the price refuses to fall.",
+      "point_out": "The ticker field now reads SIM-BIDABS.",
+      "journey": "J-04",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-BIDABS" }
+    },
+    {
+      "n": 7,
+      "title": "Bid Absorption, not Seller Control",
+      "narration": "Because the price holds despite the selling, Tapeology calls 'Bid Absorption' in amber — heavy selling is being quietly absorbed, not winning. Reading price impact over raw aggression is the whole reason this product exists.",
+      "point_out": "The amber 'Bid Absorption' headline; the new Absorption score / Bid refresh score / Ask refresh score rows in Features; and the event-log lines 'Large sell print absorbed' and 'Bid refreshing at 100.00'.",
+      "journey": "J-04",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Bid Absorption" }
+    },
+    {
+      "n": 8,
+      "title": "The buy-side mirror",
+      "narration": "SIM-ASKABS is the mirror case: heavy aggressive buying into an offer that holds firm.",
+      "point_out": "The ticker field now reads SIM-ASKABS.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-ASKABS" }
+    },
+    {
+      "n": 9,
+      "title": "Ask Absorption, not Buyer Control",
+      "narration": "The ask holds and the price stalls instead of rising, so the call is 'Ask Absorption' in amber — heavy buying being absorbed rather than lifting the tape.",
+      "point_out": "The amber 'Ask Absorption' headline and the elevated Ask refresh score that justifies the call.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Ask Absorption" }
+    },
+    {
+      "n": 10,
+      "title": "Try an unknown ticker",
+      "narration": "Finally, a trust check: we type a ticker the system doesn't recognise.",
+      "point_out": "The ticker field reads NOPE.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "NOPE" }
+    },
+    {
+      "n": 11,
+      "title": "It refuses to fabricate data",
+      "narration": "Instead of inventing a reading, Tapeology shows a clear error and stays idle — it never fabricates a tape state for a stock it doesn't know.",
+      "point_out": "The red 'is not a known simulated ticker' message, with the status still 'idle' and no fake panels populated.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "not a known simulated ticker" }
+    }
+  ]
+}

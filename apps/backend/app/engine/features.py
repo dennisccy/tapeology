@@ -20,8 +20,7 @@ from ..config import Config
 from ..providers.base import Side
 
 # Names of the features this iteration computes. (The remaining blueprint features —
-# spread_change, absorption_score, bid/ask_refresh_score, liquidity_imbalance — are added
-# additively in their owning iterations.)
+# spread_change, liquidity_imbalance — are added additively in their owning iterations.)
 FEATURE_NAMES = (
     "trade_speed",
     "volume_speed",
@@ -32,25 +31,34 @@ FEATURE_NAMES = (
     "sell_price_impact",
     "average_spread",
     "large_print_count",
+    # Absorption triplet (price impact, not aggression).
+    "absorption_score",
+    "bid_refresh_score",
+    "ask_refresh_score",
 )
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, value))
 
 
 class _Window:
     """One rolling window of a fixed logical length (seconds)."""
 
-    def __init__(self, length: int, large_print_size: int) -> None:
+    def __init__(self, length: int, config: Config) -> None:
         self.length = length
-        self._large_print_size = large_print_size
+        self._config = config
         # (timestamp, price, size, side)
         self._trades: deque[tuple[float, float, int, Side]] = deque()
-        # (timestamp, spread)
-        self._quotes: deque[tuple[float, float]] = deque()
+        # (timestamp, bid, ask, spread) — bid/ask threaded additively for the refresh scores;
+        # spread is still stored verbatim so ``average_spread`` is computed unchanged.
+        self._quotes: deque[tuple[float, float, float, float]] = deque()
 
     def add_trade(self, ts: float, price: float, size: int, side: Side) -> None:
         self._trades.append((ts, price, size, side))
 
-    def add_quote(self, ts: float, spread: float) -> None:
-        self._quotes.append((ts, spread))
+    def add_quote(self, ts: float, bid: float, ask: float, spread: float) -> None:
+        self._quotes.append((ts, bid, ask, spread))
 
     def _evict(self, now_ts: float) -> None:
         lo = now_ts - self.length
@@ -81,20 +89,89 @@ class _Window:
                     sell_impact += delta
             prev_price = price
 
-        large_prints = sum(1 for t in self._trades if t[2] >= self._large_print_size)
-        average_spread = fmean(q[1] for q in self._quotes) if self._quotes else 0.0
+        large_prints = sum(1 for t in self._trades if t[2] >= self._config.large_print_size)
+        average_spread = fmean(q[3] for q in self._quotes) if self._quotes else 0.0
+
+        buy_ratio = (buy_volume / directional) if directional else 0.0
+        sell_ratio = (sell_volume / directional) if directional else 0.0
+
+        quotes = list(self._quotes)
+        # bid_refresh: among aggressive-SELL prints, fraction at which the bid HELD (did not
+        # fall below its in-window high). ask_refresh: among aggressive-BUY prints, fraction
+        # at which the ask HELD (did not rise above its in-window low). High when the quote
+        # absorbs (SIM-BIDABS / SIM-ASKABS); low when it walks (SIM-SELLER / SIM-BUYER).
+        bid_refresh = self._refresh_fraction(quotes, Side.SELL, price_index=1, track_max=True)
+        ask_refresh = self._refresh_fraction(quotes, Side.BUY, price_index=2, track_max=False)
 
         return {
             "trade_speed": trade_count / self.length,
             "volume_speed": total_volume / self.length,
-            "aggressive_buy_ratio": (buy_volume / directional) if directional else 0.0,
-            "aggressive_sell_ratio": (sell_volume / directional) if directional else 0.0,
+            "aggressive_buy_ratio": buy_ratio,
+            "aggressive_sell_ratio": sell_ratio,
             "net_aggressive_volume": float(buy_volume - sell_volume),
             "buy_price_impact": buy_impact,
             "sell_price_impact": sell_impact,
             "average_spread": average_spread,
             "large_print_count": float(large_prints),
+            "absorption_score": self._absorption_score(
+                buy_ratio, sell_ratio, buy_impact, sell_impact
+            ),
+            "bid_refresh_score": bid_refresh,
+            "ask_refresh_score": ask_refresh,
         }
+
+    def _refresh_fraction(
+        self,
+        quotes: list[tuple[float, float, float, float]],
+        side: Side,
+        price_index: int,
+        track_max: bool,
+    ) -> float:
+        """Fraction of ``side`` prints at which the quote held against its high/low-water mark.
+
+        For each matching print the in-effect quote is the last quote with ``ts <= trade ts``
+        (a forward merge over the ts-ordered series). bid uses a running MAX (held = bid did
+        not fall below its prior high); ask uses a running MIN (held = ask did not rise above
+        its prior low). 0.0 when there is no matching print (no evidence — never fabricated)."""
+        qi = 0
+        n = len(quotes)
+        current: float | None = None
+        watermark: float | None = None
+        refreshed = 0
+        total = 0
+        for tts, _price, _size, tside in self._trades:
+            while qi < n and quotes[qi][0] <= tts:
+                current = quotes[qi][price_index]
+                qi += 1
+            if tside is not side or current is None:
+                continue
+            total += 1
+            if watermark is None:
+                refreshed += 1
+                watermark = current
+            else:
+                held = current >= watermark if track_max else current <= watermark
+                if held:
+                    refreshed += 1
+                watermark = max(watermark, current) if track_max else min(watermark, current)
+        return (refreshed / total) if total else 0.0
+
+    def _absorption_score(
+        self, buy_ratio: float, sell_ratio: float, buy_impact: float, sell_impact: float
+    ) -> float:
+        """Summary of "high one-sided aggression with little/no price progress".
+
+        Take the dominant aggressive side; the score is high only when that side's ratio is
+        strong AND its price impact is flat (near zero). Real directional progress collapses
+        the flatness term to zero, so control scenarios read ~0 here."""
+        c = self._config
+        if buy_ratio >= sell_ratio:
+            dom_ratio, dom_impact, dom_floor = buy_ratio, buy_impact, c.min_aggressive_buy_ratio
+        else:
+            dom_ratio, dom_impact, dom_floor = sell_ratio, sell_impact, c.min_aggressive_sell_ratio
+        ratio_strength = _clamp01((dom_ratio - dom_floor) / c.ratio_scale)
+        flatness = _clamp01(1.0 - abs(dom_impact) / c.absorption_flat_band)
+        return ratio_strength * flatness
 
 
 class FeatureEngine:
@@ -103,16 +180,16 @@ class FeatureEngine:
     def __init__(self, config: Config) -> None:
         self._config = config
         self._windows: dict[int, _Window] = {
-            w: _Window(w, config.large_print_size) for w in config.windows
+            w: _Window(w, config) for w in config.windows
         }
 
     def add_trade(self, ts: float, price: float, size: int, side: Side) -> None:
         for window in self._windows.values():
             window.add_trade(ts, price, size, side)
 
-    def add_quote(self, ts: float, spread: float) -> None:
+    def add_quote(self, ts: float, bid: float, ask: float, spread: float) -> None:
         for window in self._windows.values():
-            window.add_quote(ts, spread)
+            window.add_quote(ts, bid, ask, spread)
 
     def compute(self, now_ts: float) -> dict[str, dict[str, float]]:
         """Feature values for every window, keyed by window label (e.g. ``"30s"``)."""

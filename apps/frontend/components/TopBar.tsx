@@ -3,11 +3,24 @@
 import { useState } from "react";
 import type { ConnStatus, TapeSnapshot } from "@/lib/types";
 
-const DOT_COLOR: Record<ConnStatus, string> = {
-  idle: "bg-slate-600",
-  connecting: "bg-amber-400 animate-pulse",
-  live: "bg-emerald-400",
-  closed: "bg-rose-500",
+type DotSpec = { color: string; label: string };
+
+// Pre-snapshot affordance only (idle / connecting before the first engine snapshot arrives).
+const CONN_DOT: Record<ConnStatus, DotSpec> = {
+  idle: { color: "bg-slate-600", label: "idle" },
+  connecting: { color: "bg-amber-400 animate-pulse", label: "connecting" },
+  live: { color: "bg-emerald-400", label: "live" },
+  closed: { color: "bg-rose-500", label: "closed" },
+};
+
+// The canonical engine stream status (single source of truth). Once a snapshot is present the
+// dot reads THIS — so when a bounded sim stream exhausts and the engine flips to "closed", the
+// dot tells the truth instead of a stale client-side "live".
+const STREAM_DOT: Record<string, DotSpec> = {
+  connecting: { color: "bg-amber-400 animate-pulse", label: "connecting" },
+  live: { color: "bg-emerald-400", label: "live" },
+  stale: { color: "bg-amber-400", label: "stale" },
+  closed: { color: "bg-rose-500", label: "closed" },
 };
 
 export function TopBar({
@@ -24,6 +37,12 @@ export function TopBar({
   error: string | null;
 }) {
   const [input, setInput] = useState("");
+
+  // Prefer the engine's canonical stream status whenever a snapshot is present; fall back to
+  // the client connection status only for the pre-snapshot idle/connecting affordance.
+  const dot: DotSpec = snapshot
+    ? STREAM_DOT[snapshot.stream_status] ?? { color: "bg-slate-600", label: snapshot.stream_status }
+    : CONN_DOT[connStatus];
 
   return (
     <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
@@ -66,8 +85,8 @@ export function TopBar({
         )}
 
         <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${DOT_COLOR[connStatus]}`} />
-          <span className="capitalize">{connStatus}</span>
+          <span className={`inline-block h-2.5 w-2.5 rounded-full ${dot.color}`} />
+          <span className="capitalize">{dot.label}</span>
         </div>
       </div>
 

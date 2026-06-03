@@ -16,6 +16,10 @@ const FEATURE_ROWS: [string, string, string, number, boolean][] = [
   ["sell_price_impact", "Sell price impact", "", 3, true],
   ["average_spread", "Average spread", "", 3, false],
   ["large_print_count", "Large prints", "", 0, false],
+  // Absorption triplet (price impact, not aggression) — neutral readouts, not color-by-sign.
+  ["absorption_score", "Absorption score", "", 3, false],
+  ["bid_refresh_score", "Bid refresh score", "", 3, false],
+  ["ask_refresh_score", "Ask refresh score", "", 3, false],
 ];
 
 export function FeaturesPanel({

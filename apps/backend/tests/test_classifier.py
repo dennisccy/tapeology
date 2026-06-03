@@ -1,10 +1,16 @@
-"""TapeStateClassifier: buyer_control, seller_control, cold-start unclear, and the
-price-impact guards (the critical anti-goal surface) on both sides."""
+"""TapeStateClassifier: buyer_control, seller_control, bid/ask_absorption, cold-start
+unclear, and the price-impact guards (the critical anti-goal surface) on all sides.
+
+The keystone of the whole product lives here: identical high one-sided aggression resolves
+to *control* when price actually moved and to *absorption* when it did not — keying on price
+impact, never on the aggression ratio alone."""
 
 import pytest
 
 from app.config import CONFIG
 from app.engine.classifier import (
+    STATE_ASK_ABSORPTION,
+    STATE_BID_ABSORPTION,
     STATE_BUYER_CONTROL,
     STATE_SELLER_CONTROL,
     STATE_UNCLEAR,
@@ -25,6 +31,11 @@ def _features(**overrides) -> dict[str, float]:
         "sell_price_impact": -0.01,
         "average_spread": 0.02,
         "large_print_count": 2.0,
+        # Absorption features default to NO refresh evidence, so flat impact alone never
+        # fabricates an absorption call — it requires positive *_refresh_score evidence.
+        "absorption_score": 0.0,
+        "bid_refresh_score": 0.0,
+        "ask_refresh_score": 0.0,
     }
     base.update(overrides)
     return base
@@ -112,3 +123,100 @@ def test_default_buyer_features_do_not_trip_seller_gate():
     result = clf.classify(_features(), trade_count=60)
     assert result.state == STATE_BUYER_CONTROL
     assert result.state != STATE_SELLER_CONTROL
+
+
+# --- Absorption: bid_absorption (J-04) — high sell aggression, FLAT impact, bid refresh ----
+
+def _bid_absorption_features(**overrides) -> dict[str, float]:
+    """High aggressive SELL volume with FLAT impact (no real drop) + a refreshing bid.
+
+    Symmetric (sell-ratio 0.90, flat impact, spread 0.02, bid_refresh 1.0) so it scores the
+    SAME transparent confidence the symmetric buyer/seller cases pin (0.8542)."""
+    base = _features(
+        aggressive_buy_ratio=0.10,
+        aggressive_sell_ratio=0.90,
+        buy_price_impact=0.01,
+        sell_price_impact=0.0,        # FLAT — above the negative cutoff: no real drop
+        absorption_score=0.90,
+        bid_refresh_score=1.0,        # the bid held / refreshed under selling
+        ask_refresh_score=0.0,
+    )
+    base.update(overrides)
+    return base
+
+
+def test_bid_absorption_on_flat_impact_with_refresh():
+    # The defining case: high sell aggression but the bid HELD (flat impact + refresh) =>
+    # bid_absorption, NOT seller_control and NOT a silent unclear.
+    result = clf.classify(_bid_absorption_features(), trade_count=60)
+    assert result.state == STATE_BID_ABSORPTION
+    assert result.state != STATE_SELLER_CONTROL
+    assert result.state != STATE_UNCLEAR
+    assert result.confidence >= CONFIG.reasonable_confidence
+    assert result.confidence == pytest.approx(0.8542, abs=1e-3)
+
+
+def test_high_sell_aggression_with_real_drop_is_seller_not_bid_absorption():
+    # KEYSTONE precedence: identical high sell aggression but with a REAL negative impact
+    # must resolve to seller_control — never bid_absorption. Price impact, not aggression.
+    result = clf.classify(_bid_absorption_features(sell_price_impact=-0.40), trade_count=60)
+    assert result.state == STATE_SELLER_CONTROL
+    assert result.state != STATE_BID_ABSORPTION
+
+
+def test_bid_absorption_requires_refresh_evidence_not_mere_flat_impact():
+    # Flat impact but NO refresh evidence => honest unclear (no fabricated absorption).
+    result = clf.classify(_bid_absorption_features(bid_refresh_score=0.0), trade_count=60)
+    assert result.state == STATE_UNCLEAR
+    assert result.state != STATE_BID_ABSORPTION
+
+
+def test_wide_spread_blocks_bid_absorption():
+    result = clf.classify(_bid_absorption_features(average_spread=0.50), trade_count=60)
+    assert result.state == STATE_UNCLEAR
+    assert result.state != STATE_BID_ABSORPTION
+
+
+# --- Absorption: ask_absorption (J-05) — the strict buy/ask mirror -------------------------
+
+def _ask_absorption_features(**overrides) -> dict[str, float]:
+    """High aggressive BUY volume with FLAT impact (no real rise) + a refreshing ask."""
+    base = _features(
+        aggressive_buy_ratio=0.90,
+        aggressive_sell_ratio=0.10,
+        buy_price_impact=0.0,         # FLAT — below the positive cutoff: no real rise
+        sell_price_impact=-0.01,
+        absorption_score=0.90,
+        bid_refresh_score=0.0,
+        ask_refresh_score=1.0,        # the ask held / refreshed under buying
+    )
+    base.update(overrides)
+    return base
+
+
+def test_ask_absorption_on_flat_impact_with_refresh():
+    result = clf.classify(_ask_absorption_features(), trade_count=60)
+    assert result.state == STATE_ASK_ABSORPTION
+    assert result.state != STATE_BUYER_CONTROL
+    assert result.state != STATE_UNCLEAR
+    assert result.confidence >= CONFIG.reasonable_confidence
+    assert result.confidence == pytest.approx(0.8542, abs=1e-3)
+
+
+def test_high_buy_aggression_with_real_rise_is_buyer_not_ask_absorption():
+    # Mirror keystone: high buy aggression WITH real upward progress => buyer_control.
+    result = clf.classify(_ask_absorption_features(buy_price_impact=0.40), trade_count=60)
+    assert result.state == STATE_BUYER_CONTROL
+    assert result.state != STATE_ASK_ABSORPTION
+
+
+def test_ask_absorption_requires_refresh_evidence_not_mere_flat_impact():
+    result = clf.classify(_ask_absorption_features(ask_refresh_score=0.0), trade_count=60)
+    assert result.state == STATE_UNCLEAR
+    assert result.state != STATE_ASK_ABSORPTION
+
+
+def test_wide_spread_blocks_ask_absorption():
+    result = clf.classify(_ask_absorption_features(average_spread=0.50), trade_count=60)
+    assert result.state == STATE_UNCLEAR
+    assert result.state != STATE_ASK_ABSORPTION

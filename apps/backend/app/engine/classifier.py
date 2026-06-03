@@ -1,19 +1,24 @@
 """Rule/threshold tape-state classifier — transparent, no ML (anti-goal: No ML in v1).
 
-This iteration resolves three states:
-  * ``buyer_control`` — requires, over the primary window, ALL of: high aggressive_buy_ratio
-    AND positive buy_price_impact AND a stable (narrow) spread AND elevated trade_speed,
-    and a resulting confidence at/above the directional floor.
+This iteration resolves five states:
+  * ``buyer_control`` — high aggressive_buy_ratio AND positive buy_price_impact AND a stable
+    spread AND elevated trade_speed, confidence at/above the directional floor.
   * ``seller_control`` — the strict mirror: high aggressive_sell_ratio AND *negative*
-    sell_price_impact (real downward price progress) AND a stable spread AND elevated speed,
-    confidence at/above the floor.
-  * ``unclear`` — cold-start (before warm-up), or warmed-up-but-no-clean-control.
+    sell_price_impact (real downward progress) AND a stable spread AND elevated speed.
+  * ``bid_absorption`` — high aggressive_sell_ratio but the bid HELD: sell_price_impact is
+    FLAT (above the negative control cutoff — no real drop) AND the bid refreshed
+    (bid_refresh_score high) AND a stable spread.
+  * ``ask_absorption`` — the buy/ask mirror: high aggressive_buy_ratio but buy_price_impact
+    FLAT (below the positive control cutoff — no real rise) AND the ask refreshed.
+  * ``unclear`` — cold-start (before warm-up), or warmed-up-but-no-clean-read.
 
-Each directional gate REQUIRES real price impact, not raw aggression (anti-goal): buyer needs
-positive ``buy_price_impact``, seller needs negative ``sell_price_impact``. High one-sided
-aggression with no matching price progress does NOT qualify — that case is absorption, owned
-by the bid/ask_absorption states in a later iteration. The structure extends to the remaining
-two states then. Every threshold/boundary comes from ``Config`` — no literal numbers here.
+THE KEYSTONE (price impact, not aggression): the absorption gates use the EXACT complement of
+the control impact condition (bid_absorption needs ``sell_price_impact > max_sell_price_impact``
+where seller_control needs ``<=``), so control and absorption are mutually exclusive on impact
+and cannot both fire. Identical high one-sided aggression therefore resolves to *control* when
+price actually moved and to *absorption* when it did not — and never to a silent ``unclear``,
+because absorption requires real refresh evidence, not the mere absence of impact. Every
+threshold/boundary comes from ``Config`` — no literal numbers here.
 """
 
 from __future__ import annotations
@@ -24,6 +29,8 @@ from ..config import Config
 
 STATE_BUYER_CONTROL = "buyer_control"
 STATE_SELLER_CONTROL = "seller_control"
+STATE_BID_ABSORPTION = "bid_absorption"
+STATE_ASK_ABSORPTION = "ask_absorption"
 STATE_UNCLEAR = "unclear"
 
 
@@ -59,6 +66,8 @@ class TapeStateClassifier:
         sell_impact = primary_features["sell_price_impact"]
         spread = primary_features["average_spread"]
         speed = primary_features["trade_speed"]
+        bid_refresh = primary_features["bid_refresh_score"]
+        ask_refresh = primary_features["ask_refresh_score"]
 
         # buyer_control — high buy aggression WITH real upward price progress. The buyer and
         # seller gates are mutually exclusive in practice (the aggressive ratios are
@@ -100,7 +109,48 @@ class TapeStateClassifier:
                     self._seller_observations(sell_ratio, sell_impact, spread),
                 )
 
-        # Warmed up but no clean control => honestly unclear.
+        # bid_absorption — high sell aggression but the bid HELD: impact FLAT (strictly the
+        # complement of seller_control's condition, so the two never both fire) AND a
+        # refreshing bid. Reached only because the seller gate above did not (no real drop).
+        bid_absorption_gate = (
+            sell_ratio >= c.min_aggressive_sell_ratio
+            and sell_impact > c.max_sell_price_impact      # NOT a real drop (flat)
+            and bid_refresh >= c.min_bid_refresh_score      # real refresh evidence
+            and spread <= c.max_stable_spread
+        )
+        if bid_absorption_gate:
+            confidence = self._absorption_confidence(
+                sell_ratio, sell_impact, spread, bid_refresh, c.min_aggressive_sell_ratio,
+                c.min_bid_refresh_score,
+            )
+            if confidence >= c.reasonable_confidence:
+                return Classification(
+                    STATE_BID_ABSORPTION,
+                    confidence,
+                    self._bid_absorption_observations(),
+                )
+
+        # ask_absorption — the buy/ask mirror: high buy aggression but the ask HELD (impact
+        # flat — no real rise) AND a refreshing ask.
+        ask_absorption_gate = (
+            buy_ratio >= c.min_aggressive_buy_ratio
+            and buy_impact < c.min_buy_price_impact         # NOT a real rise (flat)
+            and ask_refresh >= c.min_ask_refresh_score
+            and spread <= c.max_stable_spread
+        )
+        if ask_absorption_gate:
+            confidence = self._absorption_confidence(
+                buy_ratio, buy_impact, spread, ask_refresh, c.min_aggressive_buy_ratio,
+                c.min_ask_refresh_score,
+            )
+            if confidence >= c.reasonable_confidence:
+                return Classification(
+                    STATE_ASK_ABSORPTION,
+                    confidence,
+                    self._ask_absorption_observations(),
+                )
+
+        # Warmed up but no clean control or absorption => honestly unclear.
         return Classification(
             STATE_UNCLEAR,
             c.unclear_confidence,
@@ -160,3 +210,49 @@ class TapeStateClassifier:
             observations.append("Price falling on sell prints")
         observations.append("Spread stable and narrow")
         return tuple(observations)
+
+    def _absorption_confidence(
+        self,
+        ratio: float,
+        impact: float,
+        spread: float,
+        refresh: float,
+        ratio_floor: float,
+        refresh_floor: float,
+    ) -> float:
+        """Side-neutral absorption confidence (bid and ask share it by symmetry).
+
+        Four components, equally weighted (reusing ``confidence_weights`` so absorption stays
+        calibrated alongside the directional states): aggression past its floor, FLATNESS of
+        the matching impact (rewarding near-zero, the opposite of the directional impact
+        component), a narrow spread, and the refresh past its floor."""
+        c = self._c
+        ratio_score = _clamp01((ratio - ratio_floor) / c.ratio_scale)
+        flatness_score = _clamp01(1.0 - abs(impact) / c.absorption_flat_band)
+        spread_score = _clamp01((c.max_stable_spread - spread) / c.max_stable_spread)
+        refresh_score = _clamp01((refresh - refresh_floor) / c.refresh_scale)
+
+        w_ratio, w_flat, w_spread, w_refresh = c.confidence_weights
+        raw = (
+            w_ratio * ratio_score
+            + w_flat * flatness_score
+            + w_spread * spread_score
+            + w_refresh * refresh_score
+        )
+        return min(raw, c.max_confidence)
+
+    @staticmethod
+    def _bid_absorption_observations() -> tuple[str, ...]:
+        return (
+            "Heavy sell volume being absorbed",
+            "Price holding despite sell prints",
+            "Spread stable and narrow",
+        )
+
+    @staticmethod
+    def _ask_absorption_observations() -> tuple[str, ...]:
+        return (
+            "Heavy buy volume being absorbed",
+            "Price stalling despite buy prints",
+            "Spread stable and narrow",
+        )

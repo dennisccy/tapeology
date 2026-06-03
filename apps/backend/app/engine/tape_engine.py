@@ -51,7 +51,9 @@ class TapeEngine:
     def process_event(self, event: Event) -> EngineSnapshot:
         if isinstance(event, QuoteEvent):
             self._market.update_quote(event)
-            self._features.add_quote(event.timestamp, self._market.spread)
+            self._features.add_quote(
+                event.timestamp, self._market.bid, self._market.ask, self._market.spread
+            )
         elif isinstance(event, TradeEvent):
             # The quote already in MarketState is the one in effect at this trade's ts,
             # because events arrive in logical-timestamp order (quote before trade).
@@ -74,10 +76,16 @@ class TapeEngine:
 
     def _build_snapshot(self) -> EngineSnapshot:
         features = self._features.compute(self._last_ts)
-        classification = self._classifier.classify(
-            features[self._config.primary_window_label], self._trade_count
-        )
-        for message in self._emitter.on_tick(classification.state):
+        primary = features[self._config.primary_window_label]
+        classification = self._classifier.classify(primary, self._trade_count)
+        # The emitter owns the appended event log; it needs the held bid/ask and large-print
+        # evidence to phrase the absorption message from real values (single source, here).
+        for message in self._emitter.on_tick(
+            classification.state,
+            bid=self._market.bid,
+            ask=self._market.ask,
+            large_print_count=primary["large_print_count"],
+        ):
             self._event_log.append(message)
 
         return EngineSnapshot(

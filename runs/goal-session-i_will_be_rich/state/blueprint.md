@@ -16,7 +16,7 @@ aggression with no price progress resolves to *absorption*, never *control*.
 
 **App shell (persistent).** Top bar: app name **Tapeology** · **ticker input + Watch button**
 (submits `POST /watch/{ticker}`) · **watched-ticker label** · **scenario indicator** (which
-simulated scenario is replaying) · **stream-status** dot (connected / stale / closed) · **Stop**
+simulated scenario is replaying) · **stream-status** dot (driven by the engine's canonical `snapshot.stream_status` — connecting / live / stale / closed) · **Stop**
 control (`DELETE /watch/{ticker}`). Calm dark surface, monospaced numerics; green = buy-side /
 positive impact, red = sell-side / negative impact, amber = absorption / unclear.
 
@@ -60,6 +60,15 @@ recompute. `…/state` and `…/features` are the canonical REST reads (per goal
 **Config (no magic numbers).** All window lengths, thresholds, large-print size,
 impact/absorption cutoffs, and confidence boundaries live in one config module read by the
 engine/classifier — never inline literals in engine/classifier code.
+
+**Feature-set realization (additive log — same producer/endpoint, no new contract row).** The
+"14 core features" row is filled in across iterations through its one owner (`FeatureEngine`) →
+`GET /tape/{ticker}/features`: live as of **iter-5** are the 9 directional/market features plus the
+absorption triplet `absorption_score` / `bid_refresh_score` / `ask_refresh_score` (J-04/J-05). The
+remaining `spread_change` / `liquidity_imbalance` (+ later `liquidity_pull_score`) follow in their
+owning iterations — same producer, same endpoint, no new row. All five tape states (`buyer_control`
+/ `seller_control` / `bid_absorption` / `ask_absorption` / `unclear`) are already-enumerated values
+of the Tape-state row, produced once by `TapeStateClassifier` and served by `/state`.
 
 **Singularity rules (coherence guardrails).**
 - Tape state, confidence, and each feature have exactly **one producer** (the engine). REST, WS,
