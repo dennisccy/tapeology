@@ -72,6 +72,16 @@ async def watch(ticker: str) -> dict:
     return {"ticker": ticker, "scenario": snap.scenario, "status": "watching"}
 
 
+@app.delete("/watch/{ticker}")
+async def stop_watch(ticker: str) -> dict:
+    # Async so task cancellation runs on the event loop (the feeder lives there). Tearing the
+    # engine down removes it from the registry, so subsequent reads honestly 404 and a fresh
+    # WS connect is rejected 4404 — no fabricated success, no synthesized post-stop snapshot.
+    if not manager.stop(ticker):
+        raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' is not being watched")
+    return {"ticker": ticker, "status": "stopped"}
+
+
 @app.get("/tape/{ticker}/state")
 def get_state(ticker: str) -> dict:
     return serialize_state(_engine_or_404(ticker).snapshot())

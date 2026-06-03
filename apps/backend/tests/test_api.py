@@ -4,7 +4,9 @@ import asyncio
 import itertools
 
 import pytest
+from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from starlette.websockets import WebSocketDisconnect
 
 from app.config import CONFIG
 from app.engine.tape_engine import TapeEngine
@@ -243,3 +245,45 @@ async def test_watch_sim_chop_reads_unclear_over_feeder():
         assert not any(m.startswith("Tape state changed to") for m in events["event_log"])
 
     await manager.shutdown()
+
+
+# --- DELETE /watch/{ticker}: deliberate teardown, then re-watch is a fresh read (J-09) -----
+
+def test_delete_watch_stops_then_reads_404_and_rewatch_is_fresh():
+    # TestClient drives a real event loop so POST starts the background feeder and DELETE
+    # cancels it. SIM-ASKABS is used by no other test against the shared manager, and this
+    # test removes its own engine, so it leaves no cross-test residue.
+    client = TestClient(app)
+
+    assert client.post("/watch/SIM-ASKABS").status_code == 200
+
+    # Stop: an explicit success body, not a fabricated something.
+    stopped = client.delete("/watch/SIM-ASKABS")
+    assert stopped.status_code == 200
+    assert stopped.json() == {"ticker": "SIM-ASKABS", "status": "stopped"}
+
+    # Engine removed => reads are an explicit 404 (never a synthesized snapshot) and a fresh
+    # WS connect is rejected with 4404 — the timing-independent teardown evidence.
+    assert client.get("/tape/SIM-ASKABS/state").status_code == 404
+    assert client.get("/tape/SIM-ASKABS/features").status_code == 404
+    with pytest.raises(WebSocketDisconnect) as ws_exc:
+        with client.websocket_connect("/tape/SIM-ASKABS/stream"):
+            pass
+    assert ws_exc.value.code == 4404
+
+    # Re-watch rebuilds the engine: reads went 404 (gone) -> 200 (rebuilt) across the re-POST,
+    # the timing-independent API-level proof of "stop, then a fresh re-watch". (The cold-start /
+    # no-state-leakage guarantee for the fresh engine is proven directly in test_watch_manager.py.)
+    rewatch = client.post("/watch/SIM-ASKABS")
+    assert rewatch.status_code == 200
+    assert rewatch.json() == {"ticker": "SIM-ASKABS", "scenario": "ask_absorption", "status": "watching"}
+    assert client.get("/tape/SIM-ASKABS/state").status_code == 200  # engine present again
+
+    # Clean up the re-watch feeder + engine so nothing leaks into later tests.
+    assert client.delete("/watch/SIM-ASKABS").status_code == 200
+
+
+def test_delete_not_watched_ticker_returns_404():
+    client = TestClient(app)
+    # SIM-SELLER is a known reserved ticker but is not being watched — honest 404, no fabrication.
+    assert client.delete("/watch/SIM-SELLER").status_code == 404

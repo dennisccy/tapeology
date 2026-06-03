@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-i_will_be_rich-iter-7",
+  "base_url": "http://localhost:3650",
+  "iteration": 7,
+  "default_timeout_ms": 12000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the tape cockpit",
+      "narration": "We start on Tapeology's home screen with nothing being watched yet. The cockpit sits quietly idle, waiting for a stock to read.",
+      "point_out": "The body reads \"No ticker watched\" and the status dot at the top-right is grey — and notice there is no Stop button while the screen is idle.",
+      "journey": "",
+      "new": false,
+      "verified": false,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Enter a ticker to watch",
+      "narration": "We type the built-in sample stock SIM-BUYER into the ticker box at the top.",
+      "point_out": "SIM-BUYER now fills the ticker field, ready to be watched.",
+      "journey": "J-01",
+      "new": false,
+      "verified": false,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "Watch the live read",
+      "narration": "Clicking Watch brings the stock to life — the cockpit fills with the live tape and calls who is in control, settling on Buyer Control.",
+      "point_out": "The top bar now shows \"Watching SIM-BUYER\" with a new rose Stop button beside it, while the body shows the live read: prices, recent trades, tape measurements, and the overall tape-state call with its confidence.",
+      "journey": "J-01",
+      "new": false,
+      "verified": false,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Buyer Control" }
+    },
+    {
+      "n": 4,
+      "title": "Stop watching",
+      "narration": "Pressing the new Stop button ends the watch on demand and clears the screen straight back to a clean idle state — with no frozen numbers left behind.",
+      "point_out": "The body returns to \"No ticker watched\", the \"Watching SIM-BUYER\" label and the Stop button both disappear, and the status dot goes back to grey idle — nothing stale remains on screen.",
+      "journey": "J-09",
+      "new": true,
+      "verified": false,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Stop" } },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 5,
+      "title": "Re-enter the same ticker",
+      "narration": "To show the watch truly reset, we type SIM-BUYER back into the ticker box for a second watch.",
+      "point_out": "SIM-BUYER is back in the ticker field, ready for a fresh watch from a cold start.",
+      "journey": "J-09",
+      "new": false,
+      "verified": false,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 6,
+      "title": "A fresh cold-start read",
+      "narration": "Watching again rebuilds the read from scratch — the cockpit repopulates cold and settles on Buyer Control once more, rather than showing a stale leftover frame.",
+      "point_out": "The cockpit fills in fresh from a cold start and resolves to Buyer Control again, confirming a brand-new read of the stock rather than the previous session frozen in place.",
+      "journey": "J-09",
+      "new": true,
+      "verified": false,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Buyer Control" }
+    }
+  ]
+}

@@ -72,7 +72,11 @@ of the Tape-state row, produced once by `TapeStateClassifier` and served by `/st
 the `unclear` state is demonstrated against an **actively-driven** `SIM-CHOP` stream (mixed two-sided
 aggression, wide/jittery spread, no clean price impact) — completing the five-state taxonomy on driven
 data; this adds only provider scenario data + tests (no new contract row, no classifier/config change,
-no nav change).
+no nav change). As of **iter-7** the **Stop / teardown** half of the "Watched-scenario label + watch/stream
+status" row is realized: the already-declared `DELETE /watch/{ticker}` endpoint + `WatchManager.stop()`
+(cancels the feeder, sets `stream_status="closed"`, removes the engine so re-watch is a fresh read) + the
+top-bar **Stop** control returning the cockpit to the idle/empty state (J-09). Same owner (`WatchManager`),
+same row — no new contract value, no second producer/endpoint, no nav-skeleton change.
 
 **Singularity rules (coherence guardrails).**
 - Tape state, confidence, and each feature have exactly **one producer** (the engine). REST, WS,

@@ -4,21 +4,21 @@
       "id": "J-01",
       "name": "Watch a ticker and see the live tape cockpit",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_rich-iter-7",
+      "last_passing_iter": "goal-i_will_be_rich-iter-7",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-11-cold-transition-buyer.png",
-      "notes": "Held PASSING — re-verified iter-6 as a required-still-passing regression guard during the chop/transition work (frontend byte-untouched; git diff apps/frontend == 0 lines). SIM-BUYER renders all six panels live (Tape State 'Buyer Control', Quote bid 100.74/ask 100.76/spread 0.02=ask-bid/last 100.76, Recent Trades with price/size/side, 30s Features, Observations, Event Log) with a 'Live' dot and no reload. The chop work touched only simulated.py (provider data) + tests, so the cockpit render path is unperturbed. Evidence: TC-11-cold-transition-buyer.png (also UT-14, UT-12-14-sim-buyer.png)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-7-evidence/TC-10-cockpit-live.png",
+      "notes": "Re-verified PASSING iter-7 (required-still-passing guard for the J-09 watch/re-watch lifecycle). TC-10-cockpit-live.png (I opened it) shows all six panels live for SIM-BUYER: Tape State 'Buyer Control' (emerald) @ 0.873 with confidence bar; Quote Bid 119.46 / Ask 119.48 (rose) / Spread 0.02 (=ask-bid) / Last 119.48; Recent Trades with price/size/side (BUY rows green); 30s Features (trade_speed 2.03/s, volume 570.0/s, aggressive_buy_ratio 0.930, aggressive_sell_ratio 0.070); '● Live' dot, no reload. The iter-7 diff (teardown plumbing + additive Stop control) leaves the Cockpit render path untouched."
     },
     "J-02": {
       "id": "J-02",
       "name": "Buyer-control scenario is identified",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_rich-iter-7",
+      "last_passing_iter": "goal-i_will_be_rich-iter-7",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-11-cold-transition-buyer.png",
-      "notes": "Held PASSING — re-verified iter-6; the keystone NO-MISROUTE guard. SIM-BUYER stays buyer_control @ 0.870 (>= reasonable_confidence 0.60): aggressive_buy_ratio 0.925 high, buy_price_impact +0.460 POSITIVE (price walked up to 100.76), headline emerald (text-emerald-400 rgb(52,211,153), computed-style), NOT amber/absorption, absorption_score 0.000. The contrast this iter is decisive: buyer +0.460 impact -> control; chop 0.000 impact + balanced ratios -> unclear; bidabs/askabs high one-sided aggression + flat price -> absorption. Price-impact-not-aggression positively reconfirmed three ways on screen. Classifier.py byte-untouched. Evidence: TC-11-cold-transition-buyer.png, UT-12-14-sim-buyer.png."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-7-evidence/TC-11-rewatch-fresh.png",
+      "notes": "Re-verified PASSING iter-7 as the J-09 'fresh read' proof. TC-11-rewatch-fresh.png (I opened it): re-watched SIM-BUYER re-resolves to buyer_control @ 0.856 (>= reasonable_confidence 0.60), aggressive_buy_ratio 0.902 high, and QA TC-13 confirms buy_price_impact +0.450 POSITIVE — the keystone price-impact-not-aggression read intact. Re-watch quote origin (Bid 100.77 / Ask 100.79) differs from the first watch's 119.46/119.48, proving a genuinely fresh cold-start engine (not a frozen leftover). classifier.py byte-untouched this iter (git-proven)."
     },
     "J-03": {
       "id": "J-03",
@@ -28,7 +28,7 @@
       "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-11-cold-transition-seller-confirmed.png",
-      "notes": "Held PASSING — re-verified iter-6; the keystone mirror NO-MISROUTE guard. SIM-SELLER stays seller_control @ 0.885 (>= threshold): aggressive_sell_ratio 0.949 high, sell_price_impact -0.400 NEGATIVE (price fell to 98.94), headline rose (text-rose-400 rgb(251,113,133), computed-style), NOT amber/absorption, bid_refresh_score 0.038 low, absorption_score 0.000. Event log 'Tape state changed to seller_control' captured on the cold-start first watch (also serves J-07). Classifier.py byte-untouched. Evidence: TC-11-cold-transition-seller-confirmed.png, UT-13-15-sim-seller.png."
+      "notes": "Held PASSING through iter-7 by byte-level invariance (not browser-re-tested this iter, so last_verified_iter stays iter-6). The iter-7 diff is provably orthogonal to seller classification: git diff shows classifier.py / features.py / config.py / providers/ have ZERO changes, and the shared Cockpit render path (which rendered correctly for SIM-BUYER in TC-10/TC-11) is untouched. Last active browser verification iter-6: SIM-SELLER seller_control @ 0.885, aggressive_sell_ratio 0.949 high, sell_price_impact -0.400 NEGATIVE, rose headline, NOT misrouted to bid_absorption. No regression possible from a teardown-only + additive-Stop-control change. Evidence: TC-11-cold-transition-seller-confirmed.png."
     },
     "J-04": {
       "id": "J-04",
@@ -38,7 +38,7 @@
       "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/UT-16-sim-bidabs-amber.png",
-      "notes": "Held PASSING — re-verified iter-6 regression guard. SIM-BIDABS reads amber 'Bid Absorption' (text-amber-400 rgb(251,191,36), computed-style) @ 0.917 (>= threshold): aggressive_sell_ratio 1.000 high WHILE last price holds at 100.00 (sell_price_impact ~0, no fall) -> bid_absorption NOT seller_control — the defining price-impact case intact. The chop work (provider data + tests only) did not perturb the absorption gates. Dot reads 'closed' (bounded stream exhausted) but the persisted snapshot is the correct bid_absorption read. Evidence: UT-16-sim-bidabs-amber.png."
+      "notes": "Held PASSING through iter-7 by byte-level invariance (last_verified_iter stays iter-6). The absorption gates live in classifier.py, which the iter-7 git diff confirms is byte-untouched (0 lines) — teardown work cannot perturb the defining price-impact case. Last active browser verification iter-6: SIM-BIDABS amber 'Bid Absorption' @ 0.917, aggressive_sell_ratio 1.000 high WHILE last price holds (sell_price_impact ~0) -> bid_absorption NOT seller_control. Evidence: UT-16-sim-bidabs-amber.png."
     },
     "J-05": {
       "id": "J-05",
@@ -48,7 +48,7 @@
       "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-12-regression-askabs.png",
-      "notes": "Held PASSING — re-verified iter-6 regression guard. SIM-ASKABS reads amber 'Ask Absorption' (text-amber-400 rgb(251,191,36), computed-style) @ 0.917 (>= threshold): aggressive_buy_ratio 1.000 high WHILE buy_price_impact 0.000 flat (last 100.02 does not rise), absorption_score 1.000 + ask_refresh_score 1.000 elevated -> ask_absorption NOT buyer_control. Event log 'Ask refreshing at 100.02' / 'Large buy print absorbed' / 'Tape state changed to ask_absorption'; observations 'Heavy buy volume being absorbed' / 'Price stalling despite buy prints'; 'Live' dot. Evidence: TC-12-regression-askabs.png, UT-17-sim-askabs-amber.png."
+      "notes": "Held PASSING through iter-7 by byte-level invariance (last_verified_iter stays iter-6). Absorption gates (classifier.py) byte-untouched in the iter-7 diff. Last active browser verification iter-6: SIM-ASKABS amber 'Ask Absorption' @ 0.917, aggressive_buy_ratio 1.000 high WHILE buy_price_impact 0.000 flat, absorption_score 1.000 + ask_refresh_score 1.000 -> ask_absorption NOT buyer_control; event log 'Ask refreshing at 100.02' / 'Large buy print absorbed'. Evidence: TC-12-regression-askabs.png, UT-17-sim-askabs-amber.png."
     },
     "J-06": {
       "id": "J-06",
@@ -58,7 +58,7 @@
       "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-10-sim-chop-unclear.png",
-      "notes": "PROMOTED failing -> PASSING in iter-6 (full depth) — the FIFTH and final MVP tape state and the honest-uncertainty CRITICAL anti-goal, now positively demonstrated against a DRIVEN choppy stream (distinct from iter-5's honest-unclear-on-silence). Net-new provider work (confirmed by diff, not forward-carried notes): _chop_stream() authored + wired into stream() via 'elif SIM-CHOP' (it previously emitted ZERO events). NO classifier/config change (classifier.py + config.py byte-untouched, 0 diff lines — the spec's red-flag guard honored: chop reads unclear purely through the existing fallback + four gate preconditions). Chop shape constants (_CHOP_*) live in simulated.py as scenario DATA, not config (no-magic-numbers honored). Every TradeEvent carries Side.UNKNOWN — aggressor classification deferred to the engine (reinforces single-source-of-truth). Browser-verified on SIM-CHOP: amber 'Unclear' headline (text-amber-400 rgb(251,191,36), bar bg-amber-500 rgb(245,158,11), ~20% width, via getComputedStyle + base-selector probe, NOT eyeballed/grep), confidence 0.200 (== unclear_confidence, < reasonable_confidence 0.60 — warmed, not cold-start 0.10); UI asserts NO side and NO absorption; observation 'Mixed or weak evidence — no clear side in control'; Event Log 'No events yet' (no spurious transition — correct honest behavior); all Recent Trades 100.00 mixed BUY/SELL/UNKNOWN; 30s features buy_ratio 0.500 / sell_ratio 0.500 (<0.60), avg_spread 0.148 (>0.06), buy/sell impact 0.000, bid/ask refresh 0.118/0.103 (<0.55) — past EVERY gate precondition. KEYSTONE TESTS (I ran the suite: 61 passed): test_sim_chop_never_misfires_a_resolved_state_step_through (state is STATE_UNCLEAR and NOT any of the four resolved states at EVERY tick over 600 events, cold AND warm), test_sim_chop_all_windows_deny_every_gate (every window incl. noise-prone 10s: both ratios < floor, spread > max_stable, both refresh < floor, impact past neither cutoff), test_sim_chop_settles_on_unclear (warm, event_count >= 40, conf == 0.20, no transition line), test_sim_chop_is_deterministic. Coherence PASS. Evidence: TC-10-sim-chop-unclear.png, UT-02-sim-chop-fullpage.png, UT-03-sim-chop-amber-features.png."
+      "notes": "Held PASSING through iter-7 by byte-level invariance (last_verified_iter stays iter-6). The unclear fallback + four gate preconditions live in classifier.py/config.py/providers/simulated.py, all byte-untouched in the iter-7 diff. Last active browser verification iter-6: SIM-CHOP amber 'Unclear' @ 0.200 (< reasonable_confidence 0.60), balanced 0.500/0.500 ratios, wide spread 0.148, 0.000 impacts; UI asserts NO side and NO absorption; 'Mixed or weak evidence — no clear side in control'; backed by keystone step-through guards (no gate misfires over 600 events, cold and warm). Evidence: TC-10-sim-chop-unclear.png."
     },
     "J-07": {
       "id": "J-07",
@@ -68,29 +68,29 @@
       "last_passing_iter": "goal-i_will_be_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/TC-11-cold-transition-buyer.png",
-      "notes": "PROMOTED failing -> PASSING in iter-6 — the cold-start transition taxonomy closed out across TWO distinct resolving states. From a cold first watch on a fresh backend: SIM-BUYER event log appended 'Tape state changed to buyer_control' with observations updating live ('Buyer aggression increasing', 'Price lifting on buy prints'); SIM-SELLER event log appended 'Tape state changed to seller_control' (headline rose 'Seller Control'). Both captured by the functional-QA agent on the cold-start watch with the 'Live' dot showing; the lines persist in the event log thereafter (the browser-qa-agent later re-observed them as persisted because the bounded streams had exhausted — the live append is corroborated by the QA agent's contemporaneous live capture, TC-11-cold-transition-*.png). SIM-CHOP correctly produces NO transition line (cold-start unclear -> warmed unclear is not a state change — honest behavior, asserted in tests). The full cross-state transition vocabulary is now demonstrated (buyer/seller control + bid/ask absorption from prior iters). Evidence: TC-11-cold-transition-buyer.png, TC-11-cold-transition-seller-confirmed.png."
+      "notes": "Held PASSING through iter-7 by byte-level invariance (last_verified_iter stays iter-6). The engine's transition/observation emission path is untouched by the iter-7 teardown diff (classifier.py / features.py / providers/ all 0-diff). Last active browser verification iter-6: cold-start SIM-BUYER appended 'Tape state changed to buyer_control' + live observations, SIM-SELLER appended 'Tape state changed to seller_control'; SIM-CHOP correctly emits NO transition line (honest). Full cross-state transition vocabulary demonstrated across buyer/seller control + bid/ask absorption. Evidence: TC-11-cold-transition-buyer.png, TC-11-cold-transition-seller-confirmed.png."
     },
     "J-08": {
       "id": "J-08",
       "name": "REST and the live UI agree (single source of truth)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_rich-iter-7",
+      "last_passing_iter": "goal-i_will_be_rich-iter-7",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-6-evidence/UT-19-sim-chop-unclear-final.png",
-      "notes": "Held GREEN — re-verified iter-6, extended to the FIFTH (unclear) state. On SIM-CHOP the UI 'Unclear' / confidence 0.200 == GET /tape/SIM-CHOP/state (unclear / 0.2), and every UI 30s feature readout exactly == /features (aggressive_buy 0.500, aggressive_sell 0.500, average_spread 0.152, buy/sell impact 0.000, bid_refresh 0.114, ask_refresh 0.143); /summary agrees. One engine value per metric, no UI-side recomputation. Structurally reinforced this iter: classifier.py + config.py byte-untouched, and the chop provider emits Side.UNKNOWN (it does NOT pre-classify the aggressor side — it defers to the canonical engine classifier rather than short-circuiting the contract). Coherence Step-1 data-contract check PASS. Proven green iter-2 (buyer) -> held across seller/absorption iters -> now the unclear read. Evidence: UT-19-sim-chop-unclear-final.png, QA TC-07/TC-10."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-7-evidence/TC-11-rewatch-fresh.png",
+      "notes": "Re-verified PASSING iter-7 (required-still-passing guard). QA TC-13: on the active SIM-BUYER read the UI tape_state 'buyer_control', scenario 'buyer_control', and positive buy_price_impact all match GET /tape/SIM-BUYER/summary exactly — one engine value per metric, no UI/API recomputation. Structurally reinforced: the iter-7 diff adds NO recomputation (stop() reuses the existing set_stream_status setter; frontend renders engine values verbatim), and coherence Part A (data-contract) = PASS. A small confidence delta (0.873 vs 0.878) across consecutive live snapshots is an advancing stream, not divergence; categorical values match exactly. Evidence: TC-11-rewatch-fresh.png, QA TC-13."
     },
     "J-09": {
       "id": "J-09",
       "name": "Stop watching a ticker",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_rich-iter-6",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_rich-iter-7",
+      "last_passing_iter": "goal-i_will_be_rich-iter-7",
       "first_seen_iter": "goal-i_will_be_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-0-evidence/precondition-check.txt",
-      "notes": "Still FAILING — the LAST remaining Must-have journey (8 of 9 now passing). Re-confirmed failing iter-6 by diff inspection: apps/frontend was byte-untouched (0 diff lines), so no Stop / DELETE /watch UI control exists in the cockpit yet (explicitly OUT OF SCOPE for iter-6; the dev handoff names J-09 as the suggested next phase). The stream-status-dot groundwork landed iter-5 (top-bar dot reads canonical snapshot.stream_status). NEW concrete gotcha surfaced this iter (directly informs J-09 verification): the live -> idle teardown can only be observed on a still-LIVE stream, but (a) bounded sim streams run to exhaustion and watch() returns the EXISTING closed engine on re-watch, and (b) the harness PERMISSION LAYER blocks a backend restart (the browser-qa-agent tried and was denied). So J-09's teardown verification must arrange a fresh-backend / fresh-ticker observation, or use the new DELETE /watch endpoint itself to tear down a live engine. Remaining work: add the Stop control wired to DELETE /watch/{ticker} (verify the endpoint exists by code inspection per lesson iter-4), assert the stream closes + cockpit returns to idle/empty + re-watching starts a fresh read."
+      "last_evidence_path": "reports/qa/goal-i_will_be_rich-iter-7-evidence/TC-10-post-stop-idle.png",
+      "notes": "PROMOTED failing -> PASSING in iter-7 (full depth) — the NINTH and final Must-have journey; the MVP watch lifecycle (start -> read -> stop -> re-start) is now complete. Verified skeptically by primary evidence I gathered directly, not summary-trust. BACKEND CODE (read directly): WatchManager.stop() (watch_manager.py:60) returns False if not watched (idempotent, raises nothing), cancels+pops the feeder, calls the PRE-EXISTING engine.set_stream_status('closed') setter (one producer), and del self._engines[ticker] (engine removal = fresh cold re-watch). DELETE /watch/{ticker} (main.py:75) raises HTTPException(404) on not-watched (HONEST 404, never a fabricated success) and returns {'status':'stopped'} on success. SCREENSHOTS (I opened all four): TC-10-cockpit-live.png (live SIM-BUYER cockpit with the net-new rose Stop button, '● Live' dot, Buyer Control @ 0.873), TC-10-post-stop-idle.png (after Stop: Stop button + 'Watching' label gone, dot -> Idle, 'No ticker watched', NO stale numbers), TC-11-rewatch-fresh.png (re-watch buyer_control @ 0.856 with Bid 100.77/Ask 100.79 — different origin than the first watch's 119.46/119.48, proving a genuinely fresh engine), TC-14-404-idle.png (UI Stop returns to clean idle even on a server 404, no error banner). DETERMINISTIC API (timing-independent): TC-01 DELETE->200; TC-02 not-watched->404 honest detail; TC-03 stopped reads (state/features/events/summary)->404 (no synthesized snapshot); TC-04 fresh WS->4404; TC-05 re-POST->cold start (warm:false, conf 0.1, 'Warming up'). TESTS: 68/68 pytest (61 + 7 new) incl. stop-removes/closes/cancels, idempotent-False, re-watch-fresh-cold-engine, determinism guard (no state leakage across the stop boundary), DELETE lifecycle route. Coherence PASS (realizes the already-registered DELETE half of an existing row; no new value/producer/route). NOTE: the dedicated browser-qa-agent step SKIPPED (frontend transiently down from an npm-build/.next clobber); the authoritative browser evidence is the QA agent's own Chrome MCP run (screenshots above, captured after recovery to HTTP 200). Evidence: TC-10-post-stop-idle.png, TC-10-cockpit-live.png, TC-11-rewatch-fresh.png, TC-14-404-idle.png."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-06-03T04:30:41Z"
+  "updated_at": "2026-06-03T06:25:00Z"
 }

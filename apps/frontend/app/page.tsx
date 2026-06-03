@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTapeStream } from "@/lib/useTapeStream";
-import { watchTicker } from "@/lib/api";
+import { watchTicker, stopTicker } from "@/lib/api";
 import { TopBar } from "@/components/TopBar";
 import { Cockpit } from "@/components/Cockpit";
 import { IdleState } from "@/components/IdleState";
@@ -25,6 +25,17 @@ export default function Page() {
     }
   }
 
+  async function handleStop() {
+    if (!ticker) return;
+    // Tell the backend to tear the engine down (DELETE /watch). Idle is the truthful end
+    // state regardless of the result, so we return to idle even if the call fails: setTicker(null)
+    // renders <IdleState/> and triggers useTapeStream's cleanup, which closes the WS client-side
+    // (the "no further updates" mechanism — it must not depend on the server closing the socket).
+    await stopTicker(ticker);
+    setTicker(null);
+    setError(null);
+  }
+
   return (
     <div className="min-h-screen">
       <TopBar
@@ -32,6 +43,7 @@ export default function Page() {
         snapshot={snapshot}
         connStatus={connStatus}
         onWatch={handleWatch}
+        onStop={handleStop}
         error={error}
       />
       <main className="mx-auto max-w-7xl px-4 py-6">

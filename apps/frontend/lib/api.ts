@@ -7,6 +7,11 @@ export interface WatchResult {
   error?: string;
 }
 
+export interface StopResult {
+  ok: boolean;
+  error?: string;
+}
+
 // POST /watch/{ticker}. An unknown / non-sim ticker returns an explicit error (no fabrication).
 export async function watchTicker(ticker: string): Promise<WatchResult> {
   try {
@@ -18,6 +23,29 @@ export async function watchTicker(ticker: string): Promise<WatchResult> {
       return { ok: true, scenario: data.scenario };
     }
     let error = `'${ticker}' could not be watched`;
+    try {
+      const data = await res.json();
+      if (data?.detail) error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// DELETE /watch/{ticker}: stop watching. A 404 means the ticker is already not watched —
+// effectively stopped, so we treat it as success (the UI returns to idle either way).
+export async function stopTicker(ticker: string): Promise<StopResult> {
+  try {
+    const res = await fetch(`${API_BASE}/watch/${encodeURIComponent(ticker)}`, {
+      method: "DELETE",
+    });
+    if (res.ok || res.status === 404) {
+      return { ok: true };
+    }
+    let error = `'${ticker}' could not be stopped`;
     try {
       const data = await res.json();
       if (data?.detail) error = data.detail;

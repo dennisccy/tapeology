@@ -57,6 +57,23 @@ class WatchManager:
     def get(self, ticker: str) -> TapeEngine | None:
         return self._engines.get(ticker)
 
+    def stop(self, ticker: str) -> bool:
+        """Stop watching ``ticker``: cancel its feeder, mark the engine closed, and remove it.
+
+        Removing the engine is what makes a later ``watch()`` build a fresh, cold engine
+        (satisfying "re-watch starts a fresh read") instead of returning the exhausted one.
+        Idempotent: returns ``False`` (no exception) when the ticker was not being watched.
+        """
+        engine = self._engines.get(ticker)
+        if engine is None:
+            return False
+        task = self._tasks.pop(ticker, None)
+        if task is not None:
+            task.cancel()
+        engine.set_stream_status("closed")
+        del self._engines[ticker]
+        return True
+
     async def _feed(self, engine: TapeEngine, provider: Provider) -> None:
         try:
             for event in provider.stream():

@@ -28,12 +28,14 @@ export function TopBar({
   snapshot,
   connStatus,
   onWatch,
+  onStop,
   error,
 }: {
   watched: string | null;
   snapshot: TapeSnapshot | null;
   connStatus: ConnStatus;
   onWatch: (ticker: string) => void;
+  onStop: () => void;
   error: string | null;
 }) {
   const [input, setInput] = useState("");
@@ -75,6 +77,14 @@ export function TopBar({
           <div className="flex items-center gap-2 text-sm">
             <span className="text-slate-500">Watching</span>
             <span className="font-mono font-semibold text-slate-100">{watched}</span>
+            <button
+              type="button"
+              onClick={onStop}
+              aria-label="Stop watching"
+              className="rounded border border-rose-500/70 px-2.5 py-1 text-xs font-semibold text-rose-400 transition-colors hover:bg-rose-500/10 hover:text-rose-300 focus:outline-none focus:ring-1 focus:ring-rose-400 active:bg-rose-500/20"
+            >
+              Stop
+            </button>
           </div>
         )}
 
