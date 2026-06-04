@@ -8,11 +8,14 @@ into the same vendor-neutral ``HistoricalWindow`` the production adapter returns
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
+from typing import AsyncIterator
 
 from app.providers.adapters.base import (
     HistoricalWindow,
+    LiveRecord,
     MarketClock,
     NoDataForWindow,
     RawQuote,
@@ -20,6 +23,7 @@ from app.providers.adapters.base import (
     SymbolMatch,
     SymbolNotTradable,
 )
+from app.providers.base import Event
 
 FIXTURE_PATH = (
     Path(__file__).parent / "fixtures" / "alpaca" / "F_20260602_150000_20260602_150200.json"
@@ -35,6 +39,65 @@ def load_fixture_window(path: Path = FIXTURE_PATH) -> tuple[HistoricalWindow, di
         for q in data["quotes"]
     )
     return HistoricalWindow(data["symbol"], trades, quotes), data
+
+
+class FakeLiveSocket:
+    """A stand-in vendor live socket that records its unsubscribe + close (no leak assertions).
+
+    The live tests assert the feeder closes the socket on stop/switch/shutdown. A real leaked
+    socket is an actual vendor connection leak (the iter-0 lesson), so ``closed`` /
+    ``unsubscribed`` being set on teardown is the in-loop proof the cleanup path ran.
+    """
+
+    def __init__(self) -> None:
+        self.closed = False
+        self.unsubscribed = False
+
+    def unsubscribe(self) -> None:
+        self.unsubscribed = True
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class FakeLiveProvider:
+    """An async (live) ``AsyncProvider`` double with full timing control over event arrival.
+
+    Plays the role of ``LiveProvider`` behind the seam: ``stream()`` yields engine ``Event``s the
+    test enqueues via ``feed``/``feed_nowait`` (so the test controls exactly when — and whether —
+    the next event arrives, the lever the stale-watchdog test needs) and closes a ``FakeLiveSocket``
+    in its ``finally`` so the lifecycle tests can assert the socket was closed. It is a legitimate
+    test double behind the provider seam — NEVER wired into the production live path.
+    """
+
+    def __init__(self, ticker: str = "FAKE", scenario: str = "live FAKE") -> None:
+        self.ticker = ticker
+        self.scenario = scenario
+        self.socket = FakeLiveSocket()
+        self._queue: asyncio.Queue = asyncio.Queue()
+        self._end = object()
+
+    def feed_nowait(self, event: Event) -> None:
+        """Enqueue an event for ``stream`` to yield next (non-blocking; for use inside a loop)."""
+        self._queue.put_nowait(event)
+
+    async def feed(self, event: Event) -> None:
+        await self._queue.put(event)
+
+    def end(self) -> None:
+        """Signal natural end-of-stream (the feeder then flips the engine to ``closed``)."""
+        self._queue.put_nowait(self._end)
+
+    async def stream(self) -> AsyncIterator[Event]:
+        try:
+            while True:
+                event = await self._queue.get()
+                if event is self._end:
+                    return
+                yield event
+        finally:
+            self.socket.unsubscribe()
+            self.socket.close()
 
 
 class FakeAdapter:
@@ -53,6 +116,8 @@ class FakeAdapter:
         search_raises: bool = False,
         clock: MarketClock | None = None,
         clock_raises: bool = False,
+        live_records: list[LiveRecord] | None = None,
+        live_hold: asyncio.Event | None = None,
     ) -> None:
         self._available = available
         self._window = window
@@ -62,12 +127,30 @@ class FakeAdapter:
         self._search_raises = search_raises
         self._clock = clock
         self._clock_raises = clock_raises
+        self._live_records = live_records or []
+        self._live_hold = live_hold
         self.fetch_calls: list[tuple] = []
         self.search_calls: list[str] = []
         self.clock_calls = 0
+        self.stream_live_calls: list[str] = []
+        self.live_socket = FakeLiveSocket()
 
     def is_available(self) -> bool:
         return self._available
+
+    async def stream_live(self, symbol: str) -> AsyncIterator[LiveRecord]:
+        """Yield the scripted neutral records, then (optionally) hold the stream open until
+        released, closing the fake socket on teardown — the neutral-record analogue of the real
+        adapter's ``stream_live`` (records close/unsubscribe so the no-leak path is asserted)."""
+        self.stream_live_calls.append(symbol)
+        try:
+            for rec in self._live_records:
+                yield rec
+            if self._live_hold is not None:
+                await self._live_hold.wait()  # keep the socket open (status stays live) until released
+        finally:
+            self.live_socket.unsubscribe()
+            self.live_socket.close()
 
     def get_market_clock(self) -> MarketClock:
         # ``clock_raises`` models a degraded/unreachable vendor (the API must degrade to an

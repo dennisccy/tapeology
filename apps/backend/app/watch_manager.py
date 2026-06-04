@@ -10,11 +10,12 @@ computes purely from logical event timestamps.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 
 from .config import Config
 from .engine.tape_engine import TapeEngine
-from .providers.base import Provider
+from .providers.base import AsyncProvider, Provider
 from .providers.simulated import build_provider
 
 # Wall-clock seconds between delivered events in live mode (delivery pacing only).
@@ -77,6 +78,31 @@ class WatchManager:
             pass
         return engine
 
+    def watch_with_async_provider(
+        self, ticker: str, provider: AsyncProvider
+    ) -> TapeEngine:
+        """Watch ``ticker`` fed by an async (live) provider, WITHOUT touching the sim registry.
+
+        Any existing watch for the ticker is torn down first (a switch/re-watch cancels the prior
+        feeder — the orphaned-watch lesson; for a live socket that teardown is a genuine vendor
+        connection close, not a sim no-op). The live feeder is registered in ``self._tasks`` so
+        ``stop()`` / a switch / ``shutdown`` already cancel it, and the feeder additionally closes
+        the vendor socket on cancel (see ``_feed_live``). A live watch is only ever started on the
+        event loop (the ``POST /watch`` route is async).
+        """
+        self.stop(ticker)  # tear down any prior watch for this ticker (no orphaned feeder/socket)
+        engine = TapeEngine(ticker, provider.scenario, self._config)
+        self._engines[ticker] = engine
+        try:
+            loop = asyncio.get_running_loop()
+            self._tasks[ticker] = loop.create_task(self._feed_live(engine, provider))
+        except RuntimeError:
+            # No running loop: an async live feed cannot run; leave the engine without a feeder
+            # (it stays in its honest cold-start "connecting" read). In practice the route always
+            # runs on the loop, so this branch is only hit by a synchronous caller.
+            pass
+        return engine
+
     def get(self, ticker: str) -> TapeEngine | None:
         return self._engines.get(ticker)
 
@@ -132,6 +158,58 @@ class WatchManager:
         except asyncio.CancelledError:
             engine.set_stream_status("closed")
             raise
+
+    async def _feed_live(self, engine: TapeEngine, provider: AsyncProvider) -> None:
+        """Feed an async (live) provider into the engine with a stale watchdog (J-12 / J-15).
+
+        Each arriving event is processed into the engine and the status is ensured ``live`` — the
+        engine only auto-flips ``connecting``→``live``, NOT ``stale``→``live``, so the feeder owns
+        the recovery flip. If NO event arrives within ``config.stale_gap_seconds`` the status flips
+        to ``stale`` and **no trade is fabricated** during the lull; the next event flips it back
+        to ``live``. On cancel (stop/switch/shutdown) the status is set ``closed`` and the
+        provider stream is ``aclose()``d so the vendor socket is closed — no leaked connection.
+
+        The provider's async generator is consumed by a single background *puller* task so the
+        stale-gap ``wait_for`` times out on the queue (never on the generator itself) — timing out
+        on ``__anext__`` directly would throw into the generator and could close the socket on a
+        mere lull. On teardown the puller is cancelled and the stream is ``aclose()``d explicitly,
+        which deterministically runs the generator's cleanup (socket close).
+        """
+        stale_gap = self._config.stale_gap_seconds
+        stream = provider.stream()  # async iterator (unbounded)
+        queue: asyncio.Queue = asyncio.Queue()
+        done = object()  # sentinel: the stream ended on its own
+
+        async def _pull() -> None:
+            async for event in stream:
+                await queue.put(event)
+            await queue.put(done)  # reached only on natural exhaustion (skipped on cancel)
+
+        puller = asyncio.create_task(_pull())
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), stale_gap)
+                except asyncio.TimeoutError:
+                    engine.set_stream_status("stale")  # honest stale — fabricates no trade
+                    continue
+                if event is done:
+                    break
+                engine.process_event(event)
+                if engine.snapshot().stream_status != "live":
+                    engine.set_stream_status("live")  # owns the stale->live recovery flip
+            engine.set_stream_status("closed")
+        except asyncio.CancelledError:
+            engine.set_stream_status("closed")
+            raise
+        finally:
+            puller.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await puller
+            # Deterministically close the stream (and, via its cascade, the vendor socket) now
+            # that the puller no longer touches the generator — no leaked connection.
+            with contextlib.suppress(Exception):
+                await stream.aclose()
 
     async def shutdown(self) -> None:
         for task in self._tasks.values():

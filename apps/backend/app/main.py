@@ -30,6 +30,7 @@ from .env import load_env
 from .providers.adapters import MarketDataAdapter, get_adapter
 from .providers.adapters.base import NoDataForWindow, SymbolNotTradable
 from .providers.historical import HistoricalProvider
+from .providers.live import LiveProvider
 from .serializers import (
     serialize_events,
     serialize_features,
@@ -146,30 +147,7 @@ async def watch(
     mode = body.mode if body is not None else "sim"
 
     if mode == "live":
-        # Live streaming is out of scope this iteration: gate on availability, then on market
-        # session, then refuse explicitly (no fabricated cockpit, no sim fall-back).
-        if not adapter.is_available():
-            raise RealDataError("provider_unavailable", "real-data provider unavailable", 503)
-        # Market-closed pre-flight gate (J-14): refuse a live watch while the market is closed
-        # with an explicit non-cockpit state carrying the next open — NO engine created. Read the
-        # clock from the SAME computing owner the indicator's endpoint uses (adapter.get_market_
-        # clock), off the event loop. Only an AUTHORITATIVE closed clock (is_open is False)
-        # triggers it; a degraded/unreachable clock is INDETERMINATE and must NOT be reported as
-        # closed (that would fabricate a session), so it falls through to the honest refusal below.
-        try:
-            clock = await asyncio.to_thread(adapter.get_market_clock)
-        except Exception:
-            clock = None
-        if clock is not None and clock.is_open is False:
-            raise RealDataError(
-                "market_closed",
-                "market is closed",
-                CONFIG.market_closed_status_code,
-                next_open=clock.next_open,
-            )
-        raise RealDataError(
-            "provider_not_implemented", "real-data provider not yet available", 503
-        )
+        return await _watch_live(ticker, adapter)
 
     if mode == "historical":
         return await _watch_historical(ticker, body, adapter)
@@ -182,6 +160,43 @@ async def watch(
             status_code=400,
             detail=f"'{ticker}' is not a known simulated ticker",
         )
+    snap = engine.snapshot()
+    return {"ticker": ticker, "scenario": snap.scenario, "status": "watching"}
+
+
+async def _watch_live(ticker: str, adapter: MarketDataAdapter) -> dict:
+    """Stream a real symbol's live trades + quotes through the SAME engine (J-12 / J-15).
+
+    Gate, then stream — never fabricate, never fall back to sim:
+      1. No credentials → explicit ``provider_unavailable`` (503), NO engine.
+      2. Market-closed pre-flight (J-14): read the clock from the SAME computing owner the
+         indicator endpoint uses (``adapter.get_market_clock``, off the event loop). Only an
+         AUTHORITATIVE closed clock (``is_open is False``) refuses with ``market_closed`` (409 +
+         next open), NO engine. A degraded/unreachable clock is INDETERMINATE — it is NOT reported
+         as closed (that would fabricate a session); the watch proceeds and the live feed itself
+         honestly shows ``stale``/no events if the market is in fact closed.
+      3. Otherwise open the vendor live socket behind the neutral adapter and stream it through the
+         engine via the async feeder; a feed gap flips the row-6 status to ``stale`` (no invented
+         trades) and recovers to ``live`` on resume.
+    """
+    if not adapter.is_available():
+        raise RealDataError("provider_unavailable", "real-data provider unavailable", 503)
+    try:
+        clock = await asyncio.to_thread(adapter.get_market_clock)
+    except Exception:
+        clock = None
+    if clock is not None and clock.is_open is False:
+        raise RealDataError(
+            "market_closed",
+            "market is closed",
+            CONFIG.market_closed_status_code,
+            next_open=clock.next_open,
+        )
+    # Stream the real live feed through the SAME engine. The scenario label is the row-6 source
+    # descriptor, rendered verbatim from the canonical snapshot.
+    scenario = f"live {ticker}"
+    provider = LiveProvider(ticker, adapter.stream_live(ticker), scenario)
+    engine = manager.watch_with_async_provider(ticker, provider)
     snap = engine.snapshot()
     return {"ticker": ticker, "scenario": snap.scenario, "status": "watching"}
 

@@ -82,6 +82,12 @@ the snapshot and MUST NOT recompute. `…/state` and `…/features` are the cano
   interface; a second vendor (Polygon, Databento…) is **one new adapter**, no engine/API/provider change.
 - Real vendor timestamps are mapped to the engine's **logical timeline** (quote-before-trade preserved) so the engine
   stays unchanged and deterministic per stream.
+- The seam has a **synchronous** variant (`stream() -> Iterable`, used by the bounded simulated + historical-replay
+  providers) and an **async** variant (`async stream() -> AsyncIterator`, used by the unbounded **live** provider) — the
+  **same** interface in two shapes; both feed the **same** engine via `process_event` (no engine change). The **live
+  feeder** is the single owner that flips row-6 `stream_status` to **`stale`** when no event arrives within
+  `stale_gap_seconds` (and back to **`live`** on resume), fabricating no trades — there is no second `stream_status`
+  writer and no parallel live state/feature path.
 
 **Config (no magic numbers).** All window lengths, thresholds, large-print size, impact/absorption cutoffs, confidence
 boundaries, **and the stale-gap timeout** live in one config module — never inline literals in engine/classifier code.

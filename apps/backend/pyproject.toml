@@ -7,3 +7,6 @@ requires-python = ">=3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "integration: hits the REAL Alpaca live socket (operator/gated; needs credentials + market hours + TAPEOLOGY_LIVE_INTEGRATION=1). Skipped by default.",
+]

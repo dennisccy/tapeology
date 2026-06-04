@@ -126,16 +126,18 @@ def test_historical_watch_without_creds_returns_503_and_creates_no_engine(client
     assert client.get("/tape/AAPL/state").status_code == 404
 
 
-def test_live_watch_with_creds_market_open_is_not_implemented_no_cockpit(fake_client):
-    # Creds present + market OPEN, but the live socket is iter-4: the watch MUST surface an
-    # explicit non-cockpit provider_not_implemented — never a synthesized cockpit (no-fabricated-
-    # data anti-goal). Hermetic via the FakeAdapter clock (Assumptions #3): once the pre-flight
-    # gate calls adapter.get_market_clock(), the suite must make NO real vendor network call.
+def test_live_watch_with_creds_market_open_starts_stream(fake_client):
+    # iter-4 behavior change: creds present + market OPEN now STREAMS the live feed through the
+    # same engine (was the iter-3 provider_not_implemented refusal). The watch starts (200, the
+    # row-6 "live AAPL" label, engine present) — never a fabricated cockpit. Hermetic via the
+    # FakeAdapter clock + stream_live (Assumptions #3): NO real vendor network call is made.
     client = fake_client(available=True, clock=OPEN_CLOCK)
     resp = client.post("/watch/AAPL", json={"mode": "live"})
-    assert resp.status_code == 503
-    assert resp.json()["reason"] == "provider_not_implemented"
-    assert client.get("/tape/AAPL/state").status_code == 404
+    assert resp.status_code == 200
+    assert resp.json() == {"ticker": "AAPL", "scenario": "live AAPL", "status": "watching"}
+    assert client.get("/tape/AAPL/state").status_code == 200  # engine created
+    assert client.delete("/watch/AAPL").status_code == 200  # tear down the feeder + socket
+    assert client.get("/tape/AAPL/state").status_code == 404  # gone — no orphan
 
 
 # --- Live-branch market-closed pre-flight gate (J-14 4th case): explicit closed, NO engine -----
@@ -155,15 +157,17 @@ def test_live_watch_market_closed_is_market_closed_with_next_open_no_engine(fake
     assert client.get("/tape/AAPL/state").status_code == 404
 
 
-def test_live_watch_degraded_clock_is_not_reported_closed(fake_client):
+def test_live_watch_degraded_clock_starts_stream_not_reported_closed(fake_client):
     # Degraded-clock honesty (Assumptions #2, no-fabricated-data): creds present but the clock
     # call fails, so the session is INDETERMINATE. The gate MUST NOT report "closed" (that would
-    # fabricate a session) — it falls through to the honest provider_not_implemented refusal.
+    # fabricate a session); with the iter-4 live path it proceeds to start the stream (which itself
+    # honestly shows stale/no events if the market is in fact closed) rather than refusing.
     client = fake_client(available=True, clock_raises=True)
     resp = client.post("/watch/AAPL", json={"mode": "live"})
-    assert resp.status_code == 503
-    assert resp.json()["reason"] == "provider_not_implemented"
-    assert client.get("/tape/AAPL/state").status_code == 404
+    assert resp.status_code == 200
+    assert resp.json() == {"ticker": "AAPL", "scenario": "live AAPL", "status": "watching"}
+    assert client.get("/tape/AAPL/state").status_code == 200  # engine created (not refused)
+    assert client.delete("/watch/AAPL").status_code == 200
 
 
 def test_four_real_data_refusal_reasons_are_distinct(fake_client):
@@ -190,15 +194,12 @@ def test_four_real_data_refusal_reasons_are_distinct(fake_client):
 
 
 def test_non_market_closed_refusal_bodies_are_unchanged_no_next_open(fake_client):
-    # The new next_open field appears ONLY on a market_closed body; the other three reasons stay
+    # The new next_open field appears ONLY on a market_closed body; the other refusals stay
     # byte-for-byte {detail, reason} (no leaked next_open key) — the spec's compatibility guard.
     unknown = fake_client(available=True, not_tradable=True).post("/watch/ZZZZ", json=HIST_BODY)
     no_data = fake_client(available=True, no_data=True).post("/watch/AAPL", json=HIST_BODY)
     no_creds = fake_client(available=False).post("/watch/AAPL", json=HIST_BODY)
-    not_impl = fake_client(available=True, clock=OPEN_CLOCK).post(
-        "/watch/AAPL", json={"mode": "live"}
-    )
-    for resp in (unknown, no_data, no_creds, not_impl):
+    for resp in (unknown, no_data, no_creds):
         body = resp.json()
         assert set(body.keys()) == {"detail", "reason"}
         assert "next_open" not in body
@@ -281,6 +282,32 @@ def test_alpaca_sdk_import_confined_to_one_module():
         if sdk_import.search(p.read_text())
     )
     assert hits == ["providers/adapters/alpaca.py"]
+
+
+def test_live_sdk_symbols_confined_to_one_module():
+    # The live socket class name appears in EXACTLY one module: the live wiring (LiveProvider,
+    # the async feeder, the live POST branch) is vendor-neutral; only the adapter names the SDK.
+    hits = sorted(
+        p.relative_to(APP_DIR).as_posix()
+        for p in APP_DIR.rglob("*.py")
+        if "StockDataStream" in p.read_text()
+    )
+    assert hits == ["providers/adapters/alpaca.py"]
+
+
+def test_no_execution_or_account_api_in_adapter():
+    # No-execution anti-goal (critical): the single vendor adapter must never place/route an order
+    # or read/modify an account or position — even the new live stream subscribes to market data
+    # ONLY. (TradingClient is used for read-only asset/clock reference, which is allowed.)
+    src = (APP_DIR / "providers/adapters/alpaca.py").read_text()
+    forbidden = [
+        "submit_order", "place_order", "cancel_order", "replace_order",
+        "OrderRequest", "MarketOrderRequest", "LimitOrderRequest", "TradingStream",
+        "get_account", "get_all_positions", "get_open_position",
+        "close_position", "close_all_positions",
+    ]
+    present = [name for name in forbidden if name in src]
+    assert present == [], f"adapter references execution/account/position API: {present}"
 
 
 # --- Historical mode: distinct honest failures, each with NO engine (J-14 advances) ----------

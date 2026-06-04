@@ -7,15 +7,37 @@ across the stop boundary.
 """
 
 import asyncio
+import dataclasses
 import itertools
 
 import pytest
 
 from app.config import CONFIG
 from app.providers.adapters.base import HistoricalWindow, RawQuote, RawTrade
+from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.providers.historical import HistoricalProvider
 from app.providers.simulated import SimulatedProvider
 from app.watch_manager import WatchManager
+from fakes import FakeLiveProvider
+
+# A small stale-gap override so the live watchdog fires in milliseconds, not the 10s default.
+FAST_STALE = dataclasses.replace(CONFIG, stale_gap_seconds=0.05)
+
+
+async def _until(predicate, timeout: float = 3.0, step: float = 0.005) -> None:
+    elapsed = 0.0
+    while elapsed < timeout:
+        if predicate():
+            return
+        await asyncio.sleep(step)
+        elapsed += step
+    raise AssertionError("condition not met within timeout")
+
+
+def _seed_live(provider: FakeLiveProvider) -> None:
+    """Enqueue one quote + one trade so the engine has data and the status can reach `live`."""
+    provider.feed_nowait(QuoteEvent(provider.ticker, 0.0, 100.0, 100.02, 100, 100))
+    provider.feed_nowait(TradeEvent(provider.ticker, 0.0, 100.02, 100, Side.UNKNOWN))
 
 
 def _buyer_events(n: int):
@@ -161,3 +183,97 @@ async def test_switch_tears_down_prior_historical_feeder_no_orphan():
 
     assert manager.stop("F") is True  # clean up the second feeder
     await asyncio.sleep(0.02)
+
+
+# --- Live async feeder + stale watchdog (J-12 / J-15): no sim registry, stale-recover, no leak --
+
+@pytest.mark.anyio
+async def test_live_feeder_flips_live_then_stale_then_recovers_without_fabricating_trades():
+    # J-15 core, hermetic: with a small stale gap, the live feeder reads `live`, flips to `stale`
+    # after a feed lull (fabricating NO trades during the gap), and recovers to `live` on resume.
+    manager = WatchManager(FAST_STALE)
+    provider = FakeLiveProvider("LIVE")
+    _seed_live(provider)
+    engine = manager.watch_with_async_provider("LIVE", provider)
+    try:
+        await _until(lambda: engine.snapshot().stream_status == "live")
+        count_before = engine.snapshot().event_count
+        assert count_before == 1  # exactly the one seeded trade
+
+        # Lull: no event within stale_gap_seconds -> `stale`, and NOTHING is synthesized.
+        await _until(lambda: engine.snapshot().stream_status == "stale")
+        assert engine.snapshot().event_count == count_before  # no fabricated trades during the gap
+        assert len(engine.snapshot().recent_trades) == count_before  # recent-trades unchanged
+
+        # Resume: the next real event flips the status back to `live` (the feeder owns this flip;
+        # the engine only auto-flips connecting->live, not stale->live).
+        provider.feed_nowait(TradeEvent("LIVE", 1.0, 100.02, 100, Side.UNKNOWN))
+        await _until(lambda: engine.snapshot().stream_status == "live")
+        assert engine.snapshot().event_count == count_before + 1
+    finally:
+        assert manager.stop("LIVE") is True
+        await _until(lambda: provider.socket.closed)
+
+
+@pytest.mark.anyio
+async def test_stop_cancels_live_feeder_and_closes_socket_no_leak():
+    # Load-bearing iter-0 lesson: a live socket leak is a real vendor connection leak. stop() must
+    # cancel the feeder, set `closed`, AND close + unsubscribe the vendor socket — no orphan.
+    manager = WatchManager(FAST_STALE)
+    provider = FakeLiveProvider("LIVE")
+    _seed_live(provider)
+    engine = manager.watch_with_async_provider("LIVE", provider)
+    task = manager._tasks["LIVE"]
+    await _until(lambda: engine.snapshot().stream_status == "live")
+
+    assert manager.stop("LIVE") is True
+    assert "LIVE" not in manager._tasks  # feeder de-registered
+    assert manager.get("LIVE") is None
+    assert engine.snapshot().stream_status == "closed"
+
+    await _until(lambda: provider.socket.closed)
+    assert provider.socket.closed and provider.socket.unsubscribed  # socket closed (no leak)
+    await _until(lambda: task.cancelled())
+    assert task.cancelled()
+
+
+@pytest.mark.anyio
+async def test_switch_tears_down_prior_live_feeder_and_closes_prior_socket():
+    # A source/symbol switch (a fresh watch_with_async_provider for the same ticker) must tear down
+    # the prior live feeder AND close its socket — no orphaned watch, no leaked vendor connection.
+    manager = WatchManager(FAST_STALE)
+    first = FakeLiveProvider("LIVE", "live LIVE-1")
+    _seed_live(first)
+    first_engine = manager.watch_with_async_provider("LIVE", first)
+    first_task = manager._tasks["LIVE"]
+    await _until(lambda: first_engine.snapshot().stream_status == "live")
+
+    second = FakeLiveProvider("LIVE", "live LIVE-2")
+    second_engine = manager.watch_with_async_provider("LIVE", second)  # the switch
+    assert second_engine is not first_engine
+    assert manager._tasks["LIVE"] is not first_task
+
+    await _until(lambda: first.socket.closed)
+    assert first.socket.closed and first.socket.unsubscribed  # prior socket closed on switch
+    await _until(lambda: first_task.cancelled())
+    assert first_task.cancelled()
+
+    assert manager.stop("LIVE") is True  # clean up the second feeder
+    await _until(lambda: second.socket.closed)
+
+
+@pytest.mark.anyio
+async def test_live_feeder_does_not_touch_sim_registry():
+    # The live path never consults the simulated registry (a live symbol is not a sim ticker).
+    manager = WatchManager(FAST_STALE)
+    assert manager.is_known("AAPL") is False
+    provider = FakeLiveProvider("AAPL", "live AAPL")
+    _seed_live(provider)
+    engine = manager.watch_with_async_provider("AAPL", provider)
+    try:
+        assert manager.get("AAPL") is engine
+        assert engine.scenario == "live AAPL"  # row-6 source label carried through
+        await _until(lambda: engine.snapshot().stream_status == "live")  # feeder ran (socket open)
+    finally:
+        assert manager.stop("AAPL") is True
+        await _until(lambda: provider.socket.closed)

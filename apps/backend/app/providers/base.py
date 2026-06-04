@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Protocol, Union, runtime_checkable
+from typing import AsyncIterator, Iterable, Protocol, Union, runtime_checkable
 
 
 class Side(str, Enum):
@@ -66,4 +66,23 @@ class Provider(Protocol):
     scenario: str
 
     def stream(self) -> Iterable[Event]:
+        ...
+
+
+@runtime_checkable
+class AsyncProvider(Protocol):
+    """The **async** counterpart to ``Provider`` for an unbounded live feed.
+
+    A simulated/historical stream is synchronous and finite (``Provider.stream`` returns an
+    ``Iterable``); a real live feed is **async and unbounded**, so ``stream`` returns an
+    ``AsyncIterator`` consumed with ``async for``. The engine is identical either way — it still
+    consumes each yielded ``Event`` through the unchanged ``engine.process_event``; only the
+    iteration differs. This is the same provider seam, not a second one, so a live source remains
+    one new provider behind the vendor-neutral adapter (provider-agnostic anti-goal).
+    """
+
+    ticker: str
+    scenario: str
+
+    def stream(self) -> AsyncIterator[Event]:
         ...

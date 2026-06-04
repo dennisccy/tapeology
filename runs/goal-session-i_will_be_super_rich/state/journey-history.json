@@ -4,26 +4,26 @@
       "id": "J-01",
       "name": "Watch a ticker and see the live tape cockpit",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-3",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-3",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-3-evidence/TC-16-sim-buyer-control.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-07-sim-buyer-control.png"
     },
     "J-02": {
       "id": "J-02",
       "name": "Buyer-control scenario is identified",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-3",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-3",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-3-evidence/TC-16-sim-buyer-control.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-07-sim-buyer-control.png"
     },
     "J-03": {
       "id": "J-03",
       "name": "Seller-control scenario is identified",
       "status": "already_passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-0",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-0-evidence/UT-J-03-SIM-SELLER.png"
     },
@@ -31,8 +31,8 @@
       "id": "J-04",
       "name": "Bid absorption is detected (price impact, not aggression)",
       "status": "already_passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-0",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-0-evidence/UT-J-04-SIM-BIDABS.png"
     },
@@ -40,8 +40,8 @@
       "id": "J-05",
       "name": "Ask absorption is detected (price impact, not aggression)",
       "status": "already_passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-0",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-0-evidence/UT-J-05-SIM-ASKABS.png"
     },
@@ -49,8 +49,8 @@
       "id": "J-06",
       "name": "Unclear / choppy tape is reported as unclear",
       "status": "already_passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-0",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-0-evidence/UT-J-06-SIM-CHOP.png"
     },
@@ -58,17 +58,17 @@
       "id": "J-07",
       "name": "Tape-state transitions are announced in the event log and observations",
       "status": "already_passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-0",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-1-evidence/UT-08-cockpit-buyer-control.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-07-sim-buyer-control.png"
     },
     "J-08": {
       "id": "J-08",
       "name": "REST and the live UI agree (single source of truth)",
       "status": "already_passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-2",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-2",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
       "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-2-evidence/UT-06-historical-F-cockpit.png"
     },
@@ -76,66 +76,66 @@
       "id": "J-09",
       "name": "Stop watching a ticker",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-3",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-3",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-2-evidence/UT-14-source-switch-teardown.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-10-teardown-idle.png"
     },
     "J-10": {
       "id": "J-10",
       "name": "Choose a data source (Live / Historical / Simulated)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-3",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-3",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-3-evidence/TC-16-sim-buyer-control.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-03-11-live-controls-idle.png"
     },
     "J-11": {
       "id": "J-11",
       "name": "Replay a real historical session",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-3",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-3",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-3-evidence/TC-16-historical-replay.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-08-historical-aapl.png"
     },
     "J-12": {
       "id": "J-12",
       "name": "Stream a real live ticker",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-3",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-3-evidence/TC-13-market-indicator.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-02-live-F-emerald.png"
     },
     "J-13": {
       "id": "J-13",
       "name": "Find a symbol by search",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-3",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-3",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-3-evidence/TC-14-market-closed.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-08-historical-aapl.png"
     },
     "J-14": {
       "id": "J-14",
       "name": "Real-data edge cases are handled honestly (no fabricated data)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-3",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-3",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-3-evidence/TC-14-market-closed.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/TC-14-honest-error-panel.png"
     },
     "J-15": {
       "id": "J-15",
       "name": "A live-feed gap shows stale, then recovers",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-0-evidence/UT-J-10-no-datasource-selector.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-09-stale-amber.png"
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-06-04T13:35:26Z"
+  "updated_at": "2026-06-04T15:50:19Z"
 }

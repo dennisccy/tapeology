@@ -107,6 +107,13 @@ class Config:
     # `reason` ("market_closed"), not this code, so 503 would be an acceptable alternative.
     market_closed_status_code: int = 409
 
+    # --- Live streaming stale watchdog (J-12 / J-15) ----------------------------------
+    # The live feeder flips the row-6 `stream_status` to `stale` when NO live event arrives
+    # within this many wall-clock seconds (and back to `live` on the next event), fabricating
+    # no trades during the lull. This is a *delivery-gap* timeout (a real feed lull), not an
+    # engine threshold — the engine math stays purely logical/deterministic.
+    stale_gap_seconds: float = 10.0
+
     def window_label(self, window: int) -> str:
         return f"{window}s"
 
