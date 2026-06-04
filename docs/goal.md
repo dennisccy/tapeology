@@ -13,7 +13,7 @@ aggressive sell volume is high yet price refuses to fall is **bid absorption**, 
 seller control, and Tapeology must say so.
 
 Tapeology is deliberately narrow. It is **not** a scanner, not news/theme/fundamental
-analysis, not charting, not an execution or portfolio system — those are separate
+analysis, not a general charting/technical-analysis platform, not an execution or portfolio system — those are separate
 projects. Tapeology receives a ticker (from a user or an upstream system) and answers one
 question: *what is the tape doing right now, and how confident are we?*
 
@@ -26,6 +26,13 @@ vendor (free **IEX** feed by default) behind a **vendor-agnostic adapter**, so a
 (Polygon, Databento, …) can be added without touching the engine or API. The five tape states —
 **buyer_control, seller_control, bid_absorption, ask_absorption, unclear** — are surfaced one
 ticker at a time in a simple Next.js UI, identically for simulated, live, or replayed real data.
+
+To turn that read into something **testable**, Tapeology also plots the watched price as a
+**candlestick chart** and overlays **markers at meaningful tape-state transitions** (for simulated
+data and historical replay), so a user can see whether a state actually preceded the next move —
+the one focused chart the product allows, not a general charting platform. A watched session can be
+**paused and resumed** without losing what is on screen, and historical windows are chosen in the
+user's **local time** with US-market-session quick-picks.
 
 ## Target Users
 
@@ -63,8 +70,21 @@ The first success metric is **not** profit. In priority order:
   read is reproducible for a fixed symbol + window.
 - **Real-data honesty.** An unknown symbol, an empty window, a closed market, missing credentials,
   and a live-feed gap each surface an explicit error or `stale` state — never a fabricated tape.
-- *(later)* **Predictive value.** On historical/replay data, high-confidence tape states
-  show measurable directional edge over the next 10 / 30 / 60 / 120 seconds.
+- **Resolved aggressor side.** On real (historical and live) data the aggressor side is resolved
+  for the vast majority of prints via the quote rule plus a tick-test fallback; only a genuinely
+  undecidable print (no quote and no prior trade) remains `unknown`. Historical recent-trades is no
+  longer dominated by `unknown`.
+- **Tape-state prediction chart.** For simulated data and historical replay, the cockpit plots the
+  price as candlesticks (selectable 10 / 30 / 60 s bars) and marks meaningful tape-state
+  transitions, so a user can visually judge whether a state preceded the subsequent price move.
+- **Pause / resume.** A watched session can be paused and resumed without tearing it down or
+  clearing the UI; replay resumes deterministically and live resumes at current real data.
+- **Local-time historical selection.** Historical windows are entered in the user's local timezone
+  (with an explicit zone label and US-session quick-picks); the window fetched from the vendor
+  matches the local window selected — no silent timezone shift.
+- *(later)* **Predictive value, measured.** Beyond the visual chart read, an automated harness
+  quantifies the directional edge of high-confidence tape states over the next 10 / 30 / 60 / 120
+  seconds.
 
 ## Key Capabilities
 
@@ -79,9 +99,14 @@ The first success metric is **not** profit. In priority order:
 2. **Core input events**: `TradeEvent` (ticker, timestamp, price, size, side ∈
    {buy, sell, unknown}); `QuoteEvent` (ticker, timestamp, bid, ask, bid_size, ask_size);
    and later `BookLevelEvent` (ticker, timestamp, side ∈ {bid, ask}, price, size, level).
-3. **Trade aggressor classification**: trade price ≥ current ask ⇒ aggressive buy; price ≤
-   current bid ⇒ aggressive sell; otherwise unknown — using the quote in effect at the
-   trade's timestamp.
+3. **Trade aggressor classification (quote rule + tick-test fallback)**: trade price ≥ current
+   ask ⇒ aggressive buy; price ≤ current bid ⇒ aggressive sell, using the quote in effect at the
+   trade's timestamp. When no quote is in effect yet or the print is strictly between bid and ask,
+   fall back to the **tick test** against the prior trade price (uptick ⇒ buy, downtick ⇒ sell,
+   zero-tick ⇒ carry the last non-zero direction). Only a genuinely undecidable print — no quote
+   **and** no prior trade — stays `unknown`. This rule is engine-level, so it sharpens **live** as
+   well as historical; because far more prints get a side, real-data features and tape state read
+   more truthfully than the quote-only rule did — an intended fidelity gain, not a regression.
 4. **Rolling feature windows** maintained concurrently at **10s, 30s, 60s, 180s, 300s**.
 5. **Core features** per window: `trade_speed`, `volume_speed`, `aggressive_buy_ratio`,
    `aggressive_sell_ratio`, `net_aggressive_volume`, `large_print_count`,
@@ -119,20 +144,40 @@ The first success metric is **not** profit. In priority order:
     buyer_control", "Tape state changed to unclear".
 11. **Five simulated scenarios** that deterministically drive the engine toward each MVP
     state: buyer_control, seller_control, bid_absorption, ask_absorption, unclear_chop.
-12. *(nice-to-have, later)* Optional extended states: `fake_breakout_risk`,
+12. **Engine price + marker history buffer**: alongside the per-tick snapshot, the engine
+    accumulates the watched price as **OHLC bars at 10 / 30 / 60 s** and a series of **meaningful
+    tape-state-transition markers** (state + confidence + timestamp), using config-driven
+    thresholds (no magic numbers). Computed once in the engine and served read-only.
+13. **Tape-state prediction chart (UI)**: a **candlestick** chart of the watched price with a
+    **bar-size selector** (10 / 30 / 60 s) and **markers at meaningful tape-state transitions**
+    (green buyer_control, red seller_control, amber bid/ask_absorption; unclear unmarked), with
+    pan/zoom. Shown for **simulated and historical** only, built on a lightweight client-side
+    financial-charting library.
+14. **Pause / resume a watch**: freeze and continue a watched session **without** tearing it down
+    or clearing the UI. Replay (sim/historical) resumes exactly where it left off; live freezes the
+    view and resumes at current real data (no fabricated backfill). The paused state is surfaced in
+    the snapshot; Stop still fully tears the instance down.
+15. **Historical window selection in local time**: the date/time picker defaults to the user's
+    local timezone with an explicit **zone label** and **US-session quick-picks** ("Open 9:30 ET",
+    "Close 16:00 ET", "Full RTH"), each annotated with the local equivalent; the fetched window
+    equals the user's selected local window.
+16. *(nice-to-have, later)* Optional extended states: `fake_breakout_risk`,
     `fake_breakdown_risk`, `liquidity_pull`, `liquidity_stack`, `exhaustion`.
-13. *(nice-to-have, later)* Level 2 book ingestion (`BookLevelEvent`) and
+17. *(nice-to-have, later)* Level 2 book ingestion (`BookLevelEvent`) and
     `liquidity_pull_score` / liquidity-stack features.
-14. *(nice-to-have, later)* Persistence (PostgreSQL / Redis / Parquet / DuckDB) — only if a
+18. *(nice-to-have, later)* Persistence (PostgreSQL / Redis / Parquet / DuckDB) — only if a
     concrete need arises; Phase 1 is in-memory.
-15. *(nice-to-have, later)* Replay/backtest harness measuring predictive value of
+19. *(nice-to-have, later)* Replay/backtest harness measuring predictive value of
     high-confidence states over 10 / 30 / 60 / 120 s.
 
 ## Non-Goals
 
 - No stock scanning or screening.
 - No news, theme, or sentiment analysis.
-- No chart-pattern scanning or technical-indicator charting.
+- No chart-pattern scanning, technical-indicator studies, drawing tools, or multi-symbol /
+  multi-pane charting. *(The one allowed chart is the focused price candlestick + tape-state-marker
+  overlay for simulated/historical replay, used to evaluate whether a state predicts direction —
+  not a general charting platform.)*
 - No fundamental analysis.
 - No trade execution, order placement, or broker/brokerage integration.
 - No portfolio or position management.
@@ -146,7 +191,9 @@ The first success metric is **not** profit. In priority order:
 
 - **Backend:** Python 3.12+, FastAPI (uvicorn ASGI). Python is the implementation language
   — explicitly not Rust.
-- **Frontend:** Next.js (App Router) + TypeScript; a simple single-ticker UI.
+- **Frontend:** Next.js (App Router) + TypeScript; a simple single-ticker UI. The price chart uses
+  a lightweight client-side financial-charting library — no server-side rendering and no new
+  backend dependency.
 - **Real-time transport:** WebSocket for live state/feature/event push; REST for
   request/response.
 - **Data sources:** the deterministic, seedable **simulator** is the default/offline foundation
@@ -158,6 +205,9 @@ The first success metric is **not** profit. In priority order:
 - **Credentials:** real-vendor API keys come only from environment/config (never committed). With
   no keys configured, the app runs simulator-only and the real modes report an explicit
   "provider unavailable" — they never fall back to fabricated data.
+- **Local-time windows:** historical date/time windows are entered and displayed in the user's
+  local timezone (with an explicit zone label) and resolved to the exact instant selected before
+  the vendor fetch — no silent UTC reinterpretation of a naive value.
 - **In-memory Phase 1:** rolling windows and state live in process memory; optional
   PostgreSQL/Redis/Parquet/DuckDB only if later needed.
 - **No magic numbers:** every window length, threshold, large-print size, impact/absorption
@@ -176,6 +226,9 @@ The first success metric is **not** profit. In priority order:
   information.
 - **Reference:** the trade blotter / Level-2 montage of a pro trading terminal, distilled
   to one ticker and one verdict.
+- **Prediction chart:** one candlestick pane sized to the tape's short horizon (10 / 30 / 60 s
+  bars), with tape-state markers in the same green/red/amber semantics — a focused decision aid,
+  not a studies canvas.
 
 ## Product Shape
 
@@ -189,13 +242,19 @@ The first success metric is **not** profit. In priority order:
   mode-specific controls — a **symbol search** (real modes), a **date + time-window picker** and
   **replay-speed** control (historical), and a **market-status** indicator (live) — without
   changing the cockpit. It remains exactly one screen; a small indicator shows the source being
-  watched (the sim scenario, "live AAPL", or "historical AAPL <window>").
+  watched (the sim scenario, "live AAPL", or "historical AAPL <window>"). Above the cockpit, a
+  **price chart** — candlesticks with a bar-size selector and tape-state markers — is shown for
+  **Simulated** and **Historical**. The watch controls include **Pause / Resume** (freeze and
+  continue without clearing) beside Stop, with a **PAUSED** indicator when paused. The Historical
+  **date/time-window picker** defaults to **local time** (with a zone label) and offers
+  **US-session quick-picks** (Open 9:30 ET / Close 16:00 ET / Full RTH).
 
 ### API surface (Phase 1)
 
 - `POST /watch/{ticker}` — begin watching; spins up an engine instance fed by the provider. An
-  optional JSON body selects the mode and historical params (`{mode, start, end, speed}`); an
-  empty body = a simulated watch (backward compatible).
+  optional JSON body selects the mode and historical params (`{mode, start, end, speed}`, where
+  `start`/`end` are timezone-aware instants for the selected local window); an empty body = a
+  simulated watch (backward compatible).
 - `DELETE /watch/{ticker}` — stop watching; tears the instance down (a live socket is closed).
 - `GET /symbols/search?q=` — tradable-symbol suggestions for the search box (real modes).
 - `GET /market/clock` — market open/closed + next open/close (live-mode status).
@@ -206,6 +265,10 @@ The first success metric is **not** profit. In priority order:
   features).
 - `WS /tape/{ticker}/stream` — live push of state, features, quote/last, and event-log
   messages.
+- `GET /tape/{ticker}/history?bar=<10|30|60>` — engine-computed **OHLC bars + tape-state markers**
+  for the price chart (simulated + historical); a pure projection of the engine history buffer.
+- `POST /watch/{ticker}/pause` and `POST /watch/{ticker}/resume` — freeze/continue the feeder
+  **without** tearing the instance down; the engine, its snapshot, and the history buffer survive.
 
 ### Canonical values (single source of truth — computed once in the engine, displayed identically everywhere)
 
@@ -220,9 +283,15 @@ The first success metric is **not** profit. In priority order:
   identical across REST, WS, and UI (spread = ask − bid).
 - **Observations & event-log messages** — generated once by the engine on transitions; the
   stream and UI render the same messages (no UI-side re-derivation).
-- **Stream status** (connecting | live | stale | closed) — owned once by the engine/feeder; the
-  UI's status indicator reads it. A live-feed gap flips it to **stale**; stop or stream
-  exhaustion flips it to **closed** — never a fabricated "live".
+- **Price history & tape-state markers** — OHLC bars (per selectable size) and meaningful-state
+  markers are derived once in the engine's history buffer; `…/history` and the chart read the same
+  series; the chart never recomputes side, state, or price.
+- **Paused state** — owned once by the engine/feeder and surfaced in the snapshot; the UI reads it
+  (no UI-side guess) to render the PAUSED indicator and toggle the control.
+- **Stream status** (connecting | live | stale | paused | closed) — owned once by the engine/feeder;
+  the UI's status indicator reads it. A live-feed gap flips it to **stale**; **pause** flips it to
+  **paused** (without teardown) and resume restores the prior status; stop or stream exhaustion
+  flips it to **closed** — never a fabricated "live".
 
 ## Must-have user journeys
 
@@ -400,6 +469,66 @@ journey requiring no feed.
     **stale** (and the engine fabricates **no** trades during the gap); when events resume it
     returns to **live**. *(Confirmed by an operator/gated credentialed run.)*
 
+Journeys **J-16 – J-20** cover the side-classification fix, the prediction chart, pause/resume, and
+local-time window selection. **J-17 and J-19 run on simulated data and are browser-verifiable with
+no credentials**; **J-16, J-18, and the correct-window-fetch half of J-20 assume vendor credentials
+are configured**, while their UI/control surfaces remain browser-verifiable without a feed. These
+additions MUST NOT regress J-01 – J-15.
+
+- **J-16: Historical recent-trades show a resolved side (not `unknown`)**
+  - Steps:
+    1. Visit `/`, select **Historical**, enter a liquid symbol (e.g. `AAPL`) over a past
+       regular-hours window, and Watch
+    2. Let the window replay and read the **recent-trades** list
+  - Acceptance: the large majority of trades show **buy** or **sell** (not `unknown`); where a quote
+    is in effect, at/above-ask reads buy and at/below-bid reads sell, and mid-spread / pre-quote
+    prints are resolved by the tick test; only a genuinely undecidable print may remain `unknown`;
+    the `unknown` fraction is far lower than before. *(Verified with credentials configured.)*
+
+- **J-17: Price chart with tape-state markers on simulated data**
+  - Steps:
+    1. Visit `/`, watch `SIM-BUYER`
+    2. Observe the price chart above the cockpit; switch the **bar size** between 10 / 30 / 60 s
+    3. Watch `SIM-SELLER`, then `SIM-BIDABS` / `SIM-ASKABS`
+  - Acceptance: a **candlestick** chart of price renders and updates during replay; the bar-size
+    selector re-renders the candles; **markers** appear at meaningful tape-state transitions in the
+    correct colors (green for buyer_control, red for seller_control, amber for absorption; unclear
+    unmarked). `SIM-BUYER` trends up with buyer markers, `SIM-SELLER` trends down with seller
+    markers, and the absorption scenarios show amber markers with price held. *(No credentials;
+    browser-verifiable.)*
+
+- **J-18: Inspect tape-state prediction on a real historical chart**
+  - Steps:
+    1. Visit `/`, select **Historical**, watch a real symbol over a past window
+    2. Read the candlestick chart; switch bar size 10 / 30 / 60 s; pan/zoom to a meaningful marker
+       and inspect the price that follows it
+  - Acceptance: candlesticks reflect the **real** replayed prices; the bars match the engine-served
+    `…/history` data at each bar size; markers align with tape-state transitions; the user can
+    visually assess whether a marked state preceded the subsequent move. *(Verified with credentials
+    configured.)*
+
+- **J-19: Pause and resume a watch without losing state**
+  - Steps:
+    1. Visit `/`, watch `SIM-BUYER` and let the cockpit populate
+    2. Click **Pause**; observe the tape, chart, counters, and tape state
+    3. Click **Resume**; then later click **Stop**
+  - Acceptance: on **Pause**, the recent trades, chart, features, and tape state **freeze**, a
+    **PAUSED** indicator shows, and the session is **not** cleared (no teardown); on **Resume**, the
+    stream continues from where it left off; **Stop** still closes the stream and returns the cockpit
+    to idle. *(No credentials; browser-verifiable.)*
+
+- **J-20: Pick a historical window in local time with US-session quick-picks**
+  - Steps:
+    1. Visit `/`, select **Historical**
+    2. Read the timezone label on the date/time picker and the **quick-picks** ("Open 9:30 ET",
+       "Close 16:00 ET", "Full RTH")
+    3. Choose a date and click a quick-pick (e.g. **Open**); then Watch
+  - Acceptance: the picker defaults to the user's **local** time with an explicit zone label; each
+    quick-pick is annotated with its local equivalent and fills a valid regular-hours start/end;
+    with credentials, the window fetched from the vendor **matches the selected local window** (no
+    UTC shift). *(The local-time labels + presets are browser-verifiable without a feed; the
+    correct-window fetch is verified with credentials.)*
+
 ## Anti-goals
 
 - **No execution path.** Tapeology MUST NOT place, route, simulate, or recommend orders, and
@@ -407,7 +536,9 @@ journey requiring no feed.
   tape. *(critical)*
 - **Stay in scope.** No stock scanner/screener, no news/theme/sentiment analysis, no
   fundamental analysis, no chart-pattern or indicator charting, no portfolio/position
-  management — these belong to separate projects and MUST NOT be built here. *(critical)*
+  management — these belong to separate projects and MUST NOT be built here. The one allowed chart
+  is the focused price candlestick + tape-state-marker overlay (simulated/historical), which adds
+  **no** indicators, studies, or drawing tools. *(critical)*
 - **Price impact over raw aggression.** The classifier MUST distinguish absorption from
   control: a tape with high one-sided aggression but no corresponding price progress MUST
   resolve to the matching absorption state (bid_absorption / ask_absorption), never to
@@ -444,3 +575,19 @@ journey requiring no feed.
   features — no trained model in the first version.
 - **No trade/profit claims.** The product MUST NOT claim profitability or present output as
   trading advice; tape state is descriptive, not prescriptive.
+- **Honest side inference, not fabrication.** The aggressor side is a documented classification
+  (quote rule, then a Lee-Ready **tick test** against the prior trade). This inference is legitimate
+  and MUST be applied, but the engine MUST NOT force a guess when there is no quote **and** no prior
+  trade — such a print stays `unknown`. Inferred side MUST NOT invent quotes or trades. *(critical)*
+- **One focused chart, computed once.** OHLC bars and tape-state markers MUST be computed once in
+  the engine history buffer and read identically by `…/history` and the chart; the UI MUST NOT
+  recompute side, state, or price from raw data. An empty window MUST yield an **empty** chart, not
+  invented candles. The chart is analysis-only — it MUST NOT add any order/execution affordance.
+  *(critical)*
+- **Honest pause.** Pause MUST freeze the displayed state without tearing the session down or
+  fabricating data; while paused the UI MUST read as **paused**, never as live. On resume, **live**
+  MUST rejoin current real data — the engine MUST NOT synthesize trades to "catch up" the gap.
+  *(critical)*
+- **Timezone-correct windows.** A historical window MUST be fetched for the exact instant the user
+  selected in their local time — no silent UTC reinterpretation that shifts the window by the local
+  offset; all market/session times shown to the user MUST carry an explicit zone label. *(critical)*
