@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ConnStatus, DataSourceMode, TapeSnapshot, WatchParams } from "@/lib/types";
 import { DataSourceSelector } from "./DataSourceSelector";
+import { SymbolSearch } from "./SymbolSearch";
 
 type DotSpec = { color: string; label: string };
 
@@ -82,13 +83,25 @@ export function TopBar({
         <DataSourceSelector mode={mode} onChange={onModeChange} />
 
         <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2">
-          <input
-            aria-label={symbolLabel}
-            value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
-            placeholder={symbolPlaceholder}
-            className={`w-48 ${INPUT_CLASS}`}
-          />
+          {mode === "sim" ? (
+            <input
+              aria-label={symbolLabel}
+              value={symbol}
+              onChange={(e) => setSymbol(e.target.value)}
+              placeholder={symbolPlaceholder}
+              className={`w-48 ${INPUT_CLASS}`}
+            />
+          ) : (
+            // Live / Historical: real symbol search (J-13). Free-text entry still works.
+            <SymbolSearch
+              value={symbol}
+              onChange={setSymbol}
+              onPick={setSymbol}
+              placeholder={symbolPlaceholder}
+              ariaLabel={symbolLabel}
+              inputClassName={`w-48 ${INPUT_CLASS}`}
+            />
+          )}
 
           {mode === "historical" && (
             <>

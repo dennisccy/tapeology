@@ -3,25 +3,40 @@
 import { useState } from "react";
 import { useTapeStream } from "@/lib/useTapeStream";
 import { watchTicker, stopTicker } from "@/lib/api";
-import type { DataSourceMode, WatchParams } from "@/lib/types";
+import type { DataSourceMode, FailureReason, WatchParams } from "@/lib/types";
 import { TopBar } from "@/components/TopBar";
 import { Cockpit } from "@/components/Cockpit";
 import { IdleState } from "@/components/IdleState";
 import { ProviderUnavailable } from "@/components/ProviderUnavailable";
 
+// Real-data failures that get their own distinct honest non-cockpit panel (row 9). Any other
+// failure (e.g. the live creds-present "not yet available", or a bad sim ticker) falls through
+// to the generic error banner.
+const HONEST_REASONS: FailureReason[] = [
+  "provider_unavailable",
+  "symbol_not_tradable",
+  "no_data_for_window",
+];
+
+function isHonestReason(reason: string | undefined): reason is FailureReason {
+  return !!reason && (HONEST_REASONS as string[]).includes(reason);
+}
+
 export default function Page() {
   const [ticker, setTicker] = useState<string | null>(null);
   const [mode, setMode] = useState<DataSourceMode>("sim");
   const [error, setError] = useState<string | null>(null);
-  // When a real-mode Watch is honestly refused (503), show the explicit "provider unavailable"
-  // panel in place of the cockpit — never a fabricated cockpit, never a fall-back to Simulated.
-  const [unavailableMode, setUnavailableMode] = useState<"live" | "historical" | null>(null);
+  // When a real-mode Watch is honestly refused, show the distinct non-cockpit panel for that
+  // reason in place of the cockpit — never a fabricated cockpit, never a fall-back to Simulated.
+  const [failure, setFailure] = useState<{ reason: FailureReason; mode: DataSourceMode } | null>(
+    null,
+  );
   const { snapshot, connStatus } = useTapeStream(ticker);
 
   // Lifecycle hardening (iter-0 lesson): tear down any active watch (backend DELETE + close the
   // WS) BEFORE starting a new one, so a source/symbol switch never leaves an orphaned backend
-  // watch — or, once the live provider lands, a leaked vendor socket. setTicker(null) triggers
-  // useTapeStream's cleanup, which closes the WebSocket client-side.
+  // watch or a leaked replay feeder. setTicker(null) triggers useTapeStream's cleanup, which
+  // closes the WebSocket client-side.
   async function teardownActiveWatch() {
     if (!ticker) return;
     await stopTicker(ticker);
@@ -32,15 +47,15 @@ export default function Page() {
     const candidate = rawSymbol.trim().toUpperCase();
     if (!candidate) return;
     setError(null);
-    setUnavailableMode(null);
+    setFailure(null);
     await teardownActiveWatch();
 
     const result = await watchTicker(candidate, params);
     if (result.ok) {
       setTicker(candidate);
-    } else if (result.providerUnavailable) {
+    } else if (isHonestReason(result.reason)) {
       setTicker(null);
-      setUnavailableMode(params.mode === "historical" ? "historical" : "live");
+      setFailure({ reason: result.reason, mode: params.mode });
     } else {
       setTicker(null);
       setError(result.error ?? "Could not watch ticker");
@@ -53,7 +68,7 @@ export default function Page() {
     if (next === mode) return;
     await teardownActiveWatch();
     setError(null);
-    setUnavailableMode(null);
+    setFailure(null);
     setMode(next);
   }
 
@@ -82,8 +97,8 @@ export default function Page() {
       <main className="mx-auto max-w-7xl px-4 py-6">
         {ticker ? (
           <Cockpit snapshot={snapshot} />
-        ) : unavailableMode ? (
-          <ProviderUnavailable mode={unavailableMode} />
+        ) : failure ? (
+          <ProviderUnavailable reason={failure.reason} mode={failure.mode} />
         ) : (
           <IdleState />
         )}

@@ -1,14 +1,15 @@
 import { API_BASE } from "./config";
-import type { TapeSnapshot, WatchParams } from "./types";
+import type { SymbolMatch, TapeSnapshot, WatchParams } from "./types";
 
 export interface WatchResult {
   ok: boolean;
   scenario?: string;
   error?: string;
-  // True when the backend honestly refused a real-mode watch (503 provider_unavailable). The UI
-  // shows the explicit "provider unavailable" non-cockpit state instead of a generic error —
-  // never a fabricated cockpit, never a silent fall-back to Simulated.
-  providerUnavailable?: boolean;
+  // The distinct honest failure `reason` when the backend refused a real-mode watch (row 9):
+  // "provider_unavailable" | "symbol_not_tradable" | "no_data_for_window" (or another reason
+  // string). The UI renders a distinct non-cockpit panel per reason — never a fabricated
+  // cockpit, never a silent fall-back to Simulated.
+  reason?: string;
 }
 
 export interface StopResult {
@@ -36,19 +37,33 @@ export async function watchTicker(
       return { ok: true, scenario: data.scenario };
     }
     let error = `'${ticker}' could not be watched`;
-    let providerUnavailable = false;
+    let reason: string | undefined;
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;
-      if (res.status === 503 && data?.reason === "provider_unavailable") {
-        providerUnavailable = true;
-      }
+      if (typeof data?.reason === "string") reason = data.reason;
     } catch {
       /* keep default */
     }
-    return { ok: false, error, providerUnavailable };
+    return { ok: false, error, reason };
   } catch {
     return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /symbols/search?q= — real tradable suggestions for the search box (J-13). Any failure or
+// empty/short query yields an empty list (free-text watch entry always remains possible); the
+// UI renders these verbatim and never fabricates a suggestion.
+export async function searchSymbols(q: string): Promise<SymbolMatch[]> {
+  const query = q.trim();
+  if (!query) return [];
+  try {
+    const res = await fetch(`${API_BASE}/symbols/search?q=${encodeURIComponent(query)}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? (data as SymbolMatch[]) : [];
+  } catch {
+    return [];
   }
 }
 

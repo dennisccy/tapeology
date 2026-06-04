@@ -54,6 +54,29 @@ class WatchManager:
             pass
         return engine
 
+    def watch_with_provider(
+        self, ticker: str, provider: Provider, speed: float = 1.0
+    ) -> TapeEngine:
+        """Watch ``ticker`` fed by an arbitrary ``Provider`` (e.g. the historical replay),
+        WITHOUT touching the simulated registry.
+
+        Any existing watch for the ticker is torn down first (a switch/re-watch cancels the
+        prior feeder and starts a fresh, cold engine — the orphaned-watch lesson). The replay
+        feeder is registered in ``self._tasks`` so ``stop()`` and a switch already cancel it.
+        """
+        self.stop(ticker)  # tear down any prior watch for this ticker (no orphaned feeder)
+        engine = TapeEngine(ticker, provider.scenario, self._config)
+        self._engines[ticker] = engine
+        try:
+            loop = asyncio.get_running_loop()
+            self._tasks[ticker] = loop.create_task(
+                self._feed_paced(engine, provider, speed)
+            )
+        except RuntimeError:
+            # No running loop (synchronous context): the caller feeds the engine itself.
+            pass
+        return engine
+
     def get(self, ticker: str) -> TapeEngine | None:
         return self._engines.get(ticker)
 
@@ -79,6 +102,32 @@ class WatchManager:
             for event in provider.stream():
                 engine.process_event(event)
                 await asyncio.sleep(self._pace)
+            engine.set_stream_status("closed")
+        except asyncio.CancelledError:
+            engine.set_stream_status("closed")
+            raise
+
+    async def _feed_paced(
+        self, engine: TapeEngine, provider: Provider, speed: float
+    ) -> None:
+        """Feed a provider's stream pacing delivery by each event's logical gap / ``speed``.
+
+        The wall-clock delay between two events is their logical-timestamp gap divided by the
+        replay speed, clamped to ``config.replay_pacing_cap_seconds`` so a large quiet gap never
+        stalls the cockpit. Pacing is delivery-only; the engine still computes purely from the
+        logical timestamps, so the replay stays deterministic. Cancellable like the sim feeder.
+        """
+        cap = self._config.replay_pacing_cap_seconds
+        divisor = speed if speed > 0 else 1.0
+        try:
+            prev_ts: float | None = None
+            for event in provider.stream():
+                if prev_ts is not None:
+                    delay = min((event.timestamp - prev_ts) / divisor, cap)
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+                prev_ts = event.timestamp
+                engine.process_event(event)
             engine.set_stream_status("closed")
         except asyncio.CancelledError:
             engine.set_stream_status("closed")

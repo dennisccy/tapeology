@@ -12,12 +12,22 @@ import itertools
 import pytest
 
 from app.config import CONFIG
+from app.providers.adapters.base import HistoricalWindow, RawQuote, RawTrade
+from app.providers.historical import HistoricalProvider
 from app.providers.simulated import SimulatedProvider
 from app.watch_manager import WatchManager
 
 
 def _buyer_events(n: int):
     return list(itertools.islice(SimulatedProvider("SIM-BUYER", "buyer_control").stream(), n))
+
+
+def _hist_provider(ticker: str = "F", n: int = 300) -> HistoricalProvider:
+    # Dense, small-gap synthetic window so the feeder flips to "live" within a short sleep.
+    quotes = tuple(RawQuote(i * 0.001, 16.0, 16.01, 100, 100) for i in range(n))
+    trades = tuple(RawTrade(i * 0.001 + 0.0005, 16.0, 100) for i in range(n))
+    window = HistoricalWindow(ticker, trades, quotes)
+    return HistoricalProvider(ticker, window, f"historical {ticker} test-window")
 
 
 def test_stop_unwatched_ticker_returns_false_and_raises_nothing():
@@ -103,3 +113,51 @@ def test_rewatch_yields_identical_snapshot_to_first_ever_watch():
     assert new.bid == ref.bid
     assert new.ask == ref.ask
     assert new.last == ref.last
+
+
+# --- Historical-provider lifecycle (J-11): no sim registry, cancellable, switch-safe --------
+
+def test_watch_with_provider_does_not_touch_sim_registry():
+    manager = WatchManager(CONFIG)
+    provider = _hist_provider("F")  # "F" is NOT a known sim ticker
+    assert manager.is_known("F") is False
+
+    engine = manager.watch_with_provider("F", provider)  # sync context: no feeder task
+    assert manager.get("F") is engine
+    assert engine.scenario == "historical F test-window"  # row-6 source label carried through
+
+
+@pytest.mark.anyio
+async def test_historical_feeder_is_cancellable_via_stop():
+    manager = WatchManager(CONFIG)
+    engine = manager.watch_with_provider("F", _hist_provider("F"), speed=1.0)
+    task = manager._tasks["F"]
+    await asyncio.sleep(0.05)  # let the feeder process events and flip the status to live
+    assert engine.snapshot().stream_status == "live"
+
+    assert manager.stop("F") is True
+    assert "F" not in manager._tasks  # feeder de-registered
+    assert manager.get("F") is None
+    assert engine.snapshot().stream_status == "closed"
+
+    await asyncio.sleep(0.02)  # let cancellation propagate
+    assert task.cancelled()
+
+
+@pytest.mark.anyio
+async def test_switch_tears_down_prior_historical_feeder_no_orphan():
+    manager = WatchManager(CONFIG)
+    first_engine = manager.watch_with_provider("F", _hist_provider("F"), speed=1.0)
+    first_task = manager._tasks["F"]
+    await asyncio.sleep(0.03)
+
+    # A switch (re-watch of the same ticker) must cancel the prior feeder — no orphaned task.
+    second_engine = manager.watch_with_provider("F", _hist_provider("F"), speed=1.0)
+    assert second_engine is not first_engine
+    assert manager._tasks["F"] is not first_task
+
+    await asyncio.sleep(0.02)
+    assert first_task.cancelled()  # the prior replay feeder was torn down
+
+    assert manager.stop("F") is True  # clean up the second feeder
+    await asyncio.sleep(0.02)

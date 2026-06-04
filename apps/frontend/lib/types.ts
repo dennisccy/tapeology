@@ -40,12 +40,25 @@ export type ConnStatus = "idle" | "connecting" | "live" | "closed";
 // "sim" is the default and preserves the existing backward-compatible no-body watch.
 export type DataSourceMode = "sim" | "live" | "historical";
 
-// Optional params carried by the watch body. Only `mode` is consumed by the backend this
-// iteration; `start`/`end`/`speed` are sent for a Historical request but are not replayed yet
-// (the real historical provider lands with J-11).
+// Optional params carried by the watch body. `mode` selects the source; `start`/`end`/`speed`
+// drive a Historical replay (fetched + replayed through the engine — J-11).
 export interface WatchParams {
   mode: DataSourceMode;
   start?: string;
   end?: string;
   speed?: number;
 }
+
+// One symbol-search suggestion from GET /symbols/search (J-13) — rendered verbatim.
+export interface SymbolMatch {
+  symbol: string;
+  name: string;
+}
+
+// Distinct honest real-data failure reasons surfaced by POST /watch (data-contract row 9). The
+// UI renders a distinct non-cockpit panel per reason — never a fabricated cockpit, never a
+// silent fall-back to Simulated.
+export type FailureReason =
+  | "provider_unavailable"
+  | "symbol_not_tradable"
+  | "no_data_for_window";

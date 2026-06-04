@@ -37,3 +37,9 @@ J-13 symbol search) — align env-var names to `adapters/alpaca.py` and add a do
 expecting the creds-present branch to work. Also: J-11+ "real fetch" needs a credentialed verification
 path (gated run or a recorded real-vendor fixture — never synthesized data, per the no-fabrication
 anti-goal); plan it before building.
+
+## iter-2 — 2026-06-04T12:13:04Z
+
+**Verdict:** CONTINUE
+**Lesson:** A committed REAL captured Alpaca fixture (VCR-style, real epochs + prices, self-documented `note: REAL … not synthesized`) is what makes J-11 deterministic and offline-reproducible *in-loop* — reuse this capture-once pattern for every real-data journey rather than depending on live creds being present in QA. Two real-data gotchas surfaced and will recur: (1) the free **IEX** top-of-book is wide/noisy for high-priced names — AAPL honestly reads `unclear` because the spread gate is calibrated for tight tapes (correct, and out of scope to change since it would regress J-01–J-09), so any clean-state demo/fixture must use a **penny-spread** name (Ford → clean `bid_absorption`); (2) the historical window picker sends **naive** datetimes that the backend treats as **UTC**, so an operator must enter UTC times (15:00 UTC = 11:00 ET) — a market-local/tz picker is unbuilt.
+**Applies to:** any iter wiring real-vendor data (J-12 live streaming / J-15 stale-recover) or authoring real-data fixtures/demos; anything choosing a symbol for a clean-state walkthrough.

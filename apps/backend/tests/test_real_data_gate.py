@@ -10,20 +10,41 @@ SDK), *single source of truth* (the sim path is byte-for-byte unchanged).
 """
 
 import pathlib
+import re
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import app, get_market_adapter
 from app.providers.adapters.alpaca import AlpacaAdapter, real_data_available
+from fakes import FakeAdapter, load_fixture_window
 
 ALPACA_ENV = ("ALPACA_API_KEY", "ALPACA_API_SECRET")
 APP_DIR = pathlib.Path(__file__).resolve().parents[1] / "app"
+
+HIST_BODY = {
+    "mode": "historical",
+    "start": "2026-06-02T15:00",
+    "end": "2026-06-02T15:02",
+    "speed": 1,
+}
 
 
 @pytest.fixture
 def client() -> TestClient:
     return TestClient(app)
+
+
+@pytest.fixture
+def fake_client():
+    """Build a TestClient with the market-data adapter overridden by a FakeAdapter (hermetic)."""
+
+    def _make(**kwargs) -> TestClient:
+        app.dependency_overrides[get_market_adapter] = lambda: FakeAdapter(**kwargs)
+        return TestClient(app)
+
+    yield _make
+    app.dependency_overrides.pop(get_market_adapter, None)
 
 
 @pytest.fixture
@@ -170,3 +191,100 @@ def test_engine_and_canonical_modules_reference_no_vendor():
         files = list(target.rglob("*.py")) if target.is_dir() else [target]
         for f in files:
             assert "alpaca" not in f.read_text().lower(), f"{f} unexpectedly references alpaca"
+
+
+def test_alpaca_sdk_import_confined_to_one_module():
+    # The alpaca-py SDK may be imported in EXACTLY one module (the adapter). Engine, API,
+    # providers, and the historical layer stay vendor-free behind the neutral seam.
+    sdk_import = re.compile(r"^\s*(from\s+alpaca\b|import\s+alpaca\b)", re.MULTILINE)
+    hits = sorted(
+        p.relative_to(APP_DIR).as_posix()
+        for p in APP_DIR.rglob("*.py")
+        if sdk_import.search(p.read_text())
+    )
+    assert hits == ["providers/adapters/alpaca.py"]
+
+
+# --- Historical mode: distinct honest failures, each with NO engine (J-14 advances) ----------
+
+def test_historical_unknown_symbol_is_symbol_not_tradable_no_engine(fake_client):
+    client = fake_client(available=True, not_tradable=True)
+    resp = client.post("/watch/ZZZZ", json=HIST_BODY)
+    assert resp.status_code == 404
+    body = resp.json()
+    assert body["reason"] == "symbol_not_tradable"
+    assert body["detail"] == "not a tradable symbol"
+    assert client.get("/tape/ZZZZ/state").status_code == 404  # no engine created
+
+
+def test_historical_empty_window_is_no_data_no_engine(fake_client):
+    client = fake_client(available=True, no_data=True)
+    resp = client.post("/watch/AAPL", json=HIST_BODY)
+    assert resp.status_code == 404
+    body = resp.json()
+    assert body["reason"] == "no_data_for_window"
+    assert body["detail"] == "no data for that window"
+    assert client.get("/tape/AAPL/state").status_code == 404
+
+
+def test_historical_no_creds_is_provider_unavailable_no_engine(fake_client):
+    client = fake_client(available=False)
+    resp = client.post("/watch/AAPL", json=HIST_BODY)
+    assert resp.status_code == 503
+    assert resp.json()["reason"] == "provider_unavailable"
+    assert client.get("/tape/AAPL/state").status_code == 404
+
+
+def test_historical_failure_reasons_are_distinct(fake_client):
+    unknown = fake_client(available=True, not_tradable=True).post("/watch/ZZZZ", json=HIST_BODY)
+    no_data = fake_client(available=True, no_data=True).post("/watch/AAPL", json=HIST_BODY)
+    no_creds = fake_client(available=False).post("/watch/AAPL", json=HIST_BODY)
+    reasons = {unknown.json()["reason"], no_data.json()["reason"], no_creds.json()["reason"]}
+    assert reasons == {"symbol_not_tradable", "no_data_for_window", "provider_unavailable"}
+
+
+# --- Historical mode: param validation -> 422, NO engine, NO fetch --------------------------
+
+def test_historical_end_before_start_is_422_no_engine(fake_client):
+    client = fake_client(available=True)
+    body = {**HIST_BODY, "start": "2026-06-02T15:02", "end": "2026-06-02T15:00"}
+    resp = client.post("/watch/AAPL", json=body)
+    assert resp.status_code == 422
+    assert client.get("/tape/AAPL/state").status_code == 404
+
+
+def test_historical_unparseable_datetime_is_422(fake_client):
+    client = fake_client(available=True)
+    resp = client.post("/watch/AAPL", json={**HIST_BODY, "start": "not-a-date"})
+    assert resp.status_code == 422
+    assert client.get("/tape/AAPL/state").status_code == 404
+
+
+def test_historical_out_of_bounds_speed_is_422(fake_client):
+    client = fake_client(available=True)
+    resp = client.post("/watch/AAPL", json={**HIST_BODY, "speed": 3})  # 3 not in allowed set
+    assert resp.status_code == 422
+    assert client.get("/tape/AAPL/state").status_code == 404
+
+
+def test_historical_missing_window_is_422(fake_client):
+    client = fake_client(available=True)
+    resp = client.post("/watch/AAPL", json={"mode": "historical", "speed": 1})
+    assert resp.status_code == 422
+    assert client.get("/tape/AAPL/state").status_code == 404
+
+
+# --- Historical mode: success builds an engine fed by the real window ------------------------
+
+def test_historical_success_builds_engine_and_labels_source(fake_client):
+    window, _ = load_fixture_window()
+    client = fake_client(available=True, window=window)
+    try:
+        resp = client.post("/watch/F", json=HIST_BODY)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "watching"
+        assert body["scenario"].startswith("historical F ")  # row-6 source label
+        assert client.get("/tape/F/state").status_code == 200  # engine present
+    finally:
+        client.delete("/watch/F")  # tear down the shared-manager engine + feeder

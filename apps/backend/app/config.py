@@ -87,6 +87,20 @@ class Config:
     recent_trades_limit: int = 30            # rows kept for the Recent-trades panel
     event_log_limit: int = 50                # messages kept in the Event-log panel
 
+    # --- Real historical replay (J-11) ------------------------------------------------
+    # Selectable replay speeds for a historical watch. A superset of the UI's {1,2,5,10}
+    # (TopBar REPLAY_SPEEDS) so every UI choice validates; an out-of-set speed is a 422.
+    allowed_replay_speeds: tuple[float, ...] = (1.0, 2.0, 5.0, 10.0)
+    default_replay_speed: float = 1.0
+    # Max wall-clock seconds the feeder waits between two replayed events. A large logical
+    # gap in the real data (e.g. a quiet minute) is clamped to this so the cockpit never
+    # stalls. Pacing is delivery-only — engine math stays purely logical/deterministic.
+    replay_pacing_cap_seconds: float = 1.0
+
+    # --- Symbol search (J-13) ---------------------------------------------------------
+    symbol_search_limit: int = 20            # max suggestions returned to the search box
+    symbol_search_min_query: int = 1         # below this query length => empty list (no error)
+
     def window_label(self, window: int) -> str:
         return f"{window}s"
 

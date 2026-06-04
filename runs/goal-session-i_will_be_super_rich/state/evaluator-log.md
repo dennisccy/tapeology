@@ -68,3 +68,22 @@ real-vendor fixture — never synthesized data, even in tests). Heed the **`.env
 Recommend **full** depth (first third-party dependency `alpaca-py` via the supply-chain gate, real I/O,
 real-timestamp→logical-timeline mapping, must not regress J-01–J-10); later well-bounded slices can drop
 to lean.
+
+---
+
+## Iteration 2 — goal-i_will_be_super_rich-iter-2
+
+**Date:** 2026-06-04T12:13:04Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-11 (real historical replay — Ford window 2026-06-02 15:00–15:02Z → `bid_absorption` @0.950, UI==REST), J-13 (symbol search — real Alpaca matches `AAP`→AAPL/Apple Inc. fill the box; free-text preserved)
+- Advanced (not a pass): J-14 partial 1/4 → 3/4 (added `symbol_not_tradable` + `no_data_for_window` honest no-engine states; market-closed case stays with J-12)
+- Re-verified passing this iter: J-01, J-02, J-09, J-10 (sim regression); J-08 SSOT re-confirmed on real data
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (all 5 critical anti-goals independently re-verified clean via git diff)
+
+**Reasoning:** Verified J-11 + J-13 directly from evidence screenshots, and confirmed the committed fixture is genuinely captured Alpaca data (65 trades/1772 quotes, real microsecond epochs + penny-spread Ford prices, `source: alpaca`, `note: REAL captured … not synthesized`) — the no-fabrication boundary holds. The defining price-impact principle now holds on REAL data: aggressive_sell_ratio 1.000 + net_aggressive_volume −400 yet price holds → `bid_absorption`, not seller_control. Sim path J-01–J-10 is behavior-identical (engine/config/serializers/`base`/`simulated` empty-diff; UT-13 SIM-BUYER→buyer_control @0.868). Coherence COHERENCE-PASS — no veto. Not GOAL_ACHIEVED because J-12/J-15 are `failing` and J-14 is `partial`; CONTINUE on real progress with zero regressions and a tractable next slice.
+
+**Next-step recommendation:** Build the live-streaming half at **full** depth — J-12 (Alpaca live WebSocket behind the same seam, reuse `watch_with_provider` + the cancellable feeder so no orphaned watch), J-15 (stale-on-gap → recover, fabricate no trades during the lull), `GET /market/clock` (Data Contract **row 8** — likely the first `blueprint.md` edit + re-approval this session, so run coherence + closure), and the 4th J-14 case (live + market-closed → "market is closed" with next open). Process gap: **no iter-2 audit handoff was produced** — I performed the skeptical anti-goal verification myself via git (secrets/vendor-confinement/execution-path/SSOT/fixture-provenance all clean).
