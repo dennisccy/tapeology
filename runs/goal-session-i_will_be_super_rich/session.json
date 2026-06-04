@@ -8,11 +8,15 @@
     "stall_window": 3,
     "regression_halt": true
   },
-  "status": "in_progress",
+  "status": "GOAL_ACHIEVED",
   "last_verdict": "GOAL_ACHIEVED",
   "next_depth": "lean",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/i_will_be_super_rich",
-  "updated_at": "2026-06-04T15:58:24.794423Z"
+  "updated_at": "2026-06-04T15:58:24.794423Z",
+  "finished_at": "2026-06-04T16:01:11.903851Z",
+  "total_iterations": 5,
+  "wall_time_seconds": 27544,
+  "quota_pause_count": 0
 }
