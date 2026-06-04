@@ -1,0 +1,13 @@
+{
+  "phase": "goal-i_will_be_super_rich-iter-0",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-06-03T23:52:36.125842Z",
+  "started_at": "2026-06-03T23:52:36.125842Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "next_action": "none"
+}
