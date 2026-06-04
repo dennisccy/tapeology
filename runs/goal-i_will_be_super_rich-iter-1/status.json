@@ -1,0 +1,26 @@
+{
+  "phase": "goal-i_will_be_super_rich-iter-1",
+  "status": "complete",
+  "current_step": "qa_complete",
+  "updated_at": "2026-06-04T09:30:00.000000Z",
+  "started_at": "2026-06-04T08:30:00.806888Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/main.py",
+    "apps/backend/app/providers/adapters/__init__.py",
+    "apps/backend/app/providers/adapters/base.py",
+    "apps/backend/app/providers/adapters/alpaca.py",
+    "apps/backend/.env.example",
+    "apps/backend/tests/test_real_data_gate.py",
+    "apps/frontend/app/page.tsx",
+    "apps/frontend/components/TopBar.tsx",
+    "apps/frontend/components/DataSourceSelector.tsx",
+    "apps/frontend/components/ProviderUnavailable.tsx",
+    "apps/frontend/lib/api.ts",
+    "apps/frontend/lib/types.ts"
+  ],
+  "tests_run": true,
+  "browser_checks_run": true,
+  "next_action": "audit"
+}

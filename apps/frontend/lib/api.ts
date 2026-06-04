@@ -1,10 +1,14 @@
 import { API_BASE } from "./config";
-import type { TapeSnapshot } from "./types";
+import type { TapeSnapshot, WatchParams } from "./types";
 
 export interface WatchResult {
   ok: boolean;
   scenario?: string;
   error?: string;
+  // True when the backend honestly refused a real-mode watch (503 provider_unavailable). The UI
+  // shows the explicit "provider unavailable" non-cockpit state instead of a generic error —
+  // never a fabricated cockpit, never a silent fall-back to Simulated.
+  providerUnavailable?: boolean;
 }
 
 export interface StopResult {
@@ -12,24 +16,37 @@ export interface StopResult {
   error?: string;
 }
 
-// POST /watch/{ticker}. An unknown / non-sim ticker returns an explicit error (no fabrication).
-export async function watchTicker(ticker: string): Promise<WatchResult> {
+// POST /watch/{ticker}. Simulated mode sends NO body (byte-for-byte the prior request, so the
+// sim path is unchanged); Live / Historical send the mode + params. An unknown / non-sim ticker
+// returns an explicit error and a real mode with no credentials returns 503 (no fabrication).
+export async function watchTicker(
+  ticker: string,
+  params?: WatchParams,
+): Promise<WatchResult> {
   try {
-    const res = await fetch(`${API_BASE}/watch/${encodeURIComponent(ticker)}`, {
-      method: "POST",
-    });
+    const init: RequestInit = { method: "POST" };
+    // Only attach a JSON body for the real modes; Simulated stays a bodyless POST.
+    if (params && params.mode !== "sim") {
+      init.headers = { "Content-Type": "application/json" };
+      init.body = JSON.stringify(params);
+    }
+    const res = await fetch(`${API_BASE}/watch/${encodeURIComponent(ticker)}`, init);
     if (res.ok) {
       const data = await res.json();
       return { ok: true, scenario: data.scenario };
     }
     let error = `'${ticker}' could not be watched`;
+    let providerUnavailable = false;
     try {
       const data = await res.json();
-      if (data?.detail) error = data.detail;
+      if (typeof data?.detail === "string") error = data.detail;
+      if (res.status === 503 && data?.reason === "provider_unavailable") {
+        providerUnavailable = true;
+      }
     } catch {
       /* keep default */
     }
-    return { ok: false, error };
+    return { ok: false, error, providerUnavailable };
   } catch {
     return { ok: false, error: "Backend unreachable — is the API running?" };
   }

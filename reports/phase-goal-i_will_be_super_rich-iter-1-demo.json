@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-i_will_be_super_rich-iter-1",
+  "base_url": "http://localhost:3650",
+  "iteration": 1,
+  "default_timeout_ms": 12000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open Tapeology",
+      "narration": "Tapeology opens straight to the tape cockpit. New this time: a Data source switch at the top lets you choose Live, Historical, or Simulated, and it starts on Simulated.",
+      "point_out": "The three-way Live / Historical / Simulated switch in the top bar, with Simulated highlighted.",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Enter the demo ticker",
+      "narration": "With Simulated selected, type the built-in demo ticker SIM-BUYER into the ticker box.",
+      "point_out": "SIM-BUYER typed into the ticker box, ready to watch.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "Watch the simulated tape",
+      "narration": "Click Watch and the cockpit comes alive: the quote, recent trades, features, and event log all stream in, and the tape state reads Buyer Control.",
+      "point_out": "The full cockpit populated, the tape state resolved to Buyer Control, and the status dot turned green.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Buyer Control" }
+    },
+    {
+      "n": 4,
+      "title": "Switch to Live data",
+      "narration": "Switch the source to Live. The simulated watch is torn down cleanly, and an honest 'market unavailable' pill appears, because Tapeology won't invent a market status it can't verify.",
+      "point_out": "The amber 'market unavailable' pill, and the cockpit cleared back to idle as the old watch is dropped (no orphaned stream).",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Live" } },
+      "expect": { "text": "unavailable" }
+    },
+    {
+      "n": 5,
+      "title": "Look up a real symbol",
+      "narration": "In Live mode you get a symbol search box. Type a real ticker such as AAPL.",
+      "point_out": "The input now reads 'Symbol e.g. AAPL' — it adapts to the chosen data source.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Symbol search" }, "text": "AAPL" }
+    },
+    {
+      "n": 6,
+      "title": "An honest answer with no credentials",
+      "narration": "Click Watch. Because no vendor credentials are configured, Tapeology shows a clear 'real-data provider unavailable' panel instead of a cockpit. There are no fabricated prices and no silent fall-back to the simulator.",
+      "point_out": "The amber 'Real-data provider unavailable' panel with a warning icon and guidance to add Alpaca credentials or switch to Simulated. No cockpit, no fake data.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "needs vendor API credentials" }
+    },
+    {
+      "n": 7,
+      "title": "Explore Historical mode",
+      "narration": "Switch to Historical and the top bar reveals exactly the controls a replay needs: a date, a start and end time, and a replay-speed selector.",
+      "point_out": "The new date picker, the start and end time boxes separated by an en-dash, and the replay-speed dropdown defaulting to 1x.",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Historical" } },
+      "expect": { "target": { "label": "Replay speed" } }
+    },
+    {
+      "n": 8,
+      "title": "Enter a historical symbol",
+      "narration": "Type a symbol to replay — say MSFT.",
+      "point_out": "MSFT entered in the symbol box for the historical replay window.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Symbol search" }, "text": "MSFT" }
+    },
+    {
+      "n": 9,
+      "title": "Pick a replay date",
+      "narration": "Choose the session date you want to replay.",
+      "point_out": "A past date selected in the date picker.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Date" }, "text": "2026-06-03" }
+    },
+    {
+      "n": 10,
+      "title": "Set the start time",
+      "narration": "Set when the replay window should begin.",
+      "point_out": "The start time set to 09:30.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Start time" }, "text": "09:30" }
+    },
+    {
+      "n": 11,
+      "title": "Set the end time",
+      "narration": "And when the replay window should end.",
+      "point_out": "The end time set to 10:30, closing a one-hour replay window.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "End time" }, "text": "10:30" }
+    },
+    {
+      "n": 12,
+      "title": "Same honest answer for Historical",
+      "narration": "Click Watch. With no credentials, Historical gives the same honest 'real-data provider unavailable' panel, never a fabricated replay.",
+      "point_out": "The same amber 'Real-data provider unavailable' panel, now for Historical data — still no cockpit and no invented tape.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "needs vendor API credentials" }
+    }
+  ]
+}

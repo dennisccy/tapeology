@@ -35,3 +35,17 @@ export interface TapeSnapshot {
 }
 
 export type ConnStatus = "idle" | "connecting" | "live" | "closed";
+
+// The watch data-source mode (wire values; the selector renders Live / Historical / Simulated).
+// "sim" is the default and preserves the existing backward-compatible no-body watch.
+export type DataSourceMode = "sim" | "live" | "historical";
+
+// Optional params carried by the watch body. Only `mode` is consumed by the backend this
+// iteration; `start`/`end`/`speed` are sent for a Historical request but are not replayed yet
+// (the real historical provider lands with J-11).
+export interface WatchParams {
+  mode: DataSourceMode;
+  start?: string;
+  end?: string;
+  speed?: number;
+}

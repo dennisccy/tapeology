@@ -3,20 +3,20 @@
     "J-01": {
       "id": "J-01",
       "name": "Watch a ticker and see the live tape cockpit",
-      "status": "already_passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-0",
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-1",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-1",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-0-evidence/UT-J-01-J-02-SIM-BUYER.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-1-evidence/UT-08-cockpit-buyer-control.png"
     },
     "J-02": {
       "id": "J-02",
       "name": "Buyer-control scenario is identified",
-      "status": "already_passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-0",
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-1",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-1",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-0-evidence/UT-J-01-J-02-SIM-BUYER.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-1-evidence/UT-08-cockpit-buyer-control.png"
     },
     "J-03": {
       "id": "J-03",
@@ -61,7 +61,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-0",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-0-evidence/UT-J-01-J-02-SIM-BUYER.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-1-evidence/UT-08-cockpit-buyer-control.png"
     },
     "J-08": {
       "id": "J-08",
@@ -75,20 +75,20 @@
     "J-09": {
       "id": "J-09",
       "name": "Stop watching a ticker",
-      "status": "already_passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-0",
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-1",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-1",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-0-evidence/UT-J-09-stopped-idle.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-1-evidence/UT-10-after-stop-idle.png"
     },
     "J-10": {
       "id": "J-10",
       "name": "Choose a data source (Live / Historical / Simulated)",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-1",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-1",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-0-evidence/UT-J-10-no-datasource-selector.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-1-evidence/UT-01-home-simulated-default.png"
     },
     "J-11": {
       "id": "J-11",
@@ -120,11 +120,11 @@
     "J-14": {
       "id": "J-14",
       "name": "Real-data edge cases are handled honestly (no fabricated data)",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-0",
+      "status": "partial",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-1",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-0-evidence/UT-J-14-unknown-symbol-honest-error.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-1-evidence/UT-06-live-provider-unavailable.png"
     },
     "J-15": {
       "id": "J-15",
@@ -137,5 +137,5 @@
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-06-04T00:20:39Z"
+  "updated_at": "2026-06-04T09:39:35Z"
 }

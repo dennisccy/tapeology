@@ -10,11 +10,15 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from .config import CONFIG
+from .providers.adapters.alpaca import real_data_available
 from .serializers import (
     serialize_events,
     serialize_features,
@@ -23,6 +27,31 @@ from .serializers import (
     serialize_summary,
 )
 from .watch_manager import UnknownTickerError, WatchManager
+
+
+class WatchRequest(BaseModel):
+    """Optional ``POST /watch`` body selecting the data-source mode.
+
+    Backward compatible: no body / ``{}`` / ``mode == "sim"`` is the existing simulated watch.
+    ``start`` / ``end`` / ``speed`` are accepted for a historical request but are not replayed
+    this iteration (the real historical provider lands with J-11); an unrecognized ``mode`` is
+    rejected by the ``Literal`` as a 422 — never a silent default into a real feed.
+    """
+
+    mode: Literal["sim", "live", "historical"] = "sim"
+    start: str | None = None
+    end: str | None = None
+    speed: float | None = None
+
+
+class RealDataUnavailableError(Exception):
+    """Refuse a real-mode watch with an explicit, distinct non-cockpit response instead of
+    fabricating a snapshot (no-fabricated-data anti-goal). Carries a machine-readable ``reason``
+    alongside a human ``detail``; raising it creates no engine."""
+
+    def __init__(self, reason: str, detail: str) -> None:
+        self.reason = reason
+        self.detail = detail
 
 # Wall-clock seconds between WS pushes (re-exposes the latest snapshot; no recompute).
 WS_PUSH_INTERVAL = 0.2
@@ -45,6 +74,13 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(RealDataUnavailableError)
+async def _real_data_unavailable_handler(_, exc: RealDataUnavailableError) -> JSONResponse:
+    # 503: the real-data provider exists in the contract but cannot serve right now. The body
+    # carries both the human detail and the machine reason; NO engine/snapshot is produced.
+    return JSONResponse(status_code=503, content={"detail": exc.detail, "reason": exc.reason})
+
+
 def _engine_or_404(ticker: str):
     engine = manager.get(ticker)
     if engine is None:
@@ -58,9 +94,24 @@ def health() -> dict:
 
 
 @app.post("/watch/{ticker}")
-async def watch(ticker: str) -> dict:
+async def watch(ticker: str, body: WatchRequest | None = None) -> dict:
     # Async so it runs on the event loop: WatchManager.watch starts the background feeder
     # via asyncio.create_task, which needs a running loop (a sync route runs in a threadpool).
+    mode = body.mode if body is not None else "sim"
+
+    if mode in ("live", "historical"):
+        # Real-data modes never touch the sim registry. Gate on the single canonical
+        # availability source FIRST and create NO engine on refusal — no fabricated snapshot,
+        # no fall-back to the simulator.
+        if not real_data_available():
+            raise RealDataUnavailableError("provider_unavailable", "real-data provider unavailable")
+        # Credentials present, but the live/historical provider is not wired yet (J-11/J-12).
+        # Still refuse with an explicit non-cockpit error rather than synthesizing a cockpit.
+        raise RealDataUnavailableError(
+            "provider_not_implemented", "real-data provider not yet available"
+        )
+
+    # Simulated path — unchanged.
     try:
         engine = manager.watch(ticker)
     except UnknownTickerError:

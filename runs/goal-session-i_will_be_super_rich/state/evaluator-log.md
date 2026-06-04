@@ -34,3 +34,37 @@ body + historical replay (J-11), the live provider + stale/recover (J-12/J-15), 
 data-source selector (J-10). Recommend **full** depth for iter 1 (security- + architecture-critical
 foundation; must not regress J-01–J-09). Watch the orphaned-watch-on-switch issue (see lessons.md)
 when wiring live sockets.
+
+---
+
+## Iteration 1 — goal-i_will_be_super_rich-iter-1
+
+**Date:** 2026-06-04T09:39:35Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-10 (data-source selector + per-mode reveal + Simulated→SIM-BUYER→buyer_control)
+- Advanced (not a pass): J-14 failing → partial (no-credentials path only; 3 of 4 cases remain)
+- Re-verified passing this iter: J-01, J-02 (UT-08 cockpit), J-09 (UT-10/UT-09 teardown → /state 404)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (all 5 critical anti-goals independently verified clean via git diff)
+
+**Reasoning:** Verified J-10 and the J-14 no-creds path directly from evidence screenshots (UT-08 Buyer
+Control @ 0.869 with agg_buy 0.924 / buy_impact +0.400; UT-06/UT-07 honest "real-data provider
+unavailable" panel, no cockpit) and backend REST cross-checks (503 `provider_unavailable` + `/state`
+404 proving no engine created). Independently confirmed the anti-goals against `git diff HEAD`: engine /
+config / serializers / providers base+simulated have an **empty diff**; `ALPACA_*` confined to exactly
+one module; `.env.example` empty values, no env file tracked; no broker/order/execution code. Coherence
+is COHERENCE-PASS (no veto). Not GOAL_ACHIEVED because J-11/J-12/J-13/J-15 are still `failing` and J-14
+is only `partial`; CONTINUE because real progress was made with zero regressions and a tractable next
+slice.
+
+**Next-step recommendation:** Wire the first real provider behind the seam — **J-11 historical replay**
+(reproducible, no market hours needed), bundling **J-13 `GET /symbols/search`** for the symbol box.
+Decide the **credentialed verification strategy up front** (gated credentialed run OR a recorded
+real-vendor fixture — never synthesized data, even in tests). Heed the **`.env` name trap**: the stale
+`.env` uses `ALPACA_SECRET_KEY` but the adapter reads `ALPACA_API_SECRET`, and there is no dotenv loader.
+Recommend **full** depth (first third-party dependency `alpaca-py` via the supply-chain gate, real I/O,
+real-timestamp→logical-timeline mapping, must not regress J-01–J-10); later well-bounded slices can drop
+to lean.
