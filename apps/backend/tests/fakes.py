@@ -13,6 +13,7 @@ from pathlib import Path
 
 from app.providers.adapters.base import (
     HistoricalWindow,
+    MarketClock,
     NoDataForWindow,
     RawQuote,
     RawTrade,
@@ -50,6 +51,8 @@ class FakeAdapter:
         no_data: bool = False,
         matches: list[SymbolMatch] | None = None,
         search_raises: bool = False,
+        clock: MarketClock | None = None,
+        clock_raises: bool = False,
     ) -> None:
         self._available = available
         self._window = window
@@ -57,11 +60,23 @@ class FakeAdapter:
         self._no_data = no_data
         self._matches = matches or []
         self._search_raises = search_raises
+        self._clock = clock
+        self._clock_raises = clock_raises
         self.fetch_calls: list[tuple] = []
         self.search_calls: list[str] = []
+        self.clock_calls = 0
 
     def is_available(self) -> bool:
         return self._available
+
+    def get_market_clock(self) -> MarketClock:
+        # ``clock_raises`` models a degraded/unreachable vendor (the API must degrade to an
+        # explicit unavailable, never fabricate a session); otherwise return the configured clock.
+        self.clock_calls += 1
+        if self._clock_raises:
+            raise RuntimeError("simulated market-clock failure")
+        assert self._clock is not None, "FakeAdapter needs a clock for get_market_clock"
+        return self._clock
 
     def fetch_historical(self, symbol: str, start, end) -> HistoricalWindow:
         self.fetch_calls.append((symbol, start, end))

@@ -1,4 +1,5 @@
 import { Panel } from "./Panel";
+import { formatMarketTime } from "@/lib/datetime";
 import type { DataSourceMode, FailureReason } from "@/lib/types";
 
 // Honest non-cockpit state (J-14): rendered IN PLACE OF the cockpit when a Live / Historical
@@ -9,9 +10,20 @@ import type { DataSourceMode, FailureReason } from "@/lib/types";
 
 type Copy = { title: string; phrase: string; help: string };
 
-function copyFor(reason: FailureReason, mode?: DataSourceMode): Copy {
+function copyFor(reason: FailureReason, mode?: DataSourceMode, nextOpen?: string): Copy {
   const modeLabel = mode === "historical" ? "Historical" : "Live";
   switch (reason) {
+    case "market_closed":
+      return {
+        title: "Market is closed",
+        phrase: "market is closed",
+        help:
+          (nextOpen
+            ? `The US market is closed right now — it next opens ${formatMarketTime(nextOpen)}. `
+            : "The US market is closed right now. ") +
+          "Live streaming resumes during market hours. No tape is shown — Tapeology never " +
+          "fabricates data to fill the gap. You can replay a past session with Historical instead.",
+      };
     case "symbol_not_tradable":
       return {
         title: "Symbol not tradable",
@@ -46,11 +58,13 @@ function copyFor(reason: FailureReason, mode?: DataSourceMode): Copy {
 export function ProviderUnavailable({
   reason,
   mode,
+  nextOpen,
 }: {
   reason: FailureReason;
   mode?: DataSourceMode;
+  nextOpen?: string;
 }) {
-  const copy = copyFor(reason, mode);
+  const copy = copyFor(reason, mode, nextOpen);
   return (
     <div className="flex min-h-[50vh] items-center justify-center">
       <Panel title={copy.title} className="max-w-lg border-amber-500/40 bg-amber-500/5">

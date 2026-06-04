@@ -61,4 +61,16 @@ export interface SymbolMatch {
 export type FailureReason =
   | "provider_unavailable"
   | "symbol_not_tradable"
-  | "no_data_for_window";
+  | "no_data_for_window"
+  | "market_closed";
+
+// GET /market/clock (data-contract row 8) — the market session status read VERBATIM by the Live
+// market-status indicator (the UI never recomputes open/closed). `available:false` (with null
+// fields) means no credentials or the clock could not be reached — the indicator shows
+// "unavailable", never a fabricated open/closed. `next_open`/`next_close` are ISO-8601 UTC.
+export interface MarketClock {
+  available: boolean;
+  is_open: boolean | null;
+  next_open: string | null;
+  next_close: string | null;
+}

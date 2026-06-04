@@ -25,9 +25,11 @@ data* (every failure is an explicit neutral outcome, never a synthesized read).
 from __future__ import annotations
 
 import os
+from datetime import timezone
 
 from .base import (
     HistoricalWindow,
+    MarketClock,
     NoDataForWindow,
     RawQuote,
     RawTrade,
@@ -52,6 +54,15 @@ def _env(name: str) -> str:
     """Return a trimmed environment value, or ``""`` when unset/blank (blank != configured)."""
     value = os.environ.get(name)
     return value.strip() if value else ""
+
+
+def _to_iso_utc(value) -> str | None:
+    """Serialize a (tz-aware) vendor datetime to an ISO-8601 UTC string (``…Z``); ``None`` passes
+    through. Alpaca returns tz-aware datetimes, so converting to UTC is unambiguous — an operator
+    is never misled about "next open"."""
+    if value is None:
+        return None
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 class AlpacaAdapter:
@@ -159,6 +170,26 @@ class AlpacaAdapter:
             key=lambda m: m.symbol,
         )
         return prefix + substring
+
+    # --- Market clock (read-only session reference) -------------------------------------
+
+    def get_market_clock(self) -> MarketClock:
+        """Fetch the REAL market session status via Alpaca's trading clock (J-14 / row 8).
+
+        Read-only reference call: it reports open/closed + next open/close and places/echoes NO
+        order (the no-execution anti-goal holds). Vendor tz-aware datetimes are serialized to
+        ISO-8601 UTC. A credential/network failure propagates so the API degrades to an explicit
+        ``available:false`` — this method never fabricates a session.
+        """
+        from alpaca.trading.client import TradingClient
+
+        client = TradingClient(_env(ENV_API_KEY), _env(ENV_API_SECRET), paper=True)
+        clock = client.get_clock()
+        return MarketClock(
+            is_open=bool(clock.is_open),
+            next_open=_to_iso_utc(clock.next_open),
+            next_close=_to_iso_utc(clock.next_close),
+        )
 
     def _asset_universe(self) -> list[SymbolMatch]:
         global _ASSET_UNIVERSE

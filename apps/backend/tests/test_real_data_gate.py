@@ -15,8 +15,10 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import CONFIG
 from app.main import app, get_market_adapter
 from app.providers.adapters.alpaca import AlpacaAdapter, real_data_available
+from app.providers.adapters.base import MarketClock
 from fakes import FakeAdapter, load_fixture_window
 
 ALPACA_ENV = ("ALPACA_API_KEY", "ALPACA_API_SECRET")
@@ -28,6 +30,14 @@ HIST_BODY = {
     "end": "2026-06-02T15:02",
     "speed": 1,
 }
+
+# Authoritative session-clock fixtures for the live-branch pre-flight gate (ISO-8601 UTC).
+OPEN_CLOCK = MarketClock(
+    is_open=True, next_open="2026-06-05T13:30:00Z", next_close="2026-06-04T20:00:00Z"
+)
+CLOSED_CLOCK = MarketClock(
+    is_open=False, next_open="2026-06-05T13:30:00Z", next_close="2026-06-05T20:00:00Z"
+)
 
 
 @pytest.fixture
@@ -116,14 +126,82 @@ def test_historical_watch_without_creds_returns_503_and_creates_no_engine(client
     assert client.get("/tape/AAPL/state").status_code == 404
 
 
-def test_live_watch_with_creds_does_not_fabricate_a_cockpit(client, with_creds):
-    # Even WITH credentials, the real live/historical provider is not wired this iteration
-    # (J-11/J-12). The watch MUST surface an explicit non-cockpit error — never a synthesized
-    # cockpit/snapshot (no-fabricated-data anti-goal). Distinct reason from the no-creds case.
+def test_live_watch_with_creds_market_open_is_not_implemented_no_cockpit(fake_client):
+    # Creds present + market OPEN, but the live socket is iter-4: the watch MUST surface an
+    # explicit non-cockpit provider_not_implemented — never a synthesized cockpit (no-fabricated-
+    # data anti-goal). Hermetic via the FakeAdapter clock (Assumptions #3): once the pre-flight
+    # gate calls adapter.get_market_clock(), the suite must make NO real vendor network call.
+    client = fake_client(available=True, clock=OPEN_CLOCK)
     resp = client.post("/watch/AAPL", json={"mode": "live"})
     assert resp.status_code == 503
     assert resp.json()["reason"] == "provider_not_implemented"
     assert client.get("/tape/AAPL/state").status_code == 404
+
+
+# --- Live-branch market-closed pre-flight gate (J-14 4th case): explicit closed, NO engine -----
+
+def test_live_watch_market_closed_is_market_closed_with_next_open_no_engine(fake_client):
+    # The keystone J-14 case: a live watch while the market is closed surfaces an explicit,
+    # distinct market_closed refusal carrying the next open — and creates NO engine (never a
+    # fabricated cockpit, never a sim fall-back).
+    client = fake_client(available=True, clock=CLOSED_CLOCK)
+    resp = client.post("/watch/AAPL", json={"mode": "live"})
+    assert resp.status_code == CONFIG.market_closed_status_code  # 409 by config
+    body = resp.json()
+    assert body["reason"] == "market_closed"
+    assert body["detail"] == "market is closed"
+    assert body["next_open"] == CLOSED_CLOCK.next_open  # the real next open is surfaced
+    # No engine was created => a subsequent canonical read is an explicit 404, never a snapshot.
+    assert client.get("/tape/AAPL/state").status_code == 404
+
+
+def test_live_watch_degraded_clock_is_not_reported_closed(fake_client):
+    # Degraded-clock honesty (Assumptions #2, no-fabricated-data): creds present but the clock
+    # call fails, so the session is INDETERMINATE. The gate MUST NOT report "closed" (that would
+    # fabricate a session) — it falls through to the honest provider_not_implemented refusal.
+    client = fake_client(available=True, clock_raises=True)
+    resp = client.post("/watch/AAPL", json={"mode": "live"})
+    assert resp.status_code == 503
+    assert resp.json()["reason"] == "provider_not_implemented"
+    assert client.get("/tape/AAPL/state").status_code == 404
+
+
+def test_four_real_data_refusal_reasons_are_distinct(fake_client):
+    # All four honest real-data refusals are pairwise distinct, so the UI shows a distinct
+    # non-cockpit panel per failure mode (no creds / untradable / empty window / market closed).
+    unknown = fake_client(available=True, not_tradable=True).post("/watch/ZZZZ", json=HIST_BODY)
+    no_data = fake_client(available=True, no_data=True).post("/watch/AAPL", json=HIST_BODY)
+    no_creds = fake_client(available=False).post("/watch/AAPL", json=HIST_BODY)
+    closed = fake_client(available=True, clock=CLOSED_CLOCK).post(
+        "/watch/AAPL", json={"mode": "live"}
+    )
+    reasons = {
+        unknown.json()["reason"],
+        no_data.json()["reason"],
+        no_creds.json()["reason"],
+        closed.json()["reason"],
+    }
+    assert reasons == {
+        "symbol_not_tradable",
+        "no_data_for_window",
+        "provider_unavailable",
+        "market_closed",
+    }
+
+
+def test_non_market_closed_refusal_bodies_are_unchanged_no_next_open(fake_client):
+    # The new next_open field appears ONLY on a market_closed body; the other three reasons stay
+    # byte-for-byte {detail, reason} (no leaked next_open key) — the spec's compatibility guard.
+    unknown = fake_client(available=True, not_tradable=True).post("/watch/ZZZZ", json=HIST_BODY)
+    no_data = fake_client(available=True, no_data=True).post("/watch/AAPL", json=HIST_BODY)
+    no_creds = fake_client(available=False).post("/watch/AAPL", json=HIST_BODY)
+    not_impl = fake_client(available=True, clock=OPEN_CLOCK).post(
+        "/watch/AAPL", json={"mode": "live"}
+    )
+    for resp in (unknown, no_data, no_creds, not_impl):
+        body = resp.json()
+        assert set(body.keys()) == {"detail", "reason"}
+        assert "next_open" not in body
 
 
 # --- Unknown mode => explicit 4xx, no engine ------------------------------------------------

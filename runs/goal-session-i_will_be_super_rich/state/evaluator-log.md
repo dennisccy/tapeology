@@ -87,3 +87,24 @@ to lean.
 **Reasoning:** Verified J-11 + J-13 directly from evidence screenshots, and confirmed the committed fixture is genuinely captured Alpaca data (65 trades/1772 quotes, real microsecond epochs + penny-spread Ford prices, `source: alpaca`, `note: REAL captured … not synthesized`) — the no-fabrication boundary holds. The defining price-impact principle now holds on REAL data: aggressive_sell_ratio 1.000 + net_aggressive_volume −400 yet price holds → `bid_absorption`, not seller_control. Sim path J-01–J-10 is behavior-identical (engine/config/serializers/`base`/`simulated` empty-diff; UT-13 SIM-BUYER→buyer_control @0.868). Coherence COHERENCE-PASS — no veto. Not GOAL_ACHIEVED because J-12/J-15 are `failing` and J-14 is `partial`; CONTINUE on real progress with zero regressions and a tractable next slice.
 
 **Next-step recommendation:** Build the live-streaming half at **full** depth — J-12 (Alpaca live WebSocket behind the same seam, reuse `watch_with_provider` + the cancellable feeder so no orphaned watch), J-15 (stale-on-gap → recover, fabricate no trades during the lull), `GET /market/clock` (Data Contract **row 8** — likely the first `blueprint.md` edit + re-approval this session, so run coherence + closure), and the 4th J-14 case (live + market-closed → "market is closed" with next open). Process gap: **no iter-2 audit handoff was produced** — I performed the skeptical anti-goal verification myself via git (secrets/vendor-confinement/execution-path/SSOT/fixture-provenance all clean).
+
+---
+
+## Iteration 3 — goal-i_will_be_super_rich-iter-3
+
+**Date:** 2026-06-04T13:35:26Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: **J-14** (4/4 — Live + market-closed → distinct `market_closed` panel with next open, **no engine**: `…/state`→404, verified live HTTP 409 + hermetic FakeAdapter clock=closed). First pass for J-14.
+- Re-verified passing this iter: J-01, J-02 (TC-16 SIM-BUYER → Buyer Control 0.886), J-09 (Stop→idle), J-10 (Simulated reveal + Live indicator), J-11 (historical AAPL replay populates), J-13 (AAPL→Apple Inc. search fills box)
+- Advanced (not a pass): J-12 — its **Live controls + market-status indicator** surface became real (`GET /market/clock`), but live streaming stays `failing` (`provider_not_implemented`, iter-4)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (all 7 reminders independently re-verified clean via `git diff`: vendor+cred confinement to `alpaca.py`; engine/serializers/`providers/base|simulated|historical` 0-line diff; `.env` untracked + empty example; `TradingClient` read-only `get_clock` only — no order/account/position method; `CONFIG.market_closed_status_code`)
+
+**Reasoning:** Verified J-14 directly from TC-14 (honest "market is closed" panel + next open, "never fabricates data", no cockpit) and from the backend (`POST /watch/AAPL {mode:live}` → 409 `{reason:market_closed,next_open:…}`, then `GET /tape/AAPL/state` → 404 = no engine). Data Contract **row 8** (`GET /market/clock`) built with exactly one computing owner + one serving endpoint; the pre-flight gate reads the same owner (not a 2nd lookup) — COHERENCE-PASS, no veto. Independently re-ran the full backend suite: **118 passed, exit 0**. The sim + historical paths are provably behavior-identical (empty engine/serializer/provider diff), so the 12 required-still-passing journeys cannot have regressed; J-01/J-02/J-10/J-11/J-13 re-confirmed by screenshot. Not GOAL_ACHIEVED because J-12 and J-15 (the live-streaming half) are still `failing`; CONTINUE on real progress (a full journey completed + a contract row built) with zero regressions and a tractable next slice.
+
+**Next-step recommendation:** iter-4 at **full** depth — build the live half (J-12 + J-15). Introduce the **async** provider/feeder seam (today's `Provider.stream()` is synchronous), wire the real Alpaca live WebSocket behind the vendor-neutral adapter, and add the stale-on-gap → recover watchdog (no fabricated trades during the lull). Reuse iter-3's `get_market_clock()` as J-12's pre-flight open-check and the cancellable feeder teardown (iter-0 orphaned-watch lesson); `stale` dot + `set_stream_status` already exist. Operator/gated for real-socket behavior (market hours + creds). This closes the last two must-have journeys → goal completion.
+
+**Process note:** browser-qa-agent recorded SKIPPED (harness `:3650` down) while the `qa` agent captured authoritative evidence on an isolated `:3651` instance — the `:3650` outage was QA-process-self-inflicted (`npm run build` against the shared `.next`, then a `git checkout` that discarded uncommitted `page.tsx` edits, since reconstructed verbatim and independently re-verified by me). No iter-3 code defect. No iter-3 audit-handoff file was present; I performed the skeptical anti-goal verification myself via `git`.

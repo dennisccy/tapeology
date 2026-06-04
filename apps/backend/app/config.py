@@ -101,6 +101,12 @@ class Config:
     symbol_search_limit: int = 20            # max suggestions returned to the search box
     symbol_search_min_query: int = 1         # below this query length => empty list (no error)
 
+    # --- Live market-closed pre-flight gate (J-14) ------------------------------------
+    # HTTP status for a live watch refused because the market is closed: the request is valid
+    # but conflicts with the current market session, so 409 Conflict. The frontend keys off the
+    # `reason` ("market_closed"), not this code, so 503 would be an acceptable alternative.
+    market_closed_status_code: int = 409
+
     def window_label(self, window: int) -> str:
         return f"{window}s"
 

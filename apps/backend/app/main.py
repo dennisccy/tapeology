@@ -63,12 +63,21 @@ class WatchRequest(BaseModel):
 class RealDataError(Exception):
     """Refuse a real-mode watch with an explicit, distinct non-cockpit response instead of
     fabricating a snapshot (no-fabricated-data anti-goal). Carries a machine-readable ``reason``
-    and a human ``detail`` at an explicit ``status_code``; raising it creates no engine."""
+    and a human ``detail`` at an explicit ``status_code``; raising it creates no engine. A
+    ``market_closed`` refusal additionally carries ``next_open`` (ISO-8601 UTC) so the honest
+    closed-market panel can show when the market reopens; it is ``None`` for the other reasons."""
 
-    def __init__(self, reason: str, detail: str, status_code: int = 503) -> None:
+    def __init__(
+        self,
+        reason: str,
+        detail: str,
+        status_code: int = 503,
+        next_open: str | None = None,
+    ) -> None:
         self.reason = reason
         self.detail = detail
         self.status_code = status_code
+        self.next_open = next_open
 
 
 # Wall-clock seconds between WS pushes (re-exposes the latest snapshot; no recompute).
@@ -100,10 +109,12 @@ app.add_middleware(
 @app.exception_handler(RealDataError)
 async def _real_data_error_handler(_, exc: RealDataError) -> JSONResponse:
     # An explicit real-data refusal: the body carries both the human detail and the machine
-    # reason at the error's own status; NO engine/snapshot is produced.
-    return JSONResponse(
-        status_code=exc.status_code, content={"detail": exc.detail, "reason": exc.reason}
-    )
+    # reason at the error's own status; NO engine/snapshot is produced. ``next_open`` is added
+    # only when present (a market_closed refusal), so the other reasons' bodies stay unchanged.
+    content = {"detail": exc.detail, "reason": exc.reason}
+    if exc.next_open is not None:
+        content["next_open"] = exc.next_open
+    return JSONResponse(status_code=exc.status_code, content=content)
 
 
 def _engine_or_404(ticker: str):
@@ -135,10 +146,27 @@ async def watch(
     mode = body.mode if body is not None else "sim"
 
     if mode == "live":
-        # Live streaming is out of scope this iteration: gate on availability, then refuse
-        # explicitly (no fabricated cockpit, no sim fall-back). Behavior unchanged from iter-1.
+        # Live streaming is out of scope this iteration: gate on availability, then on market
+        # session, then refuse explicitly (no fabricated cockpit, no sim fall-back).
         if not adapter.is_available():
             raise RealDataError("provider_unavailable", "real-data provider unavailable", 503)
+        # Market-closed pre-flight gate (J-14): refuse a live watch while the market is closed
+        # with an explicit non-cockpit state carrying the next open — NO engine created. Read the
+        # clock from the SAME computing owner the indicator's endpoint uses (adapter.get_market_
+        # clock), off the event loop. Only an AUTHORITATIVE closed clock (is_open is False)
+        # triggers it; a degraded/unreachable clock is INDETERMINATE and must NOT be reported as
+        # closed (that would fabricate a session), so it falls through to the honest refusal below.
+        try:
+            clock = await asyncio.to_thread(adapter.get_market_clock)
+        except Exception:
+            clock = None
+        if clock is not None and clock.is_open is False:
+            raise RealDataError(
+                "market_closed",
+                "market is closed",
+                CONFIG.market_closed_status_code,
+                next_open=clock.next_open,
+            )
         raise RealDataError(
             "provider_not_implemented", "real-data provider not yet available", 503
         )
@@ -218,6 +246,36 @@ async def symbols_search(
         {"symbol": m.symbol, "name": m.name}
         for m in matches[: CONFIG.symbol_search_limit]
     ]
+
+
+def _clock_unavailable() -> dict:
+    """The explicit row-8 unavailable: null fields, never a guessed open/closed."""
+    return {"available": False, "is_open": None, "next_open": None, "next_close": None}
+
+
+@app.get("/market/clock")
+async def market_clock(
+    adapter: MarketDataAdapter = Depends(get_market_adapter),
+) -> dict:
+    """Market session status (Data Contract row 8): open/closed + next open/close, read by the
+    Live market-status indicator. With no credentials -> explicit ``available:false`` (null
+    fields); a vendor/network error degrades to the same unavailable (benign, like
+    ``/symbols/search``). It NEVER fabricates an open/closed. Single source of truth: this is the
+    one serving endpoint, and ``adapter.get_market_clock`` is the one computing owner the live
+    pre-flight gate also reads — no recomputation, no second lookup.
+    """
+    if not adapter.is_available():
+        return _clock_unavailable()
+    try:
+        clock = await asyncio.to_thread(adapter.get_market_clock)
+    except Exception:
+        return _clock_unavailable()
+    return {
+        "available": True,
+        "is_open": clock.is_open,
+        "next_open": clock.next_open,
+        "next_close": clock.next_close,
+    }
 
 
 @app.delete("/watch/{ticker}")

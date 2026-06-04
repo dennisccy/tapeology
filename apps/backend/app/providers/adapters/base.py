@@ -14,6 +14,10 @@ The neutral contract is:
     API can map them to explicit, distinct HTTP errors WITHOUT importing any vendor type. They
     are the *honest* real-data failure modes (no fabricated tape ever takes their place).
   * ``SymbolMatch`` — one symbol-search suggestion (symbol + name).
+  * ``MarketClock`` — the market session status (open/closed + next open/close as ISO-8601 UTC
+    strings). Read by the Live market-status indicator and the live-watch pre-flight gate; the
+    adapter only ever builds it from a real vendor reply (a credential/network failure surfaces
+    as an explicit unavailable or an exception, never a fabricated session).
 
 This seam carries no network call by itself and never fabricates an answer.
 """
@@ -61,6 +65,22 @@ class SymbolMatch:
     name: str
 
 
+@dataclass(frozen=True)
+class MarketClock:
+    """Vendor-neutral market session status: open/closed + next open/close.
+
+    ``is_open`` is the authoritative open/closed flag from the vendor. ``next_open`` and
+    ``next_close`` are ISO-8601 **UTC** strings (e.g. ``2026-06-05T13:30:00Z``) or ``None`` when
+    the vendor omits them. The adapter constructs this ONLY from a successful vendor reply, so an
+    instance always carries a real ``is_open``; a missing credential or an unreachable vendor is
+    surfaced as an explicit unavailable (at the API) or an exception — never a fabricated session.
+    """
+
+    is_open: bool
+    next_open: str | None
+    next_close: str | None
+
+
 class SymbolNotTradable(Exception):
     """The requested symbol is unknown / not a tradable symbol (neutral; no vendor type)."""
 
@@ -77,7 +97,9 @@ class MarketDataAdapter(Protocol):
     vendor's credentials are present in the environment (no network, no fabrication).
     ``fetch_historical`` returns a ``HistoricalWindow`` or raises ``SymbolNotTradable`` /
     ``NoDataForWindow``. ``search_symbols`` returns matching tradable ``SymbolMatch`` rows (an
-    empty list — never an error — when there is nothing to suggest).
+    empty list — never an error — when there is nothing to suggest). ``get_market_clock`` returns
+    the real ``MarketClock`` (read-only reference call — it places/echoes no order); a vendor or
+    network failure propagates as an exception the API degrades to an explicit unavailable.
     """
 
     name: str
@@ -89,4 +111,7 @@ class MarketDataAdapter(Protocol):
         ...
 
     def search_symbols(self, query: str) -> list[SymbolMatch]:
+        ...
+
+    def get_market_clock(self) -> MarketClock:
         ...

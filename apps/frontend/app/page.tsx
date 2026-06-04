@@ -16,6 +16,7 @@ const HONEST_REASONS: FailureReason[] = [
   "provider_unavailable",
   "symbol_not_tradable",
   "no_data_for_window",
+  "market_closed",
 ];
 
 function isHonestReason(reason: string | undefined): reason is FailureReason {
@@ -28,9 +29,11 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
   // When a real-mode Watch is honestly refused, show the distinct non-cockpit panel for that
   // reason in place of the cockpit — never a fabricated cockpit, never a fall-back to Simulated.
-  const [failure, setFailure] = useState<{ reason: FailureReason; mode: DataSourceMode } | null>(
-    null,
-  );
+  const [failure, setFailure] = useState<{
+    reason: FailureReason;
+    mode: DataSourceMode;
+    nextOpen?: string;
+  } | null>(null);
   const { snapshot, connStatus } = useTapeStream(ticker);
 
   // Lifecycle hardening (iter-0 lesson): tear down any active watch (backend DELETE + close the
@@ -55,7 +58,7 @@ export default function Page() {
       setTicker(candidate);
     } else if (isHonestReason(result.reason)) {
       setTicker(null);
-      setFailure({ reason: result.reason, mode: params.mode });
+      setFailure({ reason: result.reason, mode: params.mode, nextOpen: result.nextOpen });
     } else {
       setTicker(null);
       setError(result.error ?? "Could not watch ticker");
@@ -98,7 +101,11 @@ export default function Page() {
         {ticker ? (
           <Cockpit snapshot={snapshot} />
         ) : failure ? (
-          <ProviderUnavailable reason={failure.reason} mode={failure.mode} />
+          <ProviderUnavailable
+            reason={failure.reason}
+            mode={failure.mode}
+            nextOpen={failure.nextOpen}
+          />
         ) : (
           <IdleState />
         )}

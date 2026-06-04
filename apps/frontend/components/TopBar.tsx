@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ConnStatus, DataSourceMode, TapeSnapshot, WatchParams } from "@/lib/types";
 import { DataSourceSelector } from "./DataSourceSelector";
+import { MarketStatusIndicator } from "./MarketStatusIndicator";
 import { SymbolSearch } from "./SymbolSearch";
 
 type DotSpec = { color: string; label: string };
@@ -150,16 +151,10 @@ export function TopBar({
           </button>
         </form>
 
-        {mode === "live" && (
-          <div
-            className="flex items-center gap-1.5 rounded bg-slate-800 px-2 py-1 text-xs text-amber-400"
-            title="Live market status needs vendor credentials (not configured)"
-          >
-            <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
-            <span>market</span>
-            <span className="font-mono">unavailable</span>
-          </div>
-        )}
+        {/* Live market-status indicator (row 8): the REAL session status from GET /market/clock,
+            replacing the prior hardcoded "unavailable" stub. Mounted only in Live mode, so its
+            poll is torn down on mode-change. */}
+        {mode === "live" && <MarketStatusIndicator />}
 
         {watched && (
           <div className="flex items-center gap-2 text-sm">

@@ -1,15 +1,18 @@
 import { API_BASE } from "./config";
-import type { SymbolMatch, TapeSnapshot, WatchParams } from "./types";
+import type { MarketClock, SymbolMatch, TapeSnapshot, WatchParams } from "./types";
 
 export interface WatchResult {
   ok: boolean;
   scenario?: string;
   error?: string;
   // The distinct honest failure `reason` when the backend refused a real-mode watch (row 9):
-  // "provider_unavailable" | "symbol_not_tradable" | "no_data_for_window" (or another reason
-  // string). The UI renders a distinct non-cockpit panel per reason — never a fabricated
-  // cockpit, never a silent fall-back to Simulated.
+  // "provider_unavailable" | "symbol_not_tradable" | "no_data_for_window" | "market_closed" (or
+  // another reason string). The UI renders a distinct non-cockpit panel per reason — never a
+  // fabricated cockpit, never a silent fall-back to Simulated.
   reason?: string;
+  // The next market open (ISO-8601 UTC) carried by a "market_closed" refusal, so the honest
+  // closed-market panel can show when the market reopens. Absent for the other reasons.
+  nextOpen?: string;
 }
 
 export interface StopResult {
@@ -38,16 +41,44 @@ export async function watchTicker(
     }
     let error = `'${ticker}' could not be watched`;
     let reason: string | undefined;
+    let nextOpen: string | undefined;
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;
       if (typeof data?.reason === "string") reason = data.reason;
+      if (typeof data?.next_open === "string") nextOpen = data.next_open;
     } catch {
       /* keep default */
     }
-    return { ok: false, error, reason };
+    return { ok: false, error, reason, nextOpen };
   } catch {
     return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /market/clock (data-contract row 8) — the real market session status for the Live
+// market-status indicator. Read verbatim (the UI never recomputes open/closed). Any failure or
+// a non-OK response yields an explicit `available:false` (the indicator shows "unavailable"),
+// never a fabricated open/closed status.
+export async function getMarketClock(): Promise<MarketClock> {
+  const unavailable: MarketClock = {
+    available: false,
+    is_open: null,
+    next_open: null,
+    next_close: null,
+  };
+  try {
+    const res = await fetch(`${API_BASE}/market/clock`);
+    if (!res.ok) return unavailable;
+    const data = await res.json();
+    return {
+      available: !!data.available,
+      is_open: typeof data.is_open === "boolean" ? data.is_open : null,
+      next_open: typeof data.next_open === "string" ? data.next_open : null,
+      next_close: typeof data.next_close === "string" ? data.next_close : null,
+    };
+  } catch {
+    return unavailable;
   }
 }
 
