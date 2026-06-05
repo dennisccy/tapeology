@@ -14,7 +14,8 @@ Current capabilities:
 - **Three data-source modes** — Simulated (no credentials, deterministic), Historical replay (fetch a past window and replay at a chosen speed), and Live (real-time feed during market hours).
 - **Five deterministic sim scenarios** — SIM-BUYER, SIM-SELLER, SIM-BIDABS, SIM-ASKABS, and SIM-CHOP each resolve to their expected tape state with no credentials or network access.
 - **Symbol search** — find tradable US symbols by partial name or ticker (real-data modes).
-- **Historical replay** — choose a past date/time window and replay speed; the cockpit populates with real prices, trades, quotes, features, and tape state, reproducible for a fixed symbol and window.
+- **Historical replay in local time** — enter a date and start/end times in your own local timezone; the app converts them to the correct absolute UTC instant automatically. A timezone label beside the inputs (e.g. `Asia/Hong_Kong`) shows exactly which zone your entry is interpreted in. No manual UTC conversion required.
+- **US-session quick-pick buttons** — three one-click presets beside the Historical time inputs fill the window for the market open (Open 9:30 ET), market close (Close 16:00 ET), or the full regular trading day (Full RTH 9:30–16:00 ET). Each button shows both the New York time and its local-time equivalent for the date you picked. DST transitions are handled correctly for both summer and winter dates.
 - **Live streaming** — during market hours with vendor credentials, streams real trades and quotes through the same engine as the simulator.
 - **Market-status indicator** — shows open/closed with next open or close time.
 - **Honest error states** — no credentials shows "provider unavailable"; unknown symbol, empty window, and closed-market each surface a distinct explicit message; no tape state is fabricated.

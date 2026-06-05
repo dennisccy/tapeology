@@ -1,0 +1,30 @@
+{
+  "phase": "goal-i_will_be_super_rich-iter-8",
+  "status": "blocked",
+  "current_step": "qa_failed",
+  "updated_at": "2026-06-05T05:35:00Z",
+  "started_at": "2026-06-05T04:02:11.714884Z",
+  "cli": "claude",
+  "blockers": [
+    {
+      "type": "CRITICAL",
+      "title": "Corrupted frontend .next build artifacts",
+      "description": "Frontend dev server on :3650 returns 500 errors (missing ./833.js module). Prevents execution of 15/17 browser-based functional tests and user-facing feature verification.",
+      "action": "Clean .next directory and restart frontend dev server; re-run browser QA. For TC-09 (chart render), use isolated NEXT_DIST_DIR per dev handoff requirements."
+    }
+  ],
+  "changed_files": [
+    "apps/frontend/lib/datetime.ts",
+    "apps/frontend/components/TopBar.tsx",
+    "apps/backend/tests/test_window_resolution.py",
+    "docs/handoffs/goal-i_will_be_super_rich-iter-8-dev.md",
+    "docs/handoffs/goal-i_will_be_super_rich-iter-8-frontend.md",
+    "reports/phase-goal-i_will_be_super_rich-iter-8-implementation-summary.md"
+  ],
+  "tests_run": true,
+  "backend_tests_result": "PASS (184 passed, 1 skipped)",
+  "frontend_build_result": "PASS (compiles successfully)",
+  "browser_checks_run": false,
+  "browser_checks_blocked_reason": "Frontend dev server unavailable (corrupted .next)",
+  "next_action": "fix_frontend_build"
+}

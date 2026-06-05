@@ -2,6 +2,15 @@
 
 import { useState } from "react";
 import type { ConnStatus, DataSourceMode, TapeSnapshot, WatchParams } from "@/lib/types";
+import {
+  ET_SESSION_CLOSE,
+  ET_SESSION_OPEN,
+  etWallTimeToUtc,
+  localZoneLabel,
+  resolveLocalWindowInstant,
+  resolveSessionPreset,
+  utcToLocalTimeInput,
+} from "@/lib/datetime";
 import { DataSourceSelector } from "./DataSourceSelector";
 import { MarketStatusIndicator } from "./MarketStatusIndicator";
 import { SymbolSearch } from "./SymbolSearch";
@@ -34,6 +43,28 @@ const INPUT_CLASS =
 
 const REPLAY_SPEEDS = [1, 2, 5, 10];
 
+// US regular-trading-hours session quick-picks (J-20). The ET wall-clock anchors come from named
+// constants in lib/datetime (no scattered literals); the ET->local/UTC mapping is DST-correct via
+// America/New_York. Each entry fills the start/end window in one click.
+const SESSION_QUICK_PICKS: {
+  key: string;
+  label: string;
+  start: { hour: number; minute: number };
+  end: { hour: number; minute: number };
+}[] = [
+  { key: "open", label: "Open 9:30 ET", start: ET_SESSION_OPEN, end: ET_SESSION_OPEN },
+  { key: "close", label: "Close 16:00 ET", start: ET_SESSION_CLOSE, end: ET_SESSION_CLOSE },
+  { key: "rth", label: "Full RTH 9:30–16:00 ET", start: ET_SESSION_OPEN, end: ET_SESSION_CLOSE },
+];
+
+// A small window so single-instant presets (Open / Close) yield a valid start < end: anchor +
+// this many minutes. RTH uses the full 9:30->16:00 span, so this only pads the point presets.
+const PRESET_POINT_SPAN_MIN = 1;
+
+// Shared chrome for the quick-pick buttons (neutral — no buy/sell semantics on the picker).
+const QUICK_PICK_CLASS =
+  "rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus:border-emerald-500 focus:outline-none active:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40";
+
 export function TopBar({
   watched,
   snapshot,
@@ -62,6 +93,47 @@ export function TopBar({
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [speed, setSpeed] = useState(1);
+  // When a US-session quick-pick is clicked, we keep the already-resolved tz-aware UTC instants
+  // here and submit them VERBATIM. This is correct even when the session spans two LOCAL calendar
+  // dates (e.g. 16:00 ET = 04:00 next-day in Hong Kong) — a case that re-resolving local HH:MM
+  // against the single date input would silently shift. Any manual edit to date/start/end clears
+  // it, handing control back to the per-field local resolver (manual entry still fully works).
+  const [presetWindow, setPresetWindow] = useState<{ start: string; end: string } | null>(null);
+
+  // The operator's local zone label, shown on the Historical picker so they see which zone their
+  // entry is interpreted in (satisfies "all market/session times shown carry an explicit zone
+  // label"). Computed once per render from the runtime Intl zone — display only.
+  const zoneLabel = localZoneLabel();
+
+  // Manual edits to any window field invalidate a prior quick-pick selection.
+  function onDateChange(value: string) {
+    setDate(value);
+    setPresetWindow(null);
+  }
+  function onStartTimeChange(value: string) {
+    setStartTime(value);
+    setPresetWindow(null);
+  }
+  function onEndTimeChange(value: string) {
+    setEndTime(value);
+    setPresetWindow(null);
+  }
+
+  // Apply a US-session quick-pick: resolve the ET anchors for the chosen date to tz-aware UTC
+  // instants (DST-correct), store them for a verbatim submit, AND fill the visible time inputs
+  // with their LOCAL equivalents so the user sees the window in their own zone. A point preset
+  // (Open / Close) is padded by PRESET_POINT_SPAN_MIN so start < end is always valid.
+  function applyQuickPick(pick: (typeof SESSION_QUICK_PICKS)[number]) {
+    if (!date) return; // disabled in the UI, but never produce a malformed/empty window
+    const startUtc = etWallTimeToUtc(date, pick.start.hour, pick.start.minute);
+    let endUtc = etWallTimeToUtc(date, pick.end.hour, pick.end.minute);
+    if (endUtc.getTime() <= startUtc.getTime()) {
+      endUtc = new Date(startUtc.getTime() + PRESET_POINT_SPAN_MIN * 60000);
+    }
+    setStartTime(utcToLocalTimeInput(startUtc));
+    setEndTime(utcToLocalTimeInput(endUtc));
+    setPresetWindow({ start: startUtc.toISOString(), end: endUtc.toISOString() });
+  }
 
   // Prefer the engine's canonical stream status whenever a snapshot is present; fall back to
   // the client connection status only for the pre-snapshot idle/connecting affordance.
@@ -80,8 +152,18 @@ export function TopBar({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (mode === "historical") {
-      const start = date && startTime ? `${date}T${startTime}` : undefined;
-      const end = date && endTime ? `${date}T${endTime}` : undefined;
+      // Resolve the window to tz-aware UTC instants ONCE here, before the POST (Data Contract row
+      // 12). A quick-pick has already resolved (and is correct across a local-midnight span), so
+      // submit it verbatim; otherwise resolve the manually-entered LOCAL date+time fields. We send
+      // explicit `...Z` instants — never the old naive `${date}T${startTime}` the backend then
+      // treated as UTC (the iter-2 load-bearing bug). A half-filled field resolves to undefined,
+      // so the backend returns its honest 422 (no malformed window).
+      const start = presetWindow
+        ? presetWindow.start
+        : resolveLocalWindowInstant(date, startTime);
+      const end = presetWindow
+        ? presetWindow.end
+        : resolveLocalWindowInstant(date, endTime);
       onWatch(symbol, { mode, start, end, speed });
     } else {
       onWatch(symbol, { mode });
@@ -125,14 +207,14 @@ export function TopBar({
                 type="date"
                 aria-label="Date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(e) => onDateChange(e.target.value)}
                 className={`${INPUT_CLASS} [color-scheme:dark]`}
               />
               <input
                 type="time"
                 aria-label="Start time"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(e) => onStartTimeChange(e.target.value)}
                 className={`${INPUT_CLASS} [color-scheme:dark]`}
               />
               <span className="text-slate-600">–</span>
@@ -140,9 +222,18 @@ export function TopBar({
                 type="time"
                 aria-label="End time"
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+                onChange={(e) => onEndTimeChange(e.target.value)}
                 className={`${INPUT_CLASS} [color-scheme:dark]`}
               />
+              {/* Explicit local zone label: the user's date/time entry is interpreted in THIS zone
+                  and resolved to a tz-aware UTC instant before the fetch (no silent UTC shift). */}
+              <span
+                aria-label="Local timezone"
+                title="Your date and time entry is interpreted in this timezone"
+                className="font-mono text-xs text-slate-500"
+              >
+                {zoneLabel}
+              </span>
               <select
                 aria-label="Replay speed"
                 value={speed}
@@ -155,6 +246,45 @@ export function TopBar({
                   </option>
                 ))}
               </select>
+
+              {/* US-session quick-picks (J-20). Each fills a valid RTH start/end in one click and
+                  is annotated with its LOCAL equivalent for the chosen date (DST-correct via
+                  America/New_York). Disabled until a date is chosen, so a pick can never produce a
+                  malformed/empty window. */}
+              <div
+                role="group"
+                aria-label="US session quick-picks"
+                className="flex flex-wrap items-center gap-1.5"
+              >
+                {SESSION_QUICK_PICKS.map((pick) => {
+                  const preset = resolveSessionPreset(date, pick.start, pick.end);
+                  const annotation = preset
+                    ? pick.key === "rth"
+                      ? ` (${preset.startLocal}–${preset.endLocal} local)`
+                      : ` (${preset.startLocal} local)`
+                    : "";
+                  return (
+                    <button
+                      key={pick.key}
+                      type="button"
+                      onClick={() => applyQuickPick(pick)}
+                      disabled={!date}
+                      aria-label={`${pick.label}${annotation}`}
+                      title={
+                        date
+                          ? `Fill the window with ${pick.label}${annotation}`
+                          : "Choose a date first"
+                      }
+                      className={QUICK_PICK_CLASS}
+                    >
+                      <span>{pick.label}</span>
+                      {annotation && (
+                        <span className="ml-1 font-mono text-slate-500">{annotation.trim()}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </>
           )}
 

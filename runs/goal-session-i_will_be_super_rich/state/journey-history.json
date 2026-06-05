@@ -13,10 +13,10 @@
       "id": "J-02",
       "name": "Buyer-control scenario is identified",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-7",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-7-evidence/UT-13-before-pause-chart.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-09-sim-buyer-chart.png — evaluator re-verified: SIM-BUYER settles on Buyer Control conf 0.872, aggressive_buy_ratio 0.928, buy_price_impact 0.420, event log 'Tape state changed to buyer_control'."
     },
     "J-03": {
       "id": "J-03",
@@ -58,10 +58,10 @@
       "id": "J-07",
       "name": "Tape-state transitions are announced in the event log and observations",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-07-result.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-09-sim-buyer-chart.png — evaluator re-verified: event log shows 'Tape state changed to buyer_control', observations 'Buyer aggression increasing' append live."
     },
     "J-08": {
       "id": "J-08",
@@ -70,34 +70,34 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-08-result.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-08-result.png — corroborated iter-8: chart reads GET /history verbatim (PriceChart.tsx re-bins nothing), Ford cockpit values match the engine snapshot."
     },
     "J-09": {
       "id": "J-09",
       "name": "Stop watching a ticker",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-7",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-7-evidence/UT-07-stopped-idle.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-11-sim-stopped-idle.png — evaluator re-verified: Stop returns cockpit to 'No ticker watched' idle; subsequent /state poll 404 (instance torn down)."
     },
     "J-10": {
       "id": "J-10",
       "name": "Choose a data source (Live / Historical / Simulated)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-10-simulated-buyer.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-01-historical-mode.png + EVAL-06-live-mode-no-chart.png — evaluator re-verified: selector offers exactly Live/Historical/Simulated; Historical reveals symbol search + date/time picker + zone label + quick-picks + speed; Live reveals symbol + market-status indicator; Simulated reveals the ticker input."
     },
     "J-11": {
       "id": "J-11",
       "name": "Replay a real historical session",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-11-result.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-07-ford-chart-populated.png — evaluator re-verified the historical watch path (this iter touched it): real Ford fixture window (15:00-15:02Z) replays through the same engine; every cockpit panel populates with real values (Bid 16.58 / Ask 16.59 / Last 16.59, recent trades with side, features, tape state + confidence, observations, event log)."
     },
     "J-12": {
       "id": "J-12",
@@ -106,25 +106,25 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-12-live-controls.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-12-live-controls.png — Live controls + market-status render without a feed (re-confirmed iter-8 EVAL-06: 'market closed — next open Jun 5 09:30 AM EDT'); real-socket leg is operator-gated (genuinely exercised + passed in iter-4 during market hours)."
     },
     "J-13": {
       "id": "J-13",
       "name": "Find a symbol by search",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-13-dropdown.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-04-ford-historical-chart.png — symbol search returns matching tradable symbols ('F' -> Ford Motor Company, F.PRB/F.PRC/F.PRD notes, FA, FAAA) from the vendor; free-text 'F' still works."
     },
     "J-14": {
       "id": "J-14",
       "name": "Real-data edge cases are handled honestly (no fabricated data)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-14-market-closed.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-06-live-mode-no-chart.png — evaluator re-confirmed the market-closed honesty path: Live shows 'market closed — next open Jun 5, 09:30 AM EDT' (explicit, ET-labeled), no cockpit fabricated. Empty-window/unknown-symbol/no-creds paths unchanged from iter-6."
     },
     "J-15": {
       "id": "J-15",
@@ -133,54 +133,54 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-4",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-4",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-09-stale-amber.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-09-stale-amber.png — stale-recover is operator-gated; unchanged this iter (no engine/feeder change)."
     },
     "J-16": {
       "id": "J-16",
       "name": "Historical recent-trades show a resolved side (not unknown)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "apps/backend/tests/test_historical_provider.py::test_tick_test_reduces_unknown_fraction_on_real_fixture"
+      "last_evidence_path": "apps/backend/tests/test_historical_provider.py::test_tick_test_reduces_unknown_fraction_on_real_fixture — evaluator re-verified live over the wire on the historical path (this iter touched it): Ford replay recent-trades resolved 16 buy / 14 sell, 0 unknown."
     },
     "J-17": {
       "id": "J-17",
       "name": "Price chart with tape-state markers on simulated data",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-7",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-7-evidence/UT-13-before-pause-chart.png — RENDER GAP CLOSED: real screenshot of the populated SIM-BUYER candlestick chart (emerald rising candles 100.00->101.05, emerald 'Buyer Control' marker, working 10s/30s/60s bar-size selector) on a live frontend (HTTP 200, not the iter-3/5/6 corrupted-.next 500). Advisory residual: the rose (SIM-SELLER) / amber (SIM-BIDABS/ASKABS) marker variants + the bar-size re-render + chart-hidden-in-Live were NOT separately screenshotted in ui-test-results.md (the qa-report TC-01/TC-02 'chart' PNGs are actually idle-placeholder shots, discounted); marker colors are a pure server projection from /history (proven for all 5 scenarios in iter-6) that the chart reads verbatim and that was untouched this iter, and the render pipeline is now proven live — so the variant risk is low. The structural question (is the canvas ever drawn?) is now answered with pixels."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-09-sim-buyer-chart.png — evaluator re-verified after the TopBar.tsx change: SIM-BUYER renders emerald rising candles (100.00->100.32) with an emerald 'Buyer Control' transition marker and a working 10s/30s/60s bar-size selector. No regression from the J-20 picker edits."
     },
     "J-18": {
       "id": "J-18",
       "name": "Inspect tape-state prediction on a real historical chart",
-      "status": "partial",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "Surface + bar-match confirmed (chart pane render is now proven for sim via J-17 UT-13; the chart component/_history path is identical for historical). Backend real-fetch correctness stands from iter-6 (bars+markers projected once via /history?bar=10|30|60, OHLC integrity, SSOT; test_history_api.py). GAP (carried, operator-gated like J-12/J-15): no credentialed REAL-historical rendered-chart screenshot captured (no creds at QA time). Per the visual-journey lesson this stays `partial` until a real-historical render is captured with credentials."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-07-ford-chart-populated.png + EVAL-08-ford-chart-bar-{10,30,60}s.png — RENDER GAP CLOSED by the evaluator: the qa report (FAIL) and browser-qa (SKIPPED) were both frontend INFRA (corrupted shared :3650 .next), not a defect. The evaluator built the iter-8 source into an ISOLATED dist dir (.next-eval-iter8) wired to backend :8650, served it on :3661, and drove a real Chromium via Playwright. EVAL-07 shows the POPULATED real-historical Ford candlestick chart (real penny-spread prices 16.54-16.59 from the committed fixture F_20260602_150000_20260602_150200.json) with the cockpit populated by real values; EVAL-08 shows the bar-size selector re-rendering 10s->30s->60s (backend /history re-aggregates 7->3->2 bars, markers ask_absorption->bid_absorption). The chart reads /history verbatim (PriceChart.tsx re-bins nothing). Operator-gated against-live-vendor leg remains gated like J-12/J-15; the offline fixture render satisfies the in-loop visual bar."
     },
     "J-19": {
       "id": "J-19",
       "name": "Pause and resume a watch without losing state",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-7",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-7-evidence/UT-04-paused-state.png — Pause -> amber 'Paused' dot + Resume/Stop buttons, cockpit+chart intact (no teardown); UT-13-after-pause-chart.png frozen chart; UT-06-resumed-live.png stream continues (green 'live', no fabricated jump); UT-07-stopped-idle.png Stop-after-pause -> idle + 404. Backed by 19 hermetic backend tests (test_pause.py/test_pause_api.py): paused=true & stream_status=paused, feeder task alive, no-backfill on resume, stop-after-pause->404, unknown-ticker->404. Honest-pause anti-goal verified by code inspection (live socket stays open + events discarded; status restored verbatim, never fabricated 'live')."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-10-sim-paused.png — evaluator re-verified after the TopBar.tsx change: Pause -> amber 'Paused' status dot + the control toggles to Resume, cockpit + chart remain intact (no teardown); Resume reappears; Stop returns to idle (EVAL-11). No regression from the J-20 picker edits. Backed by 19 hermetic backend tests (test_pause.py/test_pause_api.py)."
     },
     "J-20": {
       "id": "J-20",
       "name": "Pick a historical window in local time with US-session quick-picks",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "NOT built — explicitly OUT OF SCOPE for iter-7 (its own next slice; likely needs a blueprint touch for the timezone surface / Data Contract row 12). The naive-datetime-treated-as-UTC gotcha from the iter-2 lesson is the load-bearing risk for this journey. The goal is NOT complete until J-20 passes and J-18's credentialed render is captured."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-03-quickpick-open-filled.png + EVAL-01-historical-mode.png — BUILT & VERIFIED this iter (evaluator's own Playwright render, since browser-qa SKIPPED on the corrupted shared .next). The Historical picker shows an explicit local zone label (America/New_York) and the three quick-picks each annotated with their local equivalent: 'Open 9:30 ET (09:30 AM local)', 'Close 16:00 ET (04:00 PM local)', 'Full RTH 9:30-16:00 ET (09:30 AM-04:00 PM local)'. Clicking Open fills a valid RTH start/end (09:30/09:31, 1-min pad). TIMEZONE-CORRECT FETCH proven OVER THE WIRE: captured POST /watch body for an 11:00-11:02 ET-local entry = {start:'2026-06-02T15:00:00.000Z', end:'2026-06-02T15:02:00.000Z'} — explicit tz-aware Z instants, NOT a naive string, NOT UTC-shifted (the iter-2 load-bearing bug is fixed). Backend test_window_resolution.py (6/6) proves DST-correctness end-to-end: EDT -04:00 -> 13:30Z, EST -05:00 -> 14:30Z, naive->UTC no-regression. Resolution owner is apps/frontend/lib/datetime.ts (DST-correct via America/New_York), sole consumer TopBar.tsx (COHERENCE-PASS)."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-06-05T03:40:00Z"
+  "updated_at": "2026-06-05T05:05:00Z"
 }
