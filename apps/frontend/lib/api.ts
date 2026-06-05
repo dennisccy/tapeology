@@ -129,6 +129,44 @@ export async function fetchHistory(
   }
 }
 
+// POST /watch/{ticker}/pause — freeze a watched session WITHOUT teardown (J-19). The backend
+// flips the canonical paused flag + stream_status to "paused" (owned once by the engine/feeder);
+// the UI reads that off the snapshot/stream and never guesses paused. A 404 means the ticker is
+// not (or no longer) watched. The cockpit is NOT cleared by a pause.
+export async function pauseTicker(ticker: string): Promise<StopResult> {
+  return postWatchAction(ticker, "pause");
+}
+
+// POST /watch/{ticker}/resume — continue a paused watch (J-19). The backend clears paused and
+// restores the prior stream_status (never a fabricated "live"); feeding continues with no
+// synthesized catch-up. The UI reads the restored status off the snapshot/stream.
+export async function resumeTicker(ticker: string): Promise<StopResult> {
+  return postWatchAction(ticker, "resume");
+}
+
+async function postWatchAction(
+  ticker: string,
+  action: "pause" | "resume",
+): Promise<StopResult> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/watch/${encodeURIComponent(ticker)}/${action}`,
+      { method: "POST" },
+    );
+    if (res.ok) return { ok: true };
+    let error = `'${ticker}' could not be ${action}d`;
+    try {
+      const data = await res.json();
+      if (data?.detail) error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
 // DELETE /watch/{ticker}: stop watching. A 404 means the ticker is already not watched —
 // effectively stopped, so we treat it as success (the UI returns to idle either way).
 export async function stopTicker(ticker: string): Promise<StopResult> {
@@ -172,6 +210,7 @@ export async function fetchInitialSnapshot(
       ticker: summary.ticker,
       scenario: summary.scenario,
       stream_status: summary.stream_status,
+      paused: summary.paused ?? false,
       timestamp: summary.timestamp,
       market: summary.market,
       tape_state: summary.tape_state,

@@ -123,9 +123,51 @@ class WatchManager:
         del self._engines[ticker]
         return True
 
+    def pause(self, ticker: str) -> bool:
+        """Freeze the watch WITHOUT tearing it down (J-19) — the deliberate opposite of stop().
+
+        Sets the engine's canonical paused flag (which flips stream_status to "paused"); the feeder
+        task is left ALIVE and the engine stays registered. The paced feeders then poll the paused
+        flag and stop applying events (consuming nothing, so replay resumes where it left off); the
+        live feeder keeps its socket OPEN but stops applying events. NO catch-up is fabricated on
+        resume. Idempotent: a second pause is a no-op (returns True). Returns False (no exception)
+        when the ticker is not being watched (the route turns this into a 404) — no fabricated engine.
+        """
+        engine = self._engines.get(ticker)
+        if engine is None:
+            return False
+        engine.pause()
+        return True
+
+    def resume(self, ticker: str) -> bool:
+        """Continue a paused watch (J-19): clear paused and restore the prior pre-pause status.
+
+        The feeder (still alive) resumes applying the next real events; nothing is synthesized to
+        cover the pause. Idempotent: resume-when-not-paused is a no-op (returns True). Returns False
+        for a not-watched ticker (-> 404), never fabricating an engine.
+        """
+        engine = self._engines.get(ticker)
+        if engine is None:
+            return False
+        engine.resume()
+        return True
+
+    async def _wait_while_paused(self, engine: TapeEngine) -> None:
+        """Block (without consuming the provider stream) while the engine is paused.
+
+        Polling the paused flag here — rather than letting the loop pull-and-discard events —
+        is what makes a paused paced/sim replay resume EXACTLY where it left off (it consumes
+        nothing while frozen) and a paused live feed stop applying without closing the socket.
+        Cancellation still propagates (asyncio.sleep is a cancel point), so stop() during a pause
+        tears down normally.
+        """
+        while engine.paused:
+            await asyncio.sleep(self._config.pause_poll_seconds)
+
     async def _feed(self, engine: TapeEngine, provider: Provider) -> None:
         try:
             for event in provider.stream():
+                await self._wait_while_paused(engine)  # freeze in place while paused (no consume)
                 engine.process_event(event)
                 await asyncio.sleep(self._pace)
             engine.set_stream_status("closed")
@@ -148,6 +190,9 @@ class WatchManager:
         try:
             prev_ts: float | None = None
             for event in provider.stream():
+                # Freeze in place while paused BEFORE consuming this event, so a paused historical
+                # replay resumes from exactly here (the next event), with no fabricated catch-up.
+                await self._wait_while_paused(engine)
                 if prev_ts is not None:
                     delay = min((event.timestamp - prev_ts) / divisor, cap)
                     if delay > 0:
@@ -188,13 +233,32 @@ class WatchManager:
         puller = asyncio.create_task(_pull())
         try:
             while True:
+                # Honest pause for LIVE: the puller keeps draining the socket (socket stays OPEN,
+                # no unsubscribe/close — the iter-4 deadlock lesson), but while paused we apply
+                # NOTHING and DISCARD anything that queued during the gap. Resume therefore rejoins
+                # CURRENT real data with no synthesized catch-up (a replay of the gap would be a
+                # fabricated backfill). The engine owns the "paused" status; we do not touch it here.
+                if engine.paused:
+                    while not queue.empty():
+                        discarded = queue.get_nowait()
+                        if discarded is done:
+                            # The stream ended while paused: stop discarding, fall through so the
+                            # loop sees `done` after resume and closes honestly.
+                            queue.put_nowait(done)
+                            break
+                    await asyncio.sleep(self._config.pause_poll_seconds)
+                    continue
                 try:
                     event = await asyncio.wait_for(queue.get(), stale_gap)
                 except asyncio.TimeoutError:
+                    if engine.paused:
+                        continue  # paused mid-wait: loop back into the freeze branch
                     engine.set_stream_status("stale")  # honest stale — fabricates no trade
                     continue
                 if event is done:
                     break
+                if engine.paused:
+                    continue  # raced into pause after dequeue: drop this event (no backfill)
                 engine.process_event(event)
                 if engine.snapshot().stream_status != "live":
                     engine.set_stream_status("live")  # owns the stale->live recovery flip

@@ -20,7 +20,13 @@ export type FeatureSet = Record<string, number>;
 export interface TapeSnapshot {
   ticker: string;
   scenario: string;
+  // The engine's canonical stream status: "connecting" | "live" | "stale" | "paused" | "closed"
+  // (a free string here; "paused" is added in J-19). Read verbatim — the UI never recomputes it.
   stream_status: string;
+  // Canonical paused flag (Data Contract row 11), owned once by the engine/feeder. The UI READS
+  // this to render the PAUSED indicator and toggle the Pause/Resume control — it never guesses
+  // paused client-side. Optional for backward compatibility with any pre-J-19 snapshot shape.
+  paused?: boolean;
   warm?: boolean;
   timestamp: number;
   market: Market;

@@ -26,7 +26,7 @@ class EngineSnapshot:
     timestamp: float            # logical timestamp of the last processed event
     event_count: int            # trades processed so far
     warm: bool                  # have we passed the warm-up floor?
-    stream_status: str          # "connecting" | "live" | "stale" | "closed"
+    stream_status: str          # "connecting" | "live" | "stale" | "paused" | "closed"
 
     # Market (derived once in MarketState; spread = ask - bid).
     bid: float | None
@@ -46,6 +46,12 @@ class EngineSnapshot:
     # Panels.
     recent_trades: tuple[TradeRow, ...] = field(default_factory=tuple)
     event_log: tuple[str, ...] = field(default_factory=tuple)
+
+    # Canonical paused flag (Data Contract row 11). Owned ONCE by the engine/feeder: pause() sets
+    # it (and flips stream_status to "paused"), resume() clears it (restoring the prior status).
+    # REST, the WS stream, and the UI READ this — none of them guess paused. Defaulted (and placed
+    # with the other defaulted fields) so every existing snapshot/test is unchanged (additive).
+    paused: bool = False
 
     @property
     def primary_features(self) -> dict[str, float]:

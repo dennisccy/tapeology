@@ -168,3 +168,20 @@ to lean.
 **Next-step recommendation:** iter-7 at **full** depth. (1) **Close the J-17/J-18 render gap** — run browser-qa against a CLEAN isolated frontend (rebuild/bypass the corrupted shared `.next`; `NEXT_DIST_DIR` + `NEXT_PUBLIC_API_URL`→isolated backend) and capture screenshots of: SIM-BUYER candles + emerald marker, SIM-SELLER rose, BIDABS/ASKABS amber, 10→30→60 s re-render, chart hidden in Live. Then J-17→passing, J-18 surface→passing (real-fetch correctness already stands on the backend test + my live `/history` proof). (2) **Build J-19** (pause/resume — rows 11–12; honest-pause anti-goal load-bearing). Then **J-20** (local-time picker) as its own slice. Do not mark GOAL_ACHIEVED until J-17/J-18 have rendered-chart screenshots AND J-19/J-20 pass.
 
 **Process note (carries the iter-3 + iter-5 lesson forward):** twice now the frontend QA path has been undermined by the shared `:3650` `.next` (iter-3 corruption; here a `Cannot find module './833.js'` 500), and the `qa` agent's "PASS_SURFACE / browser automation did not complete" must NOT be read as a journey pass for a *visual* journey. The dev added a `NEXT_DIST_DIR` guard precisely for this, but the running harness server's shared `.next` was still left corrupted at evaluation time — the next browser run must rebuild or fully bypass it.
+
+## Iteration 7 — goal-i_will_be_super_rich-iter-7
+
+**Date:** 2026-06-05T03:40:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-17 (chart render gap closed — real SIM-BUYER candlestick screenshot), J-19 (honest pause/resume)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (honest-pause, SSOT, one-focused-chart, no-execution, no-magic-numbers all verified)
+
+**Reasoning:** The iter-3/5/6 render-verification gap for J-17 is closed: browser-qa ran for real this time (frontend HTTP 200, not the corrupted-.next 500) and `UT-13-before-pause-chart.png` shows the populated SIM-BUYER candlestick chart with emerald rising candles, an emerald "Buyer Control" marker, and a working 10s/30s/60s bar-size selector — the structural "is the canvas ever drawn?" question is now answered with pixels. J-19 honest pause/resume is fully verified across 19 hermetic backend tests, code inspection (live socket stays open + gap events discarded; status restored verbatim, never fabricated "live"), and real pause/resume/stop screenshots. Coherence is PASS (single canonical paused owner, rows 6+11). J-18 still lacks a credentialed real-historical render (kept `partial`) and J-20 was explicitly out of scope (`failing`), so the goal is not achieved.
+
+**Skepticism applied:** The `qa` agent's report claimed TC-01..TC-05 chart-render PASS with screenshots `TC-01-chart-sim-buyer.png` / `TC-02-chart-sim-seller.png`, but visual inspection showed those PNGs are actually the **idle "No ticker watched" placeholder** (TC-02 even has the input garbled "SIM-BUYERSIM-SELLER") — the qa-report chart claims for SELLER/BIDABS/ASKABS are NOT backed by real chart screenshots and were discounted. The authoritative chart evidence is the browser-qa-agent's `ui-test-results.md` UT-13 (real rendered chart). J-17 promoted on the SIM-BUYER render; the rose/amber marker variants + bar re-render + chart-hidden-in-Live recorded as a low-risk advisory residual (marker colors are a pure /history projection, proven in iter-6, untouched this iter; render pipeline now proven live).
+
+**Next-step recommendation:** Run iter-8 at FULL depth: build J-20 (local-time historical picker + US-session quick-picks; the *critical* timezone-correct-windows anti-goal is load-bearing — resolve the selected local instant to a tz-aware instant before the vendor fetch, per the iter-2 naive-UTC gotcha; likely needs a blueprint touch for row 12). Secondarily close J-18's credentialed real-historical chart render. After J-18 renders and J-20 passes with timezone-correct fetch, the goal is a GOAL_ACHIEVED candidate.

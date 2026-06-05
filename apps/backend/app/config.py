@@ -135,6 +135,14 @@ class Config:
     # engine threshold — the engine math stays purely logical/deterministic.
     stale_gap_seconds: float = 10.0
 
+    # --- Pause/resume feeder freeze (J-19) --------------------------------------------
+    # While a watch is paused the feeder stops *applying* events without cancelling its task or
+    # closing a live socket. The paced (sim/historical) feeders poll this many wall-clock seconds
+    # between checks of the engine's paused flag so they freeze in place (consuming nothing) and
+    # resume exactly where they left off — no fabricated catch-up. This is a *delivery* poll
+    # cadence (wall-clock), never an engine threshold; the engine math stays logical/deterministic.
+    pause_poll_seconds: float = 0.02
+
     def window_label(self, window: int) -> str:
         return f"{window}s"
 

@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-i_will_be_super_rich-iter-7",
+  "base_url": "http://localhost:3650",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Home page — idle state with Watch controls",
+      "narration": "The Tapeology cockpit opens clean. The top bar shows the provider selector and Watch button, and the status indicator sits idle — no Pause or Resume button in sight until you actually start a watch.",
+      "point_out": "Notice the grey idle dot top-right and that there are no Pause or Resume buttons anywhere in the header.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Watch" }
+    },
+    {
+      "n": 2,
+      "title": "Start watching SIM-BUYER",
+      "narration": "Type in SIM-BUYER and hit Watch. Within seconds the stream goes live — a green dot lights up in the top-right and an amber Pause button appears beside Stop.",
+      "point_out": "The amber Pause button is new this iteration. It sits right next to Stop in the watch-control cluster.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker" }, "text": "SIM-BUYER" },
+      "expect": { "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "Click Watch to start the stream",
+      "narration": "Once Watch is clicked the cockpit comes alive: quote prices, recent trades, and feature counters begin populating in real time.",
+      "point_out": "The green live dot and the Pause button both appear once the stream connects.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Pause" }
+    },
+    {
+      "n": 4,
+      "title": "Pause the live watch",
+      "narration": "Click Pause and the cockpit freezes in place. Every panel — quote, recent trades, feature counters, tape state, and the price chart — holds its last values. The stream stays alive in the background; nothing is closed.",
+      "point_out": "The amber dot now says 'paused' instead of 'live', and the Pause button has been replaced by a Resume button.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Pause" } },
+      "expect": { "text": "Resume" }
+    },
+    {
+      "n": 5,
+      "title": "Cockpit frozen — data intact while paused",
+      "narration": "While paused you can read the snapshot at your own pace. Trade counts, quote prices, and chart candles are completely frozen — no new data appears even after several seconds.",
+      "point_out": "The amber 'paused' dot in the top-right confirms the stream is frozen, yet all panel data remains fully visible and readable.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "paused" }
+    },
+    {
+      "n": 6,
+      "title": "Resume the stream",
+      "narration": "Click Resume and the cockpit picks up right where it left off. The green live dot returns immediately, and new trades trickle in at the normal one-per-second cadence — no sudden backfill spike.",
+      "point_out": "The Pause button reappears in place of Resume, and trade counts start incrementing again at a steady rate.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Resume" } },
+      "expect": { "text": "Pause" }
+    },
+    {
+      "n": 7,
+      "title": "Price chart survives Pause and Resume",
+      "narration": "The candlestick price chart with tape-state markers keeps rendering cleanly through the entire pause-resume cycle. No blank canvas, no reload, no lost candles.",
+      "point_out": "Look for the PRICE CHART section below the cockpit — it should show candles with emerald markers for SIM-BUYER buyer-control signals.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "PRICE CHART" }
+    },
+    {
+      "n": 8,
+      "title": "Stop from any state — cockpit clears cleanly",
+      "narration": "Whether the watch is live or paused, clicking Stop always closes the session completely. The watch-control cluster disappears, the cockpit returns to its idle placeholder, and the app is ready for a fresh watch.",
+      "point_out": "All buttons (Pause/Resume/Stop) vanish and the cockpit shows the 'No ticker watched' placeholder.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Stop" } },
+      "expect": { "text": "No ticker watched" }
+    }
+  ]
+}

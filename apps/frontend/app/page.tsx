@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTapeStream } from "@/lib/useTapeStream";
-import { watchTicker, stopTicker } from "@/lib/api";
+import { watchTicker, stopTicker, pauseTicker, resumeTicker } from "@/lib/api";
 import type { DataSourceMode, FailureReason, WatchParams } from "@/lib/types";
 import { TopBar } from "@/components/TopBar";
 import { Cockpit } from "@/components/Cockpit";
@@ -86,6 +86,27 @@ export default function Page() {
     setError(null);
   }
 
+  // Pause (J-19): freeze the watch WITHOUT teardown — the deliberate opposite of Stop. It MUST NOT
+  // call stopTicker and MUST NOT setTicker(null): the cockpit + chart stay mounted, and the engine
+  // (whose feeder stays alive) keeps the WS open, pushing the frozen snapshot now carrying
+  // paused=true / stream_status="paused". The UI flips to the PAUSED indicator with NO client-side
+  // guess (it reads the canonical paused state), and the cockpit/chart freeze because the engine
+  // accrues no new snapshots/candles while paused.
+  async function handlePause() {
+    if (!ticker) return;
+    const result = await pauseTicker(ticker);
+    if (!result.ok) setError(result.error ?? "Could not pause watch");
+  }
+
+  // Resume (J-19): continue the paused watch. The backend clears paused and restores the prior
+  // stream_status (never a fabricated "live"); feeding continues with no synthesized catch-up. The
+  // restored status flows back in over the WS stream — again, no client-side recompute.
+  async function handleResume() {
+    if (!ticker) return;
+    const result = await resumeTicker(ticker);
+    if (!result.ok) setError(result.error ?? "Could not resume watch");
+  }
+
   return (
     <div className="min-h-screen">
       <TopBar
@@ -96,6 +117,8 @@ export default function Page() {
         onModeChange={handleModeChange}
         onWatch={handleWatch}
         onStop={handleStop}
+        onPause={handlePause}
+        onResume={handleResume}
         error={error}
       />
       <main className="mx-auto max-w-7xl px-4 py-6">

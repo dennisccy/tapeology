@@ -23,6 +23,9 @@ const STREAM_DOT: Record<string, DotSpec> = {
   connecting: { color: "bg-amber-400 animate-pulse", label: "connecting" },
   live: { color: "bg-emerald-400", label: "live" },
   stale: { color: "bg-amber-400", label: "stale" },
+  // Paused (J-19): amber, consistent with stale/absorption/unclear = amber. Read from the engine's
+  // canonical paused status — never a client-side guess; the dot must read "paused", never "live".
+  paused: { color: "bg-amber-400", label: "paused" },
   closed: { color: "bg-rose-500", label: "closed" },
 };
 
@@ -39,6 +42,8 @@ export function TopBar({
   onModeChange,
   onWatch,
   onStop,
+  onPause,
+  onResume,
   error,
 }: {
   watched: string | null;
@@ -48,6 +53,8 @@ export function TopBar({
   onModeChange: (mode: DataSourceMode) => void;
   onWatch: (symbol: string, params: WatchParams) => void;
   onStop: () => void;
+  onPause: () => void;
+  onResume: () => void;
   error: string | null;
 }) {
   const [symbol, setSymbol] = useState("");
@@ -61,6 +68,14 @@ export function TopBar({
   const dot: DotSpec = snapshot
     ? STREAM_DOT[snapshot.stream_status] ?? { color: "bg-slate-600", label: snapshot.stream_status }
     : CONN_DOT[connStatus];
+
+  // Pause/Resume visibility is read ONLY from the engine's canonical snapshot (single source of
+  // truth — the UI never guesses paused). `paused` toggles the control to Resume; `pauseable`
+  // gates the Pause button to an active feed (connecting / live / stale) so it's hidden once the
+  // stream is closed (a closed/idle session has nothing to pause).
+  const paused = snapshot?.paused === true;
+  const pauseable =
+    !!snapshot && ["connecting", "live", "stale"].includes(snapshot.stream_status);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -160,6 +175,31 @@ export function TopBar({
           <div className="flex items-center gap-2 text-sm">
             <span className="text-slate-500">Watching</span>
             <span className="font-mono font-semibold text-slate-100">{watched}</span>
+            {/* Pause / Resume (J-19): driven ONLY by the engine's canonical paused state — no
+                client guess. Resume shows while paused; Pause shows while the feed is active
+                (connecting / live / stale) and not paused. Both are hidden once the stream is
+                closed/idle. Amber (paused = amber, consistent with the status dot). */}
+            {paused ? (
+              <button
+                type="button"
+                onClick={onResume}
+                aria-label="Resume watching"
+                className="rounded border border-amber-400/70 px-2.5 py-1 text-xs font-semibold text-amber-400 transition-colors hover:bg-amber-400/10 hover:text-amber-300 focus:outline-none focus:ring-1 focus:ring-amber-400 active:bg-amber-400/20"
+              >
+                Resume
+              </button>
+            ) : (
+              pauseable && (
+                <button
+                  type="button"
+                  onClick={onPause}
+                  aria-label="Pause watching"
+                  className="rounded border border-amber-400/70 px-2.5 py-1 text-xs font-semibold text-amber-400 transition-colors hover:bg-amber-400/10 hover:text-amber-300 focus:outline-none focus:ring-1 focus:ring-amber-400 active:bg-amber-400/20"
+                >
+                  Pause
+                </button>
+              )
+            )}
             <button
               type="button"
               onClick={onStop}

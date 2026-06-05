@@ -48,6 +48,11 @@ class TapeEngine:
         self._recent_trades: deque[TradeRow] = deque(maxlen=config.recent_trades_limit)
         self._event_log: deque[str] = deque(maxlen=config.event_log_limit)
         self._stream_status = "connecting"
+        # Honest-pause state (Data Contract row 11), owned ONCE here. `_paused` is the canonical
+        # flag; `_pre_pause_status` remembers the stream_status in effect at pause time so resume
+        # restores it verbatim (live/connecting/stale) and NEVER fabricates "live".
+        self._paused = False
+        self._pre_pause_status: str | None = None
         self._snapshot = self._build_snapshot()
 
     @property
@@ -58,7 +63,49 @@ class TapeEngine:
         self._stream_status = status
         self._snapshot = self._build_snapshot()
 
+    @property
+    def paused(self) -> bool:
+        return self._paused
+
+    def pause(self) -> None:
+        """Freeze the read: set the canonical paused flag and flip the status to "paused".
+
+        Idempotent — a second pause is a no-op (it does NOT re-capture the already-"paused" status,
+        which would make resume restore "paused" instead of the real pre-pause status). The
+        pre-pause status is remembered so resume restores it verbatim (honest pause: never a
+        fabricated "live"). This only flips the canonical flag/status; the feeder (WatchManager)
+        is what stops *applying* events while paused. The engine itself also refuses to advance in
+        process_event while paused, so a stray event cannot leak in.
+        """
+        if self._paused:
+            return
+        self._pre_pause_status = self._stream_status
+        self._paused = True
+        self._stream_status = "paused"
+        self._snapshot = self._build_snapshot()
+
+    def resume(self) -> None:
+        """Continue: clear the paused flag and restore the exact pre-pause status.
+
+        Idempotent — resume-when-not-paused is a quiet no-op. Restores the remembered pre-pause
+        status (live / connecting / stale) so a paused-then-resumed live feed rejoins at its prior
+        honest status; it NEVER manufactures "live". No catch-up is synthesized — feeding simply
+        continues (the feeder resumes applying the next real events).
+        """
+        if not self._paused:
+            return
+        self._paused = False
+        self._stream_status = self._pre_pause_status or "connecting"
+        self._pre_pause_status = None
+        self._snapshot = self._build_snapshot()
+
     def process_event(self, event: Event) -> EngineSnapshot:
+        # Honest pause: while paused the engine applies NOTHING (no trades, no quotes, no ts
+        # advance) and fabricates no backfill — it returns the frozen snapshot as-is. The feeder
+        # already stops calling this while paused; this guard is the engine-level backstop so a
+        # stray event from any path cannot advance a paused engine (no fabricated catch-up).
+        if self._paused:
+            return self._snapshot
         if isinstance(event, QuoteEvent):
             self._market.update_quote(event)
             self._features.add_quote(
@@ -139,6 +186,7 @@ class TapeEngine:
             event_count=self._trade_count,
             warm=self._trade_count >= self._config.warmup_min_events,
             stream_status=self._stream_status,
+            paused=self._paused,
             bid=self._market.bid,
             ask=self._market.ask,
             spread=self._market.spread,

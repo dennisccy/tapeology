@@ -294,6 +294,35 @@ async def market_clock(
     }
 
 
+@app.post("/watch/{ticker}/pause")
+async def pause_watch(ticker: str) -> dict:
+    """Freeze a watched ticker WITHOUT tearing it down (J-19) — the opposite of DELETE/stop.
+
+    The feeder is left alive (its task is NOT cancelled, a live socket stays open) and the engine,
+    its latest snapshot, and the history buffer survive; only the canonical paused flag is set and
+    the row-6 status flips to "paused" (owned once by the engine — no second writer here). Returns
+    the updated canonical snapshot projection (carrying ``paused`` + ``stream_status``). A
+    not-watched ticker is an honest 404 — no engine is fabricated. Idempotent: pausing an
+    already-paused watch is a no-op 200.
+    """
+    if not manager.pause(ticker):
+        raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' is not being watched")
+    return serialize_summary(_engine_or_404(ticker).snapshot())
+
+
+@app.post("/watch/{ticker}/resume")
+async def resume_watch(ticker: str) -> dict:
+    """Continue a paused watch (J-19): clear ``paused`` and restore the prior pre-pause status.
+
+    Feeding resumes from where it left off (paced replay) or rejoins current real data (live) —
+    NO catch-up is synthesized (honest pause). Returns the updated canonical snapshot projection.
+    A not-watched ticker is an honest 404. Idempotent: resuming a not-paused watch is a no-op 200.
+    """
+    if not manager.resume(ticker):
+        raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' is not being watched")
+    return serialize_summary(_engine_or_404(ticker).snapshot())
+
+
 @app.delete("/watch/{ticker}")
 async def stop_watch(ticker: str) -> dict:
     # Async so task cancellation runs on the event loop (the feeder lives there). Tearing the

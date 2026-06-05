@@ -4,19 +4,19 @@
       "id": "J-01",
       "name": "Watch a ticker and see the live tape cockpit",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-7",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-01-result.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-7-evidence/UT-13-before-pause-chart.png"
     },
     "J-02": {
       "id": "J-02",
       "name": "Buyer-control scenario is identified",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-7",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-01-result.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-7-evidence/UT-13-before-pause-chart.png"
     },
     "J-03": {
       "id": "J-03",
@@ -76,10 +76,10 @@
       "id": "J-09",
       "name": "Stop watching a ticker",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-7",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-09-result.png"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-7-evidence/UT-07-stopped-idle.png"
     },
     "J-10": {
       "id": "J-10",
@@ -147,40 +147,40 @@
     "J-17": {
       "id": "J-17",
       "name": "Price chart with tape-state markers on simulated data",
-      "status": "partial",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-7",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "evaluator-independent: /history data path verified live for all 5 sim scenarios (SIM-BUYER emerald marker + rising candles, SIM-SELLER rose + falling, BIDABS/ASKABS amber + flat, CHOP 0 markers); 18 new tests pass (141->159); isolated build serves clean app. GAP: no browser screenshot of the rendered candlestick canvas (browser-qa SKIPPED — shared :3650 returns HTTP 500 from corrupted .next; qa TC-08 screenshot is blank)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-7-evidence/UT-13-before-pause-chart.png — RENDER GAP CLOSED: real screenshot of the populated SIM-BUYER candlestick chart (emerald rising candles 100.00->101.05, emerald 'Buyer Control' marker, working 10s/30s/60s bar-size selector) on a live frontend (HTTP 200, not the iter-3/5/6 corrupted-.next 500). Advisory residual: the rose (SIM-SELLER) / amber (SIM-BIDABS/ASKABS) marker variants + the bar-size re-render + chart-hidden-in-Live were NOT separately screenshotted in ui-test-results.md (the qa-report TC-01/TC-02 'chart' PNGs are actually idle-placeholder shots, discounted); marker colors are a pure server projection from /history (proven for all 5 scenarios in iter-6) that the chart reads verbatim and that was untouched this iter, and the render pipeline is now proven live — so the variant risk is low. The structural question (is the canvas ever drawn?) is now answered with pixels."
     },
     "J-18": {
       "id": "J-18",
       "name": "Inspect tape-state prediction on a real historical chart",
       "status": "partial",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "evaluator-independent: load-bearing backend correctness (bars+markers projected once from the engine via /history?bar=10|30|60, OHLC integrity, SSOT) verified live + by test_history_api.py; not-watched->404, bad-bar->422, empty->200 over the wire. GAP: real-historical render unverified in-browser (no creds at QA time AND browser layer never exercised — :3650 500)."
+      "last_evidence_path": "Surface + bar-match confirmed (chart pane render is now proven for sim via J-17 UT-13; the chart component/_history path is identical for historical). Backend real-fetch correctness stands from iter-6 (bars+markers projected once via /history?bar=10|30|60, OHLC integrity, SSOT; test_history_api.py). GAP (carried, operator-gated like J-12/J-15): no credentialed REAL-historical rendered-chart screenshot captured (no creds at QA time). Per the visual-journey lesson this stays `partial` until a real-historical render is captured with credentials."
     },
     "J-19": {
       "id": "J-19",
       "name": "Pause and resume a watch without losing state",
-      "status": "failing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-7",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "not built this iteration (deferred to a later slice per the iter-6 spec OUT OF SCOPE; rows 11-12 unimplemented)"
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-7-evidence/UT-04-paused-state.png — Pause -> amber 'Paused' dot + Resume/Stop buttons, cockpit+chart intact (no teardown); UT-13-after-pause-chart.png frozen chart; UT-06-resumed-live.png stream continues (green 'live', no fabricated jump); UT-07-stopped-idle.png Stop-after-pause -> idle + 404. Backed by 19 hermetic backend tests (test_pause.py/test_pause_api.py): paused=true & stream_status=paused, feeder task alive, no-backfill on resume, stop-after-pause->404, unknown-ticker->404. Honest-pause anti-goal verified by code inspection (live socket stays open + events discarded; status restored verbatim, never fabricated 'live')."
     },
     "J-20": {
       "id": "J-20",
       "name": "Pick a historical window in local time with US-session quick-picks",
       "status": "failing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-7",
       "last_passing_iter": null,
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "not built this iteration (deferred to a later slice per the iter-6 spec OUT OF SCOPE; rows 11-12 unimplemented)"
+      "last_evidence_path": "NOT built — explicitly OUT OF SCOPE for iter-7 (its own next slice; likely needs a blueprint touch for the timezone surface / Data Contract row 12). The naive-datetime-treated-as-UTC gotcha from the iter-2 lesson is the load-bearing risk for this journey. The goal is NOT complete until J-20 passes and J-18's credentialed render is captured."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-06-05T03:25:00Z"
+  "updated_at": "2026-06-05T03:40:00Z"
 }
