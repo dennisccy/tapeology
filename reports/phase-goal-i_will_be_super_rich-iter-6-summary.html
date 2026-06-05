@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>goal-i_will_be_super_rich-iter-6 — Iteration Summary</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0; padding: 0; color: #1f2328; background: #f6f8fa; line-height: 1.5;
+}
+.container { max-width: 880px; margin: 0 auto; padding: 24px 16px 80px; }
+.hero {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 28px; margin-bottom: 16px; text-align: center;
+}
+.hero.pass { border-top: 6px solid #1a7f37; }
+.hero.fail { border-top: 6px solid #cf222e; }
+.hero.inprogress { border-top: 6px solid #d4a72c; }
+.hero h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+.hero h2 { margin: 0 0 14px 0; font-size: 1rem; color: #57606a; font-weight: 500; }
+.badge-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.95rem;
+}
+.badge.pass { background: #dafbe1; color: #1a7f37; }
+.badge.fail { background: #ffebe9; color: #cf222e; }
+.badge.inprogress { background: #fff8c5; color: #9a6700; }
+.signal-badge { padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; }
+.signal-badge.improving { background: #dafbe1; color: #1a7f37; }
+.signal-badge.holding { background: #ddf4ff; color: #0969da; }
+.signal-badge.stalling { background: #fff8c5; color: #9a6700; }
+.signal-badge.regressing { background: #ffebe9; color: #cf222e; }
+.signal-badge.na { background: #f6f8fa; color: #57606a; }
+.meta { color: #57606a; font-size: 0.875rem; margin: 10px 0 16px; }
+.journey-row {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 4px;
+}
+.journey-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 0.85rem;
+  background: #f6f8fa; border: 1px solid #d0d7de;
+}
+.journey-pill.passing, .journey-pill.already_passing { background: #dafbe1; color: #1a7f37; border-color: #b4e2c0; }
+.journey-pill.failing, .journey-pill.regressed { background: #ffebe9; color: #cf222e; border-color: #f1aeb0; }
+.journey-pill.partial { background: #fff8c5; color: #9a6700; border-color: #eed888; }
+.journey-pill.unknown { background: #f6f8fa; color: #57606a; }
+.hero-image { margin-top: 18px; }
+.hero-image img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+details {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  margin-bottom: 12px;
+}
+details > summary {
+  cursor: pointer; padding: 14px 18px; font-weight: 600; font-size: 1.05rem;
+  list-style: none; user-select: none; display: flex; align-items: center; gap: 8px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: '▶'; transition: transform 0.15s; font-size: 0.75rem; color: #57606a;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+.accordion-body { padding: 0 18px 18px; }
+.accordion-body h3 { font-size: 0.95rem; color: #57606a; margin: 16px 0 6px; }
+.why-text { background: #f6f8fa; padding: 10px 12px; border-radius: 6px; margin: 4px 0 12px; }
+ul.bullets { margin: 6px 0 14px; padding-left: 22px; }
+ul.bullets li { margin-bottom: 4px; }
+ol.steps { padding-left: 0; list-style: none; counter-reset: step; }
+ol.steps > li {
+  counter-increment: step; padding: 12px 0 12px 44px;
+  border-top: 1px solid #eaeef2; position: relative;
+}
+ol.steps > li:first-child { border-top: none; }
+ol.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 14px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #0969da; color: white; display: flex;
+  align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600;
+}
+.step-shot { margin-top: 10px; }
+.step-shot img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+.next-step-box {
+  background: #ddf4ff; padding: 12px 16px; border-radius: 6px;
+  border-left: 4px solid #0969da; margin: 12px 0;
+}
+.drill-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.drill-table th, .drill-table td {
+  text-align: left; padding: 8px 6px; border-bottom: 1px solid #eaeef2;
+}
+.drill-table th { background: #f6f8fa; }
+.verdict-cell.PASS, .verdict-cell.CLOSURE-PASS, .verdict-cell.GOAL_ACHIEVED { color: #1a7f37; font-weight: 600; }
+.verdict-cell.FAIL, .verdict-cell.CLOSURE-FAIL, .verdict-cell.REGRESSION { color: #cf222e; font-weight: 600; }
+.verdict-cell.CONTINUE, .verdict-cell.ESCALATE, .verdict-cell.STALLED { color: #9a6700; font-weight: 600; }
+.verdict-cell.SKIPPED, .verdict-cell.UNKNOWN, .verdict-cell.IN-PROGRESS { color: #57606a; }
+.footer-note { text-align: center; color: #6e7781; font-size: 0.8rem; margin-top: 24px; }
+.iter-card {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 16px 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 14px;
+}
+.iter-card .left { flex-shrink: 0; }
+.iter-card .body { flex: 1 1 auto; }
+.iter-card .body .title { font-weight: 600; }
+.iter-card .body .sub { color: #57606a; font-size: 0.88rem; margin-top: 2px; }
+.iter-card a.open { color: #0969da; text-decoration: none; font-weight: 500; }
+.iter-card a.open:hover { text-decoration: underline; }
+.matrix { width: 100%; border-collapse: collapse; margin: 12px 0 22px; font-size: 0.88rem; }
+.matrix th, .matrix td { padding: 6px 8px; border: 1px solid #d0d7de; text-align: center; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix .cell-passing, .matrix .cell-already_passing { background: #dafbe1; color: #1a7f37; }
+.matrix .cell-failing, .matrix .cell-regressed { background: #ffebe9; color: #cf222e; }
+.matrix .cell-partial { background: #fff8c5; color: #9a6700; }
+.matrix .cell-unknown { background: #f6f8fa; color: #57606a; }
+.no-summary {
+  background: #fff8c5; border: 1px solid #eed888; padding: 14px 18px;
+  border-radius: 8px; color: #9a6700; margin-bottom: 14px;
+}
+/* Plain-language layer — the primary, non-technical view. */
+.plain-words {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 24px; margin: 18px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.plain-words .pw-heading {
+  margin: 0 0 14px; font-size: 1.15rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.pw-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.pw-card {
+  background: white; border-radius: 8px; padding: 14px 16px;
+  border: 1px solid #e3eaf3;
+}
+.pw-card .pw-label {
+  font-size: 0.78rem; font-weight: 600; color: #57606a;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.pw-card .pw-text {
+  margin: 0; font-size: 1rem; color: #1f2328; line-height: 1.45;
+}
+.pw-empty { color: #8c959f; font-style: italic; font-size: 0.95rem; }
+.tech-divider {
+  margin: 18px 0 8px; text-align: center;
+  color: #6e7781; font-size: 0.82rem; font-style: italic;
+  border-top: 1px dashed #d0d7de; padding-top: 12px;
+}
+/* Watch-it-work — narrated screenshot gallery from demo-narrator. */
+.watch-it-work {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 18px 22px; margin: 10px 0 6px;
+}
+.wiw-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.wiw-heading {
+  margin: 0; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.demo-badge {
+  font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 12px;
+  border: 1px solid transparent; letter-spacing: 0.04em;
+}
+.demo-badge.demo-recorded { background: #dafbe1; color: #1a7f37; border-color: #aceebb; }
+.demo-badge.demo-notes    { background: #fff8c5; color: #9a6700; border-color: #e8d97e; }
+.demo-badge.demo-skipped  { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+.demo-badge.demo-pending  { background: #ddf4ff; color: #0969da; border-color: #b6e3ff; }
+.demo-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.demo-step {
+  margin: 0; padding: 12px; background: #f6f8fa;
+  border: 1px solid #d0d7de; border-radius: 8px;
+}
+.demo-step-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.demo-step-num {
+  font-weight: 600; color: #57606a; font-variant-numeric: tabular-nums;
+}
+.demo-step-title { color: #1f2328; font-weight: 500; }
+.demo-new {
+  background: #ddf4ff; color: #0969da; font-size: 0.7rem; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px; letter-spacing: 0.06em;
+}
+.demo-shot { margin-bottom: 8px; }
+.demo-shot img {
+  width: 100%; height: auto; border-radius: 4px; border: 1px solid #d0d7de;
+  display: block;
+}
+.demo-narration {
+  margin: 0; color: #1f2328; font-size: 0.92rem; line-height: 1.4;
+}
+.demo-empty {
+  margin: 8px 0 0; color: #57606a; font-style: italic;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.demo-notes-wrap { margin-top: 14px; }
+.demo-notes-wrap summary {
+  cursor: pointer; color: #9a6700; font-weight: 500; font-size: 0.9rem;
+}
+.demo-notes-wrap[open] summary { margin-bottom: 6px; }
+/* Story so far + latest demo (session index plain-language top). */
+.story-so-far {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 14px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.story-heading {
+  margin: 0 0 12px; font-size: 1.1rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.story-body { font-size: 1rem; color: #1f2328; line-height: 1.55; }
+.story-body .story-h { margin: 14px 0 6px; color: #1f2328; }
+.story-body p { margin: 0 0 10px; }
+.session-demo {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 0; margin: 8px 0 6px; overflow: hidden;
+}
+.session-demo-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 22px;
+  background: #f6f8fa; border-bottom: 1px solid #d6e4f0;
+  font-weight: 600; color: #1f2328; font-size: 0.95rem;
+}
+.session-demo-head a.open { color: #0969da; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+.session-demo-head a.open:hover { text-decoration: underline; }
+.session-demo .watch-it-work {
+  border: none; border-radius: 0; box-shadow: none; margin: 0;
+}
+/* Delivered link banner — sits on the session index when GOAL_ACHIEVED. */
+.delivered-link {
+  margin: 14px 0; padding: 14px 22px;
+  background: #dafbe1; border: 1px solid #aceebb; border-radius: 10px;
+  color: #1a7f37; font-size: 1rem;
+}
+.delivered-link a {
+  color: #1a7f37; font-weight: 600; text-decoration: none; margin-left: 8px;
+}
+.delivered-link a:hover { text-decoration: underline; }
+.delivered-back {
+  margin: 8px 0 14px; padding: 0; font-size: 0.9rem;
+}
+.delivered-back a { color: #0969da; text-decoration: none; }
+.delivered-back a:hover { text-decoration: underline; }
+.delivered-body {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 28px; margin: 12px 0;
+}
+.delivered-body h2.story-h { margin-top: 0; }
+/* Feature manual (session index, top of page). */
+.cover-vision {
+  margin: 8px 0 14px; color: #57606a; font-size: 1.02rem;
+  font-style: italic; max-width: 60ch;
+}
+.feature-toc {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 20px 26px; margin: 14px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.feature-toc-heading {
+  margin: 0 0 14px; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.feature-toc-list {
+  margin: 0; padding-left: 22px; font-size: 1rem; line-height: 1.7;
+}
+.feature-toc-list li { padding: 2px 0; }
+.feature-toc-list a {
+  color: #1f2328; text-decoration: none; font-weight: 500;
+}
+.feature-toc-list a:hover { color: #0969da; text-decoration: underline; }
+.toc-extra-header {
+  list-style: none; margin: 10px 0 4px -22px;
+  font-size: 0.82rem; color: #57606a; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.feature-manual { margin: 14px 0; }
+.feature-section {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 16px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+  scroll-margin-top: 12px;
+}
+.feature-heading {
+  margin: 0 0 10px; font-size: 1.2rem; color: #1f2328;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.feature-description {
+  margin: 0 0 16px; color: #1f2328; font-size: 1rem; line-height: 1.55;
+}
+.feature-description-label {
+  font-weight: 600; color: #57606a; margin-right: 4px;
+}
+.feature-note {
+  margin: 8px 0 12px; padding: 8px 12px;
+  background: #fff8c5; border: 1px solid #eed888; border-radius: 6px;
+  color: #9a6700; font-size: 0.88rem;
+}
+.feature-source {
+  margin: 12px 0 0; font-size: 0.88rem; color: #57606a;
+}
+.feature-source a { color: #0969da; text-decoration: none; }
+.feature-source a:hover { text-decoration: underline; }
+.feature-empty {
+  margin: 10px 0; padding: 12px 16px;
+  background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+  color: #57606a; font-style: italic;
+}
+.status-pill {
+  font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+  letter-spacing: 0.04em; white-space: nowrap; display: inline-block;
+}
+.status-pill-passing { background: #dafbe1; color: #1a7f37; border: 1px solid #aceebb; }
+.status-pill-failing { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-regressed { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-partial { background: #fff8c5; color: #9a6700; border: 1px solid #e8d97e; }
+.status-pill-unknown { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.status-pill-coming-soon { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.developer-view {
+  margin: 28px 0 6px;
+  border: 1px dashed #d0d7de; border-radius: 8px;
+}
+.developer-view > summary {
+  cursor: pointer; padding: 12px 16px;
+  color: #57606a; font-size: 0.92rem; font-weight: 500;
+  background: #f6f8fa; border-radius: 8px;
+}
+.developer-view[open] > summary {
+  border-bottom: 1px dashed #d0d7de;
+  border-radius: 8px 8px 0 0;
+}
+.developer-view-body { padding: 12px 18px; }
+</style>
+</head><body><div class='container'>
+<section class='hero inprogress'><div class='badge-row'><div class='badge inprogress'><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+<circle cx="12" cy="12" r="11" fill="#d4a72c"/>
+<path d="M12 6v6l4 2.5" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg><span>CONTINUE</span></div><span class='signal-badge improving'>Direction: improving</span></div><h1>Iteration 6  ·  session i_will_be_super_rich</h1><h2>Engine history buffer (OHLC 10/30/60 s + markers) + `/history` endpoint + PriceChart component built; backend data path proven; browser render unverified (J-17/J-18 partial).</h2><div class='meta'>2026-06-05 · goal-full</div><div class='meta'>Journeys: 16/20 passing</div><div class='journey-row'><span class='journey-pill passing' title='Watch a ticker and see the live tape cockpit'>J-01 · passing</span><span class='journey-pill passing' title='Buyer-control scenario is identified'>J-02 · passing</span><span class='journey-pill passing' title='Seller-control scenario is identified'>J-03 · passing</span><span class='journey-pill passing' title='Bid absorption is detected (price impact, not aggression)'>J-04 · passing</span><span class='journey-pill passing' title='Ask absorption is detected (price impact, not aggression)'>J-05 · passing</span><span class='journey-pill passing' title='Unclear / choppy tape is reported as unclear'>J-06 · passing</span><span class='journey-pill passing' title='Tape-state transitions are announced in the event log and observations'>J-07 · passing</span><span class='journey-pill passing' title='REST and the live UI agree (single source of truth)'>J-08 · passing</span><span class='journey-pill passing' title='Stop watching a ticker'>J-09 · passing</span><span class='journey-pill passing' title='Choose a data source (Live / Historical / Simulated)'>J-10 · passing</span><span class='journey-pill passing' title='Replay a real historical session'>J-11 · passing</span><span class='journey-pill passing' title='Stream a real live ticker'>J-12 · passing</span><span class='journey-pill passing' title='Find a symbol by search'>J-13 · passing</span><span class='journey-pill passing' title='Real-data edge cases are handled honestly (no fabricated data)'>J-14 · passing</span><span class='journey-pill passing' title='A live-feed gap shows stale, then recovers'>J-15 · passing</span><span class='journey-pill passing' title='Historical recent-trades show a resolved side (not unknown)'>J-16 · passing</span><span class='journey-pill partial' title='Price chart with tape-state markers on simulated data'>J-17 · partial</span><span class='journey-pill partial' title='Inspect tape-state prediction on a real historical chart'>J-18 · partial</span><span class='journey-pill failing' title='Pause and resume a watch without losing state'>J-19 · failing</span><span class='journey-pill failing' title='Pick a historical window in local time with US-session quick-picks'>J-20 · failing</span></div></section>
+<section class='plain-words'><h2 class='pw-heading'>In plain words</h2><div class='pw-grid'><div class='pw-card'><div class='pw-label'>What you can do now</div><p class='pw-text'>Watch a US stock in practice or historical replay mode and read the tape in plain language — buyer control, seller control, bid or ask absorption, or unclear — with a confidence score, live quote, running trades list, and observations. You can search for a stock by name, choose from Live, Historical, or Simulated data sources, replay a past session at speed, or follow a live market with an honest live/stale signal. The recent-trades list labels most real-market prints as buy or sell (not &quot;unknown&quot;). A candlestick price chart now appears above the cockpit when you are watching a simulated or replayed stock, letting you see the watched price drawn as candles, with colored markers at each moment the tape state shifted to something meaningful — green for buyer control, red for seller control, amber for absorption.</p></div><div class='pw-card'><div class='pw-label'>What changed this time</div><p class='pw-text'>A price chart was added above the cockpit for Simulated and Historical watches. You can see candle bars representing the watched price over time, and colored markers show exactly where the tape state changed to something significant. A small bar-size selector lets you switch between 10-second, 30-second, and 60-second candles. The chart shows an honest &quot;no price history yet&quot; message before data arrives, and disappears automatically when you switch to Live mode. The underlying data pipeline is fully proven correct, but the chart&#x27;s on-screen rendering has not yet been captured in a browser screenshot — that confirmation is the top priority for the next round.</p></div><div class='pw-card'><div class='pw-label'>What&#x27;s next</div><p class='pw-text'>Next we&#x27;ll re-run the browser checks against a clean build to confirm the candlestick chart actually renders on screen, then build the ability to pause and resume a watch without losing state.</p></div></div></section>
+<section class='watch-it-work'><div class='wiw-head'><h2 class='wiw-heading'>Watch it work</h2><span class='demo-badge demo-skipped'>SKIPPED</span></div><p class='demo-empty'>Frontend at http://localhost:3650 did not respond after 90s of retries. No browser walkthrough was performed.
+
+Frontend log tail (/tmp/fanout-frontend-8650.log):
+```
+Require stack:
+- /home/dennisccy/Git/tapeology/apps/frontend/.next/server/webpack-runtime.js
+- /home/dennisccy/Git/tapeology/apps/frontend/.next/server/pages/_document.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/server/require.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/server/load-components.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/build/utils.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/build/swc/options.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/build/swc/index.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/build/analysis/parse-module.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/build/analysis/get-page-static-info.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/server/lib/router-server.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/server/lib/start-server.js
+    at &lt;unknown&gt; (.next/server/app/page.js:2:29328)
+    at Object.&lt;anonymous&gt; (.next/server/app/page.js:2:29372) {
+  code: &#x27;MODULE_NOT_FOUND&#x27;,
+  requireStack: [Array],
+  page: &#x27;/&#x27;
+}
+ GET / 500 in 231ms
+```</p></section>
+<div class='tech-divider'><span>Technical detail below — open if you want the developer view.</span></div>
+<details><summary>What was done</summary><div class='accordion-body'><ul class='bullets'><li>Built `app/engine/history.py`: new engine history buffer accumulating OHLC candles at 10/30/60 s (binned by logical timestamp) and meaningful-transition markers (`buyer_control`, `seller_control`, `bid_absorption`, `ask_absorption`); markers reuse the engine snapshot&#x27;s own `tape_state`/`confidence` — no second classification</li><li>Wired the buffer into `tape_engine.py` (feed in `process_event` only; exposed as a read-only `TapeEngine.history` property); added config keys (`history_bar_sizes`, `history_marker_states`, `history_max_bars`, `history_max_markers`) — no magic numbers in engine code</li><li>Added `GET /tape/{ticker}/history?bar=&lt;10|30|60&gt;` in `main.py` with a pure `serialize_history` projection: 404 for unwatched ticker, 422 for out-of-range `bar`, 200 + empty lists for a ticker with no trades yet — never invented candles</li><li>Added `PriceChart.tsx` (client-only, `&quot;use client&quot;`, dynamic import in effect to avoid SSR): renders OHLC candlesticks + emerald/rose/amber markers; 10/30/60 s bar-size selector; pan/zoom; honest empty state; polls `/history` at 1 s cadence</li><li>Mounted `&lt;PriceChart&gt;` above `&lt;Cockpit&gt;` in `page.tsx` for `mode === &quot;sim&quot; || mode === &quot;historical&quot;` only (hidden for `live`); added `fetchHistory` to `api.ts` and `OhlcBar`/`TapeMarker`/`TapeHistory` types to `types.ts`</li><li>Added `NEXT_DIST_DIR` env-gated override to `next.config.mjs` so a one-off isolated build never clobbers the running dev server&#x27;s `.next`</li><li>Backend data path independently verified by evaluator: live SIM-BUYER/SELLER/BIDABS/ASKABS/CHOP probed → correct candles, correct marker colors, 0 markers for `unclear`; 404/422/empty over the wire confirmed</li><li>Suite rose from 141 to 159 (18 new tests in `test_history.py` + `test_history_api.py`); isolated frontend build (`NEXT_DIST_DIR=.next-iter6-build`) compiled clean with `/` static-prerendered (no SSR violation); 0 browser QA tests run (shared `:3650` HTTP 500 from corrupted `.next`)</li></ul></div></details>
+<details><summary>What's left + Next step</summary><div class='accordion-body'><h3>Still open</h3><ul class='bullets'><li>Journey J-17 (Price chart with tape-state markers on simulated data) — `partial`; browser render not yet pixel-verified due to corrupted shared `.next`; top priority for iter-7</li><li>Journey J-18 (Inspect tape-state prediction on a real historical chart) — `partial`; real-historical in-browser render unverified; backend correctness already proven</li><li>Journey J-19 (Pause and resume a watch without losing state) — `failing`; not built (deferred per iter-6 spec)</li><li>Journey J-20 (Pick a historical window in local time with US-session quick-picks) — `failing`; not built (deferred per iter-6 spec)</li><li>Corrupted shared `.next` at `:3650` must be rebuilt before any browser-qa run (`Cannot find module &#x27;./833.js&#x27;`); prerequisite for closing J-17/J-18</li></ul><h3>Next step</h3><div class='next-step-box'>iter-7 at full depth, two deliverables: (1) Close the J-17/J-18 visual-evidence gap (highest priority) — run browser-qa against a clean isolated frontend build (`NEXT_DIST_DIR` set, `NEXT_PUBLIC_API_URL` pointing to an isolated backend, never the shared `:3650`/`.next`) and capture real screenshots showing: candlesticks rendered for SIM-BUYER, the emerald buyer_control marker, rose for SIM-SELLER, amber for SIM-BIDABS/SIM-ASKABS, the 10→30→60 s selector re-rendering candles, and the chart hidden in Live mode. The shared `:3650` `.next` is corrupted and must be rebuilt or bypassed before any browser run — this is a prerequisite, not optional. Once those screenshots exist, J-17 → passing and J-18&#x27;s surface → passing (real-fetch correctness already stands on the backend test and the evaluator&#x27;s live `/history` proof). (2) Build J-19 (pause/resume) — `POST /watch/{ticker}/pause|resume`, engine/feeder owns the paused state in the snapshot, UI Pause/Resume beside Stop with a PAUSED indicator; freeze without teardown, live resumes at current real data (no fabricated backfill), Stop still tears down. Then J-20 (local-time picker + US-session quick-picks) as its own slice.</div></div></details>
+<details><summary>Direction signal</summary><div class='accordion-body'><div class='why-text'><strong>Why:</strong> J-17 and J-18 advanced from `failing` to `partial` this iteration — the full backend data pipeline is independently proven correct (live `/history` probe, 18 new tests, 141→159 suite count, no regressions, COHERENCE-PASS), the frontend component exists and builds cleanly, and the source of the browser-QA failure is root-caused to stale infra (corrupted `.next`), not a code defect. No previously-passing journey regressed. The path to full `passing` status for J-17/J-18 is unambiguous: rebuild the shared `.next` and re-run browser checks.</div><h3>Trend</h3><ul class='bullets'><li>Newly passing this iter: none</li><li>Newly passing in last 5 iters total: J-16 (iter-5)</li><li>Regressions in last 5 iters: none</li><li>Anti-goal violations in last 5 iters: none</li><li>Iters with no journey state change: 0 of last 5 (iter-6 advanced J-17/J-18 from failing to partial; iter-5 passed J-16; iters 2/3/4 each passed journeys)</li></ul><h3>Latest evaluator reasoning</h3><div class='why-text'>&quot;The backend data path is independently proven correct for all five sim scenarios and over the wire (404/422/empty contract), the suite rose 141→159 with no regressions, the source builds clean (`/` static-prerendered, no SSR), and coherence is PASS. However, J-17/J-18 lack their defining visual evidence: browser-qa SKIPPED all 15 UT tests because the shared `:3650` dev server returns HTTP 500 (corrupted `.next` — the iter-3 failure mode recurring), and the one `qa` chart screenshot is blank. The chart-renders claim is therefore unconfirmed at the pixel level — `partial`, not passing.&quot;</div></div></details>
+<details><summary>Quick verify (5 min)</summary><div class='accordion-body'><ol class='steps'><li><span class='step-action'>Open `http://localhost:3650` in your browser — expect the page loads with a TopBar, ticker input, and mode selector showing &quot;Simulated&quot;; no chart panel yet (confirms chart only appears when watching).</span></li><li><span class='step-action'>Type `SIM-BUYER` into the ticker input field and click the &quot;Watch&quot; button — expect a panel titled &quot;Price Chart — Tape-State Markers&quot; appears above the cockpit within 1–2 seconds, with a &quot;Loading price history…&quot; overlay and a bar-size selector (&quot;10s&quot;, &quot;30s&quot;, &quot;60s&quot;).</span></li><li><span class='step-action'>Wait 15–20 seconds and observe the chart canvas — expect at least 3 candlestick bars on the dark canvas and an emerald (bright green) arrow marker at the `buyer_control` transition; cockpit &quot;Tape State&quot; panel simultaneously shows `buyer_control`.</span></li><li><span class='step-action'>Click the &quot;30s&quot; button in the bar-size selector — expect the chart redraws within 1 second with fewer, wider bars; &quot;30s&quot; button gains an active/filled style.</span></li><li><span class='step-action'>Click the &quot;Live&quot; button in the TopBar — expect the &quot;Price Chart — Tape-State Markers&quot; panel disappears immediately; no empty gap or ghost box where the chart was.</span></li></ol></div></details>
+<details><summary>Artifacts</summary><div class='accordion-body'><table class='drill-table'><thead><tr><th>Report</th><th>Verdict</th><th>Path</th></tr></thead><tbody><tr><td>Iter spec</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/phases/goal-i_will_be_super_rich-iter-6.md'>docs/phases/goal-i_will_be_super_rich-iter-6.md</a></td></tr><tr><td>Dev handoff</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/handoffs/goal-i_will_be_super_rich-iter-6-dev.md'>docs/handoffs/goal-i_will_be_super_rich-iter-6-dev.md</a></td></tr><tr><td>Review</td><td><span class='verdict-cell PASS_WITH_NOTES'>PASS_WITH_NOTES</span></td><td><a href='reviews/goal-i_will_be_super_rich-iter-6-review.md'>reports/reviews/goal-i_will_be_super_rich-iter-6-review.md</a></td></tr><tr><td>Browser QA</td><td><span class='verdict-cell SKIPPED'>SKIPPED</span></td><td><a href='phase-goal-i_will_be_super_rich-iter-6-ui-test-results.md'>reports/phase-goal-i_will_be_super_rich-iter-6-ui-test-results.md</a></td></tr><tr><td>Implementation summary</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-i_will_be_super_rich-iter-6-implementation-summary.md'>reports/phase-goal-i_will_be_super_rich-iter-6-implementation-summary.md</a></td></tr><tr><td>User-visible changes</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-i_will_be_super_rich-iter-6-user-visible-changes.md'>reports/phase-goal-i_will_be_super_rich-iter-6-user-visible-changes.md</a></td></tr><tr><td>What to click</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-i_will_be_super_rich-iter-6-what-to-click.md'>reports/phase-goal-i_will_be_super_rich-iter-6-what-to-click.md</a></td></tr><tr><td>QA</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='qa/goal-i_will_be_super_rich-iter-6-qa.md'>reports/qa/goal-i_will_be_super_rich-iter-6-qa.md</a></td></tr><tr><td>Goal evaluation</td><td><span class='verdict-cell CONTINUE'>CONTINUE</span></td><td><a href='../runs/goal-session-i_will_be_super_rich/iter-6/eval.md'>runs/goal-session-i_will_be_super_rich/iter-6/eval.md</a></td></tr><tr><td>Journey history</td><td><span class='verdict-cell —'>—</span></td><td><a href='../runs/goal-session-i_will_be_super_rich/state/journey-history.json'>runs/goal-session-i_will_be_super_rich/state/journey-history.json</a></td></tr></tbody></table></div></details>
+<div class='footer-note'>Generated 2026-06-05 03:35 by <code>render_iteration_summary.py</code> · source: <a href='phase-goal-i_will_be_super_rich-iter-6-iteration-summary.md'>phase-goal-i_will_be_super_rich-iter-6-iteration-summary.md</a></div>
+</div></body></html>

@@ -6,6 +6,7 @@ import { watchTicker, stopTicker } from "@/lib/api";
 import type { DataSourceMode, FailureReason, WatchParams } from "@/lib/types";
 import { TopBar } from "@/components/TopBar";
 import { Cockpit } from "@/components/Cockpit";
+import { PriceChart } from "@/components/PriceChart";
 import { IdleState } from "@/components/IdleState";
 import { ProviderUnavailable } from "@/components/ProviderUnavailable";
 
@@ -98,6 +99,11 @@ export default function Page() {
         error={error}
       />
       <main className="mx-auto max-w-7xl px-4 py-6">
+        {/* Tape-state prediction chart — above the cockpit, for Simulated + Historical only
+            (hidden for Live, per the blueprint IA). Reads GET …/history verbatim. */}
+        {ticker && (mode === "sim" || mode === "historical") && (
+          <PriceChart ticker={ticker} />
+        )}
         {ticker ? (
           <Cockpit snapshot={snapshot} />
         ) : failure ? (

@@ -34,6 +34,7 @@ from .providers.live import LiveProvider
 from .serializers import (
     serialize_events,
     serialize_features,
+    serialize_history,
     serialize_state,
     serialize_stream,
     serialize_summary,
@@ -321,6 +322,25 @@ def get_events(ticker: str) -> dict:
 @app.get("/tape/{ticker}/summary")
 def get_summary(ticker: str) -> dict:
     return serialize_summary(_engine_or_404(ticker).snapshot())
+
+
+@app.get("/tape/{ticker}/history")
+def get_history(ticker: str, bar: int = CONFIG.history_bar_sizes[0]) -> dict:
+    """Engine-computed OHLC candles + tape-state markers for the prediction chart (J-17 / J-18).
+
+    A pure projection of the engine history buffer (single source of truth — the chart recomputes
+    no price/side/state). Honest contract:
+      * Not-watched ticker -> 404 (reuse ``_engine_or_404``; never a fabricated empty 200).
+      * ``bar`` not in the configured set -> 422 (rejected, not silently coerced).
+      * Watched but no trades yet / an empty historical window -> empty bars + empty markers (200);
+        no invented candles.
+    Works for simulated + historical alike — the backend does not special-case the mode; it serves
+    whatever the engine accumulated (Live is hidden in the UI, not here).
+    """
+    if bar not in CONFIG.history_bar_sizes:
+        allowed = ", ".join(str(b) for b in CONFIG.history_bar_sizes)
+        raise HTTPException(status_code=422, detail=f"bar must be one of: {allowed}")
+    return serialize_history(_engine_or_404(ticker).history, bar)
 
 
 @app.websocket("/tape/{ticker}/stream")

@@ -55,6 +55,41 @@ export interface SymbolMatch {
   name: string;
 }
 
+// Price-history / prediction-chart shapes from GET /tape/{ticker}/history?bar= (J-17 / J-18).
+// The chart renders these VERBATIM — it never re-bins candles or re-derives a marker's state.
+
+// One OHLC candle: `time` is the bin's left edge in LOGICAL seconds (the engine's timeline).
+export interface OhlcBar {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+// One meaningful tape-state-transition marker. `state`/`confidence` are the engine's OWN
+// classifier values at the transition (reused verbatim — never recomputed in the UI). Only
+// meaningful states appear (buyer_control | seller_control | bid_absorption | ask_absorption);
+// a transition into `unclear` is not marked.
+export interface TapeMarker {
+  time: number;
+  state: string;
+  confidence: number;
+}
+
+// GET /tape/{ticker}/history?bar= response — the OHLC series + markers for one bar size. An
+// empty (or not-yet-warmed) window yields empty arrays (the chart shows an empty treatment).
+export interface TapeHistory {
+  bar: number;
+  bars: OhlcBar[];
+  markers: TapeMarker[];
+}
+
+// The bar sizes (logical seconds) the chart's selector offers — must match the backend's
+// configured `history_bar_sizes`. An out-of-set value is rejected by the backend with a 422.
+export const HISTORY_BAR_SIZES = [10, 30, 60] as const;
+export type HistoryBarSize = (typeof HISTORY_BAR_SIZES)[number];
+
 // Distinct honest real-data failure reasons surfaced by POST /watch (data-contract row 9). The
 // UI renders a distinct non-cockpit panel per reason — never a fabricated cockpit, never a
 // silent fall-back to Simulated.

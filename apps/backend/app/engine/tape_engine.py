@@ -17,6 +17,7 @@ from ..providers.base import Event, QuoteEvent, Side, TradeEvent
 from .aggressor import classify_aggressor
 from .classifier import TapeStateClassifier
 from .features import FeatureEngine
+from .history import HistoryBuffer
 from .market_state import MarketState
 from .observations import ObservationEmitter
 from .snapshot import EngineSnapshot, TradeRow
@@ -32,6 +33,10 @@ class TapeEngine:
         self._features = FeatureEngine(config)
         self._classifier = TapeStateClassifier(config)
         self._emitter = ObservationEmitter()
+        # Price-history buffer (OHLC candles + tape-state markers). Accrued ONLY from
+        # process_event (per real events), never from a status flip or construction — so a
+        # set_stream_status call cannot mutate the chart series. Computed once, read-only.
+        self._history = HistoryBuffer(config)
 
         self._trade_count = 0
         self._last_ts = 0.0
@@ -85,15 +90,33 @@ class TapeEngine:
             self._recent_trades.appendleft(
                 TradeRow(event.timestamp, event.price, event.size, side.value)
             )
+            # Bin this trade's price into the OHLC candles (same price the snapshot exposes as
+            # `last`; quotes do not create candles). Logical-ts bucketing — no wall-clock.
+            self._history.add_trade(event.timestamp, event.price)
 
         self._last_ts = event.timestamp
         if self._stream_status == "connecting":
             self._stream_status = "live"
         self._snapshot = self._build_snapshot()
+        # Append a tape-state-transition MARKER if this tick's classified state changed to a
+        # meaningful state — reusing the snapshot's OWN tape_state/confidence (single source of
+        # truth; no second classification). Done here in process_event (not in _build_snapshot)
+        # so a set_stream_status rebuild never appends a spurious marker.
+        self._history.note_state(
+            self._snapshot.timestamp, self._snapshot.tape_state, self._snapshot.confidence
+        )
         return self._snapshot
 
     def snapshot(self) -> EngineSnapshot:
         return self._snapshot
+
+    @property
+    def history(self) -> HistoryBuffer:
+        """Read-only access to the price-history buffer (OHLC candles + markers).
+
+        The `…/history` serializer reads this; it is computed once here and never recomputed.
+        """
+        return self._history
 
     def _build_snapshot(self) -> EngineSnapshot:
         features = self._features.compute(self._last_ts)

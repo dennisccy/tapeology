@@ -87,6 +87,27 @@ class Config:
     recent_trades_limit: int = 30            # rows kept for the Recent-trades panel
     event_log_limit: int = 50                # messages kept in the Event-log panel
 
+    # --- Price-history buffer & prediction chart (J-17 / J-18) ------------------------
+    # The OHLC candle bin sizes (logical seconds) the engine accumulates concurrently and
+    # the chart offers via its bar-size selector. The set of valid `?bar=` values for
+    # `GET /tape/{ticker}/history` comes from HERE — an out-of-set bar is a 422 (never
+    # silently coerced). No bar-size literal may appear inline in engine/serializer code.
+    history_bar_sizes: tuple[int, ...] = (10, 30, 60)
+    # The tape states that earn a transition MARKER on the chart. A transition INTO any of
+    # these "meaningful" states is marked (with the engine's own state + confidence — never
+    # recomputed); a transition into `unclear` is NOT marked. Listed here (not inline) so the
+    # marker-significance rule is config-owned (no-magic anti-goal).
+    history_marker_states: tuple[str, ...] = (
+        "buyer_control",
+        "seller_control",
+        "bid_absorption",
+        "ask_absorption",
+    )
+    # Cap on candles/markers retained PER bar size (in-memory, Phase-1). A long replay is
+    # bounded so memory stays flat; the chart pans/zooms over what is retained.
+    history_max_bars: int = 1000
+    history_max_markers: int = 500
+
     # --- Real historical replay (J-11) ------------------------------------------------
     # Selectable replay speeds for a historical watch. A superset of the UI's {1,2,5,10}
     # (TopBar REPLAY_SPEEDS) so every UI choice validates; an out-of-set speed is a 422.

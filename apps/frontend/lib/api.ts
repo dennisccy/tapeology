@@ -1,5 +1,11 @@
 import { API_BASE } from "./config";
-import type { MarketClock, SymbolMatch, TapeSnapshot, WatchParams } from "./types";
+import type {
+  MarketClock,
+  SymbolMatch,
+  TapeHistory,
+  TapeSnapshot,
+  WatchParams,
+} from "./types";
 
 export interface WatchResult {
   ok: boolean;
@@ -95,6 +101,31 @@ export async function searchSymbols(q: string): Promise<SymbolMatch[]> {
     return Array.isArray(data) ? (data as SymbolMatch[]) : [];
   } catch {
     return [];
+  }
+}
+
+// GET /tape/{ticker}/history?bar= — engine-computed OHLC candles + tape-state markers for the
+// prediction chart (J-17 / J-18). The chart reads these VERBATIM (single source of truth); it
+// never re-bins candles or re-derives a marker. A not-watched ticker (404), a not-yet-warmed
+// window, or any error yields null/empty so the chart falls back to its empty treatment — it
+// NEVER invents candles. `bar` is one of the configured sizes (an out-of-set value is a 422).
+export async function fetchHistory(
+  ticker: string,
+  bar: number,
+): Promise<TapeHistory | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/tape/${encodeURIComponent(ticker)}/history?bar=${bar}`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      bar: typeof data.bar === "number" ? data.bar : bar,
+      bars: Array.isArray(data.bars) ? data.bars : [],
+      markers: Array.isArray(data.markers) ? data.markers : [],
+    };
+  } catch {
+    return null;
   }
 }
 

@@ -8,6 +8,7 @@ metric. The headline feature subset is read straight from the snapshot's primary
 
 from __future__ import annotations
 
+from .engine.history import HistoryBuffer, OhlcBar, TapeMarker
 from .engine.snapshot import EngineSnapshot, TradeRow
 
 # The features the cockpit shows as headline readouts (and J-01 requires); a subset of the
@@ -85,6 +86,38 @@ def serialize_summary(snap: EngineSnapshot) -> dict:
         "primary_window": snap.primary_window,
         "headline_features": _headline_features(snap),
         "observations": list(snap.observations),
+    }
+
+
+def _ohlc_bar(bar: OhlcBar) -> dict:
+    return {
+        "time": bar.start,
+        "open": bar.open,
+        "high": bar.high,
+        "low": bar.low,
+        "close": bar.close,
+    }
+
+
+def _tape_marker(marker: TapeMarker) -> dict:
+    return {
+        "time": marker.timestamp,
+        "state": marker.state,
+        "confidence": marker.confidence,
+    }
+
+
+def serialize_history(history: HistoryBuffer, bar: int) -> dict:
+    """Price history for the chart (`GET /tape/{ticker}/history?bar=`): OHLC bars + markers.
+
+    A pure projection of the engine's history buffer for the requested (already-validated) bar
+    size — it reads candles/markers the engine computed once and recomputes nothing (one focused
+    chart, computed once). An empty buffer yields empty lists (HTTP 200) — never invented candles.
+    """
+    return {
+        "bar": bar,
+        "bars": [_ohlc_bar(b) for b in history.bars(bar)],
+        "markers": [_tape_marker(m) for m in history.markers()],
     }
 
 
