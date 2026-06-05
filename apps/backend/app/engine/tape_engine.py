@@ -35,6 +35,11 @@ class TapeEngine:
 
         self._trade_count = 0
         self._last_ts = 0.0
+        # Carried state for the aggressor tick-test fallback: the last NON-ZERO tick direction
+        # (uptick=BUY / downtick=SELL between consecutive trades). Seeded empty so a fresh watch
+        # (or a re-watch after Stop) starts with no direction to carry — the very first zero-tick-
+        # before-any-direction print is then honestly UNKNOWN (determinism anti-goal).
+        self._last_tick_dir: Side | None = None
         self._recent_trades: deque[TradeRow] = deque(maxlen=config.recent_trades_limit)
         self._event_log: deque[str] = deque(maxlen=config.event_log_limit)
         self._stream_status = "connecting"
@@ -55,10 +60,26 @@ class TapeEngine:
                 event.timestamp, self._market.bid, self._market.ask, self._market.spread
             )
         elif isinstance(event, TradeEvent):
-            # The quote already in MarketState is the one in effect at this trade's ts,
-            # because events arrive in logical-timestamp order (quote before trade).
-            side = classify_aggressor(event, self._market.quote)
+            # The quote already in MarketState is the one in effect at this trade's ts, and
+            # MarketState.last is still the PRIOR trade price — both because events arrive in
+            # logical-timestamp order (quote before trade) and we classify BEFORE recording this
+            # trade. This ordering is load-bearing for the tick-test fallback; do not reorder.
+            prior_trade_price = self._market.last
+            side = classify_aggressor(
+                event, self._market.quote, prior_trade_price, self._last_tick_dir
+            )
+            # Update the carried last non-zero tick direction from this trade's price move
+            # (a pure function of the consecutive trade prices, independent of how `side` was
+            # decided), so a later zero-tick can carry it.
+            if prior_trade_price is not None:
+                if event.price > prior_trade_price:
+                    self._last_tick_dir = Side.BUY
+                elif event.price < prior_trade_price:
+                    self._last_tick_dir = Side.SELL
             self._market.update_trade(event)
+            # Single source of truth: this one `side` value feeds BOTH the displayed recent-trades
+            # row and the FeatureEngine (aggressive ratios / net aggressive volume) — never
+            # recomputed downstream.
             self._features.add_trade(event.timestamp, event.price, event.size, side)
             self._trade_count += 1
             self._recent_trades.appendleft(

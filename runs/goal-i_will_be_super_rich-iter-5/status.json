@@ -1,0 +1,49 @@
+{
+  "phase": "goal-i_will_be_super_rich-iter-5",
+  "session_id": "i_will_be_super_rich",
+  "iteration": 5,
+  "mode": "next",
+  "depth": "full",
+  "current_step": "closure_passed",
+  "dev_mode": "initial-build",
+  "code_changed": true,
+  "apps_diff_empty": false,
+  "target_journeys": [
+    "J-16"
+  ],
+  "backend_tests": {
+    "command": "cd apps/backend && .venv/bin/python -m pytest tests/ -v",
+    "passed": 141,
+    "skipped": 1,
+    "failed": 0,
+    "baseline_passed": 128,
+    "test_count_strictly_increased": true
+  },
+  "j16_fidelity": {
+    "fixture": "apps/backend/tests/fixtures/alpaca/F_20260602_150000_20260602_150200.json",
+    "quote_only_unknown_fraction": 0.2,
+    "two_stage_unknown_fraction": 0.0,
+    "strictly_lower_than_quote_only": true,
+    "proven_in_loop_offline": true
+  },
+  "handoff": "docs/handoffs/goal-i_will_be_super_rich-iter-5-dev.md",
+  "implementation_summary": "reports/phase-goal-i_will_be_super_rich-iter-5-implementation-summary.md",
+  "notes": "REAL build (J-16): two-stage aggressor classification \u2014 quote rule (precedence) + Lee-Ready tick-test fallback. Overwrites the prior stale verify-only status. Backend-only; no frontend change (recent-trades already renders side). Single source of truth preserved (one side value feeds both the displayed row and FeatureEngine). Deterministic pure classifier; no magic numbers; provider-agnostic. Sim scenarios re-verified green. J-17-J-20 remain out of scope for later slices.",
+  "changed_files": [
+    "apps/backend/app/engine/aggressor.py",
+    "apps/backend/app/engine/tape_engine.py",
+    "apps/backend/tests/test_aggressor.py",
+    "apps/backend/tests/test_historical_provider.py",
+    "docs/handoffs/goal-i_will_be_super_rich-iter-5-dev.md",
+    "reports/phase-goal-i_will_be_super_rich-iter-5-implementation-summary.md",
+    "runs/goal-i_will_be_super_rich-iter-5/status.json"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "updated_at": "2026-06-05T00:58:44.696645Z",
+  "status": "complete",
+  "started_at": "2026-06-05T00:33:35.228522Z",
+  "cli": "claude",
+  "blockers": [],
+  "next_action": "phase_audit"
+}

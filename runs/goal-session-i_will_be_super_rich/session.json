@@ -1,22 +1,23 @@
 {
   "session_id": "i_will_be_super_rich",
   "started_at": "2026-06-03T23:45:10.576325Z",
-  "current_iter": 5,
+  "current_iter": 6,
   "cli": "claude",
   "halt_config": {
     "max_iterations": 30,
     "stall_window": 3,
     "regression_halt": true
   },
-  "status": "GOAL_ACHIEVED",
-  "last_verdict": "GOAL_ACHIEVED",
-  "next_depth": "lean",
+  "status": "in_progress",
+  "last_verdict": "CONTINUE",
+  "next_depth": "full",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/i_will_be_super_rich",
-  "updated_at": "2026-06-04T15:58:24.794423Z",
-  "finished_at": "2026-06-04T16:01:11.903851Z",
+  "updated_at": "2026-06-05T01:20:15.565075Z",
+  "finished_at": "2026-06-05T00:07:53.561035Z",
   "total_iterations": 5,
-  "wall_time_seconds": 27544,
-  "quota_pause_count": 0
+  "wall_time_seconds": 2519,
+  "quota_pause_count": 0,
+  "agent_backend": "interactive"
 }

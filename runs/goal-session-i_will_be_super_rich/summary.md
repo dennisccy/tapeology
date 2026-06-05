@@ -1,18 +1,18 @@
 # Goal Session Summary — i_will_be_super_rich
 
-**Final verdict:** GOAL_ACHIEVED
+**Final verdict:** ABORTED
 **Total iterations:** 5
-**Wall time (seconds):** 27544
+**Wall time (seconds):** 2519
 **Quota pauses:** 0
 **Started:** 2026-06-03T23:45:10.576325Z
-**Finished:** 2026-06-04T16:01:11.903851Z
+**Finished:** 2026-06-05T00:07:53.561035Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/i_will_be_super_rich`. Open a PR with:
 
     gh pr create --base main --head goal/i_will_be_super_rich \
-      --title "feat: i_will_be_super_rich — GOAL_ACHIEVED" \
+      --title "feat: i_will_be_super_rich — ABORTED" \
       --body-file runs/goal-session-i_will_be_super_rich/summary.md
 
 ## Final journey state
