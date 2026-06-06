@@ -7,7 +7,7 @@ import type { DataSourceMode, FailureReason, WatchParams } from "@/lib/types";
 import { TopBar } from "@/components/TopBar";
 import { Cockpit } from "@/components/Cockpit";
 import { PriceChart } from "@/components/PriceChart";
-import { IdleState } from "@/components/IdleState";
+import { IdleState, ConnectingState, StreamFailedState } from "@/components/IdleState";
 import { ProviderUnavailable } from "@/components/ProviderUnavailable";
 
 // Real-data failures that get their own distinct honest non-cockpit panel (row 9). Any other
@@ -28,6 +28,11 @@ export default function Page() {
   const [ticker, setTicker] = useState<string | null>(null);
   const [mode, setMode] = useState<DataSourceMode>("sim");
   const [error, setError] = useState<string | null>(null);
+  // Pending/connecting acknowledgement (J-21): set SYNCHRONOUSLY the instant Watch is clicked —
+  // before the teardown/watch round-trip — so the cockpit immediately leaves idle and shows
+  // "Connecting to <SYMBOL>…". Cleared/replaced when the watch resolves (cockpit / honest panel /
+  // error). It carries the symbol so the acknowledgement is distinct per click, in every mode.
+  const [pending, setPending] = useState<string | null>(null);
   // When a real-mode Watch is honestly refused, show the distinct non-cockpit panel for that
   // reason in place of the cockpit — never a fabricated cockpit, never a fall-back to Simulated.
   const [failure, setFailure] = useState<{
@@ -35,7 +40,7 @@ export default function Page() {
     mode: DataSourceMode;
     nextOpen?: string;
   } | null>(null);
-  const { snapshot, connStatus } = useTapeStream(ticker);
+  const { snapshot, connStatus, connError } = useTapeStream(ticker);
 
   // Lifecycle hardening (iter-0 lesson): tear down any active watch (backend DELETE + close the
   // WS) BEFORE starting a new one, so a source/symbol switch never leaves an orphaned backend
@@ -49,18 +54,31 @@ export default function Page() {
 
   async function handleWatch(rawSymbol: string, params: WatchParams) {
     const candidate = rawSymbol.trim().toUpperCase();
-    if (!candidate) return;
+    // J-24 client-side backstop: an empty/whitespace symbol is an immediate inline validation,
+    // never a silent no-op. (TopBar also disables Watch + shows the inline message; this guards
+    // the handler too.) The historical missing/invalid-window case is validated in TopBar before
+    // it ever calls onWatch, and the backend 422 remains the server-side backstop.
+    if (!candidate) {
+      setError("Enter a ticker symbol to watch.");
+      return;
+    }
     setError(null);
     setFailure(null);
+    // J-21: acknowledge the click NOW — synchronously, before the awaited teardown/watch round-
+    // trip — so the idle screen never lingers after a valid Watch click in any mode.
+    setPending(candidate);
     await teardownActiveWatch();
 
     const result = await watchTicker(candidate, params);
+    setPending(null);
     if (result.ok) {
       setTicker(candidate);
     } else if (isHonestReason(result.reason)) {
       setTicker(null);
       setFailure({ reason: result.reason, mode: params.mode, nextOpen: result.nextOpen });
     } else {
+      // Everything else — a client-side timeout (`provider_timeout`), an unreachable backend, or
+      // a bad sim ticker — resolves to the explicit error banner (never a frozen spinner).
       setTicker(null);
       setError(result.error ?? "Could not watch ticker");
     }
@@ -73,6 +91,7 @@ export default function Page() {
     await teardownActiveWatch();
     setError(null);
     setFailure(null);
+    setPending(null);
     setMode(next);
   }
 
@@ -83,6 +102,7 @@ export default function Page() {
     // which closes the WS client-side (it must not depend on the server closing the socket).
     await stopTicker(ticker);
     setTicker(null);
+    setPending(null);
     setError(null);
   }
 
@@ -107,27 +127,42 @@ export default function Page() {
     if (!result.ok) setError(result.error ?? "Could not resume watch");
   }
 
+  // A connect failure surfaced by the stream hook (J-23): the initial snapshot fetch or the WS
+  // failed before any frame arrived. Surface it via the error banner (and a failure cockpit
+  // treatment) within a bounded time — never a frozen "Connecting…".
+  const streamFailed = !!ticker && connStatus === "failed";
+  // The dot/status while the pending acknowledgement is showing reads "connecting" (J-21); once a
+  // real watch is mounted the hook's connStatus drives it.
+  const effectiveConnStatus = pending && !ticker ? "connecting" : connStatus;
+  const bannerError = error ?? (streamFailed ? connError : null);
+
   return (
     <div className="min-h-screen">
       <TopBar
-        watched={ticker}
+        watched={ticker ?? pending}
         snapshot={snapshot}
-        connStatus={connStatus}
+        connStatus={effectiveConnStatus}
         mode={mode}
         onModeChange={handleModeChange}
         onWatch={handleWatch}
         onStop={handleStop}
         onPause={handlePause}
         onResume={handleResume}
-        error={error}
+        error={bannerError}
       />
       <main className="mx-auto max-w-7xl px-4 py-6">
         {/* Tape-state prediction chart — above the cockpit, for Simulated + Historical only
             (hidden for Live, per the blueprint IA). Reads GET …/history verbatim. */}
-        {ticker && (mode === "sim" || mode === "historical") && (
+        {ticker && !streamFailed && (mode === "sim" || mode === "historical") && (
           <PriceChart ticker={ticker} />
         )}
-        {ticker ? (
+        {pending && !ticker ? (
+          // J-21: pending acknowledgement — shown the instant Watch is clicked, before any data.
+          <ConnectingState symbol={pending} />
+        ) : streamFailed ? (
+          // J-23: an explicit, distinct connect-failure state (no frozen spinner, no fabrication).
+          <StreamFailedState message={connError ?? undefined} />
+        ) : ticker ? (
           <Cockpit snapshot={snapshot} />
         ) : failure ? (
           <ProviderUnavailable

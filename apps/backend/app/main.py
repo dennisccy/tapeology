@@ -182,8 +182,18 @@ async def _watch_live(ticker: str, adapter: MarketDataAdapter) -> dict:
     """
     if not adapter.is_available():
         raise RealDataError("provider_unavailable", "real-data provider unavailable", 503)
+    # Read the clock under an explicit per-call timeout (no-unbounded-waits anti-goal): a hung
+    # market-clock call can NOT block the Watch request indefinitely. A TIMEOUT is an explicit
+    # `provider_timeout` refusal (distinct, NO engine) — not the degraded-but-reachable path. A
+    # degraded/unreachable (non-timeout) clock stays INDETERMINATE (`clock = None`) and the watch
+    # proceeds, since reporting "closed" off an unknown clock would fabricate a session.
     try:
-        clock = await asyncio.to_thread(adapter.get_market_clock)
+        clock = await asyncio.wait_for(
+            asyncio.to_thread(adapter.get_market_clock),
+            timeout=CONFIG.vendor_call_timeout_seconds,
+        )
+    except asyncio.TimeoutError:
+        raise RealDataError("provider_timeout", "market data provider timed out", 504)
     except Exception:
         clock = None
     if clock is not None and clock.is_open is False:
@@ -225,9 +235,19 @@ async def _watch_historical(
         allowed = ", ".join(str(s) for s in CONFIG.allowed_replay_speeds)
         raise HTTPException(status_code=422, detail=f"speed must be one of: {allowed}")
 
-    # 2. Fetch the real window OFF the event loop. Map neutral failures -> distinct 4xx, no engine.
+    # 2. Fetch the real window OFF the event loop, under an explicit per-call timeout
+    #    (no-unbounded-waits anti-goal): a hung/slow vendor can NOT block the Watch request
+    #    indefinitely. On timeout, refuse with an explicit `provider_timeout` and create NO
+    #    engine (no fabricated tape). Map neutral failures -> distinct 4xx, no engine.
     try:
-        window = await asyncio.to_thread(adapter.fetch_historical, ticker, start, end)
+        window = await asyncio.wait_for(
+            asyncio.to_thread(adapter.fetch_historical, ticker, start, end),
+            timeout=CONFIG.vendor_call_timeout_seconds,
+        )
+    except asyncio.TimeoutError:
+        raise RealDataError(
+            "provider_timeout", "market data provider timed out", 504
+        )
     except SymbolNotTradable:
         raise RealDataError("symbol_not_tradable", "not a tradable symbol", 404)
     except NoDataForWindow:

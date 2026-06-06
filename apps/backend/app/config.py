@@ -128,6 +128,16 @@ class Config:
     # `reason` ("market_closed"), not this code, so 503 would be an acceptable alternative.
     market_closed_status_code: int = 409
 
+    # --- Per-call vendor timeout (J-22 / no-unbounded-waits anti-goal) ----------------
+    # The hard wall-clock bound for a SINGLE outbound vendor request that gates a Watch
+    # (the historical-window fetch in `_watch_historical` and the market-clock pre-flight in
+    # `_watch_live`). Each such `asyncio.to_thread(...)` call runs under
+    # `asyncio.wait_for(..., timeout=vendor_call_timeout_seconds)`; on expiry the Watch is
+    # refused with an explicit `provider_timeout` error and NO engine is created (no tape is
+    # fabricated). This is a PRE-connection per-request bound and is DISTINCT from
+    # `stale_gap_seconds` (a mid-stream delivery-gap watchdog) — the two MUST NOT be conflated.
+    vendor_call_timeout_seconds: float = 8.0
+
     # --- Live streaming stale watchdog (J-12 / J-15) ----------------------------------
     # The live feeder flips the row-6 `stream_status` to `stale` when NO live event arrives
     # within this many wall-clock seconds (and back to `live` on the next event), fabricating

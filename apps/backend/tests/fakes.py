@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -116,6 +117,8 @@ class FakeAdapter:
         search_raises: bool = False,
         clock: MarketClock | None = None,
         clock_raises: bool = False,
+        fetch_hang_seconds: float = 0.0,
+        clock_hang_seconds: float = 0.0,
         live_records: list[LiveRecord] | None = None,
         live_hold: asyncio.Event | None = None,
     ) -> None:
@@ -127,6 +130,11 @@ class FakeAdapter:
         self._search_raises = search_raises
         self._clock = clock
         self._clock_raises = clock_raises
+        # A slow/hung vendor: block the worker thread this many wall-clock seconds before
+        # returning, so the per-call `asyncio.wait_for` bound (set tiny in the test) fires first
+        # and the Watch is refused with `provider_timeout` — proving the no-unbounded-waits bound.
+        self._fetch_hang_seconds = fetch_hang_seconds
+        self._clock_hang_seconds = clock_hang_seconds
         self._live_records = live_records or []
         self._live_hold = live_hold
         self.fetch_calls: list[tuple] = []
@@ -156,6 +164,8 @@ class FakeAdapter:
         # ``clock_raises`` models a degraded/unreachable vendor (the API must degrade to an
         # explicit unavailable, never fabricate a session); otherwise return the configured clock.
         self.clock_calls += 1
+        if self._clock_hang_seconds:
+            time.sleep(self._clock_hang_seconds)  # block the worker thread (simulated hung vendor)
         if self._clock_raises:
             raise RuntimeError("simulated market-clock failure")
         assert self._clock is not None, "FakeAdapter needs a clock for get_market_clock"
@@ -163,6 +173,8 @@ class FakeAdapter:
 
     def fetch_historical(self, symbol: str, start, end) -> HistoricalWindow:
         self.fetch_calls.append((symbol, start, end))
+        if self._fetch_hang_seconds:
+            time.sleep(self._fetch_hang_seconds)  # block the worker thread (simulated hung vendor)
         if self._not_tradable:
             raise SymbolNotTradable(symbol)
         if self._no_data:

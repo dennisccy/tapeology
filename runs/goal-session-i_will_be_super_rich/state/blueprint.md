@@ -10,6 +10,15 @@
 > **iter-5 extension is ADDITIVE** — same single `/` HOME, same nav skeleton, same one-engine source of truth. New
 > rows 10–12 register the new displayed values; row 4 is clarified (not changed) to name the tick-test fallback inside
 > its existing owner. No top-level nav section added/renamed/moved ⇒ **no re-approval requested**.
+>
+> **iter-9 extension is ADDITIVE (no-silent-dead-clicks, J-21–J-24).** Same single `/` HOME, same nav skeleton, same
+> one-engine source of truth. No new displayed engine value: every Watch click is guaranteed an immediate, bounded,
+> honest UI response (pending/connecting → streaming | honest non-cockpit | explicit error | inline validation). Row 6
+> and row 9 are clarified additively — the already-registered `connecting` status becomes a first-class pre-snapshot
+> affordance, and a new `provider_timeout` failure reason is a sibling of the existing row-9 reasons on the SAME
+> `POST /watch` failure path. A per-call `vendor_call_timeout_seconds` (backend config) and a `WATCH_REQUEST_TIMEOUT_MS`
+> (frontend config) bound every outbound vendor call and the client request — config constants, not displayed values.
+> No top-level nav section added/renamed/moved ⇒ **no re-approval requested**.
 
 **Governing principle.** Tapeology is a single-ticker **tape cockpit**. Every tape state, confidence, and feature is
 computed **exactly once in the engine** and read identically by REST, WebSocket, and the UI (anti-goal: *Single source
@@ -86,7 +95,7 @@ rows 10–12 are the **analysis-fidelity additions**: rows 10 (J-17 chart **rend
 | 6 | **Watched-source descriptor + watch/stream status** (sim scenario \| `live <SYM>` \| `historical <SYM> <window>`; status connecting/live/**stale**/**paused**/closed) | `WatchManager` (records mode + params at watch) / engine feeder (owns `stream_status`) | `GET /tape/{ticker}/summary` (+ `POST`/`DELETE /watch` responses) | `WS /stream` |
 | 7 | **Symbol search results** (symbol + name) | **Vendor-agnostic adapter** (Alpaca first) behind the provider seam | `GET /symbols/search?q=` | — |
 | 8 | **Market clock** (open/closed + next open/close) | **Vendor-agnostic adapter** / market-clock module | `GET /market/clock` | Live market-status indicator reads this |
-| 9 | **Real-data availability / failure state** (`provider unavailable` \| `not a tradable symbol` \| `no data for that window` \| `market is closed`) | Live / Historical provider + adapter (credential check + vendor responses) | Explicit error from `POST /watch/{ticker}` (mid-stream feed-gap ⇒ `stream_status="stale"` on the row-6 snapshot) | UI renders the matching non-cockpit state |
+| 9 | **Real-data availability / failure state** (`provider unavailable` \| `not a tradable symbol` \| `no data for that window` \| `market is closed` \| **`provider_timeout`** — a bounded vendor/clock/fetch call that exceeded `vendor_call_timeout_seconds`) | Live / Historical provider + adapter (credential check + vendor responses); the watch endpoint wraps each outbound vendor `to_thread` call in `asyncio.wait_for(..., vendor_call_timeout_seconds)` so a hung vendor yields `provider_timeout`, **never** an unbounded wait and **never** a fabricated tape (J-22 backend half) | Explicit error from `POST /watch/{ticker}` (mid-stream feed-gap ⇒ `stream_status="stale"` on the row-6 snapshot; same single failure path — `provider_timeout` is a sibling reason, not a new endpoint) | UI renders the matching non-cockpit state / error banner |
 | 10 | **Price history: OHLC bars (per 10/30/60 s) + tape-state-transition markers** (state + confidence + ts) | **Engine history buffer** (accumulates watched price → config-binned OHLC + meaningful-transition markers; computed once with the snapshot) | `GET /tape/{ticker}/history?bar=<10\|30\|60>` (pure projection; sim + historical only) | Chart reads this — never recomputes price/side/state |
 | 11 | **Paused state** (boolean) | **Engine/feeder** (owns paused; pause freezes the feeder without teardown — no fabricated backfill) → snapshot | `GET /tape/{ticker}/summary` (set via `POST /watch/{ticker}/pause` · `POST /watch/{ticker}/resume`) | `WS /stream`; UI renders PAUSED + toggles the control |
 | 12 | **Resolved historical window** (tz-aware start/end instants for the user's selected **local** window; explicit **local zone label** + **US-session quick-picks** Open 9:30 ET / Close 16:00 ET / Full RTH, each annotated with its local equivalent) | **Frontend datetime module** (`apps/frontend/lib/datetime.ts` — the resolution fn resolves the local selection AND the ET session anchors via the IANA `America/New_York` zone, DST-correct, → exact tz-aware UTC instants **once, before** the fetch; the 9:30/16:00 ET anchors are named preset constants, not engine thresholds) → request body | `POST /watch/{ticker}` body `{mode:"historical",start,end,speed}` (timezone-aware instants; backend `_parse_window_dt` honors the offset verbatim) | Historical provider fetches exactly the resolved window (no second tz conversion, no silent UTC shift) — **built at iter-8** |
@@ -109,9 +118,12 @@ rows 10–12 are the **analysis-fidelity additions**: rows 10 (J-17 chart **rend
   catch-up data on resume.
 
 **Config (no magic numbers).** All window lengths, thresholds, large-print size, impact/absorption cutoffs, confidence
-boundaries, the stale-gap timeout, **the OHLC bar sizes / marker-significance thresholds, and any tick-test tie/tolerance**
+boundaries, the stale-gap timeout, the **per-call `vendor_call_timeout_seconds`** (the bound on a single outbound
+vendor/clock/fetch call that gates a Watch — distinct from the mid-stream `stale_gap_seconds` delivery watchdog),
+**the OHLC bar sizes / marker-significance thresholds, and any tick-test tie/tolerance**
 live in one config module — never inline literals in engine/classifier code. (The tick test itself is a pure rule with
-no numeric cutoff; if any tolerance is introduced it MUST live in config.)
+no numeric cutoff; if any tolerance is introduced it MUST live in config.) The frontend's matching client-side request
+backstop (`WATCH_REQUEST_TIMEOUT_MS`) likewise lives in one `lib/config.ts` constant — no inline millisecond literal.
 
 **Credentials.** Real-vendor keys come **only** from environment/config (never committed). With no keys, the app runs
 simulator-only and the real modes report **row-9** `provider unavailable` — they never fall back to fabricated data.
@@ -128,6 +140,13 @@ simulator-only and the real modes report **row-9** `provider unavailable` — th
   before the fetch (no second tz conversion, no silent UTC reinterpretation).
 - On a feed gap / provider failure the snapshot surfaces explicit **stale / no-data / unavailable** — nothing is
   fabricated to force a green journey (anti-goal: *No fabricated data*). An empty historical window ⇒ **empty** chart.
+- **No silent dead-clicks (J-21–J-24).** Every Watch click resolves to exactly one visible state within a bounded
+  time: a pre-snapshot **connecting** affordance (row-6 status, shown synchronously before the round-trip), then
+  streaming data | an honest non-cockpit panel (row 9) | an explicit error (incl. **`provider_timeout`** from the
+  bounded vendor call, and a client-side `WATCH_REQUEST_TIMEOUT_MS` backstop on a hung backend) | an inline
+  validation message (empty symbol / invalid window). No empty `catch`, no dropped promise, no unbounded external
+  wait. These are presentation states only — they add **no** client-side recomputation of an engine value (rows 1–6
+  stay single-source-of-truth); the timeout values are config constants, not displayed values.
 
 **Note on module names.** `TapeStateClassifier`, `FeatureEngine`, `MarketState`, the aggressor classifier,
 `WatchManager`, the config module, the **vendor-agnostic adapter** + the live/historical providers, and (new) the

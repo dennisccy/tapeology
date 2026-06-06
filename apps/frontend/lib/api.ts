@@ -1,4 +1,4 @@
-import { API_BASE } from "./config";
+import { API_BASE, WATCH_REQUEST_TIMEOUT_MS } from "./config";
 import type {
   MarketClock,
   SymbolMatch,
@@ -6,6 +6,43 @@ import type {
   TapeSnapshot,
   WatchParams,
 } from "./types";
+
+// Client-side request-timeout backstop (J-22 / no-unbounded-waits anti-goal). Wrap a fetch in an
+// AbortController that aborts after WATCH_REQUEST_TIMEOUT_MS (the single config constant — no
+// inline millisecond literal), so a slow/hung backend never leaves the Watch flow hanging forever.
+// An aborted request throws (a DOMException with name "AbortError"); callers map that to an
+// explicit, distinct error result so the connecting state resolves to a visible timeout error.
+// `isTimeoutError` lets callers distinguish a timeout from a plain network failure.
+export class RequestTimeoutError extends Error {
+  constructor(message = "Request timed out") {
+    super(message);
+    this.name = "RequestTimeoutError";
+  }
+}
+
+export function isTimeoutError(err: unknown): boolean {
+  return (
+    err instanceof RequestTimeoutError ||
+    (err instanceof DOMException && err.name === "AbortError") ||
+    (typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError")
+  );
+}
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit = {},
+  timeoutMs: number = WATCH_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    // Always clear the timer — on success, network error, OR abort — so no dangling timeout
+    // leaks and a swallowed rejection can never hide here (the rejection still propagates).
+    clearTimeout(timer);
+  }
+}
 
 export interface WatchResult {
   ok: boolean;
@@ -40,7 +77,7 @@ export async function watchTicker(
       init.headers = { "Content-Type": "application/json" };
       init.body = JSON.stringify(params);
     }
-    const res = await fetch(`${API_BASE}/watch/${encodeURIComponent(ticker)}`, init);
+    const res = await fetchWithTimeout(`${API_BASE}/watch/${encodeURIComponent(ticker)}`, init);
     if (res.ok) {
       const data = await res.json();
       return { ok: true, scenario: data.scenario };
@@ -57,7 +94,17 @@ export async function watchTicker(
       /* keep default */
     }
     return { ok: false, error, reason, nextOpen };
-  } catch {
+  } catch (err) {
+    // A client-side timeout (the AbortController fired) is a distinct, explicit error so the
+    // connecting state resolves to a visible "timed out" message rather than hanging forever
+    // (J-22 frontend half). Any other throw is an unreachable/failed backend.
+    if (isTimeoutError(err)) {
+      return {
+        ok: false,
+        error: "Market data provider timed out — please try again.",
+        reason: "provider_timeout",
+      };
+    }
     return { ok: false, error: "Backend unreachable — is the API running?" };
   }
 }
@@ -192,37 +239,51 @@ export async function stopTicker(ticker: string): Promise<StopResult> {
 
 // Initial paint via REST: assemble one snapshot from the canonical reads. These return the
 // same engine snapshot values the WS stream pushes, so the UI shows one value per metric.
+//
+// Outcomes (J-23 — a failed initial connection must NOT be swallowed):
+//   * Resolves to a TapeSnapshot when all three canonical reads succeed.
+//   * Resolves to `null` when a read came back not-ok (e.g. 404 not-yet-watched / not-warmed) —
+//     a clean "no snapshot yet", not a failure; the WS will paint the first frame instead.
+//   * THROWS on a hard transport failure (backend unreachable / client-side timeout) so the
+//     caller can SURFACE an explicit connect-failure rather than silently dropping it. The throw
+//     re-uses RequestTimeoutError for an abort so the caller can label a timeout distinctly.
 export async function fetchInitialSnapshot(
   ticker: string,
 ): Promise<TapeSnapshot | null> {
   const t = encodeURIComponent(ticker);
+  let summaryRes: Response, featuresRes: Response, eventsRes: Response;
   try {
-    const [summaryRes, featuresRes, eventsRes] = await Promise.all([
-      fetch(`${API_BASE}/tape/${t}/summary`),
-      fetch(`${API_BASE}/tape/${t}/features`),
-      fetch(`${API_BASE}/tape/${t}/events`),
+    [summaryRes, featuresRes, eventsRes] = await Promise.all([
+      fetchWithTimeout(`${API_BASE}/tape/${t}/summary`),
+      fetchWithTimeout(`${API_BASE}/tape/${t}/features`),
+      fetchWithTimeout(`${API_BASE}/tape/${t}/events`),
     ]);
-    if (!summaryRes.ok || !featuresRes.ok || !eventsRes.ok) return null;
-    const summary = await summaryRes.json();
-    const features = await featuresRes.json();
-    const events = await eventsRes.json();
-    return {
-      ticker: summary.ticker,
-      scenario: summary.scenario,
-      stream_status: summary.stream_status,
-      paused: summary.paused ?? false,
-      timestamp: summary.timestamp,
-      market: summary.market,
-      tape_state: summary.tape_state,
-      confidence: summary.confidence,
-      primary_window: summary.primary_window ?? features.primary_window,
-      features: features.windows,
-      headline_features: summary.headline_features,
-      observations: summary.observations ?? events.observations ?? [],
-      event_log: events.event_log ?? [],
-      recent_trades: events.recent_trades ?? [],
-    };
-  } catch {
-    return null;
+  } catch (err) {
+    // Do NOT swallow: a transport failure/timeout is rethrown (as a RequestTimeoutError for an
+    // abort) so useTapeStream can record an explicit connect-failure status.
+    if (isTimeoutError(err)) throw new RequestTimeoutError("Tape stream request timed out");
+    throw err;
   }
+  // A not-ok response is a clean "no snapshot yet" (e.g. just-watched, not warmed) — return null
+  // and let the WS paint the first frame; this is NOT a hard failure.
+  if (!summaryRes.ok || !featuresRes.ok || !eventsRes.ok) return null;
+  const summary = await summaryRes.json();
+  const features = await featuresRes.json();
+  const events = await eventsRes.json();
+  return {
+    ticker: summary.ticker,
+    scenario: summary.scenario,
+    stream_status: summary.stream_status,
+    paused: summary.paused ?? false,
+    timestamp: summary.timestamp,
+    market: summary.market,
+    tape_state: summary.tape_state,
+    confidence: summary.confidence,
+    primary_window: summary.primary_window ?? features.primary_window,
+    features: features.windows,
+    headline_features: summary.headline_features,
+    observations: summary.observations ?? events.observations ?? [],
+    event_log: events.event_log ?? [],
+    recent_trades: events.recent_trades ?? [],
+  };
 }

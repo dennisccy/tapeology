@@ -23,6 +23,9 @@ const CONN_DOT: Record<ConnStatus, DotSpec> = {
   connecting: { color: "bg-amber-400 animate-pulse", label: "connecting" },
   live: { color: "bg-emerald-400", label: "live" },
   closed: { color: "bg-rose-500", label: "closed" },
+  // J-23: an explicit surfaced connect-failure (initial snapshot / pre-snapshot WS failed) — rose,
+  // distinct from a normal "closed", so the dot never sits on a frozen "connecting".
+  failed: { color: "bg-rose-500", label: "failed" },
 };
 
 // The canonical engine stream status (single source of truth). Once a snapshot is present the
@@ -99,24 +102,37 @@ export function TopBar({
   // against the single date input would silently shift. Any manual edit to date/start/end clears
   // it, handing control back to the per-field local resolver (manual entry still fully works).
   const [presetWindow, setPresetWindow] = useState<{ start: string; end: string } | null>(null);
+  // Inline validation message (J-24): set on a Watch attempt with invalid input, so an empty
+  // symbol or a missing/invalid historical window gives immediate feedback and is NEVER a silent
+  // no-op. Cleared as soon as the offending input is corrected (the field onChange handlers).
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // The operator's local zone label, shown on the Historical picker so they see which zone their
   // entry is interpreted in (satisfies "all market/session times shown carry an explicit zone
   // label"). Computed once per render from the runtime Intl zone — display only.
   const zoneLabel = localZoneLabel();
 
-  // Manual edits to any window field invalidate a prior quick-pick selection.
+  // Manual edits to any window field invalidate a prior quick-pick selection AND clear a stale
+  // validation message (J-24) so the inline feedback tracks the live input.
   function onDateChange(value: string) {
     setDate(value);
     setPresetWindow(null);
+    setValidationError(null);
   }
   function onStartTimeChange(value: string) {
     setStartTime(value);
     setPresetWindow(null);
+    setValidationError(null);
   }
   function onEndTimeChange(value: string) {
     setEndTime(value);
     setPresetWindow(null);
+    setValidationError(null);
+  }
+  // Symbol edits clear a stale validation message too (J-24).
+  function onSymbolChange(value: string) {
+    setSymbol(value);
+    setValidationError(null);
   }
 
   // Apply a US-session quick-pick: resolve the ET anchors for the chosen date to tz-aware UTC
@@ -149,23 +165,41 @@ export function TopBar({
   const pauseable =
     !!snapshot && ["connecting", "live", "stale"].includes(snapshot.stream_status);
 
+  // Resolve the Historical window once (preset verbatim, else the manual local fields). Returns
+  // null when the window is missing/invalid (end <= start) so both the disabled-Watch gate and the
+  // submit guard share one definition of "valid window" — no divergence.
+  function resolveHistoricalWindow(): { start: string; end: string } | null {
+    const start = presetWindow ? presetWindow.start : resolveLocalWindowInstant(date, startTime);
+    const end = presetWindow ? presetWindow.end : resolveLocalWindowInstant(date, endTime);
+    if (!start || !end) return null;
+    if (new Date(end).getTime() <= new Date(start).getTime()) return null;
+    return { start, end };
+  }
+
+  const symbolValid = symbol.trim().length > 0;
+  const windowValid = mode !== "historical" || resolveHistoricalWindow() !== null;
+  const watchDisabled = !symbolValid || !windowValid;
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // J-24: client-side inline validation BEFORE any round-trip — never a silent no-op. The
+    // backend 422 remains the server-side backstop.
+    if (!symbolValid) {
+      setValidationError("Enter a ticker symbol.");
+      return;
+    }
     if (mode === "historical") {
-      // Resolve the window to tz-aware UTC instants ONCE here, before the POST (Data Contract row
-      // 12). A quick-pick has already resolved (and is correct across a local-midnight span), so
-      // submit it verbatim; otherwise resolve the manually-entered LOCAL date+time fields. We send
-      // explicit `...Z` instants — never the old naive `${date}T${startTime}` the backend then
-      // treated as UTC (the iter-2 load-bearing bug). A half-filled field resolves to undefined,
-      // so the backend returns its honest 422 (no malformed window).
-      const start = presetWindow
-        ? presetWindow.start
-        : resolveLocalWindowInstant(date, startTime);
-      const end = presetWindow
-        ? presetWindow.end
-        : resolveLocalWindowInstant(date, endTime);
-      onWatch(symbol, { mode, start, end, speed });
+      const window = resolveHistoricalWindow();
+      if (!window) {
+        setValidationError("Choose a valid time window.");
+        return;
+      }
+      setValidationError(null);
+      // Send explicit `...Z` instants — never the old naive `${date}T${startTime}` the backend
+      // then treated as UTC (the iter-2 load-bearing bug). (Data Contract row 12.)
+      onWatch(symbol, { mode, start: window.start, end: window.end, speed });
     } else {
+      setValidationError(null);
       onWatch(symbol, { mode });
     }
   }
@@ -185,7 +219,7 @@ export function TopBar({
             <input
               aria-label={symbolLabel}
               value={symbol}
-              onChange={(e) => setSymbol(e.target.value)}
+              onChange={(e) => onSymbolChange(e.target.value)}
               placeholder={symbolPlaceholder}
               className={`w-48 ${INPUT_CLASS}`}
             />
@@ -193,8 +227,8 @@ export function TopBar({
             // Live / Historical: real symbol search (J-13). Free-text entry still works.
             <SymbolSearch
               value={symbol}
-              onChange={setSymbol}
-              onPick={setSymbol}
+              onChange={onSymbolChange}
+              onPick={onSymbolChange}
               placeholder={symbolPlaceholder}
               ariaLabel={symbolLabel}
               inputClassName={`w-48 ${INPUT_CLASS}`}
@@ -290,10 +324,34 @@ export function TopBar({
 
           <button
             type="submit"
-            className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-400 active:bg-emerald-700"
+            disabled={watchDisabled}
+            aria-disabled={watchDisabled}
+            title={
+              !symbolValid
+                ? "Enter a ticker symbol"
+                : !windowValid
+                  ? "Choose a valid time window"
+                  : "Watch this ticker"
+            }
+            className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-400 active:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:hover:bg-slate-700"
           >
             Watch
           </button>
+
+          {/* Inline validation feedback (J-24): an always-visible hint while the input is invalid
+              (so a Watch attempt is never a silent no-op), plus the explicit message set on a
+              submit attempt. Amber = needs-attention, consistent with the palette. */}
+          {(validationError || watchDisabled) && (
+            <span
+              role="status"
+              aria-live="polite"
+              data-testid="watch-validation"
+              className="font-mono text-xs text-amber-400"
+            >
+              {validationError ??
+                (!symbolValid ? "Enter a ticker symbol" : "Choose a valid time window")}
+            </span>
+          )}
         </form>
 
         {/* Live market-status indicator (row 8): the REAL session status from GET /market/clock,

@@ -40,7 +40,10 @@ export interface TapeSnapshot {
   recent_trades: TradeRow[];
 }
 
-export type ConnStatus = "idle" | "connecting" | "live" | "closed";
+// Client-side connection status for the pre-snapshot / no-snapshot window. "failed" (J-23) is the
+// surfaced connect-failure: the initial snapshot fetch threw (backend unreachable / client-side
+// timeout) AND/OR the WS errored/closed before any snapshot arrived — never silently swallowed.
+export type ConnStatus = "idle" | "connecting" | "live" | "closed" | "failed";
 
 // The watch data-source mode (wire values; the selector renders Live / Historical / Simulated).
 // "sim" is the default and preserves the existing backward-compatible no-body watch.

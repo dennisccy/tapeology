@@ -149,3 +149,22 @@
 {"agent":"goal-evaluator","ts":"2026-06-05T04:50:06Z","session_id":"i_will_be_super_rich","iter":8,"event":"agent_invocation_start","cli":"claude"}
 {"agent":"goal-evaluator","exit_status":0,"duration_seconds":1112,"retries":0,"ts":"2026-06-05T05:08:38Z","session_id":"i_will_be_super_rich","iter":8,"event":"agent_invocation_end","cli":"claude"}
 {"iter_name":"goal-i_will_be_super_rich-iter-8","verdict":"GOAL_ACHIEVED","next_depth":"lean","journey_deltas":{"newly_passing":12,"newly_failing":0,"regressed":0,"anti_goal_violations":0},"ts":"2026-06-05T05:14:34Z","session_id":"i_will_be_super_rich","iter":8,"event":"iter_end","cli":"claude"}
+{"branch":"goal/i_will_be_super_rich","commit_sha":"1fb09d8b5d4fd8c0f80ebae61be03cc8a9d3322c","success":true,"error":"","verdict":"GOAL_ACHIEVED","ts":"2026-06-05T05:14:43Z","session_id":"i_will_be_super_rich","iter":8,"event":"iter_push","cli":"claude"}
+{"final_verdict":"GOAL_ACHIEVED","total_iterations":9,"wall_time_seconds":17807,"quota_pause_count":0,"ts":"2026-06-05T05:16:55Z","session_id":"i_will_be_super_rich","iter":8,"event":"session_end","cli":"claude"}
+{"mode":"resume","max_iterations":30,"stall_window":3,"auto_release":false,"ts":"2026-06-06T01:05:28Z","session_id":"i_will_be_super_rich","iter":null,"event":"session_start","cli":"claude"}
+{"iter_name":"goal-i_will_be_super_rich-iter-9","prior_verdict":"GOAL_ACHIEVED","prior_depth":"lean","snapshot_sha":"ed65fbdf1a1d81e67d4656f05a3f26d3ea82685e","ts":"2026-06-06T01:05:29Z","session_id":"i_will_be_super_rich","iter":9,"event":"iter_start","cli":"claude"}
+{"agent":"goal-decomposer","ts":"2026-06-06T01:05:29Z","session_id":"i_will_be_super_rich","iter":9,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-decomposer","exit_status":70,"duration_seconds":0,"retries":0,"ts":"2026-06-06T01:05:29Z","session_id":"i_will_be_super_rich","iter":9,"event":"agent_invocation_end","cli":"claude"}
+{"reason":"DECOMPOSER_FAILED","detected_at_step":"decomposer","ts":"2026-06-06T01:05:29Z","session_id":"i_will_be_super_rich","iter":9,"event":"halt","cli":"claude"}
+{"final_verdict":"ABORTED","total_iterations":9,"wall_time_seconds":1,"quota_pause_count":0,"ts":"2026-06-06T01:05:29Z","session_id":"i_will_be_super_rich","iter":9,"event":"session_end","cli":"claude"}
+{"mode":"resume","max_iterations":30,"stall_window":3,"auto_release":false,"ts":"2026-06-06T01:06:45Z","session_id":"i_will_be_super_rich","iter":null,"event":"session_start","cli":"claude"}
+{"iter_name":"goal-i_will_be_super_rich-iter-9","prior_verdict":"GOAL_ACHIEVED","prior_depth":"lean","snapshot_sha":"e0bd8b38534069e6a7601f9fae1e3c1740e56f0b","ts":"2026-06-06T01:06:46Z","session_id":"i_will_be_super_rich","iter":9,"event":"iter_start","cli":"claude"}
+{"agent":"goal-decomposer","ts":"2026-06-06T01:06:46Z","session_id":"i_will_be_super_rich","iter":9,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-decomposer","exit_status":0,"duration_seconds":300,"retries":0,"ts":"2026-06-06T01:11:46Z","session_id":"i_will_be_super_rich","iter":9,"event":"agent_invocation_end","cli":"claude"}
+{"depth":"full","target_journeys":"J-21, J-22, J-23, J-24","ts":"2026-06-06T01:11:46Z","session_id":"i_will_be_super_rich","iter":9,"event":"iter_dispatch","cli":"claude"}
+{"agent":"coherence-auditor","ts":"2026-06-06T01:46:10Z","session_id":"i_will_be_super_rich","iter":9,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"coherence-auditor","exit_status":0,"duration_seconds":126,"retries":0,"ts":"2026-06-06T01:48:16Z","session_id":"i_will_be_super_rich","iter":9,"event":"agent_invocation_end","cli":"claude"}
+{"verdict":"COHERENCE-PASS","ts":"2026-06-06T01:48:16Z","session_id":"i_will_be_super_rich","iter":9,"event":"coherence_audit","cli":"claude"}
+{"agent":"goal-evaluator","ts":"2026-06-06T01:48:16Z","session_id":"i_will_be_super_rich","iter":9,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-evaluator","exit_status":0,"duration_seconds":801,"retries":0,"ts":"2026-06-06T02:01:37Z","session_id":"i_will_be_super_rich","iter":9,"event":"agent_invocation_end","cli":"claude"}
+{"iter_name":"goal-i_will_be_super_rich-iter-9","verdict":"GOAL_ACHIEVED","next_depth":"lean","journey_deltas":{"newly_passing":9,"newly_failing":0,"regressed":0,"anti_goal_violations":0},"ts":"2026-06-06T02:05:31Z","session_id":"i_will_be_super_rich","iter":9,"event":"iter_end","cli":"claude"}
