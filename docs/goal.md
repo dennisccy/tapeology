@@ -86,8 +86,10 @@ The first success metric is **not** profit. In priority order:
   simulated, live, or historical mode — the UI acknowledges the click with a pending/"connecting"
   state for that symbol, and every outcome (streaming data, empty window, provider unavailable,
   unknown symbol, market closed, request timeout, or unreachable backend) resolves to an explicit,
-  distinct on-screen state within a bounded time. The UI never silently ignores a Watch click and
-  never leaves "Connecting…" running forever.
+  distinct on-screen state within a bounded time. The UI never silently ignores a Watch click,
+  never returns to or remains on the idle screen after a valid click, never leaves "Connecting…"
+  running forever, and never shows a "live" cockpit that stays empty with no explanation — including
+  on real feeds and off-hours.
 - *(later)* **Predictive value, measured.** Beyond the visual chart read, an automated harness
   quantifies the directional edge of high-confidence tape states over the next 10 / 30 / 60 / 120
   seconds.
@@ -568,7 +570,9 @@ additions MUST NOT regress J-01 – J-15.
   - Acceptance: the UI surfaces an explicit "couldn't connect to the tape stream" error (reusing the
     existing error banner / failure panel) within a bounded time; the connecting state does not persist
     forever, and no error path is silently swallowed (no empty `catch`, no dropped promise rejection).
-    *(Browser-verifiable with the backend stopped after watch.)*
+    An empty cold-start snapshot does **not** by itself count as a successful connection: the
+    failure/empty-resolution path stays armed until either real activity streams or an explicit honest
+    empty-state is shown (see J-25/J-26). *(Browser-verifiable with the backend stopped after watch.)*
 
 - **J-24: Invalid or empty Watch input gives immediate inline feedback**
   - Steps:
@@ -577,6 +581,56 @@ additions MUST NOT regress J-01 – J-15.
   - Acceptance: the UI immediately shows a clear inline validation message (e.g. "Enter a ticker
     symbol" / "Choose a valid time window") or the Watch button is disabled until input is valid;
     clicking Watch never results in a silent no-op. *(No credentials; browser-verifiable.)*
+
+Journeys **J-25 – J-27** harden the Watch lifecycle *after* the click resolves, on **real feeds and
+off-hours** — the conditions sim-only verification never exercises. They MUST be verified beyond the
+simulated scenarios (real historical/live, quiet/illiquid symbols, closed-market) and MUST NOT regress
+J-01 – J-24.
+
+- **J-25: A valid Watch never silently returns to (or stays on) the idle screen — in real modes and off-hours**
+  - Steps:
+    1. In **Historical** mode, enter a real symbol (e.g. `AAPL`) + a valid past window and click **Watch**
+    2. In **Live** mode, enter a real symbol and click **Watch** — including **outside US market hours**
+       and on a **thin / illiquid** symbol
+    3. After the click, watch the screen through the first ~1s and until the watch resolves
+  - Acceptance: in every case the idle screen leaves within ~1s (an explicit pending/"connecting" state
+    labelled with the symbol) **and** the watch resolves to a **non-idle terminal state** — streaming
+    data, an explicit connecting/waiting state (J-26), an explicit honest state (**market-closed** with
+    next open / **provider unavailable** / **no data for window** / **stale** / **closed**), or an
+    explicit error. The idle screen MUST NOT reappear or persist after a valid Watch, and the pending
+    state MUST NOT be cleared without landing on one of those non-idle states. An off-hours Live watch
+    shows the explicit **closed** state — never idle, never a fake-"live" empty cockpit. *(Real modes
+    verified with credentials; the closed-market / unavailable paths are browser-verifiable without a
+    feed.)*
+
+- **J-26: A connected stream with no data yet explains itself (never a mute cockpit)**
+  - Steps:
+    1. Watch a stream that connects but has no immediate activity — a **Live** watch on a quiet/illiquid
+       symbol, or the moment just after connect before the first trade, or a sparse **Historical**
+       window — in both modes
+    2. Observe the cockpit after the connecting state, while the tape is still empty
+  - Acceptance: while connected but before any trade/quote has arrived, the cockpit shows an explicit,
+    human-readable waiting/empty state labelled with the symbol and mode (e.g. "Connected to <SYMBOL> —
+    waiting for the first trade…"), **not** a set of blank panels under a bare **live** indicator. The
+    status MUST NOT read a confident **live** over an empty tape; an empty tape reads as
+    connecting/waiting (then **stale** once the configured gap is exceeded). The user always knows the
+    watch is alive and what it is waiting for. *(Browser-verifiable with a provider that yields no
+    immediate first event.)*
+
+- **J-27: No usable data — whether silent or failed — resolves to an explicit honest state within a bounded time**
+  - Steps:
+    1. Start a watch that is accepted (200) and connects but whose feed delivers **no first event**
+       (live: a quiet/off-hours symbol whose socket stays silent; historical: an effectively empty replay)
+    2. Separately, start a watch whose background **feeder task fails** after acceptance — the
+       provider/stream raises, or the feeder exits unexpectedly — before or after the first frame
+    3. Wait past the configured bound in each case
+  - Acceptance: each case is **bounded** by config and resolves to an explicit, distinct outcome — a
+    no-data/empty message, **stale**, **closed**, or an error — owned once by the engine's
+    `stream_status` (never a fabricated **live** over an empty tape, never a stuck **connecting**). A
+    feeder exception/early-exit is **logged server-side and surfaced** to the UI (the existing failure
+    panel / error banner / honest status dot), never swallowed, and never leaves the engine frozen at
+    cold-start. *(Backend-provable by unit tests with a no-event provider and with a feeder that raises;
+    UI-verifiable by the resulting state.)*
 
 ## Anti-goals
 
@@ -646,3 +700,13 @@ additions MUST NOT regress J-01 – J-15.
   "Connecting…" running with no resolution, and MUST NOT swallow a failure (no empty `catch`, no
   unawaited promise that drops an error, no unbounded external wait). A reproducible silent no-op, an
   infinite connecting spinner, or a swallowed Watch error is a veto on GOAL_ACHIEVED. *(critical)*
+- **No mute cockpit, no silent return to idle.** A valid Watch MUST resolve to a non-idle terminal
+  state and MUST NOT silently return to or remain on the idle/previous screen. A watched cockpit MUST
+  NOT present a confident **live** status over an empty tape, nor render blank panels indefinitely with
+  no explanation. Connected-but-no-data MUST read as an explicit connecting/waiting or honest
+  empty-state and MUST resolve, within a bounded configured time, to streaming data or an explicit
+  honest state (**stale** / **closed** / no-data / market-closed / unavailable / error) — owned once by
+  the engine's `stream_status`. A cold-start/empty snapshot MUST NOT be treated as a settled connection
+  that disables the failure/empty-resolution path; a feeder failure MUST be logged and surfaced, never
+  swallowed. A reproducible Watch that returns to idle, or an indefinitely-empty cockpit, in any mode
+  (including off-hours), is a veto on GOAL_ACHIEVED. *(critical)*
