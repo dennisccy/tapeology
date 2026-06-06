@@ -82,6 +82,12 @@ The first success metric is **not** profit. In priority order:
 - **Local-time historical selection.** Historical windows are entered in the user's local timezone
   (with an explicit zone label and US-session quick-picks); the window fetched from the vendor
   matches the local window selected — no silent timezone shift.
+- **Every Watch action gives immediate, honest feedback.** The instant a user clicks Watch — in
+  simulated, live, or historical mode — the UI acknowledges the click with a pending/"connecting"
+  state for that symbol, and every outcome (streaming data, empty window, provider unavailable,
+  unknown symbol, market closed, request timeout, or unreachable backend) resolves to an explicit,
+  distinct on-screen state within a bounded time. The UI never silently ignores a Watch click and
+  never leaves "Connecting…" running forever.
 - *(later)* **Predictive value, measured.** Beyond the visual chart read, an automated harness
   quantifies the directional edge of high-confidence tape states over the next 10 / 30 / 60 / 120
   seconds.
@@ -214,6 +220,12 @@ The first success metric is **not** profit. In priority order:
   cutoff, and confidence boundary comes from config — no such literal in engine code.
 - **Deterministic engine:** the same ordered event stream (and seed) yields identical
   features, state, and confidence — no wall-clock or randomness in classification.
+- **No unbounded waits.** Every outbound vendor call — market-clock check, historical fetch, and
+  live-stream connect — runs under an explicit timeout from config (no magic numbers); no external
+  call may block a Watch request indefinitely. The frontend also enforces a client-side request
+  timeout as a backstop, so a slow or hung backend always resolves to a visible error rather than a
+  frozen UI. (A connected feed that then goes quiet is the separate, intentional `stale` state and
+  is out of scope here — this targets the pre-connection "Connecting…" phase and silent no-ops.)
 
 ## Design Direction
 
@@ -529,6 +541,43 @@ additions MUST NOT regress J-01 – J-15.
     UTC shift). *(The local-time labels + presets are browser-verifiable without a feed; the
     correct-window fetch is verified with credentials.)*
 
+- **J-21: A Watch click is always acknowledged immediately (no silent dead-click)**
+  - Steps:
+    1. Visit `/` (idle screen)
+    2. Enter a valid symbol, choose **Live** (then repeat for **Historical** and **Simulated**), click **Watch**
+    3. Observe the cockpit in the first ~1 second after the click, before any tape data arrives
+  - Acceptance: within ~1s the cockpit leaves the idle screen and shows an explicit pending/"connecting"
+    state labelled with the symbol (e.g. "Connecting to <SYMBOL>…" with the connecting status dot). The
+    idle screen never remains after a valid Watch click, in any mode. *(Browser-verifiable.)*
+
+- **J-22: A slow or hung request resolves to an explicit error, never an infinite spinner**
+  - Steps:
+    1. Trigger a Watch whose backend vendor call is slow/unreachable (live or historical against an
+       unresponsive provider, or the backend itself down)
+    2. Wait
+  - Acceptance: the wait is **bounded** — backend vendor calls run under an explicit timeout and the
+    frontend enforces a client-side timeout backstop. Within that bound the connecting state is replaced
+    by a clear, distinct error (e.g. "Market data provider timed out" / "Backend unreachable"); the
+    "Connecting…" spinner never runs indefinitely. *(Backend timeout proven by unit test with a mocked
+    slow adapter; the client-side timeout proven by a non-resolving request.)*
+
+- **J-23: A failed initial connection or stream surfaces an explicit error (no swallowed failures)**
+  - Steps:
+    1. Watch a symbol where the watch is accepted but the initial snapshot fetch or live stream then
+       fails (backend becomes unreachable right after Watch, or no first event ever arrives)
+  - Acceptance: the UI surfaces an explicit "couldn't connect to the tape stream" error (reusing the
+    existing error banner / failure panel) within a bounded time; the connecting state does not persist
+    forever, and no error path is silently swallowed (no empty `catch`, no dropped promise rejection).
+    *(Browser-verifiable with the backend stopped after watch.)*
+
+- **J-24: Invalid or empty Watch input gives immediate inline feedback**
+  - Steps:
+    1. With the symbol field empty (or whitespace), click **Watch**
+    2. In **Historical** mode, also try Watch with a missing/invalid date-time window
+  - Acceptance: the UI immediately shows a clear inline validation message (e.g. "Enter a ticker
+    symbol" / "Choose a valid time window") or the Watch button is disabled until input is valid;
+    clicking Watch never results in a silent no-op. *(No credentials; browser-verifiable.)*
+
 ## Anti-goals
 
 - **No execution path.** Tapeology MUST NOT place, route, simulate, or recommend orders, and
@@ -591,3 +640,9 @@ additions MUST NOT regress J-01 – J-15.
 - **Timezone-correct windows.** A historical window MUST be fetched for the exact instant the user
   selected in their local time — no silent UTC reinterpretation that shifts the window by the local
   offset; all market/session times shown to the user MUST carry an explicit zone label. *(critical)*
+- **No silent dead-clicks.** Pressing Watch MUST always produce a visible UI change within ~1 second —
+  a pending/"connecting" state, streaming data, an empty-state, an explicit error, or an inline
+  validation message. The UI MUST NOT silently remain on the idle/previous screen, MUST NOT leave
+  "Connecting…" running with no resolution, and MUST NOT swallow a failure (no empty `catch`, no
+  unawaited promise that drops an error, no unbounded external wait). A reproducible silent no-op, an
+  infinite connecting spinner, or a swallowed Watch error is a veto on GOAL_ACHIEVED. *(critical)*
