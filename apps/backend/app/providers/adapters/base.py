@@ -94,6 +94,23 @@ class NoDataForWindow(Exception):
     """The symbol is tradable but the requested window returned no trades/quotes (neutral)."""
 
 
+class VendorTimeout(Exception):
+    """A vendor call exceeded the real call-level HTTP deadline (J-28 / bounded-honest-vendor).
+
+    Raised by the adapter when the SDK client's underlying HTTP request times out — the TRUE
+    call-level bound, distinct from the API's outer ``asyncio.wait_for`` wrapper (which only
+    abandons the worker thread). It is a NEUTRAL failure (no vendor exception type leaks out) the
+    API maps to the existing row-9 ``provider_timeout`` reason. ``detail`` carries the human
+    message: a generic "market data provider timed out" by default, or a more ACTIONABLE variant
+    for a deterministically-oversized/high-volume historical window (e.g. "that window is very
+    high-volume — try a shorter range") so the user is told the real cause, not a misleading retry.
+    """
+
+    def __init__(self, detail: str = "market data provider timed out") -> None:
+        super().__init__(detail)
+        self.detail = detail
+
+
 @runtime_checkable
 class MarketDataAdapter(Protocol):
     """Vendor-neutral seam the API reads for availability, history, and symbol search.
@@ -108,6 +125,11 @@ class MarketDataAdapter(Protocol):
     ``stream_live`` opens the vendor's real-time trade+quote socket for ONE symbol and yields
     vendor-neutral ``LiveRecord``s (market data only — no order/account/position call); on
     cancel/close it MUST unsubscribe and close the socket (no leaked connection).
+    ``warm_symbol_universe`` pre-loads the tradable-symbol cache so the first ``search_symbols``
+    after startup is not a cold stall (J-30); it is a no-op without credentials or when already
+    warmed, and it is the neutral entry the API's startup hook calls so ``main.py`` never names a
+    vendor SDK or the universe cache. It MUST NOT raise (a warm failure is swallowed — search then
+    falls back to its own lazy fetch).
     """
 
     name: str
@@ -125,4 +147,7 @@ class MarketDataAdapter(Protocol):
         ...
 
     def stream_live(self, symbol: str) -> AsyncIterator[LiveRecord]:
+        ...
+
+    def warm_symbol_universe(self) -> None:
         ...

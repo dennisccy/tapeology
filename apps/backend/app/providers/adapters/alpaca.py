@@ -22,19 +22,36 @@ The SDK is imported lazily inside the methods so the no-credentials / simulated 
 never pay its (pandas/numpy) import cost. Blocking network calls are synchronous here; the API
 runs them off the event loop (``asyncio.to_thread``) so the watch gate stays responsive.
 
+Vendor responsiveness (J-28/J-29/J-30) lives entirely behind this seam:
+  * A **real call-level HTTP deadline** (``_with_http_timeout`` + ``_mapped_vendor_timeout``)
+    cuts off a slow/large vendor response at the SDK client's ``requests.Session`` — the true
+    bound, distinct from the API's outer ``asyncio.wait_for`` wrapper — surfaced as the neutral
+    ``VendorTimeout`` the API maps to ``provider_timeout``.
+  * The historical fetch is **fast by design**: trades + quotes are fetched **concurrently**, the
+    tradable pre-flight is **folded** (a second round-trip only on an empty result), and a bounded
+    **window cache** makes a re-watch of the same (symbol, window, feed) near-instant.
+  * ``warm_symbol_universe`` lets the API **warm** the tradable-symbol cache at startup so the
+    first search is not a cold stall — through the neutral seam, with no SDK name in ``main.py``.
+All of these are performance/honesty properties only — they never reorder, drop, or fabricate a
+trade/quote, and a cache hit replays the SAME real window.
+
 Anti-goals served: *no secrets in source* (env-only; names documented with empty values in
 ``.env.example``), *provider-agnostic engine* (vendor names + SDK confined here), *no fabricated
-data* (every failure is an explicit neutral outcome, never a synthesized read).
+data* (every failure is an explicit neutral outcome, never a synthesized read), *bounded, honest,
+performant vendor calls* (a real HTTP deadline + concurrent/cached/warmed fast paths).
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
-from contextlib import suppress
+import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager, suppress
 from datetime import timezone
 from typing import AsyncIterator
 
+from ...config import CONFIG
 from .base import (
     HistoricalWindow,
     LiveRecord,
@@ -44,6 +61,7 @@ from .base import (
     RawTrade,
     SymbolMatch,
     SymbolNotTradable,
+    VendorTimeout,
 )
 
 # Environment variable NAMES (never values). Documented with empty values in
@@ -60,8 +78,17 @@ DEFAULT_FEED = "iex"
 LIVE_TEARDOWN_GRACE_SECONDS = 6.0
 
 # Process-lifetime cache of the (rarely-changing) tradable-symbol universe, so the search box
-# does not re-fetch ~14k assets on every keystroke. Populated lazily on first search.
+# does not re-fetch ~14k assets on every keystroke. Warmed once at startup (J-30) via
+# ``warm_symbol_universe`` and otherwise populated lazily on first search. This module-level cell
+# is the SINGLE owner of the universe — there is no second store.
 _ASSET_UNIVERSE: list[SymbolMatch] | None = None
+
+# Bounded in-process cache of fetched REAL historical windows keyed by (symbol, start, end, feed)
+# so re-watching the same symbol+window is near-instant (J-29): a cache hit skips the vendor
+# round-trip and replays the SAME real ``HistoricalWindow`` (never a fabricated one). Bounded by
+# CONFIG.historical_cache_max_entries (LRU) + CONFIG.historical_cache_ttl_seconds (TTL) so memory
+# stays flat. Maps key -> (stored_at_monotonic, HistoricalWindow); insertion order = LRU order.
+_HISTORICAL_WINDOW_CACHE: "dict[tuple, tuple[float, HistoricalWindow]]" = {}
 
 
 def _env(name: str) -> str:
@@ -77,6 +104,70 @@ def _to_iso_utc(value) -> str | None:
     if value is None:
         return None
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+@contextmanager
+def _mapped_vendor_timeout(detail: str = "market data provider timed out"):
+    """Map the vendor SDK's HTTP timeout to the NEUTRAL ``VendorTimeout`` (J-28).
+
+    The real call-level deadline is a ``requests`` timeout on the SDK client session; when it
+    fires the SDK raises ``requests.exceptions.Timeout``. We translate it here to a vendor-neutral
+    ``VendorTimeout`` so no vendor exception type leaks outside this module (provider-agnostic
+    anti-goal) and the API maps it to the existing row-9 ``provider_timeout`` reason. ``detail``
+    lets a caller supply a more actionable message for an oversized window. ``requests`` is
+    imported lazily so the no-creds / simulated / test paths never pay the import cost.
+    """
+    try:
+        from requests.exceptions import Timeout as _RequestsTimeout
+    except Exception:  # requests unavailable for some reason — treat nothing as a timeout
+        _RequestsTimeout = ()  # type: ignore[assignment]
+    try:
+        yield
+    except _RequestsTimeout:
+        raise VendorTimeout(detail) from None
+
+
+def _cache_get(key: tuple) -> HistoricalWindow | None:
+    """Return a non-expired cached window for ``key`` (refreshing LRU order), else ``None``.
+
+    Honours the TTL (``CONFIG.historical_cache_ttl_seconds``): an expired entry is dropped and
+    treated as a miss. A hit is moved to the most-recently-used position so the LRU eviction in
+    ``_cache_put`` discards the genuinely coldest window.
+    """
+    entry = _HISTORICAL_WINDOW_CACHE.get(key)
+    if entry is None:
+        return None
+    stored_at, window = entry
+    if (time.monotonic() - stored_at) > CONFIG.historical_cache_ttl_seconds:
+        _HISTORICAL_WINDOW_CACHE.pop(key, None)
+        return None
+    # Refresh recency (move to the end = most-recently-used).
+    _HISTORICAL_WINDOW_CACHE.pop(key, None)
+    _HISTORICAL_WINDOW_CACHE[key] = (stored_at, window)
+    return window
+
+
+def _cache_put(key: tuple, window: HistoricalWindow) -> None:
+    """Store ``window`` for ``key`` under the bounded LRU+TTL cache (J-29).
+
+    Bounded to ``CONFIG.historical_cache_max_entries``: when full, the least-recently-used entry
+    (the first key in insertion order) is evicted so memory stays flat. Stores the REAL window
+    only — a cache hit later replays the same real trades/quotes (never fabricated)."""
+    _HISTORICAL_WINDOW_CACHE.pop(key, None)
+    while len(_HISTORICAL_WINDOW_CACHE) >= CONFIG.historical_cache_max_entries:
+        oldest = next(iter(_HISTORICAL_WINDOW_CACHE))
+        _HISTORICAL_WINDOW_CACHE.pop(oldest, None)
+    _HISTORICAL_WINDOW_CACHE[key] = (time.monotonic(), window)
+
+
+def _clear_caches() -> None:
+    """Reset the process-lifetime caches (the window cache + the warmed universe).
+
+    For tests/operators only — production never needs to clear; this keeps test isolation explicit
+    rather than reaching into the module globals from the test files."""
+    global _ASSET_UNIVERSE
+    _ASSET_UNIVERSE = None
+    _HISTORICAL_WINDOW_CACHE.clear()
 
 
 class AlpacaAdapter:
@@ -98,24 +189,58 @@ class AlpacaAdapter:
     def fetch_historical(self, symbol: str, start, end) -> HistoricalWindow:
         """Fetch REAL trades + quotes for ``symbol`` over ``[start, end)`` as neutral records.
 
-        Raises ``SymbolNotTradable`` for an unknown/untradable symbol and ``NoDataForWindow``
-        when the (tradable) symbol has no trades in the window — never a fabricated tape.
+        FAST BY DESIGN (J-29), HONEST AND BOUNDED (J-28):
+          * **Window cache** — a (symbol, start, end, feed) hit returns the SAME real window with
+            NO vendor round-trip (near-instant re-watch); never a fabricated window.
+          * **One round-trip on success** — the trades+quotes are fetched FIRST (concurrently);
+            the tradable/unknown-symbol pre-flight is folded in so it costs a SECOND round-trip
+            only when the data comes back empty (to decide unknown-symbol vs. empty-window). A
+            successful fetch pays one round-trip's latency, not two.
+          * **Concurrent fetch** — trades and quotes are fetched in parallel (total ≈ the slower
+            of the two, not their sum). Ordering into the engine timeline is unchanged.
+          * **Real call-level deadline** — every SDK HTTP call runs under
+            ``CONFIG.vendor_http_timeout_seconds`` (set on the client session); a slow/large
+            response is cut off as a neutral ``VendorTimeout`` (no vendor type leaks).
+
+        Honest failures (no fabricated tape): ``SymbolNotTradable`` for an unknown/untradable
+        symbol, ``NoDataForWindow`` when a tradable symbol has no trades in the window, and
+        ``VendorTimeout`` (mapped to ``provider_timeout`` by the API) when the deadline fires.
         """
         sym = symbol.strip().upper()
-        self._require_tradable(sym)
-        trades, quotes = self._fetch_trades_quotes(sym, start, end)
+        feed = self._data_feed()
+        cache_key = (sym, start, end, getattr(feed, "value", str(feed)))
+
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached  # near-instant re-watch: the SAME real window, no vendor round-trip
+
+        trades, quotes = self._fetch_trades_quotes(sym, start, end, feed)
         if not trades:
+            # Folded pre-flight: only on an EMPTY result do we pay a second round-trip to
+            # distinguish an unknown/untradable symbol (-> SymbolNotTradable) from a tradable
+            # symbol with no prints in the window (-> NoDataForWindow). A successful fetch above
+            # already returned after ONE round-trip, so the common path is not penalized.
+            self._require_tradable(sym)
             raise NoDataForWindow(sym)
-        return HistoricalWindow(sym, tuple(trades), tuple(quotes))
+        window = HistoricalWindow(sym, tuple(trades), tuple(quotes))
+        _cache_put(cache_key, window)
+        return window
 
     def _require_tradable(self, symbol: str) -> None:
-        """Validate the symbol against Alpaca's asset reference; raise neutral on failure."""
+        """Validate the symbol against Alpaca's asset reference; raise neutral on failure.
+
+        Only invoked on the EMPTY-result path now (no longer a pre-flight on the hot path), to
+        decide unknown-symbol vs. empty-window. Runs under the real call-level HTTP deadline.
+        """
         from alpaca.common.exceptions import APIError
         from alpaca.trading.client import TradingClient
 
-        client = TradingClient(_env(ENV_API_KEY), _env(ENV_API_SECRET), paper=True)
+        client = self._with_http_timeout(
+            TradingClient(_env(ENV_API_KEY), _env(ENV_API_SECRET), paper=True)
+        )
         try:
-            asset = client.get_asset(symbol)
+            with _mapped_vendor_timeout():
+                asset = client.get_asset(symbol)
         except APIError as exc:
             if getattr(exc, "status_code", None) == 404:
                 raise SymbolNotTradable(symbol) from None
@@ -123,18 +248,46 @@ class AlpacaAdapter:
         if not getattr(asset, "tradable", False):
             raise SymbolNotTradable(symbol)
 
-    def _fetch_trades_quotes(self, symbol: str, start, end):
+    def _fetch_trades_quotes(self, symbol: str, start, end, feed):
+        """Fetch trades and quotes CONCURRENTLY (J-29) under the real call-level HTTP deadline.
+
+        ``fetch_historical`` is already run off the event loop in ONE worker thread (the API calls
+        it via ``asyncio.to_thread``); here we overlap the two vendor calls by running each in its
+        own thread (a small ``ThreadPoolExecutor``) and joining — so wall-clock ≈ max(t_trades,
+        t_quotes), not their sum. This is a FETCH optimization ONLY: the records are mapped to the
+        same neutral ``RawTrade`` / ``RawQuote`` and ordered into the engine timeline by
+        ``HistoricalProvider`` exactly as before (quote-before-trade); nothing is reordered,
+        dropped, or fabricated. A timeout in either call surfaces as a neutral ``VendorTimeout``.
+        """
         from alpaca.data.historical import StockHistoricalDataClient
         from alpaca.data.requests import StockQuotesRequest, StockTradesRequest
 
-        client = StockHistoricalDataClient(_env(ENV_API_KEY), _env(ENV_API_SECRET))
-        feed = self._data_feed()
-        trades_resp = client.get_stock_trades(
-            StockTradesRequest(symbol_or_symbols=symbol, start=start, end=end, feed=feed)
+        client = self._with_http_timeout(
+            StockHistoricalDataClient(_env(ENV_API_KEY), _env(ENV_API_SECRET))
         )
-        quotes_resp = client.get_stock_quotes(
-            StockQuotesRequest(symbol_or_symbols=symbol, start=start, end=end, feed=feed)
-        )
+
+        def _get_trades():
+            with _mapped_vendor_timeout():
+                return client.get_stock_trades(
+                    StockTradesRequest(
+                        symbol_or_symbols=symbol, start=start, end=end, feed=feed
+                    )
+                )
+
+        def _get_quotes():
+            with _mapped_vendor_timeout():
+                return client.get_stock_quotes(
+                    StockQuotesRequest(
+                        symbol_or_symbols=symbol, start=start, end=end, feed=feed
+                    )
+                )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            trades_future = pool.submit(_get_trades)
+            quotes_future = pool.submit(_get_quotes)
+            trades_resp = trades_future.result()
+            quotes_resp = quotes_future.result()
+
         trades = [
             RawTrade(t.timestamp.timestamp(), float(t.price), int(t.size))
             for t in trades_resp.data.get(symbol, [])
@@ -158,6 +311,38 @@ class AlpacaAdapter:
             return DataFeed(self.feed)
         except ValueError:
             return DataFeed.IEX
+
+    @staticmethod
+    def _with_http_timeout(client):
+        """Apply the REAL call-level HTTP deadline to a constructed SDK client (J-28).
+
+        The pinned alpaca-py 0.43.4 exposes NO per-request ``timeout`` kwarg on its client
+        constructors; the base ``RESTClient`` builds ``self._session = requests.Session()`` and
+        calls ``self._session.request(method, url, **opts)`` with no ``timeout`` in ``opts``. We
+        therefore set a DEFAULT timeout at the ``requests.Session`` layer by wrapping the session's
+        ``request`` to inject ``timeout=CONFIG.vendor_http_timeout_seconds`` whenever the caller
+        (the SDK) does not pass one. This is the real call-level bound: the client itself aborts a
+        slow/large/CPU-bound response (raising ``requests.exceptions.Timeout``), which we map to a
+        neutral ``VendorTimeout`` — distinct from the API's outer ``asyncio.wait_for`` wrapper that
+        only abandons the worker thread. The SDK stays confined to this module (no vendor specifics
+        leak). Idempotent and defensive: if the SDK internals ever differ we leave the client
+        unchanged (the outer wrapper still bounds the call) rather than guessing.
+        """
+        session = getattr(client, "_session", None)
+        if session is None or not hasattr(session, "request"):
+            return client  # SDK internals differ — fall back to the outer wrapper bound
+        if getattr(session, "_tapeology_timeout_wrapped", False):
+            return client  # already wrapped (idempotent)
+        original_request = session.request
+        deadline = CONFIG.vendor_http_timeout_seconds
+
+        def _request_with_timeout(method, url, **kwargs):
+            kwargs.setdefault("timeout", deadline)
+            return original_request(method, url, **kwargs)
+
+        session.request = _request_with_timeout  # type: ignore[method-assign]
+        session._tapeology_timeout_wrapped = True  # type: ignore[attr-defined]
+        return client
 
     # --- Symbol search (read-only asset reference) --------------------------------------
 
@@ -197,8 +382,11 @@ class AlpacaAdapter:
         """
         from alpaca.trading.client import TradingClient
 
-        client = TradingClient(_env(ENV_API_KEY), _env(ENV_API_SECRET), paper=True)
-        clock = client.get_clock()
+        client = self._with_http_timeout(
+            TradingClient(_env(ENV_API_KEY), _env(ENV_API_SECRET), paper=True)
+        )
+        with _mapped_vendor_timeout():
+            clock = client.get_clock()
         return MarketClock(
             is_open=bool(clock.is_open),
             next_open=_to_iso_utc(clock.next_open),
@@ -267,22 +455,50 @@ class AlpacaAdapter:
                 await asyncio.wait_for(stream.close(), timeout=grace)
 
     def _asset_universe(self) -> list[SymbolMatch]:
+        """Return the cached tradable-symbol universe, fetching it once if not yet warmed.
+
+        Lazy fallback for the case where the startup warm did not run (or finished after the first
+        search). The fetch runs under the real call-level HTTP deadline. ``_ASSET_UNIVERSE`` is the
+        SINGLE owner of the universe (warmed at startup OR here) — there is no second store."""
         global _ASSET_UNIVERSE
         if _ASSET_UNIVERSE is None:
-            from alpaca.trading.client import TradingClient
-            from alpaca.trading.enums import AssetClass, AssetStatus
-            from alpaca.trading.requests import GetAssetsRequest
+            _ASSET_UNIVERSE = self._fetch_asset_universe()
+        return _ASSET_UNIVERSE
 
-            client = TradingClient(_env(ENV_API_KEY), _env(ENV_API_SECRET), paper=True)
+    def _fetch_asset_universe(self) -> list[SymbolMatch]:
+        """Fetch the active US-equity tradable universe from the vendor (one round-trip)."""
+        from alpaca.trading.client import TradingClient
+        from alpaca.trading.enums import AssetClass, AssetStatus
+        from alpaca.trading.requests import GetAssetsRequest
+
+        client = self._with_http_timeout(
+            TradingClient(_env(ENV_API_KEY), _env(ENV_API_SECRET), paper=True)
+        )
+        with _mapped_vendor_timeout():
             assets = client.get_all_assets(
                 GetAssetsRequest(status=AssetStatus.ACTIVE, asset_class=AssetClass.US_EQUITY)
             )
-            _ASSET_UNIVERSE = [
-                SymbolMatch(a.symbol, a.name or "")
-                for a in assets
-                if getattr(a, "tradable", False)
-            ]
-        return _ASSET_UNIVERSE
+        return [
+            SymbolMatch(a.symbol, a.name or "")
+            for a in assets
+            if getattr(a, "tradable", False)
+        ]
+
+    def warm_symbol_universe(self) -> None:
+        """Warm the tradable-symbol universe cache so the FIRST search is not a cold stall (J-30).
+
+        Called once (in the background) from the FastAPI ``lifespan`` startup via the neutral
+        adapter seam — ``main.py`` never names the SDK or the universe cache. NO-OP without
+        credentials (search then stays ``[]``, never an error) and a NO-OP when already warmed.
+        Any vendor/network error is swallowed (logged by the caller's task wrapper if it surfaces)
+        so a warm failure never crashes startup — search just falls back to its lazy fetch. Keeps
+        ``_ASSET_UNIVERSE`` the single owner; populates the same cell ``_asset_universe`` reads.
+        """
+        global _ASSET_UNIVERSE
+        if not self.is_available() or _ASSET_UNIVERSE is not None:
+            return
+        with suppress(Exception):
+            _ASSET_UNIVERSE = self._fetch_asset_universe()
 
 
 def real_data_available() -> bool:

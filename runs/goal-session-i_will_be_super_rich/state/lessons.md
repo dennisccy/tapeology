@@ -91,3 +91,20 @@ anti-goal); plan it before building.
 **Verdict:** CONTINUE
 **Lesson:** To render a SNAPSHOT-BORNE lifecycle state (waiting/failed/live) in an isolated-stack browser check, the WebSocket must OPEN-AND-STAY-SILENT, not be aborted. useTapeStream (`apps/frontend/lib/useTapeStream.ts`) flips `connStatus` to `failed` on a WS onerror/early-onclose-before-first-frame, and `page.tsx` renders the J-23 PRE-snapshot StreamFailedState BEFORE it ever checks `snapshot.stream_status` — so a Playwright `route("**/stream**", abort)` (or just letting the WS fail to reach the mock backend) makes EVERY case render "Couldn't connect to the tape stream" and masks the real waiting/failed/live treatment. The fix: stand up a trivial raw-socket WS server that completes the RFC6455 handshake then sends no frame (so onopen fires, connStatus is not `failed`), and mock only the HTTP /summary|/features|/events via page.route. Playwright HTTP routes do NOT intercept WS, so the two coexist.
 **Applies to:** any future iter verifying a snapshot-driven cockpit state (stream_status waiting/failed/live/stale/paused) on an isolated stack — and any iter touching the page.tsx render-priority order (pending -> connStatus failed -> snapshot failed -> snapshot waiting -> cockpit); if that order changes, re-derive which treatment wins before trusting a render.
+
+## iter-11 — 2026-06-07T05:05:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A browser-qa "FAIL" can be a mis-specified TEST rather than a product defect — here
+UT-02/UT-10 asserted symbol-search min-query ≥ 2, but the as-built backend `symbol_search_min_query`
+(config.py:123) and frontend `SYMBOL_SEARCH_MIN_QUERY` (config.ts:34) both = 1 and MATCH exactly,
+which is precisely what the spec mandated ("mirror the backend"); the journey only required "a
+sensible minimum query length", never 2. The coherence-auditor had already flagged this exact pair
+as an advisory WARN, and it resolved in the implementation's favor. Always trace a config-value FAIL
+to the spec/contract and to BOTH sides of the mirror before treating it as a regression — a failing
+assertion can encode the test author's assumption, not the requirement.
+**Applies to:** any evaluator reconciling a browser-qa FAIL on a config/threshold value (min-query,
+debounce, timeout ordering, large-print size) — check the spec wording and both the backend and
+frontend constants for agreement before scoring it a defect; and any future iter touching the
+symbol-search min-query (change both `symbol_search_min_query` and `SYMBOL_SEARCH_MIN_QUERY` together
+and update UT-02/UT-10).

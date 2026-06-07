@@ -134,9 +134,60 @@ class Config:
     # `_watch_live`). Each such `asyncio.to_thread(...)` call runs under
     # `asyncio.wait_for(..., timeout=vendor_call_timeout_seconds)`; on expiry the Watch is
     # refused with an explicit `provider_timeout` error and NO engine is created (no tape is
-    # fabricated). This is a PRE-connection per-request bound and is DISTINCT from
+    # fabricated). This is the OUTER `wait_for` BACKSTOP — it abandons the worker thread but does
+    # not stop the underlying call; the real call-level deadline below is what actually cuts the
+    # vendor request off. It is a PRE-connection per-request bound and is DISTINCT from
     # `stale_gap_seconds` (a mid-stream delivery-gap watchdog) — the two MUST NOT be conflated.
     vendor_call_timeout_seconds: float = 8.0
+
+    # --- Real call-level vendor HTTP deadline (J-28 / bounded-honest-vendor-calls anti-goal) --
+    # The TRUE call-level deadline applied at the vendor-call boundary — a real HTTP timeout on
+    # the SDK client's underlying `requests.Session` (set inside the one vendor adapter; that SDK
+    # exposes no per-request `timeout` kwarg). A slow/large/CPU-bound vendor response is cut off
+    # by the client ITSELF (surfacing as a distinct timeout the adapter maps to the neutral
+    # `provider_timeout`), not merely abandoned by the outer `wait_for` wrapper (which leaves the
+    # worker thread running). It is the (requests connect, read) timeout in seconds.
+    #
+    # ORDERING INVARIANT (J-28, asserted by a unit test from config, never hardcoded):
+    #   vendor_http_timeout_seconds  <=  vendor_call_timeout_seconds   (HTTP deadline <= wrapper)
+    #   vendor_call_timeout_seconds  <   WATCH_REQUEST_TIMEOUT_MS / 1000  (backend < frontend)
+    # i.e. the backend-effective bound (the HTTP deadline, bounded above by the wrapper) is
+    # strictly shorter than the frontend client timeout (12000ms in apps/frontend/lib/config.ts),
+    # so the user ALWAYS sees the backend's honest, distinct error rather than a client-side
+    # give-up. Do NOT raise these to "fix" a slow window — J-29 is fast BY DESIGN, not by a longer
+    # deadline. The frontend constant is mirrored here ONLY to make the ordering invariant testable
+    # in-process; the live value lives in `apps/frontend/lib/config.ts`.
+    vendor_http_timeout_seconds: float = 6.0
+    frontend_watch_request_timeout_ms: int = 12000
+
+    # --- Historical-window fetch cache (J-29 / fast-by-design) -------------------------
+    # A bounded in-process cache of fetched REAL historical windows keyed by (symbol, start, end,
+    # feed) so re-watching the same symbol+window is near-instant (a cache hit skips the vendor
+    # round-trip entirely and replays the SAME real `HistoricalWindow` — never a fabricated one).
+    # Bounded so memory stays flat: at most this many windows, each evicted after this many
+    # wall-clock seconds (LRU + TTL). A miss behaves exactly as before (one real fetch). These are
+    # operational cache bounds, not engine thresholds — the engine math stays untouched.
+    historical_cache_max_entries: int = 32
+    historical_cache_ttl_seconds: float = 300.0
+
+    # --- Historical warm-up fast-forward (J-29 / prompt warm-up) -----------------------
+    # On a historical replay the feeder delivers the first up-to-`warmup_min_events` warm-up events
+    # with this (tiny) wall-clock pace instead of their logical inter-event gaps, then resumes
+    # normal `_feed_paced` pacing — so the cockpit shows a WARM read quickly rather than waiting out
+    # the real timeline of the warm-up window. This is DELIVERY PACING ONLY: the fast-forwarded
+    # events still enter the engine in the same order with their same logical timestamps, so the
+    # resulting features/state/confidence are IDENTICAL to an un-fast-forwarded replay (determinism
+    # preserved — asserted by a unit test). It is NOT an engine threshold.
+    warmup_fast_forward_pace_seconds: float = 0.0
+
+    # --- Symbol-universe background warm/refresh (J-30 / warmed search) ----------------
+    # The tradable-symbol universe is warmed once at FastAPI startup (in the background, via the
+    # neutral adapter seam — no-creds => a no-op, search stays []) so the FIRST search after a
+    # (re)start is not a multi-second stall. Optionally refreshed in the background this often;
+    # `0` (the default) disables the periodic refresh (the one-time startup warm alone satisfies
+    # "not a multi-second stall"). This is an operational cache-refresh cadence, not an engine
+    # threshold.
+    symbol_universe_refresh_seconds: float = 0.0
 
     # --- Live streaming stale watchdog (J-12 / J-15) ----------------------------------
     # The live feeder flips the row-6 `stream_status` to `stale` when NO live event arrives

@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-i_will_be_super_rich-iter-11",
+  "base_url": "http://localhost:3650",
+  "iteration": 11,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Cockpit loads with all three modes ready",
+      "narration": "The Tapeology cockpit opens instantly, showing three data-source modes — Simulated, Historical, and Live — alongside the symbol search field. Everything is in place before a single keystroke.",
+      "point_out": "Mode buttons (Live, Historical, Simulated) and the symbol search input are all visible with no error banner.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Historical" }
+    },
+    {
+      "n": 2,
+      "title": "Symbol search responds immediately",
+      "narration": "Typing 'AAPL' into the symbol search box returns a dropdown of matching tickers within about a second — even right after the backend starts, because the symbol list is pre-loaded in the background at startup.",
+      "point_out": "A dropdown of AAPL-prefixed suggestions appears promptly, with no multi-second stall.",
+      "journey": "J-30",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "fill", "target": { "placeholder": "Symbol" }, "text": "AAPL" },
+      "expect": { "text": "AAPL" }
+    },
+    {
+      "n": 3,
+      "title": "Select AAPL from the search results",
+      "narration": "Clicking the AAPL suggestion in the dropdown locks in the symbol and closes the list cleanly — no lingering spinner, no stale results from earlier keystrokes.",
+      "point_out": "AAPL is selected in the symbol field and the dropdown closes.",
+      "journey": "J-13",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "AAPL" } }
+    },
+    {
+      "n": 4,
+      "title": "Switch to Historical mode",
+      "narration": "Switching to Historical mode reveals the date and time-window pickers. This is where the new caching and fast-load improvements shine.",
+      "point_out": "The Historical button is highlighted and the date/time picker UI appears below the mode selector.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Historical" } },
+      "expect": { "text": "Historical" }
+    },
+    {
+      "n": 5,
+      "title": "Oversized window triggers an actionable error",
+      "narration": "Requesting a full trading-day window for a liquid stock would swamp the system, so the app catches that cleanly and tells you exactly what to do: try a shorter range.",
+      "point_out": "The failure panel reads 'that window is very high-volume — try a shorter range' — a specific instruction, not a generic error.",
+      "journey": "J-28",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "try a shorter range" }
+    },
+    {
+      "n": 6,
+      "title": "Amber dot signals data is loading",
+      "narration": "As soon as you kick off a Historical watch for a short two-minute window, an amber pulsing dot appears immediately so you always know a fetch is in progress — the cockpit is never a mute blank screen.",
+      "point_out": "The pulsing amber dot and a 'connecting' or 'waiting' status label appear within the first second of clicking Watch.",
+      "journey": "J-26",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "TSLA" }
+    },
+    {
+      "n": 7,
+      "title": "Historical cockpit populates with real tape data",
+      "narration": "Within a few seconds the tape-state panel fills in with a real classification, a confidence reading, and the full feature set — trade speed, aggressive buy and sell ratios, net volume, and a list of recent trades with prices and sides.",
+      "point_out": "Tape state (e.g. 'Unclear'), confidence value, and feature panel rows all show real non-zero numbers. Recent trades are listed with prices and sides.",
+      "journey": "J-11",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Confidence" }
+    },
+    {
+      "n": 8,
+      "title": "Re-watching the same window is near-instant",
+      "narration": "Stop the watch, then request the exact same TSLA window again. Because the app cached the vendor data from the first fetch, it replays the result in under two seconds — no round-trip to the vendor.",
+      "point_out": "The cockpit re-populates almost immediately on the second Watch click, visibly faster than the first load.",
+      "journey": "J-29",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Stop" } }
+    },
+    {
+      "n": 9,
+      "title": "Cache hit: cockpit returns in milliseconds",
+      "narration": "The second Watch on the identical window hits the in-process cache and the cockpit is live again in well under two seconds — the same tape-state and confidence values from the first load come back immediately.",
+      "point_out": "Confidence and tape-state reappear within one to two seconds, with no loading spinner lingering.",
+      "journey": "J-29",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Confidence" }
+    },
+    {
+      "n": 10,
+      "title": "Switch to Simulated mode for SIM-BUYER",
+      "narration": "Switching to Simulated mode lets you run any named scenario without live market data. There is no dropdown requirement — just type the scenario name and click Watch.",
+      "point_out": "The Simulated button is active and a plain text input replaces the autocomplete search.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Simulated" } },
+      "expect": { "text": "Simulated" }
+    },
+    {
+      "n": 11,
+      "title": "Type SIM-BUYER without selecting from a dropdown",
+      "narration": "In Simulated mode the symbol field accepts free text. Typing 'SIM-BUYER' directly and clicking Watch — without ever touching a dropdown — works perfectly with no blocking validation error.",
+      "point_out": "The symbol field contains 'SIM-BUYER' typed in by hand.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Symbol" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 12,
+      "title": "SIM-BUYER resolves to Buyer Control",
+      "narration": "The cockpit reads the simulated buyer-control scenario and classifies the tape: Buyer Control, confidence 0.87, with a strong aggressive-buy ratio and positive net volume. The observations panel narrates what is happening in plain language.",
+      "point_out": "Tape state shows 'Buyer Control', confidence is above 0.80, aggressive buy ratio is near 0.93, and the observations panel lists entries like 'Buyer aggression increasing'.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Buyer Control" }
+    }
+  ]
+}

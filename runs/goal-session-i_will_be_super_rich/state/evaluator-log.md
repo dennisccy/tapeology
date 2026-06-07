@@ -235,3 +235,37 @@ to lean.
 **Next-step recommendation:** iter-11 at **full** depth — build the vendor-responsiveness cluster J-28/J-29/J-30 together (they share the vendor-fetch path and are mutually reinforcing). J-28: a TRUE call-level deadline at the Alpaca adapter HTTP/SDK boundary (httpx/SDK timeout, not just the iter-9 asyncio.wait_for wrapper that a blocking/large-response call can defeat), with backend-timeout < frontend WATCH_REQUEST_TIMEOUT_MS so the backend's honest error wins, and an actionable oversize-window message ("try a shorter range") instead of a misleading retry — all timeout literals from config.py (no magic numbers). J-29: optimize historical load by DESIGN, not by lengthening timeouts — concurrent trades+quotes fetch (asyncio.gather), drop needless pre-flight round-trips, cache/reuse a fetched window (re-watch near-instant), prompt bounded warm-up; the fetch wait shows the iter-10 waiting/progress state, never a blank screen; MUST NOT fabricate or drop trades (SSOT holds). J-30: a warmed/cached tradable-symbol universe (fetched once at startup, refreshed in background, ideally persisted), cancel stale in-flight searches (no pile-up/out-of-order), a sensible min-query, and empty-list-never-error on a vendor hiccup. Full depth: crosses adapter (real call-level deadline), provider/fetch concurrency + caching, symbol-search lifecycle, new unit tests (slow/large vendor double; concurrency timing; cache hit; request cancellation; backend<frontend ordering), and MUST NOT regress J-01–J-27. After J-28/J-29/J-30 pass with evidence, the full Must-have set J-01–J-30 is a GOAL_ACHIEVED candidate.
 
 **Process notes:** (1) No iter-10 audit handoff was produced (docs/handoffs/...-iter-10-audit.md absent) — the recurring iter-2/3/5 gap; I performed the skeptical anti-goal verification myself via git-grep + a full local test run. (2) browser-qa + the qa report's 13 browser rows are all SKIPPED for the SAME shared-:3650-.next corruption that has now undermined frontend QA in iter-3/6/8/9/10 — the dev's NEXT_DIST_DIR guard exists but the harness server's shared .next was again left corrupted at eval time; the authoritative visual evidence is the evaluator's isolated-stack render. (3) The iter-10 implementation is in the WORKING TREE (uncommitted) — the latest commits are the J-25–J-27 / J-28–J-30 SPEC commits, not the code; the changed_files match status.json + the new untracked test_stream_lifecycle.py. (4) My render build re-pointed the tracked next-env.d.ts at .next-eval-iter10; I restored it to the dev's intended ./.next/types/routes.d.ts. The untracked apps/frontend/.next-eval-iter10/ build artifact remains (rm sandbox-denied) but is harmless — finalize git-adds only the status.json changed_files.
+
+## Iteration 11 — goal-i_will_be_super_rich-iter-11
+
+**Date:** 2026-06-07T05:05:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-28, J-29, J-30 (the last three unbuilt Must-haves)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none
+
+**Reasoning:** J-28/J-29/J-30 are built and verified with concrete evidence — an independently
+re-run backend suite (230 passed / 1 skipped; +32 new vendor-responsiveness tests over the iter-10
+floor of 198, zero regressions) plus a REAL browser run on a working :3650 with credentials that
+captured the J-28 actionable timeout ("that window is very high-volume — try a shorter range", no
+cockpit, UT-06), the J-29 fast/cached real-TSLA historical load (~2s populate, ~131ms cache hit,
+waiting indicator during fetch, UT-07/08/15), and the crisp J-30 search (~60ms first search,
+no out-of-order, vendor-miss→empty, UT-03/04/05/09/13). Anti-goals re-checked against the actual
+diff: Alpaca SDK confined to the one adapter (git-grep), main.py provider-agnostic (no SDK/cache
+name), .env untracked + gitignored, window cache stores raw real records, warm-up fast-forward is
+delivery-only with determinism unit-test-proven, single-source-of-truth held (coherence.md Step 1
+PASS). coherence.md = COHERENCE-PASS. The browser-qa FAIL (UT-02/UT-10) is a MIS-SPECIFIED test
+asserting symbol-search min-query ≥ 2, but the as-built backend (config.py:123) and frontend
+(config.ts:34) both = 1 and MATCH exactly (the spec mandated mirroring); J-30 requires only "a
+sensible minimum query length", never 2 — so this is the coherence-auditor's advisory WARN resolving
+in the implementation's favor, not a journey regression or anti-goal violation. Every Must-have
+journey J-01–J-30 now has positive passing evidence.
+
+**Next-step recommendation:** Halt — goal achieved. The full Must-have set J-01–J-30 is complete
+with concrete passing evidence, COHERENCE-PASS, and zero anti-goal violations. (Optional non-blocking
+touch-up for any future session: if a ≥2 min-query is ever desired for UX, bump both
+symbol_search_min_query and SYMBOL_SEARCH_MIN_QUERY together and update UT-02/UT-10 — the current
+aligned value of 1 is spec-conformant and not a defect.)

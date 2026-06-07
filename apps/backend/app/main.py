@@ -16,6 +16,8 @@ fabricated cockpit.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Literal
@@ -28,7 +30,7 @@ from pydantic import BaseModel
 from .config import CONFIG
 from .env import load_env
 from .providers.adapters import MarketDataAdapter, get_adapter
-from .providers.adapters.base import NoDataForWindow, SymbolNotTradable
+from .providers.adapters.base import NoDataForWindow, SymbolNotTradable, VendorTimeout
 from .providers.historical import HistoricalProvider
 from .providers.live import LiveProvider
 from .serializers import (
@@ -44,6 +46,8 @@ from .watch_manager import UnknownTickerError, WatchManager
 # Make uvicorn (and any importer) see the operator's apps/backend/.env without sourcing it by
 # hand. Load-if-missing: never overrides an already-set var, so the test suite stays hermetic.
 load_env()
+
+logger = logging.getLogger(__name__)
 
 
 class WatchRequest(BaseModel):
@@ -85,6 +89,15 @@ class RealDataError(Exception):
 # Wall-clock seconds between WS pushes (re-exposes the latest snapshot; no recompute).
 WS_PUSH_INTERVAL = 0.2
 
+# The ACTIONABLE message for a Historical watch that exceeds the vendor budget (J-28). A
+# historical-fetch timeout deterministically means the window pulled too much data, so the message
+# names the real cause and the fix — NOT a misleading generic "please try again" that would
+# deterministically fail again on the same window. It is still surfaced via the existing row-9
+# `provider_timeout` reason on the same `POST /watch/{ticker}` failure path (no new endpoint).
+HISTORICAL_OVERSIZE_DETAIL = (
+    "that window is very high-volume — try a shorter range"
+)
+
 manager = WatchManager(CONFIG)
 
 
@@ -93,10 +106,32 @@ def get_market_adapter() -> MarketDataAdapter:
     return get_adapter()
 
 
+async def _warm_symbol_universe_bg(adapter: MarketDataAdapter) -> None:
+    """Background task: warm the tradable-symbol universe so the first search is not a cold stall
+    (J-30). Runs the (blocking) neutral warm off the event loop; NO-OP without credentials, and a
+    warm failure is logged (never crashes startup — search falls back to its lazy fetch)."""
+    try:
+        await asyncio.to_thread(adapter.warm_symbol_universe)
+    except Exception:
+        logger.exception("symbol-universe warm failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
-    await manager.shutdown()
+    # Fire-and-forget the symbol-universe warm at startup through the NEUTRAL adapter seam (J-30)
+    # — main.py never names the SDK or the universe cache. Non-blocking: startup does not wait on
+    # it (no-creds makes it a no-op; the search endpoint stays correct either way). The adapter is
+    # resolved honoring any test ``dependency_overrides`` so a hermetic test warms its FakeAdapter,
+    # never the real vendor. Kept referenced so it is not GC'd mid-flight, and cancelled on shutdown.
+    warm_adapter = app.dependency_overrides.get(get_market_adapter, get_market_adapter)()
+    warm_task = asyncio.create_task(_warm_symbol_universe_bg(warm_adapter))
+    try:
+        yield
+    finally:
+        warm_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await warm_task
+        await manager.shutdown()
 
 
 app = FastAPI(title="Tapeology", version="0.1.0", lifespan=lifespan)
@@ -235,19 +270,21 @@ async def _watch_historical(
         allowed = ", ".join(str(s) for s in CONFIG.allowed_replay_speeds)
         raise HTTPException(status_code=422, detail=f"speed must be one of: {allowed}")
 
-    # 2. Fetch the real window OFF the event loop, under an explicit per-call timeout
-    #    (no-unbounded-waits anti-goal): a hung/slow vendor can NOT block the Watch request
-    #    indefinitely. On timeout, refuse with an explicit `provider_timeout` and create NO
-    #    engine (no fabricated tape). Map neutral failures -> distinct 4xx, no engine.
+    # 2. Fetch the real window OFF the event loop, bounded TWO ways (no-unbounded-waits +
+    #    bounded-honest-vendor-calls anti-goals): the adapter applies a REAL call-level HTTP
+    #    deadline (cutting the vendor request off itself -> a neutral `VendorTimeout`), and this
+    #    `asyncio.wait_for` is the OUTER backstop. Either way a hung/slow/oversized vendor can NOT
+    #    block the Watch indefinitely: it is refused with an explicit `provider_timeout` and NO
+    #    engine (no fabricated tape). On the historical path a timeout deterministically means the
+    #    window pulled too much data, so the message is ACTIONABLE ("try a shorter range"), not a
+    #    misleading generic retry. Map the other neutral failures -> distinct 4xx, no engine.
     try:
         window = await asyncio.wait_for(
             asyncio.to_thread(adapter.fetch_historical, ticker, start, end),
             timeout=CONFIG.vendor_call_timeout_seconds,
         )
-    except asyncio.TimeoutError:
-        raise RealDataError(
-            "provider_timeout", "market data provider timed out", 504
-        )
+    except (asyncio.TimeoutError, VendorTimeout):
+        raise RealDataError("provider_timeout", HISTORICAL_OVERSIZE_DETAIL, 504)
     except SymbolNotTradable:
         raise RealDataError("symbol_not_tradable", "not a tradable symbol", 404)
     except NoDataForWindow:

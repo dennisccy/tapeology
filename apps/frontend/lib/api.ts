@@ -135,18 +135,34 @@ export async function getMarketClock(): Promise<MarketClock> {
   }
 }
 
-// GET /symbols/search?q= — real tradable suggestions for the search box (J-13). Any failure or
-// empty/short query yields an empty list (free-text watch entry always remains possible); the
+// GET /symbols/search?q= — real tradable suggestions for the search box (J-13 / J-30). Any
+// failure or empty query yields an empty list (free-text watch entry always remains possible); the
 // UI renders these verbatim and never fabricates a suggestion.
-export async function searchSymbols(q: string): Promise<SymbolMatch[]> {
+//
+// Cancellation (J-30): the caller passes an `AbortSignal` so a newer keystroke can cancel this
+// in-flight request — preventing a pile-up and an out-of-order overwrite where a slow earlier
+// response clobbers a newer result. An aborted request resolves to "no result" (`[]`), NEVER an
+// error: the dropdown simply shows nothing for the cancelled query rather than an error banner or
+// a stuck "Searching…". A vendor hiccup likewise degrades to `[]` here.
+export async function searchSymbols(
+  q: string,
+  signal?: AbortSignal,
+): Promise<SymbolMatch[]> {
   const query = q.trim();
   if (!query) return [];
   try {
-    const res = await fetch(`${API_BASE}/symbols/search?q=${encodeURIComponent(query)}`);
+    const res = await fetch(
+      `${API_BASE}/symbols/search?q=${encodeURIComponent(query)}`,
+      { signal },
+    );
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data) ? (data as SymbolMatch[]) : [];
-  } catch {
+  } catch (err) {
+    // An abort (a newer keystroke cancelled this request) is NOT an error — resolve to no result
+    // so a late/cancelled response can never overwrite a newer one. Any other failure (vendor
+    // hiccup / unreachable backend) also degrades to an empty list, never a thrown error.
+    if (isTimeoutError(err)) return [];
     return [];
   }
 }

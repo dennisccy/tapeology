@@ -23,6 +23,7 @@ from app.providers.adapters.base import (
     RawTrade,
     SymbolMatch,
     SymbolNotTradable,
+    VendorTimeout,
 )
 from app.providers.base import Event
 
@@ -121,6 +122,8 @@ class FakeAdapter:
         clock_hang_seconds: float = 0.0,
         live_records: list[LiveRecord] | None = None,
         live_hold: asyncio.Event | None = None,
+        fetch_timeout: bool = False,
+        warm_raises: bool = False,
     ) -> None:
         self._available = available
         self._window = window
@@ -135,16 +138,31 @@ class FakeAdapter:
         # and the Watch is refused with `provider_timeout` — proving the no-unbounded-waits bound.
         self._fetch_hang_seconds = fetch_hang_seconds
         self._clock_hang_seconds = clock_hang_seconds
+        # A REAL call-level timeout: raise the neutral VendorTimeout (the analogue of the real
+        # adapter mapping a requests.Timeout) so the historical path's actionable-oversize message
+        # is exercised end-to-end without a wall-clock block (J-28).
+        self._fetch_timeout = fetch_timeout
+        # `warm_symbol_universe` must NEVER raise (a warm failure is swallowed); this lets a test
+        # assert that contract even when the underlying load would fail.
+        self._warm_raises = warm_raises
         self._live_records = live_records or []
         self._live_hold = live_hold
         self.fetch_calls: list[tuple] = []
         self.search_calls: list[str] = []
         self.clock_calls = 0
+        self.warm_calls = 0
         self.stream_live_calls: list[str] = []
         self.live_socket = FakeLiveSocket()
 
     def is_available(self) -> bool:
         return self._available
+
+    def warm_symbol_universe(self) -> None:
+        """Record a warm call (J-30). MUST NOT raise — a warm failure is swallowed so startup is
+        never crashed; ``warm_raises`` proves that contract (the swallow happens in the adapter)."""
+        self.warm_calls += 1
+        if self._warm_raises:
+            raise RuntimeError("simulated universe-warm failure")
 
     async def stream_live(self, symbol: str) -> AsyncIterator[LiveRecord]:
         """Yield the scripted neutral records, then (optionally) hold the stream open until
@@ -175,6 +193,10 @@ class FakeAdapter:
         self.fetch_calls.append((symbol, start, end))
         if self._fetch_hang_seconds:
             time.sleep(self._fetch_hang_seconds)  # block the worker thread (simulated hung vendor)
+        if self._fetch_timeout:
+            # The real call-level deadline fired inside the adapter: surface the NEUTRAL
+            # VendorTimeout the API maps to provider_timeout (with the actionable oversize message).
+            raise VendorTimeout("that window is very high-volume — try a shorter range")
         if self._not_tradable:
             raise SymbolNotTradable(symbol)
         if self._no_data:

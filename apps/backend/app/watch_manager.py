@@ -200,24 +200,41 @@ class WatchManager:
         replay speed, clamped to ``config.replay_pacing_cap_seconds`` so a large quiet gap never
         stalls the cockpit. Pacing is delivery-only; the engine still computes purely from the
         logical timestamps, so the replay stays deterministic. Cancellable like the sim feeder.
+
+        WARM-UP FAST-FORWARD (J-29): the first up-to-``warmup_min_events`` events are delivered with
+        a tiny fixed pace (``config.warmup_fast_forward_pace_seconds``) instead of their logical
+        gaps, so the cockpit reaches a WARM read quickly rather than waiting out the real timeline
+        of the warm-up window; normal logical-gap pacing resumes once warmed. This changes ONLY the
+        wall-clock sleep between deliveries — every event still enters the engine in the same order
+        with its same logical timestamp, so the resulting features/state/confidence are IDENTICAL
+        to an un-fast-forwarded replay (the engine never reads wall-clock; determinism preserved).
         """
         cap = self._config.replay_pacing_cap_seconds
         divisor = speed if speed > 0 else 1.0
+        warmup_count = self._config.warmup_min_events
+        ff_pace = self._config.warmup_fast_forward_pace_seconds
         # Stream open, no event applied yet -> `waiting`; the first process_event promotes to
         # `live`. A finite historical window resolves to `live`-or-`closed` by exhaustion.
         engine.set_stream_status("waiting")
         try:
             prev_ts: float | None = None
+            delivered = 0
             for event in provider.stream():
                 # Freeze in place while paused BEFORE consuming this event, so a paused historical
                 # replay resumes from exactly here (the next event), with no fabricated catch-up.
                 await self._wait_while_paused(engine)
                 if prev_ts is not None:
-                    delay = min((event.timestamp - prev_ts) / divisor, cap)
+                    if delivered < warmup_count:
+                        # Warm-up fast-forward: deliver promptly (delivery pacing only — the event's
+                        # logical timestamp below is unchanged, so engine math is identical).
+                        delay = ff_pace
+                    else:
+                        delay = min((event.timestamp - prev_ts) / divisor, cap)
                     if delay > 0:
                         await asyncio.sleep(delay)
                 prev_ts = event.timestamp
                 engine.process_event(event)
+                delivered += 1
             engine.set_stream_status("closed")
         except asyncio.CancelledError:
             engine.set_stream_status("closed")  # a clean stop/switch — NOT a failure

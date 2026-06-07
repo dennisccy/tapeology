@@ -91,7 +91,10 @@ def test_historical_hung_fetch_times_out_provider_timeout_no_engine(fake_client,
     assert resp.status_code == 504
     body = resp.json()
     assert body["reason"] == "provider_timeout"
-    assert body["detail"] == "market data provider timed out"
+    # iter-11 (J-28): a Historical-fetch timeout is ACTIONABLE for its real cause (the window
+    # pulled too much data) — not the generic "please try again". The reason stays provider_timeout.
+    assert body["detail"] == "that window is very high-volume — try a shorter range"
+    assert "try a shorter range" in body["detail"]
     # No engine was created => a subsequent canonical read is an explicit 404 (no fabricated tape,
     # and the watch was never registered after the timeout).
     assert client.get("/tape/AAPL/state").status_code == 404
