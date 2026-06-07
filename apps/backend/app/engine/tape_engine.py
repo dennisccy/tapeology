@@ -60,6 +60,16 @@ class TapeEngine:
         return self._scenario
 
     def set_stream_status(self, status: str) -> None:
+        """Set the canonical row-6 ``stream_status`` (delivery/lifecycle metadata, owned ONCE here).
+
+        Valid values: ``connecting`` | ``waiting`` | ``live`` | ``stale`` | ``paused`` | ``closed``
+        | ``failed``. The feeder writes ``waiting`` (stream open, no first event yet), ``stale`` (a
+        delivery-gap lull), ``closed`` (clean stop/exhaustion), and ``failed`` (the feeder raised);
+        ``connecting``->/``waiting``->``live`` is promoted in ``process_event`` and ``paused`` by
+        ``pause()``. This is NOT part of classification — it never enters ``classify(...)`` or any
+        feature/score, so the same ordered event stream still yields identical features/state/
+        confidence (determinism anti-goal).
+        """
         self._stream_status = status
         self._snapshot = self._build_snapshot()
 
@@ -142,7 +152,12 @@ class TapeEngine:
             self._history.add_trade(event.timestamp, event.price)
 
         self._last_ts = event.timestamp
-        if self._stream_status == "connecting":
+        # First-event promotion to the post-connect `live` rung. The status climbs
+        # connecting (pre-open / cold construction) -> waiting (stream open, no event yet, set by
+        # the feeder) -> live (first event arrived). Both pre-live rungs promote here so a stream
+        # that signalled open (status `waiting`) also goes `live` on its first event. `stale` ->
+        # `live` recovery and `paused`/`closed`/`failed` are owned by the feeder, not flipped here.
+        if self._stream_status in ("connecting", "waiting"):
             self._stream_status = "live"
         self._snapshot = self._build_snapshot()
         # Append a tape-state-transition MARKER if this tick's classified state changed to a

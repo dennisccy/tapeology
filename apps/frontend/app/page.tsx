@@ -7,7 +7,12 @@ import type { DataSourceMode, FailureReason, WatchParams } from "@/lib/types";
 import { TopBar } from "@/components/TopBar";
 import { Cockpit } from "@/components/Cockpit";
 import { PriceChart } from "@/components/PriceChart";
-import { IdleState, ConnectingState, StreamFailedState } from "@/components/IdleState";
+import {
+  IdleState,
+  ConnectingState,
+  StreamFailedState,
+  WaitingState,
+} from "@/components/IdleState";
 import { ProviderUnavailable } from "@/components/ProviderUnavailable";
 
 // Real-data failures that get their own distinct honest non-cockpit panel (row 9). Any other
@@ -128,13 +133,29 @@ export default function Page() {
   }
 
   // A connect failure surfaced by the stream hook (J-23): the initial snapshot fetch or the WS
-  // failed before any frame arrived. Surface it via the error banner (and a failure cockpit
-  // treatment) within a bounded time — never a frozen "Connecting…".
+  // failed before any frame arrived (pre-snapshot). Surface it via the error banner (and a failure
+  // cockpit treatment) within a bounded time — never a frozen "Connecting…".
   const streamFailed = !!ticker && connStatus === "failed";
+  // Post-connect lifecycle states owned by the canonical engine snapshot (J-25/J-26/J-27): the
+  // feeder connected, then either has no first event yet (`waiting`) or RAISED (`failed`). These are
+  // distinct from the pre-snapshot `connStatus === "failed"` above — they ride the snapshot's
+  // row-6 `stream_status`, read VERBATIM (no client-side "is the tape empty?" guess). An empty
+  // cold-start snapshot now arrives as `waiting`, so it can never short-circuit into the full
+  // cockpit grid as a settled `live` connection.
+  const snapshotWaiting = !!ticker && snapshot?.stream_status === "waiting";
+  const snapshotFailed = !!ticker && snapshot?.stream_status === "failed";
+  // A snapshot can briefly read the pre-open `connecting` rung if it is fetched in the instant
+  // before the feeder sets `waiting`. That is still an empty, not-yet-connected tape — render the
+  // connecting acknowledgement, NOT the full cockpit grid (the cold-start snapshot must never
+  // short-circuit into a settled `live` cockpit).
+  const snapshotConnecting = !!ticker && snapshot?.stream_status === "connecting";
   // The dot/status while the pending acknowledgement is showing reads "connecting" (J-21); once a
   // real watch is mounted the hook's connStatus drives it.
   const effectiveConnStatus = pending && !ticker ? "connecting" : connStatus;
-  const bannerError = error ?? (streamFailed ? connError : null);
+  const bannerError =
+    error ??
+    (streamFailed ? connError : null) ??
+    (snapshotFailed ? "The tape feed failed after connecting. No tape is shown." : null);
 
   return (
     <div className="min-h-screen">
@@ -152,16 +173,34 @@ export default function Page() {
       />
       <main className="mx-auto max-w-7xl px-4 py-6">
         {/* Tape-state prediction chart — above the cockpit, for Simulated + Historical only
-            (hidden for Live, per the blueprint IA). Reads GET …/history verbatim. */}
-        {ticker && !streamFailed && (mode === "sim" || mode === "historical") && (
-          <PriceChart ticker={ticker} />
-        )}
+            (hidden for Live, per the blueprint IA). Hidden while the stream has failed (pre- or
+            post-connect) or is still waiting for its first event — there is nothing to chart yet,
+            and the chart must never invent candles. Reads GET …/history verbatim. */}
+        {ticker &&
+          !streamFailed &&
+          !snapshotFailed &&
+          !snapshotWaiting &&
+          !snapshotConnecting &&
+          (mode === "sim" || mode === "historical") && <PriceChart ticker={ticker} />}
         {pending && !ticker ? (
           // J-21: pending acknowledgement — shown the instant Watch is clicked, before any data.
           <ConnectingState symbol={pending} />
         ) : streamFailed ? (
-          // J-23: an explicit, distinct connect-failure state (no frozen spinner, no fabrication).
+          // J-23: an explicit, distinct PRE-snapshot connect-failure state (no frozen spinner).
           <StreamFailedState message={connError ?? undefined} />
+        ) : snapshotFailed ? (
+          // J-27: a POST-connect feeder failure surfaced by the canonical snapshot — the feeder
+          // raised after connecting. Reuse the same explicit failure treatment + banner; never a
+          // mute/blank `live` cockpit and never frozen at "Connecting…".
+          <StreamFailedState message="The tape feed failed after connecting. No tape is shown." />
+        ) : snapshotWaiting ? (
+          // J-26: connected but no first event yet — an explicit waiting treatment labelled with
+          // the symbol + mode, IN PLACE OF blank panels under a misleading status.
+          <WaitingState symbol={ticker ?? undefined} mode={mode} />
+        ) : snapshotConnecting ? (
+          // Pre-open snapshot (transient, before the feeder sets `waiting`): the connecting
+          // acknowledgement, never the full grid over an empty tape.
+          <ConnectingState symbol={ticker ?? undefined} />
         ) : ticker ? (
           <Cockpit snapshot={snapshot} />
         ) : failure ? (

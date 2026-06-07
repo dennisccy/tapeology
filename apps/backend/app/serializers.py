@@ -4,6 +4,13 @@ These functions ONLY read fields off the snapshot — they never recompute a val
 single source of truth). ``/summary`` and the WS stream re-expose the same snapshot fields
 that ``/state`` and ``/features`` serve, so every view shows one identical engine value per
 metric. The headline feature subset is read straight from the snapshot's primary window.
+
+``stream_status`` is passed through VERBATIM wherever it appears below (``serialize_state`` /
+``serialize_summary`` / ``serialize_stream``) — one of
+``connecting`` | ``waiting`` | ``live`` | ``stale`` | ``paused`` | ``closed`` | ``failed``,
+owned once by the engine/feeder. The UI reads it as-is (it never adds a second status field or
+guesses a status), so a connected-but-empty tape reads ``waiting`` and a feeder failure reads
+``failed`` everywhere identically.
 """
 
 from __future__ import annotations

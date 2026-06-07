@@ -26,7 +26,12 @@ class EngineSnapshot:
     timestamp: float            # logical timestamp of the last processed event
     event_count: int            # trades processed so far
     warm: bool                  # have we passed the warm-up floor?
-    stream_status: str          # "connecting" | "live" | "stale" | "paused" | "closed"
+    # Canonical row-6 lifecycle status, owned ONCE by the engine/feeder (never recomputed by the
+    # API/UI). "connecting" (pre-open) -> "waiting" (stream open, no first event yet) -> "live"
+    # (first event arrived); "stale" (delivery-gap lull, incl. a `waiting` that never got a first
+    # event), "paused" (frozen, no teardown), "closed" (stopped/exhausted), "failed" (the feeder
+    # raised — logged + surfaced, never swallowed). NOT part of classification (determinism holds).
+    stream_status: str
 
     # Market (derived once in MarketState; spread = ask - bid).
     bid: float | None

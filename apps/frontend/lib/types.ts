@@ -20,8 +20,14 @@ export type FeatureSet = Record<string, number>;
 export interface TapeSnapshot {
   ticker: string;
   scenario: string;
-  // The engine's canonical stream status: "connecting" | "live" | "stale" | "paused" | "closed"
-  // (a free string here; "paused" is added in J-19). Read verbatim — the UI never recomputes it.
+  // The engine's canonical stream status (a free string here), owned once by the engine/feeder and
+  // read VERBATIM — the UI never recomputes it. Values:
+  //   "connecting" (pre-open) | "waiting" (stream open, no first event yet — J-26) |
+  //   "live" (first event arrived) | "stale" (delivery-gap lull, incl. a waiting that never got a
+  //   first event) | "paused" (J-19) | "closed" (stopped/exhausted) |
+  //   "failed" (the feeder raised after connecting — J-27).
+  // "waiting"/"failed" are added in J-25–J-27; an empty cold-start snapshot reads "waiting", so it
+  // never renders as a settled "live" cockpit.
   stream_status: string;
   // Canonical paused flag (Data Contract row 11), owned once by the engine/feeder. The UI READS
   // this to render the PAUSED indicator and toggle the Pause/Resume control — it never guesses

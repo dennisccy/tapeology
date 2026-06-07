@@ -33,12 +33,18 @@ const CONN_DOT: Record<ConnStatus, DotSpec> = {
 // dot tells the truth instead of a stale client-side "live".
 const STREAM_DOT: Record<string, DotSpec> = {
   connecting: { color: "bg-amber-400 animate-pulse", label: "connecting" },
+  // Waiting (J-26): stream open, no first event yet — amber + pulse to read as in-progress
+  // (matching connecting). The dot MUST read "waiting", never a confident "live" over an empty tape.
+  waiting: { color: "bg-amber-400 animate-pulse", label: "waiting" },
   live: { color: "bg-emerald-400", label: "live" },
   stale: { color: "bg-amber-400", label: "stale" },
   // Paused (J-19): amber, consistent with stale/absorption/unclear = amber. Read from the engine's
   // canonical paused status — never a client-side guess; the dot must read "paused", never "live".
   paused: { color: "bg-amber-400", label: "paused" },
   closed: { color: "bg-rose-500", label: "closed" },
+  // Failed (J-27): a post-connect feeder failure surfaced by the canonical snapshot — rose,
+  // distinct from a normal "closed". Read verbatim; the dot never sits on a frozen "live".
+  failed: { color: "bg-rose-500", label: "failed" },
 };
 
 const INPUT_CLASS =

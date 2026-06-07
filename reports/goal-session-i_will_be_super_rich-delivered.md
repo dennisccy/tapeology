@@ -1,9 +1,9 @@
 # Delivered — Tapeology: Real-Time Tape-Reading System for US Stocks
 
 **Session:** i_will_be_super_rich
-**Date:** 2026-06-05
+**Date:** 2026-06-06
 **Final verdict:** GOAL_ACHIEVED
-**Iterations:** 9 (iterations 0–8)
+**Iterations:** 10 (iterations 0–9)
 
 ## What you can do today
 
@@ -16,6 +16,8 @@
 - Pause a running watch at any moment to study the chart and cockpit in detail, then resume exactly where you left off with no invented data filling the gap
 - Follow a real live feed with a green "live" light while data streams and an honest amber "stale" light when the feed goes quiet, recovering cleanly when real data resumes
 - Always see an honest, specific message — never fabricated prices or trades — when real data is unavailable: no credentials, unknown symbol, empty window, or market closed each give their own clear explanation
+- Click Watch and immediately see a "Connecting to SYMBOL…" acknowledgement — the screen never silently stays on the idle state after a valid click; every outcome resolves to either a populated cockpit or a clear, specific error message within a bounded time
+- Get instant inline feedback for invalid input: the Watch button disables and a short message appears if you leave the ticker blank or set an invalid historical time window, before any network call is made
 
 ## How it came together
 
@@ -23,7 +25,9 @@ Tapeology started from a proven foundation: a deterministic simulator that drove
 
 The first real-data milestone was a data-source selector and an honest "unavailable" state. Rather than inventing data when no market-data account was connected, the product learned to say so clearly — a principle it has never violated. Historical replay arrived next: pick a real US stock, choose a past date and time window, set a replay speed, and the screen fills with that session's actual trades and quotes flowing through the unchanged engine. Symbol search came with it. A real market-clock indicator then completed the live-mode controls, and an honest "market is closed" screen appeared for the case where you try to watch a stock during off-hours. The live-feed milestone followed: a real ticker watched during market hours streams the vendor's actual trades and quotes with a green live light; a quiet period in the feed honestly shows amber and invents nothing. All fifteen original must-have journeys were passing at that point.
 
-Then the product was sharpened and extended over four more iterations. The aggressor-side classifier was upgraded so that nearly all real trades show "buy" or "sell" rather than "unknown" — on real Ford data, the unknown fraction dropped from 20% to zero, making the directional read materially more useful. A candlestick price chart appeared above the cockpit with colored markers at each tape-state transition; a technical build-cache problem briefly prevented its browser render from being confirmed, which was resolved in the next round with genuine screenshots. Pause and Resume arrived: a single button freezes the cockpit and chart without closing the session, and Resume continues exactly where things left off. Finally, the historical date/time picker was upgraded to accept your local time rather than requiring you to convert manually — a bug that had silently shifted fetched windows by the UTC offset was fixed at its root, and three one-click US-session presets each display their local-time equivalent. With the real-historical candlestick chart rendered and verified with genuine browser screenshots for the first time, all twenty must-have journeys reached positive evidence of passing.
+The product was then sharpened over four more iterations. The aggressor-side classifier was upgraded so that nearly all real trades show "buy" or "sell" rather than "unknown" — on real Ford data, the unknown fraction dropped from 20% to zero, making the directional read materially more useful. A candlestick price chart appeared above the cockpit with colored markers at each tape-state transition and a bar-size selector. Pause and Resume arrived: a single button freezes the cockpit and chart without closing the session, and Resume continues exactly where things left off. The historical date/time picker was upgraded to accept your local time — a bug that had silently shifted fetched windows by the UTC offset was fixed at its root, and three one-click US-session presets each display their local-time equivalent. With the real-historical candlestick chart rendered and verified with genuine browser screenshots, all twenty must-have journeys reached positive evidence of passing.
+
+After those twenty journeys reached their first goal completion, a final round raised the bar on Watch responsiveness — the moment of truth when a user clicks Watch. Four new requirements were introduced and delivered: the screen now shows "Connecting to SYMBOL…" immediately after every valid click (no more dead clicks); a slow or unreachable backend resolves to a clear error within a bounded time rather than an infinite spinner; a stream connection failure surfaces an explicit message rather than being silently swallowed; and empty or invalid input disables the Watch button with a short inline hint before any network call is made. All twenty-four must-have journeys now have positive evidence of passing, and every critical principle — no fabricated data, no silent failures, no magic numbers, single source of truth — has been upheld throughout.
 
 ## Watch it work
 

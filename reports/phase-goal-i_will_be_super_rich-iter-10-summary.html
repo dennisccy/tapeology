@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>goal-i_will_be_super_rich-iter-10 — Iteration Summary</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0; padding: 0; color: #1f2328; background: #f6f8fa; line-height: 1.5;
+}
+.container { max-width: 880px; margin: 0 auto; padding: 24px 16px 80px; }
+.hero {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 28px; margin-bottom: 16px; text-align: center;
+}
+.hero.pass { border-top: 6px solid #1a7f37; }
+.hero.fail { border-top: 6px solid #cf222e; }
+.hero.inprogress { border-top: 6px solid #d4a72c; }
+.hero h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+.hero h2 { margin: 0 0 14px 0; font-size: 1rem; color: #57606a; font-weight: 500; }
+.badge-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.95rem;
+}
+.badge.pass { background: #dafbe1; color: #1a7f37; }
+.badge.fail { background: #ffebe9; color: #cf222e; }
+.badge.inprogress { background: #fff8c5; color: #9a6700; }
+.signal-badge { padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; }
+.signal-badge.improving { background: #dafbe1; color: #1a7f37; }
+.signal-badge.holding { background: #ddf4ff; color: #0969da; }
+.signal-badge.stalling { background: #fff8c5; color: #9a6700; }
+.signal-badge.regressing { background: #ffebe9; color: #cf222e; }
+.signal-badge.na { background: #f6f8fa; color: #57606a; }
+.meta { color: #57606a; font-size: 0.875rem; margin: 10px 0 16px; }
+.journey-row {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 4px;
+}
+.journey-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 0.85rem;
+  background: #f6f8fa; border: 1px solid #d0d7de;
+}
+.journey-pill.passing, .journey-pill.already_passing { background: #dafbe1; color: #1a7f37; border-color: #b4e2c0; }
+.journey-pill.failing, .journey-pill.regressed { background: #ffebe9; color: #cf222e; border-color: #f1aeb0; }
+.journey-pill.partial { background: #fff8c5; color: #9a6700; border-color: #eed888; }
+.journey-pill.unknown { background: #f6f8fa; color: #57606a; }
+.hero-image { margin-top: 18px; }
+.hero-image img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+details {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  margin-bottom: 12px;
+}
+details > summary {
+  cursor: pointer; padding: 14px 18px; font-weight: 600; font-size: 1.05rem;
+  list-style: none; user-select: none; display: flex; align-items: center; gap: 8px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: '▶'; transition: transform 0.15s; font-size: 0.75rem; color: #57606a;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+.accordion-body { padding: 0 18px 18px; }
+.accordion-body h3 { font-size: 0.95rem; color: #57606a; margin: 16px 0 6px; }
+.why-text { background: #f6f8fa; padding: 10px 12px; border-radius: 6px; margin: 4px 0 12px; }
+ul.bullets { margin: 6px 0 14px; padding-left: 22px; }
+ul.bullets li { margin-bottom: 4px; }
+ol.steps { padding-left: 0; list-style: none; counter-reset: step; }
+ol.steps > li {
+  counter-increment: step; padding: 12px 0 12px 44px;
+  border-top: 1px solid #eaeef2; position: relative;
+}
+ol.steps > li:first-child { border-top: none; }
+ol.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 14px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #0969da; color: white; display: flex;
+  align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600;
+}
+.step-shot { margin-top: 10px; }
+.step-shot img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+.next-step-box {
+  background: #ddf4ff; padding: 12px 16px; border-radius: 6px;
+  border-left: 4px solid #0969da; margin: 12px 0;
+}
+.drill-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.drill-table th, .drill-table td {
+  text-align: left; padding: 8px 6px; border-bottom: 1px solid #eaeef2;
+}
+.drill-table th { background: #f6f8fa; }
+.verdict-cell.PASS, .verdict-cell.CLOSURE-PASS, .verdict-cell.GOAL_ACHIEVED { color: #1a7f37; font-weight: 600; }
+.verdict-cell.FAIL, .verdict-cell.CLOSURE-FAIL, .verdict-cell.REGRESSION { color: #cf222e; font-weight: 600; }
+.verdict-cell.CONTINUE, .verdict-cell.ESCALATE, .verdict-cell.STALLED { color: #9a6700; font-weight: 600; }
+.verdict-cell.SKIPPED, .verdict-cell.UNKNOWN, .verdict-cell.IN-PROGRESS { color: #57606a; }
+.footer-note { text-align: center; color: #6e7781; font-size: 0.8rem; margin-top: 24px; }
+.iter-card {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 16px 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 14px;
+}
+.iter-card .left { flex-shrink: 0; }
+.iter-card .body { flex: 1 1 auto; }
+.iter-card .body .title { font-weight: 600; }
+.iter-card .body .sub { color: #57606a; font-size: 0.88rem; margin-top: 2px; }
+.iter-card a.open { color: #0969da; text-decoration: none; font-weight: 500; }
+.iter-card a.open:hover { text-decoration: underline; }
+.matrix { width: 100%; border-collapse: collapse; margin: 12px 0 22px; font-size: 0.88rem; }
+.matrix th, .matrix td { padding: 6px 8px; border: 1px solid #d0d7de; text-align: center; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix .cell-passing, .matrix .cell-already_passing { background: #dafbe1; color: #1a7f37; }
+.matrix .cell-failing, .matrix .cell-regressed { background: #ffebe9; color: #cf222e; }
+.matrix .cell-partial { background: #fff8c5; color: #9a6700; }
+.matrix .cell-unknown { background: #f6f8fa; color: #57606a; }
+.no-summary {
+  background: #fff8c5; border: 1px solid #eed888; padding: 14px 18px;
+  border-radius: 8px; color: #9a6700; margin-bottom: 14px;
+}
+/* Plain-language layer — the primary, non-technical view. */
+.plain-words {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 24px; margin: 18px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.plain-words .pw-heading {
+  margin: 0 0 14px; font-size: 1.15rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.pw-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.pw-card {
+  background: white; border-radius: 8px; padding: 14px 16px;
+  border: 1px solid #e3eaf3;
+}
+.pw-card .pw-label {
+  font-size: 0.78rem; font-weight: 600; color: #57606a;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.pw-card .pw-text {
+  margin: 0; font-size: 1rem; color: #1f2328; line-height: 1.45;
+}
+.pw-empty { color: #8c959f; font-style: italic; font-size: 0.95rem; }
+.tech-divider {
+  margin: 18px 0 8px; text-align: center;
+  color: #6e7781; font-size: 0.82rem; font-style: italic;
+  border-top: 1px dashed #d0d7de; padding-top: 12px;
+}
+/* Watch-it-work — narrated screenshot gallery from demo-narrator. */
+.watch-it-work {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 18px 22px; margin: 10px 0 6px;
+}
+.wiw-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.wiw-heading {
+  margin: 0; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.demo-badge {
+  font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 12px;
+  border: 1px solid transparent; letter-spacing: 0.04em;
+}
+.demo-badge.demo-recorded { background: #dafbe1; color: #1a7f37; border-color: #aceebb; }
+.demo-badge.demo-notes    { background: #fff8c5; color: #9a6700; border-color: #e8d97e; }
+.demo-badge.demo-skipped  { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+.demo-badge.demo-pending  { background: #ddf4ff; color: #0969da; border-color: #b6e3ff; }
+.demo-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.demo-step {
+  margin: 0; padding: 12px; background: #f6f8fa;
+  border: 1px solid #d0d7de; border-radius: 8px;
+}
+.demo-step-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.demo-step-num {
+  font-weight: 600; color: #57606a; font-variant-numeric: tabular-nums;
+}
+.demo-step-title { color: #1f2328; font-weight: 500; }
+.demo-new {
+  background: #ddf4ff; color: #0969da; font-size: 0.7rem; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px; letter-spacing: 0.06em;
+}
+.demo-shot { margin-bottom: 8px; }
+.demo-shot img {
+  width: 100%; height: auto; border-radius: 4px; border: 1px solid #d0d7de;
+  display: block;
+}
+.demo-narration {
+  margin: 0; color: #1f2328; font-size: 0.92rem; line-height: 1.4;
+}
+.demo-empty {
+  margin: 8px 0 0; color: #57606a; font-style: italic;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.demo-notes-wrap { margin-top: 14px; }
+.demo-notes-wrap summary {
+  cursor: pointer; color: #9a6700; font-weight: 500; font-size: 0.9rem;
+}
+.demo-notes-wrap[open] summary { margin-bottom: 6px; }
+/* Story so far + latest demo (session index plain-language top). */
+.story-so-far {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 14px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.story-heading {
+  margin: 0 0 12px; font-size: 1.1rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.story-body { font-size: 1rem; color: #1f2328; line-height: 1.55; }
+.story-body .story-h { margin: 14px 0 6px; color: #1f2328; }
+.story-body p { margin: 0 0 10px; }
+.session-demo {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 0; margin: 8px 0 6px; overflow: hidden;
+}
+.session-demo-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 22px;
+  background: #f6f8fa; border-bottom: 1px solid #d6e4f0;
+  font-weight: 600; color: #1f2328; font-size: 0.95rem;
+}
+.session-demo-head a.open { color: #0969da; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+.session-demo-head a.open:hover { text-decoration: underline; }
+.session-demo .watch-it-work {
+  border: none; border-radius: 0; box-shadow: none; margin: 0;
+}
+/* Delivered link banner — sits on the session index when GOAL_ACHIEVED. */
+.delivered-link {
+  margin: 14px 0; padding: 14px 22px;
+  background: #dafbe1; border: 1px solid #aceebb; border-radius: 10px;
+  color: #1a7f37; font-size: 1rem;
+}
+.delivered-link a {
+  color: #1a7f37; font-weight: 600; text-decoration: none; margin-left: 8px;
+}
+.delivered-link a:hover { text-decoration: underline; }
+.delivered-back {
+  margin: 8px 0 14px; padding: 0; font-size: 0.9rem;
+}
+.delivered-back a { color: #0969da; text-decoration: none; }
+.delivered-back a:hover { text-decoration: underline; }
+.delivered-body {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 28px; margin: 12px 0;
+}
+.delivered-body h2.story-h { margin-top: 0; }
+/* Feature manual (session index, top of page). */
+.cover-vision {
+  margin: 8px 0 14px; color: #57606a; font-size: 1.02rem;
+  font-style: italic; max-width: 60ch;
+}
+.feature-toc {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 20px 26px; margin: 14px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.feature-toc-heading {
+  margin: 0 0 14px; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.feature-toc-list {
+  margin: 0; padding-left: 22px; font-size: 1rem; line-height: 1.7;
+}
+.feature-toc-list li { padding: 2px 0; }
+.feature-toc-list a {
+  color: #1f2328; text-decoration: none; font-weight: 500;
+}
+.feature-toc-list a:hover { color: #0969da; text-decoration: underline; }
+.toc-extra-header {
+  list-style: none; margin: 10px 0 4px -22px;
+  font-size: 0.82rem; color: #57606a; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.feature-manual { margin: 14px 0; }
+.feature-section {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 16px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+  scroll-margin-top: 12px;
+}
+.feature-heading {
+  margin: 0 0 10px; font-size: 1.2rem; color: #1f2328;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.feature-description {
+  margin: 0 0 16px; color: #1f2328; font-size: 1rem; line-height: 1.55;
+}
+.feature-description-label {
+  font-weight: 600; color: #57606a; margin-right: 4px;
+}
+.feature-note {
+  margin: 8px 0 12px; padding: 8px 12px;
+  background: #fff8c5; border: 1px solid #eed888; border-radius: 6px;
+  color: #9a6700; font-size: 0.88rem;
+}
+.feature-source {
+  margin: 12px 0 0; font-size: 0.88rem; color: #57606a;
+}
+.feature-source a { color: #0969da; text-decoration: none; }
+.feature-source a:hover { text-decoration: underline; }
+.feature-empty {
+  margin: 10px 0; padding: 12px 16px;
+  background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+  color: #57606a; font-style: italic;
+}
+.status-pill {
+  font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+  letter-spacing: 0.04em; white-space: nowrap; display: inline-block;
+}
+.status-pill-passing { background: #dafbe1; color: #1a7f37; border: 1px solid #aceebb; }
+.status-pill-failing { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-regressed { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-partial { background: #fff8c5; color: #9a6700; border: 1px solid #e8d97e; }
+.status-pill-unknown { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.status-pill-coming-soon { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.developer-view {
+  margin: 28px 0 6px;
+  border: 1px dashed #d0d7de; border-radius: 8px;
+}
+.developer-view > summary {
+  cursor: pointer; padding: 12px 16px;
+  color: #57606a; font-size: 0.92rem; font-weight: 500;
+  background: #f6f8fa; border-radius: 8px;
+}
+.developer-view[open] > summary {
+  border-bottom: 1px dashed #d0d7de;
+  border-radius: 8px 8px 0 0;
+}
+.developer-view-body { padding: 12px 18px; }
+</style>
+</head><body><div class='container'>
+<section class='hero inprogress'><div class='badge-row'><div class='badge inprogress'><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+<circle cx="12" cy="12" r="11" fill="#d4a72c"/>
+<path d="M12 6v6l4 2.5" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg><span>CONTINUE</span></div><span class='signal-badge improving'>Direction: improving</span></div><h1>Iteration 10  ·  session i_will_be_super_rich</h1><h2>Post-connect lifecycle hardening: waiting/failed states close the &quot;no mute cockpit&quot; anti-goal; J-25/J-26/J-27 now passing</h2><div class='meta'>2026-06-07 · goal-full</div><div class='meta'>Journeys: 27/30 passing</div><div class='journey-row'><span class='journey-pill passing' title='Watch a ticker and see the live tape cockpit'>J-01 · passing</span><span class='journey-pill passing' title='Buyer-control scenario is identified'>J-02 · passing</span><span class='journey-pill passing' title='Seller-control scenario is identified'>J-03 · passing</span><span class='journey-pill passing' title='Bid absorption is detected (price impact, not aggression)'>J-04 · passing</span><span class='journey-pill passing' title='Ask absorption is detected (price impact, not aggression)'>J-05 · passing</span><span class='journey-pill passing' title='Unclear / choppy tape is reported as unclear'>J-06 · passing</span><span class='journey-pill passing' title='Tape-state transitions are announced in the event log and observations'>J-07 · passing</span><span class='journey-pill passing' title='REST and the live UI agree (single source of truth)'>J-08 · passing</span><span class='journey-pill passing' title='Stop watching a ticker'>J-09 · passing</span><span class='journey-pill passing' title='Choose a data source (Live / Historical / Simulated)'>J-10 · passing</span><span class='journey-pill passing' title='Replay a real historical session'>J-11 · passing</span><span class='journey-pill passing' title='Stream a real live ticker'>J-12 · passing</span><span class='journey-pill passing' title='Find a symbol by search'>J-13 · passing</span><span class='journey-pill passing' title='Real-data edge cases are handled honestly (no fabricated data)'>J-14 · passing</span><span class='journey-pill passing' title='A live-feed gap shows stale, then recovers'>J-15 · passing</span><span class='journey-pill passing' title='Historical recent-trades show a resolved side (not unknown)'>J-16 · passing</span><span class='journey-pill passing' title='Price chart with tape-state markers on simulated data'>J-17 · passing</span><span class='journey-pill passing' title='Inspect tape-state prediction on a real historical chart'>J-18 · passing</span><span class='journey-pill passing' title='Pause and resume a watch without losing state'>J-19 · passing</span><span class='journey-pill passing' title='Pick a historical window in local time with US-session quick-picks'>J-20 · passing</span><span class='journey-pill passing' title='A Watch click is always acknowledged immediately (no silent dead-click)'>J-21 · passing</span><span class='journey-pill passing' title='A slow or hung request resolves to an explicit error, never an infinite spinner'>J-22 · passing</span><span class='journey-pill passing' title='A failed initial connection or stream surfaces an explicit error (no swallowed failures)'>J-23 · passing</span><span class='journey-pill passing' title='Invalid or empty Watch input gives immediate inline feedback'>J-24 · passing</span><span class='journey-pill passing' title='A valid Watch never silently returns to (or stays on) the idle screen — in real modes and off-hours'>J-25 · passing</span><span class='journey-pill passing' title='A connected stream with no data yet explains itself (never a mute cockpit)'>J-26 · passing</span><span class='journey-pill passing' title='No usable data — whether silent or failed — resolves to an explicit honest state within a bounded time'>J-27 · passing</span><span class='journey-pill failing' title='A vendor-call timeout is truly enforced and honestly reported (backend wins, message is actionable)'>J-28 · failing</span><span class='journey-pill failing' title='A Historical watch of a real liquid symbol loads quickly and within bounds — never a routine timeout'>J-29 · failing</span><span class='journey-pill failing' title='Symbol search is fast and responsive'>J-30 · failing</span></div></section>
+<section class='plain-words'><h2 class='pw-heading'>In plain words</h2><div class='pw-grid'><div class='pw-card'><div class='pw-label'>What you can do now</div><p class='pw-text'>Watch a US stock ticker live, in simulated mode, or as a real historical replay and read the tape in plain language — buyer control, seller control, bid or ask absorption, or an unclear tape — each with a confidence score, a live quote, a running trade list, and plain-language observations. Search for a stock by name, choose your data source, and pick historical windows in your own local time using one-click US-session presets. A candlestick price chart appears in simulated and historical modes with colored tape-state markers and a bar-size selector. Pause and resume a running watch at any time. Every Watch click gives immediate feedback — a &quot;Connecting…&quot; acknowledgement appears instantly, an explicit error surfaces if the feed fails, and the input field tells you right away if your ticker or time window is invalid. If the connection succeeds but no trade has come through yet, the screen now tells you so explicitly (&quot;Waiting for the first trade…&quot;) rather than showing blank panels. If the feed breaks in the background, you see a clear error message instead of a frozen screen.</p></div><div class='pw-card'><div class='pw-label'>What changed this time</div><p class='pw-text'>After a Watch connects, you will never see a blank or misleading cockpit again. The app now shows &quot;Connected to SYMBOL — waiting for the first trade…&quot; (with an amber pulsing indicator) when the stream is open but quiet, instead of drawing an empty grid of panels. If the data feed breaks after connecting, an explicit red error screen appears and the failure is recorded in the server log — nothing is silently swallowed. A live watch that stays quiet long enough automatically moves from &quot;waiting&quot; to &quot;stale&quot; without inventing any fake data.</p></div><div class='pw-card'><div class='pw-label'>What&#x27;s next</div><p class='pw-text'>Next we will make the app faster and more reliable when talking to the data vendor — enforcing a real network-level timeout on vendor calls, loading busy historical windows faster, and making symbol search snappier.</p></div></div></section>
+<section class='watch-it-work'><div class='wiw-head'><h2 class='wiw-heading'>Watch it work</h2><span class='demo-badge demo-skipped'>SKIPPED</span></div><p class='demo-empty'>Frontend at http://localhost:3650 did not respond after 90s of retries. No browser walkthrough was performed.
+
+Likely cause: a stale/corrupt .next build (a &#x27;next build&#x27; likely ran against the live &#x27;next dev&#x27; .next). The harness auto-clears .next and retries; if it persists, isolate builds with NEXT_DIST_DIR (e.g. NEXT_DIST_DIR=.next-qa for build/QA commands).
+
+Frontend log tail (/tmp/fanout-frontend-8650.log):
+```
+Require stack:
+- /home/dennisccy/Git/tapeology/apps/frontend/.next/server/webpack-runtime.js
+- /home/dennisccy/Git/tapeology/apps/frontend/.next/server/pages/_document.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/server/require.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/server/load-components.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/build/utils.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/build/swc/options.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/build/swc/index.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/build/analysis/parse-module.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/build/analysis/get-page-static-info.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/server/lib/router-server.js
+- /home/dennisccy/Git/tapeology/apps/frontend/node_modules/next/dist/server/lib/start-server.js
+    at &lt;unknown&gt; (.next/server/app/page.js:2:37335)
+    at Object.&lt;anonymous&gt; (.next/server/app/page.js:2:37379) {
+  code: &#x27;MODULE_NOT_FOUND&#x27;,
+  requireStack: [Array],
+  page: &#x27;/&#x27;
+}
+ GET / 500 in 240ms
+```</p></section>
+<div class='tech-divider'><span>Technical detail below — open if you want the developer view.</span></div>
+<details><summary>What was done</summary><div class='accordion-body'><ul class='bullets'><li>Added `waiting` rung to the engine status ladder (`connecting` → `waiting` → `live`) so a connected-but-quiet stream never masquerades as live or stays frozen at connecting</li><li>Updated all three feeders (`_feed`, `_feed_paced`, `_feed_live`) to signal `waiting` once the provider stream is open but before the first event is applied</li><li>Added exception handling in all three feeders: a non-cancel exception now logs the ticker server-side and flips `stream_status` to `failed`; a clean cancel still ends `closed`</li><li>Bound the live `waiting` state to `stale` after `CONFIG.stale_gap_seconds` with zero fabricated data (reuses the existing config constant; no new magic numbers)</li><li>Added `WaitingState` frontend component and routed snapshot-borne `waiting` and `failed` states to their honest treatments in `page.tsx` and `Cockpit.tsx`; `TopBar.tsx` gained amber-pulse `waiting` and rose `failed` status dots</li><li>Added 9 new backend unit tests in `test_stream_lifecycle.py` covering both paced/sim and live feeders for waiting-on-open, waiting→live, failure→failed+logged, cancel→closed, and waiting→stale-no-fabrication</li><li>Backend suite: 198 passed / 1 skipped (up from 189 baseline); evaluator closed the browser-QA render gap independently on an isolated stack with 6 byte-distinct screenshots</li></ul></div></details>
+<details><summary>What's left + Next step</summary><div class='accordion-body'><h3>Still open</h3><ul class='bullets'><li>Journey J-28 (vendor-call timeout truly enforced at the HTTP/SDK boundary) failing — unbuilt</li><li>Journey J-29 (historical watch of a real liquid symbol loads quickly by design — concurrent fetch, cached windows) failing — unbuilt</li><li>Journey J-30 (symbol search is fast and responsive — warmed/cached universe, cancelled stale requests) failing — unbuilt</li></ul><h3>Next step</h3><div class='next-step-box'>iter-11 at **full** depth — build the vendor-responsiveness cluster **J-28 + J-29 + J-30** together (they share the vendor-fetch path and reinforce one another), the last unbuilt Must-haves: J-28 needs a TRUE call-level deadline at the Alpaca adapter HTTP/SDK boundary (an httpx/SDK timeout, not just the iter-9 asyncio.wait_for wrapper), with the backend timeout shorter than the frontend WATCH_REQUEST_TIMEOUT_MS so the backend&#x27;s honest error wins, and an actionable oversize-window message (&quot;try a shorter range&quot;); J-29 needs fast-by-design historical loading via concurrent trades+quotes fetch (asyncio.gather), removal of needless pre-flight round-trips, and a cached/reused window; J-30 needs a warmed/cached tradable-symbol universe (fetched once at startup, refreshed in background), cancelled stale in-flight searches, a sensible min-query length, and empty-list-never-error on a vendor hiccup. After J-28/J-29/J-30 pass with concrete evidence, the full set J-01–J-30 is a GOAL_ACHIEVED candidate.</div></div></details>
+<details><summary>Direction signal</summary><div class='accordion-body'><div class='why-text'><strong>Why:</strong> Three journeys (J-25, J-26, J-27) moved from failing/unbuilt to passing this iteration, closing the critical &quot;no mute cockpit / no silent return to idle&quot; anti-goal. Zero regressions were found across the 24 previously-passing journeys. The newly-scored vendor-responsiveness cluster (J-28, J-29, J-30) is genuinely unbuilt and is the sole remaining work before GOAL_ACHIEVED.</div><h3>Trend</h3><ul class='bullets'><li>Newly passing this iter: J-25, J-26, J-27</li><li>Newly passing in last 5 iters total: J-17, J-18, J-19, J-20 (iter-7/8), J-21, J-22, J-23, J-24 (iter-9), J-25, J-26, J-27 (iter-10)</li><li>Regressions in last 5 iters: none</li><li>Anti-goal violations in last 5 iters: none</li><li>Iters with no journey state change: 0 of last 5</li></ul><h3>Latest evaluator reasoning</h3><div class='why-text'>The post-connect stream-lifecycle cluster (J-25/J-26/J-27) is fully satisfied, closing the &quot;No mute cockpit / no silent return to idle&quot; critical anti-goal. browser-qa was SKIPPED (shared :3650 .next corrupted) and the evidence dir was empty, so I closed the render gap myself on an isolated stack with DOM-text assertions and byte-distinct screenshots, and independently re-ran the backend suite (198 passed / 1 skipped). This is NOT GOAL_ACHIEVED because the goal was re-expanded with the vendor-responsiveness cluster J-28/J-29/J-30, which is explicitly out of scope this iteration and genuinely unbuilt.</div></div></details>
+<details><summary>Quick verify (5 min)</summary><div class='accordion-body'><ol class='steps'><li><span class='step-action'>Open `http://localhost:3650` in your browser — expect the idle screen with a symbol input and Watch button</span></li><li><span class='step-action'>Type `SIM-BUYER` and click Watch — expect the full cockpit within ~10 seconds, status dot green (&quot;live&quot;), TapeState shows &quot;buyer_control&quot;</span></li><li><span class='step-action'>Click Stop, then type `WAIT-TEST` and click Watch — expect the &quot;waiting for the first trade&quot; screen (amber pulsing dot, ticker and mode label visible, no blank panel grid)</span></li><li><span class='step-action'>While the waiting screen is visible, check the TopBar status dot — expect amber/yellow and pulsing, label reads &quot;waiting&quot; (not &quot;live&quot;, not &quot;connecting&quot;)</span></li><li><span class='step-action'>Attempt a Watch with an empty symbol field — expect Watch button disabled or an inline &quot;Enter a ticker symbol&quot; message; the idle screen should not change silently</span></li></ol></div></details>
+<details><summary>Artifacts</summary><div class='accordion-body'><table class='drill-table'><thead><tr><th>Report</th><th>Verdict</th><th>Path</th></tr></thead><tbody><tr><td>Iter spec</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/phases/goal-i_will_be_super_rich-iter-10.md'>docs/phases/goal-i_will_be_super_rich-iter-10.md</a></td></tr><tr><td>Dev handoff</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/handoffs/goal-i_will_be_super_rich-iter-10-dev.md'>docs/handoffs/goal-i_will_be_super_rich-iter-10-dev.md</a></td></tr><tr><td>Review</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='reviews/goal-i_will_be_super_rich-iter-10-review.md'>reports/reviews/goal-i_will_be_super_rich-iter-10-review.md</a></td></tr><tr><td>Browser QA</td><td><span class='verdict-cell SKIPPED'>SKIPPED</span></td><td><a href='phase-goal-i_will_be_super_rich-iter-10-ui-test-results.md'>reports/phase-goal-i_will_be_super_rich-iter-10-ui-test-results.md</a></td></tr><tr><td>Implementation summary</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-i_will_be_super_rich-iter-10-implementation-summary.md'>reports/phase-goal-i_will_be_super_rich-iter-10-implementation-summary.md</a></td></tr><tr><td>User-visible changes</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-i_will_be_super_rich-iter-10-user-visible-changes.md'>reports/phase-goal-i_will_be_super_rich-iter-10-user-visible-changes.md</a></td></tr><tr><td>What to click</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-i_will_be_super_rich-iter-10-what-to-click.md'>reports/phase-goal-i_will_be_super_rich-iter-10-what-to-click.md</a></td></tr><tr><td>QA</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='qa/goal-i_will_be_super_rich-iter-10-qa.md'>reports/qa/goal-i_will_be_super_rich-iter-10-qa.md</a></td></tr><tr><td>Goal evaluation</td><td><span class='verdict-cell CONTINUE'>CONTINUE</span></td><td><a href='../runs/goal-session-i_will_be_super_rich/iter-10/eval.md'>runs/goal-session-i_will_be_super_rich/iter-10/eval.md</a></td></tr><tr><td>Journey history</td><td><span class='verdict-cell —'>—</span></td><td><a href='../runs/goal-session-i_will_be_super_rich/state/journey-history.json'>runs/goal-session-i_will_be_super_rich/state/journey-history.json</a></td></tr></tbody></table></div></details>
+<div class='footer-note'>Generated 2026-06-07 03:03 by <code>render_iteration_summary.py</code> · source: <a href='phase-goal-i_will_be_super_rich-iter-10-iteration-summary.md'>phase-goal-i_will_be_super_rich-iter-10-iteration-summary.md</a></div>
+</div></body></html>

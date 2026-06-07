@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 
 from .config import Config
@@ -20,6 +21,11 @@ from .providers.simulated import build_provider
 
 # Wall-clock seconds between delivered events in live mode (delivery pacing only).
 FEED_PACE_SECONDS = float(os.environ.get("TAPEOLOGY_FEED_PACE", "0.04"))
+
+# Server-side logger for feeder lifecycle. A background-feeder failure MUST be LOGGED (a real,
+# inspectable line naming the ticker), never swallowed in the task — the no-mute-cockpit / no-
+# silent-dead-clicks anti-goal. The status flip to "failed" is what surfaces it to the UI.
+logger = logging.getLogger(__name__)
 
 
 class UnknownTickerError(Exception):
@@ -165,6 +171,10 @@ class WatchManager:
             await asyncio.sleep(self._config.pause_poll_seconds)
 
     async def _feed(self, engine: TapeEngine, provider: Provider) -> None:
+        # Stream is open but no event applied yet -> `waiting` (not a frozen `connecting`); the
+        # first process_event promotes it to `live`. A finite sim stream then resolves to
+        # `live`-or-`closed` by exhaustion, so no extra timer is needed here.
+        engine.set_stream_status("waiting")
         try:
             for event in provider.stream():
                 await self._wait_while_paused(engine)  # freeze in place while paused (no consume)
@@ -172,8 +182,14 @@ class WatchManager:
                 await asyncio.sleep(self._pace)
             engine.set_stream_status("closed")
         except asyncio.CancelledError:
-            engine.set_stream_status("closed")
+            engine.set_stream_status("closed")  # a clean stop/switch — NOT a failure
             raise
+        except Exception:
+            # A real feeder failure: log it server-side (naming the ticker) and surface it as
+            # `failed` so the cockpit shows an explicit error instead of freezing at cold-start.
+            # Never swallowed; the engine is left at `failed`, never a fabricated `live`.
+            logger.exception("paced/sim feeder for %s failed", engine.snapshot().ticker)
+            engine.set_stream_status("failed")
 
     async def _feed_paced(
         self, engine: TapeEngine, provider: Provider, speed: float
@@ -187,6 +203,9 @@ class WatchManager:
         """
         cap = self._config.replay_pacing_cap_seconds
         divisor = speed if speed > 0 else 1.0
+        # Stream open, no event applied yet -> `waiting`; the first process_event promotes to
+        # `live`. A finite historical window resolves to `live`-or-`closed` by exhaustion.
+        engine.set_stream_status("waiting")
         try:
             prev_ts: float | None = None
             for event in provider.stream():
@@ -201,8 +220,13 @@ class WatchManager:
                 engine.process_event(event)
             engine.set_stream_status("closed")
         except asyncio.CancelledError:
-            engine.set_stream_status("closed")
+            engine.set_stream_status("closed")  # a clean stop/switch — NOT a failure
             raise
+        except Exception:
+            # A real replay-feeder failure: log it (naming the ticker) and surface `failed` — never
+            # swallowed, never left frozen at cold-start, never a fabricated `live`.
+            logger.exception("historical replay feeder for %s failed", engine.snapshot().ticker)
+            engine.set_stream_status("failed")
 
     async def _feed_live(self, engine: TapeEngine, provider: AsyncProvider) -> None:
         """Feed an async (live) provider into the engine with a stale watchdog (J-12 / J-15).
@@ -225,12 +249,36 @@ class WatchManager:
         queue: asyncio.Queue = asyncio.Queue()
         done = object()  # sentinel: the stream ended on its own
 
+        class _Failure:
+            """Sentinel carrying a provider/stream exception from the puller to the main loop.
+
+            The provider may raise inside the puller's ``async for`` (a live-feed failure), which
+            would otherwise die silently in the puller task. Wrapping it and enqueuing it lets the
+            main loop surface it as ``failed`` + log it — never swallowed (the no-mute-cockpit
+            anti-goal). A ``CancelledError`` is NOT wrapped here — it is re-raised so a clean
+            teardown stays a cancel, not a failure.
+            """
+
+            def __init__(self, error: BaseException) -> None:
+                self.error = error
+
         async def _pull() -> None:
-            async for event in stream:
-                await queue.put(event)
+            try:
+                async for event in stream:
+                    await queue.put(event)
+            except asyncio.CancelledError:
+                raise  # clean teardown — let the cancel propagate (not a failure)
+            except Exception as exc:  # a real provider/stream failure
+                await queue.put(_Failure(exc))
+                return
             await queue.put(done)  # reached only on natural exhaustion (skipped on cancel)
 
         puller = asyncio.create_task(_pull())
+        # Stream is open and the puller is draining it, but no event has been applied yet ->
+        # `waiting` (not a frozen `connecting`, and never a confident `live` over an empty tape).
+        # The first event promotes it to `live`; the stale watchdog below bounds it to `stale` if no
+        # event ever arrives (off-hours / quiet feed), so it never sits on `waiting` forever.
+        engine.set_stream_status("waiting")
         try:
             while True:
                 # Honest pause for LIVE: the puller keeps draining the socket (socket stays OPEN,
@@ -246,6 +294,11 @@ class WatchManager:
                             # loop sees `done` after resume and closes honestly.
                             queue.put_nowait(done)
                             break
+                        if isinstance(discarded, _Failure):
+                            # A feeder failure during pause must NOT be discarded/swallowed: re-queue
+                            # it so the loop surfaces `failed` after resume (no-swallow anti-goal).
+                            queue.put_nowait(discarded)
+                            break
                     await asyncio.sleep(self._config.pause_poll_seconds)
                     continue
                 try:
@@ -253,10 +306,17 @@ class WatchManager:
                 except asyncio.TimeoutError:
                     if engine.paused:
                         continue  # paused mid-wait: loop back into the freeze branch
-                    engine.set_stream_status("stale")  # honest stale — fabricates no trade
+                    # Honest stale — bounds BOTH a `waiting` (no first event ever, off-hours/quiet
+                    # feed) and a `live` gap; fabricates no trade. Never sits on `waiting` forever.
+                    engine.set_stream_status("stale")
                     continue
                 if event is done:
                     break
+                if isinstance(event, _Failure):
+                    # The provider/stream raised in the puller: surface it as `failed` + log it
+                    # (naming the ticker). Re-raised below so the failure path runs the bounded
+                    # `aclose()` teardown (no synchronous unsubscribe — the iter-4 deadlock lesson).
+                    raise event.error
                 if engine.paused:
                     continue  # raced into pause after dequeue: drop this event (no backfill)
                 engine.process_event(event)
@@ -264,8 +324,15 @@ class WatchManager:
                     engine.set_stream_status("live")  # owns the stale->live recovery flip
             engine.set_stream_status("closed")
         except asyncio.CancelledError:
-            engine.set_stream_status("closed")
+            engine.set_stream_status("closed")  # a clean stop/switch — NOT a failure
             raise
+        except Exception:
+            # A real live-feeder failure (the provider raised, or the loop body failed): log it
+            # server-side (naming the ticker) and surface `failed` — never swallowed, never frozen
+            # at cold-start, never a fabricated `live`. The `finally` below still tears the socket
+            # down via the bounded `aclose()` path (no synchronous unsubscribe in this branch).
+            logger.exception("live feeder for %s failed", engine.snapshot().ticker)
+            engine.set_stream_status("failed")
         finally:
             puller.cancel()
             with contextlib.suppress(asyncio.CancelledError):

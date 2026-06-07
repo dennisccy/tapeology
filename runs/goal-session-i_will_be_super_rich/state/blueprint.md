@@ -3,7 +3,7 @@
 > Goal session: `i_will_be_super_rich` · Status: **APPROVED** (J-01–J-15 built & in force) · **extended** at iter-5
 > with the now-in-scope **analysis-fidelity** half (J-16–J-20): tick-test side resolution, the one focused
 > price-candlestick + tape-state-marker chart, pause/resume, and local-time historical-window selection.
-> Source: `docs/goal.md` (Product Shape, Must-have journeys J-01–J-20, Key Capabilities, Canonical values).
+> Source: `docs/goal.md` (Product Shape, Must-have journeys J-01–J-30, Key Capabilities, Canonical values).
 > Carries forward the **APPROVED** simulated blueprint from session `i_will_be_rich` (J-01–J-09) and the real-data
 > half (J-10–J-15): live streaming + historical replay behind a vendor-agnostic adapter (Alpaca first, free IEX feed).
 >
@@ -18,6 +18,19 @@
 > affordance, and a new `provider_timeout` failure reason is a sibling of the existing row-9 reasons on the SAME
 > `POST /watch` failure path. A per-call `vendor_call_timeout_seconds` (backend config) and a `WATCH_REQUEST_TIMEOUT_MS`
 > (frontend config) bound every outbound vendor call and the client request — config constants, not displayed values.
+> No top-level nav section added/renamed/moved ⇒ **no re-approval requested**.
+>
+> **iter-10 extension is ADDITIVE (no mute cockpit / no silent return to idle, J-25–J-27).** Same single `/` HOME, same
+> nav skeleton, same one-engine source of truth. **No new endpoint, no new producer, no new top-level value.** The work
+> extends the **existing row-6 `stream_status`** (owned once by the engine/feeder) with two engine-owned post-connect
+> outcomes so a connected watch is never a mute/idle dead-end: **`waiting`** (the watch connected but no first
+> trade/quote has arrived yet — replaces a confident `live` over an empty tape) and **`failed`** (the background feeder
+> raised / exited unexpectedly — logged server-side and surfaced, never swallowed, never frozen at cold-start). Both flow
+> verbatim through the already-registered row-6 serving path (`/summary` + `WS /stream`); the cockpit renders an explicit
+> waiting / failed treatment **in place of** blank panels (an in-place non-cockpit treatment, exactly like the existing
+> honest-state clause — no new route). The bound that turns a silent no-first-event into `waiting`→`stale` is the
+> **already-registered** `stale_gap_seconds` watchdog (no new config). J-28–J-30 (true vendor-call-boundary timeout
+> enforcement, fast historical load, fast symbol search) are a SEPARATE later concern — explicitly out of scope here.
 > No top-level nav section added/renamed/moved ⇒ **no re-approval requested**.
 
 **Governing principle.** Tapeology is a single-ticker **tape cockpit**. Every tape state, confidence, and feature is
@@ -42,11 +55,11 @@ studies, or drawing tools, and **no** order/execution affordance (anti-goal: *St
 
 …then **Watch** (`POST /watch/{ticker}` with an optional `{mode,start,end,speed}` body; empty body = sim) ·
 **watched-source label** (the sim scenario, `live AAPL`, or `historical AAPL <window>`) · **stream-status** dot (the
-engine's canonical `snapshot.stream_status` — connecting / live / stale / **paused** / closed) ·
+engine's canonical `snapshot.stream_status` — connecting / **waiting** / live / stale / **paused** / **failed** / closed) ·
 **Pause / Resume** (`POST /watch/{ticker}/pause` · `POST /watch/{ticker}/resume`; freeze/continue without teardown) ·
 **Stop** (`DELETE /watch/{ticker}`).
-Calm dark surface, monospaced numerics; green = buy-side / positive impact, red = sell-side / negative impact,
-amber = absorption / unclear / stale.
+Calm dark surface, monospaced numerics; green = buy-side / positive impact, red = sell-side / negative impact / failed,
+amber = absorption / unclear / stale / waiting.
 
 **Routes — still exactly one screen across all modes.**
 
@@ -60,6 +73,13 @@ amber = absorption / unclear / stale.
   - **Price chart (Simulated + Historical only)** — *above the cockpit:* a **candlestick** chart of the watched price with a **bar-size selector (10 / 30 / 60 s)** and **tape-state-transition markers** (green buyer_control, red seller_control, amber bid/ask_absorption; unclear unmarked), pan/zoom. Reads `GET /tape/{ticker}/history?bar=…` — never recomputes price/side/state. Empty window ⇒ empty chart. Hidden for Live.
   - **Idle/empty state** — before Watch and after Stop: empty cockpit, no stale numbers.
   - **PAUSED indicator** — when paused, the cockpit + chart **freeze** (no teardown, no fabricated catch-up); reads the engine's canonical paused state.
+  - **Connected-but-no-data (waiting) treatment** — when the watch connected but no first trade/quote has arrived (row-6
+    `stream_status == "waiting"`): an explicit, human-readable "Connected to <SYMBOL> (<mode>) — waiting for the first
+    trade…" panel **in place of** blank panels under a bare `live` dot (J-26). It reads the canonical status — no
+    client-side guess; the status NEVER reads a confident `live` over an empty tape.
+  - **Feeder-failure treatment** — when the background feeder raised / exited unexpectedly (row-6
+    `stream_status == "failed"`): the existing failure panel / error banner, rendered in place of the cockpit (J-23/J-27).
+    The failure is logged server-side and surfaced — never swallowed, never left frozen at cold-start.
   - **Honest non-cockpit states** (real modes) — rendered *in place of* the cockpit, never alongside fabricated panels:
     *provider unavailable* (no credentials), *not a tradable symbol*, *no data for that window*, *market is closed
     (with next open)*.
@@ -71,7 +91,11 @@ J-07 → event-log + observations · J-08 → `/` panels vs the REST endpoints (
 **J-12 → Live controls + status → cockpit** · **J-13 → symbol search box** · **J-14 → the honest non-cockpit states** ·
 **J-15 → stream-status dot (live ⇄ stale)** ·
 **J-16 → recent-trades panel (resolved side)** · **J-17 / J-18 → price-chart pane above the cockpit (sim / historical)** ·
-**J-19 → Pause/Resume controls + PAUSED indicator** · **J-20 → Historical date/time picker (local-zone label + quick-picks)**.
+**J-19 → Pause/Resume controls + PAUSED indicator** · **J-20 → Historical date/time picker (local-zone label + quick-picks)** ·
+**J-21 → synchronous pending/connecting cockpit treatment** · **J-22 → bounded error banner (provider_timeout / unreachable)** ·
+**J-23 → feeder/connect-failure treatment (StreamFailedState + banner)** · **J-24 → inline Watch-input validation** ·
+**J-25 → the watch always leaves idle for a non-idle terminal state (status dot + the in-place treatments above), real modes + off-hours** ·
+**J-26 → the connected-but-no-data (waiting) treatment** · **J-27 → the waiting→stale/closed bound + the feeder-failure treatment** (all on the same `/` cockpit area, reading row-6 `stream_status`).
 
 No second page, no watchlist grid, no dashboard, no execution/order controls, no general charting (anti-goals:
 single-ticker UI; no execution path; one focused chart only).
@@ -92,10 +116,10 @@ rows 10–12 are the **analysis-fidelity additions**: rows 10 (J-17 chart **rend
 | 3 | **bid / ask / spread / last** (spread = ask − bid) | `MarketState` (latest Quote/Trade) → snapshot | `GET /tape/{ticker}/summary` | `WS /stream` |
 | 4 | **Recent trades** (price / size / **side**) | **Aggressor classifier** — quote rule (≥ask⇒buy, ≤bid⇒sell) **then a tick-test fallback** (no quote yet **or** strictly mid-spread ⇒ uptick=buy / downtick=sell / zero-tick carries last non-zero dir; no quote **and** no prior trade ⇒ `unknown`) over provider TradeEvents | `GET /tape/{ticker}/events` | `WS /stream` |
 | 5 | **Observations + event-log messages** | Engine **observation / transition emitter** | `GET /tape/{ticker}/events` | `WS /stream` |
-| 6 | **Watched-source descriptor + watch/stream status** (sim scenario \| `live <SYM>` \| `historical <SYM> <window>`; status connecting/live/**stale**/**paused**/closed) | `WatchManager` (records mode + params at watch) / engine feeder (owns `stream_status`) | `GET /tape/{ticker}/summary` (+ `POST`/`DELETE /watch` responses) | `WS /stream` |
+| 6 | **Watched-source descriptor + watch/stream status** (sim scenario \| `live <SYM>` \| `historical <SYM> <window>`; status connecting / **waiting** / live / **stale** / **paused** / **failed** / closed) — **`waiting`** = connected but no first event yet (J-26; replaces a confident `live` over an empty tape); **`failed`** = the feeder raised / exited unexpectedly (J-23/J-27; logged + surfaced, never swallowed). One owner: the engine/feeder; NO second `stream_status` writer | `GET /tape/{ticker}/summary` (+ `POST`/`DELETE /watch` responses) | `WS /stream` |
 | 7 | **Symbol search results** (symbol + name) | **Vendor-agnostic adapter** (Alpaca first) behind the provider seam | `GET /symbols/search?q=` | — |
 | 8 | **Market clock** (open/closed + next open/close) | **Vendor-agnostic adapter** / market-clock module | `GET /market/clock` | Live market-status indicator reads this |
-| 9 | **Real-data availability / failure state** (`provider unavailable` \| `not a tradable symbol` \| `no data for that window` \| `market is closed` \| **`provider_timeout`** — a bounded vendor/clock/fetch call that exceeded `vendor_call_timeout_seconds`) | Live / Historical provider + adapter (credential check + vendor responses); the watch endpoint wraps each outbound vendor `to_thread` call in `asyncio.wait_for(..., vendor_call_timeout_seconds)` so a hung vendor yields `provider_timeout`, **never** an unbounded wait and **never** a fabricated tape (J-22 backend half) | Explicit error from `POST /watch/{ticker}` (mid-stream feed-gap ⇒ `stream_status="stale"` on the row-6 snapshot; same single failure path — `provider_timeout` is a sibling reason, not a new endpoint) | UI renders the matching non-cockpit state / error banner |
+| 9 | **Real-data availability / failure state** (`provider unavailable` \| `not a tradable symbol` \| `no data for that window` \| `market is closed` \| **`provider_timeout`** — a bounded vendor/clock/fetch call that exceeded `vendor_call_timeout_seconds`) | Live / Historical provider + adapter (credential check + vendor responses); the watch endpoint wraps each outbound vendor `to_thread` call in `asyncio.wait_for(..., vendor_call_timeout_seconds)` so a hung vendor yields `provider_timeout`, **never** an unbounded wait and **never** a fabricated tape (J-22 backend half) | Explicit error from `POST /watch/{ticker}` (mid-stream feed-gap ⇒ `stream_status="stale"` on the row-6 snapshot; a post-connect feeder failure ⇒ `stream_status="failed"` on the row-6 snapshot — same single failure ownership; `provider_timeout` is a sibling reason, not a new endpoint) | UI renders the matching non-cockpit state / error banner |
 | 10 | **Price history: OHLC bars (per 10/30/60 s) + tape-state-transition markers** (state + confidence + ts) | **Engine history buffer** (accumulates watched price → config-binned OHLC + meaningful-transition markers; computed once with the snapshot) | `GET /tape/{ticker}/history?bar=<10\|30\|60>` (pure projection; sim + historical only) | Chart reads this — never recomputes price/side/state |
 | 11 | **Paused state** (boolean) | **Engine/feeder** (owns paused; pause freezes the feeder without teardown — no fabricated backfill) → snapshot | `GET /tape/{ticker}/summary` (set via `POST /watch/{ticker}/pause` · `POST /watch/{ticker}/resume`) | `WS /stream`; UI renders PAUSED + toggles the control |
 | 12 | **Resolved historical window** (tz-aware start/end instants for the user's selected **local** window; explicit **local zone label** + **US-session quick-picks** Open 9:30 ET / Close 16:00 ET / Full RTH, each annotated with its local equivalent) | **Frontend datetime module** (`apps/frontend/lib/datetime.ts` — the resolution fn resolves the local selection AND the ET session anchors via the IANA `America/New_York` zone, DST-correct, → exact tz-aware UTC instants **once, before** the fetch; the 9:30/16:00 ET anchors are named preset constants, not engine thresholds) → request body | `POST /watch/{ticker}` body `{mode:"historical",start,end,speed}` (timezone-aware instants; backend `_parse_window_dt` honors the offset verbatim) | Historical provider fetches exactly the resolved window (no second tz conversion, no silent UTC shift) — **built at iter-8** |
@@ -113,9 +137,10 @@ rows 10–12 are the **analysis-fidelity additions**: rows 10 (J-17 chart **rend
   **same** interface in two shapes; both feed the **same** engine via `process_event` (no engine change). The **live
   feeder** is the single owner that flips row-6 `stream_status` to **`stale`** when no event arrives within
   `stale_gap_seconds` (and back to **`live`** on resume), fabricating no trades — there is no second `stream_status`
-  writer and no parallel live state/feature path. **Pause** (row 11) is also a feeder-level freeze owned by the
-  feeder/engine — distinct from `stop()` (which cancels + tears down); pause does NOT cancel the task and synthesizes no
-  catch-up data on resume.
+  writer and no parallel live state/feature path. The **same feeders** are the single owner of the new row-6
+  **`waiting`** (held before the first event) and **`failed`** (on a feeder exception/early-exit) statuses — no second
+  writer. **Pause** (row 11) is also a feeder-level freeze owned by the feeder/engine — distinct from `stop()` (which
+  cancels + tears down); pause does NOT cancel the task and synthesizes no catch-up data on resume.
 
 **Config (no magic numbers).** All window lengths, thresholds, large-print size, impact/absorption cutoffs, confidence
 boundaries, the stale-gap timeout, the **per-call `vendor_call_timeout_seconds`** (the bound on a single outbound
@@ -124,6 +149,8 @@ vendor/clock/fetch call that gates a Watch — distinct from the mid-stream `sta
 live in one config module — never inline literals in engine/classifier code. (The tick test itself is a pure rule with
 no numeric cutoff; if any tolerance is introduced it MUST live in config.) The frontend's matching client-side request
 backstop (`WATCH_REQUEST_TIMEOUT_MS`) likewise lives in one `lib/config.ts` constant — no inline millisecond literal.
+The connected-but-no-first-event → `stale` bound (J-26/J-27) reuses the **already-registered** `stale_gap_seconds` — no
+new timeout constant is introduced.
 
 **Credentials.** Real-vendor keys come **only** from environment/config (never committed). With no keys, the app runs
 simulator-only and the real modes report **row-9** `provider unavailable` — they never fall back to fabricated data.
@@ -147,6 +174,15 @@ simulator-only and the real modes report **row-9** `provider unavailable` — th
   validation message (empty symbol / invalid window). No empty `catch`, no dropped promise, no unbounded external
   wait. These are presentation states only — they add **no** client-side recomputation of an engine value (rows 1–6
   stay single-source-of-truth); the timeout values are config constants, not displayed values.
+- **No mute cockpit / no silent return to idle (J-25–J-27).** AFTER the click resolves, a valid Watch lands on a
+  **non-idle terminal state** and never silently returns to / remains on idle: streaming data, an explicit honest panel
+  (row 9), an explicit error, the **`waiting`** connecting/waiting treatment, or **`stale`/`closed`/`failed`**. The
+  cockpit MUST NOT present a confident **`live`** over an empty tape — an empty tape reads **`waiting`** (then `stale`
+  once `stale_gap_seconds` is exceeded). A feeder exception/early-exit flips row-6 to **`failed`** (logged + surfaced),
+  never swallowed, never frozen at cold-start, never a fabricated `live`. An off-hours **Live** watch lands on the
+  explicit **`market_closed`** panel (or, if the clock is indeterminate, the **`waiting`→`stale`/`failed`** path) —
+  never idle, never a fake-`live` empty cockpit. These are all the **one** engine-owned row-6 `stream_status` rendered
+  read-only by the UI — no second status writer, no client-side recompute of any rows 1–6 value.
 
 **Note on module names.** `TapeStateClassifier`, `FeatureEngine`, `MarketState`, the aggressor classifier,
 `WatchManager`, the config module, the **vendor-agnostic adapter** + the live/historical providers, and (new) the
