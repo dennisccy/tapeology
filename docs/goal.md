@@ -560,8 +560,10 @@ additions MUST NOT regress J-01 – J-15.
   - Acceptance: the wait is **bounded** — backend vendor calls run under an explicit timeout and the
     frontend enforces a client-side timeout backstop. Within that bound the connecting state is replaced
     by a clear, distinct error (e.g. "Market data provider timed out" / "Backend unreachable"); the
-    "Connecting…" spinner never runs indefinitely. *(Backend timeout proven by unit test with a mocked
-    slow adapter; the client-side timeout proven by a non-resolving request.)*
+    "Connecting…" spinner never runs indefinitely. The bound MUST be real — enforced at the vendor-call
+    boundary, not only an async wrapper a blocking/large-response call can defeat — and the backend
+    timeout MUST be shorter than the frontend client timeout (see J-28/J-29). *(Backend timeout proven
+    by unit test with a mocked slow adapter; the client-side timeout proven by a non-resolving request.)*
 
 - **J-23: A failed initial connection or stream surfaces an explicit error (no swallowed failures)**
   - Steps:
@@ -631,6 +633,58 @@ J-01 – J-24.
     panel / error banner / honest status dot), never swallowed, and never leaves the engine frozen at
     cold-start. *(Backend-provable by unit tests with a no-event provider and with a feeder that raises;
     UI-verifiable by the resulting state.)*
+
+Journeys **J-28 – J-30** cover real-vendor responsiveness — honest, truly-enforced timeouts (J-28),
+fast Historical loading of busy windows (J-29), and a fast symbol search (J-30). They assume vendor
+credentials are configured and MUST NOT regress J-01 – J-27.
+
+- **J-28: A vendor-call timeout is truly enforced and honestly reported (backend wins, message is actionable)**
+  - Steps:
+    1. Trigger a Historical/Live watch whose vendor fetch genuinely exceeds the budget — an oversized
+       window, or a slow / CPU-bound large response
+    2. Observe how and when the error appears, and what it says
+  - Acceptance: the timeout is enforced at the **vendor-call boundary** (a real HTTP/SDK deadline), not
+    only via an async wrapper that a blocking or CPU-bound (large-response) call can defeat; the
+    **backend timeout is shorter than the frontend client timeout** so the user sees the backend's
+    honest, distinct error rather than a client-side give-up; and the message is **actionable for the
+    real cause** — a deterministically oversized window says so (e.g. "that window is very high-volume —
+    try a shorter range") instead of a misleading "please try again" that will deterministically fail
+    again. *(Backend bound proven by a test simulating a slow / large vendor response; the
+    backend<frontend ordering and message mapping are verifiable.)*
+
+- **J-29: A Historical watch of a real liquid symbol loads quickly and within bounds — never a routine timeout**
+  - Steps:
+    1. Select **Historical**, enter a **liquid** symbol (e.g. `TSLA`) and a busy regular-hours window
+       that includes the **market-open minute** (09:30–09:31 ET, or its local equivalent such as
+       14:30–14:31 BST), and click **Watch**
+    2. Measure the time from click to the cockpit showing real values / a warm read; then re-watch the
+       same symbol + window
+  - Acceptance: the cockpit populates with the window's **real** trades + quotes within a bounded,
+    configured time, and a legitimate busy window MUST NOT routinely time out. Loading is **optimized
+    for speed, not merely given a longer timeout**: trades and quotes are fetched **concurrently**,
+    needless pre-flight round-trips are removed, a fetched window may be **cached / reused** (re-watching
+    the same symbol + window is near-instant), and the engine **warms promptly** (the warm-up events are
+    delivered with minimal initial pacing / a bounded fast-forward, then normal replay pacing resumes).
+    The fetch wait is filled with an explicit **progress** state (J-26), never a blank / idle screen.
+    These speed-ups MUST NOT introduce a timeout or error, MUST NOT fabricate or drop trades/quotes, and
+    a genuinely slow path still resolves to an honest bounded state (J-28). *(Verified with credentials
+    against a real liquid symbol + busy window; the fetch concurrency and warm-up timing are covered by
+    tests.)*
+
+- **J-30: Symbol search is fast and responsive**
+  - Steps:
+    1. Select **Live** or **Historical** and type a few characters (e.g. "TSL", then backspace and
+       "AAP") into the symbol search, typing quickly
+    2. Observe how fast suggestions appear — including the **very first search after a backend (re)start**
+  - Acceptance: suggestions appear within a small bounded time after the debounce, and the **first
+    search after startup is not a multi-second stall** — the tradable-symbol universe is **warmed /
+    cached** (fetched once at startup or first availability, ideally persisted across restarts and
+    refreshed in the background) rather than re-fetched per request; rapid typing **cancels stale
+    in-flight requests** (no pile-up, no out-of-order overwrite) and repeated queries are served from a
+    cache; a sensible **minimum query length** avoids over-broad single-character scans. Free-text watch
+    entry always remains possible, and any vendor hiccup still yields an **empty list, never an error or
+    a stuck spinner**. *(Browser-verifiable; the cache warm / refresh and request cancellation are
+    covered by tests.)*
 
 ## Anti-goals
 
@@ -710,3 +764,15 @@ J-01 – J-24.
   that disables the failure/empty-resolution path; a feeder failure MUST be logged and surfaced, never
   swallowed. A reproducible Watch that returns to idle, or an indefinitely-empty cockpit, in any mode
   (including off-hours), is a veto on GOAL_ACHIEVED. *(critical)*
+- **Bounded, honest, performant vendor calls.** Every vendor-gated Watch MUST be bounded by a **real
+  call-level deadline** (an HTTP/SDK timeout), not only an async wrapper a blocking/large-response call
+  can defeat, and the backend's bound MUST be **shorter than the frontend client timeout** so the user
+  always sees the backend's honest error, never a client-side give-up. Interactive vendor paths MUST be
+  **fast by design, not by lengthening timeouts**: a legitimate high-volume window MUST load within
+  budget via an optimized fetch (concurrent trades/quotes, no needless pre-flight, cached/reused
+  windows, prompt warm-up), and **symbol search MUST NOT re-fetch the whole asset universe per
+  keystroke** (a warmed/cached universe, cancelled stale requests, a sensible min-query). Any
+  timeout/oversize error MUST be **actionable for the real cause** (e.g. "shorten the window"), never a
+  misleading "try again"; and every performance optimization MUST preserve correctness — **no fabricated
+  or dropped trades/quotes, no recomputation outside the engine** (single source of truth holds).
+  *(critical)*
