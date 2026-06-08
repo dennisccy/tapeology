@@ -76,7 +76,9 @@ The first success metric is **not** profit. In priority order:
   longer dominated by `unknown`.
 - **Tape-state prediction chart.** For simulated data and historical replay, the cockpit plots the
   price as candlesticks (selectable 10 / 30 / 60 s bars) and marks meaningful tape-state
-  transitions, so a user can visually judge whether a state preceded the subsequent price move.
+  transitions, so a user can visually judge whether a state preceded the subsequent price move. The
+  chart's time axis shows **true clock time** — real market time for historical, a synthetic session
+  clock for simulated — not elapsed playback seconds.
 - **Pause / resume.** A watched session can be paused and resumed without tearing it down or
   clearing the UI; replay resumes deterministically and live resumes at current real data.
 - **Local-time historical selection.** Historical windows are entered in the user's local timezone
@@ -103,7 +105,10 @@ The first success metric is **not** profit. In priority order:
    The real providers talk to the vendor only through a **vendor-agnostic adapter** (Alpaca
    first, free IEX feed; another vendor is one new adapter). The engine consumes provider events
    and never knows the source. Real timestamps are mapped to the engine's logical timeline
-   (quote-before-trade preserved) so the engine stays unchanged and deterministic per stream.
+   (quote-before-trade preserved) so the engine stays unchanged and deterministic per stream. The
+   real (and, for the simulator, a synthetic session-start) **epoch origin** is preserved alongside
+   that logical timeline as a canonical **display anchor**, so the chart can render **true clock
+   time** without the engine ever reading wall-clock (determinism unchanged).
 2. **Core input events**: `TradeEvent` (ticker, timestamp, price, size, side ∈
    {buy, sell, unknown}); `QuoteEvent` (ticker, timestamp, bid, ask, bid_size, ask_size);
    and later `BookLevelEvent` (ticker, timestamp, side ∈ {bid, ask}, price, size, level).
@@ -131,8 +136,8 @@ The first success metric is **not** profit. In priority order:
      lower, bid appears to refresh, seller impact weakens.
    - **ask_absorption** — high aggressive buy volume, price does not move meaningfully
      higher, ask appears to refresh, buyer impact weakens.
-   - **unclear** — mixed signals, weak evidence, wide spread, low trade_speed, or no clean
-     price impact.
+   - **unclear** — mixed signals, weak evidence, a spread **wide relative to the instrument's
+     price / typical spread**, low trade_speed, or no clean price impact.
 7. **Watch lifecycle**: start/stop watching a ticker; each watched ticker has an
    independent engine instance fed by the provider.
 8. **REST + WebSocket API**: `POST /watch/{ticker}` (optional body selects mode + historical
@@ -159,8 +164,9 @@ The first success metric is **not** profit. In priority order:
 13. **Tape-state prediction chart (UI)**: a **candlestick** chart of the watched price with a
     **bar-size selector** (10 / 30 / 60 s) and **markers at meaningful tape-state transitions**
     (green buyer_control, red seller_control, amber bid/ask_absorption; unclear unmarked), with
-    pan/zoom. Shown for **simulated and historical** only, built on a lightweight client-side
-    financial-charting library.
+    pan/zoom and a **true-clock time axis** (real market time for historical; a synthetic session
+    clock for simulated — never elapsed playback seconds). Shown for **simulated and historical**
+    only, built on a lightweight client-side financial-charting library.
 14. **Pause / resume a watch**: freeze and continue a watched session **without** tearing it down
     or clearing the UI. Replay (sim/historical) resumes exactly where it left off; live freezes the
     view and resumes at current real data (no fabricated backfill). The paused state is surfaced in
@@ -215,7 +221,9 @@ The first success metric is **not** profit. In priority order:
   "provider unavailable" — they never fall back to fabricated data.
 - **Local-time windows:** historical date/time windows are entered and displayed in the user's
   local timezone (with an explicit zone label) and resolved to the exact instant selected before
-  the vendor fetch — no silent UTC reinterpretation of a naive value.
+  the vendor fetch — no silent UTC reinterpretation of a naive value. **Dates are entered and shown
+  as `dd-MM-yyyy`** via a custom date input (not a locale-dependent native picker) and times as 24h
+  `HH:mm`; **every date rendered anywhere in the UI uses `dd-MM-yyyy`** (one shared formatter).
 - **In-memory Phase 1:** rolling windows and state live in process memory; optional
   PostgreSQL/Redis/Parquet/DuckDB only if later needed.
 - **No magic numbers:** every window length, threshold, large-print size, impact/absorption
@@ -254,13 +262,15 @@ The first success metric is **not** profit. In priority order:
   readouts, the current **tape state** + **confidence**, the **observations** list, and the
   **event log**. Everything streams over `WS /tape/{ticker}/stream`. The source selector reveals
   mode-specific controls — a **symbol search** (real modes), a **date + time-window picker** and
-  **replay-speed** control (historical), and a **market-status** indicator (live) — without
+  **replay-speed** control (historical; speed changes apply **live** to the running replay), and a
+  **market-status** indicator (live) — without
   changing the cockpit. It remains exactly one screen; a small indicator shows the source being
   watched (the sim scenario, "live AAPL", or "historical AAPL <window>"). Above the cockpit, a
-  **price chart** — candlesticks with a bar-size selector and tape-state markers — is shown for
-  **Simulated** and **Historical**. The watch controls include **Pause / Resume** (freeze and
+  **price chart** — candlesticks with a bar-size selector, tape-state markers, and a **true-clock
+  time axis** — is shown for **Simulated** and **Historical**. The watch controls include **Pause / Resume** (freeze and
   continue without clearing) beside Stop, with a **PAUSED** indicator when paused. The Historical
-  **date/time-window picker** defaults to **local time** (with a zone label) and offers
+  **date/time-window picker** defaults to **local time** (with a zone label; dates entered and shown
+  as **dd-MM-yyyy** via a custom date input) and offers
   **US-session quick-picks** (Open 9:30 ET / Close 16:00 ET / Full RTH).
 
 ### API surface (Phase 1)
@@ -283,6 +293,10 @@ The first success metric is **not** profit. In priority order:
   for the price chart (simulated + historical); a pure projection of the engine history buffer.
 - `POST /watch/{ticker}/pause` and `POST /watch/{ticker}/resume` — freeze/continue the feeder
   **without** tearing the instance down; the engine, its snapshot, and the history buffer survive.
+- `POST /watch/{ticker}/speed` — set the historical replay speed of a **running** watch (validated
+  against the configured allowed speeds; out-of-set → 422, not-watched → 404). The change applies
+  **immediately** to the in-progress replay (delivery pacing only — the engine stays deterministic),
+  with no re-fetch and no restart.
 
 ### Canonical values (single source of truth — computed once in the engine, displayed identically everywhere)
 
@@ -667,7 +681,9 @@ credentials are configured and MUST NOT regress J-01 – J-27.
     delivered with minimal initial pacing / a bounded fast-forward, then normal replay pacing resumes).
     The fetch wait is filled with an explicit **progress** state (J-26), never a blank / idle screen.
     These speed-ups MUST NOT introduce a timeout or error, MUST NOT fabricate or drop trades/quotes, and
-    a genuinely slow path still resolves to an honest bounded state (J-28). *(Verified with credentials
+    a genuinely slow path still resolves to an honest bounded state (J-28). A **longer** window (multi-
+    hour, up to full RTH) MUST be loaded by **chunked, bounded-concurrency** sub-window fetches stitched
+    in order rather than refused (see **J-34**). *(Verified with credentials
     against a real liquid symbol + busy window; the fetch concurrency and warm-up timing are covered by
     tests.)*
 
@@ -686,6 +702,101 @@ credentials are configured and MUST NOT regress J-01 – J-27.
     a stuck spinner**. *(Browser-verifiable; the cache warm / refresh and request cancellation are
     covered by tests.)*
 
+Journeys **J-31 – J-35** are the refinement pass: a **true-clock chart axis** (J-31), **live**
+replay-speed changes (J-32), **real-data classification calibration** so a genuine move is not stuck
+on `unclear` (J-33), **chunked loading of long historical windows** up to a full trading day (J-34),
+and **dd-MM-yyyy dates everywhere** with a custom date input (J-35). J-31, J-32, and J-35 are
+browser-verifiable without credentials; J-33's gating check is a deterministic fixture (its real-GME
+confirmation needs credentials); J-34's gating checks are chunk-stitch unit tests (its full-window
+load is verified with credentials). These additions MUST NOT regress **J-01 – J-30**.
+
+- **J-31: The price chart shows TRUE clock time, not elapsed playback seconds**
+  - Steps:
+    1. Visit `/`, select **Historical**, watch a real symbol over a known past intraday window (e.g. a
+       recent trading day, 09:30–09:40 ET — 14:30–14:40 BST in London) and let it replay
+    2. Read the chart's **time axis**, hover the **crosshair**, and inspect a **tape-state marker**
+    3. Switch the bar size 10 / 30 / 60 s; then watch a `SIM-*` ticker and read its chart axis
+  - Acceptance: on **historical** replay the candles, crosshair, and markers are stamped at the
+    window's **real market clock time** (e.g. ~14:30–14:40 of the chosen day, formatted `dd-MM-yyyy
+    HH:mm:ss` in the user's local zone with an explicit zone label — see J-35), **never** an elapsed
+    0…600 s playback counter; switching bar size keeps the real-time axis. On **simulated** data the
+    axis shows a **synthetic session clock** anchored to the watch-start instant (a real clock face,
+    not elapsed seconds). The engine still bins on its **deterministic logical timeline** and the
+    chart recomputes no price/state/side — true time comes from an **additive canonical epoch anchor**
+    exposed by the engine/serializer and read verbatim (single source of truth + determinism
+    preserved; **J-17 / J-18** still pass). *(Historical verified with credentials; the sim axis and
+    the axis date formatting are browser-verifiable.)*
+
+- **J-32: Replay-speed changes take effect immediately (no re-Watch)**
+  - Steps:
+    1. Visit `/`, select **Historical**, watch a real symbol at **1×** and let the replay run
+    2. While it is running, change the **replay-speed** control to **10×** (and back) **without
+       clicking Watch again**
+    3. Observe the replay cadence (new candles / new trades arriving) and the watched session
+  - Acceptance: the new speed applies to the **in-progress** replay within ~1 s — the cockpit and
+    chart **continue from their current position** at the new cadence, with **no** re-fetch of the
+    window, **no** engine restart, and **no** teardown of the watch. Speed is a **delivery-pacing
+    change only**, so the resulting features/state/confidence for the window are unchanged
+    (determinism preserved). A change made while **paused** applies on resume. An out-of-set speed is
+    rejected (HTTP 422); setting speed on a not-watched ticker is a 404. *(Historical replay verified
+    with credentials; the control + immediate-apply wiring are browser-verifiable, and the backend
+    speed endpoint is covered by a unit test.)*
+
+- **J-33: A genuine directional move on real data classifies as control, not perpetual `unclear`**
+  - Steps:
+    1. Replay a real symbol over a window with a **strong, fast directional move** — the reference
+       case is **GME on 14-05-2024, 14:30–14:40 London time** (13:30–13:40 UTC), which fell >10% in
+       minutes near the open
+    2. Read the **tape-state** panel + confidence as the drop plays, and the chart **markers**
+  - Acceptance: the drop resolves to **seller_control** (and the mirror: a comparable rally →
+    **buyer_control**) with confidence ≥ the configured reasonable threshold, and seller markers
+    appear at the transition — it does **not** sit on `unclear` through an obvious >10% move. The fix
+    is that the directional/absorption gates judge **spread and price-impact relative to the
+    instrument's price level / recent volatility** (config-owned — **no magic numbers**), **not** a
+    single absolute dollar constant tuned for the simulator; so a real ~$30–50 name with a
+    proportionate spread is no longer forced to `unclear`, while a genuinely **wide relative** spread,
+    or high aggression with no proportionate price progress, still reads `unclear` / absorption (the
+    *Honest uncertainty* and *Price impact over raw aggression* anti-goals hold). All five simulated
+    scenarios **J-01 – J-09** and the existing classifier unit tests MUST stay green after re-tuning.
+    *(Gated by a **deterministic regression fixture** reproducing the failing conditions — warmed,
+    high sell ratio, strong negative impact, spread wide in absolute $ but normal relative to price —
+    asserting `seller_control`; the real-GME confirmation is verified with credentials.)*
+
+- **J-34: A long historical window loads via chunking instead of "very high-volume"**
+  - Steps:
+    1. Visit `/`, select **Historical**, choose a **liquid** symbol and a **long** window — click the
+       **Full RTH 9:30–16:00** quick-pick (or any multi-hour window) — and Watch
+    2. Wait for the fetch and watch the cockpit + chart populate; then re-watch the same symbol +
+       window
+  - Acceptance: the long window loads its **real** trades + quotes and the cockpit/chart populate
+    within a bounded, configured time **without** the "that window is very high-volume — try a shorter
+    range" error; the advertised **Full RTH** quick-pick MUST work for a liquid symbol. The fetch is
+    **split into bounded sub-windows fetched with bounded concurrency** and **stitched in epoch
+    order** into one real window — it MUST NOT fabricate, drop, reorder, or de-duplicate real prints,
+    and a re-watch is near-instant from the window cache (the SAME real window). This is **fast by
+    design** (parallelizing the vendor SDK's sequential pagination), not "a longer timeout": any
+    timeout raise stays modest and the **backend bound MUST remain shorter than the frontend client
+    timeout** (J-28). A window genuinely too large to load within budget still resolves to the honest,
+    actionable "shorter range" message (J-28) — that message is now only a **true backstop**, not the
+    routine outcome for a normal long session. *(Gated by unit tests on chunk splitting + in-order
+    stitching with no fabricated/dropped/reordered prints; the full-window load is verified with
+    credentials against a liquid symbol.)*
+
+- **J-35: Dates are dd-MM-yyyy everywhere, entered via a custom date input**
+  - Steps:
+    1. Inspect every place the UI shows a date — the **chart time axis / crosshair** (J-31), the
+       **market-status** times (live), the **watched-source** descriptor ("historical <SYM>
+       <window>"), recent-trade / event timestamps on real data, and the historical picker
+    2. In **Historical** mode, enter a date in the **date field**, pick a window, and Watch
+  - Acceptance: every rendered date reads **`dd-MM-yyyy`** (and date-times **`dd-MM-yyyy HH:mm[:ss]`**,
+    24h) from a **single shared formatter** — no `MM/DD/YYYY`, ISO `YYYY-MM-DD`, or "Jun 8"-style date
+    remains visible anywhere in the UI. The native `<input type="date">` is **replaced by a custom
+    `dd-MM-yyyy` text input** (validated), so both entry and display are `dd-MM-yyyy`. Timezone
+    correctness is **unchanged**: the field still carries the explicit **local zone label** and
+    resolves to the exact tz-aware instant the user selected with **no silent UTC shift**, and the
+    fetched window still matches the selected local window (**J-20** and the *Timezone-correct
+    windows* anti-goal hold). *(Browser-verifiable.)*
+
 ## Anti-goals
 
 - **No execution path.** Tapeology MUST NOT place, route, simulate, or recommend orders, and
@@ -700,9 +811,15 @@ credentials are configured and MUST NOT regress J-01 – J-27.
   control: a tape with high one-sided aggression but no corresponding price progress MUST
   resolve to the matching absorption state (bid_absorption / ask_absorption), never to
   seller_control / buyer_control. Keying on aggression ratios alone is a defect. *(critical)*
-- **Honest uncertainty.** When evidence is weak or mixed, the spread is wide, or there is no
-  clean price impact, the state MUST be `unclear` with low confidence. The system MUST NOT
-  manufacture a directional call to look decisive. *(critical)*
+- **Honest uncertainty.** When evidence is weak or mixed, the spread is wide **relative to the
+  instrument's price / typical spread**, or there is no clean price impact, the state MUST be
+  `unclear` with low confidence. The system MUST NOT manufacture a directional call to look decisive.
+  The "wide spread" and "clean price impact" tests MUST be judged **relative to the instrument's
+  price level / recent volatility** (e.g. spread in basis points, impact as a return), never via a
+  single absolute dollar constant calibrated for the simulator — so a genuine strong directional move
+  on a real symbol with a proportionate spread reads as control, while a genuinely wide *relative*
+  spread (or high aggression with no proportionate price progress) still reads `unclear` / absorption.
+  *(critical)*
 - **No fabricated data.** The system MUST NOT synthesize trades, quotes, prices, or a tape state
   to force a green journey. Every real-data failure mode MUST surface an explicit, distinct state
   and never a cockpit: a provider gap/feed lull → `stale`; an unknown/untradable symbol → an
@@ -739,7 +856,10 @@ credentials are configured and MUST NOT regress J-01 – J-27.
 - **One focused chart, computed once.** OHLC bars and tape-state markers MUST be computed once in
   the engine history buffer and read identically by `…/history` and the chart; the UI MUST NOT
   recompute side, state, or price from raw data. An empty window MUST yield an **empty** chart, not
-  invented candles. The chart is analysis-only — it MUST NOT add any order/execution affordance.
+  invented candles. The chart is analysis-only — it MUST NOT add any order/execution affordance. The
+  chart's **time axis shows true clock time** (real market time for historical; a synthetic session
+  clock for simulated) via an **additive canonical epoch anchor** — the chart still recomputes no
+  side/state/price, and the engine still bins on its deterministic logical timeline.
   *(critical)*
 - **Honest pause.** Pause MUST freeze the displayed state without tearing the session down or
   fabricating data; while paused the UI MUST read as **paused**, never as live. On resume, **live**
@@ -769,7 +889,8 @@ credentials are configured and MUST NOT regress J-01 – J-27.
   can defeat, and the backend's bound MUST be **shorter than the frontend client timeout** so the user
   always sees the backend's honest error, never a client-side give-up. Interactive vendor paths MUST be
   **fast by design, not by lengthening timeouts**: a legitimate high-volume window MUST load within
-  budget via an optimized fetch (concurrent trades/quotes, no needless pre-flight, cached/reused
+  budget via an optimized fetch (concurrent trades/quotes, **chunked sub-window fetch with bounded
+  concurrency for long windows up to a full trading day**, no needless pre-flight, cached/reused
   windows, prompt warm-up), and **symbol search MUST NOT re-fetch the whole asset universe per
   keystroke** (a warmed/cached universe, cancelled stale requests, a sensible min-query). Any
   timeout/oversize error MUST be **actionable for the real cause** (e.g. "shorten the window"), never a
