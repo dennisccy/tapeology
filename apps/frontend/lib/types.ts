@@ -94,8 +94,15 @@ export interface TapeMarker {
 
 // GET /tape/{ticker}/history?bar= response — the OHLC series + markers for one bar size. An
 // empty (or not-yet-warmed) window yields empty arrays (the chart shows an empty treatment).
+//
+// `epoch_anchor` (Data Contract row 13, J-31) is the canonical display anchor: the real UTC epoch
+// (SECONDS) that logical-time 0 maps to. The chart renders TRUE clock time as `epoch_anchor +
+// bar.time` (real market time for historical; a synthetic session clock for simulated) — a pure
+// additive offset, so the chart still recomputes no price/side/state. `null` when there is no
+// anchor (an empty/anchorless window): the chart stays empty and fabricates no timestamps.
 export interface TapeHistory {
   bar: number;
+  epoch_anchor: number | null;
   bars: OhlcBar[];
   markers: TapeMarker[];
 }

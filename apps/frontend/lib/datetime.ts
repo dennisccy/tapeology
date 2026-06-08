@@ -13,20 +13,50 @@
 // constants and the ET->local/UTC mapping is computed via the IANA `America/New_York` zone, so it
 // is DST-correct (no hardcoded -04:00 / -05:00 offset).
 
+// --- THE one shared dd-MM-yyyy date/time formatter (J-35) ------------------------------------
+//
+// Every date the UI renders flows through these two functions, so the WHOLE product shows ONE
+// consistent format: dates as `dd-MM-yyyy` and date-times as `dd-MM-yyyy HH:mm[:ss]` (24h), in the
+// operator's LOCAL zone. No `MM/DD/YYYY`, ISO `YYYY-MM-DD`, or "Jun 8"-style date remains anywhere.
+// These are presentation-only (not a new computed/served value) — they read a backend instant and
+// format it; they never recompute a tape value.
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+// Format a Date (or a parseable instant) as `dd-MM-yyyy` in the operator's LOCAL zone. Returns
+// "—" for an unparseable value (never invents a date).
+export function formatDateDMY(value: Date | number | string): string {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}-${d.getFullYear()}`;
+}
+
+// Format a Date (or a parseable instant) as `dd-MM-yyyy HH:mm:ss` (24h) in the operator's LOCAL
+// zone. `withSeconds=false` drops the `:ss`. Returns "—" for an unparseable value.
+export function formatDateTimeDMY(
+  value: Date | number | string,
+  withSeconds = true,
+): string {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const date = formatDateDMY(d);
+  const time = withSeconds
+    ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
+    : `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return `${date} ${time}`;
+}
+
 // Render an ISO-8601 UTC instant (e.g. a market `next_open` from GET /market/clock) in the
-// operator's LOCAL zone with an explicit zone label, so the backend's UTC value is never
-// mis-read as local time. Falls back to the raw string if it cannot be parsed — never invents a
-// time. Used by the Live market-status indicator and the honest "market is closed" panel.
+// operator's LOCAL zone as `dd-MM-yyyy HH:mm` with an explicit zone label (J-35) — so the backend's
+// UTC value is never mis-read as local time AND the format is the one shared `dd-MM-yyyy` form (no
+// "Jun 8"). Falls back to the raw string if it cannot be parsed — never invents a time. Used by the
+// Live market-status indicator and the honest "market is closed" panel.
 export function formatMarketTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
+  return `${formatDateTimeDMY(d, false)} ${localOffsetLabel()}`;
 }
 
 // --- Historical-window resolution (Data Contract row 12 owner) -------------------------------
@@ -177,4 +207,62 @@ export function resolveLocalWindowInstant(
   const local = new Date(`${isoDate}T${time}`);
   if (Number.isNaN(local.getTime())) return undefined;
   return local.toISOString(); // tz-aware UTC (`...Z`)
+}
+
+// --- Custom dd-MM-yyyy date input parse/validate (J-35) --------------------------------------
+//
+// The native `<input type="date">` is replaced by a custom validated `dd-MM-yyyy` text input. The
+// field carries the explicit LOCAL zone label and resolves to the SAME tz-aware instant as before:
+// we parse the user's `dd-MM-yyyy` into the internal `YYYY-MM-DD` the row-12 resolver
+// (`resolveLocalWindowInstant`) and the ET quick-pick helpers already expect, so timezone
+// correctness is UNCHANGED (no silent UTC shift — J-20 stays green). `dd-MM-yyyy` is the SINGLE
+// entry+display format (entry here, display via formatDateDMY); the internal ISO form is plumbing
+// only and is never shown to the user.
+
+// Parse a `dd-MM-yyyy` string to the internal `YYYY-MM-DD` (the form the row-12 resolver and ET
+// presets consume). Returns `undefined` for any malformed or out-of-range value — e.g. `31-02-2026`
+// (Feb has no 31st), `1-1-2026` (un-padded), `2026-01-01` (wrong order), or empty — so an invalid
+// entry never silently produces a window (J-24: it drives inline validation, never a silent no-op).
+// The round-trip check (re-formatting the constructed date must equal the input) rejects overflow
+// dates like 31-02 that the Date constructor would otherwise roll forward to 03-03.
+export function parseDMYToIsoDate(value: string): string | undefined {
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value.trim());
+  if (!m) return undefined;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const year = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  // Construct at NOON local to avoid any DST edge near midnight, then verify the fields survived
+  // (rejects 31-02 etc., which would otherwise overflow into the next month).
+  const d = new Date(year, month - 1, day, 12, 0, 0);
+  if (
+    d.getFullYear() !== year ||
+    d.getMonth() !== month - 1 ||
+    d.getDate() !== day
+  ) {
+    return undefined;
+  }
+  return `${m[3]}-${m[2]}-${m[1]}`; // YYYY-MM-DD
+}
+
+// True iff `value` is a well-formed, in-range `dd-MM-yyyy` date (used to gate the Watch button and
+// the quick-picks; an empty string is NOT valid).
+export function isValidDMY(value: string): boolean {
+  return parseDMYToIsoDate(value) !== undefined;
+}
+
+// --- Watched-source descriptor date formatting (J-35) ----------------------------------------
+//
+// The backend's row-6 watched-source descriptor (`scenario`) is rendered VERBATIM in the cockpit
+// (single source of truth — the UI never recomputes the watched source). For a HISTORICAL watch it
+// embeds the window as ISO-8601 instants, e.g. `historical AAPL 2024-05-14T13:30:00.000Z–...Z`.
+// J-35 requires every date the UI SHOWS to read `dd-MM-yyyy`. This is a pure DISPLAY reformat of
+// the descriptor string — it replaces any embedded ISO-8601 instant with its `dd-MM-yyyy HH:mm`
+// local-zone form via the ONE shared formatter; it changes no value, only how the date is shown.
+// A descriptor with no ISO instant (e.g. a sim scenario, or `live AAPL`) is returned unchanged.
+const ISO_INSTANT_RE =
+  /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/g;
+
+export function formatWatchedSource(scenario: string): string {
+  return scenario.replace(ISO_INSTANT_RE, (iso) => formatDateTimeDMY(iso, false));
 }

@@ -426,7 +426,10 @@ def get_history(ticker: str, bar: int = CONFIG.history_bar_sizes[0]) -> dict:
     if bar not in CONFIG.history_bar_sizes:
         allowed = ", ".join(str(b) for b in CONFIG.history_bar_sizes)
         raise HTTPException(status_code=422, detail=f"bar must be one of: {allowed}")
-    return serialize_history(_engine_or_404(ticker).history, bar)
+    engine = _engine_or_404(ticker)
+    # Pass the engine's canonical display/epoch anchor (row 13, J-31) through to the projection so
+    # the chart renders TRUE clock time (`epoch_anchor + bar.time`). Read verbatim — no recompute.
+    return serialize_history(engine.history, bar, epoch_anchor=engine.epoch_anchor)
 
 
 @app.websocket("/tape/{ticker}/stream")

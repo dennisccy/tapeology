@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fetchHistory } from "@/lib/api";
+import { formatDateTimeDMY } from "@/lib/datetime";
 import {
   HISTORY_BAR_SIZES,
   type HistoryBarSize,
@@ -107,7 +108,22 @@ export function PriceChart({ ticker }: { ticker: string | null }) {
           horzLines: { color: "#1e293b" },
         },
         rightPriceScale: { borderColor: "#1e293b" },
-        timeScale: { borderColor: "#1e293b", timeVisible: true, secondsVisible: true },
+        timeScale: {
+          borderColor: "#1e293b",
+          timeVisible: true,
+          secondsVisible: true,
+          // TRUE clock time on the axis (J-31): each candle's `time` is a real UTC epoch
+          // (anchor + logical_ts, see the data effect), and this formatter renders the axis ticks
+          // as `dd-MM-yyyy HH:mm:ss` in the operator's LOCAL zone via the ONE shared formatter
+          // (J-35) — never an elapsed 0…600 s counter. lightweight-charts passes UTCTimestamp
+          // SECONDS, so multiply to ms for the Date-based formatter.
+          tickMarkFormatter: (time: number) => formatDateTimeDMY(time * 1000),
+        },
+        // The crosshair tooltip time, also TRUE clock time via the shared `dd-MM-yyyy HH:mm:ss`
+        // formatter (J-31 / J-35) — consistent with the axis ticks.
+        localization: {
+          timeFormatter: (time: number) => formatDateTimeDMY(time * 1000),
+        },
         crosshair: { mode: lc.CrosshairMode.Normal },
       });
       const series = chart.addSeries(lc.CandlestickSeries, {
@@ -140,11 +156,20 @@ export function PriceChart({ ticker }: { ticker: string | null }) {
     const series = seriesRef.current;
     if (!series || !history) return;
 
+    // TRUE clock time (J-31): map each LOGICAL bin/marker time to a real UTC-epoch SECONDS value
+    // as `epoch_anchor + logical_ts` — a pure ADDITIVE display offset (the chart recomputes NO
+    // price/side/state; the engine's logical timeline + classification are unchanged). The anchor
+    // is real market epoch for historical and the synthetic session-start for simulated. When the
+    // backend has no anchor (an empty/anchorless window) we fall back to the logical seconds — the
+    // chart is empty in that case anyway, so no fabricated timestamp is shown.
+    const anchor = history.epoch_anchor ?? 0;
+    const toClock = (logical: number) => Math.round(anchor + logical);
+
     // Candles VERBATIM from the engine buffer (no re-binning). Logical-second bin starts are
-    // whole multiples of the bar size; coerce to integer for the library's time scale and keep
-    // ascending order (the backend already returns them sorted + unique per bar).
+    // whole multiples of the bar size; map to the true-clock epoch and keep ascending order
+    // (the backend already returns them sorted + unique per bar).
     const candles = history.bars.map((b) => ({
-      time: Math.round(b.time) as any,
+      time: toClock(b.time) as any,
       open: b.open,
       high: b.high,
       low: b.low,
@@ -153,10 +178,11 @@ export function PriceChart({ ticker }: { ticker: string | null }) {
     series.setData(candles);
 
     // Markers VERBATIM from the engine buffer (the marker's own state/confidence — no
-    // re-derivation). One marker per meaningful transition, colored by state.
+    // re-derivation). One marker per meaningful transition, colored by state, stamped at true
+    // clock time so it aligns with the candle under it.
     if (markersRef.current && createMarkersRef.current) {
       const markers = history.markers.map((m) => ({
-        time: Math.round(m.time) as any,
+        time: toClock(m.time) as any,
         position: "aboveBar" as const,
         color: MARKER_COLORS[m.state] ?? "#fbbf24",
         shape: "arrowDown" as const,

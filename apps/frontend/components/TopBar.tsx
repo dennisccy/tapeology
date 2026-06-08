@@ -6,7 +6,10 @@ import {
   ET_SESSION_CLOSE,
   ET_SESSION_OPEN,
   etWallTimeToUtc,
+  formatWatchedSource,
+  isValidDMY,
   localZoneLabel,
+  parseDMYToIsoDate,
   resolveLocalWindowInstant,
   resolveSessionPreset,
   utcToLocalTimeInput,
@@ -98,7 +101,11 @@ export function TopBar({
   error: string | null;
 }) {
   const [symbol, setSymbol] = useState("");
-  const [date, setDate] = useState("");
+  // The custom dd-MM-yyyy date field (J-35): the user types `dd-MM-yyyy` (the SINGLE entry+display
+  // format) and we derive the internal `YYYY-MM-DD` (`date`) the row-12 resolver + ET quick-picks
+  // already consume — so timezone resolution is UNCHANGED (no silent UTC shift; J-20 stays green).
+  const [dateText, setDateText] = useState("");
+  const date = parseDMYToIsoDate(dateText) ?? ""; // internal ISO plumbing; "" when invalid/empty
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [speed, setSpeed] = useState(1);
@@ -121,7 +128,7 @@ export function TopBar({
   // Manual edits to any window field invalidate a prior quick-pick selection AND clear a stale
   // validation message (J-24) so the inline feedback tracks the live input.
   function onDateChange(value: string) {
-    setDate(value);
+    setDateText(value);
     setPresetWindow(null);
     setValidationError(null);
   }
@@ -195,6 +202,12 @@ export function TopBar({
       return;
     }
     if (mode === "historical") {
+      // A non-empty but malformed/out-of-range dd-MM-yyyy date gets its own explicit message (J-35
+      // error case: e.g. 31-02-2026) rather than the generic window message — never a silent no-op.
+      if (dateText.trim() && !isValidDMY(dateText)) {
+        setValidationError("Enter a valid date as dd-MM-yyyy.");
+        return;
+      }
       const window = resolveHistoricalWindow();
       if (!window) {
         setValidationError("Choose a valid time window.");
@@ -243,12 +256,24 @@ export function TopBar({
 
           {mode === "historical" && (
             <>
+              {/* Custom dd-MM-yyyy date input (J-35) — replaces the native <input type="date">,
+                  so both ENTRY and DISPLAY are dd-MM-yyyy (no locale-dependent native picker). It
+                  still carries the explicit local zone label below and resolves to the SAME
+                  tz-aware instant via the row-12 resolver (no silent UTC shift; J-20 holds). An
+                  invalid value drives inline validation (J-24) — never a silent no-op. */}
               <input
-                type="date"
+                type="text"
+                inputMode="numeric"
                 aria-label="Date"
-                value={date}
+                value={dateText}
                 onChange={(e) => onDateChange(e.target.value)}
-                className={`${INPUT_CLASS} [color-scheme:dark]`}
+                placeholder="dd-MM-yyyy"
+                aria-invalid={dateText.trim().length > 0 && !isValidDMY(dateText)}
+                className={`w-32 ${INPUT_CLASS} ${
+                  dateText.trim().length > 0 && !isValidDMY(dateText)
+                    ? "border-amber-500"
+                    : ""
+                }`}
               />
               <input
                 type="time"
@@ -407,7 +432,8 @@ export function TopBar({
 
         {watched && snapshot?.scenario && (
           <div className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
-            scenario: <span className="font-mono">{snapshot.scenario}</span>
+            scenario:{" "}
+            <span className="font-mono">{formatWatchedSource(snapshot.scenario)}</span>
           </div>
         )}
 

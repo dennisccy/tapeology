@@ -80,8 +80,13 @@ async def test_history_endpoint_agrees_with_engine_for_watched_ticker():
             resp = await client.get(f"/tape/SIM-BUYER/history?bar={bar}")
             assert resp.status_code == 200
             body = resp.json()
-            # The served projection equals the engine buffer for that bar size (single source).
-            assert body == serialize_history(engine.history, bar)
+            # The served projection equals the engine buffer for that bar size (single source) —
+            # including the canonical display/epoch anchor (row 13, J-31) the route passes through.
+            assert body == serialize_history(
+                engine.history, bar, epoch_anchor=engine.epoch_anchor
+            )
+            # The sim watch carries the config synthetic session-start anchor (true-clock axis).
+            assert body["epoch_anchor"] == CONFIG.sim_session_anchor_epoch
             assert body["bars"], "a warmed buyer scenario must have accrued candles"
 
         # The chart's defining read: exactly one buyer_control marker, in emerald-coded state.
@@ -138,8 +143,10 @@ def test_empty_buffer_serializes_to_empty_lists():
     # (HTTP 200 at the route), never invented candles (no-fabricated-data / one-focused-chart).
     engine = TapeEngine("SIM-BUYER", "buyer_control", CONFIG)
     for bar in CONFIG.history_bar_sizes:
+        # No anchor passed -> epoch_anchor None, empty bars/markers (no fabricated candle/time).
         assert serialize_history(engine.history, bar) == {
             "bar": bar,
+            "epoch_anchor": None,
             "bars": [],
             "markers": [],
         }

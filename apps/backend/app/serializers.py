@@ -115,15 +115,24 @@ def _tape_marker(marker: TapeMarker) -> dict:
     }
 
 
-def serialize_history(history: HistoryBuffer, bar: int) -> dict:
+def serialize_history(
+    history: HistoryBuffer, bar: int, epoch_anchor: float | None = None
+) -> dict:
     """Price history for the chart (`GET /tape/{ticker}/history?bar=`): OHLC bars + markers.
 
     A pure projection of the engine's history buffer for the requested (already-validated) bar
     size — it reads candles/markers the engine computed once and recomputes nothing (one focused
     chart, computed once). An empty buffer yields empty lists (HTTP 200) — never invented candles.
+
+    ``epoch_anchor`` (Data Contract row 13, J-31) is the engine's canonical display anchor — the
+    real UTC epoch that logical-time 0 maps to — carried through VERBATIM so the chart can render
+    TRUE clock time as ``epoch_anchor + bar.time`` (a pure additive offset). Bar/marker ``time``
+    stay LOGICAL (the engine's single-source timeline); the chart applies the anchor. ``None`` when
+    there is no anchor (an empty/anchorless window) — the chart then fabricates no timestamps.
     """
     return {
         "bar": bar,
+        "epoch_anchor": epoch_anchor,
         "bars": [_ohlc_bar(b) for b in history.bars(bar)],
         "markers": [_tape_marker(m) for m in history.markers()],
     }

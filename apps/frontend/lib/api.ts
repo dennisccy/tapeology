@@ -184,6 +184,9 @@ export async function fetchHistory(
     const data = await res.json();
     return {
       bar: typeof data.bar === "number" ? data.bar : bar,
+      // The canonical display/epoch anchor (row 13, J-31), read VERBATIM so the chart renders
+      // true clock time. `null` when the backend has no anchor (empty/anchorless window).
+      epoch_anchor: typeof data.epoch_anchor === "number" ? data.epoch_anchor : null,
       bars: Array.isArray(data.bars) ? data.bars : [],
       markers: Array.isArray(data.markers) ? data.markers : [],
     };

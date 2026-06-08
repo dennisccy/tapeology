@@ -56,6 +56,23 @@
 > New config constants (the call-level HTTP deadline, the window-cache size/age, any warm/refresh interval or fast-forward
 > bound, the frontend debounce-ms / min-query) are **config values, not displayed values** (no magic numbers).
 > No top-level nav section added/renamed/moved ⇒ **no re-approval requested**.
+>
+> **iter-12 extension is ADDITIVE (true-clock chart axis + dd-MM-yyyy dates, J-31 / J-35).** Same single `/` HOME, same
+> nav skeleton, same one-engine source of truth. It adds **one new contract row (row 13)** and no new top-level surface:
+> - **NEW row 13 — Canonical display/epoch anchor.** The engine/feeder preserves, **once and additively**, the real UTC
+>   epoch origin (historical/live = the first record's real epoch) or a **synthetic session-start** instant (simulated),
+>   alongside the existing logical timeline. The engine still **bins on its deterministic logical timeline** and reads no
+>   wall-clock for classification — the anchor is **display metadata only**. It is served read-only through the existing
+>   **`GET /tape/{ticker}/history`** projection (and the snapshot serializer); the **chart reads it verbatim** to render
+>   **true clock time** (`dd-MM-yyyy HH:mm:ss`, local zone label) on the axis / crosshair / markers — it still recomputes
+>   no price/side/state and still reads OHLC/markers from **row 10**. This introduces no second timeline, no second
+>   history endpoint, and no recomputation outside the engine. (J-31)
+> - **Row 12 / `lib/datetime.ts`** keeps its single owner; J-35 adds **one shared `dd-MM-yyyy` formatter** there that every
+>   UI date render is routed through, and replaces the native `<input type="date">` with a **custom validated `dd-MM-yyyy`
+>   text input** — a **presentation change only** (no new computed/served value, no new row). Timezone correctness is
+>   **unchanged**: the field still carries the explicit local zone label and resolves to the **same** tz-aware instant via
+>   the existing row-12 resolver (no silent UTC shift); **J-20** holds. (J-35)
+> No top-level nav section added/renamed/moved ⇒ **no re-approval requested**.
 
 **Governing principle.** Tapeology is a single-ticker **tape cockpit**. Every tape state, confidence, and feature is
 computed **exactly once in the engine** and read identically by REST, WebSocket, and the UI (anti-goal: *Single source
@@ -139,7 +156,7 @@ single-ticker UI; no execution path; one focused chart only).
 Every displayed value is computed once and read-only re-exposed elsewhere; `…/summary` and `WS …/stream` **re-expose**
 the snapshot and MUST NOT recompute. `…/state` and `…/features` are the canonical REST reads. Rows 1–6 are the
 **already-built** simulated contract (in force, unchanged); rows 7–9 are the **already-built** real-data additions;
-rows 10–12 are the **analysis-fidelity additions**: rows 10 (J-17 chart **render-verified**; J-18 real-historical render closed at iter-8) and 11 (J-19 pause/resume) are **built & in force**; row 12 (J-20 local-time historical window) is **built at iter-8** (J-16 is folded into row 4). **iter-11 adds NO row** — it hardens the *performance/honesty* of rows 7 and 9 and the historical-fetch path (see the iter-11 header note).
+rows 10–12 are the **analysis-fidelity additions**: rows 10 (J-17 chart **render-verified**; J-18 real-historical render closed at iter-8) and 11 (J-19 pause/resume) are **built & in force**; row 12 (J-20 local-time historical window) is **built at iter-8** (J-16 is folded into row 4). **iter-11 adds NO row** — it hardens the *performance/honesty* of rows 7 and 9 and the historical-fetch path (see the iter-11 header note). **iter-12 adds row 13** (the additive display/epoch anchor for the true-clock chart axis — J-31; J-35's shared `dd-MM-yyyy` formatter is presentation-only, no row) — see the iter-12 header note.
 
 | # | Displayed value | Canonical computing module (computed once) | Canonical serving endpoint | Re-exposed read-only by |
 |---|---|---|---|---|
@@ -155,6 +172,7 @@ rows 10–12 are the **analysis-fidelity additions**: rows 10 (J-17 chart **rend
 | 10 | **Price history: OHLC bars (per 10/30/60 s) + tape-state-transition markers** (state + confidence + ts) | **Engine history buffer** (accumulates watched price → config-binned OHLC + meaningful-transition markers; computed once with the snapshot) | `GET /tape/{ticker}/history?bar=<10\|30\|60>` (pure projection; sim + historical only) | Chart reads this — never recomputes price/side/state |
 | 11 | **Paused state** (boolean) | **Engine/feeder** (owns paused; pause freezes the feeder without teardown — no fabricated backfill) → snapshot | `GET /tape/{ticker}/summary` (set via `POST /watch/{ticker}/pause` · `POST /watch/{ticker}/resume`) | `WS /stream`; UI renders PAUSED + toggles the control |
 | 12 | **Resolved historical window** (tz-aware start/end instants for the user's selected **local** window; explicit **local zone label** + **US-session quick-picks** Open 9:30 ET / Close 16:00 ET / Full RTH, each annotated with its local equivalent) | **Frontend datetime module** (`apps/frontend/lib/datetime.ts` — the resolution fn resolves the local selection AND the ET session anchors via the IANA `America/New_York` zone, DST-correct, → exact tz-aware UTC instants **once, before** the fetch; the 9:30/16:00 ET anchors are named preset constants, not engine thresholds) → request body | `POST /watch/{ticker}` body `{mode:"historical",start,end,speed}` (timezone-aware instants; backend `_parse_window_dt` honors the offset verbatim) | Historical provider fetches exactly the resolved window (no second tz conversion, no silent UTC shift) — **built at iter-8** |
+| 13 | **Canonical display/epoch anchor** (the real UTC epoch origin for historical/live = the first record's real epoch; a **synthetic session-start** instant for simulated) — **additive display metadata**, NOT a second timeline | **Engine/feeder** (preserved once alongside the logical timeline; the engine still bins on the **deterministic logical timeline** and reads no wall-clock for classification — the anchor never feeds features/state/confidence) | exposed read-only via the existing **`GET /tape/{ticker}/history?bar=<10\|30\|60>`** projection (+ the snapshot serializer) | Chart reads it **verbatim** to stamp the axis / crosshair / markers with **true clock time** (`dd-MM-yyyy HH:mm:ss`, local zone label); `WS /stream` / `/summary` re-expose as applicable — the chart still reads OHLC/markers from **row 10** and recomputes no price/side/state — **built at iter-12** |
 
 **Provider & vendor seam (singularity — architectural, not a displayed value).**
 - One **provider interface** (`TradeEvent`/`QuoteEvent`/[later]`BookLevelEvent`); `SimulatedProvider`, the **live
@@ -208,6 +226,12 @@ J-30 startup universe-warm is a **no-op without credentials** (search stays an e
   PAUSED indicator reads row-11 from the snapshot (no UI-side guess); the historical window is resolved once by row-12
   before the fetch (no second tz conversion, no silent UTC reinterpretation). The J-29 concurrent fetch / cache / warm-up
   do **not** move any computation out of the engine — OHLC/markers/features are still computed once in the engine.
+- **The display/epoch anchor (row 13) is additive display metadata with one owner** — the engine/feeder preserves it
+  once alongside the logical timeline; the chart reads it **verbatim** to render true clock time and still reads OHLC/markers
+  from row 10. It introduces **no second timeline** (the engine still bins on the deterministic logical timeline, reads no
+  wall-clock for classification), **no second history endpoint**, and **no recomputation** of price/side/state in the UI
+  (single source of truth + determinism hold). The shared `dd-MM-yyyy` formatter (J-35) is presentation-only — it computes
+  no value and the historical window still resolves once via row 12 (no silent UTC shift; J-20 holds).
 - On a feed gap / provider failure the snapshot surfaces explicit **stale / no-data / unavailable / failed / timed-out** —
   nothing is fabricated to force a green journey (anti-goal: *No fabricated data*). An empty historical window ⇒ **empty**
   chart. A cached window replays the **same real** records.

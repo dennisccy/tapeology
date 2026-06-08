@@ -7,16 +7,16 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-11-12-sim-buyer-control.png — re-verified in the iter-11 browser run on a working :3650: SIM-BUYER full cockpit renders Buyer Control conf 0.870, trade speed 2.00/s, aggressive buy ratio 0.925, net +14800, large prints 13, recent trades + observations + event log all live. The search/fetch responsiveness edits did not regress the normal cockpit."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-11-12-sim-buyer-control.png — carried; iter-12 diff is additive display-only (epoch anchor + dd-MM-yyyy formatter), engine/cockpit unchanged. Re-confirmed incidentally by iter-12 TC-05-sim-buyer-chart.png: full SIM-BUYER cockpit (Buyer Control conf 0.860, full features, recent trades, observations, event log) renders live."
     },
     "J-02": {
       "id": "J-02",
       "name": "Buyer-control scenario is identified",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-11-12-sim-buyer-control.png — buyer_control conf 0.870, aggressive_buy_ratio 0.925, net +14800. Engine/classifier an EMPTY diff this iter (coherence.md Step 1 confirms only config/adapter/fetch/search changed); test_scenario green within the independently re-run 230-pass suite."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — re-verified: SIM-BUYER resolves to Buyer Control with event log 'Tape state changed to buyer_control'. Classifier diff EMPTY this iter (anchor is additive, determinism byte-identical per test_epoch_anchor.py); test_scenario (15) + test_classifier (20) green in the evaluator's re-run."
     },
     "J-03": {
       "id": "J-03",
@@ -25,7 +25,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-03-result.png — carried; engine/classifier untouched iter-7/8/9/10/11 (iter-11 diff is config/adapter/fetch/search only; determinism unaffected). test_scenario/test_classifier green in the 230-pass run."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-03-result.png — carried; engine/classifier untouched iter-7..12 (iter-12 is additive display-only). test_scenario/test_classifier green in the evaluator's re-run."
     },
     "J-04": {
       "id": "J-04",
@@ -34,7 +34,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-04-result.png — carried; engine untouched iter-7..11. Absorption logic in test_classifier green in the 230-pass run."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-04-result.png — carried; engine untouched iter-7..12. Absorption logic in test_classifier green in the evaluator's re-run."
     },
     "J-05": {
       "id": "J-05",
@@ -43,7 +43,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-05-result.png — carried; engine untouched iter-7..11. test_classifier green in the 230-pass run."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-05-result.png — carried; engine untouched iter-7..12. test_classifier green in the evaluator's re-run."
     },
     "J-06": {
       "id": "J-06",
@@ -52,25 +52,25 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-06-result.png — carried; engine untouched iter-11. Corroborated incidentally: iter-11 UT-07 shows a real TSLA historical window honestly reading 'Unclear' conf 0.200 (no forced direction), exactly the honest-uncertainty behavior."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-06-result.png — carried; engine untouched iter-12. (Note: J-33 calibration is a future iter and will re-tune relative spread/impact while keeping this honest-uncertainty behavior.)"
     },
     "J-07": {
       "id": "J-07",
       "name": "Tape-state transitions are announced in the event log and observations",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-09-sim-buyer-chart.png — carried; engine/observation generation untouched iter-9/10/11. iter-11 UT-12 event log shows 'Tape state changed to…' + observations ('Buyer aggression increasing', 'Price lifting on buy prints')."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — re-verified: event log shows 'Tape state changed to buyer_control' and observations ('Buyer aggression increasing', 'Price lifting on buy prints'). Observation generation untouched iter-12."
     },
     "J-08": {
       "id": "J-08",
       "name": "REST and the live UI agree (single source of truth)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-08-result.png — re-confirmed by iter-11 coherence.md (COHERENCE-PASS, Step 1): the window cache supplies RAW real records (not pre-computed engine values); OHLC/markers/features are still computed once by the engine after the provider delivers events; stream_status written once by engine/feeder and read verbatim by the UI. No client/API recomputation of rows 1–6."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-08-result.png — re-confirmed by iter-12 coherence.md (COHERENCE-PASS, Step 1): row 13 (epoch_anchor) has one owner (engine/feeder) and one endpoint (GET /history); the chart reads it verbatim and recomputes no price/side/state. Formatters are presentation-only; no client/API recomputation of rows 1–12."
     },
     "J-09": {
       "id": "J-09",
@@ -79,16 +79,16 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-10",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-10",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-11-sim-stopped-idle.png — carried; the watch lifecycle (_feed / _feed_live / pause / stop) is UNTOUCHED iter-11 (only _feed_paced warm-up delivery pacing changed). iter-11 QA browser flow re-exercised Stop→re-Watch (UT-08 stop then re-watch cache hit). Lifecycle tests green in the 230-pass run."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-11-sim-stopped-idle.png — carried; watch lifecycle (_feed/_feed_live/pause/stop) UNTOUCHED iter-12 (only additive anchor threading in watch_manager._provider_anchor). Lifecycle tests green."
     },
     "J-10": {
       "id": "J-10",
       "name": "Choose a data source (Live / Historical / Simulated)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-14-mode-selector.png — re-verified: exactly Live/Historical/Simulated present; Simulated reveals the ticker input, Historical reveals the date/time pickers + SymbolSearch combobox, Live reveals the market-status indicator ('market closed — next open …'); no crash, no error banner. No regression from the search/fetch edits."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-08-historical-controls-initial.png — re-verified: Historical mode reveals the custom dd-MM-yyyy date field + time pickers + quick-picks + replay speed + zone label ('Europe/London'); no crash. Mode selector untouched iter-12."
     },
     "J-11": {
       "id": "J-11",
@@ -97,7 +97,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png — re-verified: a real TSLA Historical window (2025-06-06, 09:30–09:32 ET) replays REAL trades+quotes through the same engine and populates every cockpit panel (bid/ask/spread/last, 15 recent trades with price/size/side, full features, tape state + confidence, observations, event log) within ~2s, over the WebSocket. The cache-miss success path is unchanged from iter-8; the concurrent fetch + folded pre-flight are a fetch optimization only (coherence.md Step 1). test_historical_provider green in the 230-pass run. Against-live-vendor leg remains operator-gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png — carried; historical fetch/replay path untouched iter-12 (anchor = min(epochs) is read from the existing loaded window, additive). test_historical_provider green. Against-live-vendor leg operator-gated."
     },
     "J-12": {
       "id": "J-12",
@@ -106,7 +106,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-12-live-controls.png — carried. Live-socket path (stream_live / _feed_live) explicitly UNTOUCHED iter-11 (iter-4 deadlock lesson heeded; spec scoped to historical-fetch + search). iter-11 UT-14 re-confirms Live controls + market-status render without a feed. Real-socket leg operator-gated (exercised iter-4 during market hours)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-12-live-controls.png — carried; live-socket path UNTOUCHED iter-12 (LiveProvider.epoch_anchor = None — no chart for live). Real-socket leg operator-gated."
     },
     "J-13": {
       "id": "J-13",
@@ -115,7 +115,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-13-aapl-selected.png — re-verified: typing 'AAPL' returns real Alpaca matches (AAPL — Apple Inc. Common Stock first); clicking it fills the ticker and closes the dropdown; free-text watch still works (UT-11). Search CORRECTNESS confirmed; search SPEED/cancellation is the separate J-30 (now also passing)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-13-aapl-selected.png — carried; symbol search untouched iter-12."
     },
     "J-14": {
       "id": "J-14",
@@ -124,7 +124,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-03-offhours-closed.png — carried + the folded-fetch path re-verified to PRESERVE the honest states: iter-11 unit tests assert unknown symbol → symbol_not_tradable and empty window → no_data_for_window on the new single-round-trip path (get_asset consulted only on an empty result), the no-creds startup warm is a no-op (search stays []), and an oversize timeout creates NO engine (no fabricated tape). UT-09 shows a vendor-miss search → empty dropdown, never an error. The no-fabricated-data boundary is preserved, not weakened."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-03-offhours-closed.png — carried; honest-degradation paths untouched iter-12. Empty/anchorless window → empty chart with epoch_anchor None fallback (no fabricated timestamps) — confirmed by code + dev handoff."
     },
     "J-15": {
       "id": "J-15",
@@ -133,7 +133,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-10",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-10",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-09-stale-amber.png — carried; the mid-stream stale_gap watchdog + live lifecycle are explicitly OUT OF SCOPE and untouched iter-11 (spec: 'Changing the mid-stream stale_gap_seconds delivery watchdog … is a separate, settled concern'). Stream-lifecycle tests green in the 230-pass run. Recover leg operator-gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-09-stale-amber.png — carried; mid-stream stale watchdog + live lifecycle untouched iter-12. Recover leg operator-gated."
     },
     "J-16": {
       "id": "J-16",
@@ -142,16 +142,16 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "apps/backend/tests/test_historical_provider.py::test_tick_test_reduces_unknown_fraction_on_real_fixture — carried; aggressor/tick-test classifier untouched iter-9/10/11 (iter-11 changed only the FETCH path, not the side-resolution math). iter-11 UT-07 recent-trades show real buy/sell sides. Backend suite green (230 passed)."
+      "last_evidence_path": "apps/backend/tests/test_historical_provider.py::test_tick_test_reduces_unknown_fraction_on_real_fixture — carried; aggressor/tick-test classifier untouched iter-12. Backend suite green."
     },
     "J-17": {
       "id": "J-17",
       "name": "Price chart with tape-state markers on simulated data",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-10",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-06-sim-cockpit.png — carried; PriceChart untouched iter-11. iter-11 UT-07 incidentally shows the candlestick price-chart pane with the 10s/30s/60s bar-size selector and the tape-state-marker overlay rendering on the populated historical cockpit. No regression."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — re-verified: the SIM-BUYER candlestick chart renders with the 10s/30s/60s bar-size selector; the chart still reads /history verbatim (epoch anchor is an additive display offset, markers/OHLC unchanged). No regression from the true-clock axis change."
     },
     "J-18": {
       "id": "J-18",
@@ -160,7 +160,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png — re-verified: real TSLA historical replay renders candlesticks of the REAL replayed prices with the tape-state-marker overlay; the chart reads /history verbatim (PriceChart/history path untouched, coherence.md Step 1). Operator-gated against-live-vendor pan/zoom leg remains gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png — carried; the PriceChart /history-read path is unchanged (anchor applied as additive offset only). Operator-gated against-live-vendor pan/zoom leg remains gated."
     },
     "J-19": {
       "id": "J-19",
@@ -169,16 +169,16 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-10",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-10",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-10-sim-paused.png — carried; pause behavior unchanged iter-11 (only _feed_paced's warm-up delivery pacing changed — pause/_feed/_feed_live untouched per the dev handoff). 19 hermetic pause tests + test_pause_api green within the 230-pass run."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-10-sim-paused.png — carried; pause behavior unchanged iter-12. Pause tests green."
     },
     "J-20": {
       "id": "J-20",
       "name": "Pick a historical window in local time with US-session quick-picks",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-06-timeout-error.png — re-verified: the Historical picker shows the explicit zone label ('Europe/London') and the US-session quick-picks ('Full RTH 9:30–16:00 ET' annotated with the 02:30 PM–09:00 PM local equivalent). datetime/window-resolution untouched iter-11 (no picker file changed); test_window_resolution green (6/6) in the 230-pass run."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-08-historical-controls-initial.png — re-verified: explicit zone label ('Europe/London') and US-session quick-picks present. NO regression from J-35: the custom dd-MM-yyyy input parses to internal YYYY-MM-DD and feeds the SAME row-12 resolver (resolveLocalWindowInstant) — no new tz resolver, no silent UTC shift (parseDMYToIsoDate, datetime.ts:228; coherence.md Step 1 confirms). test_window_resolution green."
     },
     "J-21": {
       "id": "J-21",
@@ -187,7 +187,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-9",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png — re-verified: a Historical Watch shows pulse=true + connecting=true within the first ~300ms (MutationObserver), i.e. the idle screen is left immediately and a connecting/waiting state appears. page.tsx pending branch untouched iter-11."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png — carried; page.tsx pending branch untouched iter-12."
     },
     "J-22": {
       "id": "J-22",
@@ -196,7 +196,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-9",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-9-evidence/EVAL-iter9-11-unreachable-error.png — carried + HARDENED by J-28: the iter-9 client backstop (WATCH_REQUEST_TIMEOUT_MS=12000 AbortController) + asyncio.wait_for wrapper are retained as the backstop, and iter-11 adds a TRUE call-level requests.Session HTTP deadline (6.0s) beneath the wrapper (8.0s), strictly < the frontend 12000ms — asserted from config by test_vendor_responsiveness. UT-06 shows the bounded resolution to an explicit error. test_vendor_timeout green."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-9-evidence/EVAL-iter9-11-unreachable-error.png — carried; client backstop + backend call-level deadline untouched iter-12. test_vendor_timeout green in the evaluator's re-run."
     },
     "J-23": {
       "id": "J-23",
@@ -205,16 +205,16 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-10",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-10",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-9",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-02-failed.png — carried; the useTapeStream no-swallow path + page.tsx render-priority order are UNTOUCHED iter-11. The new searchSymbols AbortController resolves an aborted request to [] (no swallowed error, no stuck spinner — UT-05/UT-09); reviewer + coherence-auditor confirm no empty catch introduced."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-02-failed.png — carried; useTapeStream no-swallow path untouched iter-12. The new custom-date validation surfaces an inline error, never a silent no-op."
     },
     "J-24": {
       "id": "J-24",
       "name": "Invalid or empty Watch input gives immediate inline feedback",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-9",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-11-12-sim-buyer-control.png — re-verified the complementary positive: free-text 'SIM-BUYER' Watches WITHOUT a false 'select a symbol from the list' error (UT-11). The TopBar empty/whitespace validation gate is untouched iter-11; never a silent no-op (iter-10 EVAL-iter10-05-empty-validation.png carried for the empty-input leg)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-05-empty-validation.png — re-verified + EXTENDED: the custom dd-MM-yyyy input drives explicit inline validation ('Enter a valid date as dd-MM-yyyy.') for 31-02-2026/malformed/empty (TopBar.tsx:205-208; parseDMYToIsoDate round-trip guard rejects overflow dates) — never a silent no-op. Existing empty/whitespace symbol gate retained."
     },
     "J-25": {
       "id": "J-25",
@@ -223,7 +223,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png + UT-06-timeout-error.png — re-verified: a Historical Watch leaves idle within ~300ms (UT-15 pulse/connecting) and resolves to a non-idle terminal state — streaming data (UT-07) or an explicit actionable error (UT-06 'try a shorter range', cockpit shows 'No ticker watched', never a fake-live empty cockpit). The off-hours closed-market honest path is carried from iter-10. Against-live-vendor streaming leg operator-gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png + UT-06-timeout-error.png — carried; watch-resolution lifecycle untouched iter-12. Against-live-vendor streaming leg operator-gated."
     },
     "J-26": {
       "id": "J-26",
@@ -232,7 +232,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png — re-verified incidentally by J-29: during the Historical fetch wait the cockpit shows the explicit amber pulsing connecting/waiting treatment (pulse=true, connecting=true within ~300ms) and NEVER a blank/idle screen — exactly the connected-but-no-data honest waiting state. The waiting/empty treatment is untouched iter-11; backend waiting/stale tests green in the 230-pass run."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png — carried; waiting/empty treatment untouched iter-12. Backend waiting/stale tests green."
     },
     "J-27": {
       "id": "J-27",
@@ -241,7 +241,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-10",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-10",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-02-failed.png — carried; the stale/failed/no-data lifecycle (engine stream_status owner, feeder-failure logging+surfacing) is OUT OF SCOPE and untouched iter-11. The new oversize-timeout path resolves to an explicit honest bounded error with NO engine (test_vendor_responsiveness), consistent with J-27's bounded-honest-state requirement. Lifecycle tests green in the 230-pass run."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-02-failed.png — carried; stale/failed/no-data lifecycle (engine stream_status owner) untouched iter-12. Empty window still yields an empty chart with no fabricated timestamps. Lifecycle tests green."
     },
     "J-28": {
       "id": "J-28",
@@ -250,7 +250,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-06-timeout-error.png (+ UT-16) — BUILT & VERIFIED. A real call-level HTTP deadline is applied at the vendor-call boundary on the SDK client's underlying requests.Session inside the one adapter (alpaca.py _with_http_timeout, mapped to neutral VendorTimeout); a slow/large/CPU-bound response is cut off by the client itself. Config ordering vendor_http_timeout_seconds=6.0 ≤ vendor_call_timeout_seconds=8.0 < frontend WATCH_REQUEST_TIMEOUT_MS=12000 is asserted FROM CONFIG by test_vendor_responsiveness (not hardcoded). An oversize Historical window returns the actionable 'that window is very high-volume — try a shorter range' (UT-06/UT-16) via the existing row-9 provider_timeout path with NO engine created (no fabricated tape). 32 new vendor-responsiveness tests pass within the independently re-run 230-pass suite. Oversize-against-live-vendor leg operator-gated; the deterministic proof uses a slow/timeout double."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-06-timeout-error.png — carried; vendor-call deadline + config ordering (vendor_http_timeout 6.0 <= vendor_call_timeout 8.0 < frontend 12000ms) untouched iter-12. (Note: the QA env's vendor-responsiveness test errors are a missing optional alpaca module, not a code regression — dev's own run reported 238 passed with alpaca present.) Oversize-against-live-vendor leg operator-gated."
     },
     "J-29": {
       "id": "J-29",
@@ -259,7 +259,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png + UT-08-rewatch-cache-hit.png + UT-15-waiting-indicator.png — BUILT & VERIFIED. A real TSLA Historical window incl. the market-open minute (09:30–09:32 ET) populates the cockpit with REAL values within ~2s (UT-07: full features + chart + 15 recent trades); re-watching the same symbol+window is near-instant (~131ms, UT-08 cache hit); the fetch wait shows the waiting/progress treatment, never a blank/idle screen (UT-15). Fast by DESIGN: trades+quotes fetched concurrently (≈ max not sum), the needless get_asset pre-flight folded out (one round-trip on success), a bounded LRU+TTL window cache replays the SAME real HistoricalWindow, and the engine warms promptly via a delivery-only fast-forward whose features/state/confidence are byte-identical to the synchronous reference (determinism unit-test-proven). Live credentialed run: ~1.0s first fetch / 0.013s cache hit. NOT a particular tape state asserted (iter-2 lesson — TSLA honestly reads Unclear). Tests green in the 230-pass suite."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png + UT-08-rewatch-cache-hit.png — carried; concurrent fetch + window cache + prompt warm-up untouched iter-12. Live credentialed leg operator-gated."
     },
     "J-30": {
       "id": "J-30",
@@ -268,9 +268,54 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-04-aapl-fast-response.png + UT-03 + UT-05 + UT-09 + UT-13 — BUILT & VERIFIED. The first search after a backend (re)start is ~60ms, not a multi-second stall (UT-04) — the tradable-symbol universe is warmed once at FastAPI startup in the background through the neutral warm_symbol_universe() seam (single-owner _ASSET_UNIVERSE; main.py never names the SDK). Rapid typing shows no pile-up / out-of-order overwrite (UT-03: 'TS' then 'AAP' → only AAP-prefixed results) via a real AbortController in searchSymbols/SymbolSearch.tsx; an aborted request resolves to no result (UT-05 no stuck spinner). A vendor hiccup yields an empty list, never an error or stuck spinner (UT-09 'ZZZ' → empty dropdown). Free-text watch still works (UT-11). Unit tests cover startup warm (no per-request refetch), abort cancellation, vendor-error→[], and the min-query. NOTE: browser-qa UT-02/UT-10 FAIL is a MIS-SPECIFIED test asserting min-query≥2; the as-built backend symbol_search_min_query=1 (config.py:123) and frontend SYMBOL_SEARCH_MIN_QUERY=1 (config.ts:34) MATCH exactly (the spec mandated mirroring), and J-30 requires only 'a sensible minimum query length' — not 2. No journey/anti-goal violation."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-04-aapl-fast-response.png — carried; startup-warmed universe + AbortController cancellation untouched iter-12. Unit tests green."
+    },
+    "J-31": {
+      "id": "J-31",
+      "name": "The price chart shows TRUE clock time, not elapsed playback seconds",
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
+      "first_seen_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — BUILT & VERIFIED (sim half). The evaluator opened the axis bytes: the SIM-BUYER chart's time axis reads '…01-2024 14:30 … 14:40' (synthetic session clock anchored to sim_session_anchor_epoch = 2024-01-02 09:30 ET), dd-MM-yyyy HH:mm:ss form — NOT a 0…600s elapsed counter. Code: PriceChart.tsx drops `Math.round(b.time)` for `toClock = anchor + logical` (line 165-166), axis/crosshair via formatDateTimeDMY (lines 120,125). Backend: row 13 epoch_anchor computed once per provider (sim=config constant, historical=min(epochs), live=None), exposed via GET /history (serializers.py:135, main.py:432); determinism byte-identical (test_epoch_anchor.py 8/8 pass in the evaluator's re-run). HISTORICAL real-symbol axis leg is operator-gated (needs Alpaca credentials) — covered by the historical-provider anchor fixture; consistent with prior real-data journeys (J-11/J-18)."
+    },
+    "J-32": {
+      "id": "J-32",
+      "name": "Replay-speed changes take effect immediately (no re-Watch)",
+      "status": "unknown",
+      "last_verified_iter": null,
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_evidence_path": "Not yet built — explicitly OUT OF SCOPE for iter-12 (target of a subsequent iteration). Added to history per the iter-12 spec note that J-31–J-35 are newly-introduced Must-have journeys."
+    },
+    "J-33": {
+      "id": "J-33",
+      "name": "A genuine directional move on real data classifies as control, not perpetual unclear",
+      "status": "unknown",
+      "last_verified_iter": null,
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_evidence_path": "Not yet built — explicitly OUT OF SCOPE for iter-12. Highest-risk remaining journey: it re-tunes the classifier's spread/impact gates to be RELATIVE to price level / recent volatility (config-owned) and MUST keep J-01–J-09 green via a deterministic regression fixture. Target of a full-depth iteration."
+    },
+    "J-34": {
+      "id": "J-34",
+      "name": "A long historical window loads via chunking instead of very-high-volume error",
+      "status": "unknown",
+      "last_verified_iter": null,
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_evidence_path": "Not yet built — explicitly OUT OF SCOPE for iter-12. Chunked, bounded-concurrency sub-window fetch stitched in epoch order; gated by chunk-split + in-order-stitch unit tests."
+    },
+    "J-35": {
+      "id": "J-35",
+      "name": "Dates are dd-MM-yyyy everywhere, entered via a custom date input",
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
+      "first_seen_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-08-date-input-visible.png + TC-08-valid-date-entered.png — BUILT & VERIFIED. The native <input type=\"date\"> is replaced by a custom dd-MM-yyyy text input (TopBar.tsx:259-273, placeholder 'dd-MM-yyyy', validated; '08-01-2024' entered cleanly). ONE shared formatter (formatDateDMY/formatDateTimeDMY, datetime.ts:30-59) routes the chart axis/crosshair (J-31), market-status times (formatMarketTime), and the watched-source descriptor (formatWatchedSource reformats embedded ISO instants to dd-MM-yyyy HH:mm — a re-format, not a re-compute; coherence.md Step 1). Strict validation rejects 31-02-2026/malformed/empty via parseDMYToIsoDate round-trip guard (J-24 stays green). J-20 invariant preserved: the input feeds the existing row-12 resolver via internal YYYY-MM-DD — no new tz resolver, no silent UTC shift. Recent-trades/event-log have no date column (nothing to convert there)."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-06-07T05:05:00Z"
+  "updated_at": "2026-06-09T00:30:00Z"
 }

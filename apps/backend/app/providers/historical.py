@@ -38,6 +38,13 @@ class HistoricalProvider:
         self.ticker = ticker
         self.scenario = scenario
         self._window = window
+        # Canonical display/epoch anchor (row 13, J-31): the first real record's UTC epoch — exactly
+        # the ``t0`` ``stream()`` subtracts to build the logical timeline, so the chart maps a logical
+        # bin time back to true market clock time as ``epoch_anchor + logical_ts``. Computed ONCE here
+        # (the same min-epoch the stream uses) so it is the canonical anchor; ``None`` for an empty
+        # window (no first record => no anchor => an empty chart with no fabricated timestamps).
+        epochs = [q.epoch for q in window.quotes] + [t.epoch for t in window.trades]
+        self.epoch_anchor: float | None = min(epochs) if epochs else None
 
     def stream(self) -> Iterator[Event]:
         window = self._window

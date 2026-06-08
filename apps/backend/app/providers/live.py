@@ -41,6 +41,11 @@ class LiveProvider:
         self.ticker = ticker
         self.scenario = scenario
         self._raw_stream = raw_stream
+        # Canonical display/epoch anchor (row 13, J-31): a live feed's first real epoch is only
+        # known once the first record arrives, and the prediction chart is shown for SIMULATED and
+        # HISTORICAL only (not live), so this stays None for the live path. Declared for interface
+        # consistency; a live watch needs no chart anchor.
+        self.epoch_anchor: float | None = None
 
     async def stream(self) -> AsyncIterator[Event]:
         raw = self._raw_stream

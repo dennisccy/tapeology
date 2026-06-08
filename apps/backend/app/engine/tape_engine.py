@@ -24,10 +24,22 @@ from .snapshot import EngineSnapshot, TradeRow
 
 
 class TapeEngine:
-    def __init__(self, ticker: str, scenario: str, config: Config) -> None:
+    def __init__(
+        self,
+        ticker: str,
+        scenario: str,
+        config: Config,
+        epoch_anchor: float | None = None,
+    ) -> None:
         self._ticker = ticker
         self._scenario = scenario
         self._config = config
+        # Canonical display/epoch anchor (Data Contract row 13, J-31): the real UTC epoch that
+        # logical-time 0 maps to, preserved ONCE here from the provider (historical = first real
+        # record epoch; simulated = config synthetic session-start; live = None). It is additive
+        # DISPLAY metadata — it never enters market state / features / classification, so the
+        # engine stays deterministic. Defaulted None so every pre-J-31 construction is unchanged.
+        self._epoch_anchor = epoch_anchor
 
         self._market = MarketState()
         self._features = FeatureEngine(config)
@@ -58,6 +70,12 @@ class TapeEngine:
     @property
     def scenario(self) -> str:
         return self._scenario
+
+    @property
+    def epoch_anchor(self) -> float | None:
+        """The canonical display/epoch anchor (row 13). Read by the history projection so the
+        chart can map a logical bin time to a true clock instant; never recomputed downstream."""
+        return self._epoch_anchor
 
     def set_stream_status(self, status: str) -> None:
         """Set the canonical row-6 ``stream_status`` (delivery/lifecycle metadata, owned ONCE here).
@@ -202,6 +220,7 @@ class TapeEngine:
             warm=self._trade_count >= self._config.warmup_min_events,
             stream_status=self._stream_status,
             paused=self._paused,
+            epoch_anchor=self._epoch_anchor,
             bid=self._market.bid,
             ask=self._market.ask,
             spread=self._market.spread,

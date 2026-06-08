@@ -32,6 +32,17 @@ class UnknownTickerError(Exception):
     """Raised when asked to watch a ticker that is not a known simulated ticker."""
 
 
+def _provider_anchor(provider: object) -> float | None:
+    """Read the provider's canonical display/epoch anchor (row 13, J-31), if it exposes one.
+
+    Every Phase-1 provider (sim / historical / live) carries an ``epoch_anchor`` attribute; this
+    reads it defensively (``None`` for any provider/double that does not) so the engine receives
+    the anchor ONCE here and surfaces it through the history projection. It is additive DISPLAY
+    metadata — it never enters the engine's logical timeline or classification.
+    """
+    return getattr(provider, "epoch_anchor", None)
+
+
 class WatchManager:
     def __init__(self, config: Config, pace: float = FEED_PACE_SECONDS) -> None:
         self._config = config
@@ -51,7 +62,9 @@ class WatchManager:
         if existing is not None:
             return existing
 
-        engine = TapeEngine(ticker, provider.scenario, self._config)
+        engine = TapeEngine(
+            ticker, provider.scenario, self._config, epoch_anchor=_provider_anchor(provider)
+        )
         self._engines[ticker] = engine
         try:
             loop = asyncio.get_running_loop()
@@ -72,7 +85,9 @@ class WatchManager:
         feeder is registered in ``self._tasks`` so ``stop()`` and a switch already cancel it.
         """
         self.stop(ticker)  # tear down any prior watch for this ticker (no orphaned feeder)
-        engine = TapeEngine(ticker, provider.scenario, self._config)
+        engine = TapeEngine(
+            ticker, provider.scenario, self._config, epoch_anchor=_provider_anchor(provider)
+        )
         self._engines[ticker] = engine
         try:
             loop = asyncio.get_running_loop()
@@ -97,7 +112,9 @@ class WatchManager:
         event loop (the ``POST /watch`` route is async).
         """
         self.stop(ticker)  # tear down any prior watch for this ticker (no orphaned feeder/socket)
-        engine = TapeEngine(ticker, provider.scenario, self._config)
+        engine = TapeEngine(
+            ticker, provider.scenario, self._config, epoch_anchor=_provider_anchor(provider)
+        )
         self._engines[ticker] = engine
         try:
             loop = asyncio.get_running_loop()

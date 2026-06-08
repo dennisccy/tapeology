@@ -108,3 +108,9 @@ debounce, timeout ordering, large-print size) — check the spec wording and bot
 frontend constants for agreement before scoring it a defect; and any future iter touching the
 symbol-search min-query (change both `symbol_search_min_query` and `SYMBOL_SEARCH_MIN_QUERY` together
 and update UT-02/UT-10).
+
+## iter-12 — 2026-06-09T00:30:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** The dedicated browser-qa-agent run reported SKIPPED/0-of-16 (frontend not on :3650 at that moment) yet the qa-agent's own Chrome MCP pass produced real evidence PNGs and the qa.md narrated screenshots as if browser-qa had run — the two reports must be reconciled, never one trusted over the other. The load-bearing proof for a chart-axis journey is opening the PNG bytes: TC-05's axis genuinely reads '…01-2024 14:30 … 14:40' (a real clock face), which is what confirmed J-31, not the PASS label. Also: no `-audit.md` handoff was produced (status stopped at qa_complete) — full-depth iterations can finish without the audit step, so verify the gate artifacts you actually have rather than assuming the full pipeline ran.
+**Applies to:** any iter whose target is a chart axis / crosshair / time-display surface, or any iter where browser-qa SKIPs but qa.md claims browser screenshots — open the evidence bytes and reconcile the two reports before scoring.

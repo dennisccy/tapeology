@@ -108,6 +108,19 @@ class Config:
     history_max_bars: int = 1000
     history_max_markers: int = 500
 
+    # --- Canonical display/epoch anchor for SIMULATED data (J-31, Data Contract row 13) ------
+    # The chart's time axis shows TRUE clock time via an ADDITIVE epoch anchor: the real UTC epoch
+    # that logical-time 0 maps to (true_clock = anchor + logical_ts). For historical/live the
+    # anchor is the first real record's UTC epoch (computed in the provider). For SIMULATED data
+    # there is no real epoch, so the synthetic session-clock is anchored to this config-owned
+    # synthetic session-start instant — a fixed UTC epoch (seconds) corresponding to
+    # 2024-01-02 09:30:00 America/New_York (US RTH open, EST -05:00 = 14:30:00Z), a real clock
+    # face rather than an elapsed 0…600 s counter. It is DISPLAY metadata only — it never enters
+    # classification, so the engine stays deterministic (no wall-clock in the engine math). A fixed
+    # constant (not wall-clock now()) keeps the simulated axis reproducible. No inline literal may
+    # appear in engine/provider code — it lives ONLY here.
+    sim_session_anchor_epoch: float = 1704205800.0  # 2024-01-02T14:30:00Z (09:30 ET, EST)
+
     # --- Real historical replay (J-11) ------------------------------------------------
     # Selectable replay speeds for a historical watch. A superset of the UI's {1,2,5,10}
     # (TopBar REPLAY_SPEEDS) so every UI choice validates; an out-of-set speed is a 422.

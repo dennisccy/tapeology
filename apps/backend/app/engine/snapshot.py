@@ -58,6 +58,16 @@ class EngineSnapshot:
     # with the other defaulted fields) so every existing snapshot/test is unchanged (additive).
     paused: bool = False
 
+    # Canonical display/epoch anchor (Data Contract row 13, J-31): the real UTC epoch (seconds)
+    # that logical-time 0 maps to, so the chart renders TRUE clock time as ``anchor + logical_ts``
+    # (real market time for historical/live; a synthetic session-clock for simulated). Preserved
+    # ONCE by the engine/feeder (from the provider), NEVER fed into classification — it is additive
+    # display metadata, so the engine stays deterministic and the same ordered stream yields
+    # identical features/state/confidence. ``None`` when there is no anchor (an empty historical
+    # window, or any pre-J-31 construction) — the chart then stays empty and fabricates no time.
+    # Defaulted so every existing snapshot/test is unchanged (additive).
+    epoch_anchor: float | None = None
+
     @property
     def primary_features(self) -> dict[str, float]:
         return self.features[self.primary_window]

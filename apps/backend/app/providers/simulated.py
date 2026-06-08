@@ -16,6 +16,7 @@ from __future__ import annotations
 import random
 from typing import Iterator
 
+from ..config import CONFIG
 from .base import Event, QuoteEvent, Side, TradeEvent
 
 # Reserved sim tickers -> target tape state. All five are now driven to their read.
@@ -91,6 +92,11 @@ class SimulatedProvider:
         self.ticker = ticker
         self.scenario = scenario
         self.seed = seed
+        # Canonical display/epoch anchor (row 13, J-31): there is no real epoch for simulated data,
+        # so the synthetic session-clock is anchored to the config-owned synthetic session-start
+        # (a fixed UTC epoch — a real clock face, not an elapsed counter). DISPLAY metadata only —
+        # it does not touch the (logical, deterministic) event timestamps the stream emits.
+        self.epoch_anchor = CONFIG.sim_session_anchor_epoch
 
     def stream(self) -> Iterator[Event]:
         if self.ticker == "SIM-BUYER":

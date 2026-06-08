@@ -211,3 +211,20 @@
 {"iter_name":"goal-i_will_be_super_rich-iter-11","verdict":"GOAL_ACHIEVED","next_depth":"lean","journey_deltas":{"newly_passing":17,"newly_failing":0,"regressed":0,"anti_goal_violations":0},"ts":"2026-06-07T04:21:57Z","session_id":"i_will_be_super_rich","iter":11,"event":"iter_end","cli":"claude"}
 {"branch":"goal/i_will_be_super_rich","commit_sha":"7fcacae92f82a955ecbcd4d7b29dfc885c638227","success":true,"error":"","verdict":"GOAL_ACHIEVED","ts":"2026-06-07T04:22:35Z","session_id":"i_will_be_super_rich","iter":11,"event":"iter_push","cli":"claude"}
 {"final_verdict":"GOAL_ACHIEVED","total_iterations":12,"wall_time_seconds":5271,"quota_pause_count":0,"ts":"2026-06-07T04:25:12Z","session_id":"i_will_be_super_rich","iter":11,"event":"session_end","cli":"claude"}
+{"mode":"resume","max_iterations":30,"stall_window":3,"auto_release":false,"ts":"2026-06-08T22:21:36Z","session_id":"i_will_be_super_rich","iter":null,"event":"session_start","cli":"claude"}
+{"iter_name":"goal-i_will_be_super_rich-iter-12","prior_verdict":"GOAL_ACHIEVED","prior_depth":"lean","snapshot_sha":"5e47aa352176a8bcad4917e5f24ed20517a23b18","ts":"2026-06-08T22:21:37Z","session_id":"i_will_be_super_rich","iter":12,"event":"iter_start","cli":"claude"}
+{"agent":"goal-decomposer","ts":"2026-06-08T22:21:37Z","session_id":"i_will_be_super_rich","iter":12,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-decomposer","exit_status":70,"duration_seconds":0,"retries":0,"ts":"2026-06-08T22:21:37Z","session_id":"i_will_be_super_rich","iter":12,"event":"agent_invocation_end","cli":"claude"}
+{"reason":"DECOMPOSER_FAILED","detected_at_step":"decomposer","ts":"2026-06-08T22:21:37Z","session_id":"i_will_be_super_rich","iter":12,"event":"halt","cli":"claude"}
+{"final_verdict":"ABORTED","total_iterations":12,"wall_time_seconds":1,"quota_pause_count":0,"ts":"2026-06-08T22:21:37Z","session_id":"i_will_be_super_rich","iter":12,"event":"session_end","cli":"claude"}
+{"mode":"resume","max_iterations":30,"stall_window":3,"auto_release":false,"ts":"2026-06-08T22:21:58Z","session_id":"i_will_be_super_rich","iter":null,"event":"session_start","cli":"claude"}
+{"iter_name":"goal-i_will_be_super_rich-iter-12","prior_verdict":"GOAL_ACHIEVED","prior_depth":"lean","snapshot_sha":"4bdec1f9dcafa6644a8009a3784cbda01dc241d1","ts":"2026-06-08T22:21:59Z","session_id":"i_will_be_super_rich","iter":12,"event":"iter_start","cli":"claude"}
+{"agent":"goal-decomposer","ts":"2026-06-08T22:21:59Z","session_id":"i_will_be_super_rich","iter":12,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-decomposer","exit_status":0,"duration_seconds":285,"retries":0,"ts":"2026-06-08T22:26:44Z","session_id":"i_will_be_super_rich","iter":12,"event":"agent_invocation_end","cli":"claude"}
+{"depth":"full","target_journeys":"J-31, J-35","ts":"2026-06-08T22:26:44Z","session_id":"i_will_be_super_rich","iter":12,"event":"iter_dispatch","cli":"claude"}
+{"agent":"coherence-auditor","ts":"2026-06-08T23:13:51Z","session_id":"i_will_be_super_rich","iter":12,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"coherence-auditor","exit_status":0,"duration_seconds":173,"retries":0,"ts":"2026-06-08T23:16:44Z","session_id":"i_will_be_super_rich","iter":12,"event":"agent_invocation_end","cli":"claude"}
+{"verdict":"COHERENCE-PASS","ts":"2026-06-08T23:16:44Z","session_id":"i_will_be_super_rich","iter":12,"event":"coherence_audit","cli":"claude"}
+{"agent":"goal-evaluator","ts":"2026-06-08T23:16:44Z","session_id":"i_will_be_super_rich","iter":12,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-evaluator","exit_status":0,"duration_seconds":370,"retries":0,"ts":"2026-06-08T23:22:54Z","session_id":"i_will_be_super_rich","iter":12,"event":"agent_invocation_end","cli":"claude"}
+{"iter_name":"goal-i_will_be_super_rich-iter-12","verdict":"CONTINUE","next_depth":"full","journey_deltas":{"newly_passing":9,"newly_failing":0,"regressed":0,"anti_goal_violations":0},"ts":"2026-06-08T23:27:57Z","session_id":"i_will_be_super_rich","iter":12,"event":"iter_end","cli":"claude"}

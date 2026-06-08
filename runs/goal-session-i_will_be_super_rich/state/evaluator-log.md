@@ -269,3 +269,19 @@ with concrete passing evidence, COHERENCE-PASS, and zero anti-goal violations. (
 touch-up for any future session: if a ≥2 min-query is ever desired for UX, bump both
 symbol_search_min_query and SYMBOL_SEARCH_MIN_QUERY together and update UT-02/UT-10 — the current
 aligned value of 1 is spec-conformant and not a defect.)
+
+## Iteration 12 — goal-i_will_be_super_rich-iter-12
+
+**Date:** 2026-06-09T00:30:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-31 (true-clock chart axis), J-35 (dd-MM-yyyy dates everywhere)
+- Newly failing: none
+- Regressed: none
+- Newly tracked (unbuilt, out of scope this iter): J-32, J-33, J-34 — status unknown
+- Anti-goal violations: none
+
+**Reasoning:** J-31 sim half is browser-verified — I opened TC-05-sim-buyer-chart.png and the axis reads a real clock face ('…01-2024 14:30 … 14:40', synthetic session clock anchored to 2024-01-02 09:30 ET), not a 0…600s counter; code drops `Math.round(b.time)` for `anchor + logical`, and the additive epoch anchor (row 13) is exposed via GET /history with determinism byte-identical (test_epoch_anchor.py 8/8 in my re-run). J-35 is built and verified: native date picker replaced by a validated dd-MM-yyyy text input feeding the existing row-12 resolver (no J-20 UTC shift), one shared formatter routing every date surface. COHERENCE-PASS; no anti-goal violation. Caveats: the dedicated browser-qa-agent file is SKIPPED (frontend not on :3650 at that moment) but the QA agent's own Chrome MCP run produced the 5 real PNGs I relied on; no audit handoff exists (status stopped at qa_complete); the QA-env vendor-responsiveness test errors are a missing optional alpaca module, not a regression. Overall goal not yet achieved — J-32/J-33/J-34 remain unbuilt.
+
+**Next-step recommendation:** Full-depth iteration targeting J-33 (real-data classification calibration — relative spread/impact, highest-risk, must keep J-01–J-09 green via a deterministic regression fixture) and J-32 (live replay-speed apply), with J-34 (chunked long-window load) bundled or next. When all of J-31–J-35 pass with no regression and coherence holds, GOAL_ACHIEVED is reachable.
