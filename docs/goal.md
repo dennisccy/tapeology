@@ -22,7 +22,8 @@ default, offline, no-keys foundation. **Real US-equity market data is now in sco
 modes that reuse the exact same engine: **live** (streaming real trades/quotes in real time) and
 **historical replay** (fetching a chosen past date/time window and replaying it at a selectable
 speed). Both sit behind the same **replaceable provider interface**; **Alpaca** is the first real
-vendor (free **IEX** feed by default) behind a **vendor-agnostic adapter**, so another vendor
+vendor (**SIP** consolidated feed for historical replay — realistic spreads, free for data >15 min old;
+free **IEX** feed for live) behind a **vendor-agnostic adapter**, so another vendor
 (Polygon, Databento, …) can be added without touching the engine or API. The five tape states —
 **buyer_control, seller_control, bid_absorption, ask_absorption, unclear** — are surfaced one
 ticker at a time in a simple Next.js UI, identically for simulated, live, or replayed real data.
@@ -103,7 +104,8 @@ The first success metric is **not** profit. In priority order:
    no keys); a **live provider** that streams real trades/quotes in real time; and a
    **historical-replay provider** that fetches a past window and replays it at a chosen speed.
    The real providers talk to the vendor only through a **vendor-agnostic adapter** (Alpaca
-   first, free IEX feed; another vendor is one new adapter). The engine consumes provider events
+   first — SIP consolidated feed for historical replay, free IEX feed for live; another vendor is one
+   new adapter). The engine consumes provider events
    and never knows the source. Real timestamps are mapped to the engine's logical timeline
    (quote-before-trade preserved) so the engine stays unchanged and deterministic per stream. The
    real (and, for the simulator, a synthetic session-start) **epoch origin** is preserved alongside
@@ -212,7 +214,9 @@ The first success metric is **not** profit. In priority order:
   request/response.
 - **Data sources:** the deterministic, seedable **simulator** is the default/offline foundation
   (no keys); **real US-equity data** is selectable in two modes — **live** streaming and
-  **historical replay** — from a real vendor (**Alpaca**, free IEX feed by default) behind a
+  **historical replay** — from a real vendor (**Alpaca**: **historical replay uses the SIP consolidated
+  feed** for realistic quotes/spreads — free for data >15 min old — while **live** uses the free IEX
+  feed) behind a
   **vendor-agnostic adapter** so another vendor can be added without touching the engine/API.
 - **Provider interface:** trades, quotes, and (later) L2 come from a replaceable provider
   selected by watch mode; the engine and API are provider-agnostic.
@@ -743,6 +747,9 @@ load is verified with credentials). These additions MUST NOT regress **J-01 – 
     speed endpoint is covered by a unit test.)*
 
 - **J-33: A genuine directional move on real data classifies as control, not perpetual `unclear`**
+  - ⚠️ **Superseded by J-36** — the iter-13 pass was synthetic-fixture-only and is **INVALID**; replayed
+    on real data the GME window reads 100% `unclear` (IEX quoted spread ~2,700 bps vs the ≤30 bps gate,
+    though sell-ratio 0.77 / impact −4.79 / speed 1.5 all pass). The real fix is tracked by **J-36**.
   - Steps:
     1. Replay a real symbol over a window with a **strong, fast directional move** — the reference
        case is **GME on 14-05-2024, 14:30–14:40 London time** (13:30–13:40 UTC), which fell >10% in
@@ -763,6 +770,9 @@ load is verified with credentials). These additions MUST NOT regress **J-01 – 
     asserting `seller_control`; the real-GME confirmation is verified with credentials.)*
 
 - **J-34: A long historical window loads via chunking instead of "very high-volume"**
+  - ⚠️ **Superseded by J-37** — chunking only parallelized within the 8s cap; it never decoupled
+    first-data from full-load, so long/dense real windows still time out into "very high-volume". The
+    real fix (progressive streamed loading) is tracked by **J-37**.
   - Steps:
     1. Visit `/`, select **Historical**, choose a **liquid** symbol and a **long** window — click the
        **Full RTH 9:30–16:00** quick-pick (or any multi-hour window) — and Watch
@@ -797,6 +807,62 @@ load is verified with credentials). These additions MUST NOT regress **J-01 – 
     fetched window still matches the selected local window (**J-20** and the *Timezone-correct
     windows* anti-goal hold). *(Browser-verifiable.)*
 
+Journeys **J-36 – J-37** REOPEN the two real-data defects the user verified still fail after iter-13.
+The iter-13 "pass" for J-33/J-34 was validated only against **hand-built synthetic fixtures** with the
+real-data legs marked "operator-gated" — the real Alpaca data was never replayed, so two real-data
+defects shipped. These two journeys are therefore gated by **committed real captured market data**, not
+synthetic fixtures; an "operator-gated" manual note is explicitly **insufficient** (see the *Real-data
+journeys are proven with real data* anti-goal). They MUST NOT regress **J-01 – J-35**.
+
+- **J-36: A real directional move classifies as control on real data — proven by a committed real-data fixture**
+  - Steps:
+    1. In **Historical** mode replay the reference window — **GME on 14-05-2024, 14:30–14:40 London
+       time (13:30–13:40 UTC)**, which fell ~12% in minutes into an LULD trading halt
+    2. Read the **tape-state** panel + confidence as the drop plays, and the chart **markers**
+  - Acceptance: the drop resolves to **seller_control** with confidence ≥ the configured reasonable
+    threshold (and the mirror: a comparable rally → **buyer_control**), with seller markers at the
+    transition — it does **not** sit on `unclear` through the obvious >10% move. *(Measured today the
+    engine reads 100% `unclear`: on the default IEX feed the quoted spread is ~2,700 bps versus the
+    ≤30 bps gate, even though aggressive-sell-ratio 0.77, sell-price-impact −4.79, and trade-speed 1.5
+    all clearly pass — the spread gate alone vetoes the call.)* The fix is twofold and **config-owned
+    (no magic numbers)**: **(a)** historical replays fetch the **SIP consolidated feed** so the quoted
+    spread is realistic (the account has SIP historical, free for data >15 min old; on a calm name the
+    SIP spread is sub-bps where the single-venue IEX spread is hundreds of bps) — the feed per mode is
+    explicit and config-owned, and **live** streaming may remain the free IEX feed; **(b)** the
+    classifier is **robust to quoting artifacts** — a clearly directional move (strong one-sided
+    aggressive ratio AND real price impact AND elevated speed) MUST resolve to control even when the
+    quoted spread is momentarily wide or quotes are **absent/crossed** (e.g. around a halt), with spread
+    acting as a **graded confidence factor, not an absolute veto**. Genuinely mixed/illiquid tape (weak
+    ratio or no real price impact) still reads `unclear` / absorption (the *Honest uncertainty* and
+    *Price impact over raw aggression* anti-goals hold). All five simulated scenarios **J-01 – J-09**
+    and the existing classifier unit tests MUST stay green after the change. *(Gated by a **committed
+    real-data fixture** captured from the GME window above driving an automated test that asserts
+    `seller_control` at the drop, runnable in CI **without** live credentials; a synthetic fixture and
+    an "operator-gated" note are NOT sufficient. The live SIP confirmation is re-run as a manual check.)*
+
+- **J-37: A long/dense window loads progressively — first chunk replays immediately, the rest streams in — proven by a committed real-data fixture**
+  - Steps:
+    1. In **Historical** mode choose a **liquid** symbol and a **long** window — the **Full RTH
+       9:30–16:00** quick-pick (or any multi-hour window) — and Watch
+    2. Observe the cockpit + chart **begin within the frontend timeout**; keep watching as later data
+       arrives; then re-watch the same symbol + window
+  - Acceptance: **time-to-first-data is decoupled from total-window load** — the replay begins as soon
+    as the **first chunk** is fetched (within the bounded budget, backend bound < frontend timeout) and
+    subsequent chunks are fetched **in the background** and appended **in epoch order** as the replay
+    advances; the system MUST **never** fetch the entire window before responding. The advertised **Full
+    RTH** quick-pick MUST work for a liquid symbol **without** the "that window is very high-volume — try
+    a shorter range" error; that message becomes a **true last-resort backstop** (e.g. the first chunk
+    itself genuinely cannot load), never the routine outcome for a normal long/dense session. Correctness
+    is preserved: streamed chunks MUST NOT fabricate, drop, reorder (beyond the canonical epoch order),
+    or de-duplicate real prints, and a re-watch is near-instant from the window cache. The engine MUST
+    process real consolidated-tape density without stalling *(today a ~50k-event window does not finish
+    processing within budget)* — it MAY bound/aggregate the displayed series, but tape state and each
+    feature stay **single-source and deterministic**. *(Gated by a **committed real-data fixture** for a
+    long/dense real window driving an automated test that asserts (a) first-data/replay begins within
+    budget, (b) no "high-volume" error, and (c) no fabricated/dropped/reordered prints across the
+    streamed chunks, runnable in CI **without** live credentials; chunk-stitch unit tests alone and an
+    "operator-gated" note are NOT sufficient. The live Full-RTH confirmation is re-run as a manual check.)*
+
 ## Anti-goals
 
 - **No execution path.** Tapeology MUST NOT place, route, simulate, or recommend orders, and
@@ -819,6 +885,12 @@ load is verified with credentials). These additions MUST NOT regress **J-01 – 
   single absolute dollar constant calibrated for the simulator — so a genuine strong directional move
   on a real symbol with a proportionate spread reads as control, while a genuinely wide *relative*
   spread (or high aggression with no proportionate price progress) still reads `unclear` / absorption.
+  The spread/impact tests MUST also account for the **selected feed** and for **trading halts**: a wide
+  or **absent** *quoted* spread (a single-venue IEX quote, or suppressed/crossed quotes during an LULD
+  halt) MUST NOT by itself veto a move that is otherwise clearly directional (strong one-sided ratio +
+  real price impact + elevated speed) — there the spread acts as a **graded confidence factor, not an
+  absolute veto**. Honest uncertainty applies to genuinely illiquid/mixed tape, never to a single-venue
+  quoting artifact.
   *(critical)*
 - **No fabricated data.** The system MUST NOT synthesize trades, quotes, prices, or a tape state
   to force a green journey. Every real-data failure mode MUST surface an explicit, distinct state
@@ -896,4 +968,14 @@ load is verified with credentials). These additions MUST NOT regress **J-01 – 
   timeout/oversize error MUST be **actionable for the real cause** (e.g. "shorten the window"), never a
   misleading "try again"; and every performance optimization MUST preserve correctness — **no fabricated
   or dropped trades/quotes, no recomputation outside the engine** (single source of truth holds).
+  For a long window, "fast by design" MUST mean **time-to-first-data is decoupled from total-window
+  load** — the first chunk begins the replay within budget while later chunks stream in the background —
+  not merely parallelizing a fetch that still completes entirely before responding; the "shorter range"
+  message is a true last-resort backstop only.
   *(critical)*
+- **Real-data journeys are proven with real data.** A journey whose outcome depends on real market data
+  (classification of a real move, real-window loading) is NOT done until an **automated test over
+  committed, real captured market data** asserts the outcome and runs in CI **without** live credentials.
+  A synthetic/hand-tuned fixture and an "operator-gated" manual check are necessary-but-**insufficient** —
+  they MUST NOT be the sole evidence for GOAL_ACHIEVED. This rule exists because the iter-13 J-33/J-34
+  "pass" was synthetic-only and shipped two real-data defects. *(critical)*
