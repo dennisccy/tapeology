@@ -66,6 +66,16 @@ class WatchRequest(BaseModel):
     speed: float | None = None
 
 
+class SpeedRequest(BaseModel):
+    """Body for ``POST /watch/{ticker}/speed`` (J-32): the new replay speed for a RUNNING watch.
+
+    ``speed`` is validated against ``CONFIG.allowed_replay_speeds`` in the route (out-of-set ⇒ 422),
+    so the allowed set stays backend-authoritative (the frontend control disable is only a
+    courtesy). It is a delivery-pacing change only — never a displayed engine value."""
+
+    speed: float
+
+
 class RealDataError(Exception):
     """Refuse a real-mode watch with an explicit, distinct non-cockpit response instead of
     fabricating a snapshot (no-fabricated-data anti-goal). Carries a machine-readable ``reason``
@@ -376,6 +386,27 @@ async def resume_watch(ticker: str) -> dict:
     A not-watched ticker is an honest 404. Idempotent: resuming a not-paused watch is a no-op 200.
     """
     if not manager.resume(ticker):
+        raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' is not being watched")
+    return serialize_summary(_engine_or_404(ticker).snapshot())
+
+
+@app.post("/watch/{ticker}/speed")
+async def set_watch_speed(ticker: str, body: SpeedRequest) -> dict:
+    """Change the historical replay speed of a RUNNING watch (J-32) — applies immediately.
+
+    The body ``speed`` is validated against ``CONFIG.allowed_replay_speeds`` (backend-authoritative):
+    an out-of-set value is a 422 BEFORE any feeder mutation (never silently coerced); a not-watched
+    ticker is an honest 404 (no engine fabricated). On success the per-ticker mutable speed cell is
+    updated, so ``_feed_paced`` re-paces the in-progress replay within ~1s with NO re-fetch, engine
+    restart, or teardown — and because speed scales delivery pacing only (never the events, their
+    order, or their logical timestamps), the resulting features/state/confidence are unchanged
+    (determinism preserved). Returns the canonical snapshot projection (carrying the unchanged
+    state/confidence); the new speed itself is delivery-pacing metadata, never a displayed value.
+    """
+    if body.speed not in CONFIG.allowed_replay_speeds:
+        allowed = ", ".join(str(s) for s in CONFIG.allowed_replay_speeds)
+        raise HTTPException(status_code=422, detail=f"speed must be one of: {allowed}")
+    if not manager.set_speed(ticker, body.speed):
         raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' is not being watched")
     return serialize_summary(_engine_or_404(ticker).snapshot())
 

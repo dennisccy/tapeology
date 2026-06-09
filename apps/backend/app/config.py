@@ -36,6 +36,42 @@ class Config:
     min_aggressive_sell_ratio: float = 0.60  # share of directional volume that is sells
     max_sell_price_impact: float = -0.02     # MUST be negative: price actually fell
 
+    # --- RELATIVE spread / price-impact gates (J-33 / price-impact-relative-to-price) ----------
+    # The directional/absorption gates judge the "wide spread" and "clean price impact" tests
+    # RELATIVE to the instrument's price level (spread in basis points of price; impact as a
+    # RETURN), NOT via the absolute dollar constants above — which were calibrated for the ~$100
+    # simulator and forced a real ~$30–50 name with a proportionate spread to `unclear`. The
+    # classifier reads the canonical ``reference_price`` feature (computed once in the feature
+    # engine) and applies these when a basis is present; with NO basis (legacy unit-test fixtures
+    # that pass no reference_price) it falls back to the absolute constants above, so the existing
+    # classifier tests are byte-identical (the absolute path is unchanged).
+    #
+    # EQUIVALENCE / SIM SANITY (the relative path must keep all five sim scenarios green):
+    #   * sim control/absorption: price ~$100, spread $0.02 = 2 bps  (well under max_stable_spread_bps)
+    #   * sim chop:               price ~$100, spread $0.10–$0.20 = 10–20 bps — but chop is blocked
+    #                             by the RATIO floor regardless, so the bps cutoff is generous enough
+    #                             to admit a real fast-mover's proportionate spread without ever
+    #                             admitting chop (whose one-sided ratios never reach 0.60).
+    # max_stable_spread_bps is deliberately generous so a genuine ~$30–50 fast-mover with a
+    # proportionate (even absolute-$-wide) spread is NOT forced to `unclear`; a genuinely wide
+    # RELATIVE spread (e.g. > this many bps) still blocks control/absorption (honest-uncertainty
+    # holds). The impact-return cutoffs are the relative mirrors of min_buy/max_sell_price_impact:
+    # at $100 the old $0.02 cutoff is 2 bps of return (0.0002), so these keep the sim equivalence
+    # while expressing the cutoff as a return that scales to any price level.
+    max_stable_spread_bps: float = 30.0          # average spread (bps of mid/last) at/below = stable
+    min_buy_price_impact_return: float = 0.0002  # MUST be positive: real upward progress (a return)
+    max_sell_price_impact_return: float = -0.0002  # MUST be negative: real downward progress
+    # Half-width of the relative "price is flat" band (impact magnitude as a return). The absorption
+    # gates use the EXACT complement of the control impact-return condition, so control and
+    # absorption stay mutually exclusive on impact (the keystone) in the relative domain too. Wider
+    # than the control return cutoff (|0.0002|) so there is a graded near-zero region (mirrors the
+    # absolute absorption_flat_band's relation to max_sell_price_impact).
+    absorption_flat_band_return: float = 0.0005
+    # How far past the relative impact-return cutoff a metric must read to earn a full (1.0)
+    # confidence component (the relative mirror of impact_scale). At $100 a $0.40 impact is a 0.004
+    # return, comfortably past this — so sim confidence stays well above reasonable_confidence.
+    impact_return_scale: float = 0.003
+
     # --- absorption gate thresholds (bid_absorption / ask_absorption) -----------------
     # The keystone case: high one-sided aggression but the quote HOLDS, so the matching
     # price impact is flat (NOT past the control cutoff) and the quote refreshes. The flat-
@@ -182,6 +218,23 @@ class Config:
     # operational cache bounds, not engine thresholds — the engine math stays untouched.
     historical_cache_max_entries: int = 32
     historical_cache_ttl_seconds: float = 300.0
+
+    # --- Chunked long-window historical fetch (J-34 / fast-by-design, not a longer timeout) ----
+    # A long requested window (up to a full trading day) is split into BOUNDED sub-windows fetched
+    # with BOUNDED concurrency and stitched back in epoch order into ONE real window — parallelizing
+    # the vendor SDK's otherwise-sequential pagination so the advertised Full-RTH quick-pick loads
+    # for a liquid symbol instead of returning the "very high-volume" error. Both bounds are
+    # config-owned (no magic number): a window longer than the sub-window size is split into
+    # ceil(span / chunk) sub-windows, at most ``historical_chunk_max_concurrency`` fetched at once.
+    # A window at/under the sub-window size is fetched as a SINGLE call (the prior fast path,
+    # unchanged). Stitching merges the sub-windows' real trades/quotes and sorts by epoch —
+    # it MUST NOT fabricate, drop, reorder (beyond the canonical epoch sort), or de-duplicate real
+    # prints; a re-watch of the same symbol+window stays near-instant from the window cache. This is
+    # fast BY DESIGN (concurrency), never a relaxed deadline — the backend bound stays shorter than
+    # the frontend client timeout; a window genuinely too large to load within budget still resolves
+    # to the actionable "shorter range" backstop (J-28).
+    historical_chunk_seconds: float = 900.0       # sub-window span (15 min) — split above this
+    historical_chunk_max_concurrency: int = 4     # max sub-window fetches in flight at once
 
     # --- Historical warm-up fast-forward (J-29 / prompt warm-up) -----------------------
     # On a historical replay the feeder delivers the first up-to-`warmup_min_events` warm-up events

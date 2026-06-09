@@ -35,6 +35,11 @@ FEATURE_NAMES = (
     "absorption_score",
     "bid_refresh_score",
     "ask_refresh_score",
+    # The price-relative basis (J-33): the instrument's in-window price LEVEL, computed ONCE here so
+    # the classifier can judge spread/impact RELATIVE to price (spread in bps, impact as a return)
+    # instead of via an absolute dollar constant tuned for the simulator. Single source of truth —
+    # the classifier reads this, it never recomputes price.
+    "reference_price",
 )
 
 
@@ -92,6 +97,18 @@ class _Window:
         large_prints = sum(1 for t in self._trades if t[2] >= self._config.large_print_size)
         average_spread = fmean(q[3] for q in self._quotes) if self._quotes else 0.0
 
+        # Price-relative basis (J-33): the in-window price LEVEL the classifier normalises spread
+        # and impact against. Prefer the average quote MID-price (the cleanest level indicator);
+        # fall back to the average trade price when there are no quotes, and to 0.0 when the window
+        # is empty (the classifier then treats it as "no basis" and uses its absolute fallback — a
+        # cold/empty window stays honest, never a fabricated relative read). Computed ONCE here.
+        if self._quotes:
+            reference_price = fmean((q[1] + q[2]) / 2.0 for q in self._quotes)
+        elif self._trades:
+            reference_price = fmean(t[1] for t in self._trades)
+        else:
+            reference_price = 0.0
+
         buy_ratio = (buy_volume / directional) if directional else 0.0
         sell_ratio = (sell_volume / directional) if directional else 0.0
 
@@ -118,6 +135,7 @@ class _Window:
             ),
             "bid_refresh_score": bid_refresh,
             "ask_refresh_score": ask_refresh,
+            "reference_price": reference_price,
         }
 
     def _refresh_fraction(

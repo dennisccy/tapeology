@@ -49,6 +49,13 @@ class WatchManager:
         self._pace = pace
         self._engines: dict[str, TapeEngine] = {}
         self._tasks: dict[str, asyncio.Task] = {}
+        # Per-ticker MUTABLE replay-speed holder (J-32). A single-element list is the small mutable
+        # cell ``_feed_paced`` reads each loop iteration, so ``set_speed`` changes the in-progress
+        # replay's pacing within ~1s with NO re-fetch, engine restart, or teardown. Speed is a
+        # delivery-pacing divisor ONLY — the engine still processes the same ordered events with the
+        # same logical timestamps, so features/state/confidence are byte-identical at any speed
+        # (determinism preserved). Cleared in ``stop()``.
+        self._speeds: dict[str, list[float]] = {}
 
     def is_known(self, ticker: str) -> bool:
         return build_provider(ticker) is not None
@@ -89,10 +96,15 @@ class WatchManager:
             ticker, provider.scenario, self._config, epoch_anchor=_provider_anchor(provider)
         )
         self._engines[ticker] = engine
+        # Register the per-ticker mutable speed cell BEFORE the feeder starts so ``set_speed`` (and
+        # the feeder's per-iteration read) share the one holder. A non-positive speed is normalised
+        # to 1.0 here (defensive) — the route already validates against the allowed set.
+        speed_cell = [speed if speed > 0 else 1.0]
+        self._speeds[ticker] = speed_cell
         try:
             loop = asyncio.get_running_loop()
             self._tasks[ticker] = loop.create_task(
-                self._feed_paced(engine, provider, speed)
+                self._feed_paced(engine, provider, speed_cell)
             )
         except RuntimeError:
             # No running loop (synchronous context): the caller feeds the engine itself.
@@ -142,8 +154,26 @@ class WatchManager:
         task = self._tasks.pop(ticker, None)
         if task is not None:
             task.cancel()
+        self._speeds.pop(ticker, None)  # drop the mutable speed cell (no cross-watch residue)
         engine.set_stream_status("closed")
         del self._engines[ticker]
+        return True
+
+    def set_speed(self, ticker: str, speed: float) -> bool:
+        """Set the replay speed of a RUNNING watch (J-32) — delivery pacing only, no teardown.
+
+        Mutates the per-ticker speed cell that ``_feed_paced`` reads each loop iteration, so the
+        change applies to the in-progress replay within ~1s with NO re-fetch, engine restart, or
+        teardown (a change made while paused applies on resume — the pause gate is unchanged).
+        Because speed only scales the wall-clock delay between deliveries — never the events' order
+        or their logical timestamps — the resulting features/state/confidence for the window are
+        byte-identical at any speed (determinism preserved). Returns ``False`` (no exception) when
+        the ticker is not being watched, mirroring pause/resume — the route turns that into a 404;
+        the caller (route) validates ``speed`` against the allowed set BEFORE calling this."""
+        cell = self._speeds.get(ticker)
+        if cell is None:
+            return False
+        cell[0] = speed if speed > 0 else 1.0
         return True
 
     def pause(self, ticker: str) -> bool:
@@ -209,14 +239,22 @@ class WatchManager:
             engine.set_stream_status("failed")
 
     async def _feed_paced(
-        self, engine: TapeEngine, provider: Provider, speed: float
+        self, engine: TapeEngine, provider: Provider, speed: "float | list[float]"
     ) -> None:
         """Feed a provider's stream pacing delivery by each event's logical gap / ``speed``.
 
+        ``speed`` is the per-ticker MUTABLE speed cell (a single-element list) so a live
+        ``set_speed`` (J-32) takes effect on the in-progress replay: the divisor is re-read from the
+        cell EACH loop iteration, not captured once, so changing it re-paces subsequent deliveries
+        within ~1s with no re-fetch / restart / teardown. (A bare float is still accepted for the
+        unit tests / legacy callers that pass a fixed speed — it is read once into a local cell.)
+
         The wall-clock delay between two events is their logical-timestamp gap divided by the
-        replay speed, clamped to ``config.replay_pacing_cap_seconds`` so a large quiet gap never
-        stalls the cockpit. Pacing is delivery-only; the engine still computes purely from the
-        logical timestamps, so the replay stays deterministic. Cancellable like the sim feeder.
+        CURRENT replay speed, clamped to ``config.replay_pacing_cap_seconds`` so a large quiet gap
+        never stalls the cockpit. Pacing is delivery-only; the engine still computes purely from the
+        logical timestamps, so the replay stays deterministic at ANY speed (a change of speed
+        re-paces delivery but never the events, their order, or their logical timestamps — so the
+        resulting features/state/confidence are byte-identical). Cancellable like the sim feeder.
 
         WARM-UP FAST-FORWARD (J-29): the first up-to-``warmup_min_events`` events are delivered with
         a tiny fixed pace (``config.warmup_fast_forward_pace_seconds``) instead of their logical
@@ -227,7 +265,10 @@ class WatchManager:
         to an un-fast-forwarded replay (the engine never reads wall-clock; determinism preserved).
         """
         cap = self._config.replay_pacing_cap_seconds
-        divisor = speed if speed > 0 else 1.0
+        # Accept either the mutable speed cell (live re-pacing, J-32) or a bare float (fixed speed,
+        # used by the unit tests / legacy callers). Normalise to a one-element cell so the loop reads
+        # ``speed_cell[0]`` uniformly each iteration.
+        speed_cell = speed if isinstance(speed, list) else [speed]
         warmup_count = self._config.warmup_min_events
         ff_pace = self._config.warmup_fast_forward_pace_seconds
         # Stream open, no event applied yet -> `waiting`; the first process_event promotes to
@@ -246,6 +287,10 @@ class WatchManager:
                         # logical timestamp below is unchanged, so engine math is identical).
                         delay = ff_pace
                     else:
+                        # Re-read the CURRENT speed each iteration (J-32 live re-pacing): a
+                        # ``set_speed`` mid-replay changes this divisor without re-fetch/restart.
+                        current_speed = speed_cell[0]
+                        divisor = current_speed if current_speed > 0 else 1.0
                         delay = min((event.timestamp - prev_ts) / divisor, cap)
                     if delay > 0:
                         await asyncio.sleep(delay)

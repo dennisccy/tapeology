@@ -87,6 +87,7 @@ export function TopBar({
   onStop,
   onPause,
   onResume,
+  onSpeedChange,
   error,
 }: {
   watched: string | null;
@@ -98,6 +99,9 @@ export function TopBar({
   onStop: () => void;
   onPause: () => void;
   onResume: () => void;
+  // J-32: change the replay speed of a RUNNING historical replay (applies live via
+  // POST /watch/{ticker}/speed — NOT a re-Watch). Called only when a historical watch is active.
+  onSpeedChange: (speed: number) => void;
   error: string | null;
 }) {
   const [symbol, setSymbol] = useState("");
@@ -177,6 +181,17 @@ export function TopBar({
   const paused = snapshot?.paused === true;
   const pauseable =
     !!snapshot && ["connecting", "live", "stale"].includes(snapshot.stream_status);
+
+  // J-32: a historical replay is "running" (so a speed change applies LIVE rather than only
+  // staging the next Watch) when we are in Historical mode and an active engine snapshot is
+  // mounted — any non-terminal stream status (a closed/failed stream has nothing to re-pace; a
+  // change made while paused applies on resume, so paused counts as running). Read from the
+  // canonical snapshot — never a client-side guess.
+  const replayRunning =
+    mode === "historical" &&
+    !!watched &&
+    !!snapshot &&
+    !["closed", "failed"].includes(snapshot.stream_status);
 
   // Resolve the Historical window once (preset verbatim, else the manual local fields). Returns
   // null when the window is missing/invalid (end <= start) so both the disabled-Watch gate and the
@@ -302,7 +317,16 @@ export function TopBar({
               <select
                 aria-label="Replay speed"
                 value={speed}
-                onChange={(e) => setSpeed(Number(e.target.value))}
+                onChange={(e) => {
+                  const next = Number(e.target.value);
+                  setSpeed(next);
+                  // J-32: if a historical replay is already RUNNING (a snapshot is mounted for the
+                  // watched ticker), apply the new speed LIVE via POST /watch/{ticker}/speed — NOT a
+                  // re-Watch. Out-of-set values can't be chosen here (only REPLAY_SPEEDS are
+                  // offered), and the backend 422 stays authoritative. When no watch is running yet
+                  // the value is just the speed the next Watch submits with (unchanged behavior).
+                  if (replayRunning) onSpeedChange(next);
+                }}
                 className={INPUT_CLASS}
               >
                 {REPLAY_SPEEDS.map((s) => (

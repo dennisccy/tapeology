@@ -73,6 +73,39 @@
 >   **unchanged**: the field still carries the explicit local zone label and resolves to the **same** tz-aware instant via
 >   the existing row-12 resolver (no silent UTC shift); **J-20** holds. (J-35)
 > No top-level nav section added/renamed/moved ⇒ **no re-approval requested**.
+>
+> **iter-13 extension is ADDITIVE (live replay-speed + relative spread/impact calibration + chunked long-window load, J-32 / J-33 / J-34).**
+> Same single `/` HOME, same nav skeleton, same one-engine source of truth. **No new displayed value, no new contract row.**
+> - **J-32 — mutable replay speed (lifecycle, not a displayed value).** A new `POST /watch/{ticker}/speed` endpoint sets the
+>   replay speed of a **running** historical watch (validated against `CONFIG.allowed_replay_speeds`: out-of-set ⇒ 422,
+>   not-watched ⇒ 404). `WatchManager` owns a per-ticker **mutable speed** that `_feed_paced` reads each loop, so a change
+>   applies to the in-progress replay within ~1s — **no re-fetch, no engine restart, no teardown**; a change while paused
+>   applies on resume. Speed is **delivery-pacing only**: the engine still processes the same ordered events with the same
+>   logical timestamps, so the window's features/state/confidence (rows 1/2/3) are byte-identical at any speed (determinism
+>   preserved). This is a sibling of the existing `pause`/`resume`/`stop` watch-lifecycle controls on the row-6/row-12 watch —
+>   **not** a new displayed engine value and **not** a second computation of any row. The existing Historical replay-speed
+>   control wires to it (no new surface). (J-32)
+> - **J-33 — relative spread/impact calibration of the SAME row-1 classifier.** The directional/absorption gates in the
+>   single row-1 owner (`TapeStateClassifier`) judge the "wide spread" and "clean price impact" tests **relative to the
+>   instrument's price level / recent volatility** (spread in bps; impact as a return), all boundaries **config-owned (no
+>   magic numbers)** — replacing the absolute dollar constants tuned for the simulator. A real ~$30–50 name with a
+>   proportionate spread + strong impact resolves to **buyer/seller control**, not perpetual `unclear`; a genuinely wide
+>   *relative* spread, or high aggression with no proportionate progress, still reads `unclear`/absorption (price-impact-
+>   over-aggression + honest-uncertainty anti-goals hold; absorption gates stay the exact complement of the control impact
+>   condition). The classifier reads the price-relative basis from the **canonical snapshot / feature engine** — **no second
+>   computation of price/spread/impact**, no new producer, no new row. All five sim scenarios J-01–J-09 stay green. (J-33)
+> - **J-34 — chunked long-window fetch inside the ONE vendor adapter.** The historical fetch (row 10 / rows 3/4 source) splits
+>   a long requested window into **bounded sub-windows fetched with bounded concurrency** (both bounds config-owned) and
+>   **stitches them in epoch order** into one real window — fabricating/dropping/reordering/de-duplicating **no** real prints;
+>   a re-watch is near-instant from the existing window cache (same real records). This is **fast by design** (parallelizing
+>   the SDK's sequential pagination), not a longer timeout; the backend bound stays **shorter than** the frontend
+>   `WATCH_REQUEST_TIMEOUT_MS`, and the "very high-volume — try a shorter range" message (row 9 / J-28) becomes a **true
+>   backstop** only for a window genuinely too large to load within budget — not the routine outcome for a normal Full-RTH
+>   session. The work lives in the **one** vendor-agnostic adapter / its serving path (no second fetch path, no recomputation
+>   outside the engine). (J-34)
+> New config constants (mutable-speed holder bounds, the relative spread/impact thresholds in bps/return, the sub-window size
+> and chunk-concurrency bounds) are **config values, not displayed values**.
+> No top-level nav section added/renamed/moved ⇒ **no re-approval requested**.
 
 **Governing principle.** Tapeology is a single-ticker **tape cockpit**. Every tape state, confidence, and feature is
 computed **exactly once in the engine** and read identically by REST, WebSocket, and the UI (anti-goal: *Single source
@@ -160,18 +193,18 @@ rows 10–12 are the **analysis-fidelity additions**: rows 10 (J-17 chart **rend
 
 | # | Displayed value | Canonical computing module (computed once) | Canonical serving endpoint | Re-exposed read-only by |
 |---|---|---|---|---|
-| 1 | **Tape state + confidence** | `TapeStateClassifier` (rule/threshold over features) → snapshot | `GET /tape/{ticker}/state` | `/summary`, `WS /stream` |
+| 1 | **Tape state + confidence** | `TapeStateClassifier` (rule/threshold over features) → snapshot — the directional/absorption **wide-spread + clean-price-impact gates are judged RELATIVE to the instrument's price level / recent volatility** (spread in bps, impact as a return; config-owned, no magic numbers — **J-33**), so a real proportionate move reads as control while a genuinely wide *relative* spread or high aggression with no proportionate progress stays `unclear`/absorption; absorption gates remain the exact complement of the control impact condition; the price-relative basis is read from the canonical snapshot/feature engine (no second computation) | `GET /tape/{ticker}/state` | `/summary`, `WS /stream` |
 | 2 | **14 core features × 5 windows** | `FeatureEngine` (windows 10/30/60/180/300s) → snapshot | `GET /tape/{ticker}/features` | `/summary` (subset), `WS /stream` |
 | 3 | **bid / ask / spread / last** (spread = ask − bid) | `MarketState` (latest Quote/Trade) → snapshot | `GET /tape/{ticker}/summary` | `WS /stream` |
 | 4 | **Recent trades** (price / size / **side**) | **Aggressor classifier** — quote rule (≥ask⇒buy, ≤bid⇒sell) **then a tick-test fallback** (no quote yet **or** strictly mid-spread ⇒ uptick=buy / downtick=sell / zero-tick carries last non-zero dir; no quote **and** no prior trade ⇒ `unknown`) over provider TradeEvents | `GET /tape/{ticker}/events` | `WS /stream` |
 | 5 | **Observations + event-log messages** | Engine **observation / transition emitter** | `GET /tape/{ticker}/events` | `WS /stream` |
-| 6 | **Watched-source descriptor + watch/stream status** (sim scenario \| `live <SYM>` \| `historical <SYM> <window>`; status connecting / **waiting** / live / **stale** / **paused** / **failed** / closed) — **`waiting`** = connected but no first event yet (J-26; replaces a confident `live` over an empty tape; also fills the J-29 Historical fetch wait); **`failed`** = the feeder raised / exited unexpectedly (J-23/J-27; logged + surfaced, never swallowed). One owner: the engine/feeder; NO second `stream_status` writer | `GET /tape/{ticker}/summary` (+ `POST`/`DELETE /watch` responses) | `WS /stream` |
+| 6 | **Watched-source descriptor + watch/stream status** (sim scenario \| `live <SYM>` \| `historical <SYM> <window>`; status connecting / **waiting** / live / **stale** / **paused** / **failed** / closed) — **`waiting`** = connected but no first event yet (J-26; replaces a confident `live` over an empty tape; also fills the J-29 Historical fetch wait); **`failed`** = the feeder raised / exited unexpectedly (J-23/J-27; logged + surfaced, never swallowed). One owner: the engine/feeder; NO second `stream_status` writer | `GET /tape/{ticker}/summary` (+ `POST`/`DELETE /watch` responses; the running watch is also re-paced live via `POST /watch/{ticker}/speed` — out-of-set ⇒ 422, not-watched ⇒ 404; a sibling lifecycle control like pause/resume, delivery-pacing only, NOT a displayed value — **J-32**) | `WS /stream` |
 | 7 | **Symbol search results** (symbol + name) | **Vendor-agnostic adapter** (Alpaca first) behind the provider seam — the tradable-symbol universe is the module-level `_ASSET_UNIVERSE` cache, **warmed at startup** via the existing `lifespan` hook (and optionally background-refreshed); a re-fetch per keystroke is forbidden (J-30). One owner, no second universe store | `GET /symbols/search?q=` (min-query enforced; vendor hiccup ⇒ empty list, never an error) | — (the frontend debounces + **cancels stale in-flight searches** via AbortController so a late response can't overwrite a newer one — J-30; presentation only) |
 | 8 | **Market clock** (open/closed + next open/close) | **Vendor-agnostic adapter** / market-clock module | `GET /market/clock` | Live market-status indicator reads this |
 | 9 | **Real-data availability / failure state** (`provider unavailable` \| `not a tradable symbol` \| `no data for that window` \| `market is closed` \| **`provider_timeout`** — a bounded vendor/clock/fetch call that exceeded its deadline) | Live / Historical provider + adapter (credential check + vendor responses). The bound is a **real call-level deadline at the adapter HTTP/SDK boundary** (an HTTP/SDK timeout — J-28), backstopped by the watch endpoint's `asyncio.wait_for(..., vendor_call_timeout_seconds)`; the backend-effective bound stays **shorter than** the frontend `WATCH_REQUEST_TIMEOUT_MS` so the backend's honest error wins. A hung/oversized vendor yields `provider_timeout`, **never** an unbounded wait and **never** a fabricated tape; an oversize/high-volume Historical window yields an **actionable** message variant ("try a shorter range"), not a misleading generic retry | Explicit error from `POST /watch/{ticker}` (mid-stream feed-gap ⇒ `stream_status="stale"` on the row-6 snapshot; a post-connect feeder failure ⇒ `stream_status="failed"` on the row-6 snapshot — same single failure ownership; `provider_timeout` is a sibling reason / message, not a new endpoint) | UI renders the matching non-cockpit state / error banner |
 | 10 | **Price history: OHLC bars (per 10/30/60 s) + tape-state-transition markers** (state + confidence + ts) | **Engine history buffer** (accumulates watched price → config-binned OHLC + meaningful-transition markers; computed once with the snapshot) | `GET /tape/{ticker}/history?bar=<10\|30\|60>` (pure projection; sim + historical only) | Chart reads this — never recomputes price/side/state |
 | 11 | **Paused state** (boolean) | **Engine/feeder** (owns paused; pause freezes the feeder without teardown — no fabricated backfill) → snapshot | `GET /tape/{ticker}/summary` (set via `POST /watch/{ticker}/pause` · `POST /watch/{ticker}/resume`) | `WS /stream`; UI renders PAUSED + toggles the control |
-| 12 | **Resolved historical window** (tz-aware start/end instants for the user's selected **local** window; explicit **local zone label** + **US-session quick-picks** Open 9:30 ET / Close 16:00 ET / Full RTH, each annotated with its local equivalent) | **Frontend datetime module** (`apps/frontend/lib/datetime.ts` — the resolution fn resolves the local selection AND the ET session anchors via the IANA `America/New_York` zone, DST-correct, → exact tz-aware UTC instants **once, before** the fetch; the 9:30/16:00 ET anchors are named preset constants, not engine thresholds) → request body | `POST /watch/{ticker}` body `{mode:"historical",start,end,speed}` (timezone-aware instants; backend `_parse_window_dt` honors the offset verbatim) | Historical provider fetches exactly the resolved window (no second tz conversion, no silent UTC shift) — **built at iter-8** |
+| 12 | **Resolved historical window** (tz-aware start/end instants for the user's selected **local** window; explicit **local zone label** + **US-session quick-picks** Open 9:30 ET / Close 16:00 ET / Full RTH, each annotated with its local equivalent) | **Frontend datetime module** (`apps/frontend/lib/datetime.ts` — the resolution fn resolves the local selection AND the ET session anchors via the IANA `America/New_York` zone, DST-correct, → exact tz-aware UTC instants **once, before** the fetch; the 9:30/16:00 ET anchors are named preset constants, not engine thresholds) → request body | `POST /watch/{ticker}` body `{mode:"historical",start,end,speed}` (timezone-aware instants; backend `_parse_window_dt` honors the offset verbatim) | Historical provider fetches exactly the resolved window (no second tz conversion, no silent UTC shift) — **built at iter-8**. *(iter-13: a long window is fetched via **chunked bounded-concurrency sub-windows stitched in epoch order** — no fabricated/dropped/reordered/de-duplicated prints; Full RTH loads without the high-volume refusal — J-34; the running replay's **speed is mutable** via `POST /watch/{ticker}/speed`, delivery-pacing only, determinism preserved — J-32.)* |
 | 13 | **Canonical display/epoch anchor** (the real UTC epoch origin for historical/live = the first record's real epoch; a **synthetic session-start** instant for simulated) — **additive display metadata**, NOT a second timeline | **Engine/feeder** (preserved once alongside the logical timeline; the engine still bins on the **deterministic logical timeline** and reads no wall-clock for classification — the anchor never feeds features/state/confidence) | exposed read-only via the existing **`GET /tape/{ticker}/history?bar=<10\|30\|60>`** projection (+ the snapshot serializer) | Chart reads it **verbatim** to stamp the axis / crosshair / markers with **true clock time** (`dd-MM-yyyy HH:mm:ss`, local zone label); `WS /stream` / `/summary` re-expose as applicable — the chart still reads OHLC/markers from **row 10** and recomputes no price/side/state — **built at iter-12** |
 
 **Provider & vendor seam (singularity — architectural, not a displayed value).**
@@ -184,7 +217,7 @@ rows 10–12 are the **analysis-fidelity additions**: rows 10 (J-17 chart **rend
   the **warmed symbol universe** (J-30) all live inside this one adapter / its serving endpoints — vendor specifics do
   not leak into the engine, providers, or API.
 - Real vendor timestamps are mapped to the engine's **logical timeline** (quote-before-trade preserved) so the engine
-  stays unchanged and deterministic per stream. The J-29 concurrent fetch and prompt warm-up are **delivery/fetch
+  stays unchanged and deterministic per stream. A **long** window is fetched via **chunked bounded-concurrency sub-windows stitched in epoch order** inside this one adapter — parallelizing the SDK's sequential pagination, fabricating/dropping/reordering/de-duplicating no real prints (J-34). The J-29 concurrent fetch and prompt warm-up are **delivery/fetch
   optimizations only**: the merged stream keeps quote-before-trade ordering and the engine math stays purely logical and
   deterministic (same ordered stream ⇒ identical features/state/confidence); a cached window replays the **same real**
   records (no fabrication, no drop).
@@ -261,6 +294,18 @@ J-30 startup universe-warm is a **no-op without credentials** (search stays an e
   the real cause** ("shorten the window"), never a misleading retry. Every optimization preserves correctness — **no
   fabricated or dropped trades/quotes, no recomputation outside the engine** (single source of truth holds); a cached
   window is the same real data, and a vendor hiccup in search is an empty list, never an error.
+- **Live replay-speed + relative calibration + chunked long-window load (J-32–J-34).** **J-32:** the running watch's replay
+  speed is mutable via `POST /watch/{ticker}/speed` — a sibling lifecycle control (like pause/resume/stop) owned by the
+  `WatchManager`/feeder; speed is **delivery-pacing only**, so the engine processes the same ordered events with the same
+  logical timestamps and the window's rows 1/2/3 are byte-identical at any speed (determinism + single-source-of-truth
+  hold); it is **not** a displayed value and adds no client-side recompute. **J-33:** the **one** row-1 classifier judges
+  spread/impact **relative to price/volatility** (config-owned, no magic numbers) — recalibrating the computation of the
+  existing row-1 value, **not** adding a second producer or a second source of spread/impact/price; the absorption gates
+  stay the exact complement of the control gate (price-impact-over-aggression + honest-uncertainty hold), and all five sim
+  scenarios J-01–J-09 stay green. **J-34:** the long-window fetch is **chunked + bounded-concurrency, stitched in epoch
+  order** in the **one** vendor adapter — fast by design, never fabricating/dropping/reordering/de-duplicating real prints,
+  backend bound < frontend bound, with the "shorter range" message reduced to a true backstop; no recomputation outside the
+  engine.
 
 **Note on module names.** `TapeStateClassifier`, `FeatureEngine`, `MarketState`, the aggressor classifier,
 `WatchManager`, the config module, the **vendor-agnostic adapter** + the live/historical providers, and (new) the

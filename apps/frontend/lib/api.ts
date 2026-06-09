@@ -210,6 +210,40 @@ export async function resumeTicker(ticker: string): Promise<StopResult> {
   return postWatchAction(ticker, "resume");
 }
 
+// POST /watch/{ticker}/speed — change the replay speed of a RUNNING historical replay (J-32).
+// This is NOT a re-Watch: the backend re-paces the in-progress replay (no re-fetch, no engine
+// restart, no teardown), so the cockpit/chart continue from their current position at the new
+// cadence. The backend validates the speed against its allowed set (out-of-set => 422,
+// authoritative); a 404 means the ticker is not (or no longer) watched. The frontend control only
+// offers in-set values as a courtesy. Speed is delivery-pacing only — never a displayed value, so
+// nothing in the cockpit's canonical engine values changes (determinism preserved).
+export async function setReplaySpeed(
+  ticker: string,
+  speed: number,
+): Promise<StopResult> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/watch/${encodeURIComponent(ticker)}/speed`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ speed }),
+      },
+    );
+    if (res.ok) return { ok: true };
+    let error = `replay speed could not be changed`;
+    try {
+      const data = await res.json();
+      if (data?.detail) error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
 async function postWatchAction(
   ticker: string,
   action: "pause" | "resume",

@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { useTapeStream } from "@/lib/useTapeStream";
-import { watchTicker, stopTicker, pauseTicker, resumeTicker } from "@/lib/api";
+import {
+  watchTicker,
+  stopTicker,
+  pauseTicker,
+  resumeTicker,
+  setReplaySpeed,
+} from "@/lib/api";
 import type { DataSourceMode, FailureReason, WatchParams } from "@/lib/types";
 import { TopBar } from "@/components/TopBar";
 import { Cockpit } from "@/components/Cockpit";
@@ -132,6 +138,16 @@ export default function Page() {
     if (!result.ok) setError(result.error ?? "Could not resume watch");
   }
 
+  // Change the replay speed of the RUNNING historical replay (J-32): POST /watch/{ticker}/speed —
+  // NOT a re-Watch. The backend re-paces the in-progress replay (no re-fetch / restart / teardown),
+  // so the cockpit + chart continue from their current position at the new cadence; the canonical
+  // engine values are unchanged (speed is delivery-pacing only). A failure surfaces in the banner.
+  async function handleSpeedChange(speed: number) {
+    if (!ticker) return;
+    const result = await setReplaySpeed(ticker, speed);
+    if (!result.ok) setError(result.error ?? "Could not change replay speed");
+  }
+
   // A connect failure surfaced by the stream hook (J-23): the initial snapshot fetch or the WS
   // failed before any frame arrived (pre-snapshot). Surface it via the error banner (and a failure
   // cockpit treatment) within a bounded time — never a frozen "Connecting…".
@@ -169,6 +185,7 @@ export default function Page() {
         onStop={handleStop}
         onPause={handlePause}
         onResume={handleResume}
+        onSpeedChange={handleSpeedChange}
         error={bannerError}
       />
       <main className="mx-auto max-w-7xl px-4 py-6">

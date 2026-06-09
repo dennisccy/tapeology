@@ -285,3 +285,18 @@ aligned value of 1 is spec-conformant and not a defect.)
 **Reasoning:** J-31 sim half is browser-verified — I opened TC-05-sim-buyer-chart.png and the axis reads a real clock face ('…01-2024 14:30 … 14:40', synthetic session clock anchored to 2024-01-02 09:30 ET), not a 0…600s counter; code drops `Math.round(b.time)` for `anchor + logical`, and the additive epoch anchor (row 13) is exposed via GET /history with determinism byte-identical (test_epoch_anchor.py 8/8 in my re-run). J-35 is built and verified: native date picker replaced by a validated dd-MM-yyyy text input feeding the existing row-12 resolver (no J-20 UTC shift), one shared formatter routing every date surface. COHERENCE-PASS; no anti-goal violation. Caveats: the dedicated browser-qa-agent file is SKIPPED (frontend not on :3650 at that moment) but the QA agent's own Chrome MCP run produced the 5 real PNGs I relied on; no audit handoff exists (status stopped at qa_complete); the QA-env vendor-responsiveness test errors are a missing optional alpaca module, not a regression. Overall goal not yet achieved — J-32/J-33/J-34 remain unbuilt.
 
 **Next-step recommendation:** Full-depth iteration targeting J-33 (real-data classification calibration — relative spread/impact, highest-risk, must keep J-01–J-09 green via a deterministic regression fixture) and J-32 (live replay-speed apply), with J-34 (chunked long-window load) bundled or next. When all of J-31–J-35 pass with no regression and coherence holds, GOAL_ACHIEVED is reachable.
+
+## Iteration 13 — goal-i_will_be_super_rich-iter-13
+
+**Date:** 2026-06-09T00:00:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-32 (mutable live replay speed), J-33 (relative spread/impact gates), J-34 (chunked long-window fetch)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none
+
+**Reasoning:** The last three unbuilt Must-have journeys closed cleanly. I independently re-ran the full backend suite twice (259 passed / 1 credential-gated skip) and the J-32/J-33/J-34 + scenario + classifier subset (56 passed), and read the actual source + every gating-test assertion rather than trusting handoffs. J-33 is the high-risk one: the classifier now judges spread in bps and impact as a return relative to a canonical reference_price computed ONCE in the feature engine, with a byte-identical absolute fallback when no basis is present — and the absorption gates remain the EXACT complement of the control impact condition (the iter-5 keystone), so J-04/J-05 and all five sim scenarios stay green. All new boundaries are config-owned (no magic numbers); the diff carries no secrets. Coherence is COHERENCE-PASS with one advisory WARN (reference_price in the raw /features payload, not displayed). All 35 Must-have journeys are now passing, no anti-goal violation remains, and the spec's GOAL_ACHIEVED condition is met.
+
+**Next-step recommendation:** halt — goal achieved. (Optional, non-blocking: a future pass could annotate reference_price in the Data Contract as an internal feature present in /features but not a cockpit readout, per the coherence WARN.)

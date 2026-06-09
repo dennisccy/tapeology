@@ -48,7 +48,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, suppress
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 from typing import AsyncIterator
 
 from ...config import CONFIG
@@ -170,6 +170,38 @@ def _clear_caches() -> None:
     _HISTORICAL_WINDOW_CACHE.clear()
 
 
+def _split_window(start, end, chunk_seconds: float) -> list[tuple]:
+    """Split ``[start, end)`` into bounded contiguous sub-windows of at most ``chunk_seconds`` (J-34).
+
+    Pure and deterministic (no network): returns a list of ``(sub_start, sub_end)`` tuples that
+    PARTITION ``[start, end)`` with NO overlap and NO gap (each sub-window's end is the next one's
+    start; the last ends exactly at ``end``), so stitching the sub-windows' real prints reconstructs
+    the full real window with nothing fabricated, dropped, reordered, or de-duplicated. A window
+    at/under ``chunk_seconds`` (or with a non-datetime / non-positive chunk) returns a single
+    ``[(start, end)]`` — the prior single-call fast path, unchanged. ``start``/``end`` are the
+    tz-aware datetimes the API parsed; arithmetic uses ``timedelta`` so DST/zone correctness is the
+    datetimes' own (the API already resolved the exact local instants).
+    """
+    # Only datetimes can be chunked by timedelta; anything else (e.g. the test fakes that pass
+    # strings/None) is fetched as a single call — the split is a fetch optimization, never a
+    # correctness dependency.
+    if not isinstance(start, datetime) or not isinstance(end, datetime):
+        return [(start, end)]
+    if chunk_seconds <= 0:
+        return [(start, end)]
+    span = (end - start).total_seconds()
+    if span <= chunk_seconds:
+        return [(start, end)]
+    step = timedelta(seconds=chunk_seconds)
+    ranges: list[tuple] = []
+    cursor = start
+    while cursor < end:
+        nxt = min(cursor + step, end)
+        ranges.append((cursor, nxt))
+        cursor = nxt
+    return ranges
+
+
 class AlpacaAdapter:
     """The concrete Alpaca adapter (availability, historical fetch, symbol search)."""
 
@@ -249,15 +281,24 @@ class AlpacaAdapter:
             raise SymbolNotTradable(symbol)
 
     def _fetch_trades_quotes(self, symbol: str, start, end, feed):
-        """Fetch trades and quotes CONCURRENTLY (J-29) under the real call-level HTTP deadline.
+        """Fetch the window's trades + quotes, CHUNKED for a long span (J-34), CONCURRENT (J-29).
 
-        ``fetch_historical`` is already run off the event loop in ONE worker thread (the API calls
-        it via ``asyncio.to_thread``); here we overlap the two vendor calls by running each in its
-        own thread (a small ``ThreadPoolExecutor``) and joining — so wall-clock ≈ max(t_trades,
-        t_quotes), not their sum. This is a FETCH optimization ONLY: the records are mapped to the
-        same neutral ``RawTrade`` / ``RawQuote`` and ordered into the engine timeline by
-        ``HistoricalProvider`` exactly as before (quote-before-trade); nothing is reordered,
-        dropped, or fabricated. A timeout in either call surfaces as a neutral ``VendorTimeout``.
+        FAST BY DESIGN, not a longer timeout:
+          * **Chunked (J-34)** — a window longer than ``CONFIG.historical_chunk_seconds`` is split
+            into bounded contiguous sub-windows (``_split_window``) fetched with BOUNDED concurrency
+            (``CONFIG.historical_chunk_max_concurrency``), parallelizing the SDK's otherwise-
+            sequential pagination so a multi-hour / Full-RTH window loads within budget instead of
+            returning the "very high-volume" error. A window at/under the sub-window size is ONE
+            fetch (the prior fast path, unchanged).
+          * **Concurrent trades+quotes (J-29)** — within each sub-window the two vendor calls overlap
+            (each in its own thread), so a sub-window costs ≈ max(t_trades, t_quotes), not their sum.
+
+        Stitching is correctness-preserving: the sub-windows' real records are concatenated and
+        SORTED by epoch (the canonical merge order ``HistoricalProvider`` already relies on), so the
+        merged stream is epoch-ordered with NO fabricated, dropped, reordered (beyond the epoch
+        sort), or de-duplicated prints — and because the sub-windows partition ``[start, end)`` with
+        no overlap/gap, a chunked fetch yields the SAME real records a single fetch would. A timeout
+        in any sub-window's call surfaces as the neutral ``VendorTimeout`` (the J-28 backstop).
         """
         from alpaca.data.historical import StockHistoricalDataClient
         from alpaca.data.requests import StockQuotesRequest, StockTradesRequest
@@ -266,42 +307,65 @@ class AlpacaAdapter:
             StockHistoricalDataClient(_env(ENV_API_KEY), _env(ENV_API_SECRET))
         )
 
-        def _get_trades():
+        def _get_trades(sub_start, sub_end):
             with _mapped_vendor_timeout():
                 return client.get_stock_trades(
                     StockTradesRequest(
-                        symbol_or_symbols=symbol, start=start, end=end, feed=feed
+                        symbol_or_symbols=symbol, start=sub_start, end=sub_end, feed=feed
                     )
                 )
 
-        def _get_quotes():
+        def _get_quotes(sub_start, sub_end):
             with _mapped_vendor_timeout():
                 return client.get_stock_quotes(
                     StockQuotesRequest(
-                        symbol_or_symbols=symbol, start=start, end=end, feed=feed
+                        symbol_or_symbols=symbol, start=sub_start, end=sub_end, feed=feed
                     )
                 )
 
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            trades_future = pool.submit(_get_trades)
-            quotes_future = pool.submit(_get_quotes)
-            trades_resp = trades_future.result()
-            quotes_resp = quotes_future.result()
+        ranges = _split_window(start, end, CONFIG.historical_chunk_seconds)
+        trades: list[RawTrade] = []
+        quotes: list[RawQuote] = []
 
-        trades = [
-            RawTrade(t.timestamp.timestamp(), float(t.price), int(t.size))
-            for t in trades_resp.data.get(symbol, [])
-        ]
-        quotes = [
-            RawQuote(
-                q.timestamp.timestamp(),
-                float(q.bid_price),
-                float(q.ask_price),
-                int(q.bid_size),
-                int(q.ask_size),
+        def _fetch_sub(sub_start, sub_end):
+            # Each sub-window overlaps its own trades+quotes calls (J-29) in two threads.
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                t_future = pool.submit(_get_trades, sub_start, sub_end)
+                q_future = pool.submit(_get_quotes, sub_start, sub_end)
+                return t_future.result(), q_future.result()
+
+        if len(ranges) == 1:
+            # Single-call fast path (a short window) — unchanged from the J-29 behavior.
+            sub_results = [_fetch_sub(*ranges[0])]
+        else:
+            # Bounded-concurrency chunked fetch (J-34): at most historical_chunk_max_concurrency
+            # sub-windows in flight at once; results collected in submission order so the stitch is
+            # deterministic before the canonical epoch sort below.
+            max_workers = max(1, CONFIG.historical_chunk_max_concurrency)
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                sub_results = list(pool.map(lambda r: _fetch_sub(*r), ranges))
+
+        for trades_resp, quotes_resp in sub_results:
+            trades.extend(
+                RawTrade(t.timestamp.timestamp(), float(t.price), int(t.size))
+                for t in trades_resp.data.get(symbol, [])
             )
-            for q in quotes_resp.data.get(symbol, [])
-        ]
+            quotes.extend(
+                RawQuote(
+                    q.timestamp.timestamp(),
+                    float(q.bid_price),
+                    float(q.ask_price),
+                    int(q.bid_size),
+                    int(q.ask_size),
+                )
+                for q in quotes_resp.data.get(symbol, [])
+            )
+
+        # Stitch in epoch order (stable sort preserves intra-epoch input order). This is the SAME
+        # canonical ordering HistoricalProvider applies; doing it here keeps a chunked fetch's merged
+        # stream identical to a single fetch's — no fabricated/dropped/reordered/de-duplicated print.
+        trades.sort(key=lambda t: t.epoch)
+        quotes.sort(key=lambda q: q.epoch)
         return trades, quotes
 
     def _data_feed(self):

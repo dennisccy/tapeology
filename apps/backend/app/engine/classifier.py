@@ -68,6 +68,31 @@ class TapeStateClassifier:
         speed = primary_features["trade_speed"]
         bid_refresh = primary_features["bid_refresh_score"]
         ask_refresh = primary_features["ask_refresh_score"]
+        # The price-relative basis (J-33), read VERBATIM from the canonical feature engine (single
+        # source of truth — the classifier never recomputes price). When it is present and positive
+        # the gates are judged RELATIVE to price (spread in bps, impact as a return); when absent or
+        # zero (legacy unit-test fixtures that pass no reference_price, or a cold/empty window) the
+        # gates fall back to the ABSOLUTE dollar constants, so the prior behavior is byte-identical.
+        reference_price = primary_features.get("reference_price", 0.0)
+        rel = reference_price > 0.0
+
+        # Resolve the four impact/spread gate-boundaries into one comparison space (relative when a
+        # basis exists, absolute otherwise) so each gate is a single readable predicate below and
+        # the absorption gates stay the EXACT complement of the control impact condition (keystone).
+        if rel:
+            spread_metric = spread / reference_price * 10000.0  # basis points
+            buy_impact_metric = buy_impact / reference_price    # a return
+            sell_impact_metric = sell_impact / reference_price  # a return
+            max_spread = c.max_stable_spread_bps
+            min_buy_impact = c.min_buy_price_impact_return
+            max_sell_impact = c.max_sell_price_impact_return
+        else:
+            spread_metric = spread
+            buy_impact_metric = buy_impact
+            sell_impact_metric = sell_impact
+            max_spread = c.max_stable_spread
+            min_buy_impact = c.min_buy_price_impact
+            max_sell_impact = c.max_sell_price_impact
 
         # buyer_control — high buy aggression WITH real upward price progress. The buyer and
         # seller gates are mutually exclusive in practice (the aggressive ratios are
@@ -75,12 +100,14 @@ class TapeStateClassifier:
         # precedence is made explicit and neither branch perturbs the other.
         buyer_gate = (
             buy_ratio >= c.min_aggressive_buy_ratio
-            and buy_impact >= c.min_buy_price_impact      # price impact, not aggression
-            and spread <= c.max_stable_spread
+            and buy_impact_metric >= min_buy_impact       # price impact (relative), not aggression
+            and spread_metric <= max_spread
             and speed >= c.min_trade_speed
         )
         if buyer_gate:
-            confidence = self._buyer_confidence(buy_ratio, buy_impact, spread, speed)
+            confidence = self._buyer_confidence(
+                buy_ratio, buy_impact_metric, spread_metric, speed, rel
+            )
             # Only call a direction once we're at least reasonably confident; a weaker
             # read stays unclear rather than manufacturing a low-confidence directional call.
             if confidence >= c.reasonable_confidence:
@@ -96,12 +123,14 @@ class TapeStateClassifier:
         # here rather than being mislabelled seller_control.
         seller_gate = (
             sell_ratio >= c.min_aggressive_sell_ratio
-            and sell_impact <= c.max_sell_price_impact    # negative — price impact, not aggression
-            and spread <= c.max_stable_spread
+            and sell_impact_metric <= max_sell_impact     # negative (relative) — impact, not aggression
+            and spread_metric <= max_spread
             and speed >= c.min_trade_speed
         )
         if seller_gate:
-            confidence = self._seller_confidence(sell_ratio, sell_impact, spread, speed)
+            confidence = self._seller_confidence(
+                sell_ratio, sell_impact_metric, spread_metric, speed, rel
+            )
             if confidence >= c.reasonable_confidence:
                 return Classification(
                     STATE_SELLER_CONTROL,
@@ -114,14 +143,14 @@ class TapeStateClassifier:
         # refreshing bid. Reached only because the seller gate above did not (no real drop).
         bid_absorption_gate = (
             sell_ratio >= c.min_aggressive_sell_ratio
-            and sell_impact > c.max_sell_price_impact      # NOT a real drop (flat)
+            and sell_impact_metric > max_sell_impact       # NOT a real drop (flat) — complement
             and bid_refresh >= c.min_bid_refresh_score      # real refresh evidence
-            and spread <= c.max_stable_spread
+            and spread_metric <= max_spread
         )
         if bid_absorption_gate:
             confidence = self._absorption_confidence(
-                sell_ratio, sell_impact, spread, bid_refresh, c.min_aggressive_sell_ratio,
-                c.min_bid_refresh_score,
+                sell_ratio, sell_impact_metric, spread_metric, bid_refresh,
+                c.min_aggressive_sell_ratio, c.min_bid_refresh_score, rel,
             )
             if confidence >= c.reasonable_confidence:
                 return Classification(
@@ -134,14 +163,14 @@ class TapeStateClassifier:
         # flat — no real rise) AND a refreshing ask.
         ask_absorption_gate = (
             buy_ratio >= c.min_aggressive_buy_ratio
-            and buy_impact < c.min_buy_price_impact         # NOT a real rise (flat)
+            and buy_impact_metric < min_buy_impact          # NOT a real rise (flat) — complement
             and ask_refresh >= c.min_ask_refresh_score
-            and spread <= c.max_stable_spread
+            and spread_metric <= max_spread
         )
         if ask_absorption_gate:
             confidence = self._absorption_confidence(
-                buy_ratio, buy_impact, spread, ask_refresh, c.min_aggressive_buy_ratio,
-                c.min_ask_refresh_score,
+                buy_ratio, buy_impact_metric, spread_metric, ask_refresh,
+                c.min_aggressive_buy_ratio, c.min_ask_refresh_score, rel,
             )
             if confidence >= c.reasonable_confidence:
                 return Classification(
@@ -157,13 +186,34 @@ class TapeStateClassifier:
             ("Mixed or weak evidence — no clear side in control",),
         )
 
+    def _impact_score(self, impact_metric: float, min_impact: float, rel: bool) -> float:
+        """Reward the magnitude of (buy) impact past its cutoff — relative or absolute domain.
+
+        ``impact_metric`` and ``min_impact`` are both already in the SAME domain (a return when
+        ``rel``, dollars otherwise), so the difference and the scale are consistent. With ``rel``
+        False the absolute ``impact_scale`` is used, byte-identical to the pre-J-33 computation."""
+        c = self._c
+        scale = c.impact_return_scale if rel else c.impact_scale
+        return _clamp01((impact_metric - min_impact) / scale)
+
+    def _spread_score(self, spread_metric: float, rel: bool) -> float:
+        """Reward a narrow spread — judged in bps when ``rel`` (relative to price), else dollars.
+
+        With ``rel`` False this is (max_stable_spread - spread)/max_stable_spread, exactly the
+        pre-J-33 absolute spread component (so the legacy fixtures keep their pinned confidence)."""
+        c = self._c
+        cap = c.max_stable_spread_bps if rel else c.max_stable_spread
+        return _clamp01((cap - spread_metric) / cap)
+
     def _buyer_confidence(
-        self, buy_ratio: float, buy_impact: float, spread: float, speed: float
+        self, buy_ratio: float, buy_impact_metric: float, spread_metric: float,
+        speed: float, rel: bool,
     ) -> float:
         c = self._c
+        min_impact = c.min_buy_price_impact_return if rel else c.min_buy_price_impact
         ratio_score = _clamp01((buy_ratio - c.min_aggressive_buy_ratio) / c.ratio_scale)
-        impact_score = _clamp01((buy_impact - c.min_buy_price_impact) / c.impact_scale)
-        spread_score = _clamp01((c.max_stable_spread - spread) / c.max_stable_spread)
+        impact_score = self._impact_score(buy_impact_metric, min_impact, rel)
+        spread_score = self._spread_score(spread_metric, rel)
         speed_score = _clamp01((speed - c.min_trade_speed) / c.speed_scale)
 
         w_ratio, w_impact, w_spread, w_speed = c.confidence_weights
@@ -184,14 +234,17 @@ class TapeStateClassifier:
         return tuple(observations)
 
     def _seller_confidence(
-        self, sell_ratio: float, sell_impact: float, spread: float, speed: float
+        self, sell_ratio: float, sell_impact_metric: float, spread_metric: float,
+        speed: float, rel: bool,
     ) -> float:
         c = self._c
+        max_sell_impact = c.max_sell_price_impact_return if rel else c.max_sell_price_impact
+        scale = c.impact_return_scale if rel else c.impact_scale
         ratio_score = _clamp01((sell_ratio - c.min_aggressive_sell_ratio) / c.ratio_scale)
         # Mirror of the buyer impact score: reward the MAGNITUDE of the negative impact past
-        # the negative cutoff, so a sharper drop earns higher confidence. Reuses impact_scale.
-        impact_score = _clamp01((c.max_sell_price_impact - sell_impact) / c.impact_scale)
-        spread_score = _clamp01((c.max_stable_spread - spread) / c.max_stable_spread)
+        # the negative cutoff, so a sharper drop earns higher confidence (same domain on both).
+        impact_score = _clamp01((max_sell_impact - sell_impact_metric) / scale)
+        spread_score = self._spread_score(spread_metric, rel)
         speed_score = _clamp01((speed - c.min_trade_speed) / c.speed_scale)
 
         w_ratio, w_impact, w_spread, w_speed = c.confidence_weights
@@ -214,22 +267,26 @@ class TapeStateClassifier:
     def _absorption_confidence(
         self,
         ratio: float,
-        impact: float,
-        spread: float,
+        impact_metric: float,
+        spread_metric: float,
         refresh: float,
         ratio_floor: float,
         refresh_floor: float,
+        rel: bool,
     ) -> float:
         """Side-neutral absorption confidence (bid and ask share it by symmetry).
 
         Four components, equally weighted (reusing ``confidence_weights`` so absorption stays
         calibrated alongside the directional states): aggression past its floor, FLATNESS of
         the matching impact (rewarding near-zero, the opposite of the directional impact
-        component), a narrow spread, and the refresh past its floor."""
+        component), a narrow spread, and the refresh past its floor. ``impact_metric`` /
+        ``spread_metric`` are in the relative (return / bps) domain when ``rel``; with ``rel`` False
+        this is byte-identical to the pre-J-33 absolute computation (legacy fixtures unchanged)."""
         c = self._c
+        flat_band = c.absorption_flat_band_return if rel else c.absorption_flat_band
         ratio_score = _clamp01((ratio - ratio_floor) / c.ratio_scale)
-        flatness_score = _clamp01(1.0 - abs(impact) / c.absorption_flat_band)
-        spread_score = _clamp01((c.max_stable_spread - spread) / c.max_stable_spread)
+        flatness_score = _clamp01(1.0 - abs(impact_metric) / flat_band)
+        spread_score = self._spread_score(spread_metric, rel)
         refresh_score = _clamp01((refresh - refresh_floor) / c.refresh_scale)
 
         w_ratio, w_flat, w_spread, w_refresh = c.confidence_weights
