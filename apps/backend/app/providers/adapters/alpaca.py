@@ -62,13 +62,21 @@ from .base import (
     SymbolMatch,
     SymbolNotTradable,
     VendorTimeout,
+    split_window,
 )
+
+# Re-exported under the historical ``_split_window`` name (the neutral partition now lives in the
+# adapter base so the API can use it without importing this vendor module; existing tests import it
+# from here).
+_split_window = split_window
 
 # Environment variable NAMES (never values). Documented with empty values in
 # apps/backend/.env.example — the only committable env file.
 ENV_API_KEY = "ALPACA_API_KEY"
 ENV_API_SECRET = "ALPACA_API_SECRET"
-# The market-data feed is configuration, not a secret. Alpaca's free feed is IEX.
+# The market-data feed is configuration, not a secret. The ``ALPACA_FEED`` env var, when set, is an
+# operator OVERRIDE that pins BOTH modes to one feed (for testing). With no override, the per-mode
+# defaults in ``CONFIG`` apply: SIP for historical (realistic spreads), IEX for live (the free feed).
 ENV_FEED = "ALPACA_FEED"
 DEFAULT_FEED = "iex"
 
@@ -170,38 +178,6 @@ def _clear_caches() -> None:
     _HISTORICAL_WINDOW_CACHE.clear()
 
 
-def _split_window(start, end, chunk_seconds: float) -> list[tuple]:
-    """Split ``[start, end)`` into bounded contiguous sub-windows of at most ``chunk_seconds`` (J-34).
-
-    Pure and deterministic (no network): returns a list of ``(sub_start, sub_end)`` tuples that
-    PARTITION ``[start, end)`` with NO overlap and NO gap (each sub-window's end is the next one's
-    start; the last ends exactly at ``end``), so stitching the sub-windows' real prints reconstructs
-    the full real window with nothing fabricated, dropped, reordered, or de-duplicated. A window
-    at/under ``chunk_seconds`` (or with a non-datetime / non-positive chunk) returns a single
-    ``[(start, end)]`` — the prior single-call fast path, unchanged. ``start``/``end`` are the
-    tz-aware datetimes the API parsed; arithmetic uses ``timedelta`` so DST/zone correctness is the
-    datetimes' own (the API already resolved the exact local instants).
-    """
-    # Only datetimes can be chunked by timedelta; anything else (e.g. the test fakes that pass
-    # strings/None) is fetched as a single call — the split is a fetch optimization, never a
-    # correctness dependency.
-    if not isinstance(start, datetime) or not isinstance(end, datetime):
-        return [(start, end)]
-    if chunk_seconds <= 0:
-        return [(start, end)]
-    span = (end - start).total_seconds()
-    if span <= chunk_seconds:
-        return [(start, end)]
-    step = timedelta(seconds=chunk_seconds)
-    ranges: list[tuple] = []
-    cursor = start
-    while cursor < end:
-        nxt = min(cursor + step, end)
-        ranges.append((cursor, nxt))
-        cursor = nxt
-    return ranges
-
-
 class AlpacaAdapter:
     """The concrete Alpaca adapter (availability, historical fetch, symbol search)."""
 
@@ -213,8 +189,26 @@ class AlpacaAdapter:
 
     @property
     def feed(self) -> str:
-        """The configured market-data feed (defaults to the free IEX feed)."""
-        return _env(ENV_FEED) or DEFAULT_FEED
+        """The LIVE market-data feed name (defaults to the free IEX feed).
+
+        Back-compat alias for the live feed: the ``ALPACA_FEED`` env override wins, else the
+        config-owned ``live_feed`` (``iex``). Historical replay reads ``historical_feed`` instead
+        (the per-mode split, J-36) — use ``_feed_name(...)`` for an explicit mode."""
+        return self._feed_name(CONFIG.live_feed)
+
+    def _feed_name(self, mode_default: str) -> str:
+        """Resolve a feed NAME for one mode: the ``ALPACA_FEED`` override, else the mode default.
+
+        The env override (when set) pins BOTH modes to one feed so an operator can force a feed for
+        testing; with no override each mode uses its own config-owned default (SIP historical / IEX
+        live, J-36). Returns a vendor-neutral string — the DataFeed enum mapping stays in
+        ``_data_feed`` (no vendor type leaks out of this module)."""
+        return _env(ENV_FEED) or mode_default
+
+    @property
+    def historical_feed(self) -> str:
+        """The HISTORICAL market-data feed name (SIP by default; ``ALPACA_FEED`` override wins)."""
+        return self._feed_name(CONFIG.historical_feed)
 
     # --- Historical fetch ---------------------------------------------------------------
 
@@ -239,7 +233,7 @@ class AlpacaAdapter:
         ``VendorTimeout`` (mapped to ``provider_timeout`` by the API) when the deadline fires.
         """
         sym = symbol.strip().upper()
-        feed = self._data_feed()
+        feed = self._data_feed(self.historical_feed)  # SIP for historical (J-36), override-aware
         cache_key = (sym, start, end, getattr(feed, "value", str(feed)))
 
         cached = _cache_get(cache_key)
@@ -257,6 +251,83 @@ class AlpacaAdapter:
         window = HistoricalWindow(sym, tuple(trades), tuple(quotes))
         _cache_put(cache_key, window)
         return window
+
+    def iter_historical_chunks(self, symbol: str, start, end):
+        """Yield the window's real records as epoch-ordered ``HistoricalWindow`` CHUNKS, LAZILY (J-37).
+
+        DECOUPLES time-to-first-data from total-window load: the requested ``[start, end)`` is split
+        into bounded contiguous sub-windows (``_split_window``); each sub-window is fetched ONLY when
+        the consumer advances the generator to it, and yielded in epoch order. So the caller can begin
+        replaying the FIRST sub-window's real trades/quotes after just one sub-window's fetch latency,
+        while later sub-windows are fetched as the replay advances — rather than materialising the
+        whole window first (the iter-13 stall). Each chunk is the SAME real records the corresponding
+        slice of ``fetch_historical`` would return, sorted by epoch within the chunk; concatenating the
+        chunks in yield order reconstructs the full real window with nothing fabricated, dropped,
+        reordered (beyond the canonical per-chunk epoch sort), or de-duplicated — because the
+        sub-windows partition ``[start, end)`` with no overlap and no gap. A short window (at/under the
+        chunk size) yields exactly ONE chunk (the full window). The first chunk runs under the SAME
+        real call-level HTTP deadline as ``fetch_historical`` (the J-28 backstop), so a genuinely
+        un-loadable first chunk still surfaces a neutral ``VendorTimeout``.
+
+        It does NOT touch the window cache (that is keyed on the whole window and owned by
+        ``fetch_historical``); the progressive path is for long windows where the first-chunk latency
+        is what matters. Empty sub-windows simply yield empty chunks (no fabricated records); the
+        caller decides unknown-symbol vs. empty-window via the same folded pre-flight if needed.
+        """
+        sym = symbol.strip().upper()
+        feed = self._data_feed(self.historical_feed)
+        for sub_start, sub_end in _split_window(start, end, CONFIG.historical_chunk_seconds):
+            trades, quotes = self._fetch_one_subwindow(sym, sub_start, sub_end, feed)
+            yield HistoricalWindow(sym, tuple(trades), tuple(quotes))
+
+    def _fetch_one_subwindow(self, symbol: str, start, end, feed):
+        """Fetch ONE sub-window's trades + quotes concurrently (no further chunking), epoch-sorted.
+
+        The single-sub-window primitive ``iter_historical_chunks`` calls per chunk: trades and quotes
+        overlap in two threads (J-29) under the real call-level HTTP deadline, and the two streams are
+        each epoch-sorted (the canonical order ``HistoricalProvider`` relies on). No fabricated,
+        dropped, reordered (beyond the epoch sort), or de-duplicated print."""
+        from alpaca.data.historical import StockHistoricalDataClient
+        from alpaca.data.requests import StockQuotesRequest, StockTradesRequest
+
+        client = self._with_http_timeout(
+            StockHistoricalDataClient(_env(ENV_API_KEY), _env(ENV_API_SECRET))
+        )
+
+        def _get_trades():
+            with _mapped_vendor_timeout():
+                return client.get_stock_trades(
+                    StockTradesRequest(symbol_or_symbols=symbol, start=start, end=end, feed=feed)
+                )
+
+        def _get_quotes():
+            with _mapped_vendor_timeout():
+                return client.get_stock_quotes(
+                    StockQuotesRequest(symbol_or_symbols=symbol, start=start, end=end, feed=feed)
+                )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            t_future = pool.submit(_get_trades)
+            q_future = pool.submit(_get_quotes)
+            trades_resp, quotes_resp = t_future.result(), q_future.result()
+
+        trades = [
+            RawTrade(t.timestamp.timestamp(), float(t.price), int(t.size))
+            for t in trades_resp.data.get(symbol, [])
+        ]
+        quotes = [
+            RawQuote(
+                q.timestamp.timestamp(),
+                float(q.bid_price),
+                float(q.ask_price),
+                int(q.bid_size),
+                int(q.ask_size),
+            )
+            for q in quotes_resp.data.get(symbol, [])
+        ]
+        trades.sort(key=lambda t: t.epoch)
+        quotes.sort(key=lambda q: q.epoch)
+        return trades, quotes
 
     def _require_tradable(self, symbol: str) -> None:
         """Validate the symbol against Alpaca's asset reference; raise neutral on failure.
@@ -368,11 +439,19 @@ class AlpacaAdapter:
         quotes.sort(key=lambda q: q.epoch)
         return trades, quotes
 
-    def _data_feed(self):
+    def _data_feed(self, feed_name: str | None = None):
+        """Map a vendor-neutral feed NAME to the vendor's DataFeed enum (the ONLY place it appears).
+
+        ``feed_name`` lets a caller request a mode-specific feed (``historical_feed`` for the
+        historical fetch, ``feed``/``live_feed`` for the live stream — the J-36 per-mode split);
+        with no argument it defaults to the live feed (back-compat). An unrecognised name falls back
+        to IEX defensively so a typo never crashes a fetch. The DataFeed enum is imported lazily and
+        never leaves this method — no vendor type leaks past the adapter seam."""
         from alpaca.data.enums import DataFeed
 
+        name = feed_name if feed_name is not None else self.feed
         try:
-            return DataFeed(self.feed)
+            return DataFeed(name)
         except ValueError:
             return DataFeed.IEX
 
@@ -473,7 +552,11 @@ class AlpacaAdapter:
 
         sym = symbol.strip().upper()
         queue: asyncio.Queue[LiveRecord] = asyncio.Queue()
-        stream = StockDataStream(_env(ENV_API_KEY), _env(ENV_API_SECRET), feed=self._data_feed())
+        # Live stays on the IEX feed by design (J-36 only moves HISTORICAL to SIP); the override is
+        # still honoured via ``self.feed`` -> ``_feed_name(CONFIG.live_feed)``.
+        stream = StockDataStream(
+            _env(ENV_API_KEY), _env(ENV_API_SECRET), feed=self._data_feed(self.feed)
+        )
 
         async def _on_trade(t) -> None:
             await queue.put(RawTrade(t.timestamp.timestamp(), float(t.price), int(t.size)))

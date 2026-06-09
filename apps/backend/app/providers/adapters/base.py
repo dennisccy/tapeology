@@ -25,7 +25,35 @@ This seam carries no network call by itself and never fabricates an answer.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import AsyncIterator, Protocol, Union, runtime_checkable
+
+
+def split_window(start, end, chunk_seconds: float) -> list[tuple]:
+    """Split ``[start, end)`` into bounded contiguous sub-windows of at most ``chunk_seconds`` (J-34/J-37).
+
+    Pure and deterministic (no network, no vendor): returns ``(sub_start, sub_end)`` tuples that
+    PARTITION ``[start, end)`` with NO overlap and NO gap (each sub-window's end is the next one's
+    start; the last ends exactly at ``end``), so stitching the sub-windows' real prints reconstructs
+    the full real window with nothing fabricated, dropped, reordered, or de-duplicated. A window
+    at/under ``chunk_seconds`` (or non-datetime / non-positive chunk) returns a single
+    ``[(start, end)]`` — the single-call fast path. Lives in the NEUTRAL adapter base (not the vendor
+    module) so the API can decide single-shot vs. progressive load without importing a vendor."""
+    if not isinstance(start, datetime) or not isinstance(end, datetime):
+        return [(start, end)]
+    if chunk_seconds <= 0:
+        return [(start, end)]
+    span = (end - start).total_seconds()
+    if span <= chunk_seconds:
+        return [(start, end)]
+    step = timedelta(seconds=chunk_seconds)
+    ranges: list[tuple] = []
+    cursor = start
+    while cursor < end:
+        nxt = min(cursor + step, end)
+        ranges.append((cursor, nxt))
+        cursor = nxt
+    return ranges
 
 
 @dataclass(frozen=True)

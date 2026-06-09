@@ -300,3 +300,18 @@ aligned value of 1 is spec-conformant and not a defect.)
 **Reasoning:** The last three unbuilt Must-have journeys closed cleanly. I independently re-ran the full backend suite twice (259 passed / 1 credential-gated skip) and the J-32/J-33/J-34 + scenario + classifier subset (56 passed), and read the actual source + every gating-test assertion rather than trusting handoffs. J-33 is the high-risk one: the classifier now judges spread in bps and impact as a return relative to a canonical reference_price computed ONCE in the feature engine, with a byte-identical absolute fallback when no basis is present — and the absorption gates remain the EXACT complement of the control impact condition (the iter-5 keystone), so J-04/J-05 and all five sim scenarios stay green. All new boundaries are config-owned (no magic numbers); the diff carries no secrets. Coherence is COHERENCE-PASS with one advisory WARN (reference_price in the raw /features payload, not displayed). All 35 Must-have journeys are now passing, no anti-goal violation remains, and the spec's GOAL_ACHIEVED condition is met.
 
 **Next-step recommendation:** halt — goal achieved. (Optional, non-blocking: a future pass could annotate reference_price in the Data Contract as an internal feature present in /features but not a cockpit readout, per the coherence WARN.)
+
+## Iteration 14 — goal-i_will_be_super_rich-iter-14
+
+**Date:** 2026-06-10T00:00:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-36, J-37 (the two real-data defects reopened in f3ea17c)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (the one honesty defect — misleading "Spread stable and narrow" observation on the override path — was found and fixed by the auditor as B1, state/confidence unchanged)
+
+**Reasoning:** The two reopened real-data defects are now closed with the load-bearing anti-goal #20 evidence: committed-real-data CI tests that run offline without live credentials. The evaluator independently ran the J-36 + J-37 gate tests (14 green) and re-ran the full suite (283 passed / 1 credential-gated skip, matching the iter-13 floor + 24 new). Critically, the evaluator confirmed the J-36 fix is LOAD-BEARING, not a vacuous test: replaying the same committed REAL GME SIP window (17,342 real trades, µs epochs, realistic SIP spread, no secrets) yields seller_control @ 0.925 with the directional override enabled vs unclear @ 0.200 disabled. J-37 laziness (counting fake SDK proves first-chunk-before-whole-window), no-fabricate/drop/reorder/dedup, and progressive==single-shot determinism over real records all hold. Coherence is PASS; single-source-of-truth, provider-agnostic engine, no-secrets, and determinism all verified against the diff. Every Must-have journey J-01–J-37 is now passing.
+
+**Next-step recommendation:** halt — goal achieved.

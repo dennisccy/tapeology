@@ -4,73 +4,73 @@
       "id": "J-01",
       "name": "Watch a ticker and see the live tape cockpit",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — carried; iter-13 engine/cockpit changes are the additive relative classifier path (byte-identical absolute fallback) + new speed endpoint; full backend suite re-run green (259 passed/1 skip)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — carried; iter-14 is backend-only (classifier override + progressive fetch + incremental features). Sim scenarios byte-identical; full backend suite re-run by evaluator green (283 passed/1 skip)."
     },
     "J-02": {
       "id": "J-02",
       "name": "Buyer-control scenario is identified",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "apps/backend/tests/test_scenario.py (15 green) + test_classifier.py (20 green) re-run by the evaluator after J-33 relative-gate re-tuning; SIM-BUYER still resolves buyer_control. Carried screenshot: reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png."
+      "last_evidence_path": "apps/backend/tests/test_scenario.py (15 green) + test_classifier.py (20 green), evaluator re-run after the J-36 override: SIM-BUYER still resolves buyer_control; override-off keystone keeps sim fixtures byte-identical. Carried screenshot: reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png."
     },
     "J-03": {
       "id": "J-03",
       "name": "Seller-control scenario is identified",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "test_scenario/test_classifier green in the evaluator's iter-13 re-run; SIM-SELLER still resolves seller_control after the J-33 relative gates (absorption gate remains exact complement of the control impact condition). Carried: reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-03-result.png."
+      "last_evidence_path": "test_scenario/test_classifier green (evaluator iter-14 re-run); SIM-SELLER still resolves seller_control after the J-36 directional override (absorption gate remains exact complement of the control impact condition). Carried: reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-03-result.png."
     },
     "J-04": {
       "id": "J-04",
       "name": "Bid absorption is detected (price impact, not aggression)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "test_classifier + test_classifier_relative::test_absorption_gate_is_exact_complement_of_control_impact_in_relative_domain green (evaluator re-run): the keystone — absorption gate stays the exact complement of the control impact-return condition, so bid_absorption is not silently reclassified. Carried: reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-04-result.png."
+      "last_evidence_path": "test_classifier_relative.py absorption keystone (evaluator iter-14 re-run): the J-36 override is the control predicate MINUS the spread term — absorption gates keep the spread term and stay the EXACT complement, so bid_absorption is not silently reclassified even under a wide in-band spread. Carried: reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-04-result.png."
     },
     "J-05": {
       "id": "J-05",
       "name": "Ask absorption is detected (price impact, not aggression)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "test_classifier + test_classifier_relative::test_ask_absorption_mirror_on_real_name green (evaluator re-run): ask_absorption preserved as the complement of buyer_control in the relative domain. Carried: reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-05-result.png."
+      "last_evidence_path": "test_classifier_relative.py ask-absorption keystone (evaluator iter-14 re-run): ask_absorption preserved as the exact complement of buyer_control under the override band. Carried: reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-05-result.png."
     },
     "J-06": {
       "id": "J-06",
       "name": "Unclear / choppy tape is reported as unclear",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "test_scenario (SIM-CHOP) + test_classifier_relative::test_wide_relative_spread_still_reads_unclear green (evaluator re-run): honest-uncertainty behavior preserved after J-33 — a genuinely wide RELATIVE spread still reads unclear. Carried: reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-06-result.png."
+      "last_evidence_path": "test_scenario (SIM-CHOP) + test_classifier_relative::test_spread_beyond_the_band_still_vetoes_control_honest_uncertainty green (evaluator iter-14 re-run): honest uncertainty preserved — a wide RELATIVE spread beyond the override band on weak/mixed tape still reads unclear. Carried: reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-06-result.png."
     },
     "J-07": {
       "id": "J-07",
       "name": "Tape-state transitions are announced in the event log and observations",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — carried; observation/event-log generation UNTOUCHED iter-13 (only classifier gate boundaries + speed/fetch changed). Backend suite green."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — carried; the audit (B1) made the override-path observation HONEST ('Wide quoted spread — call on price impact' instead of false 'Spread stable and narrow'); default spread_wide=False keeps every narrow-spread/absorption/sim observation byte-identical. Backend suite green."
     },
     "J-08": {
       "id": "J-08",
       "name": "REST and the live UI agree (single source of truth)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "iter-13 coherence.md (COHERENCE-PASS, Part A): reference_price computed ONCE in FeatureEngine and read verbatim by the classifier (no second computation); speed is delivery-pacing only (determinism test: features byte-identical at any speed). Advisory WARN only: reference_price appears in the raw /features payload unregistered as a contract row (not displayed). Carried screenshot: reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-08-result.png."
+      "last_evidence_path": "iter-14 coherence.md (COHERENCE-PASS, Part A): the classifier reads spread/impact/price from the canonical FeatureEngine (no second computation); progressive chunks vs single-shot yield byte-identical state/confidence/features. Carried screenshot: reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-08-result.png."
     },
     "J-09": {
       "id": "J-09",
@@ -79,7 +79,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-11-sim-stopped-idle.png — carried; stop() now also clears the per-ticker speed cell (watch_manager.py:157, test_speed_api asserts no cross-watch residue) — teardown semantics unchanged. Lifecycle tests green."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-11-sim-stopped-idle.png — carried; teardown/lifecycle untouched iter-14. Lifecycle tests green."
     },
     "J-10": {
       "id": "J-10",
@@ -88,16 +88,16 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-08-historical-controls-initial.png — carried; mode selector + mode-specific controls UNTOUCHED iter-13 (only the existing speed dropdown's onChange handler wiring changed). Frontend builds clean."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-08-historical-controls-initial.png — carried; frontend untouched iter-14 (git diff --stat HEAD -- apps/frontend/ empty)."
     },
     "J-11": {
       "id": "J-11",
       "name": "Replay a real historical session",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png — carried; iter-13 chunked fetch (J-34) parallelizes the SAME vendor pagination and stitches in epoch order with no fabricate/drop/reorder/dedup (test_chunked_fetch green) — a short window still makes a single call. HistoricalProvider/replay path otherwise unchanged. Against-live-vendor leg operator-gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png — carried + REINFORCED iter-14: a real committed GME SIP window now replays end-to-end through HistoricalProvider+TapeEngine in CI (test_real_data_classify.py green); progressive load preserves the exact real records (progressive==single-shot). Live-vendor leg re-run as manual SIP smoke (AAPL 187.01/187.02 penny spread confirmed)."
     },
     "J-12": {
       "id": "J-12",
@@ -106,7 +106,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-6",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-6",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-12-live-controls.png — carried; live-socket path (_feed_live) UNTOUCHED iter-13 (speed is a historical-replay concept; set_speed on a live/sim watch is a 404). Real-socket leg operator-gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-5-evidence/UT-J-12-live-controls.png — carried; live-socket path stays on the IEX feed by design (per-mode feed: SIP historical / IEX live, test_real_data_gate.py green). Real-socket leg operator-gated."
     },
     "J-13": {
       "id": "J-13",
@@ -115,7 +115,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-13-aapl-selected.png — carried; symbol search UNTOUCHED iter-13."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-13-aapl-selected.png — carried; symbol search untouched iter-14."
     },
     "J-14": {
       "id": "J-14",
@@ -124,7 +124,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-03-offhours-closed.png — carried; honest-degradation paths UNTOUCHED iter-13. An empty/anchorless window → reference_price 0.0 → classifier absolute fallback (no fabricated relative read); chunked fetch fabricates nothing."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-03-offhours-closed.png — carried; honest-degradation paths untouched iter-14. An all-empty progressive chunk set yields no events + None anchor (test_progressive_fetch::test_progressive_all_empty_chunks_yield_no_events_no_fabrication) — no fabrication on empty windows."
     },
     "J-15": {
       "id": "J-15",
@@ -133,7 +133,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-10",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-10",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-0",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-09-stale-amber.png — carried; mid-stream stale watchdog + live lifecycle UNTOUCHED iter-13. Recover leg operator-gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-4-evidence/UT-09-stale-amber.png — carried; mid-stream stale watchdog + live lifecycle untouched iter-14. Recover leg operator-gated."
     },
     "J-16": {
       "id": "J-16",
@@ -142,7 +142,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-8",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-8",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "apps/backend/tests/test_historical_provider.py::test_tick_test_reduces_unknown_fraction_on_real_fixture — carried; aggressor/tick-test classifier UNTOUCHED iter-13 (J-33 changes the directional/absorption gates, not side inference). Backend suite green."
+      "last_evidence_path": "apps/backend/tests/test_historical_provider.py::test_tick_test_reduces_unknown_fraction_on_real_fixture — carried; aggressor/tick-test side inference untouched iter-14 (J-36 changes the directional/absorption gates, not side inference). Backend suite green."
     },
     "J-17": {
       "id": "J-17",
@@ -151,16 +151,16 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — carried; chart /history-read path UNTOUCHED iter-13 (sim scenarios still resolve to the same states post-J-33; markers unchanged). Backend suite green."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — carried; chart /history read path untouched iter-14 (sim scenarios still resolve to the same states; markers carry engine state). Backend suite green."
     },
     "J-18": {
       "id": "J-18",
       "name": "Inspect tape-state prediction on a real historical chart",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png — carried; PriceChart /history-read path unchanged; chunked fetch preserves the exact real records the chart bins. Operator-gated against-live-vendor pan/zoom leg remains gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png — carried + REINFORCED iter-14: serialize_history over the REAL GME replay places seller_control markers at the transition (test_real_data_classify::test_real_gme_sip_drop_has_seller_markers_at_the_transition); markers carry engine confidence (no recompute); progressive anchor == single-shot anchor (true-clock axis unchanged). Operator-gated pan/zoom leg remains gated."
     },
     "J-19": {
       "id": "J-19",
@@ -169,16 +169,16 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-10",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-10",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-10-sim-paused.png — carried; pause gate (_wait_while_paused) UNCHANGED iter-13. A set_speed while paused applies on resume (the speed cell is re-read after the pause gate). Pause tests green."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-8-evidence/EVAL-10-sim-paused.png — carried; pause gate untouched iter-14. Pause tests green."
     },
     "J-20": {
       "id": "J-20",
       "name": "Pick a historical window in local time with US-session quick-picks",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-5",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-08-historical-controls-initial.png — carried; window resolver + quick-picks UNTOUCHED iter-13. _split_window uses timedelta on the already-resolved tz-aware instants — no tz re-interpretation. test_window_resolution green."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-08-historical-controls-initial.png — carried; window resolver + quick-picks untouched iter-14. split_window operates on already-resolved tz-aware instants — no tz re-interpretation (test_window_resolution.py green, updated for progressive first-chunk fetch at the exact UTC instant)."
     },
     "J-21": {
       "id": "J-21",
@@ -187,7 +187,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-9",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png — carried; page.tsx pending branch UNTOUCHED iter-13 (only handleSpeedChange added, a separate handler)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png — carried; frontend pending branch untouched iter-14."
     },
     "J-22": {
       "id": "J-22",
@@ -196,7 +196,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-9",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-9-evidence/EVAL-iter9-11-unreachable-error.png — carried; client backstop + backend call-level deadline UNTOUCHED iter-13 (each chunked sub-window call is wrapped in the SAME _mapped_vendor_timeout). test_vendor_timeout green."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-9-evidence/EVAL-iter9-11-unreachable-error.png — carried; client backstop + backend call-level deadline preserved iter-14 (J-37 fetches only the first chunk under the SAME vendor budget; backend bound < frontend timeout). test_vendor_timeout green."
     },
     "J-23": {
       "id": "J-23",
@@ -205,7 +205,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-10",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-10",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-9",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-02-failed.png — carried; useTapeStream no-swallow path UNTOUCHED iter-13. Lifecycle tests green."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-02-failed.png — carried; useTapeStream no-swallow path untouched iter-14. Lifecycle tests green."
     },
     "J-24": {
       "id": "J-24",
@@ -214,7 +214,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-9",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-05-empty-validation.png — carried; dd-MM-yyyy validation + symbol gate UNTOUCHED iter-13. The out-of-set speed is a backend 422 (frontend disable is a courtesy)."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-05-empty-validation.png — carried; dd-MM-yyyy validation + symbol gate untouched iter-14."
     },
     "J-25": {
       "id": "J-25",
@@ -223,7 +223,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png + UT-06-timeout-error.png — carried; watch-resolution lifecycle UNTOUCHED iter-13. Against-live-vendor streaming leg operator-gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png + UT-06-timeout-error.png — carried; watch-resolution lifecycle untouched iter-14. The long-window path now RESOLVES (200, row-6 source descriptor) instead of refusing up front (test_progressive_fetch::test_route_long_window_is_accepted...). Against-live-vendor streaming leg operator-gated."
     },
     "J-26": {
       "id": "J-26",
@@ -232,7 +232,7 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png — carried; waiting/empty treatment + stream_status owner UNTOUCHED iter-13. Backend waiting/stale tests green."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-15-waiting-indicator.png — carried; waiting/empty treatment + stream_status owner untouched iter-14. Backend waiting/stale tests green."
     },
     "J-27": {
       "id": "J-27",
@@ -241,25 +241,25 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-10",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-10",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-02-failed.png — carried; stale/failed/no-data lifecycle UNTOUCHED iter-13. An empty window still yields an empty chart and the classifier's honest absolute fallback (no fabricated relative read). Lifecycle tests green."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-10-evidence/EVAL-iter10-02-failed.png — carried; stale/failed/no-data lifecycle untouched iter-14. An empty window still yields an empty chart + honest read (progressive all-empty → no events, None anchor). Lifecycle tests green."
     },
     "J-28": {
       "id": "J-28",
       "name": "A vendor-call timeout is truly enforced and honestly reported (backend wins, message is actionable)",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-06-timeout-error.png — carried; each chunked sub-window fetch still runs under the SAME _mapped_vendor_timeout call-level deadline, and J-34 keeps any timeout raise modest with the backend bound < frontend client timeout. The 'shorter range' message remains a true backstop. Oversize-against-live-vendor leg operator-gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-06-timeout-error.png — carried + REINFORCED iter-14: the J-37 first-chunk fetch runs under the SAME _mapped_vendor_timeout call-level deadline; backend bound < frontend client timeout preserved; the 'very high-volume — try a shorter range' message is now a TRUE backstop that fires only when the first chunk itself cannot load. test_vendor_timeout/test_progressive_fetch green. Oversize-against-live-vendor leg operator-gated."
     },
     "J-29": {
       "id": "J-29",
       "name": "A Historical watch of a real liquid symbol loads quickly and within bounds — never a routine timeout",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png — carried + REINFORCED by J-34: within-sub-window concurrent trades+quotes is preserved AND long windows now load via bounded-concurrency chunking instead of refusal (test_chunked_fetch green; alpaca.py:281-371). Window cache re-watch path unchanged. Live credentialed leg operator-gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-07-cockpit-populated.png — carried + REINFORCED iter-14: J-37 decouples time-to-first-data from total-window load (first chunk under budget, rest streams in background; engine warms promptly via incremental O(1)-amortised features so a ~17k-print dense burst processes in ~1s). Window cache re-watch path unchanged. Live credentialed leg operator-gated."
     },
     "J-30": {
       "id": "J-30",
@@ -268,16 +268,16 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-11",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-11",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-10",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-04-aapl-fast-response.png — carried; startup-warmed universe + AbortController cancellation UNTOUCHED iter-13. Unit tests green."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-11-evidence/UT-04-aapl-fast-response.png — carried; startup-warmed universe + AbortController cancellation untouched iter-14. Unit tests green."
     },
     "J-31": {
       "id": "J-31",
       "name": "The price chart shows TRUE clock time, not elapsed playback seconds",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-12",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — carried; the epoch-anchor / true-clock axis (row 13) is UNTOUCHED iter-13 (J-32 speed change is delivery-pacing only; the logical timeline and anchor are unchanged, so determinism + the true-clock axis hold). test_epoch_anchor green. Historical real-symbol axis leg operator-gated."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-05-sim-buyer-chart.png — carried; the epoch-anchor / true-clock axis (row 13) holds under chunking: progressive provider anchor == single-shot anchor (test_progressive_fetch::test_progressive_provider_anchor_is_first_real_record). test_epoch_anchor green. Historical real-symbol axis leg operator-gated."
     },
     "J-32": {
       "id": "J-32",
@@ -286,25 +286,25 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-12",
-      "last_evidence_path": "apps/backend/tests/test_speed_api.py (6/6, evaluator re-run): POST /watch/{ticker}/speed validates against CONFIG.allowed_replay_speeds (out-of-set ⇒ 422 BEFORE any mutation; 422 precedes 404), not-watched ⇒ 404; set_speed applies to a running watch with NO teardown (a read stays 200); determinism — the SAME fixed window at 1× and 10× yields byte-identical tape_state/confidence/features (delivery-pacing only). Source: main.py:393 (route), watch_manager.py:154 (set_speed, per-ticker mutable speed cell), watch_manager.py:265-291 (_feed_paced re-reads the cell each loop iteration). Frontend wiring (lib/api.ts setReplaySpeed + TopBar onChange + page handleSpeedChange) confirmed by reviewer PASS + clean build; browser leg SKIPPED (frontend not on :3650) but spec designates the backend tests as the authoritative gate."
+      "last_evidence_path": "apps/backend/tests/test_speed_api.py (6/6) — carried; the speed endpoint + delivery-pacing path untouched iter-14 (the progressive feeder reuses the SAME _replay_events pacing loop; speed remains a delivery-pacing change only, determinism preserved). Browser leg per spec backend-authoritative."
     },
     "J-33": {
       "id": "J-33",
       "name": "A genuine directional move on real data classifies as control, not perpetual unclear",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-12",
-      "last_evidence_path": "apps/backend/tests/test_classifier_relative.py (8/8, evaluator re-run): a real ~$40 shape with a spread WIDE in absolute $ but normal RELATIVE to price + strong negative impact resolves to seller_control (mirror: buyer_control), NOT perpetual unclear; negative guards hold — wide RELATIVE spread ⇒ unclear, high aggression with no proportionate progress ⇒ bid/ask_absorption; KEYSTONE — the absorption gate is the EXACT complement of the control impact-return condition (test_absorption_gate_is_exact_complement...); absolute fallback byte-identical (pinned confidence 0.8542) when no reference_price basis. Source: classifier.py:76-186 (relative gates reading the canonical reference_price), features.py:42/97-110 (reference_price computed ONCE in the feature engine), config.py:39-71 (all boundaries config-owned, no magic numbers). All 5 sim scenarios (test_scenario 15) + test_classifier (20) GREEN after re-tuning. Real-GME confirmation operator-gated per spec."
+      "last_evidence_path": "apps/backend/tests/test_classifier_relative.py (15, evaluator iter-14 re-run): the relative gates + negative guards hold under the new directional override — wide RELATIVE spread beyond the band ⇒ unclear, high aggression with no proportionate progress ⇒ absorption, absorption gate is the EXACT complement of the control impact condition. SUPERSEDED-NOTE: the synthetic-fixture half is now backed by the committed REAL GME SIP gate (J-36) per anti-goal #20. All 5 sim scenarios + test_classifier GREEN."
     },
     "J-34": {
       "id": "J-34",
       "name": "A long historical window loads via chunking instead of very-high-volume error",
       "status": "passing",
-      "last_verified_iter": "goal-i_will_be_super_rich-iter-13",
-      "last_passing_iter": "goal-i_will_be_super_rich-iter-13",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-12",
-      "last_evidence_path": "apps/backend/tests/test_chunked_fetch.py (7/7, evaluator re-run): _split_window PARTITIONS [start,end) into bounded contiguous sub-windows with NO gap/overlap (long window → expected sub-window count; short window → single-call fast path; non-datetime/non-positive chunk → single range); the chunked fetch fetches EVERY sub-window for both trades+quotes (no dropped sub-window), stitches in epoch order, and yields exactly the per-sub-window distinct record set — NO fabricated/dropped/reordered/de-duplicated print. Source: alpaca.py:170-199 (_split_window, pure) + alpaca.py:281-371 (bounded-concurrency chunked fetch + epoch-sorted stitch); config.py:222-238 (historical_chunk_seconds/concurrency, config-owned). Backend bound stays < frontend timeout; 'shorter range' remains a true backstop. Full-RTH real-symbol load operator-gated per spec."
+      "last_evidence_path": "apps/backend/tests/test_chunked_fetch.py (7) — carried; the within-cap chunking partition/stitch is preserved AND now superseded by J-37's PROGRESSIVE load (first chunk before whole window; rest streams in background), proven by the committed-real-data gate per anti-goal #20. Backend bound < frontend timeout; 'shorter range' is a true backstop."
     },
     "J-35": {
       "id": "J-35",
@@ -313,9 +313,27 @@
       "last_verified_iter": "goal-i_will_be_super_rich-iter-12",
       "last_passing_iter": "goal-i_will_be_super_rich-iter-12",
       "first_seen_iter": "goal-i_will_be_super_rich-iter-12",
-      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-08-date-input-visible.png + TC-08-valid-date-entered.png — carried; the custom dd-MM-yyyy input + single shared formatter UNTOUCHED iter-13 (no UI date surface changed). Frontend builds clean."
+      "last_evidence_path": "reports/qa/goal-i_will_be_super_rich-iter-12-evidence/TC-08-date-input-visible.png + TC-08-valid-date-entered.png — carried; the custom dd-MM-yyyy input + single shared formatter untouched iter-14 (frontend untouched). Frontend builds clean."
+    },
+    "J-36": {
+      "id": "J-36",
+      "name": "A real directional move classifies as control on real data — proven by a committed real-data fixture",
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
+      "first_seen_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_evidence_path": "apps/backend/tests/test_real_data_classify.py (5 green, evaluator re-run, no live credentials) — the committed REAL GME SIP fixture tests/fixtures/alpaca/GME_20240514_133013_133020_sip.json (17,342 real trades, 1,946 SIP quotes, µs epochs, ~50bps spread, no secrets) replayed through HistoricalProvider+TapeEngine resolves to seller_control @ confidence 0.925 (≥ reasonable_confidence 0.6), with seller markers at the transition; final-state assertion (not transient). LOAD-BEARING confirmed by the evaluator: the SAME window with directional_override_enabled=False reads unclear @ 0.200. Fix: per-mode feed (SIP historical / IEX live, config-owned, vendor enum confined to alpaca.py) + spread as a graded confidence factor within the 4× band, not an absolute veto. Negative guards hold (wide RELATIVE spread beyond band / weak tape ⇒ unclear/absorption). Anti-goal #20 satisfied — test fails loudly if the fixture is absent, never a synthetic stand-in. Live SIP smoke (AAPL penny spread) re-run manually."
+    },
+    "J-37": {
+      "id": "J-37",
+      "name": "A long/dense window loads progressively — first chunk replays immediately, the rest streams in — proven by a committed real-data fixture",
+      "status": "passing",
+      "last_verified_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_passing_iter": "goal-i_will_be_super_rich-iter-14",
+      "first_seen_iter": "goal-i_will_be_super_rich-iter-14",
+      "last_evidence_path": "apps/backend/tests/test_progressive_fetch.py (9 green, evaluator re-run, no live credentials) — LAZINESS proven structurally (counting fake SDK driving AlpacaAdapter.iter_historical_chunks: pulling the first chunk fetches ONLY the first sub-window; time-to-first-data decoupled from total-window load); NO fabricate/drop/reorder/dedup across the stitch; DETERMINISM over REAL GME records (ProgressiveHistoricalProvider chunked == single-shot HistoricalProvider: identical event stream AND final seller_control state / confidence / per-window features / epoch anchor); route accepts the long window (200, no 'very high-volume' refusal) with the first fetch = the first sub-window; feeder end-to-end stitch on a real loop drops/dups nothing. Engine handles dense consolidated-tape density via incremental O(1)-amortised features (~17k prints in ~1s). Anti-goal #20 satisfied — gate fails loudly without the real fixture. Live Full-RTH confirmation re-run manually."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-06-09T00:00:00Z"
+  "updated_at": "2026-06-10T00:00:00Z"
 }

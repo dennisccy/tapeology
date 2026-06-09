@@ -156,11 +156,21 @@ class TapeEngine:
                     self._last_tick_dir = Side.BUY
                 elif event.price < prior_trade_price:
                     self._last_tick_dir = Side.SELL
+            # The in-effect quote at THIS trade's instant is the bid/ask already in MarketState (a
+            # quote at the same/earlier logical ts was applied before this trade — the load-bearing
+            # ordering preserved above). Capture it BEFORE `update_trade` (which only touches `last`,
+            # not the quote) and hand it to the FeatureEngine so the refresh scores can be maintained
+            # incrementally (J-37 perf) — it is the SAME in-effect quote the forward-merge would find,
+            # so the value is unchanged; only dense-window speed improves.
+            eff_bid = self._market.bid
+            eff_ask = self._market.ask
             self._market.update_trade(event)
             # Single source of truth: this one `side` value feeds BOTH the displayed recent-trades
             # row and the FeatureEngine (aggressive ratios / net aggressive volume) — never
             # recomputed downstream.
-            self._features.add_trade(event.timestamp, event.price, event.size, side)
+            self._features.add_trade(
+                event.timestamp, event.price, event.size, side, eff_bid, eff_ask
+            )
             self._trade_count += 1
             self._recent_trades.appendleft(
                 TradeRow(event.timestamp, event.price, event.size, side.value)

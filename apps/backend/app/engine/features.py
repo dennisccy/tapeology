@@ -48,77 +48,199 @@ def _clamp01(value: float) -> float:
 
 
 class _Window:
-    """One rolling window of a fixed logical length (seconds)."""
+    """One rolling window of a fixed logical length (seconds).
+
+    PERFORMANCE (J-37 — engine handles real consolidated-tape density without stalling): a dense
+    Full-RTH window carries tens of thousands of prints, and a naive per-tick rescan of the window
+    is O(n²) — which made a real GME open-drop window take minutes. Every aggregate is therefore
+    maintained INCREMENTALLY (O(1) amortised per event): running sums updated on append and on
+    eviction. The values produced are BYTE-IDENTICAL to the prior full-rescan implementation
+    (determinism + single-source-of-truth preserved — asserted by the existing feature tests and a
+    progressive-vs-single-shot determinism test), only computed without the quadratic rescan.
+
+    The in-effect quote (bid/ask) at each trade's instant is supplied by the engine at ``add_trade``
+    time (it already holds it in ``MarketState``), so the refresh scores need no forward quote-merge.
+    """
 
     def __init__(self, length: int, config: Config) -> None:
         self.length = length
         self._config = config
-        # (timestamp, price, size, side)
-        self._trades: deque[tuple[float, float, int, Side]] = deque()
-        # (timestamp, bid, ask, spread) — bid/ask threaded additively for the refresh scores;
-        # spread is still stored verbatim so ``average_spread`` is computed unchanged.
+        # (timestamp, price, size, side, impact_delta, eff_bid, eff_ask) — each trade stores the
+        # signed price delta vs the prior trade IN ARRIVAL ORDER (to keep impact incremental on
+        # eviction) and the in-effect bid/ask at its instant (supplied by the engine; ``None`` for the
+        # standalone FeatureEngine API, which falls back to a forward quote-merge at compute time).
+        self._trades: deque[
+            tuple[float, float, int, Side, float, float | None, float | None]
+        ] = deque()
+        # (timestamp, bid, ask, spread)
         self._quotes: deque[tuple[float, float, float, float]] = deque()
 
-    def add_trade(self, ts: float, price: float, size: int, side: Side) -> None:
-        self._trades.append((ts, price, size, side))
+        # --- Incrementally-maintained running aggregates (the single source for compute()) -------
+        self._total_volume = 0
+        self._buy_volume = 0
+        self._sell_volume = 0
+        self._buy_impact = 0.0
+        self._sell_impact = 0.0
+        self._large_prints = 0
+        self._spread_sum = 0.0
+        self._mid_sum = 0.0       # Σ (bid+ask)/2 over in-window quotes (reference_price basis)
+        self._price_sum = 0.0     # Σ trade price over in-window trades (reference fallback)
+        # The price of the most-recently appended trade, so a new trade's impact_delta is computed
+        # in O(1) at append (vs the prior trade in arrival order). ``None`` until the first trade.
+        self._last_price: float | None = None
+
+        # --- Incremental refresh-score state (J-37 perf) ----------------------------------------
+        # bid_refresh / ask_refresh count the SELL/BUY prints whose in-effect bid/ask was at a new
+        # window high/low (the quote "held"). When every trade arrives with its in-effect quote (the
+        # engine path) AND nothing has been evicted, these counts update in O(1) on append — so a
+        # dense burst that fits inside the window (e.g. the GME drop) never triggers a rescan. They
+        # become stale on ANY eviction or when a trade lacked its in-effect quote (the standalone API),
+        # in which case ``compute`` falls back to the exact forward-merge rescan. Either way the value
+        # is byte-identical; only the cost differs.
+        self._refresh_incremental = True   # False once we must fall back to the merge (eviction etc.)
+        # True once ANY trade carried an in-effect quote (the engine path). The standalone FeatureEngine
+        # API never threads one, so this stays False and ``compute`` uses the authoritative forward-merge
+        # — keeping that API byte-identical while the engine path gets the O(1) incremental counts.
+        self._refresh_has_eff = False
+        self._bid_mark: float | None = None
+        self._ask_mark: float | None = None
+        self._bid_refreshed = 0
+        self._bid_total = 0
+        self._ask_refreshed = 0
+        self._ask_total = 0
+
+    def add_trade(
+        self,
+        ts: float,
+        price: float,
+        size: int,
+        side: Side,
+        eff_bid: float | None = None,
+        eff_ask: float | None = None,
+    ) -> None:
+        # Impact delta vs the immediately preceding trade in arrival order (0.0 for the very first
+        # trade or a non-directional print — it contributes nothing to either impact sum).
+        delta = 0.0
+        if self._last_price is not None:
+            delta = price - self._last_price
+            if side is Side.BUY:
+                self._buy_impact += delta
+            elif side is Side.SELL:
+                self._sell_impact += delta
+        self._trades.append((ts, price, size, side, delta, eff_bid, eff_ask))
+        self._last_price = price
+        self._total_volume += size
+        self._price_sum += price
+        if side is Side.BUY:
+            self._buy_volume += size
+        elif side is Side.SELL:
+            self._sell_volume += size
+        if size >= self._config.large_print_size:
+            self._large_prints += 1
+
+        # O(1) incremental refresh update (engine path). A SELL/BUY print with NO in-effect quote yet
+        # (a trade before the first quote) contributes no refresh evidence — it is SKIPPED, exactly as
+        # the forward-merge skips a print whose ``current`` quote is still None (so the two agree). The
+        # standalone FeatureEngine API (no eff_* threaded) never reaches the SELL/BUY branches with a
+        # value, so it naturally falls through with bid_total/ask_total == 0 here; ``compute`` then
+        # serves the merge result whenever the incremental counts have no evidence (see compute()).
+        if not self._refresh_incremental:
+            return
+        if eff_bid is not None or eff_ask is not None:
+            self._refresh_has_eff = True  # the engine threaded an in-effect quote: use the O(1) path
+        if side is Side.SELL:
+            if eff_bid is None:
+                return  # no in-effect quote — no refresh evidence (skip, do NOT disable)
+            self._bid_total += 1
+            if self._bid_mark is None or eff_bid >= self._bid_mark:
+                self._bid_refreshed += 1
+            self._bid_mark = eff_bid if self._bid_mark is None else max(self._bid_mark, eff_bid)
+        elif side is Side.BUY:
+            if eff_ask is None:
+                return  # no in-effect quote — no refresh evidence (skip, do NOT disable)
+            self._ask_total += 1
+            if self._ask_mark is None or eff_ask <= self._ask_mark:
+                self._ask_refreshed += 1
+            self._ask_mark = eff_ask if self._ask_mark is None else min(self._ask_mark, eff_ask)
 
     def add_quote(self, ts: float, bid: float, ask: float, spread: float) -> None:
         self._quotes.append((ts, bid, ask, spread))
+        self._spread_sum += spread
+        self._mid_sum += (bid + ask) / 2.0
 
     def _evict(self, now_ts: float) -> None:
         lo = now_ts - self.length
         while self._trades and self._trades[0][0] < lo:
-            self._trades.popleft()
+            _ts, price, size, side, _delta, _eb, _ea = self._trades.popleft()
+            # A trade left the window, so the incremental refresh counts (which assume an append-only
+            # window) are no longer valid — fall back to the exact forward-merge rescan for refresh.
+            # (Sums/impact stay incremental; only the order-dependent refresh needs the rescan.)
+            self._refresh_incremental = False
+            self._total_volume -= size
+            self._price_sum -= price
+            if side is Side.BUY:
+                self._buy_volume -= size
+            elif side is Side.SELL:
+                self._sell_volume -= size
+            if size >= self._config.large_print_size:
+                self._large_prints -= 1
+            # The NEW oldest trade no longer has a predecessor inside the window, so its stored
+            # impact_delta (computed vs the just-evicted trade) must be removed from the impact sum
+            # — keeping buy/sell impact EXACTLY the cumulative in-window consecutive-delta sum the
+            # full rescan produced. (Only the boundary trade is affected; everything else is intact.)
+            if self._trades:
+                new_oldest = self._trades[0]
+                d = new_oldest[4]
+                if new_oldest[3] is Side.BUY:
+                    self._buy_impact -= d
+                elif new_oldest[3] is Side.SELL:
+                    self._sell_impact -= d
         while self._quotes and self._quotes[0][0] < lo:
-            self._quotes.popleft()
+            _ts, bid, ask, spread = self._quotes.popleft()
+            # A quote leaving the window can change the in-effect quote the merge sees for an early
+            # trade, so the incremental refresh (which used the engine's true in-effect quote) must
+            # also drop to the merge once any quote is evicted — keeping the two paths in agreement.
+            self._refresh_incremental = False
+            self._spread_sum -= spread
+            self._mid_sum -= (bid + ask) / 2.0
 
     def compute(self, now_ts: float) -> dict[str, float]:
         self._evict(now_ts)
 
         trade_count = len(self._trades)
-        total_volume = sum(t[2] for t in self._trades)
-
-        buy_volume = sum(t[2] for t in self._trades if t[3] is Side.BUY)
-        sell_volume = sum(t[2] for t in self._trades if t[3] is Side.SELL)
+        quote_count = len(self._quotes)
+        total_volume = self._total_volume
+        buy_volume = self._buy_volume
+        sell_volume = self._sell_volume
         directional = buy_volume + sell_volume
+        buy_impact = self._buy_impact
+        sell_impact = self._sell_impact
 
-        buy_impact = 0.0
-        sell_impact = 0.0
-        prev_price: float | None = None
-        for _ts, price, _size, side in self._trades:
-            if prev_price is not None:
-                delta = price - prev_price
-                if side is Side.BUY:
-                    buy_impact += delta
-                elif side is Side.SELL:
-                    sell_impact += delta
-            prev_price = price
+        average_spread = (self._spread_sum / quote_count) if quote_count else 0.0
 
-        large_prints = sum(1 for t in self._trades if t[2] >= self._config.large_print_size)
-        average_spread = fmean(q[3] for q in self._quotes) if self._quotes else 0.0
-
-        # Price-relative basis (J-33): the in-window price LEVEL the classifier normalises spread
-        # and impact against. Prefer the average quote MID-price (the cleanest level indicator);
-        # fall back to the average trade price when there are no quotes, and to 0.0 when the window
-        # is empty (the classifier then treats it as "no basis" and uses its absolute fallback — a
-        # cold/empty window stays honest, never a fabricated relative read). Computed ONCE here.
-        if self._quotes:
-            reference_price = fmean((q[1] + q[2]) / 2.0 for q in self._quotes)
-        elif self._trades:
-            reference_price = fmean(t[1] for t in self._trades)
+        # Price-relative basis (J-33): prefer the average quote MID-price; fall back to the average
+        # trade price when there are no quotes; 0.0 for an empty window (classifier treats as "no
+        # basis"). Maintained as running sums so this is O(1) — identical value, no rescan.
+        if quote_count:
+            reference_price = self._mid_sum / quote_count
+        elif trade_count:
+            reference_price = self._price_sum / trade_count
         else:
             reference_price = 0.0
 
         buy_ratio = (buy_volume / directional) if directional else 0.0
         sell_ratio = (sell_volume / directional) if directional else 0.0
 
-        quotes = list(self._quotes)
-        # bid_refresh: among aggressive-SELL prints, fraction at which the bid HELD (did not
-        # fall below its in-window high). ask_refresh: among aggressive-BUY prints, fraction
-        # at which the ask HELD (did not rise above its in-window low). High when the quote
-        # absorbs (SIM-BIDABS / SIM-ASKABS); low when it walks (SIM-SELLER / SIM-BUYER).
-        bid_refresh = self._refresh_fraction(quotes, Side.SELL, price_index=1, track_max=True)
-        ask_refresh = self._refresh_fraction(quotes, Side.BUY, price_index=2, track_max=False)
+        # bid_refresh: among aggressive-SELL prints, fraction at which the bid HELD (did not fall
+        # below its in-window high). ask_refresh: among aggressive-BUY prints, fraction at which the
+        # ask HELD (did not rise above its in-window low). Served from the O(1) incremental counts
+        # when valid (append-only window with in-effect quotes — the dense-burst case J-37 targets),
+        # else from the exact forward-merge rescan. Both produce the identical value.
+        if self._refresh_incremental and self._refresh_has_eff:
+            bid_refresh = (self._bid_refreshed / self._bid_total) if self._bid_total else 0.0
+            ask_refresh = (self._ask_refreshed / self._ask_total) if self._ask_total else 0.0
+        else:
+            bid_refresh, ask_refresh = self._refresh_fractions()
 
         return {
             "trade_speed": trade_count / self.length,
@@ -129,7 +251,7 @@ class _Window:
             "buy_price_impact": buy_impact,
             "sell_price_impact": sell_impact,
             "average_spread": average_spread,
-            "large_print_count": float(large_prints),
+            "large_print_count": float(self._large_prints),
             "absorption_score": self._absorption_score(
                 buy_ratio, sell_ratio, buy_impact, sell_impact
             ),
@@ -138,41 +260,42 @@ class _Window:
             "reference_price": reference_price,
         }
 
-    def _refresh_fraction(
-        self,
-        quotes: list[tuple[float, float, float, float]],
-        side: Side,
-        price_index: int,
-        track_max: bool,
-    ) -> float:
-        """Fraction of ``side`` prints at which the quote held against its high/low-water mark.
+    def _refresh_fractions(self) -> tuple[float, float]:
+        """Compute (bid_refresh, ask_refresh) in one forward-merge pass over the window.
 
-        For each matching print the in-effect quote is the last quote with ``ts <= trade ts``
-        (a forward merge over the ts-ordered series). bid uses a running MAX (held = bid did
-        not fall below its prior high); ask uses a running MIN (held = ask did not rise above
-        its prior low). 0.0 when there is no matching print (no evidence — never fabricated)."""
+        For each trade the in-effect quote is the last quote with ``ts <= trade ts`` (a two-pointer
+        forward merge over the ts-ordered series — identical to the prior per-side ``_refresh_fraction``
+        merge, just shared across both sides so the window is walked once, not twice). bid_refresh is
+        over aggressive-SELL prints with a running-MAX watermark (held = bid did not fall below its
+        prior high); ask_refresh is over aggressive-BUY prints with a running-MIN watermark. A side
+        with no matching print (or with no in-effect quote yet) scores 0.0 — no fabricated evidence."""
+        quotes = self._quotes
         qi = 0
         n = len(quotes)
-        current: float | None = None
-        watermark: float | None = None
-        refreshed = 0
-        total = 0
-        for tts, _price, _size, tside in self._trades:
+        cur_bid: float | None = None
+        cur_ask: float | None = None
+        bid_mark: float | None = None
+        ask_mark: float | None = None
+        bid_refreshed = bid_total = 0
+        ask_refreshed = ask_total = 0
+        for tts, _price, _size, tside, _delta, _eb, _ea in self._trades:
             while qi < n and quotes[qi][0] <= tts:
-                current = quotes[qi][price_index]
+                cur_bid = quotes[qi][1]
+                cur_ask = quotes[qi][2]
                 qi += 1
-            if tside is not side or current is None:
-                continue
-            total += 1
-            if watermark is None:
-                refreshed += 1
-                watermark = current
-            else:
-                held = current >= watermark if track_max else current <= watermark
-                if held:
-                    refreshed += 1
-                watermark = max(watermark, current) if track_max else min(watermark, current)
-        return (refreshed / total) if total else 0.0
+            if tside is Side.SELL and cur_bid is not None:
+                bid_total += 1
+                if bid_mark is None or cur_bid >= bid_mark:
+                    bid_refreshed += 1
+                bid_mark = cur_bid if bid_mark is None else max(bid_mark, cur_bid)
+            elif tside is Side.BUY and cur_ask is not None:
+                ask_total += 1
+                if ask_mark is None or cur_ask <= ask_mark:
+                    ask_refreshed += 1
+                ask_mark = cur_ask if ask_mark is None else min(ask_mark, cur_ask)
+        bid_refresh = (bid_refreshed / bid_total) if bid_total else 0.0
+        ask_refresh = (ask_refreshed / ask_total) if ask_total else 0.0
+        return bid_refresh, ask_refresh
 
     def _absorption_score(
         self, buy_ratio: float, sell_ratio: float, buy_impact: float, sell_impact: float
@@ -201,9 +324,17 @@ class FeatureEngine:
             w: _Window(w, config) for w in config.windows
         }
 
-    def add_trade(self, ts: float, price: float, size: int, side: Side) -> None:
+    def add_trade(
+        self,
+        ts: float,
+        price: float,
+        size: int,
+        side: Side,
+        eff_bid: float | None = None,
+        eff_ask: float | None = None,
+    ) -> None:
         for window in self._windows.values():
-            window.add_trade(ts, price, size, side)
+            window.add_trade(ts, price, size, side, eff_bid, eff_ask)
 
     def add_quote(self, ts: float, bid: float, ask: float, spread: float) -> None:
         for window in self._windows.values():

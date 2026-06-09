@@ -107,6 +107,41 @@
 > and chunk-concurrency bounds) are **config values, not displayed values**.
 > No top-level nav section added/renamed/moved ⇒ **no re-approval requested**.
 
+> **iter-14 extension is ADDITIVE (real-data classification + progressive long-window load, J-36 / J-37) — computation
+> hardening of already-built rows; NO new value, NO new contract row, NO nav change.** Same single `/` HOME, same nav
+> skeleton, same one-engine source of truth. It REOPENS the two real-data defects the iter-13 synthetic-only "pass"
+> shipped (the new critical anti-goal *Real-data journeys are proven with real data* now gates them with **committed
+> real captured market data**, runnable in CI without live credentials — an "operator-gated" note is insufficient).
+> - **J-36 — the SAME row-1 classifier, made robust to quoting artifacts + a per-mode vendor feed.** Two changes, both
+>   recalibrating the computation of the existing **row-1** value (no second producer, no new row): **(a)** the **one**
+>   vendor adapter fetches the **SIP** consolidated feed for `fetch_historical` (realistic spreads) while `stream_live`
+>   stays the free **IEX** feed — a config-owned **per-mode feed** choice that lives inside the one adapter (the vendor
+>   enum never leaks out); **(b)** the directional/absorption gates treat a wide or **absent/crossed** *quoted* spread
+>   (a single-venue IEX quote, or suppressed quotes around an LULD halt) as a **graded confidence factor, NOT an absolute
+>   veto** when the move is clearly directional (strong one-sided ratio AND real relative price impact AND elevated
+>   speed). A genuinely wide *relative* spread on weak/mixed tape still reads `unclear`/absorption (honest-uncertainty +
+>   price-impact-over-aggression hold); the absorption gates stay the **exact complement** of the control impact
+>   condition (the iter-5/iter-13 keystone); the classifier still reads spread/impact/price from the **canonical feature
+>   engine** (no second computation); all five sim scenarios J-01–J-09 and the J-33 relative gates stay green, with the
+>   absolute-fallback fixtures byte-identical. (J-36)
+> - **J-37 — progressive long-window load inside the ONE adapter + the historical provider/feeder.** The historical fetch
+>   is restructured so **time-to-first-data is decoupled from total-window load**: the **first sub-window chunk** is
+>   fetched within the bounded budget (backend bound < frontend timeout) and the replay BEGINS on it, while subsequent
+>   chunks are fetched **in the background** and appended **in epoch order** as the replay advances — the system NEVER
+>   fetches the whole window before responding. This serves **rows 10/12** (the chart + resolved window) via the same
+>   single owners, stitching the **same real records** in epoch order — fabricating/dropping/reordering/de-duplicating
+>   **no** real prints, quote-before-trade preserved per chunk and across the stitch, a re-watch near-instant from the
+>   existing window cache, and tape state + each feature byte-identical vs a single-shot fetch (determinism + single-
+>   source-of-truth hold; the engine still bins on its logical timeline). The advertised **Full RTH** quick-pick loads
+>   without the "very high-volume — try a shorter range" refusal (row 9 / J-28), which becomes a **true last-resort
+>   backstop** only for a first chunk that genuinely cannot load. A displayed-series cap (if needed for ~50k-event
+>   density) bounds only the **shown** series, never a fabricated/dropped print, and is config-owned. (J-37)
+> New config constants (the per-mode `historical_feed`/`live_feed`, the J-36 graded-spread / artifact-tolerance
+> boundaries, any J-37 displayed-series cap) are **config values, not displayed values** (no magic numbers). Both
+> journeys are gated by **committed real-data CI tests** (GME SIP fixture → `seller_control`; a long/dense fixture →
+> first-chunk-replay-within-budget + no fabricated/dropped/reordered prints), runnable without live credentials.
+> No top-level nav section added/renamed/moved ⇒ **no re-approval requested**.
+
 **Governing principle.** Tapeology is a single-ticker **tape cockpit**. Every tape state, confidence, and feature is
 computed **exactly once in the engine** and read identically by REST, WebSocket, and the UI (anti-goal: *Single source
 of truth*). The engine and API depend **only** on the **provider interface** (`TradeEvent` / `QuoteEvent`); the
@@ -189,7 +224,7 @@ single-ticker UI; no execution path; one focused chart only).
 Every displayed value is computed once and read-only re-exposed elsewhere; `…/summary` and `WS …/stream` **re-expose**
 the snapshot and MUST NOT recompute. `…/state` and `…/features` are the canonical REST reads. Rows 1–6 are the
 **already-built** simulated contract (in force, unchanged); rows 7–9 are the **already-built** real-data additions;
-rows 10–12 are the **analysis-fidelity additions**: rows 10 (J-17 chart **render-verified**; J-18 real-historical render closed at iter-8) and 11 (J-19 pause/resume) are **built & in force**; row 12 (J-20 local-time historical window) is **built at iter-8** (J-16 is folded into row 4). **iter-11 adds NO row** — it hardens the *performance/honesty* of rows 7 and 9 and the historical-fetch path (see the iter-11 header note). **iter-12 adds row 13** (the additive display/epoch anchor for the true-clock chart axis — J-31; J-35's shared `dd-MM-yyyy` formatter is presentation-only, no row) — see the iter-12 header note.
+rows 10–12 are the **analysis-fidelity additions**: rows 10 (J-17 chart **render-verified**; J-18 real-historical render closed at iter-8) and 11 (J-19 pause/resume) are **built & in force**; row 12 (J-20 local-time historical window) is **built at iter-8** (J-16 is folded into row 4). **iter-11 adds NO row** — it hardens the *performance/honesty* of rows 7 and 9 and the historical-fetch path (see the iter-11 header note). **iter-12 adds row 13** (the additive display/epoch anchor for the true-clock chart axis — J-31; J-35's shared `dd-MM-yyyy` formatter is presentation-only, no row) — see the iter-12 header note. **iter-14 adds NO row** — it hardens the *computation* of rows 1 (J-36: SIP historical feed + spread-as-graded-factor, not an absolute veto) and 10/12 (J-37: progressive first-chunk-replay long-window load), each through its existing single owner; see the iter-14 header note.
 
 | # | Displayed value | Canonical computing module (computed once) | Canonical serving endpoint | Re-exposed read-only by |
 |---|---|---|---|---|

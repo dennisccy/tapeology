@@ -111,6 +111,45 @@ class WatchManager:
             pass
         return engine
 
+    def watch_with_progressive_historical(
+        self,
+        ticker: str,
+        first_chunk_provider: Provider,
+        fetch_remaining,
+        speed: float = 1.0,
+    ) -> TapeEngine:
+        """Watch a LONG historical window progressively (J-37): replay the FIRST chunk immediately
+        while the REMAINING chunks are fetched in the background and appended in epoch order.
+
+        ``first_chunk_provider`` is a ready ``HistoricalProvider`` over the already-fetched FIRST
+        sub-window (so replay + the canonical epoch anchor begin within budget). ``fetch_remaining``
+        is a zero-arg BLOCKING callable returning the remaining sub-windows as an ordered list of
+        ``HistoricalWindow`` (it runs OFF the event loop via ``asyncio.to_thread`` inside the feeder,
+        so a slow later chunk never blocks the loop or the already-running replay). The remaining
+        chunks are stitched after the first in epoch order — the same real records, determinism +
+        single-source-of-truth preserved (the engine bins on its logical timeline regardless of chunk
+        boundaries). Any existing watch is torn down first (orphaned-watch lesson); the feeder is
+        registered so stop()/switch/shutdown cancel it.
+        """
+        self.stop(ticker)
+        engine = TapeEngine(
+            ticker,
+            first_chunk_provider.scenario,
+            self._config,
+            epoch_anchor=_provider_anchor(first_chunk_provider),
+        )
+        self._engines[ticker] = engine
+        speed_cell = [speed if speed > 0 else 1.0]
+        self._speeds[ticker] = speed_cell
+        try:
+            loop = asyncio.get_running_loop()
+            self._tasks[ticker] = loop.create_task(
+                self._feed_progressive(engine, first_chunk_provider, fetch_remaining, speed_cell)
+            )
+        except RuntimeError:
+            pass
+        return engine
+
     def watch_with_async_provider(
         self, ticker: str, provider: AsyncProvider
     ) -> TapeEngine:
@@ -275,28 +314,7 @@ class WatchManager:
         # `live`. A finite historical window resolves to `live`-or-`closed` by exhaustion.
         engine.set_stream_status("waiting")
         try:
-            prev_ts: float | None = None
-            delivered = 0
-            for event in provider.stream():
-                # Freeze in place while paused BEFORE consuming this event, so a paused historical
-                # replay resumes from exactly here (the next event), with no fabricated catch-up.
-                await self._wait_while_paused(engine)
-                if prev_ts is not None:
-                    if delivered < warmup_count:
-                        # Warm-up fast-forward: deliver promptly (delivery pacing only — the event's
-                        # logical timestamp below is unchanged, so engine math is identical).
-                        delay = ff_pace
-                    else:
-                        # Re-read the CURRENT speed each iteration (J-32 live re-pacing): a
-                        # ``set_speed`` mid-replay changes this divisor without re-fetch/restart.
-                        current_speed = speed_cell[0]
-                        divisor = current_speed if current_speed > 0 else 1.0
-                        delay = min((event.timestamp - prev_ts) / divisor, cap)
-                    if delay > 0:
-                        await asyncio.sleep(delay)
-                prev_ts = event.timestamp
-                engine.process_event(event)
-                delivered += 1
+            await self._replay_events(engine, provider.stream(), speed_cell, start_delivered=0)
             engine.set_stream_status("closed")
         except asyncio.CancelledError:
             engine.set_stream_status("closed")  # a clean stop/switch — NOT a failure
@@ -305,6 +323,87 @@ class WatchManager:
             # A real replay-feeder failure: log it (naming the ticker) and surface `failed` — never
             # swallowed, never left frozen at cold-start, never a fabricated `live`.
             logger.exception("historical replay feeder for %s failed", engine.snapshot().ticker)
+            engine.set_stream_status("failed")
+
+    async def _replay_events(
+        self, engine: TapeEngine, events, speed_cell: "list[float]", start_delivered: int
+    ) -> int:
+        """Pace one event iterable into the engine (the shared replay loop for paced + progressive).
+
+        ``start_delivered`` is the count of events ALREADY delivered (so warm-up fast-forward spans
+        the whole replay across chunk boundaries, not per chunk). Returns the new delivered count.
+        Pacing is delivery-only — the engine math is purely logical, so the result is deterministic
+        and identical whether the events come from one window or several stitched chunks."""
+        cap = self._config.replay_pacing_cap_seconds
+        warmup_count = self._config.warmup_min_events
+        ff_pace = self._config.warmup_fast_forward_pace_seconds
+        delivered = start_delivered
+        prev_ts = engine.snapshot().timestamp if start_delivered else None
+        for event in events:
+            # Freeze in place while paused BEFORE consuming this event (no fabricated catch-up).
+            await self._wait_while_paused(engine)
+            if prev_ts is not None:
+                if delivered < warmup_count:
+                    delay = ff_pace  # warm-up fast-forward (delivery pacing only)
+                else:
+                    current_speed = speed_cell[0]
+                    divisor = current_speed if current_speed > 0 else 1.0
+                    delay = min((event.timestamp - prev_ts) / divisor, cap)
+                if delay > 0:
+                    await asyncio.sleep(delay)
+            prev_ts = event.timestamp
+            engine.process_event(event)
+            delivered += 1
+        return delivered
+
+    async def _feed_progressive(
+        self,
+        engine: TapeEngine,
+        first_chunk_provider: Provider,
+        fetch_remaining,
+        speed_cell: "list[float]",
+    ) -> None:
+        """Replay the first chunk, then stitch the background-fetched remaining chunks (J-37).
+
+        The first chunk is already in hand (fetched within budget by the route), so replay begins
+        immediately. The remaining sub-windows are fetched OFF the event loop (``asyncio.to_thread``)
+        concurrently with that first-chunk replay, so a slow later chunk neither blocks the loop nor
+        the already-running replay (time-to-first-data decoupled from total-window load). Once
+        fetched, each remaining chunk is replayed in epoch order through a ``ProgressiveHistorical
+        provider`` seeded with the SAME canonical epoch anchor, so the stitched stream is identical to
+        a single-shot fetch of all records (determinism + single-source-of-truth preserved). The
+        background fetch is started before the first-chunk replay so it overlaps; a fetch failure is
+        surfaced as ``failed`` (never swallowed, never a fabricated ``live``)."""
+        from .providers.historical import ProgressiveHistoricalProvider
+
+        engine.set_stream_status("waiting")
+        # Kick off the remaining-chunk fetch BEFORE replaying the first chunk so it overlaps.
+        remaining_task = asyncio.create_task(asyncio.to_thread(fetch_remaining))
+        try:
+            delivered = await self._replay_events(
+                engine, first_chunk_provider.stream(), speed_cell, start_delivered=0
+            )
+            remaining_chunks = await remaining_task
+            if remaining_chunks:
+                anchor = first_chunk_provider.epoch_anchor
+                # Stitch the remaining chunks after the first using the SAME epoch anchor, so logical
+                # timestamps stay monotonic and identical to a single-shot fetch of all records.
+                rest = ProgressiveHistoricalProvider(
+                    engine.snapshot().ticker, remaining_chunks, first_chunk_provider.scenario
+                )
+                rest.epoch_anchor = anchor  # pin to the first chunk's anchor (single timeline)
+                rest._t0 = anchor
+                await self._replay_events(
+                    engine, rest.stream(), speed_cell, start_delivered=delivered
+                )
+            engine.set_stream_status("closed")
+        except asyncio.CancelledError:
+            engine.set_stream_status("closed")
+            raise
+        except Exception:
+            logger.exception(
+                "progressive historical feeder for %s failed", engine.snapshot().ticker
+            )
             engine.set_stream_status("failed")
 
     async def _feed_live(self, engine: TapeEngine, provider: AsyncProvider) -> None:

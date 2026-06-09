@@ -240,7 +240,7 @@ def test_blank_creds_are_not_available(monkeypatch):
 
 
 def test_default_feed_is_iex(monkeypatch):
-    # The free IEX feed is the default when ALPACA_FEED is unset (non-secret config).
+    # The free IEX feed is the default LIVE feed when ALPACA_FEED is unset (non-secret config).
     monkeypatch.delenv("ALPACA_FEED", raising=False)
     assert AlpacaAdapter().feed == "iex"
 
@@ -248,6 +248,51 @@ def test_default_feed_is_iex(monkeypatch):
 def test_configured_feed_is_used(monkeypatch):
     monkeypatch.setenv("ALPACA_FEED", "sip")
     assert AlpacaAdapter().feed == "sip"
+
+
+# --- Per-mode feed (J-36): SIP for historical, IEX for live, config-owned, override-aware ----
+
+def test_historical_uses_sip_live_uses_iex_by_default(monkeypatch):
+    # J-36: with no ALPACA_FEED override, the per-mode config defaults apply — HISTORICAL replay
+    # reads the SIP consolidated feed (realistic quoted spreads) while LIVE stays on the free IEX
+    # feed. Both are config-owned (no inline literal in the adapter); the feed NAME never leaks the
+    # vendor enum (it is a plain string here).
+    from app.config import CONFIG
+
+    monkeypatch.delenv("ALPACA_FEED", raising=False)
+    adapter = AlpacaAdapter()
+    assert CONFIG.historical_feed == "sip"
+    assert CONFIG.live_feed == "iex"
+    assert adapter.historical_feed == "sip"   # historical fetch reads SIP
+    assert adapter.feed == "iex"              # live stream reads IEX
+
+
+def test_feed_override_pins_both_modes(monkeypatch):
+    # The vendor feed-override env var still wins for BOTH modes (operator can pin a feed for
+    # testing), preserving the documented override behavior.
+    monkeypatch.setenv("ALPACA_FEED", "iex")
+    adapter = AlpacaAdapter()
+    assert adapter.historical_feed == "iex"   # override forces historical onto IEX
+    assert adapter.feed == "iex"
+    monkeypatch.setenv("ALPACA_FEED", "sip")
+    adapter2 = AlpacaAdapter()
+    assert adapter2.historical_feed == "sip"
+    assert adapter2.feed == "sip"             # override forces live onto SIP too
+
+
+def test_per_mode_feed_constants_are_config_sourced_no_magic_numbers():
+    # The per-mode feed names live in config (no inline vendor feed literal in the adapter's
+    # mode-selection methods). The adapter reads CONFIG.historical_feed / CONFIG.live_feed.
+    import inspect
+
+    from app.config import CONFIG
+
+    assert isinstance(CONFIG.historical_feed, str) and CONFIG.historical_feed
+    assert isinstance(CONFIG.live_feed, str) and CONFIG.live_feed
+    src = inspect.getsource(AlpacaAdapter.historical_feed.fget)
+    assert "historical_feed" in src
+    src_feed = inspect.getsource(AlpacaAdapter.feed.fget)
+    assert "live_feed" in src_feed
 
 
 # --- Single-module confinement: vendor credential names + SDK live in exactly one module -----

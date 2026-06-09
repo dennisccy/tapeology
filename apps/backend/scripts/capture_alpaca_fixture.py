@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,10 +53,21 @@ def main() -> int:
     parser.add_argument("--symbol", default=DEFAULT_SYMBOL)
     parser.add_argument("--start", default=DEFAULT_START)
     parser.add_argument("--end", default=DEFAULT_END)
+    parser.add_argument(
+        "--feed",
+        default=None,
+        help="market-data feed to capture (e.g. 'sip' for the consolidated feed used by J-36). "
+        "When set it forces the vendor fetch to that feed via the ALPACA_FEED override and records "
+        "it in the fixture; default uses the adapter's per-mode historical feed.",
+    )
     parser.add_argument("--out", default=None, help="output path (defaults under tests/fixtures/alpaca)")
     args = parser.parse_args()
 
     load_env()
+    # ``--feed`` pins the feed via the documented ALPACA_FEED override so the capture goes through
+    # the SAME adapter code path the app uses (no fixture is ever hand-edited; J-36 needs SIP).
+    if args.feed:
+        os.environ["ALPACA_FEED"] = args.feed
     adapter = get_adapter()
     if not adapter.is_available():
         print("ERROR: no real-data credentials configured — cannot capture. Do NOT fabricate a "
@@ -76,7 +88,7 @@ def main() -> int:
         "symbol": window.symbol,
         "start": args.start,
         "end": args.end,
-        "feed": getattr(adapter, "feed", "iex"),
+        "feed": getattr(adapter, "historical_feed", getattr(adapter, "feed", "iex")),
         "source": "alpaca",
         "note": "REAL captured market data — not synthesized. See capture_alpaca_fixture.py.",
         "trades": [{"epoch": t.epoch, "price": t.price, "size": t.size} for t in window.trades],

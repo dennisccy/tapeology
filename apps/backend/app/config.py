@@ -90,6 +90,53 @@ class Config:
     # Wider than the control cutoff magnitude (|0.02|) so there is a graded near-zero region.
     absorption_flat_band: float = 0.05
 
+    # --- Directional override: spread is a GRADED factor, not an absolute veto (J-36) -----------
+    # On REAL data a momentarily wide or absent/crossed QUOTED spread (a single-venue IEX quote, or
+    # the suppressed/crossed quotes around an LULD trading halt) must NOT by itself veto a move that
+    # is otherwise CLEARLY directional. The directional gates above apply ``spread_metric <= max_spread``
+    # as a hard AND-term, so on the GME 14-05-2024 open drop a ~2,700-bps single-venue quote killed a
+    # move whose sell-ratio (0.77), negative impact (−4.79), and speed (1.5) all clearly passed —
+    # forcing a perpetual ``unclear`` through an obvious >10% drop. The fix:
+    #   * historical fetch uses the SIP consolidated feed (config ``historical_feed`` below) so the
+    #     quoted spread is realistic the vast majority of the time; AND
+    #   * when a move is CLEARLY DIRECTIONAL — ratio >= floor AND |relative price impact| past its
+    #     cutoff AND speed >= floor (the EXISTING control predicate MINUS the spread term) — it
+    #     resolves to control even when the quoted spread is wide/absent, with the spread entering
+    #     ONLY through a GRADED confidence factor (never as a veto).
+    # The override engages ONLY for that clearly-directional case and is ADDITIVE: a genuinely wide
+    # RELATIVE spread on weak/mixed tape (J-06 / J-33) and high aggression with no proportionate
+    # price progress (absorption, J-04/J-05) are unchanged — they never satisfy the override predicate
+    # (weak ratio / flat impact / low speed), so honest-uncertainty and price-impact-over-aggression
+    # hold. The absorption gates remain the EXACT complement of the control impact condition.
+    #
+    # ``directional_override_enabled`` gates the whole behaviour (a single switch for the keystone
+    # test to prove the pre-override fixtures stay byte-identical when False). The override's
+    # ratio/impact/speed floors REUSE the existing control floors (min_aggressive_*_ratio,
+    # min_buy/max_sell_price_impact[_return], min_trade_speed) — it adds NO second set of magic
+    # numbers; only the bounded graded-spread band below is new.
+    directional_override_enabled: bool = True
+    # THE OVERRIDE BAND (the artifact-vs-illiquid boundary). The override engages only while the
+    # spread is at most ``override_max_spread_multiple`` × the stable-spread cap — i.e. a spread that
+    # is moderately-to-very wide (a single-venue / fast-mover / momentarily-halted QUOTE around a
+    # real directional move), but NOT a spread so wide it signals genuinely illiquid / mixed tape.
+    # Beyond this multiple the spread STILL VETOES control (honest-uncertainty holds: a genuinely
+    # wide *relative* spread on mixed tape reads ``unclear``). Calibrated from real SIP data:
+    #   * the GME 14-05-2024 open-drop window quotes ~28–44 bps avg on SIP (≈1–1.5× the 30-bps cap)
+    #     — well inside the band, so the clear >10% drop resolves to seller_control; while
+    #   * the honest-uncertainty guards (250 bps ≈ 8× the cap; $0.50 ≈ 8× the $0.06 absolute cap)
+    #     are OUTSIDE the band, so genuinely-wide-relative tape still reads unclear.
+    # A 4× multiple cleanly separates the two (real ~1.5× admitted, guard ~8× still vetoed). Scales to
+    # either metric domain (bps when a price basis exists, dollars otherwise) since it multiplies the
+    # active cap.
+    override_max_spread_multiple: float = 4.0
+    # Inside the band the spread is a GRADED confidence factor, never a veto: at/under the cap it
+    # scores 1.0 (no change to the in-gate confidence); at the band edge (``override_max_spread_multiple``
+    # × cap) it scores this floor; in between it decays LINEARLY. The floor is high enough that a
+    # clearly-directional move with a wide-but-in-band spread still earns confidence >=
+    # ``reasonable_confidence`` (so the move is called), while a wider in-band spread still LOWERS
+    # confidence (graded, honest) — never asserting false certainty.
+    override_spread_floor_score: float = 0.50
+
     # --- Warm-up ----------------------------------------------------------------------
     # Below this many processed trades the read is an honest cold-start ``unclear``. Set so
     # the first directional call lands with comfortable margin above ``reasonable_confidence``
@@ -162,6 +209,31 @@ class Config:
     # (TopBar REPLAY_SPEEDS) so every UI choice validates; an out-of-set speed is a 422.
     allowed_replay_speeds: tuple[float, ...] = (1.0, 2.0, 5.0, 10.0)
     default_replay_speed: float = 1.0
+
+    # --- Per-mode vendor market-data feed (J-36) --------------------------------------
+    # The feed each REAL mode reads, config-owned and read ONLY inside the one vendor adapter (no
+    # vendor enum leaks outward). HISTORICAL replay uses the SIP consolidated feed — realistic
+    # spreads, free for data >15 min old — so a real directional move is judged against a real
+    # quoted spread rather than a wide single-venue IEX quote (the J-36 root cause). LIVE streaming
+    # stays on the free IEX feed by design (out of scope to change). The vendor's feed-override env
+    # var still takes precedence inside the adapter (it forces BOTH modes to the named feed) so an
+    # operator can pin a feed for testing; with no override these per-mode defaults apply. These are
+    # vendor-neutral feed NAMES (strings), not the vendor's feed enum — the adapter maps the name
+    # to its enum internally, so no vendor type appears here.
+    historical_feed: str = "sip"
+    live_feed: str = "iex"
+
+    # --- Progressive long-window load: displayed-series caps (J-37) -------------------
+    # A long/dense Full-RTH window can carry tens of thousands of real prints. The engine still bins
+    # EVERY real print on its deterministic logical timeline (tape state + features stay single-source
+    # and exact — nothing is dropped from the computation), but the DISPLAYED recent-trades and chart
+    # series are already bounded (``recent_trades_limit`` / ``history_max_bars`` / ``history_max_markers``)
+    # so memory stays flat regardless of window size. The progressive-fetch first-chunk budget (the
+    # wall-clock the backend may spend fetching the FIRST sub-window before replay begins) is bounded
+    # by the existing vendor-call deadlines (``vendor_http_timeout_seconds`` / ``vendor_call_timeout_seconds``),
+    # which stay shorter than the frontend timeout — so time-to-first-data is decoupled from total
+    # window load without a new magic number. The maximum number of background sub-window chunks
+    # fetched concurrently while replay is already running reuses ``historical_chunk_max_concurrency``.
     # Max wall-clock seconds the feeder waits between two replayed events. A large logical
     # gap in the real data (e.g. a quiet minute) is clamped to this so the cockpit never
     # stalls. Pacing is delivery-only — engine math stays purely logical/deterministic.

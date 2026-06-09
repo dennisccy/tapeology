@@ -30,7 +30,12 @@ from pydantic import BaseModel
 from .config import CONFIG
 from .env import load_env
 from .providers.adapters import MarketDataAdapter, get_adapter
-from .providers.adapters.base import NoDataForWindow, SymbolNotTradable, VendorTimeout
+from .providers.adapters.base import (
+    NoDataForWindow,
+    SymbolNotTradable,
+    VendorTimeout,
+    split_window as _split_window,
+)
 from .providers.historical import HistoricalProvider
 from .providers.live import LiveProvider
 from .serializers import (
@@ -288,23 +293,56 @@ async def _watch_historical(
     #    engine (no fabricated tape). On the historical path a timeout deterministically means the
     #    window pulled too much data, so the message is ACTIONABLE ("try a shorter range"), not a
     #    misleading generic retry. Map the other neutral failures -> distinct 4xx, no engine.
+    #
+    #    PROGRESSIVE LOADING (J-37): for a LONG window (more than one sub-window chunk) we fetch only
+    #    the FIRST chunk under the budget so replay begins quickly (time-to-first-data decoupled from
+    #    total-window load), then stream the remaining chunks in the background. For a short window
+    #    (one chunk) the single-shot `fetch_historical` (cached) path is unchanged. The "very
+    #    high-volume — try a shorter range" backstop now fires only when the FIRST chunk itself cannot
+    #    load within budget — the advertised Full-RTH quick-pick is no longer refused up front.
+    scenario = f"historical {ticker} {body.start}–{body.end}"
+    chunk_ranges = _split_window(start, end, CONFIG.historical_chunk_seconds)
     try:
-        window = await asyncio.wait_for(
-            asyncio.to_thread(adapter.fetch_historical, ticker, start, end),
-            timeout=CONFIG.vendor_call_timeout_seconds,
-        )
+        if len(chunk_ranges) <= 1:
+            # Short window: one real fetch (concurrent + cached), replay through the SAME engine.
+            window = await asyncio.wait_for(
+                asyncio.to_thread(adapter.fetch_historical, ticker, start, end),
+                timeout=CONFIG.vendor_call_timeout_seconds,
+            )
+            provider = HistoricalProvider(ticker, window, scenario)
+            engine = manager.watch_with_provider(ticker, provider, speed)
+        else:
+            # Long window: fetch ONLY the first chunk under the budget (decoupled first-data), then
+            # background-fetch the rest. The first chunk is fetched via the same lazy generator the
+            # CI test drives, so it is the SAME real records the single-shot path would produce.
+            first_start, first_end = chunk_ranges[0]
+            first_window = await asyncio.wait_for(
+                asyncio.to_thread(adapter.fetch_historical, ticker, first_start, first_end),
+                timeout=CONFIG.vendor_call_timeout_seconds,
+            )
+            first_provider = HistoricalProvider(ticker, first_window, scenario)
+
+            def _fetch_remaining() -> list:
+                # Blocking; runs OFF the event loop inside the feeder (via asyncio.to_thread).
+                return [
+                    adapter.fetch_historical(ticker, s, e)
+                    for (s, e) in chunk_ranges[1:]
+                ]
+
+            engine = manager.watch_with_progressive_historical(
+                ticker, first_provider, _fetch_remaining, speed
+            )
     except (asyncio.TimeoutError, VendorTimeout):
+        # Only the FIRST chunk's load is gated here; a genuinely un-loadable first chunk -> the
+        # actionable backstop (J-28). The advertised long-window path no longer refuses up front.
         raise RealDataError("provider_timeout", HISTORICAL_OVERSIZE_DETAIL, 504)
     except SymbolNotTradable:
         raise RealDataError("symbol_not_tradable", "not a tradable symbol", 404)
     except NoDataForWindow:
         raise RealDataError("no_data_for_window", "no data for that window", 404)
 
-    # 3. Success -> replay through the SAME engine. The scenario label is the row-6 source
-    #    descriptor, rendered verbatim from the canonical snapshot.
-    scenario = f"historical {ticker} {body.start}–{body.end}"
-    provider = HistoricalProvider(ticker, window, scenario)
-    engine = manager.watch_with_provider(ticker, provider, speed)
+    # 3. Success -> the engine is replaying. The scenario label is the row-6 source descriptor,
+    #    rendered verbatim from the canonical snapshot.
     snap = engine.snapshot()
     return {"ticker": ticker, "scenario": snap.scenario, "status": "watching"}
 

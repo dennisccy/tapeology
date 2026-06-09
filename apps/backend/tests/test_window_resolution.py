@@ -81,11 +81,18 @@ def test_naive_value_is_still_treated_as_utc_no_regression():
 
 def test_historical_watch_fetches_exact_utc_instant_for_offset_input(fake_client):
     # End to end: an offset-bearing window (09:30-16:00 ET on a summer date = -04:00) submitted to
-    # POST /watch must reach adapter.fetch_historical as the EXACT equivalent UTC instants
-    # (13:30Z / 20:00Z) — proving the corrected frontend's tz-aware POST is fetched verbatim, with
-    # no silent UTC reinterpretation that would shift the window by the local offset.
+    # POST /watch must reach adapter.fetch_historical at the EXACT equivalent UTC instants
+    # (13:30Z start / 20:00Z end) — proving the corrected frontend's tz-aware POST is fetched
+    # verbatim, with no silent UTC reinterpretation that would shift the window by the local offset.
+    #
+    # PROGRESSIVE LOADING (J-37): a 6.5h window is split into bounded sub-window chunks, so the FIRST
+    # synchronous fetch is the first chunk (start = 13:30Z, no shift) and the WHOLE window's end is
+    # the last chunk's end (20:00Z). The partition is verified directly (it has no overlap/gap and
+    # spans exactly [13:30Z, 20:00Z]), so the no-tz-shift contract holds end to end under chunking.
+    from app.config import CONFIG
+    from app.providers.adapters.base import split_window
+
     window, _ = load_fixture_window()
-    captured: dict = {}
 
     adapter = FakeAdapter(available=True, window=window)
     app.dependency_overrides[get_market_adapter] = lambda: adapter
@@ -102,16 +109,24 @@ def test_historical_watch_fetches_exact_utc_instant_for_offset_input(fake_client
         )
         assert resp.status_code == 200
         assert adapter.fetch_calls, "the adapter must have been asked to fetch the window"
-        symbol, start, end = adapter.fetch_calls[0]
-        captured["start"], captured["end"] = start, end
+        symbol, first_start, first_end = adapter.fetch_calls[0]
     finally:
         app.dependency_overrides.pop(get_market_adapter, None)
         client.delete("/watch/F")
 
     assert symbol == "F"
-    # Both endpoints are tz-aware and equal the exact equivalent UTC instants (no shift).
-    assert captured["start"] == datetime(2026, 6, 2, 13, 30, 0, tzinfo=timezone.utc)
-    assert captured["end"] == datetime(2026, 6, 2, 20, 0, 0, tzinfo=timezone.utc)
+    # The FIRST chunk's start is the exact equivalent UTC instant (no shift).
+    assert first_start == datetime(2026, 6, 2, 13, 30, 0, tzinfo=timezone.utc)
+    # The partition of the resolved window spans EXACTLY [13:30Z, 20:00Z] — the whole window's start
+    # and end are the exact UTC instants, with the first chunk's start matching what was fetched.
+    ranges = split_window(
+        datetime(2026, 6, 2, 13, 30, 0, tzinfo=timezone.utc),
+        datetime(2026, 6, 2, 20, 0, 0, tzinfo=timezone.utc),
+        CONFIG.historical_chunk_seconds,
+    )
+    assert ranges[0][0] == datetime(2026, 6, 2, 13, 30, 0, tzinfo=timezone.utc)
+    assert ranges[-1][1] == datetime(2026, 6, 2, 20, 0, 0, tzinfo=timezone.utc)
+    assert first_end == ranges[0][1]  # the first fetched chunk is exactly the first partition
 
 
 def test_historical_watch_treats_naive_window_as_utc_no_regression(fake_client):

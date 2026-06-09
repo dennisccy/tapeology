@@ -172,3 +172,122 @@ def test_no_reference_price_falls_back_to_absolute_path_unchanged():
     result = clf.classify(legacy, trade_count=60)
     assert result.state == STATE_BUYER_CONTROL
     assert result.confidence == pytest.approx(0.8542, abs=1e-3)
+
+
+# --- J-36: spread is a GRADED factor (override), not an absolute veto -------------------------
+#
+# The directional override admits a CLEARLY-directional move with a wide-but-in-band quoted spread
+# (the single-venue / SIP fast-mover / momentarily-halted case), while a spread BEYOND the band
+# still vetoes control (honest uncertainty for genuinely illiquid tape). The override is config-
+# gated so the pre-override fixtures stay byte-identical when disabled (the keystone switch).
+
+import dataclasses
+
+from app.engine.classifier import Classification  # noqa: E402
+
+# A spread wide in absolute $ AND moderately wide relative to ~$40 (just over the 30-bps cap), but
+# INSIDE the override band (≤ override_max_spread_multiple × cap = 120 bps). This is the real-SIP
+# GME-drop shape: a clear >5% directional drop whose SIP quote read ~40–55 bps during the cascade.
+IN_BAND_WIDE_SPREAD = 0.20  # 50 bps of $40 — over the 30-bps cap, under the 120-bps band edge
+
+
+def _bps(spread: float) -> float:
+    return spread / REF_PRICE * 10000.0
+
+
+def test_in_band_wide_spread_directional_drop_resolves_to_seller_control():
+    # A clearly-directional drop (high sell ratio + strong negative relative impact + speed) with a
+    # wide-but-in-band quoted spread resolves to seller_control via the override — NOT a perpetual
+    # `unclear`. This is exactly the J-36 real-GME-on-SIP case (spread over the cap, move obvious).
+    assert CONFIG.max_stable_spread_bps < _bps(IN_BAND_WIDE_SPREAD)  # over the stable cap...
+    assert _bps(IN_BAND_WIDE_SPREAD) <= CONFIG.max_stable_spread_bps * CONFIG.override_max_spread_multiple  # ...but in band
+    result = clf.classify(_real_features(average_spread=IN_BAND_WIDE_SPREAD), trade_count=60)
+    assert result.state == STATE_SELLER_CONTROL
+    assert result.confidence >= CONFIG.reasonable_confidence
+
+
+def test_in_band_wide_spread_directional_rally_resolves_to_buyer_control():
+    # The mirror: a clearly-directional RALLY with an in-band wide spread ⇒ buyer_control.
+    rally = _real_features(
+        aggressive_buy_ratio=0.90,
+        aggressive_sell_ratio=0.10,
+        buy_price_impact=2.0,
+        sell_price_impact=-0.01,
+        net_aggressive_volume=800.0,
+        average_spread=IN_BAND_WIDE_SPREAD,
+    )
+    result = clf.classify(rally, trade_count=60)
+    assert result.state == STATE_BUYER_CONTROL
+    assert result.confidence >= CONFIG.reasonable_confidence
+
+
+def test_spread_beyond_the_band_still_vetoes_control_honest_uncertainty():
+    # A spread BEYOND the override band (here $1.00 on $40 = 250 bps ≈ 8× the cap) still reads
+    # `unclear` even with a strong directional impact — the artifact-vs-illiquid boundary holds, so
+    # genuinely illiquid / mixed tape is never forced to a directional call (honest-uncertainty).
+    beyond = _real_features(average_spread=1.0)
+    assert _bps(1.0) > CONFIG.max_stable_spread_bps * CONFIG.override_max_spread_multiple
+    result = clf.classify(beyond, trade_count=60)
+    assert result.state == STATE_UNCLEAR
+    assert result.state != STATE_SELLER_CONTROL
+
+
+def test_override_grades_spread_into_confidence_monotonically():
+    # Within the band, a WIDER spread LOWERS confidence (graded, honest) — never asserting false
+    # certainty — while still resolving to control. A near-cap spread is more confident than a
+    # near-band-edge spread on the same otherwise-identical clearly-directional drop.
+    near_cap = clf.classify(_real_features(average_spread=0.13), trade_count=60)   # ~32 bps
+    near_edge = clf.classify(_real_features(average_spread=0.45), trade_count=60)  # ~112 bps
+    assert near_cap.state == STATE_SELLER_CONTROL
+    assert near_edge.state == STATE_SELLER_CONTROL
+    assert near_cap.confidence > near_edge.confidence  # wider in-band spread => lower confidence
+
+
+def test_override_does_not_force_a_call_on_weak_evidence():
+    # The override is ADDITIVE: with the spread wide-but-in-band but the RATIO weak (mixed tape), the
+    # directional predicate fails, so the read stays `unclear` — the override never manufactures a
+    # call on weak evidence (price-impact / honest-uncertainty anti-goals hold).
+    weak = _real_features(
+        aggressive_sell_ratio=0.55,  # below the 0.60 floor — mixed
+        aggressive_buy_ratio=0.45,
+        average_spread=IN_BAND_WIDE_SPREAD,
+    )
+    result = clf.classify(weak, trade_count=60)
+    assert result.state == STATE_UNCLEAR
+
+
+def test_override_disabled_is_byte_identical_to_a_hard_spread_veto():
+    # KEYSTONE SWITCH: with the override DISABLED the spread is a hard veto again, so the in-band
+    # wide-spread drop that resolves to seller_control WITH the override falls back to `unclear`
+    # WITHOUT it — proving the override is the ONLY thing admitting the wide-spread case and the
+    # pre-override behavior is recoverable exactly (the absolute-fallback fixtures stay pinned).
+    cfg_off = dataclasses.replace(CONFIG, directional_override_enabled=False)
+    clf_off = TapeStateClassifier(cfg_off)
+    drop = _real_features(average_spread=IN_BAND_WIDE_SPREAD)
+    assert clf.classify(drop, trade_count=60).state == STATE_SELLER_CONTROL      # override ON
+    assert clf_off.classify(drop, trade_count=60).state == STATE_UNCLEAR         # override OFF
+    # A NARROW-spread drop is unaffected by the switch (the override only changes the wide case).
+    narrow = _real_features(average_spread=0.02)  # 5 bps
+    on = clf.classify(narrow, trade_count=60)
+    off = clf_off.classify(narrow, trade_count=60)
+    assert on.state == off.state == STATE_SELLER_CONTROL
+    assert on.confidence == pytest.approx(off.confidence, abs=1e-9)  # identical narrow confidence
+
+
+def test_absorption_keystone_holds_under_wide_in_band_spread():
+    # KEYSTONE under the override: at an in-band wide spread, identical high sell aggression resolves
+    # to seller_control when the relative impact is past the cutoff and to bid_absorption (with
+    # refresh + a NARROW spread) when it is flat — the override never lets absorption masquerade as
+    # control. Absorption keeps the spread term (its gate is unchanged), so a wide-spread flat-impact
+    # tape stays `unclear` (no fabricated absorption), while a clean drop is control.
+    real_drop = clf.classify(
+        _real_features(average_spread=IN_BAND_WIDE_SPREAD, sell_price_impact=-2.0), trade_count=60
+    )
+    assert real_drop.state == STATE_SELLER_CONTROL
+    # Flat impact + refresh at a NORMAL spread ⇒ bid_absorption (the complement), proving the two are
+    # mutually exclusive on the impact condition regardless of the override.
+    absorbed = clf.classify(
+        _real_features(sell_price_impact=0.0, bid_refresh_score=1.0, absorption_score=0.9),
+        trade_count=60,
+    )
+    assert absorbed.state == STATE_BID_ABSORPTION
