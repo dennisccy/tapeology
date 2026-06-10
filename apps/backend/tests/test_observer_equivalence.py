@@ -188,7 +188,7 @@ def test_real_monitor_attached_outputs_byte_identical(tmp_path):
         events = _events()
         plain = TapeEngine(_SCENARIO_TICKER, _SCENARIO, CONFIG)
         observed = TapeEngine(_SCENARIO_TICKER, _SCENARIO, CONFIG)
-        monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+        monitor = ResearchMonitor(store, CONFIG)
         observed.add_observer(monitor)
 
         for i, event in enumerate(events, start=1):
@@ -204,8 +204,9 @@ def test_real_monitor_attached_outputs_byte_identical(tmp_path):
 
 
 def test_real_monitor_with_thesis_does_not_alter_engine_outputs(tmp_path):
-    # Even with an ACTIVE thesis attached (statements recomputed every event), the engine's
-    # serialized projections stay byte-identical — the monitor is read-only over the engine.
+    # Even with an ACTIVE thesis attached AND the verdict-transition engine evaluating every event
+    # (capability 24), the engine's serialized projections stay byte-identical — the monitor +
+    # evaluator are read-only over the engine (the iter-4 re-proof of the equivalence anti-goal).
     import itertools
 
     from app.providers.simulated import SimulatedProvider
@@ -218,7 +219,7 @@ def test_real_monitor_with_thesis_does_not_alter_engine_outputs(tmp_path):
         events = _events()
         plain = TapeEngine(_SCENARIO_TICKER, _SCENARIO, CONFIG)
         observed = TapeEngine(_SCENARIO_TICKER, _SCENARIO, CONFIG)
-        monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+        monitor = ResearchMonitor(store, CONFIG)
         # Warm a separate engine to build a realistic frozen thesis, then attach + activate it.
         warm = TapeEngine(_SCENARIO_TICKER, _SCENARIO, CONFIG)
         for e in itertools.islice(SimulatedProvider(_SCENARIO_TICKER, _SCENARIO).stream(), 60):
@@ -249,7 +250,9 @@ def test_real_monitor_with_thesis_does_not_alter_engine_outputs(tmp_path):
             if i in _ASSERT_AT:
                 assert _projections(plain) == _projections(observed), f"diverged at event {i}"
         assert _projections(plain) == _projections(observed)
-        # The monitor really evaluated statements (its projection is live, not a no-op).
-        assert monitor.projection()["verdict"] == "pending"
+        # The verdict engine REALLY ran (not a no-op): on SIM-BUYER trend_continuation/long it
+        # published confirming during the run — yet the engine outputs above are still byte-identical
+        # to the no-observer run, so the verdict evaluation is genuinely read-only over the engine.
+        assert monitor.projection()["verdict"] == "confirming"
     finally:
         store.close()

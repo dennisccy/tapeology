@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-i_will_be_super_rich_with_my_loved_ones-iter-4",
+  "base_url": "http://localhost:3650",
+  "iteration": 4,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Cockpit home — thesis strip visible in idle state",
+      "narration": "The trading cockpit loads cleanly. Between the chart and the panel grid you can already see the thesis strip sitting in its idle state, inviting you to declare a thesis on whatever ticker you are watching.",
+      "point_out": "The 'Declare a thesis' prompt in the thesis strip area — the new strip section is present and ready even before a watch is started.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Declare" }
+    },
+    {
+      "n": 2,
+      "title": "Select SIM-BUYER and start watching",
+      "narration": "Choosing the SIM-BUYER simulated ticker and hitting Watch starts a live tape stream. The thesis strip stays in idle state, ready for a declaration.",
+      "point_out": "Tape prints begin updating and the thesis strip idle prompt remains visible beneath the chart.",
+      "journey": "",
+      "new": true,
+      "verified": false,
+      "section": "highlights",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker" }, "text": "SIM-BUYER" },
+      "expect": { "text": "Declare" }
+    },
+    {
+      "n": 3,
+      "title": "Click Watch to begin the tape stream",
+      "narration": "With SIM-BUYER entered, clicking Watch connects to the live tape. Price prints start flowing and the cockpit is now in an active-watch state.",
+      "point_out": "The tape display shows updating price data and the thesis strip idle affordance is still present below the chart.",
+      "journey": "",
+      "new": false,
+      "verified": false,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Declare" }
+    },
+    {
+      "n": 4,
+      "title": "Open the thesis declaration form",
+      "narration": "Clicking 'Declare a thesis' opens the declaration form right inside the strip. This is where you commit a directional read — setup type, direction, and an invalidation price level.",
+      "point_out": "The declaration form appears with fields for setup type, direction, and invalidation price — all the parameters needed to define what would prove the thesis wrong.",
+      "journey": "",
+      "new": true,
+      "verified": false,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Declare thesis" } },
+      "expect": { "text": "Invalidation" }
+    }
+  ]
+}

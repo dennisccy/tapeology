@@ -72,7 +72,7 @@ class ResearchRegistry:
 
     def on_engine_created(self, ticker: str, engine: object) -> None:
         """Attach a fresh monitor to a freshly-built engine (the WatchManager hook)."""
-        monitor = ResearchMonitor(self._store, self._fingerprint)
+        monitor = ResearchMonitor(self._store, self._config)
         self._monitors[ticker] = monitor
         engine.add_observer(monitor)
 
@@ -133,6 +133,57 @@ def get_active_thesis(
     Reads the SAME ``monitor.projection()`` the WS ``thesis`` key reads, so the two are
     verbatim-equal by construction (data-contract row 15)."""
     return {"thesis": registry.projection_for(ticker)}
+
+
+@router.get("/journal/{thesis_id}")
+def get_journal_entry(
+    thesis_id: str, registry: ResearchRegistry = Depends(get_registry)
+) -> dict:
+    """The blueprint row-16 registered serving endpoint: a thesis record + its persisted, append-only
+    verdict timeline, served VERBATIM from the store (never recomputed at read time).
+
+    Minimal projection only this iteration — NO list endpoint, NO analytics, NO review fields (those
+    are later iterations). 404 for an unknown id. The timeline rows are returned in insertion order
+    (the append-only sequence) with the canonical per-row values the verdict engine recorded,
+    including the dwell timing record (``rule_first_true``)."""
+    thesis = registry.store.get_thesis(thesis_id)
+    if thesis is None:
+        raise HTTPException(status_code=404, detail=f"no thesis with id '{thesis_id}'")
+    events = registry.store.verdict_events(thesis_id)
+    return {
+        "thesis": {
+            "id": thesis.id,
+            "ticker": thesis.ticker,
+            "setup_type": thesis.setup_type,
+            "direction": thesis.direction,
+            "invalidation_price": thesis.invalidation_price,
+            "level_price": thesis.level_price,
+            "status": thesis.status,
+            "bound_source": thesis.bound_source,
+            "data_feed": thesis.data_feed,
+            "config_fingerprint": thesis.config_fingerprint,
+            "entry_context": thesis.entry_context,
+            "statements": thesis.statements,
+            "created_logical_ts": thesis.created_logical_ts,
+            "created_wall_ts": thesis.created_wall_ts,
+        },
+        # The append-only verdict timeline, verbatim. Each row carries its canonical values and the
+        # dwell timing record (capability 24) — never interpolated, never recomputed at read.
+        "timeline": [
+            {
+                "logical_ts": e.logical_ts,
+                "wall_ts": e.wall_ts,
+                "verdict": e.verdict,
+                "evidence": e.evidence,
+                "tape_state": e.tape_state,
+                "confidence": e.confidence,
+                "last": e.last,
+                "rule_first_true_ts": e.rule_first_true_ts,
+                "rule_first_true_price": e.rule_first_true_price,
+            }
+            for e in events
+        ],
+    }
 
 
 @router.post("/thesis")
@@ -263,7 +314,7 @@ def declare_thesis(
     if monitor is None:
         # Defensive: a watched ticker should always have a monitor (the hook attaches one on engine
         # creation). If not, create + attach one now so the projection is still served.
-        monitor = ResearchMonitor(registry.store, config.config_fingerprint())
+        monitor = ResearchMonitor(registry.store, config)
         registry._monitors[ticker] = monitor
         engine.add_observer(monitor)
     monitor.set_thesis(thesis)

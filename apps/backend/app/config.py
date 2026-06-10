@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 
 @dataclass(frozen=True)
@@ -360,6 +360,50 @@ class Config:
     # The journal schema version stamped in the ``schema_version`` table at creation. Bump when the
     # schema changes (migration is out of scope this iteration — the full schema is created at once).
     journal_schema_version: int = 1
+
+    # --- Research evolution: verdict-transition engine (capability 24) -------------------------
+    # RESEARCH DEFAULTS — a starting point calibrated against the deterministic sims, NEVER a
+    # validated edge (the goal doc's Research-config-defaults constraint: every research value lives
+    # in config with its sim calibration documented; no literal in research code). These enter the
+    # ``config_fingerprint`` automatically (it hashes the entire frozen config), so a verdict timeline
+    # is never silently compared across different verdict timings.
+    #
+    # PER-SETUP VERDICT DWELL (LOGICAL seconds): how long the raw verdict rule must hold CONTINUOUSLY
+    # (in logical time, restarting at thesis creation) before the verdict is PUBLISHED — so a single
+    # flickering tick never publishes a transition and confirmation is always backed by sustained
+    # post-declaration evidence. Calibrated against the sim phase lengths: SIM-BUYER/SIM-REVERSAL's
+    # control phase and SIM-REVERSAL's absorption phase each run well past 30s logical once settled
+    # (the classifier's 30s primary window), so a 3.0s dwell publishes comfortably INSIDE the phase
+    # while still demanding several consecutive confirming ticks (at the 0.5s sim tick that is ~6
+    # ticks). Keyed per setup so a slower-to-trust setup can carry a longer dwell without a magic
+    # number anywhere else; all four share the same default here (one documented starting point).
+    verdict_dwell_seconds: dict = field(
+        default_factory=lambda: {
+            "absorption_reversal": 3.0,
+            "trend_continuation": 3.0,
+            "level_break": 3.0,
+            "failed_move_fade": 3.0,
+        }
+    )
+    # INVALIDATION ε (a spread multiple): a single print beyond the declared invalidation by AT LEAST
+    # this many TIMES the current spread is a hard, dwell-exempt invalidation — far enough past the
+    # level that one genuinely-bad print (a fat-finger inside the guard) does NOT trip it. The guard
+    # band is ``epsilon × spread`` on the wrong side of the invalidation. Calibrated so the sim's
+    # $0.02 spread yields a ~$0.03 band: a print $0.04+ through the level invalidates immediately,
+    # while a lone print $0.02 through it (inside the band) does not. A spread multiple (not a dollar
+    # figure) so it scales to any instrument's price/liquidity (the no-magic-numbers discipline).
+    invalidation_epsilon_spread_multiple: float = 1.5
+    # k CONSECUTIVE prints beyond the invalidation (INSIDE the ε guard band) that together invalidate:
+    # a sustained leak through the level — not a single ≥ε breach, not a lone bad print — is itself
+    # decisive. ``k`` consecutive prints on the wrong side (each by any margin > 0) auto-resolve the
+    # thesis. Keeps a slow drift through the level honest without waiting for one big ≥ε print.
+    invalidation_k_consecutive: int = 3
+    # The append-only verdict timeline is capped at this many PUBLISHED rows per thesis (the oldest
+    # are pruned on append once the cap is exceeded). A safety bound on an unbounded live watch — a
+    # generous default since transitions are rare (dwell-gated). Capacity bound only; the surviving
+    # rows are never edited (append-only at the repository level holds — pruning is the store's own
+    # capacity management, distinct from any update/delete of a retained row, which does not exist).
+    verdict_timeline_cap: int = 500
 
     def window_label(self, window: int) -> str:
         return f"{window}s"

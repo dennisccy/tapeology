@@ -1,6 +1,7 @@
 """Journal store discipline (capability 28): WAL, writer queue, temp-path injection, schema_version,
 append-only verdict_events repository."""
 
+import dataclasses
 import json
 
 import pytest
@@ -178,6 +179,42 @@ def test_writes_after_close_raise(tmp_path):
     s.close()
     with pytest.raises(RuntimeError):
         s.insert_thesis(_thesis())
+
+
+def test_verdict_event_timing_record_roundtrips(store):
+    # The capability-24 dwell timing record (rule_first_true) persists + reads back verbatim.
+    store.insert_thesis(_thesis())
+    store.append_verdict_event(
+        VerdictEventRecord(
+            "t1", 12.0, 100.0, "confirming", "the tape confirms", "buyer_control", 0.9, 100.5,
+            rule_first_true_ts=9.0, rule_first_true_price=100.2,
+        )
+    )
+    e = store.verdict_events("t1")[0]
+    assert e.verdict == "confirming"
+    assert e.rule_first_true_ts == 9.0
+    assert e.rule_first_true_price == 100.2
+    assert e.logical_ts == 12.0  # publication instant, distinct from rule_first_true_ts
+
+
+def test_timeline_cap_prunes_oldest_rows(tmp_path):
+    # The config-owned timeline cap bounds an unbounded watch: once over the cap, the OLDEST rows are
+    # pruned and only the most-recent ``cap`` survive — in order, never edited (capacity management,
+    # distinct from any update/delete of a retained row).
+    small = dataclasses.replace(CONFIG, verdict_timeline_cap=5)
+    s = JournalStore(str(tmp_path / "capped.db"), small)
+    try:
+        s.insert_thesis(_thesis())
+        for i in range(12):
+            s.append_verdict_event(
+                VerdictEventRecord("t1", float(i), float(i), "pending", f"e{i}", None, None, None)
+            )
+        events = s.verdict_events("t1")
+        assert len(events) == 5  # capped
+        # The SURVIVORS are the most-recent five, in insertion order (oldest pruned).
+        assert [e.evidence for e in events] == ["e7", "e8", "e9", "e10", "e11"]
+    finally:
+        s.close()
 
 
 def test_no_tape_data_columns_in_schema(store):

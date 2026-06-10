@@ -27,8 +27,10 @@ from __future__ import annotations
 import logging
 import time
 
+from ..config import Config
 from ..engine.snapshot import EngineSnapshot
 from .store import JournalStore, ThesisRecord, VerdictEventRecord
+from .verdict import VerdictEvaluator
 
 logger = logging.getLogger(__name__)
 
@@ -100,25 +102,52 @@ def _evaluate_statement(statement: dict, snap: EngineSnapshot, thesis: ThesisRec
 class ResearchMonitor:
     """Holds one ticker's active thesis and serves its live projection (capability 20 observer)."""
 
-    def __init__(self, store: JournalStore, config_fingerprint: str) -> None:
+    def __init__(self, store: JournalStore, config: Config) -> None:
         self._store = store
-        self._config_fingerprint = config_fingerprint
+        self._config = config
+        self._config_fingerprint = config.config_fingerprint()
         self._thesis: ThesisRecord | None = None
         self._last_snapshot: EngineSnapshot | None = None
         self._failed = False
-        # Set once the engine resolves the thesis terminally (expired-on-stop); the projection then
-        # reflects the resolved status and the monitor stops holding it active.
+        # Set once the engine resolves the thesis terminally (expired-on-stop, or invalidated by the
+        # verdict engine); the projection then reflects the resolved status and the monitor stops
+        # holding it active.
         self._resolved = False
+        self._resolution: str | None = None  # the terminal resolution (expired | invalidated)
+        # The verdict-transition engine (capability 24). Created when a thesis is set; the dwell
+        # restarts at thesis creation by construction (a fresh evaluator). The PUBLISHED verdict +
+        # evidence the projection serves live below.
+        self._evaluator: VerdictEvaluator | None = None
+        self._verdict = "pending"
+        self._verdict_evidence = ""
 
     # --- thesis lifecycle (called from the route, NOT the hot path) -----------------------------
     def set_thesis(self, thesis: ThesisRecord) -> None:
         """Attach the freshly-declared thesis so subsequent events evaluate against it."""
         self._thesis = thesis
         self._resolved = False
+        self._resolution = None
+        # A FRESH evaluator => the per-setup dwell restarts at declaration, so confirmation requires
+        # post-declaration evidence by construction (capability 24). The initial published verdict is
+        # ``pending`` (the declaration route already appended the initial pending timeline row).
+        self._evaluator = VerdictEvaluator(thesis, self._config)
+        self._verdict = "pending"
+        # Seed the published evidence with the pending register so the projection never carries a
+        # NAKED verdict (the no-naked-outputs anti-goal): every verdict — including the initial
+        # pending — reads with plain-language evidence. Replaced verbatim by the engine's evidence on
+        # the first published transition.
+        self._verdict_evidence = (
+            "The tape is being watched against your thesis; the verdict stays pending until "
+            "sustained post-declaration evidence accrues."
+        )
 
     def clear_thesis(self) -> None:
         self._thesis = None
         self._resolved = False
+        self._resolution = None
+        self._evaluator = None
+        self._verdict = "pending"
+        self._verdict_evidence = ""
 
     @property
     def active_thesis_id(self) -> str | None:
@@ -126,15 +155,59 @@ class ResearchMonitor:
 
     # --- observer callbacks (the hot path — exception-isolated, read-only) ----------------------
     def on_event(self, event: object, snapshot: EngineSnapshot) -> None:
-        # Read-only: remember the latest snapshot so the projection reflects the current engine read.
-        # Wrapped defensively so a monitor-side bug surfaces as ``monitor_status: failed`` rather
-        # than propagating (the engine ALSO isolates this, but defense in depth keeps the projection
-        # honest). NO engine/feature/state mutation happens here.
+        # Read-only over the engine: remember the latest snapshot (the projection reflects the current
+        # engine read) and run the verdict engine against it. Wrapped defensively so a monitor-side
+        # bug (an evaluator error or a store write failure on the verdict path) surfaces as
+        # ``monitor_status: failed`` rather than propagating — the engine ALSO isolates this, but
+        # defense in depth keeps the projection honest and the feed alive. NO engine/feature/state
+        # mutation happens here (equivalence anti-goal): the evaluator only READS the frozen snapshot.
         try:
             self._last_snapshot = snapshot
+            self._evaluate_verdict(snapshot)
         except Exception:
             self._failed = True
             logger.exception("research monitor on_event failed")
+
+    def _evaluate_verdict(self, snapshot: EngineSnapshot) -> None:
+        """Advance the verdict against this snapshot; publish + persist any transition.
+
+        Pure-read of the snapshot via the evaluator, then — only on a PUBLISHED transition — append
+        ONE append-only timeline row and update the live projection's verdict + evidence. On an
+        ``invalidated`` transition the thesis is auto-resolved ``invalidated`` through the existing
+        store path (system-owned; distinct from the user-facing resolve endpoint, out of scope this
+        iteration). Runs inside ``on_event``'s try/except so any failure surfaces as
+        ``monitor_status: failed`` and never kills the feeder."""
+        if self._evaluator is None or self._thesis is None or self._resolved:
+            return
+        decision = self._evaluator.evaluate(snapshot)
+        # Keep the live projection's verdict/evidence current (the published verdict, no flapping).
+        self._verdict = decision.verdict
+        if decision.changed:
+            self._verdict_evidence = decision.evidence
+            self._store.append_verdict_event(
+                VerdictEventRecord(
+                    thesis_id=self._thesis.id,
+                    logical_ts=decision.published_at_ts
+                    if decision.published_at_ts is not None
+                    else snapshot.timestamp,
+                    wall_ts=time.time(),
+                    verdict=decision.verdict,
+                    evidence=decision.evidence,
+                    tape_state=decision.tape_state,
+                    confidence=decision.confidence,
+                    last=decision.last,
+                    rule_first_true_ts=decision.rule_first_true_ts,
+                    rule_first_true_price=decision.rule_first_true_price,
+                )
+            )
+            if decision.invalidated:
+                # System-owned auto-resolve via the existing resolution path (status row only — the
+                # timeline row was just appended, never edited). The monitor stops holding the thesis
+                # active; the projection then reflects the resolved/invalidated status (NOT a silent
+                # revert to the idle declare affordance — the strip shows the terminal treatment).
+                self._store.resolve_thesis(self._thesis.id, "invalidated")
+                self._resolved = True
+                self._resolution = "invalidated"
 
     def on_status(self, status: str) -> None:
         # Lifecycle honesty (subset of capability 24): a terminal stream status auto-resolves an
@@ -174,6 +247,7 @@ class ResearchMonitor:
                 )
             )
             self._resolved = True
+            self._resolution = "expired"
         except Exception:
             # A store failure on resolution must surface as failed, never crash the feeder.
             self._failed = True
@@ -186,11 +260,20 @@ class ResearchMonitor:
         Both ``GET /research/thesis/active`` and the WS ``thesis`` key call THIS one function, so the
         two are verbatim-equal by construction (data-contract row 15). Statement statuses are
         recomputed from the latest engine read each call (projection-level, never persisted); the
-        verdict is fixed at ``pending`` this iteration. ``monitor_status`` is ``ok`` normally and
-        ``failed`` if the monitor or its store write ever errored — surfaced honestly, never hidden.
+        PUBLISHED verdict + its evidence come from the verdict engine (capability 24).
+        ``monitor_status`` is ``ok`` normally and ``failed`` if the monitor or its store write ever
+        errored — surfaced honestly, never hidden.
+
+        Resolution honesty: an ``expired`` resolution (the watch was stopped / the stream ended)
+        clears the projection (``None``) — there is nothing live to show. An ``invalidated``
+        resolution KEEPS the projection so the strip shows the TERMINAL treatment (the resolved
+        thesis with its ``invalidated`` verdict + the offending evidence) rather than silently
+        reverting to the idle declare affordance.
         """
         thesis = self._thesis
-        if thesis is None or self._resolved:
+        if thesis is None:
+            return None
+        if self._resolved and self._resolution != "invalidated":
             return None
         snap = self._last_snapshot
         statements = [
@@ -200,6 +283,9 @@ class ResearchMonitor:
             }
             for s in thesis.statements
         ]
+        # A resolved-invalidated thesis reports its terminal status/verdict; otherwise the active
+        # thesis reports its declared status and the live published verdict.
+        status = "invalidated" if self._resolution == "invalidated" else thesis.status
         return {
             "id": thesis.id,
             "ticker": thesis.ticker,
@@ -207,8 +293,9 @@ class ResearchMonitor:
             "direction": thesis.direction,
             "invalidation_price": thesis.invalidation_price,
             "level_price": thesis.level_price,
-            "status": thesis.status,
-            "verdict": "pending",
+            "status": status,
+            "verdict": self._verdict,
+            "verdict_evidence": self._verdict_evidence,
             "statements": statements,
             "entry_context": thesis.entry_context,
             "bound_source": thesis.bound_source,

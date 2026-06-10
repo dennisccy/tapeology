@@ -47,6 +47,18 @@ def _watch_bidabs(client: TestClient) -> None:
     raise AssertionError("SIM-BIDABS did not warm to bid_absorption in time")
 
 
+def _watch_until_state(client: TestClient, ticker: str, state: str, timeout: float = 12.0) -> None:
+    r = client.post(f"/watch/{ticker}")
+    assert r.status_code == 200
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        summary = client.get(f"/tape/{ticker}/summary").json()
+        if summary.get("market", {}).get("last") is not None and summary.get("tape_state") == state:
+            return
+        time.sleep(0.1)
+    raise AssertionError(f"{ticker} did not warm to {state} in time")
+
+
 # --- taxonomy ------------------------------------------------------------------------------------
 
 def test_taxonomy_endpoint_lists_setups_directions_verdicts(client):
@@ -276,3 +288,118 @@ def test_ws_thesis_key_is_null_when_none(client):
         frame = ws.receive_json()
     assert "thesis" in frame
     assert frame["thesis"] is None
+
+
+# --- GET /research/journal/{id} (capability 24 / blueprint row-16 serving slice) -----------------
+
+def test_journal_entry_unknown_id_is_404(client):
+    r = client.get("/research/journal/does-not-exist")
+    assert r.status_code == 404
+
+
+def test_journal_entry_serves_thesis_and_persisted_timeline_verbatim(client):
+    _watch_bidabs(client)
+    declared = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-BIDABS",
+            "setup_type": "absorption_reversal",
+            "direction": "long",
+            "invalidation_price": 99.0,
+        },
+    ).json()["thesis"]
+    tid = declared["id"]
+
+    entry = client.get(f"/research/journal/{tid}").json()
+    # The thesis record is served verbatim (frozen context + statements + stamps).
+    assert entry["thesis"]["id"] == tid
+    assert entry["thesis"]["setup_type"] == "absorption_reversal"
+    assert entry["thesis"]["bound_source"] == "bid_absorption"
+    assert entry["thesis"]["data_feed"] == "sim"
+    assert len(entry["thesis"]["statements"]) == 2
+    # The append-only timeline holds at least the initial pending row (the declaration started it),
+    # each with plain-language evidence (no naked verdicts).
+    assert len(entry["timeline"]) >= 1
+    assert entry["timeline"][0]["verdict"] == "pending"
+    assert entry["timeline"][0]["evidence"]  # non-empty
+    # Every timeline row carries the timing-record fields (None for the initial pending row).
+    for row in entry["timeline"]:
+        assert "rule_first_true_ts" in row
+        assert "rule_first_true_price" in row
+
+
+def test_journal_timeline_records_confirming_transition(client):
+    # End-to-end through the API + observer: a watched SIM-BUYER trend_continuation/long confirms,
+    # and the confirming transition lands on the persisted timeline with its dwell timing record.
+    _watch_until_state(client, "SIM-BUYER", "buyer_control")
+    declared = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-BUYER",
+            "setup_type": "trend_continuation",
+            "direction": "long",
+            "invalidation_price": 98.0,
+        },
+    ).json()["thesis"]
+    tid = declared["id"]
+    assert declared["verdict"] == "pending"
+
+    # Wait for the verdict to publish confirming (after the logical dwell) via the live observer.
+    deadline = time.time() + 12
+    confirming = False
+    while time.time() < deadline:
+        proj = client.get("/research/thesis/active?ticker=SIM-BUYER").json()["thesis"]
+        if proj and proj["verdict"] == "confirming":
+            confirming = True
+            break
+        time.sleep(0.1)
+    assert confirming, "verdict never published confirming"
+
+    entry = client.get(f"/research/journal/{tid}").json()
+    verdicts = [row["verdict"] for row in entry["timeline"]]
+    assert "pending" in verdicts and "confirming" in verdicts
+    assert verdicts.index("confirming") > verdicts.index("pending")  # append-only order
+    confirm_row = next(r for r in entry["timeline"] if r["verdict"] == "confirming")
+    # The confirming row carries plain-language evidence and the dwell timing record.
+    assert "confirms your thesis" in confirm_row["evidence"].lower()
+    assert confirm_row["rule_first_true_ts"] is not None
+    assert confirm_row["logical_ts"] >= confirm_row["rule_first_true_ts"]
+
+
+def test_invalidated_thesis_shows_terminal_projection_not_idle(client):
+    # SIM-SELLER drops price; a long thesis invalidates. The active projection then reports the
+    # TERMINAL invalidated state (verdict + status invalidated), NOT null/idle, so the strip shows
+    # the terminal treatment rather than reverting to the declare affordance.
+    _watch_until_state(client, "SIM-SELLER", "seller_control")
+    summary = client.get("/tape/SIM-SELLER/summary").json()
+    last = summary["market"]["last"]
+    declared = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-SELLER",
+            "setup_type": "trend_continuation",
+            "direction": "long",
+            "invalidation_price": round(last - 0.05, 2),
+        },
+    )
+    assert declared.status_code == 200
+    tid = declared.json()["thesis"]["id"]
+
+    deadline = time.time() + 12
+    invalidated = False
+    while time.time() < deadline:
+        proj = client.get("/research/thesis/active?ticker=SIM-SELLER").json()["thesis"]
+        if proj and proj["verdict"] == "invalidated":
+            invalidated = True
+            assert proj["status"] == "invalidated"
+            assert proj["verdict_evidence"]  # the offending evidence, never a naked verdict
+            break
+        time.sleep(0.1)
+    assert invalidated, "thesis never auto-resolved invalidated"
+
+    # The persisted timeline's final row is the invalidation, with the offending print recorded.
+    entry = client.get(f"/research/journal/{tid}").json()
+    final = entry["timeline"][-1]
+    assert final["verdict"] == "invalidated"
+    assert final["last"] is not None
+    assert final["evidence"]

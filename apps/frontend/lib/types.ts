@@ -47,6 +47,10 @@ export interface ThesisProjection {
   level_price: number | null;
   status: string;
   verdict: ThesisVerdict;
+  // Plain-language evidence for the CURRENTLY published verdict (capability 24 / no-naked-outputs):
+  // every verdict — including pending — carries descriptive, present-tense, thesis-attributed
+  // evidence read VERBATIM from the WS `thesis` key. The frontend never derives or composes it.
+  verdict_evidence: string;
   statements: ThesisStatement[];
   entry_context: Record<string, unknown>;
   bound_source: string;

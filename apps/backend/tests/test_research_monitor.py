@@ -70,7 +70,7 @@ def test_data_feed_mapping():
 def test_entry_context_and_statements_frozen_against_config_change(store):
     engine = _warm_engine("SIM-BIDABS", "bid_absorption")
     thesis = _thesis_for(engine, store)
-    monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+    monitor = ResearchMonitor(store, CONFIG)
     monitor.set_thesis(thesis)
     monitor.on_event(None, engine.snapshot())
 
@@ -90,7 +90,7 @@ def test_entry_context_and_statements_frozen_against_config_change(store):
 def test_source_binding_is_scenario_descriptor_not_bare_ticker(store):
     engine = _warm_engine("SIM-BIDABS", "bid_absorption")
     thesis = _thesis_for(engine, store)
-    monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+    monitor = ResearchMonitor(store, CONFIG)
     monitor.set_thesis(thesis)
     monitor.on_event(None, engine.snapshot())
     proj = monitor.projection()
@@ -102,7 +102,7 @@ def test_source_binding_is_scenario_descriptor_not_bare_ticker(store):
 def test_fingerprint_stamp_present_and_matches_config(store):
     engine = _warm_engine("SIM-BIDABS", "bid_absorption")
     thesis = _thesis_for(engine, store)
-    monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+    monitor = ResearchMonitor(store, CONFIG)
     monitor.set_thesis(thesis)
     monitor.on_event(None, engine.snapshot())
     assert monitor.projection()["config_fingerprint"] == CONFIG.config_fingerprint()
@@ -114,7 +114,7 @@ def test_statement_status_met_when_tape_state_matches(store):
     engine = _warm_engine("SIM-BIDABS", "bid_absorption")
     assert engine.snapshot().tape_state == "bid_absorption"
     thesis = _thesis_for(engine, store, setup="absorption_reversal", direction="long")
-    monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+    monitor = ResearchMonitor(store, CONFIG)
     monitor.set_thesis(thesis)
     monitor.on_event(None, engine.snapshot())
     statements = monitor.projection()["statements"]
@@ -127,7 +127,7 @@ def test_statement_status_met_when_tape_state_matches(store):
 def test_statement_status_not_yet_without_a_snapshot(store):
     engine = _warm_engine("SIM-BIDABS", "bid_absorption")
     thesis = _thesis_for(engine, store)
-    monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+    monitor = ResearchMonitor(store, CONFIG)
     monitor.set_thesis(thesis)
     # No on_event yet => no snapshot => every statement reads not_yet (honest default).
     statements = monitor.projection()["statements"]
@@ -137,21 +137,21 @@ def test_statement_status_not_yet_without_a_snapshot(store):
 def test_verdict_fixed_pending(store):
     engine = _warm_engine("SIM-BIDABS", "bid_absorption")
     thesis = _thesis_for(engine, store)
-    monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+    monitor = ResearchMonitor(store, CONFIG)
     monitor.set_thesis(thesis)
     monitor.on_event(None, engine.snapshot())
     assert monitor.projection()["verdict"] == "pending"
 
 
 def test_projection_none_when_no_thesis(store):
-    monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+    monitor = ResearchMonitor(store, CONFIG)
     assert monitor.projection() is None
 
 
 def test_projection_omits_risk_flags_entirely(store):
     engine = _warm_engine("SIM-BIDABS", "bid_absorption")
     thesis = _thesis_for(engine, store)
-    monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+    monitor = ResearchMonitor(store, CONFIG)
     monitor.set_thesis(thesis)
     monitor.on_event(None, engine.snapshot())
     # Honesty: an always-empty risk_flags list would read as "no risks found". The field is OMITTED.
@@ -163,7 +163,7 @@ def test_projection_omits_risk_flags_entirely(store):
 def test_observer_exception_surfaces_monitor_status_failed_feed_alive(store, monkeypatch):
     engine = _warm_engine("SIM-BIDABS", "bid_absorption")
     thesis = _thesis_for(engine, store)
-    monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+    monitor = ResearchMonitor(store, CONFIG)
     monitor.set_thesis(thesis)
     engine.add_observer(monitor)
 
@@ -188,7 +188,7 @@ def test_initial_pending_then_expired_on_stop(store):
     store.append_verdict_event(
         VerdictEventRecord(thesis.id, 0.0, 1.0, "pending", "declared", None, None, None)
     )
-    monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+    monitor = ResearchMonitor(store, CONFIG)
     monitor.set_thesis(thesis)
     engine.add_observer(monitor)
     assert monitor.active_thesis_id == thesis.id
@@ -206,7 +206,7 @@ def test_paused_does_not_expire(store):
     engine = _warm_engine("SIM-BIDABS", "bid_absorption")
     thesis = _thesis_for(engine, store)
     store.insert_thesis(thesis)
-    monitor = ResearchMonitor(store, CONFIG.config_fingerprint())
+    monitor = ResearchMonitor(store, CONFIG)
     monitor.set_thesis(thesis)
     engine.add_observer(monitor)
     engine.pause()  # fires on_status("paused") — NOT terminal

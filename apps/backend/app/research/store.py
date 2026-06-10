@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS verdict_events (
     tape_state          TEXT,
     confidence          REAL,
     last                REAL,
+    rule_first_true_ts     REAL,                -- first logical instant the raw rule held (capability 24)
+    rule_first_true_price  REAL,                -- price at rule_first_true_ts
     FOREIGN KEY (thesis_id) REFERENCES theses (id)
 );
 
@@ -129,6 +131,12 @@ class VerdictEventRecord:
     tape_state: str | None
     confidence: float | None
     last: float | None
+    # The verdict-transition timing record (capability 24): the first logical instant + price at which
+    # the RAW rule began holding, distinct from ``logical_ts`` (the publication instant, after dwell).
+    # Defaulted ``None`` so every existing call site / fixture stays valid (additive) and so the
+    # initial ``pending`` / lifecycle rows (no raw rule) record no spurious timing.
+    rule_first_true_ts: float | None = None
+    rule_first_true_price: float | None = None
 
 
 class _StopSentinel:
@@ -259,14 +267,21 @@ class JournalStore:
 
     def append_verdict_event(self, record: VerdictEventRecord) -> None:
         """Append ONE verdict event. There is deliberately NO update/delete counterpart — the
-        timeline is append-only at the repository level (capability 28 / journal-integrity)."""
+        timeline is append-only at the repository level (capability 28 / journal-integrity).
+
+        A config-owned capacity CAP (``verdict_timeline_cap``) bounds an unbounded live watch: once a
+        thesis exceeds the cap, the OLDEST surviving rows are pruned. This is capacity management, NOT
+        an edit of a retained row — the surviving rows are never rewritten, so the append-only
+        guarantee (no update/delete method exists) holds: there is no way to change what a kept row
+        says. A pruned row is gone, never altered."""
 
         def _fn(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
                 INSERT INTO verdict_events (
-                    thesis_id, logical_ts, wall_ts, verdict, evidence, tape_state, confidence, last
-                ) VALUES (?,?,?,?,?,?,?,?)
+                    thesis_id, logical_ts, wall_ts, verdict, evidence, tape_state, confidence, last,
+                    rule_first_true_ts, rule_first_true_price
+                ) VALUES (?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     record.thesis_id,
@@ -277,10 +292,36 @@ class JournalStore:
                     record.tape_state,
                     record.confidence,
                     record.last,
+                    record.rule_first_true_ts,
+                    record.rule_first_true_price,
                 ),
             )
+            self._prune_timeline(conn, record.thesis_id)
 
         self._do_write(_fn)
+
+    def _prune_timeline(self, conn: sqlite3.Connection, thesis_id: str) -> None:
+        """Enforce the config-owned per-thesis timeline cap by deleting the OLDEST rows over the cap.
+
+        Runs INSIDE the same writer-queue transaction as the append (so the cap is maintained
+        atomically off any hot path). Deletes only the oldest excess rows (by ascending ``id`` =
+        insertion order); the kept rows are untouched. Capacity bound only — distinct from any
+        update/delete of a RETAINED row, which the repository deliberately does not expose."""
+        cap = self._config.verdict_timeline_cap
+        count = conn.execute(
+            "SELECT COUNT(*) FROM verdict_events WHERE thesis_id=?", (thesis_id,)
+        ).fetchone()[0]
+        if count <= cap:
+            return
+        conn.execute(
+            """
+            DELETE FROM verdict_events
+            WHERE id IN (
+                SELECT id FROM verdict_events WHERE thesis_id=? ORDER BY id ASC LIMIT ?
+            )
+            """,
+            (thesis_id, count - cap),
+        )
 
     def resolve_thesis(self, thesis_id: str, status: str) -> None:
         """Set a thesis's terminal status (played_out | abandoned | invalidated | expired).
@@ -373,6 +414,8 @@ class JournalStore:
                     tape_state=r["tape_state"],
                     confidence=r["confidence"],
                     last=r["last"],
+                    rule_first_true_ts=r["rule_first_true_ts"],
+                    rule_first_true_price=r["rule_first_true_price"],
                 )
                 for r in rows
             ]

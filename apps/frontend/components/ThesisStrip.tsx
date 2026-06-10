@@ -6,6 +6,7 @@ import type {
   ResearchTaxonomy,
   StatementStatus,
   ThesisProjection,
+  ThesisVerdict,
 } from "@/lib/types";
 
 // The thesis strip (capability 23): sits between the price chart and the panel grid on `/`.
@@ -29,6 +30,48 @@ const STATUS_STYLE: Record<StatementStatus, { dot: string; text: string; label: 
 
 const FEED_LABEL: Record<string, string> = { sim: "SIM", sip: "SIP", iex: "IEX" };
 
+// Verdict VISUAL semantics only (the design direction): pending slate, confirming emerald, weakening
+// amber, rejecting rose, invalidated rose with a terminal treatment, expired slate. The DISPLAY COPY
+// (the label text) is read from GET /research/taxonomy — the frontend hardcodes none of it. This map
+// is the side/impact palette EXTENDED, never repurposed.
+const VERDICT_STYLE: Record<ThesisVerdict, string> = {
+  pending:
+    "border-slate-700 bg-slate-800 text-slate-300",
+  confirming:
+    "border-emerald-700 bg-emerald-900/40 text-emerald-300",
+  weakening:
+    "border-amber-700 bg-amber-900/40 text-amber-300",
+  rejecting:
+    "border-rose-700 bg-rose-900/40 text-rose-300",
+  // Terminal treatment: a heavier, ringed rose chip so an invalidated thesis reads as resolved/final
+  // (not just another live verdict) — never a silent revert to the idle declare affordance.
+  invalidated:
+    "border-rose-500 bg-rose-950 text-rose-200 ring-1 ring-rose-500/50",
+  expired:
+    "border-slate-700 bg-slate-800 text-slate-400",
+};
+
+// The verdict's plain-language evidence line color, matched to the chip semantics (descriptive copy
+// is read verbatim from the projection — never composed client-side).
+const VERDICT_EVIDENCE_COLOR: Record<ThesisVerdict, string> = {
+  pending: "text-slate-400",
+  confirming: "text-emerald-300/90",
+  weakening: "text-amber-300/90",
+  rejecting: "text-rose-300/90",
+  invalidated: "text-rose-200/90",
+  expired: "text-slate-400",
+};
+
+function verdictLabel(
+  verdict: ThesisVerdict,
+  taxonomy: ResearchTaxonomy | null,
+): string {
+  // Display copy comes from the taxonomy (row 24); fall back to the raw enum only if it has not
+  // loaded yet (the chip still renders — it never blocks on the catalog).
+  const fromTaxonomy = taxonomy?.verdicts.find((v) => v.id === verdict)?.name;
+  return fromTaxonomy ?? verdict;
+}
+
 function StripShell({ children }: { children: React.ReactNode }) {
   return (
     <section className="mb-4 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
@@ -37,9 +80,19 @@ function StripShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ActiveThesis({ thesis }: { thesis: ThesisProjection }) {
+function ActiveThesis({
+  thesis,
+  taxonomy,
+}: {
+  thesis: ThesisProjection;
+  taxonomy: ResearchTaxonomy | null;
+}) {
   const directionColor =
     thesis.direction === "long" ? "text-emerald-400" : "text-rose-400";
+  const isInvalidated = thesis.verdict === "invalidated";
+  const verdictChip = VERDICT_STYLE[thesis.verdict] ?? VERDICT_STYLE.pending;
+  const evidenceColor =
+    VERDICT_EVIDENCE_COLOR[thesis.verdict] ?? VERDICT_EVIDENCE_COLOR.pending;
   return (
     <StripShell>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -69,13 +122,38 @@ function ActiveThesis({ thesis }: { thesis: ThesisProjection }) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* `pending` verdict badge — slate per the design direction (green/amber/red reserved
-              for the verdict-transition engine next iteration). */}
-          <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-300">
-            {thesis.verdict}
+          {/* The live PUBLISHED verdict chip — color per the design direction (confirming emerald,
+              weakening amber, rejecting/invalidated rose, pending slate); invalidated carries the
+              terminal ringed treatment. The LABEL text is taxonomy-owned (hardcoded nowhere). */}
+          <span
+            data-testid="verdict-chip"
+            data-verdict={thesis.verdict}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider ${verdictChip}`}
+          >
+            {isInvalidated ? "✕ " : ""}
+            {verdictLabel(thesis.verdict, taxonomy)}
           </span>
         </div>
       </div>
+
+      {/* The verdict's plain-language EVIDENCE line (no naked verdicts) — read verbatim from the
+          projection, never composed client-side. Always present (every verdict carries evidence). */}
+      {thesis.verdict_evidence && (
+        <p
+          data-testid="verdict-evidence"
+          className={`mt-2 text-sm ${evidenceColor}`}
+        >
+          {thesis.verdict_evidence}
+        </p>
+      )}
+
+      {/* Terminal invalidated notice: the thesis is resolved (not a live read) — shown explicitly so
+          the strip never silently reverts to the idle declare affordance. */}
+      {isInvalidated && (
+        <p className="mt-1 text-xs font-medium uppercase tracking-wider text-rose-400">
+          Thesis invalidated — resolved
+        </p>
+      )}
 
       {/* Frozen expected-behaviour statements, each with its live status (read verbatim). */}
       <ul className="mt-3 space-y-1.5">
@@ -135,10 +213,11 @@ export function ThesisStrip({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Load the taxonomy when the form opens (so the idle line costs no request). The form is fully
-  // driven by it — the frontend hardcodes no setup/direction label.
+  // Load the taxonomy when the form opens OR when a thesis is active (so the verdict label/copy is
+  // taxonomy-owned, not hardcoded). The idle line still costs no request. The form is fully driven
+  // by it — the frontend hardcodes no setup/direction/verdict label.
   useEffect(() => {
-    if (!open || taxonomy) return;
+    if ((!open && !thesis) || taxonomy) return;
     let cancelled = false;
     fetchTaxonomy().then((t) => {
       if (cancelled) return;
@@ -154,11 +233,11 @@ export function ThesisStrip({
     return () => {
       cancelled = true;
     };
-  }, [open, taxonomy]);
+  }, [open, thesis, taxonomy]);
 
   // An active thesis always wins — render it verbatim (the form is only for the idle state).
   if (thesis) {
-    return <ActiveThesis thesis={thesis} />;
+    return <ActiveThesis thesis={thesis} taxonomy={taxonomy} />;
   }
 
   const selectedSetup = taxonomy?.setups.find((s) => s.id === setupType);
