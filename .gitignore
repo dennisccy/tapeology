@@ -65,6 +65,8 @@ htmlcov/
 # Data / db
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 .data/
 
 # IDE

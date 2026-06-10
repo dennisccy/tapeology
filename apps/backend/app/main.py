@@ -38,6 +38,13 @@ from .providers.adapters.base import (
 )
 from .providers.historical import HistoricalProvider
 from .providers.live import LiveProvider
+from .research.routes import (
+    ResearchRegistry,
+    get_registry_or_none,
+    router as research_router,
+    set_registry,
+)
+from .research.store import JournalStore
 from .serializers import (
     serialize_events,
     serialize_features,
@@ -133,6 +140,25 @@ async def _warm_symbol_universe_bg(adapter: MarketDataAdapter) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Research store + registry (capabilities 23 / 28). The journal-scoped SQLite store is opened at
+    # the operator's resolved DB path (``TAPEOLOGY_JOURNAL_DB`` or the config default); the registry
+    # owns the per-ticker monitors and is wired to the WatchManager's engine-created hook so every
+    # watch gets a monitor attached at the engine's observer seam. A startup SWEEP resolves any
+    # thesis left ``active`` in the DB by a prior process to ``expired`` (lifecycle honesty — no
+    # orphaned active theses). A test injects its own registry via ``set_registry`` BEFORE the app
+    # starts, in which case we leave it in place (skip building the default file store).
+    own_registry = False
+    if get_registry_or_none() is None:
+        store = JournalStore(CONFIG.journal_db_path_resolved(), CONFIG)
+        registry = ResearchRegistry(store, CONFIG)
+        set_registry(registry)
+        manager.set_on_engine_created(registry.on_engine_created)
+        own_registry = True
+        try:
+            registry.startup_sweep()
+        except Exception:
+            logger.exception("research startup sweep failed")
+
     # Fire-and-forget the symbol-universe warm at startup through the NEUTRAL adapter seam (J-30)
     # — main.py never names the SDK or the universe cache. Non-blocking: startup does not wait on
     # it (no-creds makes it a no-op; the search endpoint stays correct either way). The adapter is
@@ -147,6 +173,13 @@ async def lifespan(app: FastAPI):
         with contextlib.suppress(asyncio.CancelledError):
             await warm_task
         await manager.shutdown()
+        # Close the store we own (a test-injected registry owns its own store lifecycle).
+        if own_registry:
+            reg = get_registry_or_none()
+            if reg is not None:
+                reg.store.close()
+            set_registry(None)
+            manager.set_on_engine_created(None)
 
 
 app = FastAPI(title="Tapeology", version="0.1.0", lifespan=lifespan)
@@ -156,6 +189,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# The research namespace (capability 23/24): declare + read a thesis, taxonomy. Mounted as its own
+# router; the engine snapshot endpoints above are untouched.
+app.include_router(research_router)
 
 
 @app.exception_handler(RealDataError)
@@ -510,7 +547,27 @@ async def stream(websocket: WebSocket, ticker: str) -> None:
     await websocket.accept()
     try:
         while True:
-            await websocket.send_json(serialize_stream(engine.snapshot()))
+            # The WS frame is the engine projection PLUS one ADDITIVE ``thesis`` key (capability 23,
+            # data-contract row 15). The key is merged HERE at the send site — NOT inside
+            # ``serialize_stream`` — so the engine serializers stay byte-identical (the equivalence
+            # anti-goal / J-68). The projection is the SAME ``monitor.projection()`` that
+            # ``GET /research/thesis/active`` returns, so REST and WS are verbatim-equal; ``null``
+            # when no thesis is active (a normal state, never an error).
+            frame = serialize_stream(engine.snapshot())
+            frame["thesis"] = _thesis_projection(ticker)
+            await websocket.send_json(frame)
             await asyncio.sleep(WS_PUSH_INTERVAL)
     except WebSocketDisconnect:
         return
+
+
+def _thesis_projection(ticker: str) -> dict | None:
+    """The active-thesis projection for ``ticker`` from the research registry, or ``None``.
+
+    Read-only and defensive: if the registry is not wired (e.g. an isolated unit-test app), the WS
+    simply carries ``thesis: null`` — never an error. This is the ONE place the WS reads the thesis,
+    so the WS key and the REST read share the single ``monitor.projection()`` source."""
+    registry = get_registry_or_none()
+    if registry is None:
+        return None
+    return registry.projection_for(ticker)

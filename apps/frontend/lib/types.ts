@@ -17,6 +17,75 @@ export interface TradeRow {
 
 export type FeatureSet = Record<string, number>;
 
+// --- Research: thesis projection + taxonomy (capability 23/24) ---------------------------------
+// The active-thesis projection — the SAME object returned by GET /research/thesis/active and
+// carried on the WS frame's `thesis` key (verbatim-equal by construction). The strip renders these
+// values VERBATIM; it derives nothing (no client-side verdict/status recompute). `null` when no
+// thesis is active (a normal state, not an error). NOTE: `risk_flags` is deliberately ABSENT this
+// iteration (an always-empty list would dishonestly read as "no risks found" — J-49 adds it).
+export type ThesisVerdict =
+  | "pending"
+  | "confirming"
+  | "weakening"
+  | "rejecting"
+  | "invalidated"
+  | "expired";
+
+// A frozen expected-behaviour statement with its LIVE status (recomputed server-side per event).
+export type StatementStatus = "not_yet" | "met" | "violated";
+export interface ThesisStatement {
+  text: string;
+  status: StatementStatus;
+}
+
+export interface ThesisProjection {
+  id: string;
+  ticker: string;
+  setup_type: string;
+  direction: "long" | "short";
+  invalidation_price: number;
+  level_price: number | null;
+  status: string;
+  verdict: ThesisVerdict;
+  statements: ThesisStatement[];
+  entry_context: Record<string, unknown>;
+  bound_source: string;
+  data_feed: "sim" | "sip" | "iex";
+  config_fingerprint: string;
+  // "ok" normally; "failed" if the research monitor or its store write errored — surfaced honestly.
+  monitor_status: "ok" | "failed";
+}
+
+// GET /research/taxonomy — the single backend owner of every research label. The declare form is
+// built from this (which setups exist, their display names, and whether each needs a level field);
+// the frontend hardcodes none of it.
+export interface TaxonomySetup {
+  id: string;
+  name: string;
+  requires_level: boolean;
+  statements: { text: string; kind: string }[];
+}
+export interface TaxonomyEnum {
+  id: string;
+  name: string;
+}
+export interface ResearchTaxonomy {
+  setups: TaxonomySetup[];
+  directions: TaxonomyEnum[];
+  verdicts: TaxonomyEnum[];
+  statement_statuses: string[];
+  disclaimer: string;
+}
+
+// The result of POST /research/thesis — `ok` with the projection, or a backend error with its
+// status + detail surfaced inline (422/409/404 — never a silent coercion).
+export interface DeclareResult {
+  ok: boolean;
+  thesis?: ThesisProjection | null;
+  status?: number;
+  error?: string;
+}
+
 export interface TapeSnapshot {
   ticker: string;
   scenario: string;
@@ -44,6 +113,10 @@ export interface TapeSnapshot {
   observations: string[];
   event_log: string[];
   recent_trades: TradeRow[];
+  // Additive `thesis` key (data-contract row 15): the active-thesis projection (same object as
+  // GET /research/thesis/active), or `null` when none. Optional so a pre-research snapshot shape
+  // (e.g. the REST initial-paint assembly) is still valid; the strip reads it verbatim.
+  thesis?: ThesisProjection | null;
 }
 
 // Client-side connection status for the pre-snapshot / no-snapshot window. "failed" (J-23) is the

@@ -13,6 +13,7 @@ import type { DataSourceMode, FailureReason, WatchParams } from "@/lib/types";
 import { TopBar } from "@/components/TopBar";
 import { Cockpit } from "@/components/Cockpit";
 import { PriceChart } from "@/components/PriceChart";
+import { ThesisStrip } from "@/components/ThesisStrip";
 import {
   IdleState,
   ConnectingState,
@@ -219,7 +220,19 @@ export default function Page() {
           // acknowledgement, never the full grid over an empty tape.
           <ConnectingState symbol={ticker ?? undefined} />
         ) : ticker ? (
-          <Cockpit snapshot={snapshot} />
+          <>
+            {/* Thesis strip (J-38) — between the price chart and the panel grid. Shown only once
+                the cockpit grid itself is shown (a live/settled snapshot), so it never appears over
+                a waiting/connecting/failed tape. Idle = one declare line (nothing else moves);
+                active = the WS `thesis` projection rendered verbatim. */}
+            {snapshot &&
+              snapshot.stream_status !== "waiting" &&
+              snapshot.stream_status !== "connecting" &&
+              snapshot.stream_status !== "failed" && (
+                <ThesisStrip ticker={ticker} thesis={snapshot.thesis} />
+              )}
+            <Cockpit snapshot={snapshot} />
+          </>
         ) : failure ? (
           <ProviderUnavailable
             reason={failure.reason}

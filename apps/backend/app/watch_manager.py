@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 import logging
 import os
+from typing import Callable
 
 from .config import Config
 from .engine.tape_engine import TapeEngine
@@ -44,9 +45,20 @@ def _provider_anchor(provider: object) -> float | None:
 
 
 class WatchManager:
-    def __init__(self, config: Config, pace: float = FEED_PACE_SECONDS) -> None:
+    def __init__(
+        self,
+        config: Config,
+        pace: float = FEED_PACE_SECONDS,
+        on_engine_created: "Callable[[str, TapeEngine], None] | None" = None,
+    ) -> None:
         self._config = config
         self._pace = pace
+        # Optional engine-created hook (the research seam, capability 20). When set, it is called
+        # with each freshly-built engine so the research layer can attach its observer (the monitor)
+        # at the ONE sanctioned attachment point. The WatchManager stays research-agnostic — it knows
+        # nothing about the hook's payload and never imports a research type. Exception-isolated so a
+        # hook error can never break a watch; default None keeps every existing test unchanged.
+        self._on_engine_created = on_engine_created
         self._engines: dict[str, TapeEngine] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         # Per-ticker MUTABLE replay-speed holder (J-32). A single-element list is the small mutable
@@ -56,6 +68,25 @@ class WatchManager:
         # same logical timestamps, so features/state/confidence are byte-identical at any speed
         # (determinism preserved). Cleared in ``stop()``.
         self._speeds: dict[str, list[float]] = {}
+
+    def set_on_engine_created(
+        self, hook: "Callable[[str, TapeEngine], None] | None"
+    ) -> None:
+        """Set/replace the engine-created hook (used by the app to wire the research registry)."""
+        self._on_engine_created = hook
+
+    def _announce_engine(self, ticker: str, engine: TapeEngine) -> None:
+        """Fire the engine-created hook (the research seam), exception-isolated.
+
+        A hook failure is logged and swallowed HERE so it can never break a watch — the research
+        layer is strictly additive and must never take the engine down (anti-goal: an observer
+        failure never kills the feed). Called at every engine-construction site below."""
+        if self._on_engine_created is None:
+            return
+        try:
+            self._on_engine_created(ticker, engine)
+        except Exception:
+            logger.exception("on_engine_created hook failed for %s", ticker)
 
     def is_known(self, ticker: str) -> bool:
         return build_provider(ticker) is not None
@@ -73,6 +104,9 @@ class WatchManager:
             ticker, provider.scenario, self._config, epoch_anchor=_provider_anchor(provider)
         )
         self._engines[ticker] = engine
+        # Attach research observers (if any) BEFORE the feeder starts so the monitor sees the first
+        # event/status. Exception-isolated — a hook failure never breaks the watch.
+        self._announce_engine(ticker, engine)
         try:
             loop = asyncio.get_running_loop()
             self._tasks[ticker] = loop.create_task(self._feed(engine, provider))
@@ -96,6 +130,7 @@ class WatchManager:
             ticker, provider.scenario, self._config, epoch_anchor=_provider_anchor(provider)
         )
         self._engines[ticker] = engine
+        self._announce_engine(ticker, engine)  # attach research observers before the feeder starts
         # Register the per-ticker mutable speed cell BEFORE the feeder starts so ``set_speed`` (and
         # the feeder's per-iteration read) share the one holder. A non-positive speed is normalised
         # to 1.0 here (defensive) — the route already validates against the allowed set.
@@ -139,6 +174,7 @@ class WatchManager:
             epoch_anchor=_provider_anchor(first_chunk_provider),
         )
         self._engines[ticker] = engine
+        self._announce_engine(ticker, engine)  # attach research observers before the feeder starts
         speed_cell = [speed if speed > 0 else 1.0]
         self._speeds[ticker] = speed_cell
         try:
@@ -167,6 +203,7 @@ class WatchManager:
             ticker, provider.scenario, self._config, epoch_anchor=_provider_anchor(provider)
         )
         self._engines[ticker] = engine
+        self._announce_engine(ticker, engine)  # attach research observers before the feeder starts
         try:
             loop = asyncio.get_running_loop()
             self._tasks[ticker] = loop.create_task(self._feed_live(engine, provider))

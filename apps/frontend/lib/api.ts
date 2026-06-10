@@ -1,9 +1,12 @@
 import { API_BASE, WATCH_REQUEST_TIMEOUT_MS } from "./config";
 import type {
+  DeclareResult,
   MarketClock,
+  ResearchTaxonomy,
   SymbolMatch,
   TapeHistory,
   TapeSnapshot,
+  ThesisProjection,
   WatchParams,
 } from "./types";
 
@@ -339,4 +342,80 @@ export async function fetchInitialSnapshot(
     event_log: events.event_log ?? [],
     recent_trades: events.recent_trades ?? [],
   };
+}
+
+// --- Research: taxonomy, declare, active read (capability 23/24) --------------------------------
+
+// GET /research/taxonomy — the single backend owner of every research label. The declare form is
+// built from this (setups, directions, per-setup level requirement). Returns null on any failure so
+// the strip can show an explicit "couldn't load the catalog" state rather than a fabricated form.
+export async function fetchTaxonomy(): Promise<ResearchTaxonomy | null> {
+  try {
+    const res = await fetch(`${API_BASE}/research/taxonomy`);
+    if (!res.ok) return null;
+    return (await res.json()) as ResearchTaxonomy;
+  } catch {
+    return null;
+  }
+}
+
+// POST /research/thesis — declare a thesis with HONEST validation. The backend's 422/409/404 detail
+// is surfaced VERBATIM for an inline message (never a client-side coercion); nothing is created on
+// rejection. On success the full projection is returned. `level_price` is sent only when provided.
+export async function declareThesis(params: {
+  ticker: string;
+  setup_type: string;
+  direction: string;
+  invalidation_price: number;
+  level_price?: number | null;
+}): Promise<DeclareResult> {
+  try {
+    const body: Record<string, unknown> = {
+      ticker: params.ticker,
+      setup_type: params.setup_type,
+      direction: params.direction,
+      invalidation_price: params.invalidation_price,
+    };
+    if (params.level_price !== undefined && params.level_price !== null) {
+      body.level_price = params.level_price;
+    }
+    const res = await fetch(`${API_BASE}/research/thesis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, thesis: data.thesis, status: res.status };
+    }
+    // Surface the backend detail verbatim for the inline message (422 wrong-side / missing-or-
+    // forbidden level / unknown enum; 409 active-thesis-exists; 404 not-watched).
+    let error = "The thesis could not be declared.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, status: res.status, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/thesis/active?ticker= — the canonical thesis projection (the REST counterpart of
+// the WS `thesis` key). `thesis: null` is a NORMAL state, not an error. Returns null on failure.
+export async function fetchActiveThesis(
+  ticker: string,
+): Promise<ThesisProjection | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/thesis/active?ticker=${encodeURIComponent(ticker)}`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data?.thesis ?? null) as ThesisProjection | null;
+  } catch {
+    return null;
+  }
 }

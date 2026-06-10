@@ -8,7 +8,10 @@ API import the same instance so there is one source of truth for the numbers too
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
+import json
+import os
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
@@ -342,12 +345,55 @@ class Config:
     # cadence (wall-clock), never an engine threshold; the engine math stays logical/deterministic.
     pause_poll_seconds: float = 0.02
 
+    # --- Research evolution: journal store + fingerprint (capabilities 23 / 28) ---------------
+    # The journal-scoped SQLite store's DB path. It is ONLY a default here — the operator overrides
+    # it with the ``TAPEOLOGY_JOURNAL_DB`` env var (read in ``journal_db_path`` below) and tests
+    # inject a per-test temp path via the existing dependency-override pattern (``get_journal_store``
+    # in main.py). ``":memory:"`` is a valid value for a hermetic in-process store. Persistence is
+    # SCOPED to research records (theses, verdict events, hints, actions, studies) — NO tape data is
+    # ever written here (committed test fixtures excepted).
+    journal_db_path: str = "tapeology_journal.db"
+    # SQLite busy timeout (milliseconds) applied on every connection (capability 28 discipline):
+    # under WAL with a single writer queue, a reader that briefly contends waits up to this long
+    # rather than failing immediately. Operational store tuning, never an engine threshold.
+    journal_busy_timeout_ms: int = 5000
+    # The journal schema version stamped in the ``schema_version`` table at creation. Bump when the
+    # schema changes (migration is out of scope this iteration — the full schema is created at once).
+    journal_schema_version: int = 1
+
     def window_label(self, window: int) -> str:
         return f"{window}s"
 
     @property
     def primary_window_label(self) -> str:
         return self.window_label(self.primary_window)
+
+    def journal_db_path_resolved(self) -> str:
+        """The effective journal DB path: the ``TAPEOLOGY_JOURNAL_DB`` env var if set, else the
+        config default. Read at store-construction time so an operator can point persistence at a
+        real file without code change, while tests inject a temp path via dependency-override."""
+        return os.environ.get("TAPEOLOGY_JOURNAL_DB", self.journal_db_path)
+
+    def config_fingerprint(self) -> str:
+        """A stable hash over the ENTIRE frozen config (capability 28 / honesty stamps).
+
+        Every research record carries this so results are NEVER silently compared across different
+        thresholds: a verdict depends transitively on every classifier threshold, so the fingerprint
+        spans the whole config dataclass (classifier + research values), not a hand-picked subset.
+
+        Properties (asserted by the unit matrix):
+          * **Stable across runs / processes** — derived only from the config field values (sorted,
+            JSON-serialized), never from object identity, ordering noise, or wall-clock.
+          * **Changes when ANY config value changes** — a different threshold yields a different
+            hash, so two records under different configs can never be silently pooled.
+        Operational store-tuning fields (the journal DB path / busy timeout) are EXCLUDED: they do
+        not affect any engine/verdict computation, so two journals that differ only in where they
+        live must share a fingerprint (else every temp-path test would mint a unique one).
+        """
+        excluded = {"journal_db_path", "journal_busy_timeout_ms", "journal_schema_version"}
+        payload = {k: v for k, v in asdict(self).items() if k not in excluded}
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
 
 
 # The one shared instance read by engine, classifier, API, and tests.
