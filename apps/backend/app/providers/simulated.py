@@ -19,13 +19,21 @@ from typing import Iterator
 from ..config import CONFIG
 from .base import Event, QuoteEvent, Side, TradeEvent
 
-# Reserved sim tickers -> target tape state. All five are now driven to their read.
+# Reserved sim tickers -> target tape state. The original five are driven to their single read;
+# the two research-evolution scenarios (capability 21) deliberately CHANGE regime mid-stream, so
+# their value names the SEQUENCE (the engine still classifies each tick from one immutable state):
+#   * SIM-SHIFT     — buyer_control THEN unclear (control that decays; price band dips back down).
+#   * SIM-REVERSAL  — bid_absorption THEN buyer_control (sellers absorbed, then buyers lift price).
+# Both are provider-level shape only: the engine/classifier/features/config are untouched, and the
+# same seed yields an identical stream (determinism anti-goal).
 SIM_SCENARIOS: dict[str, str] = {
     "SIM-BUYER": "buyer_control",
     "SIM-SELLER": "seller_control",
     "SIM-BIDABS": "bid_absorption",
     "SIM-ASKABS": "ask_absorption",
     "SIM-CHOP": "unclear_chop",
+    "SIM-SHIFT": "shift_buyer_then_unclear",
+    "SIM-REVERSAL": "reversal_absorption_then_buyer",
 }
 
 DEFAULT_SEED = 7
@@ -86,6 +94,36 @@ _CHOP_P_MID_PRINT = 0.08       # share of prints landing mid-spread (Side.UNKNOW
 _CHOP_DT = 0.2                 # logical seconds per tick — dense enough that even the short 10s
                                # window holds plenty of prints, so its refresh score stays low too
 
+# --- Regime-transition scenario shapes (SIM-SHIFT, SIM-REVERSAL; capability 21) --------------
+# These two scenarios are the first sims that deliberately CHANGE state mid-stream. Each is two
+# back-to-back phases reusing the SAME shape primitives as the single-state scenarios above, so no
+# new engine behaviour is exercised — only a regime transition. The phase lengths are sized in
+# logical time against the engine's 30s PRIMARY window (the window the classifier reads): each
+# phase runs long enough that, by the time that phase ends, the 30s window is DOMINATED by that
+# phase's prints, so the classified state has fully settled into the phase's read before the next
+# phase begins to take over. These are scenario DATA (simulator shape), never engine thresholds.
+#
+# Phase 1 length: at _LOGICAL_DT = 0.5s/tick, 120 ticks = 60s of logical time = two full 30s
+# windows, so phase 1's read is rock-solid and the 30s window is 100% phase-1 prints at handoff.
+# Phase 2 length: long enough that the 30s window flushes to 100% phase-2 prints AND phase 2's own
+# read settles — another 60s+ of logical time at the phase's tick rate.
+_SHIFT_CONTROL_TICKS = 120     # buyer-control phase: 60s logical (two 30s windows) — fully settled
+_SHIFT_CHOP_TICKS = 360        # chop phase: 72s logical at _CHOP_DT (0.2s) — flushes the 30s window
+# The chop phase is anchored at the directional phase's STARTING price, which the buyer phase has
+# walked strictly UP and away from — so the chop band sits comfortably BELOW the late-control price
+# (the deterministic "price band dips below the late-control price" the spec calls for), and the
+# decay reads as honest weakening, not a fabricated reversal.
+_SHIFT_CHOP_CENTER = _START_BID   # 100.00 — below every walked-up late-control price (no progress)
+
+# SIM-REVERSAL: a bid-absorption phase at a HELD price, then a buyer-control phase that lifts price
+# strictly ABOVE the absorbed level. The control phase starts from the absorbed quote and walks it
+# UP exactly like _buyer_control_stream, so the buyer read is EARNED by real positive price impact
+# (never the relaxed aggression-only shortcut — the critical project-template guard), and the final
+# `last` is provably above the absorbed price.
+_REV_ABSORB_TICKS = 120        # bid-absorption phase: 60s logical — fully settled bid_absorption
+_REV_CONTROL_TICKS = 240       # buyer-control phase: 120s logical — flushes the 30s window + lifts
+_REV_ABSORBED_PRICE = _ABS_BID    # 100.00 — the held bid the sells were absorbed at
+
 
 class SimulatedProvider:
     def __init__(self, ticker: str, scenario: str, seed: int = DEFAULT_SEED) -> None:
@@ -109,6 +147,10 @@ class SimulatedProvider:
             yield from self._ask_absorption_stream()
         elif self.ticker == "SIM-CHOP":
             yield from self._chop_stream()
+        elif self.ticker == "SIM-SHIFT":
+            yield from self._shift_stream()
+        elif self.ticker == "SIM-REVERSAL":
+            yield from self._reversal_stream()
 
     def _buyer_control_stream(self) -> Iterator[Event]:
         rng = random.Random(self.seed)
@@ -225,6 +267,104 @@ class SimulatedProvider:
                 yield TradeEvent(self.ticker, t, _CHOP_CENTER, _CHOP_SIZE, Side.UNKNOWN)
                 next_aggressor = Side.BUY
             t += _CHOP_DT
+
+    # --- Regime-transition phase emitters (shared by SIM-SHIFT / SIM-REVERSAL) ----------------
+    # Each emitter is a faithful slice of the matching single-state stream above, parameterised so
+    # the two regime scenarios reuse the SAME calibrated shape (so their per-phase reads land with
+    # the same confidence margin as the single-state scenarios). They take and return the running
+    # (rng, bid, ask, t) so the phases stitch into one monotonic logical timeline off a single seed.
+
+    def _emit_buyer_control_phase(
+        self, rng: random.Random, bid: float, ask: float, t: float, ticks: int
+    ) -> tuple[float, float, float]:
+        """Buyer-control phase: a faithful slice of ``_buyer_control_stream`` (majority aggressive
+        buys lifting the quote => positive buy_price_impact). Returns the running (bid, ask, t)."""
+        for _ in range(ticks):
+            is_buy = rng.random() >= _P_MINORITY
+            if is_buy and rng.random() < _P_QUOTE_MOVE:
+                bid = round(bid + _PRICE_TICK, 2)
+                ask = round(ask + _PRICE_TICK, 2)
+            yield QuoteEvent(self.ticker, t, bid, ask, _QUOTE_SIZE, _QUOTE_SIZE)
+            if is_buy:
+                yield TradeEvent(self.ticker, t, ask, rng.choice(_MAJORITY_SIZES), Side.UNKNOWN)
+            else:
+                yield TradeEvent(self.ticker, t, bid, rng.choice(_MINORITY_SIZES), Side.UNKNOWN)
+            t += _LOGICAL_DT
+        return bid, ask, t
+
+    def _emit_chop_phase(
+        self, rng: random.Random, t: float, ticks: int, center: float
+    ) -> float:
+        """Choppy/unclear phase: a faithful slice of ``_chop_stream`` anchored at ``center``
+        (balanced alternating aggression, wide jittery spread, no price progress, no refresh).
+        Returns the running ``t``."""
+        next_aggressor = Side.BUY
+        for _ in range(ticks):
+            backoff = rng.uniform(0.0, _CHOP_QUOTE_JITTER)
+            spread = rng.uniform(_CHOP_SPREAD_MIN, _CHOP_SPREAD_MAX)
+            is_mid = rng.random() < _CHOP_P_MID_PRINT
+            if is_mid:
+                bid = round(center - spread / 2, 2)
+                ask = round(center + spread / 2, 2)
+                yield QuoteEvent(self.ticker, t, bid, ask, _QUOTE_SIZE, _QUOTE_SIZE)
+                yield TradeEvent(self.ticker, t, center, _CHOP_SIZE, Side.UNKNOWN)
+            elif next_aggressor is Side.BUY:
+                ask = round(center - backoff, 2)
+                bid = round(ask - spread, 2)
+                yield QuoteEvent(self.ticker, t, bid, ask, _QUOTE_SIZE, _QUOTE_SIZE)
+                yield TradeEvent(self.ticker, t, center, _CHOP_SIZE, Side.UNKNOWN)
+                next_aggressor = Side.SELL
+            else:
+                bid = round(center + backoff, 2)
+                ask = round(bid + spread, 2)
+                yield QuoteEvent(self.ticker, t, bid, ask, _QUOTE_SIZE, _QUOTE_SIZE)
+                yield TradeEvent(self.ticker, t, center, _CHOP_SIZE, Side.UNKNOWN)
+                next_aggressor = Side.BUY
+            t += _CHOP_DT
+        return t
+
+    def _emit_bid_absorption_phase(
+        self, rng: random.Random, bid: float, ask: float, t: float, ticks: int
+    ) -> tuple[float, float, float]:
+        """Bid-absorption phase: a faithful slice of ``_bid_absorption_stream`` (heavy aggressive
+        sells into a bid that HOLDS at the same level — flat sell impact + refreshing bid). Returns
+        the running (bid, ask, t)."""
+        for _ in range(ticks):
+            yield QuoteEvent(self.ticker, t, bid, ask, _QUOTE_SIZE, _QUOTE_SIZE)
+            yield TradeEvent(self.ticker, t, bid, rng.choice(_MAJORITY_SIZES), Side.UNKNOWN)
+            t += _LOGICAL_DT
+        return bid, ask, t
+
+    def _shift_stream(self) -> Iterator[Event]:
+        # SIM-SHIFT (capability 21): a sustained buyer-control phase, then an unclear/chop phase
+        # whose price band sits BELOW the late-control price. Phase 1 walks the quote strictly UP
+        # from _START_BID; phase 2 chops around _SHIFT_CHOP_CENTER (= _START_BID), which is below
+        # every walked-up late-control price — so the engine first confirms buyer_control with real
+        # positive impact, then honestly DECAYS to unclear as the regime turns choppy and price
+        # gives back its progress (drives weakening-after-confirmation / stance-decay / clean-process
+        # invalidation deterministically in later research iterations). One seed, one monotonic
+        # logical timeline — provider shape only; the engine is untouched and deterministic.
+        rng = random.Random(self.seed)
+        bid, ask, t = yield from self._emit_buyer_control_phase(
+            rng, _START_BID, _START_ASK, 0.0, _SHIFT_CONTROL_TICKS
+        )
+        yield from self._emit_chop_phase(rng, t, _SHIFT_CHOP_TICKS, _SHIFT_CHOP_CENTER)
+
+    def _reversal_stream(self) -> Iterator[Event]:
+        # SIM-REVERSAL (capability 21): a bid-absorption phase at a HELD price, then a buyer-control
+        # phase that lifts price strictly ABOVE the absorbed level. Phase 1 is heavy aggressive
+        # selling into a bid that refreshes at _REV_ABSORBED_PRICE (=> bid_absorption, NOT
+        # seller_control — the price-impact discipline: high sell aggression, ~zero downward
+        # progress). Phase 2 then walks the quote UP from that same level exactly like
+        # _buyer_control_stream, so buyer_control is EARNED by genuine positive buy_price_impact
+        # (never the relaxed aggression-only shortcut — the critical buyer-guard) and the final
+        # `last` is provably above the absorbed price (drives the absorption-reversal happy path /
+        # failed-move-fade confirmation later). One seed, one monotonic timeline; engine untouched.
+        rng = random.Random(self.seed)
+        bid, ask, t = yield from self._emit_bid_absorption_phase(
+            rng, _ABS_BID, _ABS_ASK, 0.0, _REV_ABSORB_TICKS
+        )
+        yield from self._emit_buyer_control_phase(rng, bid, ask, t, _REV_CONTROL_TICKS)
 
 
 def is_sim_ticker(ticker: str) -> bool:

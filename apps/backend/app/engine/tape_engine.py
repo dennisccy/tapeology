@@ -10,6 +10,7 @@ config — never on a concrete provider.
 
 from __future__ import annotations
 
+import logging
 from collections import deque
 
 from ..config import Config
@@ -21,6 +22,12 @@ from .history import HistoryBuffer
 from .market_state import MarketState
 from .observations import ObservationEmitter
 from .snapshot import EngineSnapshot, TradeRow
+
+# Server-side logger for the observer seam. An observer callback that RAISES must be logged here
+# (a real, inspectable line) and never swallowed silently — the no-mute / no-silent-failure
+# discipline. The engine itself stays research-agnostic: an observer is an opaque object, never a
+# research type, so logging a failure leaks no research concept into the engine.
+logger = logging.getLogger(__name__)
 
 
 class TapeEngine:
@@ -65,6 +72,22 @@ class TapeEngine:
         # restores it verbatim (live/connecting/stale) and NEVER fabricates "live".
         self._paused = False
         self._pre_pause_status: str | None = None
+
+        # --- Research seam (capability 20): the generic snapshot-observer list ----------------
+        # The ONLY sanctioned attachment point for the research evolution. Each registered observer
+        # is an OPAQUE object exposing optional ``on_event(event, snapshot)`` (invoked at the END of
+        # every ``process_event``, after the snapshot is rebuilt) and ``on_status(status)`` (invoked
+        # on EVERY stream-status change — status flips do not pass through events, so this hook is
+        # what the future research monitor will need for stale/closed/failed). The engine stays
+        # research-agnostic: it imports/holds no research type and calls only these two opaque
+        # callbacks. Notification is EXCEPTION-ISOLATED — a raising observer is logged and marked
+        # failed (a per-observer state a future research monitor reads to surface
+        # ``monitor_status: failed``) and event processing/feeding continues UNCHANGED, so engine
+        # outputs stay byte-identical with or without an attached (even throwing) observer (J-68).
+        # Nothing attaches an observer in production code this iteration — only tests do.
+        self._observers: list[object] = []
+        self._observer_failed: dict[int, bool] = {}
+
         self._snapshot = self._build_snapshot()
 
     @property
@@ -76,6 +99,62 @@ class TapeEngine:
         """The canonical display/epoch anchor (row 13). Read by the history projection so the
         chart can map a logical bin time to a true clock instant; never recomputed downstream."""
         return self._epoch_anchor
+
+    def add_observer(self, observer: object) -> object:
+        """Register a snapshot observer on the research seam (capability 20); returns the handle.
+
+        ``observer`` is an OPAQUE object that may expose ``on_event(event, snapshot)`` and/or
+        ``on_status(status)`` — the engine calls only those two callbacks and knows nothing else
+        about it (engine stays research-agnostic). The returned handle (the observer itself) is what
+        ``observer_failed`` is later queried with. Registration does NOT rebuild the snapshot and
+        does NOT fire any callback, so attaching an observer never perturbs engine output.
+        """
+        self._observers.append(observer)
+        self._observer_failed[id(observer)] = False
+        return observer
+
+    def observer_failed(self, handle: object) -> bool:
+        """Whether the observer behind ``handle`` has raised in any callback (per-observer state).
+
+        Read by the FUTURE research monitor to surface ``monitor_status: failed`` (no research
+        projection is built this iteration — only this engine-side flag exists). Defaults ``False``
+        for an unknown handle (never raises — a query is side-effect-free)."""
+        return self._observer_failed.get(id(handle), False)
+
+    def _notify_event(self, event: Event, snapshot: EngineSnapshot) -> None:
+        """Invoke ``on_event`` on every observer, EXCEPTION-ISOLATED (J-68 anti-goal).
+
+        A raising observer is logged and marked failed; the loop continues so one bad observer
+        never starves the others, and — crucially — the exception never propagates back into
+        ``process_event``, so the engine's outputs are unchanged whether an observer throws or not.
+        """
+        for observer in self._observers:
+            callback = getattr(observer, "on_event", None)
+            if callback is None:
+                continue
+            try:
+                callback(event, snapshot)
+            except Exception:
+                self._observer_failed[id(observer)] = True
+                logger.exception("snapshot observer on_event failed for %s", self._ticker)
+
+    def _notify_status(self, status: str) -> None:
+        """Invoke ``on_status`` on every observer, EXCEPTION-ISOLATED (mirrors ``_notify_event``).
+
+        Fired from EVERY status writer (``set_stream_status``, ``pause``, ``resume``, and the
+        internal connecting/waiting->live promotion) — status flips do not pass through events, so
+        this is the only hook the future research monitor has for stale/closed/failed. A raising
+        observer is logged + marked failed and the status write itself still succeeds.
+        """
+        for observer in self._observers:
+            callback = getattr(observer, "on_status", None)
+            if callback is None:
+                continue
+            try:
+                callback(status)
+            except Exception:
+                self._observer_failed[id(observer)] = True
+                logger.exception("snapshot observer on_status failed for %s", self._ticker)
 
     def set_stream_status(self, status: str) -> None:
         """Set the canonical row-6 ``stream_status`` (delivery/lifecycle metadata, owned ONCE here).
@@ -90,6 +169,9 @@ class TapeEngine:
         """
         self._stream_status = status
         self._snapshot = self._build_snapshot()
+        # Notify AFTER the write + snapshot rebuild so an observer reading the engine sees the new
+        # status. Exception-isolated; the write above has already taken effect regardless.
+        self._notify_status(status)
 
     @property
     def paused(self) -> bool:
@@ -111,6 +193,7 @@ class TapeEngine:
         self._paused = True
         self._stream_status = "paused"
         self._snapshot = self._build_snapshot()
+        self._notify_status("paused")  # status flip => observer hook (exception-isolated)
 
     def resume(self) -> None:
         """Continue: clear the paused flag and restore the exact pre-pause status.
@@ -126,6 +209,7 @@ class TapeEngine:
         self._stream_status = self._pre_pause_status or "connecting"
         self._pre_pause_status = None
         self._snapshot = self._build_snapshot()
+        self._notify_status(self._stream_status)  # restored status => observer hook (isolated)
 
     def process_event(self, event: Event) -> EngineSnapshot:
         # Honest pause: while paused the engine applies NOTHING (no trades, no quotes, no ts
@@ -185,8 +269,10 @@ class TapeEngine:
         # the feeder) -> live (first event arrived). Both pre-live rungs promote here so a stream
         # that signalled open (status `waiting`) also goes `live` on its first event. `stale` ->
         # `live` recovery and `paused`/`closed`/`failed` are owned by the feeder, not flipped here.
+        promoted_to_live = False
         if self._stream_status in ("connecting", "waiting"):
             self._stream_status = "live"
+            promoted_to_live = True
         self._snapshot = self._build_snapshot()
         # Append a tape-state-transition MARKER if this tick's classified state changed to a
         # meaningful state — reusing the snapshot's OWN tape_state/confidence (single source of
@@ -195,6 +281,14 @@ class TapeEngine:
         self._history.note_state(
             self._snapshot.timestamp, self._snapshot.tape_state, self._snapshot.confidence
         )
+        # Research-seam notifications (exception-isolated; capability 20). The internal
+        # connecting/waiting->live promotion is a status flip that does NOT go through on_event, so
+        # it must fire on_status too (the future research monitor needs it). Both notifications run
+        # AFTER the snapshot/history are finalised so an observer reads the complete tick, and both
+        # are isolated so a throwing observer cannot perturb the value returned here (J-68).
+        if promoted_to_live:
+            self._notify_status("live")
+        self._notify_event(event, self._snapshot)
         return self._snapshot
 
     def snapshot(self) -> EngineSnapshot:
