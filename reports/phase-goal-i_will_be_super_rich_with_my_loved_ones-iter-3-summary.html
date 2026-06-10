@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>goal-i_will_be_super_rich_with_my_loved_ones-iter-3 — Iteration Summary</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0; padding: 0; color: #1f2328; background: #f6f8fa; line-height: 1.5;
+}
+.container { max-width: 880px; margin: 0 auto; padding: 24px 16px 80px; }
+.hero {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 28px; margin-bottom: 16px; text-align: center;
+}
+.hero.pass { border-top: 6px solid #1a7f37; }
+.hero.fail { border-top: 6px solid #cf222e; }
+.hero.inprogress { border-top: 6px solid #d4a72c; }
+.hero h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+.hero h2 { margin: 0 0 14px 0; font-size: 1rem; color: #57606a; font-weight: 500; }
+.badge-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.95rem;
+}
+.badge.pass { background: #dafbe1; color: #1a7f37; }
+.badge.fail { background: #ffebe9; color: #cf222e; }
+.badge.inprogress { background: #fff8c5; color: #9a6700; }
+.signal-badge { padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; }
+.signal-badge.improving { background: #dafbe1; color: #1a7f37; }
+.signal-badge.holding { background: #ddf4ff; color: #0969da; }
+.signal-badge.stalling { background: #fff8c5; color: #9a6700; }
+.signal-badge.regressing { background: #ffebe9; color: #cf222e; }
+.signal-badge.na { background: #f6f8fa; color: #57606a; }
+.meta { color: #57606a; font-size: 0.875rem; margin: 10px 0 16px; }
+.journey-row {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 4px;
+}
+.journey-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 0.85rem;
+  background: #f6f8fa; border: 1px solid #d0d7de;
+}
+.journey-pill.passing, .journey-pill.already_passing { background: #dafbe1; color: #1a7f37; border-color: #b4e2c0; }
+.journey-pill.failing, .journey-pill.regressed { background: #ffebe9; color: #cf222e; border-color: #f1aeb0; }
+.journey-pill.partial { background: #fff8c5; color: #9a6700; border-color: #eed888; }
+.journey-pill.unknown { background: #f6f8fa; color: #57606a; }
+.hero-image { margin-top: 18px; }
+.hero-image img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+details {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  margin-bottom: 12px;
+}
+details > summary {
+  cursor: pointer; padding: 14px 18px; font-weight: 600; font-size: 1.05rem;
+  list-style: none; user-select: none; display: flex; align-items: center; gap: 8px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: '▶'; transition: transform 0.15s; font-size: 0.75rem; color: #57606a;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+.accordion-body { padding: 0 18px 18px; }
+.accordion-body h3 { font-size: 0.95rem; color: #57606a; margin: 16px 0 6px; }
+.why-text { background: #f6f8fa; padding: 10px 12px; border-radius: 6px; margin: 4px 0 12px; }
+ul.bullets { margin: 6px 0 14px; padding-left: 22px; }
+ul.bullets li { margin-bottom: 4px; }
+ol.steps { padding-left: 0; list-style: none; counter-reset: step; }
+ol.steps > li {
+  counter-increment: step; padding: 12px 0 12px 44px;
+  border-top: 1px solid #eaeef2; position: relative;
+}
+ol.steps > li:first-child { border-top: none; }
+ol.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 14px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #0969da; color: white; display: flex;
+  align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600;
+}
+.step-shot { margin-top: 10px; }
+.step-shot img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+.next-step-box {
+  background: #ddf4ff; padding: 12px 16px; border-radius: 6px;
+  border-left: 4px solid #0969da; margin: 12px 0;
+}
+.drill-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.drill-table th, .drill-table td {
+  text-align: left; padding: 8px 6px; border-bottom: 1px solid #eaeef2;
+}
+.drill-table th { background: #f6f8fa; }
+.verdict-cell.PASS, .verdict-cell.CLOSURE-PASS, .verdict-cell.GOAL_ACHIEVED { color: #1a7f37; font-weight: 600; }
+.verdict-cell.FAIL, .verdict-cell.CLOSURE-FAIL, .verdict-cell.REGRESSION { color: #cf222e; font-weight: 600; }
+.verdict-cell.CONTINUE, .verdict-cell.ESCALATE, .verdict-cell.STALLED { color: #9a6700; font-weight: 600; }
+.verdict-cell.SKIPPED, .verdict-cell.UNKNOWN, .verdict-cell.IN-PROGRESS { color: #57606a; }
+.footer-note { text-align: center; color: #6e7781; font-size: 0.8rem; margin-top: 24px; }
+.iter-card {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 16px 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 14px;
+}
+.iter-card .left { flex-shrink: 0; }
+.iter-card .body { flex: 1 1 auto; }
+.iter-card .body .title { font-weight: 600; }
+.iter-card .body .sub { color: #57606a; font-size: 0.88rem; margin-top: 2px; }
+.iter-card a.open { color: #0969da; text-decoration: none; font-weight: 500; }
+.iter-card a.open:hover { text-decoration: underline; }
+.matrix { width: 100%; border-collapse: collapse; margin: 12px 0 22px; font-size: 0.88rem; }
+.matrix th, .matrix td { padding: 6px 8px; border: 1px solid #d0d7de; text-align: center; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix .cell-passing, .matrix .cell-already_passing { background: #dafbe1; color: #1a7f37; }
+.matrix .cell-failing, .matrix .cell-regressed { background: #ffebe9; color: #cf222e; }
+.matrix .cell-partial { background: #fff8c5; color: #9a6700; }
+.matrix .cell-unknown { background: #f6f8fa; color: #57606a; }
+.no-summary {
+  background: #fff8c5; border: 1px solid #eed888; padding: 14px 18px;
+  border-radius: 8px; color: #9a6700; margin-bottom: 14px;
+}
+/* Plain-language layer — the primary, non-technical view. */
+.plain-words {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 24px; margin: 18px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.plain-words .pw-heading {
+  margin: 0 0 14px; font-size: 1.15rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.pw-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.pw-card {
+  background: white; border-radius: 8px; padding: 14px 16px;
+  border: 1px solid #e3eaf3;
+}
+.pw-card .pw-label {
+  font-size: 0.78rem; font-weight: 600; color: #57606a;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.pw-card .pw-text {
+  margin: 0; font-size: 1rem; color: #1f2328; line-height: 1.45;
+}
+.pw-empty { color: #8c959f; font-style: italic; font-size: 0.95rem; }
+.tech-divider {
+  margin: 18px 0 8px; text-align: center;
+  color: #6e7781; font-size: 0.82rem; font-style: italic;
+  border-top: 1px dashed #d0d7de; padding-top: 12px;
+}
+/* Watch-it-work — narrated screenshot gallery from demo-narrator. */
+.watch-it-work {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 18px 22px; margin: 10px 0 6px;
+}
+.wiw-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.wiw-heading {
+  margin: 0; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.demo-badge {
+  font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 12px;
+  border: 1px solid transparent; letter-spacing: 0.04em;
+}
+.demo-badge.demo-recorded { background: #dafbe1; color: #1a7f37; border-color: #aceebb; }
+.demo-badge.demo-notes    { background: #fff8c5; color: #9a6700; border-color: #e8d97e; }
+.demo-badge.demo-skipped  { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+.demo-badge.demo-pending  { background: #ddf4ff; color: #0969da; border-color: #b6e3ff; }
+.demo-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.demo-step {
+  margin: 0; padding: 12px; background: #f6f8fa;
+  border: 1px solid #d0d7de; border-radius: 8px;
+}
+.demo-step-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.demo-step-num {
+  font-weight: 600; color: #57606a; font-variant-numeric: tabular-nums;
+}
+.demo-step-title { color: #1f2328; font-weight: 500; }
+.demo-new {
+  background: #ddf4ff; color: #0969da; font-size: 0.7rem; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px; letter-spacing: 0.06em;
+}
+.demo-shot { margin-bottom: 8px; }
+.demo-shot img {
+  width: 100%; height: auto; border-radius: 4px; border: 1px solid #d0d7de;
+  display: block;
+}
+.demo-narration {
+  margin: 0; color: #1f2328; font-size: 0.92rem; line-height: 1.4;
+}
+.demo-empty {
+  margin: 8px 0 0; color: #57606a; font-style: italic;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.demo-notes-wrap { margin-top: 14px; }
+.demo-notes-wrap summary {
+  cursor: pointer; color: #9a6700; font-weight: 500; font-size: 0.9rem;
+}
+.demo-notes-wrap[open] summary { margin-bottom: 6px; }
+/* Story so far + latest demo (session index plain-language top). */
+.story-so-far {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 14px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.story-heading {
+  margin: 0 0 12px; font-size: 1.1rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.story-body { font-size: 1rem; color: #1f2328; line-height: 1.55; }
+.story-body .story-h { margin: 14px 0 6px; color: #1f2328; }
+.story-body p { margin: 0 0 10px; }
+.session-demo {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 0; margin: 8px 0 6px; overflow: hidden;
+}
+.session-demo-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 22px;
+  background: #f6f8fa; border-bottom: 1px solid #d6e4f0;
+  font-weight: 600; color: #1f2328; font-size: 0.95rem;
+}
+.session-demo-head a.open { color: #0969da; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+.session-demo-head a.open:hover { text-decoration: underline; }
+.session-demo .watch-it-work {
+  border: none; border-radius: 0; box-shadow: none; margin: 0;
+}
+/* Delivered link banner — sits on the session index when GOAL_ACHIEVED. */
+.delivered-link {
+  margin: 14px 0; padding: 14px 22px;
+  background: #dafbe1; border: 1px solid #aceebb; border-radius: 10px;
+  color: #1a7f37; font-size: 1rem;
+}
+.delivered-link a {
+  color: #1a7f37; font-weight: 600; text-decoration: none; margin-left: 8px;
+}
+.delivered-link a:hover { text-decoration: underline; }
+.delivered-back {
+  margin: 8px 0 14px; padding: 0; font-size: 0.9rem;
+}
+.delivered-back a { color: #0969da; text-decoration: none; }
+.delivered-back a:hover { text-decoration: underline; }
+.delivered-body {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 28px; margin: 12px 0;
+}
+.delivered-body h2.story-h { margin-top: 0; }
+/* Feature manual (session index, top of page). */
+.cover-vision {
+  margin: 8px 0 14px; color: #57606a; font-size: 1.02rem;
+  font-style: italic; max-width: 60ch;
+}
+.feature-toc {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 20px 26px; margin: 14px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.feature-toc-heading {
+  margin: 0 0 14px; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.feature-toc-list {
+  margin: 0; padding-left: 22px; font-size: 1rem; line-height: 1.7;
+}
+.feature-toc-list li { padding: 2px 0; }
+.feature-toc-list a {
+  color: #1f2328; text-decoration: none; font-weight: 500;
+}
+.feature-toc-list a:hover { color: #0969da; text-decoration: underline; }
+.toc-extra-header {
+  list-style: none; margin: 10px 0 4px -22px;
+  font-size: 0.82rem; color: #57606a; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.feature-manual { margin: 14px 0; }
+.feature-section {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 16px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+  scroll-margin-top: 12px;
+}
+.feature-heading {
+  margin: 0 0 10px; font-size: 1.2rem; color: #1f2328;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.feature-description {
+  margin: 0 0 16px; color: #1f2328; font-size: 1rem; line-height: 1.55;
+}
+.feature-description-label {
+  font-weight: 600; color: #57606a; margin-right: 4px;
+}
+.feature-note {
+  margin: 8px 0 12px; padding: 8px 12px;
+  background: #fff8c5; border: 1px solid #eed888; border-radius: 6px;
+  color: #9a6700; font-size: 0.88rem;
+}
+.feature-source {
+  margin: 12px 0 0; font-size: 0.88rem; color: #57606a;
+}
+.feature-source a { color: #0969da; text-decoration: none; }
+.feature-source a:hover { text-decoration: underline; }
+.feature-empty {
+  margin: 10px 0; padding: 12px 16px;
+  background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+  color: #57606a; font-style: italic;
+}
+.status-pill {
+  font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+  letter-spacing: 0.04em; white-space: nowrap; display: inline-block;
+}
+.status-pill-passing { background: #dafbe1; color: #1a7f37; border: 1px solid #aceebb; }
+.status-pill-failing { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-regressed { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-partial { background: #fff8c5; color: #9a6700; border: 1px solid #e8d97e; }
+.status-pill-unknown { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.status-pill-coming-soon { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.developer-view {
+  margin: 28px 0 6px;
+  border: 1px dashed #d0d7de; border-radius: 8px;
+}
+.developer-view > summary {
+  cursor: pointer; padding: 12px 16px;
+  color: #57606a; font-size: 0.92rem; font-weight: 500;
+  background: #f6f8fa; border-radius: 8px;
+}
+.developer-view[open] > summary {
+  border-bottom: 1px dashed #d0d7de;
+  border-radius: 8px 8px 0 0;
+}
+.developer-view-body { padding: 12px 18px; }
+</style>
+</head><body><div class='container'>
+<section class='hero inprogress'><div class='badge-row'><div class='badge inprogress'><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+<circle cx="12" cy="12" r="11" fill="#d4a72c"/>
+<path d="M12 6v6l4 2.5" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg><span>ESCALATE</span></div><span class='signal-badge holding'>Direction: holding</span></div><h1>Iteration 3  ·  session i_will_be_super_rich_with_my_loved_ones</h1><h2>Harness repaired, J-38/J-39 browser flows exercised end-to-end, but strip screenshots mis-framed for a second consecutive iter — ESCALATE to FULL.</h2><div class='meta'>2026-06-10 · goal-lean</div><div class='meta'>Journeys: 23/68 passing</div><div class='journey-row'><span class='journey-pill passing' title='Watch a ticker and see the live tape cockpit'>J-01 · passing</span><span class='journey-pill passing' title='Buyer-control scenario is identified'>J-02 · passing</span><span class='journey-pill passing' title='Seller-control scenario is identified'>J-03 · passing</span><span class='journey-pill passing' title='Bid absorption is detected (price impact, not aggression)'>J-04 · passing</span><span class='journey-pill passing' title='Ask absorption is detected (price impact, not aggression)'>J-05 · passing</span><span class='journey-pill passing' title='Unclear / choppy tape is reported as unclear'>J-06 · passing</span><span class='journey-pill passing' title='Tape-state transitions are announced in the event log and observations'>J-07 · passing</span><span class='journey-pill passing' title='REST and the live UI agree (single source of truth)'>J-08 · passing</span><span class='journey-pill passing' title='Stop watching a ticker'>J-09 · passing</span><span class='journey-pill already_passing' title='Choose a data source (Live / Historical / Simulated)'>J-10 · already_passing</span><span class='journey-pill partial' title='Replay a real historical session'>J-11 · partial</span><span class='journey-pill already_passing' title='Stream a real live ticker'>J-12 · already_passing</span><span class='journey-pill already_passing' title='Find a symbol by search'>J-13 · already_passing</span><span class='journey-pill partial' title='Real-data edge cases are handled honestly (no fabricated data)'>J-14 · partial</span><span class='journey-pill unknown' title='A live-feed gap shows stale, then recovers'>J-15 · unknown</span><span class='journey-pill partial' title='Historical recent-trades show a resolved side (not unknown)'>J-16 · partial</span><span class='journey-pill passing' title='Price chart with tape-state markers on simulated data'>J-17 · passing</span><span class='journey-pill partial' title='Inspect tape-state prediction on a real historical chart'>J-18 · partial</span><span class='journey-pill passing' title='Pause and resume a watch without losing state'>J-19 · passing</span><span class='journey-pill partial' title='Pick a historical window in local time with US-session quick-picks'>J-20 · partial</span><span class='journey-pill passing' title='A Watch click is always acknowledged immediately (no silent dead-click)'>J-21 · passing</span><span class='journey-pill partial' title='A slow or hung request resolves to an explicit error, never an infinite spinner'>J-22 · partial</span><span class='journey-pill partial' title='A failed initial connection or stream surfaces an explicit error (no swallowed failures)'>J-23 · partial</span><span class='journey-pill passing' title='Invalid or empty Watch input gives immediate inline feedback'>J-24 · passing</span><span class='journey-pill already_passing' title='A valid Watch never silently returns to (or stays on) the idle screen — in real modes and off-hours'>J-25 · already_passing</span><span class='journey-pill already_passing' title='A connected stream with no data yet explains itself (never a mute cockpit)'>J-26 · already_passing</span><span class='journey-pill partial' title='No usable data — whether silent or failed — resolves to an explicit honest state within a bounded time'>J-27 · partial</span><span class='journey-pill partial' title='A vendor-call timeout is truly enforced and honestly reported (backend wins, message is actionable)'>J-28 · partial</span><span class='journey-pill partial' title='A Historical watch of a real liquid symbol loads quickly and within bounds — never a routine timeout'>J-29 · partial</span><span class='journey-pill already_passing' title='Symbol search is fast and responsive'>J-30 · already_passing</span><span class='journey-pill already_passing' title='The price chart shows TRUE clock time, not elapsed playback seconds'>J-31 · already_passing</span><span class='journey-pill partial' title='Replay-speed changes take effect immediately (no re-Watch)'>J-32 · partial</span><span class='journey-pill superseded' title='A genuine directional move on real data classifies as control, not perpetual unclear'>J-33 · superseded</span><span class='journey-pill superseded' title='A long historical window loads via chunking instead of very-high-volume error'>J-34 · superseded</span><span class='journey-pill already_passing' title='Dates are dd-MM-yyyy everywhere, entered via a custom date input'>J-35 · already_passing</span><span class='journey-pill already_passing' title='A real directional move classifies as control on real data — proven by a committed real-data fixture'>J-36 · already_passing</span><span class='journey-pill already_passing' title='A long/dense window loads progressively — proven by a committed real-data fixture'>J-37 · already_passing</span><span class='journey-pill partial' title='Declare a thesis on the watched ticker'>J-38 · partial</span><span class='journey-pill partial' title='Thesis creation is validated honestly (no silent coercion)'>J-39 · partial</span><span class='journey-pill failing' title='Absorption-reversal confirms on the REVERSAL, not the absorption'>J-40 · failing</span><span class='journey-pill failing' title='A thesis against the tape reads REJECTING, with evidence'>J-41 · failing</span><span class='journey-pill failing' title='Trend continuation confirms while control holds'>J-42 · failing</span><span class='journey-pill failing' title='WEAKENING after confirmation on a shifting tape'>J-43 · failing</span><span class='journey-pill failing' title='Invalidation is a hard, robust trigger'>J-44 · failing</span><span class='journey-pill failing' title='Level break-and-go confirms only after the level is crossed'>J-45 · failing</span><span class='journey-pill failing' title='Failed-move fade confirms on absorption of the break'>J-46 · failing</span><span class='journey-pill failing' title='A thesis is bound to its source, and survives interruption only with a position'>J-47 · failing</span><span class='journey-pill failing' title='Thesis geometry is drawn on the price chart'>J-48 · failing</span><span class='journey-pill failing' title='Entry risk flags are computed at declaration and recorded'>J-49 · failing</span><span class='journey-pill failing' title='Resolving a thesis is honest (played out / abandoned / expired)'>J-50 · failing</span><span class='journey-pill failing' title='The journal survives a backend restart; interrupted theses are handled honestly'>J-51 · failing</span><span class='journey-pill failing' title='Mark your actual entry and exit (journaling, not execution)'>J-52 · failing</span><span class='journey-pill failing' title='Management stance while holding a position'>J-53 · failing</span><span class='journey-pill failing' title='Objective execution checks suggest mistake tags'>J-54 · failing</span><span class='journey-pill failing' title='Review compares expected vs actual behaviour'>J-55 · failing</span><span class='journey-pill failing' title='Outcome and process are graded on separate axes'>J-56 · failing</span><span class='journey-pill failing' title='Mistake tags come from the backend taxonomy'>J-57 · failing</span><span class='journey-pill failing' title='Excursion outcomes are measured and honest'>J-58 · failing</span><span class='journey-pill failing' title='Analytics aggregate honestly, segregated by feed and config'>J-59 · failing</span><span class='journey-pill failing' title='A replay study runs the setup grammar over a window — against a null baseline'>J-60 · failing</span><span class='journey-pill failing' title='Studies are honest about their limits'>J-61 · failing</span><span class='journey-pill failing' title='The reference study reproduces pinned results in CI (and the engine keeps up)'>J-62 · failing</span><span class='journey-pill failing' title='The entry checklist renders live margins, not a naked signal'>J-63 · failing</span><span class='journey-pill failing' title='Stance freshness — never a frozen green over a dead tape'>J-64 · failing</span><span class='journey-pill failing' title='Setup-forming hints are descriptive, gated, and logged'>J-65 · failing</span><span class='journey-pill failing' title='Cue-discipline sweep — no imperative, no prediction, sound off by default'>J-66 · failing</span><span class='journey-pill failing' title='The live-feed basis is always labeled (SIP research vs IEX live)'>J-67 · failing</span><span class='journey-pill partial' title='The existing cockpit is unchanged (regression sentinel)'>J-68 · partial</span></div><div class='hero-image'><img src='data:image/png;base64,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' alt='Hero screenshot'></div></section>
+<section class='plain-words'><h2 class='pw-heading'>In plain words</h2><div class='pw-grid'><div class='pw-card'><div class='pw-label'>What you can do now</div><p class='pw-text'>Watch any stock ticker in simulated or real mode and see a live cockpit that identifies whether buyers are in control, sellers are pressing, bids or asks are being absorbed, or the tape is unclear — with a confidence score. Pause and resume a watch without losing state. View a price chart with tape-state markers on true clock-time candles. Replay historical sessions, stream live tickers, and search for symbols. Declare a trade thesis on a watched ticker by choosing a setup type, direction, and an invalidation price; the cockpit shows your thesis with live expected-behaviour statuses. Incoherent declarations (wrong-side invalidation, duplicate thesis, unwatched ticker, missing or forbidden fields) are refused with a clear on-screen message and nothing is recorded.</p></div><div class='pw-card'><div class='pw-label'>What changed this time</div><p class='pw-text'>Behind-the-scenes work — nothing visibly new this round. The build tooling was tightened so a test build can never accidentally break the running app, and one unused internal code path was removed to keep the data flow clean. Browser testing of the thesis strip ran end-to-end with REST cross-checks and the full error-rejection flow was re-proven live, but the screenshots of the strip panel itself were cropped to the wrong part of the screen (only the price chart was captured, the strip was just below it). So the visual proof the team needs to formally close out the thesis-strip journeys still hasn&#x27;t landed — that is the main thing next round will fix.</p></div><div class='pw-card'><div class='pw-label'>What&#x27;s next</div><p class='pw-text'>Next we&#x27;ll build the verdict-transition engine — the part that moves a thesis from &quot;pending&quot; through &quot;confirming&quot;, &quot;weakening&quot;, &quot;rejecting&quot;, or &quot;invalidated&quot; as the tape evolves — while also fixing the screenshot framing so the thesis strip is finally captured on screen and those journeys can be formally signed off.</p></div></div></section>
+<section class='watch-it-work'><div class='wiw-head'><h2 class='wiw-heading'>Watch it work</h2><span class='demo-badge demo-skipped'>SKIPPED</span></div><p class='demo-empty'>Backend-only iteration (Frontend Present: no). No browser walkthrough was performed.</p></section>
+<div class='tech-divider'><span>Technical detail below — open if you want the developer view.</span></div>
+<details><summary>What was done</summary><div class='accordion-body'><ul class='bullets'><li>Extended `.gitignore` with a `.next*` pattern so isolated QA build directories can never be accidentally staged</li><li>Removed unused `fetchActiveThesis` export and `ThesisProjection` import from `apps/frontend/lib/api.ts`; added a NOTE documenting the single WebSocket read path (enforces data-contract row 15)</li><li>Verified the frontend dev server was serving HTTP 200 before any build step; ran type-check build isolated under `NEXT_DIST_DIR=.next-qa` (clean, no type errors); re-probed 200 after build — live `.next` never touched</li><li>Re-ran full backend suite: 332 passed / 1 skipped — byte-for-byte iter-2 baseline, zero regressions</li><li>Browser-QA exercised J-38 (full declare flow: absorption_reversal/long on SIM-BIDABS, REST == WS projection verbatim, no page reload) and J-39 (full 404/422/422/422/409 rejection matrix, nothing-persisted REST null probes)</li><li>Re-verified required-still-passing journeys J-01–J-09, J-17, J-19, J-21, J-24 all green</li><li>Coherence audit: COHERENCE-PASS; diff confined to `.gitignore` + single api.ts cleanup; no anti-goal violations</li></ul></div></details>
+<details><summary>What's left + Next step</summary><div class='accordion-body'><h3>Still open</h3><ul class='bullets'><li>Journey J-38 (Declare a thesis on the watched ticker) partial — REST/DOM evidence strong but strip-region screenshots are mis-framed; flip requires a capture that visibly contains the thesis strip (scroll-to-element or full-page)</li><li>Journey J-39 (Thesis creation is validated honestly) partial — full rejection matrix proven live but inline 422 UI message not visible in any screenshot; same scroll-fix required</li><li>Journey J-68 (The existing cockpit is unchanged — regression sentinel) partial — strip-idle clause not yet visually captured; &quot;J-01–J-37 all green&quot; clause unmet</li><li>Journey J-40 (Absorption-reversal confirms on the reversal) failing — verdict-transition engine not built; prerequisites all in place</li><li>Journey J-41 (A thesis against the tape reads REJECTING) failing — no verdict-transition engine</li><li>Journey J-42 (Trend continuation confirms while control holds) failing — no verdict-transition engine</li><li>Journey J-43 (WEAKENING after confirmation on a shifting tape) failing — no verdict-transition engine</li><li>Journey J-44 (Invalidation is a hard, robust trigger) failing — no verdict-transition engine</li><li>Journey J-45 (Level break-and-go confirms only after the level is crossed) failing — no verdict-transition engine</li><li>Journey J-46 (Failed-move fade confirms on absorption of the break) failing — no verdict-transition engine</li><li>Browser-QA report discipline: summary line said &quot;14/15 passed&quot; while table held 16 all-PASS rows; demo step skipped on a false frontend-absent detection despite spec flagging `Frontend Present: yes`</li></ul><h3>Next step</h3><div class='next-step-box'>Iter-4 at **FULL depth** (mandated by this ESCALATE):
+
+1. **Primary scope:** the verdict-transition engine (J-40–J-46) — `confirming / weakening / rejecting / invalidated`, per-setup logical-time dwell restarting at creation, `rule_first_true` + `published_at`, dwell-exempt robust invalidation, append-only timeline. All prerequisites are in place (SIM-SHIFT / SIM-REVERSAL from iter-1; thesis layer + monitor seam from iter-2; backend re-confirmed green here).
+2. **Fold in the visual-evidence debt as an explicit DoD:** J-38, J-39, and the J-68 strip-idle clause flip ONLY on screenshots that **visibly contain the thesis strip**. Binding evidence rule for browser-qa: scroll the asserted element into view (or take a full-page capture) before every screenshot — viewport-top captures of below-the-fold surfaces are the proven failure mode. The verdict-engine journeys render on the strip anyway, so this costs near nothing.
+3. The full pipeline&#x27;s phase-closure-auditor must check that evidence PNGs actually show the asserted UI states (non-vague artifacts) — exactly the gate the lean loop lacks and has now missed twice.
+4. Fix the browser-qa report-summary discipline: the summary line said &quot;14/15 passed&quot; while the table held 16 all-PASS rows; the demo step skipped on a false &quot;Frontend Present: no&quot; despite the spec&#x27;s `Frontend Present: yes`. Recount from tables; correct the demo dispatcher&#x27;s frontend detection.</div></div></details>
+<details><summary>Direction signal</summary><div class='accordion-body'><div class='why-text'><strong>Why:</strong> No journey state changed this iteration — J-38, J-39, and J-68 remain partial, and no previously-failing journey flipped to passing. The harness was genuinely repaired (zero skips, 13 screenshots, backend byte-for-byte green) and the REST/DOM evidence for J-38/J-39 is strong, but the evaluator&#x27;s flip criterion requires a screenshot that visibly contains the thesis strip. That strip has not appeared in a single pixel across three iterations. No regression occurred and the required-still-passing journeys (J-01–J-09, J-17, J-19, J-21, J-24) all re-verified clean, so the product is holding rather than regressing — but the evidence gap escalates iter-4 to FULL depth.</div><h3>Trend</h3><ul class='bullets'><li>Newly passing this iter: none</li><li>Newly passing in last 3 iters total: none (J-38/J-39 backend proven in iter-2; UI flip still pending)</li><li>Regressions in last 3 iters: none</li><li>Anti-goal violations in last 3 iters: none</li><li>Iters with no journey state change: 2 of last 3 (iter-2 and iter-3 produced no flips; iter-1 produced no flips for these journeys either)</li></ul><h3>Latest evaluator reasoning</h3><div class='why-text'>&quot;The QA harness was genuinely repaired — frontend 200 before and after an isolated `NEXT_DIST_DIR=.next-qa` build, zero skips, 13 screenshots, backend suite byte-for-byte at the iter-2 green baseline (332 passed / 1 skipped) — and the J-38/J-39 browser flows were exercised end-to-end with REST cross-checks. But the iteration&#x27;s defining deliverable fails verification: every screenshot named for the thesis strip is mis-framed (viewport-top captures showing only the price chart; the strip sits below the fold), so the strip&#x27;s claimed rendering — the exact thing this iteration existed to &#x27;demonstrate working with screenshot evidence&#x27; — has zero rendered-pixel proof for a second consecutive iteration.&quot;</div></div></details>
+<details><summary>Artifacts</summary><div class='accordion-body'><table class='drill-table'><thead><tr><th>Report</th><th>Verdict</th><th>Path</th></tr></thead><tbody><tr><td>Iter spec</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/phases/goal-i_will_be_super_rich_with_my_loved_ones-iter-3.md'>docs/phases/goal-i_will_be_super_rich_with_my_loved_ones-iter-3.md</a></td></tr><tr><td>Dev handoff</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/handoffs/goal-i_will_be_super_rich_with_my_loved_ones-iter-3-dev.md'>docs/handoffs/goal-i_will_be_super_rich_with_my_loved_ones-iter-3-dev.md</a></td></tr><tr><td>Review</td><td><span class='verdict-cell PASS_WITH_NOTES'>PASS_WITH_NOTES</span></td><td><a href='reviews/goal-i_will_be_super_rich_with_my_loved_ones-iter-3-review.md'>reports/reviews/goal-i_will_be_super_rich_with_my_loved_ones-iter-3-review.md</a></td></tr><tr><td>Browser QA</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='phase-goal-i_will_be_super_rich_with_my_loved_ones-iter-3-ui-test-results.md'>reports/phase-goal-i_will_be_super_rich_with_my_loved_ones-iter-3-ui-test-results.md</a></td></tr><tr><td>Goal evaluation</td><td><span class='verdict-cell ESCALATE'>ESCALATE</span></td><td><a href='../runs/goal-session-i_will_be_super_rich_with_my_loved_ones/iter-3/eval.md'>runs/goal-session-i_will_be_super_rich_with_my_loved_ones/iter-3/eval.md</a></td></tr><tr><td>Journey history</td><td><span class='verdict-cell —'>—</span></td><td><a href='../runs/goal-session-i_will_be_super_rich_with_my_loved_ones/state/journey-history.json'>runs/goal-session-i_will_be_super_rich_with_my_loved_ones/state/journey-history.json</a></td></tr></tbody></table></div></details>
+<div class='footer-note'>Generated 2026-06-10 19:26 by <code>render_iteration_summary.py</code> · source: <a href='phase-goal-i_will_be_super_rich_with_my_loved_ones-iter-3-iteration-summary.md'>phase-goal-i_will_be_super_rich_with_my_loved_ones-iter-3-iteration-summary.md</a></div>
+</div></body></html>

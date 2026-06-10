@@ -44,6 +44,8 @@ vite.config.ts.timestamp-*
 
 # Next (shim is harmless; ignore any real next build output)
 .next
+# Isolated/QA build dirs (e.g. NEXT_DIST_DIR=.next-qa) must never be staged either.
+.next*
 
 # Python / backend
 __pycache__/

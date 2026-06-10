@@ -6,7 +6,6 @@ import type {
   SymbolMatch,
   TapeHistory,
   TapeSnapshot,
-  ThesisProjection,
   WatchParams,
 } from "./types";
 
@@ -403,19 +402,7 @@ export async function declareThesis(params: {
   }
 }
 
-// GET /research/thesis/active?ticker= — the canonical thesis projection (the REST counterpart of
-// the WS `thesis` key). `thesis: null` is a NORMAL state, not an error. Returns null on failure.
-export async function fetchActiveThesis(
-  ticker: string,
-): Promise<ThesisProjection | null> {
-  try {
-    const res = await fetch(
-      `${API_BASE}/research/thesis/active?ticker=${encodeURIComponent(ticker)}`,
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return (data?.thesis ?? null) as ThesisProjection | null;
-  } catch {
-    return null;
-  }
-}
+// NOTE: the canonical thesis projection (`GET /research/thesis/active?ticker=`) is the REST
+// counterpart of the WS `thesis` key. The strip reads the WS `thesis` key only (one read path per
+// contract value — data-contract row 15); QA probes the REST endpoint directly for the
+// verbatim-equality check. No parallel UI-layer REST fetch is kept here on purpose.
