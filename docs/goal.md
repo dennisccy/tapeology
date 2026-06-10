@@ -14,8 +14,10 @@ seller control, and Tapeology must say so.
 
 Tapeology is deliberately narrow. It is **not** a scanner, not news/theme/fundamental
 analysis, not a general charting/technical-analysis platform, not an execution or portfolio system — those are separate
-projects. Tapeology receives a ticker (from a user or an upstream system) and answers one
-question: *what is the tape doing right now, and how confident are we?*
+projects. Tapeology receives a ticker (from a user or an upstream system) and answers, first:
+*what is the tape doing right now, and how confident are we?* — and now, layered on top of that
+read: *does the tape support my declared thesis, where is the idea invalidated, and is the system
+itself measurably helping?*
 
 The **deterministic, seedable simulator** proved the engine's correctness first and remains the
 default, offline, no-keys foundation. **Real US-equity market data is now in scope**, in two
@@ -29,17 +31,53 @@ free **IEX** feed for live) behind a **vendor-agnostic adapter**, so another ven
 ticker at a time in a simple Next.js UI, identically for simulated, live, or replayed real data.
 
 To turn that read into something **testable**, Tapeology also plots the watched price as a
-**candlestick chart** and overlays **markers at meaningful tape-state transitions** (for simulated
-data and historical replay), so a user can see whether a state actually preceded the next move —
-the one focused chart the product allows, not a general charting platform. A watched session can be
-**paused and resumed** without losing what is on screen, and historical windows are chosen in the
-user's **local time** with US-market-session quick-picks.
+**candlestick chart** and overlays **markers at meaningful tape-state transitions** (in **all
+modes** — simulated, historical replay, and live), so a user can see whether a state actually
+preceded the next move — the one focused chart the product allows, not a general charting
+platform. The chart doubles as the **thesis canvas**: a declared thesis draws its invalidation
+and level as labeled price-lines, with verdict-transition, entry, and confirmation marks at their
+times. A watched session can be **paused and resumed** without losing what is on screen, and
+historical windows are chosen in the user's **local time** with US-market-session quick-picks.
+
+Tapeology now evolves from a tape **reader** into a narrow, real-market **tape decision-support
+and research system**, built around four pillars:
+
+1. **Setup types** — the user declares a **thesis** on the watched ticker from a small catalog of
+   tape-native setups (**absorption reversal, trend continuation, level break-and-go, failed-move
+   fade**), each long or short, each with a REQUIRED **invalidation price**.
+2. **Tape confirmation** — the engine's existing states and features are continuously judged
+   against the declared thesis: `pending | confirming | weakening | rejecting | invalidated`,
+   every verdict carrying plain-language evidence, drawn as geometry on the price chart.
+3. **Risk rules** — entry risk flags (chasing, too-tight invalidation, illiquidity, declaring
+   against the tape), a hard invalidation trigger the system enforces, and — only after the
+   evidence layer exists — an **entry checklist** whose named checks render **live margins**, so
+   the moment-of-decision read is honest and glanceable rather than a naked signal.
+4. **Review** — every thesis, verdict, hint, and the user's own logged entry/exit is recorded in
+   a journal; review compares expected vs actual behaviour, tags mistakes, and grades **outcome
+   and process on separate axes**, so "a good thesis that failed normally" is distinguishable
+   from "a bad trade caused by poor execution".
+
+The system is decision support, not a signal service: it never says buy or sell, never predicts,
+and never claims an edge. It helps answer: *what kind of situation is forming? what should the
+tape do if the thesis is valid? is the tape confirming, weakening, or rejecting it right now?
+where is the idea invalidated? and — afterwards — was the review honest?* Because every hint,
+verdict, stance, and study result is **recorded**, the system's own usefulness is itself
+reviewable: **replay studies** re-run the setup grammar over real historical windows,
+side-by-side with a seeded **random-arm-time null baseline**, so the user can check whether the
+setups measurably help **before** trusting any cue live.
 
 ## Target Users
 
 - A discretionary US-equity trader who already knows *which* ticker to watch and wants a
   fast, honest read on whether the current tape favors buyers, favors sellers, or is
   absorbing aggression.
+- The same trader **at the moment of decision** in the real market: declaring a thesis on the
+  watched ticker and needing an evidence-backed read on whether the tape confirms it, where it is
+  invalidated, whether the entry conditions are met right now — and, while holding, whether the
+  tape still supports the position.
+- The trader **as their own researcher**: journaling theses and actual entries/exits, reviewing
+  them honestly afterwards, and running replay studies over historical windows to check whether
+  the system's setups measurably help before trusting any live cue.
 - An upstream system (scanner, alerting, or another project) that pushes a ticker to
   Tapeology and consumes the resulting tape state over REST/WebSocket.
 - The developer/operator validating the engine against known simulated scenarios.
@@ -95,7 +133,40 @@ The first success metric is **not** profit. In priority order:
   on real feeds and off-hours.
 - *(later)* **Predictive value, measured.** Beyond the visual chart read, an automated harness
   quantifies the directional edge of high-confidence tape states over the next 10 / 30 / 60 / 120
-  seconds.
+  seconds. ⚠️ **Realized — reshaped — by the research evolution:** validation is now done at the
+  **setup-grammar** level by **replay studies** with null baselines (see below), not by
+  state-edge measurement, and is a must-have rather than a later item.
+
+The research evolution adds, in priority order:
+
+- **A thesis can be declared and judged in all three modes.** Declaring a setup + direction +
+  invalidation on the watched ticker yields deterministic, evidence-carrying verdicts
+  (`pending → confirming / weakening / rejecting / invalidated`) — proven browser-side on seeded
+  sim scenarios and identically available on live and historical data.
+- **Invalidation is enforced, not advised.** A print through the declared invalidation resolves
+  the thesis `invalidated` immediately (dwell-exempt, robust to a lone bad print), and the
+  journal records the offending evidence.
+- **The user's own actions are first-class.** Actual entries/exits are journaled verbatim;
+  machine-derived execution checks (entered-before-confirmation, chased, held-through-stop,
+  cut-confirming-early) ground review in recorded fact, and a holding-period **management
+  stance** answers "does the tape still support this position?" descriptively.
+- **Honest review, two axes.** Every resolved thesis is graded as outcome (`thesis_held |
+  thesis_failed | no_read`) × process (`clean | flagged | violated`) from named, evidence-backed
+  checks — distinguishing a good thesis that failed normally from poor execution. No composite
+  scores.
+- **The journal survives restarts** and never rewrites history: append-only verdict timelines,
+  explicit gap events, explicit `expired` on data end.
+- **The system's helpfulness is itself measurable.** Excursion outcomes in R units, segregated
+  analytics (feed- and config-fingerprint-aware, abandonment always visible), and deterministic
+  replay studies with seeded null baselines let the user check whether the setups help —
+  **before** any live cue is trusted.
+- **Cues come last and stay honest.** The entry checklist/stance (live margins, freshness
+  checks) and setup-forming hints (descriptive, logged, baseline-citing) ship only after the
+  evidence layer exists, and degrade explicitly (`no_fresh_tape`) when the tape is not live.
+- **The engine keeps up, visibly.** Unpaced dense replay (studies) passes a CI-gated time budget
+  and a `delivery_lag_seconds` metric makes any live processing lag explicit — never silent.
+- **Nothing existing regresses.** J-01 – J-37 stay green; engine outputs are byte-identical with
+  the research layer attached and no thesis declared.
 
 ## Key Capabilities
 
@@ -168,7 +239,10 @@ The first success metric is **not** profit. In priority order:
     (green buyer_control, red seller_control, amber bid/ask_absorption; unclear unmarked), with
     pan/zoom and a **true-clock time axis** (real market time for historical; a synthetic session
     clock for simulated — never elapsed playback seconds). Shown for **simulated and historical**
-    only, built on a lightweight client-side financial-charting library.
+    only, built on a lightweight client-side financial-charting library. ⚠️ **Amended by the
+    research evolution (capability 22):** the chart now renders in **all modes including live**
+    (display-only epoch anchor from the first live record; determinism untouched) and carries the
+    **thesis geometry** overlays of capability 25. J-17/J-18 semantics are unchanged.
 14. **Pause / resume a watch**: freeze and continue a watched session **without** tearing it down
     or clearing the UI. Replay (sim/historical) resumes exactly where it left off; live freezes the
     view and resumes at current real data (no fabricated backfill). The paused state is surfaced in
@@ -182,9 +256,143 @@ The first success metric is **not** profit. In priority order:
 17. *(nice-to-have, later)* Level 2 book ingestion (`BookLevelEvent`) and
     `liquidity_pull_score` / liquidity-stack features.
 18. *(nice-to-have, later)* Persistence (PostgreSQL / Redis / Parquet / DuckDB) — only if a
-    concrete need arises; Phase 1 is in-memory.
+    concrete need arises; Phase 1 is in-memory. ⚠️ **Amended by the research evolution:** a
+    **journal-scoped SQLite** store (capability 28) is now a must-have — research records only;
+    tape data stays unpersisted.
 19. *(nice-to-have, later)* Replay/backtest harness measuring predictive value of
-    high-confidence states over 10 / 30 / 60 / 120 s.
+    high-confidence states over 10 / 30 / 60 / 120 s. ⚠️ **Superseded by replay studies**
+    (capability 32): setup-grammar validation with seeded null baselines, a must-have.
+
+Capabilities **20 – 34** are the research evolution — decision support and validation layered
+strictly on top of capabilities 1 – 19, which remain unchanged:
+
+20. **Engine snapshot observers (the research seam)**: `TapeEngine` exposes a generic observer
+    list — `on_event(event, snapshot)` invoked at the end of every processed event, and
+    `on_status(status)` invoked on every stream-status change (status flips do not pass through
+    events, so stale/closed/failed handling REQUIRES this hook). Observers are exception-isolated
+    (an observer error is logged, surfaces `monitor_status: failed` on the research projection,
+    and never kills the feeder), and the engine stays research-agnostic: the same stream yields
+    **byte-identical** snapshots with observers attached or absent (automated equivalence test).
+21. **Two new deterministic sim scenarios** (provider-level only; engine untouched):
+    **`SIM-SHIFT`** — a sustained buyer-control phase, then an unclear/chop phase whose price
+    band dips below the late-control price (drives weakening-after-confirmation,
+    management-stance decay, and clean-process invalidation deterministically); and
+    **`SIM-REVERSAL`** — a bid-absorption phase at a held price, then a buyer-control phase that
+    lifts price (drives the absorption-reversal happy path, failed-move-fade confirmation, and
+    positive excursions deterministically). Both seeded and documented like the existing five.
+22. **Live chart + delivery-lag honesty**: the price chart (capability 13) renders in **live**
+    mode via a **display-only epoch anchor** taken from the first live record (engine determinism
+    untouched; the history buffer and `…/history` already accrue and serve live data). The
+    snapshot carries a canonical **`delivery_lag_seconds`** (feeder-owned: latest record's epoch
+    vs wall clock) so a dense tape that outruns processing is *visible*, never silent.
+23. **Declared thesis**: on the watched ticker the user declares `setup_type ∈
+    {absorption_reversal, trend_continuation, level_break, failed_move_fade}` × `long | short`,
+    a REQUIRED `invalidation_price`, and a `level_price` (required for the two level setups,
+    rejected otherwise). The thesis freezes its **entry context** (state, confidence, last,
+    spread, primary-window features) and its derived **expected-behaviour statements** at
+    creation (later config changes never rewrite journal history), and is **bound to the source
+    identity** (the snapshot's scenario descriptor: the sim scenario / the exact historical
+    window / live SYMBOL) — never to the bare ticker string. One active thesis per ticker
+    (second → 409); theses are immutable (abandon + redeclare is the only edit; redeclares are
+    linked via `redeclared_from`).
+24. **Confirmation verdict engine**: a pure per-event evaluator maps each engine snapshot to
+    `pending | confirming | weakening | rejecting | invalidated` via config-owned, per-setup rule
+    tables composed ONLY of existing states/features. Every transition records
+    **`rule_first_true`** (first logical instant + price at which the raw rule held) and
+    **`published_at`** (after the per-setup, logical-time **dwell**, which restarts at thesis
+    creation — confirmation requires post-declaration evidence by construction). Sustained
+    premise alone never confirms: **absorption-reversal confirms on the reversal** (the flip to
+    matching control with real impact), not on the absorption. Once confirmed, fading evidence
+    reads `weakening`, never a silent return to `pending`. **Invalidation is dwell-exempt and
+    robust**: one print beyond the level by ≥ a config spread-multiple, or k consecutive prints
+    beyond (config), auto-resolves the thesis with the offending prints recorded as evidence.
+    The published timeline is **append-only** (`logical_ts, wall_ts, verdict, evidence,
+    tape_state, confidence, last, rule_first_true`) with explicit **gap events** (`paused`,
+    `watch_restarted`, stale spans) — never interpolated. Stream end / stop / failure
+    auto-resolves an active thesis `expired(reason)` — UNLESS it carries an entry mark (a real
+    position must never be orphaned): then it survives as **active-but-not-evaluated**, shown
+    honestly as such, and re-attaches only to a watch of the **matching source** (recording a
+    `watch_restarted` gap event); a mismatched source shows an explicit notice and is never
+    evaluated against the thesis.
+25. **Thesis geometry on the chart**: the declared invalidation and level render as labeled
+    price-lines; published verdict transitions, entry/exit marks, and the first-confirmation
+    mark render as markers visually distinct from tape-state markers — in every mode, computed
+    once server-side and drawn verbatim.
+26. **Entry risk flags** (computed once at declaration; advisory, never blocking; frozen on the
+    thesis): `before_warmup`; `invalidation_too_tight` (vs a config spread multiple);
+    `chasing_entry` (recent directional impact beyond a config return threshold);
+    `wide_spread_illiquid` / `low_trade_speed` (reusing the classifier's own stability gates — no
+    new thresholds); `against_expected_tape` (setup-aware: a long absorption-reversal declared
+    during bid_absorption is NOT flagged; declared during seller_control it is). Incoherent
+    input (wrong-side invalidation, missing/forbidden level, unknown enums) is a **422, never a
+    flag**.
+27. **Action marks + management stance**: the user journals an actual **entry** and **exit**
+    (price prefilled from the current last, recorded verbatim, never inferred — no mark, no
+    realized metric). An entry-marked thesis cannot be abandoned (anti-survivorship). While
+    entry-marked and unresolved, the strip shows the **management stance** — `thesis_intact |
+    thesis_weakening | thesis_invalidated` — derived from the same verdicts, plus live
+    **distance-to-invalidation** ($ and R) and **open R** (R = |entry − invalidation|).
+    Machine-derived **execution checks** (entered before first confirmation; chased beyond the
+    `rule_first_true` price + threshold; exited beyond invalidation; cut a confirming thesis
+    early) auto-SUGGEST mistake tags at review — the user confirms.
+28. **Journal persistence (SQLite, scoped)**: stdlib `sqlite3` — WAL, `busy_timeout`,
+    `BEGIN IMMEDIATE`, a single writer queue (never written from event processing or the WS
+    serialization path). Tables: theses, verdict_events (**append-only** — the repository
+    exposes no update/delete), hints, actions, studies, study_occurrences, plus a
+    `schema_version`. Every record is stamped with its **bound source**, its **`data_feed`**
+    (`sip | iex | sim`), and a **`config_fingerprint`** hashed over the ENTIRE frozen config
+    (verdicts depend transitively on every classifier threshold). **No tape data is persisted**
+    (committed test fixtures excepted). The DB path is env-configured; tests inject a temp path
+    via the existing dependency-override pattern.
+29. **Review**: a journal page (`/journal`) with filterable rows and a detail view rendering the
+    frozen expected-behaviour statements (with final statuses) beside the verdict timeline in
+    true clock time; **mistake tags** from a backend-owned taxonomy (`chased`,
+    `entered_before_confirmation`, `ignored_rejection`, `ignored_risk_flags`,
+    `moved_invalidation` *(self-assessed)*, `no_clear_setup`, `wrong_setup_type`, `overstayed`,
+    `other` + required note); and **outcome × process grading** — outcome `thesis_held |
+    thesis_failed | no_read` (1:1 from resolution) × process `clean | flagged | violated`
+    (a config-owned rule over named, evidence-backed checks; never a numeric score). Being
+    invalidated is never by itself a process failure — the system enforces invalidation.
+30. **Excursion outcomes**: from the first published confirmation (and separately from the entry
+    mark — two populations, never pooled), max favorable / max adverse excursion in **R units**
+    over config horizons, reported as a **ternary outcome** per horizon (`+1R_first | −1R_first |
+    neither_within_horizon`), with **spread-at-mark** recorded and horizons cut short by stream
+    end or gaps flagged **truncated** — never extrapolated.
+31. **Journal analytics, segregated**: per setup × direction — n with the **abandonment bucket
+    always visible**, ternary excursion distributions, median time-to-confirm, tag frequencies,
+    the acted-trade R distribution (kept apart from confirmation-anchored stats), and **median
+    spread / R** beside every +1R figure (the no-cost caveat as a number). Groups under the
+    config minimum sample read "insufficient sample" (n always shown). Aggregates NEVER pool
+    across `data_feed` or `config_fingerprint`.
+32. **Replay studies**: from `/studies`, run the setup grammar over an explicitly chosen symbol +
+    past window — an **unpaced offline replay** through a fresh engine (the proven fixture-test
+    pattern) that **auto-arms** occurrences per state-native arming rules (absorption_reversal
+    and trend_continuation; level setups only with a user-supplied level, labeled
+    **`hindsight_level`** and excluded from cross-study aggregates), records per-occurrence
+    verdict summaries + excursions, and reports them **side-by-side with a seeded
+    random-arm-time null baseline** (same window, direction, R definition, and horizons).
+    Studies run as cancellable background jobs with explicit status/progress; results are
+    deterministic, feed- and fingerprint-stamped; and a committed **reference study** (a
+    moderate-density real SIP fixture spanning the configured horizons — ≈10 minutes — plus the
+    seeded sims) reproduces pinned results in CI without credentials.
+33. **Decision-support cues (built LAST, on the evidence layer)**: the **entry checklist /
+    stance** — named checks rendered as **live margins** in their own units (verdict confirming;
+    warm; `feed_live`; `tape_lag_ok`; spread within the stability domain; trade speed ≥ floor;
+    invalidation distance ≥ spread multiple; not chasing, anchored at the `rule_first_true`
+    price) with a **nearest-counterevidence** line, publishing through its own small dwell to
+    `conditions_met | conditions_not_met | tape_against | no_fresh_tape`; and **setup-forming
+    hints** — watched-ticker-only, state-native patterns (sustained absorption; sustained
+    control), sustain-dwell + cooldown gated, state-descriptive wording, one-click prefilled
+    declaration (invalidation still typed by the user — one click never creates a thesis),
+    **every shown hint logged**, and every card citing the user's own study baseline for that
+    setup/feed or exactly "no studied baseline — unvalidated pattern". An optional sound cue
+    defaults OFF, fires on transitions only, with a cooldown.
+34. **Engine performance gate** (prerequisite for studies and dense live tape): rolling-feature
+    maintenance MUST be truly incremental — no per-event full-window rescans after evictions
+    (today the incremental refresh path degrades permanently after the first eviction) — with
+    feature values **byte-identical** to before, or the change justified and re-pinned as its own
+    iteration; a CI timing gate replays a committed dense fixture unpaced within a configured
+    budget.
 
 ## Non-Goals
 
@@ -199,9 +407,22 @@ The first success metric is **not** profit. In priority order:
 - No portfolio or position management.
 - No machine learning in the first version — the MVP classifier is rule/threshold-based.
 - No multi-ticker dashboard or watchlist grid — the UI shows one ticker at a time.
-- No persistence in Phase 1 (in-memory only); a datastore is added later only if needed.
+- No persistence of market/tape data. ⚠️ **Amended by the research evolution:** a
+  **journal-scoped SQLite** store is now in scope for research records only (theses, verdict
+  timelines, hints, actions, reviews, studies); trades/quotes/candles/feature series remain
+  unpersisted (committed test fixtures excepted).
 - No claim or implication that the system is profitable, and nothing presented as trading
   advice.
+- No auto-detection or scanning: theses are user-declared on the one watched ticker; hints exist
+  only there; studies run only over explicitly chosen windows; nothing watches the market for
+  you.
+- No position sizing, account, capital, or P&L management; no currency P&L, equity curves, or
+  win-rate-as-edge presentation anywhere — R statistics are journaled measurements with visible
+  caveats and baselines, never performance claims.
+- No parameter optimizer, grid search, or auto-tuning of thresholds — research defaults are
+  config-owned and validated by studies, never fitted by a machine.
+- No new market indicators: confirmation, stance, hints, and studies compose the EXISTING engine
+  features and states only.
 
 ## Constraints
 
@@ -240,6 +461,37 @@ The first success metric is **not** profit. In priority order:
   timeout as a backstop, so a slow or hung backend always resolves to a visible error rather than a
   frozen UI. (A connected feed that then goes quiet is the separate, intentional `stale` state and
   is out of scope here — this targets the pre-connection "Connecting…" phase and silent no-ops.)
+- **Research layer is observer-only:** it attaches via the engine's snapshot observers
+  (capability 20) and MUST NOT mutate engine/classifier/feature state; engine outputs stay
+  byte-identical with or without it (equivalence-tested). Observer failures are isolated, logged,
+  and surfaced as `monitor_status: failed` — never a dead feeder, never a silently-continuing
+  verdict stream.
+- **Journal store discipline:** SQLite via stdlib `sqlite3` only — WAL, `busy_timeout`,
+  `BEGIN IMMEDIATE`, one writer queue; no writes from event processing or the WS serialization
+  path; `verdict_events` is append-only at the repository level; tests inject a temp DB path;
+  the schema is versioned.
+- **Verdict timing semantics:** dwell is logical-time, per setup type, and restarts at thesis
+  creation; invalidation is dwell-exempt with config-owned bad-print robustness (ε·spread or
+  k-consecutive); chase checks anchor at the recorded `rule_first_true` price, never the
+  post-dwell publish; the stance publishes through its own dwell (no per-tick flapping).
+- **Honesty stamps:** every research record carries its bound source, `data_feed`, and a
+  `config_fingerprint` hashed over the entire frozen config; analytics and studies MUST NOT pool
+  across feeds or fingerprints; live surfaces MUST label the IEX basis wherever SIP-derived
+  research is shown nearby (the feed-per-mode seam stays config-owned so a SIP-entitled operator
+  can upgrade live with one config value).
+- **Evidence before cues:** the entry checklist/stance and hints MUST NOT be built before the
+  journal, excursions, and studies exist and their journeys pass; hints MUST cite a study
+  baseline or declare themselves unvalidated.
+- **Research config defaults:** every new research value (per-setup verdict dwell, stance dwell,
+  chase return threshold, invalidation spread-multiple and ε / k robustness, hint sustain +
+  cooldown, rejecting-overstay window, excursion horizons, timeline cap, minimum sample size,
+  delivery-lag bound, study null-arm count) lives in config with its sim/fixture calibration
+  documented as a **research default** — a starting point, never a validated edge; no such
+  literal in research code (the no-magic-numbers rule extends).
+- **Engine throughput honesty:** unpaced replay of the committed dense fixture MUST pass a CI
+  timing budget (capability 34) before studies ship, and the snapshot MUST surface
+  `delivery_lag_seconds` so processing that falls behind a dense live tape is visible, never
+  silent.
 
 ## Design Direction
 
@@ -255,6 +507,38 @@ The first success metric is **not** profit. In priority order:
 - **Prediction chart:** one candlestick pane sized to the tape's short horizon (10 / 30 / 60 s
   bars), with tape-state markers in the same green/red/amber semantics — a focused decision aid,
   not a studies canvas.
+- **Verdict & stance semantics:** `confirming` green, `weakening` amber, `rejecting` /
+  `invalidated` red (invalidated with a terminal treatment), `pending` slate — the existing
+  side/impact palette extended, never repurposed. Checklist items render their live margin in
+  their own units (bps, ratios, seconds, spread-multiples); stance copy is factual ("6/6 checks
+  pass"), and the nearest counterevidence is always one line away.
+- **Copy register:** every research string is thesis-attributed, present-tense, and descriptive
+  ("the tape confirmed *your* thesis"), never imperative ("buy / sell / enter / exit now"), never
+  predictive, never certain. The cockpit's existing "Descriptive only — not trading advice"
+  discipline extends verbatim to the thesis strip, hints, journal, analytics, and studies.
+- **Glossary (shared vocabulary, used consistently by every iteration):**
+  - **Thesis** — the user's declared idea: one setup type × direction on the watched ticker, with
+    a required invalidation price (and a level for level setups).
+  - **Setup type** — one of the four tape-native situation templates in the catalog.
+  - **Premise** — the part of a setup's expected behaviour that can hold *before* the trigger
+    (e.g. "sellers are being absorbed"); premise-intact alone never reads `confirming`.
+  - **Verdict** — the evaluator's published judgement of the tape against the thesis:
+    `pending | confirming | weakening | rejecting | invalidated`.
+  - **Stance** — the entry checklist's aggregate at the moment of decision: `conditions_met |
+    conditions_not_met | tape_against | no_fresh_tape`; thesis-gated, never unsolicited. The
+    **management stance** (`thesis_intact | thesis_weakening | thesis_invalidated`) is its
+    holding-period counterpart.
+  - **Hint** — a logged, descriptive "this pattern is forming" card; never a command, never a
+    thesis by itself.
+  - **Action mark** — the user's journaled actual entry/exit (price + time), recorded verbatim.
+  - **R** — the invalidation distance |entry reference − invalidation|; the unit for excursions
+    and realized moves (no currency P&L).
+  - **Excursion** — the max favorable/adverse move in R after a mark, reported per horizon as
+    `+1R_first | −1R_first | neither_within_horizon`.
+  - **Study** — a deterministic, unpaced replay of the setup grammar over a chosen historical
+    window, reported against a seeded random-arm-time **null baseline**.
+  - **Config fingerprint** — a hash of the entire frozen config stamped on every record so
+    results are never silently compared across different thresholds.
 
 ## Product Shape
 
@@ -270,12 +554,36 @@ The first success metric is **not** profit. In priority order:
   **market-status** indicator (live) — without
   changing the cockpit. It remains exactly one screen; a small indicator shows the source being
   watched (the sim scenario, "live AAPL", or "historical AAPL <window>"). Above the cockpit, a
-  **price chart** — candlesticks with a bar-size selector, tape-state markers, and a **true-clock
-  time axis** — is shown for **Simulated** and **Historical**. The watch controls include **Pause / Resume** (freeze and
+  **price chart** — candlesticks with a bar-size selector, tape-state markers, a **true-clock
+  time axis**, and (when a thesis exists) the **thesis geometry** (invalidation/level
+  price-lines; verdict, entry, and confirmation marks) — is shown in **all modes** (live included,
+  via the display-only epoch anchor). Between the chart and the panel grid sits the **thesis
+  strip**: a one-line declare affordance when idle; when declared, the active thesis (setup,
+  direction, invalidation in mono, expected-behaviour statuses, verdict + evidence, risk-flag
+  chips, resolve / mark-entry / mark-exit controls) — and, once the cue layer exists, the entry
+  checklist + stance or the holding-period management stance. A small **hint dock** under the
+  tape-state panel shows the current setup-forming hint when one is active. The watch controls include **Pause / Resume** (freeze and
   continue without clearing) beside Stop, with a **PAUSED** indicator when paused. The Historical
   **date/time-window picker** defaults to **local time** (with a zone label; dates entered and shown
   as **dd-MM-yyyy** via a custom date input) and offers
   **US-session quick-picks** (Open 9:30 ET / Close 16:00 ET / Full RTH).
+
+- **Journal (`/journal`)** — the research record: a filterable table of every thesis (ticker,
+  bound source, data feed, setup, direction, declared date `dd-MM-yyyy`, resolution, outcome ×
+  process grades, reviewed), plus the hint log and the **analytics** view (capability 31). A row
+  opens **`/journal/[id]`** — the review detail: the frozen expected-behaviour statements with
+  final statuses beside the verdict timeline in true clock time, entry risk flags, action marks,
+  execution checks, excursions, the outcome × process quadrant, the mistake-tag picker + note,
+  and a **"re-watch this window"** affordance that pre-fills the historical picker from the
+  thesis's bound window (or a live thesis's anchored real window).
+
+- **Studies (`/studies`)** — create and monitor replay studies (symbol + past window + setup +
+  direction, optional manual level), with job status / progress / cancel, and read results:
+  occurrence rows, aggregates side-by-side with the seeded null baseline, truncation and
+  `hindsight_level` labels, feed + config-fingerprint stamps.
+
+- The top bar carries the **Cockpit / Journal / Studies** navigation — the first multi-page
+  surface; the cockpit remains the home and stays one screen.
 
 ### API surface (Phase 1)
 
@@ -302,6 +610,39 @@ The first success metric is **not** profit. In priority order:
   **immediately** to the in-progress replay (delivery pacing only — the engine stays deterministic),
   with no re-fetch and no restart.
 
+The research evolution adds (every projection computed once server-side):
+
+- `POST /research/thesis` — declare a thesis on a watched ticker (`{ticker, setup_type,
+  direction, invalidation_price, level_price?}`); 404 not-watched, 409 an active thesis exists,
+  422 incoherent input (wrong-side invalidation, missing/forbidden level, unknown enums).
+  Returns the full thesis projection (id, frozen expected behaviour, entry risk flags, verdict
+  `pending`).
+- `GET /research/thesis/active?ticker=` — the active-thesis projection (`thesis: null` is a
+  normal state, not an error); the canonical REST read that MUST equal the WS frame's `thesis`
+  key verbatim.
+- `POST /research/thesis/{id}/resolve` — body `{resolution: "played_out" | "abandoned"}` only —
+  `invalidated` and `expired` are system-owned (422 if requested); 409 if already resolved.
+  Process checks and both grades are computed once here.
+- `POST /research/thesis/{id}/action` — record an entry or exit mark (`{kind, price}`), stamped
+  at the current logical + wall time, recorded verbatim; an entry-marked thesis refuses
+  `abandoned`.
+- `POST /research/thesis/{id}/review` — `{mistake_tags, note?}` validated against the taxonomy;
+  409 unless resolved; flips the thesis to `reviewed`.
+- `GET /research/journal?ticker=&setup_type=&direction=&resolution=&status=&limit=&offset=` —
+  compact journal rows; `GET /research/journal/{id}` — full detail (timeline incl. gap events,
+  statements with final statuses, flags, marks, execution checks, excursions, grades, replay
+  linkage).
+- `GET /research/analytics` — the segregated aggregates (capability 31), partitioned by
+  `data_feed` and `config_fingerprint`.
+- `POST /research/studies` / `GET /research/studies` / `GET /research/studies/{id}` /
+  `POST /research/studies/{id}/cancel` — create, list, read, and cancel replay-study jobs
+  (status: queued | running | done | failed | cancelled, with progress).
+- `GET /research/taxonomy` — the setup catalog (+ per-setup parameter requirements +
+  expected-behaviour templates), risk-flag and mistake-tag catalogs, and verdict/stance enums
+  with display copy — the single backend owner of every research label.
+- `WS /tape/{ticker}/stream` gains one **additive `thesis` key** (the same projection as
+  `…/thesis/active`; `null` when none) — the engine snapshot fields are untouched.
+
 ### Canonical values (single source of truth — computed once in the engine, displayed identically everywhere)
 
 - **Tape state** (buyer_control | seller_control | bid_absorption | ask_absorption |
@@ -324,6 +665,28 @@ The first success metric is **not** profit. In priority order:
   the UI's status indicator reads it. A live-feed gap flips it to **stale**; **pause** flips it to
   **paused** (without teardown) and resume restores the prior status; stop or stream exhaustion
   flips it to **closed** — never a fabricated "live".
+- **Thesis projection** (thesis fields, expected-behaviour statuses, verdict + evidence, risk
+  flags, monitor status) — produced once by the research monitor; REST `…/thesis/active`, the WS
+  `thesis` key, the thesis strip, and the chart geometry read it verbatim.
+- **Published verdict + evidence** — computed once by the verdict engine per event; the
+  append-only timeline (with its gap events) is the only history and is never recomputed at read
+  time.
+- **Stance + per-check margins** (entry checklist and management stance) — computed once
+  server-side; the UI renders the margins verbatim and derives nothing.
+- **Expected-behaviour statements** — derived once at creation and stored frozen; review renders
+  the stored statements, not re-derived ones.
+- **Excursions, execution checks, and grades** — computed once at their defining moments (marks /
+  resolution) and persisted; analytics aggregates the persisted rows only.
+- **Hints** — pattern, evidence, and baseline citation produced once when shown; the hint log is
+  the record.
+- **Study results** (occurrence rows, aggregates, null baseline) — computed once by the study
+  runner and persisted; the studies page renders stored results.
+- **Taxonomies & research display copy** (setups, flags, tags, verdict/stance labels) — owned
+  once by the backend (`/research/taxonomy`); the frontend hardcodes none of them.
+- **Source / feed / config-fingerprint stamps** — assigned once at record creation; every view
+  shows the stored stamp.
+- **`delivery_lag_seconds`** — owned once by the feeder and surfaced in the snapshot; the UI lag
+  readout and the `tape_lag_ok` check read the same value.
 
 ## Must-have user journeys
 
@@ -863,6 +1226,404 @@ journeys are proven with real data* anti-goal). They MUST NOT regress **J-01 –
     streamed chunks, runnable in CI **without** live credentials; chunk-stitch unit tests alone and an
     "operator-gated" note are NOT sufficient. The live Full-RTH confirmation is re-run as a manual check.)*
 
+Journeys **J-38 – J-68** are the **research evolution**: declared theses and tape confirmation
+(J-38 – J-48), risk and lifecycle honesty (J-49 – J-51), the user's own actions and holding-period
+support (J-52 – J-54), review and grading (J-55 – J-57), the **evidence layer** — excursions,
+analytics, and replay studies (J-58 – J-62) — and, strictly **last**, the decision-support cues
+(J-63 – J-67) plus the regression sentinel (J-68). Verdict-transition journeys are deterministic
+on the seeded sims — including the two new scenarios **`SIM-SHIFT`** and **`SIM-REVERSAL`**
+(capability 21) — so they are browser-verifiable without credentials; persistence journeys span a
+backend restart; study journeys are gated by **committed real-data fixtures** per the established
+J-36/J-37 standard. **Build order is binding: the cue journeys (J-63 – J-67) MUST NOT be
+implemented before the evidence journeys (J-58 – J-62) pass** (the *Evidence before cues*
+anti-goal). These additions MUST NOT regress **J-01 – J-37**.
+
+- **J-38: Declare a thesis on the watched ticker**
+  - Steps:
+    1. Visit `/`, watch `SIM-BIDABS` (Simulated) and let the cockpit populate
+    2. In the thesis strip, declare: setup **absorption_reversal**, direction **long**, an
+       invalidation price below the current last; submit
+    3. Read the thesis strip; in a new tab open `GET /research/thesis/active?ticker=SIM-BIDABS`
+  - Acceptance: the strip shows an ACTIVE thesis — setup, direction, and invalidation (mono) —
+    with the frozen **expected-behaviour statements** each rendering a live status (met /
+    not-yet / violated); the verdict starts honestly at **pending** (dwell restarts at creation —
+    no instant confirmation); the REST projection equals the WS frame's `thesis` key **verbatim**
+    (single source of truth); declaration requires no page reload. *(No credentials;
+    browser-verifiable.)*
+
+- **J-39: Thesis creation is validated honestly (no silent coercion)**
+  - Steps:
+    1. With no ticker watched, attempt `POST /research/thesis` for an unwatched ticker
+    2. Watch `SIM-BUYER`; in the form, declare **long** with an invalidation **above** the
+       current last (wrong side) and submit
+    3. Declare **level_break** without a level; then declare **absorption_reversal** with a level
+    4. Declare a valid thesis; then attempt to declare a second on the same ticker
+  - Acceptance: unwatched ticker → explicit 404; wrong-side invalidation → inline validation
+    message + 422 and nothing created; missing level for a level setup → 422; a level supplied to
+    a non-level setup → 422; a second active thesis → 409 with an explicit message. Input is
+    never silently coerced, auto-corrected, or partially saved. *(No credentials;
+    browser-verifiable.)*
+
+- **J-40: Absorption-reversal confirms on the REVERSAL, not the absorption**
+  - Steps:
+    1. Watch `SIM-REVERSAL`; during its **bid-absorption phase**, declare **absorption_reversal /
+       long** with an invalidation below the absorbed price
+    2. Read the verdict and the statement statuses through the phase shift into buyer control
+  - Acceptance: during sustained bid_absorption the verdict stays **pending** — the premise
+    statements (e.g. "sellers absorbed, bid holding") read **met** while the trigger statement
+    ("buyers take control with real upward impact") reads **not-yet**; sustained absorption alone
+    MUST NOT read `confirming` (the classic trap — entering long while sellers still hammer the
+    bid — is structurally excluded). When the scenario flips to buyer_control with real upward
+    impact, the verdict publishes **confirming** (after its post-declaration dwell) with evidence
+    citing the flip; the timeline records the transition with both `rule_first_true` and
+    published timestamps. *(No credentials; browser-verifiable.)*
+
+- **J-41: A thesis against the tape reads REJECTING, with evidence**
+  - Steps:
+    1. Watch `SIM-SELLER`; declare **trend_continuation / long** with an invalidation **far**
+       below the current last (so the rejection publishes before any invalidation)
+    2. Read the verdict, its evidence, and the timeline
+  - Acceptance: after the dwell the verdict publishes **rejecting**, citing seller control / real
+    downward impact in plain language — never a naked verdict; the thesis stays active (rejecting
+    is a judgement, not a resolution); the expected-behaviour statements read violated/not-met
+    honestly. *(No credentials; browser-verifiable.)*
+
+- **J-42: Trend continuation confirms while control holds**
+  - Steps:
+    1. Watch `SIM-BUYER`; declare **trend_continuation / long**, invalidation below
+    2. Read the verdict as the scenario streams
+  - Acceptance: after the post-declaration dwell the verdict publishes **confirming** with
+    evidence citing buyer control and positive impact; it remains confirming while the scenario's
+    control persists (no flapping); statements read met. *(No credentials; browser-verifiable.)*
+
+- **J-43: WEAKENING after confirmation on a shifting tape**
+  - Steps:
+    1. Watch `SIM-SHIFT`; during its buyer-control phase declare **trend_continuation / long**
+       with an invalidation far below the chop band
+    2. Let the scenario shift into its unclear/chop phase; read the verdict and timeline
+  - Acceptance: the verdict publishes **confirming** during control, then — only after the
+    configured logical-time dwell — **weakening** when the tape goes neutral after having
+    confirmed (the confirmed→neutral rule; never a silent return to `pending`), with distinct
+    plain-language evidence ("supporting evidence faded" register); the timeline holds both
+    transitions at their logical timestamps; the published verdict never flaps per tick.
+    *(No credentials; browser-verifiable; dwell asserted in logical time.)*
+
+- **J-44: Invalidation is a hard, robust trigger**
+  - Steps:
+    1. Watch `SIM-SELLER`; declare any **long** thesis with an invalidation just below the
+       current last
+    2. Let the scenario print through the invalidation; read the strip, timeline, and journal
+  - Acceptance: the qualifying print(s) flip the verdict to **invalidated** immediately —
+    dwell-exempt — and the thesis **auto-resolves** `invalidated`; the strip shows the terminal
+    treatment and the final timeline entry records the offending print price + logical timestamp
+    as evidence. Robustness is config-owned: a single print must exceed the level by ≥ the
+    configured spread-multiple ε, or k consecutive prints beyond it (a lone bad print inside the
+    guard does NOT invalidate) — *the guard behaviour is proven by a unit test with a synthetic
+    outlier print; the browser leg uses the deterministic sim fall.* *(No credentials;
+    browser-verifiable.)*
+
+- **J-45: Level break-and-go confirms only after the level is crossed**
+  - Steps:
+    1. Watch `SIM-BUYER`; declare **level_break / long** with a level **above** the current last
+       (inside the scenario's deterministic rise) and an invalidation below
+    2. Read the verdict before and after price crosses the level
+  - Acceptance: pre-cross the verdict is **pending** with the cross statement not-yet (the latch
+    is unset — no confirmation however strong the control); once last ≥ level (latched) and buyer
+    control holds, the verdict publishes **confirming** citing the cross + control; the level
+    line is visible on the chart at the declared price (J-48). *(No credentials;
+    browser-verifiable.)*
+
+- **J-46: Failed-move fade confirms on absorption of the break**
+  - Steps:
+    1. Watch `SIM-REVERSAL`; during its absorption phase declare **failed_move_fade / long** with
+       the level just above the absorbed price (the broken level being faded) and an invalidation
+       below
+    2. Read the verdict through the absorption and the reclaim
+  - Acceptance: during the absorption phase the verdict reads **confirming** ("the downside break
+    is being absorbed") — for THIS setup the absorption *is* the expected behaviour, the
+    deliberate asymmetry with J-40 made explicit by the statements; when buyers take control and
+    price reclaims the level, the verdict remains confirming citing the reclaim; `rejecting`
+    would require real downside follow-through (seller_control), which never occurs in this
+    scenario. *(No credentials; browser-verifiable.)*
+
+- **J-47: A thesis is bound to its source, and survives interruption only with a position**
+  - Steps:
+    1. Watch `SIM-BUYER`; declare **trend_continuation / long** (invalidation far below) and
+       **mark an entry** (J-52)
+    2. Stop the watch; read the strip/journal; then re-watch `SIM-BUYER`
+    3. Separately: declare a thesis WITHOUT an entry mark and stop the watch
+  - Acceptance: the entry-marked thesis survives the stop as **active-but-not-evaluated**, shown
+    honestly ("not currently evaluated — re-watch this source to resume"), with NO verdicts
+    appended while unwatched; re-watching the **matching source** re-attaches it and the timeline
+    records an explicit **`watch_restarted` gap event** (never interpolated history). The
+    unmarked thesis instead auto-resolves **`expired(watch_stopped)`**. A watch of a
+    **different** source for the same symbol MUST NOT be evaluated against the thesis (explicit
+    bound-source notice) — *the cross-source leg (e.g. a live thesis vs a historical replay of
+    the same symbol) is enforced by the source-identity check and proven by a unit test; with
+    credentials it is also operator-verifiable.* *(Sim legs: no credentials;
+    browser-verifiable.)*
+
+- **J-48: Thesis geometry is drawn on the price chart**
+  - Steps:
+    1. Watch `SIM-BUYER`; declare **level_break / long** with a level and an invalidation; later
+       mark an entry
+    2. Read the chart through confirmation
+  - Acceptance: the chart shows a labeled **invalidation price-line** and **level price-line** at
+    the declared prices; published verdict transitions appear as markers visually distinct from
+    tape-state markers; the entry mark and first-confirmation mark appear at their times; all
+    geometry is served by the backend projection and drawn verbatim (the chart computes nothing).
+    The same component renders in historical and **live** modes — *the live chart render
+    (display-only epoch anchor) is verified with credentials during market hours; sim/historical
+    are browser-verifiable.* *(No credentials for the sim leg.)*
+
+- **J-49: Entry risk flags are computed at declaration and recorded**
+  - Steps:
+    1. Watch `SIM-BUYER` and let it run well past warm-up (an extended move); declare
+       **trend_continuation / long**
+    2. On a fresh watch, declare with an invalidation extremely close to the last
+    3. Watch `SIM-CHOP`; declare any thesis
+  - Acceptance: (1) fires **`chasing_entry`** — the recent directional impact already exceeds the
+    config return threshold — shown as an amber chip with its measured margin in plain language;
+    (2) fires **`invalidation_too_tight`** (distance < the config spread-multiple); (3) fires the
+    liquidity flags (**`wide_spread_illiquid`** / **`low_trade_speed`**, reusing the classifier's
+    own stability gates). Flags are **advisory** — creation always succeeds — and are frozen on
+    the thesis, visible later in the journal and review. Declaring before warm-up fires
+    **`before_warmup`**. *(No credentials; browser-verifiable.)*
+
+- **J-50: Resolving a thesis is honest (played out / abandoned / expired)**
+  - Steps:
+    1. On a confirming `SIM-BUYER` thesis, click **Played out**
+    2. Declare again; click **Abandon**
+    3. Declare again (no entry mark) and let the bounded sim stream end
+  - Acceptance: (1) resolves `played_out` and (2) `abandoned`, each recorded with logical + wall
+    timestamps, the journal row appearing immediately and the strip returning to the declare
+    affordance; (3) auto-resolves **`expired(stream_closed)`** with the final verdict frozen —
+    never deleted, never upgraded to a user resolution. The UI offers ONLY played-out/abandon
+    (the system owns `invalidated`/`expired`; requesting them via the API is a 422), and an
+    entry-marked thesis offers no Abandon at all (J-52). *(No credentials; browser-verifiable.)*
+
+- **J-51: The journal survives a backend restart; interrupted theses are handled honestly**
+  - Steps:
+    1. Create and resolve a thesis on `SIM-BUYER` (with a few verdict transitions)
+    2. Declare a second thesis and leave it active without an entry mark
+    3. Restart the backend; reload the UI and open `/journal`
+  - Acceptance: the resolved thesis's row and full verdict timeline are **byte-identical** after
+    the restart (append-only store, nothing recomputed at read); the previously-active unmarked
+    thesis reads **`expired`** with an explicit interruption reason — never deleted, never still
+    "active" over a fabricated gap, never backfilled; an entry-marked active thesis instead
+    survives as active-but-not-evaluated per J-47. *(No credentials; browser-verifiable with an
+    operator/harness-performed restart.)*
+
+- **J-52: Mark your actual entry and exit (journaling, not execution)**
+  - Steps:
+    1. On a confirming `SIM-BUYER` **trend_continuation / long**, click **Mark entry** — the
+       price field is prefilled with the current last; accept or edit; submit
+    2. Later click **Mark exit** the same way; then resolve **Played out**
+  - Acceptance: both marks are recorded **verbatim** (price + logical & wall time — never
+    inferred, never a simulated fill) and appear on the strip, the chart (J-48), and the journal
+    detail; once entry-marked the thesis no longer offers **Abandon** (resolve only); the
+    realized move displays in **R units** (R = |entry − invalidation|) labeled as a journaled
+    measurement with the spread-at-mark shown — never as currency P&L. With no marks, no realized
+    metric is shown. *(No credentials; browser-verifiable.)*
+
+- **J-53: Management stance while holding a position**
+  - Steps:
+    1. Watch `SIM-SHIFT`; during the control phase declare **trend_continuation / long** with the
+       invalidation just below the late-control price (inside the coming chop band); **mark an
+       entry** while confirming
+    2. Watch the strip through the phase shift until the band prints through the invalidation
+  - Acceptance: after the entry mark the strip switches to the **management stance**:
+    **`thesis_intact`** while confirming → **`thesis_weakening`** with evidence as the verdict
+    decays → **`thesis_invalidated`** when the invalidation prints (auto-resolve per J-44); live
+    **distance-to-invalidation** ($ and R) and **open R** read in mono throughout; the copy
+    states facts ("invalidation level traded") and never instructions ("exit now"). *(No
+    credentials; browser-verifiable.)*
+
+- **J-54: Objective execution checks suggest mistake tags**
+  - Steps:
+    1. Watch `SIM-REVERSAL`; declare **absorption_reversal / long** during the absorption phase
+       and deliberately **mark an entry while the verdict is still `pending`**
+    2. Let it confirm; mark an exit; resolve; open the review detail
+  - Acceptance: the review shows machine-derived **execution checks** with evidence —
+    `entered_before_confirmation` reads failed (entry timestamp < first confirming publish) and
+    is **auto-suggested** as a mistake tag, pre-selected but editable (the user confirms; the
+    system never tags on its own); the checks for chased-beyond-trigger (vs the `rule_first_true`
+    price + threshold), exited-beyond-invalidation, and cut-confirming-early are likewise
+    evaluated from recorded marks + the timeline only. *(No credentials; browser-verifiable.)*
+
+- **J-55: Review compares expected vs actual behaviour**
+  - Steps:
+    1. Open a resolved thesis with transitions (e.g. J-40's) at `/journal/[id]`
+  - Acceptance: the frozen expected-behaviour statements are listed with their final statuses
+    beside the verdict timeline rendered at **true clock time** (epoch anchor), each transition
+    carrying its evidence; entry risk flags, action marks, and execution checks are visible; the
+    page renders **recorded values verbatim** — nothing is recomputed at read time, and the REST
+    detail equals what was shown live. *(No credentials; browser-verifiable.)*
+
+- **J-56: Outcome and process are graded on separate axes**
+  - Steps:
+    1. Produce a **clean-process invalidated** thesis: on `SIM-SHIFT`, declare
+       **trend_continuation / long** early in the warm control phase (no flags), invalidation
+       under the chop band — it invalidates in phase 2
+    2. Produce a **flagged-process played-out** thesis: declare long on a long-extended
+       `SIM-BUYER` (chase flag), let it confirm, resolve **Played out**
+    3. Read both in the journal
+  - Acceptance: (1) renders outcome **`thesis_failed`** × process **`clean`** — the "disciplined
+    thesis, adverse tape" quadrant; (2) renders **`thesis_held`** × **`flagged`** — the "got away
+    with it" quadrant. Both grades are enum labels derived from named, evidence-backed checks —
+    never a numeric score; being invalidated is never itself a process failure. *(No
+    credentials; browser-verifiable.)*
+
+- **J-57: Mistake tags come from the backend taxonomy**
+  - Steps:
+    1. On any resolved thesis's review, open the tag picker; select tags (including `other`) and
+       write a note; save
+  - Acceptance: the picker lists exactly the backend taxonomy (`GET /research/taxonomy`) with its
+    display copy — the frontend hardcodes no labels; `other` requires the note; saving persists
+    tags + note and flips the thesis to **reviewed**; tags render identically everywhere they
+    appear. *(No credentials; browser-verifiable.)*
+
+- **J-58: Excursion outcomes are measured and honest**
+  - Steps:
+    1. Run J-42's confirming `SIM-BUYER` thesis (with an entry mark) to the scenario's end
+    2. Open the journal detail and read the excursion section
+  - Acceptance: for each configured horizon after the **first confirmation** — and separately
+    after the **entry mark** (two populations, never pooled) — the max favorable and adverse
+    excursions read in **R units** with the ternary outcome `+1R_first | −1R_first |
+    neither_within_horizon`; **spread-at-mark** is recorded alongside; horizons cut short by the
+    stream end are flagged **truncated**, never extrapolated; re-running the same seeded scenario
+    reproduces identical numbers. *(No credentials; browser-verifiable; determinism asserted by a
+    unit test.)*
+
+- **J-59: Analytics aggregate honestly, segregated by feed and config**
+  - Steps:
+    1. Create a handful of resolved theses across setups and sims, including at least one
+       abandoned
+    2. Open the analytics view on `/journal`
+  - Acceptance: per setup × direction the view shows **n with the abandonment bucket always
+    visible**, the ternary excursion distribution, median time-to-confirm, tag frequencies, and
+    the acted-trade R distribution **kept apart** from confirmation-anchored stats; **median
+    spread / R** reads beside every +1R figure; groups under the config minimum sample read
+    "insufficient sample" (n still shown) instead of bare percentages; rows are partitioned by
+    `data_feed` and `config_fingerprint` — never pooled across either; no equity curve and no
+    currency P&L appear anywhere. *(No credentials; browser-verifiable.)*
+
+- **J-60: A replay study runs the setup grammar over a window — against a null baseline**
+  - Steps:
+    1. Open `/studies`; create a study: a symbol + past window (the committed reference window
+       works), setup **absorption_reversal** (or trend_continuation), direction; run it
+    2. Watch the job status; open the results when done; run the identical study again
+  - Acceptance: the runner replays the window **unpaced** through a fresh engine, **auto-arms**
+    occurrences per the state-native arming rule, and records per-occurrence verdict summaries +
+    excursions; results show occurrence rows and aggregates **side-by-side with the seeded
+    random-arm-time null baseline** (same window, direction, R definition, horizons — e.g.
+    "setup: 8/13 `+1R_first`; random-time baseline: 41/100"); outcomes are ternary; the study is
+    stamped with feed + config fingerprint; the identical re-run reproduces **identical**
+    results. The page presents measurements with n and caveats — never an edge claim. *(The
+    fixture-window leg runs in CI without credentials; an arbitrary-window study is verified with
+    credentials.)*
+
+- **J-61: Studies are honest about their limits**
+  - Steps:
+    1. Run a **level_break** study supplying a manual level on a single window
+    2. Run a study whose window end truncates the horizons
+    3. Start a long study and cancel it; separately observe a failing study (e.g. no data)
+  - Acceptance: manual-level results carry a visible **`hindsight_level`** label ("level chosen
+    with hindsight — illustrative") and are excluded from cross-study aggregates; truncated
+    occurrences are flagged and counted separately — never silently dropped or extrapolated; the
+    job shows queued/running progress, a cancelled study resolves to an explicit **cancelled**
+    status (partial results clearly marked partial, never presented as complete), and a failed
+    study surfaces an explicit error — never an empty "success". *(Browser-verifiable with the
+    committed fixtures; cancellation covered by a test.)*
+
+- **J-62: The reference study reproduces pinned results in CI (and the engine keeps up)**
+  - Steps:
+    1. (Automated; operator can re-run) Execute the committed reference study over the committed
+       **moderate-density real SIP fixture** (≈10 minutes of real tape, sized for the configured
+       horizons) and over the seeded sims
+  - Acceptance: a committed test runs the study **unpaced in CI without credentials** and asserts
+    the exact pinned occurrence rows + aggregates (byte-stable); the run completes within the
+    **CI-gated time budget** — the engine-performance gate (capability 34): truly incremental
+    feature maintenance, no per-event full-window rescans, with feature values byte-identical to
+    before (or the change justified and re-pinned as its own iteration). The 7-second GME fixture
+    remains the classification gate (J-36) and is NOT used for minute-horizon excursion claims.
+    *(CI-gated by committed real data, per the J-36/J-37 standard.)*
+
+- **J-63: The entry checklist renders live margins, not a naked signal**
+  - Steps:
+    1. Watch `SIM-REVERSAL`; declare **absorption_reversal / long** during the absorption phase
+    2. Read the checklist before, at, and after the confirmation
+  - Acceptance: each named check — verdict confirming; warm; `feed_live`; `tape_lag_ok`; spread
+    within the stability domain; trade speed ≥ floor; invalidation distance ≥ spread multiple;
+    not chasing (anchored at the **`rule_first_true`** price + config threshold) — renders its
+    **live measured margin in its own units**, never a bare boolean; the stance reads
+    **`conditions_not_met`** with the blocker list while pending, flips **`conditions_met`** only
+    when every check passes after confirmation, and **`tape_against`** if the verdict turns
+    rejecting; a **nearest-counterevidence** line names the closest condition that would flip the
+    read; the stance publishes through its own dwell (no per-tick flapping); the copy is factual
+    ("6/6 checks pass") — never imperative. *(No credentials; browser-verifiable.)*
+
+- **J-64: Stance freshness — never a frozen green over a dead tape**
+  - Steps:
+    1. With a `conditions_met` checklist showing on a watched sim, click **Pause**
+    2. Let a bounded sim stream end (**closed**)
+    3. (Live leg) observe a live lull that crosses the stale gap
+  - Acceptance: paused, closed, stale, and failed each force the stance to an explicit
+    **`no_fresh_tape`** (the named `feed_live` / `tape_lag_ok` checks failing) — a previous green
+    `conditions_met` never persists over non-live data; resume restores honest evaluation; the
+    `delivery_lag_seconds` readout is visible and its bound is config-owned. *(Pause/closed legs:
+    no credentials, browser-verifiable; the stale leg follows J-15's gated pattern.)*
+
+- **J-65: Setup-forming hints are descriptive, gated, and logged**
+  - Steps:
+    1. Watch `SIM-BIDABS` with **no thesis**; wait past the configured sustain dwell and read the
+       hint dock
+    2. Click the hint's declare affordance
+    3. Watch `SIM-CHOP` for at least the same duration
+  - Acceptance: the hint card is **state-descriptive** ("bid absorption sustained 45 s — sellers
+    being absorbed at the bid"), names the matching setup type as context, and contains **no
+    imperative and no direction command**; it cites the user's own study baseline for that
+    setup/feed when one exists, else exactly **"no studied baseline — unvalidated pattern"**; the
+    declare affordance **prefills** the form (ticker, setup, direction) but the invalidation must
+    still be typed — one click never creates a thesis; `SIM-CHOP`'s flapping produces **no hint**
+    (sustain dwell + cooldown); every shown hint is **logged** (ticker, time, pattern, evidence,
+    whether declared-from) and visible in the journal's hint log. *(No credentials;
+    browser-verifiable.)*
+
+- **J-66: Cue-discipline sweep — no imperative, no prediction, sound off by default**
+  - Steps:
+    1. Walk every research surface: the thesis strip across all verdicts and stances, hint cards,
+       chart geometry labels, journal rows + detail, analytics, studies, and the taxonomy copy
+  - Acceptance: no surface uses imperative trade language (buy / sell / enter / exit / "should" /
+    targets) or prediction/certainty claims; verdict, stance, and hint copy is present-tense,
+    descriptive, and thesis-attributed; the "Descriptive only — not trading advice" register
+    appears on the research surfaces; the optional sound cue defaults **OFF**, fires only on
+    stance/verdict transitions with a cooldown when enabled, and its toggle is explicit. *(No
+    credentials; browser-verifiable; backed by a copy-lint test over UI strings.)*
+
+- **J-67: The live-feed basis is always labeled (SIP research vs IEX live)**
+  - Steps:
+    1. Open **Live** mode and read the cockpit; declare a live thesis (with credentials) or
+       inspect a stored live-bound thesis row
+    2. Open the analytics view and read the partitioning
+  - Acceptance: the live cockpit carries a visible feed badge ("live verdicts read the
+    single-venue IEX feed; historical replay and studies use SIP — spreads and prints differ");
+    every thesis/hint/action/study row stores and displays its `data_feed`; no aggregate pools
+    SIP with IEX rows; upgrading live to SIP remains a single config value (no relabeling code).
+    *(Badge + stamps + partitioning: browser-verifiable without a feed; the live-declared row is
+    verified with credentials.)*
+
+- **J-68: The existing cockpit is unchanged (regression sentinel)**
+  - Steps:
+    1. With the research layer deployed but **no thesis declared**, run the J-01 – J-09 sim flows
+       and spot-check J-17 (chart) and J-19 (pause/resume)
+  - Acceptance: every pre-existing panel and flow behaves identically — the thesis strip idles as
+    a single declare affordance and nothing else moves; an automated **equivalence test** replays
+    a fixed event stream through the engine with research observers attached vs absent and
+    asserts **byte-identical** snapshots (state, confidence, features, history); J-01 – J-37 all
+    remain green in the session's journey history. *(No credentials; browser-verifiable +
+    automated.)*
+
 ## Anti-goals
 
 - **No execution path.** Tapeology MUST NOT place, route, simulate, or recommend orders, and
@@ -979,3 +1740,52 @@ journeys are proven with real data* anti-goal). They MUST NOT regress **J-01 –
   A synthetic/hand-tuned fixture and an "operator-gated" manual check are necessary-but-**insufficient** —
   they MUST NOT be the sole evidence for GOAL_ACHIEVED. This rule exists because the iter-13 J-33/J-34
   "pass" was synthetic-only and shipped two real-data defects. *(critical)*
+
+The research evolution adds the following anti-goals (the existing ones above all still hold):
+
+- **No unsolicited or unconditional trade commands.** Every actionable cue MUST be gated on a
+  user-declared thesis with an invalidation, rendered as named checks with margins and evidence,
+  in present-tense descriptive language. No imperative buy/sell/enter/exit wording, no price
+  targets, no certainty language — anywhere. A hint is a logged description of a forming pattern,
+  never a command and never a thesis by itself. *(critical)*
+- **Evidence before cues.** The entry checklist/stance and setup-forming hints MUST NOT be built
+  before the journal, excursion outcomes, and replay studies exist and their journeys
+  (J-58 – J-62) pass; every hint MUST cite the user's study baseline for its setup/feed or state
+  exactly that none exists. Shipping a buy/sell-adjacent cue with no evidence layer behind it is
+  a defect. *(critical)*
+- **No profitability or edge claims.** No currency P&L, equity curves, compounding, or
+  win-rate-as-edge presentation anywhere. R statistics are journaled measurements and MUST always
+  appear with their n, the abandonment bucket, the null baseline (where one applies), and the
+  spread/R cost figure. *(critical)*
+- **No prediction language.** A verdict or stance describes what the tape is doing **now**
+  relative to the declared thesis — never a forecast of what price will do. *(critical)*
+- **No naked outputs.** Every published verdict, stance, hint, risk flag, execution check, and
+  grade MUST carry plain-language evidence derived from canonical engine values. A verdict
+  without evidence is a defect. *(critical)*
+- **Journal integrity.** Verdict timelines are append-only: never edited, backfilled, fabricated,
+  or recomputed at read time; nothing is recorded before declaration; gaps (pause, watch restart,
+  stale spans) are explicit events; data-end resolves to an explicit `expired`, never a fabricated
+  outcome; action marks are recorded exactly as the user stated them — never inferred fills.
+  Abandoned theses remain visible in every denominator (no survivorship pruning), and an
+  entry-marked thesis can never be abandoned. *(critical)*
+- **The research layer is read-only over the engine.** It MUST NOT mutate engine, classifier, or
+  feature state or outputs: the same event stream yields **byte-identical** tape
+  state/confidence/features/history with or without an active thesis or attached observers
+  (equivalence-tested). An observer failure MUST surface explicitly and never kill the feed.
+  *(critical)*
+- **Source, feed, and config honesty.** Every research record MUST be stamped with its bound
+  source, its `data_feed`, and a `config_fingerprint` over the entire frozen config; a thesis
+  MUST never be evaluated against a different source than it was declared on; analytics and
+  studies MUST NOT pool across feeds or fingerprints; and SIP-derived research MUST NOT be
+  presented as validating IEX-live behaviour without the explicit basis label. *(critical)*
+- **No scanning, no execution — still.** Theses and hints exist only on the one watched ticker;
+  studies run only over explicitly chosen windows; there is no background or multi-symbol setup
+  detection, and (re-affirming the first anti-goal) no order placement, routing, simulation of
+  fills, or broker integration.
+- **No new indicators, no auto-tuning.** Confirmation rules, stances, hints, and studies MUST be
+  composed from the EXISTING engine features and states only; research thresholds are config-owned
+  research defaults calibrated against the sims/fixtures; no parameter optimizer, grid search, or
+  automatic threshold fitting of any kind. *(critical)*
+- **Persistence stays scoped to research records.** SQLite holds theses, verdict events, hints,
+  actions, reviews, and study results only — no trades, quotes, candles, or feature series are
+  persisted (committed test fixtures excepted).
