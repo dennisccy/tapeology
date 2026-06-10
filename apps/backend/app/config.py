@@ -357,9 +357,17 @@ class Config:
     # under WAL with a single writer queue, a reader that briefly contends waits up to this long
     # rather than failing immediately. Operational store tuning, never an engine threshold.
     journal_busy_timeout_ms: int = 5000
-    # The journal schema version stamped in the ``schema_version`` table at creation. Bump when the
-    # schema changes (migration is out of scope this iteration — the full schema is created at once).
-    journal_schema_version: int = 1
+    # The CURRENT journal schema version the store migrates UP to on open (capability 28). Stamped in
+    # the ``schema_version`` table at creation, and the target of the versioned on-open migration: a
+    # store opened against an older DB runs each pending step inside one ``BEGIN IMMEDIATE`` writer
+    # transaction until the stored version equals this. Bump (and add the matching migration step in
+    # ``store._migrate``) whenever the schema changes.
+    #   v1 → v2: ``verdict_events`` gains ``rule_first_true_ts`` / ``rule_first_true_price`` (the
+    #            capability-24 dwell timing record), added by ``ALTER TABLE`` and never backfilled
+    #            (the append-only timeline keeps old rows' values ``NULL``).
+    # Excluded from ``config_fingerprint`` (see the exclusion set below): a migration must NOT change
+    # the fingerprint — verdicts depend on classifier thresholds, never on where/how the DB is stored.
+    journal_schema_version: int = 2
 
     # --- Research evolution: verdict-transition engine (capability 24) -------------------------
     # RESEARCH DEFAULTS — a starting point calibrated against the deterministic sims, NEVER a

@@ -74,7 +74,10 @@ function verdictLabel(
 
 function StripShell({ children }: { children: React.ReactNode }) {
   return (
-    <section className="mb-4 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+    <section
+      data-testid="thesis-strip"
+      className="mb-4 rounded-lg border border-slate-800 bg-slate-900/60 p-4"
+    >
       {children}
     </section>
   );

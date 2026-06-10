@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-i_will_be_super_rich_with_my_loved_ones-iter-5",
+  "base_url": "http://localhost:3650",
+  "iteration": 5,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Tapeology Cockpit",
+      "narration": "We open the Cockpit — the single-page home for watching and judging the tape. The chart, live panels, and thesis strip load together with no errors.",
+      "point_out": "The price chart fills the upper area, and just below it sits the thesis strip showing a clean declare affordance — ready for a new thesis.",
+      "journey": "J-68",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Declare thesis" }
+    },
+    {
+      "n": 2,
+      "title": "Watch SIM-BIDABS (bid absorption scenario)",
+      "narration": "We type SIM-BIDABS into the Watch field — a simulated ticker that runs a sustained bid-absorption scenario — and submit. The cockpit acknowledges the watch immediately.",
+      "point_out": "The heading updates to confirm we are now watching SIM-BIDABS, and the tape state panel begins showing live signals. The thesis strip remains in its idle declare state.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker" }, "text": "SIM-BIDABS" },
+      "expect": { "text": "SIM-BIDABS" }
+    },
+    {
+      "n": 3,
+      "title": "Click Watch to start streaming",
+      "narration": "Clicking Watch starts the live stream. The cockpit transitions from idle to an active session for SIM-BIDABS without any page reload.",
+      "point_out": "The tape state panel shows bid absorption activity and the price chart begins plotting real-time prints. The thesis strip below the chart is in its idle declare affordance — no chip, no error.",
+      "journey": "J-21",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Declare a thesis" }
+    },
+    {
+      "n": 4,
+      "title": "Select absorption reversal setup",
+      "narration": "In the declare form at the bottom of the cockpit we choose the absorption reversal setup type — the thesis that absorption has been absorbed and a reversal is coming.",
+      "point_out": "The Setup type dropdown now shows absorption_reversal selected, and the Level price field is hidden because this setup does not use one — the UI enforces that constraint automatically.",
+      "journey": "J-38",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "combobox", "name": "Setup type" } }
+    },
+    {
+      "n": 5,
+      "title": "Choose absorption_reversal from the setup list",
+      "narration": "We pick absorption_reversal from the dropdown list. This is the setup the tape on SIM-BIDABS is primed to confirm.",
+      "point_out": "The dropdown closes with absorption_reversal selected. The Level price field remains hidden — the form only shows fields that are relevant to the chosen setup.",
+      "journey": "J-38",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "option", "name": "absorption_reversal" } }
+    },
+    {
+      "n": 6,
+      "title": "Set direction to long and enter invalidation price",
+      "narration": "We select long as the direction and type 99.0 as the invalidation price — the level below current price that would prove the thesis wrong.",
+      "point_out": "Direction is set to long and the invalidation field shows 99.00. All three required fields — setup, direction, invalidation — are now filled, and the Declare button is available.",
+      "journey": "J-38",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Invalidation price" }, "text": "99.0" }
+    },
+    {
+      "n": 7,
+      "title": "Declare the thesis — strip transitions to active view",
+      "narration": "Clicking Declare submits the thesis to the backend. This is the moment that was blocked by a missing database migration in the previous iteration — it now returns success and the strip immediately shows the active thesis.",
+      "point_out": "The strip transitions from the idle declare affordance to the active thesis view showing YOUR THESIS / absorption reversal / LONG / invalidation 99.00 / PENDING. A slate-grey chip labelled PENDING appears — the verdict engine has started judging.",
+      "journey": "J-38",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Declare" } },
+      "expect": { "text": "YOUR THESIS" }
+    },
+    {
+      "n": 8,
+      "title": "Verdict chip updates live to CONFIRMING",
+      "narration": "With the thesis active we watch the chip. As the tape delivers buyer-control signals that match the reversal call, the chip transitions from PENDING to CONFIRMING — live, with no page reload.",
+      "point_out": "The chip colour shifts from slate-grey to emerald-green and the label reads CONFIRMING. An evidence line below the chip explains in plain language why the tape is confirming the thesis right now.",
+      "journey": "J-40",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "CONFIRMING" }
+    },
+    {
+      "n": 9,
+      "title": "Watch SIM-SELLER to see a REJECTING verdict",
+      "narration": "We switch to SIM-SELLER and declare a long trend-continuation thesis. Because sellers are in control on this ticker, the tape immediately works against the thesis and the chip reads REJECTING.",
+      "point_out": "The verdict chip is rose-coloured and labelled REJECTING. The evidence line below it explains in plain language that opposing-side control is pressing price against the declared direction — no raw JSON, just a clear human-readable statement.",
+      "journey": "J-41",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "REJECTING" }
+    },
+    {
+      "n": 10,
+      "title": "INVALIDATED state — terminal treatment on the strip",
+      "narration": "When three consecutive prints cross below the declared invalidation level the thesis auto-resolves to INVALIDATED. This is a terminal verdict: the strip shows the heavier rose chip with a glowing ring border, and the offending print is cited in the evidence.",
+      "point_out": "The chip has a rose border with a rose ring around it — visually distinct from REJECTING which has no ring. The evidence reads the exact print count and the price that crossed the invalidation level. THESIS INVALIDATED — RESOLVED is shown below.",
+      "journey": "J-44",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "THESIS INVALIDATED" }
+    },
+    {
+      "n": 11,
+      "title": "Inline validation — wrong-side invalidation is caught in the strip",
+      "narration": "If we try to declare a long thesis with an invalidation price above the current last traded price the backend returns a 422 error. The error appears as visible text inside the strip itself — not a pop-up, not a toast, not hidden in the console.",
+      "point_out": "The error message reads 'a long thesis's invalidation must be below the current last price' and sits inline inside the declare form. The form stays open so the value can be corrected immediately.",
+      "journey": "J-39",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "invalidation must be below" }
+    },
+    {
+      "n": 12,
+      "title": "Chart and panel grid are intact throughout",
+      "narration": "Throughout all of the above — declaration, live verdict updates, and invalidation — the price chart and lower panel grid keep rendering normally. The thesis strip lives between them without displacing or clipping any other element.",
+      "point_out": "Seven canvas elements and the SVG chart overlay are present. The TAPE STATE, QUOTE, and FEATURES panels all render below the thesis strip. Layout is intact with no overlapping or collapsed elements.",
+      "journey": "J-17",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "TAPE STATE" }
+    }
+  ]
+}

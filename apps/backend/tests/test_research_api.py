@@ -403,3 +403,59 @@ def test_invalidated_thesis_shows_terminal_projection_not_idle(client):
     assert final["verdict"] == "invalidated"
     assert final["last"] is not None
     assert final["evidence"]
+
+
+class _FaultInjectingConn:
+    """Proxy around the writer connection that raises on a targeted INSERT (``sqlite3.Connection`` is
+    an immutable C type and cannot be monkeypatched directly)."""
+
+    def __init__(self, conn, fail_on: str) -> None:
+        import sqlite3 as _sqlite3
+
+        self._conn = conn
+        self._fail_on = fail_on
+        self._OperationalError = _sqlite3.OperationalError
+
+    def execute(self, sql, *args, **kwargs):
+        if isinstance(sql, str) and self._fail_on in sql:
+            raise self._OperationalError("injected fault on the initial verdict-event insert")
+        return self._conn.execute(sql, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+def test_declare_atomicity_event_insert_failure_surfaces_503_and_persists_nothing(client):
+    # A failure DURING the single declaration transaction must surface an explicit API error (503)
+    # AND leave NO thesis row — the declaration is one atomic writer transaction now, so a thesis row
+    # without its initial verdict event can no longer exist (the iter-4 orphan defect).
+    _watch_bidabs(client)
+
+    from app.research.routes import get_registry
+
+    store = get_registry().store
+    real_conn = store._write_conn
+    store._write_conn = _FaultInjectingConn(real_conn, "INSERT INTO verdict_events")
+    r = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-BIDABS",
+            "setup_type": "absorption_reversal",
+            "direction": "long",
+            "invalidation_price": 99.0,
+        },
+    )
+    store._write_conn = real_conn  # restore before the clean declare + teardown
+    assert r.status_code == 503  # honest, explicit error — never a silent half-save
+    # Nothing partially saved: the canonical active read is still null and a clean declare now works.
+    assert client.get("/research/thesis/active?ticker=SIM-BIDABS").json()["thesis"] is None
+    ok = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-BIDABS",
+            "setup_type": "absorption_reversal",
+            "direction": "long",
+            "invalidation_price": 99.0,
+        },
+    )
+    assert ok.status_code == 200  # no orphan 409 from the failed attempt

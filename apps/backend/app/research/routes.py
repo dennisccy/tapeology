@@ -287,26 +287,26 @@ def declare_thesis(
         created_wall_ts=time.time(),
     )
 
-    # Persist the thesis row, then APPEND the initial ``pending`` verdict event (the append-only
-    # timeline starts here — nothing was recorded before declaration). A store failure here is a
-    # real 503 (the declaration did not take effect) — never a silently-lost thesis.
+    # Persist the thesis row AND its initial ``pending`` verdict event ATOMICALLY (one writer
+    # transaction). The append-only timeline starts here — nothing was recorded before declaration —
+    # and a store failure rolls BOTH back, so a thesis row without its initial event can no longer be
+    # left behind (the iter-4 orphan defect). A failure is a real 503 (the declaration did not take
+    # effect) — never a silently-lost or half-saved thesis.
+    initial_event = VerdictEventRecord(
+        thesis_id=thesis.id,
+        logical_ts=snap.timestamp,
+        wall_ts=thesis.created_wall_ts,
+        verdict="pending",
+        evidence=(
+            "Thesis declared. The tape is being watched against it; "
+            "the verdict stays pending until post-declaration evidence accrues."
+        ),
+        tape_state=snap.tape_state,
+        confidence=snap.confidence,
+        last=last,
+    )
     try:
-        registry.store.insert_thesis(thesis)
-        registry.store.append_verdict_event(
-            VerdictEventRecord(
-                thesis_id=thesis.id,
-                logical_ts=snap.timestamp,
-                wall_ts=thesis.created_wall_ts,
-                verdict="pending",
-                evidence=(
-                    "Thesis declared. The tape is being watched against it; "
-                    "the verdict stays pending until post-declaration evidence accrues."
-                ),
-                tape_state=snap.tape_state,
-                confidence=snap.confidence,
-                last=last,
-            )
-        )
+        registry.store.insert_thesis_with_event(thesis, initial_event)
     except Exception:
         raise HTTPException(status_code=503, detail="could not persist the thesis")
 

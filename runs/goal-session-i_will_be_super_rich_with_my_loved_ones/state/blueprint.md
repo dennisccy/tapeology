@@ -95,6 +95,9 @@ re-expose the snapshot and never recompute; no page recomputes or re-fetches any
 one writer queue — never written from event processing or the WS serialization path). Tables:
 theses, verdict_events (append-only), hints, actions, studies, study_occurrences, schema_version.
 Env-configured DB path; tests inject a temp path. No tape data persisted (committed fixtures excepted).
+**Schema evolution ships a versioned migration** (bump `journal_schema_version` + in-place `ALTER`
+of older DBs in one writer transaction, never backfilling append-only rows), proven by a test against
+a committed old-schema fixture — `CREATE TABLE IF NOT EXISTS` alone is never a migration (iter-4 lesson).
 
 **New sim scenarios.** `SIM-SHIFT` and `SIM-REVERSAL` (capability 21) are provider-level only —
 seeded, documented like the existing five; the engine is untouched.

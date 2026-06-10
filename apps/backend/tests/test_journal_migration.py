@@ -1,0 +1,288 @@
+"""Versioned journal-store migration (capability 28) — the class of defect temp-DB unit tests
+structurally cannot see (iter-5).
+
+A fresh ``JournalStore`` creates the schema at the CURRENT version, so a temp-path test never
+exercises the v1 -> v2 path. These tests open the store against a PRE-EXISTING v1 DB (built from the
+committed ``fixtures/journal_v1_schema.sql`` — research records only, no tape data) and assert:
+
+  * the v1 -> v2 migration adds ``verdict_events.rule_first_true_{ts,price}`` and bumps
+    ``schema_version`` to 2;
+  * pre-existing rows are INTACT and keep ``NULL`` rule_first_true (never backfilled — the timeline
+    is append-only);
+  * a thesis declares end-to-end against the migrated DB (no 503);
+  * re-opening an already-v2 DB is idempotent (no crash, version stays 2);
+  * a stale version row whose columns are ALREADY present does not crash the open;
+  * a forced failure on the initial verdict-event insert leaves NO thesis row (atomic declaration);
+  * the startup sweep resolves a zero-event active (orphan) thesis to ``expired`` (the SIM-BUYER /
+    SIM-SELLER orphans the dev DB carries).
+"""
+
+import dataclasses
+import sqlite3
+from pathlib import Path
+
+import pytest
+
+from app.config import CONFIG
+from app.research.store import JournalStore, ThesisRecord, VerdictEventRecord
+
+FIXTURE_SQL = Path(__file__).parent / "fixtures" / "journal_v1_schema.sql"
+
+
+def _build_v1_db(path: str) -> None:
+    """Materialize the committed v1-schema SQL fixture into a real SQLite DB at ``path``."""
+    sql = FIXTURE_SQL.read_text()
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript(sql)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _verdict_event_columns(path: str) -> set[str]:
+    conn = sqlite3.connect(path)
+    try:
+        return {r[1] for r in conn.execute("PRAGMA table_info(verdict_events)").fetchall()}
+    finally:
+        conn.close()
+
+
+def _thesis(tid: str = "t1", ticker: str = "SIM-BIDABS", status: str = "active") -> ThesisRecord:
+    return ThesisRecord(
+        id=tid,
+        ticker=ticker,
+        setup_type="absorption_reversal",
+        direction="long",
+        invalidation_price=99.0,
+        level_price=None,
+        status=status,
+        bound_source="bid_absorption",
+        data_feed="sim",
+        config_fingerprint="abc123",
+        entry_context={"last": 100.0, "tape_state": "bid_absorption"},
+        statements=[{"text": "x", "kind": "tape_state_is", "params": {"states": ["bid_absorption"]}}],
+        created_logical_ts=12.5,
+        created_wall_ts=1700000000.0,
+    )
+
+
+def _pending_event(tid: str = "t1") -> VerdictEventRecord:
+    return VerdictEventRecord(
+        thesis_id=tid,
+        logical_ts=12.5,
+        wall_ts=1700000000.0,
+        verdict="pending",
+        evidence="Thesis declared.",
+        tape_state="bid_absorption",
+        confidence=0.6,
+        last=100.0,
+    )
+
+
+# --- the committed v1-schema fixture is real and v1 -------------------------------------------------
+
+def test_fixture_starts_at_v1_without_the_new_columns(tmp_path):
+    db = str(tmp_path / "v1.db")
+    _build_v1_db(db)
+    cols = _verdict_event_columns(db)
+    assert "rule_first_true_ts" not in cols
+    assert "rule_first_true_price" not in cols
+    conn = sqlite3.connect(db)
+    try:
+        assert conn.execute("SELECT version FROM schema_version").fetchone()[0] == 1
+        # The fixture carries research records ONLY — no tape-data tables.
+        names = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+    finally:
+        conn.close()
+    for forbidden in ("trades", "quotes", "candles", "features"):
+        assert forbidden not in names
+
+
+# --- v1 -> v2 migration on open --------------------------------------------------------------------
+
+def test_open_migrates_v1_to_v2_adding_columns_and_bumping_version(tmp_path):
+    db = str(tmp_path / "v1.db")
+    _build_v1_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        assert store.schema_version() == 2
+        cols = _verdict_event_columns(db)
+        assert "rule_first_true_ts" in cols
+        assert "rule_first_true_price" in cols
+    finally:
+        store.close()
+
+
+def test_migration_does_not_backfill_pre_existing_rows(tmp_path):
+    # The append-only timeline is NEVER backfilled: the two pre-existing v1 verdict events keep NULL
+    # rule_first_true after the column is added, and their other values are untouched.
+    db = str(tmp_path / "v1.db")
+    _build_v1_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        events = store.verdict_events("v1thesis0001")
+        assert [e.verdict for e in events] == ["pending", "expired"]
+        for e in events:
+            assert e.rule_first_true_ts is None
+            assert e.rule_first_true_price is None
+        # Pre-existing values intact (not rewritten by the migration).
+        assert events[0].tape_state == "bid_absorption"
+        assert events[0].confidence == 0.6
+        assert events[1].verdict == "expired"
+        thesis = store.get_thesis("v1thesis0001")
+        assert thesis is not None
+        assert thesis.status == "expired"
+        assert thesis.config_fingerprint == "oldfingerprint00"  # the old stamp is preserved
+    finally:
+        store.close()
+
+
+def test_declare_succeeds_end_to_end_against_migrated_db(tmp_path):
+    # The defining defect: a declaration against an OLD DB used to 503 at the initial verdict-event
+    # INSERT (missing columns). After migration it must succeed and the timeline starts cleanly.
+    db = str(tmp_path / "v1.db")
+    _build_v1_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        store.insert_thesis_with_event(_thesis(tid="new1", ticker="SIM-BUYER"), _pending_event("new1"))
+        active = store.get_active_thesis("SIM-BUYER")
+        assert active is not None and active.id == "new1"
+        events = store.verdict_events("new1")
+        assert len(events) == 1
+        assert events[0].verdict == "pending"
+    finally:
+        store.close()
+
+
+# --- idempotency / stale-version guards ------------------------------------------------------------
+
+def test_reopen_already_v2_is_idempotent(tmp_path):
+    db = str(tmp_path / "v1.db")
+    _build_v1_db(db)
+    JournalStore(db, CONFIG).close()  # first open migrates to v2
+    store = JournalStore(db, CONFIG)  # second open must be a no-op, not a crash
+    try:
+        assert store.schema_version() == 2
+        cols = _verdict_event_columns(db)
+        assert "rule_first_true_ts" in cols
+        assert "rule_first_true_price" in cols
+    finally:
+        store.close()
+
+
+def test_stale_version_row_with_columns_present_does_not_crash(tmp_path):
+    # Belt-and-braces: a DB whose verdict_events ALREADY carries the v2 columns but whose version row
+    # is stale at 1 (e.g. tables recreated at the new shape by CREATE TABLE but the version never
+    # bumped). The PRAGMA table_info guard makes the ALTERs no-op and the open just bumps the version.
+    db = str(tmp_path / "v1.db")
+    _build_v1_db(db)
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute("ALTER TABLE verdict_events ADD COLUMN rule_first_true_ts REAL")
+        conn.execute("ALTER TABLE verdict_events ADD COLUMN rule_first_true_price REAL")
+        conn.commit()  # version row still says 1
+    finally:
+        conn.close()
+    store = JournalStore(db, CONFIG)  # must not raise "duplicate column name"
+    try:
+        assert store.schema_version() == 2
+    finally:
+        store.close()
+
+
+def test_fresh_temp_db_is_created_at_current_version_no_migration(tmp_path):
+    store = JournalStore(str(tmp_path / "fresh.db"), CONFIG)
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version == 2
+        cols = _verdict_event_columns(str(tmp_path / "fresh.db"))
+        assert {"rule_first_true_ts", "rule_first_true_price"} <= cols
+    finally:
+        store.close()
+
+
+# --- atomic declaration ----------------------------------------------------------------------------
+
+class _FaultInjectingConn:
+    """A thin proxy around a real sqlite3 connection that raises on a targeted INSERT.
+
+    ``sqlite3.Connection`` is an immutable C type (cannot be monkeypatched), so we wrap the store's
+    write connection in this proxy to fault-inject the initial verdict-event INSERT — exercising the
+    rollback of the single declaration transaction.
+    """
+
+    def __init__(self, conn: sqlite3.Connection, fail_on: str) -> None:
+        self._conn = conn
+        self._fail_on = fail_on
+
+    def execute(self, sql, *args, **kwargs):
+        if isinstance(sql, str) and self._fail_on in sql:
+            raise sqlite3.OperationalError("injected fault on the initial verdict-event insert")
+        return self._conn.execute(sql, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+def test_atomic_declare_rolls_back_both_on_event_insert_failure(tmp_path):
+    # Force a failure DURING the single declaration transaction, after the thesis INSERT but on the
+    # verdict-event INSERT. The whole transaction must roll back: NO thesis row, NO event — never a
+    # half-saved orphan (the iter-4 two-transaction defect that left active theses with zero events).
+    db = str(tmp_path / "fresh.db")
+    store = JournalStore(db, CONFIG)
+    try:
+        # Swap the writer connection for a proxy that raises on the initial verdict-event INSERT.
+        store._write_conn = _FaultInjectingConn(store._write_conn, "INSERT INTO verdict_events")
+        with pytest.raises(sqlite3.OperationalError):
+            store.insert_thesis_with_event(_thesis(tid="x1", ticker="SIM-BUYER"), _pending_event("x1"))
+        # Restore the real connection so the reads below (and close) work normally.
+        store._write_conn = store._write_conn._conn
+        # NO partial save: neither the thesis row nor any verdict event survives.
+        assert store.get_thesis("x1") is None
+        assert store.get_active_thesis("SIM-BUYER") is None
+        assert store.verdict_events("x1") == []
+    finally:
+        store.close()
+
+
+def test_atomic_declare_persists_both_rows_in_one_go(tmp_path):
+    db = str(tmp_path / "fresh.db")
+    store = JournalStore(db, CONFIG)
+    try:
+        store.insert_thesis_with_event(
+            _thesis(tid="ok1", ticker="SIM-BUYER"),
+            dataclasses.replace(_pending_event("ok1"), rule_first_true_ts=None),
+        )
+        assert store.get_thesis("ok1") is not None
+        events = store.verdict_events("ok1")
+        assert len(events) == 1 and events[0].verdict == "pending"
+        # The initial pending row records no spurious rule_first_true timing.
+        assert events[0].rule_first_true_ts is None
+        assert events[0].rule_first_true_price is None
+    finally:
+        store.close()
+
+
+# --- startup sweep over a zero-event active (orphan) thesis ---------------------------------------
+
+def test_startup_sweep_expires_zero_event_active_orphan(tmp_path):
+    # The dev DB carried active theses with ZERO verdict events (the orphan defect). The generic
+    # "active -> expired" sweep must resolve them regardless of event count and append the final
+    # expired event — leaving the row visible (no survivorship pruning) so a fresh declaration on the
+    # same ticker no longer 409s.
+    db = str(tmp_path / "fresh.db")
+    store = JournalStore(db, CONFIG)
+    try:
+        store.insert_thesis(_thesis(tid="orphan", ticker="SIM-BUYER", status="active"))  # NO event
+        assert store.verdict_events("orphan") == []
+        assert store.get_active_thesis("SIM-BUYER") is not None
+        affected = store.expire_stale_actives(1700000999.0)
+        assert affected == ["orphan"]
+        assert store.get_thesis("orphan").status == "expired"  # row retained, not deleted
+        assert store.get_active_thesis("SIM-BUYER") is None  # a fresh declare no longer 409s
+        events = store.verdict_events("orphan")
+        assert len(events) == 1 and events[-1].verdict == "expired"
+    finally:
+        store.close()

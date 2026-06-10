@@ -4,14 +4,24 @@ Discipline mandated by the goal doc and re-stated in the iteration spec:
   * stdlib ``sqlite3`` only;
   * **WAL** journal mode + a **busy_timeout** so a reader never fails on brief writer contention;
   * every write runs under **BEGIN IMMEDIATE** in **ONE writer queue** (a single background worker
-    thread) — writes NEVER happen on the engine's event-processing path or the WS serialization
-    path (the monitor enqueues a write from its observer callback and returns immediately, so a slow
-    or failing disk never blocks the feeder);
+    thread) — the actual disk write NEVER happens on the engine's event-processing path or the WS
+    serialization path: it is enqueued onto and executed by the dedicated writer worker. The
+    enqueuing caller (e.g. the monitor's observer callback) is synchronous-but-fast — it waits only
+    for the worker's result handoff, NOT for any reader/WS contention — and a write failure is
+    surfaced to it (raised) so the monitor can flip ``monitor_status: failed`` rather than crash the
+    feeder. Verdict writes are rare (dwell-gated transitions), so this synchronous handoff is not an
+    observable latency source on the hot path;
   * ``verdict_events`` is **append-only at the repository level** — the repository exposes NO update
     or delete for it (the only way history changes is appending a new row);
   * the FULL versioned schema is created at once (theses, verdict_events, hints, actions, studies,
     study_occurrences, schema_version) even though only ``theses`` + ``verdict_events`` are written
-    this iteration.
+    this iteration;
+  * **versioned, on-open migrations** carry an OLDER DB up to the current
+    ``Config.journal_schema_version`` (capability 28): each pending step runs inside ONE
+    ``BEGIN IMMEDIATE`` writer transaction, is idempotent (``PRAGMA table_info`` guards a re-run),
+    and NEVER backfills existing rows (the timeline is append-only — old verdict events keep
+    ``NULL`` for any column added later). The migration is proven against a committed old-schema
+    fixture (research records only), not just freshly-created temp DBs.
 
 The store is constructed with an explicit DB path (the operator's ``TAPEOLOGY_JOURNAL_DB`` or a
 test's temp path), so persistence is dependency-injected and hermetic in tests.
@@ -182,6 +192,11 @@ class JournalStore:
         conn.execute("PRAGMA foreign_keys=ON")
 
     def _create_schema(self) -> None:
+        # Ensure every table exists (idempotent — CREATE TABLE IF NOT EXISTS). On a brand-new DB this
+        # also stamps the schema_version row at the CURRENT version, so a freshly-created store needs
+        # no migration. On a PRE-EXISTING older DB the CREATE-IF-NOT-EXISTS no-ops (the tables already
+        # exist with the old column set) and the stored version row is left untouched here — the
+        # versioned migration below is what carries it up.
         with self._write_conn:
             self._write_conn.executescript(_SCHEMA)
             row = self._write_conn.execute(
@@ -192,6 +207,52 @@ class JournalStore:
                     "INSERT INTO schema_version (version) VALUES (?)",
                     (self._config.journal_schema_version,),
                 )
+        self._migrate()
+
+    def _column_exists(self, table: str, column: str) -> bool:
+        """True if ``column`` is present on ``table`` (drives the idempotent migration guards)."""
+        cols = {r["name"] for r in self._write_conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        return column in cols
+
+    def _migrate(self) -> None:
+        """Carry an older journal DB up to ``Config.journal_schema_version`` (capability 28).
+
+        Reads the stored ``schema_version`` and applies each pending step in order, INSIDE ONE
+        ``BEGIN IMMEDIATE`` writer transaction per step (so a failure rolls back cleanly and the
+        version row only advances once the columns exist). Every step is idempotent — a
+        ``PRAGMA table_info`` guard makes "columns already present but a stale version row" a no-op
+        rather than a crash (e.g. a DB whose tables were re-created at the new shape by a newer
+        ``CREATE TABLE`` but whose version row was never bumped). NO step backfills existing rows: the
+        verdict timeline is append-only, so a column added in a migration stays ``NULL`` on every row
+        written before it (never fabricated, never recomputed).
+        """
+        target = self._config.journal_schema_version
+        row = self._write_conn.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+        current = row["version"] if row is not None else target
+
+        # --- v1 → v2: add the capability-24 dwell timing columns to verdict_events ---------------
+        if current < 2:
+            self._write_conn.execute("BEGIN IMMEDIATE")
+            try:
+                # ALTER TABLE ADD COLUMN is not itself idempotent (a re-add errors), so guard each
+                # with table_info: a DB that already carries the columns (only the version row is
+                # stale) skips straight to bumping the version — no crash.
+                if not self._column_exists("verdict_events", "rule_first_true_ts"):
+                    self._write_conn.execute(
+                        "ALTER TABLE verdict_events ADD COLUMN rule_first_true_ts REAL"
+                    )
+                if not self._column_exists("verdict_events", "rule_first_true_price"):
+                    self._write_conn.execute(
+                        "ALTER TABLE verdict_events ADD COLUMN rule_first_true_price REAL"
+                    )
+                self._write_conn.execute("UPDATE schema_version SET version = 2")
+                self._write_conn.commit()
+            except Exception:
+                self._write_conn.rollback()
+                raise
+            current = 2
+
+        # Future steps (current < 3, …) append here, each in its own BEGIN IMMEDIATE block.
 
     def _read_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -260,6 +321,67 @@ class JournalStore:
                     json.dumps(record.statements),
                     record.created_logical_ts,
                     record.created_wall_ts,
+                ),
+            )
+
+        self._do_write(_fn)
+
+    def insert_thesis_with_event(
+        self, thesis: ThesisRecord, event: VerdictEventRecord
+    ) -> None:
+        """Declare a thesis ATOMICALLY: the thesis row + its initial verdict event in ONE writer
+        transaction (single ``BEGIN IMMEDIATE`` … commit, owned by the writer worker).
+
+        A failure at any point rolls BOTH back — so a thesis row without its initial timeline event
+        can no longer exist (the iter-4 two-transaction defect). This is the only declaration path the
+        route uses; the standalone ``insert_thesis`` / ``append_verdict_event`` remain for the
+        lifecycle/test paths that legitimately write one row at a time. The append-only guarantee is
+        preserved (this only INSERTs; it never updates/deletes a verdict row)."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                """
+                INSERT INTO theses (
+                    id, ticker, setup_type, direction, invalidation_price, level_price,
+                    status, bound_source, data_feed, config_fingerprint,
+                    entry_context, statements, created_logical_ts, created_wall_ts
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    thesis.id,
+                    thesis.ticker,
+                    thesis.setup_type,
+                    thesis.direction,
+                    thesis.invalidation_price,
+                    thesis.level_price,
+                    thesis.status,
+                    thesis.bound_source,
+                    thesis.data_feed,
+                    thesis.config_fingerprint,
+                    json.dumps(thesis.entry_context),
+                    json.dumps(thesis.statements),
+                    thesis.created_logical_ts,
+                    thesis.created_wall_ts,
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO verdict_events (
+                    thesis_id, logical_ts, wall_ts, verdict, evidence, tape_state, confidence, last,
+                    rule_first_true_ts, rule_first_true_price
+                ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    event.thesis_id,
+                    event.logical_ts,
+                    event.wall_ts,
+                    event.verdict,
+                    event.evidence,
+                    event.tape_state,
+                    event.confidence,
+                    event.last,
+                    event.rule_first_true_ts,
+                    event.rule_first_true_price,
                 ),
             )
 
