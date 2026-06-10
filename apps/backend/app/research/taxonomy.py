@@ -119,18 +119,24 @@ SETUPS: dict[str, dict] = {
     "failed_move_fade": {
         "name": "Failed-move fade",
         "requires_level": True,
+        # goal.md J-46 side mapping (iter-6 fix): a LONG fmf fades a failed DOWNSIDE break absorbed at
+        # the BID (``bid_absorption``); a SHORT fmf fades a failed UPSIDE break absorbed at the ASK
+        # (``ask_absorption``). Statement 2 then expects control turning to YOUR side
+        # (long => buyer_control; short => seller_control). The prior templates had both inverted —
+        # statement 1 ask_absorption-for-long and statement 2 seller_control-for-long (the latter
+        # contradicting even the verdict engine's own control branch) — goal.md wins.
         "statements": [
             _statement(
                 "A push beyond the level fails to find control and is absorbed back toward it.",
                 "tape_state_is",
-                states_long=["ask_absorption"],
-                states_short=["bid_absorption"],
+                states_long=["bid_absorption"],
+                states_short=["ask_absorption"],
             ),
             _statement(
                 "Control then turns to your side as the failed move fades back from the level.",
                 "tape_state_is",
-                states_long=["seller_control"],
-                states_short=["buyer_control"],
+                states_long=["buyer_control"],
+                states_short=["seller_control"],
             ),
         ],
     },

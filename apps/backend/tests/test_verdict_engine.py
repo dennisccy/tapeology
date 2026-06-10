@@ -330,16 +330,54 @@ def test_j45_level_break_never_confirms_if_level_unreached():
 
 
 # =================================================================================================
-# J-46 — failed_move_fade: confirming DURING the absorption (the deliberate J-40 asymmetry)
+# J-46 — failed_move_fade: confirming DURING the absorbed DOWNSIDE break (the deliberate J-40
+# asymmetry), then STILL confirming after buyers reclaim the level.
+#
+# goal.md J-46 (verbatim semantics): a LONG failed_move_fade declared during SIM-REVERSAL's
+# BID-absorption phase reads ``confirming`` ("the downside break is being absorbed"); the push LOWER
+# failed and is being absorbed at the bid. The iter-6 side-mapping fix makes the fade premise for a
+# LONG fmf ``bid_absorption`` (the failed DOWNSIDE break), with SHORT mirroring to ``ask_absorption``.
+# (The pre-fix code had this INVERTED — ask_absorption for long — which goal.md contradicts in plain
+# words; goal.md wins, so these tests assert the corrected semantics, not the old inversion.)
 # =================================================================================================
 
-def test_j46_failed_move_fade_confirms_during_absorption():
-    # A long failed_move_fade expects a failed UP push absorbed at the ask (ask_absorption). SIM-ASKABS
-    # is ask_absorption forever — so a long failed_move_fade confirms DURING the absorption (the
-    # asymmetry with absorption_reversal, which would stay pending on the same tape).
+def test_j46_failed_move_fade_long_confirms_during_bid_absorption_and_stays_through_reclaim():
+    # SIM-REVERSAL: bid_absorption phase, then a buyer_control reclaim that lifts price. A LONG
+    # failed_move_fade declared DURING the bid_absorption phase confirms RIGHT THERE — the push lower
+    # failed and is being absorbed at the bid (the deliberate asymmetry with absorption_reversal,
+    # which would stay PENDING on the same absorption). It then STAYS confirming through the
+    # buyer_control reclaim — never rejecting, never a silent revert.
+    thesis = _thesis(
+        "SIM-REVERSAL", "reversal_absorption_then_buyer",
+        setup="failed_move_fade", direction="long", invalidation=98.0, level=100.05,
+    )
+    # Warm into the bid_absorption phase so declaration happens DURING absorption (it starts ~ev 79).
+    published, decisions, _ = _replay_with_evaluator(
+        "SIM-REVERSAL", "reversal_absorption_then_buyer", thesis, warm=60,
+    )
+    # The FIRST published transition away from pending is confirming, published DURING the absorption
+    # (not on the later reclaim) — proving the asymmetry the fix delivers.
+    assert published[0] == "pending"
+    assert published[1] == "confirming"
+    first_confirm = decisions[0]
+    assert first_confirm.verdict == "confirming"
+    assert first_confirm.tape_state == "bid_absorption"
+    # Evidence cites the absorbed FAILED-LOWER push (the J-46 wording register), not a reclaim.
+    assert "absorbed" in first_confirm.evidence.lower()
+    assert "lower" in first_confirm.evidence.lower()
+    # It never flips to rejecting, and it does not silently revert: the published verdict stays
+    # confirming through the buyer_control reclaim (a reclaim KEEPS a fade confirming).
+    assert "rejecting" not in published
+    assert published[-1] == "confirming"
+
+
+def test_j46_failed_move_fade_short_mirror_confirms_on_ask_absorption():
+    # SHORT mirror: a SHORT failed_move_fade fades a failed UPSIDE break absorbed at the ASK
+    # (ask_absorption). SIM-ASKABS is ask_absorption — so a SHORT fmf confirms DURING the absorption,
+    # the exact reflection of the long case (long => bid_absorption; short => ask_absorption).
     thesis = _thesis(
         "SIM-ASKABS", "ask_absorption",
-        setup="failed_move_fade", direction="long", invalidation=99.0, level=100.5,
+        setup="failed_move_fade", direction="short", invalidation=101.0, level=99.95,
     )
     published, decisions, _ = _replay_with_evaluator(
         "SIM-ASKABS", "ask_absorption", thesis, warm=40, n=200,
@@ -347,26 +385,10 @@ def test_j46_failed_move_fade_confirms_during_absorption():
     assert published[:2] == ["pending", "confirming"]
     confirm = decisions[0]
     assert confirm.tape_state == "ask_absorption"
-    assert "absorbed" in confirm.evidence.lower() and "fading" in confirm.evidence.lower()
-
-
-def test_j46_failed_move_fade_stays_confirming_through_reclaim():
-    # SIM-REVERSAL: bid_absorption then buyer_control. For a long failed_move_fade the buyer_control
-    # phase is the RECLAIM (control turning to your side) — it must KEEP confirming, not flip away.
-    # (We declare on SIM-REVERSAL where the absorption is bid_absorption — the fade's premise for a
-    # long fmf is ask_absorption, so it confirms on the reclaim's buyer_control phase.)
-    thesis = _thesis(
-        "SIM-REVERSAL", "reversal_absorption_then_buyer",
-        setup="failed_move_fade", direction="long", invalidation=98.0, level=100.5,
-    )
-    published, decisions, _ = _replay_with_evaluator(
-        "SIM-REVERSAL", "reversal_absorption_then_buyer", thesis, warm=60,
-    )
-    # Confirms on the buyer_control reclaim and stays confirming (no weakening/rejecting afterwards).
-    assert "confirming" in published
+    # The failed HIGHER push being absorbed (short mirror wording).
+    assert "absorbed" in confirm.evidence.lower()
+    assert "higher" in confirm.evidence.lower()
     assert "rejecting" not in published
-    # Once confirmed it does not silently revert.
-    assert published[-1] in ("confirming", "weakening")
 
 
 # =================================================================================================

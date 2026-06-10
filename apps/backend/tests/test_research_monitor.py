@@ -6,9 +6,10 @@ import itertools
 import pytest
 
 from app.config import CONFIG, Config
+from app.engine.snapshot import EngineSnapshot
 from app.engine.tape_engine import TapeEngine
 from app.providers.simulated import SimulatedProvider
-from app.research.monitor import ResearchMonitor, data_feed_for_scenario
+from app.research.monitor import ResearchMonitor, _evaluate_statement, data_feed_for_scenario
 from app.research.store import JournalStore, ThesisRecord, VerdictEventRecord
 from app.research.taxonomy import frozen_statements
 
@@ -132,6 +133,70 @@ def test_statement_status_not_yet_without_a_snapshot(store):
     # No on_event yet => no snapshot => every statement reads not_yet (honest default).
     statements = monitor.projection()["statements"]
     assert all(s["status"] == "not_yet" for s in statements)
+
+
+# --- directional_impact statement: four-quadrant direction-awareness (iter-6 fix) ---------------
+# The "Price keeps making progress in your direction rather than stalling." statement
+# (trend_continuation, kind=directional_impact). Before the fix it read ONLY the thesis-side impact,
+# so an incidentally positive buy_price_impact made it read ``met`` on a LONG thesis even while
+# sellers pressed price down (SIM-SELLER: buy_impact +0.14, sell_impact -0.43). The fix makes the
+# status direction-aware against the ADVERSE side using ONLY existing primary-window impact values
+# read verbatim, with the dominance cutoff config-owned (the classifier's own real-progress cutoffs):
+#   * material adverse impact  => violated  (the tape moves AGAINST the thesis)
+#   * favorable progress, no material adverse impact => met
+#   * genuinely flat / no evidence => not_yet (honest default; no evidence is not a failure)
+
+_DIRECTIONAL_IMPACT_STATEMENT = {"kind": "directional_impact", "params": {}}
+
+
+def _impact_snap(*, buy_impact: float, sell_impact: float) -> EngineSnapshot:
+    """A minimal warmed snapshot carrying just the primary-window impact pair under test."""
+    return EngineSnapshot(
+        ticker="SIM-X", scenario="x", timestamp=10.0, event_count=100, warm=True,
+        stream_status="live", bid=99.99, ask=100.01, spread=0.02, last=100.0,
+        features={"30s": {"buy_price_impact": buy_impact, "sell_price_impact": sell_impact}},
+        primary_window="30s", tape_state="buyer_control", confidence=0.9, observations=(),
+    )
+
+
+def _eval_directional(direction: str, *, buy_impact: float, sell_impact: float, store) -> str:
+    engine = _warm_engine("SIM-BUYER", "buyer_control")
+    thesis = _thesis_for(engine, store, setup="trend_continuation", direction=direction,
+                         invalidation=50.0 if direction == "long" else 200.0)
+    return _evaluate_statement(
+        _DIRECTIONAL_IMPACT_STATEMENT,
+        _impact_snap(buy_impact=buy_impact, sell_impact=sell_impact),
+        thesis,
+        CONFIG,
+    )
+
+
+def test_directional_impact_long_favorable_is_met(store):
+    # LONG, clean upward progress, no adverse sell pressure => met.
+    assert _eval_directional("long", buy_impact=0.40, sell_impact=0.0, store=store) == "met"
+
+
+def test_directional_impact_long_adverse_is_violated_despite_incidental_buy_impact(store):
+    # LONG, sellers materially pressing price down (the SIM-SELLER shape) — an incidentally positive
+    # buy_impact must NOT read ``met``; the adverse side dominates => violated. THE iter-6 defect.
+    assert _eval_directional("long", buy_impact=0.14, sell_impact=-0.43, store=store) == "violated"
+
+
+def test_directional_impact_short_favorable_is_met(store):
+    # SHORT, clean downward progress, no adverse buy pressure => met.
+    assert _eval_directional("short", buy_impact=0.0, sell_impact=-0.40, store=store) == "met"
+
+
+def test_directional_impact_short_adverse_is_violated_despite_incidental_sell_impact(store):
+    # SHORT mirror: buyers materially lifting price — an incidentally negative sell_impact must NOT
+    # read ``met``; the adverse (buy) side dominates => violated.
+    assert _eval_directional("short", buy_impact=0.43, sell_impact=-0.14, store=store) == "violated"
+
+
+def test_directional_impact_flat_is_not_yet(store):
+    # Genuinely flat both sides (inside the cutoffs) => not_yet (no evidence is not a failure).
+    assert _eval_directional("long", buy_impact=0.0, sell_impact=0.0, store=store) == "not_yet"
+    assert _eval_directional("short", buy_impact=0.0, sell_impact=0.0, store=store) == "not_yet"
 
 
 def test_verdict_fixed_pending(store):

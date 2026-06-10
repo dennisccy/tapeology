@@ -243,9 +243,10 @@ class VerdictEvaluator:
         return "seller_control" if self._thesis.direction == "long" else "buyer_control"
 
     def _absorption_state(self) -> str:
-        # The absorption the THESIS is built on: a long absorption_reversal expects sellers absorbed
-        # at the bid (bid_absorption); a long failed_move_fade expects a failed UP push absorbed at
-        # the ask (ask_absorption). Each setup names its own absorption below.
+        # The absorption an absorption_reversal THESIS is built on: a long absorption_reversal expects
+        # sellers absorbed at the bid (bid_absorption); a short expects buyers absorbed at the ask
+        # (ask_absorption). (failed_move_fade names its OWN fade absorption inline in
+        # ``_raw_failed_move_fade`` — long fades a failed DOWNSIDE break at the bid, per goal.md J-46.)
         return "bid_absorption" if self._thesis.direction == "long" else "ask_absorption"
 
     def _directional_impact(self, snap: EngineSnapshot) -> float:
@@ -331,9 +332,14 @@ class VerdictEvaluator:
         # The deliberate asymmetry with absorption_reversal: the ABSORPTION of the failed push IS the
         # expected behaviour and reads confirming directly; control on your side keeps it confirming;
         # rejecting needs real OPPOSITE follow-through (the failed move resuming with impact).
-        fade_absorption = "ask_absorption" if self._thesis.direction == "long" else "bid_absorption"
+        #
+        # goal.md J-46 side mapping (iter-6 fix): a LONG failed_move_fade fades a failed DOWNSIDE
+        # break — the push LOWER fails and is absorbed at the BID (``bid_absorption``); a SHORT fmf
+        # fades a failed UPSIDE break absorbed at the ASK (``ask_absorption``). (The prior code had
+        # this INVERTED — ask_absorption for long — which goal.md contradicts in plain words.)
+        fade_absorption = "bid_absorption" if self._thesis.direction == "long" else "ask_absorption"
         if snap.tape_state == fade_absorption:
-            pushed = "higher" if self._thesis.direction == "long" else "lower"
+            pushed = "lower" if self._thesis.direction == "long" else "higher"
             return (
                 _RAW_CONFIRMING,
                 f"The push {pushed} failed to find control and is being absorbed back toward "

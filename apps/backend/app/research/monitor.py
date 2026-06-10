@@ -49,13 +49,16 @@ def data_feed_for_scenario(scenario: str) -> str:
     return "sim"
 
 
-def _evaluate_statement(statement: dict, snap: EngineSnapshot, thesis: ThesisRecord) -> str:
+def _evaluate_statement(
+    statement: dict, snap: EngineSnapshot, thesis: ThesisRecord, config: Config
+) -> str:
     """The LIVE status of one frozen statement from EXISTING engine states/features only.
 
     Returns one of ``met | not_yet | violated``. No new indicator is computed — each ``kind`` reads
     canonical snapshot values (tape_state, primary-window price impact, last vs invalidation). The
     honest default is ``not_yet`` (no evidence is not a failure); ``violated`` is reserved for a read
-    that contradicts the statement.
+    that contradicts the statement. ``config`` supplies the config-owned cutoffs the
+    ``directional_impact`` adverse-side dominance test reuses (no magic number in research code).
     """
     kind = statement.get("kind")
     params = statement.get("params", {})
@@ -66,23 +69,34 @@ def _evaluate_statement(statement: dict, snap: EngineSnapshot, thesis: ThesisRec
         return "met" if snap.tape_state in states else "not_yet"
 
     if kind == "directional_impact":
-        # Progress in the thesis direction: long => positive buy impact; short => negative sell
-        # impact. Read from the primary window verbatim (single source of truth) — never recomputed.
+        # Progress in the thesis direction must be DIRECTION-AWARE against the ADVERSE side, not just
+        # a sign check on the thesis-side impact (iter-6 fix). On a falling tape the incidentally
+        # positive ``buy_price_impact`` of a LONG thesis must NOT read ``met`` while sellers press
+        # price DOWN — that is the tape moving against the thesis, so it reads ``violated``.
+        #
+        # Composes ONLY the existing primary-window ``buy_price_impact`` / ``sell_price_impact``
+        # values, read verbatim from the snapshot (single source of truth — never recomputed). The
+        # "material adverse impact" dominance test reuses the classifier's OWN config-owned
+        # real-price-progress cutoffs (no magic number in research code): for a LONG thesis the
+        # adverse side is selling, so ``sell_price_impact <= max_sell_price_impact`` means sellers are
+        # making REAL downward progress against the thesis; symmetrically for SHORT against buying.
+        #   * material adverse impact => violated  (the tape is moving AGAINST the thesis)
+        #   * favorable progress on the thesis side, no material adverse impact => met
+        #   * genuinely flat / no clean progress => not_yet (no evidence is not a failure)
         primary = snap.primary_features
+        buy_impact = primary.get("buy_price_impact", 0.0)
+        sell_impact = primary.get("sell_price_impact", 0.0)
         if direction == "long":
-            impact = primary.get("buy_price_impact", 0.0)
-            if impact > 0:
-                return "met"
-            if impact < 0:
-                return "violated"
-            return "not_yet"
+            adverse = sell_impact <= config.max_sell_price_impact
+            favorable = buy_impact >= config.min_buy_price_impact
         else:
-            impact = primary.get("sell_price_impact", 0.0)
-            if impact < 0:
-                return "met"
-            if impact > 0:
-                return "violated"
-            return "not_yet"
+            adverse = buy_impact >= config.min_buy_price_impact
+            favorable = sell_impact <= config.max_sell_price_impact
+        if adverse:
+            return "violated"
+        if favorable:
+            return "met"
+        return "not_yet"
 
     if kind == "above_invalidation":
         # last on the correct side of the declared invalidation (long => above; short => below).
@@ -279,7 +293,9 @@ class ResearchMonitor:
         statements = [
             {
                 "text": s["text"],
-                "status": _evaluate_statement(s, snap, thesis) if snap is not None else "not_yet",
+                "status": _evaluate_statement(s, snap, thesis, self._config)
+                if snap is not None
+                else "not_yet",
             }
             for s in thesis.statements
         ]

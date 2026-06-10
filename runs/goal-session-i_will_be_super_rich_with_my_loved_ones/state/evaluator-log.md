@@ -91,3 +91,18 @@
 **Reasoning:** The persistence blocker is genuinely dead — v1→v2 migration proven in-place on the real dev DB (live HTTP 200 declare), atomic declaration, orphans swept, +11 tests (364/1 green), coherence PASS. I opened every PNG: UT-03/05/06/10/12/14 are real pixel evidence (active strip + PENDING, inline 422s — the 4-iteration-old clause finally proven — REJECTING with evidence, terminal INVALIDATED with offending print, CONFIRMING with reversal evidence). But the run did NOT flip all ten targets: UT-04's capture shows an IDLE strip instead of the claimed SIM-REVERSAL CONFIRMING moment (thesis expired before capture — the spec's named capture-narrative FAIL condition), and the executed 15-test plan simply omitted J-43 (SIM-SHIFT never watched; amber weakening chip has never rendered anywhere), J-45's latch leg, J-46, and J-42's confirming leg. Also: the pipeline halted at qa_complete AGAIN (audit/ux-regression/closure never ran despite the spec's explicit mandate), and the QA-validation report repeated the iter-4 anti-pattern of marking browser TCs PASS on unit-test evidence.
 
 **Next-step recommendation:** Lean evidence-completion iteration: (1) moment-correct browser captures for J-40 (SIM-REVERSAL pending→confirming, captured before thesis expiry), J-42 (trend_continuation confirming), J-43 (SIM-SHIFT confirming→weakening — the only source of the amber chip), J-45 (latch pre/post cross), J-46 (fade confirms during absorption); (2) verify/fix statement-status direction-awareness — UT-10/UT-14 pixels show 'Price keeps making progress in your direction' reading MET on a falling tape for LONG theses; (3) address the engine halt at qa_complete so audit/closure actually run. No new feature scope.
+
+## Iteration 6 — goal-i_will_be_super_rich_with_my_loved_ones-iter-6
+
+**Date:** 2026-06-11T09:55:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-40, J-42, J-43, J-45 (all four with evaluator-opened, moment-correct pixels; the amber WEAKENING chip rendered for the first time)
+- Newly failing: none
+- Regressed: none (J-41 downgraded passing -> partial for honesty — its core REJECTING-with-evidence clauses still passed in iter-6 pixels; only the statement-honesty clause failed, the SAME pre-existing defect logged as the iter-5 caveat, captured against a stale server)
+- Anti-goal violations: none (journal integrity positively proven — pre-fix theses retain their frozen statements verbatim after the template fix)
+
+**Reasoning:** The two browser FAILs (J-46, J-41-statement) are conclusively a stale QA server, not a code defect — I verified independently that the J-46 thesis (bff5cff3, declared 00:25:41 on 11-06) carries the OLD inverted frozen params (`ask_absorption`/`seller_control` for long) in the journal DB while on-disk taxonomy.py was corrected at 23:15:13 on 10-06; only a pre-fix process in memory can produce that record. The on-disk fixes match goal.md J-46, review PASS, coherence PASS, and I re-ran the backend suite myself: 369 passed / 1 skipped / 0 failed. Four of five target journeys flipped on verified pixels; the verdict engine has now rendered all five verdict states in real pixels.
+
+**Next-step recommendation:** Lean iter-7: restart the QA backend, verify code identity via the `GET /research/taxonomy` fmf-template canary BEFORE capturing, then re-run exactly the J-46 (confirming DURING bid_absorption + through the reclaim) and J-41 (progress statement violated on adverse tape) browser legs. After those flip, next feature target: J-48 (thesis geometry) or J-50 (user-facing resolve). The harness `qa_complete` halt must be fixed before any FULL iteration.
