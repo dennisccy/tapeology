@@ -227,7 +227,9 @@ export default function Page() {
           !snapshotFailed &&
           !snapshotWaiting &&
           !snapshotConnecting &&
-          (mode === "sim" || mode === "historical") && <PriceChart ticker={ticker} />}
+          (mode === "sim" || mode === "historical") && (
+            <PriceChart ticker={ticker} thesis={snapshot?.thesis ?? null} />
+          )}
         {pending && !ticker ? (
           // J-21: pending acknowledgement — shown the instant Watch is clicked, before any data.
           <ConnectingState symbol={pending} />

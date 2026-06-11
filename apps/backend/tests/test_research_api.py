@@ -277,9 +277,18 @@ def test_rest_active_equals_ws_thesis_key_verbatim(client):
         "config_fingerprint",
         "entry_context",
         "monitor_status",
+        # Capability 25 / J-48: geometry is part of the row-15 projection, so the WS thesis key MUST
+        # carry it verbatim too (one builder, one projection). The price-lines are time-independent
+        # and fully stable between the two reads; the markers (verdict-transition rows) come from the
+        # same append-only timeline. Assert byte-equality of the whole geometry object.
+        "geometry",
     ):
         assert rest[key] == ws_thesis[key], f"REST/WS diverged on {key}"
     assert [s["text"] for s in rest["statements"]] == [s["text"] for s in ws_thesis["statements"]]
+    # An absorption_reversal (no level) declares only the invalidation line — sanity that geometry is
+    # really present and shaped, not an empty dict that happens to match.
+    assert {pl["kind"] for pl in rest["geometry"]["price_lines"]} == {"invalidation"}
+    assert rest["geometry"]["price_lines"][0]["price"] == 99.0
 
 
 def test_ws_thesis_key_is_null_when_none(client):

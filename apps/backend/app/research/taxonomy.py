@@ -69,6 +69,30 @@ def mismatched_source_notice(bound_source: str, watched_source: str) -> str:
     )
 
 
+# --- Chart-geometry labels (capability 25, J-48; data-contract row 24) ---------------------------
+# The backend-owned plain-language labels the chart renders VERBATIM on the thesis geometry
+# overlay — the frontend hardcodes NONE of them (one copy register, J-66). Present-tense,
+# descriptive, never imperative/predictive ("Descriptive only — not trading advice" extends to the
+# chart). The invalidation/level lines name what the user DECLARED; the verdict/entry/exit marker
+# labels reuse the established verdict + action vocabulary.
+GEOMETRY_INVALIDATION_LINE_LABEL = "Invalidation"
+GEOMETRY_LEVEL_LINE_LABEL = "Level"
+
+# Marker labels keyed by verdict (the verdict-transition markers reuse the VERDICTS display copy);
+# the entry/exit marks and the first-confirmation marker carry their own descriptive labels.
+GEOMETRY_ENTRY_MARK_LABEL = "Entry"
+GEOMETRY_EXIT_MARK_LABEL = "Exit"
+GEOMETRY_FIRST_CONFIRMATION_LABEL = "First confirmation"
+
+
+def verdict_marker_label(verdict: str) -> str:
+    """The chart label for a published verdict-transition marker — the VERDICTS display copy.
+
+    Reuses the single verdict enum (``VERDICTS``) so the chart, the strip, and the timeline all read
+    the same words. An unknown verdict falls back to its own raw key (never a fabricated label)."""
+    return VERDICTS.get(verdict, verdict)
+
+
 # --- Statement-status enum (the monitor's live read of each expected-behaviour statement) -------
 # met = the statement's premise is observed in the current engine read; not_yet = not observed yet
 # (the honest default — no evidence is not a failure); violated = the engine read contradicts it.

@@ -31,8 +31,22 @@ from ..config import Config
 from ..engine.snapshot import EngineSnapshot
 from .marks import marks_projection
 from .store import JournalStore, ThesisRecord, VerdictEventRecord
-from .taxonomy import mismatched_source_notice
+from .taxonomy import (
+    GEOMETRY_ENTRY_MARK_LABEL,
+    GEOMETRY_EXIT_MARK_LABEL,
+    GEOMETRY_FIRST_CONFIRMATION_LABEL,
+    GEOMETRY_INVALIDATION_LINE_LABEL,
+    GEOMETRY_LEVEL_LINE_LABEL,
+    mismatched_source_notice,
+    verdict_marker_label,
+)
 from .verdict import VerdictEvaluator
+
+# Timeline rows that are GAP/segment delimiters, not published verdict transitions: they are never
+# drawn as verdict markers (capability 25 / J-48). ``watch_restarted`` ALSO delimits the current
+# watch's drawable segment (the honest segment rule below). ``paused`` / ``stale`` join it here when
+# those gap rows are appended (forward-compatible; only ``watch_restarted`` is written today).
+_GAP_VERDICTS: frozenset[str] = frozenset({"watch_restarted", "paused", "stale"})
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +148,131 @@ def _evaluate_statement(
     return "not_yet"
 
 
+def _build_geometry(
+    thesis: ThesisRecord,
+    verdict_events: list,
+    marks: dict,
+) -> dict:
+    """The chart-ready ``geometry`` for a thesis (capability 25 / J-48) — a PURE projection.
+
+    Computed ONCE inside ``build_projection`` (the single row-15 builder) from canonical owners
+    ONLY — the declared thesis prices, the append-only verdict timeline (row 16), and the row-18
+    action marks already computed by ``marks_projection``. It recomputes NO side/state/price/time
+    basis (the chart draws this verbatim on the row-13 epoch anchor); the timeline is never edited or
+    recomputed here — its rows are re-exposed verbatim as markers.
+
+    Shape::
+
+        {
+          "price_lines": [ {kind, price, label}, … ],   # invalidation always; level only when set
+          "markers":     [ {kind, …}, … ],              # verdict transitions + marks + 1st-confirm
+        }
+
+    Honest segment rule: only events placeable on the CURRENT watch's logical timeline are drawn —
+    i.e. events at/after the latest ``watch_restarted`` gap event when one exists. A re-attached
+    thesis's pre-gap events belong to a previous watch's timeline and would be MISPLACED on this
+    watch's clock, so they are omitted from the chart (they remain fully visible in the journal
+    timeline). Price-lines are time-independent and ALWAYS served.
+    """
+    # --- price-lines (time-independent; declared prices verbatim) ---------------------------------
+    price_lines = [
+        {
+            "kind": "invalidation",
+            "price": thesis.invalidation_price,
+            "label": GEOMETRY_INVALIDATION_LINE_LABEL,
+        }
+    ]
+    if thesis.level_price is not None:
+        price_lines.append(
+            {
+                "kind": "level",
+                "price": thesis.level_price,
+                "label": GEOMETRY_LEVEL_LINE_LABEL,
+            }
+        )
+
+    # --- segment boundary: the latest watch_restarted gap (current-watch events only) -------------
+    # Rows are returned in insertion order (append-only ``id ASC``), so the LAST gap row index is the
+    # boundary; everything strictly after it belongs to the current watch's drawable timeline. The
+    # boundary is identified positionally for the timeline rows AND by its WALL time for the marks —
+    # ``logical_ts`` RESETS per watch (the engine's per-stream logical clock), so it cannot discriminate
+    # a pre-gap mark from a post-gap one; ``wall_ts`` is monotonic across re-watches (a re-watch always
+    # happens later in real time), so a mark recorded BEFORE the latest restart's wall time belongs to
+    # the previous watch's timeline and is omitted (it stays visible in the journal timeline).
+    boundary_wall: float | None = None
+    boundary_idx = -1
+    for i, ev in enumerate(verdict_events):
+        if ev.verdict == "watch_restarted":
+            boundary_idx = i
+            boundary_wall = ev.wall_ts
+    current_rows = verdict_events[boundary_idx + 1 :] if boundary_idx >= 0 else verdict_events
+
+    # --- verdict-transition markers (one per published transition; pure projection) ---------------
+    markers: list[dict] = []
+    first_confirmation_ts: float | None = None
+    for ev in current_rows:
+        if ev.verdict in _GAP_VERDICTS:
+            continue  # a gap delimiter is never drawn as a verdict marker
+        markers.append(
+            {
+                "kind": "verdict",
+                "verdict": ev.verdict,
+                "logical_ts": ev.logical_ts,
+                "wall_ts": ev.wall_ts,
+                "last": ev.last,
+                "label": verdict_marker_label(ev.verdict),
+            }
+        )
+        if ev.verdict == "confirming" and first_confirmation_ts is None:
+            first_confirmation_ts = ev.logical_ts
+
+    # --- the first-confirmation marker (identified once; only within the current segment) ---------
+    if first_confirmation_ts is not None:
+        markers.append(
+            {
+                "kind": "first_confirmation",
+                "logical_ts": first_confirmation_ts,
+                "label": GEOMETRY_FIRST_CONFIRMATION_LABEL,
+            }
+        )
+
+    # --- entry / exit mark markers (verbatim; present ONLY when the mark exists) -------------------
+    # Marks belonging to a PREVIOUS watch (recorded before the latest watch_restarted) are omitted by
+    # the same segment rule: a pre-gap mark's logical_ts cannot be placed on the current watch's
+    # clock. With no gap (the common case) every recorded mark is current and drawn.
+    def _mark_in_segment(mark: dict | None) -> bool:
+        if mark is None:
+            return False
+        if boundary_wall is None:
+            return True
+        return mark["wall_ts"] >= boundary_wall
+
+    entry = marks.get("entry")
+    if _mark_in_segment(entry):
+        markers.append(
+            {
+                "kind": "entry",
+                "price": entry["price"],
+                "logical_ts": entry["logical_ts"],
+                "wall_ts": entry["wall_ts"],
+                "label": GEOMETRY_ENTRY_MARK_LABEL,
+            }
+        )
+    exit_ = marks.get("exit")
+    if _mark_in_segment(exit_):
+        markers.append(
+            {
+                "kind": "exit",
+                "price": exit_["price"],
+                "logical_ts": exit_["logical_ts"],
+                "wall_ts": exit_["wall_ts"],
+                "label": GEOMETRY_EXIT_MARK_LABEL,
+            }
+        )
+
+    return {"price_lines": price_lines, "markers": markers}
+
+
 def build_projection(
     thesis: ThesisRecord,
     actions: list,
@@ -145,6 +284,7 @@ def build_projection(
     verdict_evidence: str,
     monitor_status: str,
     monitor_notice: str | None = None,
+    verdict_events: list | None = None,
 ) -> dict:
     """The SINGLE thesis-projection builder (data-contract row 15) — one code path, never a second.
 
@@ -156,6 +296,12 @@ def build_projection(
     Action marks + realized-R come from the ONE ``marks_projection`` (shared with the journal-detail
     read). ``monitor_notice`` (optional) is the backend-owned plain-language lifecycle notice (the
     not-evaluated / mismatched-source copy) rendered VERBATIM by the strip — present only when set.
+
+    ``verdict_events`` (the thesis's canonical append-only timeline rows, in insertion order) feeds
+    the additive ``geometry`` key (capability 25 / J-48): a PURE projection of the declared prices +
+    those timeline rows + the row-18 marks, computed ONCE here (never a second path, never recomputed
+    at the chart). Callers hand the same single-writer rows used by the live and survivor paths; an
+    omitted/``None`` list serves price-lines only (no markers) — never a fabricated timeline.
     """
     statements = [
         {
@@ -167,6 +313,7 @@ def build_projection(
         for s in thesis.statements
     ]
     marks = marks_projection(thesis, actions)
+    geometry = _build_geometry(thesis, verdict_events or [], marks)
     projection = {
         "id": thesis.id,
         "ticker": thesis.ticker,
@@ -183,6 +330,7 @@ def build_projection(
         "data_feed": thesis.data_feed,
         "config_fingerprint": thesis.config_fingerprint,
         "marks": marks,
+        "geometry": geometry,
         "monitor_status": monitor_status,
     }
     if monitor_notice is not None:
@@ -532,6 +680,7 @@ class ResearchMonitor:
                 ),
                 monitor_status="not_evaluated",
                 monitor_notice=mismatched_source_notice(candidate.bound_source, watched),
+                verdict_events=self._store.verdict_events(candidate.id),
             )
         thesis = self._thesis
         if thesis is None:
@@ -553,4 +702,5 @@ class ResearchMonitor:
             verdict=self._verdict,
             verdict_evidence=self._verdict_evidence,
             monitor_status="failed" if self._failed else "ok",
+            verdict_events=self._store.verdict_events(thesis.id),
         )

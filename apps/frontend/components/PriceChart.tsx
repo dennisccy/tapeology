@@ -20,6 +20,8 @@ import {
   HISTORY_BAR_SIZES,
   type HistoryBarSize,
   type TapeHistory,
+  type ThesisGeometry,
+  type ThesisProjection,
 } from "@/lib/types";
 import { Panel, EmptyHint } from "./Panel";
 
@@ -45,7 +47,36 @@ const STATE_LABELS: Record<string, string> = {
   ask_absorption: "Ask Absorption",
 };
 
-export function PriceChart({ ticker }: { ticker: string | null }) {
+// Thesis-geometry colors (J-48), reusing the established verdict/side semantics so the chart, the
+// thesis strip, and the timeline all speak the same color language. Verdict markers: confirming
+// emerald, weakening amber, rejecting/invalidated rose, pending slate (the design-direction verdict
+// palette). The invalidation price-line is rose (the idea is dead beyond it); the level line is
+// slate (a neutral reference). Hex values mirror the DESIGN SYSTEM Tailwind tokens because the
+// charting canvas takes raw colors, not classes.
+const VERDICT_COLORS: Record<string, string> = {
+  confirming: "#34d399", // emerald-400
+  weakening: "#fbbf24", // amber-400
+  rejecting: "#fb7185", // rose-400
+  invalidated: "#fb7185", // rose-400
+  pending: "#94a3b8", // slate-400
+  expired: "#94a3b8", // slate-400
+};
+const PRICE_LINE_COLORS: Record<string, string> = {
+  invalidation: "#fb7185", // rose-400 — the idea is invalidated beyond this price
+  level: "#94a3b8", // slate-400 — a neutral declared reference
+};
+// Entry/exit marks render in their own slate-200 treatment, distinct from the verdict palette.
+const MARK_COLOR = "#e2e8f0"; // slate-200
+
+export function PriceChart({
+  ticker,
+  thesis,
+}: {
+  ticker: string | null;
+  // The live thesis projection (WS `thesis` key) or null. Read VERBATIM for its `geometry`; the
+  // chart derives nothing. `null` (no/cleared/resolved-non-invalidated thesis) => no overlay.
+  thesis?: ThesisProjection | null;
+}) {
   const [barSize, setBarSize] = useState<HistoryBarSize>(HISTORY_BAR_SIZES[0]);
   const [history, setHistory] = useState<TapeHistory | null>(null);
   // `loaded` distinguishes "haven't fetched yet" (connecting) from "fetched, genuinely empty"
@@ -59,6 +90,25 @@ export function PriceChart({ ticker }: { ticker: string | null }) {
   const seriesRef = useRef<any>(null);
   const markersRef = useRef<any>(null);
   const createMarkersRef = useRef<any>(null);
+  // The thesis price-line handles currently attached to the series (J-48). Tracked so each geometry
+  // update REMOVES the prior lines before adding the new ones (no stale/duplicate lines) and so a
+  // cleared/resolved thesis removes them entirely.
+  const priceLinesRef = useRef<any[]>([]);
+  // The latest tape-state markers (engine-owned) and thesis markers (research-owned). They share the
+  // ONE series-marker primitive, so both effects funnel through `setCombinedMarkers` which sets the
+  // union in a single call (lightweight-charts' setMarkers replaces the whole set).
+  const stateMarkersRef = useRef<any[]>([]);
+  const thesisMarkersRef = useRef<any[]>([]);
+
+  // Set the union of engine tape-state markers + thesis-geometry markers in one call (they share the
+  // single series-marker mechanism; markers must be sorted ascending by time for the library).
+  function setCombinedMarkers() {
+    if (!markersRef.current) return;
+    const all = [...stateMarkersRef.current, ...thesisMarkersRef.current].sort(
+      (a, b) => a.time - b.time,
+    );
+    markersRef.current.setMarkers(all);
+  }
 
   // --- Poll …/history verbatim while a ticker is watched (reset on ticker/bar change) -------
   useEffect(() => {
@@ -179,22 +229,101 @@ export function PriceChart({ ticker }: { ticker: string | null }) {
 
     // Markers VERBATIM from the engine buffer (the marker's own state/confidence — no
     // re-derivation). One marker per meaningful transition, colored by state, stamped at true
-    // clock time so it aligns with the candle under it.
+    // clock time so it aligns with the candle under it. Tape-state markers sit ABOVE the bar with a
+    // down-arrow — kept visually distinct from the thesis markers (which sit BELOW the bar), so the
+    // two registered marker owners never read as one layer (J-48).
     if (markersRef.current && createMarkersRef.current) {
-      const markers = history.markers.map((m) => ({
+      stateMarkersRef.current = history.markers.map((m) => ({
         time: toClock(m.time) as any,
         position: "aboveBar" as const,
         color: MARKER_COLORS[m.state] ?? "#fbbf24",
         shape: "arrowDown" as const,
         text: STATE_LABELS[m.state] ?? m.state,
       }));
-      markersRef.current.setMarkers(markers);
+      setCombinedMarkers();
     }
 
     if (chartRef.current && candles.length > 0) {
       chartRef.current.timeScale().fitContent();
     }
   }, [history]);
+
+  // --- Draw the thesis geometry VERBATIM (J-48): price-lines + thesis markers ---------------------
+  // Reads the served `geometry` (declared prices + the append-only timeline + the marks, computed
+  // once server-side) and draws it on the SAME epoch anchor the candles use (`anchor + logical_ts`).
+  // The chart derives NO price/side/state/time of its own. With `thesis: null` (or no geometry) it
+  // removes every line and clears the thesis-marker layer — exactly the no-thesis render (J-68/J-17).
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+    const geometry: ThesisGeometry | undefined = thesis?.geometry;
+
+    // Always clear prior price-lines first so an update never leaves a stale/duplicate line and a
+    // cleared/resolved thesis removes them entirely.
+    for (const line of priceLinesRef.current) {
+      try {
+        series.removePriceLine(line);
+      } catch {
+        // The series may have been disposed between renders — ignore (it is being torn down).
+      }
+    }
+    priceLinesRef.current = [];
+
+    if (!geometry) {
+      // No thesis => no overlay. Clear the thesis-marker layer and re-set the combined markers so
+      // only the engine tape-state markers remain (the exact no-thesis render).
+      thesisMarkersRef.current = [];
+      setCombinedMarkers();
+      return;
+    }
+
+    // Price-lines (time-independent) — invalidation always; level only when served. Each labeled
+    // with the backend-owned copy, rendered verbatim. Dashed so they read as declared reference
+    // lines, not data.
+    for (const pl of geometry.price_lines) {
+      const handle = series.createPriceLine({
+        price: pl.price,
+        color: PRICE_LINE_COLORS[pl.kind] ?? "#94a3b8",
+        lineWidth: 1,
+        lineStyle: 2, // LineStyle.Dashed
+        axisLabelVisible: true,
+        title: pl.label,
+      });
+      priceLinesRef.current.push(handle);
+    }
+
+    // Thesis markers — visually DISTINCT from tape-state markers: they sit BELOW the bar (vs above)
+    // and use a circle (verdict / first-confirmation) or arrow-up (entry/exit) shape (vs the
+    // tape-state down-arrow). x-placement uses the SAME epoch anchor as the candles.
+    const anchor = history?.epoch_anchor ?? 0;
+    const toClock = (logical: number) => Math.round(anchor + logical);
+    thesisMarkersRef.current = geometry.markers.map((m) => {
+      if (m.kind === "entry" || m.kind === "exit") {
+        // The user's own action mark — its own slate treatment with the verbatim mono price.
+        const priceText = m.price != null ? ` ${m.price.toFixed(2)}` : "";
+        return {
+          time: toClock(m.logical_ts) as any,
+          position: "belowBar" as const,
+          color: MARK_COLOR,
+          shape: "arrowUp" as const,
+          text: `${m.label}${priceText}`,
+        };
+      }
+      // A verdict-transition marker or the first-confirmation marker — verdict palette, circle shape.
+      const color =
+        m.kind === "first_confirmation"
+          ? VERDICT_COLORS.confirming
+          : VERDICT_COLORS[m.verdict ?? "pending"] ?? "#94a3b8";
+      return {
+        time: toClock(m.logical_ts) as any,
+        position: "belowBar" as const,
+        color,
+        shape: "circle" as const,
+        text: m.label,
+      };
+    });
+    setCombinedMarkers();
+  }, [thesis, history]);
 
   if (!ticker) return null;
 

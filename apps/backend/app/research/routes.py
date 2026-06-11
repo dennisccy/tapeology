@@ -164,6 +164,7 @@ class ResearchRegistry:
             ),
             monitor_status="not_evaluated",
             monitor_notice=not_evaluated_notice(surviving.bound_source),
+            verdict_events=self._store.verdict_events(surviving.id),
         )
 
     def startup_sweep(self) -> list[str]:

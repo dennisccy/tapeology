@@ -65,6 +65,35 @@ export interface ThesisMarks {
   realized_r: number | null;
 }
 
+// Thesis chart geometry (capability 25, J-48) — read VERBATIM from the WS `thesis` key's `geometry`
+// object (or `/research/thesis/active`). Computed ONCE server-side in the single thesis-projection
+// builder from the declared prices + the append-only verdict timeline + the action marks; the chart
+// draws it as-is on the SAME row-13 epoch anchor the candles use (`epoch_anchor + logical_ts`). The
+// chart recomputes no price/side/state/time basis of its own.
+//   * price-lines render as labeled horizontal lines (invalidation always; level only when set);
+//   * markers render distinct from tape-state markers — verdict transitions, the first confirmation,
+//     and the user's entry/exit marks (the marks present ONLY when recorded — no fabricated marker).
+export interface GeometryPriceLine {
+  kind: "invalidation" | "level";
+  price: number;
+  label: string;
+}
+export interface GeometryMarker {
+  kind: "verdict" | "first_confirmation" | "entry" | "exit";
+  logical_ts: number;
+  label: string;
+  // Present on a verdict marker (the published verdict + its appended `last`); absent on the others.
+  verdict?: ThesisVerdict | "watch_restarted" | "expired";
+  wall_ts?: number;
+  last?: number | null;
+  // Present on entry/exit mark markers (the verbatim recorded price); absent on verdict markers.
+  price?: number;
+}
+export interface ThesisGeometry {
+  price_lines: GeometryPriceLine[];
+  markers: GeometryMarker[];
+}
+
 export interface ThesisProjection {
   id: string;
   ticker: string;
@@ -87,6 +116,9 @@ export interface ThesisProjection {
   // `thesis` key. Optional so a pre-J-52 snapshot shape stays valid; absent => the strip shows no
   // marks (and still offers Mark entry).
   marks?: ThesisMarks;
+  // Chart geometry (J-48) — read verbatim by PriceChart. Optional so a pre-J-48 snapshot shape stays
+  // valid; absent => the chart draws no thesis overlay (exactly the no-thesis render).
+  geometry?: ThesisGeometry;
   // "ok" normally; "failed" if the research monitor or its store write errored — surfaced honestly.
   // "not_evaluated" (J-47): an ENTRY-MARKED thesis that SURVIVES a stopped/restarted watch as a real
   // position — it is not orphaned, but no verdict accrues while the matching source is not watched.
