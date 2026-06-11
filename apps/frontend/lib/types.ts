@@ -38,6 +38,33 @@ export interface ThesisStatement {
   status: StatementStatus;
 }
 
+// One journaled action mark (entry | exit) — the user's OWN already-taken action, recorded
+// VERBATIM (J-52, data-contract row 18). `price` is exactly as the user submitted it (never an
+// inferred/simulated fill); `spread_at_mark` is the moment spread recorded once at marking (`null`
+// when there was no quote). The strip renders these verbatim — it derives nothing.
+export interface ActionMark {
+  kind: "entry" | "exit";
+  price: number;
+  logical_ts: number;
+  wall_ts: number;
+  spread_at_mark: number | null;
+}
+
+// The action-marks + realized-R projection (J-52, data-contract rows 18 & 27) — computed ONCE
+// server-side by the single marks projection (REST `/thesis/active` ≡ the WS `thesis` key ≡
+// `/journal/{id}`). The strip reads these verbatim — NO client-side arithmetic.
+//   * `has_entry`   — the entry-marked fact the UI reads to WITHDRAW the Abandon control;
+//   * `r_basis`     — R = |entry − invalidation|, present once an entry exists, else null;
+//   * `realized_r`  — the signed realized move in R, present ONLY once BOTH marks exist (no marks =>
+//                     null: NO realized metric is shown — never a dishonest zero).
+export interface ThesisMarks {
+  entry: ActionMark | null;
+  exit: ActionMark | null;
+  has_entry: boolean;
+  r_basis: number | null;
+  realized_r: number | null;
+}
+
 export interface ThesisProjection {
   id: string;
   ticker: string;
@@ -56,6 +83,10 @@ export interface ThesisProjection {
   bound_source: string;
   data_feed: "sim" | "sip" | "iex";
   config_fingerprint: string;
+  // Action marks + realized-R (J-52, data-contract rows 18 & 27) — read verbatim from the WS
+  // `thesis` key. Optional so a pre-J-52 snapshot shape stays valid; absent => the strip shows no
+  // marks (and still offers Mark entry).
+  marks?: ThesisMarks;
   // "ok" normally; "failed" if the research monitor or its store write errored — surfaced honestly.
   monitor_status: "ok" | "failed";
 }

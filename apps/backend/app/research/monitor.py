@@ -29,6 +29,7 @@ import time
 
 from ..config import Config
 from ..engine.snapshot import EngineSnapshot
+from .marks import marks_projection
 from .store import JournalStore, ThesisRecord, VerdictEventRecord
 from .verdict import VerdictEvaluator
 
@@ -69,34 +70,53 @@ def _evaluate_statement(
         return "met" if snap.tape_state in states else "not_yet"
 
     if kind == "directional_impact":
-        # Progress in the thesis direction must be DIRECTION-AWARE against the ADVERSE side, not just
-        # a sign check on the thesis-side impact (iter-6 fix). On a falling tape the incidentally
-        # positive ``buy_price_impact`` of a LONG thesis must NOT read ``met`` while sellers press
-        # price DOWN — that is the tape moving against the thesis, so it reads ``violated``.
+        # Progress in the thesis direction is judged by a TRUE favorable-vs-adverse DOMINANCE
+        # comparison (iter-8 fix), not the adverse-fires-first ordering of iter-6/7 (which branded a
+        # cleanly CONFIRMING SIM-BUYER tape — buy +0.42 dominating a minority sell −0.14 — "violated"
+        # one line under evidence saying the tape confirms). It composes ONLY the existing
+        # primary-window ``buy_price_impact`` / ``sell_price_impact`` values, read verbatim from the
+        # snapshot (single source of truth — never recomputed), against the classifier's OWN
+        # config-owned real-price-progress cutoffs (no magic number in research code): a side is
+        # "material" when its impact clears that cutoff (``buy_price_impact >= min_buy_price_impact`` /
+        # ``sell_price_impact <= max_sell_price_impact``). For a LONG thesis the favorable side is
+        # buying and the adverse side is selling; for a SHORT thesis the sides swap.
         #
-        # Composes ONLY the existing primary-window ``buy_price_impact`` / ``sell_price_impact``
-        # values, read verbatim from the snapshot (single source of truth — never recomputed). The
-        # "material adverse impact" dominance test reuses the classifier's OWN config-owned
-        # real-price-progress cutoffs (no magic number in research code): for a LONG thesis the
-        # adverse side is selling, so ``sell_price_impact <= max_sell_price_impact`` means sellers are
-        # making REAL downward progress against the thesis; symmetrically for SHORT against buying.
-        #   * material adverse impact => violated  (the tape is moving AGAINST the thesis)
-        #   * favorable progress on the thesis side, no material adverse impact => met
-        #   * genuinely flat / no clean progress => not_yet (no evidence is not a failure)
+        # Semantics (direction-aware; the SHORT case is the exact symmetric mirror):
+        #   * neither side material            => not_yet  (no evidence is not a failure)
+        #   * only the favorable side material => met
+        #   * only the adverse side material   => violated
+        #   * BOTH material                    => the side with the larger impact MAGNITUDE rules
+        #       (favorable dominant => met; adverse dominant => violated). A plain magnitude
+        #       comparison — no tolerance/ratio is needed, so no new config value/literal is
+        #       introduced (and the config fingerprint is unchanged by this fix).
+        #
+        # Truth anchors (the four-quadrant + flat tests pin these): SIM-BUYER long (buy +0.42 vs sell
+        # −0.14) => met; SIM-SELLER long (sell ~−0.28 dominant) => violated; SIM-BUYER short =>
+        # violated; SIM-SELLER short => met. The iter-6 direction-awareness is preserved: an
+        # incidentally positive buy_impact on a genuinely falling tape still reads violated for a
+        # long because the dominant (adverse) sell impact wins.
         primary = snap.primary_features
         buy_impact = primary.get("buy_price_impact", 0.0)
         sell_impact = primary.get("sell_price_impact", 0.0)
         if direction == "long":
-            adverse = sell_impact <= config.max_sell_price_impact
+            favorable_impact = buy_impact
+            adverse_impact = sell_impact
             favorable = buy_impact >= config.min_buy_price_impact
+            adverse = sell_impact <= config.max_sell_price_impact
         else:
-            adverse = buy_impact >= config.min_buy_price_impact
+            favorable_impact = sell_impact
+            adverse_impact = buy_impact
             favorable = sell_impact <= config.max_sell_price_impact
-        if adverse:
-            return "violated"
-        if favorable:
+            adverse = buy_impact >= config.min_buy_price_impact
+
+        if not favorable and not adverse:
+            return "not_yet"
+        if favorable and not adverse:
             return "met"
-        return "not_yet"
+        if adverse and not favorable:
+            return "violated"
+        # Both sides are material — the dominant side (by impact magnitude) rules.
+        return "met" if abs(favorable_impact) > abs(adverse_impact) else "violated"
 
     if kind == "above_invalidation":
         # last on the correct side of the declared invalidation (long => above; short => below).
@@ -315,6 +335,14 @@ class ResearchMonitor:
         # A resolved-invalidated thesis reports its terminal status/verdict; otherwise the active
         # thesis reports its declared status and the live published verdict.
         status = "invalidated" if self._resolution == "invalidated" else thesis.status
+        # Action marks + realized-R (J-52, data-contract rows 18 & 27) — computed ONCE by the shared
+        # ``marks_projection`` (the same function ``GET /research/journal/{id}`` uses, so REST/WS/journal
+        # are identical by construction; the strip renders this verbatim, deriving nothing). Read from
+        # the persisted action rows — never from the hot path. With no marks the realized keys are
+        # ``None`` (no dishonest zero); ``marks.has_entry`` is the entry-marked fact the UI reads to
+        # WITHDRAW the Abandon control (it never guesses). A read failure here is caught by the
+        # caller's try/except and surfaces as ``monitor_status: failed`` rather than a crash.
+        marks = marks_projection(thesis, self._store.get_actions(thesis.id))
         return {
             "id": thesis.id,
             "ticker": thesis.ticker,
@@ -330,5 +358,6 @@ class ResearchMonitor:
             "bound_source": thesis.bound_source,
             "data_feed": thesis.data_feed,
             "config_fingerprint": thesis.config_fingerprint,
+            "marks": marks,
             "monitor_status": "failed" if self._failed else "ok",
         }

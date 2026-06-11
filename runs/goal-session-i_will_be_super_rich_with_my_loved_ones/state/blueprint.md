@@ -59,7 +59,7 @@ No watchlist grid, no multi-symbol view, no execution/order affordance anywhere.
 ## Data Contract
 
 Rows 1–13 are **built & in force** (approved in prior sessions; owners unchanged — listed compactly).
-Rows 14–26 are the research evolution, to be built by this session. `…/summary` and `WS /stream`
+Rows 14–27 are the research evolution, to be built by this session. `…/summary` and `WS /stream`
 re-expose the snapshot and never recompute; no page recomputes or re-fetches any row from elsewhere.
 
 | # | Value / entity | Computed by (single owner) | Served by (single endpoint) | Notes |
@@ -81,7 +81,7 @@ re-expose the snapshot and never recompute; no page recomputes or re-fetches any
 | 15 | **Thesis projection** (fields, frozen expected-behaviour statements + live statuses, verdict + evidence, risk flags, monitor_status) | Research monitor (engine snapshot observer; exception-isolated) | `GET /research/thesis/active?ticker=` | WS `thesis` key MUST equal it verbatim; thesis strip + chart geometry read it; `thesis: null` is normal |
 | 16 | **Published verdict timeline** (append-only, with gap events; `rule_first_true` + `published_at`) | Verdict engine → journal repository (single writer queue; repo exposes no update/delete) | `GET /research/journal/{id}` | rendered verbatim; never recomputed at read |
 | 17 | **Entry risk flags** | Computed once at declaration by the research monitor; frozen on the thesis | `POST /research/thesis` response → row 15 / journal | advisory, never blocking; incoherent input = 422, never a flag |
-| 18 | **Action marks** (entry/exit, verbatim price + logical & wall time) | `POST /research/thesis/{id}/action` (recorded as stated, never inferred) | row 15 projection + `GET /research/journal/{id}` | chart marks + strip read it; entry-marked ⇒ no Abandon |
+| 18 | **Action marks** (entry/exit, verbatim price + logical & wall time + **spread-at-mark stamped once at recording** from the current snapshot — a moment value, never recomputed) | `POST /research/thesis/{id}/action` (recorded as stated, never inferred) | row 15 projection + `GET /research/journal/{id}` | chart marks + strip read it; entry-marked ⇒ no Abandon |
 | 19 | **Thesis resolution + execution checks + outcome × process grades** | Computed once at resolution (`POST /research/thesis/{id}/resolve`); persisted | `GET /research/journal/{id}` | user resolutions = `played_out \| abandoned` ONLY (system owns `invalidated`/`expired` → 422); 409 already-resolved; entry-marked refuses abandon; the resolution is an APPENDED timeline event + status flip (logical + wall timestamps), never an edit; enum labels from evidence-backed checks; never numeric scores |
 | 20 | **Excursion outcomes** (R-unit ternary per horizon; spread-at-mark; truncation flags; confirmation- vs entry-anchored populations never pooled) | Excursion calculator at marks / first confirmation / stream end; persisted | `GET /research/journal/{id}` | analytics aggregates persisted rows only |
 | 21 | **Journal rows + analytics aggregates** (segregated by `data_feed` + `config_fingerprint`; abandonment bucket always visible; "insufficient sample" under min-n) | Analytics module over persisted rows ONLY | `GET /research/journal`, `GET /research/analytics` | `/journal` renders; no pooling across feeds/fingerprints |
@@ -90,6 +90,7 @@ re-expose the snapshot and never recompute; no page recomputes or re-fetches any
 | 24 | **Taxonomies + research display copy** (setups, flags, tags, verdict/stance enums) | Backend taxonomy module | `GET /research/taxonomy` | frontend hardcodes none of them |
 | 25 | **Entry checklist + management stance** (named checks with live margins; `conditions_met/…/no_fresh_tape`; `thesis_intact/…`) — **cue layer, built LAST (after J-58–J-62 pass)** | Stance evaluator, computed once server-side; publishes through its own dwell | row 15 projection (additive keys) | UI renders margins verbatim, derives nothing |
 | 26 | **Source / `data_feed` / `config_fingerprint` stamps** | Assigned once at record creation (fingerprint hashed over the ENTIRE frozen config) | stored on every research record; shown wherever the record is shown | a thesis is never evaluated against a different source than declared |
+| 27 | **Realized move in R + R basis + spread-at-mark display** (R = \|entry − invalidation\|; realized move signed by direction; present ONLY when the marks exist — no marks ⇒ no realized metric, no dishonest zero) | ONE research projection function, computed once server-side from row-18 recorded marks + the thesis invalidation (no client-side arithmetic) | row 15 projection + `GET /research/journal/{id}` | strip renders verbatim, labeled a journaled measurement with spread-at-mark beside it — never currency P&L; distinct from row 20 (excursion horizon populations); feeds row 21's acted-trade R distribution later via the same computed values, never a second path |
 
 **Persistence (scoped).** Journal store = stdlib `sqlite3` (WAL, `busy_timeout`, `BEGIN IMMEDIATE`,
 one writer queue — never written from event processing or the WS serialization path). Tables:

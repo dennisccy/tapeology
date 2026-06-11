@@ -19,6 +19,7 @@ WatchManager through ``dependency_overrides`` exactly like the market-adapter se
 
 from __future__ import annotations
 
+import math
 import time
 import uuid
 
@@ -26,8 +27,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..config import Config
+from .marks import marks_projection
 from .monitor import ResearchMonitor, data_feed_for_scenario
-from .store import JournalStore, ThesisRecord, VerdictEventRecord
+from .store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
 from .taxonomy import (
     frozen_statements,
     is_valid_direction,
@@ -67,6 +69,16 @@ class ResolveRequest(BaseModel):
     system-owned (422) and an unknown value is also a 422."""
 
     resolution: str
+
+
+class ActionRequest(BaseModel):
+    """Body for ``POST /research/thesis/{id}/action`` (J-52). ``kind`` (``entry`` | ``exit``) and the
+    sign/finiteness of ``price`` are validated in the ROUTE (not the schema) so the message is
+    explicit and the verbatim-recording discipline is enforced in one place. ``price`` is typed
+    ``float`` so a non-numeric body is a 422 at the schema layer before the route runs."""
+
+    kind: str
+    price: float
 
 
 class ResearchRegistry:
@@ -168,6 +180,10 @@ def get_journal_entry(
     if thesis is None:
         raise HTTPException(status_code=404, detail=f"no thesis with id '{thesis_id}'")
     events = registry.store.verdict_events(thesis_id)
+    # Action marks + realized-R (J-52, data-contract rows 18 & 27) — read back VERBATIM from the
+    # persisted action rows via the SAME single ``marks_projection`` the row-15 thesis projection
+    # uses, so the journal-detail readback and the strip show identical values (no second path).
+    marks = marks_projection(thesis, registry.store.get_actions(thesis_id))
     return {
         "thesis": {
             "id": thesis.id,
@@ -185,6 +201,7 @@ def get_journal_entry(
             "created_logical_ts": thesis.created_logical_ts,
             "created_wall_ts": thesis.created_wall_ts,
         },
+        "marks": marks,
         # The append-only verdict timeline, verbatim. Each row carries its canonical values and the
         # dwell timing record (capability 24) — never interpolated, never recomputed at read.
         "timeline": [
@@ -463,5 +480,125 @@ def resolve_thesis(
             "bound_source": thesis.bound_source,
             "data_feed": thesis.data_feed,
             "config_fingerprint": thesis.config_fingerprint,
+        }
+    }
+
+
+# The action-mark kinds a user may journal (J-52). One ENTRY and one EXIT per thesis; a duplicate of
+# either, or an exit before an entry, is a 409 — recorded marks are append-only facts, never edited.
+_ACTION_KINDS = ("entry", "exit")
+
+
+@router.post("/thesis/{thesis_id}/action")
+def record_action(
+    thesis_id: str,
+    body: ActionRequest,
+    registry: ResearchRegistry = Depends(get_registry),
+    manager=Depends(get_watch_manager),
+) -> dict:
+    """Journal the user's ACTUAL entry / exit on the active thesis (J-52) — recorded VERBATIM.
+
+    The mark is the user's OWN already-taken action; this is a JOURNALING record, never a fill, never
+    a simulated execution, never an order (no-execution-path anti-goal). The submitted ``price`` is
+    stored EXACTLY as given (never inferred), stamped at the CURRENT logical + wall time, with
+    ``spread_at_mark`` taken ONCE from the current snapshot at recording (a moment value — ``None``
+    when there is no quote — never recomputable later).
+
+    Validation matrix (nothing is recorded on any rejection):
+      * 404 — no thesis with that id;
+      * 422 — unknown ``kind`` (not ``entry`` / ``exit``); non-positive / non-finite price (a price
+        must be a real, positive number — a journaled trade price is never ≤ 0 or NaN/inf);
+      * 409 — the thesis is already resolved (no new marks on a closed thesis);
+      * 409 — a duplicate entry, a duplicate exit, or an exit before any entry (one of each, in
+        order — recorded marks are append-only facts).
+
+    The write goes through the store's single writer queue (``BEGIN IMMEDIATE``), never from event
+    processing or the WS serialization path. On success the full thesis projection (now carrying the
+    recorded marks + realized-R) is returned — the same projection the WS ``thesis`` key carries, so
+    the strip updates from the live frame on its own."""
+    thesis = registry.store.get_thesis(thesis_id)
+    if thesis is None:
+        raise HTTPException(status_code=404, detail=f"no thesis with id '{thesis_id}'")
+
+    kind = body.kind
+    # 422 — unknown kind (rejected, never coerced).
+    if kind not in _ACTION_KINDS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown action kind '{kind}' — must be one of {' / '.join(_ACTION_KINDS)}",
+        )
+    # 422 — a journaled trade price must be a real, positive number (never ≤ 0, NaN, or inf). Pydantic
+    # already rejected a non-numeric body; this rejects a numerically-malformed price.
+    price = body.price
+    if not math.isfinite(price) or price <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="price must be a positive, finite number",
+        )
+
+    # 409 — no new marks on an already-resolved thesis (the thesis is closed).
+    if thesis.status in _TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"thesis '{thesis_id}' is already resolved ({thesis.status})",
+        )
+
+    # 409 — one entry + one exit, in order. Recorded marks are append-only facts (never edited): a
+    # second entry / second exit, or an exit before any entry, is refused.
+    existing = registry.store.get_actions(thesis_id)
+    has_entry = any(a.kind == "entry" for a in existing)
+    has_exit = any(a.kind == "exit" for a in existing)
+    if kind == "entry" and has_entry:
+        raise HTTPException(
+            status_code=409, detail="this thesis already has an entry mark"
+        )
+    if kind == "exit" and has_exit:
+        raise HTTPException(
+            status_code=409, detail="this thesis already has an exit mark"
+        )
+    if kind == "exit" and not has_entry:
+        raise HTTPException(
+            status_code=409, detail="cannot mark an exit before an entry"
+        )
+
+    # Stamp the CURRENT logical + wall time and the moment spread. Use the live snapshot if the ticker
+    # is still watched; otherwise fall back to the last recorded logical instant (never a fabricated
+    # value) and a ``None`` spread (no quote to read).
+    wall = time.time()
+    engine = manager.get(thesis.ticker)
+    snap = engine.snapshot() if engine is not None else None
+    if snap is not None:
+        logical = snap.timestamp
+        spread_at_mark = snap.spread
+    else:
+        events = registry.store.verdict_events(thesis_id)
+        logical = events[-1].logical_ts if events else thesis.created_logical_ts
+        spread_at_mark = None
+
+    record = ActionRecord(
+        id=uuid.uuid4().hex,
+        thesis_id=thesis_id,
+        kind=kind,
+        price=price,
+        logical_ts=logical,
+        wall_ts=wall,
+        spread_at_mark=spread_at_mark,
+    )
+    try:
+        registry.store.insert_action(record)
+    except Exception:
+        raise HTTPException(status_code=503, detail="could not record the action mark")
+
+    # Return the full live projection (now carrying the recorded marks + realized-R) if the monitor
+    # holds this thesis; otherwise assemble the marks projection directly from the store so the caller
+    # always sees the recorded mark even if the watch already ended.
+    monitor = registry.monitor_for(thesis.ticker)
+    if monitor is not None and monitor.active_thesis_id == thesis_id:
+        return {"thesis": monitor.projection()}
+    return {
+        "thesis": {
+            "id": thesis.id,
+            "ticker": thesis.ticker,
+            "marks": marks_projection(thesis, registry.store.get_actions(thesis_id)),
         }
     }

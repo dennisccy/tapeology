@@ -90,9 +90,10 @@ CREATE TABLE IF NOT EXISTS actions (
     id                  TEXT PRIMARY KEY,
     thesis_id           TEXT NOT NULL,
     kind                TEXT NOT NULL,          -- entry | exit
-    price               REAL NOT NULL,
+    price               REAL NOT NULL,          -- recorded VERBATIM from the user (never an inferred fill)
     logical_ts          REAL NOT NULL,
     wall_ts             REAL NOT NULL,
+    spread_at_mark      REAL,                   -- v3: snapshot spread at recording (moment value; NULL when no quote)
     FOREIGN KEY (thesis_id) REFERENCES theses (id)
 );
 
@@ -135,9 +136,11 @@ class ThesisRecord:
 class ActionRecord:
     """One persisted action mark (entry | exit) — recorded verbatim from the user (no inferred fill).
 
-    The entry-mark UI is a later iteration (J-52); this record exists now so the resolve path can
-    enforce the anti-survivorship rule (an entry-marked thesis can never be abandoned) and so a unit
-    test can inject an action row directly to prove the guard."""
+    ``price`` is recorded EXACTLY as the user submitted it (never an inferred/simulated fill);
+    ``spread_at_mark`` is the snapshot's spread taken ONCE at recording (a moment value — ``None``
+    when there was no quote — never recomputable later). The entry-mark UI is J-52; this record's
+    ``spread_at_mark`` column arrives with the v2 → v3 migration. ``spread_at_mark`` is defaulted so
+    every existing call site / fixture stays valid (additive) and a pre-v3 row reads ``None``."""
 
     id: str
     thesis_id: str
@@ -145,6 +148,7 @@ class ActionRecord:
     price: float
     logical_ts: float
     wall_ts: float
+    spread_at_mark: float | None = None
 
 
 @dataclass(frozen=True)
@@ -268,7 +272,26 @@ class JournalStore:
                 raise
             current = 2
 
-        # Future steps (current < 3, …) append here, each in its own BEGIN IMMEDIATE block.
+        # --- v2 → v3: add the J-52 action-mark spread column to actions --------------------------
+        if current < 3:
+            self._write_conn.execute("BEGIN IMMEDIATE")
+            try:
+                # Idempotent guard (same discipline as v1 → v2): a DB that already carries the column
+                # (only the version row is stale) skips straight to bumping the version. NO backfill —
+                # any pre-existing action row keeps ``NULL`` spread_at_mark (a moment value is never
+                # recomputed after the fact).
+                if not self._column_exists("actions", "spread_at_mark"):
+                    self._write_conn.execute(
+                        "ALTER TABLE actions ADD COLUMN spread_at_mark REAL"
+                    )
+                self._write_conn.execute("UPDATE schema_version SET version = 3")
+                self._write_conn.commit()
+            except Exception:
+                self._write_conn.rollback()
+                raise
+            current = 3
+
+        # Future steps (current < 4, …) append here, each in its own BEGIN IMMEDIATE block.
 
     def _read_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -519,15 +542,16 @@ class JournalStore:
         self._do_write(_fn)
 
     def insert_action(self, record: ActionRecord) -> None:
-        """Persist one action mark (entry | exit). The entry-mark UI is J-52; this writer exists now so
-        a unit test can inject an action row directly to prove the resolve route's
-        entry-marked-refuses-abandon guard."""
+        """Persist one action mark (entry | exit) VERBATIM (J-52). ``price`` is stored exactly as the
+        user submitted it (never an inferred/simulated fill); ``spread_at_mark`` is the moment spread
+        recorded once at marking. The write goes through the single writer queue (``BEGIN IMMEDIATE``),
+        never from event processing or the WS serialization path."""
 
         def _fn(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
-                INSERT INTO actions (id, thesis_id, kind, price, logical_ts, wall_ts)
-                VALUES (?,?,?,?,?,?)
+                INSERT INTO actions (id, thesis_id, kind, price, logical_ts, wall_ts, spread_at_mark)
+                VALUES (?,?,?,?,?,?,?)
                 """,
                 (
                     record.id,
@@ -536,6 +560,7 @@ class JournalStore:
                     record.price,
                     record.logical_ts,
                     record.wall_ts,
+                    record.spread_at_mark,
                 ),
             )
 
@@ -616,6 +641,12 @@ class JournalStore:
                     price=r["price"],
                     logical_ts=r["logical_ts"],
                     wall_ts=r["wall_ts"],
+                    # ``spread_at_mark`` is keyed defensively: a pre-v3 row (read mid-migration in a
+                    # belt-and-braces path) has no such column. The migration runs at open so file
+                    # stores always have it; ``.keys()`` guards a hypothetical raw old row.
+                    spread_at_mark=(
+                        r["spread_at_mark"] if "spread_at_mark" in r.keys() else None
+                    ),
                 )
                 for r in rows
             ]

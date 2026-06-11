@@ -229,7 +229,11 @@ export default function Page() {
               snapshot.stream_status !== "waiting" &&
               snapshot.stream_status !== "connecting" &&
               snapshot.stream_status !== "failed" && (
-                <ThesisStrip ticker={ticker} thesis={snapshot.thesis} />
+                <ThesisStrip
+                  ticker={ticker}
+                  thesis={snapshot.thesis}
+                  last={snapshot.market?.last ?? null}
+                />
               )}
             <Cockpit snapshot={snapshot} />
           </>

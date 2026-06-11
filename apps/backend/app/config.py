@@ -365,9 +365,12 @@ class Config:
     #   v1 → v2: ``verdict_events`` gains ``rule_first_true_ts`` / ``rule_first_true_price`` (the
     #            capability-24 dwell timing record), added by ``ALTER TABLE`` and never backfilled
     #            (the append-only timeline keeps old rows' values ``NULL``).
+    #   v2 → v3: ``actions`` gains ``spread_at_mark`` (the J-52 action-mark spread, a moment value
+    #            taken once from the snapshot at recording), added by ``ALTER TABLE`` and never
+    #            backfilled (any pre-existing action row keeps ``NULL`` — never recomputed).
     # Excluded from ``config_fingerprint`` (see the exclusion set below): a migration must NOT change
     # the fingerprint — verdicts depend on classifier thresholds, never on where/how the DB is stored.
-    journal_schema_version: int = 2
+    journal_schema_version: int = 3
 
     # --- Research evolution: verdict-transition engine (capability 24) -------------------------
     # RESEARCH DEFAULTS — a starting point calibrated against the deterministic sims, NEVER a

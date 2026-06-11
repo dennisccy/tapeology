@@ -55,3 +55,9 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** A direction-aware fix verified only on the ADVERSE tape can silently break the favorable tape: iter-6's `directional_impact` rewrite in `apps/backend/app/research/monitor.py::_evaluate_statement` checks the adverse-side cutoff FIRST (`sell_price_impact <= -0.02` for long) with no dominance weighing, so SIM-BUYER's minority sell flow (-0.06..-0.16) brands a CONFIRMING thesis's progress statement "violated" — directly under evidence saying "the tape confirms your thesis". The iter-6 acceptance rationale "old/new statement code coincide on the favorable tape" was wrong; only fresh-server pixels on BOTH tapes exposed it.
 **Applies to:** any iter touching verdict/statement semantics in `apps/backend/app/research/monitor.py` or `verdict.py` — always demand four-quadrant proof (favorable + adverse tape × long + short), in pixels, never just the quadrant the defect was reported on.
+
+## iter-8 — 2026-06-11T03:22:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** When a spec names explicit numeric truth anchors, verify the committed tests actually exercise those values — the iter-8 dev handoff claimed the four-quadrant suite pinned "SIM-BUYER long (buy +0.42 vs sell −0.14) → met", but `test_directional_impact_long_favorable_is_met` uses sell_impact=0.0 (only-favorable, not both-material); the favorable-dominant both-material quadrant ended up proven only in pixels, leaving a unit-regression gap the reviewer caught and the evaluator confirmed by reading the test file.
+**Applies to:** any iter whose spec lists named truth-anchor values for `apps/backend/app/research/` rule logic — the reviewer/evaluator must diff the anchor values against the actual test parameters, not trust the handoff's "proven by tests" claim.

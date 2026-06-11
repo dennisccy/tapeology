@@ -24,9 +24,10 @@ from pathlib import Path
 import pytest
 
 from app.config import CONFIG
-from app.research.store import JournalStore, ThesisRecord, VerdictEventRecord
+from app.research.store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
 
 FIXTURE_SQL = Path(__file__).parent / "fixtures" / "journal_v1_schema.sql"
+FIXTURE_V2_SQL = Path(__file__).parent / "fixtures" / "journal_v2_schema.sql"
 
 
 def _build_v1_db(path: str) -> None:
@@ -40,10 +41,29 @@ def _build_v1_db(path: str) -> None:
         conn.close()
 
 
+def _build_v2_db(path: str) -> None:
+    """Materialize the committed v2-schema SQL fixture into a real SQLite DB at ``path``."""
+    sql = FIXTURE_V2_SQL.read_text()
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript(sql)
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _verdict_event_columns(path: str) -> set[str]:
     conn = sqlite3.connect(path)
     try:
         return {r[1] for r in conn.execute("PRAGMA table_info(verdict_events)").fetchall()}
+    finally:
+        conn.close()
+
+
+def _actions_columns(path: str) -> set[str]:
+    conn = sqlite3.connect(path)
+    try:
+        return {r[1] for r in conn.execute("PRAGMA table_info(actions)").fetchall()}
     finally:
         conn.close()
 
@@ -108,7 +128,9 @@ def test_open_migrates_v1_to_v2_adding_columns_and_bumping_version(tmp_path):
     _build_v1_db(db)
     store = JournalStore(db, CONFIG)
     try:
-        assert store.schema_version() == 2
+        # A v1 DB now migrates all the way up to the CURRENT target (v3); the v1 -> v2 columns are
+        # present after the chained migration.
+        assert store.schema_version() == CONFIG.journal_schema_version
         cols = _verdict_event_columns(db)
         assert "rule_first_true_ts" in cols
         assert "rule_first_true_price" in cols
@@ -159,13 +181,13 @@ def test_declare_succeeds_end_to_end_against_migrated_db(tmp_path):
 
 # --- idempotency / stale-version guards ------------------------------------------------------------
 
-def test_reopen_already_v2_is_idempotent(tmp_path):
+def test_reopen_already_migrated_is_idempotent(tmp_path):
     db = str(tmp_path / "v1.db")
     _build_v1_db(db)
-    JournalStore(db, CONFIG).close()  # first open migrates to v2
+    JournalStore(db, CONFIG).close()  # first open migrates up to the current version
     store = JournalStore(db, CONFIG)  # second open must be a no-op, not a crash
     try:
-        assert store.schema_version() == 2
+        assert store.schema_version() == CONFIG.journal_schema_version
         cols = _verdict_event_columns(db)
         assert "rule_first_true_ts" in cols
         assert "rule_first_true_price" in cols
@@ -188,7 +210,8 @@ def test_stale_version_row_with_columns_present_does_not_crash(tmp_path):
         conn.close()
     store = JournalStore(db, CONFIG)  # must not raise "duplicate column name"
     try:
-        assert store.schema_version() == 2
+        # The stale row at 1 with v2 columns present chains v1 -> v2 (no-op ALTERs) -> v3 cleanly.
+        assert store.schema_version() == CONFIG.journal_schema_version
     finally:
         store.close()
 
@@ -196,9 +219,113 @@ def test_stale_version_row_with_columns_present_does_not_crash(tmp_path):
 def test_fresh_temp_db_is_created_at_current_version_no_migration(tmp_path):
     store = JournalStore(str(tmp_path / "fresh.db"), CONFIG)
     try:
-        assert store.schema_version() == CONFIG.journal_schema_version == 2
+        assert store.schema_version() == CONFIG.journal_schema_version
         cols = _verdict_event_columns(str(tmp_path / "fresh.db"))
         assert {"rule_first_true_ts", "rule_first_true_price"} <= cols
+        # A fresh DB created at the current version already carries the v3 action column.
+        actions_cols = _actions_columns(str(tmp_path / "fresh.db"))
+        assert "spread_at_mark" in actions_cols
+    finally:
+        store.close()
+
+
+# --- v2 -> v3 migration on open (J-52: actions.spread_at_mark) -------------------------------------
+
+def test_v2_fixture_starts_at_v2_without_spread_at_mark(tmp_path):
+    db = str(tmp_path / "v2.db")
+    _build_v2_db(db)
+    cols = _actions_columns(db)
+    assert "spread_at_mark" not in cols
+    conn = sqlite3.connect(db)
+    try:
+        assert conn.execute("SELECT version FROM schema_version").fetchone()[0] == 2
+        names = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+    finally:
+        conn.close()
+    for forbidden in ("trades", "quotes", "candles", "features"):
+        assert forbidden not in names
+
+
+def test_open_migrates_v2_to_v3_adding_spread_column_and_bumping_version(tmp_path):
+    db = str(tmp_path / "v2.db")
+    _build_v2_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        assert store.schema_version() == 3 == CONFIG.journal_schema_version
+        assert "spread_at_mark" in _actions_columns(db)
+        # The pre-existing v2 dwell columns are untouched (the v2 -> v3 step only touches actions).
+        assert {"rule_first_true_ts", "rule_first_true_price"} <= _verdict_event_columns(db)
+    finally:
+        store.close()
+
+
+def test_v3_migration_does_not_backfill_pre_existing_action(tmp_path):
+    # The append-only discipline extends to action marks: the pre-existing v2 entry mark keeps NULL
+    # spread_at_mark after the column is added (a moment value is never recomputed), and its verbatim
+    # price/timestamps are intact.
+    db = str(tmp_path / "v2.db")
+    _build_v2_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        actions = store.get_actions("v2thesis0001")
+        assert len(actions) == 1
+        a = actions[0]
+        assert a.kind == "entry"
+        assert a.price == 100.0  # verbatim, intact
+        assert a.logical_ts == 15.0
+        assert a.spread_at_mark is None  # never backfilled
+        # has_entry still works against the migrated DB (the anti-survivorship guard reads it).
+        assert store.has_entry_mark("v2thesis0001") is True
+    finally:
+        store.close()
+
+
+def test_action_records_end_to_end_against_migrated_v2_db(tmp_path):
+    # A NEW action (with a spread) records cleanly against the migrated DB and reads back verbatim.
+    db = str(tmp_path / "v2.db")
+    _build_v2_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        store.insert_action(
+            ActionRecord("new-exit", "v2thesis0001", "exit", 101.5, 20.0, 1700000099.0, 0.03)
+        )
+        actions = store.get_actions("v2thesis0001")
+        assert {a.kind for a in actions} == {"entry", "exit"}
+        new_exit = next(a for a in actions if a.kind == "exit")
+        assert new_exit.price == 101.5
+        assert new_exit.spread_at_mark == 0.03
+    finally:
+        store.close()
+
+
+def test_reopen_already_v3_is_idempotent_from_v2(tmp_path):
+    db = str(tmp_path / "v2.db")
+    _build_v2_db(db)
+    JournalStore(db, CONFIG).close()  # first open migrates v2 -> v3
+    store = JournalStore(db, CONFIG)  # second open must be a no-op
+    try:
+        assert store.schema_version() == 3
+        assert "spread_at_mark" in _actions_columns(db)
+    finally:
+        store.close()
+
+
+def test_stale_v2_version_row_with_spread_column_present_does_not_crash(tmp_path):
+    # Belt-and-braces: a DB whose actions ALREADY carries spread_at_mark but whose version row is
+    # stale at 2. The PRAGMA table_info guard makes the ALTER a no-op and the open just bumps to v3.
+    db = str(tmp_path / "v2.db")
+    _build_v2_db(db)
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute("ALTER TABLE actions ADD COLUMN spread_at_mark REAL")
+        conn.commit()  # version row still says 2
+    finally:
+        conn.close()
+    store = JournalStore(db, CONFIG)  # must not raise "duplicate column name"
+    try:
+        assert store.schema_version() == 3
     finally:
         store.close()
 

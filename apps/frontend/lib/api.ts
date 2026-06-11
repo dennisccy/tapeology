@@ -436,6 +436,42 @@ export async function resolveThesis(
   }
 }
 
+// POST /research/thesis/{id}/action — journal the user's ACTUAL entry / exit on the active thesis
+// (J-52). This is a JOURNALING record of the user's OWN already-taken action — never a fill, never a
+// simulated execution, never an order. `price` is sent VERBATIM (the backend records it exactly as
+// submitted); the backend stamps the logical/wall time and the moment spread-at-mark itself. The
+// backend's 422 (unknown kind / non-positive or malformed price) and 409 (already resolved /
+// duplicate entry / duplicate exit / exit-before-entry) detail is surfaced VERBATIM for an inline
+// message — never a swallowed failure or a dead click. On success the next WS frame carries the
+// recorded marks on the `thesis` key, so the strip updates on its own (the frontend derives nothing).
+export async function recordAction(
+  thesisId: string,
+  kind: "entry" | "exit",
+  price: number,
+): Promise<StopResult> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/thesis/${encodeURIComponent(thesisId)}/action`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, price }),
+      },
+    );
+    if (res.ok) return { ok: true };
+    let error = `The ${kind} mark could not be recorded.`;
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
 // NOTE: the canonical thesis projection (`GET /research/thesis/active?ticker=`) is the REST
 // counterpart of the WS `thesis` key. The strip reads the WS `thesis` key only (one read path per
 // contract value — data-contract row 15); QA probes the REST endpoint directly for the

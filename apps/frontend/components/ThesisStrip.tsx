@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { declareThesis, fetchTaxonomy, resolveThesis } from "@/lib/api";
+import {
+  declareThesis,
+  fetchTaxonomy,
+  recordAction,
+  resolveThesis,
+} from "@/lib/api";
 import type {
   ResearchTaxonomy,
   StatementStatus,
@@ -86,9 +91,12 @@ function StripShell({ children }: { children: React.ReactNode }) {
 function ActiveThesis({
   thesis,
   taxonomy,
+  last,
 }: {
   thesis: ThesisProjection;
   taxonomy: ResearchTaxonomy | null;
+  // The current last price (read off the live snapshot) — prefills the mark price field.
+  last: number | null;
 }) {
   const directionColor =
     thesis.direction === "long" ? "text-emerald-400" : "text-rose-400";
@@ -97,7 +105,13 @@ function ActiveThesis({
   const evidenceColor =
     VERDICT_EVIDENCE_COLOR[thesis.verdict] ?? VERDICT_EVIDENCE_COLOR.pending;
 
-  // User resolution (J-50): the two record actions on a LIVE thesis. System-owned terminal states
+  // Action marks (J-52) — read VERBATIM off the projection. `has_entry` is the backend-owned fact
+  // the UI reads to WITHDRAW the Abandon control (it never guesses).
+  const marks = thesis.marks;
+  const hasEntry = marks?.has_entry ?? false;
+  const hasExit = marks?.exit != null;
+
+  // User resolution (J-50): the record actions on a LIVE thesis. System-owned terminal states
   // (invalidated) carry no user controls — the strip shows their terminal treatment instead. On
   // success the next WS frame carries `thesis: null`, so the strip returns to the declare affordance
   // on its own (the frontend derives nothing). A 409/422 surfaces an explicit inline message.
@@ -106,6 +120,9 @@ function ActiveThesis({
   );
   const [resolveError, setResolveError] = useState<string | null>(null);
   const canResolve = !isInvalidated;
+  // Abandon is WITHDRAWN the moment an entry mark exists (anti-survivorship, J-52 closing J-50's
+  // deferred clause): a real position is never abandoned. An unmarked thesis still offers Abandon.
+  const canAbandon = canResolve && !hasEntry;
 
   async function handleResolve(resolution: "played_out" | "abandoned") {
     setResolveError(null);
@@ -119,6 +136,45 @@ function ActiveThesis({
     }
     // On success leave `resolving` set: the strip is about to unmount as the WS pushes `thesis: null`
     // (the button stays disabled in the brief interval, preventing a double-submit).
+  }
+
+  // Mark entry / exit (J-52): record the user's OWN already-taken action — a JOURNALING record,
+  // never a fill, never an order. The price field prefills from the current last, is editable, and
+  // is submitted VERBATIM. A 409/422 surfaces an explicit inline message (no dead click); the button
+  // disables during submit. On success the next WS frame carries the recorded marks on its own.
+  const [marking, setMarking] = useState<"entry" | "exit" | null>(null);
+  const [markPrice, setMarkPrice] = useState<string>("");
+  const [markEdited, setMarkEdited] = useState(false);
+  const [markError, setMarkError] = useState<string | null>(null);
+
+  // Eagerly PREFILL the price field from the current last so the value (not just a placeholder) is
+  // populated and visible — until the user edits it (then their input is preserved verbatim and the
+  // live last no longer clobbers it). Resets the edited flag once a mark is recorded (the field
+  // clears) so the NEXT mark (exit) re-prefills from the then-current last.
+  useEffect(() => {
+    if (!markEdited && last != null) {
+      setMarkPrice(last.toFixed(2));
+    }
+  }, [last, markEdited]);
+
+  async function handleMark(kind: "entry" | "exit") {
+    setMarkError(null);
+    const priceNum = Number(markPrice);
+    if (!markPrice.trim() || Number.isNaN(priceNum)) {
+      setMarkError("Enter a price for the mark.");
+      return;
+    }
+    setMarking(kind);
+    const result = await recordAction(thesis.id, kind, priceNum);
+    setMarking(null);
+    if (result.ok) {
+      // The WS frame will carry the recorded mark on its own. Reset the edited flag so the NEXT mark
+      // (exit) re-prefills from the then-current last via the effect above.
+      setMarkPrice("");
+      setMarkEdited(false);
+    } else {
+      setMarkError(result.error ?? `The ${kind} mark could not be recorded.`);
+    }
   }
 
   return (
@@ -220,9 +276,148 @@ function ActiveThesis({
         <span className="ml-auto">Descriptive only — not trading advice.</span>
       </div>
 
+      {/* Action marks (J-52): the user journals their OWN already-taken entry/exit. A JOURNALING
+          record, never a fill/order. Recorded verbatim; realized move shown in R units only (never
+          currency, never profit/loss framing). Hidden on a system-owned invalidated thesis. */}
+      {canResolve && (
+        <div
+          data-testid="thesis-marks"
+          className="mt-3 border-t border-slate-800 pt-3"
+        >
+          {/* Recorded marks line — entry/exit price (mono) + the moment spread, read verbatim. */}
+          {(marks?.entry || marks?.exit) && (
+            <div
+              data-testid="recorded-marks"
+              className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"
+            >
+              {marks?.entry && (
+                <span className="text-slate-400">
+                  entry{" "}
+                  <span data-testid="entry-mark-price" className="font-mono text-slate-200">
+                    {marks.entry.price.toFixed(2)}
+                  </span>
+                  {marks.entry.spread_at_mark != null && (
+                    <span className="ml-1 text-xs text-slate-500">
+                      spread{" "}
+                      <span className="font-mono">
+                        {marks.entry.spread_at_mark.toFixed(2)}
+                      </span>
+                    </span>
+                  )}
+                </span>
+              )}
+              {marks?.exit && (
+                <span className="text-slate-400">
+                  exit{" "}
+                  <span data-testid="exit-mark-price" className="font-mono text-slate-200">
+                    {marks.exit.price.toFixed(2)}
+                  </span>
+                  {marks.exit.spread_at_mark != null && (
+                    <span className="ml-1 text-xs text-slate-500">
+                      spread{" "}
+                      <span className="font-mono">
+                        {marks.exit.spread_at_mark.toFixed(2)}
+                      </span>
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Realized move in R (J-52) — shown ONLY once BOTH marks exist; a journaled measurement in
+              R units, with the spread-at-mark beside it. Never currency, never "profit/loss". */}
+          {marks?.realized_r != null && (
+            <p
+              data-testid="realized-r"
+              className="mb-2 text-sm text-slate-300"
+            >
+              Realized move{" "}
+              <span
+                className={`font-mono font-semibold ${
+                  marks.realized_r >= 0 ? "text-emerald-400" : "text-rose-400"
+                }`}
+              >
+                {marks.realized_r >= 0 ? "+" : ""}
+                {marks.realized_r.toFixed(2)}R
+              </span>
+              <span className="ml-2 text-xs text-slate-500">
+                journaled measurement, R = |entry − invalidation|
+                {marks.exit?.spread_at_mark != null && (
+                  <>
+                    {" "}
+                    · spread at exit{" "}
+                    <span className="font-mono">
+                      {marks.exit.spread_at_mark.toFixed(2)}
+                    </span>
+                  </>
+                )}
+              </span>
+            </p>
+          )}
+
+          {/* Mark controls: Mark entry until entered; Mark exit once entered (until exited). The
+              price field prefills from the current last, is editable, and submits verbatim. */}
+          {!hasExit && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-500">
+                {hasEntry ? "Record your exit:" : "Record your entry:"}
+              </span>
+              <input
+                type="number"
+                step="any"
+                inputMode="decimal"
+                data-testid="mark-price-input"
+                aria-label="mark price"
+                className="w-28 rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                value={markPrice}
+                placeholder={last != null ? last.toFixed(2) : "price"}
+                onChange={(e) => {
+                  // The user typed — preserve their input verbatim; stop tracking the live last.
+                  setMarkEdited(true);
+                  setMarkPrice(e.target.value);
+                  setMarkError(null);
+                }}
+              />
+              {!hasEntry ? (
+                <button
+                  type="button"
+                  data-testid="mark-entry"
+                  disabled={marking !== null}
+                  onClick={() => handleMark("entry")}
+                  className="rounded-md border border-emerald-700 bg-emerald-800/40 px-3 py-1.5 text-sm font-medium text-emerald-200 transition-colors hover:bg-emerald-700/40 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-emerald-700/60 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {marking === "entry" ? "Recording…" : "Mark entry"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="mark-exit"
+                  disabled={marking !== null}
+                  onClick={() => handleMark("exit")}
+                  className="rounded-md border border-rose-700 bg-rose-800/40 px-3 py-1.5 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-700/40 focus:outline-none focus:ring-1 focus:ring-rose-500 active:bg-rose-700/60 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {marking === "exit" ? "Recording…" : "Mark exit"}
+                </button>
+              )}
+              {markError && (
+                <p
+                  data-testid="mark-error"
+                  className="w-full text-sm text-rose-400"
+                  role="alert"
+                >
+                  {markError}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Resolution controls (J-50): record this thesis as played out or abandoned. Shown only on a
           LIVE thesis — a system-owned invalidated thesis is already resolved (terminal treatment
-          above, no user controls). Copy is descriptive/thesis-attributed, never imperative. */}
+          above, no user controls). Copy is descriptive/thesis-attributed, never imperative. Abandon
+          is WITHDRAWN once an entry mark exists (anti-survivorship, J-52). */}
       {canResolve && (
         <div
           data-testid="thesis-resolve"
@@ -238,15 +433,20 @@ function ActiveThesis({
           >
             {resolving === "played_out" ? "Resolving…" : "Played out"}
           </button>
-          <button
-            type="button"
-            data-testid="resolve-abandon"
-            disabled={resolving !== null}
-            onClick={() => handleResolve("abandoned")}
-            className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500 active:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {resolving === "abandoned" ? "Resolving…" : "Abandon"}
-          </button>
+          {/* Abandon is NOT rendered at all once an entry mark exists (anti-survivorship, J-52
+              closing J-50's deferred clause): a real position is never abandoned. An unmarked thesis
+              still offers it (J-50 must not regress). */}
+          {canAbandon && (
+            <button
+              type="button"
+              data-testid="resolve-abandon"
+              disabled={resolving !== null}
+              onClick={() => handleResolve("abandoned")}
+              className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500 active:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {resolving === "abandoned" ? "Resolving…" : "Abandon"}
+            </button>
+          )}
           {resolveError && (
             <p
               data-testid="resolve-error"
@@ -265,10 +465,14 @@ function ActiveThesis({
 export function ThesisStrip({
   ticker,
   thesis,
+  last,
 }: {
   ticker: string;
   // The active-thesis projection carried on the live snapshot's `thesis` key (or null/undefined).
   thesis: ThesisProjection | null | undefined;
+  // The current last price (off the live snapshot) — prefills the mark price field on the active
+  // thesis. Optional/null when there is no last yet.
+  last?: number | null;
 }) {
   const [open, setOpen] = useState(false);
   const [taxonomy, setTaxonomy] = useState<ResearchTaxonomy | null>(null);
@@ -304,7 +508,7 @@ export function ThesisStrip({
 
   // An active thesis always wins — render it verbatim (the form is only for the idle state).
   if (thesis) {
-    return <ActiveThesis thesis={thesis} taxonomy={taxonomy} />;
+    return <ActiveThesis thesis={thesis} taxonomy={taxonomy} last={last ?? null} />;
   }
 
   const selectedSetup = taxonomy?.setups.find((s) => s.id === setupType);
