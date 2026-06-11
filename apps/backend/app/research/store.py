@@ -567,18 +567,32 @@ class JournalStore:
         self._do_write(_fn)
 
     def expire_stale_actives(self, wall_ts: float) -> list[str]:
-        """Startup sweep: resolve every thesis still ``active`` to ``expired`` and append a final
-        ``expired`` timeline event for each (no entry marks exist yet, so there is no
-        survives-with-entry-mark exception to honor). Returns the affected thesis ids.
+        """Startup sweep (J-47 / J-51 leg): resolve each UNMARKED thesis still ``active`` to
+        ``expired`` and append a final ``expired`` timeline event — but EXEMPT an entry-marked
+        active thesis: a real position is never orphaned, so it SURVIVES a backend restart as
+        active-but-not-evaluated (its ``active`` row is left untouched; NO expiry event is appended).
+        Returns the ids actually expired (the unmarked ones only).
 
-        Done as ONE queued write so the sweep is atomic and runs off any hot path."""
+        Entry-mark presence is queried in-transaction (``actions WHERE kind='entry'``) so the sweep
+        is consistent with the persisted marks. Done as ONE queued write so the sweep is atomic and
+        runs off any hot path; the surviving entry-marked thesis is re-attached only when its
+        matching source is watched again (a fresh monitor adopts it with a ``watch_restarted`` gap
+        event)."""
 
         def _fn(conn: sqlite3.Connection) -> list[str]:
             rows = conn.execute(
                 "SELECT id FROM theses WHERE status = 'active'"
             ).fetchall()
-            ids = [r["id"] for r in rows]
-            for tid in ids:
+            expired: list[str] = []
+            for r in rows:
+                tid = r["id"]
+                # EXEMPT an entry-marked active thesis — a real position is never orphaned (J-47).
+                marked = conn.execute(
+                    "SELECT 1 FROM actions WHERE thesis_id=? AND kind='entry' LIMIT 1",
+                    (tid,),
+                ).fetchone()
+                if marked is not None:
+                    continue
                 conn.execute("UPDATE theses SET status='expired' WHERE id=?", (tid,))
                 conn.execute(
                     """
@@ -598,7 +612,8 @@ class JournalStore:
                         None,
                     ),
                 )
-            return ids
+                expired.append(tid)
+            return expired
 
         return self._do_write(_fn)
 

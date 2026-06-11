@@ -67,6 +67,14 @@ class TapeEngine:
         self._recent_trades: deque[TradeRow] = deque(maxlen=config.recent_trades_limit)
         self._event_log: deque[str] = deque(maxlen=config.event_log_limit)
         self._stream_status = "connecting"
+        # The reason behind the MOST RECENT terminal status flip (capability 24, J-47). The status
+        # string alone cannot tell a user Stop ("watch_stopped") apart from a stream that ran out
+        # ("stream_closed") — both flip stream_status to "closed" — so the WatchManager stamps the
+        # distinguishing reason here at the flip, and the research monitor reads it (via ``end_reason``)
+        # in its on_status hook. Display/lifecycle metadata only — NEVER part of classification, so the
+        # same ordered event stream still yields identical features/state/confidence (determinism).
+        # ``None`` until a terminal flip carries a reason.
+        self._end_reason: str | None = None
         # Honest-pause state (Data Contract row 11), owned ONCE here. `_paused` is the canonical
         # flag; `_pre_pause_status` remembers the stream_status in effect at pause time so resume
         # restores it verbatim (live/connecting/stale) and NEVER fabricates "live".
@@ -156,7 +164,17 @@ class TapeEngine:
                 self._observer_failed[id(observer)] = True
                 logger.exception("snapshot observer on_status failed for %s", self._ticker)
 
-    def set_stream_status(self, status: str) -> None:
+    @property
+    def end_reason(self) -> str | None:
+        """The reason behind the most recent terminal status flip (``watch_stopped`` |
+        ``stream_closed`` | feeder-failure reason), or ``None``.
+
+        Read by the research monitor's ``on_status`` hook to distinguish a USER stop from a stream
+        that ran out (both flip ``stream_status`` to ``closed``). Display/lifecycle metadata only —
+        never part of classification."""
+        return self._end_reason
+
+    def set_stream_status(self, status: str, end_reason: str | None = None) -> None:
         """Set the canonical row-6 ``stream_status`` (delivery/lifecycle metadata, owned ONCE here).
 
         Valid values: ``connecting`` | ``waiting`` | ``live`` | ``stale`` | ``paused`` | ``closed``
@@ -166,11 +184,21 @@ class TapeEngine:
         ``pause()``. This is NOT part of classification — it never enters ``classify(...)`` or any
         feature/score, so the same ordered event stream still yields identical features/state/
         confidence (determinism anti-goal).
+
+        ``end_reason`` (optional) records WHY a terminal flip happened — ``watch_stopped`` (user
+        Stop) vs ``stream_closed`` (the stream ran out) vs a feeder-failure reason — so the research
+        monitor can tell them apart in ``on_status`` (the status string alone cannot). It is stored
+        BEFORE the observer notification so the monitor reads the current reason. Defaulted ``None``
+        so every existing caller is unchanged (additive) and a non-terminal flip clears no prior
+        reason it does not own — a terminal flip always passes its own reason.
         """
         self._stream_status = status
+        if end_reason is not None:
+            self._end_reason = end_reason
         self._snapshot = self._build_snapshot()
         # Notify AFTER the write + snapshot rebuild so an observer reading the engine sees the new
-        # status. Exception-isolated; the write above has already taken effect regardless.
+        # status (and the just-stamped end_reason). Exception-isolated; the write above has already
+        # taken effect regardless.
         self._notify_status(status)
 
     @property

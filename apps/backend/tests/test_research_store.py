@@ -153,6 +153,30 @@ def test_startup_sweep_expires_stale_actives_and_appends_event(store):
     assert events[-1].verdict == "expired"
 
 
+def test_startup_sweep_exempts_entry_marked_actives(store):
+    # J-47 (and J-51's "entry-marked survives restart" leg, pre-built here): a backend restart MUST
+    # NOT expire a surviving entry-marked active thesis — a real position is never orphaned. An
+    # UNMARKED stale active is still expired with its explicit interruption reason.
+    store.insert_thesis(_thesis(tid="marked", status="active"))
+    store.insert_thesis(_thesis(tid="unmarked", status="active"))
+    store.insert_action(
+        ActionRecord(id="a1", thesis_id="marked", kind="entry", price=100.0,
+                     logical_ts=1.0, wall_ts=1700000001.0, spread_at_mark=0.02)
+    )
+    affected = store.expire_stale_actives(1700000123.0)
+    # Only the unmarked thesis is expired; the entry-marked one survives as active.
+    assert affected == ["unmarked"]
+    assert store.get_thesis("marked").status == "active"
+    assert store.get_thesis("unmarked").status == "expired"
+    # NO expiry event was appended for the surviving (exempt) thesis — nothing recorded while it
+    # survives unwatched (append-only / no fabricated event).
+    assert store.verdict_events("marked") == []
+    # The unmarked thesis got its explicit interruption reason.
+    unmarked_events = store.verdict_events("unmarked")
+    assert unmarked_events[-1].verdict == "expired"
+    assert "restart" in unmarked_events[-1].evidence
+
+
 def test_writer_queue_serializes_concurrent_writes(store):
     # Many writes enqueued from multiple threads must all land (single writer worker serializes them
     # under BEGIN IMMEDIATE — no "database is locked", no lost write).

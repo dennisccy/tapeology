@@ -88,7 +88,14 @@ export interface ThesisProjection {
   // marks (and still offers Mark entry).
   marks?: ThesisMarks;
   // "ok" normally; "failed" if the research monitor or its store write errored — surfaced honestly.
-  monitor_status: "ok" | "failed";
+  // "not_evaluated" (J-47): an ENTRY-MARKED thesis that SURVIVES a stopped/restarted watch as a real
+  // position — it is not orphaned, but no verdict accrues while the matching source is not watched.
+  // Re-watching the same source resumes it. The strip renders the not-evaluated variant + notice.
+  monitor_status: "ok" | "failed" | "not_evaluated";
+  // The backend-owned plain-language lifecycle notice (J-47, data-contract row 24) — present ONLY
+  // when not_evaluated (the not-currently-evaluated notice naming the bound source, or the
+  // mismatched-source notice). Rendered VERBATIM by the strip; the frontend composes none of it.
+  monitor_notice?: string;
 }
 
 // GET /research/taxonomy — the single backend owner of every research label. The declare form is

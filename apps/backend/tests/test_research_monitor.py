@@ -199,6 +199,24 @@ def test_directional_impact_flat_is_not_yet(store):
     assert _eval_directional("short", buy_impact=0.0, sell_impact=0.0, store=store) == "not_yet"
 
 
+# --- MANDATORY favorable-dominant dominance pins (iter-9 carry; EXACT named parameters) ----------
+# iter-8 proved the favorable-dominant BOTH-material quadrant only in pixels; the iter-8 reviewer's
+# mandatory test-completeness task pins it in BOTH directions with these EXACT parameters (binding
+# numeric-truth-anchor lesson — the params must literally be these values). Both sides are material
+# (each clears the config cutoff: |0.40| and |0.14| both ≥ 0.02 in magnitude), and the FAVORABLE side
+# dominates by magnitude (|0.40| > |0.14|) => the dominance branch reads ``met``. No production-code
+# change is expected for these; they pin the existing dominance semantics.
+
+def test_directional_impact_long_favorable_dominant_both_material_is_met(store):
+    # LONG, BOTH material, favorable (buy) dominant: buy +0.40 vs sell −0.14 => met.
+    assert _eval_directional("long", buy_impact=0.40, sell_impact=-0.14, store=store) == "met"
+
+
+def test_directional_impact_short_favorable_dominant_both_material_is_met(store):
+    # SHORT mirror, BOTH material, favorable (sell) dominant: sell −0.40 vs buy +0.14 => met.
+    assert _eval_directional("short", buy_impact=0.14, sell_impact=-0.40, store=store) == "met"
+
+
 def test_verdict_fixed_pending(store):
     engine = _warm_engine("SIM-BIDABS", "bid_absorption")
     thesis = _thesis_for(engine, store)
@@ -277,3 +295,164 @@ def test_paused_does_not_expire(store):
     engine.pause()  # fires on_status("paused") — NOT terminal
     assert monitor.active_thesis_id == thesis.id
     assert store.get_thesis(thesis.id).status == "active"
+
+
+# --- lifecycle: expiry REASON (watch_stopped vs stream_closed vs failed), J-47 / J-50 ------------
+# The engine status string alone cannot tell a USER stop apart from a stream that ran out (both flip
+# stream_status to "closed"), so the WatchManager stamps the distinguishing reason on the engine
+# (``end_reason``), which the monitor reads in on_status. J-50's already-verified stream-end leg
+# (``stream_closed``) MUST NOT regress.
+
+class _FakeEndReasonEngine:
+    """A stand-in carrying just ``end_reason`` (what the monitor reads in on_status)."""
+
+    def __init__(self, end_reason: str | None) -> None:
+        self.end_reason = end_reason
+
+
+def _declared_unmarked(store):
+    engine = _warm_engine("SIM-BIDABS", "bid_absorption")
+    thesis = _thesis_for(engine, store)
+    store.insert_thesis(thesis)
+    store.append_verdict_event(
+        VerdictEventRecord(thesis.id, 0.0, 1.0, "pending", "declared", None, None, None)
+    )
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.set_thesis(thesis)
+    monitor.on_event(None, engine.snapshot())  # a live read so the final event records last
+    return monitor, thesis
+
+
+def test_unmarked_user_stop_expires_with_watch_stopped_reason(store):
+    monitor, thesis = _declared_unmarked(store)
+    monitor.attach_engine(_FakeEndReasonEngine("watch_stopped"))
+    monitor.on_status("closed")
+    assert store.get_thesis(thesis.id).status == "expired"
+    events = store.verdict_events(thesis.id)
+    assert [e.verdict for e in events] == ["pending", "expired"]
+    assert events[-1].evidence == "Thesis expired — you stopped the watch that declared it."
+
+
+def test_unmarked_stream_exhaustion_expires_with_stream_closed_reason(store):
+    # J-50's verified leg: a bounded sim stream ending on an UNMARKED thesis expires stream_closed.
+    monitor, thesis = _declared_unmarked(store)
+    monitor.attach_engine(_FakeEndReasonEngine("stream_closed"))
+    monitor.on_status("closed")
+    assert store.get_thesis(thesis.id).status == "expired"
+    events = store.verdict_events(thesis.id)
+    assert events[-1].evidence == "Thesis expired — the stream that declared it ended."
+
+
+def test_unmarked_closed_without_engine_reason_defaults_stream_closed(store):
+    # A direct status flip with no engine reason attached defaults to stream_closed (J-50 preserved).
+    monitor, thesis = _declared_unmarked(store)
+    monitor.on_status("closed")
+    events = store.verdict_events(thesis.id)
+    assert events[-1].evidence == "Thesis expired — the stream that declared it ended."
+
+
+def test_unmarked_failure_expires_with_failed_reason(store):
+    monitor, thesis = _declared_unmarked(store)
+    monitor.attach_engine(_FakeEndReasonEngine(None))
+    monitor.on_status("failed")
+    events = store.verdict_events(thesis.id)
+    assert events[-1].evidence == "Thesis expired — the feed that declared it failed."
+
+
+# --- lifecycle: ENTRY-MARKED thesis SURVIVES stop/failure (J-47) ---------------------------------
+
+def _entry_mark(store, thesis, price=100.0):
+    from app.research.store import ActionRecord
+    store.insert_action(
+        ActionRecord(id="m1", thesis_id=thesis.id, kind="entry", price=price,
+                     logical_ts=1.0, wall_ts=1700000001.0, spread_at_mark=0.02)
+    )
+
+
+def test_entry_marked_survives_stop_no_verdict_appended(store):
+    monitor, thesis = _declared_unmarked(store)
+    _entry_mark(store, thesis)
+    monitor.attach_engine(_FakeEndReasonEngine("watch_stopped"))
+    monitor.on_status("closed")
+    # Survives: stays active in the store, NO expiry/verdict event appended after the stop.
+    assert store.get_thesis(thesis.id).status == "active"
+    events = store.verdict_events(thesis.id)
+    assert [e.verdict for e in events] == ["pending"]  # only the declaration row; nothing appended
+    # The dead monitor no longer holds it active (the watch is over).
+    assert monitor.active_thesis_id is None
+
+
+def test_entry_marked_survives_failure_no_verdict_appended(store):
+    monitor, thesis = _declared_unmarked(store)
+    _entry_mark(store, thesis)
+    monitor.attach_engine(_FakeEndReasonEngine(None))
+    monitor.on_status("failed")
+    assert store.get_thesis(thesis.id).status == "active"
+    assert [e.verdict for e in store.verdict_events(thesis.id)] == ["pending"]
+
+
+# --- lifecycle: re-attach on MATCHING source appends exactly one watch_restarted gap (J-47) ------
+
+def test_reattach_matching_source_appends_one_watch_restarted_gap(store):
+    monitor, thesis = _declared_unmarked(store)
+    _entry_mark(store, thesis)
+    monitor.attach_engine(_FakeEndReasonEngine("watch_stopped"))
+    monitor.on_status("closed")  # survives
+
+    # A FRESH monitor on re-watch is offered the surviving thesis; it adopts on the first MATCHING
+    # snapshot (scenario == bound_source) and appends exactly ONE watch_restarted gap event.
+    fresh = ResearchMonitor(store, CONFIG)
+    fresh.offer_surviving(thesis)
+    engine = _warm_engine("SIM-BIDABS", "bid_absorption")  # same scenario => matching source
+    assert engine.snapshot().scenario == thesis.bound_source
+    fresh.on_event(None, engine.snapshot())
+
+    events = store.verdict_events(thesis.id)
+    assert [e.verdict for e in events] == ["pending", "watch_restarted"]
+    assert fresh.active_thesis_id == thesis.id  # adopted => evaluation resumed
+    # Idempotence: a SECOND snapshot does not append a second gap event (append-only, no backfill).
+    fresh.on_event(None, engine.snapshot())
+    assert [e.verdict for e in store.verdict_events(thesis.id)] == ["pending", "watch_restarted"]
+
+
+def test_reattach_resumes_evaluation_from_post_restart_evidence_only(store):
+    # After adoption the projection is live again (ok), holding the thesis, with no interpolated
+    # history between the stop and the restart (the only appended row is the single gap event).
+    monitor, thesis = _declared_unmarked(store)
+    _entry_mark(store, thesis)
+    monitor.attach_engine(_FakeEndReasonEngine("watch_stopped"))
+    monitor.on_status("closed")
+    fresh = ResearchMonitor(store, CONFIG)
+    fresh.offer_surviving(thesis)
+    engine = _warm_engine("SIM-BIDABS", "bid_absorption")
+    fresh.on_event(None, engine.snapshot())
+    proj = fresh.projection()
+    assert proj is not None
+    assert proj["monitor_status"] == "ok"
+    assert proj["id"] == thesis.id
+
+
+# --- lifecycle: MISMATCHED source is NEVER adopted/evaluated (J-47 cross-source leg) -------------
+
+def test_reattach_mismatched_source_not_adopted_no_verdict_with_notice(store):
+    monitor, thesis = _declared_unmarked(store)  # bound_source == "bid_absorption"
+    _entry_mark(store, thesis)
+    monitor.attach_engine(_FakeEndReasonEngine("watch_stopped"))
+    monitor.on_status("closed")
+
+    fresh = ResearchMonitor(store, CONFIG)
+    fresh.offer_surviving(thesis)
+    # A DIFFERENT scenario (a different sim source) — the same ticker can never re-bind to it.
+    other = _warm_engine("SIM-BUYER", "buyer_control")
+    assert other.snapshot().scenario != thesis.bound_source
+    fresh.on_event(None, other.snapshot())
+
+    # Never adopted, no verdict appended against the wrong source.
+    assert fresh.active_thesis_id is None
+    assert [e.verdict for e in store.verdict_events(thesis.id)] == ["pending"]
+    # The projection carries the explicit bound-source notice naming the DECLARED source.
+    proj = fresh.projection()
+    assert proj is not None
+    assert proj["monitor_status"] == "not_evaluated"
+    assert thesis.bound_source in proj["monitor_notice"]
+    assert "buyer_control" in proj["monitor_notice"]  # names the (wrong) watched source too

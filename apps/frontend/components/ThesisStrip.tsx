@@ -88,6 +88,134 @@ function StripShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+// J-47: a surviving entry-marked thesis shown as ACTIVE-BUT-NOT-EVALUATED. The watch that declared
+// it was stopped (or restarted, or a different source is being watched), so the tape is NOT being
+// judged against it right now — but a real position is never orphaned. Rendered VERBATIM from the
+// row-15 projection (the backend-owned `monitor_notice`), with NO client-side lifecycle inference,
+// NO live verdict chip, and NO mark/resolve controls (those need a live tape) — only the frozen
+// thesis facts, the recorded marks, and the not-evaluated notice. Re-watching the bound source
+// resumes live evaluation on its own (the WS frame then carries an `ok` projection again).
+function NotEvaluatedThesis({ thesis }: { thesis: ThesisProjection }) {
+  const directionColor =
+    thesis.direction === "long" ? "text-emerald-400" : "text-rose-400";
+  const marks = thesis.marks;
+  return (
+    <StripShell>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Your thesis
+          </span>
+          <span className="text-sm font-semibold text-slate-200">
+            {thesis.setup_type.replace(/_/g, " ")}
+          </span>
+          <span className={`text-sm font-semibold uppercase ${directionColor}`}>
+            {thesis.direction}
+          </span>
+          <span className="text-sm text-slate-400">
+            invalidation{" "}
+            <span className="font-mono text-slate-200">
+              {thesis.invalidation_price.toFixed(2)}
+            </span>
+          </span>
+          {thesis.level_price != null && (
+            <span className="text-sm text-slate-400">
+              level{" "}
+              <span className="font-mono text-slate-200">
+                {thesis.level_price.toFixed(2)}
+              </span>
+            </span>
+          )}
+        </div>
+        {/* A neutral (slate) not-evaluated chip — NOT a live verdict (no green/red): the tape is not
+            being judged against this thesis right now. */}
+        <span
+          data-testid="not-evaluated-chip"
+          data-monitor-status={thesis.monitor_status}
+          className="rounded-full border border-slate-600 bg-slate-800 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-300"
+        >
+          ⏸ not evaluated
+        </span>
+      </div>
+
+      {/* The backend-owned plain-language notice (the not-currently-evaluated or mismatched-source
+          copy), rendered VERBATIM — the frontend composes none of it (data-contract row 24). */}
+      {thesis.monitor_notice && (
+        <p
+          data-testid="not-evaluated-notice"
+          className="mt-2 text-sm text-amber-300/90"
+        >
+          {thesis.monitor_notice}
+        </p>
+      )}
+
+      {/* Recorded marks (J-52) — the real position that must never be orphaned, read verbatim. */}
+      {(marks?.entry || marks?.exit) && (
+        <div
+          data-testid="recorded-marks"
+          className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"
+        >
+          {marks?.entry && (
+            <span className="text-slate-400">
+              entry{" "}
+              <span data-testid="entry-mark-price" className="font-mono text-slate-200">
+                {marks.entry.price.toFixed(2)}
+              </span>
+              {marks.entry.spread_at_mark != null && (
+                <span className="ml-1 text-xs text-slate-500">
+                  spread{" "}
+                  <span className="font-mono">
+                    {marks.entry.spread_at_mark.toFixed(2)}
+                  </span>
+                </span>
+              )}
+            </span>
+          )}
+          {marks?.exit && (
+            <span className="text-slate-400">
+              exit{" "}
+              <span data-testid="exit-mark-price" className="font-mono text-slate-200">
+                {marks.exit.price.toFixed(2)}
+              </span>
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Realized move in R (J-52) — shown only once BOTH marks exist; a journaled measurement. */}
+      {marks?.realized_r != null && (
+        <p data-testid="realized-r" className="mt-2 text-sm text-slate-300">
+          Realized move{" "}
+          <span
+            className={`font-mono font-semibold ${
+              marks.realized_r >= 0 ? "text-emerald-400" : "text-rose-400"
+            }`}
+          >
+            {marks.realized_r >= 0 ? "+" : ""}
+            {marks.realized_r.toFixed(2)}R
+          </span>
+          <span className="ml-2 text-xs text-slate-500">
+            journaled measurement, R = |entry − invalidation|
+          </span>
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+        <span>
+          source <span className="text-slate-400">{thesis.bound_source}</span>
+        </span>
+        <span>
+          feed{" "}
+          <span className="text-slate-400">
+            {FEED_LABEL[thesis.data_feed] ?? thesis.data_feed}
+          </span>
+        </span>
+        <span className="ml-auto">Descriptive only — not trading advice.</span>
+      </div>
+    </StripShell>
+  );
+}
+
 function ActiveThesis({
   thesis,
   taxonomy,
@@ -506,8 +634,14 @@ export function ThesisStrip({
     };
   }, [open, thesis, taxonomy]);
 
-  // An active thesis always wins — render it verbatim (the form is only for the idle state).
+  // A thesis always wins — render it verbatim (the form is only for the idle state). A SURVIVING
+  // entry-marked thesis on a stopped/restarted/mismatched watch reads as not-evaluated (J-47): it
+  // is shown as the honest not-currently-evaluated variant (no live verdict, no controls) rather
+  // than the live active display — read entirely from the projection (no client-side inference).
   if (thesis) {
+    if (thesis.monitor_status === "not_evaluated") {
+      return <NotEvaluatedThesis thesis={thesis} />;
+    }
     return <ActiveThesis thesis={thesis} taxonomy={taxonomy} last={last ?? null} />;
   }
 

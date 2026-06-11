@@ -227,11 +227,15 @@ class WatchManager:
         engine = self._engines.get(ticker)
         if engine is None:
             return False
+        # Flip the engine to ``closed`` with the ``watch_stopped`` reason BEFORE cancelling the
+        # feeder task, so the research monitor's on_status hook sees a USER stop (distinct from a
+        # stream that ran out). The cancel runs later on the loop and its own ``closed`` flip carries
+        # no reason — it will not overwrite this one (the monitor has already resolved by then).
+        engine.set_stream_status("closed", end_reason="watch_stopped")
         task = self._tasks.pop(ticker, None)
         if task is not None:
             task.cancel()
         self._speeds.pop(ticker, None)  # drop the mutable speed cell (no cross-watch residue)
-        engine.set_stream_status("closed")
         del self._engines[ticker]
         return True
 
@@ -303,7 +307,10 @@ class WatchManager:
                 await self._wait_while_paused(engine)  # freeze in place while paused (no consume)
                 engine.process_event(event)
                 await asyncio.sleep(self._pace)
-            engine.set_stream_status("closed")
+            # Natural exhaustion (the stream ran out) — reason ``stream_closed`` (distinct from a
+            # user Stop, which set ``watch_stopped`` before cancelling this task). J-50's stream-end
+            # leg depends on this reason.
+            engine.set_stream_status("closed", end_reason="stream_closed")
         except asyncio.CancelledError:
             engine.set_stream_status("closed")  # a clean stop/switch — NOT a failure
             raise
@@ -352,7 +359,8 @@ class WatchManager:
         engine.set_stream_status("waiting")
         try:
             await self._replay_events(engine, provider.stream(), speed_cell, start_delivered=0)
-            engine.set_stream_status("closed")
+            # Natural exhaustion — reason ``stream_closed`` (a user Stop set ``watch_stopped`` first).
+            engine.set_stream_status("closed", end_reason="stream_closed")
         except asyncio.CancelledError:
             engine.set_stream_status("closed")  # a clean stop/switch — NOT a failure
             raise
@@ -433,7 +441,8 @@ class WatchManager:
                 await self._replay_events(
                     engine, rest.stream(), speed_cell, start_delivered=delivered
                 )
-            engine.set_stream_status("closed")
+            # Natural exhaustion — reason ``stream_closed`` (a user Stop set ``watch_stopped`` first).
+            engine.set_stream_status("closed", end_reason="stream_closed")
         except asyncio.CancelledError:
             engine.set_stream_status("closed")
             raise
@@ -537,7 +546,8 @@ class WatchManager:
                 engine.process_event(event)
                 if engine.snapshot().stream_status != "live":
                     engine.set_stream_status("live")  # owns the stale->live recovery flip
-            engine.set_stream_status("closed")
+            # Natural exhaustion (the live stream ended on its own) — reason ``stream_closed``.
+            engine.set_stream_status("closed", end_reason="stream_closed")
         except asyncio.CancelledError:
             engine.set_stream_status("closed")  # a clean stop/switch — NOT a failure
             raise

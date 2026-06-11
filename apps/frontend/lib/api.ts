@@ -6,6 +6,7 @@ import type {
   SymbolMatch,
   TapeHistory,
   TapeSnapshot,
+  ThesisProjection,
   WatchParams,
 } from "./types";
 
@@ -472,7 +473,25 @@ export async function recordAction(
   }
 }
 
-// NOTE: the canonical thesis projection (`GET /research/thesis/active?ticker=`) is the REST
-// counterpart of the WS `thesis` key. The strip reads the WS `thesis` key only (one read path per
-// contract value — data-contract row 15); QA probes the REST endpoint directly for the
-// verbatim-equality check. No parallel UI-layer REST fetch is kept here on purpose.
+// The canonical thesis projection (`GET /research/thesis/active?ticker=`) is the REST counterpart
+// of the WS `thesis` key (verbatim-equal by construction — data-contract row 15). While a watch is
+// LIVE the strip reads the WS `thesis` key only (one read path per contract value). This REST fetch
+// is used ONLY when there is NO live stream — after a Stop — to discover a SURVIVING entry-marked
+// thesis (J-47): an entry-marked thesis is not orphaned by a stop, so the cockpit surface keeps
+// showing it as not-currently-evaluated (read from the SAME endpoint, never recomputed client-side).
+// Returns the projection, `null` when nothing survives (a normal state), or `null` on any error
+// (the caller simply shows the idle cockpit — no fabricated thesis).
+export async function fetchActiveThesis(
+  ticker: string,
+): Promise<ThesisProjection | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `${API_BASE}/research/thesis/active?ticker=${encodeURIComponent(ticker)}`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data?.thesis as ThesisProjection | null) ?? null;
+  } catch {
+    return null;
+  }
+}

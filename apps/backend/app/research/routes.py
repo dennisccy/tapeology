@@ -28,8 +28,9 @@ from pydantic import BaseModel
 
 from ..config import Config
 from .marks import marks_projection
-from .monitor import ResearchMonitor, data_feed_for_scenario
+from .monitor import ResearchMonitor, build_projection, data_feed_for_scenario
 from .store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
+from .taxonomy import not_evaluated_notice
 from .taxonomy import (
     frozen_statements,
     is_valid_direction,
@@ -101,17 +102,69 @@ class ResearchRegistry:
         return self._store
 
     def on_engine_created(self, ticker: str, engine: object) -> None:
-        """Attach a fresh monitor to a freshly-built engine (the WatchManager hook)."""
+        """Attach a fresh monitor to a freshly-built engine (the WatchManager hook).
+
+        The monitor is given the engine (so its ``on_status`` can read the terminal ``end_reason``).
+        If a SURVIVING entry-marked active thesis exists for this ticker (it was NOT expired on a
+        prior stop/restart because it carries a real position, J-47), it is OFFERED to the fresh
+        monitor: the monitor adopts it — appending exactly one ``watch_restarted`` gap event and
+        resuming evaluation — only once the first snapshot confirms the new watch's source identity
+        equals the thesis's ``bound_source`` (a mismatch is never adopted)."""
         monitor = ResearchMonitor(self._store, self._config)
+        monitor.attach_engine(engine)
         self._monitors[ticker] = monitor
         engine.add_observer(monitor)
+        # Offer any surviving entry-marked active thesis for re-attach (source match decided at the
+        # first snapshot). An unmarked active row would already have been expired on the prior stop /
+        # restart sweep, so this only ever finds a genuinely surviving position.
+        surviving = self._store.get_active_thesis(ticker)
+        if surviving is not None and self._store.has_entry_mark(surviving.id):
+            monitor.offer_surviving(surviving)
 
     def monitor_for(self, ticker: str) -> ResearchMonitor | None:
         return self._monitors.get(ticker)
 
     def projection_for(self, ticker: str) -> dict | None:
+        """The canonical thesis projection for ``ticker`` (``None`` is a normal state).
+
+        The LIVE monitor's projection wins when it serves one (an active live thesis, a resolved
+        ``invalidated`` terminal treatment, or a mismatched-source survivor notice). Otherwise — a
+        stopped/unwatched ticker — a SURVIVING entry-marked active thesis is served from its
+        persisted record via the SAME ``build_projection`` path (data-contract row 15 — never a
+        second computation), flagged ``not_evaluated`` with the backend-owned bound-source notice.
+        ``None`` remains the answer when nothing survives."""
         monitor = self._monitors.get(ticker)
-        return monitor.projection() if monitor is not None else None
+        if monitor is not None:
+            projection = monitor.projection()
+            if projection is not None:
+                return projection
+        return self._surviving_projection(ticker)
+
+    def _surviving_projection(self, ticker: str) -> dict | None:
+        """Serve a surviving entry-marked active thesis (unwatched) as not-evaluated, or ``None``.
+
+        Built from the persisted ``active`` record via the ONE shared ``build_projection`` — no live
+        snapshot (statements read ``not_yet``; an unwatched survivor accrues no new status), the
+        ``not_evaluated`` monitor status, and the backend-owned plain-language notice naming the
+        bound source. A non-entry-marked active row never reaches here (it was expired on stop /
+        restart), so this only ever surfaces a genuinely surviving position."""
+        surviving = self._store.get_active_thesis(ticker)
+        if surviving is None or not self._store.has_entry_mark(surviving.id):
+            return None
+        return build_projection(
+            surviving,
+            self._store.get_actions(surviving.id),
+            config=self._config,
+            snapshot=None,
+            status=surviving.status,
+            verdict="pending",
+            verdict_evidence=(
+                "This thesis carries a recorded entry and survives the stopped watch; it is not "
+                "being evaluated until its source is watched again."
+            ),
+            monitor_status="not_evaluated",
+            monitor_notice=not_evaluated_notice(surviving.bound_source),
+        )
 
     def startup_sweep(self) -> list[str]:
         """Resolve any thesis left ``active`` in the DB (from a prior process) to ``expired``."""

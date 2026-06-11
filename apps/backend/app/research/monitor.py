@@ -31,6 +31,7 @@ from ..config import Config
 from ..engine.snapshot import EngineSnapshot
 from .marks import marks_projection
 from .store import JournalStore, ThesisRecord, VerdictEventRecord
+from .taxonomy import mismatched_source_notice
 from .verdict import VerdictEvaluator
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,62 @@ def _evaluate_statement(
     return "not_yet"
 
 
+def build_projection(
+    thesis: ThesisRecord,
+    actions: list,
+    *,
+    config: Config,
+    snapshot: EngineSnapshot | None,
+    status: str,
+    verdict: str,
+    verdict_evidence: str,
+    monitor_status: str,
+    monitor_notice: str | None = None,
+) -> dict:
+    """The SINGLE thesis-projection builder (data-contract row 15) — one code path, never a second.
+
+    Both the LIVE monitor (``ResearchMonitor.projection``) and the registry's UNWATCHED-survivor
+    fallback (``GET /research/thesis/active`` for a stopped ticker whose entry-marked thesis
+    survives) call THIS function, so a surviving thesis is served by the SAME projection path as a
+    live one — never recomputed via a second route. Statement statuses are recomputed from the
+    handed snapshot (``not_yet`` when there is none — an unwatched survivor accrues no new status).
+    Action marks + realized-R come from the ONE ``marks_projection`` (shared with the journal-detail
+    read). ``monitor_notice`` (optional) is the backend-owned plain-language lifecycle notice (the
+    not-evaluated / mismatched-source copy) rendered VERBATIM by the strip — present only when set.
+    """
+    statements = [
+        {
+            "text": s["text"],
+            "status": _evaluate_statement(s, snapshot, thesis, config)
+            if snapshot is not None
+            else "not_yet",
+        }
+        for s in thesis.statements
+    ]
+    marks = marks_projection(thesis, actions)
+    projection = {
+        "id": thesis.id,
+        "ticker": thesis.ticker,
+        "setup_type": thesis.setup_type,
+        "direction": thesis.direction,
+        "invalidation_price": thesis.invalidation_price,
+        "level_price": thesis.level_price,
+        "status": status,
+        "verdict": verdict,
+        "verdict_evidence": verdict_evidence,
+        "statements": statements,
+        "entry_context": thesis.entry_context,
+        "bound_source": thesis.bound_source,
+        "data_feed": thesis.data_feed,
+        "config_fingerprint": thesis.config_fingerprint,
+        "marks": marks,
+        "monitor_status": monitor_status,
+    }
+    if monitor_notice is not None:
+        projection["monitor_notice"] = monitor_notice
+    return projection
+
+
 class ResearchMonitor:
     """Holds one ticker's active thesis and serves its live projection (capability 20 observer)."""
 
@@ -148,12 +205,27 @@ class ResearchMonitor:
         # holding it active.
         self._resolved = False
         self._resolution: str | None = None  # the terminal resolution (expired | invalidated)
+        self._expiry_reason: str | None = None  # the recorded reason on an ``expired`` resolution
         # The verdict-transition engine (capability 24). Created when a thesis is set; the dwell
         # restarts at thesis creation by construction (a fresh evaluator). The PUBLISHED verdict +
         # evidence the projection serves live below.
         self._evaluator: VerdictEvaluator | None = None
         self._verdict = "pending"
         self._verdict_evidence = ""
+        # The engine this monitor is attached to (set by the registry at attach time). Read in
+        # ``on_status`` to distinguish a user Stop (``watch_stopped``) from a stream that ran out
+        # (``stream_closed``) — both flip the engine status to ``closed``, so the reason lives on the
+        # engine, not the status string.
+        self._engine: object | None = None
+        # J-47 re-attach: a SURVIVING entry-marked thesis handed to a FRESH monitor on re-watch. It is
+        # only ADOPTED once the first snapshot confirms the new watch's source identity equals the
+        # thesis's bound_source (the source descriptor is known at/after the first snapshot, NOT at
+        # engine construction). Until then the monitor serves the not-evaluated projection. On a
+        # MISMATCH it is never adopted (the projection carries the bound-source notice).
+        self._adopt_candidate: ThesisRecord | None = None
+        self._adopt_decided = False        # has the first post-restart snapshot resolved adopt/mismatch?
+        self._adopt_mismatch = False       # the first snapshot's source differed from bound_source
+        self._restart_gap_appended = False # the single watch_restarted gap event has been appended
 
     # --- thesis lifecycle (called from the route, NOT the hot path) -----------------------------
     def set_thesis(self, thesis: ThesisRecord) -> None:
@@ -175,6 +247,27 @@ class ResearchMonitor:
             "sustained post-declaration evidence accrues."
         )
 
+    def attach_engine(self, engine: object) -> None:
+        """Remember the engine this monitor observes (set by the registry at attach time).
+
+        Read in ``on_status`` to learn WHY a terminal flip happened (``engine.end_reason``) —
+        ``watch_stopped`` (user Stop) vs ``stream_closed`` (the stream ran out) — which the status
+        string alone cannot tell apart."""
+        self._engine = engine
+
+    def offer_surviving(self, thesis: ThesisRecord) -> None:
+        """Hand a SURVIVING entry-marked thesis to this FRESH monitor on re-watch (J-47).
+
+        The thesis is NOT adopted yet: the new watch's source identity is only known at/after the
+        first snapshot. ``on_event`` adopts it (appending exactly one ``watch_restarted`` gap event
+        and resuming evaluation) iff the first snapshot's ``scenario`` equals the thesis's
+        ``bound_source``; on a mismatch it is never adopted and the projection carries the
+        bound-source notice. Until the first snapshot the not-evaluated projection is served."""
+        self._adopt_candidate = thesis
+        self._adopt_decided = False
+        self._adopt_mismatch = False
+        self._restart_gap_appended = False
+
     def clear_thesis(self) -> None:
         self._thesis = None
         self._resolved = False
@@ -182,6 +275,10 @@ class ResearchMonitor:
         self._evaluator = None
         self._verdict = "pending"
         self._verdict_evidence = ""
+        self._adopt_candidate = None
+        self._adopt_decided = False
+        self._adopt_mismatch = False
+        self._restart_gap_appended = False
 
     def resolve_by_user(self, resolution: str) -> None:
         """Detach verdict evaluation after a USER resolution (played_out | abandoned), J-50.
@@ -210,10 +307,61 @@ class ResearchMonitor:
         # mutation happens here (equivalence anti-goal): the evaluator only READS the frozen snapshot.
         try:
             self._last_snapshot = snapshot
+            self._maybe_adopt_surviving(snapshot)
             self._evaluate_verdict(snapshot)
         except Exception:
             self._failed = True
             logger.exception("research monitor on_event failed")
+
+    def _maybe_adopt_surviving(self, snapshot: EngineSnapshot) -> None:
+        """Re-attach a surviving entry-marked thesis to THIS watch iff the source matches (J-47).
+
+        The decision is made ONCE, at the first snapshot after the offer (the source descriptor is
+        known then, not at engine construction). On a MATCH (``snapshot.scenario`` == the thesis's
+        ``bound_source``): adopt — hold the thesis active again, start a FRESH evaluator (the dwell
+        restarts at re-attach so post-restart evidence is required by construction), and append
+        EXACTLY ONE ``watch_restarted`` gap event to the append-only timeline (never edited /
+        backfilled). On a MISMATCH (a different sim scenario, or live vs historical of the same
+        symbol): do NOT adopt — record the mismatch so the projection carries the explicit
+        bound-source notice and NO verdict is ever appended against the wrong source. Idempotent: a
+        second snapshot does not append a second gap event (``_restart_gap_appended`` guards it)."""
+        candidate = self._adopt_candidate
+        if candidate is None or self._adopt_decided:
+            return
+        self._adopt_decided = True
+        if snapshot.scenario != candidate.bound_source:
+            # Source mismatch — never adopt, never evaluate against the wrong source (anti-goal).
+            self._adopt_mismatch = True
+            return
+        # Source matches — adopt the surviving thesis and resume evaluation from post-restart
+        # evidence only (a fresh evaluator => the dwell restarts here).
+        self._thesis = candidate
+        self._resolved = False
+        self._resolution = None
+        self._evaluator = VerdictEvaluator(candidate, self._config)
+        self._verdict = "pending"
+        self._verdict_evidence = (
+            "The watch resumed on the source this thesis was declared on; the verdict stays pending "
+            "until sustained post-restart evidence accrues."
+        )
+        if not self._restart_gap_appended:
+            self._store.append_verdict_event(
+                VerdictEventRecord(
+                    thesis_id=candidate.id,
+                    logical_ts=snapshot.timestamp,
+                    wall_ts=time.time(),
+                    verdict="watch_restarted",
+                    evidence=(
+                        "Watch restarted on the matching source — evaluation resumes from here; "
+                        "the gap while unwatched carries no verdicts."
+                    ),
+                    tape_state=snapshot.tape_state,
+                    confidence=snapshot.confidence,
+                    last=snapshot.last,
+                )
+            )
+            self._restart_gap_appended = True
+        self._adopt_candidate = None
 
     def _evaluate_verdict(self, snapshot: EngineSnapshot) -> None:
         """Advance the verdict against this snapshot; publish + persist any transition.
@@ -257,26 +405,65 @@ class ResearchMonitor:
                 self._resolution = "invalidated"
 
     def on_status(self, status: str) -> None:
-        # Lifecycle honesty (subset of capability 24): a terminal stream status auto-resolves an
-        # active thesis ``expired(reason)`` with a final appended timeline event. ``closed`` (stop /
-        # stream exhaustion) and ``failed`` (feeder raised) are terminal; ``paused``/``stale`` are
-        # not. No entry marks exist yet, so there is no survives-with-entry-mark exception.
+        # Lifecycle honesty (capability 24, J-47): a terminal stream status resolves an UNMARKED
+        # active thesis ``expired(reason)`` with a final appended timeline event — BUT an
+        # entry-marked thesis (a real position) is NEVER orphaned: it SURVIVES as
+        # active-but-not-evaluated (stays ``active`` in the store, NO verdict events appended while
+        # unwatched, projection says so). ``closed`` (stop / stream exhaustion) and ``failed``
+        # (feeder raised) are terminal; ``paused``/``stale`` are not.
+        #
+        # The expiry REASON distinguishes a user Stop (``watch_stopped``) from a stream that ran out
+        # (``stream_closed`` — J-50's verified leg must not regress) from a feed failure (``failed``).
+        # The status string alone cannot tell stop from exhaustion (both are ``closed``); the
+        # distinguishing reason lives on the engine (``end_reason``), stamped by the WatchManager.
         try:
             if status in ("closed", "failed") and self._thesis is not None and not self._resolved:
-                self._expire_active(reason=status)
+                # A real position must never be orphaned: an entry-marked thesis survives.
+                if self._store.has_entry_mark(self._thesis.id):
+                    self._detach_not_evaluated()
+                    return
+                self._expire_active(status=status)
         except Exception:
             self._failed = True
             logger.exception("research monitor on_status failed")
 
-    def _expire_active(self, reason: str) -> None:
+    def _detach_not_evaluated(self) -> None:
+        """Survive a stop/failure as active-but-not-evaluated (J-47): the entry-marked thesis stays
+        ``active`` in the store, NO verdict event is appended, and this monitor stops evaluating it.
+
+        The thesis is NOT held active in THIS dead monitor any longer (the watch is over) — the
+        persisted ``active`` row is authoritative, and the registry serves its not-evaluated
+        projection from that row via the SAME projection builder until the matching source is
+        re-watched (then a fresh monitor adopts it with a ``watch_restarted`` gap event)."""
+        self._thesis = None
+        self._evaluator = None
+
+    def _terminal_reason(self, status: str) -> str:
+        """Map a terminal stream status to the recorded expiry reason (J-47 / J-50).
+
+        ``failed`` is a feed failure. ``closed`` is refined by the engine's ``end_reason`` into a
+        user Stop (``watch_stopped``) vs a stream that ran out (``stream_closed``) — the status
+        string alone cannot tell them apart, so the WatchManager stamps the reason on the engine."""
+        if status == "failed":
+            return "failed"
+        engine_reason = getattr(self._engine, "end_reason", None)
+        if engine_reason in ("watch_stopped", "stream_closed"):
+            return engine_reason
+        # No engine reason available (a direct status flip in a test, or a legacy path): default to
+        # ``stream_closed`` so J-50's already-verified stream-end leg is preserved by default.
+        return "stream_closed"
+
+    def _expire_active(self, status: str) -> None:
         thesis = self._thesis
         if thesis is None:
             return
+        reason = self._terminal_reason(status)
         wall = time.time()
         logical = self._last_snapshot.timestamp if self._last_snapshot is not None else 0.0
         last = self._last_snapshot.last if self._last_snapshot is not None else None
         detail = {
-            "closed": "Thesis expired — the watch that declared it was stopped or the stream ended.",
+            "watch_stopped": "Thesis expired — you stopped the watch that declared it.",
+            "stream_closed": "Thesis expired — the stream that declared it ended.",
             "failed": "Thesis expired — the feed that declared it failed.",
         }.get(reason, "Thesis expired.")
         try:
@@ -295,6 +482,7 @@ class ResearchMonitor:
             )
             self._resolved = True
             self._resolution = "expired"
+            self._expiry_reason = reason
         except Exception:
             # A store failure on resolution must surface as failed, never crash the feeder.
             self._failed = True
@@ -316,48 +504,53 @@ class ResearchMonitor:
         resolution KEEPS the projection so the strip shows the TERMINAL treatment (the resolved
         thesis with its ``invalidated`` verdict + the offending evidence) rather than silently
         reverting to the idle declare affordance.
+
+        Mismatched-source survivor (J-47): if this fresh monitor was OFFERED a surviving entry-marked
+        thesis but the first snapshot's source differed from its ``bound_source``, the thesis is
+        NEVER adopted (no verdicts ever appended against the wrong source) — the projection is served
+        from the surviving record with ``monitor_status: not_evaluated`` and the explicit
+        bound-source notice naming the declared source. The same single ``build_projection`` path is
+        used (never a second computation).
         """
+        # Mismatched-source survivor: serve the surviving record as not-evaluated with the explicit
+        # bound-source notice (never adopted, never evaluated against the wrong source).
+        if self._thesis is None and self._adopt_mismatch and self._adopt_candidate is not None:
+            candidate = self._adopt_candidate
+            watched = (
+                self._last_snapshot.scenario if self._last_snapshot is not None else "this source"
+            )
+            return build_projection(
+                candidate,
+                self._store.get_actions(candidate.id),
+                config=self._config,
+                snapshot=None,
+                status=candidate.status,
+                verdict="pending",
+                verdict_evidence=(
+                    "The watch is on a different source than this thesis was declared on, so the "
+                    "tape is not being judged against it."
+                ),
+                monitor_status="not_evaluated",
+                monitor_notice=mismatched_source_notice(candidate.bound_source, watched),
+            )
         thesis = self._thesis
         if thesis is None:
             return None
         if self._resolved and self._resolution != "invalidated":
             return None
-        snap = self._last_snapshot
-        statements = [
-            {
-                "text": s["text"],
-                "status": _evaluate_statement(s, snap, thesis, self._config)
-                if snap is not None
-                else "not_yet",
-            }
-            for s in thesis.statements
-        ]
         # A resolved-invalidated thesis reports its terminal status/verdict; otherwise the active
-        # thesis reports its declared status and the live published verdict.
+        # thesis reports its declared status and the live published verdict. Both go through the ONE
+        # shared ``build_projection`` (data-contract row 15 — never a second computation path).
         status = "invalidated" if self._resolution == "invalidated" else thesis.status
-        # Action marks + realized-R (J-52, data-contract rows 18 & 27) — computed ONCE by the shared
-        # ``marks_projection`` (the same function ``GET /research/journal/{id}`` uses, so REST/WS/journal
-        # are identical by construction; the strip renders this verbatim, deriving nothing). Read from
-        # the persisted action rows — never from the hot path. With no marks the realized keys are
-        # ``None`` (no dishonest zero); ``marks.has_entry`` is the entry-marked fact the UI reads to
-        # WITHDRAW the Abandon control (it never guesses). A read failure here is caught by the
-        # caller's try/except and surfaces as ``monitor_status: failed`` rather than a crash.
-        marks = marks_projection(thesis, self._store.get_actions(thesis.id))
-        return {
-            "id": thesis.id,
-            "ticker": thesis.ticker,
-            "setup_type": thesis.setup_type,
-            "direction": thesis.direction,
-            "invalidation_price": thesis.invalidation_price,
-            "level_price": thesis.level_price,
-            "status": status,
-            "verdict": self._verdict,
-            "verdict_evidence": self._verdict_evidence,
-            "statements": statements,
-            "entry_context": thesis.entry_context,
-            "bound_source": thesis.bound_source,
-            "data_feed": thesis.data_feed,
-            "config_fingerprint": thesis.config_fingerprint,
-            "marks": marks,
-            "monitor_status": "failed" if self._failed else "ok",
-        }
+        # A read failure inside the builder (e.g. the action read) is caught by the caller's
+        # try/except and surfaces as ``monitor_status: failed`` rather than a crash.
+        return build_projection(
+            thesis,
+            self._store.get_actions(thesis.id),
+            config=self._config,
+            snapshot=self._last_snapshot,
+            status=status,
+            verdict=self._verdict,
+            verdict_evidence=self._verdict_evidence,
+            monitor_status="failed" if self._failed else "ok",
+        )

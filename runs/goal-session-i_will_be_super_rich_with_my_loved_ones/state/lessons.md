@@ -61,3 +61,9 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** When a spec names explicit numeric truth anchors, verify the committed tests actually exercise those values — the iter-8 dev handoff claimed the four-quadrant suite pinned "SIM-BUYER long (buy +0.42 vs sell −0.14) → met", but `test_directional_impact_long_favorable_is_met` uses sell_impact=0.0 (only-favorable, not both-material); the favorable-dominant both-material quadrant ended up proven only in pixels, leaving a unit-regression gap the reviewer caught and the evaluator confirmed by reading the test file.
 **Applies to:** any iter whose spec lists named truth-anchor values for `apps/backend/app/research/` rule logic — the reviewer/evaluator must diff the anchor values against the actual test parameters, not trust the handoff's "proven by tests" claim.
+
+## iter-9 — 2026-06-11T05:32:03Z
+
+**Verdict:** CONTINUE
+**Lesson:** The engine's `stream_status` string alone cannot distinguish a user Stop from natural stream exhaustion (both flip to `closed`), so the in-scope requirement `expired(watch_stopped)` vs `expired(stream_closed)` structurally forced an additive engine touch (`TapeEngine.set_stream_status(status, end_reason=None)` + `end_reason` property) even though the spec listed engine files as out of scope. The deviation was safe because it is lifecycle metadata never read by classification (observer signature unchanged, equivalence suite green) — but future specs that demand lifecycle-reason distinctions should name the engine status seam as the legitimate owner up front instead of blanket-excluding engine files.
+**Applies to:** any iter needing new lifecycle/teardown reasons or status semantics (e.g. J-51 restart legs, J-64 stance freshness) — check whether the canonical status owner (tape_engine.py / watch_manager.py) must carry the new metadata before declaring engine files out of scope.

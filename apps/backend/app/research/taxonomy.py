@@ -33,6 +33,42 @@ VERDICTS: dict[str, str] = {
     "expired": "Expired",
 }
 
+# --- Monitor-status enum + lifecycle display copy (capability 24, J-47; data-contract row 24) ----
+# The research monitor's status, owned ONCE on the backend and read VERBATIM by the strip:
+#   ok            — the thesis is being watched and judged live.
+#   failed        — the monitor or its store write errored (surfaced honestly, never hidden).
+#   not_evaluated — the thesis carries a real entry mark and SURVIVES a stop/restart as
+#                   active-but-not-evaluated: it is not orphaned, but no verdict accrues while the
+#                   matching source is not being watched. Re-watching the SAME source resumes it.
+MONITOR_STATUSES: tuple[str, ...] = ("ok", "failed", "not_evaluated")
+
+# The plain-language notice shown on a surviving entry-marked thesis while it is not being
+# evaluated. Present-tense, descriptive, thesis-attributed (J-66) — never imperative/predictive.
+NOT_EVALUATED_NOTICE = (
+    "not currently evaluated — re-watch this source to resume"
+)
+
+
+def not_evaluated_notice(bound_source: str) -> str:
+    """The backend-owned not-evaluated notice naming the thesis's bound source (row 24).
+
+    Rendered VERBATIM by the strip — the frontend composes none of this copy. Naming the bound
+    source makes the resume action concrete ("re-watch THIS source")."""
+    return f"{NOT_EVALUATED_NOTICE} ({bound_source})"
+
+
+def mismatched_source_notice(bound_source: str, watched_source: str) -> str:
+    """The backend-owned notice when a DIFFERENT source is watched than the thesis was declared on.
+
+    A thesis is bound to its source identity and is NEVER evaluated against a different source
+    (source-honesty anti-goal). The notice names the declared (bound) source so the user knows
+    which watch would resume it. Present-tense, descriptive (J-66)."""
+    return (
+        f"not evaluated against this source — your thesis is bound to {bound_source}, "
+        f"not {watched_source}; re-watch {bound_source} to resume"
+    )
+
+
 # --- Statement-status enum (the monitor's live read of each expected-behaviour statement) -------
 # met = the statement's premise is observed in the current engine read; not_yet = not observed yet
 # (the honest default — no evidence is not a failure); violated = the engine read contradicts it.
@@ -198,5 +234,6 @@ def taxonomy_payload() -> dict:
         "directions": [{"id": k, "name": v} for k, v in DIRECTIONS.items()],
         "verdicts": [{"id": k, "name": v} for k, v in VERDICTS.items()],
         "statement_statuses": list(STATEMENT_STATUSES),
+        "monitor_statuses": list(MONITOR_STATUSES),
         "disclaimer": "Descriptive only — not trading advice.",
     }
