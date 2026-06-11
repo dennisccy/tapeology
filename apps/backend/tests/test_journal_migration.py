@@ -28,6 +28,7 @@ from app.research.store import ActionRecord, JournalStore, ThesisRecord, Verdict
 
 FIXTURE_SQL = Path(__file__).parent / "fixtures" / "journal_v1_schema.sql"
 FIXTURE_V2_SQL = Path(__file__).parent / "fixtures" / "journal_v2_schema.sql"
+FIXTURE_V3_SQL = Path(__file__).parent / "fixtures" / "journal_v3_schema.sql"
 
 
 def _build_v1_db(path: str) -> None:
@@ -48,6 +49,25 @@ def _build_v2_db(path: str) -> None:
     try:
         conn.executescript(sql)
         conn.commit()
+    finally:
+        conn.close()
+
+
+def _build_v3_db(path: str) -> None:
+    """Materialize the committed v3-schema SQL fixture into a real SQLite DB at ``path``."""
+    sql = FIXTURE_V3_SQL.read_text()
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript(sql)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _theses_columns(path: str) -> set[str]:
+    conn = sqlite3.connect(path)
+    try:
+        return {r[1] for r in conn.execute("PRAGMA table_info(theses)").fetchall()}
     finally:
         conn.close()
 
@@ -225,6 +245,8 @@ def test_fresh_temp_db_is_created_at_current_version_no_migration(tmp_path):
         # A fresh DB created at the current version already carries the v3 action column.
         actions_cols = _actions_columns(str(tmp_path / "fresh.db"))
         assert "spread_at_mark" in actions_cols
+        # ...and the v4 theses.risk_flags column (J-49).
+        assert "risk_flags" in _theses_columns(str(tmp_path / "fresh.db"))
     finally:
         store.close()
 
@@ -253,7 +275,9 @@ def test_open_migrates_v2_to_v3_adding_spread_column_and_bumping_version(tmp_pat
     _build_v2_db(db)
     store = JournalStore(db, CONFIG)
     try:
-        assert store.schema_version() == 3 == CONFIG.journal_schema_version
+        # A v2 DB now chains all the way up to the CURRENT target (v4); the v2 -> v3 spread column is
+        # present after the chained migration.
+        assert store.schema_version() == CONFIG.journal_schema_version
         assert "spread_at_mark" in _actions_columns(db)
         # The pre-existing v2 dwell columns are untouched (the v2 -> v3 step only touches actions).
         assert {"rule_first_true_ts", "rule_first_true_price"} <= _verdict_event_columns(db)
@@ -303,10 +327,10 @@ def test_action_records_end_to_end_against_migrated_v2_db(tmp_path):
 def test_reopen_already_v3_is_idempotent_from_v2(tmp_path):
     db = str(tmp_path / "v2.db")
     _build_v2_db(db)
-    JournalStore(db, CONFIG).close()  # first open migrates v2 -> v3
+    JournalStore(db, CONFIG).close()  # first open migrates v2 -> v3 -> v4 (chained to current)
     store = JournalStore(db, CONFIG)  # second open must be a no-op
     try:
-        assert store.schema_version() == 3
+        assert store.schema_version() == CONFIG.journal_schema_version
         assert "spread_at_mark" in _actions_columns(db)
     finally:
         store.close()
@@ -325,7 +349,154 @@ def test_stale_v2_version_row_with_spread_column_present_does_not_crash(tmp_path
         conn.close()
     store = JournalStore(db, CONFIG)  # must not raise "duplicate column name"
     try:
-        assert store.schema_version() == 3
+        # The stale row at 2 with the v3 column present chains v2 -> v3 (no-op ALTER) -> v4 cleanly.
+        assert store.schema_version() == CONFIG.journal_schema_version
+    finally:
+        store.close()
+
+
+# --- v3 -> v4 migration on open (J-49: theses.risk_flags) -----------------------------------------
+
+def test_v3_fixture_starts_at_v3_without_risk_flags(tmp_path):
+    db = str(tmp_path / "v3.db")
+    _build_v3_db(db)
+    cols = _theses_columns(db)
+    assert "risk_flags" not in cols
+    conn = sqlite3.connect(db)
+    try:
+        assert conn.execute("SELECT version FROM schema_version").fetchone()[0] == 3
+        names = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+    finally:
+        conn.close()
+    for forbidden in ("trades", "quotes", "candles", "features"):
+        assert forbidden not in names
+
+
+def test_open_migrates_v3_to_v4_adding_risk_flags_column_and_bumping_version(tmp_path):
+    db = str(tmp_path / "v3.db")
+    _build_v3_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        assert store.schema_version() == 4 == CONFIG.journal_schema_version
+        assert "risk_flags" in _theses_columns(db)
+        # The pre-existing v2/v3 columns are untouched (the v3 -> v4 step only touches theses).
+        assert "spread_at_mark" in _actions_columns(db)
+        assert {"rule_first_true_ts", "rule_first_true_price"} <= _verdict_event_columns(db)
+    finally:
+        store.close()
+
+
+def test_v4_migration_does_not_backfill_pre_existing_thesis(tmp_path):
+    # The append-only discipline extends to the frozen risk flags: the pre-existing v3 thesis keeps
+    # NULL risk_flags after the column is added (a pre-migration thesis was never risk-assessed — its
+    # flags are never fabricated), and its verbatim fields are intact.
+    db = str(tmp_path / "v3.db")
+    _build_v3_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        thesis = store.get_thesis("v3thesis0001")
+        assert thesis is not None
+        assert thesis.risk_flags is None  # NULL -> None: never assessed, never backfilled
+        # Verbatim fields intact (not rewritten by the migration).
+        assert thesis.setup_type == "trend_continuation"
+        assert thesis.invalidation_price == 98.0
+        assert thesis.config_fingerprint == "oldfingerprint03"
+        assert thesis.status == "active"
+    finally:
+        store.close()
+
+
+def test_pre_migration_thesis_projection_omits_risk_flags_key(tmp_path):
+    # Honest-omission semantics: a pre-v4 thesis (NULL risk_flags) is served through the SAME single
+    # build_projection — and its projection OMITS the risk_flags key entirely (an absent key means
+    # "never assessed"; an empty list would dishonestly mean "assessed, nothing fired").
+    from app.research.monitor import build_projection
+
+    db = str(tmp_path / "v3.db")
+    _build_v3_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        thesis = store.get_thesis("v3thesis0001")
+        proj = build_projection(
+            thesis,
+            store.get_actions(thesis.id),
+            config=CONFIG,
+            snapshot=None,
+            status=thesis.status,
+            verdict="pending",
+            verdict_evidence="ev",
+            monitor_status="ok",
+            verdict_events=store.verdict_events(thesis.id),
+        )
+        assert "risk_flags" not in proj  # absent, NOT an empty list
+    finally:
+        store.close()
+
+
+def test_thesis_with_risk_flags_records_end_to_end_against_migrated_v3_db(tmp_path):
+    # A NEW thesis WITH frozen risk flags records cleanly against the migrated DB and reads back
+    # verbatim (the empty-list vs absent distinction is preserved through the round-trip).
+    db = str(tmp_path / "v3.db")
+    _build_v3_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        flags = [
+            {
+                "flag": "before_warmup",
+                "label": "Declared before warm-up",
+                "evidence": "declared after 5 trades, below the 40-trade warm-up",
+                "measured": {"trade_count": 5, "warmup_min_events": 40},
+            }
+        ]
+        store.insert_thesis(
+            dataclasses.replace(
+                _thesis(tid="flagged1", ticker="SIM-CHOP", status="active"),
+                risk_flags=flags,
+            )
+        )
+        back = store.get_thesis("flagged1")
+        assert back.risk_flags == flags  # verbatim round-trip
+        # An assessed-nothing-fired thesis round-trips as an EMPTY list (distinct from None/absent).
+        store.insert_thesis(
+            dataclasses.replace(
+                _thesis(tid="clean1", ticker="SIM-SELLER", status="active"),
+                risk_flags=[],
+            )
+        )
+        clean = store.get_thesis("clean1")
+        assert clean.risk_flags == []  # assessed, nothing fired — NOT None
+    finally:
+        store.close()
+
+
+def test_reopen_already_v4_is_idempotent_from_v3(tmp_path):
+    db = str(tmp_path / "v3.db")
+    _build_v3_db(db)
+    JournalStore(db, CONFIG).close()  # first open migrates v3 -> v4
+    store = JournalStore(db, CONFIG)  # second open must be a no-op
+    try:
+        assert store.schema_version() == 4
+        assert "risk_flags" in _theses_columns(db)
+    finally:
+        store.close()
+
+
+def test_stale_v3_version_row_with_risk_flags_column_present_does_not_crash(tmp_path):
+    # Belt-and-braces: a DB whose theses ALREADY carries risk_flags but whose version row is stale at
+    # 3. The PRAGMA table_info guard makes the ALTER a no-op and the open just bumps to v4.
+    db = str(tmp_path / "v3.db")
+    _build_v3_db(db)
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute("ALTER TABLE theses ADD COLUMN risk_flags TEXT")
+        conn.commit()  # version row still says 3
+    finally:
+        conn.close()
+    store = JournalStore(db, CONFIG)  # must not raise "duplicate column name"
+    try:
+        assert store.schema_version() == 4
     finally:
         store.close()
 

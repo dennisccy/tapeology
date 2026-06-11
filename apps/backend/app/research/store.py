@@ -61,7 +61,8 @@ CREATE TABLE IF NOT EXISTS theses (
     entry_context       TEXT NOT NULL,          -- JSON: frozen state/confidence/last/spread/features
     statements          TEXT NOT NULL,          -- JSON: frozen expected-behaviour statements
     created_logical_ts  REAL NOT NULL,
-    created_wall_ts     REAL NOT NULL
+    created_wall_ts     REAL NOT NULL,
+    risk_flags          TEXT                    -- v4: JSON list of frozen entry risk flags (J-49); NULL = never assessed (pre-v4 thesis)
 );
 
 CREATE TABLE IF NOT EXISTS verdict_events (
@@ -114,7 +115,15 @@ CREATE TABLE IF NOT EXISTS study_occurrences (
 
 @dataclass(frozen=True)
 class ThesisRecord:
-    """One persisted thesis row (read back as an immutable record)."""
+    """One persisted thesis row (read back as an immutable record).
+
+    ``risk_flags`` (capability 26, J-49) is the frozen entry risk-flag set computed ONCE at
+    declaration and stored verbatim — a list of ``{flag, label, evidence, measured}`` entries, or an
+    empty list when assessed-but-nothing-fired. It is ``None`` ONLY for a pre-v4 thesis that was never
+    risk-assessed (NULL in the DB, never backfilled): the projection then OMITS the ``risk_flags`` key
+    entirely rather than read a dishonest empty list. Defaulted ``None`` so every existing call site /
+    fixture stays valid (additive) and so the two honest-omission states (ABSENT vs EMPTY) never
+    collapse."""
 
     id: str
     ticker: str
@@ -130,6 +139,7 @@ class ThesisRecord:
     statements: list[dict]
     created_logical_ts: float
     created_wall_ts: float
+    risk_flags: list[dict] | None = None
 
 
 @dataclass(frozen=True)
@@ -291,7 +301,26 @@ class JournalStore:
                 raise
             current = 3
 
-        # Future steps (current < 4, …) append here, each in its own BEGIN IMMEDIATE block.
+        # --- v3 → v4: add the J-49 entry risk-flags column to theses -----------------------------
+        if current < 4:
+            self._write_conn.execute("BEGIN IMMEDIATE")
+            try:
+                # Idempotent guard (same discipline as v1 → v2 → v3): a DB that already carries the
+                # column (only the version row is stale) skips straight to bumping the version. NO
+                # backfill — any pre-existing thesis row keeps ``NULL`` risk_flags (it was never
+                # risk-assessed; its projection OMITS the key rather than read a dishonest empty list).
+                if not self._column_exists("theses", "risk_flags"):
+                    self._write_conn.execute(
+                        "ALTER TABLE theses ADD COLUMN risk_flags TEXT"
+                    )
+                self._write_conn.execute("UPDATE schema_version SET version = 4")
+                self._write_conn.commit()
+            except Exception:
+                self._write_conn.rollback()
+                raise
+            current = 4
+
+        # Future steps (current < 5, …) append here, each in its own BEGIN IMMEDIATE block.
 
     def _read_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -335,6 +364,15 @@ class JournalStore:
         return payload
 
     # --- writes (theses + verdict_events only this iteration) ------------------------------------
+    @staticmethod
+    def _encode_risk_flags(risk_flags: list[dict] | None) -> str | None:
+        """Serialize the frozen risk-flag list to JSON, preserving the ABSENT/EMPTY distinction.
+
+        ``None`` (never assessed) is stored as SQL ``NULL`` so the projection can OMIT the key; an
+        empty list (assessed, nothing fired) is stored as ``"[]"`` so it reads back as an explicit
+        empty list. The two honest-omission states never collapse."""
+        return None if risk_flags is None else json.dumps(risk_flags)
+
     def insert_thesis(self, record: ThesisRecord) -> None:
         def _fn(conn: sqlite3.Connection) -> None:
             conn.execute(
@@ -342,8 +380,8 @@ class JournalStore:
                 INSERT INTO theses (
                     id, ticker, setup_type, direction, invalidation_price, level_price,
                     status, bound_source, data_feed, config_fingerprint,
-                    entry_context, statements, created_logical_ts, created_wall_ts
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    entry_context, statements, created_logical_ts, created_wall_ts, risk_flags
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     record.id,
@@ -360,6 +398,7 @@ class JournalStore:
                     json.dumps(record.statements),
                     record.created_logical_ts,
                     record.created_wall_ts,
+                    self._encode_risk_flags(record.risk_flags),
                 ),
             )
 
@@ -383,8 +422,8 @@ class JournalStore:
                 INSERT INTO theses (
                     id, ticker, setup_type, direction, invalidation_price, level_price,
                     status, bound_source, data_feed, config_fingerprint,
-                    entry_context, statements, created_logical_ts, created_wall_ts
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    entry_context, statements, created_logical_ts, created_wall_ts, risk_flags
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     thesis.id,
@@ -401,6 +440,7 @@ class JournalStore:
                     json.dumps(thesis.statements),
                     thesis.created_logical_ts,
                     thesis.created_wall_ts,
+                    self._encode_risk_flags(thesis.risk_flags),
                 ),
             )
             conn.execute(
@@ -723,6 +763,12 @@ class JournalStore:
 
     @staticmethod
     def _row_to_thesis(row: sqlite3.Row) -> ThesisRecord:
+        # ``risk_flags`` (v4, J-49): NULL (a pre-v4 thesis, never assessed) reads back as ``None`` so
+        # the projection OMITS the key; a stored JSON list (incl. ``"[]"`` for assessed-nothing-fired)
+        # decodes verbatim. Keyed defensively so a hypothetical raw pre-v4 row (read mid-migration) has
+        # no such column — the migration runs at open so file stores always have it.
+        raw_flags = row["risk_flags"] if "risk_flags" in row.keys() else None
+        risk_flags = json.loads(raw_flags) if raw_flags is not None else None
         return ThesisRecord(
             id=row["id"],
             ticker=row["ticker"],
@@ -738,6 +784,7 @@ class JournalStore:
             statements=json.loads(row["statements"]),
             created_logical_ts=row["created_logical_ts"],
             created_wall_ts=row["created_wall_ts"],
+            risk_flags=risk_flags,
         )
 
     # --- lifecycle ------------------------------------------------------------------------------

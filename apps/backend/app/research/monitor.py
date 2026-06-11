@@ -18,8 +18,12 @@ Discipline:
   * **Writes go through the store's queue** — the initial ``pending`` event is enqueued; a store
     write failure surfaces as ``monitor_status: failed``.
 
-The projection deliberately OMITS ``risk_flags`` entirely this iteration (J-49 builds it) — an
-always-empty list would dishonestly read as "no risks found".
+The entry risk flags (capability 26, J-49) are computed ONCE at declaration by ``compute_risk_flags``
+(invoked from ``POST /research/thesis`` where ``entry_context`` is frozen) and stored verbatim on the
+thesis; ``build_projection`` re-exposes the FROZEN list verbatim as the additive ``risk_flags`` key
+(omitting the key entirely for a pre-v4 thesis that was never assessed — an absent key and an empty
+list are distinct honest states). Flags are never recomputed at read and never a second computation
+path — exactly the geometry pattern.
 """
 
 from __future__ import annotations
@@ -37,8 +41,15 @@ from .taxonomy import (
     GEOMETRY_FIRST_CONFIRMATION_LABEL,
     GEOMETRY_INVALIDATION_LINE_LABEL,
     GEOMETRY_LEVEL_LINE_LABEL,
+    against_expected_tape_evidence,
+    before_warmup_evidence,
+    chasing_entry_evidence,
+    invalidation_too_tight_evidence,
+    low_trade_speed_evidence,
     mismatched_source_notice,
+    risk_flag_label,
     verdict_marker_label,
+    wide_spread_illiquid_evidence,
 )
 from .verdict import VerdictEvaluator
 
@@ -273,6 +284,173 @@ def _build_geometry(
     return {"price_lines": price_lines, "markers": markers}
 
 
+def _expected_tape_states(statements: list[dict]) -> list[str]:
+    """The setup's expected tape states — the union of every ``tape_state_is`` statement's resolved
+    ``states`` (direction already collapsed at ``frozen_statements``). The single source of truth for
+    ``against_expected_tape`` (composes EXISTING engine states only — no new mapping table)."""
+    expected: list[str] = []
+    for s in statements:
+        if s.get("kind") == "tape_state_is":
+            for st in s.get("params", {}).get("states", []):
+                if st not in expected:
+                    expected.append(st)
+    return expected
+
+
+def compute_risk_flags(
+    snapshot: EngineSnapshot,
+    *,
+    setup_type: str,
+    direction: str,
+    invalidation_price: float,
+    statements: list[dict],
+    config: Config,
+) -> list[dict]:
+    """Compute the capability-26 entry risk-flag set ONCE from the declaration-time snapshot + config.
+
+    Called exactly once inside ``POST /research/thesis`` (where ``entry_context`` is frozen); the
+    returned list is stored verbatim on the thesis and NEVER recomputed at read. Advisory only —
+    creation always succeeds regardless of how many fire. Returns a (possibly empty) list of frozen
+    entries, each ``{flag, label, evidence, measured}`` where:
+      * ``flag``     — the canonical flag id (taxonomy ``RISK_FLAGS``);
+      * ``label``    — the taxonomy-owned chip title (frozen so review reads it verbatim later);
+      * ``evidence`` — the plain-language MEASURED margin (taxonomy-owned template, J-66 copy);
+      * ``measured`` — the raw canonical values behind the flag (so review can show them with zero
+                       recompute).
+
+    Each flag READS canonical engine values verbatim (single source of truth) and REUSES the
+    classifier's OWN gates — it never duplicates a threshold:
+      * ``before_warmup``        — declaration trade count below ``warmup_min_events``;
+      * ``invalidation_too_tight`` — |last − invalidation| below the new
+        ``invalidation_too_tight_spread_multiple`` × current spread band;
+      * ``chasing_entry``        — the favorable-side price-impact RETURN (direction-aware; the SAME
+        ``buy_price_impact`` / ``sell_price_impact`` ÷ the canonical ``reference_price`` the classifier
+        uses as its relative impact metric) already past the new ``chase_return_threshold``;
+      * ``wide_spread_illiquid`` — the classifier's relative-spread gate VERBATIM (bps vs
+        ``max_stable_spread_bps`` when a price basis exists, else absolute vs ``max_stable_spread``);
+      * ``low_trade_speed``      — ``trade_speed`` below ``min_trade_speed`` VERBATIM;
+      * ``against_expected_tape`` — a DEFINITE snapshot tape state (not ``unclear``) that is NOT among
+        the setup's expected premise states (setup-aware; ``unclear`` is no contradiction so it never
+        fires).
+    """
+    flags: list[dict] = []
+    primary = snapshot.primary_features
+    last = snapshot.last
+    spread = snapshot.spread
+    reference_price = primary.get("reference_price", 0.0)
+    rel = reference_price > 0.0
+
+    def _add(flag: str, evidence: str, measured: dict) -> None:
+        flags.append(
+            {
+                "flag": flag,
+                "label": risk_flag_label(flag),
+                "evidence": evidence,
+                "measured": measured,
+            }
+        )
+
+    # --- before_warmup (reuses warmup_min_events verbatim) ---------------------------------------
+    if snapshot.event_count < config.warmup_min_events:
+        _add(
+            "before_warmup",
+            before_warmup_evidence(snapshot.event_count, config.warmup_min_events),
+            {"trade_count": snapshot.event_count, "warmup_min_events": config.warmup_min_events},
+        )
+
+    # --- invalidation_too_tight (new spread multiple) --------------------------------------------
+    # The invalidation distance vs the spread-multiple band. Needs both a last and a spread; without
+    # either there is no measurable band, so the flag honestly does not fire (the wrong-side / no-last
+    # cases are already a 422 in the route — a flag is never computed on an incoherent declaration).
+    if last is not None and spread is not None and spread > 0:
+        distance = abs(last - invalidation_price)
+        band = spread * config.invalidation_too_tight_spread_multiple
+        if distance < band:
+            _add(
+                "invalidation_too_tight",
+                invalidation_too_tight_evidence(
+                    distance, spread, config.invalidation_too_tight_spread_multiple
+                ),
+                {
+                    "distance": distance,
+                    "spread": spread,
+                    "spread_multiple": config.invalidation_too_tight_spread_multiple,
+                    "band": band,
+                },
+            )
+
+    # --- chasing_entry (new return threshold; the favorable-side impact return, direction-aware) --
+    # The favorable side's price-impact RETURN — the EXACT relative impact metric the classifier uses
+    # (impact ÷ reference_price). For a long the favorable side is buying (buy_price_impact); for a
+    # short it is selling (the |sell_price_impact| magnitude — a short profits as price falls). A
+    # missing/zero basis means no return can be expressed, so the flag does not fire (never fabricated).
+    if rel:
+        buy_return = primary.get("buy_price_impact", 0.0) / reference_price
+        sell_return = primary.get("sell_price_impact", 0.0) / reference_price
+        if direction == "long":
+            chase_return = buy_return
+            side_copy = "buy"
+        else:
+            # A short chases a move that has already fallen — the adverse-to-price sell impact, whose
+            # magnitude measures how far the favorable (downward) move has already run.
+            chase_return = abs(sell_return)
+            side_copy = "sell"
+        if chase_return > config.chase_return_threshold:
+            _add(
+                "chasing_entry",
+                chasing_entry_evidence(chase_return, config.chase_return_threshold, side_copy),
+                {
+                    "impact_return": chase_return,
+                    "threshold": config.chase_return_threshold,
+                    "side": side_copy,
+                },
+            )
+
+    # --- wide_spread_illiquid (classifier relative-spread gate VERBATIM) -------------------------
+    # The EXACT gate the classifier applies: relative (bps vs max_stable_spread_bps) when a price
+    # basis exists, absolute (dollars vs max_stable_spread) otherwise. No second threshold (capability
+    # 26's explicit constraint). Needs a spread to measure; absent => no flag (no fabricated read).
+    if spread is not None:
+        if rel:
+            spread_metric = spread / reference_price * 10000.0
+            max_spread = config.max_stable_spread_bps
+            unit = "bps"
+        else:
+            spread_metric = spread
+            max_spread = config.max_stable_spread
+            unit = "dollars"
+        if spread_metric > max_spread:
+            _add(
+                "wide_spread_illiquid",
+                wide_spread_illiquid_evidence(spread_metric, max_spread, unit),
+                {"spread_metric": spread_metric, "max_spread": max_spread, "unit": unit},
+            )
+
+    # --- low_trade_speed (min_trade_speed gate VERBATIM) -----------------------------------------
+    trade_speed = primary.get("trade_speed", 0.0)
+    if trade_speed < config.min_trade_speed:
+        _add(
+            "low_trade_speed",
+            low_trade_speed_evidence(trade_speed, config.min_trade_speed),
+            {"trade_speed": trade_speed, "min_trade_speed": config.min_trade_speed},
+        )
+
+    # --- against_expected_tape (setup-aware; composes existing states only) ----------------------
+    # Fires when the tape reads a DEFINITE state at declaration that is NOT one the setup expects
+    # (e.g. a long absorption_reversal declared during seller_control). ``unclear`` is NOT a
+    # contradiction (no read yet), so it never fires — honest-uncertainty is not a risk flag.
+    expected = _expected_tape_states(statements)
+    tape_state = snapshot.tape_state
+    if tape_state != "unclear" and tape_state not in expected:
+        _add(
+            "against_expected_tape",
+            against_expected_tape_evidence(tape_state, expected),
+            {"tape_state": tape_state, "expected_states": expected},
+        )
+
+    return flags
+
+
 def build_projection(
     thesis: ThesisRecord,
     actions: list,
@@ -333,6 +511,12 @@ def build_projection(
         "geometry": geometry,
         "monitor_status": monitor_status,
     }
+    # The additive ``risk_flags`` key (capability 26, J-49): re-expose the FROZEN stored list verbatim
+    # (never recomputed here — computed once at declaration by ``compute_risk_flags``). Honest-omission
+    # semantics: ``None`` (a pre-v4 thesis, never assessed) OMITS the key entirely; an empty list
+    # (assessed, nothing fired) is served as ``[]`` — the two states never collapse.
+    if thesis.risk_flags is not None:
+        projection["risk_flags"] = thesis.risk_flags
     if monitor_notice is not None:
         projection["monitor_notice"] = monitor_notice
     return projection

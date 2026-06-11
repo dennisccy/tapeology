@@ -94,6 +94,18 @@ export interface ThesisGeometry {
   markers: GeometryMarker[];
 }
 
+// One frozen entry risk flag (capability 26, J-49) — computed ONCE at declaration from the live
+// engine snapshot + config and frozen on the thesis (advisory, never blocking). The strip renders
+// the `label` + the plain-language measured `evidence` VERBATIM as an amber chip; it derives
+// nothing (the `measured` raw values back the evidence and feed later review). `flag` is the
+// canonical id (taxonomy `RISK_FLAGS`).
+export interface RiskFlag {
+  flag: string;
+  label: string;
+  evidence: string;
+  measured: Record<string, unknown>;
+}
+
 export interface ThesisProjection {
   id: string;
   ticker: string;
@@ -119,6 +131,12 @@ export interface ThesisProjection {
   // Chart geometry (J-48) — read verbatim by PriceChart. Optional so a pre-J-48 snapshot shape stays
   // valid; absent => the chart draws no thesis overlay (exactly the no-thesis render).
   geometry?: ThesisGeometry;
+  // Entry risk flags (capability 26, J-49) — read VERBATIM from the WS `thesis` key. Frozen at
+  // declaration (they never change as the tape moves). Honest-omission: the key is ABSENT for a
+  // pre-v4 thesis that was never risk-assessed (the strip shows no chips); an EMPTY array means
+  // assessed-nothing-fired (also no chips — and NO "all clear" badge, no naked reassurance). A
+  // non-empty array renders one amber advisory chip per flag.
+  risk_flags?: RiskFlag[];
   // "ok" normally; "failed" if the research monitor or its store write errored — surfaced honestly.
   // "not_evaluated" (J-47): an ENTRY-MARKED thesis that SURVIVES a stopped/restarted watch as a real
   // position — it is not orphaned, but no verdict accrues while the matching source is not watched.
@@ -148,6 +166,10 @@ export interface ResearchTaxonomy {
   directions: TaxonomyEnum[];
   verdicts: TaxonomyEnum[];
   statement_statuses: string[];
+  // The entry risk-flag catalog (capability 26, J-49) — id + display label. Optional so a pre-J-49
+  // taxonomy payload stays valid. The strip reads the per-thesis frozen flag's own `label`, so it
+  // never needs this map to render — it is here for completeness/discoverability.
+  risk_flags?: TaxonomyEnum[];
   disclaimer: string;
 }
 

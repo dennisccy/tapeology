@@ -368,9 +368,14 @@ class Config:
     #   v2 → v3: ``actions`` gains ``spread_at_mark`` (the J-52 action-mark spread, a moment value
     #            taken once from the snapshot at recording), added by ``ALTER TABLE`` and never
     #            backfilled (any pre-existing action row keeps ``NULL`` — never recomputed).
+    #   v3 → v4: ``theses`` gains ``risk_flags`` (the J-49 capability-26 entry risk flags, computed
+    #            once at declaration and frozen on the thesis), added by ``ALTER TABLE`` and never
+    #            backfilled (a pre-migration thesis keeps ``NULL`` — it was never risk-assessed, so its
+    #            projection OMITS the ``risk_flags`` key entirely rather than read a dishonest empty
+    #            list).
     # Excluded from ``config_fingerprint`` (see the exclusion set below): a migration must NOT change
     # the fingerprint — verdicts depend on classifier thresholds, never on where/how the DB is stored.
-    journal_schema_version: int = 3
+    journal_schema_version: int = 4
 
     # --- Research evolution: verdict-transition engine (capability 24) -------------------------
     # RESEARCH DEFAULTS — a starting point calibrated against the deterministic sims, NEVER a
@@ -415,6 +420,39 @@ class Config:
     # rows are never edited (append-only at the repository level holds — pruning is the store's own
     # capacity management, distinct from any update/delete of a retained row, which does not exist).
     verdict_timeline_cap: int = 500
+
+    # --- Research evolution: ENTRY RISK FLAGS (capability 26, J-49) -----------------------------
+    # RESEARCH DEFAULTS — a starting point calibrated against the deterministic sims, NEVER a
+    # validated edge (same discipline as the verdict-dwell defaults above). The flag set is computed
+    # ONCE from the declaration-time engine snapshot and FROZEN on the thesis (advisory, never
+    # blocking). FOUR of the six flags reuse EXISTING gates with NO new constant:
+    #   * ``before_warmup``        reuses ``warmup_min_events`` (the classifier's own warm-up floor);
+    #   * ``wide_spread_illiquid`` reuses the classifier's relative-spread gate
+    #                              (``max_stable_spread_bps`` when a price basis exists, else the
+    #                              absolute ``max_stable_spread``) — VERBATIM, no second threshold;
+    #   * ``low_trade_speed``      reuses ``min_trade_speed`` — VERBATIM;
+    #   * ``against_expected_tape`` is setup-aware (snapshot tape state vs the setup's expected tape)
+    #                              and needs no numeric threshold at all.
+    # Only the TWO below are genuinely new (capability 26 names exactly these two as new):
+    #
+    # CHASE RETURN THRESHOLD (a directional impact-as-return): a declaration is ``chasing_entry`` when
+    # the recent FAVORABLE-side price-impact return (the SAME ``buy_price_impact``/``sell_price_impact``
+    # divided by the canonical ``reference_price`` the classifier already uses as its relative impact
+    # metric — direction-aware: buy for a long, |sell| for a short) ALREADY exceeds this. Calibrated
+    # against SIM-BUYER's buyer-control phase: the favorable buy-impact return sits at ~0.0033 right at
+    # warm-up and climbs past ~0.0040 a few seconds later (an EXTENDED move), so a 0.0040 threshold
+    # fires ``chasing_entry`` on a well-past-warm-up declare (the move has already run) while a clean
+    # at-warm-up declare does not — the honest "you are chasing an extended move" boundary. Expressed
+    # as a RETURN (not a dollar move) so it scales to any instrument's price level (no-magic-numbers).
+    chase_return_threshold: float = 0.0040
+    # INVALIDATION-TOO-TIGHT SPREAD MULTIPLE: a declaration is ``invalidation_too_tight`` when the
+    # distance from the current last to the declared invalidation is BELOW this many times the current
+    # spread — i.e. the stop sits so close to price that ordinary spread noise would trip it. A spread
+    # MULTIPLE (not a dollar band) so it scales to any instrument's price/liquidity, mirroring the
+    # invalidation-ε robustness multiple. Calibrated against the sim's ~$0.02 spread: at a 2.0×
+    # multiple an invalidation within ~$0.04 of the last is flagged too tight, while a normal
+    # invalidation ~$1 away (50× the spread) is comfortably clear.
+    invalidation_too_tight_spread_multiple: float = 2.0
 
     def window_label(self, window: int) -> str:
         return f"{window}s"

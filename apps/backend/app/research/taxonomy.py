@@ -93,6 +93,92 @@ def verdict_marker_label(verdict: str) -> str:
     return VERDICTS.get(verdict, verdict)
 
 
+# --- Entry risk-flag catalog (capability 26, J-49; data-contract rows 17 & 24) -------------------
+# The SINGLE backend owner of every risk-flag LABEL and its plain-language EVIDENCE copy — the
+# frontend hardcodes NONE of it. Each flag is computed ONCE at declaration from the live engine
+# snapshot + config (in ``monitor.compute_risk_flags``) and FROZEN on the thesis; the strip renders
+# the label + the measured-evidence sentence VERBATIM as an amber advisory chip. Advisory, never
+# blocking — a fired flag is a record of the entry MOMENT, never a live indicator.
+#
+# Copy discipline (J-66): present-tense, descriptive, MEASURED — it states what was true at
+# declaration ("recent buy impact +0.44% exceeds the 0.20% chase threshold"), never imperative
+# ("don't buy"), never predictive, never certain. The label is the short chip title; the evidence
+# is the one-line measured margin built from the canonical engine values behind the flag.
+RISK_FLAGS: dict[str, str] = {
+    "before_warmup": "Declared before warm-up",
+    "invalidation_too_tight": "Invalidation too tight",
+    "chasing_entry": "Chasing an extended move",
+    "wide_spread_illiquid": "Wide spread / illiquid",
+    "low_trade_speed": "Low trade speed",
+    "against_expected_tape": "Against the expected tape",
+}
+
+
+def is_valid_risk_flag(flag: str) -> bool:
+    return flag in RISK_FLAGS
+
+
+def risk_flag_label(flag: str) -> str:
+    """The short chip title for a risk flag. An unknown key falls back to itself (never fabricated)."""
+    return RISK_FLAGS.get(flag, flag)
+
+
+def _pct(return_value: float) -> str:
+    """Format an impact-as-return as a signed percent (e.g. 0.0044 -> ``+0.44%``) for evidence copy."""
+    return f"{return_value * 100:+.2f}%"
+
+
+def before_warmup_evidence(trade_count: int, warmup_min_events: int) -> str:
+    return (
+        f"declared after {trade_count} trades, below the {warmup_min_events}-trade warm-up the "
+        f"classifier needs for a confident read"
+    )
+
+
+def invalidation_too_tight_evidence(
+    distance: float, spread: float, multiple: float
+) -> str:
+    band = spread * multiple
+    return (
+        f"the invalidation sits {distance:.2f} from the last, inside the {band:.2f} band "
+        f"({multiple:g}× the {spread:.2f} spread) where ordinary spread noise could trip it"
+    )
+
+
+def chasing_entry_evidence(impact_return: float, threshold: float, side: str) -> str:
+    return (
+        f"recent {side} impact {_pct(impact_return)} already exceeds the {_pct(threshold)} "
+        f"chase threshold — the move has run before this entry"
+    )
+
+
+def wide_spread_illiquid_evidence(spread_metric: float, max_spread: float, unit: str) -> str:
+    if unit == "bps":
+        return (
+            f"the average spread is {spread_metric:.1f} bps, wider than the "
+            f"{max_spread:.1f} bps the classifier treats as stable"
+        )
+    return (
+        f"the average spread is {spread_metric:.2f}, wider than the {max_spread:.2f} "
+        f"the classifier treats as stable"
+    )
+
+
+def low_trade_speed_evidence(trade_speed: float, min_trade_speed: float) -> str:
+    return (
+        f"the tape is running at {trade_speed:.2f} trades/s, below the {min_trade_speed:.2f} "
+        f"trades/s floor the classifier needs for a confident read"
+    )
+
+
+def against_expected_tape_evidence(tape_state: str, expected: list[str]) -> str:
+    expected_copy = " or ".join(s.replace("_", " ") for s in expected) if expected else "its setup"
+    state_copy = tape_state.replace("_", " ")
+    return (
+        f"the tape reads {state_copy} at declaration, not the {expected_copy} this setup expects"
+    )
+
+
 # --- Statement-status enum (the monitor's live read of each expected-behaviour statement) -------
 # met = the statement's premise is observed in the current engine read; not_yet = not observed yet
 # (the honest default — no evidence is not a failure); violated = the engine read contradicts it.
@@ -259,5 +345,9 @@ def taxonomy_payload() -> dict:
         "verdicts": [{"id": k, "name": v} for k, v in VERDICTS.items()],
         "statement_statuses": list(STATEMENT_STATUSES),
         "monitor_statuses": list(MONITOR_STATUSES),
+        # The entry risk-flag catalog (capability 26, J-49) — id + display label, owned ONCE here so
+        # the strip's amber chips are taxonomy-driven (the measured-evidence sentence travels frozen
+        # on each thesis's ``risk_flags``, also built from this module's templates).
+        "risk_flags": [{"id": k, "name": v} for k, v in RISK_FLAGS.items()],
         "disclaimer": "Descriptive only — not trading advice.",
     }

@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import type {
   ResearchTaxonomy,
+  RiskFlag,
   StatementStatus,
   ThesisProjection,
   ThesisVerdict,
@@ -75,6 +76,43 @@ function verdictLabel(
   // loaded yet (the chip still renders — it never blocks on the catalog).
   const fromTaxonomy = taxonomy?.verdicts.find((v) => v.id === verdict)?.name;
   return fromTaxonomy ?? verdict;
+}
+
+// Entry risk-flag chips (capability 26, J-49): amber advisory chips on the thesis strip — one per
+// FROZEN flag, each showing the taxonomy-owned `label` and its plain-language MEASURED `evidence`,
+// both read VERBATIM off the projection (the strip derives nothing). Amber = the absorption/unclear
+// semantics from the design system (these are advisories, not buy/sell side reads). No flags fired
+// (or the key absent — never assessed) ⇒ NOTHING renders: no chips, and deliberately NO "all clear"
+// badge (no naked reassurance). Frozen at declaration — they never change as the tape moves.
+function RiskFlagChips({ flags }: { flags: RiskFlag[] | undefined }) {
+  if (!flags || flags.length === 0) return null;
+  return (
+    <div
+      data-testid="risk-flags"
+      className="mt-3 flex flex-col gap-1.5 border-t border-slate-800 pt-3"
+    >
+      <span className="text-xs font-semibold uppercase tracking-wider text-amber-400/80">
+        Entry risk flags
+      </span>
+      <div className="flex flex-col gap-1.5">
+        {flags.map((f) => (
+          <div
+            key={f.flag}
+            data-testid="risk-flag-chip"
+            data-flag={f.flag}
+            className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md border border-amber-700/60 bg-amber-900/30 px-2.5 py-1.5"
+          >
+            <span className="text-xs font-semibold uppercase tracking-wide text-amber-300">
+              ⚠ {f.label}
+            </span>
+            {/* The measured margin, rendered verbatim. Mono so the embedded numerics read cleanly,
+                matching the cockpit's numeric discipline. */}
+            <span className="font-mono text-xs text-amber-200/90">{f.evidence}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function StripShell({ children }: { children: React.ReactNode }) {
@@ -199,6 +237,10 @@ function NotEvaluatedThesis({ thesis }: { thesis: ThesisProjection }) {
           </span>
         </p>
       )}
+
+      {/* Frozen entry risk flags (J-49) persist on the surviving/not-evaluated strip too — they are a
+          record of the entry moment, unchanged by the watch having stopped. Read verbatim. */}
+      <RiskFlagChips flags={thesis.risk_flags} />
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
         <span>
@@ -403,6 +445,10 @@ function ActiveThesis({
         )}
         <span className="ml-auto">Descriptive only — not trading advice.</span>
       </div>
+
+      {/* Entry risk flags (capability 26, J-49) — frozen at declaration, advisory amber chips. Each
+          carries the taxonomy label + its plain-language measured margin, rendered verbatim. */}
+      <RiskFlagChips flags={thesis.risk_flags} />
 
       {/* Action marks (J-52): the user journals their OWN already-taken entry/exit. A JOURNALING
           record, never a fill/order. Recorded verbatim; realized move shown in R units only (never

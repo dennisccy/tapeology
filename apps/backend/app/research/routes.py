@@ -28,7 +28,12 @@ from pydantic import BaseModel
 
 from ..config import Config
 from .marks import marks_projection
-from .monitor import ResearchMonitor, build_projection, data_feed_for_scenario
+from .monitor import (
+    ResearchMonitor,
+    build_projection,
+    compute_risk_flags,
+    data_feed_for_scenario,
+)
 from .store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
 from .taxonomy import not_evaluated_notice
 from .taxonomy import (
@@ -238,23 +243,29 @@ def get_journal_entry(
     # persisted action rows via the SAME single ``marks_projection`` the row-15 thesis projection
     # uses, so the journal-detail readback and the strip show identical values (no second path).
     marks = marks_projection(thesis, registry.store.get_actions(thesis_id))
+    thesis_payload = {
+        "id": thesis.id,
+        "ticker": thesis.ticker,
+        "setup_type": thesis.setup_type,
+        "direction": thesis.direction,
+        "invalidation_price": thesis.invalidation_price,
+        "level_price": thesis.level_price,
+        "status": thesis.status,
+        "bound_source": thesis.bound_source,
+        "data_feed": thesis.data_feed,
+        "config_fingerprint": thesis.config_fingerprint,
+        "entry_context": thesis.entry_context,
+        "statements": thesis.statements,
+        "created_logical_ts": thesis.created_logical_ts,
+        "created_wall_ts": thesis.created_wall_ts,
+    }
+    # The frozen entry risk flags (capability 26, J-49) — re-exposed verbatim from the stored record
+    # (row 17: "→ row 15 / journal"). Honest-omission: a pre-v4 thesis (never assessed) carries NULL
+    # risk_flags, so the journal detail OMITS the key entirely (never a dishonest empty list).
+    if thesis.risk_flags is not None:
+        thesis_payload["risk_flags"] = thesis.risk_flags
     return {
-        "thesis": {
-            "id": thesis.id,
-            "ticker": thesis.ticker,
-            "setup_type": thesis.setup_type,
-            "direction": thesis.direction,
-            "invalidation_price": thesis.invalidation_price,
-            "level_price": thesis.level_price,
-            "status": thesis.status,
-            "bound_source": thesis.bound_source,
-            "data_feed": thesis.data_feed,
-            "config_fingerprint": thesis.config_fingerprint,
-            "entry_context": thesis.entry_context,
-            "statements": thesis.statements,
-            "created_logical_ts": thesis.created_logical_ts,
-            "created_wall_ts": thesis.created_wall_ts,
-        },
+        "thesis": thesis_payload,
         "marks": marks,
         # The append-only verdict timeline, verbatim. Each row carries its canonical values and the
         # dwell timing record (capability 24) — never interpolated, never recomputed at read.
@@ -355,6 +366,19 @@ def declare_thesis(
         "features": {k: primary[k] for k in sorted(primary.keys())},
     }
     statements = frozen_statements(body.setup_type, body.direction)
+    # Entry risk flags (capability 26, J-49): computed ONCE here — AFTER all validation passes, so an
+    # incoherent declaration (wrong-side invalidation / missing-or-forbidden level / unknown enum) is
+    # a 422 with NO flag ever computed or persisted (advisory, never a substitute for validation). The
+    # frozen list (possibly empty) is stored verbatim and re-exposed by the single ``build_projection``
+    # — never recomputed at read, never a second computation path.
+    risk_flags = compute_risk_flags(
+        snap,
+        setup_type=body.setup_type,
+        direction=body.direction,
+        invalidation_price=body.invalidation_price,
+        statements=statements,
+        config=config,
+    )
     # Source identity is the snapshot's scenario descriptor (sim scenario / historical window / live
     # SYMBOL) — NEVER the bare ticker string (binding anti-goal).
     bound_source = snap.scenario
@@ -374,6 +398,7 @@ def declare_thesis(
         statements=statements,
         created_logical_ts=snap.timestamp,
         created_wall_ts=time.time(),
+        risk_flags=risk_flags,
     )
 
     # Persist the thesis row AND its initial ``pending`` verdict event ATOMICALLY (one writer

@@ -231,7 +231,10 @@ def test_valid_declare_returns_full_projection_and_pending(client):
     assert thesis["bound_source"] == "bid_absorption"  # scenario descriptor, not the ticker
     assert thesis["data_feed"] == "sim"
     assert thesis["config_fingerprint"] == CONFIG.config_fingerprint()
-    assert "risk_flags" not in thesis  # omitted entirely this iteration
+    # Entry risk flags (capability 26, J-49) are now PRESENT — a list (not omitted). This clean,
+    # warm, on-premise declare with a normal invalidation fires nothing, so the list is EMPTY
+    # (assessed, nothing fired — distinct from the ABSENT key a pre-v4 thesis would carry).
+    assert thesis["risk_flags"] == []
     assert len(thesis["statements"]) == 2
     assert all("status" in s and "text" in s for s in thesis["statements"])
     # The initial pending verdict event is recorded (timeline starts at declaration).
@@ -282,8 +285,15 @@ def test_rest_active_equals_ws_thesis_key_verbatim(client):
         # and fully stable between the two reads; the markers (verdict-transition rows) come from the
         # same append-only timeline. Assert byte-equality of the whole geometry object.
         "geometry",
+        # Capability 26 / J-49: risk_flags is part of the row-15 projection, FROZEN at declaration and
+        # re-exposed verbatim by the single build_projection — so REST and WS carry byte-identical
+        # flags (here an empty list — a clean on-premise declare — proving the key flows, not just a
+        # coincidental match). Extended exactly as iter-10 did for geometry.
+        "risk_flags",
     ):
         assert rest[key] == ws_thesis[key], f"REST/WS diverged on {key}"
+    # The risk_flags key is really present and a list (not absent), shaped as the frozen flag set.
+    assert isinstance(rest["risk_flags"], list)
     assert [s["text"] for s in rest["statements"]] == [s["text"] for s in ws_thesis["statements"]]
     # An absorption_reversal (no level) declares only the invalidation line — sanity that geometry is
     # really present and shaped, not an empty dict that happens to match.
@@ -468,3 +478,129 @@ def test_declare_atomicity_event_insert_failure_surfaces_503_and_persists_nothin
         },
     )
     assert ok.status_code == 200  # no orphan 409 from the failed attempt
+
+
+# --- entry risk flags end-to-end through the API (capability 26, J-49) ---------------------------
+
+def test_declare_on_extended_buyer_move_carries_chasing_entry_flag(client):
+    # A trend_continuation/long declared on a well-past-warm-up SIM-BUYER (an extended move) carries a
+    # frozen ``chasing_entry`` flag with its measured margin — surfaced on the declaration response.
+    _watch_until_state(client, "SIM-BUYER", "buyer_control")
+    # Let the move extend a little past warm-up so the favorable return clears the chase threshold.
+    # The canonical reference_price lives in the full /features windows; buy_price_impact divided by
+    # it is the EXACT relative impact metric compute_risk_flags reads.
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        windows = client.get("/tape/SIM-BUYER/features").json()["windows"]
+        pf = windows[client.get("/tape/SIM-BUYER/features").json()["primary_window"]]
+        ref = pf.get("reference_price")
+        bi = pf.get("buy_price_impact")
+        if ref and bi is not None and (bi / ref) > CONFIG.chase_return_threshold:
+            break
+        time.sleep(0.1)
+    last = client.get("/tape/SIM-BUYER/summary").json()["market"]["last"]
+    declared = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-BUYER",
+            "setup_type": "trend_continuation",
+            "direction": "long",
+            "invalidation_price": round(last - 1.0, 2),  # a normal (not too tight) invalidation
+        },
+    )
+    assert declared.status_code == 200
+    thesis = declared.json()["thesis"]
+    flags = {f["flag"]: f for f in thesis["risk_flags"]}
+    assert "chasing_entry" in flags, f"expected chasing_entry, got {list(flags)}"
+    chase = flags["chasing_entry"]
+    assert chase["label"]  # taxonomy-owned chip title, present
+    assert "chase threshold" in chase["evidence"]  # plain-language measured margin
+    assert chase["measured"]["threshold"] == CONFIG.chase_return_threshold
+    assert chase["measured"]["impact_return"] > CONFIG.chase_return_threshold
+
+
+def test_risk_flags_are_frozen_as_the_tape_moves_on(client):
+    # The flags are a record of the ENTRY MOMENT — they do NOT change as the tape moves. Two reads of
+    # the active projection, separated by live ticks, return byte-identical risk_flags.
+    _watch_until_state(client, "SIM-BUYER", "buyer_control")
+    declared = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-BUYER",
+            "setup_type": "trend_continuation",
+            "direction": "long",
+            "invalidation_price": 98.0,
+        },
+    )
+    assert declared.status_code == 200
+    first = declared.json()["thesis"]["risk_flags"]
+    time.sleep(1.5)  # let the live tape move on (more buyer-control ticks)
+    later = client.get("/research/thesis/active?ticker=SIM-BUYER").json()["thesis"]["risk_flags"]
+    assert later == first  # frozen — never re-evaluated as the tape moves
+
+
+def test_journal_detail_carries_frozen_risk_flags(client):
+    _watch_until_state(client, "SIM-BUYER", "buyer_control")
+    declared = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-BUYER",
+            "setup_type": "trend_continuation",
+            "direction": "long",
+            "invalidation_price": 98.0,
+        },
+    )
+    tid = declared.json()["thesis"]["id"]
+    flags_at_declare = declared.json()["thesis"]["risk_flags"]
+    entry = client.get(f"/research/journal/{tid}").json()
+    # Row 17: the journal detail re-exposes the SAME frozen flags verbatim (no second computation).
+    assert entry["thesis"]["risk_flags"] == flags_at_declare
+
+
+def test_wrong_side_invalidation_is_422_with_no_flags_computed(client):
+    # Advisory never substitutes for validation: an incoherent (wrong-side) invalidation stays a 422
+    # with NOTHING persisted — no thesis row, no flags. (A long's invalidation must be BELOW the last.)
+    _watch_until_state(client, "SIM-BUYER", "buyer_control")
+    last = client.get("/tape/SIM-BUYER/summary").json()["market"]["last"]
+    r = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-BUYER",
+            "setup_type": "trend_continuation",
+            "direction": "long",
+            "invalidation_price": round(last + 1.0, 2),  # ABOVE the last — wrong side for a long
+        },
+    )
+    assert r.status_code == 422
+    # Nothing persisted (no thesis, so no flags) — the canonical active read is still null.
+    assert client.get("/research/thesis/active?ticker=SIM-BUYER").json()["thesis"] is None
+
+
+def test_maximally_flagged_declare_still_succeeds_advisory_never_blocking(client):
+    # An early SIM-CHOP declare (before warm-up, slow tape, too-tight invalidation) stacks several
+    # flags — creation STILL succeeds (200), flags attached. Advisory, never blocking.
+    r = client.post("/watch/SIM-CHOP")
+    assert r.status_code == 200
+    # Declare promptly (before warm-up) — wait only for a last price to exist so validation can run,
+    # while the engine is still NOT warm (the canonical warm flag lives on /state).
+    deadline = time.time() + 8
+    last = None
+    while time.time() < deadline:
+        last = client.get("/tape/SIM-CHOP/summary").json().get("market", {}).get("last")
+        warm = client.get("/tape/SIM-CHOP/state").json().get("warm", True)
+        if last is not None and not warm:
+            break
+        time.sleep(0.02)
+    assert last is not None
+    declared = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-CHOP",
+            "setup_type": "trend_continuation",
+            "direction": "long",
+            "invalidation_price": round(last - 0.01, 2),  # extremely tight
+        },
+    )
+    assert declared.status_code == 200  # advisory — creation succeeds despite the stack of flags
+    names = {f["flag"] for f in declared.json()["thesis"]["risk_flags"]}
+    assert "before_warmup" in names  # declared before warm-up
