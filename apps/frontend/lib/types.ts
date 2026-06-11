@@ -175,7 +175,17 @@ export interface ResearchTaxonomy {
   // pre-J-51 taxonomy payload stays valid.
   statuses?: TaxonomyEnum[];
   resolutions?: TaxonomyEnum[];
+  // The mistake-tag catalog (capability 29, J-54) — the review picker renders these labels VERBATIM
+  // (the frontend hardcodes no tag label). `requires_note` flags the tags that need a free-text note
+  // at save (enforced in the J-57 save flow). Optional so a pre-J-54 taxonomy payload stays valid.
+  mistake_tags?: MistakeTag[];
   disclaimer: string;
+}
+
+export interface MistakeTag {
+  id: string;
+  name: string;
+  requires_note: boolean;
 }
 
 // One compact journal-list row (J-51) — GET /research/journal. Read VERBATIM from the persisted
@@ -199,6 +209,69 @@ export interface JournalRow {
   resolution_reason: string | null;
   has_entry: boolean;
   has_exit: boolean;
+}
+
+// One verdict-timeline row from GET /research/journal/{id} (J-55) — the append-only published
+// timeline, read VERBATIM (never recomputed at read). `wall_ts` is the TRUE clock time (unix
+// seconds) the detail page renders via the ONE shared dd-MM-yyyy formatter; `logical_ts` is the
+// engine's logical instant. Lifecycle/gap rows (expired / watch_restarted) carry null
+// tape_state/confidence. The dwell timing record (`rule_first_true_*`) is present on a published
+// raw-rule transition, absent (null) on the pending/lifecycle rows.
+export interface JournalTimelineRow {
+  logical_ts: number;
+  wall_ts: number;
+  verdict: string;
+  evidence: string;
+  tape_state: string | null;
+  confidence: number | null;
+  last: number | null;
+  rule_first_true_ts: number | null;
+  rule_first_true_price: number | null;
+}
+
+// One machine-derived execution check (capability 27, J-54) — computed ONCE at resolution, served
+// VERBATIM. `status` is an ENUM label (`failed | passed | not_applicable`), NEVER a numeric score;
+// `evidence` quotes the measured values. The detail page renders these verbatim — it derives nothing.
+export interface ExecutionCheck {
+  check: string;
+  status: "failed" | "passed" | "not_applicable";
+  evidence: string;
+}
+
+// The full journal-detail body from GET /research/journal/{id} (J-55) — the per-thesis review
+// surface, read VERBATIM. The thesis record (frozen statements, frozen risk flags), the action
+// marks + realized-R, the append-only verdict timeline, and the machine-derived execution checks +
+// suggested mistake tags (present ONLY post-resolution — honest omission pre-resolution / pre-v5).
+// The page recomputes NOTHING — every value is a read of the persisted record.
+export interface JournalDetailThesis {
+  id: string;
+  ticker: string;
+  setup_type: string;
+  direction: "long" | "short";
+  invalidation_price: number;
+  level_price: number | null;
+  status: string;
+  bound_source: string;
+  data_feed: "sim" | "sip" | "iex";
+  config_fingerprint: string;
+  entry_context: Record<string, unknown>;
+  // Frozen expected-behaviour statements WITHOUT a live status here (the detail shows the FINAL
+  // status the timeline implies; the frozen text is the canonical record). Each is `{text, kind, params}`.
+  statements: { text: string; kind: string; params?: Record<string, unknown> }[];
+  created_logical_ts: number;
+  created_wall_ts: number;
+  // Frozen entry risk flags (J-49) — present only when the thesis was risk-assessed (absent for a
+  // pre-v4 thesis: the page shows an honest "not assessed", never an invented clean state).
+  risk_flags?: RiskFlag[];
+}
+
+export interface JournalDetail {
+  thesis: JournalDetailThesis;
+  marks: ThesisMarks;
+  timeline: JournalTimelineRow[];
+  // Present ONLY post-resolution (computed once at resolution). Absent => "not assessed" honest copy.
+  execution_checks?: ExecutionCheck[];
+  suggested_mistake_tags?: string[];
 }
 
 // Server-side filter params for GET /research/journal (J-51). An omitted filter does not constrain;

@@ -373,9 +373,15 @@ class Config:
     #            backfilled (a pre-migration thesis keeps ``NULL`` — it was never risk-assessed, so its
     #            projection OMITS the ``risk_flags`` key entirely rather than read a dishonest empty
     #            list).
+    #   v4 → v5: ``theses`` gains ``execution_checks`` (the J-54 capability-27 machine-derived
+    #            execution checks + their suggested mistake tags, computed ONCE at terminal resolution
+    #            from the recorded marks + the append-only timeline + the frozen thesis fields), added
+    #            by ``ALTER TABLE`` and never backfilled (a pre-migration RESOLVED thesis keeps
+    #            ``NULL`` — its checks were never computed, so the journal detail OMITS the
+    #            ``execution_checks`` key rather than fabricate a pass/fail at read).
     # Excluded from ``config_fingerprint`` (see the exclusion set below): a migration must NOT change
     # the fingerprint — verdicts depend on classifier thresholds, never on where/how the DB is stored.
-    journal_schema_version: int = 4
+    journal_schema_version: int = 5
 
     # --- Research evolution: verdict-transition engine (capability 24) -------------------------
     # RESEARCH DEFAULTS — a starting point calibrated against the deterministic sims, NEVER a

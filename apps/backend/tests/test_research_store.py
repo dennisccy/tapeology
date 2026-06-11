@@ -467,7 +467,7 @@ def test_resolved_thesis_timeline_byte_identical_across_reopen(tmp_path):
         assert after_thesis.status == "played_out"
         assert [e.verdict for e in after_events] == ["pending", "played_out"]
         # The schema version did NOT advance on reopen (no migration triggered — already current).
-        assert s2.schema_version() == CONFIG.journal_schema_version == 4
+        assert s2.schema_version() == CONFIG.journal_schema_version
     finally:
         s2.close()
 

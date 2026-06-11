@@ -1,6 +1,7 @@
 import { API_BASE, WATCH_REQUEST_TIMEOUT_MS } from "./config";
 import type {
   DeclareResult,
+  JournalDetail,
   JournalFilters,
   JournalRow,
   MarketClock,
@@ -537,5 +538,46 @@ export async function fetchJournal(
     return { ok: false, rows: [], error };
   } catch {
     return { ok: false, rows: [], error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// The result of a journal-detail fetch (J-55). `ok` with the detail, `notFound` for an unknown id
+// (the page shows an explicit honest error state, never a blank page), or a generic error.
+export interface JournalDetailResult {
+  ok: boolean;
+  detail?: JournalDetail;
+  notFound?: boolean;
+  error?: string;
+}
+
+// GET /research/journal/{id} — the ONLY serving path for the per-thesis review detail (J-55). Reads
+// the thesis + frozen statements + frozen risk flags + action marks + the append-only verdict
+// timeline + the machine-derived execution checks (computed once at resolution) VERBATIM; the page
+// recomputes nothing. A 404 (unknown id) resolves to `notFound` so the page renders an explicit
+// honest error state; an unreachable backend resolves to an explicit error too (never a blank page).
+export async function fetchJournalDetail(
+  thesisId: string,
+): Promise<JournalDetailResult> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/journal/${encodeURIComponent(thesisId)}`,
+    );
+    if (res.ok) {
+      const data = (await res.json()) as JournalDetail;
+      return { ok: true, detail: data };
+    }
+    if (res.status === 404) {
+      return { ok: false, notFound: true, error: "No thesis with that id was found." };
+    }
+    let error = "The thesis could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
   }
 }

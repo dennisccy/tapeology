@@ -81,6 +81,40 @@ def test_taxonomy_endpoint_lists_setups_directions_verdicts(client):
     assert payload["disclaimer"].startswith("Descriptive only")
 
 
+def test_taxonomy_serves_mistake_tag_catalog_with_display_copy(client):
+    # The mistake-tag catalog (capability 29, J-54) is backend-owned — served by GET
+    # /research/taxonomy with display copy so the review picker is taxonomy-driven (the frontend
+    # hardcodes none of it). The full goal.md catalog must be present.
+    payload = client.get("/research/taxonomy").json()
+    assert "mistake_tags" in payload
+    tags = {t["id"]: t for t in payload["mistake_tags"]}
+    assert set(tags.keys()) == {
+        "chased",
+        "entered_before_confirmation",
+        "ignored_rejection",
+        "ignored_risk_flags",
+        "moved_invalidation",
+        "no_clear_setup",
+        "wrong_setup_type",
+        "overstayed",
+        "other",
+    }
+    # Every tag carries a non-empty display label.
+    for t in tags.values():
+        assert isinstance(t["name"], str) and t["name"]
+    # `other` requires a free-text note (enforced in the J-57 save flow); the others do not.
+    assert tags["other"]["requires_note"] is True
+    assert tags["chased"]["requires_note"] is False
+
+
+def test_check_suggested_tag_mapping_targets_exist_in_catalog():
+    # The check → suggested-tag mapping must only point at real catalog tags (no fabricated tag).
+    from app.research.taxonomy import CHECK_SUGGESTED_TAG, MISTAKE_TAGS
+
+    for check, tag in CHECK_SUGGESTED_TAG.items():
+        assert tag in MISTAKE_TAGS, f"{check} suggests unknown tag {tag}"
+
+
 # --- 404 / 409 -----------------------------------------------------------------------------------
 
 def test_declare_on_unwatched_ticker_is_404_nothing_persisted(client):

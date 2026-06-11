@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS theses (
     statements          TEXT NOT NULL,          -- JSON: frozen expected-behaviour statements
     created_logical_ts  REAL NOT NULL,
     created_wall_ts     REAL NOT NULL,
-    risk_flags          TEXT                    -- v4: JSON list of frozen entry risk flags (J-49); NULL = never assessed (pre-v4 thesis)
+    risk_flags          TEXT,                   -- v4: JSON list of frozen entry risk flags (J-49); NULL = never assessed (pre-v4 thesis)
+    execution_checks    TEXT                    -- v5: JSON {checks, suggested_mistake_tags} computed ONCE at resolution (J-54); NULL = never computed (pre-v5 resolution)
 );
 
 CREATE TABLE IF NOT EXISTS verdict_events (
@@ -140,6 +141,15 @@ class ThesisRecord:
     created_logical_ts: float
     created_wall_ts: float
     risk_flags: list[dict] | None = None
+    # ``execution_checks`` (capability 27, J-54) is the machine-derived execution-check result —
+    # ``{"checks": [...], "suggested_mistake_tags": [...]}`` — computed ONCE at terminal resolution
+    # from the recorded marks + the append-only timeline + the frozen thesis fields, and stored
+    # verbatim. It is ``None`` until a thesis is resolved with the checks computed (a pre-v5 resolved
+    # thesis stays ``None`` — NULL in the DB, never backfilled): the journal detail then OMITS the
+    # ``execution_checks`` key entirely rather than fabricate a pass/fail at read. Defaulted ``None``
+    # so every existing call site / fixture stays valid (additive) and the two honest-omission states
+    # (ABSENT vs computed) never collapse.
+    execution_checks: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -320,7 +330,27 @@ class JournalStore:
                 raise
             current = 4
 
-        # Future steps (current < 5, …) append here, each in its own BEGIN IMMEDIATE block.
+        # --- v4 → v5: add the J-54 execution-checks column to theses -----------------------------
+        if current < 5:
+            self._write_conn.execute("BEGIN IMMEDIATE")
+            try:
+                # Idempotent guard (same discipline as v1 → v2 → v3 → v4): a DB that already carries
+                # the column (only the version row is stale) skips straight to bumping the version. NO
+                # backfill — any pre-existing RESOLVED thesis keeps ``NULL`` execution_checks (its
+                # checks were never computed; the journal detail OMITS the key rather than fabricate a
+                # pass/fail at read).
+                if not self._column_exists("theses", "execution_checks"):
+                    self._write_conn.execute(
+                        "ALTER TABLE theses ADD COLUMN execution_checks TEXT"
+                    )
+                self._write_conn.execute("UPDATE schema_version SET version = 5")
+                self._write_conn.commit()
+            except Exception:
+                self._write_conn.rollback()
+                raise
+            current = 5
+
+        # Future steps (current < 6, …) append here, each in its own BEGIN IMMEDIATE block.
 
     def _read_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -373,6 +403,16 @@ class JournalStore:
         empty list. The two honest-omission states never collapse."""
         return None if risk_flags is None else json.dumps(risk_flags)
 
+    @staticmethod
+    def _encode_execution_checks(execution_checks: dict | None) -> str | None:
+        """Serialize the execution-check result to JSON, preserving the ABSENT/computed distinction.
+
+        ``None`` (never computed — a pre-v5 resolution, or a thesis not yet resolved) is stored as SQL
+        ``NULL`` so the journal detail can OMIT the key; a computed dict is stored as JSON so it reads
+        back verbatim. The two honest-omission states never collapse (absent ≠ a computed-but-empty
+        result)."""
+        return None if execution_checks is None else json.dumps(execution_checks)
+
     def insert_thesis(self, record: ThesisRecord) -> None:
         def _fn(conn: sqlite3.Connection) -> None:
             conn.execute(
@@ -380,8 +420,9 @@ class JournalStore:
                 INSERT INTO theses (
                     id, ticker, setup_type, direction, invalidation_price, level_price,
                     status, bound_source, data_feed, config_fingerprint,
-                    entry_context, statements, created_logical_ts, created_wall_ts, risk_flags
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    entry_context, statements, created_logical_ts, created_wall_ts, risk_flags,
+                    execution_checks
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     record.id,
@@ -399,6 +440,7 @@ class JournalStore:
                     record.created_logical_ts,
                     record.created_wall_ts,
                     self._encode_risk_flags(record.risk_flags),
+                    self._encode_execution_checks(record.execution_checks),
                 ),
             )
 
@@ -422,8 +464,9 @@ class JournalStore:
                 INSERT INTO theses (
                     id, ticker, setup_type, direction, invalidation_price, level_price,
                     status, bound_source, data_feed, config_fingerprint,
-                    entry_context, statements, created_logical_ts, created_wall_ts, risk_flags
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    entry_context, statements, created_logical_ts, created_wall_ts, risk_flags,
+                    execution_checks
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     thesis.id,
@@ -441,6 +484,7 @@ class JournalStore:
                     thesis.created_logical_ts,
                     thesis.created_wall_ts,
                     self._encode_risk_flags(thesis.risk_flags),
+                    self._encode_execution_checks(thesis.execution_checks),
                 ),
             )
             conn.execute(
@@ -535,6 +579,26 @@ class JournalStore:
             conn.execute(
                 "UPDATE theses SET status=? WHERE id=?",
                 (status, thesis_id),
+            )
+
+        self._do_write(_fn)
+
+    def set_execution_checks(self, thesis_id: str, execution_checks: dict) -> None:
+        """Persist the machine-derived execution-check result on a thesis row ONCE at terminal
+        resolution (capability 27, J-54).
+
+        This updates the THESES row's ``execution_checks`` column only — it is NOT an edit of any
+        ``verdict_events`` row (the append-only timeline is untouched; no update/delete is added).
+        Called by every terminal-resolution path (user resolve, system invalidation, stream-end /
+        stop expiry, and the restart-expiry sweep) right after the resolution, so the checks are
+        computed and stored exactly ONCE at the defining moment — never recomputed at read. The write
+        goes through the single writer queue (``BEGIN IMMEDIATE``), never from event processing or the
+        WS serialization path."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE theses SET execution_checks=? WHERE id=?",
+                (self._encode_execution_checks(execution_checks), thesis_id),
             )
 
         self._do_write(_fn)
@@ -894,6 +958,12 @@ class JournalStore:
         # no such column — the migration runs at open so file stores always have it.
         raw_flags = row["risk_flags"] if "risk_flags" in row.keys() else None
         risk_flags = json.loads(raw_flags) if raw_flags is not None else None
+        # ``execution_checks`` (v5, J-54): NULL (never computed — a pre-v5 resolution, or an
+        # unresolved thesis) reads back as ``None`` so the journal detail OMITS the key; a stored JSON
+        # object decodes verbatim. Keyed defensively so a hypothetical raw pre-v5 row (read
+        # mid-migration) has no such column — the migration runs at open so file stores always have it.
+        raw_checks = row["execution_checks"] if "execution_checks" in row.keys() else None
+        execution_checks = json.loads(raw_checks) if raw_checks is not None else None
         return ThesisRecord(
             id=row["id"],
             ticker=row["ticker"],
@@ -910,6 +980,7 @@ class JournalStore:
             created_logical_ts=row["created_logical_ts"],
             created_wall_ts=row["created_wall_ts"],
             risk_flags=risk_flags,
+            execution_checks=execution_checks,
         )
 
     # --- lifecycle ------------------------------------------------------------------------------

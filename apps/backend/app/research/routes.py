@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..config import Config
+from .execution_checks import compute_and_persist_execution_checks
 from .marks import marks_projection
 from .monitor import (
     ResearchMonitor,
@@ -174,8 +175,22 @@ class ResearchRegistry:
         )
 
     def startup_sweep(self) -> list[str]:
-        """Resolve any thesis left ``active`` in the DB (from a prior process) to ``expired``."""
-        return self._store.expire_stale_actives(time.time())
+        """Resolve any thesis left ``active`` in the DB (from a prior process) to ``expired``.
+
+        Each thesis the sweep expires (UNMARKED actives — an entry-marked thesis is exempt and
+        survives) has its execution checks computed ONCE here and persisted on its row — the SAME
+        single function every other terminal-resolution path calls (capability 27, J-54). An expired
+        unmarked thesis has no marks, so its mark-dependent checks read ``not_applicable`` honestly
+        (never a fabricated pass/fail)."""
+        expired = self._store.expire_stale_actives(time.time())
+        for thesis_id in expired:
+            try:
+                compute_and_persist_execution_checks(self._store, thesis_id, self._config)
+            except Exception:
+                # A checks-computation failure must not abort the sweep (the resolution already
+                # stands); the key stays honestly absent for that thesis.
+                pass
+        return expired
 
 
 # The app sets this in lifespan (or a test injects one via dependency_overrides). A module-level
@@ -300,25 +315,33 @@ def list_journal(
     return {"rows": rows}
 
 
-@router.get("/journal/{thesis_id}")
-def get_journal_entry(
-    thesis_id: str, registry: ResearchRegistry = Depends(get_registry)
-) -> dict:
-    """The blueprint row-16 registered serving endpoint: a thesis record + its persisted, append-only
-    verdict timeline, served VERBATIM from the store (never recomputed at read time).
+def build_journal_detail(
+    store: JournalStore, thesis_id: str, config: Config
+) -> dict | None:
+    """The single builder for the journal-detail body (J-55) — VERBATIM reads of the persisted record.
 
-    Minimal projection only this iteration — NO list endpoint, NO analytics, NO review fields (those
-    are later iterations). 404 for an unknown id. The timeline rows are returned in insertion order
-    (the append-only sequence) with the canonical per-row values the verdict engine recorded,
-    including the dwell timing record (``rule_first_true``)."""
-    thesis = registry.store.get_thesis(thesis_id)
+    Returns ``None`` when no thesis carries ``thesis_id`` (the route maps that to a 404). Every value
+    is a read of an already-persisted record — the thesis row, the action marks + realized-R (via the
+    SAME single ``marks_projection`` the row-15 strip projection uses), the frozen entry risk flags,
+    the append-only verdict timeline, and the execution checks + suggested mistake tags computed ONCE
+    at resolution. NOTHING is recomputed at read (single-source-of-truth + the data-contract row-19
+    execution-checks half) — in particular the execution checks are served from the persisted thesis
+    row, NEVER recomputed here.
+
+    Honest-omission (the established absent-vs-empty discipline):
+      * ``risk_flags`` — present only when the thesis was risk-assessed (a pre-v4 thesis omits it);
+      * ``execution_checks`` / ``suggested_mistake_tags`` — present only when computed at a terminal
+        resolution (a pre-v5 resolution, or an unresolved thesis, omits them — never fabricated/
+        backfilled at read).
+    """
+    thesis = store.get_thesis(thesis_id)
     if thesis is None:
-        raise HTTPException(status_code=404, detail=f"no thesis with id '{thesis_id}'")
-    events = registry.store.verdict_events(thesis_id)
+        return None
+    events = store.verdict_events(thesis_id)
     # Action marks + realized-R (J-52, data-contract rows 18 & 27) — read back VERBATIM from the
     # persisted action rows via the SAME single ``marks_projection`` the row-15 thesis projection
     # uses, so the journal-detail readback and the strip show identical values (no second path).
-    marks = marks_projection(thesis, registry.store.get_actions(thesis_id))
+    marks = marks_projection(thesis, store.get_actions(thesis_id))
     thesis_payload = {
         "id": thesis.id,
         "ticker": thesis.ticker,
@@ -340,7 +363,7 @@ def get_journal_entry(
     # risk_flags, so the journal detail OMITS the key entirely (never a dishonest empty list).
     if thesis.risk_flags is not None:
         thesis_payload["risk_flags"] = thesis.risk_flags
-    return {
+    detail = {
         "thesis": thesis_payload,
         "marks": marks,
         # The append-only verdict timeline, verbatim. Each row carries its canonical values and the
@@ -360,6 +383,34 @@ def get_journal_entry(
             for e in events
         ],
     }
+    # The machine-derived execution checks + suggested mistake tags (capability 27, J-54) — served
+    # VERBATIM from the persisted result computed ONCE at resolution (data-contract row 19). Honest
+    # omission: a pre-v5 resolution (or an unresolved thesis) carries NULL execution_checks, so the
+    # detail OMITS both keys entirely (never a fabricated pass/fail, never computed at read).
+    if thesis.execution_checks is not None:
+        detail["execution_checks"] = thesis.execution_checks.get("checks", [])
+        detail["suggested_mistake_tags"] = thesis.execution_checks.get(
+            "suggested_mistake_tags", []
+        )
+    return detail
+
+
+@router.get("/journal/{thesis_id}")
+def get_journal_entry(
+    thesis_id: str, registry: ResearchRegistry = Depends(get_registry)
+) -> dict:
+    """The blueprint row-16 registered serving endpoint: a thesis record + its persisted, append-only
+    verdict timeline + action marks + frozen risk flags + the machine-derived execution checks
+    (computed once at resolution), served VERBATIM from the store (never recomputed at read time).
+
+    404 for an unknown id. The timeline rows are returned in insertion order (the append-only
+    sequence) with the canonical per-row values the verdict engine recorded, including the dwell
+    timing record (``rule_first_true``). The execution-checks + suggested-tag keys are additive and
+    present only post-resolution (honest omission pre-resolution / pre-migration)."""
+    detail = build_journal_detail(registry.store, thesis_id, registry._config)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"no thesis with id '{thesis_id}'")
+    return detail
 
 
 @router.post("/thesis")
@@ -613,6 +664,17 @@ def resolve_thesis(
         registry.store.resolve_thesis_with_event(thesis_id, resolution, final_event)
     except Exception:
         raise HTTPException(status_code=503, detail="could not resolve the thesis")
+
+    # Compute the machine-derived execution checks ONCE here, at this terminal resolution, and persist
+    # them on the thesis row (capability 27, J-54 — the data-contract row-19 execution-checks half).
+    # The SAME single function every other terminal path calls (system invalidation, stream-end
+    # expiry, restart-expiry sweep); the journal detail serves the persisted result VERBATIM (never
+    # recomputed at read). A failure here must NOT undo the (already-committed) resolution — the
+    # checks then stay honestly ABSENT for this thesis rather than half-resolving it.
+    try:
+        compute_and_persist_execution_checks(registry.store, thesis_id, registry._config)
+    except Exception:
+        pass
 
     # Detach the live monitor (if the ticker is still watched and holds THIS thesis) so no verdict
     # event is appended after resolution and the projection clears (the strip returns to the declare

@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { JournalRow, ResearchTaxonomy } from "@/lib/types";
 import { formatDateDMY } from "@/lib/datetime";
 
@@ -11,7 +13,9 @@ import { formatDateDMY } from "@/lib/datetime";
 // direction, status/resolution (expired rows show the verbatim interruption reason; terminal
 // resolutions get the established terminal treatment).
 //
-// Rows are NOT yet links — /journal/[id] (review detail) ships with J-54/J-55. No dead link.
+// Rows are LINKS to /journal/[id] (the review detail, J-55) now that the target exists — the
+// iter-12 "deliberately not links" placeholder resolves here. The ticker cell carries a real anchor
+// (keyboard/SEO accessible); the whole row also navigates on click as a convenience.
 
 // Map a status/resolution id to its design-direction COLOR class (a visual concern owned by the
 // frontend; the LABEL text always comes from the taxonomy). Per the design direction:
@@ -48,6 +52,7 @@ interface Props {
 }
 
 export function JournalTable({ rows, taxonomy }: Props) {
+  const router = useRouter();
   if (rows.length === 0) {
     // Honest empty state — never a fabricated row.
     return (
@@ -55,8 +60,17 @@ export function JournalTable({ rows, taxonomy }: Props) {
         data-testid="journal-empty"
         className="flex min-h-[30vh] flex-col items-center justify-center rounded-lg border border-slate-800 bg-slate-900/40 text-center"
       >
-        <div className="mb-2 text-4xl text-slate-700" aria-hidden="true">
-          ▤
+        {/* Class-based placeholder mark — a pair of muted rules evoking an empty ledger, replacing
+            the prior ▤ (U+25A4) glyph. No icon library, no Unicode glyph: design-system tokens only
+            (the coherence fold-in). */}
+        <div
+          data-testid="journal-empty-mark"
+          aria-hidden="true"
+          className="mb-3 flex flex-col gap-1.5"
+        >
+          <span className="block h-1 w-10 rounded-full bg-slate-700" />
+          <span className="block h-1 w-7 rounded-full bg-slate-800" />
+          <span className="block h-1 w-9 rounded-full bg-slate-700" />
         </div>
         <p className="text-sm font-medium text-slate-300">No theses journaled yet</p>
         <p className="mt-1 max-w-sm text-xs text-slate-500">
@@ -87,21 +101,34 @@ export function JournalTable({ rows, taxonomy }: Props) {
               row.direction === "long" ? "text-emerald-400" : "text-rose-400";
             // The displayed lifecycle id: the resolution once terminal, else the status (active).
             const lifecycleId = row.resolution ?? row.status;
+            const href = `/journal/${encodeURIComponent(row.id)}`;
             return (
               <tr
                 key={row.id}
                 data-testid="journal-row"
                 data-thesis-id={row.id}
                 data-status={lifecycleId}
-                className="border-b border-slate-800/60 last:border-b-0 hover:bg-slate-900/60"
+                data-href={href}
+                onClick={() => router.push(href)}
+                className="cursor-pointer border-b border-slate-800/60 last:border-b-0 hover:bg-slate-900/60"
               >
                 {/* Declared date — dd-MM-yyyy via the ONE shared formatter. created_wall_ts is unix
                     seconds, so convert to ms for the Date. */}
                 <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-slate-300">
                   {formatDateDMY(row.created_wall_ts * 1000)}
                 </td>
+                {/* The ticker carries the real anchor so the row is keyboard/SEO accessible (the
+                    whole-row onClick is a convenience). Clicking it stops propagation so the row's
+                    push does not double-fire. */}
                 <td className="whitespace-nowrap px-3 py-2.5 font-mono text-slate-200">
-                  {row.ticker}
+                  <Link
+                    href={href}
+                    data-testid="journal-row-link"
+                    onClick={(e) => e.stopPropagation()}
+                    className="rounded text-slate-200 underline-offset-2 hover:text-emerald-300 hover:underline focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    {row.ticker}
+                  </Link>
                 </td>
                 <td className="px-3 py-2.5 font-mono text-xs text-slate-400">
                   {row.bound_source}

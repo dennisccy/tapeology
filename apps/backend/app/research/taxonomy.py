@@ -198,6 +198,60 @@ def against_expected_tape_evidence(tape_state: str, expected: list[str]) -> str:
     )
 
 
+# --- Mistake-tag catalog (capability 29, J-54/J-56; data-contract row 24) ------------------------
+# The SINGLE backend owner of every mistake-tag id + its display copy — the frontend hardcodes NONE
+# of it (the review picker is taxonomy-driven). The full catalog per goal.md capability 29. The
+# review SAVE flow (``POST …/review``) lands with J-57 (iter-14); this iteration only renders the
+# machine SUGGESTED tags pre-selected + toggleable in a disabled-Save picker — the system never
+# records a confirmed tag on its own.
+#
+# Copy discipline (J-66): each label is a short, neutral, descriptive phrase — never imperative, never
+# a verdict on the user. ``moved_invalidation`` is annotated self-assessed because the system cannot
+# observe a moved stop (the invalidation is frozen on the thesis); only the user can claim it.
+# ``other`` REQUIRES a free-text note at save time (enforced in the J-57 save flow, not here).
+MISTAKE_TAGS: dict[str, str] = {
+    "chased": "Chased an extended move",
+    "entered_before_confirmation": "Entered before confirmation",
+    "ignored_rejection": "Ignored a rejection / held through the stop",
+    "ignored_risk_flags": "Ignored entry risk flags",
+    "moved_invalidation": "Moved the invalidation (self-assessed)",
+    "no_clear_setup": "No clear setup",
+    "wrong_setup_type": "Wrong setup type",
+    "overstayed": "Overstayed the move",
+    "other": "Other (note required)",
+}
+
+# Tags that REQUIRE a free-text note when saved (enforced in the J-57 review save flow, not here).
+MISTAKE_TAGS_REQUIRING_NOTE: tuple[str, ...] = ("other",)
+
+# The backend-owned check → suggested-mistake-tag mapping (capability 27, J-54). A FAILED execution
+# check SUGGESTS exactly the catalog tag it grounds; the system suggests only — it never records a
+# confirmed tag. A check with no clean catalog correspondence (e.g. ``cut_confirming_early`` — cutting
+# a confirming thesis early is neither ``overstayed`` nor any other catalog tag) maps to NOTHING here
+# (the user adds ``other`` + a note in the review flow). Every tag mapped to MUST exist in
+# ``MISTAKE_TAGS`` (asserted by the taxonomy test).
+CHECK_SUGGESTED_TAG: dict[str, str] = {
+    "entered_before_confirmation": "entered_before_confirmation",
+    "chased_entry": "chased",
+    "exited_beyond_invalidation": "ignored_rejection",
+}
+
+
+def is_valid_mistake_tag(tag: str) -> bool:
+    return tag in MISTAKE_TAGS
+
+
+def mistake_tag_label(tag: str) -> str:
+    """The display label for a mistake-tag id. An unknown key falls back to itself (never fabricated)."""
+    return MISTAKE_TAGS.get(tag, tag)
+
+
+def suggested_tag_for_check(check: str) -> str | None:
+    """The backend-owned suggested mistake tag for a FAILED execution check, or ``None`` when the
+    check has no clean catalog correspondence (the user then adds ``other`` + a note)."""
+    return CHECK_SUGGESTED_TAG.get(check)
+
+
 # --- Statement-status enum (the monitor's live read of each expected-behaviour statement) -------
 # met = the statement's premise is observed in the current engine read; not_yet = not observed yet
 # (the honest default — no evidence is not a failure); violated = the engine read contradicts it.
@@ -372,5 +426,16 @@ def taxonomy_payload() -> dict:
         # the strip's amber chips are taxonomy-driven (the measured-evidence sentence travels frozen
         # on each thesis's ``risk_flags``, also built from this module's templates).
         "risk_flags": [{"id": k, "name": v} for k, v in RISK_FLAGS.items()],
+        # The mistake-tag catalog (capability 29, J-54) — id + display label, owned ONCE here so the
+        # review picker is taxonomy-driven (the frontend hardcodes no tag label). ``requires_note``
+        # flags the tags that need a free-text note at save (enforced in the J-57 save flow).
+        "mistake_tags": [
+            {
+                "id": k,
+                "name": v,
+                "requires_note": k in MISTAKE_TAGS_REQUIRING_NOTE,
+            }
+            for k, v in MISTAKE_TAGS.items()
+        ],
         "disclaimer": "Descriptive only — not trading advice.",
     }

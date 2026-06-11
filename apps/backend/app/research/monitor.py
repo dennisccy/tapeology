@@ -33,6 +33,7 @@ import time
 
 from ..config import Config
 from ..engine.snapshot import EngineSnapshot
+from .execution_checks import compute_and_persist_execution_checks
 from .marks import marks_projection
 from .store import JournalStore, ThesisRecord, VerdictEventRecord
 from .taxonomy import (
@@ -733,6 +734,15 @@ class ResearchMonitor:
                 # active; the projection then reflects the resolved/invalidated status (NOT a silent
                 # revert to the idle declare affordance — the strip shows the terminal treatment).
                 self._store.resolve_thesis(self._thesis.id, "invalidated")
+                # Compute the machine-derived execution checks ONCE at this terminal resolution and
+                # persist them (capability 27, J-54 — the SAME single function the user-resolve,
+                # stream-end-expiry, and restart-sweep paths call; the journal detail serves them
+                # verbatim, never recomputed at read). Runs inside ``on_event``'s try/except, so a
+                # checks failure surfaces as ``monitor_status: failed`` and never kills the feeder; the
+                # already-committed invalidation still stands (the key just stays honestly absent).
+                compute_and_persist_execution_checks(
+                    self._store, self._thesis.id, self._config
+                )
                 self._resolved = True
                 self._resolution = "invalidated"
 
@@ -812,6 +822,12 @@ class ResearchMonitor:
                     last=last,
                 )
             )
+            # Compute the machine-derived execution checks ONCE at this terminal (expiry) resolution
+            # and persist them (capability 27, J-54 — the SAME single function the user-resolve,
+            # system-invalidation, and restart-sweep paths call). An expired thesis here is UNMARKED
+            # (an entry-marked thesis is exempt and survives via ``_detach_not_evaluated``), so its
+            # mark-dependent checks read ``not_applicable`` honestly — never a fabricated pass/fail.
+            compute_and_persist_execution_checks(self._store, thesis.id, self._config)
             self._resolved = True
             self._resolution = "expired"
             self._expiry_reason = reason

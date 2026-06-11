@@ -196,3 +196,19 @@
 **Reasoning:** J-51's three acceptance legs each have positive evidence: byte-identical resolved row/timeline across restart (unit pin re-run green by evaluator + dev live uvicorn-restart probe before==after True); unmarked actives EXPIRED with the verbatim restart reason in evaluator-opened pixels after a REAL QA-run restart (2 rows, distinct from stream-ended/user-stop reasons); entry-marked thesis survived the same restart (resolved played_out after, has_entry=True persisted). Coherence COHERENCE-PASS, review PASS, 494/1 backend green, all 10 required-still-passing held (J-01/J-02/J-38/J-42/J-47/J-50/J-52/J-68 in opened pixels). Two QA-report defects found and discounted after direct verification: header count "11/11" vs 15-row table (budget-continuation artifact), and UT-J49's false "ThesisStrip.tsx untouched" claim — evaluator-inspected diff shows an 8-line cosmetic chip change, so the carried pass stands, but the firing-flag chip was never pixel-confirmed this iter (carry-forward gap).
 
 **Next-step recommendation:** Iter-13 lean: target J-54 + J-55 — execution checks computed once from marks + timeline, and the /journal/[id] review-detail page (rows become links). Fold in the J-49 firing-flag chip capture and the ▤ empty-state glyph advisory. Then J-56/J-57, then the evidence layer (J-58–J-62), cues last.
+
+## Iteration 13 — goal-i_will_be_super_rich_with_my_loved_ones-iter-13
+
+**Date:** 2026-06-11T14:05:14Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-54 (and J-01/J-02/J-42/J-49/J-50/J-51/J-52 re-verified in fresh pixels; J-08/J-38/J-40/J-48 incidentally re-verified)
+- Newly partial: J-55 (failing → partial)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none
+
+**Reasoning:** J-54 verified end-to-end in evaluator-opened pixels (UT-J-54-detail-full.png + zoomed crops): entered_before_confirmation FLAGGED with evidence quoting entry 0.5s < confirming 82.5s, tag pre-selected/toggleable, Save disabled with honest copy; chase check pixel-cross-verified as anchored at rule_first_true 100.23 (NOT the publish last 100.25); enum statuses only, computed once at all four terminal paths, persisted (schema v5, committed-v4-fixture migration — evaluator re-ran 52 tests green), served verbatim by the single endpoint (COHERENCE-PASS). J-55 lands PARTIAL: timeline at true clock time + evidence, flags, marks, checks, REST==UI, and the honest unknown-id error are all proven, but the "statements listed with their final statuses" clause is unmet — the detail serves statements without statuses (none persisted; rendering them today would require recompute-at-read), and QA's own PASS hedged the statuses as "implied". The iter-12 carried-forward J-49 firing-flag chip pixel debt is resolved (class-based INVALIDATION TOO TIGHT chip with measured margins).
+
+**Next-step recommendation:** Iter-14, lean: J-56 (outcome × process grades, computed once at the same terminal-resolution seam iter-13 built) + J-57 (review save flow: POST /research/thesis/{id}/review, reviewed flip, other-requires-note, 409-unless-resolved) + COMPLETE J-55 by persisting per-statement FINAL statuses at terminal resolution (same defining-moment pattern as checks/grades — schema/JSON additive, never recomputed at read) and rendering them on /journal/[id]. That trio finishes the review pillar and closes J-54's user-confirms loop. Evidence layer (J-58–J-62) after; cues strictly last.

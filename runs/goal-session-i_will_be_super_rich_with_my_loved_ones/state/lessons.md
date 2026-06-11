@@ -85,3 +85,9 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** When a browser-qa run is continued after exhausting its tool budget, the rewritten report can desync from reality: iter-12's header said "11/11" while the table listed 15 tests, and UT-J49's no-regression rationale claimed "ThesisStrip.tsx untouched" when that file WAS in changed_files (the emoji→class chip cleanup) — so a spec-mandated pixel check (req 8, firing-flag chip) was silently skipped under a false premise. Evidence filenames also drifted (J-51-journal-filtered-expired.png shows the UNfiltered "Any status" view; the real filter proof is in ...-filter-expired-working.png).
 **Applies to:** any iteration whose browser-qa run is budget-continued — QA must re-diff its "untouched, no regression possible" claims against status.json changed_files before writing them, and the evaluator must open ALL same-claim frames, not just the one cited. Next strip/J-49-touching iter owes a firing-flag chip pixel capture.
+
+## iter-13 — 2026-06-11T14:05:14Z
+
+**Verdict:** CONTINUE
+**Lesson:** Statement statuses are LIVE-only: the monitor recomputes them per event for the active projection, but neither the thesis row nor the verdict_events rows persist a per-statement FINAL status — so the /journal/[id] page cannot render J-55's "statements with their final statuses" clause without violating no-recompute-at-read, and the iteration shipped a deferral note instead. Any value a review surface must show "frozen" needs persisting at its defining moment (the execution-checks pattern); iter-14 must persist final statement statuses at terminal resolution alongside the J-56 grades.
+**Applies to:** iter-14 (J-55 completion + J-56/J-57) and any future iter adding review/detail fields — check FIRST whether the value is persisted, not just whether the live projection shows it.
