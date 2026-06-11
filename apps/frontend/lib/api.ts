@@ -1,5 +1,7 @@
 import { API_BASE, WATCH_REQUEST_TIMEOUT_MS } from "./config";
 import type {
+  Analytics,
+  AnalyticsResult,
   DeclareResult,
   JournalDetail,
   JournalFilters,
@@ -607,6 +609,30 @@ export async function fetchJournalDetail(
       return { ok: false, notFound: true, error: "No thesis with that id was found." };
     }
     let error = "The thesis could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/analytics — the ONLY serving path for the segregated journal analytics (J-59). The
+// backend computes the full partitioned projection (read-only over persisted rows, never pooled); the
+// view renders it VERBATIM (display rounding only). An empty journal returns an honest empty payload
+// (partitions: []), NOT an error; an unreachable backend resolves to an explicit error (never a blank).
+export async function fetchAnalytics(): Promise<AnalyticsResult> {
+  try {
+    const res = await fetch(`${API_BASE}/research/analytics`);
+    if (res.ok) {
+      const data = (await res.json()) as Analytics;
+      return { ok: true, analytics: data };
+    }
+    let error = "The analytics could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

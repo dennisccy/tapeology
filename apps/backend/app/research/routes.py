@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..config import Config
+from .analytics import compute_analytics
 from .excursions import compute_and_persist_excursions
 from .execution_checks import compute_and_persist_execution_checks
 from .grades import compute_and_persist_grades
@@ -255,6 +256,18 @@ def get_watch_manager():
 def get_taxonomy() -> dict:
     """The setup catalog, enums, and display copy — the single backend owner of research labels."""
     return taxonomy_payload()
+
+
+@router.get("/analytics")
+def get_analytics(registry: ResearchRegistry = Depends(get_registry)) -> dict:
+    """The segregated journal analytics (capability 31, J-59) — the SINGLE serving path.
+
+    Serves the ``analytics.compute_analytics`` projection VERBATIM (the frontend renders it directly,
+    display-rounding only — no client-side arithmetic). Read-only over persisted rows: partitions
+    keyed by (``data_feed``, ``config_fingerprint``), per ``setup_type`` × ``direction`` groups, with
+    the abandonment bucket always visible and median spread/R beside every +1R figure. NEVER pools
+    across feeds or fingerprints; an empty journal serves an honest empty payload (not an error)."""
+    return compute_analytics(registry.store, registry._config)
 
 
 @router.get("/thesis/active")

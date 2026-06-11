@@ -455,6 +455,22 @@ class Config:
     journal_list_default_limit: int = 50
     journal_list_max_limit: int = 200
 
+    # --- Research evolution: SEGREGATED JOURNAL ANALYTICS (capability 31 / J-59) -----------------
+    # The minimum group sample size for the analytics view (``GET /research/analytics``). A per
+    # ``setup_type`` × ``direction`` group whose ``n`` is BELOW this serves an explicit
+    # ``insufficient_sample`` marker (with ``n`` still present) instead of bare distributions — never
+    # a naked percentage on a thin pool. This is a SERVING / PRESENTATION-ONLY threshold: it changes
+    # only what the analytics surface CHOOSES to show, never any persisted research value (it never
+    # touches a verdict, a feature, a grade, an excursion, or a stamp). It is therefore EXCLUDED from
+    # ``config_fingerprint`` (see the exclusion set below) by the SAME iter-12 page-size precedent
+    # (``journal_list_*`` above): fingerprinting a display threshold would dishonestly FRAGMENT the
+    # analytics pools — two journals identical in every threshold but viewed at different min-sample
+    # sizes would mint different fingerprints and could never be pooled. A documented RESEARCH DEFAULT
+    # — a starting point, never a validated edge. Defaults to 5 (a small but non-trivial floor so a
+    # one-off thesis never reads as a "distribution"). Pinned by a fingerprint-stability unit test
+    # (changing this value must NOT change ``config_fingerprint``).
+    analytics_min_sample_size: int = 5
+
     # --- Research evolution: ENTRY RISK FLAGS (capability 26, J-49) -----------------------------
     # RESEARCH DEFAULTS — a starting point calibrated against the deterministic sims, NEVER a
     # validated edge (same discipline as the verdict-dwell defaults above). The flag set is computed
@@ -589,7 +605,12 @@ class Config:
         journal LIST page-size fields (``journal_list_default_limit`` / ``journal_list_max_limit``)
         are EXCLUDED for the same reason: a serving page size touches no persisted research value, so
         two journals identical in every threshold but served at different page sizes MUST share a
-        fingerprint (else their analytics pools would be dishonestly fragmented).
+        fingerprint (else their analytics pools would be dishonestly fragmented). The analytics
+        min-sample threshold (``analytics_min_sample_size``) is EXCLUDED for the identical reason
+        (capability 31 / J-59): it is a serving/presentation-only display gate that touches no
+        persisted research value, so two journals identical in every threshold but viewed at
+        different min-sample sizes MUST share a fingerprint (else fragmenting the very pools the
+        analytics surface exists to compare).
         """
         excluded = {
             "journal_db_path",
@@ -597,6 +618,7 @@ class Config:
             "journal_schema_version",
             "journal_list_default_limit",
             "journal_list_max_limit",
+            "analytics_min_sample_size",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)

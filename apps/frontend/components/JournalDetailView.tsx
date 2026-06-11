@@ -32,6 +32,34 @@ function labelFrom(
   return found ? found.name : id.replace(/_/g, " ");
 }
 
+// The terminal (resolved) thesis statuses. An `active` thesis is NOT resolved; the four terminal
+// statuses below are. This drives the honest-absence copy SPLIT (iter-16 carry-along): a grade /
+// excursion / execution-check record is absent for TWO distinct reasons —
+//   1. the thesis has NOT YET resolved (these are computed once it runs its course) — "not yet"; or
+//   2. the thesis IS resolved but predates the feature (a pre-v5/v6/v7 resolution) — "predates".
+// A still-ACTIVE post-feature thesis must read the "not yet" copy, NEVER "predates" — the iter-15
+// lesson (an absent key with two causes must get two copies).
+const RESOLVED_STATUSES = new Set([
+  "played_out",
+  "abandoned",
+  "invalidated",
+  "expired",
+]);
+function isResolved(status: string): boolean {
+  return RESOLVED_STATUSES.has(status);
+}
+
+// Pick the right honest-absence copy for an absent post-resolution record. `feature` names the thing
+// (e.g. "graded", "measured", "assessed") and `noun` the computed artifact (e.g. "outcome and process
+// grades"). Resolved-but-absent => "predates the feature"; unresolved => "not yet" (computed once the
+// thesis resolves / runs its course).
+function absentCopy(
+  status: string,
+  opts: { unresolved: string; predates: string },
+): string {
+  return isResolved(status) ? opts.predates : opts.unresolved;
+}
+
 // Verdict VISUAL semantics (the design direction): confirming emerald, weakening amber,
 // rejecting/invalidated rose (invalidated terminal), pending slate, expired/lifecycle slate. The
 // LABEL text comes from the taxonomy; the COLOR is a frontend visual concern keyed off the id.
@@ -489,11 +517,21 @@ function GradesQuadrant({
   return (
     <Section title="How it graded" testid="detail-grades">
       {grades === undefined ? (
-        // Honest omission: a pre-v6 resolution (or an unresolved thesis) was never graded — never an
-        // invented grade, never a numeric score.
-        <p data-testid="grades-not-graded" className="text-sm text-slate-500">
-          Not graded — the outcome and process grades are computed once a thesis is resolved, and
-          this thesis predates that.
+        // Honest omission with the iter-16 TWO-CAUSE split: an unresolved thesis is "not yet"
+        // graded (computed once it resolves); a RESOLVED thesis that predates the grade feature
+        // reads "predates". Never an invented grade, never a numeric score, never the wrong copy on
+        // a still-active thesis.
+        <p
+          data-testid="grades-not-graded"
+          data-absence-cause={isResolved(detail.thesis.status) ? "predates" : "not_yet"}
+          className="text-sm text-slate-500"
+        >
+          {absentCopy(detail.thesis.status, {
+            unresolved:
+              "Not yet graded — the outcome and process grades are computed once this thesis resolves.",
+            predates:
+              "Not graded — the outcome and process grades are computed once a thesis is resolved, and this thesis predates that.",
+          })}
         </p>
       ) : (
         <>
@@ -566,11 +604,21 @@ function ExcursionsSection({
   return (
     <Section title="How far the tape went (R)" testid="detail-excursions">
       {excursions === undefined ? (
-        // Honest omission: a pre-v7 resolution (or an unresolved thesis) never had excursions
-        // measured — never fabricated numbers, never computed at read.
-        <p data-testid="excursions-not-measured" className="text-sm text-slate-500">
-          Not measured — excursions are computed once a thesis runs its course, and this thesis
-          predates that.
+        // Honest omission with the iter-16 TWO-CAUSE split: an unresolved thesis is "not yet"
+        // measured (computed once it runs its course); a RESOLVED thesis that predates the excursion
+        // feature reads "predates". Never fabricated numbers, never computed at read, never the
+        // wrong copy on a still-active thesis.
+        <p
+          data-testid="excursions-not-measured"
+          data-absence-cause={isResolved(detail.thesis.status) ? "predates" : "not_yet"}
+          className="text-sm text-slate-500"
+        >
+          {absentCopy(detail.thesis.status, {
+            unresolved:
+              "Not yet measured — excursions are computed once this thesis runs its course.",
+            predates:
+              "Not measured — excursions are computed once a thesis runs its course, and this thesis predates that.",
+          })}
         </p>
       ) : excursions.tracked === false ? (
         // The explicit restart-sweep marker: no live tape to measure from — no numbers, not a zero.
@@ -815,11 +863,21 @@ function ExecutionChecksSection({
   return (
     <Section title="What the execution checks found" testid="detail-execution-checks">
       {checks === undefined ? (
-        // Honest omission: a pre-v5 resolution (or an unresolved thesis) never had its checks
-        // computed — never an invented clean state, never a fabricated pass/fail.
-        <p data-testid="execution-checks-not-assessed" className="text-sm text-slate-500">
-          Not assessed — execution checks are computed once a thesis is resolved, and this thesis
-          predates that.
+        // Honest omission with the iter-16 TWO-CAUSE split: an unresolved thesis is "not yet"
+        // assessed (checks are computed once it resolves); a RESOLVED thesis that predates the
+        // execution-checks feature reads "predates". Never an invented clean state, never a
+        // fabricated pass/fail, never the wrong copy on a still-active thesis.
+        <p
+          data-testid="execution-checks-not-assessed"
+          data-absence-cause={isResolved(detail.thesis.status) ? "predates" : "not_yet"}
+          className="text-sm text-slate-500"
+        >
+          {absentCopy(detail.thesis.status, {
+            unresolved:
+              "Not yet assessed — execution checks are computed once this thesis resolves.",
+            predates:
+              "Not assessed — execution checks are computed once a thesis is resolved, and this thesis predates that.",
+          })}
         </p>
       ) : (
         <>

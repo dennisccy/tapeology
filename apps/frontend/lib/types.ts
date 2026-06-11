@@ -189,8 +189,17 @@ export interface ResearchTaxonomy {
   // absence copy VERBATIM (the frontend hardcodes none of them). Optional so a pre-J-58 taxonomy
   // payload stays valid (the block then falls back to humanised ids).
   excursions?: ExcursionTaxonomy;
+  // The segregated-analytics display copy (capability 31, J-59) — the /journal analytics view renders
+  // every label / caption / framing VERBATIM (the frontend hardcodes none). Optional so a pre-J-59
+  // taxonomy payload stays valid (the view then falls back to its own minimal copy register).
+  analytics?: AnalyticsTaxonomy;
   disclaimer: string;
 }
+
+// The segregated-analytics display copy owned by the backend (`GET /research/taxonomy` → `analytics`).
+// A flat string map (the view reads each key by name) — keeps the backend the single owner of every
+// analytics label, caption, and the honesty framing line.
+export type AnalyticsTaxonomy = Record<string, string>;
 
 // The excursion display copy owned by the backend (`GET /research/taxonomy` → `excursions`).
 export interface ExcursionTaxonomy {
@@ -377,6 +386,69 @@ export interface JournalDetail {
   // / stream-end (absent => "not measured", an honest omission). Two segregated populations; R-units
   // only, never currency, never a prediction. Read VERBATIM — the page derives nothing.
   excursions?: ThesisExcursions;
+}
+
+// --- Segregated journal analytics (capability 31, J-59) ------------------------------------------
+// The `GET /research/analytics` payload, rendered VERBATIM by the /journal analytics view (display
+// rounding only — NO client-side arithmetic). Partitions are keyed by (data_feed, config_fingerprint)
+// and NEVER pooled; within each, groups are per setup_type × direction. The abandonment bucket is
+// always present (even 0); truncated horizon counts are separate from the resolved ternary buckets;
+// the acted-trade block is structurally disjoint from the confirmation-anchored stats. R units only —
+// never currency, never an equity curve, never a win-rate-as-edge presentation.
+
+// One per-horizon confirmation-anchored ternary distribution row. The three resolved-outcome counts
+// plus a SEPARATE truncated count (never folded into a resolved bucket); median spread/R is the
+// no-cost caveat beside the +1R figure (`null` when no anchored population carried a spread/R).
+export interface AnalyticsHorizonRow {
+  horizon: number;
+  "+1R_first": number;
+  "-1R_first": number;
+  neither_within_horizon: number;
+  truncated: number;
+  median_spread_per_r: number | null;
+}
+
+// The acted-trade (entry+exit-marked) block — STRUCTURALLY SEPARATE from the confirmation-anchored
+// stats. Realized move in R only (via the one registered marks projection server-side); never currency.
+export interface AnalyticsActedTrade {
+  n: number;
+  median_realized_r: number | null;
+  median_spread_per_r: number | null;
+}
+
+// One per setup_type × direction group within a partition. `n` is always present (abandoned theses
+// stay in it); `abandonment` is its own always-visible count; `insufficient_sample` gates the display
+// (n still shown). `median_time_to_confirm` is `null` for a group with no confirmation (honest omission).
+export interface AnalyticsGroup {
+  setup_type: string;
+  direction: string;
+  n: number;
+  abandonment: number;
+  insufficient_sample: boolean;
+  confirmation_excursions: { horizons: AnalyticsHorizonRow[] };
+  median_time_to_confirm: number | null;
+  tag_frequencies: { tag: string; count: number }[];
+  acted_trade: AnalyticsActedTrade;
+}
+
+// One partition = one (data_feed, config_fingerprint) pair. The FULL fingerprint is always present
+// (so two records are never silently compared across fingerprints); the short form is for display.
+export interface AnalyticsPartition {
+  data_feed: string;
+  config_fingerprint: string;
+  config_fingerprint_short: string;
+  groups: AnalyticsGroup[];
+}
+
+export interface Analytics {
+  partitions: AnalyticsPartition[];
+  min_sample_size: number;
+}
+
+export interface AnalyticsResult {
+  ok: boolean;
+  analytics?: Analytics;
+  error?: string;
 }
 
 // Server-side filter params for GET /research/journal (J-51). An omitted filter does not constrain;

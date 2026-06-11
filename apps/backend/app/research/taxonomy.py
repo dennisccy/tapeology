@@ -311,6 +311,63 @@ EXCURSION_NOT_TRACKED_COPY: str = (
 EXCURSION_R_BASIS_CAPTION: str = "R = |reference − invalidation|"
 
 
+# --- Segregated journal analytics display copy (capability 31, J-59) -----------------------------
+# Owned ONCE here so the analytics view on /journal is taxonomy-driven (the frontend hardcodes no
+# label / caption / framing). Descriptive, R-units, NEVER a profitability/edge/win-rate claim — the
+# framing line is the honesty caveat the spec mandates beside every figure. Copy register matches the
+# existing research strings: thesis-attributed, present-tense, descriptive (J-66 / anti-goals).
+ANALYTICS_COPY: dict[str, str] = {
+    # The view title + the one-line framing the anti-goals require (journaled measurements, never edge).
+    "title": "Analytics",
+    "measurement_framing": (
+        "These are journaled measurements of your own recorded theses — not a profitability claim, "
+        "an edge, a win rate, or a forecast. Every figure shows its n; abandoned theses stay in the "
+        "count; results are never pooled across data feeds or config fingerprints."
+    ),
+    # Partition + group section labels (a partition is one feed × fingerprint; a group is setup × dir).
+    "partition_title": "Data feed × config fingerprint",
+    "data_feed_label": "Feed",
+    "fingerprint_label": "Config fingerprint",
+    "group_title": "Setup × direction",
+    # The always-visible counts.
+    "n_label": "n",
+    "abandonment_label": "Abandoned (kept in n)",
+    # The insufficient-sample gate (shown WITH its n — never a bare percentage on a thin pool).
+    "insufficient_sample_label": "Insufficient sample",
+    "insufficient_sample_caption": (
+        "Below the minimum sample size — n is shown, but distributions are withheld rather than read "
+        "as a measurement from too few theses."
+    ),
+    # The confirmation-anchored excursion block (reuses the excursion population title + truncated flag).
+    "confirmation_excursions_title": "From first confirmation — per-horizon outcomes (R)",
+    "horizon_label": "Horizon",
+    "truncated_label": EXCURSION_TRUNCATED_LABEL,
+    "truncated_caption": (
+        "Horizons the stream end or a gap cut short before +1R or −1R could resolve — counted "
+        "separately, never folded into the resolved outcomes, never extrapolated."
+    ),
+    # Median spread / R sits beside every +1R figure (the no-cost caveat as a number).
+    "spread_per_r_caption": "median spread / R",
+    # Median time-to-confirm (logical seconds; honestly omitted when a group has no confirmation).
+    "time_to_confirm_label": "Median time to confirm",
+    "time_to_confirm_unit": "s (logical)",
+    "time_to_confirm_absent": "No confirmation recorded in this group.",
+    # User-confirmed mistake-tag frequencies (machine suggestions are never counted).
+    "tag_frequencies_title": "Mistake tags (your confirmed reviews)",
+    "tag_frequencies_absent": "No confirmed review tags in this group yet.",
+    # The acted-trade block — STRUCTURALLY SEPARATE from the confirmation-anchored stats.
+    "acted_trade_title": "Acted trades — realized move (R)",
+    "acted_trade_caption": (
+        "Entry-and-exit-marked theses only, kept apart from the confirmation-anchored figures above. "
+        "Realized move in R units, never currency, never a profit/loss claim."
+    ),
+    "median_realized_r_label": "Median realized R",
+    "acted_trade_absent": "No acted (entry-and-exit-marked) trades in this group.",
+    # The honest empty state (no records at all in the journal).
+    "empty": "No theses recorded yet — declare and resolve a thesis to populate the analytics.",
+}
+
+
 def excursion_outcome_label(outcome: str | None) -> str:
     """Display label for a ternary excursion outcome id. ``None`` (an open/undetermined horizon) and
     any unknown value fall back to a humanised form (never fabricated)."""
@@ -542,5 +599,9 @@ def taxonomy_payload() -> dict:
             "not_tracked": EXCURSION_NOT_TRACKED_COPY,
             "r_basis_caption": EXCURSION_R_BASIS_CAPTION,
         },
+        # The segregated-analytics display copy (capability 31, J-59) — owned ONCE here so the
+        # /journal analytics view is taxonomy-driven (the frontend hardcodes no label / caption /
+        # framing). Descriptive, R-units, never a profitability / edge / win-rate claim.
+        "analytics": dict(ANALYTICS_COPY),
         "disclaimer": "Descriptive only — not trading advice.",
     }
