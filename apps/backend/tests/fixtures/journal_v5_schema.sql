@@ -1,0 +1,125 @@
+-- Committed iter-13 (schema v5) journal-DB fixture for the v5 -> v6 versioned-migration regression
+-- test (capability 28 / J-55/J-56/J-57). RESEARCH RECORDS ONLY — explicitly allowed by the
+-- persistence anti-goal as a committed test fixture; there is NO tape data (no
+-- trades/quotes/candles/feature series) here.
+--
+-- This reproduces the EXACT v5 shape: theses ALREADY carries risk_flags (v3 -> v4) and
+-- execution_checks (v4 -> v5), actions spread_at_mark (v2 -> v3), and verdict_events the v1 -> v2
+-- dwell-timing columns — but the theses table deliberately LACKS the v6 review-pillar columns
+-- (statement_final_statuses, grades, review_tags, review_note, reviewed). The test builds a temp DB
+-- from this SQL, opens the JournalStore against it, and asserts the v5 -> v6 migration adds all five
+-- v6 columns IN ONE BUMP, bumps schema_version to 6, and leaves the pre-existing RESOLVED thesis row
+-- intact with NULL for each (never backfilled — a pre-migration resolution never had its final
+-- statuses/grades computed and was never reviewed, so the journal detail OMITS each key rather than
+-- fabricate a value at read; the reviewed column reads back its DEFAULT 0 = False, the honest "no
+-- review exists" state, NOT a backfilled value). Committed as SQL (not a binary .db) so the fixture
+-- is human-readable and the project's *.db gitignore rule holds.
+
+PRAGMA foreign_keys=ON;
+
+CREATE TABLE schema_version (
+    version INTEGER NOT NULL
+);
+
+-- v5 theses: carries risk_flags (v3 -> v4) AND execution_checks (v4 -> v5) but NONE of the v6
+-- review-pillar columns.
+CREATE TABLE theses (
+    id                  TEXT PRIMARY KEY,
+    ticker              TEXT NOT NULL,
+    setup_type          TEXT NOT NULL,
+    direction           TEXT NOT NULL,
+    invalidation_price  REAL NOT NULL,
+    level_price         REAL,
+    status              TEXT NOT NULL,
+    bound_source        TEXT NOT NULL,
+    data_feed           TEXT NOT NULL,
+    config_fingerprint  TEXT NOT NULL,
+    entry_context       TEXT NOT NULL,
+    statements          TEXT NOT NULL,
+    created_logical_ts  REAL NOT NULL,
+    created_wall_ts     REAL NOT NULL,
+    risk_flags          TEXT,
+    execution_checks    TEXT
+);
+
+-- v5 verdict_events: ALREADY carries the dwell-timing columns (added by the v1 -> v2 migration).
+CREATE TABLE verdict_events (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    thesis_id           TEXT NOT NULL,
+    logical_ts          REAL NOT NULL,
+    wall_ts             REAL NOT NULL,
+    verdict             TEXT NOT NULL,
+    evidence            TEXT NOT NULL,
+    tape_state          TEXT,
+    confidence          REAL,
+    last                REAL,
+    rule_first_true_ts     REAL,
+    rule_first_true_price  REAL,
+    FOREIGN KEY (thesis_id) REFERENCES theses (id)
+);
+
+CREATE TABLE hints (
+    id                  TEXT PRIMARY KEY,
+    ticker              TEXT NOT NULL,
+    payload             TEXT NOT NULL,
+    created_wall_ts     REAL NOT NULL
+);
+
+-- v5 actions: ALREADY carries spread_at_mark (added by the v2 -> v3 migration).
+CREATE TABLE actions (
+    id                  TEXT PRIMARY KEY,
+    thesis_id           TEXT NOT NULL,
+    kind                TEXT NOT NULL,
+    price               REAL NOT NULL,
+    logical_ts          REAL NOT NULL,
+    wall_ts             REAL NOT NULL,
+    spread_at_mark      REAL,
+    FOREIGN KEY (thesis_id) REFERENCES theses (id)
+);
+
+CREATE TABLE studies (
+    id                  TEXT PRIMARY KEY,
+    payload             TEXT NOT NULL,
+    created_wall_ts     REAL NOT NULL
+);
+
+CREATE TABLE study_occurrences (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    study_id            TEXT NOT NULL,
+    payload             TEXT NOT NULL,
+    FOREIGN KEY (study_id) REFERENCES studies (id)
+);
+
+-- v5 stamp.
+INSERT INTO schema_version (version) VALUES (5);
+
+-- One pre-existing RESOLVED thesis declared+resolved under v5 (with execution_checks ALREADY
+-- computed, but NONE of the v6 review columns existed when it was written) — it must survive the
+-- v5 -> v6 migration and read statement_final_statuses = NULL, grades = NULL, review_tags = NULL,
+-- review_note = NULL, reviewed = 0/False (never backfilled, never computed at read), so the journal
+-- detail OMITS each grade/status/review key (the established honest-omission pattern). It carries an
+-- empty risk_flags list (assessed at declaration, nothing fired) and a computed execution_checks
+-- object so the round-trip of the v4/v5 columns is also exercised.
+INSERT INTO theses (
+    id, ticker, setup_type, direction, invalidation_price, level_price,
+    status, bound_source, data_feed, config_fingerprint,
+    entry_context, statements, created_logical_ts, created_wall_ts, risk_flags, execution_checks
+) VALUES (
+    'v5thesis0001', 'SIM-BUYER', 'trend_continuation', 'long', 98.0, NULL,
+    'played_out', 'buyer_control', 'sim', 'oldfingerprint05',
+    '{"last": 100.0, "tape_state": "buyer_control"}',
+    '[{"text": "Buyers keep control", "kind": "tape_state_is", "params": {"states": ["buyer_control"]}}]',
+    12.5, 1700000000.0, '[]',
+    '{"checks": [{"check": "entered_before_confirmation", "status": "not_applicable", "evidence": "No entry was recorded."}], "suggested_mistake_tags": []}'
+);
+
+INSERT INTO verdict_events (
+    thesis_id, logical_ts, wall_ts, verdict, evidence, tape_state, confidence, last,
+    rule_first_true_ts, rule_first_true_price
+) VALUES
+    ('v5thesis0001', 12.5, 1700000000.0, 'pending',
+     'Thesis declared. The tape is being watched against it.', 'buyer_control', 0.8, 100.0,
+     NULL, NULL),
+    ('v5thesis0001', 30.0, 1700000060.0, 'played_out',
+     'You resolved this thesis as played out — the idea has run its course.', 'buyer_control', 0.85,
+     101.5, NULL, NULL);

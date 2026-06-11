@@ -34,6 +34,7 @@ import time
 from ..config import Config
 from ..engine.snapshot import EngineSnapshot
 from .execution_checks import compute_and_persist_execution_checks
+from .grades import compute_and_persist_grades
 from .marks import marks_projection
 from .store import JournalStore, ThesisRecord, VerdictEventRecord
 from .taxonomy import (
@@ -158,6 +159,63 @@ def _evaluate_statement(
             return "met" if last < thesis.invalidation_price else "violated"
 
     return "not_yet"
+
+
+# --- Per-statement FINAL statuses, persisted ONCE at terminal resolution (J-55) -----------------
+# A FINAL-status-only enum value: where no live evaluation context exists at the terminal moment
+# (e.g. the restart-expiry sweep over an unwatched thesis), each statement records this explicit,
+# honest enum — never fabricated, never recomputed at read.
+_NOT_EVALUATED = "not_evaluated"
+
+
+def compute_final_statement_statuses(
+    thesis: ThesisRecord, snapshot: EngineSnapshot | None, config: Config
+) -> list[dict]:
+    """The FINAL status of each frozen statement at the terminal moment (J-55), computed ONCE.
+
+    For a live-monitored terminal path (user resolve while still watched, system invalidation,
+    stream-end expiry) the snapshot is the engine's read at the terminal moment, and each statement's
+    final status is its at-resolution evaluation from the SAME ``_evaluate_statement`` the live
+    projection uses (one owner — no second evaluation rule). Where no live context exists (the
+    restart-expiry sweep over an unwatched thesis, ``snapshot is None``) every statement records the
+    explicit ``not_evaluated`` enum — an honest "no read at the terminal moment", never a fabricated
+    met/violated.
+
+    Returns one ``{"status": <enum>}`` entry per frozen statement, in statement order. The frozen
+    ``statements`` JSON is NEVER mutated — this is an additive parallel list keyed positionally to it.
+    """
+    if snapshot is None:
+        return [{"status": _NOT_EVALUATED} for _ in thesis.statements]
+    return [
+        {"status": _evaluate_statement(s, snapshot, thesis, config)}
+        for s in thesis.statements
+    ]
+
+
+def compute_and_persist_final_statuses(
+    store: JournalStore,
+    thesis_id: str,
+    snapshot: EngineSnapshot | None,
+    config: Config,
+) -> list[dict] | None:
+    """Compute the per-statement FINAL statuses for a just-resolved thesis ONCE and persist them.
+
+    The single entry point every terminal-resolution path calls right after the resolution: reads the
+    thesis back from the store, computes the final statuses via the pure
+    :func:`compute_final_statement_statuses` (using the handed terminal-moment ``snapshot``, or an
+    explicit ``not_evaluated`` per statement when there is none), and persists via
+    ``store.set_statement_final_statuses`` — so the statuses are recorded exactly ONCE at the defining
+    moment, never recomputed at read. Returns the computed list (or ``None`` if the thesis is gone).
+    Idempotent guard: if the thesis already carries final statuses (a double-resolve race), it is NOT
+    recomputed — the first computation stands (append-only spirit)."""
+    thesis = store.get_thesis(thesis_id)
+    if thesis is None:
+        return None
+    if thesis.statement_final_statuses is not None:
+        return thesis.statement_final_statuses
+    result = compute_final_statement_statuses(thesis, snapshot, config)
+    store.set_statement_final_statuses(thesis_id, result)
+    return result
 
 
 def _build_geometry(
@@ -734,14 +792,23 @@ class ResearchMonitor:
                 # active; the projection then reflects the resolved/invalidated status (NOT a silent
                 # revert to the idle declare affordance — the strip shows the terminal treatment).
                 self._store.resolve_thesis(self._thesis.id, "invalidated")
-                # Compute the machine-derived execution checks ONCE at this terminal resolution and
-                # persist them (capability 27, J-54 — the SAME single function the user-resolve,
+                # Compute the machine-derived execution checks, the per-statement FINAL statuses
+                # (J-55), and the outcome × process grades (J-56) ONCE at this terminal resolution and
+                # persist them (capabilities 27/29 — the SAME single functions the user-resolve,
                 # stream-end-expiry, and restart-sweep paths call; the journal detail serves them
-                # verbatim, never recomputed at read). Runs inside ``on_event``'s try/except, so a
-                # checks failure surfaces as ``monitor_status: failed`` and never kills the feeder; the
-                # already-committed invalidation still stands (the key just stays honestly absent).
+                # verbatim, never recomputed at read). The grades weigh the just-persisted execution
+                # checks, so they MUST run after them. The final statuses use the terminal-moment
+                # snapshot (the at-invalidation engine read). Runs inside ``on_event``'s try/except, so
+                # a failure surfaces as ``monitor_status: failed`` and never kills the feeder; the
+                # already-committed invalidation still stands (each key just stays honestly absent).
                 compute_and_persist_execution_checks(
                     self._store, self._thesis.id, self._config
+                )
+                compute_and_persist_final_statuses(
+                    self._store, self._thesis.id, snapshot, self._config
+                )
+                compute_and_persist_grades(
+                    self._store, self._thesis.id, "invalidated", self._config
                 )
                 self._resolved = True
                 self._resolution = "invalidated"
@@ -822,12 +889,19 @@ class ResearchMonitor:
                     last=last,
                 )
             )
-            # Compute the machine-derived execution checks ONCE at this terminal (expiry) resolution
-            # and persist them (capability 27, J-54 — the SAME single function the user-resolve,
+            # Compute the machine-derived execution checks, the per-statement FINAL statuses (J-55),
+            # and the outcome × process grades (J-56) ONCE at this terminal (expiry) resolution and
+            # persist them (capabilities 27/29 — the SAME single functions the user-resolve,
             # system-invalidation, and restart-sweep paths call). An expired thesis here is UNMARKED
             # (an entry-marked thesis is exempt and survives via ``_detach_not_evaluated``), so its
             # mark-dependent checks read ``not_applicable`` honestly — never a fabricated pass/fail.
+            # The grades weigh the just-persisted execution checks (so they run after them); the final
+            # statuses use the last engine read at the terminal moment (``_last_snapshot``).
             compute_and_persist_execution_checks(self._store, thesis.id, self._config)
+            compute_and_persist_final_statuses(
+                self._store, thesis.id, self._last_snapshot, self._config
+            )
+            compute_and_persist_grades(self._store, thesis.id, "expired", self._config)
             self._resolved = True
             self._resolution = "expired"
             self._expiry_reason = reason

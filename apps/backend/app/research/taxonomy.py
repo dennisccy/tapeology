@@ -252,10 +252,44 @@ def suggested_tag_for_check(check: str) -> str | None:
     return CHECK_SUGGESTED_TAG.get(check)
 
 
+# --- Grade enums (capability 29, J-56; data-contract row 24) -------------------------------------
+# The SINGLE backend owner of the outcome × process grade LABELS — the journal table + the detail
+# quadrant render these VERBATIM (the frontend hardcodes none of them). Both axes are ENUM labels,
+# NEVER a numeric score. Copy discipline (J-66): descriptive, factual, never a judgement on the user.
+#
+# OUTCOME — 1:1 from the resolution (capability 29): did the thesis hold, fail, or give no read?
+OUTCOME_GRADES: dict[str, str] = {
+    "thesis_held": "Thesis held",
+    "thesis_failed": "Thesis failed",
+    "no_read": "No read",
+}
+# PROCESS — a config-owned rule over the named checks (capability 29): was the execution clean,
+# flagged (advisories the user declared into), or violated (the user's own checks flagged it)?
+# Being invalidated is NEVER itself a process failure — that is reflected in the outcome, never here.
+PROCESS_GRADES: dict[str, str] = {
+    "clean": "Clean",
+    "flagged": "Flagged",
+    "violated": "Violated",
+}
+
+
+def outcome_grade_label(grade: str) -> str:
+    """Display label for an outcome grade id. Unknown -> itself (never fabricated)."""
+    return OUTCOME_GRADES.get(grade, grade)
+
+
+def process_grade_label(grade: str) -> str:
+    """Display label for a process grade id. Unknown -> itself (never fabricated)."""
+    return PROCESS_GRADES.get(grade, grade)
+
+
 # --- Statement-status enum (the monitor's live read of each expected-behaviour statement) -------
 # met = the statement's premise is observed in the current engine read; not_yet = not observed yet
 # (the honest default — no evidence is not a failure); violated = the engine read contradicts it.
-STATEMENT_STATUSES: tuple[str, ...] = ("not_yet", "met", "violated")
+# not_evaluated (J-55) = a FINAL status recorded at a terminal moment with NO live evaluation context
+# (e.g. the restart-expiry sweep over an unwatched thesis): an explicit honest enum, never fabricated,
+# never recomputed at read. It is a FINAL-status-only value — the monitor's LIVE read never emits it.
+STATEMENT_STATUSES: tuple[str, ...] = ("not_yet", "met", "violated", "not_evaluated")
 
 # --- Statement kind keys (machine handles the monitor maps to the engine read) ------------------
 # Each expected-behaviour statement carries a ``kind`` so the monitor can evaluate it from EXISTING
@@ -422,6 +456,11 @@ def taxonomy_payload() -> dict:
         "resolutions": [{"id": k, "name": STATUSES[k]} for k in RESOLUTIONS],
         "statement_statuses": list(STATEMENT_STATUSES),
         "monitor_statuses": list(MONITOR_STATUSES),
+        # The outcome × process grade catalogs (capability 29, J-56) — id + display label, owned ONCE
+        # here so the journal quadrant + rows are taxonomy-driven (the frontend hardcodes no grade
+        # label). ENUM labels only — never a numeric score.
+        "outcome_grades": [{"id": k, "name": v} for k, v in OUTCOME_GRADES.items()],
+        "process_grades": [{"id": k, "name": v} for k, v in PROCESS_GRADES.items()],
         # The entry risk-flag catalog (capability 26, J-49) — id + display label, owned ONCE here so
         # the strip's amber chips are taxonomy-driven (the measured-evidence sentence travels frozen
         # on each thesis's ``risk_flags``, also built from this module's templates).

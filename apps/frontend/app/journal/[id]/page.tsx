@@ -116,7 +116,7 @@ export default function JournalDetailPage({
         )}
 
         {!loading && detail && (
-          <JournalDetailView detail={detail} taxonomy={taxonomy} />
+          <JournalDetailView detail={detail} taxonomy={taxonomy} onSaved={load} />
         )}
       </main>
     </div>

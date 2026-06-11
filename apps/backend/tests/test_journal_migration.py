@@ -30,6 +30,7 @@ FIXTURE_SQL = Path(__file__).parent / "fixtures" / "journal_v1_schema.sql"
 FIXTURE_V2_SQL = Path(__file__).parent / "fixtures" / "journal_v2_schema.sql"
 FIXTURE_V3_SQL = Path(__file__).parent / "fixtures" / "journal_v3_schema.sql"
 FIXTURE_V4_SQL = Path(__file__).parent / "fixtures" / "journal_v4_schema.sql"
+FIXTURE_V5_SQL = Path(__file__).parent / "fixtures" / "journal_v5_schema.sql"
 
 
 def _build_v1_db(path: str) -> None:
@@ -68,6 +69,17 @@ def _build_v3_db(path: str) -> None:
 def _build_v4_db(path: str) -> None:
     """Materialize the committed v4-schema SQL fixture into a real SQLite DB at ``path``."""
     sql = FIXTURE_V4_SQL.read_text()
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript(sql)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _build_v5_db(path: str) -> None:
+    """Materialize the committed v5-schema SQL fixture into a real SQLite DB at ``path``."""
+    sql = FIXTURE_V5_SQL.read_text()
     conn = sqlite3.connect(path)
     try:
         conn.executescript(sql)
@@ -635,7 +647,9 @@ def test_open_migrates_v4_to_v5_adding_execution_checks_column_and_bumping_versi
     _build_v4_db(db)
     store = JournalStore(db, CONFIG)
     try:
-        assert store.schema_version() == 5 == CONFIG.journal_schema_version
+        # A v4 DB now chains all the way up to the CURRENT target (v6); the v4 -> v5 execution_checks
+        # column is present after the chained migration.
+        assert store.schema_version() == CONFIG.journal_schema_version
         assert "execution_checks" in _theses_columns(db)
         # The pre-existing v2/v3/v4 columns are untouched (the v4 -> v5 step only touches theses).
         assert "risk_flags" in _theses_columns(db)
@@ -714,10 +728,10 @@ def test_thesis_with_execution_checks_records_end_to_end_against_migrated_v4_db(
 def test_reopen_already_v5_is_idempotent_from_v4(tmp_path):
     db = str(tmp_path / "v4.db")
     _build_v4_db(db)
-    JournalStore(db, CONFIG).close()  # first open migrates v4 -> v5
+    JournalStore(db, CONFIG).close()  # first open migrates v4 -> v5 -> v6 (chained to current)
     store = JournalStore(db, CONFIG)  # second open must be a no-op
     try:
-        assert store.schema_version() == 5
+        assert store.schema_version() == CONFIG.journal_schema_version
         assert "execution_checks" in _theses_columns(db)
     finally:
         store.close()
@@ -725,7 +739,7 @@ def test_reopen_already_v5_is_idempotent_from_v4(tmp_path):
 
 def test_stale_v4_version_row_with_execution_checks_column_present_does_not_crash(tmp_path):
     # Belt-and-braces: a DB whose theses ALREADY carries execution_checks but whose version row is
-    # stale at 4. The PRAGMA table_info guard makes the ALTER a no-op and the open just bumps to v5.
+    # stale at 4. The PRAGMA table_info guard makes the ALTER a no-op and the open chains to current.
     db = str(tmp_path / "v4.db")
     _build_v4_db(db)
     conn = sqlite3.connect(db)
@@ -736,6 +750,170 @@ def test_stale_v4_version_row_with_execution_checks_column_present_does_not_cras
         conn.close()
     store = JournalStore(db, CONFIG)  # must not raise "duplicate column name"
     try:
-        assert store.schema_version() == 5
+        assert store.schema_version() == CONFIG.journal_schema_version
+    finally:
+        store.close()
+
+
+# --- v5 -> v6 migration on open (J-55/J-56/J-57: theses review-pillar columns) --------------------
+
+_V6_COLUMNS = (
+    "statement_final_statuses",
+    "grades",
+    "review_tags",
+    "review_note",
+    "reviewed",
+)
+
+
+def test_v5_fixture_starts_at_v5_without_v6_columns(tmp_path):
+    db = str(tmp_path / "v5.db")
+    _build_v5_db(db)
+    cols = _theses_columns(db)
+    for c in _V6_COLUMNS:
+        assert c not in cols
+    # The v4/v5 columns ARE present.
+    assert "risk_flags" in cols
+    assert "execution_checks" in cols
+    conn = sqlite3.connect(db)
+    try:
+        assert conn.execute("SELECT version FROM schema_version").fetchone()[0] == 5
+        names = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+    finally:
+        conn.close()
+    for forbidden in ("trades", "quotes", "candles", "features"):
+        assert forbidden not in names
+
+
+def test_open_migrates_v5_to_v6_adding_all_review_columns_and_bumping_version(tmp_path):
+    db = str(tmp_path / "v5.db")
+    _build_v5_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        assert store.schema_version() == 6 == CONFIG.journal_schema_version
+        cols = _theses_columns(db)
+        for c in _V6_COLUMNS:
+            assert c in cols  # ALL five v6 columns added in ONE bump
+        # The pre-existing v2/v3/v4/v5 columns are untouched (the v5 -> v6 step only touches theses).
+        assert "execution_checks" in cols
+        assert "risk_flags" in cols
+        assert "spread_at_mark" in _actions_columns(db)
+        assert {"rule_first_true_ts", "rule_first_true_price"} <= _verdict_event_columns(db)
+    finally:
+        store.close()
+
+
+def test_v6_migration_does_not_backfill_pre_existing_resolved_thesis(tmp_path):
+    # The append-only/honest-omission discipline extends to the review-pillar columns: the pre-existing
+    # v5 RESOLVED thesis keeps NULL for each (never backfilled — its final statuses/grades were never
+    # computed and it was never reviewed) and reads ``reviewed=False`` (the DEFAULT 0 = honest "no
+    # review exists", NOT a backfilled value). Its verbatim fields stay intact.
+    db = str(tmp_path / "v5.db")
+    _build_v5_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        thesis = store.get_thesis("v5thesis0001")
+        assert thesis is not None
+        assert thesis.statement_final_statuses is None  # never recorded, never backfilled
+        assert thesis.grades is None  # never computed, never backfilled
+        assert thesis.review_tags is None
+        assert thesis.review_note is None
+        assert thesis.reviewed is False  # honest default, not a backfill
+        # Verbatim fields intact (not rewritten by the migration).
+        assert thesis.setup_type == "trend_continuation"
+        assert thesis.config_fingerprint == "oldfingerprint05"
+        assert thesis.status == "played_out"
+        assert thesis.risk_flags == []  # v4 column round-trips
+        # The v5 execution_checks round-trips verbatim.
+        assert thesis.execution_checks is not None
+        assert thesis.execution_checks["checks"][0]["check"] == "entered_before_confirmation"
+    finally:
+        store.close()
+
+
+def test_pre_migration_thesis_detail_omits_v6_keys_but_reports_not_reviewed(tmp_path):
+    # Honest-omission semantics on the served detail: a pre-v6 resolved thesis OMITS the
+    # statement_final_statuses / grades / review keys (absent means "never computed/reviewed"), but
+    # ``reviewed`` is ALWAYS present as the boolean fact False (a definite "no review", never absent).
+    from app.research.routes import build_journal_detail
+
+    db = str(tmp_path / "v5.db")
+    _build_v5_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        detail = build_journal_detail(store, "v5thesis0001", CONFIG)
+        assert detail is not None
+        assert "statement_final_statuses" not in detail
+        assert "grades" not in detail
+        assert "review" not in detail
+        assert detail["reviewed"] is False  # always present, the honest no-review fact
+    finally:
+        store.close()
+
+
+def test_review_persists_end_to_end_against_migrated_v5_db(tmp_path):
+    # The v6 columns are writable against the migrated DB and read back verbatim: grades, final
+    # statuses, and a saved review all round-trip, with the absent->present distinction preserved.
+    db = str(tmp_path / "v5.db")
+    _build_v5_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        store.set_grades("v5thesis0001", {"outcome": "thesis_held", "process": "clean", "process_evidence": "e"})
+        store.set_statement_final_statuses("v5thesis0001", [{"status": "met"}])
+        store.save_review("v5thesis0001", tags=["overstayed", "other"], note="late exit")
+        back = store.get_thesis("v5thesis0001")
+        assert back.grades == {"outcome": "thesis_held", "process": "clean", "process_evidence": "e"}
+        assert back.statement_final_statuses == [{"status": "met"}]
+        assert back.review_tags == ["overstayed", "other"]
+        assert back.review_note == "late exit"
+        assert back.reviewed is True
+    finally:
+        store.close()
+
+
+def test_reopen_already_v6_is_idempotent_from_v5(tmp_path):
+    db = str(tmp_path / "v5.db")
+    _build_v5_db(db)
+    JournalStore(db, CONFIG).close()  # first open migrates v5 -> v6
+    store = JournalStore(db, CONFIG)  # second open must be a no-op
+    try:
+        assert store.schema_version() == 6
+        for c in _V6_COLUMNS:
+            assert c in _theses_columns(db)
+    finally:
+        store.close()
+
+
+def test_stale_v5_version_row_with_v6_columns_present_does_not_crash(tmp_path):
+    # Belt-and-braces: a DB whose theses ALREADY carries the v6 columns but whose version row is stale
+    # at 5. The PRAGMA table_info guard makes each ALTER a no-op and the open just bumps to v6.
+    db = str(tmp_path / "v5.db")
+    _build_v5_db(db)
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute("ALTER TABLE theses ADD COLUMN statement_final_statuses TEXT")
+        conn.execute("ALTER TABLE theses ADD COLUMN grades TEXT")
+        conn.execute("ALTER TABLE theses ADD COLUMN review_tags TEXT")
+        conn.execute("ALTER TABLE theses ADD COLUMN review_note TEXT")
+        conn.execute("ALTER TABLE theses ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0")
+        conn.commit()  # version row still says 5
+    finally:
+        conn.close()
+    store = JournalStore(db, CONFIG)  # must not raise "duplicate column name"
+    try:
+        assert store.schema_version() == 6
+    finally:
+        store.close()
+
+
+def test_fresh_db_created_at_current_version_carries_v6_columns(tmp_path):
+    store = JournalStore(str(tmp_path / "fresh6.db"), CONFIG)
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version == 6
+        cols = _theses_columns(str(tmp_path / "fresh6.db"))
+        for c in _V6_COLUMNS:
+            assert c in cols
     finally:
         store.close()

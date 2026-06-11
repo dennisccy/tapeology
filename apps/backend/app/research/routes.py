@@ -28,10 +28,12 @@ from pydantic import BaseModel
 
 from ..config import Config
 from .execution_checks import compute_and_persist_execution_checks
+from .grades import compute_and_persist_grades
 from .marks import marks_projection
 from .monitor import (
     ResearchMonitor,
     build_projection,
+    compute_and_persist_final_statuses,
     compute_risk_flags,
     data_feed_for_scenario,
 )
@@ -39,8 +41,10 @@ from .journal_rows import journal_row
 from .store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
 from .taxonomy import not_evaluated_notice
 from .taxonomy import (
+    MISTAKE_TAGS_REQUIRING_NOTE,
     frozen_statements,
     is_valid_direction,
+    is_valid_mistake_tag,
     is_valid_setup,
     setup_requires_level,
     taxonomy_payload,
@@ -87,6 +91,17 @@ class ActionRequest(BaseModel):
 
     kind: str
     price: float
+
+
+class ReviewRequest(BaseModel):
+    """Body for ``POST /research/thesis/{id}/review`` (J-57). ``mistake_tags`` is the user-CONFIRMED
+    tag list (distinct from the machine-SUGGESTED tags); ``note`` is the optional free text (REQUIRED
+    only when ``other`` is among the tags). Both rules are enforced in the ROUTE (not the schema) so
+    the message is explicit and taxonomy-owned. ``mistake_tags`` defaults to an empty list so a
+    body with only a note (or an empty review) is well-formed at the schema layer."""
+
+    mistake_tags: list[str] = []
+    note: str | None = None
 
 
 class ResearchRegistry:
@@ -178,17 +193,23 @@ class ResearchRegistry:
         """Resolve any thesis left ``active`` in the DB (from a prior process) to ``expired``.
 
         Each thesis the sweep expires (UNMARKED actives — an entry-marked thesis is exempt and
-        survives) has its execution checks computed ONCE here and persisted on its row — the SAME
-        single function every other terminal-resolution path calls (capability 27, J-54). An expired
-        unmarked thesis has no marks, so its mark-dependent checks read ``not_applicable`` honestly
-        (never a fabricated pass/fail)."""
+        survives) has its execution checks, per-statement FINAL statuses (J-55), and outcome × process
+        grades (J-56) computed ONCE here and persisted on its row — the SAME single functions every
+        other terminal-resolution path calls (capabilities 27/29). An expired unmarked thesis has no
+        marks, so its mark-dependent checks read ``not_applicable`` honestly (never a fabricated
+        pass/fail). The restart-expiry sweep has NO live engine context (the watch that declared the
+        thesis is long gone), so each statement's final status is the explicit ``not_evaluated`` enum
+        (``snapshot=None``) — an honest "no read at the terminal moment", never fabricated. The grades
+        weigh the just-persisted execution checks, so they run after them (resolution is ``expired``)."""
         expired = self._store.expire_stale_actives(time.time())
         for thesis_id in expired:
             try:
                 compute_and_persist_execution_checks(self._store, thesis_id, self._config)
+                compute_and_persist_final_statuses(self._store, thesis_id, None, self._config)
+                compute_and_persist_grades(self._store, thesis_id, "expired", self._config)
             except Exception:
-                # A checks-computation failure must not abort the sweep (the resolution already
-                # stands); the key stays honestly absent for that thesis.
+                # A computation failure must not abort the sweep (the resolution already stands); the
+                # key stays honestly absent for that thesis.
                 pass
         return expired
 
@@ -392,6 +413,29 @@ def build_journal_detail(
         detail["suggested_mistake_tags"] = thesis.execution_checks.get(
             "suggested_mistake_tags", []
         )
+    # The per-statement FINAL statuses (capability 29, J-55) — served VERBATIM from the persisted list
+    # recorded ONCE at resolution (data-contract row 19). Honest omission: a pre-v6 resolution carries
+    # NULL, so the detail OMITS the key (the page then renders the frozen statements WITHOUT a
+    # final-status badge — never a fabricated/recomputed status). One entry per frozen statement, in
+    # statement order (positionally keyed to ``statements``).
+    if thesis.statement_final_statuses is not None:
+        detail["statement_final_statuses"] = thesis.statement_final_statuses
+    # The outcome × process grades (capability 29, J-56) — served VERBATIM from the persisted result
+    # computed ONCE at resolution (data-contract row 19). Honest omission: a pre-v6 resolution carries
+    # NULL grades, so the detail OMITS the key. ENUM labels only (never a numeric score); the
+    # ``process_evidence`` names the checks/flags that drove the process grade (no naked grade).
+    if thesis.grades is not None:
+        detail["grades"] = thesis.grades
+    # The user-CONFIRMED review (capability 29, J-57, data-contract row 28) — served VERBATIM from the
+    # persisted record. ``reviewed`` is ALWAYS present (a boolean fact — False until the user saves a
+    # review); the confirmed ``review`` (tags + note) is present ONLY once reviewed (honest omission
+    # before then). The confirmed tags are distinct from the machine-suggested tags above (row 19).
+    detail["reviewed"] = thesis.reviewed
+    if thesis.reviewed:
+        detail["review"] = {
+            "mistake_tags": thesis.review_tags or [],
+            "note": thesis.review_note,
+        }
     return detail
 
 
@@ -665,14 +709,19 @@ def resolve_thesis(
     except Exception:
         raise HTTPException(status_code=503, detail="could not resolve the thesis")
 
-    # Compute the machine-derived execution checks ONCE here, at this terminal resolution, and persist
-    # them on the thesis row (capability 27, J-54 — the data-contract row-19 execution-checks half).
-    # The SAME single function every other terminal path calls (system invalidation, stream-end
-    # expiry, restart-expiry sweep); the journal detail serves the persisted result VERBATIM (never
-    # recomputed at read). A failure here must NOT undo the (already-committed) resolution — the
-    # checks then stay honestly ABSENT for this thesis rather than half-resolving it.
+    # Compute the machine-derived execution checks, the per-statement FINAL statuses (J-55), and the
+    # outcome × process grades (J-56) ONCE here, at this terminal resolution, and persist them on the
+    # thesis row (capabilities 27/29 — the data-contract row-19 execution-checks + grades half). The
+    # SAME single functions every other terminal path calls (system invalidation, stream-end expiry,
+    # restart-expiry sweep); the journal detail serves the persisted results VERBATIM (never recomputed
+    # at read). The grades weigh the just-persisted execution checks, so they MUST run after them. The
+    # final statuses use the at-resolution engine snapshot (``snap`` — the live read if still watched,
+    # else ``None`` => an honest ``not_evaluated`` per statement). A failure here must NOT undo the
+    # (already-committed) resolution — the keys then stay honestly ABSENT rather than half-resolving it.
     try:
         compute_and_persist_execution_checks(registry.store, thesis_id, registry._config)
+        compute_and_persist_final_statuses(registry.store, thesis_id, snap, registry._config)
+        compute_and_persist_grades(registry.store, thesis_id, resolution, registry._config)
     except Exception:
         pass
 
@@ -817,5 +866,84 @@ def record_action(
             "id": thesis.id,
             "ticker": thesis.ticker,
             "marks": marks_projection(thesis, registry.store.get_actions(thesis_id)),
+        }
+    }
+
+
+@router.post("/thesis/{thesis_id}/review")
+def review_thesis(
+    thesis_id: str,
+    body: ReviewRequest,
+    registry: ResearchRegistry = Depends(get_registry),
+) -> dict:
+    """Save the user's CONFIRMED review of a resolved thesis (J-57) — tags + optional note.
+
+    This records the user's OWN confirmation (the machine SUGGESTS tags from the execution checks; it
+    never records a confirmed tag on its own — capability 27/29). The confirmed tags are persisted
+    distinctly from the suggested tags, and the thesis flips to ``reviewed``.
+
+    Validation matrix (nothing is persisted on any rejection):
+      * 404 — no thesis with that id;
+      * 422 — an unknown mistake tag (not in the backend taxonomy), or ``other`` selected WITHOUT a
+        (non-blank) note;
+      * 409 — the thesis is NOT resolved yet (a review records how a RESOLVED thesis went);
+      * 409 — the thesis is ALREADY reviewed (conservative immutability default — goal.md is silent
+        on re-review, so a review record is kept immutable in the spirit of journal integrity; a
+        second save is refused rather than overwriting the first).
+
+    The append-only ``verdict_events`` write surface is UNTOUCHED — a review never edits the timeline
+    (journal integrity). On success the saved review + ``reviewed`` flip are served by
+    ``GET /research/journal/{id}`` and the ``reviewed`` flag lands on ``GET /research/journal`` rows.
+    Returns the saved review verbatim."""
+    thesis = registry.store.get_thesis(thesis_id)
+    if thesis is None:
+        raise HTTPException(status_code=404, detail=f"no thesis with id '{thesis_id}'")
+
+    # 409 — a review records how a RESOLVED thesis went; an active thesis has no resolution to review.
+    if thesis.status not in _TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"thesis '{thesis_id}' is not resolved yet — only a resolved thesis can be reviewed",
+        )
+
+    # 409 — already reviewed (conservative immutability default — see the route docstring / spec NOTES).
+    if thesis.reviewed:
+        raise HTTPException(
+            status_code=409,
+            detail=f"thesis '{thesis_id}' has already been reviewed",
+        )
+
+    # 422 — every confirmed tag must exist in the backend taxonomy (never a silently-coerced tag).
+    tags = body.mistake_tags
+    for tag in tags:
+        if not is_valid_mistake_tag(tag):
+            raise HTTPException(status_code=422, detail=f"unknown mistake tag '{tag}'")
+
+    # 422 — a tag that REQUIRES a note (``other``) must carry a non-blank note.
+    note = body.note
+    note_present = note is not None and note.strip() != ""
+    requires_note = any(t in MISTAKE_TAGS_REQUIRING_NOTE for t in tags)
+    if requires_note and not note_present:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"a note is required when one of {' / '.join(MISTAKE_TAGS_REQUIRING_NOTE)} is selected"
+            ),
+        )
+
+    # Persist the confirmed tags + note VERBATIM and flip ``reviewed`` — the append-only timeline is
+    # untouched (journal integrity). The note is stored exactly as given when present, else NULL.
+    stored_note = note if note_present else None
+    try:
+        registry.store.save_review(thesis_id, tags=tags, note=stored_note)
+    except Exception:
+        raise HTTPException(status_code=503, detail="could not save the review")
+
+    return {
+        "review": {
+            "id": thesis.id,
+            "reviewed": True,
+            "mistake_tags": tags,
+            "note": stored_note,
         }
     }

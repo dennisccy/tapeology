@@ -379,9 +379,17 @@ class Config:
     #            by ``ALTER TABLE`` and never backfilled (a pre-migration RESOLVED thesis keeps
     #            ``NULL`` — its checks were never computed, so the journal detail OMITS the
     #            ``execution_checks`` key rather than fabricate a pass/fail at read).
+    #   v5 → v6: ``theses`` gains the J-55/J-56/J-57 review-pillar columns IN ONE BUMP —
+    #            ``statement_final_statuses`` (per-statement FINAL statuses persisted ONCE at terminal
+    #            resolution, J-55), ``grades`` (the outcome × process grade computed ONCE at resolution,
+    #            J-56), and ``review_tags`` / ``review_note`` / ``reviewed`` (the user-confirmed review
+    #            saved by ``POST …/review``, J-57). All added by ``ALTER TABLE`` and never backfilled (a
+    #            pre-migration RESOLVED thesis keeps ``NULL`` for each — its statuses/grades were never
+    #            computed and it was never reviewed, so the journal detail OMITS each key rather than
+    #            fabricate a value at read).
     # Excluded from ``config_fingerprint`` (see the exclusion set below): a migration must NOT change
     # the fingerprint — verdicts depend on classifier thresholds, never on where/how the DB is stored.
-    journal_schema_version: int = 5
+    journal_schema_version: int = 6
 
     # --- Research evolution: verdict-transition engine (capability 24) -------------------------
     # RESEARCH DEFAULTS — a starting point calibrated against the deterministic sims, NEVER a
@@ -474,6 +482,45 @@ class Config:
     # multiple an invalidation within ~$0.04 of the last is flagged too tight, while a normal
     # invalidation ~$1 away (50× the spread) is comfortably clear.
     invalidation_too_tight_spread_multiple: float = 2.0
+
+    # --- Research evolution: OUTCOME × PROCESS GRADES (capability 29, J-56) ----------------------
+    # The config-owned rules for the two review grades, computed ONCE at terminal resolution
+    # (alongside execution checks) and persisted (schema v6). NO numeric score anywhere — both axes
+    # are ENUM labels with plain-language evidence naming which named checks drove them.
+    #
+    # OUTCOME (``thesis_held | thesis_failed | no_read``) is 1:1 from the resolution (goal.md
+    # capability 29) — a fixed, config-owned map, never a judgement:
+    #   * ``played_out``  -> ``thesis_held``   (the idea ran its course on your side);
+    #   * ``invalidated`` -> ``thesis_failed`` (the tape resolved it against the thesis);
+    #   * ``expired``     -> ``no_read``       (the watch ended before the thesis resolved either way);
+    #   * ``abandoned``   -> ``no_read``       (closed without running its course — no outcome read).
+    # Kept in config (not hardcoded in research code) so the single 1:1 mapping has ONE owner.
+    process_outcome_grade_map: dict = field(
+        default_factory=lambda: {
+            "played_out": "thesis_held",
+            "invalidated": "thesis_failed",
+            "expired": "no_read",
+            "abandoned": "no_read",
+        }
+    )
+    # PROCESS (``clean | flagged | violated``) is a config-owned RULE over the named, evidence-backed
+    # checks (the FROZEN entry risk flags + the persisted execution checks) — NEVER a numeric score,
+    # and CRITICALLY: being invalidated is never by itself a process failure (the system enforces
+    # invalidation; an invalidated thesis with no failed execution check and no fired risk flag grades
+    # ``clean``). The rule, in priority order (the worst named finding wins):
+    #   * ``violated`` — at least ``process_violated_min_failed_checks`` execution check(s) read
+    #     ``failed`` (the user demonstrably did something the checks flag: held through the stop,
+    #     chased, cut a confirming thesis early, entered before confirmation). A failed EXECUTION
+    #     check is grounded in the user's OWN recorded marks, so it is a process matter.
+    #   * ``flagged`` — no failed execution check, but at least
+    #     ``process_flagged_min_risk_flags`` entry risk flag(s) fired at declaration (an advisory the
+    #     user declared into). Risk flags are advisory, so they ``flag`` rather than ``violate``.
+    #   * ``clean``   — neither (no failed execution check, no fired risk flag).
+    # The two thresholds are config-owned (no literal in research code) and default to 1 (any single
+    # failed check violates; any single fired flag flags). They are documented research defaults — a
+    # starting point, never a validated edge.
+    process_violated_min_failed_checks: int = 1
+    process_flagged_min_risk_flags: int = 1
 
     def window_label(self, window: int) -> str:
         return f"{window}s"

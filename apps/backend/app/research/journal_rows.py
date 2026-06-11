@@ -10,9 +10,11 @@ presence. NOTHING is recomputed at read: the resolution reason is the literal ``
 verdict engine / lifecycle sweep already wrote to the terminal timeline event; mark presence is the
 persisted action fact, never inferred from a price.
 
-Grade / reviewed fields are deliberately NOT fabricated here — they land as ADDITIVE keys with the
-review/grading journeys (J-56/J-57). Until then the keys are ABSENT (honest omission, the
-established absent-vs-empty discipline), never a dishonest placeholder.
+Grade / reviewed fields (data-contract row 21 — the pre-announced additive keys, J-56/J-57): the
+``grades`` object is added VERBATIM as a row key ONLY once it has been computed at resolution (a
+pre-grade row OMITS it — honest omission, never a dishonest placeholder); ``reviewed`` is ALWAYS
+present (a boolean fact — ``False`` until the user saves a review). Both are reads of the persisted
+record — never recomputed at read.
 """
 
 from __future__ import annotations
@@ -44,7 +46,7 @@ def journal_row(
     once terminal, surfaced under its own key so the frontend reads a resolution explicitly rather
     than inferring one from the status."""
     is_terminal = thesis.status in _TERMINAL_STATUSES
-    return {
+    row = {
         "id": thesis.id,
         "ticker": thesis.ticker,
         "bound_source": thesis.bound_source,
@@ -62,4 +64,12 @@ def journal_row(
         # Mark presence — the persisted action fact the UI reads (never inferred from a price).
         "has_entry": has_entry,
         "has_exit": has_exit,
+        # The user-confirmed-review fact (J-57, data-contract row 21) — ALWAYS present (a boolean: a
+        # pre-review row reads ``False``, never absent — it is a definite fact, not a computed value).
+        "reviewed": thesis.reviewed,
     }
+    # The outcome × process grades (J-56, data-contract row 21) — added VERBATIM ONLY once computed at
+    # resolution (a pre-grade row OMITS the key entirely — honest omission, never a fabricated grade).
+    if thesis.grades is not None:
+        row["grades"] = thesis.grades
+    return row

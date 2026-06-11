@@ -118,11 +118,11 @@ def test_rows_newest_declared_first_and_verbatim(ctx):
     # Entry/exit-mark presence is an explicit boolean (never inferred from a price).
     assert new_row["has_entry"] is False
     assert new_row["has_exit"] is False
-    # Grade / reviewed fields are NOT fabricated this iteration (honest omission — they land with
-    # J-56/J-57). The key is absent, not an empty/dishonest value.
-    assert "outcome_grade" not in new_row
-    assert "process_grade" not in new_row
-    assert "reviewed" not in new_row
+    # Grades (J-56) are OMITTED for an active (un-resolved) row — honest omission, never fabricated.
+    assert "grades" not in new_row
+    # `reviewed` (J-57, data-contract row 21) is ALWAYS present — a definite boolean fact (False for
+    # an unreviewed thesis), not absent and never a fabricated value.
+    assert new_row["reviewed"] is False
 
 
 # --- resolution + verbatim expired/interruption reason -------------------------------------------

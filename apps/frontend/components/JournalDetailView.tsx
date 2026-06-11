@@ -6,8 +6,10 @@ import type {
   JournalDetail,
   JournalTimelineRow,
   ResearchTaxonomy,
+  StatementFinalStatus,
 } from "@/lib/types";
 import { formatDateTimeDMY, localOffsetLabel } from "@/lib/datetime";
+import { saveReview } from "@/lib/api";
 
 // The per-thesis review-detail body (J-55). Renders the single GET /research/journal/{id} response
 // + taxonomy labels VERBATIM — it recomputes NOTHING. Sections, top to bottom: the thesis header,
@@ -78,12 +80,57 @@ const CHECK_STATUS_STYLE: Record<
 // rendered with a muted, distinct treatment so a gap reads explicitly as an interruption.
 const GAP_VERDICTS = new Set(["watch_restarted", "paused", "expired"]);
 
+// Statement FINAL-status VISUAL semantics (J-55): met emerald (the premise resolved true), violated
+// rose (the read contradicted it), not_yet/not_evaluated slate (no contradicting read / no read at
+// the terminal moment). These are LABELS read verbatim — the page never re-derives them.
+const STATEMENT_STATUS_STYLE: Record<
+  StatementFinalStatus["status"],
+  { chip: string; label: string }
+> = {
+  met: { chip: "border-emerald-700 bg-emerald-900/30 text-emerald-300", label: "Met" },
+  violated: { chip: "border-rose-700 bg-rose-900/40 text-rose-300", label: "Violated" },
+  not_yet: { chip: "border-slate-700 bg-slate-800 text-slate-400", label: "Not met" },
+  not_evaluated: {
+    chip: "border-slate-700 bg-slate-800 text-slate-400",
+    label: "Not evaluated",
+  },
+};
+
+// Outcome-grade VISUAL semantics (J-56): held emerald, failed rose, no_read slate. Process-grade
+// VISUAL semantics: clean emerald, flagged amber, violated rose. The LABEL text comes from the
+// taxonomy; the COLOR is a frontend visual concern keyed off the id.
+function outcomeGradeClass(grade: string): string {
+  switch (grade) {
+    case "thesis_held":
+      return "border-emerald-700 bg-emerald-900/40 text-emerald-300";
+    case "thesis_failed":
+      return "border-rose-700 bg-rose-900/40 text-rose-300";
+    default:
+      return "border-slate-600 bg-slate-800 text-slate-300";
+  }
+}
+function processGradeClass(grade: string): string {
+  switch (grade) {
+    case "clean":
+      return "border-emerald-700 bg-emerald-900/40 text-emerald-300";
+    case "flagged":
+      return "border-amber-700 bg-amber-900/40 text-amber-300";
+    case "violated":
+      return "border-rose-700 bg-rose-900/40 text-rose-300";
+    default:
+      return "border-slate-600 bg-slate-800 text-slate-300";
+  }
+}
+
 interface Props {
   detail: JournalDetail;
   taxonomy: ResearchTaxonomy | null;
+  // Called after a review is saved successfully so the page re-reads the detail (the saved tags +
+  // note + reviewed status then render from the persisted record — never client-derived).
+  onSaved?: () => void;
 }
 
-export function JournalDetailView({ detail, taxonomy }: Props) {
+export function JournalDetailView({ detail, taxonomy, onSaved }: Props) {
   const { thesis, marks, timeline } = detail;
   const directionColor =
     thesis.direction === "long" ? "text-emerald-400" : "text-rose-400";
@@ -151,31 +198,58 @@ export function JournalDetailView({ detail, taxonomy }: Props) {
         </dl>
       </section>
 
-      {/* --- Expected behaviour (frozen statements) ----------------------------------------- */}
+      {/* --- Expected behaviour (frozen statements + their persisted FINAL status, J-55) ------ */}
       <Section title="What you expected" testid="detail-statements">
         {thesis.statements.length === 0 ? (
           <p className="text-sm text-slate-500">No expected-behaviour statements were frozen.</p>
         ) : (
           <ul className="space-y-2">
-            {thesis.statements.map((s, i) => (
-              <li
-                key={i}
-                data-testid="detail-statement"
-                className="flex items-start gap-2 text-sm text-slate-300"
-              >
-                <span aria-hidden="true" className="mt-1 text-slate-600">
-                  •
-                </span>
-                <span>{s.text}</span>
-              </li>
-            ))}
+            {thesis.statements.map((s, i) => {
+              // The persisted FINAL status, positionally keyed to the frozen statement (J-55). The
+              // page renders this verbatim — it NEVER re-derives a status from the timeline. Absent
+              // (a pre-v6 resolution) => no badge (honest omission).
+              const finalStatus = detail.statement_final_statuses?.[i]?.status;
+              const style = finalStatus ? STATEMENT_STATUS_STYLE[finalStatus] : null;
+              return (
+                <li
+                  key={i}
+                  data-testid="detail-statement"
+                  data-final-status={finalStatus ?? "absent"}
+                  className="flex items-start justify-between gap-3 text-sm text-slate-300"
+                >
+                  <span className="flex items-start gap-2">
+                    <span aria-hidden="true" className="mt-1 text-slate-600">
+                      •
+                    </span>
+                    <span>{s.text}</span>
+                  </span>
+                  {style && (
+                    <span
+                      data-testid="detail-statement-final-status"
+                      data-status={finalStatus}
+                      className={`mt-0.5 inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${style.chip}`}
+                    >
+                      {style.label}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
-        <p className="mt-2 text-xs text-slate-500">
-          The final status of each statement is read from the verdict timeline below — the timeline
-          is the canonical record.
-        </p>
+        {detail.statement_final_statuses === undefined && (
+          <p
+            data-testid="statement-final-statuses-not-recorded"
+            className="mt-2 text-xs text-slate-500"
+          >
+            Final statuses were not recorded for this thesis — it predates per-statement status
+            tracking.
+          </p>
+        )}
       </Section>
+
+      {/* --- Outcome × process grades (the review quadrant, J-56) --------------------------- */}
+      <GradesQuadrant detail={detail} taxonomy={taxonomy} />
 
       {/* --- Entry risk flags (frozen) ------------------------------------------------------ */}
       <Section title="Entry risk flags" testid="detail-risk-flags">
@@ -266,8 +340,8 @@ export function JournalDetailView({ detail, taxonomy }: Props) {
         )}
       </Section>
 
-      {/* --- Execution checks + suggested mistake-tag picker -------------------------------- */}
-      <ExecutionChecksSection detail={detail} taxonomy={taxonomy} />
+      {/* --- Execution checks + the review save flow ---------------------------------------- */}
+      <ExecutionChecksSection detail={detail} taxonomy={taxonomy} onSaved={onSaved} />
 
       {/* --- Verdict timeline (true clock time) --------------------------------------------- */}
       <Section title="What the tape did" testid="detail-timeline">
@@ -376,28 +450,106 @@ function TimelineRow({
   );
 }
 
-// --- execution checks + suggested mistake-tag picker ---------------------------------------------
+// --- outcome × process grade quadrant (J-56) -----------------------------------------------------
 
-function ExecutionChecksSection({
+function GradesQuadrant({
   detail,
   taxonomy,
 }: {
   detail: JournalDetail;
   taxonomy: ResearchTaxonomy | null;
 }) {
+  const grades = detail.grades;
+  return (
+    <Section title="How it graded" testid="detail-grades">
+      {grades === undefined ? (
+        // Honest omission: a pre-v6 resolution (or an unresolved thesis) was never graded — never an
+        // invented grade, never a numeric score.
+        <p data-testid="grades-not-graded" className="text-sm text-slate-500">
+          Not graded — the outcome and process grades are computed once a thesis is resolved, and
+          this thesis predates that.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {/* Outcome — 1:1 from the resolution. ENUM label from the taxonomy, never a number. */}
+            <div
+              data-testid="grade-outcome"
+              data-grade={grades.outcome}
+              className="rounded-md border border-slate-800 bg-slate-900/50 p-3"
+            >
+              <p className="text-xs uppercase tracking-wider text-slate-500">Outcome</p>
+              <span
+                className={`mt-1.5 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${outcomeGradeClass(
+                  grades.outcome,
+                )}`}
+              >
+                {labelFrom(taxonomy?.outcome_grades, grades.outcome)}
+              </span>
+            </div>
+            {/* Process — the config-owned rule over the named checks. ENUM label, never a number. */}
+            <div
+              data-testid="grade-process"
+              data-grade={grades.process}
+              className="rounded-md border border-slate-800 bg-slate-900/50 p-3"
+            >
+              <p className="text-xs uppercase tracking-wider text-slate-500">Process</p>
+              <span
+                className={`mt-1.5 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${processGradeClass(
+                  grades.process,
+                )}`}
+              >
+                {labelFrom(taxonomy?.process_grades, grades.process)}
+              </span>
+            </div>
+          </div>
+          {/* The plain-language evidence naming the checks/flags that drove the PROCESS grade (no
+              naked grade) — read verbatim. Being invalidated is never itself a process failure. */}
+          <p data-testid="grade-process-evidence" className="mt-3 text-xs text-slate-400">
+            {grades.process_evidence}
+          </p>
+        </>
+      )}
+    </Section>
+  );
+}
+
+// --- execution checks + the review save flow (J-54 / J-57) ---------------------------------------
+
+function ExecutionChecksSection({
+  detail,
+  taxonomy,
+  onSaved,
+}: {
+  detail: JournalDetail;
+  taxonomy: ResearchTaxonomy | null;
+  onSaved?: () => void;
+}) {
   const checks = detail.execution_checks;
   const suggested = useMemo(
     () => detail.suggested_mistake_tags ?? [],
     [detail.suggested_mistake_tags],
   );
+  const thesisId = detail.thesis.id;
+  const alreadyReviewed = detail.reviewed;
+  const savedReview = detail.review;
 
-  // The picker is pre-selected with the backend's SUGGESTED tags and toggleable — but NOT yet
-  // savable (the J-57 review save flow lands next iteration). The local toggle state seeds from the
-  // suggestions; the system never records a confirmed tag on its own. Re-seed if the thesis changes.
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(suggested));
+  // The picker seeds from the backend's SUGGESTED tags (the system suggests; the user confirms). On
+  // an ALREADY-reviewed thesis it seeds from the user's CONFIRMED tags so the saved selection shows.
+  // Re-seed whenever the underlying detail changes (a fresh load after save).
+  const initialSelected = useMemo(
+    () => (alreadyReviewed && savedReview ? savedReview.mistake_tags : suggested),
+    [alreadyReviewed, savedReview, suggested],
+  );
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected));
+  const [note, setNote] = useState<string>(() => savedReview?.note ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   useEffect(() => {
-    setSelected(new Set(suggested));
-  }, [suggested]);
+    setSelected(new Set(initialSelected));
+    setNote(savedReview?.note ?? "");
+    setSaveError(null);
+  }, [initialSelected, savedReview]);
 
   function toggle(tag: string) {
     setSelected((prev) => {
@@ -406,6 +558,32 @@ function ExecutionChecksSection({
       else next.add(tag);
       return next;
     });
+  }
+
+  // The taxonomy owns which tags REQUIRE a note (the frontend hardcodes none). `other` is the one.
+  const tagsRequiringNote = useMemo(
+    () =>
+      new Set(
+        (taxonomy?.mistake_tags ?? []).filter((t) => t.requires_note).map((t) => t.id),
+      ),
+    [taxonomy?.mistake_tags],
+  );
+  const selectedTags = useMemo(() => Array.from(selected), [selected]);
+  const needsNote = selectedTags.some((t) => tagsRequiringNote.has(t));
+  const noteMissing = needsNote && note.trim() === "";
+  const canSave = !saving && !noteMissing;
+
+  async function onSave() {
+    if (!canSave) return;
+    setSaving(true);
+    setSaveError(null);
+    const result = await saveReview(thesisId, selectedTags, note.trim() === "" ? null : note);
+    setSaving(false);
+    if (result.ok) {
+      onSaved?.();
+    } else {
+      setSaveError(result.error ?? "The review could not be saved.");
+    }
   }
 
   return (
@@ -447,19 +625,29 @@ function ExecutionChecksSection({
             })}
           </ul>
 
-          {/* Suggested mistake tags — pre-selected + toggleable; the tag labels come ONLY from the
-              taxonomy. The Save affordance is present but DISABLED with honest copy (the review save
-              flow lands with J-57 — mirrors the approved Studies-disabled no-dead-control pattern). */}
+          {/* The review save flow (J-57). The picker seeds from the backend's SUGGESTED tags
+              (system suggests) and the user CONFIRMS via Save (only the user records a confirmed
+              tag). The suggested set stays visibly distinct from the user-confirmed set. */}
           <div data-testid="mistake-tag-picker" className="mt-4 border-t border-slate-800 pt-3">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Suggested mistake tags
+              Mistake tags
             </p>
+            {suggested.length > 0 && (
+              <p data-testid="suggested-tags-note" className="mb-2 text-xs text-slate-500">
+                Suggested from the execution checks:{" "}
+                <span className="text-slate-400">
+                  {suggested.map((t) => labelFrom(taxonomy?.mistake_tags, t)).join(", ")}
+                </span>
+                . Toggle any that apply, then save to confirm.
+              </p>
+            )}
             {(taxonomy?.mistake_tags ?? []).length === 0 ? (
               <p className="text-xs text-slate-500">The tag catalog could not be loaded.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {(taxonomy?.mistake_tags ?? []).map((tag) => {
                   const isSelected = selected.has(tag.id);
+                  const isSuggested = suggested.includes(tag.id);
                   return (
                     <button
                       key={tag.id}
@@ -467,40 +655,116 @@ function ExecutionChecksSection({
                       data-testid="mistake-tag"
                       data-tag={tag.id}
                       data-selected={isSelected}
+                      data-suggested={isSuggested}
                       aria-pressed={isSelected}
+                      disabled={alreadyReviewed}
                       onClick={() => toggle(tag.id)}
                       className={
                         "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500 " +
+                        (alreadyReviewed ? "cursor-default " : "") +
                         (isSelected
                           ? "border-amber-600 bg-amber-900/40 text-amber-200 hover:bg-amber-900/60"
                           : "border-slate-700 bg-slate-800/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200")
                       }
                     >
                       {tag.name}
+                      {isSuggested && (
+                        <span className="ml-1 text-[10px] text-slate-500" aria-hidden="true">
+                          ·sug
+                        </span>
+                      )}
                     </button>
                   );
                 })}
               </div>
             )}
-            <p className="mt-2 text-xs text-slate-500">
-              These are suggested from the execution checks — toggle any that apply. You confirm
-              them when saving a review.
-            </p>
-            <div className="mt-3">
-              <button
-                type="button"
-                data-testid="save-review-disabled"
-                disabled
-                aria-disabled="true"
-                title="Saving a review lands with the review flow"
-                className="cursor-not-allowed rounded border border-slate-700 bg-slate-800/50 px-3 py-1.5 text-sm font-medium text-slate-500"
-              >
-                Save review
-              </button>
-              <span className="ml-2 text-xs text-slate-600">
-                Saving a review is coming with the review flow.
-              </span>
-            </div>
+
+            {/* The required-note input — shown (and required) only when a note-requiring tag (other)
+                is selected. Inline validation copy is honest and descriptive. */}
+            {needsNote && (
+              <div className="mt-3" data-testid="review-note-field">
+                <label
+                  htmlFor="review-note"
+                  className="mb-1 block text-xs font-medium text-slate-400"
+                >
+                  Note (required for “Other”)
+                </label>
+                <textarea
+                  id="review-note"
+                  data-testid="review-note-input"
+                  value={note}
+                  disabled={alreadyReviewed}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={2}
+                  placeholder="Describe what happened in your own words."
+                  className="w-full rounded border border-slate-700 bg-slate-900/60 px-2.5 py-1.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
+                />
+                {noteMissing && (
+                  <p data-testid="review-note-error" className="mt-1 text-xs text-rose-300">
+                    A note is required when “Other” is selected.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Save — enabled once a resolved, not-yet-reviewed thesis has a valid selection. After
+                a save the thesis is reviewed: the control reports the reviewed state and the saved
+                tags + note render from the re-read detail (never client-derived). */}
+            {alreadyReviewed ? (
+              <div className="mt-3" data-testid="review-saved">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-700 bg-emerald-900/30 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                  Reviewed
+                </span>
+                <p className="mt-2 text-xs text-slate-400">
+                  {savedReview && savedReview.mistake_tags.length > 0 ? (
+                    <>
+                      You confirmed:{" "}
+                      <span data-testid="confirmed-tags" className="text-slate-300">
+                        {savedReview.mistake_tags
+                          .map((t) => labelFrom(taxonomy?.mistake_tags, t))
+                          .join(", ")}
+                      </span>
+                      .
+                    </>
+                  ) : (
+                    "You reviewed this thesis with no mistake tags."
+                  )}
+                </p>
+                {savedReview?.note && (
+                  <p data-testid="confirmed-note" className="mt-1 text-xs text-slate-400">
+                    Note: <span className="text-slate-300">{savedReview.note}</span>
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="save-review"
+                  disabled={!canSave}
+                  aria-disabled={!canSave}
+                  onClick={onSave}
+                  className={
+                    "rounded border px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500 " +
+                    (canSave
+                      ? "border-emerald-600 bg-emerald-900/40 text-emerald-200 hover:bg-emerald-900/60"
+                      : "cursor-not-allowed border-slate-700 bg-slate-800/50 text-slate-500")
+                  }
+                >
+                  {saving ? "Saving…" : "Save review"}
+                </button>
+                {noteMissing && (
+                  <span className="text-xs text-slate-500">
+                    Add the required note to save.
+                  </span>
+                )}
+                {saveError && (
+                  <span data-testid="save-review-error" role="alert" className="text-xs text-rose-300">
+                    {saveError}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}

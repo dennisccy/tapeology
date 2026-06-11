@@ -476,6 +476,43 @@ export async function recordAction(
   }
 }
 
+// POST /research/thesis/{id}/review — save the user's CONFIRMED review (J-57): mistake tags + an
+// optional note. The user CONFIRMS the tags (the machine only SUGGESTS them); on success the backend
+// persists the tags + note verbatim and flips the thesis to `reviewed`. The backend's validation
+// (422 unknown tag / 422 `other` without a note / 409 unresolved / 409 already-reviewed / 404 unknown
+// id) detail is surfaced VERBATIM for an inline message — never a swallowed failure or a dead click.
+// The client also blocks Save when `other` is selected without a note as a courtesy, but the backend
+// is the authority. On success the page re-reads the detail to render the persisted review.
+export async function saveReview(
+  thesisId: string,
+  mistakeTags: string[],
+  note: string | null,
+): Promise<StopResult> {
+  try {
+    const body: Record<string, unknown> = { mistake_tags: mistakeTags };
+    if (note !== null && note.trim() !== "") body.note = note;
+    const res = await fetch(
+      `${API_BASE}/research/thesis/${encodeURIComponent(thesisId)}/review`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    if (res.ok) return { ok: true };
+    let error = "The review could not be saved.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
 // The canonical thesis projection (`GET /research/thesis/active?ticker=`) is the REST counterpart
 // of the WS `thesis` key (verbatim-equal by construction — data-contract row 15). While a watch is
 // LIVE the strip reads the WS `thesis` key only (one read path per contract value). This REST fetch

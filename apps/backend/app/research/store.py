@@ -63,7 +63,12 @@ CREATE TABLE IF NOT EXISTS theses (
     created_logical_ts  REAL NOT NULL,
     created_wall_ts     REAL NOT NULL,
     risk_flags          TEXT,                   -- v4: JSON list of frozen entry risk flags (J-49); NULL = never assessed (pre-v4 thesis)
-    execution_checks    TEXT                    -- v5: JSON {checks, suggested_mistake_tags} computed ONCE at resolution (J-54); NULL = never computed (pre-v5 resolution)
+    execution_checks    TEXT,                   -- v5: JSON {checks, suggested_mistake_tags} computed ONCE at resolution (J-54); NULL = never computed (pre-v5 resolution)
+    statement_final_statuses TEXT,              -- v6: JSON list of per-statement FINAL statuses persisted ONCE at resolution (J-55); NULL = never recorded (pre-v6 resolution)
+    grades              TEXT,                   -- v6: JSON {outcome, process, process_evidence} computed ONCE at resolution (J-56); NULL = never computed (pre-v6 resolution)
+    review_tags         TEXT,                   -- v6: JSON list of user-confirmed mistake tags (J-57); NULL = never reviewed
+    review_note         TEXT,                   -- v6: the user's free-text review note (J-57); NULL = none / never reviewed
+    reviewed            INTEGER NOT NULL DEFAULT 0  -- v6: 1 once the user saved a review (J-57); 0 otherwise
 );
 
 CREATE TABLE IF NOT EXISTS verdict_events (
@@ -150,6 +155,28 @@ class ThesisRecord:
     # so every existing call site / fixture stays valid (additive) and the two honest-omission states
     # (ABSENT vs computed) never collapse.
     execution_checks: dict | None = None
+    # --- v6 review-pillar fields (J-55 / J-56 / J-57), all persisted ONCE at their defining moment --
+    # ``statement_final_statuses`` (J-55) is the list of per-statement FINAL statuses recorded ONCE at
+    # terminal resolution — one ``{status}`` entry per frozen statement, in statement order (the
+    # status is the monitor's last live evaluation at the terminal moment, or an explicit
+    # ``not_evaluated`` enum where no live context exists — e.g. the restart-expiry sweep). It is
+    # ``None`` until recorded (a pre-v6 resolution stays ``None`` — NULL in the DB, never backfilled):
+    # the journal detail then renders the frozen statements WITHOUT a final-status badge (honest
+    # omission). The frozen ``statements`` JSON itself is NEVER mutated — this is an additive parallel.
+    statement_final_statuses: list[dict] | None = None
+    # ``grades`` (J-56) is the outcome × process grade — ``{"outcome", "process", "process_evidence"}``
+    # — computed ONCE at terminal resolution from the persisted execution checks + the frozen risk
+    # flags + the resolution, and stored verbatim. ``None`` until computed (a pre-v6 resolution stays
+    # ``None``): the journal detail/list then OMIT the grade keys (honest omission). ENUM labels only,
+    # never a numeric score.
+    grades: dict | None = None
+    # ``review_tags`` / ``review_note`` / ``reviewed`` (J-57) are the user-CONFIRMED review, recorded
+    # ONCE by ``POST …/review``. ``reviewed`` is ``False`` until the user saves a review; ``review_tags``
+    # is the list of confirmed mistake-tag ids (distinct from the machine-SUGGESTED tags on
+    # ``execution_checks``) and ``review_note`` the optional free text (required only for ``other``).
+    review_tags: list[str] | None = None
+    review_note: str | None = None
+    reviewed: bool = False
 
 
 @dataclass(frozen=True)
@@ -350,7 +377,39 @@ class JournalStore:
                 raise
             current = 5
 
-        # Future steps (current < 6, …) append here, each in its own BEGIN IMMEDIATE block.
+        # --- v5 → v6: add the J-55/J-56/J-57 review-pillar columns to theses (ONE bump) -----------
+        if current < 6:
+            self._write_conn.execute("BEGIN IMMEDIATE")
+            try:
+                # Idempotent guard (same discipline as every prior step): a DB that already carries a
+                # column (only the version row is stale) skips it and bumps the version. NO backfill —
+                # any pre-existing RESOLVED thesis keeps ``NULL`` for the new columns (its final
+                # statuses / grades were never computed and it was never reviewed; the journal detail
+                # OMITS each key rather than fabricate a value at read). ``reviewed`` is added with a
+                # ``DEFAULT 0`` so a pre-existing row reads back ``False`` (never reviewed) — that is
+                # not a backfill of a computed value, it is the honest default for "no review exists".
+                if not self._column_exists("theses", "statement_final_statuses"):
+                    self._write_conn.execute(
+                        "ALTER TABLE theses ADD COLUMN statement_final_statuses TEXT"
+                    )
+                if not self._column_exists("theses", "grades"):
+                    self._write_conn.execute("ALTER TABLE theses ADD COLUMN grades TEXT")
+                if not self._column_exists("theses", "review_tags"):
+                    self._write_conn.execute("ALTER TABLE theses ADD COLUMN review_tags TEXT")
+                if not self._column_exists("theses", "review_note"):
+                    self._write_conn.execute("ALTER TABLE theses ADD COLUMN review_note TEXT")
+                if not self._column_exists("theses", "reviewed"):
+                    self._write_conn.execute(
+                        "ALTER TABLE theses ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0"
+                    )
+                self._write_conn.execute("UPDATE schema_version SET version = 6")
+                self._write_conn.commit()
+            except Exception:
+                self._write_conn.rollback()
+                raise
+            current = 6
+
+        # Future steps (current < 7, …) append here, each in its own BEGIN IMMEDIATE block.
 
     def _read_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -413,6 +472,16 @@ class JournalStore:
         result)."""
         return None if execution_checks is None else json.dumps(execution_checks)
 
+    @staticmethod
+    def _encode_json_or_none(value: object | None) -> str | None:
+        """Serialize a JSON-able value to a string, preserving the ABSENT (NULL) state.
+
+        Used for the v6 ``statement_final_statuses`` / ``grades`` / ``review_tags`` columns — ``None``
+        (never recorded/computed) stays SQL ``NULL`` so the journal surfaces OMIT the key; a value
+        (incl. an empty list) is stored as JSON so it reads back verbatim. The ABSENT vs
+        recorded-but-empty states never collapse (the established honest-omission discipline)."""
+        return None if value is None else json.dumps(value)
+
     def insert_thesis(self, record: ThesisRecord) -> None:
         def _fn(conn: sqlite3.Connection) -> None:
             conn.execute(
@@ -421,8 +490,9 @@ class JournalStore:
                     id, ticker, setup_type, direction, invalidation_price, level_price,
                     status, bound_source, data_feed, config_fingerprint,
                     entry_context, statements, created_logical_ts, created_wall_ts, risk_flags,
-                    execution_checks
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    execution_checks, statement_final_statuses, grades, review_tags, review_note,
+                    reviewed
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     record.id,
@@ -441,6 +511,11 @@ class JournalStore:
                     record.created_wall_ts,
                     self._encode_risk_flags(record.risk_flags),
                     self._encode_execution_checks(record.execution_checks),
+                    self._encode_json_or_none(record.statement_final_statuses),
+                    self._encode_json_or_none(record.grades),
+                    self._encode_json_or_none(record.review_tags),
+                    record.review_note,
+                    1 if record.reviewed else 0,
                 ),
             )
 
@@ -465,8 +540,9 @@ class JournalStore:
                     id, ticker, setup_type, direction, invalidation_price, level_price,
                     status, bound_source, data_feed, config_fingerprint,
                     entry_context, statements, created_logical_ts, created_wall_ts, risk_flags,
-                    execution_checks
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    execution_checks, statement_final_statuses, grades, review_tags, review_note,
+                    reviewed
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     thesis.id,
@@ -485,6 +561,11 @@ class JournalStore:
                     thesis.created_wall_ts,
                     self._encode_risk_flags(thesis.risk_flags),
                     self._encode_execution_checks(thesis.execution_checks),
+                    self._encode_json_or_none(thesis.statement_final_statuses),
+                    self._encode_json_or_none(thesis.grades),
+                    self._encode_json_or_none(thesis.review_tags),
+                    thesis.review_note,
+                    1 if thesis.reviewed else 0,
                 ),
             )
             conn.execute(
@@ -599,6 +680,63 @@ class JournalStore:
             conn.execute(
                 "UPDATE theses SET execution_checks=? WHERE id=?",
                 (self._encode_execution_checks(execution_checks), thesis_id),
+            )
+
+        self._do_write(_fn)
+
+    def set_statement_final_statuses(
+        self, thesis_id: str, statement_final_statuses: list[dict]
+    ) -> None:
+        """Persist the per-statement FINAL statuses on a thesis row ONCE at terminal resolution (J-55).
+
+        Updates the THESES row's ``statement_final_statuses`` column only — the frozen ``statements``
+        JSON is NEVER mutated (this is an additive parallel column) and no ``verdict_events`` row is
+        touched (the append-only timeline is untouched). Called by every terminal-resolution path
+        right after the resolution, so the statuses are recorded exactly ONCE at the defining moment —
+        never recomputed at read. The write goes through the single writer queue (``BEGIN IMMEDIATE``),
+        never from event processing or the WS serialization path."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE theses SET statement_final_statuses=? WHERE id=?",
+                (self._encode_json_or_none(statement_final_statuses), thesis_id),
+            )
+
+        self._do_write(_fn)
+
+    def set_grades(self, thesis_id: str, grades: dict) -> None:
+        """Persist the outcome × process grades on a thesis row ONCE at terminal resolution (J-56).
+
+        Updates the THESES row's ``grades`` column only — no ``verdict_events`` row is touched (the
+        append-only timeline is untouched; no update/delete is added). Called by every
+        terminal-resolution path right after the execution checks are persisted (the process rule
+        weighs those checks), so the grades are computed and stored exactly ONCE at the defining
+        moment — never recomputed at read. The write goes through the single writer queue
+        (``BEGIN IMMEDIATE``), never from event processing or the WS serialization path."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE theses SET grades=? WHERE id=?",
+                (self._encode_json_or_none(grades), thesis_id),
+            )
+
+        self._do_write(_fn)
+
+    def save_review(
+        self, thesis_id: str, *, tags: list[str], note: str | None
+    ) -> None:
+        """Persist the user-CONFIRMED review and flip the thesis to ``reviewed`` ONCE (J-57).
+
+        Records the confirmed mistake tags + the optional note VERBATIM and sets ``reviewed=1`` in a
+        single writer transaction. This touches the THESES row only — the append-only ``verdict_events``
+        write surface is UNTOUCHED (journal integrity: a review never edits the timeline). The route
+        enforces the validation matrix (resolved-only, unknown-tag/other-note 422, already-reviewed
+        409) BEFORE calling this — so this is the persist step of a validated review only."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE theses SET review_tags=?, review_note=?, reviewed=1 WHERE id=?",
+                (self._encode_json_or_none(tags), note, thesis_id),
             )
 
         self._do_write(_fn)
@@ -964,6 +1102,20 @@ class JournalStore:
         # mid-migration) has no such column — the migration runs at open so file stores always have it.
         raw_checks = row["execution_checks"] if "execution_checks" in row.keys() else None
         execution_checks = json.loads(raw_checks) if raw_checks is not None else None
+        # ``statement_final_statuses`` / ``grades`` / ``review_tags`` (v6, J-55/J-56/J-57): NULL
+        # (never recorded/computed — a pre-v6 resolution, or an unreviewed thesis) reads back as
+        # ``None`` so the journal surfaces OMIT each key; a stored JSON value decodes verbatim. Keyed
+        # defensively (``.keys()``) so a hypothetical raw pre-v6 row (read mid-migration) has no such
+        # column — the migration runs at open so file stores always have it.
+        keys = row.keys()
+        raw_final = row["statement_final_statuses"] if "statement_final_statuses" in keys else None
+        statement_final_statuses = json.loads(raw_final) if raw_final is not None else None
+        raw_grades = row["grades"] if "grades" in keys else None
+        grades = json.loads(raw_grades) if raw_grades is not None else None
+        raw_tags = row["review_tags"] if "review_tags" in keys else None
+        review_tags = json.loads(raw_tags) if raw_tags is not None else None
+        review_note = row["review_note"] if "review_note" in keys else None
+        reviewed = bool(row["reviewed"]) if "reviewed" in keys and row["reviewed"] is not None else False
         return ThesisRecord(
             id=row["id"],
             ticker=row["ticker"],
@@ -981,6 +1133,11 @@ class JournalStore:
             created_wall_ts=row["created_wall_ts"],
             risk_flags=risk_flags,
             execution_checks=execution_checks,
+            statement_final_statuses=statement_final_statuses,
+            grades=grades,
+            review_tags=review_tags,
+            review_note=review_note,
+            reviewed=reviewed,
         )
 
     # --- lifecycle ------------------------------------------------------------------------------

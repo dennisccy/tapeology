@@ -46,6 +46,25 @@ function labelFrom(
   return id.replace(/_/g, " ");
 }
 
+// Outcome × process grade COLOR (a visual concern owned by the frontend; the LABEL text comes from
+// the taxonomy). Outcome: held emerald, failed rose, no_read slate. Process: clean emerald, flagged
+// amber, violated rose.
+function gradeClass(id: string): string {
+  switch (id) {
+    case "thesis_held":
+    case "clean":
+      return "border-emerald-700/60 bg-emerald-900/20 text-emerald-300";
+    case "thesis_failed":
+    case "violated":
+      return "border-rose-700/70 bg-rose-900/30 text-rose-300";
+    case "flagged":
+      return "border-amber-700/70 bg-amber-900/30 text-amber-300";
+    default:
+      // no_read + any other
+      return "border-slate-600 bg-slate-800 text-slate-400";
+  }
+}
+
 interface Props {
   rows: JournalRow[];
   taxonomy: ResearchTaxonomy | null;
@@ -93,6 +112,8 @@ export function JournalTable({ rows, taxonomy }: Props) {
             <th className="px-3 py-2.5 font-semibold">Setup</th>
             <th className="px-3 py-2.5 font-semibold">Direction</th>
             <th className="px-3 py-2.5 font-semibold">Status</th>
+            <th className="px-3 py-2.5 font-semibold">Grade</th>
+            <th className="px-3 py-2.5 font-semibold">Reviewed</th>
           </tr>
         </thead>
         <tbody>
@@ -183,6 +204,49 @@ export function JournalTable({ rows, taxonomy }: Props) {
                       </span>
                     )}
                   </div>
+                </td>
+                {/* Grade (J-56) — outcome × process enum chips, labels from the taxonomy. Honest
+                    omission: a pre-grade row (active / pre-v6) shows an em dash, never a fabricated
+                    grade. */}
+                <td className="px-3 py-2.5" data-testid="journal-grade-cell">
+                  {row.grades ? (
+                    <div className="flex flex-col gap-1">
+                      <span
+                        data-testid="journal-outcome-grade"
+                        data-grade={row.grades.outcome}
+                        className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${gradeClass(
+                          row.grades.outcome,
+                        )}`}
+                      >
+                        {labelFrom(taxonomy?.outcome_grades, row.grades.outcome)}
+                      </span>
+                      <span
+                        data-testid="journal-process-grade"
+                        data-grade={row.grades.process}
+                        className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${gradeClass(
+                          row.grades.process,
+                        )}`}
+                      >
+                        {labelFrom(taxonomy?.process_grades, row.grades.process)}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-mono text-slate-600">—</span>
+                  )}
+                </td>
+                {/* Reviewed (J-57) — the persisted boolean fact. A reviewed row shows a chip; an
+                    unreviewed row shows an em dash (never a fabricated value). */}
+                <td className="px-3 py-2.5" data-testid="journal-reviewed-cell">
+                  {row.reviewed ? (
+                    <span
+                      data-testid="journal-reviewed-chip"
+                      className="inline-flex w-fit rounded-full border border-emerald-700/60 bg-emerald-900/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-300"
+                    >
+                      Reviewed
+                    </span>
+                  ) : (
+                    <span className="font-mono text-slate-600">—</span>
+                  )}
                 </td>
               </tr>
             );

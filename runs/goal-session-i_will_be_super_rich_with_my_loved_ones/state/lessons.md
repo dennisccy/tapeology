@@ -91,3 +91,9 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** Statement statuses are LIVE-only: the monitor recomputes them per event for the active projection, but neither the thesis row nor the verdict_events rows persist a per-statement FINAL status — so the /journal/[id] page cannot render J-55's "statements with their final statuses" clause without violating no-recompute-at-read, and the iteration shipped a deferral note instead. Any value a review surface must show "frozen" needs persisting at its defining moment (the execution-checks pattern); iter-14 must persist final statement statuses at terminal resolution alongside the J-56 grades.
 **Applies to:** iter-14 (J-55 completion + J-56/J-57) and any future iter adding review/detail fields — check FIRST whether the value is persisted, not just whether the live projection shows it.
+
+## iter-14 — 2026-06-11T16:31:36Z
+
+**Verdict:** CONTINUE
+**Lesson:** Browser-qa cited three evidence PNGs that are blank dark frames (UT-J57-other-selected.png, UT-J57-tags-and-note-filled.png, UT-J57-after-save.png — all exactly 6,303 bytes, captured during transient/mid-interaction UI states). The journey still passed because the end states had real full-page captures and the validation matrix was REST-verified, but a capture taken mid-render can silently produce an empty frame. Browser-qa should sanity-check capture file size / non-uniform pixels before listing a PNG as evidence, and prefer full-page captures over element-timed shots for transient states.
+**Applies to:** every future browser-qa run that captures transient UI states (disabled buttons, inline validation, mid-save spinners) — and evaluators should keep opening pixels rather than trusting the evidence column.

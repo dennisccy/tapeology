@@ -179,6 +179,11 @@ export interface ResearchTaxonomy {
   // (the frontend hardcodes no tag label). `requires_note` flags the tags that need a free-text note
   // at save (enforced in the J-57 save flow). Optional so a pre-J-54 taxonomy payload stays valid.
   mistake_tags?: MistakeTag[];
+  // The outcome × process grade catalogs (capability 29, J-56) — the journal quadrant + rows render
+  // these labels VERBATIM (the frontend hardcodes no grade label). Optional so a pre-J-56 taxonomy
+  // payload stays valid.
+  outcome_grades?: TaxonomyEnum[];
+  process_grades?: TaxonomyEnum[];
   disclaimer: string;
 }
 
@@ -188,12 +193,23 @@ export interface MistakeTag {
   requires_note: boolean;
 }
 
+// The outcome × process grades (capability 29, J-56) — computed ONCE at resolution, served VERBATIM.
+// Both axes are ENUM labels (NEVER a numeric score); `process_evidence` names the checks/flags that
+// drove the process grade (no naked grade). The frontend renders the LABELS from the taxonomy and the
+// evidence verbatim — it derives nothing.
+export interface ThesisGrades {
+  outcome: "thesis_held" | "thesis_failed" | "no_read";
+  process: "clean" | "flagged" | "violated";
+  process_evidence: string;
+}
+
 // One compact journal-list row (J-51) — GET /research/journal. Read VERBATIM from the persisted
 // thesis record by the single backend row-projection (nothing recomputed at read). `resolution` is
 // the terminal status (null while active); `resolution_reason` is the verbatim persisted
 // expired/interruption/resolution reason (null while active). `has_entry`/`has_exit` are the
-// persisted action-mark presence facts (never inferred from a price). Grade/reviewed fields are
-// ABSENT this iteration (honest omission — they land with J-56/J-57).
+// persisted action-mark presence facts (never inferred from a price). `reviewed` is ALWAYS present
+// (a boolean fact — false until the user saves a review, J-57); `grades` is present ONLY post-
+// resolution (honest omission before — J-56).
 export interface JournalRow {
   id: string;
   ticker: string;
@@ -209,6 +225,8 @@ export interface JournalRow {
   resolution_reason: string | null;
   has_entry: boolean;
   has_exit: boolean;
+  reviewed: boolean;
+  grades?: ThesisGrades;
 }
 
 // One verdict-timeline row from GET /research/journal/{id} (J-55) — the append-only published
@@ -255,14 +273,31 @@ export interface JournalDetailThesis {
   data_feed: "sim" | "sip" | "iex";
   config_fingerprint: string;
   entry_context: Record<string, unknown>;
-  // Frozen expected-behaviour statements WITHOUT a live status here (the detail shows the FINAL
-  // status the timeline implies; the frozen text is the canonical record). Each is `{text, kind, params}`.
+  // Frozen expected-behaviour statements (the canonical frozen text). Each is `{text, kind, params}`.
+  // The FINAL status of each (J-55) is served separately on the detail body as
+  // `statement_final_statuses` (positionally keyed) — present only post-v6 resolution.
   statements: { text: string; kind: string; params?: Record<string, unknown> }[];
   created_logical_ts: number;
   created_wall_ts: number;
   // Frozen entry risk flags (J-49) — present only when the thesis was risk-assessed (absent for a
   // pre-v4 thesis: the page shows an honest "not assessed", never an invented clean state).
   risk_flags?: RiskFlag[];
+}
+
+// One per-statement FINAL status (J-55) — persisted ONCE at terminal resolution, served VERBATIM,
+// positionally keyed to the frozen `statements`. `not_evaluated` is the honest enum where there was
+// no live read at the terminal moment (e.g. a restart-expiry sweep). The page renders the badge
+// verbatim — it never re-derives a status from the timeline.
+export interface StatementFinalStatus {
+  status: "not_yet" | "met" | "violated" | "not_evaluated";
+}
+
+// The user-CONFIRMED review (J-57, data-contract row 28) — present ONLY once `reviewed` is true.
+// Distinct from the machine-SUGGESTED tags on `suggested_mistake_tags` (the system suggests; only
+// the user's Save records confirmed tags). Read VERBATIM — the page derives nothing.
+export interface SavedReview {
+  mistake_tags: string[];
+  note: string | null;
 }
 
 export interface JournalDetail {
@@ -272,6 +307,17 @@ export interface JournalDetail {
   // Present ONLY post-resolution (computed once at resolution). Absent => "not assessed" honest copy.
   execution_checks?: ExecutionCheck[];
   suggested_mistake_tags?: string[];
+  // Per-statement FINAL statuses (J-55) — present ONLY post-v6 resolution (absent => render the
+  // frozen statements without a final-status badge — honest omission). Positionally keyed to
+  // `thesis.statements`.
+  statement_final_statuses?: StatementFinalStatus[];
+  // The outcome × process grades (J-56) — present ONLY post-v6 resolution (absent => "not graded"
+  // honest copy). ENUM labels + evidence, read verbatim.
+  grades?: ThesisGrades;
+  // The user-confirmed-review fact (J-57) — ALWAYS present (a boolean: false until the user saves).
+  reviewed: boolean;
+  // The saved confirmed review — present ONLY once `reviewed` is true (honest omission before).
+  review?: SavedReview;
 }
 
 // Server-side filter params for GET /research/journal (J-51). An omitted filter does not constrain;
