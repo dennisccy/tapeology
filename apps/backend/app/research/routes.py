@@ -34,6 +34,7 @@ from .monitor import (
     compute_risk_flags,
     data_feed_for_scenario,
 )
+from .journal_rows import journal_row
 from .store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
 from .taxonomy import not_evaluated_notice
 from .taxonomy import (
@@ -222,6 +223,81 @@ def get_active_thesis(
     Reads the SAME ``monitor.projection()`` the WS ``thesis`` key reads, so the two are
     verbatim-equal by construction (data-contract row 15)."""
     return {"thesis": registry.projection_for(ticker)}
+
+
+# Valid LIST filter enums (J-51). ``status`` accepts the non-terminal ``active`` plus every terminal
+# status; ``resolution`` accepts the terminal statuses only (a resolution IS a terminal status).
+# Unknown values for any of these → 422 (never silent coercion). ``ticker`` is a free-form symbol, NOT
+# an enum, so it is never validated against a fixed set (an unknown ticker just matches nothing).
+_LIST_STATUSES = ("active", *_TERMINAL_STATUSES)
+_LIST_RESOLUTIONS = _TERMINAL_STATUSES
+
+
+@router.get("/journal")
+def list_journal(
+    ticker: str | None = None,
+    setup_type: str | None = None,
+    direction: str | None = None,
+    resolution: str | None = None,
+    status: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+    registry: ResearchRegistry = Depends(get_registry),
+) -> dict:
+    """The journal LIST (J-51, data-contract row 21 journal-rows half) — the ONLY serving path for
+    journal rows. Reads persisted theses rows VERBATIM via the store's single ``list_theses`` query
+    and projects each through the ONE ``journal_row`` builder (no recomputation, no second path).
+
+    Filters (ticker / setup_type / direction / resolution / status) are server-side and AND-combined;
+    the frontend does NO client-side filtering. Unknown ENUM filter values (setup_type / direction /
+    resolution / status) are a 422 — never silently coerced; ``ticker`` is free-form (an unknown
+    ticker matches nothing, never an error). Ordering is newest-declared-first.
+
+    Page size is CONFIG-OWNED and serving-only (excluded from ``config_fingerprint``): an omitted
+    ``limit`` uses ``journal_list_default_limit``; a ``limit`` above ``journal_list_max_limit`` is
+    CLAMPED down to it (a serving safety bound, never a 422). ``offset`` paginates."""
+    config = registry._config
+
+    # 422 — unknown enum filter values (rejected, never coerced). ``ticker`` is intentionally NOT here.
+    if setup_type is not None and not is_valid_setup(setup_type):
+        raise HTTPException(status_code=422, detail=f"unknown setup_type filter '{setup_type}'")
+    if direction is not None and not is_valid_direction(direction):
+        raise HTTPException(status_code=422, detail=f"unknown direction filter '{direction}'")
+    if resolution is not None and resolution not in _LIST_RESOLUTIONS:
+        raise HTTPException(status_code=422, detail=f"unknown resolution filter '{resolution}'")
+    if status is not None and status not in _LIST_STATUSES:
+        raise HTTPException(status_code=422, detail=f"unknown status filter '{status}'")
+
+    # Config-owned page-size policy (serving-only). An omitted limit uses the default; an over-large
+    # limit is clamped to the max. A non-positive limit also falls back to the default (a 0/negative
+    # page size is meaningless — honestly serve the default rather than an empty page).
+    if limit is None or limit <= 0:
+        effective_limit = config.journal_list_default_limit
+    else:
+        effective_limit = min(limit, config.journal_list_max_limit)
+    effective_offset = max(offset, 0)
+
+    theses = registry.store.list_theses(
+        ticker=ticker,
+        setup_type=setup_type,
+        direction=direction,
+        resolution=resolution,
+        status=status,
+        limit=effective_limit,
+        offset=effective_offset,
+    )
+    # The per-row context (verbatim resolution reason + mark presence) in two bulk reads (no N+1).
+    context = registry.store.list_row_context([t.id for t in theses])
+    rows = [
+        journal_row(
+            t,
+            resolution_reason=context.get(t.id, (None, False, False))[0],
+            has_entry=context.get(t.id, (None, False, False))[1],
+            has_exit=context.get(t.id, (None, False, False))[2],
+        )
+        for t in theses
+    ]
+    return {"rows": rows}
 
 
 @router.get("/journal/{thesis_id}")

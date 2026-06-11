@@ -170,7 +170,45 @@ export interface ResearchTaxonomy {
   // taxonomy payload stays valid. The strip reads the per-thesis frozen flag's own `label`, so it
   // never needs this map to render — it is here for completeness/discoverability.
   risk_flags?: TaxonomyEnum[];
+  // Thesis lifecycle statuses + the resolution subset (J-51) — the journal table + filter controls
+  // render these labels VERBATIM (the frontend hardcodes no status/resolution label). Optional so a
+  // pre-J-51 taxonomy payload stays valid.
+  statuses?: TaxonomyEnum[];
+  resolutions?: TaxonomyEnum[];
   disclaimer: string;
+}
+
+// One compact journal-list row (J-51) — GET /research/journal. Read VERBATIM from the persisted
+// thesis record by the single backend row-projection (nothing recomputed at read). `resolution` is
+// the terminal status (null while active); `resolution_reason` is the verbatim persisted
+// expired/interruption/resolution reason (null while active). `has_entry`/`has_exit` are the
+// persisted action-mark presence facts (never inferred from a price). Grade/reviewed fields are
+// ABSENT this iteration (honest omission — they land with J-56/J-57).
+export interface JournalRow {
+  id: string;
+  ticker: string;
+  bound_source: string;
+  data_feed: "sim" | "sip" | "iex";
+  config_fingerprint: string;
+  setup_type: string;
+  direction: "long" | "short";
+  created_logical_ts: number;
+  created_wall_ts: number;
+  status: string;
+  resolution: string | null;
+  resolution_reason: string | null;
+  has_entry: boolean;
+  has_exit: boolean;
+}
+
+// Server-side filter params for GET /research/journal (J-51). An omitted filter does not constrain;
+// the frontend does NO client-side filtering (the server is the only filter authority).
+export interface JournalFilters {
+  ticker?: string;
+  setup_type?: string;
+  direction?: string;
+  resolution?: string;
+  status?: string;
 }
 
 // The result of POST /research/thesis — `ok` with the projection, or a backend error with its

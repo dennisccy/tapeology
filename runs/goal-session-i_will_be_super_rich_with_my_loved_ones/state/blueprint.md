@@ -37,6 +37,12 @@ Tapeology (top bar: Cockpit · Journal · Studies)
                               hindsight_level / truncation labels, feed + fingerprint stamps
 ```
 
+> **Iter-12 (build-out note, additive — no skeleton change):** the persistent top bar ships with
+> the **Cockpit · Journal** entries and the `/journal` thesis-table page; the **Studies** entry
+> lands together with the `/studies` page (J-60) so the approved skeleton never carries a dead
+> link. `/journal/[id]`, the hint log, and the analytics view land with their own journeys
+> (J-54/J-55, J-65, J-59) under the same Journal home.
+
 **Feature / journey homes** (≤2 clicks from the nav):
 
 | Feature / journey | Canonical home (route) | Nav section |
@@ -84,7 +90,7 @@ re-expose the snapshot and never recompute; no page recomputes or re-fetches any
 | 18 | **Action marks** (entry/exit, verbatim price + logical & wall time + **spread-at-mark stamped once at recording** from the current snapshot — a moment value, never recomputed) | `POST /research/thesis/{id}/action` (recorded as stated, never inferred) | row 15 projection + `GET /research/journal/{id}` | chart marks + strip read it; entry-marked ⇒ no Abandon |
 | 19 | **Thesis resolution + execution checks + outcome × process grades** | Computed once at resolution (`POST /research/thesis/{id}/resolve`); persisted | `GET /research/journal/{id}` | user resolutions = `played_out \| abandoned` ONLY (system owns `invalidated`/`expired` → 422); 409 already-resolved; entry-marked refuses abandon; the resolution is an APPENDED timeline event + status flip (logical + wall timestamps), never an edit; enum labels from evidence-backed checks; never numeric scores |
 | 20 | **Excursion outcomes** (R-unit ternary per horizon; spread-at-mark; truncation flags; confirmation- vs entry-anchored populations never pooled) | Excursion calculator at marks / first confirmation / stream end; persisted | `GET /research/journal/{id}` | analytics aggregates persisted rows only |
-| 21 | **Journal rows + analytics aggregates** (segregated by `data_feed` + `config_fingerprint`; abandonment bucket always visible; "insufficient sample" under min-n) | Analytics module over persisted rows ONLY | `GET /research/journal`, `GET /research/analytics` | `/journal` renders; no pooling across feeds/fingerprints |
+| 21 | **Journal rows + analytics aggregates** (segregated by `data_feed` + `config_fingerprint`; abandonment bucket always visible; "insufficient sample" under min-n) | Analytics module over persisted rows ONLY | `GET /research/journal`, `GET /research/analytics` | `/journal` renders; no pooling across feeds/fingerprints. **Iter-12 (additive):** the journal-rows half ships — ONE row-projection function over the persisted theses rows (id, ticker, bound source, `data_feed`, `config_fingerprint`, setup, direction, declared logical + wall timestamps, status, resolution incl. the VERBATIM persisted expired/interruption reason, entry/exit-mark presence), computed once server-side from persisted records only (nothing recomputed at read) and served ONLY by `GET /research/journal` (filter/pagination params per goal.md; default/max page size config-owned, serving-only — excluded from `config_fingerprint` with documented rationale); `/journal` renders rows verbatim (dates dd-MM-yyyy via the one shared formatter; setup/direction/resolution display labels from row-24 taxonomy, frontend hardcodes none). Grade/reviewed fields land as additive keys with rows 19/24 journeys (J-56/J-57) — honest omission until then. The aggregates half (`GET /research/analytics`, J-59) remains to be built |
 | 22 | **Hints** (pattern, evidence, baseline citation or "no studied baseline") | Hint engine — produced once when shown; every shown hint logged | hint log (journal store; read via `/journal` hint log) | hint dock + log read the same record; sustain-dwell + cooldown gated |
 | 23 | **Study results** (occurrence rows, aggregates, seeded null baseline, status/progress) | Study runner (cancellable background job); persisted | `POST/GET /research/studies`, `GET /research/studies/{id}`, `POST …/cancel` | `/studies` renders stored results; deterministic re-runs |
 | 24 | **Taxonomies + research display copy** (setups, flags, tags, verdict/stance enums) | Backend taxonomy module | `GET /research/taxonomy` | frontend hardcodes none of them |

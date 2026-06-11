@@ -421,6 +421,21 @@ class Config:
     # capacity management, distinct from any update/delete of a retained row, which does not exist).
     verdict_timeline_cap: int = 500
 
+    # --- Research evolution: JOURNAL LIST serving (capability 31 / J-51) ------------------------
+    # The journal LIST endpoint (``GET /research/journal``) page-size policy. These are SERVING-ONLY
+    # values: the number of persisted thesis rows returned per page. They are EXCLUDED from
+    # ``config_fingerprint`` (see the exclusion set below) for the same reason ``journal_db_path`` is —
+    # a page-size choice cannot affect ANY persisted research value (it never touches a verdict, a
+    # feature, a grade, or a stamp). Including it would dishonestly fragment the analytics pools (two
+    # journals identical in every threshold but served at different page sizes would mint different
+    # fingerprints and could never be pooled), so it is deliberately excluded — never forgotten.
+    #   * ``journal_list_default_limit`` — the page size used when the request omits ``limit``.
+    #   * ``journal_list_max_limit``     — the hard cap; a request ``limit`` above this is CLAMPED down
+    #                                      to it (a serving safety bound, never a 422 — an over-large
+    #                                      page is honestly satisfied with the most rows we will serve).
+    journal_list_default_limit: int = 50
+    journal_list_max_limit: int = 200
+
     # --- Research evolution: ENTRY RISK FLAGS (capability 26, J-49) -----------------------------
     # RESEARCH DEFAULTS — a starting point calibrated against the deterministic sims, NEVER a
     # validated edge (same discipline as the verdict-dwell defaults above). The flag set is computed
@@ -481,9 +496,19 @@ class Config:
             hash, so two records under different configs can never be silently pooled.
         Operational store-tuning fields (the journal DB path / busy timeout) are EXCLUDED: they do
         not affect any engine/verdict computation, so two journals that differ only in where they
-        live must share a fingerprint (else every temp-path test would mint a unique one).
+        live must share a fingerprint (else every temp-path test would mint a unique one). The
+        journal LIST page-size fields (``journal_list_default_limit`` / ``journal_list_max_limit``)
+        are EXCLUDED for the same reason: a serving page size touches no persisted research value, so
+        two journals identical in every threshold but served at different page sizes MUST share a
+        fingerprint (else their analytics pools would be dishonestly fragmented).
         """
-        excluded = {"journal_db_path", "journal_busy_timeout_ms", "journal_schema_version"}
+        excluded = {
+            "journal_db_path",
+            "journal_busy_timeout_ms",
+            "journal_schema_version",
+            "journal_list_default_limit",
+            "journal_list_max_limit",
+        }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]

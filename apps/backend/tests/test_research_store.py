@@ -323,6 +323,178 @@ def test_has_entry_mark_false_for_exit_only(store):
     assert store.has_entry_mark("t1") is False
 
 
+# --- journal LIST query (J-51): filters / pagination / ordering over persisted rows ------------
+# The read-only list query that backs ``GET /research/journal``. Reads persisted rows VERBATIM (no
+# recomputation), newest-declared-first, with the goal.md filters (ticker, setup_type, direction,
+# resolution, status) + limit/offset. NO schema change (journal_schema_version stays 4).
+
+
+def _declared_thesis(
+    tid: str,
+    *,
+    ticker: str = "SIM-BUYER",
+    setup_type: str = "trend_continuation",
+    direction: str = "long",
+    status: str = "active",
+    created_wall_ts: float,
+    bound_source: str = "buyer_control",
+    data_feed: str = "sim",
+) -> ThesisRecord:
+    """A thesis with a distinct created_wall_ts so ordering is deterministic in the list tests."""
+    return ThesisRecord(
+        id=tid,
+        ticker=ticker,
+        setup_type=setup_type,
+        direction=direction,
+        invalidation_price=99.0,
+        level_price=None,
+        status=status,
+        bound_source=bound_source,
+        data_feed=data_feed,
+        config_fingerprint="abc123",
+        entry_context={"last": 100.0, "tape_state": "buyer_control"},
+        statements=[{"text": "x", "kind": "tape_state_is", "params": {"states": ["buyer_control"]}}],
+        created_logical_ts=12.5,
+        created_wall_ts=created_wall_ts,
+    )
+
+
+def test_list_theses_empty_store_is_empty_list(store):
+    assert store.list_theses() == []
+
+
+def test_list_theses_orders_newest_declared_first(store):
+    store.insert_thesis(_declared_thesis("old", created_wall_ts=1700000000.0))
+    store.insert_thesis(_declared_thesis("mid", created_wall_ts=1700000100.0))
+    store.insert_thesis(_declared_thesis("new", created_wall_ts=1700000200.0))
+    rows = store.list_theses()
+    assert [r.id for r in rows] == ["new", "mid", "old"]
+
+
+def test_list_theses_filters_by_ticker(store):
+    store.insert_thesis(_declared_thesis("a", ticker="SIM-BUYER", created_wall_ts=1.0))
+    store.insert_thesis(_declared_thesis("b", ticker="SIM-SELLER", created_wall_ts=2.0))
+    rows = store.list_theses(ticker="SIM-SELLER")
+    assert [r.id for r in rows] == ["b"]
+
+
+def test_list_theses_filters_by_setup_direction_status_resolution(store):
+    store.insert_thesis(
+        _declared_thesis("a", setup_type="trend_continuation", direction="long",
+                         status="active", created_wall_ts=1.0)
+    )
+    store.insert_thesis(
+        _declared_thesis("b", setup_type="absorption_reversal", direction="short",
+                         status="played_out", created_wall_ts=2.0)
+    )
+    store.insert_thesis(
+        _declared_thesis("c", setup_type="trend_continuation", direction="long",
+                         status="expired", created_wall_ts=3.0)
+    )
+    assert [r.id for r in store.list_theses(setup_type="trend_continuation")] == ["c", "a"]
+    assert [r.id for r in store.list_theses(direction="short")] == ["b"]
+    assert [r.id for r in store.list_theses(status="active")] == ["a"]
+    # ``resolution`` filters on the same terminal-status column (a resolution IS the terminal status).
+    assert [r.id for r in store.list_theses(resolution="played_out")] == ["b"]
+
+
+def test_list_theses_combined_filters_are_anded(store):
+    store.insert_thesis(
+        _declared_thesis("a", ticker="SIM-BUYER", setup_type="trend_continuation",
+                         direction="long", created_wall_ts=1.0)
+    )
+    store.insert_thesis(
+        _declared_thesis("b", ticker="SIM-BUYER", setup_type="trend_continuation",
+                         direction="short", created_wall_ts=2.0)
+    )
+    rows = store.list_theses(ticker="SIM-BUYER", setup_type="trend_continuation", direction="long")
+    assert [r.id for r in rows] == ["a"]
+
+
+def test_list_theses_limit_and_offset_paginate(store):
+    for i in range(5):
+        store.insert_thesis(_declared_thesis(f"t{i}", created_wall_ts=float(i)))
+    # Newest-first => t4, t3, t2, t1, t0.
+    page1 = store.list_theses(limit=2, offset=0)
+    page2 = store.list_theses(limit=2, offset=2)
+    assert [r.id for r in page1] == ["t4", "t3"]
+    assert [r.id for r in page2] == ["t2", "t1"]
+
+
+def test_list_theses_reads_rows_verbatim(store):
+    store.insert_thesis(
+        _declared_thesis("v", bound_source="historical AAPL 2024-01-02", data_feed="sip",
+                         created_wall_ts=1700000000.0)
+    )
+    [row] = store.list_theses()
+    # The list returns the SAME ThesisRecord shape get_thesis returns (one owner over persisted rows).
+    assert row.bound_source == "historical AAPL 2024-01-02"
+    assert row.data_feed == "sip"
+    assert row.config_fingerprint == "abc123"
+    assert row.created_wall_ts == 1700000000.0
+
+
+# --- restart simulation (J-51): byte-identical readback across a store close / reopen ----------
+
+
+def test_resolved_thesis_timeline_byte_identical_across_reopen(tmp_path):
+    # J-51's defining honesty: a backend restart loses NOTHING and rewrites NOTHING. Persist a
+    # resolved thesis + its timeline, CLOSE the store (process end), REOPEN against the same file,
+    # and read back the SAME rows byte-for-byte (nothing recomputed at read).
+    db = str(tmp_path / "restart.db")
+    s1 = JournalStore(db, CONFIG)
+    s1.insert_thesis(_declared_thesis("r", status="active", created_wall_ts=1700000000.0))
+    s1.append_verdict_event(
+        VerdictEventRecord("r", 1.0, 1700000001.0, "pending", "declared", "buyer_control", 0.8, 100.0)
+    )
+    s1.resolve_thesis_with_event(
+        "r",
+        "played_out",
+        VerdictEventRecord("r", 5.0, 1700000005.0, "played_out", "you resolved it",
+                           "buyer_control", 0.7, 100.4),
+    )
+    before_thesis = s1.get_thesis("r")
+    before_events = s1.verdict_events("r")
+    s1.close()
+
+    s2 = JournalStore(db, CONFIG)
+    try:
+        after_thesis = s2.get_thesis("r")
+        after_events = s2.verdict_events("r")
+        # Byte-identical: the dataclasses compare equal field-for-field across the reopen.
+        assert after_thesis == before_thesis
+        assert after_events == before_events
+        assert after_thesis.status == "played_out"
+        assert [e.verdict for e in after_events] == ["pending", "played_out"]
+        # The schema version did NOT advance on reopen (no migration triggered — already current).
+        assert s2.schema_version() == CONFIG.journal_schema_version == 4
+    finally:
+        s2.close()
+
+
+def test_unmarked_active_expires_with_reason_on_reopen_then_sweep(tmp_path):
+    # An UNMARKED previously-active thesis is expired (with its explicit interruption reason) by the
+    # startup sweep the registry runs on reopen; an ENTRY-MARKED active thesis SURVIVES untouched.
+    db = str(tmp_path / "sweep.db")
+    s1 = JournalStore(db, CONFIG)
+    s1.insert_thesis(_declared_thesis("unmarked", status="active", created_wall_ts=1.0))
+    s1.insert_thesis(_declared_thesis("marked", status="active", created_wall_ts=2.0))
+    s1.insert_action(ActionRecord("a1", "marked", "entry", 100.0, 1.0, 1700000001.0, 0.02))
+    s1.close()
+
+    s2 = JournalStore(db, CONFIG)
+    try:
+        affected = s2.expire_stale_actives(1700000123.0)
+        assert affected == ["unmarked"]
+        assert s2.get_thesis("unmarked").status == "expired"
+        assert "restart" in s2.verdict_events("unmarked")[-1].evidence
+        # The entry-marked position survives as active-but-not-evaluated (never orphaned).
+        assert s2.get_thesis("marked").status == "active"
+        assert s2.verdict_events("marked") == []
+    finally:
+        s2.close()
+
+
 class _FaultInjectingConn:
     """Proxy that raises on a targeted INSERT (``sqlite3.Connection`` is an immutable C type)."""
 

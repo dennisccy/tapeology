@@ -33,6 +33,25 @@ VERDICTS: dict[str, str] = {
     "expired": "Expired",
 }
 
+# --- Thesis status / resolution enum (J-51; data-contract row 24) --------------------------------
+# The SINGLE backend owner of the thesis lifecycle-status display copy — the journal table renders
+# these VERBATIM (the frontend hardcodes none of them). ``active`` is the only non-terminal status;
+# the other four are RESOLUTIONS (terminal statuses). Design direction: invalidated/expired carry the
+# terminal-red treatment, played_out/abandoned the resolved treatment, active the live treatment —
+# the frontend maps the COLOR from the id (a visual concern), but the LABEL text comes from here.
+STATUSES: dict[str, str] = {
+    "active": "Active",
+    "played_out": "Played out",
+    "abandoned": "Abandoned",
+    "invalidated": "Invalidated",
+    "expired": "Expired",
+}
+
+# The terminal statuses that count as RESOLUTIONS (a resolution IS a terminal status). Surfaced as its
+# own enum so the journal filter's resolution control is taxonomy-driven (not a hardcoded list).
+RESOLUTIONS: tuple[str, ...] = ("played_out", "abandoned", "invalidated", "expired")
+
+
 # --- Monitor-status enum + lifecycle display copy (capability 24, J-47; data-contract row 24) ----
 # The research monitor's status, owned ONCE on the backend and read VERBATIM by the strip:
 #   ok            — the thesis is being watched and judged live.
@@ -343,6 +362,10 @@ def taxonomy_payload() -> dict:
         ],
         "directions": [{"id": k, "name": v} for k, v in DIRECTIONS.items()],
         "verdicts": [{"id": k, "name": v} for k, v in VERDICTS.items()],
+        # Thesis lifecycle statuses + the resolution subset (J-51) — the journal table + its filter
+        # controls render these VERBATIM (the frontend hardcodes no status/resolution label).
+        "statuses": [{"id": k, "name": v} for k, v in STATUSES.items()],
+        "resolutions": [{"id": k, "name": STATUSES[k]} for k in RESOLUTIONS],
         "statement_statuses": list(STATEMENT_STATUSES),
         "monitor_statuses": list(MONITOR_STATUSES),
         # The entry risk-flag catalog (capability 26, J-49) — id + display label, owned ONCE here so

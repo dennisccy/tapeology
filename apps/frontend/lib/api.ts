@@ -1,6 +1,8 @@
 import { API_BASE, WATCH_REQUEST_TIMEOUT_MS } from "./config";
 import type {
   DeclareResult,
+  JournalFilters,
+  JournalRow,
   MarketClock,
   ResearchTaxonomy,
   SymbolMatch,
@@ -493,5 +495,47 @@ export async function fetchActiveThesis(
     return (data?.thesis as ThesisProjection | null) ?? null;
   } catch {
     return null;
+  }
+}
+
+// The result of a journal LIST fetch (J-51). `ok` with the rows, or an explicit error so the
+// /journal page can show a styled error state rather than a blank/fabricated table. A backend 422
+// (unknown enum filter) detail is surfaced verbatim — never coerced.
+export interface JournalListResult {
+  ok: boolean;
+  rows: JournalRow[];
+  error?: string;
+}
+
+// GET /research/journal — the ONLY serving path for journal rows (J-51). Filters drive a SERVER-side
+// re-fetch (the frontend does no client-side filtering). Reads rows VERBATIM; the frontend recomputes
+// nothing. An unknown enum filter is a backend 422 surfaced as an explicit error; an unreachable
+// backend resolves to an explicit error too (never a silent empty table).
+export async function fetchJournal(
+  filters: JournalFilters = {},
+): Promise<JournalListResult> {
+  const params = new URLSearchParams();
+  if (filters.ticker) params.set("ticker", filters.ticker);
+  if (filters.setup_type) params.set("setup_type", filters.setup_type);
+  if (filters.direction) params.set("direction", filters.direction);
+  if (filters.resolution) params.set("resolution", filters.resolution);
+  if (filters.status) params.set("status", filters.status);
+  const qs = params.toString();
+  try {
+    const res = await fetch(`${API_BASE}/research/journal${qs ? `?${qs}` : ""}`);
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, rows: (data?.rows as JournalRow[]) ?? [] };
+    }
+    let error = "The journal could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, rows: [], error };
+  } catch {
+    return { ok: false, rows: [], error: "Backend unreachable — is the API running?" };
   }
 }

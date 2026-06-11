@@ -181,3 +181,18 @@
 **Reasoning:** J-49 verified in pixels on every leg: chasing_entry (+0.42% vs +0.40% threshold), invalidation_too_tight (0.02 inside the 2x-spread 0.04 band), low_trade_speed on SIM-CHOP (0.17 < 0.50 trades/s — wide_spread honestly does not fire, SIM-CHOP spread ~14.9bps is inside the 30bps gate), before_warmup (4 < 40 trades), each with its measured plain-language margin; the clean declare shows the flags section absent (not empty), and REST confirmed risk_flags=[]. Code inspection confirmed the contract: one compute_risk_flags owner called once after validation in POST /research/thesis, four flags reusing classifier gates verbatim, two new config research defaults entering config_fingerprint, v3→v4 migration with committed fixture and no backfill, verbatim re-exposure via the single build_projection (REST==WS parity extended), 422-never-a-flag preserved. Coherence COHERENCE-PASS (one cosmetic advisory: ⚠ emoji in chip labels). All 11 required-still-passing journeys re-verified. Minor nit: QA report header says 12/12 but its table lists 16 executed tests, all PASS with evidence — header typo, not an evidence gap.
 
 **Next-step recommendation:** Target the journal review surface — GET /research/journal LIST + the /journal page rows (J-55 groundwork and J-51's browser-verifiable restart-honesty leg), completing the risk-and-lifecycle group (J-49 ✅ J-50 ✅ J-51) and unblocking J-54/J-56/J-57 per the binding build order; the frozen risk_flags now feed the future ignored_risk_flags tag. Depth: lean (FULL-pipeline harness defect still open upstream; lean iters 6–11 produced complete evidence). Optional: swap the ⚠ emoji chip prefix for a class-based indicator per the coherence advisory.
+
+## Iteration 12 — goal-i_will_be_super_rich_with_my_loved_ones-iter-12
+
+**Date:** 2026-06-11T11:50:46Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-51 (target — journal survives restart, /journal list + persistent nav)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (all five critical reminders checked against the diff: store.py adds read-only queries, single journal_row() owner, verbatim reasons, fingerprint exclusion documented, no cues/grades snuck in, "Descriptive only" on /journal)
+
+**Reasoning:** J-51's three acceptance legs each have positive evidence: byte-identical resolved row/timeline across restart (unit pin re-run green by evaluator + dev live uvicorn-restart probe before==after True); unmarked actives EXPIRED with the verbatim restart reason in evaluator-opened pixels after a REAL QA-run restart (2 rows, distinct from stream-ended/user-stop reasons); entry-marked thesis survived the same restart (resolved played_out after, has_entry=True persisted). Coherence COHERENCE-PASS, review PASS, 494/1 backend green, all 10 required-still-passing held (J-01/J-02/J-38/J-42/J-47/J-50/J-52/J-68 in opened pixels). Two QA-report defects found and discounted after direct verification: header count "11/11" vs 15-row table (budget-continuation artifact), and UT-J49's false "ThesisStrip.tsx untouched" claim — evaluator-inspected diff shows an 8-line cosmetic chip change, so the carried pass stands, but the firing-flag chip was never pixel-confirmed this iter (carry-forward gap).
+
+**Next-step recommendation:** Iter-13 lean: target J-54 + J-55 — execution checks computed once from marks + timeline, and the /journal/[id] review-detail page (rows become links). Fold in the J-49 firing-flag chip capture and the ▤ empty-state glyph advisory. Then J-56/J-57, then the evidence layer (J-58–J-62), cues last.

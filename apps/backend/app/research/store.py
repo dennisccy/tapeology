@@ -680,6 +680,131 @@ class JournalStore:
         finally:
             conn.close()
 
+    def list_theses(
+        self,
+        *,
+        ticker: str | None = None,
+        setup_type: str | None = None,
+        direction: str | None = None,
+        resolution: str | None = None,
+        status: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[ThesisRecord]:
+        """The journal LIST read (J-51) — persisted thesis rows VERBATIM, newest-declared-first.
+
+        A READ-ONLY query (NO schema change — ``journal_schema_version`` stays 4) that backs the
+        single ``GET /research/journal`` serving path. Returns the SAME ``ThesisRecord`` shape
+        ``get_thesis`` returns (ONE owner over the persisted ``theses`` rows — nothing is recomputed
+        here; resolution / reasons / stamps / dates are all reads of already-persisted values), so the
+        row-projection layer in routes.py has a single, consistent source.
+
+        Filters (all optional, AND-combined; an absent filter does not constrain):
+          * ``ticker`` / ``setup_type`` / ``direction`` — exact-match on those columns;
+          * ``resolution`` AND ``status`` — both filter the SAME terminal-status column (a resolution
+            IS the thesis's terminal status: ``played_out | abandoned | invalidated | expired``);
+            ``status`` additionally matches the non-terminal ``active``. They are kept as two filter
+            names because goal.md's API surface lists both; supplying both ANDs them (so an
+            unsatisfiable combination like ``status=active&resolution=played_out`` returns nothing,
+            never a coerced result).
+        Ordering is ``created_wall_ts DESC, id DESC`` (newest-declared-first; ``id`` breaks ties
+        deterministically). ``limit``/``offset`` paginate; ``limit=None`` returns all matches (the
+        route applies the config-owned page-size policy before calling — the store imposes no cap of
+        its own so a test can read the whole table)."""
+        clauses: list[str] = []
+        params: list[object] = []
+        if ticker is not None:
+            clauses.append("ticker = ?")
+            params.append(ticker)
+        if setup_type is not None:
+            clauses.append("setup_type = ?")
+            params.append(setup_type)
+        if direction is not None:
+            clauses.append("direction = ?")
+            params.append(direction)
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status)
+        if resolution is not None:
+            clauses.append("status = ?")
+            params.append(resolution)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = (
+            f"SELECT * FROM theses {where} "
+            "ORDER BY created_wall_ts DESC, id DESC"
+        )
+        if limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+        elif offset:
+            # OFFSET without LIMIT is not portable in sqlite; use the max-rows sentinel.
+            sql += " LIMIT -1 OFFSET ?"
+            params.append(offset)
+        conn = self._read_conn()
+        try:
+            rows = conn.execute(sql, params).fetchall()
+            return [self._row_to_thesis(r) for r in rows]
+        finally:
+            conn.close()
+
+    def list_row_context(
+        self, thesis_ids: list[str]
+    ) -> dict[str, tuple[str | None, bool, bool]]:
+        """The per-thesis context the journal-ROW projection needs, read VERBATIM in two bulk queries.
+
+        For each id in ``thesis_ids`` returns ``(resolution_reason, has_entry, has_exit)`` where:
+          * ``resolution_reason`` is the ``evidence`` of the thesis's LAST appended verdict event (the
+            terminal expired/interruption/resolution reason the engine/sweep already wrote) — read
+            verbatim, NEVER recomputed; ``None`` if the thesis has no events yet;
+          * ``has_entry`` / ``has_exit`` are the persisted action-mark presence facts.
+
+        Bulk (one query per fact across all ids) so the list endpoint is not N+1. The row projection
+        only USES the reason when the thesis is terminal (an active thesis's last event is its
+        ``pending`` declaration, which the projection ignores), so passing the last-event evidence for
+        every id is safe and keeps this a pure read."""
+        if not thesis_ids:
+            return {}
+        placeholders = ",".join("?" for _ in thesis_ids)
+        conn = self._read_conn()
+        try:
+            # Last appended event per thesis (MAX(id) = last inserted) → its evidence string.
+            reason_rows = conn.execute(
+                f"""
+                SELECT ve.thesis_id AS tid, ve.evidence AS evidence
+                FROM verdict_events ve
+                JOIN (
+                    SELECT thesis_id, MAX(id) AS max_id
+                    FROM verdict_events
+                    WHERE thesis_id IN ({placeholders})
+                    GROUP BY thesis_id
+                ) last ON ve.id = last.max_id
+                """,
+                thesis_ids,
+            ).fetchall()
+            reasons = {r["tid"]: r["evidence"] for r in reason_rows}
+            # Mark presence per thesis (one row per kind that exists).
+            mark_rows = conn.execute(
+                f"""
+                SELECT DISTINCT thesis_id, kind
+                FROM actions
+                WHERE thesis_id IN ({placeholders})
+                """,
+                thesis_ids,
+            ).fetchall()
+        finally:
+            conn.close()
+        entries: dict[str, bool] = {}
+        exits: dict[str, bool] = {}
+        for r in mark_rows:
+            if r["kind"] == "entry":
+                entries[r["thesis_id"]] = True
+            elif r["kind"] == "exit":
+                exits[r["thesis_id"]] = True
+        return {
+            tid: (reasons.get(tid), entries.get(tid, False), exits.get(tid, False))
+            for tid in thesis_ids
+        }
+
     def get_actions(self, thesis_id: str) -> list[ActionRecord]:
         """Every action mark recorded for a thesis, in insertion order. Used by the resolve route to
         enforce the anti-survivorship rule (an entry-marked thesis can never be abandoned)."""

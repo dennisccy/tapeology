@@ -100,10 +100,14 @@ function RiskFlagChips({ flags }: { flags: RiskFlag[] | undefined }) {
             key={f.flag}
             data-testid="risk-flag-chip"
             data-flag={f.flag}
-            className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md border border-amber-700/60 bg-amber-900/30 px-2.5 py-1.5"
+            className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md border-l-2 border-amber-500 border-y border-r border-y-amber-700/60 border-r-amber-700/60 bg-amber-900/30 px-2.5 py-1.5"
           >
+            {/* Class-based amber advisory indicator — a left accent rule replaces the prior ⚠ emoji
+                prefix (coherence cleanup, J-51), consistent with the cockpit's text/class-based
+                design system (no icon library, no emoji). The amber semantics carry the advisory
+                meaning; the label is taxonomy-owned and read verbatim. */}
             <span className="text-xs font-semibold uppercase tracking-wide text-amber-300">
-              ⚠ {f.label}
+              {f.label}
             </span>
             {/* The measured margin, rendered verbatim. Mono so the embedded numerics read cleanly,
                 matching the cockpit's numeric discipline. */}
