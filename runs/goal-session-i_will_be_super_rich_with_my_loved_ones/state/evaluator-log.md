@@ -106,3 +106,18 @@
 **Reasoning:** The two browser FAILs (J-46, J-41-statement) are conclusively a stale QA server, not a code defect — I verified independently that the J-46 thesis (bff5cff3, declared 00:25:41 on 11-06) carries the OLD inverted frozen params (`ask_absorption`/`seller_control` for long) in the journal DB while on-disk taxonomy.py was corrected at 23:15:13 on 10-06; only a pre-fix process in memory can produce that record. The on-disk fixes match goal.md J-46, review PASS, coherence PASS, and I re-ran the backend suite myself: 369 passed / 1 skipped / 0 failed. Four of five target journeys flipped on verified pixels; the verdict engine has now rendered all five verdict states in real pixels.
 
 **Next-step recommendation:** Lean iter-7: restart the QA backend, verify code identity via the `GET /research/taxonomy` fmf-template canary BEFORE capturing, then re-run exactly the J-46 (confirming DURING bid_absorption + through the reclaim) and J-41 (progress statement violated on adverse tape) browser legs. After those flip, next feature target: J-48 (thesis geometry) or J-50 (user-facing resolve). The harness `qa_complete` halt must be fixed before any FULL iteration.
+
+## Iteration 7 — goal-i_will_be_super_rich_with_my_loved_ones-iter-7
+
+**Date:** 2026-06-11T01:40:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-41 (partial→passing), J-46 (partial→passing), J-50 (failing→passing)
+- Newly failing: none
+- Regressed: none (J-42 downgraded passing→partial — honesty downgrade on the "statements read met" clause, core clauses still pass; mirrors the iter-6 J-41 treatment)
+- Anti-goal violations: none
+
+**Reasoning:** The mandated fresh-server re-capture succeeded: the canary passed (uvicorn 01:33 > patches 23:15; `states_long=["bid_absorption"]` on disk), and evaluator-opened pixels prove J-46 CONFIRMING during Bid Absorption 0.950 then through the Buyer Control 0.923 reclaim (UT-J-46-A/B), J-41 REJECTING with stmt2 VIOLATED on the adverse tape (UT-J-41-rejecting-violated.png), and the full J-50 resolve lifecycle (played_out/abandoned with logical+wall timestamps, strip back to declare, redeclare in pixels, expired frozen, 422/409/404 matrix). Suite re-run by the evaluator: 383 passed / 1 skipped. Review PASS, coherence COHERENCE-PASS; the diff (atomic `resolve_thesis_with_event`, append-only, monitor detach, descriptive copy) violates no anti-goal. BUT the same fresh pixels show the iter-6 `directional_impact` fix over-corrected: stmt2 reads "violated" on a clean confirming SIM-BUYER tape (buy_price_impact +0.42, ratio 0.92, sell_price_impact -0.14 trips the adverse-first check in `monitor.py::_evaluate_statement`, which never weighs dominance despite its docstring) — seen in 3 captures; the iter-6 "old/new coincide on the favorable tape" rationale was wrong, so J-42 drops to partial.
+
+**Next-step recommendation:** (1) Fix `_evaluate_statement`'s directional_impact with a real dominance rule + four-quadrant unit tests, then re-capture BOTH SIM-BUYER (stmt2 met while confirming → J-42 back to passing) and SIM-SELLER (stmt2 still violated while rejecting → J-41 must not regress). (2) Feature target: J-52 action marks (store support already landed in iter-7; add the endpoint + strip controls + verbatim recording + R display), which unblocks J-47/J-48/J-53 and closes J-50's deferred no-Abandon-UI clause. Depth: lean (the FULL-pipeline `qa_complete` halt carry-forward is still open).

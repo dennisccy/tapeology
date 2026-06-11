@@ -402,6 +402,40 @@ export async function declareThesis(params: {
   }
 }
 
+// POST /research/thesis/{id}/resolve — honestly close out a USER-declared thesis (J-50). The user
+// may set ONLY `played_out` or `abandoned`; `invalidated`/`expired` are system-owned (the backend
+// returns 422). On success the backend flips the terminal status, appends the final timeline event,
+// and detaches the monitor — the next WS frame then carries `thesis: null`, so the strip returns to
+// the declare affordance on its own (the frontend derives nothing). A 409 (already resolved /
+// entry-marked-refuses-abandon) or 422 detail is surfaced VERBATIM for an inline message — never a
+// swallowed failure or a dead click.
+export async function resolveThesis(
+  thesisId: string,
+  resolution: "played_out" | "abandoned",
+): Promise<StopResult> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/thesis/${encodeURIComponent(thesisId)}/resolve`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolution }),
+      },
+    );
+    if (res.ok) return { ok: true };
+    let error = "The thesis could not be resolved.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
 // NOTE: the canonical thesis projection (`GET /research/thesis/active?ticker=`) is the REST
 // counterpart of the WS `thesis` key. The strip reads the WS `thesis` key only (one read path per
 // contract value — data-contract row 15); QA probes the REST endpoint directly for the

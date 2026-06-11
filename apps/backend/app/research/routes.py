@@ -39,6 +39,15 @@ from .taxonomy import (
 router = APIRouter(prefix="/research", tags=["research"])
 
 
+# The terminal statuses a thesis can carry. A USER may set only ``played_out`` / ``abandoned`` via
+# the resolve endpoint; ``invalidated`` / ``expired`` are SYSTEM-owned (the verdict engine / the
+# lifecycle path own them) and a request for either is a 422. Any status in this set means the thesis
+# is already resolved (a second resolve is a 409).
+_USER_RESOLUTIONS = ("played_out", "abandoned")
+_SYSTEM_RESOLUTIONS = ("invalidated", "expired")
+_TERMINAL_STATUSES = (*_USER_RESOLUTIONS, *_SYSTEM_RESOLUTIONS)
+
+
 class ThesisRequest(BaseModel):
     """Body for ``POST /research/thesis``. ``level_price`` is optional at the schema level — the
     per-setup REQUIRED/FORBIDDEN rule is enforced in the route (a 422), never by the schema, so the
@@ -49,6 +58,15 @@ class ThesisRequest(BaseModel):
     direction: str
     invalidation_price: float
     level_price: float | None = None
+
+
+class ResolveRequest(BaseModel):
+    """Body for ``POST /research/thesis/{id}/resolve``. ``resolution`` is validated in the route (not
+    by the schema) so the message is explicit and the user-vs-system ownership rule is enforced in one
+    place: a user may set only ``played_out`` / ``abandoned``; ``invalidated`` / ``expired`` are
+    system-owned (422) and an unknown value is also a 422."""
+
+    resolution: str
 
 
 class ResearchRegistry:
@@ -321,3 +339,129 @@ def declare_thesis(
 
     projection = monitor.projection()
     return {"thesis": projection}
+
+
+@router.post("/thesis/{thesis_id}/resolve")
+def resolve_thesis(
+    thesis_id: str,
+    body: ResolveRequest,
+    registry: ResearchRegistry = Depends(get_registry),
+    manager=Depends(get_watch_manager),
+) -> dict:
+    """Honestly close out a USER-declared thesis (J-50) — ``played_out`` or ``abandoned`` ONLY.
+
+    Validation matrix (nothing is mutated on any rejection):
+      * 404 — no thesis with that id;
+      * 422 — ``invalidated`` / ``expired`` requested (those resolutions are SYSTEM-owned), or an
+        unknown ``resolution`` enum;
+      * 409 — the thesis is already resolved (any terminal status) — the resolve is idempotently
+        refused, never a duplicated timeline event (a double-click yields one resolution + one 409);
+      * 409 — ``abandoned`` requested for an ENTRY-MARKED thesis (anti-survivorship: a real position
+        is never abandoned). The entry-mark UI is a later iteration; this guard is enforced at the
+        store/API level now.
+
+    On success the resolution is routed through ONE store function
+    (``resolve_thesis_with_event``) — so a later iteration can compute grades / execution checks
+    "once here" without a second path — which flips the terminal status AND appends the final
+    timeline event (logical + wall timestamps) ATOMICALLY (append-only — prior events are never
+    edited). The live monitor (if the ticker is still watched) is detached so no verdict event is
+    appended after resolution and ``thesis/active`` returns ``null`` (a redeclare then succeeds)."""
+    thesis = registry.store.get_thesis(thesis_id)
+    if thesis is None:
+        raise HTTPException(status_code=404, detail=f"no thesis with id '{thesis_id}'")
+
+    resolution = body.resolution
+
+    # 422 — system-owned resolutions can never be set by the user.
+    if resolution in _SYSTEM_RESOLUTIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"'{resolution}' is a system-owned resolution — only "
+                f"{' / '.join(_USER_RESOLUTIONS)} may be set by the user"
+            ),
+        )
+    # 422 — unknown enum (rejected, never coerced).
+    if resolution not in _USER_RESOLUTIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"unknown resolution '{resolution}' — must be one of "
+                f"{' / '.join(_USER_RESOLUTIONS)}"
+            ),
+        )
+
+    # 409 — already resolved (any terminal status). Idempotent refusal: a second resolve (e.g. a
+    # double-click race) gets one 409 and appends NO duplicate timeline event.
+    if thesis.status in _TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"thesis '{thesis_id}' is already resolved ({thesis.status})",
+        )
+
+    # 409 — an entry-marked thesis can never be abandoned (anti-survivorship). Checked against the
+    # persisted action rows (the entry-mark UI is J-52; the guard is unit-proven now).
+    if resolution == "abandoned" and registry.store.has_entry_mark(thesis_id):
+        raise HTTPException(
+            status_code=409,
+            detail="an entry-marked thesis cannot be abandoned — it carries a real position",
+        )
+
+    # --- All validation passed — resolve through the ONE store function (status flip + appended final
+    # timeline event, atomic + append-only). Stamp logical + wall timestamps: use the live engine
+    # snapshot's logical clock if the ticker is still watched, else the last recorded logical instant
+    # (never a fabricated value).
+    wall = time.time()
+    engine = manager.get(thesis.ticker)
+    snap = engine.snapshot() if engine is not None else None
+    if snap is not None:
+        logical = snap.timestamp
+        last = snap.last
+    else:
+        events = registry.store.verdict_events(thesis_id)
+        logical = events[-1].logical_ts if events else thesis.created_logical_ts
+        last = events[-1].last if events else None
+
+    evidence = {
+        "played_out": "You resolved this thesis as played out — the idea has run its course.",
+        "abandoned": "You abandoned this thesis — it was closed without running its course.",
+    }[resolution]
+
+    final_event = VerdictEventRecord(
+        thesis_id=thesis_id,
+        logical_ts=logical,
+        wall_ts=wall,
+        verdict=resolution,
+        evidence=evidence,
+        tape_state=snap.tape_state if snap is not None else None,
+        confidence=snap.confidence if snap is not None else None,
+        last=last,
+    )
+    try:
+        registry.store.resolve_thesis_with_event(thesis_id, resolution, final_event)
+    except Exception:
+        raise HTTPException(status_code=503, detail="could not resolve the thesis")
+
+    # Detach the live monitor (if the ticker is still watched and holds THIS thesis) so no verdict
+    # event is appended after resolution and the projection clears (the strip returns to the declare
+    # affordance). If the watch already ended, the persisted status is authoritative on its own.
+    monitor = registry.monitor_for(thesis.ticker)
+    if monitor is not None and monitor.active_thesis_id == thesis_id:
+        monitor.resolve_by_user(resolution)
+
+    return {
+        "thesis": {
+            "id": thesis.id,
+            "ticker": thesis.ticker,
+            "setup_type": thesis.setup_type,
+            "direction": thesis.direction,
+            "invalidation_price": thesis.invalidation_price,
+            "level_price": thesis.level_price,
+            "status": resolution,
+            "resolved_logical_ts": logical,
+            "resolved_wall_ts": wall,
+            "bound_source": thesis.bound_source,
+            "data_feed": thesis.data_feed,
+            "config_fingerprint": thesis.config_fingerprint,
+        }
+    }

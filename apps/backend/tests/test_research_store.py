@@ -7,7 +7,12 @@ import json
 import pytest
 
 from app.config import CONFIG
-from app.research.store import JournalStore, ThesisRecord, VerdictEventRecord
+from app.research.store import (
+    ActionRecord,
+    JournalStore,
+    ThesisRecord,
+    VerdictEventRecord,
+)
 
 
 def _thesis(tid: str = "t1", ticker: str = "SIM-BIDABS", status: str = "active") -> ThesisRecord:
@@ -229,3 +234,85 @@ def test_no_tape_data_columns_in_schema(store):
         conn.close()
     for forbidden in ("trades", "quotes", "candles", "features", "events"):
         assert forbidden not in names, f"tape-data table {forbidden} must not exist"
+
+
+# --- user resolution path (J-50): atomic status flip + appended final event ----------------------
+
+def test_resolve_thesis_with_event_flips_status_and_appends_final_event(store):
+    store.insert_thesis(_thesis())
+    store.append_verdict_event(
+        VerdictEventRecord("t1", 1.0, 100.0, "pending", "declared", "bid_absorption", 0.8, 100.0)
+    )
+    store.resolve_thesis_with_event(
+        "t1",
+        "played_out",
+        VerdictEventRecord(
+            "t1", 5.0, 1700000500.0, "played_out", "you resolved it", "bid_absorption", 0.7, 100.4
+        ),
+    )
+    assert store.get_thesis("t1").status == "played_out"
+    events = store.verdict_events("t1")
+    # The prior pending row is byte-identical (append-only); the resolution is a NEW appended row.
+    assert [e.verdict for e in events] == ["pending", "played_out"]
+    assert events[0].evidence == "declared"
+    final = events[-1]
+    assert final.verdict == "played_out"
+    assert final.logical_ts == 5.0
+    assert final.wall_ts == 1700000500.0
+    assert final.last == 100.4
+
+
+def test_resolve_with_event_is_atomic_failure_leaves_status_unflipped(store):
+    # A failure during the resolve transaction rolls BOTH back — no half-state (status flipped but no
+    # event, or vice-versa). Fault-inject on the verdict_events INSERT.
+    store.insert_thesis(_thesis())
+    real = store._write_conn
+    store._write_conn = _FaultInjectingConn(real, "INSERT INTO verdict_events")
+    with pytest.raises(Exception):
+        store.resolve_thesis_with_event(
+            "t1",
+            "abandoned",
+            VerdictEventRecord("t1", 5.0, 5.0, "abandoned", "x", None, None, None),
+        )
+    store._write_conn = real
+    # Status NOT flipped and NO timeline event appended (clean rollback).
+    assert store.get_thesis("t1").status == "active"
+    assert store.verdict_events("t1") == []
+
+
+def test_insert_and_read_actions_roundtrip(store):
+    store.insert_thesis(_thesis())
+    assert store.get_actions("t1") == []
+    assert store.has_entry_mark("t1") is False
+    store.insert_action(ActionRecord("a1", "t1", "entry", 100.25, 12.0, 1700000010.0))
+    actions = store.get_actions("t1")
+    assert len(actions) == 1
+    assert actions[0].kind == "entry"
+    assert actions[0].price == 100.25
+    assert store.has_entry_mark("t1") is True
+
+
+def test_has_entry_mark_false_for_exit_only(store):
+    store.insert_thesis(_thesis())
+    store.insert_action(ActionRecord("x1", "t1", "exit", 101.0, 20.0, 1700000020.0))
+    # An exit-only thesis carries no ENTRY mark (the anti-survivorship guard keys on entry).
+    assert store.has_entry_mark("t1") is False
+
+
+class _FaultInjectingConn:
+    """Proxy that raises on a targeted INSERT (``sqlite3.Connection`` is an immutable C type)."""
+
+    def __init__(self, conn, fail_on: str) -> None:
+        import sqlite3 as _sqlite3
+
+        self._conn = conn
+        self._fail_on = fail_on
+        self._OperationalError = _sqlite3.OperationalError
+
+    def execute(self, sql, *args, **kwargs):
+        if isinstance(sql, str) and self._fail_on in sql:
+            raise self._OperationalError("injected fault")
+        return self._conn.execute(sql, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)

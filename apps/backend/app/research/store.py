@@ -132,6 +132,22 @@ class ThesisRecord:
 
 
 @dataclass(frozen=True)
+class ActionRecord:
+    """One persisted action mark (entry | exit) — recorded verbatim from the user (no inferred fill).
+
+    The entry-mark UI is a later iteration (J-52); this record exists now so the resolve path can
+    enforce the anti-survivorship rule (an entry-marked thesis can never be abandoned) and so a unit
+    test can inject an action row directly to prove the guard."""
+
+    id: str
+    thesis_id: str
+    kind: str
+    price: float
+    logical_ts: float
+    wall_ts: float
+
+
+@dataclass(frozen=True)
 class VerdictEventRecord:
     thesis_id: str
     logical_ts: float
@@ -460,6 +476,71 @@ class JournalStore:
 
         self._do_write(_fn)
 
+    def resolve_thesis_with_event(
+        self, thesis_id: str, status: str, event: VerdictEventRecord
+    ) -> None:
+        """Resolve a thesis ATOMICALLY: flip the theses-row status AND append ONE final timeline
+        event in a single ``BEGIN IMMEDIATE`` writer transaction (the user-resolution path, J-50).
+
+        This is the single function the resolve route funnels through (so a later iteration can add
+        grading/execution-check computation "once here" — data-contract row 19 — without a second
+        path). The status flip touches ONLY the theses row; the resolution is recorded as an APPENDED
+        verdict event (never an edit of a prior row — journal-integrity append-only guarantee). A
+        failure rolls BOTH back, so a status flip without its timeline event (or vice versa) can never
+        be left behind."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE theses SET status=? WHERE id=?",
+                (status, thesis_id),
+            )
+            conn.execute(
+                """
+                INSERT INTO verdict_events (
+                    thesis_id, logical_ts, wall_ts, verdict, evidence, tape_state, confidence, last,
+                    rule_first_true_ts, rule_first_true_price
+                ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    event.thesis_id,
+                    event.logical_ts,
+                    event.wall_ts,
+                    event.verdict,
+                    event.evidence,
+                    event.tape_state,
+                    event.confidence,
+                    event.last,
+                    event.rule_first_true_ts,
+                    event.rule_first_true_price,
+                ),
+            )
+            self._prune_timeline(conn, thesis_id)
+
+        self._do_write(_fn)
+
+    def insert_action(self, record: ActionRecord) -> None:
+        """Persist one action mark (entry | exit). The entry-mark UI is J-52; this writer exists now so
+        a unit test can inject an action row directly to prove the resolve route's
+        entry-marked-refuses-abandon guard."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                """
+                INSERT INTO actions (id, thesis_id, kind, price, logical_ts, wall_ts)
+                VALUES (?,?,?,?,?,?)
+                """,
+                (
+                    record.id,
+                    record.thesis_id,
+                    record.kind,
+                    record.price,
+                    record.logical_ts,
+                    record.wall_ts,
+                ),
+            )
+
+        self._do_write(_fn)
+
     def expire_stale_actives(self, wall_ts: float) -> list[str]:
         """Startup sweep: resolve every thesis still ``active`` to ``expired`` and append a final
         ``expired`` timeline event for each (no entry marks exist yet, so there is no
@@ -516,6 +597,40 @@ class JournalStore:
                 (ticker,),
             ).fetchone()
             return self._row_to_thesis(row) if row is not None else None
+        finally:
+            conn.close()
+
+    def get_actions(self, thesis_id: str) -> list[ActionRecord]:
+        """Every action mark recorded for a thesis, in insertion order. Used by the resolve route to
+        enforce the anti-survivorship rule (an entry-marked thesis can never be abandoned)."""
+        conn = self._read_conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM actions WHERE thesis_id=? ORDER BY id ASC", (thesis_id,)
+            ).fetchall()
+            return [
+                ActionRecord(
+                    id=r["id"],
+                    thesis_id=r["thesis_id"],
+                    kind=r["kind"],
+                    price=r["price"],
+                    logical_ts=r["logical_ts"],
+                    wall_ts=r["wall_ts"],
+                )
+                for r in rows
+            ]
+        finally:
+            conn.close()
+
+    def has_entry_mark(self, thesis_id: str) -> bool:
+        """True if the thesis carries at least one ``entry`` action mark (anti-survivorship guard)."""
+        conn = self._read_conn()
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM actions WHERE thesis_id=? AND kind='entry' LIMIT 1",
+                (thesis_id,),
+            ).fetchone()
+            return row is not None
         finally:
             conn.close()
 

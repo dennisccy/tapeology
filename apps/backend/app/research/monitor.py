@@ -163,6 +163,19 @@ class ResearchMonitor:
         self._verdict = "pending"
         self._verdict_evidence = ""
 
+    def resolve_by_user(self, resolution: str) -> None:
+        """Detach verdict evaluation after a USER resolution (played_out | abandoned), J-50.
+
+        The route has already flipped the persisted status + appended the final timeline event
+        atomically; this only updates the in-memory monitor so that (a) the hot-path
+        ``_evaluate_verdict`` stops appending verdict events for this thesis (it early-returns while
+        ``_resolved``), and (b) the projection clears to ``None`` — a user resolution returns the
+        strip to the idle declare affordance (distinct from the system-owned ``invalidated``
+        treatment, which the strip KEEPS visible). ``active_thesis_id`` then reads ``None``, so a
+        redeclare on the same ticker succeeds (no 409). Called from the route, NEVER the hot path."""
+        self._resolved = True
+        self._resolution = resolution
+
     @property
     def active_thesis_id(self) -> str | None:
         return self._thesis.id if self._thesis is not None and not self._resolved else None

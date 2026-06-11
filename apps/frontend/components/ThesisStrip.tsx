@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { declareThesis, fetchTaxonomy } from "@/lib/api";
+import { declareThesis, fetchTaxonomy, resolveThesis } from "@/lib/api";
 import type {
   ResearchTaxonomy,
   StatementStatus,
@@ -96,6 +96,31 @@ function ActiveThesis({
   const verdictChip = VERDICT_STYLE[thesis.verdict] ?? VERDICT_STYLE.pending;
   const evidenceColor =
     VERDICT_EVIDENCE_COLOR[thesis.verdict] ?? VERDICT_EVIDENCE_COLOR.pending;
+
+  // User resolution (J-50): the two record actions on a LIVE thesis. System-owned terminal states
+  // (invalidated) carry no user controls — the strip shows their terminal treatment instead. On
+  // success the next WS frame carries `thesis: null`, so the strip returns to the declare affordance
+  // on its own (the frontend derives nothing). A 409/422 surfaces an explicit inline message.
+  const [resolving, setResolving] = useState<"played_out" | "abandoned" | null>(
+    null,
+  );
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const canResolve = !isInvalidated;
+
+  async function handleResolve(resolution: "played_out" | "abandoned") {
+    setResolveError(null);
+    setResolving(resolution);
+    const result = await resolveThesis(thesis.id, resolution);
+    if (!result.ok) {
+      // No dead click, no swallowed failure — surface the backend detail verbatim. The WS frame
+      // keeps the thesis active (nothing was resolved), so the controls stay available to retry.
+      setResolveError(result.error ?? "The thesis could not be resolved.");
+      setResolving(null);
+    }
+    // On success leave `resolving` set: the strip is about to unmount as the WS pushes `thesis: null`
+    // (the button stays disabled in the brief interval, preventing a double-submit).
+  }
+
   return (
     <StripShell>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -194,6 +219,45 @@ function ActiveThesis({
         )}
         <span className="ml-auto">Descriptive only — not trading advice.</span>
       </div>
+
+      {/* Resolution controls (J-50): record this thesis as played out or abandoned. Shown only on a
+          LIVE thesis — a system-owned invalidated thesis is already resolved (terminal treatment
+          above, no user controls). Copy is descriptive/thesis-attributed, never imperative. */}
+      {canResolve && (
+        <div
+          data-testid="thesis-resolve"
+          className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-3"
+        >
+          <span className="text-xs text-slate-500">Close out your thesis:</span>
+          <button
+            type="button"
+            data-testid="resolve-played-out"
+            disabled={resolving !== null}
+            onClick={() => handleResolve("played_out")}
+            className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500 active:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {resolving === "played_out" ? "Resolving…" : "Played out"}
+          </button>
+          <button
+            type="button"
+            data-testid="resolve-abandon"
+            disabled={resolving !== null}
+            onClick={() => handleResolve("abandoned")}
+            className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500 active:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {resolving === "abandoned" ? "Resolving…" : "Abandon"}
+          </button>
+          {resolveError && (
+            <p
+              data-testid="resolve-error"
+              className="w-full text-sm text-rose-400"
+              role="alert"
+            >
+              {resolveError}
+            </p>
+          )}
+        </div>
+      )}
     </StripShell>
   );
 }

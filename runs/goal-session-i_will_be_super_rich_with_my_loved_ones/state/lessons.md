@@ -49,3 +49,9 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** Browser QA ran against a uvicorn process started BEFORE the iteration's code was written (22:07 server vs 23:15 patches), so two correct on-disk fixes failed in pixels — the journal DB itself proved it (thesis bff5cff3 declared at 00:25 froze the OLD inverted `ask_absorption`-for-long params that no longer exist in `apps/backend/app/research/taxonomy.py`). Restart (or freshly start) the QA backend AFTER dev completes, and verify the running server's code identity with a cheap canary probe before any capture — e.g. `GET /research/taxonomy` must reflect the patched templates.
 **Applies to:** every browser-qa run in every future iteration — make "server start time > newest patched-file mtime" (or a response-content canary) a mandatory pre-capture check, especially for backend-only iterations where no rebuild step forces a restart.
+
+## iter-7 — 2026-06-11T01:40:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A direction-aware fix verified only on the ADVERSE tape can silently break the favorable tape: iter-6's `directional_impact` rewrite in `apps/backend/app/research/monitor.py::_evaluate_statement` checks the adverse-side cutoff FIRST (`sell_price_impact <= -0.02` for long) with no dominance weighing, so SIM-BUYER's minority sell flow (-0.06..-0.16) brands a CONFIRMING thesis's progress statement "violated" — directly under evidence saying "the tape confirms your thesis". The iter-6 acceptance rationale "old/new statement code coincide on the favorable tape" was wrong; only fresh-server pixels on BOTH tapes exposed it.
+**Applies to:** any iter touching verdict/statement semantics in `apps/backend/app/research/monitor.py` or `verdict.py` — always demand four-quadrant proof (favorable + adverse tape × long + short), in pixels, never just the quadrant the defect was reported on.
