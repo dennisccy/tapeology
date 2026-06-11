@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..config import Config
+from .excursions import compute_and_persist_excursions
 from .execution_checks import compute_and_persist_execution_checks
 from .grades import compute_and_persist_grades
 from .marks import marks_projection
@@ -207,6 +208,12 @@ class ResearchRegistry:
                 compute_and_persist_execution_checks(self._store, thesis_id, self._config)
                 compute_and_persist_final_statuses(self._store, thesis_id, None, self._config)
                 compute_and_persist_grades(self._store, thesis_id, "expired", self._config)
+                # Excursions (capability 30, J-58): the restart-expiry sweep has NO in-memory tracker
+                # (the watch that declared the thesis is long gone and tape data is never persisted, so
+                # the price path cannot be reconstructed). Passing ``tracker=None`` persists the
+                # explicit ``not_tracked`` honest marker — never fabricated numbers, never a dishonest
+                # zero. The journal detail then renders an explicit not-tracked notice.
+                compute_and_persist_excursions(self._store, thesis_id, None)
             except Exception:
                 # A computation failure must not abort the sweep (the resolution already stands); the
                 # key stays honestly absent for that thesis.
@@ -436,6 +443,15 @@ def build_journal_detail(
             "mistake_tags": thesis.review_tags or [],
             "note": thesis.review_note,
         }
+    # The per-horizon excursion record (capability 30, J-58, data-contract row 20) — served VERBATIM
+    # from the persisted result measured ONCE at the terminal resolution / stream-end. This is the
+    # ONLY serving path (no new endpoint, no second computation, no client-side arithmetic). Honest
+    # omission: a pre-v7 resolution (or an unresolved thesis) carries NULL excursions, so the detail
+    # OMITS the key entirely (never fabricated numbers, never recomputed at read). A measured record
+    # carries ``tracked: true`` + the two segregated populations; the restart-sweep marker carries
+    # ``tracked: false`` (an explicit honest "not tracked", never a dishonest zero).
+    if thesis.excursions is not None:
+        detail["excursions"] = thesis.excursions
     return detail
 
 
@@ -725,10 +741,23 @@ def resolve_thesis(
     except Exception:
         pass
 
+    # Excursions (capability 30, J-58): if the live monitor still HOLDS this thesis, the user
+    # resolution is the terminal moment for the in-memory tracker — truncate any open horizon and
+    # persist the tracker's resolved state ONCE through the SAME single function every terminal path
+    # calls (the journal detail serves it verbatim). If the watch already ended (an entry-marked
+    # surviving thesis the user is now resolving), the excursion record was ALREADY persisted at the
+    # stream-end survival path; the store-level idempotent guard means it is never reopened. A failure
+    # here must NOT undo the (already-committed) resolution — the key then stays honestly ABSENT.
+    monitor = registry.monitor_for(thesis.ticker)
+    if monitor is not None and monitor.active_thesis_id == thesis_id:
+        try:
+            monitor.persist_excursions_on_user_resolve(thesis_id)
+        except Exception:
+            pass
+
     # Detach the live monitor (if the ticker is still watched and holds THIS thesis) so no verdict
     # event is appended after resolution and the projection clears (the strip returns to the declare
     # affordance). If the watch already ended, the persisted status is authoritative on its own.
-    monitor = registry.monitor_for(thesis.ticker)
     if monitor is not None and monitor.active_thesis_id == thesis_id:
         monitor.resolve_by_user(resolution)
 
@@ -855,10 +884,20 @@ def record_action(
     except Exception:
         raise HTTPException(status_code=503, detail="could not record the action mark")
 
+    # Arm the excursion ENTRY population (capability 30, J-58) at the recorded ENTRY mark — the
+    # entry-anchored population's defining moment. Uses the verbatim mark price + the moment spread
+    # ALREADY stamped on the action row (row 18, reused — never re-stamped). Only when the live monitor
+    # holds this thesis (the entry-mark API refuses marks on a resolved thesis, so a held monitor is
+    # the normal case); a stopped watch's surviving thesis re-arms on re-attach if needed.
+    monitor = registry.monitor_for(thesis.ticker)
+    if kind == "entry" and monitor is not None and monitor.active_thesis_id == thesis_id:
+        monitor.arm_entry_excursions(
+            logical_ts=logical, wall_ts=wall, price=price, spread_at_mark=spread_at_mark
+        )
+
     # Return the full live projection (now carrying the recorded marks + realized-R) if the monitor
     # holds this thesis; otherwise assemble the marks projection directly from the store so the caller
     # always sees the recorded mark even if the watch already ended.
-    monitor = registry.monitor_for(thesis.ticker)
     if monitor is not None and monitor.active_thesis_id == thesis_id:
         return {"thesis": monitor.projection()}
     return {

@@ -48,12 +48,14 @@ function labelFrom(
 
 // Outcome × process grade COLOR (a visual concern owned by the frontend; the LABEL text comes from
 // the taxonomy). Outcome: held emerald, failed rose, no_read slate. Process: clean emerald, flagged
-// amber, violated rose.
+// amber, violated rose. The emerald shade is UNIFIED with JournalDetailView's grade chips
+// (`bg-emerald-900/40`, `border-emerald-700`) so the SAME grade id reads identically on both surfaces
+// (the iter-15 coherence cleanup — one shade for one grade across the journal list + detail).
 function gradeClass(id: string): string {
   switch (id) {
     case "thesis_held":
     case "clean":
-      return "border-emerald-700/60 bg-emerald-900/20 text-emerald-300";
+      return "border-emerald-700 bg-emerald-900/40 text-emerald-300";
     case "thesis_failed":
     case "violated":
       return "border-rose-700/70 bg-rose-900/30 text-rose-300";

@@ -24,6 +24,19 @@ from __future__ import annotations
 from .store import ActionRecord, ThesisRecord
 
 
+def r_basis(reference_price: float, invalidation_price: float) -> float:
+    """The ONE shared R basis: ``R = |reference - invalidation|`` (the goal-doc glossary's R unit).
+
+    The SINGLE owner of the R definition — both ``marks_projection`` (row 27 realized-R) and the
+    excursion calculator (row 20, capability 30) call THIS function, so the R basis is computed by
+    one formula everywhere (never a second one). ``reference_price`` is the entry mark for realized-R
+    and the entry/confirmation anchor's reference price for excursions; ``invalidation_price`` is the
+    declared invalidation. A degenerate ``R == 0`` (reference exactly at the invalidation) is returned
+    as-is so the caller decides the honest no-metric behaviour (no divide-by-zero, no fabricated
+    infinity)."""
+    return abs(reference_price - invalidation_price)
+
+
 def _mark_dict(record: ActionRecord) -> dict:
     """One mark, projected verbatim (price + logical/wall stamps + recorded moment spread)."""
     return {
@@ -49,21 +62,23 @@ def marks_projection(thesis: ThesisRecord, actions: list[ActionRecord]) -> dict:
     entry = next((a for a in actions if a.kind == "entry"), None)
     exit_ = next((a for a in actions if a.kind == "exit"), None)
 
-    r_basis: float | None = None
+    r_basis_value: float | None = None
     realized_r: float | None = None
     if entry is not None:
-        r_basis = abs(entry.price - thesis.invalidation_price)
-        if exit_ is not None and r_basis > 0:
+        # The ONE shared R-basis helper (never a second formula) — also used by the excursion
+        # calculator so realized-R and excursions share a single R definition.
+        r_basis_value = r_basis(entry.price, thesis.invalidation_price)
+        if exit_ is not None and r_basis_value > 0:
             # Price change from entry to exit, signed so a move in the thesis's FAVOR is positive
             # (long: exit above entry; short: exit below entry), expressed in R units.
             raw_move = exit_.price - entry.price
             directed = raw_move if thesis.direction == "long" else -raw_move
-            realized_r = directed / r_basis
+            realized_r = directed / r_basis_value
 
     return {
         "entry": _mark_dict(entry) if entry is not None else None,
         "exit": _mark_dict(exit_) if exit_ is not None else None,
         "has_entry": entry is not None,
-        "r_basis": r_basis,
+        "r_basis": r_basis_value,
         "realized_r": realized_r,
     }

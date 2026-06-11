@@ -184,7 +184,24 @@ export interface ResearchTaxonomy {
   // payload stays valid.
   outcome_grades?: TaxonomyEnum[];
   process_grades?: TaxonomyEnum[];
+  // The excursion display copy (capability 30, J-58) — the journal detail's two excursion blocks
+  // render the ternary-outcome labels, the truncated flag, the population titles, and the honest-
+  // absence copy VERBATIM (the frontend hardcodes none of them). Optional so a pre-J-58 taxonomy
+  // payload stays valid (the block then falls back to humanised ids).
+  excursions?: ExcursionTaxonomy;
   disclaimer: string;
+}
+
+// The excursion display copy owned by the backend (`GET /research/taxonomy` → `excursions`).
+export interface ExcursionTaxonomy {
+  ternary_outcomes: TaxonomyEnum[];
+  truncated_label: string;
+  populations: TaxonomyEnum[];
+  // Per-population honest-absence copy (never-confirmed / no-entry-mark), keyed by population id.
+  not_applicable: Record<string, string>;
+  // The restart-sweep "not tracked" copy (no live tape to measure from — no numbers, not a zero).
+  not_tracked: string;
+  r_basis_caption: string;
 }
 
 export interface MistakeTag {
@@ -201,6 +218,44 @@ export interface ThesisGrades {
   outcome: "thesis_held" | "thesis_failed" | "no_read";
   process: "clean" | "flagged" | "violated";
   process_evidence: string;
+}
+
+// One per-horizon excursion row (capability 30, J-58) — measured ONCE at the terminal resolution /
+// stream-end, served VERBATIM. `mfe_r`/`mae_r` are the max favorable/adverse excursion in R units over
+// the horizon window (never currency); `outcome` is the ternary by FIRST TOUCH (`null` while a
+// horizon was cut short with no first touch — `truncated` then tells the story); `truncated` flags a
+// horizon the stream end / a gap cut short. The page renders these verbatim — it derives nothing.
+export interface ExcursionHorizon {
+  horizon: number;
+  mfe_r: number;
+  mae_r: number;
+  outcome: "+1R_first" | "-1R_first" | "neither_within_horizon" | null;
+  truncated: boolean;
+}
+
+// One excursion POPULATION (confirmation-anchored OR entry-anchored) — its anchor + per-horizon rows.
+// The two populations are segregated end to end and NEVER pooled. `reference_price` is the anchor's
+// reference (the first-confirmation `last`, or the verbatim entry-mark price); `r_basis` is
+// R = |reference − invalidation|; `spread_at_anchor` is the moment spread stamped ONCE at the anchor.
+export interface ExcursionPopulation {
+  population: string;
+  anchor_logical_ts: number;
+  anchor_wall_ts: number;
+  reference_price: number;
+  invalidation_price: number;
+  r_basis: number;
+  spread_at_anchor: number | null;
+  horizons: ExcursionHorizon[];
+}
+
+// The full excursion record (capability 30, J-58) — `tracked: true` carries the measured populations
+// (each present ONLY when its anchor existed — never-confirmed => no confirmation key; no entry mark
+// => no entry key, honest absence). `tracked: false` is the explicit restart-sweep "not tracked"
+// marker (no live tape to measure from — no numbers, never a dishonest zero). Absent entirely on the
+// detail body for a pre-v7 resolution (honest omission).
+export interface ThesisExcursions {
+  tracked: boolean;
+  populations: Record<string, ExcursionPopulation>;
 }
 
 // One compact journal-list row (J-51) — GET /research/journal. Read VERBATIM from the persisted
@@ -318,6 +373,10 @@ export interface JournalDetail {
   reviewed: boolean;
   // The saved confirmed review — present ONLY once `reviewed` is true (honest omission before).
   review?: SavedReview;
+  // The per-horizon excursion record (capability 30, J-58) — present ONLY post-v7 terminal resolution
+  // / stream-end (absent => "not measured", an honest omission). Two segregated populations; R-units
+  // only, never currency, never a prediction. Read VERBATIM — the page derives nothing.
+  excursions?: ThesisExcursions;
 }
 
 // Server-side filter params for GET /research/journal (J-51). An omitted filter does not constrain;

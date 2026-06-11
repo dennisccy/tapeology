@@ -33,6 +33,7 @@ import time
 
 from ..config import Config
 from ..engine.snapshot import EngineSnapshot
+from .excursions import ExcursionTracker, compute_and_persist_excursions
 from .execution_checks import compute_and_persist_execution_checks
 from .grades import compute_and_persist_grades
 from .marks import marks_projection
@@ -617,6 +618,13 @@ class ResearchMonitor:
         self._adopt_decided = False        # has the first post-restart snapshot resolved adopt/mismatch?
         self._adopt_mismatch = False       # the first snapshot's source differed from bound_source
         self._restart_gap_appended = False # the single watch_restarted gap event has been appended
+        # The in-memory excursion tracker (capability 30, J-58) for the active thesis. Created when a
+        # thesis is set / adopted (it needs the invalidation + direction); fed by ``on_event``; armed
+        # at the first published ``confirming`` and at the recorded entry mark; SNAPSHOTTED + persisted
+        # ONCE at the terminal resolution / stream-end. ``None`` when no thesis is held. The tracker
+        # reads ONLY the snapshot (read-only over the engine) — no tape data is persisted, only the
+        # R-unit excursion summaries.
+        self._excursions: ExcursionTracker | None = None
 
     # --- thesis lifecycle (called from the route, NOT the hot path) -----------------------------
     def set_thesis(self, thesis: ThesisRecord) -> None:
@@ -629,6 +637,15 @@ class ResearchMonitor:
         # ``pending`` (the declaration route already appended the initial pending timeline row).
         self._evaluator = VerdictEvaluator(thesis, self._config)
         self._verdict = "pending"
+        # A FRESH excursion tracker (capability 30, J-58) — keyed to this thesis's invalidation +
+        # direction (the R basis + the favorable-side sense). It arms its confirmation population at
+        # the first published ``confirming`` and its entry population at the recorded entry mark; both
+        # populations stay segregated. Fed by ``on_event`` from here on.
+        self._excursions = ExcursionTracker(
+            invalidation_price=thesis.invalidation_price,
+            direction=thesis.direction,
+            config=self._config,
+        )
         # Seed the published evidence with the pending register so the projection never carries a
         # NAKED verdict (the no-naked-outputs anti-goal): every verdict — including the initial
         # pending — reads with plain-language evidence. Replaced verbatim by the engine's evidence on
@@ -670,6 +687,7 @@ class ResearchMonitor:
         self._adopt_decided = False
         self._adopt_mismatch = False
         self._restart_gap_appended = False
+        self._excursions = None
 
     def resolve_by_user(self, resolution: str) -> None:
         """Detach verdict evaluation after a USER resolution (played_out | abandoned), J-50.
@@ -688,6 +706,38 @@ class ResearchMonitor:
     def active_thesis_id(self) -> str | None:
         return self._thesis.id if self._thesis is not None and not self._resolved else None
 
+    def arm_entry_excursions(
+        self, *, logical_ts: float, wall_ts: float, price: float, spread_at_mark: float | None
+    ) -> None:
+        """Arm the excursion ENTRY population at the recorded entry mark (capability 30, J-58).
+
+        Called from the action route (NOT the hot path) right after an ENTRY mark is recorded, so the
+        entry-anchored population arms at the verbatim mark price + the moment spread ALREADY stamped
+        on the action row (row 18 — reused, never re-stamped). The two populations stay segregated.
+        Idempotent (the tracker keeps the first arming). A no-op when no tracker is held (the thesis
+        was resolved / the watch ended) — the entry-mark API already refuses marks on a resolved
+        thesis, so a held tracker is the normal case."""
+        if self._excursions is None:
+            return
+        self._excursions.arm_entry(
+            logical_ts=logical_ts,
+            wall_ts=wall_ts,
+            reference_price=price,
+            spread_at_mark=spread_at_mark,
+        )
+
+    def persist_excursions_on_user_resolve(self, thesis_id: str) -> None:
+        """Truncate any open horizon + persist the excursion record at a USER resolution (J-50/J-58).
+
+        Called from the resolve route (NOT the hot path) right after the user resolves a thesis the
+        live monitor still holds: the resolution is a terminal moment, so any open horizon is TRUNCATED
+        (never bridged, never extrapolated) and the tracker's resolved state is persisted ONCE through
+        the SAME single function every terminal path calls. Idempotent at the store level (a record
+        already present is never reopened)."""
+        if self._excursions is not None:
+            self._excursions.truncate_open()
+        compute_and_persist_excursions(self._store, thesis_id, self._excursions)
+
     # --- observer callbacks (the hot path — exception-isolated, read-only) ----------------------
     def on_event(self, event: object, snapshot: EngineSnapshot) -> None:
         # Read-only over the engine: remember the latest snapshot (the projection reflects the current
@@ -700,6 +750,11 @@ class ResearchMonitor:
             self._last_snapshot = snapshot
             self._maybe_adopt_surviving(snapshot)
             self._evaluate_verdict(snapshot)
+            # Advance the excursion tracker AFTER the verdict step (so a confirmation armed on THIS
+            # snapshot also sees this snapshot as its dt=0 baseline). Read-only over the engine — the
+            # tracker only reads the snapshot's logical ts + last (no engine/feature mutation).
+            if self._excursions is not None and not self._resolved:
+                self._excursions.on_event(snapshot)
         except Exception:
             self._failed = True
             logger.exception("research monitor on_event failed")
@@ -730,6 +785,16 @@ class ResearchMonitor:
         self._resolved = False
         self._resolution = None
         self._evaluator = VerdictEvaluator(candidate, self._config)
+        # A fresh tracker so the hot path stays safe; the surviving thesis's excursions were ALREADY
+        # measured + persisted ONCE at the prior stream-end (the survival path), so the idempotent
+        # guard in ``compute_and_persist_excursions`` never reopens them on a matching-source re-attach
+        # (the spec's "never reopened on a matching-source re-attach"). This tracker's state is only
+        # used if the thesis somehow lacks a record (defensive); it never overwrites a frozen one.
+        self._excursions = ExcursionTracker(
+            invalidation_price=candidate.invalidation_price,
+            direction=candidate.direction,
+            config=self._config,
+        )
         self._verdict = "pending"
         self._verdict_evidence = (
             "The watch resumed on the source this thesis was declared on; the verdict stays pending "
@@ -770,13 +835,14 @@ class ResearchMonitor:
         self._verdict = decision.verdict
         if decision.changed:
             self._verdict_evidence = decision.evidence
+            event_wall = time.time()
             self._store.append_verdict_event(
                 VerdictEventRecord(
                     thesis_id=self._thesis.id,
                     logical_ts=decision.published_at_ts
                     if decision.published_at_ts is not None
                     else snapshot.timestamp,
-                    wall_ts=time.time(),
+                    wall_ts=event_wall,
                     verdict=decision.verdict,
                     evidence=decision.evidence,
                     tape_state=decision.tape_state,
@@ -786,6 +852,22 @@ class ResearchMonitor:
                     rule_first_true_price=decision.rule_first_true_price,
                 )
             )
+            # Arm the excursion CONFIRMATION population ONCE at the FIRST published ``confirming``
+            # (capability 30, J-58). The reference price is the ``last`` recorded on this published
+            # timeline event (the basis the spec mandates — already persisted on the append-only
+            # timeline); the spread-at-anchor is captured ONCE from the current snapshot; the anchor's
+            # true-clock wall_ts is the same ``event_wall`` stamped on the timeline row. Re-confirmation
+            # after weakening never re-arms (the tracker's own idempotent guard). The verdict step runs
+            # inside ``on_event``'s try/except, so a tracker error surfaces as ``monitor_status: failed``
+            # and never kills the feeder.
+            if (
+                decision.verdict == "confirming"
+                and self._excursions is not None
+                and decision.last is not None
+            ):
+                self._excursions.arm_confirmation(
+                    snapshot, reference_price=decision.last, wall_ts=event_wall
+                )
             if decision.invalidated:
                 # System-owned auto-resolve via the existing resolution path (status row only — the
                 # timeline row was just appended, never edited). The monitor stops holding the thesis
@@ -809,6 +891,17 @@ class ResearchMonitor:
                 )
                 compute_and_persist_grades(
                     self._store, self._thesis.id, "invalidated", self._config
+                )
+                # Excursions (capability 30, J-58): invalidation is a terminal moment for the thesis —
+                # the price path stops mattering here, so any open horizon is TRUNCATED (never bridged
+                # past the invalidation, never extrapolated) and the tracker's resolved state is
+                # persisted ONCE. The SAME single function every other terminal path calls; the journal
+                # detail serves it verbatim. A failure here surfaces as ``monitor_status: failed`` (it
+                # runs inside ``on_event``'s try/except) and the key stays honestly absent.
+                if self._excursions is not None:
+                    self._excursions.truncate_open()
+                compute_and_persist_excursions(
+                    self._store, self._thesis.id, self._excursions
                 )
                 self._resolved = True
                 self._resolution = "invalidated"
@@ -843,7 +936,29 @@ class ResearchMonitor:
         The thesis is NOT held active in THIS dead monitor any longer (the watch is over) — the
         persisted ``active`` row is authoritative, and the registry serves its not-evaluated
         projection from that row via the SAME projection builder until the matching source is
-        re-watched (then a fresh monitor adopts it with a ``watch_restarted`` gap event)."""
+        re-watched (then a fresh monitor adopts it with a ``watch_restarted`` gap event).
+
+        Excursions (capability 30, J-58): the stream end IS the defining (truncation) moment for the
+        excursion record even though NO resolution occurs (the thesis survives) — J-58's script ends
+        exactly here, so the record MUST exist for the surviving thesis. Any open horizon is TRUNCATED
+        at the stream end (never bridged, never extrapolated) and the tracker's resolved state is
+        persisted ONCE through the SAME single function the resolved paths call. NO timeline event and
+        NO status change accompany it (the append-only timeline + the surviving ``active`` row are
+        untouched) — this is purely the one-time excursion measurement at the stream end."""
+        if self._thesis is not None:
+            if self._excursions is not None:
+                self._excursions.truncate_open()
+            try:
+                compute_and_persist_excursions(
+                    self._store, self._thesis.id, self._excursions
+                )
+            except Exception:
+                # A persist failure must not crash the feeder teardown — surface it honestly.
+                self._failed = True
+                logger.exception(
+                    "research monitor failed to persist excursions for surviving thesis %s",
+                    self._thesis.id,
+                )
         self._thesis = None
         self._evaluator = None
 
@@ -902,6 +1017,13 @@ class ResearchMonitor:
                 self._store, thesis.id, self._last_snapshot, self._config
             )
             compute_and_persist_grades(self._store, thesis.id, "expired", self._config)
+            # Excursions (capability 30, J-58): the stream ended / the watch was stopped — any open
+            # horizon is TRUNCATED at the stream end (never bridged across the gap, never extrapolated)
+            # and the tracker's resolved state is persisted ONCE. The SAME single function every other
+            # terminal path calls; the journal detail serves it verbatim.
+            if self._excursions is not None:
+                self._excursions.truncate_open()
+            compute_and_persist_excursions(self._store, thesis.id, self._excursions)
             self._resolved = True
             self._resolution = "expired"
             self._expiry_reason = reason

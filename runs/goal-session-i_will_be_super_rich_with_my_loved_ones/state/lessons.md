@@ -97,3 +97,9 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** Browser-qa cited three evidence PNGs that are blank dark frames (UT-J57-other-selected.png, UT-J57-tags-and-note-filled.png, UT-J57-after-save.png — all exactly 6,303 bytes, captured during transient/mid-interaction UI states). The journey still passed because the end states had real full-page captures and the validation matrix was REST-verified, but a capture taken mid-render can silently produce an empty frame. Browser-qa should sanity-check capture file size / non-uniform pixels before listing a PNG as evidence, and prefer full-page captures over element-timed shots for transient states.
 **Applies to:** every future browser-qa run that captures transient UI states (disabled buttons, inline validation, mid-save spinners) — and evaluators should keep opening pixels rather than trusting the evidence column.
+
+## iter-15 — 2026-06-11T19:45:09Z
+
+**Verdict:** CONTINUE
+**Lesson:** A single honest-absence fallback copy silently becomes dishonest when one `undefined` serves two distinct states: `JournalDetailView.tsx` renders "…computed once a thesis is resolved, and this thesis predates that" for grades, execution checks, and (newly replicated this iteration) excursions — but the same `undefined` also covers a still-ACTIVE v7-era thesis, where "predates that" is factually wrong (pixel-confirmed on the J-58 main-case capture). Honest-omission copy must discriminate "not yet" (unresolved) from "never measured" (pre-schema), or the honesty discipline turns into wrong copy on live records.
+**Applies to:** iter-16's J-59 analytics empty/insufficient-sample states and any future detail-page section with an absent-key fallback — check whether the absent key has more than one cause before writing one copy string for it; carry-along owed: split the three existing "predates that" fallbacks.

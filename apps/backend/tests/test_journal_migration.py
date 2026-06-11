@@ -31,6 +31,7 @@ FIXTURE_V2_SQL = Path(__file__).parent / "fixtures" / "journal_v2_schema.sql"
 FIXTURE_V3_SQL = Path(__file__).parent / "fixtures" / "journal_v3_schema.sql"
 FIXTURE_V4_SQL = Path(__file__).parent / "fixtures" / "journal_v4_schema.sql"
 FIXTURE_V5_SQL = Path(__file__).parent / "fixtures" / "journal_v5_schema.sql"
+FIXTURE_V6_SQL = Path(__file__).parent / "fixtures" / "journal_v6_schema.sql"
 
 
 def _build_v1_db(path: str) -> None:
@@ -80,6 +81,17 @@ def _build_v4_db(path: str) -> None:
 def _build_v5_db(path: str) -> None:
     """Materialize the committed v5-schema SQL fixture into a real SQLite DB at ``path``."""
     sql = FIXTURE_V5_SQL.read_text()
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript(sql)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _build_v6_db(path: str) -> None:
+    """Materialize the committed v6-schema SQL fixture into a real SQLite DB at ``path``."""
+    sql = FIXTURE_V6_SQL.read_text()
     conn = sqlite3.connect(path)
     try:
         conn.executescript(sql)
@@ -792,7 +804,9 @@ def test_open_migrates_v5_to_v6_adding_all_review_columns_and_bumping_version(tm
     _build_v5_db(db)
     store = JournalStore(db, CONFIG)
     try:
-        assert store.schema_version() == 6 == CONFIG.journal_schema_version
+        # A v5 DB now chains all the way up to the CURRENT target; the v5 -> v6 columns are present
+        # after the chained migration (the v6 -> v7 step then adds excursions on top).
+        assert store.schema_version() == CONFIG.journal_schema_version
         cols = _theses_columns(db)
         for c in _V6_COLUMNS:
             assert c in cols  # ALL five v6 columns added in ONE bump
@@ -876,10 +890,10 @@ def test_review_persists_end_to_end_against_migrated_v5_db(tmp_path):
 def test_reopen_already_v6_is_idempotent_from_v5(tmp_path):
     db = str(tmp_path / "v5.db")
     _build_v5_db(db)
-    JournalStore(db, CONFIG).close()  # first open migrates v5 -> v6
+    JournalStore(db, CONFIG).close()  # first open migrates v5 -> v6 -> v7 (chained to current)
     store = JournalStore(db, CONFIG)  # second open must be a no-op
     try:
-        assert store.schema_version() == 6
+        assert store.schema_version() == CONFIG.journal_schema_version
         for c in _V6_COLUMNS:
             assert c in _theses_columns(db)
     finally:
@@ -903,7 +917,7 @@ def test_stale_v5_version_row_with_v6_columns_present_does_not_crash(tmp_path):
         conn.close()
     store = JournalStore(db, CONFIG)  # must not raise "duplicate column name"
     try:
-        assert store.schema_version() == 6
+        assert store.schema_version() == CONFIG.journal_schema_version
     finally:
         store.close()
 
@@ -911,9 +925,216 @@ def test_stale_v5_version_row_with_v6_columns_present_does_not_crash(tmp_path):
 def test_fresh_db_created_at_current_version_carries_v6_columns(tmp_path):
     store = JournalStore(str(tmp_path / "fresh6.db"), CONFIG)
     try:
-        assert store.schema_version() == CONFIG.journal_schema_version == 6
+        assert store.schema_version() == CONFIG.journal_schema_version
         cols = _theses_columns(str(tmp_path / "fresh6.db"))
         for c in _V6_COLUMNS:
             assert c in cols
+    finally:
+        store.close()
+
+
+# --- v6 -> v7 migration on open (J-58: theses.excursions) -----------------------------------------
+
+def test_v6_fixture_starts_at_v6_without_excursions_column(tmp_path):
+    db = str(tmp_path / "v6.db")
+    _build_v6_db(db)
+    cols = _theses_columns(db)
+    assert "excursions" not in cols
+    # The v6 review-pillar columns ARE present.
+    for c in _V6_COLUMNS:
+        assert c in cols
+    conn = sqlite3.connect(db)
+    try:
+        assert conn.execute("SELECT version FROM schema_version").fetchone()[0] == 6
+        names = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+    finally:
+        conn.close()
+    # Research records ONLY — no tape-data tables in the fixture.
+    for forbidden in ("trades", "quotes", "candles", "features"):
+        assert forbidden not in names
+
+
+def test_open_migrates_v6_to_v7_adding_excursions_column_and_bumping_version(tmp_path):
+    db = str(tmp_path / "v6.db")
+    _build_v6_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        assert store.schema_version() == 7 == CONFIG.journal_schema_version
+        cols = _theses_columns(db)
+        assert "excursions" in cols  # the single additive v7 column
+        # The pre-existing v2..v6 columns are untouched (the v6 -> v7 step only adds one column).
+        for c in _V6_COLUMNS:
+            assert c in cols
+        assert "execution_checks" in cols
+        assert "risk_flags" in cols
+        assert "spread_at_mark" in _actions_columns(db)
+        assert {"rule_first_true_ts", "rule_first_true_price"} <= _verdict_event_columns(db)
+    finally:
+        store.close()
+
+
+def test_v7_migration_does_not_backfill_pre_existing_resolved_thesis(tmp_path):
+    # The append-only/honest-omission discipline extends to the excursions column: the pre-existing v6
+    # RESOLVED thesis keeps NULL excursions (never backfilled — its excursions were never measured),
+    # while every v6 field (incl. the saved review) round-trips verbatim across the migration.
+    db = str(tmp_path / "v6.db")
+    _build_v6_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        thesis = store.get_thesis("v6thesis0001")
+        assert thesis is not None
+        assert thesis.excursions is None  # never measured, never backfilled
+        # The v6 fields round-trip verbatim (not rewritten by the migration).
+        assert thesis.setup_type == "trend_continuation"
+        assert thesis.config_fingerprint == "oldfingerprint06"
+        assert thesis.status == "played_out"
+        assert thesis.grades == {
+            "outcome": "thesis_held",
+            "process": "clean",
+            "process_evidence": "No execution check failed and no entry risk flag fired.",
+        }
+        assert thesis.statement_final_statuses == [{"status": "met"}]
+        assert thesis.reviewed is True
+        assert thesis.review_tags == []
+    finally:
+        store.close()
+
+
+def test_pre_migration_thesis_detail_omits_excursions_key(tmp_path):
+    # Honest-omission on the served detail: a pre-v7 resolved thesis OMITS the ``excursions`` key
+    # (absent means "never measured") — never a fabricated zero, never computed at read.
+    from app.research.routes import build_journal_detail
+
+    db = str(tmp_path / "v6.db")
+    _build_v6_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        detail = build_journal_detail(store, "v6thesis0001", CONFIG)
+        assert detail is not None
+        assert "excursions" not in detail
+    finally:
+        store.close()
+
+
+def test_excursions_persist_end_to_end_against_migrated_v6_db(tmp_path):
+    # The v7 column is writable against the migrated DB and reads back the excursion record verbatim
+    # (the two segregated populations preserved). The not-tracked marker also round-trips.
+    db = str(tmp_path / "v6.db")
+    _build_v6_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        record = {
+            "tracked": True,
+            "populations": {
+                "confirmation": {
+                    "population": "confirmation",
+                    "anchor_logical_ts": 22.5,
+                    "anchor_wall_ts": 1700000022.0,
+                    "reference_price": 100.21,
+                    "invalidation_price": 98.0,
+                    "r_basis": 2.21,
+                    "spread_at_anchor": 0.02,
+                    "horizons": [
+                        {"horizon": 10.0, "mfe_r": 0.05, "mae_r": 0.0,
+                         "outcome": "neither_within_horizon", "truncated": False},
+                        {"horizon": 120.0, "mfe_r": 0.32, "mae_r": 0.0,
+                         "outcome": None, "truncated": True},
+                    ],
+                },
+            },
+        }
+        store.set_excursions("v6thesis0001", record)
+        back = store.get_thesis("v6thesis0001")
+        assert back.excursions == record
+        # The not-tracked marker round-trips distinctly (never collapses to absent).
+        store.set_excursions("v6thesis0001", {"tracked": False, "populations": {}})
+        assert store.get_thesis("v6thesis0001").excursions == {"tracked": False, "populations": {}}
+    finally:
+        store.close()
+
+
+def test_persistent_db_serves_byte_identical_excursions_no_read_time_recompute(tmp_path):
+    # The persistent-DB check the iter spec mandates: persist an excursion record, CLOSE the store
+    # (drop all in-memory state), REOPEN against the same file, and serve byte-identical values — proof
+    # the journal detail reads the PERSISTED record and never recomputes excursions at read time.
+    import json
+    from app.research.routes import build_journal_detail
+
+    db = str(tmp_path / "persist.db")
+    _build_v6_db(db)
+    record = {
+        "tracked": True,
+        "populations": {
+            "entry": {
+                "population": "entry",
+                "anchor_logical_ts": 25.0,
+                "anchor_wall_ts": 1700000025.0,
+                "reference_price": 100.30,
+                "invalidation_price": 98.0,
+                "r_basis": 2.30,
+                "spread_at_anchor": 0.03,
+                "horizons": [
+                    {"horizon": 30.0, "mfe_r": 0.12, "mae_r": -0.01,
+                     "outcome": "neither_within_horizon", "truncated": False},
+                    {"horizon": 120.0, "mfe_r": 0.41, "mae_r": -0.02,
+                     "outcome": None, "truncated": True},
+                ],
+            },
+        },
+    }
+    store = JournalStore(db, CONFIG)
+    try:
+        store.set_excursions("v6thesis0001", record)
+        before = build_journal_detail(store, "v6thesis0001", CONFIG)["excursions"]
+    finally:
+        store.close()  # drop ALL in-memory state — the file is the only survivor
+    # Reopen a brand-new store against the same file: the served excursions must be byte-identical.
+    store2 = JournalStore(db, CONFIG)
+    try:
+        after = build_journal_detail(store2, "v6thesis0001", CONFIG)["excursions"]
+    finally:
+        store2.close()
+    assert json.dumps(before, sort_keys=True) == json.dumps(after, sort_keys=True) == json.dumps(
+        record, sort_keys=True
+    )
+
+
+def test_reopen_already_v7_is_idempotent_from_v6(tmp_path):
+    db = str(tmp_path / "v6.db")
+    _build_v6_db(db)
+    JournalStore(db, CONFIG).close()  # first open migrates v6 -> v7
+    store = JournalStore(db, CONFIG)  # second open must be a no-op
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+        assert "excursions" in _theses_columns(db)
+    finally:
+        store.close()
+
+
+def test_stale_v6_version_row_with_excursions_column_present_does_not_crash(tmp_path):
+    # Belt-and-braces: a DB whose theses ALREADY carries the excursions column but whose version row is
+    # stale at 6. The PRAGMA table_info guard makes the ALTER a no-op and the open just bumps to v7.
+    db = str(tmp_path / "v6.db")
+    _build_v6_db(db)
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute("ALTER TABLE theses ADD COLUMN excursions TEXT")
+        conn.commit()  # version row still says 6
+    finally:
+        conn.close()
+    store = JournalStore(db, CONFIG)  # must not raise "duplicate column name"
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+    finally:
+        store.close()
+
+
+def test_fresh_db_created_at_current_version_carries_excursions_column(tmp_path):
+    store = JournalStore(str(tmp_path / "fresh7.db"), CONFIG)
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version == 7
+        assert "excursions" in _theses_columns(str(tmp_path / "fresh7.db"))
     finally:
         store.close()

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   ExecutionCheck,
+  ExcursionHorizon,
+  ExcursionPopulation,
   JournalDetail,
   JournalTimelineRow,
   ResearchTaxonomy,
@@ -120,6 +122,27 @@ function processGradeClass(grade: string): string {
     default:
       return "border-slate-600 bg-slate-800 text-slate-300";
   }
+}
+
+// Ternary excursion-outcome chip COLOR (J-58): +1R_first emerald (the tape reached +1R first),
+// -1R_first rose (adverse first), neither slate (no R target touched within the horizon). The LABEL
+// text comes from the taxonomy; the COLOR is a frontend visual concern keyed off the id. These are
+// descriptive outcome LABELS in R units — never a prediction, never currency, never a numeric score.
+function excursionOutcomeClass(outcome: string | null): string {
+  switch (outcome) {
+    case "+1R_first":
+      return "border-emerald-700 bg-emerald-900/40 text-emerald-300";
+    case "-1R_first":
+      return "border-rose-700 bg-rose-900/40 text-rose-300";
+    default:
+      // neither_within_horizon + null (open/undetermined)
+      return "border-slate-600 bg-slate-800 text-slate-400";
+  }
+}
+
+// One signed R figure, formatted to 2 dp with an explicit sign and the R unit (never currency).
+function formatR(value: number): string {
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}R`;
 }
 
 interface Props {
@@ -343,6 +366,9 @@ export function JournalDetailView({ detail, taxonomy, onSaved }: Props) {
       {/* --- Execution checks + the review save flow ---------------------------------------- */}
       <ExecutionChecksSection detail={detail} taxonomy={taxonomy} onSaved={onSaved} />
 
+      {/* --- Excursion outcomes (two segregated populations, J-58) -------------------------- */}
+      <ExcursionsSection detail={detail} taxonomy={taxonomy} tz={tz} />
+
       {/* --- Verdict timeline (true clock time) --------------------------------------------- */}
       <Section title="What the tape did" testid="detail-timeline">
         {timeline.length === 0 ? (
@@ -511,6 +537,206 @@ function GradesQuadrant({
         </>
       )}
     </Section>
+  );
+}
+
+// --- excursion outcomes: two segregated populations (J-58) ---------------------------------------
+
+// The R-units excursion review surface: two VISUALLY SEPARATE blocks — "From first confirmation" and
+// "From entry mark" — each with its anchor (true-clock time, mono reference price, spread-at-anchor,
+// R basis) and per-horizon rows (horizon, MFE/MAE in R, the ternary outcome chip, a TRUNCATED flag).
+// Every value is read VERBATIM from the persisted record + taxonomy — the page derives nothing. R
+// units only — no currency, no prediction. The two populations are never pooled (independent anchors,
+// independent R bases, independent rows). Honest absence: a missing population reads its explicit
+// not-applicable copy; the restart-sweep `tracked:false` reads the not-tracked copy; a pre-v7 thesis
+// (no `excursions` key) reads the honest-omission copy.
+const EXCURSION_POPULATION_ORDER = ["confirmation", "entry"] as const;
+
+function ExcursionsSection({
+  detail,
+  taxonomy,
+  tz,
+}: {
+  detail: JournalDetail;
+  taxonomy: ResearchTaxonomy | null;
+  tz: string;
+}) {
+  const excursions = detail.excursions;
+  const copy = taxonomy?.excursions;
+  return (
+    <Section title="How far the tape went (R)" testid="detail-excursions">
+      {excursions === undefined ? (
+        // Honest omission: a pre-v7 resolution (or an unresolved thesis) never had excursions
+        // measured — never fabricated numbers, never computed at read.
+        <p data-testid="excursions-not-measured" className="text-sm text-slate-500">
+          Not measured — excursions are computed once a thesis runs its course, and this thesis
+          predates that.
+        </p>
+      ) : excursions.tracked === false ? (
+        // The explicit restart-sweep marker: no live tape to measure from — no numbers, not a zero.
+        <p data-testid="excursions-not-tracked" className="text-sm text-slate-500">
+          {copy?.not_tracked ??
+            "Excursions were not tracked for this thesis — it resolved with no live tape to measure against."}
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {EXCURSION_POPULATION_ORDER.map((popId) => (
+            <ExcursionPopulationBlock
+              key={popId}
+              popId={popId}
+              population={excursions.populations[popId]}
+              taxonomy={taxonomy}
+              tz={tz}
+            />
+          ))}
+          {/* The R-basis caption + the no-cost caveat: R is defined once, and the spread cost sits
+              beside every figure (the no-cost caveat is always one line away). */}
+          <p data-testid="excursions-r-basis-caption" className="text-xs text-slate-600">
+            {copy?.r_basis_caption ?? "R = |reference − invalidation|"} · measured in R units only, never
+            currency. The spread at each anchor is shown beside its reference as the round-trip cost.
+          </p>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function ExcursionPopulationBlock({
+  popId,
+  population,
+  taxonomy,
+  tz,
+}: {
+  popId: string;
+  population: ExcursionPopulation | undefined;
+  taxonomy: ResearchTaxonomy | null;
+  tz: string;
+}) {
+  const copy = taxonomy?.excursions;
+  const title = labelFrom(copy?.populations, popId);
+  // Honest absence: the population never armed (never-confirmed / no entry mark) — its explicit
+  // not-applicable copy, never a dishonest zero row.
+  if (!population) {
+    return (
+      <div
+        data-testid="excursion-population"
+        data-population={popId}
+        data-present="false"
+        className="rounded-md border border-dashed border-slate-700 bg-slate-900/30 p-3"
+      >
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{title}</p>
+        <p
+          data-testid="excursion-not-applicable"
+          className="mt-1.5 text-sm text-slate-500"
+        >
+          {copy?.not_applicable?.[popId] ??
+            "No anchor exists for this population, so there is no excursion to measure — no anchor, no metric."}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div
+      data-testid="excursion-population"
+      data-population={popId}
+      data-present="true"
+      className="rounded-md border border-slate-800 bg-slate-900/50 p-3"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">{title}</p>
+        <span
+          data-testid="excursion-anchor-time"
+          className="font-mono text-xs text-slate-500"
+        >
+          {formatDateTimeDMY(population.anchor_wall_ts * 1000, true)} {tz}
+        </span>
+      </div>
+      {/* The anchor detail line: reference price (mono), R basis, and the moment spread-at-anchor. */}
+      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-500">
+        <span className="font-mono">
+          reference{" "}
+          <span data-testid="excursion-reference-price" className="text-slate-300">
+            {population.reference_price.toFixed(2)}
+          </span>
+        </span>
+        <span className="font-mono">
+          R ={" "}
+          <span data-testid="excursion-r-basis" className="text-slate-300">
+            {population.r_basis.toFixed(2)}
+          </span>
+        </span>
+        <span className="font-mono" data-testid="excursion-spread-at-anchor">
+          spread{" "}
+          <span className="text-slate-300">
+            {population.spread_at_anchor !== null
+              ? population.spread_at_anchor.toFixed(2)
+              : "—"}
+          </span>
+        </span>
+      </div>
+      {/* Per-horizon rows: horizon, MFE (R), MAE (R), the ternary outcome chip, and a TRUNCATED flag
+          where set. Sorted by horizon ascending for a stable, glanceable read. */}
+      <ul className="mt-2.5 space-y-1.5">
+        {[...population.horizons]
+          .sort((a, b) => a.horizon - b.horizon)
+          .map((h) => (
+            <ExcursionHorizonRow key={h.horizon} h={h} taxonomy={taxonomy} />
+          ))}
+      </ul>
+    </div>
+  );
+}
+
+function ExcursionHorizonRow({
+  h,
+  taxonomy,
+}: {
+  h: ExcursionHorizon;
+  taxonomy: ResearchTaxonomy | null;
+}) {
+  const copy = taxonomy?.excursions;
+  const outcomeLabel = labelFrom(copy?.ternary_outcomes, h.outcome ?? "");
+  return (
+    <li
+      data-testid="excursion-horizon"
+      data-horizon={h.horizon}
+      data-outcome={h.outcome ?? "open"}
+      data-truncated={h.truncated}
+      className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded border border-slate-800/80 bg-slate-900/40 px-2.5 py-1.5 text-xs"
+    >
+      <span className="font-mono font-semibold text-slate-300">{h.horizon}s</span>
+      <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {/* MFE / MAE in R — descriptive measurements, never currency. */}
+        <span className="font-mono text-emerald-400" data-testid="excursion-mfe">
+          MFE {formatR(h.mfe_r)}
+        </span>
+        <span className="font-mono text-rose-400" data-testid="excursion-mae">
+          MAE {formatR(h.mae_r)}
+        </span>
+        {/* The ternary outcome chip (by first touch). Absent (null) when the horizon was truncated
+            before any first touch — the TRUNCATED flag then carries the meaning. */}
+        {h.outcome !== null && (
+          <span
+            data-testid="excursion-outcome-chip"
+            className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${excursionOutcomeClass(
+              h.outcome,
+            )}`}
+          >
+            {outcomeLabel}
+          </span>
+        )}
+        {/* TRUNCATED — the stream end / a gap cut this horizon short before its outcome resolved.
+            Declared explicitly, never hidden, never extrapolated. */}
+        {h.truncated && (
+          <span
+            data-testid="excursion-truncated"
+            className="inline-flex rounded-full border border-amber-700 bg-amber-900/30 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-amber-300"
+          >
+            {copy?.truncated_label ?? "Truncated"}
+          </span>
+        )}
+      </span>
+    </li>
   );
 }
 

@@ -68,7 +68,8 @@ CREATE TABLE IF NOT EXISTS theses (
     grades              TEXT,                   -- v6: JSON {outcome, process, process_evidence} computed ONCE at resolution (J-56); NULL = never computed (pre-v6 resolution)
     review_tags         TEXT,                   -- v6: JSON list of user-confirmed mistake tags (J-57); NULL = never reviewed
     review_note         TEXT,                   -- v6: the user's free-text review note (J-57); NULL = none / never reviewed
-    reviewed            INTEGER NOT NULL DEFAULT 0  -- v6: 1 once the user saved a review (J-57); 0 otherwise
+    reviewed            INTEGER NOT NULL DEFAULT 0, -- v6: 1 once the user saved a review (J-57); 0 otherwise
+    excursions          TEXT                    -- v7: JSON excursion record {tracked, populations} computed ONCE at terminal resolution / stream-end (J-58); NULL = never measured (pre-v7 resolution)
 );
 
 CREATE TABLE IF NOT EXISTS verdict_events (
@@ -177,6 +178,17 @@ class ThesisRecord:
     review_tags: list[str] | None = None
     review_note: str | None = None
     reviewed: bool = False
+    # ``excursions`` (capability 30, J-58) is the per-horizon excursion record —
+    # ``{"tracked": bool, "populations": {confirmation?: {...}, entry?: {...}}}`` — measured ONCE at
+    # the terminal resolution / stream-end (the proven persist-once seam) from the in-memory price
+    # path and stored verbatim. The two populations (confirmation-anchored / entry-anchored) are
+    # segregated and never pooled. It is ``None`` until measured (a pre-v7 resolution stays ``None`` —
+    # NULL in the DB, never backfilled): the journal detail then OMITS the ``excursions`` key entirely
+    # rather than fabricate numbers at read. A ``{"tracked": False}`` record is the explicit honest
+    # marker persisted where no tracker existed at the persist moment (the restart-expiry sweep).
+    # Defaulted ``None`` so every existing call site / fixture stays valid (additive) and the
+    # honest-omission states (ABSENT vs measured vs not-tracked) never collapse.
+    excursions: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -409,7 +421,26 @@ class JournalStore:
                 raise
             current = 6
 
-        # Future steps (current < 7, …) append here, each in its own BEGIN IMMEDIATE block.
+        # --- v6 → v7: add the J-58 excursion-record column to theses (ONE additive column) --------
+        if current < 7:
+            self._write_conn.execute("BEGIN IMMEDIATE")
+            try:
+                # Idempotent guard (same discipline as every prior step): a DB that already carries the
+                # column (only the version row is stale) skips it and bumps the version. NO backfill —
+                # any pre-existing RESOLVED thesis keeps ``NULL`` excursions (its excursions were never
+                # measured; the journal detail OMITS the key rather than fabricate numbers at read).
+                if not self._column_exists("theses", "excursions"):
+                    self._write_conn.execute(
+                        "ALTER TABLE theses ADD COLUMN excursions TEXT"
+                    )
+                self._write_conn.execute("UPDATE schema_version SET version = 7")
+                self._write_conn.commit()
+            except Exception:
+                self._write_conn.rollback()
+                raise
+            current = 7
+
+        # Future steps (current < 8, …) append here, each in its own BEGIN IMMEDIATE block.
 
     def _read_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -491,8 +522,8 @@ class JournalStore:
                     status, bound_source, data_feed, config_fingerprint,
                     entry_context, statements, created_logical_ts, created_wall_ts, risk_flags,
                     execution_checks, statement_final_statuses, grades, review_tags, review_note,
-                    reviewed
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    reviewed, excursions
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     record.id,
@@ -516,6 +547,7 @@ class JournalStore:
                     self._encode_json_or_none(record.review_tags),
                     record.review_note,
                     1 if record.reviewed else 0,
+                    self._encode_json_or_none(record.excursions),
                 ),
             )
 
@@ -541,8 +573,8 @@ class JournalStore:
                     status, bound_source, data_feed, config_fingerprint,
                     entry_context, statements, created_logical_ts, created_wall_ts, risk_flags,
                     execution_checks, statement_final_statuses, grades, review_tags, review_note,
-                    reviewed
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    reviewed, excursions
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     thesis.id,
@@ -566,6 +598,7 @@ class JournalStore:
                     self._encode_json_or_none(thesis.review_tags),
                     thesis.review_note,
                     1 if thesis.reviewed else 0,
+                    self._encode_json_or_none(thesis.excursions),
                 ),
             )
             conn.execute(
@@ -718,6 +751,26 @@ class JournalStore:
             conn.execute(
                 "UPDATE theses SET grades=? WHERE id=?",
                 (self._encode_json_or_none(grades), thesis_id),
+            )
+
+        self._do_write(_fn)
+
+    def set_excursions(self, thesis_id: str, excursions: dict) -> None:
+        """Persist the per-horizon excursion record on a thesis row ONCE at its defining moment (J-58).
+
+        Updates the THESES row's ``excursions`` column only — no ``verdict_events`` row is touched (the
+        append-only timeline is untouched; no update/delete is added) and NO tape data is persisted
+        (the excursion record holds only R-unit summaries + anchors, never trades/quotes/candles).
+        Called by every terminal-resolution path (user resolve, system invalidation, stream-end / stop
+        expiry, restart-expiry sweep) AND the stream-end survival path for a surviving entry-marked
+        thesis, right at the defining moment — so the excursions are measured and stored exactly ONCE,
+        never recomputed at read. The write goes through the single writer queue (``BEGIN IMMEDIATE``),
+        never from event processing or the WS serialization path."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE theses SET excursions=? WHERE id=?",
+                (self._encode_json_or_none(excursions), thesis_id),
             )
 
         self._do_write(_fn)
@@ -1116,6 +1169,13 @@ class JournalStore:
         review_tags = json.loads(raw_tags) if raw_tags is not None else None
         review_note = row["review_note"] if "review_note" in keys else None
         reviewed = bool(row["reviewed"]) if "reviewed" in keys and row["reviewed"] is not None else False
+        # ``excursions`` (v7, J-58): NULL (never measured — a pre-v7 resolution, or an unresolved
+        # thesis) reads back as ``None`` so the journal detail OMITS the key; a stored JSON object
+        # (incl. the ``{"tracked": False}`` not-tracked marker) decodes verbatim. Keyed defensively so
+        # a hypothetical raw pre-v7 row (read mid-migration) has no such column — the migration runs at
+        # open so file stores always have it.
+        raw_excursions = row["excursions"] if "excursions" in keys else None
+        excursions = json.loads(raw_excursions) if raw_excursions is not None else None
         return ThesisRecord(
             id=row["id"],
             ticker=row["ticker"],
@@ -1138,6 +1198,7 @@ class JournalStore:
             review_tags=review_tags,
             review_note=review_note,
             reviewed=reviewed,
+            excursions=excursions,
         )
 
     # --- lifecycle ------------------------------------------------------------------------------

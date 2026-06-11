@@ -273,6 +273,57 @@ PROCESS_GRADES: dict[str, str] = {
 }
 
 
+# --- Excursion-outcome enums + display copy (capability 30, J-58; data-contract row 24) ----------
+# The SINGLE backend owner of the excursion display copy — the journal detail's two excursion blocks
+# render these VERBATIM (the frontend hardcodes none of them). R-units only, never currency, never a
+# prediction (the copy register is descriptive, past-tense). The two POPULATIONS are segregated and
+# never pooled; their titles + caption copy live here so the frontend never re-words them.
+EXCURSION_TERNARY_OUTCOMES: dict[str, str] = {
+    "+1R_first": "+1R first",
+    "-1R_first": "−1R first",
+    "neither_within_horizon": "Neither within horizon",
+}
+# The TRUNCATED flag (a horizon the stream end / a gap cut short before its outcome could resolve).
+EXCURSION_TRUNCATED_LABEL: str = "Truncated"
+# The two excursion POPULATION titles (capability 30) — distinct anchors, never pooled.
+EXCURSION_POPULATIONS: dict[str, str] = {
+    "confirmation": "From first confirmation",
+    "entry": "From entry mark",
+}
+# Honest-absence copy: each block reads its explicit not-applicable when its anchor never existed
+# (never-confirmed => no confirmation population; no entry mark => no entry population). The
+# ``not_tracked`` copy is the restart-sweep marker (no in-memory price path to measure from).
+EXCURSION_NOT_APPLICABLE_COPY: dict[str, str] = {
+    "confirmation": (
+        "This thesis never published a confirming verdict, so there is no first-confirmation "
+        "anchor to measure excursions from."
+    ),
+    "entry": (
+        "No entry was recorded for this thesis, so there is no entry anchor to measure excursions "
+        "from — no mark, no metric."
+    ),
+}
+EXCURSION_NOT_TRACKED_COPY: str = (
+    "Excursions were not tracked for this thesis — it resolved on a restart sweep with no live tape "
+    "to measure against, so no numbers are shown rather than fabricated ones."
+)
+# The per-block caption naming the R basis + spread cost (the no-cost caveat is always one line away).
+EXCURSION_R_BASIS_CAPTION: str = "R = |reference − invalidation|"
+
+
+def excursion_outcome_label(outcome: str | None) -> str:
+    """Display label for a ternary excursion outcome id. ``None`` (an open/undetermined horizon) and
+    any unknown value fall back to a humanised form (never fabricated)."""
+    if outcome is None:
+        return "—"
+    return EXCURSION_TERNARY_OUTCOMES.get(outcome, outcome.replace("_", " "))
+
+
+def excursion_population_title(population: str) -> str:
+    """Display title for an excursion population id. Unknown -> itself (never fabricated)."""
+    return EXCURSION_POPULATIONS.get(population, population.replace("_", " "))
+
+
 def outcome_grade_label(grade: str) -> str:
     """Display label for an outcome grade id. Unknown -> itself (never fabricated)."""
     return OUTCOME_GRADES.get(grade, grade)
@@ -476,5 +527,20 @@ def taxonomy_payload() -> dict:
             }
             for k, v in MISTAKE_TAGS.items()
         ],
+        # The excursion-outcome display copy (capability 30, J-58) — owned ONCE here so the journal
+        # detail's two excursion blocks are taxonomy-driven (the frontend hardcodes no ternary label,
+        # truncated flag, population title, or honest-absence copy). R-units only, descriptive copy.
+        "excursions": {
+            "ternary_outcomes": [
+                {"id": k, "name": v} for k, v in EXCURSION_TERNARY_OUTCOMES.items()
+            ],
+            "truncated_label": EXCURSION_TRUNCATED_LABEL,
+            "populations": [
+                {"id": k, "name": v} for k, v in EXCURSION_POPULATIONS.items()
+            ],
+            "not_applicable": EXCURSION_NOT_APPLICABLE_COPY,
+            "not_tracked": EXCURSION_NOT_TRACKED_COPY,
+            "r_basis_caption": EXCURSION_R_BASIS_CAPTION,
+        },
         "disclaimer": "Descriptive only — not trading advice.",
     }

@@ -387,9 +387,14 @@ class Config:
     #            pre-migration RESOLVED thesis keeps ``NULL`` for each — its statuses/grades were never
     #            computed and it was never reviewed, so the journal detail OMITS each key rather than
     #            fabricate a value at read).
+    #   v6 → v7: ``theses`` gains ONE additive ``excursions`` column — the per-horizon excursion record
+    #            (capability 30, J-58) computed ONCE at the terminal resolution / stream-end and stored
+    #            verbatim. Added by ``ALTER TABLE`` and never backfilled (a pre-v7 RESOLVED thesis keeps
+    #            ``NULL`` — its excursions were never measured, so the journal detail OMITS the key
+    #            rather than fabricate numbers at read).
     # Excluded from ``config_fingerprint`` (see the exclusion set below): a migration must NOT change
     # the fingerprint — verdicts depend on classifier thresholds, never on where/how the DB is stored.
-    journal_schema_version: int = 6
+    journal_schema_version: int = 7
 
     # --- Research evolution: verdict-transition engine (capability 24) -------------------------
     # RESEARCH DEFAULTS — a starting point calibrated against the deterministic sims, NEVER a
@@ -521,6 +526,37 @@ class Config:
     # starting point, never a validated edge.
     process_violated_min_failed_checks: int = 1
     process_flagged_min_risk_flags: int = 1
+
+    # --- Research evolution: EXCURSION OUTCOMES (capability 30, J-58) ----------------------------
+    # The config-owned excursion horizons, computed ONCE at terminal resolution / stream-end (a
+    # research record, schema v7) and served VERBATIM on the journal detail. NO numeric "score"
+    # anywhere — each horizon reports MFE/MAE in R units + a TERNARY outcome
+    # (``+1R_first | -1R_first | neither_within_horizon``) resolved by FIRST TOUCH in logical time.
+    # These are documented RESEARCH DEFAULTS — a starting point, never a validated edge — and they
+    # enter ``config_fingerprint`` (it hashes the entire config), so a record created after this
+    # iteration carries a new fingerprint (the intended honesty mechanism: analytics never pool
+    # across fingerprints). This is NOT a defect — it is the same fingerprint-shift discipline every
+    # prior research-config addition introduced.
+    #
+    # HORIZONS (logical seconds past the anchor): the canonical 10 / 30 / 60 / 120 s family
+    # (goal.md's predictive-value horizons). Calibrated against the seeded J-58 substrate — J-42's
+    # ``SIM-BUYER`` confirmed long with the EXACT J-42 invalidation of 98.00 (R ≈ 2.21 at the
+    # confirmation, which lands ~22.5s logical in). SIM-BUYER grinds price strictly UP but only at
+    # ~$0.012/s, so a full +1R favorable move ($2.21 past the anchor) is NOT reached within any short
+    # horizon: the 10 / 30 / 60s horizons fully ELAPSE at ``neither_within_horizon`` (a partial
+    # favorable excursion honestly recorded as MFE, well under +1R) — at least one COMPLETED horizon.
+    # The J-58 script ends the watch ~77s of logical time past the confirmation (the entry-marked
+    # thesis then survives active-but-not-evaluated at the stream end), which is BEFORE the 120s
+    # horizon elapses, so the 120s horizon is still open and is TRUNCATED at the stream end — at least
+    # one STREAM-END-TRUNCATED horizon. Both requirements the spec calls for are thus deterministically
+    # exercised by the seeded run (proven in test_excursions.py's J-58 calibration test).
+    excursion_horizons_seconds: tuple = (10.0, 30.0, 60.0, 120.0)
+    # The R MULTIPLE at which the ternary outcome resolves by first touch (favorable reaches
+    # ``+excursion_target_r`` before adverse reaches ``-excursion_target_r``, or neither within the
+    # horizon). Kept in config (no literal in research code) so the "+1R / -1R" definition has ONE
+    # owner; defaults to 1.0 R (the goal-doc ternary ``+1R_first | -1R_first | neither``). A research
+    # default — a starting point, never a validated edge.
+    excursion_target_r: float = 1.0
 
     def window_label(self, window: int) -> str:
         return f"{window}s"
