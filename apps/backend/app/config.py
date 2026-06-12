@@ -440,6 +440,29 @@ class Config:
     # capacity management, distinct from any update/delete of a retained row, which does not exist).
     verdict_timeline_cap: int = 500
 
+    # --- Research evolution: MANAGEMENT-STANCE DWELL (capability 27, J-53; data-contract row 25) ----
+    # RESEARCH DEFAULT — a starting point calibrated against the deterministic sims, NEVER a validated
+    # edge (the goal doc's Research-config-defaults constraint: every research value lives in config
+    # with its sim calibration documented; no literal in research code). The holding-period MANAGEMENT
+    # STANCE (``thesis_intact | thesis_weakening | thesis_invalidated``) is a pure derivation from the
+    # latest PUBLISHED verdict; it publishes through THIS config-owned, LOGICAL-time dwell so a single
+    # flickering verdict tick never flaps the stance — EXCEPT ``thesis_invalidated``, which is
+    # dwell-exempt (it mirrors the hard, dwell-exempt invalidation trigger and is terminal). Calibrated
+    # to the SAME 3.0 s the per-setup verdict dwell uses (the verdict it reads is already dwell-gated,
+    # so a SHORT additional stance dwell suffices to absorb a one-tick verdict flicker without lagging
+    # the user's read; at the 0.5 s sim tick that is a few consecutive ticks). One documented starting
+    # point; tighten/loosen only with a re-measured justification, never to fit a result.
+    #
+    # EXCLUDED FROM ``config_fingerprint`` (see the exclusion set in ``config_fingerprint``) with the
+    # codified iter-12 / iter-16 discipline: the stance is NEVER PERSISTED (it is a live cue, derived
+    # at read from the published verdict + the recorded marks — schema stays v7, no stance row exists).
+    # A serving-only timing value that touches NO persisted research value (no verdict, feature, grade,
+    # excursion, or stamp) MUST NOT move the fingerprint — else two journals identical in every
+    # threshold but served at different stance dwells would mint different fingerprints and could never
+    # be pooled. Pinned by a fingerprint-stability test (changing it does NOT move the fingerprint) and
+    # its counter-test (a real classifier threshold STILL does).
+    management_stance_dwell_seconds: float = 3.0
+
     # --- Research evolution: JOURNAL LIST serving (capability 31 / J-51) ------------------------
     # The journal LIST endpoint (``GET /research/journal``) page-size policy. These are SERVING-ONLY
     # values: the number of persisted thesis rows returned per page. They are EXCLUDED from
@@ -709,7 +732,11 @@ class Config:
         analytics surface exists to compare). The dense-replay CI timing budget
         (``dense_replay_time_budget_seconds``) is EXCLUDED for the identical reason (capability 34 /
         J-62): a CI gate value touches no persisted research value, so two journals identical in every
-        threshold but run under different CI budgets MUST share a fingerprint.
+        threshold but run under different CI budgets MUST share a fingerprint. The management-stance
+        dwell (``management_stance_dwell_seconds``) is EXCLUDED for the identical reason (capability
+        27 / J-53): the stance is a live cue that is NEVER PERSISTED (schema stays v7), so a stance
+        timing value touches no persisted research value and two journals identical in every threshold
+        but served at different stance dwells MUST share a fingerprint.
         """
         excluded = {
             "journal_db_path",
@@ -733,6 +760,13 @@ class Config:
             # — they shape the persisted study results, so they MOVE the fingerprint (the intended
             # never-pool-across-fingerprints honesty mechanism).
             "study_list_max",
+            # The management-stance dwell (capability 27 / J-53): the stance is a live cue that is
+            # NEVER PERSISTED (schema stays v7 — no stance row exists), so this timing value touches no
+            # persisted research value (no verdict, feature, grade, excursion, or stamp). It is
+            # therefore serving-only and EXCLUDED by the same iter-12/iter-16 precedent — two journals
+            # identical in every threshold but served at different stance dwells MUST share a
+            # fingerprint. Pinned by a fingerprint-stability test + the real-threshold counter-test.
+            "management_stance_dwell_seconds",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)

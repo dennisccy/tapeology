@@ -8,6 +8,7 @@ import {
   resolveThesis,
 } from "@/lib/api";
 import type {
+  ManagementStance,
   ResearchTaxonomy,
   RiskFlag,
   StatementStatus,
@@ -114,6 +115,110 @@ function RiskFlagChips({ flags }: { flags: RiskFlag[] | undefined }) {
             <span className="font-mono text-xs text-amber-200/90">{f.evidence}</span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// The holding-period MANAGEMENT STANCE block (capability 27, J-53; data-contract row 25 stance half).
+// Shown ONLY when the active projection carries the stance keys — i.e. the thesis is ENTRY-MARKED,
+// unresolved, and a live monitor is evaluating (the backend gates presence; the strip never guesses).
+// It answers "does the tape still support this position?" with the stance label in the established
+// verdict/stance palette (thesis_intact emerald, thesis_weakening amber, thesis_invalidated rose with
+// the terminal treatment), its evidence line, and the live distance-to-invalidation ($ and R) + open
+// R in font-mono. ALL values render VERBATIM from the projection — ZERO client-side arithmetic, ZERO
+// client-side stance derivation. The "Descriptive only — not trading advice" register extends here;
+// the distance/open-R copy carries the journaled-measurement register (consistent with realized-R).
+
+// Stance VISUAL semantics only (the design direction) — the side/impact palette EXTENDED, never
+// repurposed. The LABEL text comes from the projection's `label` (taxonomy-owned); this maps the id
+// to its color treatment (a visual concern). thesis_invalidated carries the ringed terminal treatment.
+const STANCE_STYLE: Record<ManagementStance["value"], { chip: string; evidence: string }> = {
+  thesis_intact: {
+    chip: "border-emerald-700 bg-emerald-900/40 text-emerald-300",
+    evidence: "text-emerald-300/90",
+  },
+  thesis_weakening: {
+    chip: "border-amber-700 bg-amber-900/40 text-amber-300",
+    evidence: "text-amber-300/90",
+  },
+  thesis_invalidated: {
+    chip: "border-rose-500 bg-rose-950 text-rose-200 ring-1 ring-rose-500/50",
+    evidence: "text-rose-200/90",
+  },
+};
+
+// One signed mono readout (distance / open-R) with a label — emerald when on the safe/favorable side,
+// rose when adverse, slate when absent. The value is rendered verbatim (server-computed); only the
+// display rounding happens here (toFixed) — never any arithmetic on the underlying numbers.
+function StanceReadout({
+  label,
+  value,
+  suffix = "",
+  testid,
+}: {
+  label: string;
+  value: number | null | undefined;
+  suffix?: string;
+  testid: string;
+}) {
+  const present = value != null;
+  const tone = !present
+    ? "text-slate-500"
+    : value >= 0
+      ? "text-emerald-400"
+      : "text-rose-400";
+  return (
+    <span className="flex items-baseline gap-1.5 text-xs text-slate-500">
+      {label}
+      <span data-testid={testid} className={`font-mono text-sm font-semibold ${tone}`}>
+        {present ? `${value >= 0 ? "+" : ""}${value.toFixed(2)}${suffix}` : "—"}
+      </span>
+    </span>
+  );
+}
+
+function ManagementStanceBlock({ thesis }: { thesis: ThesisProjection }) {
+  const stance = thesis.management_stance;
+  if (!stance) return null; // backend-gated: no stance keys => nothing renders (no client guess)
+  const style = STANCE_STYLE[stance.value] ?? STANCE_STYLE.thesis_weakening;
+  const dist = thesis.distance_to_invalidation;
+  return (
+    <div
+      data-testid="management-stance"
+      data-stance={stance.value}
+      className="mt-3 flex flex-col gap-2 border-t border-slate-800 pt-3"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Management stance
+        </span>
+        {/* The stance chip — color per the id; the LABEL text is taxonomy-owned (read verbatim). */}
+        <span
+          data-testid="stance-chip"
+          className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider ${style.chip}`}
+        >
+          {stance.label}
+        </span>
+      </div>
+      {/* The stance's plain-language EVIDENCE (no naked stance) — read verbatim from the projection. */}
+      {stance.evidence && (
+        <p data-testid="stance-evidence" className={`text-sm ${style.evidence}`}>
+          {stance.evidence}
+        </p>
+      )}
+      {/* The live readouts — distance-to-invalidation ($ and R) + open R, all font-mono, verbatim. */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+        <StanceReadout
+          label="distance to invalidation"
+          value={dist?.dollars}
+          testid="distance-dollars"
+        />
+        <StanceReadout label="" value={dist?.r} suffix="R" testid="distance-r" />
+        <StanceReadout label="open" value={thesis.open_r} suffix="R" testid="open-r" />
+        <span className="ml-auto text-xs text-slate-600">
+          journaled measurement, R = |entry − invalidation|
+        </span>
       </div>
     </div>
   );
@@ -453,6 +558,11 @@ function ActiveThesis({
       {/* Entry risk flags (capability 26, J-49) — frozen at declaration, advisory amber chips. Each
           carries the taxonomy label + its plain-language measured margin, rendered verbatim. */}
       <RiskFlagChips flags={thesis.risk_flags} />
+
+      {/* Management stance (capability 27, J-53): the holding-period read — shown ONLY while the
+          backend serves the stance keys (entry-marked + unresolved + evaluating). Stance label +
+          evidence + live distance-to-invalidation ($ and R) + open R, all rendered VERBATIM. */}
+      <ManagementStanceBlock thesis={thesis} />
 
       {/* Action marks (J-52): the user journals their OWN already-taken entry/exit. A JOURNALING
           record, never a fill/order. Recorded verbatim; realized move shown in R units only (never

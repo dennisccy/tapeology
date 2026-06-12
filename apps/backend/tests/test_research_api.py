@@ -81,6 +81,34 @@ def test_taxonomy_endpoint_lists_setups_directions_verdicts(client):
     assert payload["disclaimer"].startswith("Descriptive only")
 
 
+def test_taxonomy_serves_management_stance_catalog_canary(client):
+    # The management-stance catalog (capability 27, J-53; row 25 stance half) is backend-owned —
+    # served by GET /research/taxonomy. This is ALSO iter-20's code-identity canary: the presence of
+    # `management_stances` here proves the NEW server code is live before any browser capture.
+    payload = client.get("/research/taxonomy").json()
+    assert "management_stances" in payload
+    stances = {s["id"]: s["name"] for s in payload["management_stances"]}
+    assert stances == {
+        "thesis_intact": "Thesis intact",
+        "thesis_weakening": "Thesis weakening",
+        "thesis_invalidated": "Thesis invalidated",
+    }
+    # The two DISTINCT honest-absence copies (iter-15 lesson: one fallback must not cover two causes).
+    absence = payload["stance_absence"]
+    assert "no_entry_mark" in absence and "not_evaluated" in absence
+    assert absence["no_entry_mark"] != absence["not_evaluated"]
+    # The journaled-measurement readout caption (consistent with the realized-R register).
+    assert "R = |entry" in payload["stance_readout_caption"]
+    # Copy discipline (J-66): no imperative trade words in any new stance string.
+    blob = " ".join(
+        [s["name"] for s in payload["management_stances"]]
+        + list(absence.values())
+        + [payload["stance_readout_caption"]]
+    ).lower()
+    for word in (" buy ", " sell ", " enter ", " exit ", "should "):
+        assert word not in f" {blob} ", f"imperative word {word!r} in stance copy"
+
+
 def test_taxonomy_serves_mistake_tag_catalog_with_display_copy(client):
     # The mistake-tag catalog (capability 29, J-54) is backend-owned — served by GET
     # /research/taxonomy with display copy so the review picker is taxonomy-driven (the frontend
@@ -332,6 +360,49 @@ def test_rest_active_equals_ws_thesis_key_verbatim(client):
     # An absorption_reversal (no level) declares only the invalidation line — sanity that geometry is
     # really present and shaped, not an empty dict that happens to match.
     assert {pl["kind"] for pl in rest["geometry"]["price_lines"]} == {"invalidation"}
+
+
+def test_rest_active_equals_ws_thesis_key_with_management_stance(client):
+    # The J-53 stance keys flow through the SAME single projection — so REST /thesis/active and the WS
+    # thesis key carry them verbatim. Declare + mark an entry, then read both: the entry-marked thesis
+    # carries the management_stance + distance_to_invalidation + open_r keys identically.
+    _watch_bidabs(client)
+    declared = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-BIDABS",
+            "setup_type": "absorption_reversal",
+            "direction": "long",
+            "invalidation_price": 99.0,
+        },
+    ).json()
+    thesis_id = declared["thesis"]["id"]
+    # Record an entry mark via the route (price recorded verbatim) — the stance keys then appear.
+    mark = client.post(
+        f"/research/thesis/{thesis_id}/action",
+        json={"kind": "entry", "price": 100.5},
+    )
+    assert mark.status_code == 200
+    rest = client.get("/research/thesis/active?ticker=SIM-BIDABS").json()["thesis"]
+    assert rest is not None
+    # The entry mark is recorded => the stance keys are present.
+    assert "management_stance" in rest
+    assert rest["management_stance"]["value"] in (
+        "thesis_intact",
+        "thesis_weakening",
+        "thesis_invalidated",
+    )
+    assert rest["management_stance"]["evidence"]  # no naked stance
+    assert "distance_to_invalidation" in rest and "open_r" in rest
+    with client.websocket_connect("/tape/SIM-BIDABS/stream") as ws:
+        ws_thesis = ws.receive_json()["thesis"]
+    # The stable stance keys are byte-identical across REST and WS (one projection, never a second
+    # path). open_r / distance can move with the live last between the two reads, so assert the stance
+    # value + label + the key SHAPES match (the J-08 single-projection discipline).
+    assert rest["management_stance"]["value"] == ws_thesis["management_stance"]["value"]
+    assert rest["management_stance"]["label"] == ws_thesis["management_stance"]["label"]
+    assert set(rest["distance_to_invalidation"].keys()) == {"dollars", "r"}
+    assert set(ws_thesis["distance_to_invalidation"].keys()) == {"dollars", "r"}
     assert rest["geometry"]["price_lines"][0]["price"] == 99.0
 
 

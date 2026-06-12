@@ -1,6 +1,7 @@
 """Research monitor (capability 20 observer): frozen context/statements, source binding, stamps,
 statement statuses, exception isolation -> monitor_status failed (feed alive), expired-on-stop."""
 
+import dataclasses
 import itertools
 
 import pytest
@@ -9,9 +10,15 @@ from app.config import CONFIG, Config
 from app.engine.snapshot import EngineSnapshot
 from app.engine.tape_engine import TapeEngine
 from app.providers.simulated import SimulatedProvider
-from app.research.monitor import ResearchMonitor, _evaluate_statement, data_feed_for_scenario
-from app.research.store import JournalStore, ThesisRecord, VerdictEventRecord
-from app.research.taxonomy import frozen_statements
+from app.research.monitor import (
+    ResearchMonitor,
+    _evaluate_statement,
+    build_projection,
+    data_feed_for_scenario,
+)
+from app.research.stance import StanceEvaluator
+from app.research.store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
+from app.research.taxonomy import STANCE_PENDING_EVIDENCE, frozen_statements
 
 
 @pytest.fixture
@@ -456,3 +463,195 @@ def test_reattach_mismatched_source_not_adopted_no_verdict_with_notice(store):
     assert proj["monitor_status"] == "not_evaluated"
     assert thesis.bound_source in proj["monitor_notice"]
     assert "buyer_control" in proj["monitor_notice"]  # names the (wrong) watched source too
+
+
+# =================================================================================================
+# Management stance (capability 27, J-53; data-contract row 25 stance half) — presence rules + flow
+# =================================================================================================
+
+def _stance_thesis(store, *, direction="long", invalidation=98.0):
+    """A trend_continuation thesis on SIM-SHIFT (the J-53 scenario), declared + persisted."""
+    engine = _warm_engine("SIM-SHIFT", "shift_buyer_then_unclear", n=40)
+    snap = engine.snapshot()
+    thesis = ThesisRecord(
+        id="t-stance",
+        ticker="SIM-SHIFT",
+        setup_type="trend_continuation",
+        direction=direction,
+        invalidation_price=invalidation,
+        level_price=None,
+        status="active",
+        bound_source=snap.scenario,
+        data_feed="sim",
+        config_fingerprint=CONFIG.config_fingerprint(),
+        entry_context={},
+        statements=frozen_statements("trend_continuation", direction),
+        created_logical_ts=snap.timestamp,
+        created_wall_ts=1700000000.0,
+    )
+    store.insert_thesis(thesis)
+    store.append_verdict_event(
+        VerdictEventRecord(thesis.id, 0.0, 1.0, "pending", "declared", None, None, None)
+    )
+    return engine, thesis
+
+
+def _mark_entry(store, thesis, price, spread=0.02):
+    store.insert_action(
+        ActionRecord(id="entry-1", thesis_id=thesis.id, kind="entry", price=price,
+                     logical_ts=5.0, wall_ts=1700000005.0, spread_at_mark=spread)
+    )
+
+
+def test_no_stance_keys_without_an_entry_mark(store):
+    # A live, confirming thesis with NO entry mark carries NO stance/readout keys — the verdict view
+    # stands on its own (the strip's "no entry mark yet" absence copy is taxonomy-owned, not here).
+    engine, thesis = _stance_thesis(store)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.set_thesis(thesis)
+    provider = SimulatedProvider("SIM-SHIFT", "shift_buyer_then_unclear")
+    for ev in itertools.islice(provider.stream(), 240):
+        monitor.on_event(ev, engine.process_event(ev))
+        if monitor._verdict == "confirming":
+            break
+    assert monitor._verdict == "confirming"  # precondition: the tape confirmed
+    proj = monitor.projection()
+    assert "management_stance" not in proj
+    assert "distance_to_invalidation" not in proj
+    assert "open_r" not in proj
+
+
+def test_entry_marked_confirming_publishes_thesis_intact_with_readouts(store):
+    # The J-53 happy leg: an entry-marked, confirming thesis shows thesis_intact (emerald) with the
+    # live distance-to-invalidation ($ and R) and open R, all from the ONE r_basis() helper.
+    engine, thesis = _stance_thesis(store, invalidation=98.0)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.set_thesis(thesis)
+    provider = SimulatedProvider("SIM-SHIFT", "shift_buyer_then_unclear")
+    stream = provider.stream()
+    # Drive to a published confirming verdict.
+    for ev in itertools.islice(stream, 240):
+        monitor.on_event(ev, engine.process_event(ev))
+        if monitor._verdict == "confirming":
+            break
+    assert monitor._verdict == "confirming"
+    last_at_entry = engine.snapshot().last
+    _mark_entry(store, thesis, price=last_at_entry)
+    # Keep feeding the confirming tape so the stance's OWN dwell (its own config-owned logical-time
+    # dwell, layered on the already-published verdict) elapses and thesis_intact publishes — the stance
+    # never flaps on a single tick. Stop once the stance settles or the tape stops confirming.
+    for ev in itertools.islice(stream, 240):
+        monitor.on_event(ev, engine.process_event(ev))
+        if monitor._verdict != "confirming":
+            break
+        if monitor.projection().get("management_stance", {}).get("value") == "thesis_intact":
+            break
+
+    proj = monitor.projection()
+    assert proj["management_stance"]["value"] == "thesis_intact"
+    assert proj["management_stance"]["label"] == "Thesis intact"
+    assert proj["management_stance"]["evidence"]  # no naked stance — evidence always attached
+    # Live readouts present, in $ and R, via the ONE r_basis() helper (entry far above 98 => safe side).
+    dist = proj["distance_to_invalidation"]
+    assert dist["dollars"] is not None and dist["dollars"] > 0
+    assert dist["r"] is not None and dist["r"] > 0
+    assert proj["open_r"] is not None  # an open move in R (signed by direction)
+
+
+def test_entry_while_pending_never_reads_intact(store):
+    # The honest J-54 case: an entry marked while the verdict is still pending must NOT read
+    # thesis_intact — the stance is thesis_weakening with the explicit pending evidence.
+    engine, thesis = _stance_thesis(store)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.set_thesis(thesis)
+    snap = engine.snapshot()
+    monitor.on_event(None, snap)  # one live read, still pending
+    assert monitor._verdict == "pending"
+    _mark_entry(store, thesis, price=snap.last)
+    monitor.on_event(None, engine.snapshot())
+    proj = monitor.projection()
+    assert proj["management_stance"]["value"] == "thesis_weakening"
+    assert proj["management_stance"]["evidence"] == STANCE_PENDING_EVIDENCE
+
+
+def test_invalidation_publishes_terminal_thesis_invalidated_stance(store):
+    # The J-44 auto-resolve leg: a print through the invalidation flips the stance to the terminal
+    # thesis_invalidated (rose), present at/after the auto-resolve moment, dwell-exempt.
+    engine, thesis = _stance_thesis(store, invalidation=98.0)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.set_thesis(thesis)
+    snap = engine.snapshot()
+    _mark_entry(store, thesis, price=snap.last)
+    monitor.on_event(None, snap)
+    # Force an invalidation by feeding a synthetic snapshot whose last is far through the invalidation.
+    bad = dataclasses.replace(snap, last=90.0, timestamp=snap.timestamp + 1.0)
+    monitor.on_event(None, bad)
+    proj = monitor.projection()
+    assert proj is not None
+    assert proj["verdict"] == "invalidated"
+    assert proj["management_stance"]["value"] == "thesis_invalidated"
+    assert proj["management_stance"]["evidence"]  # the offending-print facts, no naked stance
+
+
+def test_surviving_not_evaluated_path_carries_no_stance_keys(store):
+    # A surviving entry-marked thesis served as not-evaluated (the registry survivor path / mismatched
+    # source) carries NO stance/readout keys — NO frozen-stale stance. Proven via build_projection
+    # with no stance supplied (exactly how the survivor + mismatched paths call it).
+    _, thesis = _stance_thesis(store)
+    store.insert_action(
+        ActionRecord(id="e1", thesis_id=thesis.id, kind="entry", price=100.0,
+                     logical_ts=5.0, wall_ts=1700000005.0, spread_at_mark=0.02)
+    )
+    proj = build_projection(
+        thesis,
+        store.get_actions(thesis.id),
+        config=CONFIG,
+        snapshot=None,
+        status=thesis.status,
+        verdict="pending",
+        verdict_evidence="not evaluated",
+        monitor_status="not_evaluated",
+        verdict_events=store.verdict_events(thesis.id),
+        # No management_stance supplied — the survivor/not-evaluated path passes none.
+    )
+    assert "management_stance" not in proj
+    assert "distance_to_invalidation" not in proj
+    assert "open_r" not in proj
+
+
+def test_monitor_failed_serves_no_stance(store):
+    # A failed monitor read serves NO stance (the strip shows its honest failure notice instead).
+    engine, thesis = _stance_thesis(store)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.set_thesis(thesis)
+    snap = engine.snapshot()
+    _mark_entry(store, thesis, price=snap.last)
+    monitor.on_event(None, snap)
+    monitor._failed = True
+    proj = monitor.projection()
+    assert proj["monitor_status"] == "failed"
+    assert "management_stance" not in proj
+
+
+def test_build_projection_stance_requires_both_stance_and_entry_mark(store):
+    # build_projection serves the stance keys ONLY when a stance is supplied AND an entry mark exists.
+    _, thesis = _stance_thesis(store)
+    # Entry mark present, but no stance supplied => keys absent.
+    store.insert_action(
+        ActionRecord(id="e2", thesis_id=thesis.id, kind="entry", price=100.0,
+                     logical_ts=5.0, wall_ts=1700000005.0, spread_at_mark=0.02)
+    )
+    proj_no_stance = build_projection(
+        thesis, store.get_actions(thesis.id), config=CONFIG, snapshot=None,
+        status="active", verdict="confirming", verdict_evidence="ev",
+        monitor_status="ok", verdict_events=store.verdict_events(thesis.id),
+    )
+    assert "management_stance" not in proj_no_stance
+    # Stance supplied + entry mark => keys present.
+    proj_with = build_projection(
+        thesis, store.get_actions(thesis.id), config=CONFIG, snapshot=None,
+        status="active", verdict="confirming", verdict_evidence="ev",
+        monitor_status="ok", verdict_events=store.verdict_events(thesis.id),
+        management_stance="thesis_intact", management_stance_evidence="ev",
+    )
+    assert proj_with["management_stance"]["value"] == "thesis_intact"

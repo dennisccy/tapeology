@@ -37,6 +37,7 @@ from .excursions import ExcursionTracker, compute_and_persist_excursions
 from .execution_checks import compute_and_persist_execution_checks
 from .grades import compute_and_persist_grades
 from .marks import marks_projection
+from .stance import StanceEvaluator, compute_position_readouts
 from .store import JournalStore, ThesisRecord, VerdictEventRecord
 from .taxonomy import (
     GEOMETRY_ENTRY_MARK_LABEL,
@@ -49,6 +50,7 @@ from .taxonomy import (
     chasing_entry_evidence,
     invalidation_too_tight_evidence,
     low_trade_speed_evidence,
+    management_stance_label,
     mismatched_source_notice,
     risk_flag_label,
     verdict_marker_label,
@@ -523,6 +525,8 @@ def build_projection(
     monitor_status: str,
     monitor_notice: str | None = None,
     verdict_events: list | None = None,
+    management_stance: str | None = None,
+    management_stance_evidence: str | None = None,
 ) -> dict:
     """The SINGLE thesis-projection builder (data-contract row 15) — one code path, never a second.
 
@@ -540,6 +544,15 @@ def build_projection(
     those timeline rows + the row-18 marks, computed ONCE here (never a second path, never recomputed
     at the chart). Callers hand the same single-writer rows used by the live and survivor paths; an
     omitted/``None`` list serves price-lines only (no markers) — never a fabricated timeline.
+
+    ``management_stance`` + ``management_stance_evidence`` (capability 27 / J-53; row 25 stance half)
+    are the live monitor's PUBLISHED holding-period stance (computed once by the ``StanceEvaluator``
+    from the latest published verdict, dwell-gated). The additive ``management_stance`` /
+    ``distance_to_invalidation`` / ``open_r`` keys are served ONLY when the thesis is ENTRY-MARKED AND
+    a stance is supplied (a live monitor passes one; the unwatched-survivor + not-evaluated paths pass
+    ``None`` so the keys stay ABSENT — no frozen-stale stance). The position readouts come from the
+    SAME single ``r_basis()`` helper the marks use (row 27 — the stance is its fifth registered
+    consumer, never a second formula). Nothing here is persisted (schema stays v7).
     """
     statements = [
         {
@@ -579,6 +592,30 @@ def build_projection(
         projection["risk_flags"] = thesis.risk_flags
     if monitor_notice is not None:
         projection["monitor_notice"] = monitor_notice
+
+    # --- Management stance + live position readouts (capability 27, J-53; row 25 stance half) ------
+    # Served ONLY while the thesis is ENTRY-MARKED AND a published stance was supplied (a live monitor
+    # passes one; the unwatched-survivor / not-evaluated paths pass ``None`` so the keys stay ABSENT —
+    # NO frozen-stale stance, distinct from the "no entry mark yet" absence the strip handles with its
+    # own copy). The readouts come from the ONE ``r_basis()`` helper (row 27, fifth registered
+    # consumer). Nothing here is persisted (schema v7). An ``invalidated`` terminal stance is still a
+    # stance: it renders at/after the auto-resolve moment as the terminal treatment.
+    entry = marks.get("entry")
+    if management_stance is not None and entry is not None:
+        last = snapshot.last if snapshot is not None else None
+        readouts = compute_position_readouts(
+            entry_price=entry["price"],
+            invalidation_price=thesis.invalidation_price,
+            direction=thesis.direction,
+            last=last,
+        )
+        projection["management_stance"] = {
+            "value": management_stance,
+            "evidence": management_stance_evidence or "",
+            "label": management_stance_label(management_stance),
+        }
+        projection["distance_to_invalidation"] = readouts["distance_to_invalidation"]
+        projection["open_r"] = readouts["open_r"]
     return projection
 
 
@@ -625,6 +662,11 @@ class ResearchMonitor:
         # reads ONLY the snapshot (read-only over the engine) — no tape data is persisted, only the
         # R-unit excursion summaries.
         self._excursions: ExcursionTracker | None = None
+        # The management-stance evaluator (capability 27, J-53). Created when a thesis is set / adopted;
+        # advanced per event AFTER the verdict step (it reads the just-published verdict). Holds the
+        # PUBLISHED holding-period stance the projection serves while the thesis is entry-marked. Never
+        # persisted (the stance is a live cue, schema stays v7). ``None`` when no thesis is held.
+        self._stance: StanceEvaluator | None = None
 
     # --- thesis lifecycle (called from the route, NOT the hot path) -----------------------------
     def set_thesis(self, thesis: ThesisRecord) -> None:
@@ -646,6 +688,10 @@ class ResearchMonitor:
             direction=thesis.direction,
             config=self._config,
         )
+        # A FRESH stance evaluator (capability 27, J-53) — its dwell clock starts here so the stance is
+        # settled by the time the user marks entry (no artificial warm-up gap at the mark). It reads the
+        # published verdict each event; the keys are SERVED only once an entry mark exists.
+        self._stance = StanceEvaluator(self._config.management_stance_dwell_seconds)
         # Seed the published evidence with the pending register so the projection never carries a
         # NAKED verdict (the no-naked-outputs anti-goal): every verdict — including the initial
         # pending — reads with plain-language evidence. Replaced verbatim by the engine's evidence on
@@ -688,6 +734,7 @@ class ResearchMonitor:
         self._adopt_mismatch = False
         self._restart_gap_appended = False
         self._excursions = None
+        self._stance = None
 
     def resolve_by_user(self, resolution: str) -> None:
         """Detach verdict evaluation after a USER resolution (played_out | abandoned), J-50.
@@ -750,6 +797,22 @@ class ResearchMonitor:
             self._last_snapshot = snapshot
             self._maybe_adopt_surviving(snapshot)
             self._evaluate_verdict(snapshot)
+            # Advance the management stance AFTER the verdict step (so it reads the verdict just
+            # published for THIS snapshot). The stance is a pure derivation from the published verdict
+            # (read-only over the engine — no engine/feature mutation) and is never persisted. An
+            # ``invalidated`` verdict carries the offending-print evidence the verdict engine recorded
+            # (now on ``self._verdict_evidence`` after the verdict step), so the terminal stance reads
+            # the same facts. The stance keys are only SERVED once an entry mark exists (gated in the
+            # projection); the dwell accumulates regardless so the stance is settled by the mark.
+            if self._stance is not None:
+                self._stance.advance(
+                    verdict=self._verdict,
+                    verdict_evidence=self._verdict_evidence,
+                    logical_ts=snapshot.timestamp,
+                    invalidation_evidence=(
+                        self._verdict_evidence if self._verdict == "invalidated" else None
+                    ),
+                )
             # Advance the excursion tracker AFTER the verdict step (so a confirmation armed on THIS
             # snapshot also sees this snapshot as its dt=0 baseline). Read-only over the engine — the
             # tracker only reads the snapshot's logical ts + last (no engine/feature mutation).
@@ -795,6 +858,10 @@ class ResearchMonitor:
             direction=candidate.direction,
             config=self._config,
         )
+        # A FRESH stance evaluator on re-attach (capability 27, J-53): the adopted thesis is
+        # entry-marked (only entry-marked theses survive to be re-offered), so its holding-period stance
+        # resumes from post-restart published verdicts — its dwell restarts here by construction.
+        self._stance = StanceEvaluator(self._config.management_stance_dwell_seconds)
         self._verdict = "pending"
         self._verdict_evidence = (
             "The watch resumed on the source this thesis was declared on; the verdict stays pending "
@@ -1087,6 +1154,17 @@ class ResearchMonitor:
         # thesis reports its declared status and the live published verdict. Both go through the ONE
         # shared ``build_projection`` (data-contract row 15 — never a second computation path).
         status = "invalidated" if self._resolution == "invalidated" else thesis.status
+        # The PUBLISHED management stance (capability 27, J-53): served only while this LIVE monitor is
+        # evaluating (``not self._failed``) and the thesis is entry-marked (the builder gates on the
+        # entry mark too). A monitor-failed read passes no stance (the strip shows its honest failure
+        # notice instead). The terminal ``thesis_invalidated`` stance still renders here (the resolved-
+        # invalidated branch above keeps the projection visible) so the strip shows the terminal
+        # treatment. The builder serves no stance key when the thesis is not entry-marked.
+        stance_value = self._stance.published_stance if self._stance is not None else None
+        stance_evidence = self._stance.published_evidence if self._stance is not None else None
+        if self._failed:
+            stance_value = None
+            stance_evidence = None
         # A read failure inside the builder (e.g. the action read) is caught by the caller's
         # try/except and surfaces as ``monitor_status: failed`` rather than a crash.
         return build_projection(
@@ -1099,4 +1177,6 @@ class ResearchMonitor:
             verdict_evidence=self._verdict_evidence,
             monitor_status="failed" if self._failed else "ok",
             verdict_events=self._store.verdict_events(thesis.id),
+            management_stance=stance_value,
+            management_stance_evidence=stance_evidence,
         )

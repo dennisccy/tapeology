@@ -88,6 +88,86 @@ def mismatched_source_notice(bound_source: str, watched_source: str) -> str:
     )
 
 
+# --- Management-stance enum + display copy (capability 27, J-53; data-contract rows 24 & 25) ------
+# The SINGLE backend owner of the holding-period management stance — the stance the thesis strip shows
+# while a thesis is ENTRY-MARKED and UNRESOLVED, answering "does the tape still support this position?".
+# The frontend hardcodes NONE of this copy (it reads the label + evidence verbatim off the projection).
+#
+# The stance is a pure DERIVATION from the latest row-16 PUBLISHED verdict (stance.py owns the timing
+# + dwell; this module owns the verdict->stance MAP and every display string). Three values only —
+# the established verdict/stance palette (design direction): ``thesis_intact`` emerald,
+# ``thesis_weakening`` amber, ``thesis_invalidated`` rose with the terminal treatment. Copy is
+# present-tense, factual, thesis-attributed (J-66 / anti-goals) — never imperative, never predictive.
+MANAGEMENT_STANCES: dict[str, str] = {
+    "thesis_intact": "Thesis intact",
+    "thesis_weakening": "Thesis weakening",
+    "thesis_invalidated": "Thesis invalidated",
+}
+
+# The verdict -> management-stance MAP (the backend-owned table the spec mandates). The full
+# five-verdict mapping, with ONE home:
+#   * ``confirming``  -> ``thesis_intact``      (the tape published a confirmation; the position holds);
+#   * ``weakening``   -> ``thesis_weakening``   (the confirming evidence faded);
+#   * ``rejecting``   -> ``thesis_weakening``   (the opposite side took control — the position is under
+#                                                pressure, not yet system-invalidated);
+#   * ``pending``     -> ``thesis_weakening``   (the HONEST J-54 case: an entry while the verdict is
+#                                                still pending NEVER reads ``thesis_intact`` — no
+#                                                published confirmation backs it; its evidence names
+#                                                the actual verdict via ``STANCE_PENDING_EVIDENCE``);
+#   * ``invalidated`` -> ``thesis_invalidated`` (the J-44 system auto-resolve — terminal, dwell-exempt).
+# Kept here (not inline in stance.py) so the verdict->stance mapping + its copy share ONE owner.
+_VERDICT_TO_STANCE: dict[str, str] = {
+    "confirming": "thesis_intact",
+    "weakening": "thesis_weakening",
+    "rejecting": "thesis_weakening",
+    "pending": "thesis_weakening",
+    "invalidated": "thesis_invalidated",
+}
+
+# The honest "entry while not confirmed" evidence (the J-54 case): an entry marked while the verdict is
+# pending (or carrying no published evidence yet) reads as NOT-confirmed — never ``thesis_intact``,
+# never a fabricated weakening-from-confirmation. Present-tense, factual, thesis-attributed.
+STANCE_PENDING_EVIDENCE = (
+    "The tape has not published a confirmation of your thesis since you marked entry — the position "
+    "is open without a confirming read."
+)
+
+# The two DISTINCT honest-absence copies (iter-15 lesson: one fallback string must not cover two
+# causes). They name WHY no management stance is shown — these are causally different states:
+#   * NO_ENTRY_MARK   — the thesis is live and evaluating, but the user has not marked an entry, so
+#                       there is no position to manage (the verdict view stands on its own).
+#   * NOT_EVALUATED   — the thesis carries a real entry mark but its watch is not evaluating (the
+#                       surviving not-evaluated / mismatched-source path) — no live tape to read a
+#                       stance from, and deliberately NO frozen-stale stance.
+STANCE_ABSENCE_NO_ENTRY_MARK = (
+    "No entry is marked on this thesis, so there is no held position to read a management stance for "
+    "yet — mark your entry to see whether the tape still supports it."
+)
+STANCE_ABSENCE_NOT_EVALUATED = (
+    "This thesis is not being evaluated right now, so no live management stance is read — re-watch its "
+    "source to resume; no stale stance is shown."
+)
+
+# The journaled-measurement register for the live position readouts (consistent with the realized-R
+# label discipline) — the distance-to-invalidation + open-R caption. R-units only, never currency,
+# never a prediction. The "Descriptive only — not trading advice" register extends to the stance block.
+STANCE_READOUT_CAPTION = "journaled measurement, R = |entry − invalidation|"
+
+
+def stance_for_verdict(verdict: str) -> str:
+    """The management stance for a published verdict (the backend-owned map; J-53).
+
+    An unknown/never-mapped verdict (e.g. ``expired`` — which never reaches the stance, the keys being
+    absent then) falls back to ``thesis_weakening`` (the conservative NOT-intact reading — a stance is
+    never ``thesis_intact`` without an explicit ``confirming`` verdict)."""
+    return _VERDICT_TO_STANCE.get(verdict, "thesis_weakening")
+
+
+def management_stance_label(stance: str) -> str:
+    """Display label for a management-stance id. Unknown -> itself (never fabricated)."""
+    return MANAGEMENT_STANCES.get(stance, stance)
+
+
 # --- Chart-geometry labels (capability 25, J-48; data-contract row 24) ---------------------------
 # The backend-owned plain-language labels the chart renders VERBATIM on the thesis geometry
 # overlay — the frontend hardcodes NONE of them (one copy register, J-66). Present-tense,
@@ -680,6 +760,20 @@ def taxonomy_payload() -> dict:
         "resolutions": [{"id": k, "name": STATUSES[k]} for k in RESOLUTIONS],
         "statement_statuses": list(STATEMENT_STATUSES),
         "monitor_statuses": list(MONITOR_STATUSES),
+        # The management-stance catalog (capability 27, J-53; row 25 stance half) — id + display label
+        # for each of the three stances, the two DISTINCT honest-absence copies (iter-15 lesson), and
+        # the journaled-measurement readout caption. Owned ONCE here so the strip's holding-period block
+        # is taxonomy-driven (the frontend hardcodes none of it). Present-tense, factual, never
+        # imperative or predictive (J-66). This block is also iter-20's code-identity canary —
+        # ``GET /research/taxonomy`` carrying ``management_stances`` proves the NEW server code is live.
+        "management_stances": [
+            {"id": k, "name": v} for k, v in MANAGEMENT_STANCES.items()
+        ],
+        "stance_absence": {
+            "no_entry_mark": STANCE_ABSENCE_NO_ENTRY_MARK,
+            "not_evaluated": STANCE_ABSENCE_NOT_EVALUATED,
+        },
+        "stance_readout_caption": STANCE_READOUT_CAPTION,
         # The outcome × process grade catalogs (capability 29, J-56) — id + display label, owned ONCE
         # here so the journal quadrant + rows are taxonomy-driven (the frontend hardcodes no grade
         # label). ENUM labels only — never a numeric score.

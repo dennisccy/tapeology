@@ -106,6 +106,28 @@ export interface RiskFlag {
   measured: Record<string, unknown>;
 }
 
+// The holding-period MANAGEMENT STANCE (capability 27, J-53; data-contract row 25 stance half) —
+// read VERBATIM from the WS `thesis` key (or `/research/thesis/active`). Present ONLY while the thesis
+// is ENTRY-MARKED and unresolved and a live monitor is evaluating; absent otherwise (no frozen-stale
+// stance). Computed ONCE server-side from the latest published verdict — the strip renders the
+// `value` color + the `label` text + the `evidence` line and DERIVES NOTHING.
+//   * thesis_intact      — the tape published a confirmation; the position holds (emerald);
+//   * thesis_weakening   — the confirming evidence faded / never confirmed (amber);
+//   * thesis_invalidated — the J-44 system auto-resolve; terminal (rose, terminal treatment).
+export interface ManagementStance {
+  value: "thesis_intact" | "thesis_weakening" | "thesis_invalidated";
+  evidence: string;
+  label: string;
+}
+// The live distance from the current last to the declared invalidation (capability 27 / row 27),
+// computed ONCE server-side via the ONE r_basis() helper. `dollars` is signed (POSITIVE = the safe
+// side of the invalidation; negative once price crosses it); `r` is that distance in R units (`null`
+// on a degenerate R == 0 basis or before any last). The strip renders both in font-mono, verbatim.
+export interface DistanceToInvalidation {
+  dollars: number | null;
+  r: number | null;
+}
+
 export interface ThesisProjection {
   id: string;
   ticker: string;
@@ -146,6 +168,17 @@ export interface ThesisProjection {
   // when not_evaluated (the not-currently-evaluated notice naming the bound source, or the
   // mismatched-source notice). Rendered VERBATIM by the strip; the frontend composes none of it.
   monitor_notice?: string;
+  // The holding-period management stance + live readouts (capability 27, J-53; row 25 stance half) —
+  // present as additive keys ONLY while the thesis is ENTRY-MARKED and unresolved and a live monitor
+  // is evaluating (computed ONCE server-side; the strip renders them verbatim, derives nothing).
+  // Absent otherwise (no entry mark, or the surviving not-evaluated path — NO frozen-stale stance).
+  management_stance?: ManagementStance;
+  // The live distance from the current last to the invalidation, in $ and R (signed). Present with
+  // the stance; absent otherwise. Rendered in font-mono, verbatim.
+  distance_to_invalidation?: DistanceToInvalidation;
+  // The current open move in R, signed by direction (a move in the thesis's favor is positive); the
+  // SAME sign convention as the realized-move readout. `null` before any last / on a degenerate R==0.
+  open_r?: number | null;
 }
 
 // GET /research/taxonomy — the single backend owner of every research label. The declare form is
@@ -198,6 +231,14 @@ export interface ResearchTaxonomy {
   // none). Optional so a pre-J-60 taxonomy payload stays valid (the page then falls back to its own
   // minimal copy register).
   studies?: StudiesTaxonomy;
+  // The management-stance catalog (capability 27, J-53; row 25 stance half) — the three stance labels,
+  // the two DISTINCT honest-absence copies (no entry mark yet vs not currently evaluated), and the
+  // journaled-measurement readout caption. The strip renders the per-thesis stance's own `label`, so
+  // it reads `stance_absence` (for the no-entry-mark copy) + `stance_readout_caption` here. Optional so
+  // a pre-J-53 taxonomy payload stays valid (the strip then falls back to its own minimal copy).
+  management_stances?: TaxonomyEnum[];
+  stance_absence?: { no_entry_mark: string; not_evaluated: string };
+  stance_readout_caption?: string;
   disclaimer: string;
 }
 

@@ -1,0 +1,31 @@
+{
+  "phase": "goal-i_will_be_super_rich_with_my_loved_ones-iter-20",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-06-12T12:15:00Z",
+  "started_at": "2026-06-12T11:54:00Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/research/stance.py",
+    "apps/backend/app/research/monitor.py",
+    "apps/backend/app/research/taxonomy.py",
+    "apps/backend/app/config.py",
+    "apps/backend/tests/test_research_stance.py",
+    "apps/backend/tests/test_research_monitor.py",
+    "apps/backend/tests/test_research_api.py",
+    "apps/frontend/lib/types.ts",
+    "apps/frontend/components/ThesisStrip.tsx"
+  ],
+  "operational_changes": [],
+  "code_change": true,
+  "fix_mode": false,
+  "tests_run": true,
+  "test_result": "696 passed, 1 skipped, exit 0 (full backend suite; +25 new tests this iter)",
+  "typecheck_result": "tsc --noEmit exit 0 (no npm run build; shared .next untouched)",
+  "browser_checks_run": false,
+  "canary_verified": true,
+  "canary_notes": "Live probe (uvicorn :8792, then killed): GET /research/taxonomy carries the NEW management-stance copy — management_stances=[thesis_intact,thesis_weakening,thesis_invalidated], stance_absence={no_entry_mark,not_evaluated} (two distinct copies), stance_readout_caption='journaled measurement, R = |entry − invalidation|'. /health 200. This is iter-20's code-identity canary (proves server code is live before browser captures).",
+  "servers_clean": true,
+  "next_action": "review"
+}
