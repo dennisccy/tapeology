@@ -277,3 +277,100 @@ async def test_live_feeder_does_not_touch_sim_registry():
     finally:
         assert manager.stop("AAPL") is True
         await _until(lambda: provider.socket.closed)
+
+
+# --- delivery_lag_seconds (Data Contract row 14, J-63): per-mode semantics ------------------------
+# LIVE = latest record epoch vs wall clock; PACED replay = processing backlog vs the pacing schedule.
+# Feeder-owned, additive snapshot metadata, NEVER read by classification (determinism untouched).
+
+import time as _time
+
+from app.engine.tape_engine import TapeEngine
+from app.watch_manager import _live_delivery_lag, _paced_delivery_lag
+
+
+def test_paced_delivery_lag_healthy_replay_reads_near_zero():
+    # A feeder that keeps up with its own schedule: actual wall elapsed ≈ scheduled elapsed => ≈0.
+    start = _time.time()
+    # Pretend 0.5s of scheduled pacing has elapsed and ~0.5s of wall time too (in sync).
+    scheduled = _time.time() - start  # ~0 actual elapsed so far
+    lag = _paced_delivery_lag(scheduled, start)
+    assert lag == pytest.approx(0.0, abs=0.05)
+
+
+def test_paced_delivery_lag_backlogged_feeder_reads_positive():
+    # Actual wall elapsed (now - start) far exceeds the scheduled pacing => the feeder is BEHIND.
+    start = _time.time() - 10.0  # 10s of real wall time has actually elapsed
+    scheduled = 2.0  # but the feeder only INTENDED 2s of pacing delay
+    lag = _paced_delivery_lag(scheduled, start)
+    assert lag == pytest.approx(8.0, abs=0.2)  # 10 - 2 = 8s of processing backlog
+
+
+def test_paced_delivery_lag_ahead_of_schedule_clamps_to_zero():
+    # A feeder running AHEAD of its schedule (e.g. zero-delay warm-up fast-forward) is NOT "lagging".
+    start = _time.time()
+    lag = _paced_delivery_lag(100.0, start)
+    assert lag == 0.0
+
+
+def test_live_delivery_lag_uses_record_epoch_vs_wall_clock():
+    # LIVE: lag = wall_now - (epoch_anchor + latest_logical_ts). A record stamped ~3s ago reads ~3s.
+    anchor = _time.time() - 3.0  # the first record's real epoch, 3s before now
+    engine = TapeEngine("LIVE", "live LIVE", CONFIG, epoch_anchor=anchor)
+    engine.process_event(TradeEvent("LIVE", 0.0, 100.0, 100, Side.UNKNOWN))  # logical ts 0
+    lag = _live_delivery_lag(engine)
+    assert lag is not None
+    assert lag == pytest.approx(3.0, abs=0.3)
+
+
+def test_live_delivery_lag_none_without_epoch_anchor():
+    # No epoch anchor (no first live record) => honest None, never a fabricated 0.0.
+    engine = TapeEngine("LIVE", "live LIVE", CONFIG)  # no anchor
+    assert _live_delivery_lag(engine) is None
+
+
+def test_live_delivery_lag_future_record_clamps_to_zero():
+    # A clock skew putting the record marginally AHEAD of wall is reported as 0, never negative.
+    anchor = _time.time() + 5.0
+    engine = TapeEngine("LIVE", "live LIVE", CONFIG, epoch_anchor=anchor)
+    engine.process_event(TradeEvent("LIVE", 0.0, 100.0, 100, Side.UNKNOWN))
+    assert _live_delivery_lag(engine) == 0.0
+
+
+@pytest.mark.anyio
+async def test_sim_feeder_stamps_a_small_delivery_lag():
+    # An integration check: a healthy paced sim feeder stamps a delivery_lag_seconds that is a real
+    # number (it kept up with its own schedule) — and the engine still classifies identically (the lag
+    # is feeder-owned display metadata, never read by classification).
+    manager = WatchManager(CONFIG, pace=0.001)
+    engine = manager.watch("SIM-BUYER")
+    try:
+        await _until(lambda: engine.snapshot().event_count >= 50)
+        lag = engine.snapshot().delivery_lag_seconds
+        assert lag is not None
+        assert lag >= 0.0
+        # A healthy fast sim keeps up with its own (tiny) schedule => the lag stays modest, not runaway.
+        assert lag < 5.0
+    finally:
+        assert manager.stop("SIM-BUYER") is True
+        await asyncio.sleep(0.02)
+
+
+def test_delivery_lag_is_never_read_by_classification():
+    # Determinism guard: set_delivery_lag carries display metadata onto the snapshot but must NOT
+    # change the tape state / confidence / features — the same engine with vs without a stamped lag is
+    # byte-identical on those fields.
+    def _warmed():
+        e = TapeEngine("SIM-BUYER", "buyer_control", CONFIG)
+        for ev in itertools.islice(SimulatedProvider("SIM-BUYER", "buyer_control").stream(), 240):
+            e.process_event(ev)
+        return e
+
+    a, b = _warmed(), _warmed()
+    b.set_delivery_lag(42.0)  # stamp a lag on b only
+    sa, sb = a.snapshot(), b.snapshot()
+    assert sb.delivery_lag_seconds == 42.0 and sa.delivery_lag_seconds is None
+    # Classification fields byte-identical despite the lag difference.
+    assert sa.tape_state == sb.tape_state
+    assert sa.confidence == sb.confidence
+    assert sa.features == sb.features

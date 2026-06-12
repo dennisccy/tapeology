@@ -87,6 +87,11 @@ def serialize_summary(snap: EngineSnapshot) -> dict:
         "scenario": snap.scenario,
         "stream_status": snap.stream_status,
         "paused": snap.paused,
+        # The feeder-owned delivery lag (Data Contract row 14, J-63) — carried VERBATIM off the
+        # snapshot (the engine never recomputes it; it is feeder-owned display metadata). The
+        # ``tape_lag_ok`` checklist check + the future UI lag readout read this SAME value. ``None``
+        # when the feeder has not stamped one yet (cold/sim construction) — honest absence, not 0.0.
+        "delivery_lag_seconds": snap.delivery_lag_seconds,
         "timestamp": snap.timestamp,
         "market": _market(snap),
         "tape_state": snap.tape_state,
@@ -145,6 +150,10 @@ def serialize_stream(snap: EngineSnapshot) -> dict:
         "scenario": snap.scenario,
         "stream_status": snap.stream_status,
         "paused": snap.paused,
+        # The feeder-owned delivery lag (Data Contract row 14, J-63) — carried VERBATIM off the
+        # snapshot so the WS frame and ``/summary`` serve the SAME single value (single source of
+        # truth). ``None`` until the feeder stamps one. The ``tape_lag_ok`` check reads this value.
+        "delivery_lag_seconds": snap.delivery_lag_seconds,
         "warm": snap.warm,
         "timestamp": snap.timestamp,
         "market": _market(snap),

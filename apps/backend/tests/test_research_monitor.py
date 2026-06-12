@@ -655,3 +655,112 @@ def test_build_projection_stance_requires_both_stance_and_entry_mark(store):
         management_stance="thesis_intact", management_stance_evidence="ev",
     )
     assert proj_with["management_stance"]["value"] == "thesis_intact"
+
+
+# =================================================================================================
+# Entry checklist (capability 33, J-63; data-contract row 25 checklist half) — presence rules + flow
+# =================================================================================================
+# Mutual exclusion with the management stance: a PRE-entry-mark active thesis shows the checklist and
+# NO management stance; an entry-marked thesis shows the management stance and NO checklist; the
+# no-thesis / not-evaluated paths show NEITHER.
+
+
+def _drive_to_confirming(monitor, engine, store, thesis, *, limit=480):
+    provider = SimulatedProvider("SIM-SHIFT", "shift_buyer_then_unclear")
+    for ev in itertools.islice(provider.stream(), limit):
+        monitor.on_event(ev, engine.process_event(ev))
+        if monitor._verdict == "confirming":
+            return True
+    return False
+
+
+def test_checklist_served_on_pre_entry_mark_path(store):
+    # An active, evaluated, NOT-yet-entry-marked thesis carries the entry_checklist key with the eight
+    # checks + the aggregate stance + the nearest-counterevidence line — all computed once server-side.
+    engine, thesis = _stance_thesis(store)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.set_thesis(thesis)
+    monitor.on_event(None, engine.snapshot())  # one live read, no entry mark
+    proj = monitor.projection()
+    assert "entry_checklist" in proj
+    checklist = proj["entry_checklist"]
+    assert len(checklist["checks"]) == 8
+    assert checklist["stance"]["value"] in {
+        "conditions_met", "conditions_not_met", "tape_against", "no_fresh_tape"
+    }
+    assert checklist["stance"]["evidence"]  # no naked stance
+    assert "nearest_counterevidence" in checklist
+    # Pre-confirmation: the verdict_confirming check is unmet, so the stance is not conditions_met and
+    # the verdict_confirming check is among the blockers.
+    assert "verdict_confirming" in checklist["blockers"]
+    # Mutually exclusive: no management stance on the pre-entry-mark path.
+    assert "management_stance" not in proj
+
+
+def test_checklist_absent_once_entry_is_marked_management_stance_present(store):
+    # Once the user marks an entry, the checklist is REPLACED by the management stance (mutual
+    # exclusion) — the entry_checklist key disappears and the management_stance key appears.
+    engine, thesis = _stance_thesis(store, invalidation=98.0)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.set_thesis(thesis)
+    assert _drive_to_confirming(monitor, engine, store, thesis)
+    # Pre-mark: checklist present, stance absent.
+    pre = monitor.projection()
+    assert "entry_checklist" in pre and "management_stance" not in pre
+    # Mark entry => the management stance takes over, the checklist is gone.
+    _mark_entry(store, thesis, price=engine.snapshot().last)
+    monitor.on_event(None, engine.snapshot())
+    post = monitor.projection()
+    assert "management_stance" in post
+    assert "entry_checklist" not in post
+
+
+def test_no_checklist_without_a_thesis(store):
+    # No thesis => projection is None (no checklist keys served at all).
+    monitor = ResearchMonitor(store, CONFIG)
+    assert monitor.projection() is None
+
+
+def test_no_checklist_on_not_evaluated_survivor_path(store):
+    # A surviving entry-marked thesis served as not-evaluated carries NEITHER the checklist NOR the
+    # management stance (no live tape, no frozen-stale cue). Proven via build_projection with neither
+    # supplied (exactly how the survivor / mismatched paths call it).
+    _, thesis = _stance_thesis(store)
+    store.insert_action(
+        ActionRecord(id="e3", thesis_id=thesis.id, kind="entry", price=100.0,
+                     logical_ts=5.0, wall_ts=1700000005.0, spread_at_mark=0.02)
+    )
+    proj = build_projection(
+        thesis, store.get_actions(thesis.id), config=CONFIG, snapshot=None,
+        status=thesis.status, verdict="pending", verdict_evidence="not evaluated",
+        monitor_status="not_evaluated", verdict_events=store.verdict_events(thesis.id),
+    )
+    assert "entry_checklist" not in proj
+    assert "management_stance" not in proj
+
+
+def test_monitor_failed_serves_no_checklist(store):
+    # A failed monitor read serves NO checklist (the strip shows its honest failure notice instead).
+    engine, thesis = _stance_thesis(store)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.set_thesis(thesis)
+    monitor.on_event(None, engine.snapshot())
+    assert "entry_checklist" in monitor.projection()  # precondition: served while ok
+    monitor._failed = True
+    proj = monitor.projection()
+    assert proj["monitor_status"] == "failed"
+    assert "entry_checklist" not in proj
+
+
+def test_checklist_no_fresh_tape_when_feed_not_live(store):
+    # The honest degradation: a non-live snapshot forces the aggregate stance to no_fresh_tape (a
+    # previous green must never persist over non-live data).
+    engine, thesis = _stance_thesis(store)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.set_thesis(thesis)
+    snap = engine.snapshot()
+    stale = dataclasses.replace(snap, stream_status="stale", timestamp=snap.timestamp + 1.0)
+    monitor.on_event(None, stale)
+    checklist = monitor.projection()["entry_checklist"]
+    assert checklist["stance"]["value"] == "no_fresh_tape"
+    assert checklist["checks"]  # checks still rendered (with their margins), stance honestly degraded

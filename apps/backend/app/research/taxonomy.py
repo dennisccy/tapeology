@@ -154,6 +154,134 @@ STANCE_ABSENCE_NOT_EVALUATED = (
 STANCE_READOUT_CAPTION = "journaled measurement, R = |entry − invalidation|"
 
 
+# --- Entry-checklist enums + display copy (capability 33, J-63; data-contract rows 24 & 25) --------
+# The SINGLE backend owner of EVERY entry-checklist string — the strip's pre-entry-mark cue block.
+# The frontend hardcodes NONE of it (it reads each check's label + the rendered margin VERBATIM off the
+# projection, and the stance/nearest-counterevidence copy from here). At the moment of decision (an
+# active, evaluated, not-yet-entry-marked thesis) the checklist answers, check by check with a LIVE
+# MEASURED MARGIN, whether the tape currently meets the entry conditions — never a naked signal.
+#
+# Copy discipline (J-66 / anti-goals): present-tense, FACTUAL, descriptive — never imperative
+# ("buy / enter"), never predictive (no price target, no forecast), never certain. A check DESCRIBES a
+# measured condition; the aggregate stance DESCRIBES what the tape is doing NOW relative to the thesis.
+
+# The eight named checks, in display order. Each LABEL is a short, neutral noun phrase naming the
+# condition (NOT a command). The eight compose ONLY existing canonical engine values (the spec's row-25
+# checklist half) — no new indicator. Owned ONCE here so the strip is fully taxonomy-driven.
+CHECKLIST_CHECKS: dict[str, str] = {
+    "verdict_confirming": "Verdict confirming",
+    "warm": "Classifier warm",
+    "feed_live": "Feed live",
+    "tape_lag_ok": "Tape delivery current",
+    "spread_stable": "Spread within stability",
+    "trade_speed_ok": "Trade speed at floor",
+    "invalidation_distance_ok": "Invalidation clear of spread",
+    "not_chasing": "Entry not chasing",
+}
+
+# The PER-CHECK margin CAPTION — a short unit note rendered beside each check's measured margin so the
+# user reads the margin in its OWN units (the spec: "live measured margin in its own units, never a
+# bare boolean"). Descriptive only. The numeric margin itself is computed server-side and rendered
+# verbatim by the strip; this caption only NAMES the unit/comparison.
+CHECKLIST_CHECK_CAPTIONS: dict[str, str] = {
+    "verdict_confirming": "the published verdict against your thesis",
+    "warm": "events processed vs the classifier's warm-up floor",
+    "feed_live": "the canonical stream status",
+    "tape_lag_ok": "delivery lag (s) vs the freshness bound",
+    "spread_stable": "average spread (bps) vs the stability cap",
+    "trade_speed_ok": "trade speed (trades/s) vs the floor",
+    "invalidation_distance_ok": "distance to invalidation in spread-multiples vs the floor",
+    "not_chasing": "move since the rule first held vs the chase threshold",
+}
+
+# The four aggregate STANCES — the entry checklist's read at the moment of decision. The established
+# verdict/stance palette EXTENDED (design direction): ``conditions_met`` emerald, ``conditions_not_met``
+# slate, ``tape_against`` rose, ``no_fresh_tape`` amber. The frontend maps COLOR from the id (a visual
+# concern) but reads the LABEL text from here. Factual, present-tense, never imperative/predictive.
+CHECKLIST_STANCES: dict[str, str] = {
+    "conditions_met": "Conditions met",
+    "conditions_not_met": "Conditions not met",
+    "tape_against": "Tape against",
+    "no_fresh_tape": "No fresh tape",
+}
+
+
+def checklist_check_label(check: str) -> str:
+    """Display label for a checklist-check id. Unknown -> itself (never fabricated)."""
+    return CHECKLIST_CHECKS.get(check, check)
+
+
+def checklist_check_caption(check: str) -> str:
+    """The per-check unit caption. Unknown -> empty (never fabricated)."""
+    return CHECKLIST_CHECK_CAPTIONS.get(check, "")
+
+
+def checklist_stance_label(stance: str) -> str:
+    """Display label for a checklist-stance id. Unknown -> itself (never fabricated)."""
+    return CHECKLIST_STANCES.get(stance, stance)
+
+
+def checklist_stance_evidence(stance: str, passed: int, total: int) -> str:
+    """The factual plain-language evidence for an aggregate checklist stance (no naked stance).
+
+    Present-tense, descriptive, in the goal's "N/8 checks pass" register — NEVER imperative
+    ("enter now"), NEVER predictive (no price/forecast), NEVER certain. Each stance names what the
+    tape is doing NOW relative to the thesis's entry conditions:
+      * ``conditions_met``     — every check passes after confirmation;
+      * ``conditions_not_met`` — at least one check is unmet (the blocker list travels separately);
+      * ``tape_against``       — the published verdict is rejecting the thesis;
+      * ``no_fresh_tape``      — the feed is not live / the tape is not current, so the conditions
+                                 cannot be read against fresh tape (a previous green never persists).
+    """
+    fraction = f"{passed}/{total} checks pass"
+    if stance == "conditions_met":
+        return (
+            f"The tape currently meets every entry condition for your thesis — {fraction}."
+        )
+    if stance == "tape_against":
+        return (
+            "The published verdict is rejecting your thesis — the tape is currently working against "
+            f"it ({fraction})."
+        )
+    if stance == "no_fresh_tape":
+        return (
+            "The feed is not delivering current tape, so the entry conditions cannot be read against "
+            f"fresh data right now ({fraction})."
+        )
+    # conditions_not_met (and any unknown stance) — name the shortfall factually.
+    return (
+        f"The tape does not yet meet every entry condition for your thesis — {fraction}; the unmet "
+        "checks are listed below."
+    )
+
+
+def checklist_nearest_counterevidence(check_label: str, margin: str, met: bool) -> str:
+    """The nearest-counterevidence line (capability 33) — the closest condition that would FLIP the
+    current read, with its margin, computed once server-side and rendered verbatim.
+
+    When the conditions ARE met it names the passing check nearest its boundary (the first that would
+    drop if the tape moves); when they are NOT met it names the nearest-to-passing blocker (the first
+    that would clear). Descriptive, present-tense — it states which condition is closest to its line,
+    never a forecast that it WILL cross. ``margin`` is the already-formatted margin string."""
+    if met:
+        return (
+            f"Closest to flipping: {check_label} sits nearest its boundary at {margin}."
+        )
+    return (
+        f"Nearest to passing: {check_label} at {margin}."
+    )
+
+
+# The checklist honest-absence copy — shown on the active-but-not-yet-checklist paths so the absence is
+# never a silent blank. ONE distinct cause per string (the iter-15 lesson). The not-evaluated /
+# no-entry-mark / mismatched-source absences are covered by the management-stance + monitor-notice copy
+# already; THIS string covers the checklist's own "evaluating but no fresh tape to read" intermediate.
+CHECKLIST_ABSENCE_NO_FRESH_TAPE = (
+    "The feed is not delivering current tape, so the entry checklist is not read against fresh data "
+    "right now — no stale checklist is shown."
+)
+
+
 def stance_for_verdict(verdict: str) -> str:
     """The management stance for a published verdict (the backend-owned map; J-53).
 
@@ -774,6 +902,24 @@ def taxonomy_payload() -> dict:
             "not_evaluated": STANCE_ABSENCE_NOT_EVALUATED,
         },
         "stance_readout_caption": STANCE_READOUT_CAPTION,
+        # The entry-checklist catalog (capability 33, J-63; row 25 checklist half) — the strip's
+        # pre-entry-mark cue block is fully taxonomy-driven (the frontend hardcodes none of it). The
+        # eight check labels + their per-check unit captions, the four aggregate-stance labels, and the
+        # checklist honest-absence copy. The per-check MARGINS + the stance EVIDENCE + the
+        # nearest-counterevidence line travel computed-once on each thesis projection (built from this
+        # module's templates), never re-worded on the frontend. Present-tense, factual, never
+        # imperative/predictive (J-66). This block doubles as iter-21's code-identity canary —
+        # ``GET /research/taxonomy`` carrying ``checklist_checks`` proves the NEW server code is live.
+        "checklist_checks": [
+            {"id": k, "name": v, "caption": CHECKLIST_CHECK_CAPTIONS.get(k, "")}
+            for k, v in CHECKLIST_CHECKS.items()
+        ],
+        "checklist_stances": [
+            {"id": k, "name": v} for k, v in CHECKLIST_STANCES.items()
+        ],
+        "checklist_absence": {
+            "no_fresh_tape": CHECKLIST_ABSENCE_NO_FRESH_TAPE,
+        },
         # The outcome × process grade catalogs (capability 29, J-56) — id + display label, owned ONCE
         # here so the journal quadrant + rows are taxonomy-driven (the frontend hardcodes no grade
         # label). ENUM labels only — never a numeric score.

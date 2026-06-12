@@ -128,6 +128,48 @@ export interface DistanceToInvalidation {
   r: number | null;
 }
 
+// The ENTRY CHECKLIST (capability 33, J-63; data-contract row 25 checklist half) — read VERBATIM from
+// the WS `thesis` key (or `/research/thesis/active`). Present ONLY on the PRE-ENTRY-MARK cue path (an
+// active, evaluated, NOT-yet-entry-marked thesis); absent once an entry is marked (the management
+// stance takes over — mutually exclusive) and on the no-thesis / not-evaluated paths. Computed ONCE
+// server-side: the strip renders each check's label + margin verbatim and DERIVES NOTHING (zero client
+// arithmetic, zero stance derivation; display rounding only).
+//   * conditions_met     — every check passes after confirmation (emerald);
+//   * conditions_not_met — at least one check is unmet, with the blocker list (slate);
+//   * tape_against       — the published verdict is rejecting the thesis (rose);
+//   * no_fresh_tape      — the feed is not live / the tape is not current (amber) — never a frozen green.
+export interface ChecklistCheck {
+  check: string;
+  label: string;
+  caption: string;
+  passed: boolean;
+  // The live measured margin in this check's OWN units (a verdict string; events vs floor; the stream
+  // status; lag s vs bound; spread bps vs cap; speed vs floor; spread-multiples vs floor; chase return
+  // vs threshold). Rendered VERBATIM in font-mono — the frontend does no arithmetic on it.
+  margin: string;
+}
+export interface ChecklistStance {
+  value: "conditions_met" | "conditions_not_met" | "tape_against" | "no_fresh_tape";
+  label: string;
+  evidence: string;
+}
+export interface ChecklistNearestCounterevidence {
+  check: string;
+  label: string;
+  margin: string;
+  line: string;
+}
+export interface EntryChecklist {
+  stance: ChecklistStance;
+  checks: ChecklistCheck[];
+  passed: number;
+  total: number;
+  // The failing checks (their ids) — named only when the conditions are not met; empty on met.
+  blockers: string[];
+  // The closest condition that would FLIP the current read, with its margin — or null if none.
+  nearest_counterevidence: ChecklistNearestCounterevidence | null;
+}
+
 export interface ThesisProjection {
   id: string;
   ticker: string;
@@ -179,6 +221,10 @@ export interface ThesisProjection {
   // The current open move in R, signed by direction (a move in the thesis's favor is positive); the
   // SAME sign convention as the realized-move readout. `null` before any last / on a degenerate R==0.
   open_r?: number | null;
+  // The entry checklist (capability 33, J-63; row 25 checklist half) — present as an additive key ONLY
+  // on the PRE-ENTRY-MARK cue path (active + evaluated + NO entry mark), mutually exclusive with the
+  // management stance. Computed ONCE server-side; the strip renders it verbatim, derives nothing.
+  entry_checklist?: EntryChecklist;
 }
 
 // GET /research/taxonomy — the single backend owner of every research label. The declare form is
@@ -239,6 +285,14 @@ export interface ResearchTaxonomy {
   management_stances?: TaxonomyEnum[];
   stance_absence?: { no_entry_mark: string; not_evaluated: string };
   stance_readout_caption?: string;
+  // The entry-checklist catalog (capability 33, J-63; row 25 checklist half) — the eight check labels +
+  // unit captions, the four aggregate-stance labels, and the checklist honest-absence copy. The strip
+  // renders each per-thesis check's own `label`/`margin` + the stance's own `label`/`evidence` verbatim
+  // off the projection, so it needs these only for completeness/discoverability + the absence copy.
+  // Optional so a pre-J-63 taxonomy payload stays valid.
+  checklist_checks?: { id: string; name: string; caption: string }[];
+  checklist_stances?: TaxonomyEnum[];
+  checklist_absence?: { no_fresh_tape: string };
   disclaimer: string;
 }
 

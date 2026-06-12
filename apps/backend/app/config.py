@@ -463,6 +463,49 @@ class Config:
     # its counter-test (a real classifier threshold STILL does).
     management_stance_dwell_seconds: float = 3.0
 
+    # --- Research evolution: ENTRY-CHECKLIST STANCE DWELL (capability 33, J-63; data-contract row 25) -
+    # RESEARCH DEFAULT — a starting point calibrated against the deterministic sims, NEVER a validated
+    # edge (the goal doc's Research-config-defaults constraint: every research value lives in config
+    # with its sim calibration documented; no literal in research code). The entry-checklist AGGREGATE
+    # STANCE (``conditions_met | conditions_not_met | tape_against | no_fresh_tape``) is composed at the
+    # moment of decision from EXISTING engine values; it publishes through THIS config-owned,
+    # LOGICAL-time dwell so a single flickering check (a lone tick where one margin dips under its
+    # boundary) never flaps the stance. Calibrated to the SAME 3.0 s the management-stance + per-setup
+    # verdict dwells use — the checks it aggregates read already-dwelled canonical values (the published
+    # verdict is itself dwell-gated), so a SHORT additional stance dwell suffices to absorb a one-tick
+    # flicker without lagging the user's read; at the 0.5 s sim tick that is a few consecutive ticks.
+    # One documented starting point; tighten/loosen only with a re-measured justification, never to fit.
+    #
+    # EXCLUDED FROM ``config_fingerprint`` (see the exclusion set in ``config_fingerprint``) with the
+    # codified iter-12 / iter-16 / iter-20 discipline: the checklist + its stance are NEVER PERSISTED
+    # (a live cue computed at read from the published verdict + canonical features — schema stays v7,
+    # no checklist row exists). A serving-only timing value that touches NO persisted research value
+    # (no verdict, feature, grade, excursion, or stamp) MUST NOT move the fingerprint — else two
+    # journals identical in every threshold but served at different checklist dwells would mint
+    # different fingerprints and could never be pooled. Pinned by a fingerprint-stability test (changing
+    # it does NOT move the fingerprint) and its counter-test (a real classifier threshold STILL does).
+    checklist_stance_dwell_seconds: float = 3.0
+
+    # --- Research evolution: DELIVERY-LAG BOUND (capability 22 row 14, J-63; data-contract row 14) -----
+    # RESEARCH DEFAULT — a documented starting point, NEVER a validated edge. The ``tape_lag_ok``
+    # entry-checklist check (J-63) passes when the feeder-owned ``delivery_lag_seconds`` (the latest
+    # record's epoch vs wall clock in LIVE mode; the feeder's processing backlog vs its own pacing
+    # schedule in paced replay) is at/under THIS bound. A healthy live or sim feed reads a lag well
+    # under it; a stalled/backlogged feeder reads above it and ``tape_lag_ok`` honestly fails (feeding
+    # ``no_fresh_tape``). Calibrated to the SAME family as ``stale_gap_seconds`` (10.0 s) but tighter:
+    # the stale gap is the hard "no event at all" watchdog, whereas this lag bound is the gentler
+    # "events are arriving but the processed tape trails real time" honesty gate — 5.0 s so a momentary
+    # dense-tape catch-up does not trip it while a sustained processing lag does. Seconds (a wall-clock
+    # delivery metric, NEVER read by classification — determinism unchanged), so no relative scaling.
+    #
+    # EXCLUDED FROM ``config_fingerprint`` (see the exclusion set in ``config_fingerprint``) with the
+    # SAME iter-12/16/20 discipline: the lag check is part of the never-persisted checklist (schema
+    # stays v7), and ``delivery_lag_seconds`` is feeder-owned DELIVERY metadata that never enters any
+    # persisted research value (no verdict, feature, grade, excursion, or stamp). A serving-only bound
+    # MUST NOT move the fingerprint — else two journals identical in every threshold but served under
+    # different lag bounds could never be pooled. Pinned by a fingerprint-stability test + counter-test.
+    delivery_lag_ok_bound_seconds: float = 5.0
+
     # --- Research evolution: JOURNAL LIST serving (capability 31 / J-51) ------------------------
     # The journal LIST endpoint (``GET /research/journal``) page-size policy. These are SERVING-ONLY
     # values: the number of persisted thesis rows returned per page. They are EXCLUDED from
@@ -767,6 +810,18 @@ class Config:
             # identical in every threshold but served at different stance dwells MUST share a
             # fingerprint. Pinned by a fingerprint-stability test + the real-threshold counter-test.
             "management_stance_dwell_seconds",
+            # The entry-checklist stance dwell (capability 33 / J-63): the checklist + its aggregate
+            # stance are a live cue NEVER PERSISTED (schema stays v7 — no checklist row exists), so this
+            # timing value touches no persisted research value. Serving-only, EXCLUDED by the identical
+            # iter-12/16/20 precedent (the ``management_stance_dwell_seconds`` sibling above). Pinned by
+            # a fingerprint-stability test + the real-threshold counter-test.
+            "checklist_stance_dwell_seconds",
+            # The delivery-lag bound (capability 22 row 14 / J-63): the ``tape_lag_ok`` check it gates is
+            # part of the never-persisted checklist, and ``delivery_lag_seconds`` is feeder-owned
+            # DELIVERY metadata that never enters any persisted research value. Serving-only, EXCLUDED by
+            # the identical precedent. Pinned by a fingerprint-stability test + the real-threshold
+            # counter-test.
+            "delivery_lag_ok_bound_seconds",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)

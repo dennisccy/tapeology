@@ -37,7 +37,12 @@ from .excursions import ExcursionTracker, compute_and_persist_excursions
 from .execution_checks import compute_and_persist_execution_checks
 from .grades import compute_and_persist_grades
 from .marks import marks_projection
-from .stance import StanceEvaluator, compute_position_readouts
+from .stance import (
+    EntryChecklistEvaluator,
+    StanceEvaluator,
+    build_checklist,
+    compute_position_readouts,
+)
 from .store import JournalStore, ThesisRecord, VerdictEventRecord
 from .taxonomy import (
     GEOMETRY_ENTRY_MARK_LABEL,
@@ -527,6 +532,7 @@ def build_projection(
     verdict_events: list | None = None,
     management_stance: str | None = None,
     management_stance_evidence: str | None = None,
+    entry_checklist: dict | None = None,
 ) -> dict:
     """The SINGLE thesis-projection builder (data-contract row 15) — one code path, never a second.
 
@@ -553,6 +559,13 @@ def build_projection(
     ``None`` so the keys stay ABSENT — no frozen-stale stance). The position readouts come from the
     SAME single ``r_basis()`` helper the marks use (row 27 — the stance is its fifth registered
     consumer, never a second formula). Nothing here is persisted (schema stays v7).
+
+    ``entry_checklist`` (capability 33 / J-63; row 25 checklist half) is the live monitor's PUBLISHED
+    entry checklist (the eight checks + their live margins, the dwell-published aggregate stance, the
+    blocker list, and the nearest-counterevidence line — computed ONCE by ``build_checklist`` from
+    canonical values). The additive ``entry_checklist`` key is served ONLY on the PRE-ENTRY-MARK cue
+    path (active + NO entry mark) — MUTUALLY EXCLUSIVE with the management stance (entry-marked) above;
+    the survivor / not-evaluated / failed paths pass ``None`` so the key stays ABSENT.
     """
     statements = [
         {
@@ -616,6 +629,17 @@ def build_projection(
         }
         projection["distance_to_invalidation"] = readouts["distance_to_invalidation"]
         projection["open_r"] = readouts["open_r"]
+
+    # --- Entry checklist (capability 33, J-63; row 25 checklist half) -------------------------------
+    # Served ONLY on the PRE-ENTRY-MARK cue path — active status, NO entry mark, and a checklist was
+    # supplied (a live evaluating monitor passes one; the unwatched-survivor / not-evaluated / failed
+    # paths pass ``None`` so the key stays ABSENT). MUTUALLY EXCLUSIVE with the management stance above:
+    # an entry-marked thesis shows the management stance and NO checklist; a pre-entry-mark thesis shows
+    # the checklist and NO management stance. A resolved (played_out / abandoned) thesis is not active,
+    # so an ``invalidated`` terminal projection never carries the checklist (status != active). Nothing
+    # here is persisted (schema v7); the strip renders every field verbatim (zero client arithmetic).
+    if entry_checklist is not None and entry is None and status == "active":
+        projection["entry_checklist"] = entry_checklist
     return projection
 
 
@@ -667,6 +691,16 @@ class ResearchMonitor:
         # PUBLISHED holding-period stance the projection serves while the thesis is entry-marked. Never
         # persisted (the stance is a live cue, schema stays v7). ``None`` when no thesis is held.
         self._stance: StanceEvaluator | None = None
+        # The entry-checklist evaluator (capability 33, J-63). Created when a thesis is set / adopted;
+        # advanced per event AFTER the verdict step (it reads the just-published verdict). Holds the
+        # PUBLISHED aggregate checklist stance the projection serves while the thesis is active +
+        # evaluated + NOT entry-marked. Never persisted (a live cue, schema stays v7). ``None`` when no
+        # thesis is held.
+        self._checklist: EntryChecklistEvaluator | None = None
+        # The latest recorded ``rule_first_true`` price (capability 24) — the anchor the checklist's
+        # ``not_chasing`` check measures the chase return FROM (never the post-dwell publish). Updated
+        # on each published transition that carries one; ``None`` until a raw rule has first held.
+        self._rule_first_true_price: float | None = None
 
     # --- thesis lifecycle (called from the route, NOT the hot path) -----------------------------
     def set_thesis(self, thesis: ThesisRecord) -> None:
@@ -692,6 +726,12 @@ class ResearchMonitor:
         # settled by the time the user marks entry (no artificial warm-up gap at the mark). It reads the
         # published verdict each event; the keys are SERVED only once an entry mark exists.
         self._stance = StanceEvaluator(self._config.management_stance_dwell_seconds)
+        # A FRESH entry-checklist evaluator (capability 33, J-63) — its dwell clock starts here so the
+        # aggregate stance is settled by the time the checklist is shown (active + evaluated + no entry
+        # mark). It reads the published verdict + the snapshot each event; the keys are SERVED only on
+        # the pre-entry-mark path (gated in ``build_projection``). The chase anchor resets here too.
+        self._checklist = EntryChecklistEvaluator(self._config.checklist_stance_dwell_seconds)
+        self._rule_first_true_price = None
         # Seed the published evidence with the pending register so the projection never carries a
         # NAKED verdict (the no-naked-outputs anti-goal): every verdict — including the initial
         # pending — reads with plain-language evidence. Replaced verbatim by the engine's evidence on
@@ -735,6 +775,8 @@ class ResearchMonitor:
         self._restart_gap_appended = False
         self._excursions = None
         self._stance = None
+        self._checklist = None
+        self._rule_first_true_price = None
 
     def resolve_by_user(self, resolution: str) -> None:
         """Detach verdict evaluation after a USER resolution (played_out | abandoned), J-50.
@@ -813,6 +855,17 @@ class ResearchMonitor:
                         self._verdict_evidence if self._verdict == "invalidated" else None
                     ),
                 )
+            # Advance the entry-checklist aggregate stance AFTER the verdict step (so it reads the
+            # verdict just published for THIS snapshot, and the chase anchor reflects any transition).
+            # Pure derivation from canonical values (read-only over the engine — no mutation); the
+            # checks themselves are recomputed at projection time, only the dwelled STANCE lives here.
+            # Served only on the pre-entry-mark path (gated in the projection); the dwell accumulates
+            # regardless so the stance is settled when shown.
+            if self._checklist is not None and self._thesis is not None and not self._resolved:
+                checks = self._compute_checks(snapshot)
+                self._checklist.advance(
+                    checks=checks, verdict=self._verdict, logical_ts=snapshot.timestamp
+                )
             # Advance the excursion tracker AFTER the verdict step (so a confirmation armed on THIS
             # snapshot also sees this snapshot as its dt=0 baseline). Read-only over the engine — the
             # tracker only reads the snapshot's logical ts + last (no engine/feature mutation).
@@ -862,6 +915,12 @@ class ResearchMonitor:
         # entry-marked (only entry-marked theses survive to be re-offered), so its holding-period stance
         # resumes from post-restart published verdicts — its dwell restarts here by construction.
         self._stance = StanceEvaluator(self._config.management_stance_dwell_seconds)
+        # A fresh checklist evaluator on re-attach (capability 33, J-63). The adopted thesis is
+        # entry-marked (only entry-marked theses survive), so the checklist keys are NOT served on this
+        # path (the projection gates on NO entry mark) — but the evaluator is created for consistency
+        # and the chase anchor resets so a stale anchor never carries across the restart.
+        self._checklist = EntryChecklistEvaluator(self._config.checklist_stance_dwell_seconds)
+        self._rule_first_true_price = None
         self._verdict = "pending"
         self._verdict_evidence = (
             "The watch resumed on the source this thesis was declared on; the verdict stays pending "
@@ -900,6 +959,12 @@ class ResearchMonitor:
         decision = self._evaluator.evaluate(snapshot)
         # Keep the live projection's verdict/evidence current (the published verdict, no flapping).
         self._verdict = decision.verdict
+        # Capture the recorded ``rule_first_true`` price as the checklist's chase anchor (capability
+        # 33 / J-63): the ``not_chasing`` check measures the chase return FROM the first instant the
+        # raw rule held, NEVER the post-dwell publish. A transition that carries one updates the anchor;
+        # it is never read off the post-dwell ``last``.
+        if decision.rule_first_true_price is not None:
+            self._rule_first_true_price = decision.rule_first_true_price
         if decision.changed:
             self._verdict_evidence = decision.evidence
             event_wall = time.time()
@@ -1099,6 +1164,26 @@ class ResearchMonitor:
             self._failed = True
             logger.exception("research monitor failed to expire thesis %s", thesis.id)
 
+    def _compute_checks(self, snapshot: EngineSnapshot) -> list[dict]:
+        """The eight entry-checklist checks for this snapshot (capability 33, J-63) — a PURE read.
+
+        Composes ONLY canonical values (the published verdict, the snapshot, the declared invalidation
+        + direction, the recorded chase anchor) — never a second computation of any contract value. Used
+        both to advance the dwelled aggregate stance (``on_event``) and to serve the per-check rows
+        (``projection`` via ``build_checklist``). ``_evaluate_statement``-style pure derivation: no
+        engine/feature mutation, so the engine stays byte-identical (equivalence anti-goal)."""
+        from .stance import evaluate_entry_checks
+
+        assert self._thesis is not None
+        return evaluate_entry_checks(
+            snapshot=snapshot,
+            verdict=self._verdict,
+            invalidation_price=self._thesis.invalidation_price,
+            direction=self._thesis.direction,
+            rule_first_true_price=self._rule_first_true_price,
+            config=self._config,
+        )
+
     # --- projection (the single source for REST + WS) -------------------------------------------
     def projection(self) -> dict | None:
         """The thesis projection, or ``None`` when no thesis is active (a normal state, not an error).
@@ -1162,9 +1247,33 @@ class ResearchMonitor:
         # treatment. The builder serves no stance key when the thesis is not entry-marked.
         stance_value = self._stance.published_stance if self._stance is not None else None
         stance_evidence = self._stance.published_evidence if self._stance is not None else None
+        # The PUBLISHED entry checklist (capability 33, J-63): built ONLY while this LIVE monitor is
+        # evaluating (``not self._failed``), the thesis is unresolved, and a live snapshot exists. The
+        # builder gates its actual PRESENCE on the pre-entry-mark path (active + evaluated + NO entry
+        # mark — mutually exclusive with the management stance). A monitor-failed read passes no
+        # checklist (the strip shows its honest failure notice instead). The per-check rows are
+        # recomputed fresh here from the latest snapshot (a pure read); only the aggregate STANCE is
+        # the dwell-published value the evaluator holds.
+        checklist = None
+        if (
+            self._checklist is not None
+            and not self._failed
+            and not self._resolved
+            and self._last_snapshot is not None
+        ):
+            checklist = build_checklist(
+                snapshot=self._last_snapshot,
+                verdict=self._verdict,
+                published_stance=self._checklist.published_stance,
+                invalidation_price=thesis.invalidation_price,
+                direction=thesis.direction,
+                rule_first_true_price=self._rule_first_true_price,
+                config=self._config,
+            )
         if self._failed:
             stance_value = None
             stance_evidence = None
+            checklist = None
         # A read failure inside the builder (e.g. the action read) is caught by the caller's
         # try/except and surfaces as ``monitor_status: failed`` rather than a crash.
         return build_projection(
@@ -1179,4 +1288,5 @@ class ResearchMonitor:
             verdict_events=self._store.verdict_events(thesis.id),
             management_stance=stance_value,
             management_stance_evidence=stance_evidence,
+            entry_checklist=checklist,
         )

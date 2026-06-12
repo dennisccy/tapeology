@@ -80,6 +80,20 @@ def test_spread_is_ask_minus_bid():
     assert market["spread"] == pytest.approx(market["ask"] - market["bid"])
 
 
+def test_delivery_lag_seconds_served_on_summary_and_stream_single_source(tmp_path=None):
+    # Data Contract row 14, J-63: the feeder-owned delivery_lag_seconds is served VERBATIM on BOTH
+    # /summary and the WS stream (one value, single source of truth). None when unstamped (honest
+    # absence); a stamped value is carried identically across both views.
+    engine = _warm_engine()
+    snap = engine.snapshot()
+    assert serialize_summary(snap)["delivery_lag_seconds"] is None  # not stamped yet
+    assert serialize_stream(snap)["delivery_lag_seconds"] is None
+    engine.set_delivery_lag(2.5)
+    snap2 = engine.snapshot()
+    assert serialize_summary(snap2)["delivery_lag_seconds"] == 2.5
+    assert serialize_stream(snap2)["delivery_lag_seconds"] == 2.5
+
+
 def test_absorption_views_agree_single_source():
     # J-08 for absorption: /state, /features, /summary and the WS stream serve ONE engine
     # value per metric, including the new absorption feature readouts (no recompute).

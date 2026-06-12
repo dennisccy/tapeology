@@ -8,6 +8,7 @@ import {
   resolveThesis,
 } from "@/lib/api";
 import type {
+  ChecklistStance,
   ManagementStance,
   ResearchTaxonomy,
   RiskFlag,
@@ -178,7 +179,13 @@ function StanceReadout({
   );
 }
 
-function ManagementStanceBlock({ thesis }: { thesis: ThesisProjection }) {
+function ManagementStanceBlock({
+  thesis,
+  taxonomy,
+}: {
+  thesis: ThesisProjection;
+  taxonomy: ResearchTaxonomy | null;
+}) {
   const stance = thesis.management_stance;
   if (!stance) return null; // backend-gated: no stance keys => nothing renders (no client guess)
   const style = STANCE_STYLE[stance.value] ?? STANCE_STYLE.thesis_weakening;
@@ -217,9 +224,139 @@ function ManagementStanceBlock({ thesis }: { thesis: ThesisProjection }) {
         <StanceReadout label="" value={dist?.r} suffix="R" testid="distance-r" />
         <StanceReadout label="open" value={thesis.open_r} suffix="R" testid="open-r" />
         <span className="ml-auto text-xs text-slate-600">
-          journaled measurement, R = |entry − invalidation|
+          {stanceReadoutCaption(taxonomy)}
         </span>
       </div>
+    </div>
+  );
+}
+
+// The journaled-measurement readout caption, consolidated to ONE source (capability 33 carry-along /
+// the iter-20 coherence advisory): the backend owns it as `taxonomy.stance_readout_caption`. The
+// literal here is only a pre-taxonomy-load FALLBACK so the caption still renders before the catalog
+// arrives — never a second hardcoded copy. All three prior call sites (management stance, realized-R
+// caption ×2) now read this one helper.
+const STANCE_READOUT_CAPTION_FALLBACK = "journaled measurement, R = |entry − invalidation|";
+function stanceReadoutCaption(taxonomy: ResearchTaxonomy | null): string {
+  return taxonomy?.stance_readout_caption ?? STANCE_READOUT_CAPTION_FALLBACK;
+}
+
+// The entry-checklist block (capability 33, J-63; data-contract row 25 checklist half). Shown ONLY when
+// the active projection carries the `entry_checklist` key — i.e. the thesis is active, evaluated, and
+// NOT yet entry-marked (the backend gates presence; mutually exclusive with the management stance). It
+// answers, at the moment of decision, whether the tape currently meets the entry conditions — CHECK BY
+// CHECK with LIVE measured margins — instead of a naked signal. The aggregate stance chip uses the
+// established palette (conditions_met emerald, conditions_not_met slate, tape_against rose,
+// no_fresh_tape amber), each check shows pass/fail + its margin in font-mono, the blocker list appears
+// when not met, and the nearest-counterevidence line is one line away. ALL values render VERBATIM from
+// the projection — ZERO client-side arithmetic, ZERO stance derivation (display rounding only). Labels
+// + copy come from the projection (the backend hardcodes them, the frontend hardcodes none).
+
+// Checklist-stance VISUAL semantics only (the design direction) — the side/impact palette EXTENDED.
+const CHECKLIST_STANCE_STYLE: Record<ChecklistStance["value"], { chip: string; evidence: string }> = {
+  conditions_met: {
+    chip: "border-emerald-700 bg-emerald-900/40 text-emerald-300",
+    evidence: "text-emerald-300/90",
+  },
+  conditions_not_met: {
+    chip: "border-slate-700 bg-slate-800 text-slate-300",
+    evidence: "text-slate-400",
+  },
+  tape_against: {
+    chip: "border-rose-700 bg-rose-900/40 text-rose-300",
+    evidence: "text-rose-300/90",
+  },
+  no_fresh_tape: {
+    chip: "border-amber-700 bg-amber-900/40 text-amber-300",
+    evidence: "text-amber-300/90",
+  },
+};
+
+function ChecklistRow({
+  label,
+  caption,
+  passed,
+  margin,
+}: {
+  label: string;
+  caption: string;
+  passed: boolean;
+  margin: string;
+}) {
+  // A pass/fail dot (emerald/slate) + the check label, with the live measured margin in font-mono. The
+  // margin is rendered VERBATIM (server-computed) — no arithmetic here. The caption names the unit.
+  return (
+    <div
+      data-testid="checklist-check"
+      data-check-passed={passed}
+      className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-l-2 pl-2.5"
+      style={{ borderColor: passed ? "rgb(16 185 129 / 0.6)" : "rgb(71 85 105 / 0.6)" }}
+    >
+      <span
+        aria-hidden
+        className={`mt-1.5 h-1.5 w-1.5 shrink-0 self-center rounded-full ${
+          passed ? "bg-emerald-500" : "bg-slate-600"
+        }`}
+      />
+      <span className={`text-xs font-medium ${passed ? "text-slate-300" : "text-slate-400"}`}>
+        {label}
+      </span>
+      <span data-testid="checklist-margin" className="font-mono text-xs text-slate-300">
+        {margin}
+      </span>
+      <span className="text-[10px] text-slate-600">{caption}</span>
+    </div>
+  );
+}
+
+function EntryChecklistBlock({ thesis }: { thesis: ThesisProjection }) {
+  const checklist = thesis.entry_checklist;
+  if (!checklist) return null; // backend-gated: no checklist key => nothing renders (no client guess)
+  const style =
+    CHECKLIST_STANCE_STYLE[checklist.stance.value] ?? CHECKLIST_STANCE_STYLE.conditions_not_met;
+  const counter = checklist.nearest_counterevidence;
+  return (
+    <div
+      data-testid="entry-checklist"
+      data-stance={checklist.stance.value}
+      className="mt-3 flex flex-col gap-2 border-t border-slate-800 pt-3"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Entry checklist
+        </span>
+        {/* The aggregate stance chip — color per the id; the LABEL text is backend-owned (verbatim). */}
+        <span
+          data-testid="checklist-stance-chip"
+          className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider ${style.chip}`}
+        >
+          {checklist.stance.label}
+        </span>
+      </div>
+      {/* The aggregate stance's plain-language EVIDENCE ("N/8 checks pass" register) — no naked stance. */}
+      {checklist.stance.evidence && (
+        <p data-testid="checklist-stance-evidence" className={`text-sm ${style.evidence}`}>
+          {checklist.stance.evidence}
+        </p>
+      )}
+      {/* The eight named checks, each with pass/fail + its live margin in its own units (font-mono). */}
+      <div className="flex flex-col gap-1.5">
+        {checklist.checks.map((c) => (
+          <ChecklistRow
+            key={c.check}
+            label={c.label}
+            caption={c.caption}
+            passed={c.passed}
+            margin={c.margin}
+          />
+        ))}
+      </div>
+      {/* The nearest-counterevidence line — the closest condition that would flip the read (verbatim). */}
+      {counter && (
+        <p data-testid="checklist-counterevidence" className="text-xs text-slate-500">
+          {counter.line}
+        </p>
+      )}
     </div>
   );
 }
@@ -242,7 +379,13 @@ function StripShell({ children }: { children: React.ReactNode }) {
 // NO live verdict chip, and NO mark/resolve controls (those need a live tape) — only the frozen
 // thesis facts, the recorded marks, and the not-evaluated notice. Re-watching the bound source
 // resumes live evaluation on its own (the WS frame then carries an `ok` projection again).
-function NotEvaluatedThesis({ thesis }: { thesis: ThesisProjection }) {
+function NotEvaluatedThesis({
+  thesis,
+  taxonomy,
+}: {
+  thesis: ThesisProjection;
+  taxonomy: ResearchTaxonomy | null;
+}) {
   const directionColor =
     thesis.direction === "long" ? "text-emerald-400" : "text-rose-400";
   const marks = thesis.marks;
@@ -342,7 +485,7 @@ function NotEvaluatedThesis({ thesis }: { thesis: ThesisProjection }) {
             {marks.realized_r.toFixed(2)}R
           </span>
           <span className="ml-2 text-xs text-slate-500">
-            journaled measurement, R = |entry − invalidation|
+            {stanceReadoutCaption(taxonomy)}
           </span>
         </p>
       )}
@@ -559,10 +702,17 @@ function ActiveThesis({
           carries the taxonomy label + its plain-language measured margin, rendered verbatim. */}
       <RiskFlagChips flags={thesis.risk_flags} />
 
+      {/* Entry checklist (capability 33, J-63): the moment-of-decision read — shown ONLY while the
+          backend serves the entry_checklist key (active + evaluated + NO entry mark). Eight named
+          checks each with a live margin, the aggregate stance, the blocker list, and the nearest-
+          counterevidence line — all rendered VERBATIM. Mutually exclusive with the management stance
+          below (the backend serves exactly one of the two per the entry-mark precondition). */}
+      <EntryChecklistBlock thesis={thesis} />
+
       {/* Management stance (capability 27, J-53): the holding-period read — shown ONLY while the
           backend serves the stance keys (entry-marked + unresolved + evaluating). Stance label +
           evidence + live distance-to-invalidation ($ and R) + open R, all rendered VERBATIM. */}
-      <ManagementStanceBlock thesis={thesis} />
+      <ManagementStanceBlock thesis={thesis} taxonomy={taxonomy} />
 
       {/* Action marks (J-52): the user journals their OWN already-taken entry/exit. A JOURNALING
           record, never a fill/order. Recorded verbatim; realized move shown in R units only (never
@@ -630,7 +780,7 @@ function ActiveThesis({
                 {marks.realized_r.toFixed(2)}R
               </span>
               <span className="ml-2 text-xs text-slate-500">
-                journaled measurement, R = |entry − invalidation|
+                {stanceReadoutCaption(taxonomy)}
                 {marks.exit?.spread_at_mark != null && (
                   <>
                     {" "}
@@ -800,7 +950,7 @@ export function ThesisStrip({
   // than the live active display — read entirely from the projection (no client-side inference).
   if (thesis) {
     if (thesis.monitor_status === "not_evaluated") {
-      return <NotEvaluatedThesis thesis={thesis} />;
+      return <NotEvaluatedThesis thesis={thesis} taxonomy={taxonomy} />;
     }
     return <ActiveThesis thesis={thesis} taxonomy={taxonomy} last={last ?? null} />;
   }

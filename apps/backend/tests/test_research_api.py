@@ -109,6 +109,72 @@ def test_taxonomy_serves_management_stance_catalog_canary(client):
         assert word not in f" {blob} ", f"imperative word {word!r} in stance copy"
 
 
+def test_taxonomy_serves_entry_checklist_catalog_canary(client):
+    # The entry-checklist catalog (capability 33, J-63; row 25 checklist half) is backend-owned —
+    # served by GET /research/taxonomy. ALSO iter-21's code-identity canary: `checklist_checks` here
+    # proves the NEW server code is live before any browser capture.
+    payload = client.get("/research/taxonomy").json()
+    assert "checklist_checks" in payload
+    checks = {c["id"]: c for c in payload["checklist_checks"]}
+    assert set(checks.keys()) == {
+        "verdict_confirming", "warm", "feed_live", "tape_lag_ok",
+        "spread_stable", "trade_speed_ok", "invalidation_distance_ok", "not_chasing",
+    }
+    # Each check carries a display label + a unit caption (the strip hardcodes none).
+    for c in checks.values():
+        assert c["name"] and c["caption"]
+    stances = {s["id"]: s["name"] for s in payload["checklist_stances"]}
+    assert stances == {
+        "conditions_met": "Conditions met",
+        "conditions_not_met": "Conditions not met",
+        "tape_against": "Tape against",
+        "no_fresh_tape": "No fresh tape",
+    }
+    assert "no_fresh_tape" in payload["checklist_absence"]
+    # Copy discipline (J-66): no imperative / predictive words in any new checklist string.
+    blob = " ".join(
+        [c["name"] for c in checks.values()]
+        + [c["caption"] for c in checks.values()]
+        + list(stances.values())
+        + list(payload["checklist_absence"].values())
+    ).lower()
+    for word in (" buy ", " sell ", " enter ", " exit ", "should ", "will ", "predict", "target"):
+        assert word not in f" {blob} ", f"forbidden word {word!r} in checklist copy"
+
+
+def test_checklist_keys_rest_equals_ws_verbatim_on_pre_entry_mark_path(client):
+    # The entry-checklist keys served on the PRE-entry-mark path are byte-identical across REST
+    # (/research/thesis/active) and the WS `thesis` key (one projection, never a second path — the
+    # J-08 single-source discipline). A declared, NOT-yet-entry-marked thesis carries the checklist.
+    _watch_bidabs(client)
+    declared = client.post(
+        "/research/thesis",
+        json={
+            "ticker": "SIM-BIDABS",
+            "setup_type": "absorption_reversal",
+            "direction": "long",
+            "invalidation_price": 99.0,
+        },
+    )
+    assert declared.status_code == 200
+    rest = client.get("/research/thesis/active?ticker=SIM-BIDABS").json()["thesis"]
+    assert rest is not None
+    assert "entry_checklist" in rest  # pre-entry-mark => checklist present
+    assert "management_stance" not in rest  # mutually exclusive
+    with client.websocket_connect("/tape/SIM-BIDABS/stream") as ws:
+        ws_thesis = ws.receive_json()["thesis"]
+    assert "entry_checklist" in ws_thesis
+    rest_cl = rest["entry_checklist"]
+    ws_cl = ws_thesis["entry_checklist"]
+    # The stance value + label + the eight check ids match verbatim across both reads (the margins
+    # themselves are computed once server-side; the per-read snapshot can differ by a live tick, so we
+    # assert the stable structural identity — the J-08 single-projection discipline).
+    assert rest_cl["stance"]["value"] == ws_cl["stance"]["value"]
+    assert rest_cl["stance"]["label"] == ws_cl["stance"]["label"]
+    assert [c["check"] for c in rest_cl["checks"]] == [c["check"] for c in ws_cl["checks"]]
+    assert rest_cl["total"] == ws_cl["total"] == 8
+
+
 def test_taxonomy_serves_mistake_tag_catalog_with_display_copy(client):
     # The mistake-tag catalog (capability 29, J-54) is backend-owned — served by GET
     # /research/taxonomy with display copy so the review picker is taxonomy-driven (the frontend

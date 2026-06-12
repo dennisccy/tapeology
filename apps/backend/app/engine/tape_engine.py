@@ -81,6 +81,16 @@ class TapeEngine:
         self._paused = False
         self._pre_pause_status: str | None = None
 
+        # Canonical feeder-owned DELIVERY LAG (Data Contract row 14, J-63): how far the processed tape
+        # trails real time in seconds (LIVE = latest record epoch vs wall clock; PACED replay = the
+        # feeder's processing backlog vs its own pacing schedule). The WatchManager (the feeder) STAMPS
+        # it via ``set_delivery_lag``; the engine only carries it onto the snapshot as additive
+        # display/lifecycle metadata (the iter-9 ``end_reason`` precedent). It is NEVER read by
+        # classification — the same ordered event stream yields byte-identical features/state/confidence
+        # with or without it (determinism + observer-equivalence anti-goals). ``None`` until the feeder
+        # stamps one (an honest "no lag measured", distinct from a measured 0.0).
+        self._delivery_lag_seconds: float | None = None
+
         # --- Research seam (capability 20): the generic snapshot-observer list ----------------
         # The ONLY sanctioned attachment point for the research evolution. Each registered observer
         # is an OPAQUE object exposing optional ``on_event(event, snapshot)`` (invoked at the END of
@@ -200,6 +210,19 @@ class TapeEngine:
         # status (and the just-stamped end_reason). Exception-isolated; the write above has already
         # taken effect regardless.
         self._notify_status(status)
+
+    def set_delivery_lag(self, seconds: float | None) -> None:
+        """Stamp the feeder-owned ``delivery_lag_seconds`` (Data Contract row 14, J-63).
+
+        Called ONLY by the WatchManager (the feeder), which owns the per-mode lag semantics (LIVE =
+        latest record epoch vs wall clock; PACED replay = processing backlog vs the pacing schedule).
+        The engine merely carries the value onto the next-built snapshot as additive display/lifecycle
+        metadata — it is NEVER fed into ``classify(...)`` or any feature/score, so the same ordered
+        event stream still yields identical features/state/confidence (determinism + observer-
+        equivalence anti-goals). Rebuilds the snapshot so the new lag is reflected immediately (the
+        feeder may stamp it between events). A non-negative float or ``None`` (no lag measured)."""
+        self._delivery_lag_seconds = seconds
+        self._snapshot = self._build_snapshot()
 
     @property
     def paused(self) -> bool:
@@ -353,6 +376,7 @@ class TapeEngine:
             stream_status=self._stream_status,
             paused=self._paused,
             epoch_anchor=self._epoch_anchor,
+            delivery_lag_seconds=self._delivery_lag_seconds,
             bid=self._market.bid,
             ask=self._market.ask,
             spread=self._market.spread,

@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import time
 from typing import Callable
 
 from .config import Config
@@ -22,6 +23,43 @@ from .providers.simulated import build_provider
 
 # Wall-clock seconds between delivered events in live mode (delivery pacing only).
 FEED_PACE_SECONDS = float(os.environ.get("TAPEOLOGY_FEED_PACE", "0.04"))
+
+
+def _live_delivery_lag(engine: TapeEngine) -> float | None:
+    """The LIVE-mode delivery lag (Data Contract row 14, J-63): the latest record's real epoch vs
+    the wall clock — goal.md's canonical definition.
+
+    The latest record's true-clock instant is ``epoch_anchor + latest_logical_ts`` (the row-13 anchor
+    is the first live record's real epoch; logical timestamps are offsets from it). The lag is how far
+    that trails the wall clock now: ``wall_now - (epoch_anchor + latest_logical_ts)``. A healthy live
+    feed reads a small lag (delivery + processing latency); a dense tape that outruns processing reads
+    a growing one — visible, never silent. Clamped at 0 (a clock skew that puts the record marginally
+    AHEAD of wall is reported as 0, never a negative "lag"). ``None`` when there is no epoch anchor yet
+    (no first live record) — an honest "no lag measured", distinct from a measured 0.0. Feeder-owned,
+    NEVER read by classification (determinism unchanged)."""
+    snap = engine.snapshot()
+    anchor = snap.epoch_anchor
+    if anchor is None:
+        return None
+    lag = time.time() - (anchor + snap.timestamp)
+    return lag if lag > 0.0 else 0.0
+
+
+def _paced_delivery_lag(scheduled_elapsed: float, replay_start_wall: float) -> float:
+    """The PACED-replay delivery lag (Data Contract row 14, J-63): the feeder's processing backlog
+    against its OWN pacing schedule — NOT against wall clock.
+
+    A paced replay (sim / historical) deliberately may sit hours behind real time; that is by design,
+    NOT lag. The honest lag here is whether the feeder is keeping up with its OWN delivery schedule:
+    by the time it finishes applying an event, has more wall-clock elapsed than the cumulative pacing
+    delays it intended (``scheduled_elapsed``)? If processing is fast (the common case) the actual
+    wall elapsed ≈ the scheduled elapsed, so the lag reads ≈0 — a healthy sim. If processing falls
+    behind its pacing budget (a dense window slower to classify than its pacing allots) the actual
+    wall elapsed exceeds the schedule and the lag is positive — the visible backlog. Clamped at 0 (a
+    feeder running AHEAD of schedule, e.g. zero-delay warm-up fast-forward, is not "lagging")."""
+    actual_elapsed = time.time() - replay_start_wall
+    lag = actual_elapsed - scheduled_elapsed
+    return lag if lag > 0.0 else 0.0
 
 # Server-side logger for feeder lifecycle. A background-feeder failure MUST be LOGGED (a real,
 # inspectable line naming the ticker), never swallowed in the task — the no-mute-cockpit / no-
@@ -302,11 +340,20 @@ class WatchManager:
         # first process_event promotes it to `live`. A finite sim stream then resolves to
         # `live`-or-`closed` by exhaustion, so no extra timer is needed here.
         engine.set_stream_status("waiting")
+        # Paced-delivery lag (Data Contract row 14, J-63): track the feeder's processing backlog
+        # against its OWN fixed-pace schedule. ``scheduled`` accumulates the intended per-event pace;
+        # the lag is how far actual wall-clock has fallen behind it. A healthy sim keeps up => ≈0.
+        replay_start = time.time()
+        scheduled = 0.0
         try:
             for event in provider.stream():
                 await self._wait_while_paused(engine)  # freeze in place while paused (no consume)
                 engine.process_event(event)
+                # Stamp the lag AFTER processing so it reflects the just-applied event's backlog
+                # (feeder-owned; never read by classification — determinism unchanged).
+                engine.set_delivery_lag(_paced_delivery_lag(scheduled, replay_start))
                 await asyncio.sleep(self._pace)
+                scheduled += self._pace
             # Natural exhaustion (the stream ran out) — reason ``stream_closed`` (distinct from a
             # user Stop, which set ``watch_stopped`` before cancelling this task). J-50's stream-end
             # leg depends on this reason.
@@ -357,8 +404,20 @@ class WatchManager:
         # Stream open, no event applied yet -> `waiting`; the first process_event promotes to
         # `live`. A finite historical window resolves to `live`-or-`closed` by exhaustion.
         engine.set_stream_status("waiting")
+        # Row-14 paced-delivery-lag schedule (J-63): the feeder's start instant + a mutable cumulative
+        # pacing-delay cell, threaded through ``_replay_events`` so the lag tracks the processing
+        # backlog against the feeder's own schedule (a healthy replay keeps up => ≈0).
+        replay_start = time.time()
+        schedule = [0.0]
         try:
-            await self._replay_events(engine, provider.stream(), speed_cell, start_delivered=0)
+            await self._replay_events(
+                engine,
+                provider.stream(),
+                speed_cell,
+                start_delivered=0,
+                replay_start=replay_start,
+                schedule=schedule,
+            )
             # Natural exhaustion — reason ``stream_closed`` (a user Stop set ``watch_stopped`` first).
             engine.set_stream_status("closed", end_reason="stream_closed")
         except asyncio.CancelledError:
@@ -371,14 +430,29 @@ class WatchManager:
             engine.set_stream_status("failed")
 
     async def _replay_events(
-        self, engine: TapeEngine, events, speed_cell: "list[float]", start_delivered: int
+        self,
+        engine: TapeEngine,
+        events,
+        speed_cell: "list[float]",
+        start_delivered: int,
+        *,
+        replay_start: "float | None" = None,
+        schedule: "list[float] | None" = None,
     ) -> int:
         """Pace one event iterable into the engine (the shared replay loop for paced + progressive).
 
         ``start_delivered`` is the count of events ALREADY delivered (so warm-up fast-forward spans
         the whole replay across chunk boundaries, not per chunk). Returns the new delivered count.
         Pacing is delivery-only — the engine math is purely logical, so the result is deterministic
-        and identical whether the events come from one window or several stitched chunks."""
+        and identical whether the events come from one window or several stitched chunks.
+
+        ``replay_start`` (the feeder's wall-clock start instant) + ``schedule`` (a one-element mutable
+        cell carrying the cumulative INTENDED pacing delay) enable the row-14 paced-delivery-lag stamp
+        (J-63): after each applied event the feeder records how far actual wall-clock has fallen behind
+        its own pacing schedule (a healthy replay keeps up => ≈0; a backlogged one reads positive). The
+        ``schedule`` cell is the caller's so the schedule stays CONTINUOUS across stitched chunks. Both
+        default ``None`` so legacy unit-test callers (which pass neither) stamp no lag and stay
+        byte-identical. The lag is feeder-owned display metadata, NEVER read by classification."""
         cap = self._config.replay_pacing_cap_seconds
         warmup_count = self._config.warmup_min_events
         ff_pace = self._config.warmup_fast_forward_pace_seconds
@@ -396,8 +470,13 @@ class WatchManager:
                     delay = min((event.timestamp - prev_ts) / divisor, cap)
                 if delay > 0:
                     await asyncio.sleep(delay)
+                if schedule is not None:
+                    schedule[0] += delay  # the INTENDED cumulative pacing delay (the schedule)
             prev_ts = event.timestamp
             engine.process_event(event)
+            # Stamp the paced-delivery lag AFTER processing (feeder-owned; never classification).
+            if replay_start is not None and schedule is not None:
+                engine.set_delivery_lag(_paced_delivery_lag(schedule[0], replay_start))
             delivered += 1
         return delivered
 
@@ -424,9 +503,18 @@ class WatchManager:
         engine.set_stream_status("waiting")
         # Kick off the remaining-chunk fetch BEFORE replaying the first chunk so it overlaps.
         remaining_task = asyncio.create_task(asyncio.to_thread(fetch_remaining))
+        # Row-14 paced-delivery-lag schedule (J-63): ONE continuous start + cumulative-delay cell so
+        # the schedule spans the stitched chunks (the lag never resets at a chunk boundary).
+        replay_start = time.time()
+        schedule = [0.0]
         try:
             delivered = await self._replay_events(
-                engine, first_chunk_provider.stream(), speed_cell, start_delivered=0
+                engine,
+                first_chunk_provider.stream(),
+                speed_cell,
+                start_delivered=0,
+                replay_start=replay_start,
+                schedule=schedule,
             )
             remaining_chunks = await remaining_task
             if remaining_chunks:
@@ -439,7 +527,12 @@ class WatchManager:
                 rest.epoch_anchor = anchor  # pin to the first chunk's anchor (single timeline)
                 rest._t0 = anchor
                 await self._replay_events(
-                    engine, rest.stream(), speed_cell, start_delivered=delivered
+                    engine,
+                    rest.stream(),
+                    speed_cell,
+                    start_delivered=delivered,
+                    replay_start=replay_start,
+                    schedule=schedule,
                 )
             # Natural exhaustion — reason ``stream_closed`` (a user Stop set ``watch_stopped`` first).
             engine.set_stream_status("closed", end_reason="stream_closed")
@@ -546,6 +639,10 @@ class WatchManager:
                 engine.process_event(event)
                 if engine.snapshot().stream_status != "live":
                     engine.set_stream_status("live")  # owns the stale->live recovery flip
+                # Row-14 LIVE delivery lag (J-63): the latest record's real epoch vs wall clock —
+                # stamped AFTER processing so it reflects the just-applied event (feeder-owned; never
+                # read by classification). A dense tape that outruns processing reads a growing lag.
+                engine.set_delivery_lag(_live_delivery_lag(engine))
             # Natural exhaustion (the live stream ended on its own) — reason ``stream_closed``.
             engine.set_stream_status("closed", end_reason="stream_closed")
         except asyncio.CancelledError:

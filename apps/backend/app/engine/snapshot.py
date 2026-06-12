@@ -68,6 +68,21 @@ class EngineSnapshot:
     # Defaulted so every existing snapshot/test is unchanged (additive).
     epoch_anchor: float | None = None
 
+    # Canonical feeder-owned DELIVERY LAG (Data Contract row 14, J-63): how far the processed tape
+    # trails real time, in seconds — owned ONCE by the feeder (WatchManager), surfaced here as
+    # ADDITIVE lifecycle/display metadata (the iter-9 ``end_reason`` precedent: an engine file may
+    # carry feeder-owned lifecycle metadata as long as it NEVER enters classification). Per-mode
+    # honest semantics: LIVE = the latest record's epoch vs wall clock (goal.md's canonical
+    # definition); PACED replay (sim/historical) = the feeder's processing backlog against its OWN
+    # pacing schedule (a replay deliberately hours behind wall clock is NOT "lagging"; a healthy sim
+    # reads ≈0). NEVER read by features/state/confidence — the same ordered event stream yields
+    # byte-identical engine outputs with or without it (determinism + observer-equivalence hold).
+    # The ``tape_lag_ok`` checklist check + the future UI lag readout read THIS one value. ``None``
+    # when the feeder has not stamped a lag yet (cold construction / a feeder that never sets one) —
+    # an honest "no lag measured", distinct from a measured 0.0. Defaulted so every existing
+    # snapshot/test is unchanged (additive).
+    delivery_lag_seconds: float | None = None
+
     @property
     def primary_features(self) -> dict[str, float]:
         return self.features[self.primary_window]

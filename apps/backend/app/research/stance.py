@@ -37,9 +37,16 @@ R formula. ``open_r`` is the current open move in R, SIGNED BY DIRECTION with th
 
 from __future__ import annotations
 
+from ..config import Config
+from ..engine.snapshot import EngineSnapshot
 from .marks import r_basis
 from .taxonomy import (
     STANCE_PENDING_EVIDENCE,
+    checklist_check_caption,
+    checklist_check_label,
+    checklist_nearest_counterevidence,
+    checklist_stance_evidence,
+    checklist_stance_label,
     stance_for_verdict,
 )
 
@@ -209,4 +216,388 @@ def compute_position_readouts(
             "r": distance_r,
         },
         "open_r": open_r,
+    }
+
+
+# =================================================================================================
+# The ENTRY-CHECKLIST evaluator (data-contract row 25, CHECKLIST half; capability 33 / J-63).
+# =================================================================================================
+#
+# At the moment of decision — an active, evaluated, NOT-yet-entry-marked thesis — the strip shows the
+# ENTRY CHECKLIST: eight named checks each rendering its LIVE measured margin IN ITS OWN UNITS (never a
+# bare boolean), an aggregate STANCE publishing through its own dwell, and a NEAREST-COUNTEREVIDENCE
+# line — all computed ONCE here, server-side.
+#
+# DISCIPLINE (the iter-21 spec + the goal anti-goals):
+#   * **Composed from EXISTING canonical values only.** Every check reads a value the engine/monitor
+#     ALREADY computed (the published verdict, ``event_count`` vs the warm-up floor, ``stream_status``,
+#     the feeder ``delivery_lag_seconds``, the primary-window spread/speed, the declared invalidation,
+#     the recorded ``rule_first_true`` price) — NO new indicator, NO second computation of any contract
+#     value. The reused gates are the classifier's OWN (warm-up floor, stability spread cap in bps, the
+#     trade-speed floor) + the two declaration-time research defaults (invalidation-too-tight multiple,
+#     chase-return threshold) — no new threshold.
+#   * **A live measured margin per check, never a bare boolean.** Each check carries pass/fail PLUS its
+#     measured margin in its own units (a verdict string; events vs floor; the stream status; lag s vs
+#     bound; spread bps vs cap; speed vs floor; distance in spread-multiples vs floor; chase return vs
+#     threshold), formatted ONCE here so the UI renders it verbatim (display rounding only).
+#   * **Read-only over the engine.** The evaluator only READS the snapshot + the published verdict it is
+#     handed — it mutates no engine/feature/classifier state, so engine outputs stay byte-identical
+#     (equivalence anti-goal). Never persisted (schema stays v7).
+#   * **Honest degradation, no frozen green.** Whenever the feed is not live / the tape is not current
+#     (``feed_live`` / ``tape_lag_ok`` fail) the aggregate stance is ``no_fresh_tape`` — a previous
+#     ``conditions_met`` MUST NOT persist over non-live data.
+#   * **Its own dwell.** The aggregate stance publishes through a config-owned LOGICAL-time dwell
+#     (``checklist_stance_dwell_seconds``) so a single flickering check never flaps the stance — EXCEPT
+#     ``no_fresh_tape``/``tape_against``, which publish IMMEDIATELY (honest degradation must never lag
+#     behind a stale feed, and a rejecting verdict is itself already dwell-gated).
+#   * **Never imperative, never predictive.** Present-tense, factual copy describing the tape NOW.
+
+
+def _check(check_id: str, passed: bool, margin: str, distance: float | None) -> dict:
+    """One checklist-check projection row — pass/fail + the live measured margin (its own units).
+
+    ``margin`` is the already-formatted, render-verbatim margin string (the UI does display rounding
+    only, no arithmetic). ``distance`` is the SIGNED normalized distance from this check's boundary
+    (POSITIVE = passing with this much room; NEGATIVE = failing by this much), used ONLY server-side to
+    pick the nearest-counterevidence check — it is NOT a second contract value, just a ranking key. The
+    label + caption come from the taxonomy (the frontend hardcodes none)."""
+    return {
+        "check": check_id,
+        "label": checklist_check_label(check_id),
+        "caption": checklist_check_caption(check_id),
+        "passed": passed,
+        "margin": margin,
+        "_distance": distance,  # server-only ranking key (stripped before serving — see evaluate)
+    }
+
+
+def evaluate_entry_checks(
+    *,
+    snapshot: EngineSnapshot,
+    verdict: str,
+    invalidation_price: float,
+    direction: str,
+    rule_first_true_price: float | None,
+    config: Config,
+) -> list[dict]:
+    """The eight entry-checklist checks, each with its live measured margin, computed ONCE.
+
+    Composes ONLY existing canonical values (single source of truth — never recomputes a contract
+    value): the published ``verdict`` (row 16), ``snapshot.event_count`` vs ``warmup_min_events``,
+    ``snapshot.stream_status`` (row 6), the feeder ``snapshot.delivery_lag_seconds`` (row 14) vs the
+    config bound, the primary-window ``average_spread`` (as bps of ``reference_price`` — the classifier's
+    OWN stability metric) vs ``max_stable_spread_bps``, the primary-window ``trade_speed`` vs
+    ``min_trade_speed``, ``|last − invalidation|`` in spread-multiples vs
+    ``invalidation_too_tight_spread_multiple``, and the directional return from the recorded
+    ``rule_first_true_price`` to the current last vs ``chase_return_threshold`` (anchored at
+    ``rule_first_true`` — NEVER the post-dwell publish).
+
+    Returns the eight ``_check`` rows in display order. Each ``_distance`` is the signed margin from the
+    check's boundary in a comparable, normalized space (used only to rank the nearest counterevidence).
+    """
+    primary = snapshot.primary_features
+    checks: list[dict] = []
+
+    # 1) verdict_confirming — the current published row-16 verdict (margin = the verdict itself). A
+    #    rejecting/invalidated verdict fails it; pending/weakening fail it too (only confirming passes).
+    vc_pass = verdict == "confirming"
+    checks.append(
+        _check(
+            "verdict_confirming",
+            vc_pass,
+            margin=f"verdict {verdict}",
+            distance=1.0 if vc_pass else -1.0,
+        )
+    )
+
+    # 2) warm — events processed vs the classifier's OWN warm-up floor (no new threshold).
+    events = snapshot.event_count
+    floor = config.warmup_min_events
+    warm_pass = events >= floor
+    checks.append(
+        _check(
+            "warm",
+            warm_pass,
+            margin=f"{events}/{floor} events",
+            distance=float(events - floor),
+        )
+    )
+
+    # 3) feed_live — the canonical row-6 stream_status MUST be ``live`` (margin = the actual status).
+    status = snapshot.stream_status
+    live_pass = status == "live"
+    checks.append(
+        _check(
+            "feed_live",
+            live_pass,
+            margin=f"status {status}",
+            distance=1.0 if live_pass else -1.0,
+        )
+    )
+
+    # 4) tape_lag_ok — the feeder-owned row-14 ``delivery_lag_seconds`` vs the config bound (seconds).
+    #    Reads the SAME value the UI lag readout reads. ``None`` (no lag measured yet) is treated as
+    #    NOT current (honest — we cannot assert freshness without a measurement); margin names it.
+    bound = config.delivery_lag_ok_bound_seconds
+    lag = snapshot.delivery_lag_seconds
+    if lag is None:
+        lag_pass = False
+        lag_margin = f"lag — / {bound:.1f}s"
+        lag_distance = -bound  # treated as maximally stale for ranking (no measurement)
+    else:
+        lag_pass = lag <= bound
+        lag_margin = f"lag {lag:.1f}s / {bound:.1f}s"
+        lag_distance = bound - lag
+    checks.append(_check("tape_lag_ok", lag_pass, margin=lag_margin, distance=lag_distance))
+
+    # 5) spread_stable — the average spread within the classifier's OWN stability domain, in bps
+    #    (capability-26 precedent: reuse the classifier gate, no new threshold). The spread is judged
+    #    in bps of the canonical ``reference_price`` (the SAME relative metric the classifier uses);
+    #    with no price basis it falls back to the absolute dollar cap (byte-identical to the classifier).
+    spread = primary.get("average_spread", 0.0)
+    reference_price = primary.get("reference_price", 0.0)
+    if reference_price > 0.0:
+        spread_metric = spread / reference_price * 10000.0  # basis points
+        spread_cap = config.max_stable_spread_bps
+        spread_margin = f"{spread_metric:.1f} / {spread_cap:.1f} bps"
+    else:
+        spread_metric = spread
+        spread_cap = config.max_stable_spread
+        spread_margin = f"{spread_metric:.2f} / {spread_cap:.2f}"
+    spread_pass = spread_metric <= spread_cap
+    checks.append(
+        _check(
+            "spread_stable",
+            spread_pass,
+            margin=spread_margin,
+            distance=spread_cap - spread_metric,
+        )
+    )
+
+    # 6) trade_speed_ok — trade speed at/above the classifier's OWN floor (events/s; no new threshold).
+    speed = primary.get("trade_speed", 0.0)
+    speed_floor = config.min_trade_speed
+    speed_pass = speed >= speed_floor
+    checks.append(
+        _check(
+            "trade_speed_ok",
+            speed_pass,
+            margin=f"{speed:.2f} / {speed_floor:.2f} trades/s",
+            distance=speed - speed_floor,
+        )
+    )
+
+    # 7) invalidation_distance_ok — the distance from the current last to the declared invalidation, in
+    #    SPREAD-MULTIPLES, vs ``invalidation_too_tight_spread_multiple`` (the same too-tight gate, no new
+    #    threshold). A stop comfortably outside spread noise PASSES; one inside the band FAILS. With no
+    #    spread / no last the multiple is unmeasurable — honest fail naming the absence. Direction-aware
+    #    only in the SIGN of "distance" the spec wants: the magnitude |last − invalidation| is what the
+    #    too-tight gate measures (a wrong-side invalidation is a 422 at declaration, never reachable here).
+    last = snapshot.last
+    inval_floor = config.invalidation_too_tight_spread_multiple
+    if last is None or spread <= 0.0:
+        dist_pass = False
+        dist_margin = f"— / {inval_floor:g}× spread"
+        dist_distance = -inval_floor
+    else:
+        multiples = abs(last - invalidation_price) / spread
+        dist_pass = multiples >= inval_floor
+        dist_margin = f"{multiples:.1f}× / {inval_floor:g}× spread"
+        dist_distance = multiples - inval_floor
+    checks.append(
+        _check(
+            "invalidation_distance_ok",
+            dist_pass,
+            margin=dist_margin,
+            distance=dist_distance,
+        )
+    )
+
+    # 8) not_chasing — the directional return from the recorded ``rule_first_true`` price to the current
+    #    last, vs ``chase_return_threshold`` (anchored at ``rule_first_true``, NEVER the post-dwell
+    #    publish). A FAVORABLE move past the threshold since the rule first held means the move has run
+    #    before this entry => chasing => FAIL. Direction-aware: for a long the favorable move is UP, for
+    #    a short it is DOWN. Before any rule has held (no anchor) there is nothing to chase => PASS with
+    #    an explicit "no anchor" margin (honest — the move has not begun).
+    chase_threshold = config.chase_return_threshold
+    if rule_first_true_price is None or rule_first_true_price <= 0.0 or last is None:
+        chase_pass = True
+        chase_margin = f"+0.00% / {chase_threshold * 100:.2f}% (no rule anchor yet)"
+        chase_distance = chase_threshold  # maximal room (nothing has run)
+    else:
+        raw_return = (last - rule_first_true_price) / rule_first_true_price
+        favorable_return = raw_return if direction == "long" else -raw_return
+        # Only a FAVORABLE run counts as chasing (an adverse move is not "chasing the move").
+        chasing_run = max(favorable_return, 0.0)
+        chase_pass = chasing_run < chase_threshold
+        chase_margin = f"{favorable_return * 100:+.2f}% / {chase_threshold * 100:.2f}%"
+        chase_distance = chase_threshold - chasing_run
+    checks.append(
+        _check("not_chasing", chase_pass, margin=chase_margin, distance=chase_distance)
+    )
+
+    return checks
+
+
+class EntryChecklistEvaluator:
+    """Holds one thesis's PUBLISHED entry-checklist stance and advances it per event (no I/O).
+
+    Constructed when the monitor holds a thesis; advanced in ``on_event`` AFTER the verdict step so it
+    reads the just-published verdict for this snapshot. Owns: the currently published aggregate stance
+    and its dwell tracker. Performs NO persistence and reads NOTHING but the snapshot + published
+    verdict it is handed (engine stays byte-identical — equivalence anti-goal). The PER-CHECK rows and
+    the nearest-counterevidence line are recomputed fresh from the latest snapshot at projection time
+    (they are a pure read); only the aggregate STANCE is dwell-published here so it does not flap.
+
+    The checklist only MATTERS while the thesis is active + evaluated + NOT entry-marked (gated in
+    ``build_projection``), but the dwell accumulates regardless so the stance is settled by the time it
+    is shown.
+    """
+
+    def __init__(self, dwell_seconds: float) -> None:
+        self._dwell = float(dwell_seconds)
+        # Published aggregate stance. Starts at ``conditions_not_met`` — pre-confirmation, the verdict
+        # check fails by construction, so the honest opening read is "not met", never a fabricated green.
+        self._published: str = "conditions_not_met"
+        # Dwell tracker: which raw stance is accumulating + the first logical instant it held.
+        self._pending_raw: str | None = None
+        self._raw_first_ts: float | None = None
+
+    @property
+    def published_stance(self) -> str:
+        return self._published
+
+    @staticmethod
+    def raw_stance(checks: list[dict], verdict: str) -> str:
+        """The RAW aggregate stance for this event from the eight checks + the published verdict.
+
+        Priority (the spec's aggregation map):
+          * ``no_fresh_tape`` — whenever ``feed_live`` OR ``tape_lag_ok`` fails (the feed is paused /
+            closed / stale / failed / lagging) — a previous green NEVER persists over non-live data;
+          * ``tape_against``  — the published verdict is rejecting/invalidated (the tape is working
+            against the thesis);
+          * ``conditions_met``     — every check passes (only reachable after confirmation, since the
+            verdict_confirming check is one of the eight);
+          * ``conditions_not_met`` — any check fails while the verdict is not rejecting and the tape is
+            fresh (incl. the pre-confirmation pending case — the verdict check is unmet).
+        """
+        by_id = {c["check"]: c for c in checks}
+        feed_live = by_id.get("feed_live", {}).get("passed", False)
+        tape_lag_ok = by_id.get("tape_lag_ok", {}).get("passed", False)
+        if not feed_live or not tape_lag_ok:
+            return "no_fresh_tape"
+        if verdict in ("rejecting", "invalidated"):
+            return "tape_against"
+        if all(c["passed"] for c in checks):
+            return "conditions_met"
+        return "conditions_not_met"
+
+    def advance(self, *, checks: list[dict], verdict: str, logical_ts: float) -> None:
+        """Advance the published aggregate stance against this event's raw stance.
+
+        Dwell rule: a raw stance must hold CONTINUOUSLY for the dwell before it publishes — EXCEPT
+        ``no_fresh_tape`` and ``tape_against``, which publish IMMEDIATELY (honest degradation must not
+        lag a stale feed; a rejecting verdict is itself already dwell-gated). ``conditions_met`` /
+        ``conditions_not_met`` transitions dwell so a single flickering check never flaps the stance.
+        """
+        raw = self.raw_stance(checks, verdict)
+
+        # Honest degradation / tape-against publish IMMEDIATELY (dwell-exempt).
+        if raw in ("no_fresh_tape", "tape_against"):
+            self._published = raw
+            self._pending_raw = raw
+            self._raw_first_ts = logical_ts
+            return
+
+        # Dwell tracking for conditions_met / conditions_not_met: reset the clock when the raw changes.
+        if raw != self._pending_raw:
+            self._pending_raw = raw
+            self._raw_first_ts = logical_ts
+
+        if raw == self._published:
+            return
+        held_for = logical_ts - (self._raw_first_ts if self._raw_first_ts is not None else logical_ts)
+        if held_for >= self._dwell:
+            self._published = raw
+
+
+def nearest_counterevidence(checks: list[dict], stance: str) -> dict | None:
+    """The nearest-counterevidence row (capability 33) — computed ONCE server-side.
+
+    Names the closest condition that would FLIP the current read, with its margin:
+      * when ``conditions_met`` — the PASSING check nearest its boundary (smallest positive distance);
+      * otherwise               — the nearest-to-passing FAILING check (the failing check whose
+        distance is closest to zero, i.e. the least-negative).
+    Returns ``{check, label, margin, line}`` or ``None`` when there is no candidate (e.g. an empty
+    check list). ``line`` is the taxonomy-owned, render-verbatim sentence."""
+    if not checks:
+        return None
+    if stance == "conditions_met":
+        candidates = [c for c in checks if c["passed"]]
+        if not candidates:
+            return None
+        nearest = min(candidates, key=lambda c: c["_distance"])
+        met = True
+    else:
+        failing = [c for c in checks if not c["passed"]]
+        if not failing:
+            return None
+        # The failing check closest to its boundary = the LARGEST (least-negative) distance.
+        nearest = max(failing, key=lambda c: c["_distance"])
+        met = False
+    return {
+        "check": nearest["check"],
+        "label": nearest["label"],
+        "margin": nearest["margin"],
+        "line": checklist_nearest_counterevidence(nearest["label"], nearest["margin"], met),
+    }
+
+
+def build_checklist(
+    *,
+    snapshot: EngineSnapshot,
+    verdict: str,
+    published_stance: str,
+    invalidation_price: float,
+    direction: str,
+    rule_first_true_price: float | None,
+    config: Config,
+) -> dict:
+    """The full entry-checklist projection (capability 33, J-63) — computed ONCE server-side.
+
+    Recomputes the eight checks fresh from the latest snapshot (a pure read of canonical values), pairs
+    them with the dwell-PUBLISHED aggregate ``published_stance`` (owned by ``EntryChecklistEvaluator`` so
+    it does not flap), counts ``N/total`` passing for the factual stance evidence, derives the
+    nearest-counterevidence line, and lists the blockers (the failing checks) when not met. The UI
+    renders every field verbatim (display rounding only — zero client arithmetic, zero stance
+    derivation). The server-only ``_distance`` ranking key is STRIPPED before serving."""
+    checks = evaluate_entry_checks(
+        snapshot=snapshot,
+        verdict=verdict,
+        invalidation_price=invalidation_price,
+        direction=direction,
+        rule_first_true_price=rule_first_true_price,
+        config=config,
+    )
+    total = len(checks)
+    passed = sum(1 for c in checks if c["passed"])
+    counter = nearest_counterevidence(checks, published_stance)
+    # The blocker list (the failing checks) — named only when the conditions are NOT met. Empty on
+    # conditions_met (every check passes).
+    blockers = [c["check"] for c in checks if not c["passed"]]
+    # Strip the server-only ranking key from the served check rows (it is not a contract value).
+    served_checks = [
+        {k: v for k, v in c.items() if k != "_distance"} for c in checks
+    ]
+    return {
+        "stance": {
+            "value": published_stance,
+            "label": checklist_stance_label(published_stance),
+            "evidence": checklist_stance_evidence(published_stance, passed, total),
+        },
+        "checks": served_checks,
+        "passed": passed,
+        "total": total,
+        "blockers": blockers,
+        "nearest_counterevidence": counter,
     }
