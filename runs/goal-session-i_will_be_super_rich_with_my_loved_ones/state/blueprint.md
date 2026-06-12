@@ -70,6 +70,18 @@ Tapeology (top bar: Cockpit · Journal · Studies)
 > Studies entry stays disabled). The hint log portion of `/journal` still lands with J-65 (cue layer);
 > studies (J-60–J-62) and "re-watch window" still land with their own journeys.
 
+> **Iter-17 (build-out note, additive — no skeleton change, no UI change):** the **capability-34
+> engine performance gate ships** as its own byte-identity-pinned step (the prerequisite goal.md
+> sets for studies): rolling-feature refresh maintenance in `app/engine/features.py` becomes truly
+> incremental across evictions with values BYTE-IDENTICAL to before — rows 1–2 keep their owners,
+> endpoints, and outputs unchanged (oracle-equivalence + pinned-anchor + observer-equivalence
+> tested). Test/CI assets registered: a committed ≈10-minute moderate-density real **SIP** fixture
+> (also the capability-32 reference-study window, reused by J-60–J-62 next) and a CI timing gate
+> whose budget is the config-owned `dense_replay_time_budget_seconds` — serving/CI-only, EXCLUDED
+> from `config_fingerprint` with documented rationale + stability test + counter-test (the
+> iter-12/iter-16 precedent). Schema stays v7; the Studies nav entry stays disabled; the `/studies`
+> page (row 23) still lands with J-60.
+
 **Feature / journey homes** (≤2 clicks from the nav):
 
 | Feature / journey | Canonical home (route) | Nav section |

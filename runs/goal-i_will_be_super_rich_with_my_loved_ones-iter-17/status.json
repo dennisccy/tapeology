@@ -1,0 +1,21 @@
+{
+  "phase": "goal-i_will_be_super_rich_with_my_loved_ones-iter-17",
+  "status": "complete",
+  "current_step": "qa_complete",
+  "updated_at": "2026-06-11T23:48:13.458415Z",
+  "started_at": "2026-06-11T22:21:40.732299Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/engine/features.py",
+    "apps/backend/app/config.py",
+    "apps/backend/tests/fixtures/alpaca/PG_20260609_170000_171000_sip.json",
+    "apps/backend/tests/test_dense_replay_gate.py",
+    "apps/backend/tests/test_refresh_increment.py",
+    "docs/handoffs/goal-i_will_be_super_rich_with_my_loved_ones-iter-17-dev.md",
+    "reports/phase-goal-i_will_be_super_rich_with_my_loved_ones-iter-17-implementation-summary.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "next_action": "review"
+}

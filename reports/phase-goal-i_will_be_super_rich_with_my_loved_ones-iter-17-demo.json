@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-i_will_be_super_rich_with_my_loved_ones-iter-17",
+  "base_url": "http://localhost:3650",
+  "iteration": 17,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the app home page",
+      "narration": "This iteration made no visible changes — the tape-reading engine was optimised internally to process dense streams roughly 18 times faster, but every screen, panel, and number looks identical to before. This walkthrough confirms the cockpit still works correctly after that internal work.",
+      "point_out": "The ticker input and Watch button appear exactly as before. Nothing on screen changed.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/"},
+      "expect": {"text": "Watch"}
+    },
+    {
+      "n": 2,
+      "title": "Type SIM-BUYER into the ticker input",
+      "narration": "Entering the simulated buyer-control ticker to start the cockpit watch session, exactly as QA verified.",
+      "point_out": "The ticker field accepts input normally.",
+      "journey": "J-68",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "fill", "target": {"placeholder": "Enter ticker"}, "text": "SIM-BUYER"}
+    },
+    {
+      "n": 3,
+      "title": "Click Watch to launch the cockpit",
+      "narration": "Clicking Watch immediately acknowledges the request and navigates to the live cockpit page — the same instant-feedback behaviour that has been working since the beginning.",
+      "point_out": "The browser navigates to the SIM-BUYER cockpit and begins populating panels within seconds.",
+      "journey": "J-68",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Watch"}},
+      "expect": {"text": "SIM-BUYER"}
+    },
+    {
+      "n": 4,
+      "title": "Cockpit renders all five panels with live content",
+      "narration": "After a short warm-up the cockpit fills in: the price chart with its Control marker, the tape-state label, a confidence reading, the observations list, and the event log — all identical to the previous iteration.",
+      "point_out": "Look for 'Buyer Control' in the state label and a confidence value near 0.90–0.95. The chart canvas should be populated, and the Observations and Event Log panels should each have at least one entry.",
+      "journey": "J-68",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/watch/SIM-BUYER"},
+      "expect": {"text": "Buyer Control"}
+    },
+    {
+      "n": 5,
+      "title": "REST endpoint agrees with the cockpit display",
+      "narration": "The backend REST endpoint returns the same classification and confidence the cockpit is showing — confirming there is still a single source of truth after the engine refactor.",
+      "point_out": "The JSON response at /tape/SIM-BUYER/state should show buyer_control and a confidence value in the same range as the cockpit (roughly 0.90–0.95). No error fields should be present.",
+      "journey": "J-08",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/tape/SIM-BUYER/state"},
+      "expect": {"text": "buyer_control"}
+    }
+  ]
+}

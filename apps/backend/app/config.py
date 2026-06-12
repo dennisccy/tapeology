@@ -574,6 +574,31 @@ class Config:
     # default — a starting point, never a validated edge.
     excursion_target_r: float = 1.0
 
+    # --- Engine-performance gate: dense-replay CI time budget (capability 34, J-62) -------------
+    # The wall-clock BUDGET (seconds) the CI timing gate allows for an UNPACED replay of the
+    # committed ≈10-minute real SIP dense fixture through a fresh full ``TapeEngine`` (the same
+    # fixture-replay path the J-60 study runner will use). The gate proves rolling-feature
+    # maintenance is TRULY INCREMENTAL across window evictions — no per-event full-window rescan —
+    # so the studies layer can be built on an engine that demonstrably keeps up with dense real tape.
+    #
+    # CALIBRATION (documented research/CI default, never a validated edge): on the dev machine the
+    # committed PG 10-minute SIP fixture (3,229 trades + 11,012 quotes; all five windows evict)
+    # replays unpaced in ≈10 s with the incremental refresh maintenance, versus ≈184 s with the old
+    # permanently-degraded post-eviction merge (the quadratic defect this gate guards against). The
+    # budget is set with generous headroom (≈6× the measured incremental time, and far below the
+    # minutes the O(n²) path costs) so the gate does NOT flake on a slow CI box yet STILL fails hard
+    # if the quadratic regression returns. Raise it only with a re-measured justification — never to
+    # paper over a real regression.
+    #
+    # EXCLUDED FROM ``config_fingerprint`` (see the exclusion set in ``config_fingerprint``), with
+    # the iter-12 / iter-16 discipline: this is a CI GATE value that never enters ANY persisted
+    # research computation (it touches no verdict, feature, grade, excursion, or stamp). Fingerprinting
+    # it would dishonestly FRAGMENT the analytics pools — two journals identical in every threshold
+    # but run under different CI budgets would mint different fingerprints and could never be pooled.
+    # Pinned by a fingerprint-stability test (changing it does NOT move the fingerprint) and its
+    # counter-test (a real classifier threshold still DOES).
+    dense_replay_time_budget_seconds: float = 60.0
+
     def window_label(self, window: int) -> str:
         return f"{window}s"
 
@@ -610,7 +635,10 @@ class Config:
         (capability 31 / J-59): it is a serving/presentation-only display gate that touches no
         persisted research value, so two journals identical in every threshold but viewed at
         different min-sample sizes MUST share a fingerprint (else fragmenting the very pools the
-        analytics surface exists to compare).
+        analytics surface exists to compare). The dense-replay CI timing budget
+        (``dense_replay_time_budget_seconds``) is EXCLUDED for the identical reason (capability 34 /
+        J-62): a CI gate value touches no persisted research value, so two journals identical in every
+        threshold but run under different CI budgets MUST share a fingerprint.
         """
         excluded = {
             "journal_db_path",
@@ -619,6 +647,11 @@ class Config:
             "journal_list_default_limit",
             "journal_list_max_limit",
             "analytics_min_sample_size",
+            # The dense-replay CI timing budget (capability 34 / J-62): a CI GATE value that never
+            # enters any persisted research computation, so two journals identical in every threshold
+            # but run under different CI budgets MUST share a fingerprint (else fragmenting the
+            # analytics pools). Same iter-12/iter-16 precedent as the serving/display fields above.
+            "dense_replay_time_budget_seconds",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
