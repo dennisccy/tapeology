@@ -1,7 +1,7 @@
 {
   "session_id": "i_will_be_super_rich_with_my_loved_ones",
   "started_at": "2026-06-10T12:24:51.172529Z",
-  "current_iter": 18,
+  "current_iter": 19,
   "cli": "claude",
   "agent_backend": "interactive",
   "halt_config": {
@@ -11,7 +11,7 @@
   },
   "status": "in_progress",
   "last_verdict": "CONTINUE",
-  "next_depth": "full",
+  "next_depth": "lean",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/i_will_be_super_rich_with_my_loved_ones",
@@ -19,5 +19,5 @@
   "total_iterations": 0,
   "wall_time_seconds": 3331,
   "quota_pause_count": 0,
-  "updated_at": "2026-06-12T00:22:19.162100Z"
+  "updated_at": "2026-06-12T02:04:51.842039Z"
 }

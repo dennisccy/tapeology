@@ -24,8 +24,10 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Cockpit", enabled: true },
   { href: "/journal", label: "Journal", enabled: true },
-  // Studies page lands with J-60 — registered in the IA, disabled until its page exists (no dead link).
-  { href: "/studies", label: "Studies", enabled: false },
+  // Studies page landed with J-60 — its route now exists, so the pre-registered nav entry is enabled
+  // (the approved skeleton never carried a dead link; enabling it is the ONLY cockpit-adjacent pixel
+  // change this iteration, the J-68 sentinel allowance).
+  { href: "/studies", label: "Studies", enabled: true },
 ];
 
 export function NavBar() {

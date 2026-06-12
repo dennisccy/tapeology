@@ -2,12 +2,15 @@ import { API_BASE, WATCH_REQUEST_TIMEOUT_MS } from "./config";
 import type {
   Analytics,
   AnalyticsResult,
+  CreateStudyParams,
+  CreateStudyResult,
   DeclareResult,
   JournalDetail,
   JournalFilters,
   JournalRow,
   MarketClock,
   ResearchTaxonomy,
+  Study,
   SymbolMatch,
   TapeHistory,
   TapeSnapshot,
@@ -633,6 +636,101 @@ export async function fetchAnalytics(): Promise<AnalyticsResult> {
       return { ok: true, analytics: data };
     }
     let error = "The analytics could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// --- Replay studies (capability 32, J-60/J-61/J-62) ---------------------------------------------
+
+// POST /research/studies — create + START a replay study (J-60). The backend persists it ``queued``,
+// starts it as a background job, and returns the full queued projection. The backend's 422 (unknown
+// setup/direction/source, missing/forbidden level, missing window, unavailable credentials) detail is
+// surfaced VERBATIM — never coerced. `level_price` / `start` / `end` / `null_baseline_seed` are sent
+// only when provided. The frontend computes nothing — it renders the returned projection.
+export async function createStudy(params: CreateStudyParams): Promise<CreateStudyResult> {
+  try {
+    const body: Record<string, unknown> = {
+      source_kind: params.source_kind,
+      source_id: params.source_id,
+      setup_type: params.setup_type,
+      direction: params.direction,
+    };
+    if (params.level_price !== undefined && params.level_price !== null) {
+      body.level_price = params.level_price;
+    }
+    if (params.start) body.start = params.start;
+    if (params.end) body.end = params.end;
+    if (params.null_baseline_seed !== undefined) body.null_baseline_seed = params.null_baseline_seed;
+    const res = await fetch(`${API_BASE}/research/studies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, study: data.study as Study, status: res.status };
+    }
+    let error = "The study could not be created.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, status: res.status, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/studies — list studies most-recent-first. Read VERBATIM (each row is the runner's
+// persisted payload; the page recomputes nothing). Any failure resolves to an empty list with an
+// explicit error so the page shows a styled error rather than a blank/fabricated list.
+export async function fetchStudies(): Promise<{ ok: boolean; studies: Study[]; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/studies`);
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, studies: (data?.studies as Study[]) ?? [] };
+    }
+    return { ok: false, studies: [], error: "The studies could not be loaded." };
+  } catch {
+    return { ok: false, studies: [], error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/studies/{id} — one study's status/progress + stored results, served VERBATIM. Returns
+// null on a 404 / any error (the caller keeps the prior view; never fabricates a study).
+export async function fetchStudy(studyId: string): Promise<Study | null> {
+  try {
+    const res = await fetch(`${API_BASE}/research/studies/${encodeURIComponent(studyId)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data?.study as Study) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// POST /research/studies/{id}/cancel — cancel a running/queued study (J-61). The backend's 404
+// (unknown id) / 409 (already terminal) detail is surfaced VERBATIM. On success the job resolves to
+// explicit `cancelled` with partial-marked results (the next poll shows it).
+export async function cancelStudy(studyId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/studies/${encodeURIComponent(studyId)}/cancel`,
+      { method: "POST" },
+    );
+    if (res.ok) return { ok: true };
+    let error = "The study could not be cancelled.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

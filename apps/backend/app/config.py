@@ -599,6 +599,77 @@ class Config:
     # counter-test (a real classifier threshold still DOES).
     dense_replay_time_budget_seconds: float = 60.0
 
+    # --- Research evolution: REPLAY STUDIES (capability 32, J-60/J-61/J-62) ----------------------
+    # RESEARCH DEFAULTS — a starting point calibrated against the seeded sims + the committed PG SIP
+    # reference fixture, NEVER a validated edge (the goal doc's Research-config-defaults constraint:
+    # every research value lives in config with its sim/fixture calibration documented; no literal in
+    # research code). A replay study runs the EXISTING setup grammar over a chosen window through a
+    # FRESH engine (observer-only), auto-arms occurrences per the rules below, measures each
+    # occurrence's excursions through the EXISTING excursion machinery, and reports them side-by-side
+    # with a seeded random-arm-time NULL baseline. These five values SHAPE the persisted study results
+    # (which occurrences arm, the R basis they measure against, how many null arms), so they ENTER
+    # ``config_fingerprint`` — a study created after this iteration carries a new fingerprint (the
+    # intended honesty mechanism: studies never pool across fingerprints). This is NOT a defect — it is
+    # the same fingerprint-shift discipline every prior research-config addition introduced.
+    #
+    # STUDY NULL-ARM COUNT: how many random-arm-time NULL-baseline occurrences are drawn (from the
+    # recorded seed) over the SAME window, SAME direction, SAME R definition, and SAME horizons as the
+    # setup arms. The seed is persisted on the study record so the baseline reproduces exactly. A
+    # control population large enough to be a meaningful comparison yet bounded so one in-memory replay
+    # pass serves both populations within the CI budget. Defaults to 100 (the goal.md register's
+    # "random-time baseline: 41/100" illustration).
+    study_null_arm_count: int = 100
+    # STUDY ARMING SUSTAIN (logical seconds): the auto-arming rule for the two state-native setups
+    # (absorption_reversal / trend_continuation) requires the setup's PREMISE tape state to hold
+    # CONTINUOUSLY for at least this long before an occurrence is armed — so a single flickering tick
+    # never arms an occurrence (the same sustained-evidence discipline the verdict dwell enforces).
+    # Composed ONLY of EXISTING engine states (no new indicator): absorption_reversal arms on sustained
+    # matching ABSORPTION (the premise), trend_continuation on sustained matching CONTROL. Calibrated
+    # against the sims' 30s primary window + their phase lengths so SIM-REVERSAL's absorption phase and
+    # SIM-BUYER's control phase each arm exactly one occurrence at the point the premise is settled.
+    study_arm_sustain_seconds: float = 5.0
+    # STUDY ARMING COOLDOWN (logical seconds): after an occurrence arms, no further occurrence of the
+    # same study arms until this much logical time has elapsed past the arm — so one sustained premise
+    # phase produces ONE occurrence, not an occurrence every tick. A generous default (longer than the
+    # longest excursion horizon) so occurrences are well-separated and never overlap their excursion
+    # windows. Calibrated so each single-regime sim phase yields exactly one armed occurrence.
+    study_arm_cooldown_seconds: float = 180.0
+    # STUDY OCCURRENCE-R SPREAD MULTIPLE (the named occurrence-R design decision — documented in the
+    # dev handoff). An auto-armed occurrence has NO user-typed invalidation, so its R basis is derived
+    # DETERMINISTICALLY from existing engine values at the arm instant: a synthetic invalidation placed
+    # this many TIMES the arm-instant spread on the ADVERSE side of the arm price (below for a long,
+    # above for a short). R = |arm_price − synthetic_invalidation| then flows through the EXISTING
+    # ``marks.r_basis`` helper + the ``excursions.py`` ternary/horizon machinery — the study is a
+    # REGISTERED CONSUMER of the one R formula, never a second one. IDENTICAL for setup and null arms
+    # (each arm derives its own basis from its own arm-instant price + spread the same way). A spread
+    # MULTIPLE (not a dollar band) so it scales to any instrument, mirroring the invalidation-ε /
+    # too-tight multiples. NEVER fitted to make results look good — that would be auto-tuning. Defaults
+    # to 10.0 (a stop comfortably outside spread noise yet reachable within the configured horizons on
+    # a real move — calibrated against the GME drop slice + the sim phases so +1R/−1R are exercised).
+    study_occurrence_r_spread_multiple: float = 10.0
+    # STUDY OCCURRENCE-R FLOOR (a price distance): a no-spread-basis fallback for the occurrence R so a
+    # window whose arm-instant quote is missing/zero still measures a meaningful, deterministic R rather
+    # than a degenerate R == 0 that resolves every horizon to ``neither`` (an honest but useless null
+    # study). The synthetic invalidation is placed MAX(spread-multiple band, this floor) from the arm
+    # price on the adverse side. A price-distance floor (not a multiple) since by definition there is no
+    # spread to scale; documented research default calibrated against the sims' ~$0.01 tick so it is a
+    # few ticks. Enters the fingerprint (it shapes the persisted R basis).
+    study_occurrence_r_floor: float = 0.05
+    # STUDY NULL-BASELINE SEED: the default seed used to draw the random null-arm times when a study
+    # does not carry its own. Persisted on each study record at creation so the baseline reproduces
+    # exactly (same seed ⇒ identical arms). A documented research default; it shapes the persisted null
+    # baseline, so it ENTERS the fingerprint. Per-study override is possible (recorded on the record),
+    # but the default keeps the committed reference study reproducible in CI.
+    study_null_baseline_seed: int = 1729
+    # STUDY LIST PAGE SIZE (``GET /research/studies``): a SERVING-ONLY value — the max number of study
+    # rows the list returns. EXCLUDED from ``config_fingerprint`` (see the exclusion set in
+    # ``config_fingerprint``) by the SAME iter-12 page-size precedent (``journal_list_*``): a list page
+    # size touches NO persisted study value (it never changes an occurrence, an R basis, a baseline, or
+    # a stamp), so two journals identical in every threshold but served at different study-list page
+    # sizes MUST share a fingerprint (else fragmenting the very pools studies exist to compare). Pinned
+    # by a fingerprint-stability test (changing it does NOT move the fingerprint) and its counter-test.
+    study_list_max: int = 100
+
     def window_label(self, window: int) -> str:
         return f"{window}s"
 
@@ -652,6 +723,16 @@ class Config:
             # but run under different CI budgets MUST share a fingerprint (else fragmenting the
             # analytics pools). Same iter-12/iter-16 precedent as the serving/display fields above.
             "dense_replay_time_budget_seconds",
+            # The study-list page size (capability 32 / J-60): a SERVING-ONLY value that never enters
+            # any persisted study computation (it touches no occurrence, R basis, baseline, or stamp),
+            # so two journals identical in every threshold but served at different study-list page sizes
+            # MUST share a fingerprint. Same iter-12 page-size precedent (``journal_list_*`` above). The
+            # FIVE other new study keys (``study_null_arm_count``, ``study_arm_sustain_seconds``,
+            # ``study_arm_cooldown_seconds``, ``study_occurrence_r_spread_multiple``,
+            # ``study_occurrence_r_floor``, ``study_null_baseline_seed``) are DELIBERATELY NOT excluded
+            # — they shape the persisted study results, so they MOVE the fingerprint (the intended
+            # never-pool-across-fingerprints honesty mechanism).
+            "study_list_max",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)

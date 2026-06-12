@@ -193,7 +193,103 @@ export interface ResearchTaxonomy {
   // every label / caption / framing VERBATIM (the frontend hardcodes none). Optional so a pre-J-59
   // taxonomy payload stays valid (the view then falls back to its own minimal copy register).
   analytics?: AnalyticsTaxonomy;
+  // The replay-studies display copy (capability 32, J-60/J-61/J-62) — the /studies page renders every
+  // label / caption / framing + each status's own absence sentence VERBATIM (the frontend hardcodes
+  // none). Optional so a pre-J-60 taxonomy payload stays valid (the page then falls back to its own
+  // minimal copy register).
+  studies?: StudiesTaxonomy;
   disclaimer: string;
+}
+
+// The replay-studies display copy owned by the backend (`GET /research/taxonomy` → `studies`).
+export interface StudiesTaxonomy {
+  statuses: TaxonomyEnum[];
+  // Per-status honest-absence copy — each status its OWN explicit sentence (iter-15 lesson). Keyed by
+  // status id (queued / running / cancelled / failed).
+  status_absence: Record<string, string>;
+  // The flat copy register (title, framing, form labels, results labels, captions). The page reads
+  // each key by name — the backend stays the single owner of every studies label/caption.
+  copy: Record<string, string>;
+  state_native_setups: string[];
+  level_setups: string[];
+  ternary_outcomes: TaxonomyEnum[];
+}
+
+// One per-horizon ternary distribution row for a study population (setup or null baseline). The
+// resolved-outcome counts + a SEPARATE truncated count (never folded into the resolved buckets).
+export interface StudyHorizonRow {
+  horizon: number;
+  "+1R_first": number;
+  "-1R_first": number;
+  neither_within_horizon: number;
+  truncated: number;
+}
+
+// One armed occurrence row (setup or null) — read VERBATIM (the page recomputes nothing).
+export interface StudyOccurrence {
+  arm_logical_ts: number;
+  arm_price: number;
+  spread_at_arm: number | null;
+  invalidation_price: number;
+  r_basis: number;
+  horizons: { horizon: number; outcome: string | null; truncated: boolean; mfe_r: number; mae_r: number }[];
+  verdict_summary?: string;
+}
+
+// One population's aggregate (n + the per-horizon ternary distribution).
+export interface StudyPopulationAggregate {
+  n: number;
+  horizons: StudyHorizonRow[];
+}
+
+// The full study projection served by `GET /research/studies/{id}` (and each list row). Status /
+// progress while running; occurrence rows + aggregates + the seeded null baseline once terminal. Read
+// VERBATIM — the page computes nothing.
+export interface Study {
+  id: string;
+  status: "queued" | "running" | "done" | "cancelled" | "failed";
+  source_kind: string;
+  source_id: string;
+  source: string;
+  setup_type: string;
+  direction: string;
+  level_price: number | null;
+  data_feed: string;
+  config_fingerprint: string;
+  null_baseline_seed: number;
+  null_arm_count: number;
+  hindsight_level: boolean;
+  excluded_from_cross_study_aggregate: boolean;
+  created_wall_ts: number;
+  partial?: boolean;
+  error?: string;
+  events_processed?: number;
+  min_sample_size?: number;
+  occurrences?: StudyOccurrence[];
+  null_occurrences?: StudyOccurrence[];
+  aggregates?: {
+    setup: StudyPopulationAggregate;
+    null_baseline: StudyPopulationAggregate;
+  };
+}
+
+// The body for `POST /research/studies` (capability 32, J-60).
+export interface CreateStudyParams {
+  source_kind: "reference" | "sim" | "historical";
+  source_id: string;
+  setup_type: string;
+  direction: string;
+  level_price?: number | null;
+  start?: string;
+  end?: string;
+  null_baseline_seed?: number;
+}
+
+export interface CreateStudyResult {
+  ok: boolean;
+  study?: Study;
+  status?: number;
+  error?: string;
 }
 
 // The segregated-analytics display copy owned by the backend (`GET /research/taxonomy` → `analytics`).

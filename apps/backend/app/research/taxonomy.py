@@ -368,6 +368,122 @@ ANALYTICS_COPY: dict[str, str] = {
 }
 
 
+# --- Replay-studies display copy (capability 32, J-60/J-61/J-62) ---------------------------------
+# Owned ONCE here so the /studies page is taxonomy-driven (the frontend hardcodes no label / caption /
+# framing). This is the MOST edge-claim-prone surface in the product (the J-66 sweep will audit it),
+# so every string is written CLEAN now: descriptive, present-tense, measurement-framed — n + caveats
+# always visible, NEVER "edge" / "win rate" as advice, NEVER imperative, NEVER predictive. The
+# side-by-side null baseline is the honesty mechanism: a setup distribution is only meaningful BESIDE
+# the random-arm-time control over the same window.
+
+# STUDY STATUS LABELS — each status its OWN explicit label (iter-15 lesson: one absence-fallback copy
+# string must NOT serve two distinct states). The frontend renders these verbatim; the status COLOR
+# semantics (slate for queued/cancelled, amber for running/partial, slate-green-FREE for done so it
+# never reads as an "edge win", rose for failed) live in the frontend's design tokens, not here.
+STUDY_STATUSES: dict[str, str] = {
+    "queued": "Queued",
+    "running": "Running",
+    "done": "Done",
+    "cancelled": "Cancelled",
+    "failed": "Failed",
+}
+
+# PER-STATUS HONEST-ABSENCE COPY — each status gets its OWN explicit sentence for the results area when
+# there is nothing (yet) to show (iter-15 lesson: each state distinct, never a shared fallback). These
+# describe what the study IS doing / DID, never a result that does not exist.
+STUDY_STATUS_ABSENCE_COPY: dict[str, str] = {
+    "queued": "This study is queued — it has not started replaying yet, so there are no results to show.",
+    "running": (
+        "This study is replaying its window now — results appear once the replay finishes. Nothing is "
+        "shown mid-run rather than a partial number that could be misread."
+    ),
+    "cancelled": (
+        "This study was cancelled before it finished. Any occurrences shown below are PARTIAL — they "
+        "cover only the part of the window that replayed, and are not a complete measurement."
+    ),
+    "failed": (
+        "This study could not produce a result (no data, an unavailable provider, or an empty window). "
+        "The explicit reason is shown — never an empty or fabricated success."
+    ),
+}
+
+STUDY_COPY: dict[str, str] = {
+    # The page title + the one-line framing the anti-goals require beside every figure.
+    "title": "Replay studies",
+    "intro": (
+        "Run your setup grammar over a chosen past window and read the occurrence outcomes side-by-side "
+        "with a seeded random-arm-time baseline — so you can see whether the setup measurably differs "
+        "from arming at random over the same window, before trusting any live cue."
+    ),
+    "measurement_framing": (
+        "These are journaled MEASUREMENTS of a replay over recorded data — not a profitability claim, "
+        "an edge, a win rate, or a forecast. Every distribution shows its n beside the random-arm-time "
+        "baseline; truncated horizons are counted separately; results are stamped with their data feed "
+        "and config fingerprint and are never pooled across either."
+    ),
+    # The create form.
+    "create_title": "New study",
+    "source_label": "Source",
+    "reference_source_label": "Reference window (committed PG SIP fixture — no credentials)",
+    "sim_source_label": "Seeded sim scenario",
+    "historical_source_label": "Symbol + past window",
+    "setup_label": "Setup",
+    "direction_label": "Direction",
+    "level_label": "Level price (required for level setups)",
+    "create_button": "Run study",
+    # The hindsight-level label + caption (a level study is illustrative + excluded from aggregates).
+    "hindsight_level_label": "Level chosen with hindsight",
+    "hindsight_level_caption": (
+        "This level setup used a level you supplied with full knowledge of the window — it is "
+        "illustrative only and is excluded from any cross-study comparison."
+    ),
+    # The job list.
+    "jobs_title": "Studies",
+    "jobs_empty": "No studies yet — create one above to run your setup grammar over a chosen window.",
+    "cancel_button": "Cancel",
+    "progress_label": "events processed",
+    # The results view.
+    "results_title": "Results",
+    "occurrences_title": "Occurrences",
+    "occurrence_arm_label": "Arm time (logical s)",
+    "occurrence_verdict_label": "Verdict reached",
+    "occurrence_r_label": "R basis",
+    "setup_distribution_label": "Your setup",
+    "null_baseline_label": "Random-time baseline",
+    "null_baseline_caption": (
+        "The same window, direction, R definition, and horizons — but arm times drawn at random from a "
+        "recorded seed, so the setup distribution is read against an honest control, not in isolation."
+    ),
+    "seed_label": "Baseline seed",
+    "n_label": "n",
+    "horizon_label": "Horizon",
+    "truncated_label": EXCURSION_TRUNCATED_LABEL,
+    "truncated_caption": (
+        "Horizons the window end cut short before +1R or −1R could resolve — counted separately, never "
+        "folded into the resolved outcomes, never extrapolated."
+    ),
+    "feed_label": "Feed",
+    "fingerprint_label": "Config fingerprint",
+    "insufficient_sample_label": "Insufficient sample",
+    "insufficient_sample_caption": (
+        "Below the minimum sample size — n is shown, but the distribution is read with care rather than "
+        "as a measurement from too few occurrences."
+    ),
+    "rerun_button": "Re-run identical",
+    # The R-definition note (the named occurrence-R design decision, surfaced honestly to the user).
+    "occurrence_r_caption": (
+        "An auto-armed occurrence has no typed invalidation, so its R is a config-owned synthetic "
+        "distance from the arm price (a spread multiple on the adverse side) — the same definition for "
+        "your setup and the random-time baseline. R = |arm price − synthetic invalidation|."
+    ),
+}
+
+
+def study_status_label(status: str) -> str:
+    """Display label for a study status id. Unknown -> humanised (never fabricated)."""
+    return STUDY_STATUSES.get(status, status.replace("_", " "))
+
+
 def excursion_outcome_label(outcome: str | None) -> str:
     """Display label for a ternary excursion outcome id. ``None`` (an open/undetermined horizon) and
     any unknown value fall back to a humanised form (never fabricated)."""
@@ -603,5 +719,21 @@ def taxonomy_payload() -> dict:
         # /journal analytics view is taxonomy-driven (the frontend hardcodes no label / caption /
         # framing). Descriptive, R-units, never a profitability / edge / win-rate claim.
         "analytics": dict(ANALYTICS_COPY),
+        # The replay-studies display copy (capability 32, J-60/J-61/J-62) — owned ONCE here so the
+        # /studies page is taxonomy-driven (the frontend hardcodes no label / caption / framing). Each
+        # study status carries its OWN explicit label + honest-absence sentence (iter-15 lesson);
+        # descriptive, measurement-framed, never an edge / win-rate / imperative / prediction claim.
+        "studies": {
+            "statuses": [{"id": k, "name": v} for k, v in STUDY_STATUSES.items()],
+            "status_absence": dict(STUDY_STATUS_ABSENCE_COPY),
+            "copy": dict(STUDY_COPY),
+            # The two state-native auto-arming setups vs the two level (hindsight) setups, so the
+            # create form knows which need a user-supplied level (it also reads ``setups[].requires_level``).
+            "state_native_setups": ["absorption_reversal", "trend_continuation"],
+            "level_setups": ["level_break", "failed_move_fade"],
+            "ternary_outcomes": [
+                {"id": k, "name": v} for k, v in EXCURSION_TERNARY_OUTCOMES.items()
+            ],
+        },
         "disclaimer": "Descriptive only — not trading advice.",
     }

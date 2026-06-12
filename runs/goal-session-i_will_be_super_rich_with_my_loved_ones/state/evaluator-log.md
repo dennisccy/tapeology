@@ -274,3 +274,19 @@
 **Reasoning:** The capability-34 engine performance gate — the session's first engine touch — landed exactly as spec'd: incremental refresh-score maintenance across all evictions in features.py (_RefreshSide + bounded quote-remap rebuild), byte-identical to the _refresh_fractions oracle, proven over a newly committed ≈10-min REAL PG SIP fixture (3,229 trades + 11,012 quotes, all five windows evict, ~10s unpaced replay vs ~184s quadratic, 60s config-owned budget). The pipeline halted at qa_complete (known harness defect), so per the spec's mandated fallback the evaluator independently re-ran: full suite (630 collected, exit 0), observer-equivalence 7/7 + the two new test files (29 passed isolated), real-data pins (50 passed, ZERO re-pins), the fingerprint stability+counter pair; re-diffed the tree (only features.py + config.py in app code; no store.py/classifier/provider/frontend); verified the no-rescan test guards evictions occurred and asserts post_evict_merge == 0; and opened the J-68/J-08 sentinel pixels (full-page, non-blank; one supplementary concurrent capture blank — minor). Coherence: COHERENCE-PASS. Reviewer PASS, QA PASS, browser QA 3/3.
 
 **Next-step recommendation:** Iteration 18, depth FULL — the J-60/J-61 replay-study layer: study runner (unpaced fresh-engine replay over the committed PG SIP fixture), state-native auto-arming, seeded random-arm-time null baseline, cancellable background jobs, POST/GET /research/studies API, the /studies page + nav enablement, and the pinned committed reference study that flips J-62 to passing. Multi-surface + first writes to the studies tables -> full pipeline warranted.
+
+## Iteration 18 — goal-i_will_be_super_rich_with_my_loved_ones-iter-18
+
+**Date:** 2026-06-12T01:57:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-62 (partial → passing — the committed reference-study test completes capability 32's CI clause; the iter-17 engine-keeps-up clause stays green)
+- Advanced: J-60 failing → partial, J-61 failing → partial (backend legs CI-proven; UI legs have zero pixel evidence — browser QA SKIPPED 0/33, frontend dev server down)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none
+
+**Reasoning:** Evaluator independently re-ran everything the spec mandated: full suite 671 passed / 1 skipped exit 0 (matches handoff exactly, zero re-pins), test_studies_reference.py + test_observer_equivalence.py (7/7) + test_dense_replay_gate.py = 22/22 in isolation, test_studies.py + test_studies_api.py = 38/38. Pinned reference numbers in the test byte-match the handoff (PG SIP setup n=2 / null n=99; SIM-REVERSAL setup n=1 / null n=100; r_basis [0.3, 0.6] / 0.2). Re-diff vs 6a7e2e4 confirms observer-only scope (no engine/provider/classifier/chart file), no store schema bump (grep: no CREATE/ALTER/migrate; stays v7), occurrence-R through the single marks.r_basis helper, 5 study keys IN fingerprint with only serving-only study_list_max excluded, stamps + recorded seed persisted, copy register clean. Coherence: PASS. But J-60/J-61 are UI journeys and the /studies page has no pixels — the iter-2/3 lesson bars a flip on a skipped browser run. J-62's acceptance is explicitly automated ("(Automated; operator can re-run)"), so it flips on CI evidence alone.
+
+**Next-step recommendation:** Lean browser-verification iteration: restart the frontend dev server cleanly (the QA production-build step corrupted the shared .next — known caution), canary-probe, then execute the designed 33-test plan to flip J-60/J-61 in pixels and re-capture the J-68 sentinel (cockpit unchanged except the enabled Studies nav entry). Note: state/blueprint.reapproval-requested is pending (nav-skeleton change) — the human gate must clear. After J-60/J-61 flip, the Evidence-before-cues door (J-58–J-62) opens for the strictly-last cue layer (J-53, J-63–J-67).

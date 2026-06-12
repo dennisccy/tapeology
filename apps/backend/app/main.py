@@ -177,6 +177,10 @@ async def lifespan(app: FastAPI):
         if own_registry:
             reg = get_registry_or_none()
             if reg is not None:
+                # Drain any in-flight replay-study jobs (capability 32) before closing the store so a
+                # daemon worker never writes to a closed store on shutdown.
+                with contextlib.suppress(Exception):
+                    reg.study_jobs.join_all(timeout=5.0)
                 reg.store.close()
             set_registry(None)
             manager.set_on_engine_created(None)

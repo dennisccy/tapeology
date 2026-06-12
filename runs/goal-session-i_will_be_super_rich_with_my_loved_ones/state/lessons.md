@@ -115,3 +115,9 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** The structural no-rescan pin (`_refresh_oracle_calls == 0` post-eviction) counts ONLY the merge-oracle fallback — the quote-remap rebuild in `features.py::_Window._refresh_rebuild` is a separate, bounded window re-walk (fires a few hundred times on the ~3,200-trade PG fixture and contributes most of the residual ~10s replay time; tracked by `_window._refresh_rebuilds`). If dense replay slows in future work, check the rebuild count before suspecting the merge fallback. Also: the backend's pytest `addopts = "-q"` means passing `-q` again double-quiets and SUPPRESSES the final pass/fail count line — verify suites via exit code or run without an extra `-q`.
 **Applies to:** the iter-18 J-60–J-62 study runner (which replays this same fixture and inherits this perf profile), any future `apps/backend/app/engine/features.py` change, and any agent re-running the backend suite for verification.
+
+## iter-18 — 2026-06-12T01:57:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** The already-memorialized QA caution bit anyway: running `npm run build` against the live dev server's shared `.next` (QA step 3) corrupted it, the dev server started 500-ing on missing webpack modules, and browser QA was downgraded to SKIPPED 0/33 — on exactly the iteration that shipped a brand-new UI surface (`/studies`), costing J-60/J-61 their flip. The pipeline ordering itself is the hazard: a production-build verification step before browser QA can silently destroy the browser-QA substrate.
+**Applies to:** every iteration with frontend changes — run `npm run build` with a separate build dir (e.g. `NEXT_DIST_DIR`/`--experimental-build-mode` isolation) or AFTER browser QA; the browser-qa step must treat "frontend was up earlier in the pipeline" as no evidence and re-probe (fresh-server canary) before declaring SKIP unavoidable.

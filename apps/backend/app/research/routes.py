@@ -41,6 +41,14 @@ from .monitor import (
 )
 from .journal_rows import journal_row
 from .store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
+from .studies import (
+    REFERENCE_SOURCE_ID,
+    SOURCE_HISTORICAL,
+    SOURCE_REFERENCE,
+    SOURCE_SIM,
+    TERMINAL_STATUSES as STUDY_TERMINAL_STATUSES,
+    StudyJobManager,
+)
 from .taxonomy import not_evaluated_notice
 from .taxonomy import (
     MISTAKE_TAGS_REQUIRING_NOTE,
@@ -95,6 +103,25 @@ class ActionRequest(BaseModel):
     price: float
 
 
+class StudyRequest(BaseModel):
+    """Body for ``POST /research/studies`` (capability 32, J-60). ``source_kind`` (``reference`` |
+    ``sim`` | ``historical``) + ``source_id`` (the sim ticker / reference id / the symbol), the setup ×
+    direction, an optional ``level_price`` (REQUIRED for the two level setups, FORBIDDEN otherwise),
+    and the historical ``start`` / ``end`` window for an arbitrary historical study. All validation is
+    enforced in the ROUTE (not the schema) so messages are explicit and taxonomy-owned. An optional
+    ``null_baseline_seed`` lets a caller pin the baseline (the committed reference study uses the config
+    default so it reproduces in CI)."""
+
+    source_kind: str
+    source_id: str = ""
+    setup_type: str
+    direction: str
+    level_price: float | None = None
+    start: str | None = None
+    end: str | None = None
+    null_baseline_seed: int | None = None
+
+
 class ReviewRequest(BaseModel):
     """Body for ``POST /research/thesis/{id}/review`` (J-57). ``mistake_tags`` is the user-CONFIRMED
     tag list (distinct from the machine-SUGGESTED tags); ``note`` is the optional free text (REQUIRED
@@ -120,10 +147,23 @@ class ResearchRegistry:
         self._config = config
         self._fingerprint = config.config_fingerprint()
         self._monitors: dict[str, ResearchMonitor] = {}
+        # The replay-study background-job manager (capability 32, J-60/J-61). Process-scoped: it owns
+        # the cancellable worker threads and runs studies OFF the event loop, persisting through the
+        # SAME single writer queue. One per registry (a backend restart loses in-flight jobs — a study
+        # left ``running`` from a prior process is surfaced honestly, never silently completed).
+        self._study_jobs = StudyJobManager(store, config)
 
     @property
     def store(self) -> JournalStore:
         return self._store
+
+    @property
+    def study_jobs(self) -> StudyJobManager:
+        return self._study_jobs
+
+    @property
+    def config(self) -> Config:
+        return self._config
 
     def on_engine_created(self, ticker: str, engine: object) -> None:
         """Attach a fresh monitor to a freshly-built engine (the WatchManager hook).
@@ -999,3 +1039,168 @@ def review_thesis(
             "note": stored_note,
         }
     }
+
+
+# --- Replay studies (capability 32, J-60/J-61/J-62) ---------------------------------------------
+# The four endpoints in blueprint row 23. Studies are CREATED + STARTED here, run as cancellable
+# background jobs OFF the event loop (the live cockpit is never blocked), and read VERBATIM (the
+# served payload is the runner's persisted result — never recomputed at read; the UI computes
+# nothing). Validation is explicit (422/404/409), never silent coercion.
+
+# The market adapter for an ARBITRARY-WINDOW historical study — resolved through the SAME neutral seam
+# the watch path uses, honoring test ``dependency_overrides`` (a hermetic test injects its FakeAdapter;
+# a credentialless run fails explicitly, never fixture-substituted). Lazy import avoids an import cycle.
+def get_study_market_adapter():
+    from ..main import app, get_market_adapter
+
+    return app.dependency_overrides.get(get_market_adapter, get_market_adapter)()
+
+
+def _build_historical_fetch(adapter, symbol: str, start: str, end: str):
+    """A blocking fetch callable the runner invokes ON ITS WORKER THREAD (off the event loop) for an
+    arbitrary-window study. It uses the EXISTING adapter ``fetch_historical`` so credentials / no-data /
+    untradable / timeout each surface the existing explicit errors (the runner maps them to an explicit
+    ``failed`` study — never fabricated, never fixture-substituted)."""
+    from datetime import datetime, timezone
+
+    def _parse(value: str):
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+
+    start_dt = _parse(start)
+    end_dt = _parse(end)
+
+    def _fetch():
+        return adapter.fetch_historical(symbol, start_dt, end_dt)
+
+    return _fetch
+
+
+@router.post("/studies")
+def create_study(
+    body: StudyRequest,
+    registry: ResearchRegistry = Depends(get_registry),
+) -> dict:
+    """Create + START a replay study (capability 32, J-60). Full validation (422):
+      * unknown setup_type / direction / source_kind;
+      * a level setup (level_break / failed_move_fade) WITHOUT a level_price (never a guessed level),
+        or a level supplied for a non-level setup (forbidden);
+      * a historical (arbitrary-window) study missing / malformed start / end, or end <= start.
+    On success the study is persisted ``queued`` with its honesty stamps + recorded baseline seed and
+    started as a background job; the full queued projection is returned."""
+    # 422 — enum validation (never a silently-coerced enum).
+    if not is_valid_setup(body.setup_type):
+        raise HTTPException(status_code=422, detail=f"unknown setup_type '{body.setup_type}'")
+    if not is_valid_direction(body.direction):
+        raise HTTPException(status_code=422, detail=f"unknown direction '{body.direction}'")
+    if body.source_kind not in (SOURCE_REFERENCE, SOURCE_SIM, SOURCE_HISTORICAL):
+        raise HTTPException(status_code=422, detail=f"unknown source_kind '{body.source_kind}'")
+
+    # 422 — the per-setup level rule (mirrors the thesis-declare rule): REQUIRED for the two level
+    # setups (never a guessed level), FORBIDDEN otherwise.
+    requires_level = setup_requires_level(body.setup_type)
+    if requires_level and body.level_price is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"setup_type '{body.setup_type}' requires a level_price (a level is never guessed)",
+        )
+    if not requires_level and body.level_price is not None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"setup_type '{body.setup_type}' does not take a level_price",
+        )
+
+    # Resolve the source + (for an arbitrary historical study) the bounded fetch callable.
+    historical_fetch = None
+    source_descriptor = body.source_id
+    data_feed = "sim"
+    if body.source_kind == SOURCE_SIM:
+        from ..providers.simulated import is_sim_ticker
+
+        if not is_sim_ticker(body.source_id):
+            raise HTTPException(status_code=422, detail=f"unknown sim scenario '{body.source_id}'")
+        data_feed = "sim"
+    elif body.source_kind == SOURCE_REFERENCE:
+        # The committed PG SIP fixture — no credentials, no window params.
+        source_descriptor = REFERENCE_SOURCE_ID
+        data_feed = "sip"
+    else:  # SOURCE_HISTORICAL — arbitrary symbol + past window through the existing fetch path.
+        if not body.source_id:
+            raise HTTPException(status_code=422, detail="a historical study requires a symbol")
+        if not body.start or not body.end:
+            raise HTTPException(
+                status_code=422, detail="a historical study requires start and end"
+            )
+        from datetime import datetime, timezone
+
+        try:
+            s = datetime.fromisoformat(body.start.replace("Z", "+00:00"))
+            e = datetime.fromisoformat(body.end.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="start and end must be ISO date-times")
+        if e <= s:
+            raise HTTPException(status_code=422, detail="end must be after start")
+        adapter = get_study_market_adapter()
+        if not adapter.is_available():
+            # No credentials -> explicit unavailable (the study is never created with fabricated data).
+            raise HTTPException(
+                status_code=422,
+                detail="real-data provider unavailable — a historical study needs credentials",
+            )
+        historical_fetch = _build_historical_fetch(adapter, body.source_id, body.start, body.end)
+        data_feed = "sip"
+
+    params = {
+        "source_kind": body.source_kind,
+        "source_id": body.source_id,
+        "source": source_descriptor,
+        "setup_type": body.setup_type,
+        "direction": body.direction,
+        "level_price": body.level_price,
+        "data_feed": data_feed,
+    }
+    if body.null_baseline_seed is not None:
+        params["null_baseline_seed"] = body.null_baseline_seed
+
+    jobs = registry.study_jobs
+    payload = jobs.create(params)
+    jobs.start(payload["id"], historical_fetch=historical_fetch)
+    return {"study": payload}
+
+
+@router.get("/studies")
+def list_studies(registry: ResearchRegistry = Depends(get_registry)) -> dict:
+    """List studies most-recent-first (capped at the serving-only ``study_list_max``). Each row is the
+    runner's persisted payload, served VERBATIM (never recomputed)."""
+    records = registry.store.list_studies(limit=registry.config.study_list_max)
+    return {"studies": [r.payload for r in records]}
+
+
+@router.get("/studies/{study_id}")
+def get_study(
+    study_id: str, registry: ResearchRegistry = Depends(get_registry)
+) -> dict:
+    """One study's status / progress + stored results, served VERBATIM. 404 for an unknown id."""
+    record = registry.store.get_study(study_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"no study with id '{study_id}'")
+    return {"study": record.payload}
+
+
+@router.post("/studies/{study_id}/cancel")
+def cancel_study(
+    study_id: str, registry: ResearchRegistry = Depends(get_registry)
+) -> dict:
+    """Cancel a running/queued study (capability 32, J-61). 404 unknown id; 409 if the study is
+    already terminal (done / cancelled / failed). The cancellation is cooperative — the running job
+    observes it between events and resolves to explicit ``cancelled`` with partial-marked results."""
+    record = registry.store.get_study(study_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"no study with id '{study_id}'")
+    status = record.payload.get("status")
+    if status in STUDY_TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=409, detail=f"study '{study_id}' is already {status} — cannot cancel"
+        )
+    registry.study_jobs.cancel(study_id)
+    return {"study_id": study_id, "cancelling": True}

@@ -228,6 +228,32 @@ class VerdictEventRecord:
     rule_first_true_price: float | None = None
 
 
+@dataclass(frozen=True)
+class StudyRecord:
+    """One persisted replay-study row (capability 32, J-60/J-61/J-62) — read back as an immutable record.
+
+    The ``studies`` + ``study_occurrences`` tables exist from schema v1 in a PAYLOAD-BLOB shape, so a
+    study's ENTIRE state (status, stamps, seed, progress, create params, and — at completion /
+    cancellation — its occurrence rows + aggregates + null baseline) lives in the ``studies.payload``
+    JSON. No schema bump is needed (schema stays v7): the blob absorbs the record. The study runner is
+    the single owner that builds the payload; the routes serve it VERBATIM (never recomputed at read).
+
+    Honesty stamps the runner writes into ``payload`` at creation (capability 32 / never-pool): the
+    bound ``source`` descriptor, the ``data_feed`` (``sip | iex | sim``), the ``config_fingerprint``
+    over the entire frozen config, and the ``null_baseline_seed`` — so a study reproduces exactly and
+    is never silently compared across feeds or fingerprints.
+
+    ``id`` is the study id (a uuid). ``payload`` is the full served projection. ``created_wall_ts`` is
+    the creation instant. The occurrence rows are ALSO written verbatim into ``study_occurrences`` at
+    the persist-once moment (first writes to that table) so both tables are populated; the canonical
+    served result remains the ``studies.payload`` (one source of truth — the occurrence rows mirror it,
+    never a second computation)."""
+
+    id: str
+    payload: dict
+    created_wall_ts: float
+
+
 class _StopSentinel:
     """Enqueued on close so the writer thread exits its loop cleanly."""
 
@@ -860,6 +886,119 @@ class JournalStore:
             )
 
         self._do_write(_fn)
+
+    # --- replay studies (capability 32, J-60/J-61/J-62) — first writes to the studies tables -----
+    def insert_study(self, record: StudyRecord) -> None:
+        """Persist a NEW study row at CREATION (capability 32). The full study projection — status
+        (``queued``), honesty stamps (source / data_feed / config_fingerprint / null_baseline_seed),
+        and create params — lives in the ``studies.payload`` JSON (the v1 payload-blob shape; schema
+        stays v7, no bump). The write goes through the single writer queue (``BEGIN IMMEDIATE``), never
+        from event processing or the WS serialization path. ``study_occurrences`` is NOT written here —
+        occurrences are persisted ONCE at completion / cancellation via :meth:`set_study_result`."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "INSERT INTO studies (id, payload, created_wall_ts) VALUES (?,?,?)",
+                (record.id, json.dumps(record.payload), record.created_wall_ts),
+            )
+
+        self._do_write(_fn)
+
+    def update_study_payload(self, study_id: str, payload: dict) -> None:
+        """Replace a study's served payload (capability 32). Used for the running-progress updates
+        (status ``running`` + a ``progress`` fraction) — a cheap, infrequent status write, NOT a hot
+        path (progress ticks are throttled by the runner). The write goes through the single writer
+        queue (``BEGIN IMMEDIATE``). The occurrence/aggregate/baseline result lands ONCE at the
+        terminal moment via :meth:`set_study_result` — this method never writes ``study_occurrences``."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE studies SET payload=? WHERE id=?",
+                (json.dumps(payload), study_id),
+            )
+
+        self._do_write(_fn)
+
+    def set_study_result(
+        self, study_id: str, payload: dict, occurrences: list[dict]
+    ) -> None:
+        """Persist a study's FINAL result ONCE at its defining moment (capability 32, J-60/J-61).
+
+        Writes the complete served projection (status ``done`` | ``cancelled`` | ``failed`` + the
+        occurrence rows + aggregates + the seeded null baseline) into ``studies.payload`` AND mirrors
+        each occurrence row verbatim into ``study_occurrences`` — the FIRST writes to that table — in
+        ONE ``BEGIN IMMEDIATE`` writer transaction (so the payload and the occurrence rows can never
+        diverge). The ``studies.payload`` is the canonical served result (one source of truth — the
+        ``study_occurrences`` rows mirror it, never a second computation). NO tape data is persisted:
+        an occurrence row holds only its arm metadata + R-unit excursion summaries, never
+        trades/quotes/candles (the persistence-scope anti-goal). Idempotent: a study's occurrences are
+        cleared and re-inserted so a (defensive) double-call cannot duplicate rows."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE studies SET payload=? WHERE id=?",
+                (json.dumps(payload), study_id),
+            )
+            # First writes to study_occurrences (mirror of the canonical payload occurrence rows).
+            conn.execute("DELETE FROM study_occurrences WHERE study_id=?", (study_id,))
+            for occ in occurrences:
+                conn.execute(
+                    "INSERT INTO study_occurrences (study_id, payload) VALUES (?,?)",
+                    (study_id, json.dumps(occ)),
+                )
+
+        self._do_write(_fn)
+
+    def get_study(self, study_id: str) -> StudyRecord | None:
+        """One study read back as an immutable record (the served projection is its ``payload``)."""
+        conn = self._read_conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM studies WHERE id=?", (study_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            return StudyRecord(
+                id=row["id"],
+                payload=json.loads(row["payload"]),
+                created_wall_ts=row["created_wall_ts"],
+            )
+        finally:
+            conn.close()
+
+    def list_studies(self, *, limit: int) -> list[StudyRecord]:
+        """Studies most-recent-first, capped at ``limit`` (the serving-only ``study_list_max``). Read
+        VERBATIM — the list route renders each record's ``payload`` directly (never recomputed)."""
+        conn = self._read_conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM studies ORDER BY created_wall_ts DESC, id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [
+                StudyRecord(
+                    id=r["id"],
+                    payload=json.loads(r["payload"]),
+                    created_wall_ts=r["created_wall_ts"],
+                )
+                for r in rows
+            ]
+        finally:
+            conn.close()
+
+    def study_occurrence_rows(self, study_id: str) -> list[dict]:
+        """The persisted ``study_occurrences`` rows for a study, in insertion order. The canonical
+        served result is the ``studies.payload``; this read exposes the mirrored occurrence rows for
+        the never-pool / first-writes assertions (the rows equal the payload's occurrences verbatim)."""
+        conn = self._read_conn()
+        try:
+            rows = conn.execute(
+                "SELECT payload FROM study_occurrences WHERE study_id=? ORDER BY id ASC",
+                (study_id,),
+            ).fetchall()
+            return [json.loads(r["payload"]) for r in rows]
+        finally:
+            conn.close()
 
     def expire_stale_actives(self, wall_ts: float) -> list[str]:
         """Startup sweep (J-47 / J-51 leg): resolve each UNMARKED thesis still ``active`` to
