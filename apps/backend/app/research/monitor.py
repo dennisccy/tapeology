@@ -1051,15 +1051,81 @@ class ResearchMonitor:
         # The status string alone cannot tell stop from exhaustion (both are ``closed``); the
         # distinguishing reason lives on the engine (``end_reason``), stamped by the WatchManager.
         try:
-            if status in ("closed", "failed") and self._thesis is not None and not self._resolved:
-                # A real position must never be orphaned: an entry-marked thesis survives.
-                if self._store.has_entry_mark(self._thesis.id):
-                    self._detach_not_evaluated()
-                    return
-                self._expire_active(status=status)
+            if status in ("closed", "failed"):
+                # Terminal flips: resolve/detach an active thesis; never run the freshness refresh (a
+                # closed/failed stream has nothing live to re-evaluate — the projection clears or
+                # survives not-evaluated). A terminal flip with no active thesis is a clean no-op.
+                if self._thesis is not None and not self._resolved:
+                    # A real position must never be orphaned: an entry-marked thesis survives.
+                    if self._store.has_entry_mark(self._thesis.id):
+                        self._detach_not_evaluated()
+                        return
+                    self._expire_active(status=status)
+            else:
+                # FRESHNESS WIRING (iter-22 / J-64): a NON-terminal status flip — ``paused`` / ``stale``,
+                # and the restored prior status on ``resume`` — carries NO event, so ``on_event`` (which
+                # advances the checklist + management-stance dwell evaluators and refreshes
+                # ``_last_snapshot``) never runs for it. Without this, the served checklist keeps reading
+                # the snapshot captured at the LAST event (still ``stream_status: live``) and a frozen
+                # green ``conditions_met`` persists over a paused/stale tape — the confirmed iter-21
+                # defect. Here we RE-READ the engine's CURRENT canonical snapshot (the engine rebuilds
+                # ``self._snapshot`` with the new ``stream_status`` / ``delivery_lag_seconds`` BEFORE it
+                # notifies — this is a pure READ of the canonical row-6/row-14 owner, the iter-9
+                # precedent, NEVER a second computation) and re-advance the dwell evaluators against it,
+                # so the dwell-exempt ``no_fresh_tape`` publishes IMMEDIATELY (and resume restores honest
+                # live evaluation). The pure ``stance.py`` logic is correct and is NOT re-derived.
+                self._refresh_on_status_flip()
         except Exception:
             self._failed = True
             logger.exception("research monitor on_status failed")
+
+    def _refresh_on_status_flip(self) -> None:
+        """Re-advance the checklist + management-stance evaluators against the engine's CURRENT
+        snapshot on a non-terminal status flip (paused / stale / resume-restore), so a flip that
+        carries no event still degrades (or restores) the served stance immediately.
+
+        Only acts when there is an active thesis to evaluate and an engine to read the current
+        canonical snapshot from. Reads ``engine.snapshot()`` (the row-6 ``stream_status`` + row-14
+        ``delivery_lag_seconds`` owner — a READ, never recomputed) and refreshes ``_last_snapshot`` so
+        the projection-time per-check rows reflect the current status/lag too. The verdict is NOT
+        advanced here (no event => no verdict transition); only the freshness-sensitive checklist /
+        stance dwell evaluators are re-driven, exactly as ``on_event`` does after the verdict step.
+        Runs inside ``on_status``'s try/except — a failure surfaces ``monitor_status: failed`` and the
+        feeder stays alive."""
+        if self._thesis is None or self._resolved:
+            return
+        engine = self._engine
+        if engine is None:
+            return
+        snapshot_getter = getattr(engine, "snapshot", None)
+        if snapshot_getter is None:
+            return
+        snapshot = snapshot_getter()
+        if snapshot is None:
+            return
+        # Refresh the served read to the CURRENT canonical snapshot (carries the new status/lag).
+        self._last_snapshot = snapshot
+        # Re-advance the entry-checklist aggregate stance — its ``no_fresh_tape`` rule is dwell-exempt,
+        # so the degradation (or, on resume, the restored read) publishes immediately. The per-check
+        # rows are recomputed at projection time from this refreshed snapshot.
+        if self._checklist is not None:
+            checks = self._compute_checks(snapshot)
+            self._checklist.advance(
+                checks=checks, verdict=self._verdict, logical_ts=snapshot.timestamp
+            )
+        # Re-advance the management stance too (its dwell uses the same published verdict; a freshness
+        # flip carries no verdict change, but keeping the stance current on the refreshed snapshot is
+        # consistent and harmless — the management-stance enum has no freshness state, so a pause is a
+        # row-16 gap event for J-53, not a stance change).
+        if self._stance is not None:
+            self._stance.advance(
+                verdict=self._verdict,
+                verdict_evidence=self._verdict_evidence,
+                logical_ts=snapshot.timestamp,
+                invalidation_evidence=(
+                    self._verdict_evidence if self._verdict == "invalidated" else None
+                ),
+            )
 
     def _detach_not_evaluated(self) -> None:
         """Survive a stop/failure as active-but-not-evaluated (J-47): the entry-marked thesis stays

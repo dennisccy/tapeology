@@ -677,6 +677,12 @@ export interface TapeSnapshot {
   // this to render the PAUSED indicator and toggle the Pause/Resume control — it never guesses
   // paused client-side. Optional for backward compatibility with any pre-J-19 snapshot shape.
   paused?: boolean;
+  // Canonical feeder-owned delivery lag (Data Contract row 14, J-63/J-64): how far the processed
+  // tape trails real time, in SECONDS. Owned once by the feeder and read VERBATIM here — the UI does
+  // NO wall-clock arithmetic (zero client-side computation; it reads the SAME value the `tape_lag_ok`
+  // entry-checklist check reads). `null`/absent before the feeder stamps a lag (cold construction) —
+  // an honest "no lag measured", rendered as an explicit placeholder, never a fabricated 0.
+  delivery_lag_seconds?: number | null;
   warm?: boolean;
   timestamp: number;
   market: Market;

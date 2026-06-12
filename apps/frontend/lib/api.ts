@@ -339,6 +339,8 @@ export async function fetchInitialSnapshot(
     scenario: summary.scenario,
     stream_status: summary.stream_status,
     paused: summary.paused ?? false,
+    // Row 14: read the feeder-owned lag VERBATIM (null when not yet stamped) — zero client arithmetic.
+    delivery_lag_seconds: summary.delivery_lag_seconds ?? null,
     timestamp: summary.timestamp,
     market: summary.market,
     tape_state: summary.tape_state,

@@ -50,6 +50,16 @@ const STREAM_DOT: Record<string, DotSpec> = {
   failed: { color: "bg-rose-500", label: "failed" },
 };
 
+// The canonical row-14 `delivery_lag_seconds` readout (J-64): how far the processed tape trails real
+// time, in seconds. Reads the SAME served value the `tape_lag_ok` entry-checklist check reads — the
+// UI does DISPLAY ROUNDING ONLY, never any wall-clock arithmetic (zero client-side computation). An
+// honest absence (`null`/`undefined` — before the feeder stamps the first lag) renders an explicit
+// "lag —" placeholder, never a fabricated 0.
+function formatDeliveryLag(lag: number | null | undefined): string {
+  if (lag === null || lag === undefined) return "lag —";
+  return `lag ${lag.toFixed(1)}s`;
+}
+
 const INPUT_CLASS =
   "rounded border border-slate-700 bg-slate-950 px-3 py-1.5 font-mono text-sm text-slate-100 placeholder-slate-600 transition-colors focus:border-emerald-500 focus:outline-none";
 
@@ -462,6 +472,20 @@ export function TopBar({
         )}
 
         <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
+          {/* Canonical delivery-lag readout (row 14, J-64): the served snapshot's
+              `delivery_lag_seconds`, mono numerics, display rounding only — beside the stream-status
+              indicator. Reads the SAME value the `tape_lag_ok` check reads; honest "lag —" when the
+              feeder has not stamped a lag yet (null/absent), never a fabricated 0. Shown only while a
+              snapshot is present (a watched ticker). */}
+          {watched && snapshot && (
+            <span
+              data-testid="delivery-lag"
+              title="How far the processed tape trails real time (canonical, read-only)"
+              className="font-mono text-slate-500"
+            >
+              {formatDeliveryLag(snapshot.delivery_lag_seconds)}
+            </span>
+          )}
           <span className={`inline-block h-2.5 w-2.5 rounded-full ${dot.color}`} />
           <span className="capitalize">{dot.label}</span>
         </div>

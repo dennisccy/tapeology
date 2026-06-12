@@ -764,3 +764,140 @@ def test_checklist_no_fresh_tape_when_feed_not_live(store):
     checklist = monitor.projection()["entry_checklist"]
     assert checklist["stance"]["value"] == "no_fresh_tape"
     assert checklist["checks"]  # checks still rendered (with their margins), stance honestly degraded
+
+
+# =================================================================================================
+# Freshness WIRING across a status flip (iter-22 / J-64): on_status advances the checklist + serves
+# the CURRENT canonical status/lag, so a status flip carrying NO event still degrades immediately.
+# =================================================================================================
+
+
+def _force_conditions_met(monitor, engine, store, thesis):
+    """Drive the live monitor (through the real engine observer) until the checklist publishes
+    ``conditions_met`` — the GREEN substrate a pause/stale flip must degrade. Returns once green.
+
+    Stamps a healthy ``delivery_lag_seconds`` per event (the feeder owns this in production; a raw
+    engine never sets it, leaving ``tape_lag_ok`` failing forever), so the green is actually reachable
+    — exactly the ``tape_lag_ok`` reads the feeder serves the live integration test."""
+    provider = SimulatedProvider("SIM-BUYER", "buyer_control")
+    engine.add_observer(monitor)
+    for ev in itertools.islice(provider.stream(), 1200):
+        engine.process_event(ev)  # the observer (monitor) is fed via add_observer
+        engine.set_delivery_lag(0.0)  # feeder-owned freshness stamp (healthy live tape)
+        cl = monitor.projection()["entry_checklist"]
+        if cl["stance"]["value"] == "conditions_met":
+            return True
+    return False
+
+
+def _buyer_thesis(store, *, invalidation=98.0):
+    """A trend_continuation/long thesis on SIM-BUYER (the proven conditions_met substrate)."""
+    engine = _warm_engine("SIM-BUYER", "buyer_control", n=40)
+    snap = engine.snapshot()
+    thesis = ThesisRecord(
+        id="t-fresh",
+        ticker="SIM-BUYER",
+        setup_type="trend_continuation",
+        direction="long",
+        invalidation_price=invalidation,
+        level_price=None,
+        status="active",
+        bound_source=snap.scenario,
+        data_feed="sim",
+        config_fingerprint=CONFIG.config_fingerprint(),
+        entry_context={},
+        statements=frozen_statements("trend_continuation", "long"),
+        created_logical_ts=snap.timestamp,
+        created_wall_ts=1700000000.0,
+    )
+    store.insert_thesis(thesis)
+    store.append_verdict_event(
+        VerdictEventRecord(thesis.id, 0.0, 1.0, "pending", "declared", None, None, None)
+    )
+    return engine, thesis
+
+
+def test_on_status_pause_degrades_checklist_immediately_no_frozen_green(store):
+    # The core iter-22 wiring fix at the monitor level: a previously-green conditions_met must flip to
+    # no_fresh_tape the instant the engine status goes "paused" — a flip that carries NO event. Before
+    # the fix the projection kept serving the green from the last-event snapshot.
+    engine, thesis = _buyer_thesis(store)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.attach_engine(engine)
+    monitor.set_thesis(thesis)
+    assert _force_conditions_met(monitor, engine, store, thesis), "never reached conditions_met"
+
+    engine.pause()  # fires on_status("paused"); the engine snapshot already reads stream_status=paused
+
+    cl = monitor.projection()["entry_checklist"]
+    assert cl["stance"]["value"] == "no_fresh_tape"
+    feed_live = next(c for c in cl["checks"] if c["check"] == "feed_live")
+    assert feed_live["passed"] is False
+    assert "paused" in feed_live["margin"]  # serves the CURRENT status, not the stale last-event one
+
+
+def test_on_status_stale_degrades_checklist_immediately(store):
+    engine, thesis = _buyer_thesis(store)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.attach_engine(engine)
+    monitor.set_thesis(thesis)
+    assert _force_conditions_met(monitor, engine, store, thesis)
+
+    engine.set_stream_status("stale")  # the live-feeder watchdog seam — fires on_status("stale")
+
+    cl = monitor.projection()["entry_checklist"]
+    assert cl["stance"]["value"] == "no_fresh_tape"
+    assert "stale" in next(c for c in cl["checks"] if c["check"] == "feed_live")["margin"]
+
+
+def test_on_status_resume_restores_honest_live_evaluation(store):
+    engine, thesis = _buyer_thesis(store)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.attach_engine(engine)
+    monitor.set_thesis(thesis)
+    assert _force_conditions_met(monitor, engine, store, thesis)
+
+    engine.pause()
+    assert monitor.projection()["entry_checklist"]["stance"]["value"] == "no_fresh_tape"
+
+    engine.resume()  # restores the pre-pause "live" status, fires on_status("live")
+    # The per-check rows immediately reflect the restored live status (feed_live passes again); the
+    # AGGREGATE stance is dwell-gated, so a re-green arrives only after the dwell elapses on fresh
+    # post-resume events (never an instant restoration of the pre-pause green). Drive a few events.
+    cl = monitor.projection()["entry_checklist"]
+    assert next(c for c in cl["checks"] if c["check"] == "feed_live")["passed"] is True
+    provider = SimulatedProvider("SIM-BUYER", "buyer_control")
+    cleared = False
+    for ev in itertools.islice(provider.stream(), 1200):
+        engine.process_event(ev)
+        engine.set_delivery_lag(0.0)
+        if monitor.projection()["entry_checklist"]["stance"]["value"] != "no_fresh_tape":
+            cleared = True
+            break
+    assert cleared, "no_fresh_tape never cleared after resume on fresh evidence"
+
+
+def test_on_status_failure_surfaces_monitor_failed_not_dead_feed(store):
+    # on_status stays exception-isolated: a failure inside the new wiring surfaces monitor_status
+    # failed (the projection says so) and never propagates to kill the feeder.
+    engine, thesis = _buyer_thesis(store)
+    monitor = ResearchMonitor(store, CONFIG)
+    monitor.attach_engine(engine)
+    monitor.set_thesis(thesis)
+    engine.add_observer(monitor)  # so engine.pause() reaches the monitor's on_status hook
+    monitor.on_event(None, engine.snapshot())
+
+    # Poison the checklist advancement so the new on_status refresh path raises internally.
+    class _Boom:
+        def advance(self, **kwargs):  # noqa: D401 - test stub
+            raise RuntimeError("boom")
+
+        @property
+        def published_stance(self):
+            return "conditions_not_met"
+
+    monitor._checklist = _Boom()
+    engine.pause()  # the on_status refresh hits the poisoned evaluator — must be isolated
+
+    proj = monitor.projection()
+    assert proj["monitor_status"] == "failed"
