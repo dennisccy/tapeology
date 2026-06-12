@@ -687,6 +687,135 @@ STUDY_COPY: dict[str, str] = {
 }
 
 
+# --- Setup-forming hints display copy (capability 33, J-65) --------------------------------------
+# Owned ONCE here so the cockpit's hint dock + the /journal hint log are taxonomy-driven (the frontend
+# hardcodes NO pattern label, evidence template, citation string, dock title, register line, declared-
+# from label, log column, or empty-state copy). This is a cue surface, so the copy discipline is at its
+# strictest (the J-66 sweep audits it next): every string is DESCRIPTIVE and PRESENT-TENSE — a hint
+# DESCRIBES a forming pattern on the tape NOW, it is NEVER an imperative (no buy/sell/enter/exit), NEVER
+# a prediction (no "will"/"about to"/price target), NEVER a certainty/edge claim, and NEVER a thesis by
+# itself. The pattern→setup mapping below composes ONLY the EXISTING engine tape states (no new
+# indicator): sustained absorption arms an absorption_reversal context; sustained control arms a
+# trend_continuation context (the state-native arming the goal's capability 33 names).
+
+# The four state-native hint patterns. Each maps a SUSTAINED existing tape state to a setup-type context
+# + direction (the declaration the dock prefills). ``unclear`` is deliberately absent — it never produces
+# a hint; the two level setups have no state-native arming, so they never produce hints either.
+HINT_PATTERNS: dict[str, dict] = {
+    "sustained_bid_absorption": {
+        "name": "Bid absorption forming",
+        "tape_state": "bid_absorption",
+        "setup_type": "absorption_reversal",
+        "direction": "long",
+    },
+    "sustained_ask_absorption": {
+        "name": "Ask absorption forming",
+        "tape_state": "ask_absorption",
+        "setup_type": "absorption_reversal",
+        "direction": "short",
+    },
+    "sustained_buyer_control": {
+        "name": "Buyer control forming",
+        "tape_state": "buyer_control",
+        "setup_type": "trend_continuation",
+        "direction": "long",
+    },
+    "sustained_seller_control": {
+        "name": "Seller control forming",
+        "tape_state": "seller_control",
+        "setup_type": "trend_continuation",
+        "direction": "short",
+    },
+}
+
+# The exact honest-absence citation string the spec mandates VERBATIM (a hint with no matching studied
+# baseline for its setup/feed/fingerprint). One canonical string, owned here, rendered verbatim.
+HINT_BASELINE_UNVALIDATED: str = "no studied baseline — unvalidated pattern"
+
+HINT_COPY: dict[str, str] = {
+    # The dock title + the register line the cue-discipline mandates beside every hint (the cockpit's
+    # existing "Descriptive only — not trading advice" discipline, extended verbatim to the hint dock).
+    "dock_title": "Setup forming",
+    "dock_register": "Descriptive only — not trading advice.",
+    # The declare affordance label (one click PREFILLS the declare form — it never creates a thesis).
+    "declare_label": "Prefill a thesis from this hint",
+    "declare_caption": (
+        "Prefills the setup and direction on the declare form — you still type the invalidation price "
+        "yourself. One click never creates a thesis."
+    ),
+    # The declared-from label (shown on the hint-log row once the user completed a declaration from it).
+    "declared_from_label": "Declared from this hint",
+    # The hint-log view title + its honest empty-state copy.
+    "log_title": "Hints",
+    "log_empty": (
+        "No hints logged yet — a setup-forming hint is recorded here each time a sustained pattern "
+        "is described on a watched ticker."
+    ),
+}
+
+# The hint-log column labels — the /journal hint-log table renders these verbatim (no hardcoded header).
+HINT_LOG_COLUMNS: dict[str, str] = {
+    "time": "Time",
+    "ticker": "Ticker",
+    "pattern": "Pattern",
+    "evidence": "Evidence",
+    "baseline": "Studied baseline",
+    "declared_from": "Declared from",
+}
+
+
+def hint_pattern_label(pattern_id: str) -> str:
+    """Display label for a hint pattern id. Unknown -> humanised (never fabricated)."""
+    spec = HINT_PATTERNS.get(pattern_id)
+    return spec["name"] if spec is not None else pattern_id.replace("_", " ")
+
+
+def hint_evidence(pattern_id: str, sustained_seconds: float) -> str:
+    """The plain-language, PRESENT-TENSE evidence for a fired hint, carrying the measured sustain
+    duration (capability 33 / no-naked-outputs). DESCRIPTIVE only — it states what the tape IS doing
+    now, never an imperative, never a prediction, never a price target or certainty/edge claim.
+
+    The measured value (the logical seconds the premise state has sustained) grounds the description in
+    a canonical engine fact, exactly the example the iter spec gives ("bid absorption sustained 45 s —
+    sellers being absorbed at the bid")."""
+    secs = int(round(sustained_seconds))
+    bodies = {
+        "sustained_bid_absorption": (
+            f"Bid absorption is sustained {secs}s — aggressive selling is being absorbed at the bid "
+            "with no meaningful downward price progress."
+        ),
+        "sustained_ask_absorption": (
+            f"Ask absorption is sustained {secs}s — aggressive buying is being absorbed at the ask "
+            "with no meaningful upward price progress."
+        ),
+        "sustained_buyer_control": (
+            f"Buyer control is sustained {secs}s — aggressive buying is moving price higher with "
+            "stable spread."
+        ),
+        "sustained_seller_control": (
+            f"Seller control is sustained {secs}s — aggressive selling is moving price lower with "
+            "stable spread."
+        ),
+    }
+    return bodies.get(
+        pattern_id,
+        f"The {hint_pattern_label(pattern_id).lower()} pattern is sustained {secs}s on the tape.",
+    )
+
+
+def hint_baseline_citation(n: int, plus: int, minus: int, neither: int, horizon: int) -> str:
+    """The baseline-citation sentence for a fired hint that HAS a matching studied baseline — cites the
+    STORED study aggregates VERBATIM (n occurrences + the first-horizon ternary distribution vs the
+    seeded null baseline is named on the study itself). DESCRIPTIVE measurement framing, never an edge
+    or win-rate claim (J-66): it states what the user's OWN recorded studies measured, with n always
+    shown. Reads the already-persisted aggregate numbers — NEVER recomputes anything at read."""
+    return (
+        f"Your studies of this setup on this feed: n={n} occurrences; over the {horizon}s horizon "
+        f"{plus} reached +1R first, {minus} reached −1R first, {neither} neither — a journaled "
+        "measurement of your own studies, not an edge claim."
+    )
+
+
 def study_status_label(status: str) -> str:
     """Display label for a study status id. Unknown -> humanised (never fabricated)."""
     return STUDY_STATUSES.get(status, status.replace("_", " "))
@@ -974,6 +1103,28 @@ def taxonomy_payload() -> dict:
             "ternary_outcomes": [
                 {"id": k, "name": v} for k, v in EXCURSION_TERNARY_OUTCOMES.items()
             ],
+        },
+        # The setup-forming hints display copy (capability 33, J-65) — owned ONCE here so the cockpit's
+        # hint dock + the /journal hint log are taxonomy-driven (the frontend hardcodes no pattern label,
+        # dock title, register line, declared-from label, log column, or empty-state copy). The PER-HINT
+        # evidence + baseline citation travel computed-once on each persisted hint record (built from this
+        # module's ``hint_evidence`` / ``hint_baseline_citation`` templates), never re-worded on the
+        # frontend. Strictest copy register: descriptive, present-tense, NEVER imperative/predictive/
+        # certain (J-66). This block doubles as iter-23's code-identity canary — ``GET /research/taxonomy``
+        # carrying ``hints`` proves the NEW server code is live.
+        "hints": {
+            "patterns": [
+                {
+                    "id": pid,
+                    "name": spec["name"],
+                    "setup_type": spec["setup_type"],
+                    "direction": spec["direction"],
+                }
+                for pid, spec in HINT_PATTERNS.items()
+            ],
+            "copy": dict(HINT_COPY),
+            "log_columns": dict(HINT_LOG_COLUMNS),
+            "baseline_unvalidated": HINT_BASELINE_UNVALIDATED,
         },
         "disclaimer": "Descriptive only — not trading advice.",
     }

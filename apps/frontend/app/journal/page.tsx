@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { fetchAnalytics, fetchJournal, fetchTaxonomy } from "@/lib/api";
+import { fetchAnalytics, fetchHints, fetchJournal, fetchTaxonomy } from "@/lib/api";
 import type {
   Analytics,
+  Hint,
   JournalFilters,
   JournalRow,
   ResearchTaxonomy,
@@ -11,6 +12,7 @@ import type {
 import { JournalTable } from "@/components/JournalTable";
 import { JournalFilterBar } from "@/components/JournalFilterBar";
 import { AnalyticsView } from "@/components/AnalyticsView";
+import { HintLog } from "@/components/HintLog";
 
 // The /journal page (J-51 + J-59): the research record. Two VIEWS within the one page (no new route,
 // no new nav entry — the blueprint-registered home for J-59):
@@ -24,7 +26,7 @@ import { AnalyticsView } from "@/components/AnalyticsView";
 // computed server-side and rendered verbatim (display rounding only). Loading / error / empty states
 // are all handled. Dark instrument-panel style, consistent with the cockpit.
 
-type JournalViewMode = "theses" | "analytics";
+type JournalViewMode = "theses" | "analytics" | "hints";
 
 export default function JournalPage() {
   const [taxonomy, setTaxonomy] = useState<ResearchTaxonomy | null>(null);
@@ -40,6 +42,12 @@ export default function JournalPage() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+
+  // --- hints view state (J-65) ---
+  const [hints, setHints] = useState<Hint[]>([]);
+  const [hintsLoading, setHintsLoading] = useState(false);
+  const [hintsError, setHintsError] = useState<string | null>(null);
+  const [hintsLoaded, setHintsLoaded] = useState(false);
 
   // Load the taxonomy once (display labels — the frontend hardcodes none).
   useEffect(() => {
@@ -88,6 +96,26 @@ export default function JournalPage() {
     if (view === "analytics") loadAnalytics();
   }, [view, loadAnalytics]);
 
+  // Load the persisted hint log when the hints view is opened (and refresh on each re-open so a newly
+  // logged hint shows up). Read-only — the page renders each record verbatim. The hint log is its OWN
+  // view; analytics is untouched (the spec's "no analytics change beyond none").
+  const loadHints = useCallback(async () => {
+    setHintsLoading(true);
+    setHintsError(null);
+    const result = await fetchHints();
+    if (result.ok) {
+      setHints(result.rows);
+      setHintsLoaded(true);
+    } else {
+      setHintsError(result.error ?? "The hint log could not be loaded.");
+    }
+    setHintsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (view === "hints") loadHints();
+  }, [view, loadHints]);
+
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-6">
@@ -118,9 +146,40 @@ export default function JournalPage() {
             onClick={() => setView("analytics")}
             testid="journal-view-analytics"
           />
+          <ViewTab
+            label={taxonomy?.hints?.copy.log_title ?? "Hints"}
+            active={view === "hints"}
+            onClick={() => setView("hints")}
+            testid="journal-view-hints"
+          />
         </div>
 
-        {view === "theses" ? (
+        {view === "hints" ? (
+          <>
+            {/* Hint-log error — a styled alert (never a blank/fabricated view). */}
+            {hintsError && (
+              <div
+                data-testid="hint-log-error"
+                role="alert"
+                className="mb-4 rounded-lg border border-rose-700/70 bg-rose-900/30 px-4 py-3 text-sm text-rose-200"
+              >
+                {hintsError}
+              </div>
+            )}
+
+            {hintsLoading && !hintsLoaded && !hintsError ? (
+              <div
+                data-testid="hint-log-loading"
+                className="flex min-h-[30vh] items-center justify-center rounded-lg border border-slate-800 bg-slate-900/40"
+              >
+                <div className="h-3 w-3 animate-pulse rounded-full bg-slate-600" />
+                <span className="ml-2 text-sm text-slate-500">Loading the hint log…</span>
+              </div>
+            ) : hintsLoaded ? (
+              <HintLog rows={hints} taxonomy={taxonomy} />
+            ) : null}
+          </>
+        ) : view === "theses" ? (
           <>
             <JournalFilterBar filters={filters} taxonomy={taxonomy} onChange={setFilters} />
 

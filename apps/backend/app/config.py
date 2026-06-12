@@ -735,6 +735,35 @@ class Config:
     # sizes MUST share a fingerprint (else fragmenting the very pools studies exist to compare). Pinned
     # by a fingerprint-stability test (changing it does NOT move the fingerprint) and its counter-test.
     study_list_max: int = 100
+    # HINT SUSTAIN DWELL (logical seconds, capability 33 / J-65): a state-native setup-forming hint
+    # fires only after its PREMISE tape state (one of the four sustained states — bid_absorption /
+    # ask_absorption / buyer_control / seller_control) has held CONTINUOUSLY for at least this long —
+    # so a single flickering tick, or SIM-CHOP's flapping unclear/mixed stream, NEVER sustains past
+    # it and NEVER fires a hint (the same sustained-evidence discipline the verdict dwell and the
+    # study-arm sustain enforce). Composed ONLY of EXISTING engine states (no new indicator). A
+    # RESEARCH DEFAULT — a starting point, never a validated edge. Logical-time (the verdict-dwell
+    # precedent), so sim journeys are deterministic and no wall-clock enters a hint decision (the wall
+    # ts on the record is a stamp only). Calibrated against the sims' phase lengths so SIM-BIDABS's
+    # sustained bid_absorption phase fires exactly one hint within a browser-verifiable wait, while
+    # SIM-CHOP's flapping never holds one premise state long enough to reach it. ENTERS the fingerprint
+    # (it shapes the persisted hint records — the study-arm-sustain precedent).
+    hint_sustain_dwell_seconds: float = 5.0
+    # HINT COOLDOWN (logical seconds, capability 33 / J-65): after a hint fires for a pattern on the
+    # watched ticker, no further hint of the SAME pattern on the SAME ticker fires until this much
+    # logical time has elapsed past the fire — so one sustained premise phase produces ONE logged hint,
+    # not a hint every tick (the study-arm-cooldown precedent). A generous default so re-fires are
+    # well-separated; the active-hint lifecycle (clear-on-state-leave / clear-on-non-live-status) is
+    # independent of this re-fire gate. A RESEARCH DEFAULT, logical-time, deterministic. ENTERS the
+    # fingerprint (it shapes which hint records are persisted — the study-arm-cooldown precedent).
+    hint_cooldown_seconds: float = 180.0
+    # HINT LOG PAGE SIZE (``GET /research/hints``): a SERVING-ONLY value — the default/max number of
+    # persisted hint-log rows the list returns. EXCLUDED from ``config_fingerprint`` (see the exclusion
+    # set in ``config_fingerprint``) by the SAME iter-12 page-size precedent (``journal_list_*`` /
+    # ``study_list_max``): a list page size touches NO persisted hint value (it never changes a hint
+    # record, its evidence, its citation, or its stamps), so two journals identical in every threshold
+    # but served at different hint-log page sizes MUST share a fingerprint. Pinned by a
+    # fingerprint-stability test (changing it does NOT move the fingerprint) and its counter-test.
+    hint_log_max: int = 200
 
     def window_label(self, window: int) -> str:
         return f"{window}s"
@@ -822,6 +851,15 @@ class Config:
             # the identical precedent. Pinned by a fingerprint-stability test + the real-threshold
             # counter-test.
             "delivery_lag_ok_bound_seconds",
+            # The hint-log page size (capability 33 / J-65): a SERVING-ONLY value that never enters any
+            # persisted hint computation (it touches no hint record, evidence, citation, or stamp), so
+            # two journals identical in every threshold but served at different hint-log page sizes MUST
+            # share a fingerprint. Same iter-12 page-size precedent (``journal_list_*`` / ``study_list_max``
+            # above). The TWO hint timing keys (``hint_sustain_dwell_seconds`` / ``hint_cooldown_seconds``)
+            # are DELIBERATELY NOT excluded — they shape WHICH hint records get persisted, so they MOVE
+            # the fingerprint (the intended never-pool-across-fingerprints honesty mechanism; the
+            # study-arm-sustain / study-arm-cooldown precedent).
+            "hint_log_max",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)

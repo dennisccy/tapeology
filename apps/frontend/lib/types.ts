@@ -293,7 +293,35 @@ export interface ResearchTaxonomy {
   checklist_checks?: { id: string; name: string; caption: string }[];
   checklist_stances?: TaxonomyEnum[];
   checklist_absence?: { no_fresh_tape: string };
+  // The setup-forming hints display copy (capability 33, J-65) — the cockpit hint dock + the /journal
+  // hint-log view render every label / register line / column / empty-state copy VERBATIM (the frontend
+  // hardcodes none). The per-hint evidence + baseline citation travel on each hint object. Optional so a
+  // pre-J-65 taxonomy payload stays valid (the surfaces then fall back to their own minimal copy).
+  hints?: HintsTaxonomy;
   disclaimer: string;
+}
+
+// The setup-forming hints display copy owned by the backend (`GET /research/taxonomy` → `hints`).
+export interface HintsTaxonomy {
+  patterns: { id: string; name: string; setup_type: string; direction: string }[];
+  copy: {
+    dock_title: string;
+    dock_register: string;
+    declare_label: string;
+    declare_caption: string;
+    declared_from_label: string;
+    log_title: string;
+    log_empty: string;
+  };
+  log_columns: {
+    time: string;
+    ticker: string;
+    pattern: string;
+    evidence: string;
+    baseline: string;
+    declared_from: string;
+  };
+  baseline_unvalidated: string;
 }
 
 // The replay-studies display copy owned by the backend (`GET /research/taxonomy` → `studies`).
@@ -698,6 +726,36 @@ export interface TapeSnapshot {
   // GET /research/thesis/active), or `null` when none. Optional so a pre-research snapshot shape
   // (e.g. the REST initial-paint assembly) is still valid; the strip reads it verbatim.
   thesis?: ThesisProjection | null;
+  // Additive `hint` key (data-contract row 22, J-65): the active setup-forming hint projection (same
+  // object as GET /research/hints/active), or `null` when none. Optional for the same backward-compat
+  // reason; the hint dock reads it verbatim (it never recomputes evidence or citation).
+  hint?: Hint | null;
+}
+
+// One active setup-forming hint (capability 33, J-65) — the dock reads this VERBATIM (the backend
+// computes evidence + baseline citation once; the frontend renders, never derives). Identical shape
+// for the active projection AND each persisted hint-log row (the log record IS the projection).
+export interface Hint {
+  id: string;
+  ticker: string;
+  pattern_id: string;
+  pattern_label: string;
+  // Plain-language, present-tense evidence with a measured value (no naked output).
+  evidence: string;
+  // The setup-type context + direction the declare affordance prefills.
+  setup_type: string;
+  direction: string;
+  // The user's matching studied baseline cited verbatim, or exactly "no studied baseline —
+  // unvalidated pattern".
+  baseline_citation: string;
+  // Honesty stamps (assigned once at fire).
+  bound_source: string;
+  data_feed: string;
+  config_fingerprint: string;
+  logical_ts: number;
+  wall_ts: number;
+  // Present only once the user completed a declaration FROM this hint (the created thesis id).
+  declared_from?: string;
 }
 
 // Client-side connection status for the pre-snapshot / no-snapshot window. "failed" (J-23) is the

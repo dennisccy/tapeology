@@ -559,6 +559,11 @@ async def stream(websocket: WebSocket, ticker: str) -> None:
             # when no thesis is active (a normal state, never an error).
             frame = serialize_stream(engine.snapshot())
             frame["thesis"] = _thesis_projection(ticker)
+            # One additive ``hint`` key (capability 33, J-65, data-contract row 22) — the SAME
+            # ``monitor.hint_projection()`` that ``GET /research/hints/active`` returns, so REST and WS are
+            # verbatim-equal; ``null`` when no hint is active (a normal state, never an error). Merged HERE
+            # at the send site so the engine serializers stay byte-identical (the equivalence anti-goal).
+            frame["hint"] = _hint_projection(ticker)
             await websocket.send_json(frame)
             await asyncio.sleep(WS_PUSH_INTERVAL)
     except WebSocketDisconnect:
@@ -575,3 +580,15 @@ def _thesis_projection(ticker: str) -> dict | None:
     if registry is None:
         return None
     return registry.projection_for(ticker)
+
+
+def _hint_projection(ticker: str) -> dict | None:
+    """The active setup-forming hint projection for ``ticker`` from the research registry, or ``None``.
+
+    Read-only and defensive: if the registry is not wired (e.g. an isolated unit-test app), the WS simply
+    carries ``hint: null`` — never an error. This is the ONE place the WS reads the hint, so the WS key
+    and the REST read share the single ``monitor.hint_projection()`` source (data-contract row 22)."""
+    registry = get_registry_or_none()
+    if registry is None:
+        return None
+    return registry.hint_projection_for(ticker)

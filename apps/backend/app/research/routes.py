@@ -82,6 +82,12 @@ class ThesisRequest(BaseModel):
     direction: str
     invalidation_price: float
     level_price: float | None = None
+    # The optional declared-from-hint linkage (capability 33, J-65): when the user declares from a
+    # hint's prefill affordance the frontend passes the hint id here. Additive + optional — a normal
+    # (non-prefilled) declaration omits it and is unchanged. An unknown/invalid id is a 422 (validated in
+    # the route, not the schema, so the message is explicit). The link is recorded on the hint record
+    # ONLY when the declaration COMPLETES — one click never creates a thesis.
+    declared_from_hint_id: str | None = None
 
 
 class ResolveRequest(BaseModel):
@@ -174,7 +180,7 @@ class ResearchRegistry:
         monitor: the monitor adopts it — appending exactly one ``watch_restarted`` gap event and
         resuming evaluation — only once the first snapshot confirms the new watch's source identity
         equals the thesis's ``bound_source`` (a mismatch is never adopted)."""
-        monitor = ResearchMonitor(self._store, self._config)
+        monitor = ResearchMonitor(self._store, self._config, ticker)
         monitor.attach_engine(engine)
         self._monitors[ticker] = monitor
         engine.add_observer(monitor)
@@ -230,6 +236,16 @@ class ResearchRegistry:
             monitor_notice=not_evaluated_notice(surviving.bound_source),
             verdict_events=self._store.verdict_events(surviving.id),
         )
+
+    def hint_projection_for(self, ticker: str) -> dict | None:
+        """The canonical active-hint projection for ``ticker`` (capability 33, J-65; ``None`` is a NORMAL
+        state). Served from the LIVE monitor's hint engine — a hint exists only on an actively watched
+        ticker (no background detection), so an unwatched / not-watched ticker is always ``None`` (never
+        an error). Both ``GET /research/hints/active`` and the WS ``hint`` key read THIS one method."""
+        monitor = self._monitors.get(ticker)
+        if monitor is None:
+            return None
+        return monitor.hint_projection()
 
     def startup_sweep(self) -> list[str]:
         """Resolve any thesis left ``active`` in the DB (from a prior process) to ``expired``.
@@ -319,6 +335,49 @@ def get_active_thesis(
     Reads the SAME ``monitor.projection()`` the WS ``thesis`` key reads, so the two are
     verbatim-equal by construction (data-contract row 15)."""
     return {"thesis": registry.projection_for(ticker)}
+
+
+@router.get("/hints/active")
+def get_active_hint(
+    ticker: str, registry: ResearchRegistry = Depends(get_registry)
+) -> dict:
+    """The canonical active setup-forming hint projection for ``ticker`` (capability 33, J-65;
+    ``hint: null`` is a NORMAL state, not an error — a not-watched ticker, an unclear tape, or a tape
+    that has not sustained a pattern past the dwell all read ``null``).
+
+    Reads the SAME ``monitor.hint_projection()`` the WS ``hint`` key reads, so the two are verbatim-equal
+    by construction (data-contract row 22). Computed once server-side; rendered verbatim by the dock."""
+    return {"hint": registry.hint_projection_for(ticker)}
+
+
+@router.get("/hints")
+def list_hints(
+    ticker: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+    registry: ResearchRegistry = Depends(get_registry),
+) -> dict:
+    """The persisted hint log (capability 33, J-65; data-contract row 22 log half) — the ONLY serving
+    path for hint-log rows. Reads persisted ``hints`` rows VERBATIM (newest-first) and returns each
+    record's stored ``payload`` directly (no recomputation, no second path — the log record IS the dock
+    projection by construction). Optionally filtered by ``ticker`` (free-form — an unknown ticker matches
+    nothing, never an error).
+
+    Page size is CONFIG-OWNED and serving-only (``hint_log_max``, excluded from ``config_fingerprint``):
+    an omitted / non-positive ``limit`` uses ``hint_log_max``; a larger ``limit`` is CLAMPED down to it
+    (a serving safety bound, never a 422). ``offset`` paginates (a negative offset normalises to 0 — the
+    same lenient convention the journal endpoint uses; malformed non-integer params are a 422 at the
+    schema layer before the route runs)."""
+    config = registry._config
+    if limit is None or limit <= 0:
+        effective_limit = config.hint_log_max
+    else:
+        effective_limit = min(limit, config.hint_log_max)
+    effective_offset = max(offset, 0)
+    records = registry.store.list_hints(
+        ticker=ticker, limit=effective_limit, offset=effective_offset
+    )
+    return {"rows": [r.payload for r in records]}
 
 
 # Valid LIST filter enums (J-51). ``status`` accepts the non-terminal ``active`` plus every terminal
@@ -594,6 +653,16 @@ def declare_thesis(
             status_code=409, detail=f"an active thesis already exists for '{ticker}'"
         )
 
+    # 422 — an unknown/invalid declared-from hint id (capability 33, J-65). Validated only when present;
+    # a normal (non-prefilled) declaration omits it. Checked AFTER the other validations so an otherwise
+    # incoherent declaration still reports its primary error; the link is recorded later (on completion).
+    if body.declared_from_hint_id is not None:
+        if registry.store.get_hint(body.declared_from_hint_id) is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"unknown declared_from_hint_id '{body.declared_from_hint_id}'",
+            )
+
     # --- All validation passed — freeze, bind, stamp, persist, attach -----------------------------
     config = registry._config
     primary = snap.primary_features
@@ -668,10 +737,22 @@ def declare_thesis(
     if monitor is None:
         # Defensive: a watched ticker should always have a monitor (the hook attaches one on engine
         # creation). If not, create + attach one now so the projection is still served.
-        monitor = ResearchMonitor(registry.store, config)
+        monitor = ResearchMonitor(registry.store, config, ticker)
         registry._monitors[ticker] = monitor
         engine.add_observer(monitor)
     monitor.set_thesis(thesis)
+
+    # Declared-from linkage (capability 33, J-65): when the declaration came from a hint's prefill
+    # affordance, record the link on the persisted hint record (the hints table is not append-only-
+    # mandated). The hint id was already validated to exist above (422 otherwise), so this is a no-op-
+    # safe flip recorded ONLY now — when the user has COMPLETED the declaration (one click never creates
+    # a thesis). Through the writer queue. A linkage-write failure must not undo the (already-persisted)
+    # thesis, so it is best-effort: the thesis stands; the link is the secondary record.
+    if body.declared_from_hint_id is not None:
+        try:
+            registry.store.mark_hint_declared_from(body.declared_from_hint_id, thesis.id)
+        except Exception:
+            pass
 
     projection = monitor.projection()
     return {"thesis": projection}

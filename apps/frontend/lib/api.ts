@@ -5,6 +5,7 @@ import type {
   CreateStudyParams,
   CreateStudyResult,
   DeclareResult,
+  Hint,
   JournalDetail,
   JournalFilters,
   JournalRow,
@@ -378,6 +379,9 @@ export async function declareThesis(params: {
   direction: string;
   invalidation_price: number;
   level_price?: number | null;
+  // The optional declared-from-hint linkage (capability 33, J-65): passed when the user declares from
+  // a hint's prefill affordance. Additive — a normal declaration omits it. An unknown id is a 422.
+  declared_from_hint_id?: string | null;
 }): Promise<DeclareResult> {
   try {
     const body: Record<string, unknown> = {
@@ -388,6 +392,9 @@ export async function declareThesis(params: {
     };
     if (params.level_price !== undefined && params.level_price !== null) {
       body.level_price = params.level_price;
+    }
+    if (params.declared_from_hint_id) {
+      body.declared_from_hint_id = params.declared_from_hint_id;
     }
     const res = await fetch(`${API_BASE}/research/thesis`, {
       method: "POST",
@@ -540,6 +547,58 @@ export async function fetchActiveThesis(
     return (data?.thesis as ThesisProjection | null) ?? null;
   } catch {
     return null;
+  }
+}
+
+// The result of a hint-log LIST fetch (J-65). `ok` with the rows, or an explicit error so the
+// /journal hint-log view can show a styled error state rather than a blank/fabricated table.
+export interface HintsListResult {
+  ok: boolean;
+  rows: Hint[];
+  error?: string;
+}
+
+// GET /research/hints/active?ticker= — the active setup-forming hint projection (J-65). The REST
+// counterpart of the WS `hint` key (verbatim-equal by construction — data-contract row 22). While a
+// watch is LIVE the dock reads the WS `hint` key only (one read path per contract value); this REST
+// fetch exists for completeness/discoverability and isolated tests. Returns the hint, `null` when none
+// (a NORMAL state), or `null` on any error (the dock simply renders nothing — no fabricated hint).
+export async function fetchActiveHint(ticker: string): Promise<Hint | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/hints/active?ticker=${encodeURIComponent(ticker)}`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data?.hint as Hint | null) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// GET /research/hints — the ONLY serving path for the persisted hint log (J-65). Reads rows VERBATIM
+// (newest-first); the frontend recomputes nothing. Optionally filtered by ticker. An unreachable
+// backend resolves to an explicit error (never a silent empty table).
+export async function fetchHints(ticker?: string): Promise<HintsListResult> {
+  const params = new URLSearchParams();
+  if (ticker) params.set("ticker", ticker);
+  const qs = params.toString();
+  try {
+    const res = await fetch(`${API_BASE}/research/hints${qs ? `?${qs}` : ""}`);
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, rows: (data?.rows as Hint[]) ?? [] };
+    }
+    let error = "The hint log could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, rows: [], error };
+  } catch {
+    return { ok: false, rows: [], error: "Backend unreachable — is the API running?" };
   }
 }
 

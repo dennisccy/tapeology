@@ -900,10 +900,22 @@ function ActiveThesis({
   );
 }
 
+// A prefill request from the hint dock (J-65): the setup + direction to seed the declare form, the
+// hint id for the declared-from linkage, and a `nonce` that changes on each click so the same hint can
+// re-prefill (the form applies the prefill when the nonce changes). Invalidation is NEVER prefilled —
+// the user must type it (one click never creates a thesis).
+export interface ThesisPrefill {
+  setup_type: string;
+  direction: string;
+  hintId: string;
+  nonce: number;
+}
+
 export function ThesisStrip({
   ticker,
   thesis,
   last,
+  prefill,
 }: {
   ticker: string;
   // The active-thesis projection carried on the live snapshot's `thesis` key (or null/undefined).
@@ -911,6 +923,9 @@ export function ThesisStrip({
   // The current last price (off the live snapshot) — prefills the mark price field on the active
   // thesis. Optional/null when there is no last yet.
   last?: number | null;
+  // A hint-dock prefill request (J-65). When its `nonce` changes the form opens with setup + direction
+  // seeded (invalidation stays empty + required), and a successful declare passes `declared_from_hint_id`.
+  prefill?: ThesisPrefill | null;
 }) {
   const [open, setOpen] = useState(false);
   const [taxonomy, setTaxonomy] = useState<ResearchTaxonomy | null>(null);
@@ -921,6 +936,27 @@ export function ThesisStrip({
   const [level, setLevel] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // The hint id this declaration is being made FROM (J-65), set when a prefill is applied and cleared on
+  // reset. Passed as `declared_from_hint_id` on a successful declare so the backend links + flips the
+  // hint record (one click never creates a thesis — the user still submits the form themselves).
+  const [declaredFromHintId, setDeclaredFromHintId] = useState<string | null>(null);
+  const [appliedPrefillNonce, setAppliedPrefillNonce] = useState<number | null>(null);
+
+  // Apply a hint-dock prefill (J-65): when a new prefill arrives (its nonce changes), open the form and
+  // seed setup + direction from the hint. Invalidation is deliberately LEFT EMPTY (and required) — the
+  // user must type it; one click never creates a thesis. Only runs while idle (no active thesis).
+  useEffect(() => {
+    if (!prefill || thesis) return;
+    if (prefill.nonce === appliedPrefillNonce) return;
+    setOpen(true);
+    setSetupType(prefill.setup_type);
+    setDirection(prefill.direction);
+    setInvalidation("");
+    setLevel("");
+    setFormError(null);
+    setDeclaredFromHintId(prefill.hintId);
+    setAppliedPrefillNonce(prefill.nonce);
+  }, [prefill, thesis, appliedPrefillNonce]);
 
   // Load the taxonomy when the form opens OR when a thesis is active (so the verdict label/copy is
   // taxonomy-owned, not hardcoded). The idle line still costs no request. The form is fully driven
@@ -963,6 +999,7 @@ export function ThesisStrip({
     setFormError(null);
     setInvalidation("");
     setLevel("");
+    setDeclaredFromHintId(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -988,6 +1025,8 @@ export function ThesisStrip({
       direction,
       invalidation_price: invalidationNum,
       level_price: levelNum,
+      // The declared-from-hint linkage (J-65) — present only when the form was prefilled from a hint.
+      declared_from_hint_id: declaredFromHintId,
     });
     setSubmitting(false);
     if (result.ok) {

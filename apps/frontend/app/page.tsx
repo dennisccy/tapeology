@@ -13,6 +13,7 @@ import {
 import type {
   DataSourceMode,
   FailureReason,
+  Hint,
   ThesisProjection,
   WatchParams,
 } from "@/lib/types";
@@ -20,6 +21,7 @@ import { TopBar } from "@/components/TopBar";
 import { Cockpit } from "@/components/Cockpit";
 import { PriceChart } from "@/components/PriceChart";
 import { ThesisStrip } from "@/components/ThesisStrip";
+import type { ThesisPrefill } from "@/components/ThesisStrip";
 import {
   IdleState,
   ConnectingState,
@@ -59,6 +61,22 @@ export default function Page() {
   const [survivingThesis, setSurvivingThesis] = useState<ThesisProjection | null>(
     null,
   );
+  // J-65: a hint-dock declare request. Set when the user clicks a hint's declare affordance — it seeds
+  // the thesis strip's declare form (setup + direction) and carries the hint id for the declared-from
+  // linkage. The `nonce` increments per click so the same hint can re-prefill. Invalidation is NEVER
+  // seeded — the user types it (one click never creates a thesis).
+  const [hintPrefill, setHintPrefill] = useState<ThesisPrefill | null>(null);
+
+  // Prefill the declare form from an active hint (J-65). Bumps the nonce so the strip re-applies even
+  // if the same hint is clicked again. The strip leaves invalidation empty + required.
+  function handleHintDeclare(hint: Hint) {
+    setHintPrefill((prev) => ({
+      setup_type: hint.setup_type,
+      direction: hint.direction,
+      hintId: hint.id,
+      nonce: (prev?.nonce ?? 0) + 1,
+    }));
+  }
   // When a real-mode Watch is honestly refused, show the distinct non-cockpit panel for that
   // reason in place of the cockpit — never a fabricated cockpit, never a fall-back to Simulated.
   const [failure, setFailure] = useState<{
@@ -263,9 +281,10 @@ export default function Page() {
                   ticker={ticker}
                   thesis={snapshot.thesis}
                   last={snapshot.market?.last ?? null}
+                  prefill={hintPrefill}
                 />
               )}
-            <Cockpit snapshot={snapshot} />
+            <Cockpit snapshot={snapshot} onHintDeclare={handleHintDeclare} />
           </>
         ) : failure ? (
           <ProviderUnavailable

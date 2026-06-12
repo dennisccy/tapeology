@@ -145,3 +145,9 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** Checksum the evidence dir before trusting citations: 5 of 16 iter-22 PNGs were byte-identical idle "No ticker watched" frames (md5 d99cc329…) because Chrome MCP could not reliably set the React-controlled ticker input, and QA's results table cited one of them (`UT-J-01-J-02-J-08-live.png`) as the J-01 pass evidence while the real cockpit pixels lived in differently-named J-64 captures. The journeys were genuinely fine (REST probes + other frames), but a duplicate-frame check (md5sum) instantly exposes dead captures and mis-citations.
 **Applies to:** browser-qa on any iter that drives the `/` watch form programmatically (declare/watch flows); every evaluator pass — run `md5sum` over `reports/qa/<iter>-evidence/` and verify each cited file shows its claimed state before accepting pixel claims.
+
+## iter-23 — 2026-06-12T22:33:48+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** A code comment claimed assurance that did not exist: `apps/backend/app/config.py` says `hint_log_max` is "pinned by a fingerprint-stability test and its counter-test", but no such test exists (reviewer NOTE, evaluator-confirmed by grep AND by probing the fingerprint directly — the behavior IS correct, only the claimed test is missing). Comments asserting test coverage must be cross-checked against the suite; the established stability+counter pattern (study_list_max precedent) should be added in the same commit as the exclusion, never promised in prose.
+**Applies to:** any iter adding config keys with fingerprint exclusions, and any reviewer/evaluator reading "tested by X" comments — verify X exists before crediting it.

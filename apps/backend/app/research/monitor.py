@@ -36,6 +36,7 @@ from ..engine.snapshot import EngineSnapshot
 from .excursions import ExcursionTracker, compute_and_persist_excursions
 from .execution_checks import compute_and_persist_execution_checks
 from .grades import compute_and_persist_grades
+from .hints import HintEngine
 from .marks import marks_projection
 from .stance import (
     EntryChecklistEvaluator,
@@ -646,10 +647,17 @@ def build_projection(
 class ResearchMonitor:
     """Holds one ticker's active thesis and serves its live projection (capability 20 observer)."""
 
-    def __init__(self, store: JournalStore, config: Config) -> None:
+    def __init__(self, store: JournalStore, config: Config, ticker: str = "") -> None:
         self._store = store
         self._config = config
         self._config_fingerprint = config.config_fingerprint()
+        self._ticker = ticker
+        # The setup-forming hint engine (capability 33, J-65) — attached at engine creation REGARDLESS of
+        # any thesis (a hint fires on the watched ticker with NO thesis declared, exactly what J-65 step 1
+        # requires). Observer-only, exception-isolated within ``on_event`` / ``on_status`` (a hint failure
+        # surfaces as ``monitor_status: failed`` and never kills the feeder). Independent of the
+        # thesis-lifecycle state below — it survives thesis declare/resolve and serves its own projection.
+        self._hints = HintEngine(store, config, ticker)
         self._thesis: ThesisRecord | None = None
         self._last_snapshot: EngineSnapshot | None = None
         self._failed = False
@@ -837,6 +845,11 @@ class ResearchMonitor:
         # mutation happens here (equivalence anti-goal): the evaluator only READS the frozen snapshot.
         try:
             self._last_snapshot = snapshot
+            # The setup-forming hint engine (capability 33, J-65) runs FIRST and REGARDLESS of any thesis
+            # — a hint fires on the watched ticker with no thesis declared. Read-only over the snapshot;
+            # its only write (a fired hint) goes through the store's single writer queue. A failure here
+            # falls into the shared try/except below => ``monitor_status: failed``, feeder stays alive.
+            self._hints.on_event(snapshot)
             self._maybe_adopt_surviving(snapshot)
             self._evaluate_verdict(snapshot)
             # Advance the management stance AFTER the verdict step (so it reads the verdict just
@@ -1051,6 +1064,12 @@ class ResearchMonitor:
         # The status string alone cannot tell stop from exhaustion (both are ``closed``); the
         # distinguishing reason lives on the engine (``end_reason``), stamped by the WatchManager.
         try:
+            # The setup-forming hint engine (capability 33, J-65) reacts to EVERY status flip REGARDLESS
+            # of any thesis: a non-live status (paused / stale / closed / failed) clears any active hint
+            # immediately (a present-tense "is forming" card must never sit over a non-live tape — the
+            # iter-22 J-64 freshness lesson). Clearing never touches the persisted log record. Runs inside
+            # this try/except so a hint-side failure surfaces ``monitor_status: failed``, feeder alive.
+            self._hints.on_status(status)
             if status in ("closed", "failed"):
                 # Terminal flips: resolve/detach an active thesis; never run the freshness refresh (a
                 # closed/failed stream has nothing live to re-evaluate — the projection clears or
@@ -1356,3 +1375,15 @@ class ResearchMonitor:
             management_stance_evidence=stance_evidence,
             entry_checklist=checklist,
         )
+
+    def hint_projection(self) -> dict | None:
+        """The active setup-forming hint projection (capability 33, J-65), or ``None`` (a NORMAL state).
+
+        Independent of any thesis (a hint fires with no thesis declared). Both
+        ``GET /research/hints/active`` and the WS ``hint`` key call THIS one function, so the two are
+        verbatim-equal by construction (data-contract row 22). A monitor-failed read shows NO hint (the
+        same honesty rule the thesis projection applies to the stance/checklist) — a present-tense card
+        must never sit over a monitor that has stopped evaluating honestly."""
+        if self._failed:
+            return None
+        return self._hints.projection()

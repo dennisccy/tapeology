@@ -254,6 +254,29 @@ class StudyRecord:
     created_wall_ts: float
 
 
+@dataclass(frozen=True)
+class HintRecord:
+    """One persisted setup-forming hint row (capability 33, J-65) — read back as an immutable record.
+
+    The ``hints`` table exists from schema v1 in a PAYLOAD-BLOB shape (``id, ticker, payload,
+    created_wall_ts``), so a hint's ENTIRE state lives in the ``hints.payload`` JSON. No schema bump is
+    needed (schema stays v7): the blob absorbs the record. The hint engine (``app/research/hints.py``,
+    driven by the research monitor) is the single owner that builds the payload ONCE at fire; the routes
+    + the WS ``hint`` key serve it VERBATIM (never recomputed at read).
+
+    The ``payload`` carries: the pattern id, the plain-language evidence (with measured values), the
+    setup-type context + direction, the baseline citation, the honesty stamps (bound ``source``, the
+    ``data_feed`` ``sip | iex | sim``, the ``config_fingerprint`` over the entire frozen config), the
+    logical + wall timestamps, and — once the user completes a declaration from this hint — a
+    ``declared_from`` linkage (the created thesis id). Clearing an ACTIVE hint never touches this
+    persisted record; the log is the record."""
+
+    id: str
+    ticker: str
+    payload: dict
+    created_wall_ts: float
+
+
 class _StopSentinel:
     """Enqueued on close so the writer thread exits its loop cleanly."""
 
@@ -986,6 +1009,43 @@ class JournalStore:
         finally:
             conn.close()
 
+    def latest_done_study_for(
+        self, *, setup_type: str, data_feed: str, config_fingerprint: str
+    ) -> StudyRecord | None:
+        """The most recent ``done`` study matching a hint's setup_type + data_feed + config_fingerprint
+        (capability 33, J-65 baseline citation) — read VERBATIM for the hint's baseline citation. EXCLUDES
+        ``hindsight_level`` (the two level setups) by construction: a hint only ever fires for the two
+        state-native setups (absorption_reversal / trend_continuation), so a level study never matches
+        its setup_type — but the exclusion is asserted explicitly here too so a future caller cannot pool
+        a hindsight study into a citation. ``None`` when no matching study exists (the caller then cites
+        the honest "no studied baseline — unvalidated pattern" string). The match is on the STORED stamps
+        in each study's payload — never recomputed, never pooled across feeds or fingerprints."""
+        conn = self._read_conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM studies ORDER BY created_wall_ts DESC, id DESC"
+            ).fetchall()
+            for r in rows:
+                payload = json.loads(r["payload"])
+                if payload.get("status") != "done":
+                    continue
+                if payload.get("hindsight_level"):
+                    continue
+                if payload.get("setup_type") != setup_type:
+                    continue
+                if payload.get("data_feed") != data_feed:
+                    continue
+                if payload.get("config_fingerprint") != config_fingerprint:
+                    continue
+                return StudyRecord(
+                    id=r["id"],
+                    payload=payload,
+                    created_wall_ts=r["created_wall_ts"],
+                )
+            return None
+        finally:
+            conn.close()
+
     def study_occurrence_rows(self, study_id: str) -> list[dict]:
         """The persisted ``study_occurrences`` rows for a study, in insertion order. The canonical
         served result is the ``studies.payload``; this read exposes the mirrored occurrence rows for
@@ -999,6 +1059,94 @@ class JournalStore:
             return [json.loads(r["payload"]) for r in rows]
         finally:
             conn.close()
+
+    # --- setup-forming hints (capability 33, J-65) — payload-blob writes to the hints table --------
+    def insert_hint(self, record: HintRecord) -> None:
+        """Persist one setup-forming hint ONCE at fire (capability 33, J-65). The full hint projection
+        — pattern, plain-language evidence, setup context + direction, baseline citation, and the
+        honesty stamps (source / data_feed / config_fingerprint / logical + wall ts) — lives in the
+        ``hints.payload`` JSON (the v1 payload-blob shape; schema stays v7, no bump). The write goes
+        through the single writer queue (``BEGIN IMMEDIATE``), NEVER from event processing or the WS
+        serialization path: the monitor enqueues it from its exception-isolated observer callback, so a
+        write failure surfaces as ``monitor_status: failed`` rather than killing the feeder."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "INSERT INTO hints (id, ticker, payload, created_wall_ts) VALUES (?,?,?,?)",
+                (record.id, record.ticker, json.dumps(record.payload), record.created_wall_ts),
+            )
+
+        self._do_write(_fn)
+
+    def get_hint(self, hint_id: str) -> HintRecord | None:
+        """One hint read back as an immutable record (the served projection is its ``payload``).
+
+        Used by ``POST /research/thesis`` to validate a ``declared_from_hint_id`` — an unknown id
+        returns ``None`` so the route can answer 422, and a known id supplies the record to flip."""
+        conn = self._read_conn()
+        try:
+            row = conn.execute("SELECT * FROM hints WHERE id=?", (hint_id,)).fetchone()
+            if row is None:
+                return None
+            return HintRecord(
+                id=row["id"],
+                ticker=row["ticker"],
+                payload=json.loads(row["payload"]),
+                created_wall_ts=row["created_wall_ts"],
+            )
+        finally:
+            conn.close()
+
+    def list_hints(
+        self, *, ticker: str | None = None, limit: int, offset: int = 0
+    ) -> list[HintRecord]:
+        """Persisted hint-log rows most-recent-first (capability 33, J-65), optionally filtered by
+        ``ticker``, capped at ``limit`` (the serving-only ``hint_log_max``) from ``offset``. Read
+        VERBATIM — the log route renders each record's ``payload`` directly (never recomputed)."""
+        conn = self._read_conn()
+        try:
+            params: list[Any] = []
+            sql = "SELECT * FROM hints"
+            if ticker is not None:
+                sql += " WHERE ticker=?"
+                params.append(ticker)
+            sql += " ORDER BY created_wall_ts DESC, id DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+            rows = conn.execute(sql, params).fetchall()
+            return [
+                HintRecord(
+                    id=r["id"],
+                    ticker=r["ticker"],
+                    payload=json.loads(r["payload"]),
+                    created_wall_ts=r["created_wall_ts"],
+                )
+                for r in rows
+            ]
+        finally:
+            conn.close()
+
+    def mark_hint_declared_from(self, hint_id: str, thesis_id: str) -> None:
+        """Flip a hint record's payload to record that the user completed a declaration FROM it
+        (capability 33, J-65) — sets ``payload.declared_from = thesis_id``. The hints table is NOT
+        append-only-mandated (unlike ``verdict_events``), so this in-place payload update is allowed;
+        it is recorded ONLY when the user completes a declaration (one click never creates a thesis).
+        The write goes through the single writer queue (``BEGIN IMMEDIATE``). A no-op if the id is
+        unknown (the route validates existence first, returning 422 otherwise)."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            row = conn.execute(
+                "SELECT payload FROM hints WHERE id=?", (hint_id,)
+            ).fetchone()
+            if row is None:
+                return
+            payload = json.loads(row["payload"])
+            payload["declared_from"] = thesis_id
+            conn.execute(
+                "UPDATE hints SET payload=? WHERE id=?",
+                (json.dumps(payload), hint_id),
+            )
+
+        self._do_write(_fn)
 
     def expire_stale_actives(self, wall_ts: float) -> list[str]:
         """Startup sweep (J-47 / J-51 leg): resolve each UNMARKED thesis still ``active`` to
