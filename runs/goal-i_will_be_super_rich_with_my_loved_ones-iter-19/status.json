@@ -1,0 +1,27 @@
+{
+  "phase": "goal-i_will_be_super_rich_with_my_loved_ones-iter-19",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-06-12T11:20:00Z",
+  "started_at": "2026-06-12T09:11:00Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/frontend/components/StudyCreateForm.tsx"
+  ],
+  "operational_changes": [
+    "cleared apps/frontend/.next (recurred corrupted production-build artifacts: prerender-manifest.json found on disk; gitignored). Rebuilt clean by next dev during canary, then cleared again for browser-qa hand-off.",
+    "verified apps/backend/tapeology_journal.db (gitignored dev DB) holds the full J-60/J-61 pixel substrate: reference (3177434f) + byte-equal re-run (4b1e33c1), seeded-sim (1cbf130a), hindsight level_break (6477d260), cancelled+partial (82077d4a), and failed (9c00f133)."
+  ],
+  "code_change": true,
+  "fix_mode": true,
+  "fix_summary": "Conditional frontend fix (spec IN SCOPE clause) triggered by reviewer FAIL CRITICAL + browser-qa UT-J-61-b: removed the empty-level silent-disable in canSubmit (StudyCreateForm.tsx) so a level_break study with a blank level fires the POST and surfaces the backend's honest 422 inline, per J-61. One file; inside the permitted studies-frontend boundary; no backend/engine/schema/config/endpoint change.",
+  "tests_run": true,
+  "test_result": "671 passed, 1 skipped, exit 0 (unchanged; frontend-only fix)",
+  "typecheck_result": "tsc --noEmit exit 0 (no npm run build; shared .next not corrupted)",
+  "browser_checks_run": false,
+  "canary_verified": true,
+  "canary_notes": "Live 422 probe re-confirmed this fix pass (uvicorn :8799, then killed): POST /research/studies level_break with no level -> HTTP 422 detail 'setup_type level_break requires a level_price (a level is never guessed)'; /health 200; taxonomy carries iter-18 studies copy (level_setups=[level_break,failed_move_fade], hindsight_level_caption present).",
+  "servers_clean": true,
+  "next_action": "review"
+}

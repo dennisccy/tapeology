@@ -63,15 +63,17 @@ export function StudyCreateForm({
   const requiresLevel = levelSetups.has(setupType);
 
   // The Run button is enabled when the required fields for the chosen source are present (courtesy;
-  // the backend is the authority). A level setup needs a level; a historical study needs a symbol +
-  // a valid date + both times.
+  // the backend is the authority). A historical study needs a symbol + a valid date + both times.
+  //
+  // A MISSING LEVEL on a level setup is deliberately NOT disabled here: J-61 requires the user to see
+  // the backend's honest 422 ("requires a level_price — a level is never guessed") inline, never a
+  // silent no-op. So we let the submit fire and surface the backend message rather than guess or hide.
   const canSubmit = useMemo(() => {
-    if (requiresLevel && levelPrice.trim() === "") return false;
     if (sourceKind === "historical") {
       if (!symbol.trim() || !isValidDMY(dateStr) || !startTime || !endTime) return false;
     }
     return !creating;
-  }, [requiresLevel, levelPrice, sourceKind, symbol, dateStr, startTime, endTime, creating]);
+  }, [sourceKind, symbol, dateStr, startTime, endTime, creating]);
 
   const applyPreset = (which: "open" | "close" | "rth") => {
     const iso = parseDMYToIsoDate(dateStr);
