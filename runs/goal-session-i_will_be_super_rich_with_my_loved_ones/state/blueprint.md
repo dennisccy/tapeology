@@ -154,6 +154,17 @@ Tapeology (top bar: Cockpit · Journal · Studies)
 > with no thesis, so the idle toggle is inert (no fire). Behaviour, copy, cooldown, and the
 > fired-indicator are unchanged; no backend change, no new value, no new route, no nav change.
 
+> **Iter-27 (verification-only — NO contract change):** the **J-68 backlog sweep** captures
+> positive evidence for the weekend-verifiable real-data legs (J-11/J-14/J-16/J-18/J-20/J-22/J-23/
+> J-27/J-29/J-32) at their already-registered `/` Cockpit homes (historical-mode controls + chart
+> + panel grid + honest-failure surfaces). Every value read is already in the Data Contract
+> (rows 1–6, 9, 10, 12, 13) and is read from its single canonical endpoint verbatim — no new value,
+> no second computation/serving path, no new route, no nav change. Backend + frontend expected
+> byte-identical (verification, not feature work); any genuine defect surfaced is fixed in place on
+> the existing surface. The genuinely market-hours-gated legs (J-15 live-feed-gap; J-67's live-IEX
+> badge **pixels** over a real feed) are deferred to a Monday iteration (US opens 15-06-2026
+> 14:30 UTC+01:00) — J-67 stays passing on its non-live evidence.
+
 **Feature / journey homes** (≤2 clicks from the nav):
 
 | Feature / journey | Canonical home (route) | Nav section |

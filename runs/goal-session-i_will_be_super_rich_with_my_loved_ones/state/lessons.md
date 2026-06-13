@@ -177,3 +177,15 @@ return;` to `if (taxonomy) return;` so the always-rendered toggle has its taxono
 idle line — still fetched once and cached, no client-side copy fabrication.
 **Applies to:** any iter touching `apps/frontend/components/ThesisStrip.tsx` render branches, or any
 iter adding a cockpit-wide control that must survive idle/active/error strip states.
+
+## iter-27 — 2026-06-13T07:15:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** A `partial`-leg flip to `passing` needs the asserted element VISIBLE in a still capture, not just an `await_text` DOM hit — for transient/self-replacing UI (J-23's "couldn't connect to the tape stream" panel was replaced after a reconnect attempt, so its cited PNG shows a re-populated cockpit instead). Browser-qa marked it PASS on the DOM-text assertion; the evaluator held it at `partial`. For transient error states, capture must be held/await-stabilized at the moment the element is on screen.
+**Applies to:** any iter verifying a transient honest-failure/error-panel leg (J-22/J-23/J-27 and live-feed stale/recover legs) — require a still capture that visibly contains the error text, or treat the leg as partial.
+
+## iter-27 — 2026-06-13T07:15:01+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** J-29's re-watch "near-instant <3s cache" sub-criterion is unmet (~35s observed) because `historical_cache_ttl_seconds=300` caches the fetched vendor bytes but the engine still re-processes the buffered window on re-watch rather than serving a pre-warmed in-memory snapshot. The busy-window-load-within-bound criterion is met; only the cache fast-path is missing. Before another iteration loops on this, the decomposer should decide whether <3s is a HARD acceptance criterion (scope a minimal pre-warmed-snapshot cache fix) or a soft P2 aspiration (score passing on the bounded-load criterion with the gap noted) — to avoid an infinite loop on a performance target.
+**Applies to:** any future iter touching the historical replay cache / re-watch path (apps/backend historical provider + cache), or re-scoring J-29.

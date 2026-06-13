@@ -428,3 +428,19 @@ This is the only remaining gate to GOAL_ACHIEVED; the cue layer (J-63–J-67) is
 is 15-06-2026 14:30 UTC+01:00 (Monday), enabling the live/credentialed legs. No new feature work
 expected — verification/evidence-capture sweep; any genuine real-data defect surfaced becomes its own
 scoped fix.
+
+## Iteration 27 — goal-i_will_be_super_rich_with_my_loved_ones-iter-27
+
+**Date:** 2026-06-13T07:15:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-11, J-14, J-16, J-18, J-20, J-22, J-27 (target legs flipped partial -> passing on credentialed-historical browser + config/unit evidence)
+- Newly failing: none
+- Regressed: none
+- Still partial (targets not flipped): J-23 (visible-pixel of the "couldn't connect" panel absent — only await_text DOM + test_stream_lifecycle 9 pass), J-29 (busy window loads within bound, but re-watch ~35s vs the <3s near-instant cache target)
+- Anti-goal violations: none (no-fabricated-data / no-trading-advice / single-source-of-truth / no-tape-persistence all verified across honest-failure captures; app source byte-identical)
+
+**Reasoning:** Verification-only iteration, app source byte-identical (git diff vs HEAD empty for apps/), 848 passed / 1 skipped exit 0 zero re-pins, COHERENCE-PASS. The operator supplied ALPACA_API_SECRET so the credentialed SIP historical path was genuinely exercised (24,619 real AAPL trades, unknown-aggressor ≈0.004%). Opened the cited pixels: UT-J11/J18/J20/J32 show populated real-data cockpits, true-clock chart axes, the local-zone picker, and an in-progress 1×→10× speed change continuing from position; UT-J14a/b/c show three distinct honest-failure panels with no fabricated cockpit; UT-J27 shows stream_status=Closed after replay exhaustion. Two legs held back: the J-23 cited PNG shows a re-populated cockpit (transient error text replaced) so no single capture visibly contains the failure panel (the iteration's own visible-element rule), and J-29's re-watch took ~35s, not the spec's <3s cache target. J-15 and J-67's live-IEX pixel leg are legitimately gated to the Monday open (15-06-2026 14:30 UTC+01:00) — scheduled, not stalled. Not GOAL_ACHIEVED because J-68's "all J-01–J-37 green" clause still depends on J-23, J-29, J-15.
+
+**Next-step recommendation:** Lean Monday market-hours capture pass at/after 15-06-2026 14:30 UTC+01:00: (1) J-67 live-IEX badge/disclosure pixels over a real live feed + the live-declared iex-stamped journal row; (2) J-15 live-feed-gap stale→recover; (3) J-23 re-capture a held/await-stable shot that visibly contains the "couldn't connect to the tape stream" panel; (4) J-29 — capture a genuinely <3s re-watch OR have the decomposer rule the <3s target a soft P2 aspiration (do not loop on it). Closing those four closes J-68 and unlocks GOAL_ACHIEVED. No new feature work remains — final verification gate.
