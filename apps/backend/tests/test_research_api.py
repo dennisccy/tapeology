@@ -142,6 +142,29 @@ def test_taxonomy_serves_entry_checklist_catalog_canary(client):
         assert word not in f" {blob} ", f"forbidden word {word!r} in checklist copy"
 
 
+def test_taxonomy_serves_feed_basis_copy_canary(client):
+    # The feed-basis display copy (capability 28 honesty stamps, J-67; data-contract row 24 additive)
+    # is backend-owned — served by GET /research/taxonomy. ALSO iter-24's code-identity canary: the
+    # presence of `feed_basis` here proves the NEW server code is live before any browser capture. The
+    # frontend hardcodes NONE of it (per-feed badge labels + the live IEX-vs-SIP disclosure line).
+    payload = client.get("/research/taxonomy").json()
+    assert "feed_basis" in payload
+    feed_basis = payload["feed_basis"]
+    labels = {f["id"]: f["name"] for f in feed_basis["feeds"]}
+    assert set(labels.keys()) == {"sim", "iex", "sip"}
+    for name in labels.values():
+        assert name  # every feed carries a non-empty display label
+    # The live IEX-vs-SIP disclosure line is verbatim from goal.md (J-67 acceptance).
+    assert feed_basis["live_disclosure"] == (
+        "live verdicts read the single-venue IEX feed; historical replay and studies use SIP "
+        "— spreads and prints differ"
+    )
+    # Copy discipline (J-66): no imperative / predictive words in any feed-basis string.
+    blob = " ".join(list(labels.values()) + [feed_basis["live_disclosure"]]).lower()
+    for word in (" buy ", " sell ", " enter ", " exit ", "should ", "will ", "predict", "target"):
+        assert word not in f" {blob} ", f"forbidden word {word!r} in feed-basis copy"
+
+
 def test_checklist_keys_rest_equals_ws_verbatim_on_pre_entry_mark_path(client):
     # The entry-checklist keys served on the PRE-entry-mark path are byte-identical across REST
     # (/research/thesis/active) and the WS `thesis` key (one projection, never a second path — the

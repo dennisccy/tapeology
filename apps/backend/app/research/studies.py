@@ -77,8 +77,8 @@ from .excursions import (
     TERNARY_NEITHER,
     TERNARY_PLUS,
 )
+from .feed_basis import data_feed_for_scenario
 from .marks import r_basis as _r_basis
-from .monitor import data_feed_for_scenario
 from .store import JournalStore, StudyRecord
 from .verdict import VerdictEvaluator
 
@@ -417,7 +417,7 @@ class StudyRunner:
             # Re-stamp the resolved source descriptor + data_feed now the provider is known (the create
             # stamp used the requested source; the descriptor is authoritative once resolved).
             payload["source"] = descriptor
-            payload["data_feed"] = data_feed_for_scenario(descriptor)
+            payload["data_feed"] = data_feed_for_scenario(descriptor, self._config)
 
             observer, total_events, cancelled = self._replay(
                 provider, study_id, payload, is_cancelled

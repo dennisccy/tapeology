@@ -22,6 +22,11 @@ export function HintLog({
   const copy = taxonomy?.hints?.copy;
   const declaredFromLabel = copy?.declared_from_label ?? "Declared from this hint";
 
+  // The stored `data_feed` stamp's display label (J-67) — taxonomy-owned per-feed copy. Falls back to
+  // the raw stored stamp (an honest value, never fabricated) if the taxonomy lacks the feed_basis block.
+  const feedLabel = (feed: string): string =>
+    taxonomy?.feed_basis?.feeds.find((f) => f.id === feed)?.name ?? feed;
+
   if (rows.length === 0) {
     // Honest empty state — never a fabricated row. Copy is taxonomy-owned.
     return (
@@ -51,6 +56,7 @@ export function HintLog({
             <th className="px-3 py-2.5 font-semibold">{columns?.time ?? "Time"}</th>
             <th className="px-3 py-2.5 font-semibold">{columns?.ticker ?? "Ticker"}</th>
             <th className="px-3 py-2.5 font-semibold">{columns?.pattern ?? "Pattern"}</th>
+            <th className="px-3 py-2.5 font-semibold">{columns?.feed ?? "Feed"}</th>
             <th className="px-3 py-2.5 font-semibold">{columns?.evidence ?? "Evidence"}</th>
             <th className="px-3 py-2.5 font-semibold">{columns?.baseline ?? "Studied baseline"}</th>
             <th className="px-3 py-2.5 font-semibold">
@@ -75,6 +81,16 @@ export function HintLog({
               <td className="whitespace-nowrap px-3 py-2.5">
                 <span className="rounded-md border border-amber-700/60 bg-amber-900/20 px-2 py-0.5 text-xs text-amber-300">
                   {row.pattern_label}
+                </span>
+              </td>
+              {/* The stored data_feed stamp (J-67) — the persisted value displayed VERBATIM with the
+                  taxonomy-owned label; neutral slate chip (a factual stamp, not a side/impact signal). */}
+              <td className="whitespace-nowrap px-3 py-2.5">
+                <span
+                  data-testid="hint-log-feed"
+                  className="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs text-slate-300"
+                >
+                  {feedLabel(row.data_feed)}
                 </span>
               </td>
               <td className="px-3 py-2.5 text-xs text-slate-300">{row.evidence}</td>

@@ -342,6 +342,9 @@ export async function fetchInitialSnapshot(
     paused: summary.paused ?? false,
     // Row 14: read the feeder-owned lag VERBATIM (null when not yet stamped) — zero client arithmetic.
     delivery_lag_seconds: summary.delivery_lag_seconds ?? null,
+    // Row 29 (J-67): read the served current-watch feed basis VERBATIM (never client-derived from
+    // scenario). Absent on a pre-J-67 backend => undefined (the badge then renders nothing).
+    data_feed: summary.data_feed,
     timestamp: summary.timestamp,
     market: summary.market,
     tape_state: summary.tape_state,

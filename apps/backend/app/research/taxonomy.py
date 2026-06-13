@@ -21,6 +21,23 @@ DIRECTIONS: dict[str, str] = {
     "short": "Short",
 }
 
+# --- Feed-basis display copy (capability 28 honesty stamps, J-67; data-contract row 24 additive) --
+# The SINGLE backend owner of the per-feed badge labels and the live IEX-vs-SIP disclosure line. The
+# cockpit feed-basis badge renders the served ``data_feed`` (sim | iex | sip) VERBATIM with these
+# labels; on the live IEX basis the disclosure line renders beside it. The frontend hardcodes none of
+# it. The served basis VALUE comes from the ONE config-aligned mapping (``feed_basis`` module / row
+# 29) — this block is only the DISPLAY copy. Descriptive, present-tense, never imperative/predictive
+# (J-66). The disclosure string is VERBATIM from goal.md (J-67's acceptance copy).
+FEED_BASIS_LABELS: dict[str, str] = {
+    "sim": "Simulated",
+    "iex": "IEX (live)",
+    "sip": "SIP (consolidated)",
+}
+FEED_BASIS_LIVE_DISCLOSURE: str = (
+    "live verdicts read the single-venue IEX feed; historical replay and studies use SIP "
+    "— spreads and prints differ"
+)
+
 # --- Verdict enum (display copy only this iteration; the transition engine is next) -------------
 # Per the design direction: pending = slate; confirming green; weakening amber; rejecting /
 # invalidated red. Only ``pending`` is ever published this iteration.
@@ -758,6 +775,10 @@ HINT_LOG_COLUMNS: dict[str, str] = {
     "time": "Time",
     "ticker": "Ticker",
     "pattern": "Pattern",
+    # The stored ``data_feed`` stamp column (J-67, additive): the persisted per-row feed basis is
+    # displayed VERBATIM (labels from the FEED_BASIS_LABELS block) — closing the one confirmed
+    # hint-log display gap. Read, never recomputed.
+    "feed": "Feed",
     "evidence": "Evidence",
     "baseline": "Studied baseline",
     "declared_from": "Declared from",
@@ -1011,6 +1032,16 @@ def taxonomy_payload() -> dict:
         ],
         "directions": [{"id": k, "name": v} for k, v in DIRECTIONS.items()],
         "verdicts": [{"id": k, "name": v} for k, v in VERDICTS.items()],
+        # The feed-basis display copy (capability 28 honesty stamps, J-67; data-contract row 24
+        # additive) — owned ONCE here so the cockpit feed-basis badge + the live disclosure line are
+        # taxonomy-driven (the frontend hardcodes no feed label or disclosure text). The served basis
+        # VALUE comes from the ONE config-aligned mapping (the ``feed_basis`` module / row 29); this
+        # block is the DISPLAY copy only. This block doubles as iter-24's code-identity canary —
+        # ``GET /research/taxonomy`` carrying ``feed_basis`` proves the NEW server code is live.
+        "feed_basis": {
+            "feeds": [{"id": k, "name": v} for k, v in FEED_BASIS_LABELS.items()],
+            "live_disclosure": FEED_BASIS_LIVE_DISCLOSURE,
+        },
         # Thesis lifecycle statuses + the resolution subset (J-51) — the journal table + its filter
         # controls render these VERBATIM (the frontend hardcodes no status/resolution label).
         "statuses": [{"id": k, "name": v} for k, v in STATUSES.items()],

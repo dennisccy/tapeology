@@ -94,6 +94,34 @@ def test_delivery_lag_seconds_served_on_summary_and_stream_single_source(tmp_pat
     assert serialize_stream(snap2)["delivery_lag_seconds"] == 2.5
 
 
+def test_data_feed_basis_served_on_summary_and_stream_single_source():
+    # Data Contract row 29, J-67: the current-watch feed basis is an additive metadata field on the
+    # row-6 snapshot projection — computed ONCE server-side by the ONE consolidated mapping from the
+    # snapshot's scenario, served on /summary and re-exposed by the WS frame VERBATIM (one value).
+    from app.config import Config
+    from app.research.feed_basis import data_feed_for_scenario
+
+    snap = _warm_engine().snapshot()  # a sim scenario -> "sim"
+    summary, stream = serialize_summary(snap), serialize_stream(snap)
+    assert summary["data_feed"] == "sim"
+    assert stream["data_feed"] == "sim"  # WS == /summary verbatim
+    assert summary["data_feed"] == data_feed_for_scenario(snap.scenario, CONFIG)
+
+
+def test_data_feed_basis_reflects_scenario_prefix_via_config():
+    # The basis is config-aligned: a live source reads config.live_feed, historical reads
+    # config.historical_feed — present for sim/live/historical watches.
+    import dataclasses
+
+    base = _warm_engine().snapshot()
+    live_snap = dataclasses.replace(base, scenario="live AAPL")
+    hist_snap = dataclasses.replace(base, scenario="historical AAPL window")
+    assert serialize_summary(live_snap)["data_feed"] == "iex"
+    assert serialize_summary(hist_snap)["data_feed"] == "sip"
+    assert serialize_stream(live_snap)["data_feed"] == "iex"
+    assert serialize_stream(hist_snap)["data_feed"] == "sip"
+
+
 def test_absorption_views_agree_single_source():
     # J-08 for absorption: /state, /features, /summary and the WS stream serve ONE engine
     # value per metric, including the new absorption feature readouts (no recompute).

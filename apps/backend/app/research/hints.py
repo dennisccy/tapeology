@@ -37,6 +37,7 @@ import uuid
 
 from ..config import Config
 from ..engine.snapshot import EngineSnapshot
+from .feed_basis import data_feed_for_scenario
 from .store import HintRecord, JournalStore
 from .taxonomy import (
     HINT_BASELINE_UNVALIDATED,
@@ -54,17 +55,10 @@ _STATE_TO_PATTERN: dict[str, str] = {
     spec["tape_state"]: pid for pid, spec in HINT_PATTERNS.items()
 }
 
-
-def data_feed_for_scenario(scenario: str) -> str:
-    """Map the snapshot's source descriptor to the canonical ``data_feed`` stamp (sip | iex | sim).
-
-    A local copy of the monitor's mapping so the hint engine carries no import-cycle dependency on the
-    monitor module; identical semantics (the per-mode feed seam)."""
-    if scenario.startswith("live "):
-        return "iex"
-    if scenario.startswith("historical "):
-        return "sip"
-    return "sim"
+# ``data_feed_for_scenario`` is re-exported from the leaf ``feed_basis`` module (the ONE owner,
+# data-contract row 26, iter-24) so existing ``from app.research.hints import data_feed_for_scenario``
+# call sites keep resolving. The iter-23 LOCAL copy is REMOVED, not paralleled — the single definition
+# now lives in ``feed_basis`` and reads the config-owned per-mode feed keys (J-67 single-config-value).
 
 
 def _baseline_citation(
@@ -210,7 +204,7 @@ class HintEngine:
         spec = HINT_PATTERNS[pattern]
         setup_type = spec["setup_type"]
         direction = spec["direction"]
-        data_feed = data_feed_for_scenario(snapshot.scenario)
+        data_feed = data_feed_for_scenario(snapshot.scenario, self._config)
         fingerprint = self._config.config_fingerprint()
         citation = _baseline_citation(
             self._store,

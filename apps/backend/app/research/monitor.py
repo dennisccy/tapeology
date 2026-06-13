@@ -34,6 +34,7 @@ import time
 from ..config import Config
 from ..engine.snapshot import EngineSnapshot
 from .excursions import ExcursionTracker, compute_and_persist_excursions
+from .feed_basis import data_feed_for_scenario
 from .execution_checks import compute_and_persist_execution_checks
 from .grades import compute_and_persist_grades
 from .hints import HintEngine
@@ -72,19 +73,11 @@ _GAP_VERDICTS: frozenset[str] = frozenset({"watch_restarted", "paused", "stale"}
 
 logger = logging.getLogger(__name__)
 
-
-def data_feed_for_scenario(scenario: str) -> str:
-    """Map the snapshot's source descriptor (``scenario``) to the canonical ``data_feed`` stamp.
-
-    A ``live <SYM>`` source streams the IEX feed; a ``historical <SYM> <window>`` source replays the
-    SIP consolidated feed; everything else is a simulated scenario (``sim``). This mirrors the
-    per-mode feed config (``historical_feed`` = sip, ``live_feed`` = iex) — the feed-per-mode seam
-    stays config-aligned so honesty stamps are correct."""
-    if scenario.startswith("live "):
-        return "iex"
-    if scenario.startswith("historical "):
-        return "sip"
-    return "sim"
+# ``data_feed_for_scenario`` is the ONE consolidated scenario -> ``data_feed`` mapping, owned by the
+# leaf ``feed_basis`` module (data-contract row 26, iter-24). It is re-exported here (imported above)
+# so existing ``from app.research.monitor import data_feed_for_scenario`` call sites keep resolving;
+# the single DEFINITION lives in ``feed_basis`` (no parallel copy — the hints.py duplicate is gone).
+__all__ = ["data_feed_for_scenario"]
 
 
 def _evaluate_statement(

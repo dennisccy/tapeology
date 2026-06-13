@@ -37,8 +37,8 @@ from .monitor import (
     build_projection,
     compute_and_persist_final_statuses,
     compute_risk_flags,
-    data_feed_for_scenario,
 )
+from .feed_basis import data_feed_for_scenario
 from .journal_rows import journal_row
 from .store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
 from .studies import (
@@ -691,7 +691,7 @@ def declare_thesis(
     # Source identity is the snapshot's scenario descriptor (sim scenario / historical window / live
     # SYMBOL) — NEVER the bare ticker string (binding anti-goal).
     bound_source = snap.scenario
-    data_feed = data_feed_for_scenario(snap.scenario)
+    data_feed = data_feed_for_scenario(snap.scenario, config)
     thesis = ThesisRecord(
         id=uuid.uuid4().hex,
         ticker=ticker,

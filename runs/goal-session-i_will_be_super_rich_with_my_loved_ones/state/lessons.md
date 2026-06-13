@@ -151,3 +151,9 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** A code comment claimed assurance that did not exist: `apps/backend/app/config.py` says `hint_log_max` is "pinned by a fingerprint-stability test and its counter-test", but no such test exists (reviewer NOTE, evaluator-confirmed by grep AND by probing the fingerprint directly — the behavior IS correct, only the claimed test is missing). Comments asserting test coverage must be cross-checked against the suite; the established stability+counter pattern (study_list_max precedent) should be added in the same commit as the exclusion, never promised in prose.
 **Applies to:** any iter adding config keys with fingerprint exclusions, and any reviewer/evaluator reading "tested by X" comments — verify X exists before crediting it.
+
+## iter-24 — 2026-06-13T01:44:36+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** "Browser-verifiable without a feed" does not mean "browser-verifiable any time": the live cockpit's honest-absence design means NO feed badge renders over a closed market (the watch resolves to MARKET IS CLOSED), so the live-IEX badge/disclosure pixels are market-hours-gated, not merely credential-gated — the iter-24 spec's assumption that the live badge renders without a feed was false in practice. Separately, the QA agent cited one byte-identical frame under two test names (UT-J-01-final == UT-J-68-regression-check); legitimate here since both tests share one end state, but capture-or-cite-once is cleaner.
+**Applies to:** any iter needing live-mode pixels (the J-66 sweep's live-surface walk, J-67's gated leg, the J-68 backlog's J-12/J-14/J-15 legs) — schedule those captures during US market hours (next open 15-06-2026 14:30 UTC+01:00) or document the gating up front; and browser-qa evidence hygiene generally.

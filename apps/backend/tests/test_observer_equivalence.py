@@ -234,7 +234,7 @@ def test_real_monitor_with_thesis_does_not_alter_engine_outputs(tmp_path):
             level_price=None,
             status="active",
             bound_source=snap.scenario,
-            data_feed=data_feed_for_scenario(snap.scenario),
+            data_feed=data_feed_for_scenario(snap.scenario, CONFIG),
             config_fingerprint=CONFIG.config_fingerprint(),
             entry_context={"last": snap.last},
             statements=frozen_statements("trend_continuation", "long"),

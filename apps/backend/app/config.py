@@ -762,7 +762,9 @@ class Config:
     # ``study_list_max``): a list page size touches NO persisted hint value (it never changes a hint
     # record, its evidence, its citation, or its stamps), so two journals identical in every threshold
     # but served at different hint-log page sizes MUST share a fingerprint. Pinned by a
-    # fingerprint-stability test (changing it does NOT move the fingerprint) and its counter-test.
+    # fingerprint-stability test (changing it does NOT move the fingerprint) and its counter-test
+    # (``test_hint_log_max_is_serving_only_excluded_from_fingerprint`` +
+    # ``test_a_real_threshold_still_changes_fingerprint`` in ``tests/test_research_hints.py``, iter-24).
     hint_log_max: int = 200
 
     def window_label(self, window: int) -> str:

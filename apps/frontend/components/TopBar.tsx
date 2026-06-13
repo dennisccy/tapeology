@@ -15,6 +15,7 @@ import {
   utcToLocalTimeInput,
 } from "@/lib/datetime";
 import { DataSourceSelector } from "./DataSourceSelector";
+import { FeedBasisBadge } from "./FeedBasisBadge";
 import { MarketStatusIndicator } from "./MarketStatusIndicator";
 import { SymbolSearch } from "./SymbolSearch";
 
@@ -470,6 +471,13 @@ export function TopBar({
             <span className="font-mono">{formatWatchedSource(snapshot.scenario)}</span>
           </div>
         )}
+
+        {/* Feed-basis badge (J-67, data-contract row 29 + row 24 copy): the SERVED current-watch feed
+            basis (sim | iex | sip) rendered VERBATIM beside the watched-source indicator, with the
+            backend-owned IEX-vs-SIP disclosure line on the live IEX basis. Reads the snapshot's
+            `data_feed` key only — never client-derived. Honest absence (no watch / no basis) => the
+            badge renders nothing (it self-guards on `data_feed`). */}
+        {watched && <FeedBasisBadge dataFeed={snapshot?.data_feed} />}
 
         <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
           {/* Canonical delivery-lag readout (row 14, J-64): the served snapshot's

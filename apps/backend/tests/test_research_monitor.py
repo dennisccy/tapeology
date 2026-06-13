@@ -48,7 +48,7 @@ def _thesis_for(engine: TapeEngine, store: JournalStore, *, setup="absorption_re
         level_price=level,
         status="active",
         bound_source=snap.scenario,
-        data_feed=data_feed_for_scenario(snap.scenario),
+        data_feed=data_feed_for_scenario(snap.scenario, CONFIG),
         config_fingerprint=CONFIG.config_fingerprint(),
         entry_context={
             "tape_state": snap.tape_state,
@@ -67,10 +67,11 @@ def _thesis_for(engine: TapeEngine, store: JournalStore, *, setup="absorption_re
 # --- data_feed mapping ---------------------------------------------------------------------------
 
 def test_data_feed_mapping():
-    assert data_feed_for_scenario("buyer_control") == "sim"
-    assert data_feed_for_scenario("bid_absorption") == "sim"
-    assert data_feed_for_scenario("historical AAPL 2024-05-14T09:30–2024-05-14T09:40") == "sip"
-    assert data_feed_for_scenario("live AAPL") == "iex"
+    # Re-exported from the ONE owner (feed_basis); defaults byte-identical to the prior literals.
+    assert data_feed_for_scenario("buyer_control", CONFIG) == "sim"
+    assert data_feed_for_scenario("bid_absorption", CONFIG) == "sim"
+    assert data_feed_for_scenario("historical AAPL 2024-05-14T09:30–2024-05-14T09:40", CONFIG) == "sip"
+    assert data_feed_for_scenario("live AAPL", CONFIG) == "iex"
 
 
 # --- frozen context + statements -----------------------------------------------------------------

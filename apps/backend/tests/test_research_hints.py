@@ -227,9 +227,33 @@ def test_persisted_record_carries_stamps(store):
 
 
 def test_data_feed_mapping():
-    assert data_feed_for_scenario("live AAPL") == "iex"
-    assert data_feed_for_scenario("historical AAPL 2026-..") == "sip"
-    assert data_feed_for_scenario("bid_absorption") == "sim"
+    # Re-exported from the ONE owner (feed_basis); defaults byte-identical to the prior literals.
+    assert data_feed_for_scenario("live AAPL", CONFIG) == "iex"
+    assert data_feed_for_scenario("historical AAPL 2026-..", CONFIG) == "sip"
+    assert data_feed_for_scenario("bid_absorption", CONFIG) == "sim"
+
+
+# --- config fingerprint discipline for the hint-log page size (the config comment's claimed pair) ---
+# The carry-along the iter-24 spec mandates (lesson iter-23: "comments claiming test coverage must be
+# cross-checked against the suite"). The ``hint_log_max`` config comment claims a fingerprint-stability
+# test + its counter-test; this pair makes that claim TRUE, matching the ``test_studies.py``
+# precedent (``test_study_list_page_size_is_serving_only_excluded_from_fingerprint`` + counter).
+
+def test_hint_log_max_is_serving_only_excluded_from_fingerprint():
+    # The hint-log page size is a SERVING-ONLY value: changing it touches NO persisted hint value, so
+    # it MUST NOT move config_fingerprint (else two journals identical in every threshold but served at
+    # different hint-log page sizes could never be pooled). The iter-12 page-size precedent.
+    base = Config().config_fingerprint()
+    assert base == Config(hint_log_max=999).config_fingerprint()
+
+
+def test_a_real_threshold_still_changes_fingerprint():
+    # The counter-test: a REAL classifier threshold (and the hint TIMING keys that shape WHICH hints
+    # persist) DO move the fingerprint — proving the stability test above is not vacuously true.
+    base = Config().config_fingerprint()
+    assert base != Config(min_buy_price_impact=0.99).config_fingerprint()
+    assert base != Config(hint_sustain_dwell_seconds=9.0).config_fingerprint()
+    assert base != Config(hint_cooldown_seconds=999.0).config_fingerprint()
 
 
 # --- citation logic -------------------------------------------------------------------------------

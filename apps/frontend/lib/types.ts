@@ -298,7 +298,21 @@ export interface ResearchTaxonomy {
   // hardcodes none). The per-hint evidence + baseline citation travel on each hint object. Optional so a
   // pre-J-65 taxonomy payload stays valid (the surfaces then fall back to their own minimal copy).
   hints?: HintsTaxonomy;
+  // The feed-basis display copy (capability 28 honesty stamps, J-67; data-contract row 24 additive) —
+  // the cockpit feed-basis badge renders the served `data_feed` with these per-feed labels, and on the
+  // live IEX basis the disclosure line renders beside it. The /journal hint-log stamp also reads the
+  // per-feed label here. The frontend hardcodes NONE of it. Optional so a pre-J-67 taxonomy payload
+  // stays valid (the badge then falls back to the raw feed id).
+  feed_basis?: FeedBasisTaxonomy;
   disclaimer: string;
+}
+
+// The feed-basis taxonomy block (J-67) — per-feed display labels + the live IEX-vs-SIP disclosure
+// line, owned once on the backend and rendered VERBATIM (the frontend never hardcodes a feed label
+// or the disclosure text).
+export interface FeedBasisTaxonomy {
+  feeds: TaxonomyEnum[]; // [{id:"sim"|"iex"|"sip", name}]
+  live_disclosure: string;
 }
 
 // The setup-forming hints display copy owned by the backend (`GET /research/taxonomy` → `hints`).
@@ -317,6 +331,9 @@ export interface HintsTaxonomy {
     time: string;
     ticker: string;
     pattern: string;
+    // The stored `data_feed` stamp column (J-67, additive). Optional so a pre-J-67 taxonomy payload
+    // stays valid (the column header then falls back to "Feed").
+    feed?: string;
     evidence: string;
     baseline: string;
     declared_from: string;
@@ -711,6 +728,12 @@ export interface TapeSnapshot {
   // entry-checklist check reads). `null`/absent before the feeder stamps a lag (cold construction) —
   // an honest "no lag measured", rendered as an explicit placeholder, never a fabricated 0.
   delivery_lag_seconds?: number | null;
+  // Canonical current-watch FEED BASIS (Data Contract row 29, J-67): sim | iex | sip — computed ONCE
+  // server-side by the one config-aligned scenario->data_feed mapping, served on /summary and
+  // re-exposed by the WS frame VERBATIM. The cockpit feed-basis badge reads THIS value (never
+  // client-derived from `scenario`). Optional/absent for a pre-J-67 snapshot shape (the badge then
+  // renders nothing — honest absence, never a fabricated "live"/"iex" guess).
+  data_feed?: "sim" | "iex" | "sip";
   warm?: boolean;
   timestamp: number;
   market: Market;

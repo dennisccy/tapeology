@@ -15,8 +15,10 @@ guesses a status), so a connected-but-empty tape reads ``waiting`` and a feeder 
 
 from __future__ import annotations
 
+from .config import CONFIG
 from .engine.history import HistoryBuffer, OhlcBar, TapeMarker
 from .engine.snapshot import EngineSnapshot, TradeRow
+from .research.feed_basis import data_feed_for_scenario
 
 # The features the cockpit shows as headline readouts (and J-01 requires); a subset of the
 # primary window's feature set — read from it, never recomputed.
@@ -87,6 +89,13 @@ def serialize_summary(snap: EngineSnapshot) -> dict:
         "scenario": snap.scenario,
         "stream_status": snap.stream_status,
         "paused": snap.paused,
+        # The current-watch FEED BASIS (Data Contract row 29, J-67) — sim | iex | sip — computed
+        # ONCE server-side by the ONE consolidated scenario->data_feed mapping (config-aligned to
+        # live_feed/historical_feed). Additive projection/display metadata only (the end_reason /
+        # delivery_lag_seconds precedent): NEVER read by classification, never client-derived. The WS
+        # frame re-exposes this SAME value verbatim (serialize_stream below), so the badge reads one
+        # canonical basis identically across REST and WS — single source of truth.
+        "data_feed": data_feed_for_scenario(snap.scenario, CONFIG),
         # The feeder-owned delivery lag (Data Contract row 14, J-63) — carried VERBATIM off the
         # snapshot (the engine never recomputes it; it is feeder-owned display metadata). The
         # ``tape_lag_ok`` checklist check + the future UI lag readout read this SAME value. ``None``
@@ -150,6 +159,10 @@ def serialize_stream(snap: EngineSnapshot) -> dict:
         "scenario": snap.scenario,
         "stream_status": snap.stream_status,
         "paused": snap.paused,
+        # The current-watch FEED BASIS (Data Contract row 29, J-67) — re-exposed VERBATIM off the
+        # SAME single mapping the ``/summary`` projection uses, so the WS frame and ``/summary`` serve
+        # one identical basis (single source of truth; the badge never client-derives it).
+        "data_feed": data_feed_for_scenario(snap.scenario, CONFIG),
         # The feeder-owned delivery lag (Data Contract row 14, J-63) — carried VERBATIM off the
         # snapshot so the WS frame and ``/summary`` serve the SAME single value (single source of
         # truth). ``None`` until the feeder stamps one. The ``tape_lag_ok`` check reads this value.
