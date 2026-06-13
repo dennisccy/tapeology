@@ -399,3 +399,32 @@
 **Reasoning:** The J-66 cue-discipline sweep landed nearly complete — the all-surface copy walk passed on every research surface (no imperative/prediction language; register line everywhere), the comprehensive copy-lint + 14 seeded-violation counter-tests + 14 false-positive guards are green, the iter-24 feed-stamp NOTE is consolidated to `registry.config.historical_feed` (zero re-pins; reference study byte-identical), and the sound cue is correct in behaviour (default OFF, transition-only fire with visible fired-indicator, cooldown). The SOLE failure (browser QA FAIL, 10/11) is placement: `SoundCue` is mounted inside `ActiveThesis` (ThesisStrip.tsx ~914-916), so a fresh no-thesis cockpit shows no toggle — verified in UT-J-66-cockpit-buyer-control.png (declare line, no toggle) vs UT-J-66-thesis-strip-sound-off.png (toggle present with a thesis). J-66 requires the toggle be explicit/visible in the `/` cue area on fresh load. All 10 required-still-passing journeys re-verified green in fresh pixels; coherence COHERENCE-PASS; no anti-goal touched (no app/engine or app/providers change; observer-equivalence green; suite 848/1 exit 0). Not GOAL_ACHIEVED (J-66 fails); not REGRESSION (no prior-passing journey broke); tractable next step exists so not STALLED.
 
 **Next-step recommendation:** Re-target J-66 at LEAN depth — placement-only fix. Move the `SoundCue` mount out of the thesis-conditional `ActiveThesis` branch into an always-rendered `/` cockpit cue/status area so the explicit toggle is visible on a fresh no-thesis load (default OFF; `cueKey` already tolerates null ⇒ inert, no fire). Re-verify only the two failing preconditions in pixels (fresh-load toggle present+OFF; fires on a real transition once a thesis exists) — do not re-litigate the copy walk or the lint. After J-66 flips green, only the J-68 backlog (J-11/J-14/J-16/J-18/J-20/J-22/J-23/J-27/J-28/J-29/J-32 partial, J-15 gated) and J-67's market-hours-gated live-IEX pixel legs stand before GOAL_ACHIEVED; the next US open is 15-06-2026 14:30 UTC+01:00, so a market-hours iteration can opportunistically capture those.
+
+## Iteration 26 — goal-i_will_be_super_rich_with_my_loved_ones-iter-26
+
+**Date:** 2026-06-13T05:30:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-66 (failing -> passing; the last cue-layer journey)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none
+
+**Reasoning:** The lean placement-only fix relocated the SoundCue toggle from the thesis-conditional
+ActiveThesis branch into the shared StripShell wrapper (single frontend file, +51/-20, no backend
+diff). Verified in fresh pixels: a no-thesis SIM-BUYER cockpit shows exactly one [role="switch"]
+aria-checked="false" toggle below the declare line, taxonomy-owned copy, and it remains visible with
+an active thesis without displacing the checklist/stance/hint-dock/panel-grid (J-68 additive-surface
+clause confirmed). COHERENCE-PASS, review PASS, browser QA 9/9, backend suite byte-identical (zero
+re-pins). J-66 flips passing — but GOAL_ACHIEVED is withheld because J-11/J-14/J-16/J-18/J-20/J-22/
+J-23/J-27/J-28/J-29/J-32 remain `partial`, J-15 is `unknown`/gated, and J-67's live-IEX pixel leg +
+J-68's all-green clause lack positive full-pass evidence.
+
+**Next-step recommendation:** Run the **J-68 market-hours backlog iteration** at FULL depth — convert
+the carried `partial`/`unknown` real-data legs (J-11/J-14/J-16/J-18/J-20/J-22/J-23/J-27/J-28/J-29/J-32,
+J-15) and J-67's market-hours-gated live-IEX pixel legs into positive credentialed/browser evidence.
+This is the only remaining gate to GOAL_ACHIEVED; the cue layer (J-63–J-67) is complete. Next US open
+is 15-06-2026 14:30 UTC+01:00 (Monday), enabling the live/credentialed legs. No new feature work
+expected — verification/evidence-capture sweep; any genuine real-data defect surfaced becomes its own
+scoped fix.

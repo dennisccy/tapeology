@@ -163,3 +163,17 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** A "cue-area home" registered in the blueprint as `all research surfaces` is NOT the same as `visible on a fresh load`. The sound toggle was correctly placed inside the thesis strip's cue area and passed coherence (COHERENCE-PASS), yet browser QA FAILed J-66 because `SoundCue` was mounted inside the `ActiveThesis` branch of `ThesisStrip.tsx` — so a no-thesis cockpit shows no toggle at all. A control whose acceptance says "its toggle is explicit" / "default OFF on every fresh load" must be mounted on the always-rendered cockpit shell, not gated behind a declared thesis. Coherence audits the data/IA contract, not the journey's fresh-load visibility precondition — the two can disagree.
 **Applies to:** any iter adding a cockpit-level control/affordance whose acceptance requires fresh-load (no-thesis) visibility — verify the mount point is outside any thesis/state-conditional branch, not just inside the right component.
+
+## iter-26 — 2026-06-13T05:30:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** A control that must be visible across ALL of a multi-branch component's render states
+belongs in the shared wrapper, not in one conditional branch. `ThesisStrip.tsx` has six render paths
+(idle / form / taxonomy-loading / taxonomy-error / active / not-evaluated); mounting `SoundCue` only
+inside `ActiveThesis` hid it on a fresh no-thesis cockpit. The clean fix put the single `<SoundCue>`
+in `StripShell` (rendered by every branch) with `cueKey={null}` on no-thesis states so it is visible
+but inert. The taxonomy-fetch guard also had to widen from `if ((!open && !thesis) || taxonomy)
+return;` to `if (taxonomy) return;` so the always-rendered toggle has its taxonomy-owned copy on the
+idle line — still fetched once and cached, no client-side copy fabrication.
+**Applies to:** any iter touching `apps/frontend/components/ThesisStrip.tsx` render branches, or any
+iter adding a cockpit-wide control that must survive idle/active/error strip states.

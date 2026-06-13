@@ -145,6 +145,15 @@ Tapeology (top bar: Cockpit · Journal · Studies)
 > served copy + frontend-string scan) becomes the permanent backstop. No new route, no nav
 > change; the J-68 backlog lands with its own journeys.
 
+> **Iter-26 (build-out note, additive — no skeleton change):** the **J-66 sound-cue toggle
+> placement is corrected** at its same pre-registered home — the optional sound-cue toggle
+> (shipped iter-25 in the `/` cockpit cue area) is moved OUT of the thesis-conditional
+> `ActiveThesis` branch in `ThesisStrip.tsx` so it renders UNCONDITIONALLY across every strip
+> state (idle no-thesis, active, not-evaluated). The toggle is now visible + OFF on a fresh
+> no-thesis cockpit load (J-66 'its toggle is explicit'); `cueKeyFor(thesis)` still returns null
+> with no thesis, so the idle toggle is inert (no fire). Behaviour, copy, cooldown, and the
+> fired-indicator are unchanged; no backend change, no new value, no new route, no nav change.
+
 **Feature / journey homes** (≤2 clicks from the nav):
 
 | Feature / journey | Canonical home (route) | Nav section |

@@ -12,6 +12,7 @@ import type {
   ManagementStance,
   ResearchTaxonomy,
   RiskFlag,
+  SoundCueTaxonomy,
   StatementStatus,
   ThesisProjection,
   ThesisVerdict,
@@ -373,13 +374,38 @@ function EntryChecklistBlock({ thesis }: { thesis: ThesisProjection }) {
   );
 }
 
-function StripShell({ children }: { children: React.ReactNode }) {
+// The shared strip wrapper rendered by EVERY ThesisStrip state (idle / form / loading / taxonomy-error /
+// active / not-evaluated). It owns the ALWAYS-RENDERED optional sound-cue toggle (J-66): the cue control
+// is part of the cockpit cue area regardless of thesis state, so a fresh `/` load shows it present and
+// OFF before any thesis is declared. The cue is INERT with no live verdict — `cueKey` is `null` when
+// there is no thesis (per `cueKeyFor`), so it never fires; once a thesis is live the served cueKey drives
+// transition-only fires (unchanged behaviour). `SoundCue` renders nothing if the taxonomy lacks the
+// `sound_cue` block (pre-J-66 backend ⇒ no fabricated copy).
+function StripShell({
+  children,
+  cueKey,
+  cueTaxonomy,
+}: {
+  children: React.ReactNode;
+  // The served transition key (verdict + active stance), or `null`/`undefined` when there is no live
+  // verdict (idle / not-evaluated) — the cue is then inert but visible.
+  cueKey?: string | null;
+  // The taxonomy-owned sound-cue copy + cooldown. Absent ⇒ the toggle renders nothing (no fabrication).
+  cueTaxonomy?: SoundCueTaxonomy | null;
+}) {
   return (
     <section
       data-testid="thesis-strip"
       className="mb-4 rounded-lg border border-slate-800 bg-slate-900/60 p-4"
     >
       {children}
+      {/* Optional sound cue (capability 33 final item, J-66) — the cue-layer's last control, in the
+          cockpit cue area. ALWAYS rendered (every strip state) so it is discoverable on a fresh load.
+          Default OFF on every fresh load; when enabled it plays a brief sound ONLY on a verdict/stance
+          TRANSITION (the served cueKey changes) and respects the served cooldown, with a visible fired-
+          indicator. With no thesis the served cueKey is null ⇒ the toggle is inert (never fires) but
+          visible and OFF. Toggle copy is taxonomy-owned; the UI derives no stance/verdict. */}
+      <SoundCue cueKey={cueKey ?? null} taxonomy={cueTaxonomy ?? undefined} />
     </section>
   );
 }
@@ -402,7 +428,7 @@ function NotEvaluatedThesis({
     thesis.direction === "long" ? "text-emerald-400" : "text-rose-400";
   const marks = thesis.marks;
   return (
-    <StripShell>
+    <StripShell cueKey={cueKeyFor(thesis)} cueTaxonomy={taxonomy?.sound_cue}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-baseline gap-3">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -612,7 +638,7 @@ function ActiveThesis({
   }
 
   return (
-    <StripShell>
+    <StripShell cueKey={cueKeyFor(thesis)} cueTaxonomy={taxonomy?.sound_cue}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-baseline gap-3">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -909,11 +935,8 @@ function ActiveThesis({
         </div>
       )}
 
-      {/* Optional sound cue (capability 33 final item, J-66) — the cue-layer's last control, in the
-          cockpit cue area. Default OFF on every fresh load; when enabled it plays a brief sound ONLY on
-          a verdict/stance TRANSITION (the served cueKey changes) and respects the served cooldown, with
-          a visible fired-indicator. Toggle copy is taxonomy-owned; the UI derives no stance/verdict. */}
-      <SoundCue cueKey={cueKeyFor(thesis)} taxonomy={taxonomy?.sound_cue} />
+      {/* The optional sound cue is now rendered by the shared StripShell wrapper (J-66) — always present
+          across every strip state, including the no-thesis idle cockpit — so it is not mounted here. */}
     </StripShell>
   );
 }
@@ -976,11 +999,14 @@ export function ThesisStrip({
     setAppliedPrefillNonce(prefill.nonce);
   }, [prefill, thesis, appliedPrefillNonce]);
 
-  // Load the taxonomy when the form opens OR when a thesis is active (so the verdict label/copy is
-  // taxonomy-owned, not hardcoded). The idle line still costs no request. The form is fully driven
-  // by it — the frontend hardcodes no setup/direction/verdict label.
+  // Load the taxonomy unconditionally (once): the form needs the setups/directions/verdict copy, the
+  // active thesis needs the verdict/stance labels, AND — since J-66 — the ALWAYS-RENDERED sound-cue
+  // toggle needs its taxonomy-owned `sound_cue` copy even on a fresh idle no-thesis cockpit (the toggle
+  // must be visible + labelled before any thesis is declared). The copy is never fabricated client-side:
+  // a pre-J-66 taxonomy omitting `sound_cue` ⇒ the toggle renders nothing. Fetched once and cached
+  // (`taxonomy` guard), so the idle line still issues at most this single cached request.
   useEffect(() => {
-    if ((!open && !thesis) || taxonomy) return;
+    if (taxonomy) return;
     let cancelled = false;
     fetchTaxonomy().then((t) => {
       if (cancelled) return;
@@ -996,7 +1022,7 @@ export function ThesisStrip({
     return () => {
       cancelled = true;
     };
-  }, [open, thesis, taxonomy]);
+  }, [taxonomy]);
 
   // A thesis always wins — render it verbatim (the form is only for the idle state). A SURVIVING
   // entry-marked thesis on a stopped/restarted/mismatched watch reads as not-evaluated (J-47): it
@@ -1057,10 +1083,13 @@ export function ThesisStrip({
     }
   }
 
-  // Idle: a single one-line declare affordance — nothing else moves (J-68 strip-idle clause).
+  // Idle: a single one-line declare affordance — nothing else moves (J-68 strip-idle clause). The
+  // always-rendered sound-cue toggle is appended by StripShell (J-66): it is the only additive cue-area
+  // surface here — the declare affordance itself is unchanged. `cueKey` is null (no thesis) ⇒ the toggle
+  // is inert (never fires) but visible and OFF, and reads its copy from the taxonomy `sound_cue` block.
   if (!open) {
     return (
-      <StripShell>
+      <StripShell cueKey={null} cueTaxonomy={taxonomy?.sound_cue}>
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm text-slate-400">
             Declare a thesis on this ticker to watch the tape judged against it.
@@ -1077,10 +1106,11 @@ export function ThesisStrip({
     );
   }
 
-  // The taxonomy failed to load — explicit honest state, never a fabricated form.
+  // The taxonomy failed to load — explicit honest state, never a fabricated form. (The cue toggle then
+  // renders nothing too: no taxonomy ⇒ no fabricated copy.)
   if (taxonomyError) {
     return (
-      <StripShell>
+      <StripShell cueKey={null} cueTaxonomy={taxonomy?.sound_cue}>
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm text-rose-400">
             Couldn’t load the setup catalog. The thesis form is unavailable.
@@ -1097,10 +1127,11 @@ export function ThesisStrip({
     );
   }
 
-  // Form open but the taxonomy is still loading.
+  // Form open but the taxonomy is still loading. (The cue toggle renders nothing until the taxonomy
+  // arrives — no fabricated copy; `taxonomy` is null in this branch by construction.)
   if (!taxonomy) {
     return (
-      <StripShell>
+      <StripShell cueKey={null} cueTaxonomy={null}>
         <span className="text-sm text-slate-500">Loading the setup catalog…</span>
       </StripShell>
     );
@@ -1110,7 +1141,7 @@ export function ThesisStrip({
     "rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500";
 
   return (
-    <StripShell>
+    <StripShell cueKey={null} cueTaxonomy={taxonomy?.sound_cue}>
       <form onSubmit={handleSubmit}>
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-slate-500">
