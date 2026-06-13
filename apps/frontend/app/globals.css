@@ -11,3 +11,25 @@ body {
   background-color: #020617; /* slate-950 — calm dark surface */
   color: #e2e8f0; /* slate-200 */
 }
+
+/* The optional sound-cue fired-indicator pulse (J-66): a brief, restrained flash so a fire is
+   visible at a glance, then settles — the transition-only + cooldown behaviour is verifiable
+   without audio hardware. Re-triggered on each fire via a changing React key. */
+@keyframes sound-cue-pulse {
+  0% {
+    opacity: 0.35;
+    transform: scale(0.94);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.sound-cue-pulse {
+  animation: sound-cue-pulse 0.5s ease-out;
+}

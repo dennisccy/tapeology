@@ -304,7 +304,25 @@ export interface ResearchTaxonomy {
   // per-feed label here. The frontend hardcodes NONE of it. Optional so a pre-J-67 taxonomy payload
   // stays valid (the badge then falls back to the raw feed id).
   feed_basis?: FeedBasisTaxonomy;
+  // The optional sound-cue display copy + the config-owned cooldown VALUE (capability 33 final item,
+  // J-66; data-contract row 24 additive) — the cockpit's sound-cue toggle renders the label /
+  // description / register VERBATIM and reads the cooldown number (no UI magic number). The frontend
+  // hardcodes NONE of it. Optional so a pre-J-66 taxonomy payload stays valid (the toggle then renders
+  // nothing rather than fabricate copy).
+  sound_cue?: SoundCueTaxonomy;
   disclaimer: string;
+}
+
+// The optional sound-cue taxonomy block (J-66) — the toggle label, the off-by-default/transition-only
+// description, the fired-indicator label, the reused register line, and the config-owned cooldown (s).
+export interface SoundCueTaxonomy {
+  copy: {
+    toggle_label: string;
+    description: string;
+    fired_indicator_label: string;
+    register: string;
+  };
+  cooldown_seconds: number;
 }
 
 // The feed-basis taxonomy block (J-67) — per-feed display labels + the live IEX-vs-SIP disclosure

@@ -256,6 +256,30 @@ def test_a_real_threshold_still_changes_fingerprint():
     assert base != Config(hint_cooldown_seconds=999.0).config_fingerprint()
 
 
+# --- config fingerprint discipline for the sound-cue cooldown (J-66; the config comment's claimed pair) ---
+# The carry-along the iter-25 spec mandates (lesson iter-23: a serving-only exclusion claim MUST ship
+# its fingerprint-stability test + real-threshold counter-test in the SAME commit — never promised only
+# in prose). ``sound_cue_cooldown_seconds`` is the OPTIONAL, never-persisted client sound cue's debounce;
+# its config comment claims this exact pair, matching the ``hint_log_max`` / ``study_list_max`` precedent.
+
+def test_sound_cue_cooldown_is_serving_only_excluded_from_fingerprint():
+    # The sound-cue cooldown is a SERVING-ONLY value for a CLIENT-LOCAL UI cue that is NEVER PERSISTED
+    # (schema stays v7 — no cue row exists), so changing it touches NO persisted research value and MUST
+    # NOT move config_fingerprint (else two journals identical in every threshold but served at different
+    # cue cooldowns could never be pooled). Same iter-12/16/20/23 serving-only precedent.
+    base = Config().config_fingerprint()
+    assert base == Config(sound_cue_cooldown_seconds=99.0).config_fingerprint()
+
+
+def test_a_real_threshold_still_changes_fingerprint_vs_sound_cue():
+    # The counter-test for the sound-cue exclusion: a REAL classifier threshold STILL moves the
+    # fingerprint — proving the stability test above is not vacuously true (a lint/exclusion that cannot
+    # fail proves nothing). A persisted research-timing key (hint sustain) also still moves it.
+    base = Config().config_fingerprint()
+    assert base != Config(min_buy_price_impact=0.99).config_fingerprint()
+    assert base != Config(hint_sustain_dwell_seconds=9.0).config_fingerprint()
+
+
 # --- citation logic -------------------------------------------------------------------------------
 
 def _done_study(

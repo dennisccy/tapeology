@@ -310,8 +310,13 @@ def get_watch_manager():
 
 @router.get("/taxonomy")
 def get_taxonomy() -> dict:
-    """The setup catalog, enums, and display copy — the single backend owner of research labels."""
-    return taxonomy_payload()
+    """The setup catalog, enums, and display copy — the single backend owner of research labels.
+
+    Passes the registry's config (when present) so the additive ``sound_cue`` block carries the
+    config-owned ``sound_cue_cooldown_seconds`` value (serving-only — the cue is never persisted). The
+    taxonomy needs no active watch; with no registry it falls back to the shared default config."""
+    registry = get_registry_or_none()
+    return taxonomy_payload(registry.config if registry is not None else None)
 
 
 @router.get("/analytics")
@@ -1202,9 +1207,16 @@ def create_study(
             raise HTTPException(status_code=422, detail=f"unknown sim scenario '{body.source_id}'")
         data_feed = "sim"
     elif body.source_kind == SOURCE_REFERENCE:
-        # The committed PG SIP fixture — no credentials, no window params.
+        # The committed PG SIP fixture — no credentials, no window params. The feed basis is the
+        # config-owned HISTORICAL feed (the reference study replays the committed SIP window through the
+        # historical-replay path; the runner later re-stamps the resolved ``historical PG reference``
+        # descriptor through the ONE ``data_feed_for_scenario`` mapping, which reads the SAME
+        # ``historical_feed`` key — so the create-time stamp equals the runner's re-stamp by
+        # construction). NO hardcoded ``"sip"`` literal — the row-26 feed-honesty consolidation (iter-25,
+        # closing the iter-24 reviewer NOTE). Defaults unchanged (``historical_feed="sip"``) ⇒ every
+        # existing stamp + the pinned reference study + the full suite stay byte-identical (zero re-pins).
         source_descriptor = REFERENCE_SOURCE_ID
-        data_feed = "sip"
+        data_feed = registry.config.historical_feed
     else:  # SOURCE_HISTORICAL — arbitrary symbol + past window through the existing fetch path.
         if not body.source_id:
             raise HTTPException(status_code=422, detail="a historical study requires a symbol")
@@ -1229,7 +1241,13 @@ def create_study(
                 detail="real-data provider unavailable — a historical study needs credentials",
             )
         historical_fetch = _build_historical_fetch(adapter, body.source_id, body.start, body.end)
-        data_feed = "sip"
+        # The config-owned HISTORICAL feed — an arbitrary-window study replays through the same
+        # historical-replay path. The runner later re-stamps the resolved ``historical <SYM>`` descriptor
+        # through the ONE ``data_feed_for_scenario`` mapping, which reads the SAME ``historical_feed``
+        # key — so the create-time stamp equals the runner's re-stamp by construction. NO hardcoded
+        # ``"sip"`` literal — the row-26 feed-honesty consolidation (iter-25, closing the iter-24
+        # reviewer NOTE). Defaults unchanged ⇒ byte-identical stamps (zero re-pins).
+        data_feed = registry.config.historical_feed
 
     params = {
         "source_kind": body.source_kind,

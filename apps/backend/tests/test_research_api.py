@@ -165,6 +165,37 @@ def test_taxonomy_serves_feed_basis_copy_canary(client):
         assert word not in f" {blob} ", f"forbidden word {word!r} in feed-basis copy"
 
 
+def test_taxonomy_serves_sound_cue_copy_and_config_cooldown_canary(client):
+    # The optional sound-cue display copy + the config-owned cooldown VALUE (capability 33 final item,
+    # J-66; data-contract row 24 additive) is backend-owned — served by GET /research/taxonomy. ALSO
+    # iter-25's code-identity canary: the presence of `sound_cue` here proves the NEW server code is
+    # live before any browser capture (iter-6 lesson — this iteration changes taxonomy copy). The
+    # frontend hardcodes NONE of it (toggle label, description, register line, cooldown number).
+    payload = client.get("/research/taxonomy").json()
+    assert "sound_cue" in payload
+    sound = payload["sound_cue"]
+    copy = sound["copy"]
+    # The toggle label, the off-by-default/transition-only description, and the fired-indicator label.
+    assert copy["toggle_label"]
+    assert copy["description"]
+    assert copy["fired_indicator_label"]
+    # The register line REUSES the cockpit's existing "Descriptive only — not trading advice" string
+    # verbatim (J-66: one copy register, owned on the backend) — equal to the payload-level disclaimer.
+    assert copy["register"] == "Descriptive only — not trading advice."
+    assert copy["register"] == payload["disclaimer"]
+    # The cooldown VALUE is the config-owned (serving-only) number, served verbatim (no UI magic number).
+    assert sound["cooldown_seconds"] == CONFIG.sound_cue_cooldown_seconds
+    # The off-by-default discipline is stated in the copy (a fresh load never fires) — a present-tense
+    # description, never an imperative.
+    assert "off by default" in copy["description"].lower()
+    # Copy discipline (J-66): no imperative / predictive / certainty words in any sound-cue string.
+    blob = " ".join(
+        [copy["toggle_label"], copy["description"], copy["fired_indicator_label"], copy["register"]]
+    ).lower()
+    for word in (" buy ", " sell ", " enter ", " exit ", "should ", "will ", "predict", "target", "guarantee"):
+        assert word not in f" {blob} ", f"forbidden word {word!r} in sound-cue copy"
+
+
 def test_checklist_keys_rest_equals_ws_verbatim_on_pre_entry_mark_path(client):
     # The entry-checklist keys served on the PRE-entry-mark path are byte-identical across REST
     # (/research/thesis/active) and the WS `thesis` key (one projection, never a second path — the

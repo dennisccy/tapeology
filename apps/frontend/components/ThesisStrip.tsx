@@ -16,6 +16,18 @@ import type {
   ThesisProjection,
   ThesisVerdict,
 } from "@/lib/types";
+import { SoundCue } from "./SoundCue";
+
+// The served transition key for the OPTIONAL sound cue (J-66): the verdict + the ACTIVE stance value
+// concatenated, read VERBATIM off the projection — the UI derives no stance/verdict of its own. The
+// active stance is the management stance (entry-marked) OR the entry-checklist stance (pre-entry-mark);
+// exactly one is served at a time. `null` when there is no live verdict yet (the cue then never fires).
+function cueKeyFor(thesis: ThesisProjection | null | undefined): string | null {
+  if (!thesis || !thesis.verdict) return null;
+  const stance =
+    thesis.management_stance?.value ?? thesis.entry_checklist?.stance.value ?? "";
+  return `${thesis.verdict}|${stance}`;
+}
 
 // The thesis strip (capability 23): sits between the price chart and the panel grid on `/`.
 //   * idle      — a single one-line declare affordance (J-68 strip-idle clause: nothing else moves);
@@ -896,6 +908,12 @@ function ActiveThesis({
           )}
         </div>
       )}
+
+      {/* Optional sound cue (capability 33 final item, J-66) — the cue-layer's last control, in the
+          cockpit cue area. Default OFF on every fresh load; when enabled it plays a brief sound ONLY on
+          a verdict/stance TRANSITION (the served cueKey changes) and respects the served cooldown, with
+          a visible fired-indicator. Toggle copy is taxonomy-owned; the UI derives no stance/verdict. */}
+      <SoundCue cueKey={cueKeyFor(thesis)} taxonomy={taxonomy?.sound_cue} />
     </StripShell>
   );
 }

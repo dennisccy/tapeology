@@ -766,6 +766,30 @@ class Config:
     # (``test_hint_log_max_is_serving_only_excluded_from_fingerprint`` +
     # ``test_a_real_threshold_still_changes_fingerprint`` in ``tests/test_research_hints.py``, iter-24).
     hint_log_max: int = 200
+    # SOUND-CUE COOLDOWN (wall-clock seconds, capability 33 / J-66): the OPTIONAL, off-by-default
+    # client sound cue (the last capability-33 item) fires ONLY on a stance/verdict TRANSITION and then
+    # stays silent for at least this many seconds before it may fire again — a debounce so a brief
+    # verdict flicker (or two transitions in quick succession) never machine-guns the speaker. The cue
+    # itself is a CLIENT-LOCAL UI preference: the toggle state is never sent to the backend and the cue
+    # is NEVER PERSISTED. This key is SERVING-ONLY — it is served additively to the frontend via the
+    # row-24 taxonomy payload (alongside the sound-cue display copy) so the cooldown is config-owned
+    # (no magic number in the UI), and the browser reads it verbatim. A RESEARCH DEFAULT — a documented
+    # starting point, never a validated edge. Calibrated to the SAME 3.0 s family as the verdict /
+    # stance dwells (the values it debounces are themselves already dwell-gated), so a single extra
+    # debounce of that order suffices to avoid a double-fire without lagging a genuine second
+    # transition. Seconds (a wall-clock UI debounce, NEVER read by classification — determinism
+    # unchanged), so no relative scaling.
+    #
+    # EXCLUDED FROM ``config_fingerprint`` (see the exclusion set in ``config_fingerprint``) with the
+    # codified iter-12/16/20/23 discipline: the cue is NEVER PERSISTED (schema stays v7 — no cue row
+    # exists), so this serving-only timing value touches NO persisted research value (no verdict,
+    # feature, grade, excursion, stamp, hint, or study). It MUST NOT move the fingerprint — else two
+    # journals identical in every threshold but served at different cue cooldowns would mint different
+    # fingerprints and could never be pooled. Pinned by a fingerprint-stability test (changing it does
+    # NOT move the fingerprint) + the real-threshold counter-test, in the SAME commit as this key (the
+    # ``study_list_max`` / ``hint_log_max`` serving-only pattern; iter-23 lesson — never promised only
+    # in prose).
+    sound_cue_cooldown_seconds: float = 3.0
 
     def window_label(self, window: int) -> str:
         return f"{window}s"
@@ -862,6 +886,14 @@ class Config:
             # the fingerprint (the intended never-pool-across-fingerprints honesty mechanism; the
             # study-arm-sustain / study-arm-cooldown precedent).
             "hint_log_max",
+            # The sound-cue cooldown (capability 33 / J-66): the OPTIONAL sound cue is a CLIENT-LOCAL UI
+            # preference that is NEVER PERSISTED (schema stays v7 — no cue row exists), so this
+            # serving-only debounce value touches NO persisted research value (no verdict, feature,
+            # grade, excursion, stamp, hint, or study). Serving-only, EXCLUDED by the identical
+            # iter-12/16/20/23 precedent (the ``hint_log_max`` / serving dwell siblings above) — two
+            # journals identical in every threshold but served at different cue cooldowns MUST share a
+            # fingerprint. Pinned by a fingerprint-stability test + the real-threshold counter-test.
+            "sound_cue_cooldown_seconds",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)

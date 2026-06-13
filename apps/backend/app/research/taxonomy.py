@@ -15,6 +15,11 @@ signals only, never a new indicator.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..config import Config
+
 # --- Direction enum -----------------------------------------------------------------------------
 DIRECTIONS: dict[str, str] = {
     "long": "Long",
@@ -770,6 +775,39 @@ HINT_COPY: dict[str, str] = {
     ),
 }
 
+# --- Optional sound-cue display copy (capability 33 final item, J-66; data-contract row 24 additive) --
+# Owned ONCE here so the cockpit's OPTIONAL sound-cue toggle is taxonomy-driven (the frontend hardcodes
+# NO toggle label, description, or register line). The cue is the LAST capability-33 item: an optional,
+# explicitly-toggled sound on stance/verdict TRANSITIONS, DEFAULT OFF on every fresh load, fires only on
+# a real transition, and respects the served ``sound_cue_cooldown_seconds`` debounce between fires. The
+# cooldown VALUE is config-owned (served via ``taxonomy_payload(config)`` — no magic number in the UI);
+# this block is the DISPLAY copy. The toggle state is a CLIENT-LOCAL UI preference, never served or
+# persisted.
+#
+# Copy discipline (J-66 — this surface is part of the sweep): strictly DESCRIPTIVE, present-tense. It
+# describes what the cue DOES ("plays a brief sound when the verdict or stance changes") — never an
+# imperative (no buy/sell/enter/exit), never a prediction (no "will"/forecast/target), never a
+# certainty/edge claim. The register line REUSES the cockpit's existing "Descriptive only — not trading
+# advice" discipline VERBATIM (the same string the hint dock + every research surface carries).
+SOUND_CUE_COPY: dict[str, str] = {
+    # The toggle label (the explicit on/off control in the cockpit cue area).
+    "toggle_label": "Sound on stance / verdict change",
+    # The off-by-default / transition-only description — states plainly what the cue does and that it
+    # starts OFF. Descriptive only; names no action and forecasts nothing.
+    "description": (
+        "Plays a brief sound the moment the published verdict or management stance changes. Off by "
+        "default; it never plays on a fresh load, only on a real change, and stays quiet for a short "
+        "cooldown between sounds."
+    ),
+    # The fired-indicator label (the small visible pulse shown when the cue fires — so the
+    # transition-only + cooldown behaviour is browser-verifiable without audio hardware).
+    "fired_indicator_label": "sound played",
+    # The register line — the SAME "Descriptive only — not trading advice" discipline every research
+    # surface carries, reused verbatim (J-66: one copy register, owned on the backend).
+    "register": "Descriptive only — not trading advice.",
+}
+
+
 # The hint-log column labels — the /journal hint-log table renders these verbatim (no hardcoded header).
 HINT_LOG_COLUMNS: dict[str, str] = {
     "time": "Time",
@@ -1010,14 +1048,20 @@ def frozen_statements(setup_type: str, direction: str) -> list[dict]:
     return resolved
 
 
-def taxonomy_payload() -> dict:
+def taxonomy_payload(config: Config | None = None) -> dict:
     """The full ``GET /research/taxonomy`` body — setups (with name + level requirement + statement
     templates), direction enum, verdict enum, and the statement-status enum, all with display copy.
 
     The frontend reads this to build the declare form (which setups exist, their display names, and
     whether each needs a level field) and to label the active-thesis display — it hardcodes none of
     it. The "Descriptive only — not trading advice" discipline note travels with the payload so the
-    one copy register lives on the backend (J-66)."""
+    one copy register lives on the backend (J-66).
+
+    ``config`` supplies the serving-only ``sound_cue_cooldown_seconds`` value carried in the additive
+    ``sound_cue`` block (the optional client cue's debounce — config-owned, never a magic number in the
+    UI). It defaults to the shared ``CONFIG`` so the taxonomy stays callable without a registry."""
+    if config is None:
+        from ..config import CONFIG as config  # the shared instance (taxonomy needs no watch)
     return {
         "setups": [
             {
@@ -1156,6 +1200,18 @@ def taxonomy_payload() -> dict:
             "copy": dict(HINT_COPY),
             "log_columns": dict(HINT_LOG_COLUMNS),
             "baseline_unvalidated": HINT_BASELINE_UNVALIDATED,
+        },
+        # The optional sound-cue display copy + the config-owned cooldown VALUE (capability 33 final
+        # item, J-66; data-contract row 24 additive) — owned ONCE here so the cockpit's sound toggle is
+        # taxonomy-driven (the frontend hardcodes no toggle label, description, register line, or
+        # cooldown number). The cue is a CLIENT-LOCAL UI preference (never served/persisted); only its
+        # DISPLAY copy + the serving-only ``sound_cue_cooldown_seconds`` debounce travel here. Strictly
+        # descriptive, present-tense — never imperative/predictive (the J-66 sweep audits this surface).
+        "sound_cue": {
+            "copy": dict(SOUND_CUE_COPY),
+            # Serving-only (excluded from config_fingerprint) — the UI reads it verbatim so the cooldown
+            # is config-owned, not a magic number in the browser.
+            "cooldown_seconds": config.sound_cue_cooldown_seconds,
         },
         "disclaimer": "Descriptive only — not trading advice.",
     }

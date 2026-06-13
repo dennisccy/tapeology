@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from app.config import CONFIG
 from app.main import app, get_market_adapter, manager
+from app.research.feed_basis import data_feed_for_scenario
 from app.research.routes import ResearchRegistry, set_registry
 from app.research.store import JournalStore
 from fakes import FakeAdapter
@@ -214,6 +215,63 @@ def test_cancel_terminal_study_is_409(ctx):
     _poll_until_terminal(client, sid)
     # A done study cannot be cancelled.
     assert client.post(f"/research/studies/{sid}/cancel").status_code == 409
+
+
+# --- the creation-time data_feed stamp consolidates to the ONE feed mapping (iter-25, J-66) -------
+# The iter-24 reviewer NOTE: the study-create route hardcoded ``data_feed = "sip"`` for the reference
+# and historical kinds (a literal feed string) instead of reading the registered row-26 canonical
+# source (``feed_basis.data_feed_for_scenario`` / the config-owned ``historical_feed`` key). This is the
+# exact feed-honesty drift the J-66 copy/stamp sweep exists to close. The consolidation reads
+# ``registry.config.historical_feed`` — the SAME key the one mapping exposes for the historical-replay
+# path — so the CREATE-time stamp equals the mapping's output (and equals the runner's later re-stamp of
+# the resolved ``historical ...`` descriptor) by construction. Defaults unchanged ⇒ byte-identical "sip".
+
+def test_reference_study_creation_stamp_equals_the_one_feed_mapping(ctx):
+    client, _store, _reg = ctx
+    # The reference kind loads the committed SIP fixture (no credentials); the queued payload carries
+    # the create-time data_feed stamp BEFORE the background run re-stamps the resolved descriptor.
+    r = client.post(
+        "/research/studies",
+        json={
+            "source_kind": "reference",
+            "source_id": "PG_SIP_REFERENCE",
+            "setup_type": "trend_continuation",
+            "direction": "long",
+        },
+    )
+    assert r.status_code == 200
+    created = r.json()["study"]
+    # The create-time stamp equals the ONE mapping's output for the resolved reference descriptor
+    # (``historical PG reference`` -> config.historical_feed) — NOT a hardcoded literal. Defaults => "sip".
+    assert created["data_feed"] == data_feed_for_scenario("historical PG reference", CONFIG)
+    assert created["data_feed"] == CONFIG.historical_feed
+    assert created["data_feed"] == "sip"  # the default is byte-identical to the prior hardcoded literal
+
+
+def test_historical_study_creation_stamp_equals_the_one_feed_mapping(ctx):
+    client, _store, _reg = ctx
+    # A credentialed adapter is injected so the create path accepts the historical study (the background
+    # run may then fail to fetch — irrelevant here; we assert ONLY the create-time stamp on the queued
+    # payload). The stamp consolidates to the one mapping's historical-feed output, not a literal.
+    app.dependency_overrides[get_market_adapter] = lambda: FakeAdapter(available=True)
+    r = client.post(
+        "/research/studies",
+        json={
+            "source_kind": "historical",
+            "source_id": "AAPL",
+            "setup_type": "trend_continuation",
+            "direction": "long",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:10:00Z",
+        },
+    )
+    assert r.status_code == 200
+    created = r.json()["study"]
+    # The create-time stamp equals the ONE mapping's output for the resolved historical descriptor
+    # (``historical AAPL`` -> config.historical_feed) — NOT a hardcoded literal. Defaults => "sip".
+    assert created["data_feed"] == data_feed_for_scenario("historical AAPL", CONFIG)
+    assert created["data_feed"] == CONFIG.historical_feed
+    assert created["data_feed"] == "sip"
 
 
 # --- taxonomy studies copy (the frontend hardcodes none) -----------------------------------------
