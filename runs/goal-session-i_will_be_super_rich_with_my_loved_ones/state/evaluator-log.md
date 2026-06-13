@@ -444,3 +444,18 @@ scoped fix.
 **Reasoning:** Verification-only iteration, app source byte-identical (git diff vs HEAD empty for apps/), 848 passed / 1 skipped exit 0 zero re-pins, COHERENCE-PASS. The operator supplied ALPACA_API_SECRET so the credentialed SIP historical path was genuinely exercised (24,619 real AAPL trades, unknown-aggressor ≈0.004%). Opened the cited pixels: UT-J11/J18/J20/J32 show populated real-data cockpits, true-clock chart axes, the local-zone picker, and an in-progress 1×→10× speed change continuing from position; UT-J14a/b/c show three distinct honest-failure panels with no fabricated cockpit; UT-J27 shows stream_status=Closed after replay exhaustion. Two legs held back: the J-23 cited PNG shows a re-populated cockpit (transient error text replaced) so no single capture visibly contains the failure panel (the iteration's own visible-element rule), and J-29's re-watch took ~35s, not the spec's <3s cache target. J-15 and J-67's live-IEX pixel leg are legitimately gated to the Monday open (15-06-2026 14:30 UTC+01:00) — scheduled, not stalled. Not GOAL_ACHIEVED because J-68's "all J-01–J-37 green" clause still depends on J-23, J-29, J-15.
 
 **Next-step recommendation:** Lean Monday market-hours capture pass at/after 15-06-2026 14:30 UTC+01:00: (1) J-67 live-IEX badge/disclosure pixels over a real live feed + the live-declared iex-stamped journal row; (2) J-15 live-feed-gap stale→recover; (3) J-23 re-capture a held/await-stable shot that visibly contains the "couldn't connect to the tape stream" panel; (4) J-29 — capture a genuinely <3s re-watch OR have the decomposer rule the <3s target a soft P2 aspiration (do not loop on it). Closing those four closes J-68 and unlocks GOAL_ACHIEVED. No new feature work remains — final verification gate.
+
+## Iteration 28 — goal-i_will_be_super_rich_with_my_loved_ones-iter-28
+
+**Date:** 2026-06-13T09:00:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-23 (partial → passing), J-29 (partial → passing on hard clauses), J-68 (partial → passing)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none
+
+**Reasoning:** Opened both J-23 captures (md5 531f23a1 viewport / 850b6251 full-page — distinct frames) and confirmed they VISIBLY hold the "Couldn't connect to the tape stream" failure panel (⚠ icon + rose heading + full no-fabrication copy + top "Failed" dot + "Watching SIM-BUYER" + Stop), fully in viewport (rect 160–529 of 922px), cockpit NOT repopulated — the iter-27 transient-text evidence gap is genuinely closed. J-29 flips on its hard clauses (bounded ~30s load, no routine timeout) per the binding decomposer ruling that `<3s` re-watch is a soft/P2 aspiration; the ~35s re-watch is a documented P2, not a blocker. App source verified byte-identical (`git diff --stat HEAD apps/` empty AND `git status --porcelain apps/` empty — the start-of-session untracked-file snapshot was stale; those files are committed since iter-24), backend suite green zero re-pins, coherence COHERENCE-PASS. NOT GOAL_ACHIEVED: J-15 (live-feed gap → stale → recover) remains `unknown` and J-67's live-IEX pixels are deferred — both genuinely market-hours-gated to Monday 15-06-2026 14:30 UTC+01:00. Scheduled, not stalled (no STALLED).
+
+**Next-step recommendation:** Run the Monday market-hours pass (lean) at the US open to close J-15 (live stale→recover) and J-67's live-IEX pixel/journal-row leg. Those close J-68's "all J-01–J-37 green" clause and make GOAL_ACHIEVED reachable — no feature work remains. If J-15's live stale/recover cannot be reproduced within a bounded live session on Monday, escalate to full for an operator-gated credentialed integration run rather than looping.

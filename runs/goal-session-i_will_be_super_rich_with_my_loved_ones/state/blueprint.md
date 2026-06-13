@@ -165,6 +165,21 @@ Tapeology (top bar: Cockpit · Journal · Studies)
 > badge **pixels** over a real feed) are deferred to a Monday iteration (US opens 15-06-2026
 > 14:30 UTC+01:00) — J-67 stays passing on its non-live evidence.
 
+> **Iter-28 (verification + ruling only — NO contract change):** closes the last two
+> weekend-verifiable partial legs at their already-registered `/` Cockpit home with NO application
+> code change. **J-23** gets a held/await-stabilized still capture that VISIBLY contains the
+> "couldn't connect to the tape stream" failure panel (Data Contract row 9, read verbatim; logic
+> already shipped + unit-proven, only the iter-27 evidence quality was insufficient). **J-29** is
+> ruled: the `<3s` near-instant re-watch is a **soft/P2 aspiration, not a hard acceptance clause**
+> (the spec's hard clauses — bounded-time load + never a routine timeout — are MET; the cache/reuse
+> language is illustrative, no numeric `<3s` gate in the acceptance text), so J-29 scores passing on
+> its bounded-load criterion with the ~35s re-watch cache gap recorded as a known P2 limitation. NO
+> engine/cache fast-path is built (it would risk the byte-identity / observer-equivalence discipline
+> on a working system to chase a non-binding aspiration). Every value read is already in the Data
+> Contract (rows 1-6, 9, 10) and read from its single canonical endpoint verbatim — no new value, no
+> second computation/serving path, no new route, no nav change. J-15 + J-67's live-IEX pixels stay
+> deferred to the Monday market-hours pass.
+
 **Feature / journey homes** (≤2 clicks from the nav):
 
 | Feature / journey | Canonical home (route) | Nav section |

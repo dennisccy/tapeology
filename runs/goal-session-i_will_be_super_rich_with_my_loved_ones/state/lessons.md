@@ -189,3 +189,9 @@ iter adding a cockpit-wide control that must survive idle/active/error strip sta
 **Verdict:** CONTINUE
 **Lesson:** J-29's re-watch "near-instant <3s cache" sub-criterion is unmet (~35s observed) because `historical_cache_ttl_seconds=300` caches the fetched vendor bytes but the engine still re-processes the buffered window on re-watch rather than serving a pre-warmed in-memory snapshot. The busy-window-load-within-bound criterion is met; only the cache fast-path is missing. Before another iteration loops on this, the decomposer should decide whether <3s is a HARD acceptance criterion (scope a minimal pre-warmed-snapshot cache fix) or a soft P2 aspiration (score passing on the bounded-load criterion with the gap noted) — to avoid an infinite loop on a performance target.
 **Applies to:** any future iter touching the historical replay cache / re-watch path (apps/backend historical provider + cache), or re-scoring J-29.
+
+## iter-28 — 2026-06-13T09:00:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The repo's start-of-session `git status` snapshot listed `apps/backend/app/research/feed_basis.py` and `apps/frontend/components/FeedBasisBadge.tsx` as untracked, which looked like a J-68 byte-identity breach; in fact `git status --porcelain apps/` was empty and `git ls-files` confirmed both are tracked/committed since iter-24 — the snapshot was stale. For any byte-identity sentinel (J-68), verify with a LIVE `git status --porcelain apps/` and `git diff --stat HEAD -- apps/`, never the prompt's pre-baked git-status block.
+**Applies to:** any iteration evaluating a byte-identity / no-app-source-change sentinel (J-68), or any lean verification-only iteration claiming app source unchanged.
