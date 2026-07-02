@@ -48,7 +48,7 @@ then writes the result back. The pump protocol lives in
 
 | Command | What it does |
 |---|---|
-| `/goal [session-id] [flags]` | Start (or create) a session and run **until the goal is achieved, blocked, halted, or paused by the existing rules**. No new caps — inherits the engine's `--max-iter 30` safety cap (override with e.g. `/goal my-app --max-iter 50`). |
+| `/goal [session-id] [flags]` | Start (or create) a session and run **until the goal is achieved, blocked, halted, or paused by the existing rules**. No iteration cap by default — set an optional budget with e.g. `/goal my-app --max-iter 50`. |
 | `/goal-status [session-id]` | Read-only: current iteration, last verdict, pause/halt state, and whether a dispatch is in flight. Never launches the engine, never writes. |
 | `/goal-resume [session-id] [flags]` | Resume a paused/halted session (blueprint approval, GitHub auth, quota reset, or a closed session). Resuming a blueprint pause counts as approval; a `REGRESSION_HALT` needs `--acknowledge-regression`. Cleanly stops a still-running prior engine first (no double-engine). |
 | `/goal-pause [session-id]` | Cleanly stop a running session's (detached) engine, leaving a resumable `ABORTED` checkpoint. Use after Ctrl+C to make changes, then `/goal-resume`. |
@@ -66,8 +66,9 @@ then:
 Claude launches the engine in the background and becomes the pump, dispatching
 each goal-mode agent (developer, reviewer, browser-qa, …) as a subagent and
 streaming progress. Check in any time with `/goal-status todo-app`. If it pauses
-(for example, for the one-time blueprint approval), it tells you what to do, and
-you continue with `/goal-resume todo-app`.
+(for example, for GitHub auth, or for blueprint review when you started with
+`--require-blueprint-approval`), it tells you what to do, and you continue with
+`/goal-resume todo-app`.
 
 ### What "interactive" means here
 
@@ -104,10 +105,12 @@ programmatic path with an API key** (`run-goal.sh` without `--interactive`).
   the run pauses; continue after it resets. (The headless path's
   sleep-until-reset does **not** apply in interactive mode.)
 - **Model tiering becomes live.** Each agent runs on its `.claude/agents/<name>.md`
-  model tier (Opus for strong agents, Sonnet for standard, Haiku for light), so
-  cost follows the tier. The **strong tier is Opus**, which requires interactive
-  Opus access (Max has it; Pro is limited). If a tier's model is unavailable,
-  set an interactive tier override (see Troubleshooting). Do **not** set
+  model tier (Fable 5 for strong agents, Sonnet for standard, Haiku for light), so
+  cost follows the tier. The **strong tier is Fable 5** — Anthropic's most capable
+  model (premium-priced, and available only under 30-day data retention, not ZDR).
+  It requires top-tier interactive access (Max); Pro is unlikely to grant it. If a
+  tier's model is unavailable, set an interactive tier override (see Troubleshooting).
+  Do **not** set
   `CLAUDE_CODE_SUBAGENT_MODEL` — it overrides every subagent and flattens the tiers.
 - **Fidelity gaps vs headless.** The per-agent `--effort` downgrade and the
   token-usage telemetry sidecar are **not** carried into interactive mode. The
@@ -158,7 +161,7 @@ programmatic path with an API key** (`run-goal.sh` without `--interactive`).
   subagent. Ensure the `superpowers-chrome` plugin is enabled for the session;
   the browser agents do not restrict `tools`, so they inherit the session's MCP.
 - **A strong-tier agent fails to start on Pro** — your plan may not grant
-  interactive Opus. Set an interactive tier override (see below).
+  interactive Fable 5. Set an interactive tier override (see below).
 
 ### Tuning
 
@@ -185,7 +188,7 @@ timestamped chain log is always at `runs/goal-session-<sid>/engine.log`.
 - **Codex interactive backend** — mirror the commands to `.codex/prompts/` and
   add a Codex dispatch path.
 - **Automatic interactive tier-map** — detect plan model availability and cap the
-  strong tier to an available model when interactive Opus is not granted.
+  strong tier to an available model when interactive Fable 5 is not granted.
 - **`SubagentStop` hook binding** — the advisory `on-stop-check-artifacts` hook
   fires on main-session stop but not on subagent completion; bind it to
   `SubagentStop` for parity if the reminder is wanted.
