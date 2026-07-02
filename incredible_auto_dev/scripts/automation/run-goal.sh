@@ -3,29 +3,30 @@
 #
 # Reads docs/goal.md (which must include Must-have user journeys + Anti-goals)
 # and iterates `decompose -> execute -> evaluate` adaptively until either the
-# goal-evaluator declares GOAL_ACHIEVED or a hard halt fires (max iterations,
-# stall, regression).
+# goal-evaluator declares GOAL_ACHIEVED or a hard halt fires (stall, regression,
+# or an optional --max-iter budget — there is no iteration cap by default).
 #
 # Usage:
 #   ./scripts/automation/run-goal.sh [--session-id <id>] [--max-iter N]
 #                                    [--stall-window N] [--resume] [--reset]
 #                                    [--auto-release]
 #                                    [--acknowledge-regression]
-#                                    [--auto-approve-blueprint]
+#                                    [--require-blueprint-approval]
 #                                    [--no-push-per-iter] [--push-per-iter]
 #                                    [--push-branch <name>]
 #
 # Flags:
 #   --session-id <id>            Session identifier (auto-generated if omitted)
-#   --max-iter N                 Hard cap on iterations (default: 30)
+#   --max-iter N                 Optional hard cap on iterations (default: unlimited; 0 = no cap)
 #   --stall-window N             Halt if last N iterations show no journey progress (default: 3)
 #   --resume                     Resume an existing session
 #   --reset                      Discard the named session and start fresh
 #   --auto-release               On GOAL_ACHIEVED, run release-manager once for the whole session
 #   --acknowledge-regression     Continue past a prior REGRESSION_HALT
-#   --auto-approve-blueprint     Skip the one-time blueprint-review pause after baseline (and any
-#                                structural re-approval pause); use the AI-drafted blueprint as-is.
-#                                Per-run flag — pass it on each invocation/resume to keep it on.
+#   --require-blueprint-approval Pause after baseline for the human to review/edit state/blueprint.md
+#                                (and on structural nav-skeleton changes). OFF by default — goal mode
+#                                auto-approves the AI-drafted blueprint and runs hands-off.
+#                                (--auto-approve-blueprint is still accepted but is now the default.)
 #   --push-per-iter              [Default ON for new sessions.] Commit + push each successful
 #                                iteration (CONTINUE / ESCALATE / GOAL_ACHIEVED) to a per-session
 #                                branch. No model invocation, no PR per iter — the branch is
@@ -40,13 +41,13 @@
 #
 # Halt verdicts written to runs/goal-session-<sid>/session.json.status:
 #   GOAL_ACHIEVED   - goal-evaluator declared done
-#   BUDGET_EXHAUSTED - max iterations reached
+#   BUDGET_EXHAUSTED - max iterations reached (only when --max-iter > 0 is set)
 #   STALLED          - journey-history hash unchanged for stall_window iterations
 #   REGRESSION_HALT  - goal-evaluator emitted REGRESSION verdict
 #   ABORTED          - user interrupted (SIGINT/SIGTERM)
-#   AWAITING_BLUEPRINT_APPROVAL - paused after baseline (or after a structural blueprint change) for
-#                                 the human to review/edit state/blueprint.md; resume with --resume
-#                                 (resuming counts as approval) or pre-empt with --auto-approve-blueprint
+#   AWAITING_BLUEPRINT_APPROVAL - only with --require-blueprint-approval: paused after baseline (or a
+#                                 structural blueprint change) for the human to review/edit
+#                                 state/blueprint.md; resume with --resume (resuming counts as approval)
 #   AWAITING_PUMP    - interactive pump/dispatch was unavailable mid-iteration (the foreground
 #                      session/pump went away); resumable — /goal-resume re-runs the same iteration
 #
@@ -69,15 +70,17 @@ fi
 
 # ── Defaults ──────────────────────────────────────────────────────────────
 SESSION_ID=""
-MAX_ITER=30
+MAX_ITER=0          # 0 = unlimited (no iteration cap); a positive --max-iter restores a hard budget
 STALL_WINDOW=3
 RESUME=false
 RESET=false
 AUTO_RELEASE=false
 ACK_REGRESSION=false
-# Skip the one-time blueprint-approval pause (and any structural re-approval
-# pause). Per-run flag; pass it on each invocation/resume if you want it.
-AUTO_APPROVE_BLUEPRINT=false
+# Blueprint review pause. Auto-approved by DEFAULT (goal mode is hands-off): the
+# AI-drafted blueprint is accepted as-is and any structural re-approval marker is
+# cleared, so the loop never pauses for it. Pass --require-blueprint-approval to
+# restore the one-time baseline review pause (and structural re-approval pauses).
+AUTO_APPROVE_BLUEPRINT=true
 # Interactive dispatch backend: run each agent as a subagent in the foreground
 # Claude Code session (the "pump") via a file channel instead of headless
 # `claude -p`, so the work bills to the interactive plan allowance. Pinned
@@ -105,7 +108,8 @@ while [[ $# -gt 0 ]]; do
     --reset)                   RESET=true; shift ;;
     --auto-release)            AUTO_RELEASE=true; shift ;;
     --acknowledge-regression)  ACK_REGRESSION=true; shift ;;
-    --auto-approve-blueprint)  AUTO_APPROVE_BLUEPRINT=true; shift ;;
+    --auto-approve-blueprint)  AUTO_APPROVE_BLUEPRINT=true; shift ;;   # now the default; kept for back-compat
+    --require-blueprint-approval) AUTO_APPROVE_BLUEPRINT=false; shift ;;
     --interactive)             INTERACTIVE=true; shift ;;
     --push-per-iter)           PUSH_PER_ITER=true;  PUSH_FLAG_USER="yes"; shift ;;
     --no-push-per-iter)        PUSH_PER_ITER=false; PUSH_FLAG_USER="no";  shift ;;
@@ -884,7 +888,7 @@ preflight_github_access
 # ── Main loop ─────────────────────────────────────────────────────────────
 while true; do
   # 1. Halt checks (always first)
-  if [[ $CURRENT_ITER -ge $MAX_ITER ]]; then
+  if [[ "$MAX_ITER" -gt 0 && $CURRENT_ITER -ge $MAX_ITER ]]; then
     echo "[run-goal] BUDGET_EXHAUSTED — reached max-iter cap of $MAX_ITER."
     record_telemetry_event "halt" '{"reason":"BUDGET_EXHAUSTED","detected_at_step":"pre_decomposer"}'
     write_session_summary "BUDGET_EXHAUSTED" "$CURRENT_ITER"
@@ -991,7 +995,8 @@ PY
   EVALUATOR_LOG_TAIL=$(_tail_or_placeholder "$EVALUATOR_LOG" 200 "(no entries yet — first iteration)")
   LESSONS_TAIL=$(_tail_or_placeholder "$LESSONS_FILE" 200 "(no lessons recorded yet)")
   cd "$REPO_ROOT"
-  _decomp_start=$(record_agent_invocation_start "goal-decomposer")
+  record_agent_invocation_start "goal-decomposer"   # bare call: must NOT be $(...) or the CHAIN_CURRENT_AGENT export is lost to a subshell
+  _decomp_start=$CHAIN_AGENT_START_EPOCH
   _decomp_rc=0
   claude_with_quota_retry -p "You are the goal-decomposer agent for goal-mode iteration planning.
 
@@ -1022,7 +1027,7 @@ $( [[ $CURRENT_ITER -gt 0 && -f "$GOAL_SESSION_DIR_LOCAL/iter-$((CURRENT_ITER-1)
 Apply the TOKEN AND QUESTIONING POLICY from .claude/core.md strictly.
 
 Write the iteration spec to: docs/phases/${ITER_NAME}.md
-$( if [[ "$DECOMPOSER_MODE" == "baseline" ]]; then echo "BASELINE also: draft the coherence blueprint to $BLUEPRINT_FILE per your agent instructions (Information Architecture + Data Contract, ~one screen, from docs/goal.md's Product Shape + Must-have journeys + Key Capabilities). The loop pauses for human approval of this file after baseline."; else echo "Also keep $BLUEPRINT_FILE current per your agent instructions: register any new displayed value in the Data Contract and place new pages under an existing Information-Architecture home (additive edits only). For a nav-skeleton change, make the edit AND write a one-line reason to $BLUEPRINT_REAPPROVAL."; fi )
+$( if [[ "$DECOMPOSER_MODE" == "baseline" ]]; then echo "BASELINE also: draft the coherence blueprint to $BLUEPRINT_FILE per your agent instructions (Information Architecture + Data Contract, ~one screen, from docs/goal.md's Product Shape + Must-have journeys + Key Capabilities). The blueprint is auto-approved by default and the loop proceeds; pass --require-blueprint-approval to pause for human review after baseline."; else echo "Also keep $BLUEPRINT_FILE current per your agent instructions: register any new displayed value in the Data Contract and place new pages under an existing Information-Architecture home (additive edits only). For a nav-skeleton change, make the edit AND write a one-line reason to $BLUEPRINT_REAPPROVAL."; fi )
 
 The spec MUST include a 'Goal Mode Metadata' section with at minimum:
   - Mode: $DECOMPOSER_MODE
@@ -1045,6 +1050,36 @@ Do NOT write code or implement anything. The iteration spec and any blueprint ed
     echo "[run-goal] goal-decomposer did not write spec at $ITER_SPEC_PATH — aborting." >&2
     write_session_summary "ABORTED" "$CURRENT_ITER"
     exit 1
+  fi
+
+  # ── Post-decompose gate (generic, project-local, default-off) ───────────────
+  # Extension point M2: if the project provides project-extensions/gates/
+  # post-decompose.sh, run it with the iteration context BEFORE any build work.
+  # A non-zero exit BLOCKS the iteration (e.g. an evidence-derived proposal whose
+  # statistical referee did not certify it). Absent script ⇒ skipped entirely, so
+  # other projects sharing this framework behave exactly as before.
+  if [[ -f "$REPO_ROOT/project-extensions/gates/post-decompose.sh" ]]; then
+    echo "[run-goal] Post-decompose gate: project-extensions/gates/post-decompose.sh ..."
+    mkdir -p "$ITER_DIR"
+    _gate_rc=0
+    (
+      export SESSION_ID ITER_NAME REPO_ROOT
+      export ITER="$CURRENT_ITER" \
+             SPEC_PATH="$ITER_SPEC_PATH" \
+             SESSION_DIR="$GOAL_SESSION_DIR_LOCAL" \
+             LEDGER_PATH="$GOAL_SESSION_DIR_LOCAL/state/certified-claims.jsonl" \
+             GATE_VERDICT_PATH="$ITER_DIR/gate-post-decompose.json"
+      run_project_gate post-decompose
+    ) || _gate_rc=$?
+    if [[ "$_gate_rc" -ne 0 ]]; then
+      echo "[run-goal] Post-decompose gate BLOCKED iteration $CURRENT_ITER (exit $_gate_rc)." >&2
+      if [[ -f "$ITER_DIR/gate-post-decompose.json" ]]; then
+        echo "[run-goal]   verdict: $ITER_DIR/gate-post-decompose.json" >&2
+      fi
+      record_telemetry_event "halt" '{"reason":"GATE_BLOCKED_POST_DECOMPOSE","detected_at_step":"post_decomposer"}'
+      write_session_summary "GATE_BLOCKED" "$CURRENT_ITER"
+      exit 0
+    fi
   fi
 
   # Parse depth
@@ -1116,7 +1151,8 @@ Do NOT write code or implement anything. The iteration spec and any blueprint ed
     echo "[run-goal] Step 2b: coherence-auditor"
     _snapshot_sha="$(cat "$ITER_DIR/snapshot-sha" 2>/dev/null || echo "")"
     cd "$REPO_ROOT"
-    _coh_start=$(record_agent_invocation_start "coherence-auditor")
+    record_agent_invocation_start "coherence-auditor"   # bare call: must NOT be $(...) or the CHAIN_CURRENT_AGENT export is lost to a subshell
+    _coh_start=$CHAIN_AGENT_START_EPOCH
     _coh_rc=0
     claude_with_quota_retry -p "You are the coherence-auditor agent for goal-mode coherence enforcement.
 
@@ -1156,7 +1192,8 @@ The verdict line MUST appear first and start exactly with:
   # Pre-trim — evaluator spec asks for "last 5 entries"; 300 lines covers it.
   EVALUATOR_LOG_TAIL_5=$(_tail_or_placeholder "$EVALUATOR_LOG" 300 "(no entries yet — first evaluation)")
   cd "$REPO_ROOT"
-  _eval_start=$(record_agent_invocation_start "goal-evaluator")
+  record_agent_invocation_start "goal-evaluator"   # bare call: must NOT be $(...) or the CHAIN_CURRENT_AGENT export is lost to a subshell
+  _eval_start=$CHAIN_AGENT_START_EPOCH
   _eval_rc=0
   claude_with_quota_retry -p "You are the goal-evaluator agent for goal-mode iteration evaluation.
 
@@ -1338,6 +1375,66 @@ except Exception as e:
   # 5. Halt-on-verdict
   case "$VERDICT" in
     GOAL_ACHIEVED)
+      # ── Continuous-improvement opt-in (framework mechanism "M3") ────────────────
+      # DEFAULT-OFF: fires ONLY when the project provides BOTH
+      #   project-extensions/hooks/post-goal.sh   AND
+      #   project-extensions/proposer-guidance.md
+      # (both OUTSIDE the framework subtree). Absent either ⇒ this block is skipped
+      # and the session finalizes exactly as before, so other projects sharing this
+      # framework are unaffected. When opted in: run the project's deterministic prep
+      # hook, then dispatch the generic goal-proposer agent (it surveys the product,
+      # keeps only hold-out survivors, writes the proposals backlog, and surgically
+      # appends new Must-have journeys into the goal file's <!-- AUTO:journeys -->
+      # block). CONTINUE the loop iff it extended the goal — the unmodified decomposer
+      # then builds the new (not-yet-passing) journey next iteration. If the proposer
+      # is dry (nothing survived), fall through to the normal terminal halt below.
+      if [[ -f "$REPO_ROOT/project-extensions/hooks/post-goal.sh" \
+            && -f "$REPO_ROOT/project-extensions/proposer-guidance.md" ]]; then
+        echo "[run-goal] Continuous improvement: all journeys passing — post-goal hook + goal-proposer ..."
+        _state_dir="$GOAL_SESSION_DIR_LOCAL/state"
+        mkdir -p "$_state_dir"
+        rm -f "$_state_dir/proposer-result.json"
+        # 1. deterministic project prep (non-fatal): e.g. refresh the triad scan snapshot.
+        (
+          export SESSION_ID REPO_ROOT GOAL_FILE \
+                 SESSION_DIR="$GOAL_SESSION_DIR_LOCAL" \
+                 LEDGER_PATH="$GOAL_SESSION_DIR_LOCAL/state/certified-claims.jsonl"
+          run_project_hook post-goal
+        ) || echo "[run-goal] post-goal hook returned non-zero (non-fatal) — continuing." >&2
+        # 2. dispatch the generic goal-proposer agent (works headless AND interactive pump).
+        cd "$REPO_ROOT"
+        export CHAIN_CURRENT_AGENT=goal-proposer
+        record_agent_invocation_start "goal-proposer"
+        _prop_start=$CHAIN_AGENT_START_EPOCH
+        _prop_rc=0
+        claude_with_quota_retry -p "You are the goal-proposer agent for goal-mode continuous improvement.
+
+Session ID: $SESSION_ID
+Session state dir: $GOAL_SESSION_DIR_LOCAL/state
+Goal file: $GOAL_FILE  <-- extend ONLY the <!-- AUTO:journeys --> block
+Project guidance: project-extensions/proposer-guidance.md  <-- read this FIRST; it governs everything
+Agent instructions: .claude/agents/goal-proposer.md  <-- read this first
+(CLAUDE.md is already in your system prompt — do not Read it again.)
+
+Every Must-have journey is passing. Survey the whole product per the guidance, keep only hold-out
+survivors, write the proposals backlog, and promote the best 1-2 into new Must-have journeys in the
+goal file's AUTO:journeys block (follow the goal-self-extension skill; bake the consistency + walkthrough
+requirements into each journey's Acceptance). If nothing new survives, leave the goal file UNTOUCHED.
+Then write $GOAL_SESSION_DIR_LOCAL/state/proposer-result.json with keys extended, n_new_journeys,
+n_proposals, dry.
+
+Apply the TOKEN AND QUESTIONING POLICY from .claude/core.md strictly. Do NOT write product code or start services." || _prop_rc=$?
+        record_agent_invocation_end "goal-proposer" "$_prop_start" "$_prop_rc"
+        # 3. continue the loop iff the proposer extended the goal with new buildable journey(s).
+        _prop_extended=$(python3 -c "import json,sys; print('yes' if json.load(open('$_state_dir/proposer-result.json')).get('extended') else 'no')" 2>/dev/null || echo "no")
+        if [[ "$_prop_extended" == "yes" ]]; then
+          echo "[run-goal] Continuous improvement: goal extended with new journey(s) — continuing to build them."
+          record_telemetry_event "goal_extended" "$(jq -cn --arg s "$SESSION_ID" '{session:$s}' 2>/dev/null || echo '{}')"
+          CURRENT_ITER=$((CURRENT_ITER+1))
+          continue
+        fi
+        echo "[run-goal] Continuous improvement: proposer found nothing new (dry) — finalizing the session."
+      fi
       # Render the one-time delivered wrap BEFORE write_session_summary so the
       # session-index renderer (invoked inside write_session_summary) can find
       # delivered.html and surface a prominent link to it. Non-blocking.
