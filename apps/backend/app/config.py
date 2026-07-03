@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -395,6 +396,24 @@ class Config:
     # Excluded from ``config_fingerprint`` (see the exclusion set below): a migration must NOT change
     # the fingerprint — verdicts depend on classifier thresholds, never on where/how the DB is stored.
     journal_schema_version: int = 7
+
+    # --- Profit-research era: HISTORICAL TAPE DATASET STORE directory (capability 1, J-02) ------
+    # Where the dataset store persists explicitly recorded historical tape (one JSON file per
+    # dataset). It is ONLY a default here — the operator overrides it with the
+    # ``TAPEOLOGY_DATASET_DIR`` env var (read in ``dataset_dir_resolved`` below, the
+    # ``TAPEOLOGY_JOURNAL_DB`` pattern) and tests point it at a temp dir the same way. The default
+    # is package-anchored (``apps/backend/.data/datasets/``, covered by the repo's ``.data/``
+    # gitignore entry) so it resolves identically whatever the process cwd is. Persistence is
+    # SCOPED: this dir holds explicitly recorded research datasets ONLY — the live cockpit's tape
+    # is NEVER written here (recording is an explicit research action, never ambient).
+    #
+    # EXCLUDED FROM ``config_fingerprint`` (see the exclusion set in ``config_fingerprint``) with
+    # the ``journal_db_path`` discipline: WHERE datasets are stored cannot affect any persisted
+    # research value, so two journals identical in every threshold but storing datasets in
+    # different directories (or on different machines — the default embeds an absolute path) MUST
+    # share a fingerprint. Pinned by a fingerprint-stability test + the real-threshold counter-test
+    # (``tests/test_datasets.py``).
+    dataset_dir: str = str(Path(__file__).resolve().parents[1] / ".data" / "datasets")
 
     # --- Research evolution: verdict-transition engine (capability 24) -------------------------
     # RESEARCH DEFAULTS — a starting point calibrated against the deterministic sims, NEVER a
@@ -804,6 +823,13 @@ class Config:
         real file without code change, while tests inject a temp path via dependency-override."""
         return os.environ.get("TAPEOLOGY_JOURNAL_DB", self.journal_db_path)
 
+    def dataset_dir_resolved(self) -> str:
+        """The effective dataset-store directory: the ``TAPEOLOGY_DATASET_DIR`` env var if set,
+        else the package-anchored config default (the ``journal_db_path_resolved`` pattern). Read
+        at store-construction time so an operator can point the dataset store at a real location
+        without code change, while tests point it at a temp dir via the env var."""
+        return os.environ.get("TAPEOLOGY_DATASET_DIR", self.dataset_dir)
+
     def config_fingerprint(self) -> str:
         """A stable hash over the ENTIRE frozen config (capability 28 / honesty stamps).
 
@@ -840,6 +866,13 @@ class Config:
             "journal_db_path",
             "journal_busy_timeout_ms",
             "journal_schema_version",
+            # The dataset-store directory (era-3 capability 1, J-02): an operational storage
+            # location with the ``journal_db_path`` discipline — it cannot affect any persisted
+            # research value (a dataset's CONTENT is checksummed; where the file lives is not),
+            # and the package-anchored default embeds an absolute path that would otherwise mint
+            # a different fingerprint per machine. Pinned by a fingerprint-stability test + the
+            # real-threshold counter-test in tests/test_datasets.py.
+            "dataset_dir",
             "journal_list_default_limit",
             "journal_list_max_limit",
             "analytics_min_sample_size",

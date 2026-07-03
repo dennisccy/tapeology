@@ -26,8 +26,21 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..config import Config
+from ..config import CONFIG, Config
+from ..providers.adapters.base import NoDataForWindow, SymbolNotTradable, VendorTimeout
 from .analytics import compute_analytics
+from .datasets import (
+    VALID_SOURCE_KINDS as DATASET_SOURCE_KINDS,
+    VALID_SPLITS,
+    DatasetAlreadyRegistered,
+    DatasetIntegrityError,
+    DatasetNotFound,
+    DatasetRecordError,
+    DatasetStore,
+    EmptyWindowError,
+    parse_utc_epoch,
+    record_from_source,
+)
 from .excursions import compute_and_persist_excursions
 from .execution_checks import compute_and_persist_execution_checks
 from .grades import compute_and_persist_grades
@@ -126,6 +139,22 @@ class StudyRequest(BaseModel):
     start: str | None = None
     end: str | None = None
     null_baseline_seed: int | None = None
+
+
+class DatasetRecordRequest(BaseModel):
+    """Body for ``POST /research/datasets`` (era-3 capability 1, J-02) — the explicit record +
+    register research action. ``source_kind`` (``reference`` | ``historical``; datasets are
+    HISTORICAL tape, so ``sim`` is not accepted), ``source_id`` (the symbol for a historical
+    record; optional for the committed reference window), the immutable ``split`` tag
+    (``train`` | ``holdout``, frozen at registration), and an optional ``[start, end)`` UTC
+    sub-window (REQUIRED for a historical record). All validation is enforced in the ROUTE (not
+    the schema) so every refusal is explicit — never silent coercion."""
+
+    source_kind: str
+    source_id: str = ""
+    split: str
+    start: str | None = None
+    end: str | None = None
 
 
 class ReviewRequest(BaseModel):
@@ -1303,3 +1332,136 @@ def cancel_study(
         )
     registry.study_jobs.cancel(study_id)
     return {"study_id": study_id, "cancelling": True}
+
+
+# --- Historical tape datasets (era-3 capability 1, J-02) -----------------------------------------
+# Exactly THREE routes (Product Shape): record/register, list, detail. There is NO PATCH / PUT /
+# DELETE — a dataset is immutable and its split tag is frozen at registration (structurally: the
+# store exposes no update path at all; re-recording registered content is the 409 below). The
+# dataset store module is the ONE reader/writer of dataset files; these routes serve its
+# metadata VERBATIM (the MCP ``datasets`` tool proxies the list byte-identically).
+
+
+def get_dataset_store() -> DatasetStore:
+    """The dataset store rooted at the config-owned directory (``TAPEOLOGY_DATASET_DIR``
+    override, package-anchored default). A FastAPI dependency so tests can point it at a temp
+    dir via the env var or override it outright (the adapter-seam pattern)."""
+    return DatasetStore(CONFIG.dataset_dir_resolved())
+
+
+@router.post("/datasets")
+def record_dataset(
+    body: DatasetRecordRequest,
+    registry: ResearchRegistry = Depends(get_registry),
+    store: DatasetStore = Depends(get_dataset_store),
+) -> dict:
+    """Record + register ONE historical tape dataset (the explicit research action — recording
+    is never ambient). Full validation (422, never silent coercion):
+      * unknown ``split`` (a dataset is registered ``train`` or ``holdout``) or ``source_kind``
+        (``reference`` | ``historical`` — a seeded sim stream reproduces on demand, so ``sim``
+        is not recordable);
+      * a historical record missing its symbol or its ``start``/``end`` window, a malformed
+        ISO date-time, ``end`` not after ``start``, or only one bound of the pair;
+      * an empty requested window (nothing is written, nothing fabricated).
+    Content already registered — under ANY split — is the 409-style re-tag refusal. A
+    credentialless historical record is an explicit 422 (never fixture-substituted)."""
+    if body.split not in VALID_SPLITS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown split '{body.split}' — a dataset is registered 'train' or 'holdout'",
+        )
+    if body.source_kind not in DATASET_SOURCE_KINDS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"unknown source_kind '{body.source_kind}' — datasets record 'reference' or "
+                f"'historical' tape (a sim stream reproduces on demand and is not recordable)"
+            ),
+        )
+    if (body.start is None) != (body.end is None):
+        raise HTTPException(status_code=422, detail="start and end must be given together")
+    if body.start is not None and body.end is not None:
+        try:
+            start_epoch = parse_utc_epoch(body.start)
+            end_epoch = parse_utc_epoch(body.end)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="start and end must be ISO date-times")
+        if end_epoch <= start_epoch:
+            raise HTTPException(status_code=422, detail="end must be after start")
+
+    historical_fetch = None
+    source_id = body.source_id
+    if body.source_kind == SOURCE_REFERENCE:
+        if body.source_id not in ("", REFERENCE_SOURCE_ID):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"unknown reference source '{body.source_id}' — the committed reference "
+                    f"window is '{REFERENCE_SOURCE_ID}'"
+                ),
+            )
+        source_id = REFERENCE_SOURCE_ID
+    else:  # SOURCE_HISTORICAL — an arbitrary real window through the EXISTING adapter seam.
+        if not body.source_id:
+            raise HTTPException(status_code=422, detail="a historical record requires a symbol")
+        if body.start is None or body.end is None:
+            raise HTTPException(
+                status_code=422, detail="a historical record requires start and end"
+            )
+        adapter = get_study_market_adapter()
+        if not adapter.is_available():
+            raise HTTPException(
+                status_code=422,
+                detail="real-data provider unavailable — a historical record needs credentials",
+            )
+        historical_fetch = _build_historical_fetch(adapter, body.source_id, body.start, body.end)
+
+    try:
+        meta = record_from_source(
+            store,
+            source_kind=body.source_kind,
+            source_id=source_id,
+            split=body.split,
+            start=body.start,
+            end=body.end,
+            config=registry.config,
+            historical_fetch=historical_fetch,
+        )
+    except DatasetAlreadyRegistered as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except EmptyWindowError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except DatasetRecordError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except SymbolNotTradable:
+        raise HTTPException(
+            status_code=422, detail=f"symbol '{body.source_id}' is not tradable"
+        )
+    except NoDataForWindow:
+        raise HTTPException(status_code=422, detail="no data for that window")
+    except VendorTimeout as exc:
+        raise HTTPException(status_code=504, detail=exc.detail)
+    return {"dataset": meta}
+
+
+@router.get("/datasets")
+def list_datasets(store: DatasetStore = Depends(get_dataset_store)) -> dict:
+    """List every registered dataset's metadata (each file checksum-verified on load), oldest
+    first. A file that fails verification is surfaced EXPLICITLY in ``integrity_errors`` — never
+    silently hidden, never served as data. The MCP ``datasets`` tool proxies this byte-for-byte."""
+    records, errors = store.list()
+    return {"datasets": records, "integrity_errors": errors}
+
+
+@router.get("/datasets/{dataset_id}")
+def get_dataset(dataset_id: str, store: DatasetStore = Depends(get_dataset_store)) -> dict:
+    """One dataset's stored metadata, verbatim (checksum-verified on load). 404 for an unknown
+    id; an explicit 500 integrity error for a corrupted/tampered file (never a fabricated
+    dataset)."""
+    try:
+        meta = store.get(dataset_id)
+    except DatasetNotFound:
+        raise HTTPException(status_code=404, detail=f"no dataset with id '{dataset_id}'")
+    except DatasetIntegrityError as exc:
+        raise HTTPException(status_code=500, detail=f"dataset integrity check failed: {exc}")
+    return {"dataset": meta}

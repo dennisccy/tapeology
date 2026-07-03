@@ -54,9 +54,9 @@ EXPECTED_TOOLS = (
     "get_endpoint",
 )
 
-# The honest-404 set: registered NOW, endpoints land at J-02/J-03/J-04.
+# The honest-404 set: registered NOW, endpoints land at J-03/J-04 (``datasets`` shipped at
+# J-02 and moved to the live byte-identity coverage below — zero MCP code changes were needed).
 NOT_YET_SHIPPED = {
-    "datasets": "/research/datasets",
     "backtests": "/research/backtests",
     "pnl_ledger": "/research/pnl/ledger",
 }
@@ -89,6 +89,7 @@ def backend(tmp_path_factory):
     base = f"http://127.0.0.1:{port}"
     env = os.environ.copy()
     env["TAPEOLOGY_JOURNAL_DB"] = str(tmp_path_factory.mktemp("mcp-journal") / "journal.db")
+    env["TAPEOLOGY_DATASET_DIR"] = str(tmp_path_factory.mktemp("mcp-datasets"))
     log_path = tmp_path_factory.mktemp("mcp-uvicorn") / "uvicorn.log"
     with open(log_path, "wb") as log:
         proc = subprocess.Popen(
@@ -215,6 +216,31 @@ async def test_static_live_tools_json_byte_identical_to_rest(mcp_env):
         assert result.isError is False
         assert len(result.content) == 1
         assert result.content[0].text.encode("utf-8") == rest.content, f"{name} not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_datasets_tool_byte_identical_on_a_non_empty_live_list(mcp_env):
+    """J-02 flips ``datasets`` from honest 404 to live data with ZERO MCP code changes: after
+    recording a dataset (the committed reference window, keyless), the tool's JSON is
+    byte-identical to its curl equivalent on a NON-EMPTY 200 list."""
+    recorded = httpx.post(
+        f"{mcp_env}/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:00:30Z",
+        },
+        timeout=15.0,
+    )
+    assert recorded.status_code in (200, 409)  # 409 = already recorded by an earlier run/test
+    result = await call_tool("datasets", {})
+    rest = httpx.get(f"{mcp_env}/research/datasets", timeout=5.0)
+    assert rest.status_code == 200
+    assert len(rest.json()["datasets"]) >= 1, "the live list must be non-empty for this proof"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "datasets not byte-identical"
 
 
 @pytest.mark.anyio
@@ -382,11 +408,12 @@ async def test_stdio_session_end_to_end(watched_backend):
                 assert result.content[0].text.encode("utf-8") == rest.content
 
             # Honest 404 over the wire: verbatim payload + explicit status, isError set.
-            result = await session.call_tool("datasets", {})
-            rest = httpx.get(f"{watched_backend}/research/datasets", timeout=5.0)
+            # (``backtests`` is the not-yet-shipped example now that J-02 shipped ``datasets``.)
+            result = await session.call_tool("backtests", {})
+            rest = httpx.get(f"{watched_backend}/research/backtests", timeout=5.0)
             assert result.isError is True
             assert result.content[0].text.encode("utf-8") == rest.content
-            assert result.content[1].text == "HTTP 404 from GET /research/datasets"
+            assert result.content[1].text == "HTTP 404 from GET /research/backtests"
 
             # Refusal over the wire: the SDK surfaces the raised refusal as an isError result.
             result = await session.call_tool("get_endpoint", {"path": "/health"})
