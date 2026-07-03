@@ -1,7 +1,7 @@
 {
   "session_id": "tape_to_profit",
   "started_at": "2026-07-03T00:33:36.729156Z",
-  "current_iter": 6,
+  "current_iter": 7,
   "cli": "claude",
   "agent_backend": "interactive",
   "halt_config": {
@@ -11,13 +11,13 @@
   },
   "status": "in_progress",
   "last_verdict": "CONTINUE",
-  "next_depth": "lean",
+  "next_depth": "full",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/tape_to_profit",
-  "updated_at": "2026-07-03T13:22:58.844528Z",
-  "finished_at": "2026-07-03T12:07:59.608139Z",
-  "total_iterations": 5,
-  "wall_time_seconds": 35073,
+  "updated_at": "2026-07-03T19:15:13.949256Z",
+  "finished_at": "2026-07-03T17:26:30.322204Z",
+  "total_iterations": 6,
+  "wall_time_seconds": 3009,
   "quota_pause_count": 0
 }

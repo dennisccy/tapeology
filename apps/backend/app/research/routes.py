@@ -151,10 +151,11 @@ class StudyRequest(BaseModel):
 class BacktestRequest(BaseModel):
     """Body for ``POST /research/backtests`` (era-3 capability 4, J-03) — exactly the Product
     Shape's three fields: the dataset id, the strategy id, and the profile. ``profile`` defaults
-    to ``default`` (the only registrable value until J-06 ships the profile registry); the
-    strategy/profile/dataset validation is enforced in the ROUTE (not the schema) so every
-    refusal is explicit — never silent coercion. A missing/mis-typed field is a 422 at the
-    schema layer before the route runs (the malformed-body case)."""
+    to ``default``; any id registered in the config-owned profile registry
+    (``Config.profile_definition`` — J-06) is accepted. The strategy/profile/dataset validation
+    is enforced in the ROUTE (not the schema) so every refusal is explicit — never silent
+    coercion. A missing/mis-typed field is a 422 at the schema layer before the route runs (the
+    malformed-body case)."""
 
     dataset_id: str
     strategy_id: str
@@ -1500,9 +1501,10 @@ def get_dataset(dataset_id: str, store: DatasetStore = Depends(get_dataset_store
 # The backtest runner (app/research/backtests.py) is Data Contract row 31's single computer; these
 # routes serve its persisted payloads VERBATIM (never recomputed at read; the MCP ``backtests``
 # tool proxies the list byte-identically). Validation is honest and distinct: unknown dataset id
-# -> 404-style refusal; unknown strategy id -> 422 (only the registered v1 exists); a profile
-# other than ``default`` -> 422 (the profile registry is J-06 — until it ships, ``default`` is the
-# only registrable value); malformed body -> 422 at the schema layer.
+# -> 404-style refusal; unknown strategy id -> 422 (only the registered v1 exists); an
+# UNREGISTERED profile -> 422 (``Config.profile_definition`` — the SAME registry
+# ``GET /research/profiles`` lists, J-06 — never a second allowlist); malformed body -> 422 at the
+# schema layer.
 
 
 @router.post("/backtests")
@@ -1512,24 +1514,24 @@ def create_backtest(
     store: DatasetStore = Depends(get_dataset_store),
 ) -> dict:
     """Create + START a deterministic backtest job (J-03): the config-owned strategy v1 over one
-    registered dataset under the ``default`` profile. On success the job is persisted ``queued``
-    with its identity stamps (request echo, recorded null-baseline seed, config fingerprint) and
-    started as a cancellable background job; the queued payload is returned. Nothing is persisted
-    on any rejection."""
+    registered dataset under ``default`` or a registered candidate profile (J-06). On success the
+    job is persisted ``queued`` with its identity stamps (request echo, recorded null-baseline
+    seed, config fingerprint of the RESOLVED per-run profile config) and started as a cancellable
+    background job; the queued payload is returned. Nothing is persisted on any rejection."""
     # 422 — only the registered strategy exists (never a silently-coerced default strategy).
     if registry.config.strategy_definition(body.strategy_id) is None:
         raise HTTPException(
             status_code=422,
             detail=f"unknown strategy_id '{body.strategy_id}' — the registered strategy is '{STRATEGY_V1_ID}'",
         )
-    # 422 — ``default`` is the only registrable profile until J-06 ships the profile registry.
-    if body.profile != PROFILE_DEFAULT:
+    # 422 — the profile must be REGISTERED (Config.profile_definition — the ONE registry this
+    # route and GET /research/profiles both consult; never a second allowlist). ``default`` is
+    # always registered; a candidate is registered iff profile_definition returns non-None.
+    if registry.config.profile_definition(body.profile) is None:
+        known = [p["id"] for p in registry.config.profile_registry()]
         raise HTTPException(
             status_code=422,
-            detail=(
-                f"unknown profile '{body.profile}' — '{PROFILE_DEFAULT}' is the only registered "
-                f"profile (the candidate-profile registry is a later journey)"
-            ),
+            detail=f"unknown profile '{body.profile}' — the registered profiles are {known}",
         )
     # 404-style — the dataset must exist (a checksum-verified load; never a fabricated dataset).
     try:
@@ -1604,17 +1606,18 @@ def get_pnl_ledger(registry: ResearchRegistry = Depends(get_registry)) -> dict:
     return ledger_projection(registry.store, registry.config)
 
 
-# --- Indicator profiles + champion pointer (Data Contract row 33; minimal serving side, J-05) -------
+# --- Indicator profiles + champion pointer (Data Contract row 33; J-05 shipped the serving side,
+# J-06 registers the first candidate) ----------------------------------------------------------------
 # Exactly ONE route, GET only: the registry and the champion pointer are config-owned
-# (app/research/profiles.py builds the payload from the existing single-copy constants), so there
-# is NO write surface — any non-GET verb is FastAPI's default 405 (no handler exists). J-06 adds
-# candidate registration substance; J-07 adds the only mechanics that may ever move the champion.
+# (app/research/profiles.py projects Config.profile_registry() / the champion constants), so
+# there is NO write surface — any non-GET verb is FastAPI's default 405 (no handler exists). J-07
+# adds the only mechanics that may ever move the champion (a hold-out survivor).
 
 
 @router.get("/profiles")
 def get_profiles() -> dict:
-    """The profile registry (today exactly the frozen ``default``) + the current champion
-    pointer (the founding strategy ``v1`` on profile ``default``), served verbatim from the ONE
-    config-owned projection. The J-05 champion summary and the MCP ``get_endpoint`` proxy read
-    THIS — never an inferred or duplicated copy."""
+    """The profile registry (``default`` plus the registered J-06 candidate) + the current
+    champion pointer (the founding strategy ``v1`` on profile ``default`` — unmoved; no promotion
+    exists yet), served verbatim from the ONE config-owned projection. The J-05 champion summary
+    and the MCP ``get_endpoint`` proxy read THIS — never an inferred or duplicated copy."""
     return profiles_projection()

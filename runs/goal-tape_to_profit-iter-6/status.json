@@ -1,0 +1,22 @@
+{
+  "phase": "goal-tape_to_profit-iter-6",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-03T18:20:38.000000Z",
+  "started_at": "2026-07-03T17:45:00.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/config.py",
+    "apps/backend/app/research/backtests.py",
+    "apps/backend/app/research/profiles.py",
+    "apps/backend/app/research/routes.py",
+    "apps/backend/tests/test_profile_equivalence.py",
+    "apps/backend/tests/test_profiles_api.py",
+    "apps/backend/tests/test_backtests_api.py"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "next_action": "review",
+  "notes": "J-06 (versioned indicator profiles): registered ONE additive candidate profile (candidate-faster-warmup, an alternate warmup_min_events threshold) in a config-owned registry (Config.profile_definition/profile_registry/resolved_for_profile, mirroring the existing strategy_definition pattern). Retired the hardcoded profile != default 422 check in routes.py in favor of the ONE registry. The backtest runner applies the resolved profile ONLY inside its own fresh per-run engine construction (dataclasses.replace, never mutating the shared CONFIG singleton). Empirically verified the candidate legitimately flips tape_state earlier on the committed PG SIP fixture (both founding train/holdout windows) and produces a materially different holdout backtest trade, while the train trade and the ENTIRE default-profile path stay byte-identical (fingerprint pinned to the pre-existing 4d665603569b9dbf; candidate resolves to a distinct 8c2c0fbf978228e3 via the SAME hasher). Full backend suite: 1004 passed, 1 skipped (988+1 baseline + 16 new J-06 tests, 0 failed, 0 deleted). Frontend needed zero code changes — the existing /performance registry panel already renders profiles generically; verified live via curl + npm build. No frontend handoff file written (no frontend diff exists). RESUME SESSION (verify-and-complete): this dispatch found the implementation already complete and uncommitted in the working tree with this exact handoff already written by a prior invocation. Made zero code changes; independently re-verified every DoD item from scratch — fresh full-suite run (1004 passed/1 skipped/0 failed, confirmed via grep for FAILED/ERROR), fresh live-server curl checks for all three profile-validation paths (default/candidate/unknown) with both queued- and terminal-stamp fingerprints matching the pinned values live, a full stop/restart cycle of scripts/dev.sh with no port conflicts, and confirmation that every OUT-OF-SCOPE file (pnl_ledger.py, pnl_baseline.py, pnl_history.py, pnl-history.md, app/mcp/, apps/frontend/) has zero diff. See the dev handoff's new 'Resume posture — verify-and-complete (this session)' section for full detail."
+}

@@ -4,9 +4,11 @@ Exactly FOUR routes on the existing research router (Product Shape): ``POST /res
 (create + start the cancellable job), ``GET /research/backtests`` (list), ``GET
 /research/backtests/{id}`` (detail), ``POST /research/backtests/{id}/cancel``. GET serves the
 runner's persisted rows VERBATIM — no recomputation on read (Data Contract row 31). Validation is
-honest and distinct: unknown dataset id -> 404; unknown strategy id -> 422; a profile other than
-``default`` -> 422 (the profile registry is J-06 — until it ships, ``default`` is the only
-registrable value); malformed body -> 422; cancel mirrors studies (404 unknown / 409 terminal).
+honest and distinct: unknown dataset id -> 404; unknown strategy id -> 422; an UNREGISTERED
+profile -> 422 (``default`` plus the J-06 candidate ``candidate-faster-warmup`` are both
+accepted — ``Config.profile_definition`` is the ONE registry, see
+``tests/test_profile_equivalence.py`` for its resolution/fingerprint unit tests); malformed body
+-> 422; cancel mirrors studies (404 unknown / 409 terminal).
 
 Everything is keyless: the dataset under test is recorded over the API through the committed PG
 SIP reference window (the iter-2-proven flow), and the backtest job runs as a real background
@@ -21,7 +23,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import CONFIG, STRATEGY_V1_ID
+from app.config import CONFIG, PROFILE_CANDIDATE_FASTER_WARMUP, STRATEGY_V1_ID
 from app.main import app, get_market_adapter, manager
 from app.research.backtests import PROFILE_DEFAULT, REGISTER
 from app.research.routes import ResearchRegistry, set_registry
@@ -159,12 +161,33 @@ def test_unknown_strategy_id_is_422(ctx):
     assert client.get("/research/backtests").json()["backtests"] == []
 
 
-def test_non_default_profile_is_422_until_the_profile_registry_ships(ctx):
+def test_unregistered_profile_is_422(ctx):
     client, _store, _reg = ctx
     dataset = _record_reference_dataset(client)
-    r = _create(client, dataset["id"], profile="candidate")
+    r = _create(client, dataset["id"], profile="nonexistent-profile")
     assert r.status_code == 422
-    assert "default" in r.json()["detail"]
+    assert "nonexistent-profile" in r.json()["detail"]
+    assert client.get("/research/backtests").json()["backtests"] == []
+
+
+def test_registered_candidate_profile_is_accepted_and_runs_to_done(ctx):
+    # J-06: a candidate registered in Config.profile_definition is accepted (previously 422 for
+    # ANY non-default profile) and produces a report stamped with its own profile id and a
+    # config_fingerprint distinct from default's — the SAME hasher, no second mechanism.
+    client, _store, _reg = ctx
+    dataset = _record_reference_dataset(client)
+    r = _create(client, dataset["id"], profile=PROFILE_CANDIDATE_FASTER_WARMUP)
+    assert r.status_code == 200, r.text
+    created = r.json()["backtest"]
+    assert created["profile"] == PROFILE_CANDIDATE_FASTER_WARMUP
+    assert created["config_fingerprint"] != CONFIG.config_fingerprint()
+
+    pl = _poll_until_terminal(client, created["id"])
+    assert pl["status"] == "done"
+    result = pl["result"]
+    assert result["profile"] == PROFILE_CANDIDATE_FASTER_WARMUP
+    assert result["config_fingerprint"] == created["config_fingerprint"]
+    assert result["config_fingerprint"] != CONFIG.config_fingerprint()
 
 
 def test_malformed_body_is_422(ctx):

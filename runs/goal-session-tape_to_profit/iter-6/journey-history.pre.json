@@ -4,55 +4,55 @@
       "id": "J-01",
       "name": "A read-only MCP server exposes the product over the canonical API",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-6",
-      "last_passing_iter": "goal-tape_to_profit-iter-6",
+      "last_verified_iter": "goal-tape_to_profit-iter-5",
+      "last_passing_iter": "goal-tape_to_profit-iter-5",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/J-01-verify.png"
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-5-evidence/J-01-verify.png"
     },
     "J-02": {
       "id": "J-02",
       "name": "Historical tape datasets persist and replay byte-identically (train/hold-out registry)",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-6",
-      "last_passing_iter": "goal-tape_to_profit-iter-6",
+      "last_verified_iter": "goal-tape_to_profit-iter-5",
+      "last_passing_iter": "goal-tape_to_profit-iter-5",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/UT-J-02-result.png"
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-5-evidence/J-02-record-detail-200.png"
     },
     "J-03": {
       "id": "J-03",
       "name": "Strategy grammar v1 backtests a dataset into a deterministic PnL report",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-6",
-      "last_passing_iter": "goal-tape_to_profit-iter-6",
+      "last_verified_iter": "goal-tape_to_profit-iter-5",
+      "last_passing_iter": "goal-tape_to_profit-iter-5",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/UT-J-03-result.png"
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-5-evidence/J-03-backtest-done-report.png"
     },
     "J-04": {
       "id": "J-04",
       "name": "Every enhancement lands one honest row in the PnL ledger",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-6",
-      "last_passing_iter": "goal-tape_to_profit-iter-6",
+      "last_verified_iter": "goal-tape_to_profit-iter-5",
+      "last_passing_iter": "goal-tape_to_profit-iter-5",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/UT-J-04-result.png"
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-5-evidence/J-04-ledger-founding-row-200.png"
     },
     "J-05": {
       "id": "J-05",
       "name": "The /performance page reports PnL per enhancement honestly",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-6",
-      "last_passing_iter": "goal-tape_to_profit-iter-6",
+      "last_verified_iter": "goal-tape_to_profit-iter-5",
+      "last_passing_iter": "goal-tape_to_profit-iter-5",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/J-05-verify.png"
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-5-evidence/J-05-02-performance-page.png"
     },
     "J-06": {
       "id": "J-06",
       "name": "Indicator profiles are versioned; the default stays byte-identical",
-      "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-6",
-      "last_passing_iter": "goal-tape_to_profit-iter-6",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit-iter-5",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/UT-J-06-result.png"
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-5-evidence/J-05-02-performance-page.png"
     },
     "J-07": {
       "id": "J-07",
@@ -67,12 +67,12 @@
       "id": "J-08",
       "name": "The existing product is unchanged (regression sentinel)",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-6",
-      "last_passing_iter": "goal-tape_to_profit-iter-6",
+      "last_verified_iter": "goal-tape_to_profit-iter-5",
+      "last_passing_iter": "goal-tape_to_profit-iter-5",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/J-08-verify.png"
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-5-evidence/J-08-verify.png"
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-07-03T20:01:14+01:00"
+  "updated_at": "2026-07-03T14:12:54+01:00"
 }

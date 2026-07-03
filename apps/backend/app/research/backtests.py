@@ -8,6 +8,14 @@ itself) — arms simulated entries per the config-owned strategy grammar v1 (row
 slippage model, applies the configured fee model, and persists the report ONCE. The routes and
 the MCP ``backtests`` proxy serve the stored rows VERBATIM ever after — no recomputation on read.
 
+The fresh engine is constructed with the run's RESOLVED profile config (era-3 capability 2, J-06:
+``Config.resolved_for_profile``) — ``default`` passes the SAME object unchanged (byte-identical
+engine construction, the frozen-default anti-goal); a registered candidate passes a FRESH per-run
+overlay Config, applied ONLY to this one replay, never to the shared ``CONFIG`` singleton. Every
+OTHER computation in this module (fees, slippage, the strategy grammar, the null baseline) still
+reads the manager's base ``self._config`` — a profile is an engine/classifier concern (row 33),
+never a strategy-grammar one (row 34).
+
 Every fill in this module is the ONE permitted "fill" in the whole product: computed OFFLINE
 against recorded historical tape, labeled simulated via the ``REGISTER`` string carried in every
 report payload, and sent nowhere (the no-live-execution anti-goal; enforced repo-wide by
@@ -75,7 +83,7 @@ import threading
 import time
 import uuid
 
-from ..config import Config
+from ..config import Config, PROFILE_DEFAULT
 from .datasets import DatasetIntegrityError, DatasetNotFound, DatasetStore
 from .marks import r_basis
 from .store import BacktestRecord, JournalStore
@@ -119,10 +127,6 @@ __all__ = [
 # The visible honesty register carried by EVERY report payload (the PnL-honesty constraint):
 # a simulated measurement of the past under disclosed assumptions — never live results.
 REGISTER = "simulated — assumed fees/slippage — not indicative of live results"
-
-# The only registrable profile until J-06 ships the profile registry — the route refuses any
-# other value honestly (422), and every report stamps it.
-PROFILE_DEFAULT = "default"
 
 # The null-baseline population label — an explicit non-setup so a random entry can never be
 # mistaken for (or pooled into) a real strategy setup.
@@ -211,11 +215,17 @@ class BacktestRunner:
             self._store.update_backtest_payload(
                 backtest_id, {**payload, "status": STATUS_RUNNING}
             )
+            # The per-run RESOLVED profile config (J-06): default is self._config UNCHANGED
+            # (byte-identical); a registered candidate is a FRESH overlay — self._config is never
+            # mutated. Route-guarded (422 for an unregistered profile); defensive honesty here.
+            run_config = self._config.resolved_for_profile(params["profile"])
+            if run_config is None:
+                raise ValueError(f"unknown profile '{params['profile']}'")
             # The verified metadata load (id -> 404-style DatasetNotFound; corrupt/tampered ->
             # DatasetIntegrityError) — embedded VERBATIM in the report's provenance.
             dataset_meta = dataset_store.get(params["dataset_id"])
             path, cancelled = self._replay(
-                dataset_store, params["dataset_id"], backtest_id, payload, is_cancelled
+                dataset_store, params["dataset_id"], backtest_id, payload, is_cancelled, run_config
             )
             if cancelled or is_cancelled():
                 self._persist_terminal(backtest_id, payload, STATUS_CANCELLED)
@@ -229,12 +239,15 @@ class BacktestRunner:
                 "register": REGISTER,
                 # Provenance: the dataset's stored metadata VERBATIM (id + checksum + window +
                 # feed + counts), the resolved strategy config echoed verbatim, the profile id,
-                # and the config fingerprint (the existing hasher — never a second computation).
+                # and the config fingerprint of the RESOLVED per-run config (the existing hasher —
+                # never a second computation; folds the profile through the overlaid, always-
+                # hashed engine fields, so default's fingerprint stays untouched and a candidate's
+                # is distinct).
                 "dataset": dataset_meta,
                 "strategy_id": params["strategy_id"],
                 "strategy": strategy,
                 "profile": params["profile"],
-                "config_fingerprint": self._config.config_fingerprint(),
+                "config_fingerprint": run_config.config_fingerprint(),
                 "trades": trades,
                 "aggregates": _aggregate(trades),
                 "null_baseline": {
@@ -260,15 +273,21 @@ class BacktestRunner:
         backtest_id: str,
         payload: dict,
         is_cancelled,
+        config: Config,
     ) -> tuple[list[_PathPoint], bool]:
         """Replay the stored dataset unpaced through ``DatasetStore.replay`` (a FRESH engine,
         verified load) recording the snapshot path in memory ONCE. Cancellation is checked
         between events; progress is persisted every ``_PROGRESS_EVERY`` events (throttled —
-        never a hot path). Tape data lives ONLY in this in-job memory — never persisted."""
+        never a hot path). Tape data lives ONLY in this in-job memory — never persisted.
+
+        ``config`` is the run's RESOLVED profile config (``Config.resolved_for_profile`` — J-06):
+        ``default`` passes ``self._config`` UNCHANGED (byte-identical engine construction to
+        pre-J-06); a candidate passes a FRESH per-run overlay — ``self._config`` itself is never
+        mutated, so concurrent runs under different profiles never race."""
         path: list[_PathPoint] = []
         total = 0
         cancelled = False
-        for snapshot in dataset_store.replay(dataset_id, self._config):
+        for snapshot in dataset_store.replay(dataset_id, config):
             if is_cancelled():
                 cancelled = True
                 break
@@ -520,10 +539,15 @@ class BacktestJobManager:
     def create(self, params: dict) -> dict:
         """Persist a NEW backtest ``queued`` with its identity stamps — the request echo
         (dataset/strategy/profile), the recorded null-baseline seed (the config default unless
-        the params carry one), and the config fingerprint — and return the served payload. The
-        caller (route) then STARTS it."""
+        the params carry one), and the config fingerprint of the RESOLVED per-run profile config
+        (J-06 — ``default`` unchanged; a registered candidate distinct, matching the fingerprint
+        the terminal report stamps) — and return the served payload. The caller (route) then
+        STARTS it. ``params["profile"]`` is route-validated already; an unresolvable value
+        defensively falls back to the base config rather than raising here (``run`` raises its
+        own explicit error at execution time — this stamp is best-effort identity metadata only)."""
         backtest_id = uuid.uuid4().hex
         seed = params.get("null_baseline_seed", self._config.backtest_null_baseline_seed)
+        run_config = self._config.resolved_for_profile(params["profile"]) or self._config
         payload = {
             "id": backtest_id,
             "status": STATUS_QUEUED,
@@ -531,7 +555,7 @@ class BacktestJobManager:
             "strategy_id": params["strategy_id"],
             "profile": params["profile"],
             "null_baseline_seed": seed,
-            "config_fingerprint": self._config.config_fingerprint(),
+            "config_fingerprint": run_config.config_fingerprint(),
             "created_wall_ts": time.time(),
         }
         self._store.insert_backtest(

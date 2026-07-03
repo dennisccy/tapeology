@@ -1,3 +1,20 @@
+You are the goal-decomposer agent for goal-mode iteration planning.
+
+Mode: next
+Session ID: tape_to_profit
+Iteration index: 6
+Iter name: goal-tape_to_profit-iter-6
+Prior verdict: CONTINUE
+Prior depth: lean
+
+Project template: .claude/project-template.md
+Project goal (SLICED — vision + anti-goals + failing/target journeys verbatim; stable passing journeys digested to one line): /home/dennis-chan/Git/tapeology/runs/goal-session-tape_to_profit/iter-6/goal-slice.md
+  Full goal file: /home/dennis-chan/Git/tapeology/docs/goal.md — Read it ONLY if a digested journey becomes relevant to your plan.
+Agent instructions: .claude/agents/goal-decomposer.md  <-- read this first
+(CLAUDE.md is already in your system prompt — do not Read it again.)
+
+Recent evaluator log entries (last 3, pre-trimmed):
+```
 # Goal Session tape_to_profit — Evaluator Log
 
 ## Iteration 0 — goal-tape_to_profit-iter-0
@@ -89,18 +106,71 @@
 **Reasoning:** J-05 verified end-to-end: `/performance` reached from the fourth top-bar link (rendered from `/meta/ui-routes`, single owner `app/meta.py`), ledger + champion rendered verbatim (browser-qa's live in-page 24/24 page-equals-API check; screenshot values match the raw ledger JSON capture value-for-value), founding row shows full-precision R/$/n, "insufficient sample (n < 5)" on both splits, the explicit "no prior incumbent" marker, register from the API payload, champion v1/default from the minimally-landed `GET /research/profiles`. Verify-and-complete resume worked as designed: all interrupted-dispatch claims independently reproduced (988 passed / 1 skipped, equivalence 7/7, build clean, replay J-01+J-05 green) with zero code changes. All 5 required-still-passing journeys re-verified (J-01 via the evolved 4-destination golden script, J-08 via replay, J-02/J-03/J-04 via fresh in-page API cycles + suite). MCP diff docstring-only, protected files zero-diff, COHERENCE-PASS. Passing: J-01–J-05, J-08; remaining: J-06, J-07.
 
 **Next-step recommendation:** J-06 at lean depth — register one candidate profile (additive feature key or alternate threshold set), refactor the backtest route's profile refusal to consult the registry, backtest the fixture dataset under default AND the candidate, pin pre-profile equivalence outputs. Caution: `/research/profiles` now returns 200 with a zero-candidate registry (landed minimally at J-05) — that 200 is NOT partial J-06 credit. Required-still-passing browser lane now carries three golden scripts (J-01, J-05, J-08). Then J-07 (sweep), whose promotion-gate tests must control minimum-n both ways (fixture pair arms n=1 per split).
+```
+Lessons learned (full file, append-only):
+```
+# Goal Session tape_to_profit — Lessons Learned
 
-## Iteration 6 — goal-tape_to_profit-iter-6
+Append-only ledger of takeaways from prior iterations. The goal-evaluator
+appends one entry per iteration; the goal-decomposer reads this file before
+planning each iteration to avoid repeating known pitfalls.
 
-**Date:** 2026-07-03T20:01:14+01:00
+Each entry should be 1-3 sentences capturing a non-obvious lesson — surprising
+failures, regression triggers, or decisions that worked well. Avoid
+restating the verdict (the evaluator-log.md already does that).
+
+## iter-1 — 2026-07-03T04:14:31+01:00
+
 **Verdict:** CONTINUE
-**Depth dispatched:** lean
-**Journey deltas:**
-- Newly passing: J-06
-- Newly failing: none
-- Regressed: none
-- Anti-goal violations: none (scan CLEAN; default fingerprint `4d665603569b9dbf` pinned + cross-confirmed on both the J-06 default_run and the J-04 founding-ledger provenance; `app/mcp/` + frontend zero-diff; champion still v1/default; ledger still row_count 1; `resolved_for_profile` source-scanned to only `research/backtests.py`; `test_no_execution_path.py` 4/4)
+**Lesson:** The deterministic replay of required-still-passing journeys silently no-ops when Playwright is missing: engine.log shows "Playwright (Python) is not available" at the J-08 replay step, yet the merged UI report still claims "LLM browser-qa + deterministic replay" and reports "1/1 passed (0 skipped)" with no replay row and no failure. Only engine.log reveals the gap — a real J-08 regression could have passed unnoticed if the automated suite had not covered it.
+**Applies to:** every future iteration (all carry J-08 as required-still-passing) — until `python3 -m pip install --user playwright && python3 -m playwright install chromium` is done, browser QA must explicitly execute required-still-passing browser legs, and the evaluator must demand a result row per required journey rather than trusting the merge header.
 
-**Reasoning:** J-06 passes on cross-checked multi-surface evidence: UT-J-06-result.png shows `GET /research/profiles` listing `default` (frozen) + additive `candidate-faster-warmup` (based_on default, overrides `warmup_min_events:30`), champion unmoved at v1/default, and the default fixture backtest stamped with the unchanged pinned fingerprint `4d665603569b9dbf`; the results-table row adds the candidate leg (distinct fp `8c2c0fbf978228e3`, hold-out net R -0.1728 vs default +0.3334, win_rate 1.0->0.0, deterministic re-run) and the honest `422` for an unknown profile. The critical "default frozen" anti-goal is triple-guarded — pinned equivalence test, `resolved_for_profile(default) is CONFIG` identity, and the founding PnL row's fingerprint (UT-J-04) still reading `4d665603569b9dbf`. Required-still-passing all green: J-01/J-05/J-08 via healthy golden replays (real frames, consistent 4-link nav — not the iter-1 silent no-op), J-02/J-03/J-04 via suite + in-page fetch (J-02 record/409/ambient and J-04 founding-row spot-checks opened and match). Full suite 1004 passed / 1 skipped (>= 988 baseline), observer-equivalence 7/7, review PASS_WITH_NOTES (MINOR test nit, no fail-open), coherence COHERENCE-PASS (one registry, one hasher, engine-path exclusivity). Passing: J-01–J-06, J-08; remaining: J-07 only.
+## iter-2 — 2026-07-03T06:00:19+01:00
 
-**Next-step recommendation:** J-07 (candidate sweep harness `python -m app.research.pnl_scan`) at **full** depth — the last journey and the only one performing an anti-goal-gated mutation (champion-pointer move + PnL-ledger append, gated by the critical "No train-only promotion"), and the goal-closing iteration (passing J-07 -> GOAL_ACHIEVED candidate). Promotion-gate tests must control minimum-n both ways: the fixture pair arms n=1 per split (< min 5), so the fixture sweep must honestly report ZERO survivors + exit 0 with the champion NOT moved and NO ledger row appended; the J-06 candidate itself is a legitimate non-survivor (hold-out net R negative). A survivor/promotion path needs a distinct n >= min scenario. Deterministic re-runs; promotion must never mutate `default` or any engine default.
+**Verdict:** CONTINUE
+**Lesson:** Machine-surface journeys (no frontend page) structurally cannot get golden replay scripts: `demo_runner.py` supports only goto/click/fill (no POST) and its `normalize_url` rewrites ANY localhost URL onto the single frontend base_url, so a `goto` aimed at the backend port silently hits the frontend instead. Their durable regression lane is the backend test suite; for browser-originated verification, Chrome MCP's `eval` issuing in-page `fetch()` from a backend-origin page works well (iter-2 drove POST/409/422 flows that way).
+**Applies to:** J-03, J-04, J-06, J-07 (all machine-surface per the blueprint IA table) — dispatch browser-qa knowing no replay script will exist for them, and route their required-still-passing coverage through the automated suite, not the replay lane.
+
+## iter-3 — 2026-07-03T08:34:58+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** Three seemingly unrelated failures this iteration — the replay lane's Playwright Chromium killed at launch (SIGTRAP, engine.log 07:29:19), browser-qa's Chrome `net::ERR_INSUFFICIENT_RESOURCES` + hydration stalls, and sqlite `Disk quota exceeded` errors under pytest — share ONE root cause: `/tmp` is a tmpfs with a per-user quota (~5.2G = 80%), pinned at the limit by ~4.5G of accumulated pytest basetemp dirs in `/tmp/pytest-of-dennis-chan` (~4-5MB per suite run x hundreds of framework runs; pytest's keep-3 cleanup has not kept up). Symptom looks like flaky browsers or a broken product; it is neither. Workaround proven this iteration: run pytest with `TMPDIR` + `--basetemp` pointed at a root-filesystem dir; real fix is clearing the pytest dir (this evaluator's delete was permission-denied — operator action).
+**Applies to:** every future iteration's browser-qa / replay / large-suite lane — before diagnosing "flaky browser" or unexplained sqlite I/O errors, check `du -sh /tmp/pytest-of-dennis-chan` against the per-user tmpfs quota first.
+
+## iter-4 — 2026-07-03T10:17:12+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The committed fixture dataset pair arms exactly n=1 trade per split under strategy v1's sustain/cooldown rules (train net_r −0.16, holdout net_r +0.3334, both < `pnl_min_sample_size` 5) — the iter-3 note's "n=5" figure came from a different substrate. Consequence: on the current fixtures NO candidate can ever satisfy an n ≥ 5 hold-out promotion gate, so J-07's sweep tests must control the configured minimum (both ways) or use enlarged fixture windows to exercise a real promotion; the founding row's insufficient-sample labeling also means J-05's page renders that label from day one with real data.
+**Applies to:** J-07 (promotion-gate test design on the fixture pair), J-05 (insufficient-sample rendering is live-data-exercised), any iter asserting sample-size gates against `tests/fixtures/datasets/`
+
+## iter-5 — 2026-07-03T14:12:54+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The verify-and-complete resume protocol delivered a zero-churn success: every interrupted-dispatch claim (988/1 suite, equivalence 7/7, build, 2/2 replay) reproduced independently and "no code changes — verified as-is" was the correct developer outcome — re-verification, not rebuilding, is the right posture for an uncommitted-but-complete working tree. Side effect to heed: `GET /research/profiles` now serves 200 with a zero-candidate registry (row 33 landed minimally for J-05's champion summary), so J-06's fresh-failing evidence is "registry lists no candidate", no longer a 404 — a 200 there must not be misread as J-06 progress.
+**Applies to:** any future interrupted-dispatch resume (verify first, change only what a failed check requires); the J-06 iteration's failing-baseline framing and acceptance evidence.
+```
+Journey state (inline digest; Read /home/dennis-chan/Git/tapeology/runs/goal-session-tape_to_profit/state/journey-history.json only for fields the digest omits):
+```
+J-01 | passing         | last_passing=goal-tape_to_profit-iter-5 | A read-only MCP server exposes the product over the canonical API
+J-02 | passing         | last_passing=goal-tape_to_profit-iter-5 | Historical tape datasets persist and replay byte-identically (train/hold-out registry)
+J-03 | passing         | last_passing=goal-tape_to_profit-iter-5 | Strategy grammar v1 backtests a dataset into a deterministic PnL report
+J-04 | passing         | last_passing=goal-tape_to_profit-iter-5 | Every enhancement lands one honest row in the PnL ledger
+J-05 | passing         | last_passing=goal-tape_to_profit-iter-5 | The /performance page reports PnL per enhancement honestly
+J-06 | failing         | last_passing=- | Indicator profiles are versioned; the default stays byte-identical
+J-07 | failing         | last_passing=- | The candidate sweep survives hold-out or says so honestly
+J-08 | passing         | last_passing=goal-tape_to_profit-iter-5 | The existing product is unchanged (regression sentinel)
+```
+
+Last iteration eval: /home/dennis-chan/Git/tapeology/runs/goal-session-tape_to_profit/iter-5/eval.md
+
+Apply the TOKEN AND QUESTIONING POLICY from .claude/core.md strictly.
+
+Write the iteration spec to: docs/phases/goal-tape_to_profit-iter-6.md
+Also keep /home/dennis-chan/Git/tapeology/runs/goal-session-tape_to_profit/state/blueprint.md current per your agent instructions: register any new displayed value in the Data Contract and place new pages under an existing Information-Architecture home (additive edits only). For a nav-skeleton change, make the edit AND write a one-line reason to /home/dennis-chan/Git/tapeology/runs/goal-session-tape_to_profit/state/blueprint.reapproval-requested.
+
+The spec MUST include a 'Goal Mode Metadata' section with at minimum:
+  - Mode: next
+  - Depth: lean | full
+  - Target journeys: <comma-separated journey IDs>
+
+Do NOT write code or implement anything. The iteration spec and any blueprint edits are planning documents, not code. STOP after writing them.

@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 # The ONE registered strategy id (era-3 capability 3, J-03). Data Contract row 34: the complete
@@ -20,6 +20,28 @@ from pathlib import Path
 # provenance. Any other strategy id is honestly refused (422 at the route) until a later journey
 # registers more; strategy VARIANT enumeration is J-07 sweep territory, deliberately not here.
 STRATEGY_V1_ID = "v1"
+
+# The frozen legacy profile (era-3 capability 2, J-06; Data Contract row 33) — the SAME
+# "id constant + Config-owned definition method" pattern as STRATEGY_V1_ID above governs both the
+# strategy grammar (row 34, ``strategy_definition``) and the profile registry (row 33,
+# ``profile_definition`` / ``profile_registry`` below). Moved here from
+# ``app/research/backtests.py`` (its historical home, which never actually read it — only
+# re-exported it); ``app.research.backtests`` re-exports it still, so existing importers are
+# unaffected. Every archived-era surface and the live cockpit run on THIS profile only, forever
+# (the byte-equivalence anti-goal).
+PROFILE_DEFAULT = "default"
+
+# THE FIRST additive candidate profile (J-06) — proves the versioned-profile mechanism. Registered
+# beside ``PROFILE_DEFAULT``, selectable ONLY by an explicit backtest run's ``profile`` param
+# (never by the live cockpit or any archived-era surface — enforced by
+# ``tests/test_profile_equivalence.py``'s source-scan guard). See ``Config.profile_definition``
+# for its ONE declared additive override.
+PROFILE_CANDIDATE_FASTER_WARMUP = "candidate-faster-warmup"
+
+# Registration order for the registry projection (``Config.profile_registry``) — private: external
+# callers go through ``profile_definition`` (single lookup) or ``profile_registry`` (the full
+# list), never this tuple directly.
+_PROFILE_IDS_IN_ORDER: tuple[str, ...] = (PROFILE_DEFAULT, PROFILE_CANDIDATE_FASTER_WARMUP)
 
 
 @dataclass(frozen=True)
@@ -928,6 +950,84 @@ class Config:
         Path(__file__).resolve().parents[3] / "reports" / "pnl" / "pnl-history.md"
     )
 
+    # --- Profit-research era: THE FIRST CANDIDATE INDICATOR PROFILE (capability 2, J-06; Data
+    # Contract row 33) -----------------------------------------------------------------------------
+    # RESEARCH DEFAULT — a starting point, NEVER a validated edge (no-ML / no-online-tuning
+    # anti-goal: candidate search is bounded, config-enumerated, offline). The candidate's ONE
+    # additive change: an ALTERNATE THRESHOLD VALUE for the EXISTING ``warmup_min_events`` gate
+    # (never a new code path, never a second gate) — fewer processed trades are required before
+    # the classifier evaluates the real control/absorption gates instead of forcing a cold-start
+    # ``unclear``. Read ONLY by ``Config.resolved_for_profile`` to build a per-run OVERLAY
+    # ``Config`` (via ``dataclasses.replace`` — never a mutation) for a backtest that explicitly
+    # requests ``PROFILE_CANDIDATE_FASTER_WARMUP``; ``warmup_min_events`` itself and the shared
+    # ``CONFIG`` singleton are NEVER touched, so the live cockpit and every ``default``-profile
+    # backtest stay byte-identical (equivalence-tested in tests/test_profile_equivalence.py).
+    #
+    # CALIBRATED to legitimately move behavior on the committed PG SIP reference fixture (the
+    # iter-4 "make it fire" lesson — never a no-op candidate): lowering the floor from 40 to 30
+    # processed trades moves the first directional call genuinely EARLIER on BOTH the founding
+    # train and hold-out windows (a real ``tape_state`` difference, not merely a confidence
+    # nudge — pinned in tests/test_profile_equivalence.py), while the control/absorption gates
+    # themselves (ratio / impact / spread / speed) are completely untouched — a call this
+    # candidate makes is exactly as evidenced as ``default``'s, just permitted to fire on fewer
+    # processed trades.
+    #
+    # EXCLUDED FROM ``config_fingerprint`` (see the exclusion set in ``config_fingerprint``): this
+    # field is REGISTRY METADATA ONLY — the value ``resolved_for_profile`` overlays onto the REAL
+    # ``warmup_min_events`` field — and is never itself read by engine/classifier code, so its mere
+    # presence on ``Config`` must NOT move ANY existing fingerprint (``default``'s included, pinned
+    # against the committed founding PnL-ledger row). The candidate's distinct fingerprint comes
+    # from the OVERLAID ``warmup_min_events`` value on the resolved per-run Config — the ONE
+    # existing hasher, no second mechanism.
+    profile_candidate_warmup_min_events: int = 30
+
+    def profile_definition(self, profile_id: str) -> dict | None:
+        """The config-owned descriptor for ``profile_id`` (Data Contract row 33) — the
+        ``strategy_definition`` pattern applied to profiles: THIS method is the ONE place that
+        decides registration. ``profiles_projection`` (``GET /research/profiles``) and the
+        backtest route's validation both consult it — never a second allowlist. Returns ``None``
+        for an unregistered id (the route maps that to an honest 422).
+
+        ``default`` is the frozen legacy profile (no overrides — every archived-era surface and
+        the live cockpit run on it, byte-equivalence-tested). The ONE registered candidate is
+        additive-only and self-documenting: its id, the profile it is ``based_on``, and its exact
+        declared ``overrides`` (field name -> value, read from config — no magic number)."""
+        if profile_id == PROFILE_DEFAULT:
+            return {"id": PROFILE_DEFAULT, "frozen": True, "is_default": True}
+        if profile_id == PROFILE_CANDIDATE_FASTER_WARMUP:
+            return {
+                "id": PROFILE_CANDIDATE_FASTER_WARMUP,
+                "frozen": False,
+                "is_default": False,
+                "based_on": PROFILE_DEFAULT,
+                "overrides": {"warmup_min_events": self.profile_candidate_warmup_min_events},
+            }
+        return None
+
+    def profile_registry(self) -> list[dict]:
+        """Every REGISTERED profile's descriptor, in registration order (``default`` first, then
+        each candidate) — the full ``GET /research/profiles`` list. Built ENTIRELY from
+        ``profile_definition`` (never a second copy of any id or override value)."""
+        return [self.profile_definition(pid) for pid in _PROFILE_IDS_IN_ORDER]
+
+    def resolved_for_profile(self, profile_id: str) -> "Config | None":
+        """The per-run ``Config`` for ``profile_id`` — applied ONLY inside a fresh backtest engine
+        for that one run (never the shared ``CONFIG`` singleton, never a cockpit/engine path
+        outside a backtest's own ``profile`` request param — enforced by a source-scan test).
+
+        ``default`` returns ``self`` UNCHANGED — the identical object, not merely an equal copy
+        (the strongest possible byte-identical guarantee: the frozen-default anti-goal). A
+        registered candidate returns a FRESH ``dataclasses.replace(self, **overrides)`` — self is
+        never mutated. An unregistered id returns ``None`` (the route already 422s before this is
+        ever called for an unknown profile — defensive here, never silently substitutes
+        ``default``)."""
+        definition = self.profile_definition(profile_id)
+        if definition is None:
+            return None
+        if profile_id == PROFILE_DEFAULT:
+            return self
+        return replace(self, **definition["overrides"])
+
     def strategy_definition(self, strategy_id: str) -> dict | None:
         """The COMPLETE config-owned strategy definition for ``strategy_id`` (Data Contract row 34).
 
@@ -1137,6 +1237,16 @@ class Config:
             # package-anchored default embeds an absolute path that would otherwise mint a
             # different fingerprint per machine. Pinned in tests/test_pnl_ledger.py.
             "pnl_history_md_path",
+            # The candidate profile's registry-metadata override value (era-3 capability 2 /
+            # J-06): NEVER itself read by engine/classifier code — ``resolved_for_profile``
+            # overlays it onto the REAL ``warmup_min_events`` field, and it is THAT (never
+            # excluded) field which moves the fingerprint for a candidate-resolved Config. Unlike
+            # the founding-row identity values above (persisted VERBATIM into a ledger row, so
+            # NOT excluded), this value is only ever READ to build a per-run overlay — it is
+            # itself never persisted anywhere, so two journals identical in every threshold but
+            # carrying a different (unapplied) candidate override value MUST share a fingerprint.
+            # Pinned both ways in tests/test_profile_equivalence.py.
+            "profile_candidate_warmup_min_events",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
