@@ -57,6 +57,7 @@ from .monitor import (
     compute_risk_flags,
 )
 from .pnl_ledger import ledger_projection
+from .profiles import profiles_projection
 from .feed_basis import data_feed_for_scenario
 from .journal_rows import journal_row
 from .store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
@@ -1601,3 +1602,19 @@ def get_pnl_ledger(registry: ResearchRegistry = Depends(get_registry)) -> dict:
     with the visible simulated register and the config-owned ``insufficient_sample`` labels
     (``n`` always present). An empty ledger is an honest 200 empty list — never an error."""
     return ledger_projection(registry.store, registry.config)
+
+
+# --- Indicator profiles + champion pointer (Data Contract row 33; minimal serving side, J-05) -------
+# Exactly ONE route, GET only: the registry and the champion pointer are config-owned
+# (app/research/profiles.py builds the payload from the existing single-copy constants), so there
+# is NO write surface — any non-GET verb is FastAPI's default 405 (no handler exists). J-06 adds
+# candidate registration substance; J-07 adds the only mechanics that may ever move the champion.
+
+
+@router.get("/profiles")
+def get_profiles() -> dict:
+    """The profile registry (today exactly the frozen ``default``) + the current champion
+    pointer (the founding strategy ``v1`` on profile ``default``), served verbatim from the ONE
+    config-owned projection. The J-05 champion summary and the MCP ``get_endpoint`` proxy read
+    THIS — never an inferred or duplicated copy."""
+    return profiles_projection()

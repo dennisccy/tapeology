@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "journey": "J-05",
+  "name": "The /performance page reports PnL per enhancement honestly",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {"n": 1, "journey": "J-05", "action": {"type": "goto", "url": "/"}, "expect": {"text": "Performance"}},
+    {"n": 2, "journey": "J-05", "action": {"type": "click", "target": {"role": "link", "name": "Performance"}}, "expect": {"text": "PnL ledger"}},
+    {"n": 3, "journey": "J-05", "action": {"type": "expect", "text": "simulated — assumed fees/slippage — not indicative of live results"}},
+    {"n": 4, "journey": "J-05", "action": {"type": "expect", "text": "founding baseline — strategy v1 on default"}},
+    {"n": 5, "journey": "J-05", "action": {"type": "expect", "text": "-0.16000000000001136"}},
+    {"n": 6, "journey": "J-05", "action": {"type": "expect", "text": "-16.000000000001137"}},
+    {"n": 7, "journey": "J-05", "action": {"type": "expect", "text": "0.3334000000001356"}},
+    {"n": 8, "journey": "J-05", "action": {"type": "expect", "text": "33.34000000001356"}},
+    {"n": 9, "journey": "J-05", "action": {"type": "expect", "text": "insufficient sample (n < 5)"}},
+    {"n": 10, "journey": "J-05", "action": {"type": "expect", "text": "no prior incumbent"}},
+    {"n": 11, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "champion-summary"}}},
+    {"n": 12, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "champion-strategy"}}},
+    {"n": 13, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "champion-profile"}}},
+    {"n": 14, "journey": "J-05", "action": {"type": "goto", "url": "/journal"}, "expect": {"text": "Performance"}},
+    {"n": 15, "journey": "J-05", "action": {"type": "goto", "url": "/studies"}, "expect": {"text": "Performance"}}
+  ]
+}

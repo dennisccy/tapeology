@@ -74,3 +74,18 @@
 **Reasoning:** J-04 verified passing on multi-surface evidence: iter-0 404 → live 200 with the founding row (explicit `baseline: null`, candidate net R+$ per split, n=1 both splits labeled insufficient sample, full provenance, register verbatim); POST/DELETE → 405; the row's aggregates equal the independent J-03 re-run capture EXACTLY and its dataset ids + checksums appear verbatim in the J-02 datasets-list capture; committed `reports/pnl/pnl-history.md` shows identical numbers; MCP `pnl_ledger` byte-identity tested (last tool out of honest-404). Evaluator independently confirmed the `app/mcp/__init__.py` diff is two documentation strings only and the only UPDATE SQL is schema_version bookkeeping. Suite 983 passed / 1 skipped, equivalence 7/7, replay lane 2/2 (J-01, J-08), COHERENCE-PASS.
 
 **Next-step recommendation:** Iter-5 = J-05 (`/performance` page: render `GET /research/pnl/ledger` verbatim — $ beside R beside n, register visible, train/hold-out separate, insufficient-sample labels exercised by the real n=1 founding row; champion summary per blueprint; Performance nav entry rendered from `/meta/ui-routes`, adding `/performance` to the route map — note the stored golden J-01 nav expectations must evolve with the 4th link) at lean depth. J-06 then J-07 after. J-07 planning heads-up: fixture windows arm n=1 per split (< min 5) — see lessons.md.
+
+## Iteration 5 — goal-tape_to_profit-iter-5
+
+**Date:** 2026-07-03T14:12:54+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-05
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none
+
+**Reasoning:** J-05 verified end-to-end: `/performance` reached from the fourth top-bar link (rendered from `/meta/ui-routes`, single owner `app/meta.py`), ledger + champion rendered verbatim (browser-qa's live in-page 24/24 page-equals-API check; screenshot values match the raw ledger JSON capture value-for-value), founding row shows full-precision R/$/n, "insufficient sample (n < 5)" on both splits, the explicit "no prior incumbent" marker, register from the API payload, champion v1/default from the minimally-landed `GET /research/profiles`. Verify-and-complete resume worked as designed: all interrupted-dispatch claims independently reproduced (988 passed / 1 skipped, equivalence 7/7, build clean, replay J-01+J-05 green) with zero code changes. All 5 required-still-passing journeys re-verified (J-01 via the evolved 4-destination golden script, J-08 via replay, J-02/J-03/J-04 via fresh in-page API cycles + suite). MCP diff docstring-only, protected files zero-diff, COHERENCE-PASS. Passing: J-01–J-05, J-08; remaining: J-06, J-07.
+
+**Next-step recommendation:** J-06 at lean depth — register one candidate profile (additive feature key or alternate threshold set), refactor the backtest route's profile refusal to consult the registry, backtest the fixture dataset under default AND the candidate, pin pre-profile equivalence outputs. Caution: `/research/profiles` now returns 200 with a zero-candidate registry (landed minimally at J-05) — that 200 is NOT partial J-06 credit. Required-still-passing browser lane now carries three golden scripts (J-01, J-05, J-08). Then J-07 (sweep), whose promotion-gate tests must control minimum-n both ways (fixture pair arms n=1 per split).

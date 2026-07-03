@@ -15,9 +15,9 @@ Result contract (locked by ``tests/test_mcp_server.py``):
   * non-2xx — the backend's ACTUAL status and payload surfaced explicitly: ``content[0].text``
     == the response body byte-for-byte, ``content[1].text`` == ``"HTTP <status> from GET
     <path>"``, ``isError`` true. Every registered tool's endpoint has shipped (``datasets`` at
-    J-02, ``backtests`` at J-03, ``pnl_ledger`` at J-04); an allowlisted-but-missing path (e.g.
-    ``get_endpoint`` on ``/research/profiles`` before J-06) still surfaces the backend's honest
-    404 this way — never placeholder data.
+    J-02, ``backtests`` at J-03, ``pnl_ledger`` at J-04; ``/research/profiles`` — reached via
+    ``get_endpoint`` — at J-05); an allowlisted-but-UNKNOWN path (any unshipped ``/research/*``)
+    still surfaces the backend's honest 404 this way — never placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
     no offline snapshot exists anywhere in this module).

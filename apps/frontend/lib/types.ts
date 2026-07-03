@@ -884,3 +884,71 @@ export interface MarketClock {
   next_open: string | null;
   next_close: string | null;
 }
+
+// --- The PnL ledger + the profile registry (era 3, J-05) ---------------------------------------
+
+// One split's measurement inside a PnL-ledger row (GET /research/pnl/ledger — Data Contract
+// row 32). Values are the backend's stored aggregates served VERBATIM; `insufficient_sample` is
+// the backend's config-owned label marker (n < the served `min_sample_size`) — the page renders
+// it, never re-derives it.
+export interface PnlSplitMeasurement {
+  net_r: number;
+  net_usd: number;
+  n: number;
+  insufficient_sample: boolean;
+}
+
+// The two frozen splits, always SEPARATE (never pooled — no combined figure exists anywhere).
+export interface PnlSplitPair {
+  train: PnlSplitMeasurement;
+  holdout: PnlSplitMeasurement;
+}
+
+// One split's provenance stamps (read from the cited backtest report's own stored stamps).
+export interface PnlSplitProvenance {
+  backtest_id: string;
+  dataset_id: string;
+  dataset_checksum: string;
+}
+
+// One append-only ledger row. A FOUNDING row has no prior incumbent: `baseline` is explicitly
+// null (the page renders an explicit absence marker — NEVER fabricated zeros).
+export interface PnlLedgerRow {
+  enhancement_id: string;
+  title: string;
+  founding: boolean;
+  baseline: PnlSplitPair | null;
+  candidate: PnlSplitPair;
+  provenance: {
+    strategy_id: string;
+    profile: string;
+    config_fingerprint: string;
+    train: PnlSplitProvenance;
+    holdout: PnlSplitProvenance;
+  };
+  created_wall_ts: number;
+  created_utc: string;
+}
+
+// GET /research/pnl/ledger — the whole served projection: the visible simulated register (the
+// backend's ONE register constant — the page renders THIS string, never a frontend copy), the
+// config-owned label minimum, and the stored rows verbatim in append order.
+export interface PnlLedger {
+  register: string;
+  min_sample_size: number;
+  rows: PnlLedgerRow[];
+}
+
+// GET /research/profiles (Data Contract row 33) — the config-owned indicator-profile registry
+// plus the current champion pointer, served verbatim. The champion is read ONLY from here —
+// never inferred from ledger provenance, never hardcoded.
+export interface IndicatorProfile {
+  id: string;
+  frozen: boolean;
+  is_default: boolean;
+}
+
+export interface ProfilesPayload {
+  profiles: IndicatorProfile[];
+  champion: { strategy_id: string; profile: string };
+}

@@ -3,8 +3,8 @@
 The route-map module is the SINGLE owner of the list of user-facing routes: the rendered
 top-bar navigation and the MCP ``ui_route_map`` tool both read this endpoint verbatim — no
 hand-maintained duplicate list may exist anywhere else. The map lists exactly the LIVE routes
-at all times (a route ships here in the same iteration its page ships), so it MUST NOT carry
-``/performance`` until J-05 lands that page — the nav never renders a dead link.
+at all times (a route ships here in the same iteration its page ships): ``/performance``
+entered the map at J-05 together with its page — the nav never renders a dead link.
 
 Uses a lifespan-less ``TestClient`` (the existing ``test_api.py`` precedent): the meta router
 has no registry/engine dependencies, so no store injection is needed.
@@ -18,7 +18,7 @@ client = TestClient(app)
 
 
 def test_ui_routes_lists_exactly_the_live_routes():
-    """The payload is byte-stable and lists exactly the four live routes, in nav order."""
+    """The payload is byte-stable and lists exactly the five live routes, in nav order."""
     response = client.get("/meta/ui-routes")
     assert response.status_code == 200
     assert response.json() == {
@@ -27,6 +27,7 @@ def test_ui_routes_lists_exactly_the_live_routes():
             {"path": "/journal", "label": "Journal", "nav": True},
             {"path": "/journal/[id]", "label": "Journal detail", "nav": False},
             {"path": "/studies", "label": "Studies", "nav": True},
+            {"path": "/performance", "label": "Performance", "nav": True},
         ]
     }
 
@@ -41,17 +42,27 @@ def test_ui_routes_every_entry_carries_path_and_label():
         assert isinstance(entry["nav"], bool)
 
 
-def test_ui_routes_excludes_performance_until_it_exists():
-    """J-05 ships /performance WITH its nav entry; until then the map must not mention it."""
-    body = client.get("/meta/ui-routes").text
-    assert "performance" not in body.lower()
+def test_ui_routes_includes_performance_now_its_page_ships():
+    """J-05 ships /performance WITH its nav entry (page and entry land in the SAME iteration —
+    the no-dead-link rule): exactly one ``/performance`` entry, labeled Performance, nav-true."""
+    routes = client.get("/meta/ui-routes").json()["routes"]
+    performance = [r for r in routes if r["path"] == "/performance"]
+    assert len(performance) == 1
+    assert performance[0] == {"path": "/performance", "label": "Performance", "nav": True}
 
 
 def test_ui_routes_top_bar_entries_match_the_rendered_nav_set():
-    """The nav filters ``nav: true`` — exactly Cockpit / Journal / Studies today."""
+    """The nav filters ``nav: true`` — exactly Cockpit / Journal / Studies / Performance (five
+    entries in the map, four of them top-bar destinations)."""
     routes = client.get("/meta/ui-routes").json()["routes"]
     top_bar = [(r["path"], r["label"]) for r in routes if r["nav"]]
-    assert top_bar == [("/", "Cockpit"), ("/journal", "Journal"), ("/studies", "Studies")]
+    assert len(routes) == 5
+    assert top_bar == [
+        ("/", "Cockpit"),
+        ("/journal", "Journal"),
+        ("/studies", "Studies"),
+        ("/performance", "Performance"),
+    ]
 
 
 def test_ui_routes_represents_journal_detail_honestly():

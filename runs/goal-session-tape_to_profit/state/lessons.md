@@ -31,3 +31,9 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** The committed fixture dataset pair arms exactly n=1 trade per split under strategy v1's sustain/cooldown rules (train net_r −0.16, holdout net_r +0.3334, both < `pnl_min_sample_size` 5) — the iter-3 note's "n=5" figure came from a different substrate. Consequence: on the current fixtures NO candidate can ever satisfy an n ≥ 5 hold-out promotion gate, so J-07's sweep tests must control the configured minimum (both ways) or use enlarged fixture windows to exercise a real promotion; the founding row's insufficient-sample labeling also means J-05's page renders that label from day one with real data.
 **Applies to:** J-07 (promotion-gate test design on the fixture pair), J-05 (insufficient-sample rendering is live-data-exercised), any iter asserting sample-size gates against `tests/fixtures/datasets/`
+
+## iter-5 — 2026-07-03T14:12:54+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The verify-and-complete resume protocol delivered a zero-churn success: every interrupted-dispatch claim (988/1 suite, equivalence 7/7, build, 2/2 replay) reproduced independently and "no code changes — verified as-is" was the correct developer outcome — re-verification, not rebuilding, is the right posture for an uncommitted-but-complete working tree. Side effect to heed: `GET /research/profiles` now serves 200 with a zero-candidate registry (row 33 landed minimally for J-05's champion summary), so J-06's fresh-failing evidence is "registry lists no candidate", no longer a 404 — a 200 there must not be misread as J-06 progress.
+**Applies to:** any future interrupted-dispatch resume (verify first, change only what a failed check requires); the J-06 iteration's failing-baseline framing and acceptance evidence.

@@ -6,7 +6,7 @@ The rendered top-bar navigation (``apps/frontend/components/NavBar.tsx``) and th
 retired; no duplicate route list (including a frontend "fallback") may exist anywhere.
 
 The map lists exactly the LIVE routes at all times: a route is added here in the same
-iteration its page ships (J-05 adds ``/performance`` together with that page), so the nav can
+iteration its page ships (J-05 added ``/performance`` together with that page), so the nav can
 never carry a dead link. ``nav`` says whether an entry is a top-bar destination —
 ``/journal/[id]`` is a real user-facing page but is reached from the journal list, not the
 bar, so it is present with ``nav: false`` (the honest child-route representation).
@@ -26,6 +26,7 @@ UI_ROUTES: tuple[dict[str, object], ...] = (
     {"path": "/journal", "label": "Journal", "nav": True},
     {"path": "/journal/[id]", "label": "Journal detail", "nav": False},
     {"path": "/studies", "label": "Studies", "nav": True},
+    {"path": "/performance", "label": "Performance", "nav": True},
 )
 
 

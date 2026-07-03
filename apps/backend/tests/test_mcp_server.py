@@ -56,8 +56,10 @@ EXPECTED_TOOLS = (
 
 # Every registered tool's endpoint has now shipped (``datasets`` at J-02, ``backtests`` at J-03,
 # ``pnl_ledger`` at J-04 — each moved to the live byte-identity coverage below with zero MCP code
-# changes), so the honest-404 premise set is retired; the honest-404 WIRE FORM remains covered by
-# the allowlisted-but-missing ``/research/profiles`` legs (J-06 has not shipped).
+# changes), and ``/research/profiles`` (row 33, reached via ``get_endpoint``) shipped its minimal
+# serving side at J-05 — so the honest-404 premise set is retired; the honest-404 WIRE FORM stays
+# covered on a PERMANENTLY-unknown ``/research/*`` path, which no journey will ever ship.
+UNKNOWN_RESEARCH_PATH = "/research/nonexistent-path-canary"
 
 # Live 2xx no-argument tools and their canonical endpoints.
 LIVE_STATIC = {
@@ -372,15 +374,31 @@ async def test_get_endpoint_proxies_allowlisted_paths_verbatim(mcp_env):
 
 
 @pytest.mark.anyio
-async def test_get_endpoint_proxies_allowlisted_but_missing_path_404_verbatim(mcp_env):
-    """``/research/profiles`` is allowlisted but unshipped (J-06): the backend's real 404 is
-    proxied verbatim — not refused, not synthesized."""
-    result = await call_tool("get_endpoint", {"path": "/research/profiles"})
-    rest = httpx.get(f"{mcp_env}/research/profiles", timeout=5.0)
+async def test_get_endpoint_proxies_allowlisted_but_unknown_path_404_verbatim(mcp_env):
+    """An allowlisted PREFIX does not guarantee a real endpoint: a permanently-unknown
+    ``/research/*`` path surfaces the backend's real 404 verbatim — not refused, not
+    synthesized. (Relocated from ``/research/profiles`` when J-05 shipped that endpoint —
+    the honest-404 behavior itself stays covered.)"""
+    result = await call_tool("get_endpoint", {"path": UNKNOWN_RESEARCH_PATH})
+    rest = httpx.get(f"{mcp_env}{UNKNOWN_RESEARCH_PATH}", timeout=5.0)
     assert rest.status_code == 404
     assert result.isError is True
     assert result.content[0].text.encode("utf-8") == rest.content
-    assert result.content[1].text == "HTTP 404 from GET /research/profiles"
+    assert result.content[1].text == f"HTTP 404 from GET {UNKNOWN_RESEARCH_PATH}"
+
+
+@pytest.mark.anyio
+async def test_get_endpoint_profiles_byte_identical_on_the_live_200(mcp_env):
+    """J-05 flips ``/research/profiles`` from honest 404 to live data with ZERO MCP code changes
+    (the J-02/J-03/J-04 precedent, this time through ``get_endpoint`` — the blueprint routes
+    profiles through it rather than a dedicated tool): the proxied JSON is byte-identical to its
+    curl equivalent on the live 200."""
+    result = await call_tool("get_endpoint", {"path": "/research/profiles"})
+    rest = httpx.get(f"{mcp_env}/research/profiles", timeout=5.0)
+    assert rest.status_code == 200
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "profiles not byte-identical"
 
 
 @pytest.mark.anyio
@@ -477,14 +495,14 @@ async def test_stdio_session_end_to_end(watched_backend):
                 assert result.content[0].text.encode("utf-8") == rest.content
 
             # Honest 404 over the wire: verbatim payload + explicit status, isError set.
-            # (Every registered tool's endpoint has shipped as of J-04, so the honest-404 wire
-            # form is proven on the allowlisted-but-missing ``/research/profiles`` — J-06.)
-            result = await session.call_tool("get_endpoint", {"path": "/research/profiles"})
-            rest = httpx.get(f"{watched_backend}/research/profiles", timeout=5.0)
+            # (Every registered endpoint has shipped — ``/research/profiles`` at J-05 — so the
+            # honest-404 wire form is proven on a permanently-unknown ``/research/*`` path.)
+            result = await session.call_tool("get_endpoint", {"path": UNKNOWN_RESEARCH_PATH})
+            rest = httpx.get(f"{watched_backend}{UNKNOWN_RESEARCH_PATH}", timeout=5.0)
             assert rest.status_code == 404
             assert result.isError is True
             assert result.content[0].text.encode("utf-8") == rest.content
-            assert result.content[1].text == "HTTP 404 from GET /research/profiles"
+            assert result.content[1].text == f"HTTP 404 from GET {UNKNOWN_RESEARCH_PATH}"
 
             # Refusal over the wire: the SDK surfaces the raised refusal as an isError result.
             result = await session.call_tool("get_endpoint", {"path": "/health"})

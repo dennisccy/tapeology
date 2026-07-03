@@ -10,6 +10,8 @@ import type {
   JournalFilters,
   JournalRow,
   MarketClock,
+  PnlLedger,
+  ProfilesPayload,
   ResearchTaxonomy,
   Study,
   SymbolMatch,
@@ -804,5 +806,43 @@ export async function cancelStudy(studyId: string): Promise<{ ok: boolean; error
     return { ok: false, error };
   } catch {
     return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/pnl/ledger (Data Contract row 32) — the append-only PnL ledger, served VERBATIM
+// (register + min_sample_size + stored rows). On any failure the caller shows an explicit
+// unavailable state: `ledger: null` — NEVER cached or fabricated rows.
+export async function fetchPnlLedger(): Promise<{
+  ok: boolean;
+  ledger: PnlLedger | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/pnl/ledger`);
+    if (res.ok) {
+      return { ok: true, ledger: (await res.json()) as PnlLedger };
+    }
+    return { ok: false, ledger: null, error: "The PnL ledger could not be loaded." };
+  } catch {
+    return { ok: false, ledger: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/profiles (Data Contract row 33) — the profile registry + champion pointer,
+// served VERBATIM (the ONLY source of the champion — never inferred client-side). On any
+// failure the caller shows an explicit unavailable state: `profiles: null`.
+export async function fetchProfiles(): Promise<{
+  ok: boolean;
+  profiles: ProfilesPayload | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/profiles`);
+    if (res.ok) {
+      return { ok: true, profiles: (await res.json()) as ProfilesPayload };
+    }
+    return { ok: false, profiles: null, error: "The profile registry could not be loaded." };
+  } catch {
+    return { ok: false, profiles: null, error: "Backend unreachable — is the API running?" };
   }
 }

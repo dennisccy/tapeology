@@ -7,6 +7,7 @@
     {"n": 1, "journey": "J-01", "action": {"type": "goto", "url": "/"}, "expect": {"text": "Cockpit"}},
     {"n": 2, "journey": "J-01", "action": {"type": "goto", "url": "/journal"}, "expect": {"text": "Journal"}},
     {"n": 3, "journey": "J-01", "action": {"type": "goto", "url": "/studies"}, "expect": {"text": "Studies"}},
-    {"n": 4, "journey": "J-01", "action": {"type": "goto", "url": "/journal/nonexistent-test-id"}, "expect": {"text": "Journal"}}
+    {"n": 4, "journey": "J-01", "action": {"type": "goto", "url": "/performance"}, "expect": {"text": "Performance"}},
+    {"n": 5, "journey": "J-01", "action": {"type": "goto", "url": "/journal/nonexistent-test-id"}, "expect": {"text": "Journal"}}
   ]
 }
