@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "journey": "J-08",
+  "name": "The existing product is unchanged (regression sentinel)",
+  "default_timeout_ms": 15000,
+  "steps": [
+    {"n": 1, "journey": "J-08", "action": {"type": "goto", "url": "/"}, "expect": {"text": "Try: SIM-BUYER"}},
+    {"n": 2, "journey": "J-08", "action": {"type": "fill", "target": {"label": "Ticker"}, "text": "SIM-BUYER"}},
+    {"n": 3, "journey": "J-08", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Buyer Control"}},
+    {"n": 4, "journey": "J-08", "action": {"type": "click", "target": {"role": "button", "name": "Stop watching"}}},
+    {"n": 5, "journey": "J-08", "action": {"type": "fill", "target": {"label": "Ticker"}, "text": "SIM-SELLER"}},
+    {"n": 6, "journey": "J-08", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Seller Control"}},
+    {"n": 7, "journey": "J-08", "action": {"type": "click", "target": {"role": "button", "name": "Stop watching"}}},
+    {"n": 8, "journey": "J-08", "action": {"type": "goto", "url": "/journal"}, "expect": {"text": "No theses journaled yet"}},
+    {"n": 9, "journey": "J-08", "action": {"type": "goto", "url": "/studies"}, "expect": {"text": "No studies yet"}}
+  ]
+}

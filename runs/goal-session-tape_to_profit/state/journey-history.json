@@ -1,0 +1,78 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "A read-only MCP server exposes the product over the canonical API",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit-iter-0",
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-0-evidence/UT-J-01-meta-ui-routes-404.png"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Historical tape datasets persist and replay byte-identically (train/hold-out registry)",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit-iter-0",
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-0-evidence/UT-J-02-research-datasets-404.png"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Strategy grammar v1 backtests a dataset into a deterministic PnL report",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit-iter-0",
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-0-evidence/UT-J-03-research-backtests-404.png"
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Every enhancement lands one honest row in the PnL ledger",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit-iter-0",
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-0-evidence/UT-J-04-research-pnl-ledger-404.png"
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The /performance page reports PnL per enhancement honestly",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit-iter-0",
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-0-evidence/UT-J-05-performance-404.png"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Indicator profiles are versioned; the default stays byte-identical",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit-iter-0",
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-0-evidence/UT-J-06-research-profiles-404.png"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The candidate sweep survives hold-out or says so honestly",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit-iter-0",
+      "last_evidence_path": "reports/phase-goal-tape_to_profit-iter-0-ui-test-results.md"
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The existing product is unchanged (regression sentinel)",
+      "status": "already_passing",
+      "last_verified_iter": "goal-tape_to_profit-iter-0",
+      "last_passing_iter": "goal-tape_to_profit-iter-0",
+      "first_seen_iter": "goal-tape_to_profit-iter-0",
+      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-0-evidence/UT-J-08-sim-buyer-control.png"
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-07-03T02:25:50+01:00"
+}
