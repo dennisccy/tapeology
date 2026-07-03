@@ -6,3 +6,7 @@ websockets>=13.0
 # Real market-data vendor SDK (Alpaca) — pinned, cleared through the supply-chain gate and
 # allowlisted in config/install-security-policy.json. Confined to app/providers/adapters/alpaca.py.
 alpaca-py==0.43.4
+# Official Model Context Protocol SDK (Anthropic, PBC) — pinned, cleared through the supply-chain
+# gate and allowlisted in config/install-security-policy.json. Confined to app/mcp/ (the read-only
+# stdio MCP server, J-01); pure-Python install, no post-install step, no native binary.
+mcp==1.28.1

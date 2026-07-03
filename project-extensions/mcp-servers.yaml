@@ -1,16 +1,15 @@
 # Per-project MCP servers for the AI dev-chain (read by adapters/lib/translate.py).
 # Empty = inert: no .mcp.json is emitted and agent dispatch is unchanged.
 #
-# Journey J-01 fills this in once `python -m app.mcp` exists. Target shape:
-#
-# servers:
-#   tapeology:
-#     type: stdio
-#     command: apps/backend/.venv/bin/python
-#     args: ["-m", "app.mcp"]
-#     env: { TAPEOLOGY_API_BASE: "http://localhost:8000", PYTHONPATH: "apps/backend" }
-#     timeout: 30000
+# J-01: the read-only Tapeology stdio MCP server (apps/backend/app/mcp/) — thin GET proxies
+# over the canonical REST API at TAPEOLOGY_API_BASE; byte-identical JSON, no mutating tools.
 #
 # After editing, run: ./scripts/automation/sync-cli-assets.sh
 # then verify:        python3 scripts/automation/lib/mcp_sync_selftest.py self-test
-servers: {}
+servers:
+  tapeology:
+    type: stdio
+    command: apps/backend/.venv/bin/python
+    args: ["-m", "app.mcp"]
+    env: { TAPEOLOGY_API_BASE: "http://localhost:8000", PYTHONPATH: "apps/backend" }
+    timeout: 30000

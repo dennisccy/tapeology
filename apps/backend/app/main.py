@@ -29,6 +29,7 @@ from pydantic import BaseModel
 
 from .config import CONFIG
 from .env import load_env
+from .meta import router as meta_router
 from .providers.adapters import MarketDataAdapter, get_adapter
 from .providers.adapters.base import (
     NoDataForWindow,
@@ -197,6 +198,10 @@ app.add_middleware(
 # The research namespace (capability 23/24): declare + read a thesis, taxonomy. Mounted as its own
 # router; the engine snapshot endpoints above are untouched.
 app.include_router(research_router)
+
+# The meta namespace (Data Contract row 35, J-01): the canonical UI route map. The rendered nav
+# and the MCP ``ui_route_map`` tool read it — never a hand-maintained duplicate list.
+app.include_router(meta_router)
 
 
 @app.exception_handler(RealDataError)

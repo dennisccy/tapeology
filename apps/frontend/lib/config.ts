@@ -32,3 +32,10 @@ export const WATCH_REQUEST_TIMEOUT_MS = 12000;
 //     still type and Watch a full symbol; only the suggestions dropdown waits for MIN_QUERY).
 export const SYMBOL_SEARCH_DEBOUNCE_MS = 250;
 export const SYMBOL_SEARCH_MIN_QUERY = 1;
+
+// Route-map fetch backstop (J-01). The nav loads its links from GET /meta/ui-routes (the single
+// canonical route source — Data Contract row 35); if the backend HANGS rather than refusing, this
+// abort resolves the nav to its explicit degraded state instead of loading forever (a refused
+// connection already fails fast on its own). The ONE source of the value — no inline literal in
+// NavBar.tsx.
+export const UI_ROUTES_REQUEST_TIMEOUT_MS = 8000;

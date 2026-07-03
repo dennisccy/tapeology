@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "journey": "J-01",
+  "name": "A read-only MCP server exposes the product over the canonical API",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {"n": 1, "journey": "J-01", "action": {"type": "goto", "url": "/"}, "expect": {"text": "Cockpit"}},
+    {"n": 2, "journey": "J-01", "action": {"type": "goto", "url": "/journal"}, "expect": {"text": "Journal"}},
+    {"n": 3, "journey": "J-01", "action": {"type": "goto", "url": "/studies"}, "expect": {"text": "Studies"}},
+    {"n": 4, "journey": "J-01", "action": {"type": "goto", "url": "/journal/nonexistent-test-id"}, "expect": {"text": "Journal"}}
+  ]
+}
