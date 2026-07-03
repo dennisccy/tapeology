@@ -54,10 +54,10 @@ EXPECTED_TOOLS = (
     "get_endpoint",
 )
 
-# The honest-404 set: registered NOW, endpoints land at J-03/J-04 (``datasets`` shipped at
-# J-02 and moved to the live byte-identity coverage below — zero MCP code changes were needed).
+# The honest-404 set: registered NOW, the endpoint lands at J-04 (``datasets`` shipped at J-02
+# and ``backtests`` at J-03 — each moved to the live byte-identity coverage below with zero MCP
+# code changes).
 NOT_YET_SHIPPED = {
-    "backtests": "/research/backtests",
     "pnl_ledger": "/research/pnl/ledger",
 }
 
@@ -244,6 +244,48 @@ async def test_datasets_tool_byte_identical_on_a_non_empty_live_list(mcp_env):
 
 
 @pytest.mark.anyio
+async def test_backtests_tool_byte_identical_on_a_non_empty_live_list(mcp_env):
+    """J-03 flips ``backtests`` from honest 404 to live data with ZERO MCP code changes (the
+    J-02 ``datasets`` precedent): after running a backtest to a TERMINAL status (so the stored
+    row is frozen and byte comparisons cannot flap), the tool's JSON is byte-identical to its
+    curl equivalent on a NON-EMPTY 200 list."""
+    recorded = httpx.post(
+        f"{mcp_env}/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:00:30Z",
+        },
+        timeout=15.0,
+    )
+    assert recorded.status_code in (200, 409)  # 409 = already recorded by an earlier test
+    datasets = httpx.get(f"{mcp_env}/research/datasets", timeout=5.0).json()["datasets"]
+    assert len(datasets) >= 1
+    created = httpx.post(
+        f"{mcp_env}/research/backtests",
+        json={"dataset_id": datasets[0]["id"], "strategy_id": "v1", "profile": "default"},
+        timeout=15.0,
+    )
+    assert created.status_code == 200, created.text
+    backtest_id = created.json()["backtest"]["id"]
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        payload = httpx.get(f"{mcp_env}/research/backtests/{backtest_id}", timeout=5.0).json()["backtest"]
+        if payload["status"] in ("done", "failed", "cancelled"):
+            break
+        time.sleep(0.2)
+    assert payload["status"] == "done", payload.get("error")
+    result = await call_tool("backtests", {})
+    rest = httpx.get(f"{mcp_env}/research/backtests", timeout=5.0)
+    assert rest.status_code == 200
+    assert len(rest.json()["backtests"]) >= 1, "the live list must be non-empty for this proof"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "backtests not byte-identical"
+
+
+@pytest.mark.anyio
 async def test_tape_history_bar_argument_proxies_the_same_query(mcp_env):
     bar = CONFIG.history_bar_sizes[-1]
     result = await call_tool("tape_history", {"ticker": "SIM-BUYER", "bar": bar})
@@ -408,12 +450,12 @@ async def test_stdio_session_end_to_end(watched_backend):
                 assert result.content[0].text.encode("utf-8") == rest.content
 
             # Honest 404 over the wire: verbatim payload + explicit status, isError set.
-            # (``backtests`` is the not-yet-shipped example now that J-02 shipped ``datasets``.)
-            result = await session.call_tool("backtests", {})
-            rest = httpx.get(f"{watched_backend}/research/backtests", timeout=5.0)
+            # (``pnl_ledger`` is the not-yet-shipped example now that J-03 shipped ``backtests``.)
+            result = await session.call_tool("pnl_ledger", {})
+            rest = httpx.get(f"{watched_backend}/research/pnl/ledger", timeout=5.0)
             assert result.isError is True
             assert result.content[0].text.encode("utf-8") == rest.content
-            assert result.content[1].text == "HTTP 404 from GET /research/backtests"
+            assert result.content[1].text == "HTTP 404 from GET /research/pnl/ledger"
 
             # Refusal over the wire: the SDK surfaces the raised refusal as an isError result.
             result = await session.call_tool("get_endpoint", {"path": "/health"})

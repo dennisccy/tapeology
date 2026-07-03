@@ -14,6 +14,13 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+# The ONE registered strategy id (era-3 capability 3, J-03). Data Contract row 34: the complete
+# v1 strategy definition is config-owned — ``Config.strategy_definition(STRATEGY_V1_ID)`` below is
+# its single owner, read by the backtest runner and echoed verbatim into every report's
+# provenance. Any other strategy id is honestly refused (422 at the route) until a later journey
+# registers more; strategy VARIANT enumeration is J-07 sweep territory, deliberately not here.
+STRATEGY_V1_ID = "v1"
+
 
 @dataclass(frozen=True)
 class Config:
@@ -393,9 +400,14 @@ class Config:
     #            verbatim. Added by ``ALTER TABLE`` and never backfilled (a pre-v7 RESOLVED thesis keeps
     #            ``NULL`` — its excursions were never measured, so the journal detail OMITS the key
     #            rather than fabricate numbers at read).
+    #   v7 → v8: NEW ``backtests`` table (era-3 capability 4, J-03) in the payload-blob shape the
+    #            ``studies`` table proved (id, payload, created_wall_ts). Created by the migration
+    #            (``CREATE TABLE IF NOT EXISTS`` — idempotent by construction) and arriving EMPTY:
+    #            a migration never fabricates a backtest report, and no existing table or row is
+    #            touched by this step.
     # Excluded from ``config_fingerprint`` (see the exclusion set below): a migration must NOT change
     # the fingerprint — verdicts depend on classifier thresholds, never on where/how the DB is stored.
-    journal_schema_version: int = 7
+    journal_schema_version: int = 8
 
     # --- Profit-research era: HISTORICAL TAPE DATASET STORE directory (capability 1, J-02) ------
     # Where the dataset store persists explicitly recorded historical tape (one JSON file per
@@ -810,6 +822,124 @@ class Config:
     # in prose).
     sound_cue_cooldown_seconds: float = 3.0
 
+    # --- Profit-research era: STRATEGY GRAMMAR V1 + BACKTEST models (capabilities 3/4, J-03) -------
+    # RESEARCH DEFAULTS — documented starting points calibrated against the deterministic sims and
+    # the committed PG SIP fixture pair, NEVER a validated edge and NEVER fitted to make results
+    # look good (the no-ML / no-online-tuning anti-goal: these values are fixed config, enumerated
+    # here and nowhere else; nothing moves at runtime). The complete v1 strategy definition (Data
+    # Contract row 34) is ``strategy_definition`` below — a pure read of these fields plus the
+    # REUSED studies constants (``study_arm_sustain_seconds`` / ``study_arm_cooldown_seconds`` for
+    # entry arming; ``study_occurrence_r_spread_multiple`` / ``study_occurrence_r_floor`` for the
+    # R-stop's arm-instant synthetic invalidation) — no new indicator, no second copy of any
+    # existing threshold. All five values below SHAPE persisted backtest reports (which fills, at
+    # what adjusted prices, at what cost, in whose dollars), so they ENTER ``config_fingerprint``
+    # (the intended never-pool-across-fingerprints honesty shift, exactly like every prior
+    # research-config addition).
+    #
+    # TIME-HORIZON EXIT (logical seconds after entry): an open simulated trade that has hit neither
+    # its R-stop nor a state-flip exits at the first recorded event at/after this horizon.
+    # Calibrated to the LONGEST excursion horizon (excursion_horizons_seconds' 120s) so a backtest
+    # trade's lifetime matches the outermost window the excursion machinery already studies, and so
+    # the bounded sims deterministically exercise a completed horizon exit (SIM-BUYER's 24.5s arm
+    # exits at 144.5s inside the bounded stream — pinned in tests/test_backtests.py).
+    strategy_exit_horizon_seconds: float = 120.0
+    # FEE MODEL (explicit, disclosed in every report): a per-share fee with a minimum per fill —
+    # both legs of a round trip pay ``max(per_share x shares, min_per_trade)``. The $0.005/share +
+    # $1 minimum shape is the widely published US-equity per-share commission scale — a disclosed
+    # ASSUMPTION for simulated fills, never a claim about any live venue's pricing.
+    strategy_fee_per_share: float = 0.005
+    strategy_fee_min_per_trade: float = 1.0
+    # SLIPPAGE MODEL (explicit, disclosed): each fill pays this FRACTION of the recorded
+    # at-that-event spread ADVERSELY (entry worse by it, exit worse by it). 0.5 models crossing
+    # the spread from mid — the honest cost of taking liquidity at the recorded quote; a recorded
+    # moment with no usable quote (spread None/<=0) honestly contributes zero slippage rather than
+    # a fabricated cost.
+    strategy_slippage_spread_fraction: float = 0.5
+    # FIXED $-PER-R NOTIONAL (dollar conversion): every simulated trade risks exactly this many
+    # dollars per 1R (shares = dollars_per_r / R basis), so R and $ are two disclosed unit systems
+    # over the SAME measurement and a dollar figure can never appear without its R counterpart.
+    # $100/R keeps the illustrative scale small and obviously simulated.
+    strategy_dollars_per_r: float = 100.0
+    # SEEDED RANDOM-ENTRY NULL BASELINE (the report's mandatory comparison population): this many
+    # random entry instants (and per-entry random directions) drawn from the recorded seed over the
+    # SAME dataset, exiting under the SAME rules, fees, and slippage. Count mirrors
+    # ``study_null_arm_count`` (100); the seed mirrors the ``study_null_baseline_seed`` precedent —
+    # recorded verbatim in every report so the baseline reproduces exactly. Both SHAPE the persisted
+    # report, so both ENTER the fingerprint.
+    backtest_null_entry_count: int = 100
+    backtest_null_baseline_seed: int = 1729
+    # BACKTEST LIST PAGE SIZE (``GET /research/backtests``): a SERVING-ONLY value — the max number
+    # of backtest rows the list returns. EXCLUDED from ``config_fingerprint`` (see the exclusion
+    # set in ``config_fingerprint``) by the SAME iter-12 page-size precedent (``journal_list_*`` /
+    # ``study_list_max`` / ``hint_log_max``): a list page size touches NO persisted backtest value
+    # (it never changes a trade, a fill, an aggregate, a baseline, or a stamp), so two journals
+    # identical in every threshold but served at different backtest-list page sizes MUST share a
+    # fingerprint. Pinned by a fingerprint-stability test + the real-threshold counter-test
+    # (tests/test_backtests.py).
+    backtest_list_max: int = 100
+
+    def strategy_definition(self, strategy_id: str) -> dict | None:
+        """The COMPLETE config-owned strategy definition for ``strategy_id`` (Data Contract row 34).
+
+        The SINGLE owner of the v1 strategy grammar: the backtest runner READS this (never a
+        restated copy) and echoes it VERBATIM into every report's provenance. Only
+        ``STRATEGY_V1_ID`` is registered; any other id returns ``None`` (the route maps that to an
+        explicit 422 — never a silently-coerced default strategy).
+
+        v1 declares, entirely from named config values (no inline threshold anywhere):
+          * ENTRIES — the EXISTING state-native setup arming (the studies' sustained-premise rule):
+            setup type x direction over ``trend_continuation`` / ``absorption_reversal``, long and
+            short, gated by the REUSED ``study_arm_sustain_seconds`` / ``study_arm_cooldown_seconds``
+            constants. One open trade at a time (``one_open_trade``): while a simulated position is
+            open no new entry arms, and concurrent eligibility resolves in the declared setup order.
+            The two level setups (``level_break`` / ``failed_move_fade``) are NOT in v1 — they
+            require an operator-supplied hindsight level and have no state-native arming.
+          * EXITS — invalidation R-stop (the studies' arm-instant synthetic invalidation:
+            ``study_occurrence_r_spread_multiple`` x arm spread, floored at
+            ``study_occurrence_r_floor``, on the adverse side; R via the shared ``marks.r_basis``);
+            the ``strategy_exit_horizon_seconds`` time horizon; state-flip (the OPPOSING control
+            state reads — the existing state vocabulary, resolved by the runner through the studies'
+            one state-mapping helper); and the explicit deterministic ``dataset_end`` forced exit at
+            the last recorded price for a trade still open at stream end.
+          * FEE MODEL — ``strategy_fee_per_share`` with ``strategy_fee_min_per_trade`` per fill.
+          * SLIPPAGE MODEL — ``strategy_slippage_spread_fraction`` of the recorded spread, adverse
+            at each fill.
+          * DOLLAR CONVERSION — the fixed ``strategy_dollars_per_r`` notional.
+        """
+        if strategy_id != STRATEGY_V1_ID:
+            return None
+        return {
+            "strategy_id": STRATEGY_V1_ID,
+            "entries": {
+                "rule": "state_native_sustained_premise",
+                "setups": [
+                    {"setup_type": "trend_continuation", "direction": "long"},
+                    {"setup_type": "trend_continuation", "direction": "short"},
+                    {"setup_type": "absorption_reversal", "direction": "long"},
+                    {"setup_type": "absorption_reversal", "direction": "short"},
+                ],
+                "arm_sustain_seconds": self.study_arm_sustain_seconds,
+                "arm_cooldown_seconds": self.study_arm_cooldown_seconds,
+                "concurrency": "one_open_trade",
+            },
+            "exits": {
+                "r_stop": {
+                    "rule": "synthetic_invalidation_at_arm",
+                    "spread_multiple": self.study_occurrence_r_spread_multiple,
+                    "floor": self.study_occurrence_r_floor,
+                },
+                "horizon_seconds": self.strategy_exit_horizon_seconds,
+                "state_flip": {"rule": "opposing_control_state"},
+                "dataset_end": {"rule": "forced_exit_at_last_recorded_price"},
+            },
+            "fees": {
+                "per_share": self.strategy_fee_per_share,
+                "min_per_trade": self.strategy_fee_min_per_trade,
+            },
+            "slippage": {"spread_fraction": self.strategy_slippage_spread_fraction},
+            "dollars_per_r": self.strategy_dollars_per_r,
+        }
+
     def window_label(self, window: int) -> str:
         return f"{window}s"
 
@@ -927,6 +1057,18 @@ class Config:
             # journals identical in every threshold but served at different cue cooldowns MUST share a
             # fingerprint. Pinned by a fingerprint-stability test + the real-threshold counter-test.
             "sound_cue_cooldown_seconds",
+            # The backtest-list page size (era-3 capability 4 / J-03): a SERVING-ONLY value that never
+            # enters any persisted backtest computation (it touches no trade, fill, aggregate, null
+            # baseline, or stamp), so two journals identical in every threshold but served at
+            # different backtest-list page sizes MUST share a fingerprint. Same iter-12 page-size
+            # precedent (``journal_list_*`` / ``study_list_max`` / ``hint_log_max`` above). The SEVEN
+            # other new J-03 keys (``strategy_exit_horizon_seconds``, ``strategy_fee_per_share``,
+            # ``strategy_fee_min_per_trade``, ``strategy_slippage_spread_fraction``,
+            # ``strategy_dollars_per_r``, ``backtest_null_entry_count``,
+            # ``backtest_null_baseline_seed``) are DELIBERATELY NOT excluded — they shape the
+            # persisted backtest reports, so they MOVE the fingerprint (the intended
+            # never-pool-across-fingerprints honesty mechanism; the study-keys precedent).
+            "backtest_list_max",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)

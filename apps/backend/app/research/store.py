@@ -117,6 +117,12 @@ CREATE TABLE IF NOT EXISTS study_occurrences (
     payload             TEXT NOT NULL,
     FOREIGN KEY (study_id) REFERENCES studies (id)
 );
+
+CREATE TABLE IF NOT EXISTS backtests (
+    id                  TEXT PRIMARY KEY,
+    payload             TEXT NOT NULL,
+    created_wall_ts     REAL NOT NULL
+);
 """
 
 
@@ -248,6 +254,26 @@ class StudyRecord:
     the persist-once moment (first writes to that table) so both tables are populated; the canonical
     served result remains the ``studies.payload`` (one source of truth — the occurrence rows mirror it,
     never a second computation)."""
+
+    id: str
+    payload: dict
+    created_wall_ts: float
+
+
+@dataclass(frozen=True)
+class BacktestRecord:
+    """One persisted backtest row (era-3 capability 4, J-03) — read back as an immutable record.
+
+    The ``backtests`` table (added by the v7 -> v8 migration) uses the PAYLOAD-BLOB shape the
+    ``studies`` table proved: a backtest's ENTIRE served state lives in the ``payload`` JSON —
+    run-identity metadata (id, status, request echo, created timestamp) at the top level and, at
+    completion, the DETERMINISTIC ``result`` block (trades, aggregates, seeded null baseline,
+    provenance, the simulated register) nested under it, so an identical request re-run is
+    byte-identical on exactly that ``result`` unit. The backtest runner
+    (``app/research/backtests.py``) is the single owner that computes and builds the payload ONCE
+    (Data Contract row 31); the routes + the MCP ``backtests`` proxy serve it VERBATIM (never
+    recomputed at read). NO tape data is persisted here — a trade row holds fills, costs, and
+    R/$ summaries, never trades/quotes/candles (the persistence-scope anti-goal)."""
 
     id: str
     payload: dict
@@ -489,7 +515,32 @@ class JournalStore:
                 raise
             current = 7
 
-        # Future steps (current < 8, …) append here, each in its own BEGIN IMMEDIATE block.
+        # --- v7 -> v8: create the J-03 backtests table (era-3 capability 4) -----------------------
+        if current < 8:
+            self._write_conn.execute("BEGIN IMMEDIATE")
+            try:
+                # A NEW payload-blob table (the ``studies`` shape) — ``CREATE TABLE IF NOT EXISTS``
+                # is idempotent by construction, so a DB that already carries the table (only the
+                # version row is stale — e.g. the fresh-schema executescript above just created it)
+                # skips straight to bumping the version. The table arrives EMPTY and NO existing
+                # table or row is touched: a migration never fabricates a backtest report.
+                self._write_conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS backtests (
+                        id                  TEXT PRIMARY KEY,
+                        payload             TEXT NOT NULL,
+                        created_wall_ts     REAL NOT NULL
+                    )
+                    """
+                )
+                self._write_conn.execute("UPDATE schema_version SET version = 8")
+                self._write_conn.commit()
+            except Exception:
+                self._write_conn.rollback()
+                raise
+            current = 8
+
+        # Future steps (current < 9, …) append here, each in its own BEGIN IMMEDIATE block.
 
     def _read_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -1057,6 +1108,86 @@ class JournalStore:
                 (study_id,),
             ).fetchall()
             return [json.loads(r["payload"]) for r in rows]
+        finally:
+            conn.close()
+
+    # --- backtests (era-3 capability 4, J-03) — payload-blob writes to the backtests table ---------
+    def insert_backtest(self, record: BacktestRecord) -> None:
+        """Persist a NEW backtest row at CREATION (J-03): the queued payload with its identity
+        stamps (dataset/strategy/profile echo, the recorded null-baseline seed, the config
+        fingerprint). The write goes through the single writer queue (``BEGIN IMMEDIATE``), never
+        from event processing or the WS serialization path."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "INSERT INTO backtests (id, payload, created_wall_ts) VALUES (?,?,?)",
+                (record.id, json.dumps(record.payload), record.created_wall_ts),
+            )
+
+        self._do_write(_fn)
+
+    def update_backtest_payload(self, backtest_id: str, payload: dict) -> None:
+        """Replace a backtest's served payload (J-03). Used for the running-status flip and the
+        throttled progress heartbeat — cheap, infrequent status writes, NOT a hot path. The FINAL
+        result lands ONCE via :meth:`set_backtest_result`."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE backtests SET payload=? WHERE id=?",
+                (json.dumps(payload), backtest_id),
+            )
+
+        self._do_write(_fn)
+
+    def set_backtest_result(self, backtest_id: str, payload: dict) -> None:
+        """Persist a backtest's FINAL payload ONCE at its defining moment (J-03, Data Contract
+        row 31): the terminal status plus — for ``done`` — the complete deterministic ``result``
+        block computed once by the runner. One ``BEGIN IMMEDIATE`` writer transaction; the routes
+        and the MCP proxy serve this stored row VERBATIM ever after (no recomputation on read)."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "UPDATE backtests SET payload=? WHERE id=?",
+                (json.dumps(payload), backtest_id),
+            )
+
+        self._do_write(_fn)
+
+    def get_backtest(self, backtest_id: str) -> BacktestRecord | None:
+        """One backtest read back as an immutable record (the served projection is its payload)."""
+        conn = self._read_conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM backtests WHERE id=?", (backtest_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            return BacktestRecord(
+                id=row["id"],
+                payload=json.loads(row["payload"]),
+                created_wall_ts=row["created_wall_ts"],
+            )
+        finally:
+            conn.close()
+
+    def list_backtests(self, *, limit: int) -> list[BacktestRecord]:
+        """Backtests most-recent-first, capped at ``limit`` (the serving-only
+        ``backtest_list_max``). Read VERBATIM — the list route renders each record's payload
+        directly (never recomputed)."""
+        conn = self._read_conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM backtests ORDER BY created_wall_ts DESC, id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [
+                BacktestRecord(
+                    id=r["id"],
+                    payload=json.loads(r["payload"]),
+                    created_wall_ts=r["created_wall_ts"],
+                )
+                for r in rows
+            ]
         finally:
             conn.close()
 

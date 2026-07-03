@@ -161,18 +161,18 @@ TOOLS: tuple[types.Tool, ...] = (
     types.Tool(
         name="datasets",
         description=(
-            "Read-only proxy of GET /research/datasets — recorded historical tape datasets. "
-            "404 until J-02 ships the dataset store; the honest backend status is surfaced, "
-            "never placeholder data."
+            "Read-only proxy of GET /research/datasets — recorded historical tape dataset "
+            "metadata (checksum-verified on every load, with explicit integrity errors) JSON, "
+            "verbatim."
         ),
         inputSchema=_object_schema({}),
     ),
     types.Tool(
         name="backtests",
         description=(
-            "Read-only proxy of GET /research/backtests — backtest reports. 404 until J-03 "
-            "ships the backtest engine; the honest backend status is surfaced, never "
-            "placeholder data."
+            "Read-only proxy of GET /research/backtests — deterministic backtest PnL reports "
+            "(simulated fills against recorded tape; net/gross R and $ beside a seeded null "
+            "baseline) JSON, verbatim."
         ),
         inputSchema=_object_schema({}),
     ),

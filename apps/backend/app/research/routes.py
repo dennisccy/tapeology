@@ -26,9 +26,14 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..config import CONFIG, Config
+from ..config import CONFIG, Config, STRATEGY_V1_ID
 from ..providers.adapters.base import NoDataForWindow, SymbolNotTradable, VendorTimeout
 from .analytics import compute_analytics
+from .backtests import (
+    BacktestJobManager,
+    PROFILE_DEFAULT,
+    TERMINAL_STATUSES as BACKTEST_TERMINAL_STATUSES,
+)
 from .datasets import (
     VALID_SOURCE_KINDS as DATASET_SOURCE_KINDS,
     VALID_SPLITS,
@@ -141,6 +146,19 @@ class StudyRequest(BaseModel):
     null_baseline_seed: int | None = None
 
 
+class BacktestRequest(BaseModel):
+    """Body for ``POST /research/backtests`` (era-3 capability 4, J-03) — exactly the Product
+    Shape's three fields: the dataset id, the strategy id, and the profile. ``profile`` defaults
+    to ``default`` (the only registrable value until J-06 ships the profile registry); the
+    strategy/profile/dataset validation is enforced in the ROUTE (not the schema) so every
+    refusal is explicit — never silent coercion. A missing/mis-typed field is a 422 at the
+    schema layer before the route runs (the malformed-body case)."""
+
+    dataset_id: str
+    strategy_id: str
+    profile: str = PROFILE_DEFAULT
+
+
 class DatasetRecordRequest(BaseModel):
     """Body for ``POST /research/datasets`` (era-3 capability 1, J-02) — the explicit record +
     register research action. ``source_kind`` (``reference`` | ``historical``; datasets are
@@ -187,6 +205,10 @@ class ResearchRegistry:
         # SAME single writer queue. One per registry (a backend restart loses in-flight jobs — a study
         # left ``running`` from a prior process is surfaced honestly, never silently completed).
         self._study_jobs = StudyJobManager(store, config)
+        # The backtest background-job manager (era-3 capability 4, J-03) — the StudyJobManager
+        # pattern verbatim: cancellable worker threads OFF the event loop, persistence through the
+        # SAME single writer queue, in-flight jobs honestly lost on restart (never silently done).
+        self._backtest_jobs = BacktestJobManager(store, config)
 
     @property
     def store(self) -> JournalStore:
@@ -195,6 +217,10 @@ class ResearchRegistry:
     @property
     def study_jobs(self) -> StudyJobManager:
         return self._study_jobs
+
+    @property
+    def backtest_jobs(self) -> BacktestJobManager:
+        return self._backtest_jobs
 
     @property
     def config(self) -> Config:
@@ -1465,3 +1491,95 @@ def get_dataset(dataset_id: str, store: DatasetStore = Depends(get_dataset_store
     except DatasetIntegrityError as exc:
         raise HTTPException(status_code=500, detail=f"dataset integrity check failed: {exc}")
     return {"dataset": meta}
+
+
+# --- Deterministic backtests (era-3 capability 4, J-03) --------------------------------------------
+# Exactly FOUR routes (Product Shape): create+start, list, detail, cancel — mirroring studies.
+# The backtest runner (app/research/backtests.py) is Data Contract row 31's single computer; these
+# routes serve its persisted payloads VERBATIM (never recomputed at read; the MCP ``backtests``
+# tool proxies the list byte-identically). Validation is honest and distinct: unknown dataset id
+# -> 404-style refusal; unknown strategy id -> 422 (only the registered v1 exists); a profile
+# other than ``default`` -> 422 (the profile registry is J-06 — until it ships, ``default`` is the
+# only registrable value); malformed body -> 422 at the schema layer.
+
+
+@router.post("/backtests")
+def create_backtest(
+    body: BacktestRequest,
+    registry: ResearchRegistry = Depends(get_registry),
+    store: DatasetStore = Depends(get_dataset_store),
+) -> dict:
+    """Create + START a deterministic backtest job (J-03): the config-owned strategy v1 over one
+    registered dataset under the ``default`` profile. On success the job is persisted ``queued``
+    with its identity stamps (request echo, recorded null-baseline seed, config fingerprint) and
+    started as a cancellable background job; the queued payload is returned. Nothing is persisted
+    on any rejection."""
+    # 422 — only the registered strategy exists (never a silently-coerced default strategy).
+    if registry.config.strategy_definition(body.strategy_id) is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown strategy_id '{body.strategy_id}' — the registered strategy is '{STRATEGY_V1_ID}'",
+        )
+    # 422 — ``default`` is the only registrable profile until J-06 ships the profile registry.
+    if body.profile != PROFILE_DEFAULT:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"unknown profile '{body.profile}' — '{PROFILE_DEFAULT}' is the only registered "
+                f"profile (the candidate-profile registry is a later journey)"
+            ),
+        )
+    # 404-style — the dataset must exist (a checksum-verified load; never a fabricated dataset).
+    try:
+        store.get(body.dataset_id)
+    except DatasetNotFound:
+        raise HTTPException(status_code=404, detail=f"no dataset with id '{body.dataset_id}'")
+    except DatasetIntegrityError as exc:
+        raise HTTPException(status_code=500, detail=f"dataset integrity check failed: {exc}")
+
+    jobs = registry.backtest_jobs
+    payload = jobs.create(
+        {"dataset_id": body.dataset_id, "strategy_id": body.strategy_id, "profile": body.profile}
+    )
+    jobs.start(payload["id"], dataset_store=store)
+    return {"backtest": payload}
+
+
+@router.get("/backtests")
+def list_backtests(registry: ResearchRegistry = Depends(get_registry)) -> dict:
+    """List backtests most-recent-first (capped at the serving-only ``backtest_list_max``).
+    Each row is the runner's persisted payload, served VERBATIM (never recomputed). The MCP
+    ``backtests`` tool proxies this byte-for-byte."""
+    records = registry.store.list_backtests(limit=registry.config.backtest_list_max)
+    return {"backtests": [r.payload for r in records]}
+
+
+@router.get("/backtests/{backtest_id}")
+def get_backtest(
+    backtest_id: str, registry: ResearchRegistry = Depends(get_registry)
+) -> dict:
+    """One backtest's status + stored report, served VERBATIM. 404 for an unknown id."""
+    record = registry.store.get_backtest(backtest_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"no backtest with id '{backtest_id}'")
+    return {"backtest": record.payload}
+
+
+@router.post("/backtests/{backtest_id}/cancel")
+def cancel_backtest(
+    backtest_id: str, registry: ResearchRegistry = Depends(get_registry)
+) -> dict:
+    """Cancel a running/queued backtest (J-03, mirroring studies). 404 unknown id; 409 if the
+    backtest is already terminal (done / cancelled / failed). Cancellation is cooperative — the
+    running job observes it between events and resolves to explicit ``cancelled`` WITHOUT a
+    result block (a partially computed simulated PnL is never served)."""
+    record = registry.store.get_backtest(backtest_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"no backtest with id '{backtest_id}'")
+    status = record.payload.get("status")
+    if status in BACKTEST_TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=409, detail=f"backtest '{backtest_id}' is already {status} — cannot cancel"
+        )
+    registry.backtest_jobs.cancel(backtest_id)
+    return {"backtest_id": backtest_id, "cancelling": True}

@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>goal-tape_to_profit-iter-3 — Iteration Summary</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0; padding: 0; color: #1f2328; background: #f6f8fa; line-height: 1.5;
+}
+.container { max-width: 880px; margin: 0 auto; padding: 24px 16px 80px; }
+.hero {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 28px; margin-bottom: 16px; text-align: center;
+}
+.hero.pass { border-top: 6px solid #1a7f37; }
+.hero.fail { border-top: 6px solid #cf222e; }
+.hero.inprogress { border-top: 6px solid #d4a72c; }
+.hero h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+.hero h2 { margin: 0 0 14px 0; font-size: 1rem; color: #57606a; font-weight: 500; }
+.badge-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.95rem;
+}
+.badge.pass { background: #dafbe1; color: #1a7f37; }
+.badge.fail { background: #ffebe9; color: #cf222e; }
+.badge.inprogress { background: #fff8c5; color: #9a6700; }
+.signal-badge { padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; }
+.signal-badge.improving { background: #dafbe1; color: #1a7f37; }
+.signal-badge.holding { background: #ddf4ff; color: #0969da; }
+.signal-badge.stalling { background: #fff8c5; color: #9a6700; }
+.signal-badge.regressing { background: #ffebe9; color: #cf222e; }
+.signal-badge.na { background: #f6f8fa; color: #57606a; }
+.meta { color: #57606a; font-size: 0.875rem; margin: 10px 0 16px; }
+.journey-row {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 4px;
+}
+.journey-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 0.85rem;
+  background: #f6f8fa; border: 1px solid #d0d7de;
+}
+.journey-pill.passing, .journey-pill.already_passing { background: #dafbe1; color: #1a7f37; border-color: #b4e2c0; }
+.journey-pill.failing, .journey-pill.regressed { background: #ffebe9; color: #cf222e; border-color: #f1aeb0; }
+.journey-pill.partial { background: #fff8c5; color: #9a6700; border-color: #eed888; }
+.journey-pill.unknown { background: #f6f8fa; color: #57606a; }
+.hero-image { margin-top: 18px; }
+.hero-image img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+details {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  margin-bottom: 12px;
+}
+details > summary {
+  cursor: pointer; padding: 14px 18px; font-weight: 600; font-size: 1.05rem;
+  list-style: none; user-select: none; display: flex; align-items: center; gap: 8px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: '▶'; transition: transform 0.15s; font-size: 0.75rem; color: #57606a;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+.accordion-body { padding: 0 18px 18px; }
+.accordion-body h3 { font-size: 0.95rem; color: #57606a; margin: 16px 0 6px; }
+.why-text { background: #f6f8fa; padding: 10px 12px; border-radius: 6px; margin: 4px 0 12px; }
+ul.bullets { margin: 6px 0 14px; padding-left: 22px; }
+ul.bullets li { margin-bottom: 4px; }
+ol.steps { padding-left: 0; list-style: none; counter-reset: step; }
+ol.steps > li {
+  counter-increment: step; padding: 12px 0 12px 44px;
+  border-top: 1px solid #eaeef2; position: relative;
+}
+ol.steps > li:first-child { border-top: none; }
+ol.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 14px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #0969da; color: white; display: flex;
+  align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600;
+}
+.step-shot { margin-top: 10px; }
+.step-shot img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+.next-step-box {
+  background: #ddf4ff; padding: 12px 16px; border-radius: 6px;
+  border-left: 4px solid #0969da; margin: 12px 0;
+}
+.drill-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.drill-table th, .drill-table td {
+  text-align: left; padding: 8px 6px; border-bottom: 1px solid #eaeef2;
+}
+.drill-table th { background: #f6f8fa; }
+.verdict-cell.PASS, .verdict-cell.CLOSURE-PASS, .verdict-cell.GOAL_ACHIEVED { color: #1a7f37; font-weight: 600; }
+.verdict-cell.FAIL, .verdict-cell.CLOSURE-FAIL, .verdict-cell.REGRESSION { color: #cf222e; font-weight: 600; }
+.verdict-cell.CONTINUE, .verdict-cell.ESCALATE, .verdict-cell.STALLED { color: #9a6700; font-weight: 600; }
+.verdict-cell.SKIPPED, .verdict-cell.UNKNOWN, .verdict-cell.IN-PROGRESS { color: #57606a; }
+.footer-note { text-align: center; color: #6e7781; font-size: 0.8rem; margin-top: 24px; }
+.iter-card {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 16px 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 14px;
+}
+.iter-card .left { flex-shrink: 0; }
+.iter-card .body { flex: 1 1 auto; }
+.iter-card .body .title { font-weight: 600; }
+.iter-card .body .sub { color: #57606a; font-size: 0.88rem; margin-top: 2px; }
+.iter-card a.open { color: #0969da; text-decoration: none; font-weight: 500; }
+.iter-card a.open:hover { text-decoration: underline; }
+.matrix { width: 100%; border-collapse: collapse; margin: 12px 0 22px; font-size: 0.88rem; }
+.matrix th, .matrix td { padding: 6px 8px; border: 1px solid #d0d7de; text-align: center; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix .cell-passing, .matrix .cell-already_passing { background: #dafbe1; color: #1a7f37; }
+.matrix .cell-failing, .matrix .cell-regressed { background: #ffebe9; color: #cf222e; }
+.matrix .cell-partial { background: #fff8c5; color: #9a6700; }
+.matrix .cell-unknown { background: #f6f8fa; color: #57606a; }
+.no-summary {
+  background: #fff8c5; border: 1px solid #eed888; padding: 14px 18px;
+  border-radius: 8px; color: #9a6700; margin-bottom: 14px;
+}
+/* Plain-language layer — the primary, non-technical view. */
+.plain-words {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 24px; margin: 18px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.plain-words .pw-heading {
+  margin: 0 0 14px; font-size: 1.15rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.pw-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.pw-card {
+  background: white; border-radius: 8px; padding: 14px 16px;
+  border: 1px solid #e3eaf3;
+}
+.pw-card .pw-label {
+  font-size: 0.78rem; font-weight: 600; color: #57606a;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.pw-card .pw-text {
+  margin: 0; font-size: 1rem; color: #1f2328; line-height: 1.45;
+}
+.pw-empty { color: #8c959f; font-style: italic; font-size: 0.95rem; }
+.tech-divider {
+  margin: 18px 0 8px; text-align: center;
+  color: #6e7781; font-size: 0.82rem; font-style: italic;
+  border-top: 1px dashed #d0d7de; padding-top: 12px;
+}
+/* Watch-it-work — narrated screenshot gallery from demo-narrator. */
+.watch-it-work {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 18px 22px; margin: 10px 0 6px;
+}
+.wiw-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.wiw-heading {
+  margin: 0; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.demo-badge {
+  font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 12px;
+  border: 1px solid transparent; letter-spacing: 0.04em;
+}
+.demo-badge.demo-recorded { background: #dafbe1; color: #1a7f37; border-color: #aceebb; }
+.demo-badge.demo-notes    { background: #fff8c5; color: #9a6700; border-color: #e8d97e; }
+.demo-badge.demo-skipped  { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+.demo-badge.demo-pending  { background: #ddf4ff; color: #0969da; border-color: #b6e3ff; }
+.demo-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.demo-step {
+  margin: 0; padding: 12px; background: #f6f8fa;
+  border: 1px solid #d0d7de; border-radius: 8px;
+}
+.demo-step-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.demo-step-num {
+  font-weight: 600; color: #57606a; font-variant-numeric: tabular-nums;
+}
+.demo-step-title { color: #1f2328; font-weight: 500; }
+.demo-new {
+  background: #ddf4ff; color: #0969da; font-size: 0.7rem; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px; letter-spacing: 0.06em;
+}
+.demo-shot { margin-bottom: 8px; }
+.demo-shot img {
+  width: 100%; height: auto; border-radius: 4px; border: 1px solid #d0d7de;
+  display: block;
+}
+.demo-narration {
+  margin: 0; color: #1f2328; font-size: 0.92rem; line-height: 1.4;
+}
+.demo-empty {
+  margin: 8px 0 0; color: #57606a; font-style: italic;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.demo-notes-wrap { margin-top: 14px; }
+.demo-notes-wrap summary {
+  cursor: pointer; color: #9a6700; font-weight: 500; font-size: 0.9rem;
+}
+.demo-notes-wrap[open] summary { margin-bottom: 6px; }
+/* Story so far + latest demo (session index plain-language top). */
+.story-so-far {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 14px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.story-heading {
+  margin: 0 0 12px; font-size: 1.1rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.story-body { font-size: 1rem; color: #1f2328; line-height: 1.55; }
+.story-body .story-h { margin: 14px 0 6px; color: #1f2328; }
+.story-body p { margin: 0 0 10px; }
+.session-demo {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 0; margin: 8px 0 6px; overflow: hidden;
+}
+.session-demo-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 22px;
+  background: #f6f8fa; border-bottom: 1px solid #d6e4f0;
+  font-weight: 600; color: #1f2328; font-size: 0.95rem;
+}
+.session-demo-head a.open { color: #0969da; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+.session-demo-head a.open:hover { text-decoration: underline; }
+.session-demo .watch-it-work {
+  border: none; border-radius: 0; box-shadow: none; margin: 0;
+}
+/* Delivered link banner — sits on the session index when GOAL_ACHIEVED. */
+.delivered-link {
+  margin: 14px 0; padding: 14px 22px;
+  background: #dafbe1; border: 1px solid #aceebb; border-radius: 10px;
+  color: #1a7f37; font-size: 1rem;
+}
+.delivered-link a {
+  color: #1a7f37; font-weight: 600; text-decoration: none; margin-left: 8px;
+}
+.delivered-link a:hover { text-decoration: underline; }
+.delivered-back {
+  margin: 8px 0 14px; padding: 0; font-size: 0.9rem;
+}
+.delivered-back a { color: #0969da; text-decoration: none; }
+.delivered-back a:hover { text-decoration: underline; }
+.delivered-body {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 28px; margin: 12px 0;
+}
+.delivered-body h2.story-h { margin-top: 0; }
+/* Feature manual (session index, top of page). */
+.cover-vision {
+  margin: 8px 0 14px; color: #57606a; font-size: 1.02rem;
+  font-style: italic; max-width: 60ch;
+}
+.feature-toc {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 20px 26px; margin: 14px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.feature-toc-heading {
+  margin: 0 0 14px; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.feature-toc-list {
+  margin: 0; padding-left: 22px; font-size: 1rem; line-height: 1.7;
+}
+.feature-toc-list li { padding: 2px 0; }
+.feature-toc-list a {
+  color: #1f2328; text-decoration: none; font-weight: 500;
+}
+.feature-toc-list a:hover { color: #0969da; text-decoration: underline; }
+.toc-extra-header {
+  list-style: none; margin: 10px 0 4px -22px;
+  font-size: 0.82rem; color: #57606a; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.feature-manual { margin: 14px 0; }
+.feature-section {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 16px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+  scroll-margin-top: 12px;
+}
+.feature-heading {
+  margin: 0 0 10px; font-size: 1.2rem; color: #1f2328;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.feature-description {
+  margin: 0 0 16px; color: #1f2328; font-size: 1rem; line-height: 1.55;
+}
+.feature-description-label {
+  font-weight: 600; color: #57606a; margin-right: 4px;
+}
+.feature-note {
+  margin: 8px 0 12px; padding: 8px 12px;
+  background: #fff8c5; border: 1px solid #eed888; border-radius: 6px;
+  color: #9a6700; font-size: 0.88rem;
+}
+.feature-source {
+  margin: 12px 0 0; font-size: 0.88rem; color: #57606a;
+}
+.feature-source a { color: #0969da; text-decoration: none; }
+.feature-source a:hover { text-decoration: underline; }
+.feature-empty {
+  margin: 10px 0; padding: 12px 16px;
+  background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+  color: #57606a; font-style: italic;
+}
+.status-pill {
+  font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+  letter-spacing: 0.04em; white-space: nowrap; display: inline-block;
+}
+.status-pill-passing { background: #dafbe1; color: #1a7f37; border: 1px solid #aceebb; }
+.status-pill-failing { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-regressed { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-partial { background: #fff8c5; color: #9a6700; border: 1px solid #e8d97e; }
+.status-pill-unknown { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.status-pill-coming-soon { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.developer-view {
+  margin: 28px 0 6px;
+  border: 1px dashed #d0d7de; border-radius: 8px;
+}
+.developer-view > summary {
+  cursor: pointer; padding: 12px 16px;
+  color: #57606a; font-size: 0.92rem; font-weight: 500;
+  background: #f6f8fa; border-radius: 8px;
+}
+.developer-view[open] > summary {
+  border-bottom: 1px dashed #d0d7de;
+  border-radius: 8px 8px 0 0;
+}
+.developer-view-body { padding: 12px 18px; }
+</style>
+</head><body><div class='container'>
+<section class='hero inprogress'><div class='badge-row'><div class='badge inprogress'><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+<circle cx="12" cy="12" r="11" fill="#d4a72c"/>
+<path d="M12 6v6l4 2.5" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg><span>CONTINUE</span></div><span class='signal-badge improving'>Direction: improving</span></div><h1>Iteration 3  ·  session tape_to_profit</h1><h2>J-03 ships: strategy grammar v1 + deterministic backtest engine (product&#x27;s first PnL measurement machinery)</h2><div class='meta'>2026-07-03 · goal-lean</div><div class='meta'>Journeys: 4/8 passing</div><div class='journey-row'><span class='journey-pill passing' title='A read-only MCP server exposes the product over the canonical API'>J-01 · passing</span><span class='journey-pill passing' title='Historical tape datasets persist and replay byte-identically (train/hold-out registry)'>J-02 · passing</span><span class='journey-pill passing' title='Strategy grammar v1 backtests a dataset into a deterministic PnL report'>J-03 · passing</span><span class='journey-pill failing' title='Every enhancement lands one honest row in the PnL ledger'>J-04 · failing</span><span class='journey-pill failing' title='The /performance page reports PnL per enhancement honestly'>J-05 · failing</span><span class='journey-pill failing' title='Indicator profiles are versioned; the default stays byte-identical'>J-06 · failing</span><span class='journey-pill failing' title='The candidate sweep survives hold-out or says so honestly'>J-07 · failing</span><span class='journey-pill passing' title='The existing product is unchanged (regression sentinel)'>J-08 · passing</span></div><div class='hero-image'><img src='data:image/png;base64,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nLqNvoSibOsde++++xef2bopHW7BI4gNS/992ef79evbeezc+Z5kBAAAAKAFrZufSrv18X86dNuVM+8Zent13UbnGuY+fu1la36644rJG1+08u1n77597B/mF21uvfnrg0cP3LfXbdXV08eOmr729KwxN3Q5oP8pPXeqKKbX9f3mEbuvfOaMS8c8vrjp1Pwx0zeap3S7A0Y+0L/bjEtOWBvsPk5ZrwOP6N9q8iWXXzd+VkPxyvWj+x1w8yH79rq3elZpWWnTn47bbbd121lzZz33dNGysiatyjrtsH1FedmsuZOf23Ciftb40bPW/DTmig9ds2D80F3HF1usbsqt1zx6wI03/es/jHrijMOGjp0r3AEAAADw0bYqGuaPPWmvr333x89+YdCQwzdvAejq95YtW/PU3aqGFe8tK/lip7Km9Ndt0LBbJ0yd0bzsdNHzP+9fWVbauijatN26U6di+ZJ3P6pQlXToPXCXoijftd/fdW7xc9u279SpfeUhV09a1Lym9c15j/yv3tt26tK+rGh45Z4Lfjp24VfOun/KvNqFU5s3Zm3TwjwNs8ZdOvzO17oc/0+TZi+qfeXhYft9eltClPX89jEHlT4+4rCv7fV9wQ4AAACAFqx5n92quvkvVf3LvxdddunaYvNar1X7Ttu1ba5sbcq27vTFYtmSd/9v5cAzR568y8IxZx+4a9eOOwz48eS312SpVSveXbKk6LjjTlt/RJRrfPvZi48+4qRfLjnkwitO6NNCtVvx3pIlb8+553u7dnzf35/z3NvNd159/6ihh3y194Djrny+dNCp53yza4v1r27W+MtOP+zvezU1ygff2/3kc4/azC1it1zF/9itZ7HwhUnV8+sKAAAAAGjB+j0oVhXFyqK0VelmXVS6bf/vHN6roijb5Zvf3aNs5rNV8/9YlJYWy16f9vt/mbW4oaLvNw/oXbG2nTVU/27cS60GDjlh4JrdISr3P2HI/juun+fPxcrlNc9de8H1s3c7/9JhG/amqHtnycovdPnyThXrxzXMenrctNJB55wyqHtzYiur6DNo8H7NjwSWdes/6MC+TR9VN3/6i3OXLGs6suEmV7z71jtFp547d3+/ypVV9hs0qF/TjTTMn/nq3MWNxcbjP85faw+K1qXNX/GqAgAAAABa9v6+sSuLDTtSbMqf3p5XHPHAvNpFvz2r/YTh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' alt='Hero screenshot'></div></section>
+<section class='plain-words'><h2 class='pw-heading'>In plain words</h2><div class='pw-grid'><div class='pw-card'><div class='pw-label'>What you can do now</div><p class='pw-text'>Type in a stock ticker (or use a built-in demo ticker) and watch Tapeology read live trade-by-trade activity, showing moment to moment whether buyers or sellers are in control. Write trading ideas into a journal and revisit them later, and run replay studies against past market activity. The product can permanently store slices of historical market data — checked for tampering on every read and locked forever as &quot;practice&quot; or &quot;final exam&quot; data once saved — and it can now run a defined trading strategy against that saved data to get back an honest report on whether the strategy would have made or lost money, always shown next to a fair random-guessing comparison. Other software tools, including AI assistants, can connect directly to read all of this information.</p></div><div class='pw-card'><div class='pw-label'>What changed this time</div><p class='pw-text'>This round added the actual profit-testing engine. You can now take historical data saved in earlier rounds, run a trading strategy against it, and get back a detailed, honest report — how many trades it made, how many won, the overall result — with a random-guessing comparison shown alongside every number so results can&#x27;t be dressed up to look better than they are. Running the exact same test twice was proven to give back the exact same result. This is working behind the scenes for now, reachable by the tools built in earlier rounds — there&#x27;s no new screen to look at yet.</p></div><div class='pw-card'><div class='pw-label'>What&#x27;s next</div><p class='pw-text'>Next, the product will start keeping a permanent scoreboard — a running record of the honest profit-or-loss result of every new trading idea as it&#x27;s tried, so results build up over time instead of disappearing after each test.</p></div></div></section>
+<section class='watch-it-work'><div class='wiw-head'><h2 class='wiw-heading'>Watch it work</h2><span class='demo-badge demo-skipped'>SKIPPED</span></div><p class='demo-empty'>Backend-only iteration (Frontend Present: no). No browser walkthrough was performed.</p></section>
+<div class='tech-divider'><span>Technical detail below — open if you want the developer view.</span></div>
+<details><summary>What was done</summary><div class='accordion-body'><ul class='bullets'><li>Added a config-owned strategy grammar v1 (`Config.strategy_definition`) reusing the existing state-native entry-arming rules — no new indicators or inline thresholds</li><li>Built the deterministic, seeded backtest runner (`app/research/backtests.py`) and a cancellable `BacktestJobManager` mirroring the studies job pattern; identical requests reproduce byte-identical results</li><li>Added four REST routes (create/list/detail/cancel) on the existing research router with an honest 404/422/409 validation matrix, serving stored rows verbatim</li><li>Added the `backtests` table via a proven v7→v8 schema migration tested against a committed old-schema fixture; rows survive store reload</li><li>Added a signal-bearing repo-wide no-broker/order/account grep test, proven non-vacuous against a seeded counter-example</li><li>Flipped the MCP `backtests` tool from honest 404 to live data with a surgical two-string description-only diff — zero proxy-logic changes</li><li>Grew the backend suite from 901 to 951 passed / 1 skipped (+50 tests, none deleted); engine-equivalence suite still 7/7</li><li>Verified 1 target journey (J-03) passes browser QA; re-verified J-01, J-02, J-08 all still passing with explicit evidence rows</li></ul></div></details>
+<details><summary>What's left + Next step</summary><div class='accordion-body'><h3>Still open</h3><ul class='bullets'><li>Journey J-04 (Every enhancement lands one honest row in the PnL ledger) failing — next target</li><li>Journey J-05 (The /performance page reports PnL per enhancement honestly) failing</li><li>Journey J-06 (Indicator profiles are versioned; the default stays byte-identical) failing</li><li>Journey J-07 (The candidate sweep survives hold-out or says so honestly) failing</li><li>Environment: `/tmp` per-user tmpfs quota pinned by ~4.5G of accumulated pytest basetemp dirs — destabilizes Playwright/Chrome browser lanes; evaluator was permission-denied to clear it, carried forward as an operator must-fix</li><li>Known limitation: the null baseline can honestly serve fewer than the configured draw count when a seeded draw lands before the first recorded price (documented behavior, not a defect)</li></ul><h3>Next step</h3><div class='next-step-box'>Iter-4 targets J-04 (the append-only PnL ledger) at lean depth — the next link in the J-02→J-03→J-04→J-05 chain: the founding baseline row evaluates strategy v1 on profile `default` over the committed fixture train AND hold-out datasets using this iteration&#x27;s backtest reports, exposed at `GET /research/pnl/ledger` plus the pure-rendered `reports/pnl/pnl-history.md`; the MCP `pnl_ledger` tool flips from its last remaining honest 404. Environment must-fix to carry into iter-4: clear `/tmp/pytest-of-dennis-chan` (~4.5G, pinning the per-user tmpfs quota) or route pytest basetemp off tmpfs — otherwise browser lanes and large suite runs stay flaky.</div></div></details>
+<details><summary>Direction signal</summary><div class='accordion-body'><div class='why-text'><strong>Why:</strong> J-03 (strategy grammar v1 + deterministic backtest engine) moved from failing to passing this iteration, independently cross-checked by the evaluator via a full suite re-run, direct inspection of all three J-03 screenshots, and three separate byte-identity proofs. J-01, J-02, and J-08 were all re-verified passing with explicit evidence rows and no regressions or anti-goal violations were found. Three of the last four iterations have each landed exactly one newly-passing journey, and the evaluator&#x27;s next-step recommendation (J-04, the PnL ledger) is concrete and already unblocked.</div><h3>Trend</h3><ul class='bullets'><li>Newly passing this iter: J-03</li><li>Newly passing in last 4 iters total: J-01 (iter-1), J-02 (iter-2), J-03 (iter-3)</li><li>Regressions in last 4 iters: none</li><li>Anti-goal violations in last 4 iters: none</li><li>Iters with no journey state change: 1 of last 4 (iteration 0, baseline verification)</li></ul><h3>Latest evaluator reasoning</h3><div class='why-text'>J-03 passes on independently cross-checked evidence: full suite re-run green by this evaluator (952 collected — 951 passed / 1 skipped, exact match to dev + reviewer; +50 tests over iter-2, none deleted), the 42 new backtest/API/no-broker tests green, and all three J-03 screenshots inspected — the 404→200 flip, a done report carrying per-trade fills/fees/slippage, aggregates (net/gross R AND $, win rate 0.2, max drawdown, n=5), seeded null baseline (seed 1729, entry_count 100), full verbatim provenance, and the exact register string, plus honest 404/422 error legs. Byte-identity verified three ways (QA&#x27;s two independent POSTs → identical 59,157-char result blocks; dev&#x27;s live 59,844-byte re-POST; the API-level test). J-01/J-02/J-08 all re-verified with explicit result rows (replay lane crashed, browser-qa ran the fallback legs per the iter-1 lesson).</div></div></details>
+<details><summary>Artifacts</summary><div class='accordion-body'><table class='drill-table'><thead><tr><th>Report</th><th>Verdict</th><th>Path</th></tr></thead><tbody><tr><td>Iter spec</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/phases/goal-tape_to_profit-iter-3.md'>docs/phases/goal-tape_to_profit-iter-3.md</a></td></tr><tr><td>Dev handoff</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/handoffs/goal-tape_to_profit-iter-3-dev.md'>docs/handoffs/goal-tape_to_profit-iter-3-dev.md</a></td></tr><tr><td>Review</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='reviews/goal-tape_to_profit-iter-3-review.md'>reports/reviews/goal-tape_to_profit-iter-3-review.md</a></td></tr><tr><td>Browser QA</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='phase-goal-tape_to_profit-iter-3-ui-test-results.md'>reports/phase-goal-tape_to_profit-iter-3-ui-test-results.md</a></td></tr><tr><td>Goal evaluation</td><td><span class='verdict-cell CONTINUE'>CONTINUE</span></td><td><a href='../runs/goal-session-tape_to_profit/iter-3/eval.md'>runs/goal-session-tape_to_profit/iter-3/eval.md</a></td></tr><tr><td>Journey history</td><td><span class='verdict-cell —'>—</span></td><td><a href='../runs/goal-session-tape_to_profit/state/journey-history.json'>runs/goal-session-tape_to_profit/state/journey-history.json</a></td></tr></tbody></table></div></details>
+<div class='footer-note'>Generated 2026-07-03 08:51 by <code>render_iteration_summary.py</code> · source: <a href='phase-goal-tape_to_profit-iter-3-iteration-summary.md'>phase-goal-tape_to_profit-iter-3-iteration-summary.md</a></div>
+</div></body></html>

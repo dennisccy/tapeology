@@ -32,6 +32,7 @@ FIXTURE_V3_SQL = Path(__file__).parent / "fixtures" / "journal_v3_schema.sql"
 FIXTURE_V4_SQL = Path(__file__).parent / "fixtures" / "journal_v4_schema.sql"
 FIXTURE_V5_SQL = Path(__file__).parent / "fixtures" / "journal_v5_schema.sql"
 FIXTURE_V6_SQL = Path(__file__).parent / "fixtures" / "journal_v6_schema.sql"
+FIXTURE_V7_SQL = Path(__file__).parent / "fixtures" / "journal_v7_schema.sql"
 
 
 def _build_v1_db(path: str) -> None:
@@ -96,6 +97,28 @@ def _build_v6_db(path: str) -> None:
     try:
         conn.executescript(sql)
         conn.commit()
+    finally:
+        conn.close()
+
+
+def _build_v7_db(path: str) -> None:
+    """Materialize the committed v7-schema SQL fixture into a real SQLite DB at ``path``."""
+    sql = FIXTURE_V7_SQL.read_text()
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript(sql)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _table_names(path: str) -> set[str]:
+    conn = sqlite3.connect(path)
+    try:
+        return {
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
     finally:
         conn.close()
 
@@ -961,7 +984,9 @@ def test_open_migrates_v6_to_v7_adding_excursions_column_and_bumping_version(tmp
     _build_v6_db(db)
     store = JournalStore(db, CONFIG)
     try:
-        assert store.schema_version() == 7 == CONFIG.journal_schema_version
+        # The open carries the DB THROUGH v7 up to the current version (v8 added the backtests
+        # table); the v6 -> v7 step's own effect is the excursions column asserted below.
+        assert store.schema_version() == CONFIG.journal_schema_version
         cols = _theses_columns(db)
         assert "excursions" in cols  # the single additive v7 column
         # The pre-existing v2..v6 columns are untouched (the v6 -> v7 step only adds one column).
@@ -1134,7 +1159,129 @@ def test_stale_v6_version_row_with_excursions_column_present_does_not_crash(tmp_
 def test_fresh_db_created_at_current_version_carries_excursions_column(tmp_path):
     store = JournalStore(str(tmp_path / "fresh7.db"), CONFIG)
     try:
-        assert store.schema_version() == CONFIG.journal_schema_version == 7
+        assert store.schema_version() == CONFIG.journal_schema_version == 8
         assert "excursions" in _theses_columns(str(tmp_path / "fresh7.db"))
+    finally:
+        store.close()
+
+
+# --- v7 -> v8 migration on open (J-03: the backtests table) ----------------------------------------
+
+def test_v7_fixture_starts_at_v7_without_the_backtests_table(tmp_path):
+    db = str(tmp_path / "v7.db")
+    _build_v7_db(db)
+    names = _table_names(db)
+    assert "backtests" not in names
+    # Every pre-v8 table IS present (the fixture is the full v7 shape).
+    assert {"theses", "verdict_events", "hints", "actions", "studies", "study_occurrences"} <= names
+    assert "excursions" in _theses_columns(db)
+    conn = sqlite3.connect(db)
+    try:
+        assert conn.execute("SELECT version FROM schema_version").fetchone()[0] == 7
+    finally:
+        conn.close()
+    # Research records ONLY — no tape-data tables in the fixture.
+    for forbidden in ("trades", "quotes", "candles", "features"):
+        assert forbidden not in names
+
+
+def test_open_migrates_v7_to_v8_creating_backtests_table_and_bumping_version(tmp_path):
+    db = str(tmp_path / "v7.db")
+    _build_v7_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        assert store.schema_version() == 8 == CONFIG.journal_schema_version
+        assert "backtests" in _table_names(db)
+        # The v2..v7 additions are untouched (the v7 -> v8 step only adds one NEW table).
+        cols = _theses_columns(db)
+        assert "excursions" in cols and "risk_flags" in cols and "grades" in cols
+        assert "spread_at_mark" in _actions_columns(db)
+        assert {"rule_first_true_ts", "rule_first_true_price"} <= _verdict_event_columns(db)
+    finally:
+        store.close()
+
+
+def test_v8_migration_never_backfills_a_backtest_and_leaves_rows_verbatim(tmp_path):
+    # A migration NEVER fabricates a backtest report: the new table arrives EMPTY, and every
+    # pre-existing research row (the resolved thesis with its measured excursions, the done
+    # study) round-trips verbatim across the open.
+    db = str(tmp_path / "v7.db")
+    _build_v7_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        assert store.list_backtests(limit=10) == []
+        thesis = store.get_thesis("v7thesis0001")
+        assert thesis is not None
+        assert thesis.status == "played_out"
+        assert thesis.config_fingerprint == "oldfingerprint07"
+        assert thesis.excursions == {"tracked": False, "populations": {}}
+        assert thesis.reviewed is True
+        study = store.get_study("v7study00001")
+        assert study is not None and study.payload["status"] == "done"
+    finally:
+        store.close()
+
+
+def test_backtest_rows_persist_end_to_end_against_migrated_v7_db(tmp_path):
+    # The new table is writable against the MIGRATED DB and rows survive a full store reload —
+    # the persisted payload is served verbatim (no recomputation at read).
+    from app.research.store import BacktestRecord
+
+    db = str(tmp_path / "v7.db")
+    _build_v7_db(db)
+    payload = {"id": "bt00000001", "status": "queued", "dataset_id": "d1", "strategy_id": "v1",
+               "profile": "default", "created_wall_ts": 1700000200.0}
+    store = JournalStore(db, CONFIG)
+    try:
+        store.insert_backtest(BacktestRecord(id="bt00000001", payload=payload, created_wall_ts=1700000200.0))
+        done = {**payload, "status": "done", "result": {"register": "simulated", "trades": []}}
+        store.set_backtest_result("bt00000001", done)
+    finally:
+        store.close()
+    reopened = JournalStore(db, CONFIG)
+    try:
+        assert reopened.get_backtest("bt00000001").payload == done
+        assert [r.id for r in reopened.list_backtests(limit=10)] == ["bt00000001"]
+    finally:
+        reopened.close()
+
+
+def test_reopen_already_v8_is_idempotent_from_v7(tmp_path):
+    db = str(tmp_path / "v7.db")
+    _build_v7_db(db)
+    JournalStore(db, CONFIG).close()  # first open migrates v7 -> v8
+    store = JournalStore(db, CONFIG)  # second open must be a no-op
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+        assert "backtests" in _table_names(db)
+    finally:
+        store.close()
+
+
+def test_stale_v7_version_row_with_backtests_table_present_does_not_crash(tmp_path):
+    # Belt-and-braces: a DB that ALREADY carries the backtests table but whose version row is
+    # stale at 7. CREATE TABLE IF NOT EXISTS makes the step a no-op and the open just bumps to 8.
+    db = str(tmp_path / "v7.db")
+    _build_v7_db(db)
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute(
+            "CREATE TABLE backtests (id TEXT PRIMARY KEY, payload TEXT NOT NULL, created_wall_ts REAL NOT NULL)"
+        )
+        conn.commit()  # version row still says 7
+    finally:
+        conn.close()
+    store = JournalStore(db, CONFIG)  # must not raise "table backtests already exists"
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+    finally:
+        store.close()
+
+
+def test_fresh_db_created_at_current_version_carries_backtests_table(tmp_path):
+    store = JournalStore(str(tmp_path / "fresh8.db"), CONFIG)
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+        assert "backtests" in _table_names(str(tmp_path / "fresh8.db"))
     finally:
         store.close()
