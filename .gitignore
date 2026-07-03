@@ -71,6 +71,9 @@ htmlcov/
 *.db-shm
 .data/
 
+# Generated MCP registration (build product of project-extensions/mcp-servers.yaml)
+.mcp.json
+
 # IDE
 .vscode-test
 
