@@ -34,6 +34,7 @@ FIXTURE_V5_SQL = Path(__file__).parent / "fixtures" / "journal_v5_schema.sql"
 FIXTURE_V6_SQL = Path(__file__).parent / "fixtures" / "journal_v6_schema.sql"
 FIXTURE_V7_SQL = Path(__file__).parent / "fixtures" / "journal_v7_schema.sql"
 FIXTURE_V8_SQL = Path(__file__).parent / "fixtures" / "journal_v8_schema.sql"
+FIXTURE_V9_SQL = Path(__file__).parent / "fixtures" / "journal_v9_schema.sql"
 
 
 def _build_v1_db(path: str) -> None:
@@ -124,6 +125,17 @@ def _build_v8_db(path: str) -> None:
         conn.close()
 
 
+def _build_v9_db(path: str) -> None:
+    """Materialize the committed v9-schema SQL fixture into a real SQLite DB at ``path``."""
+    sql = FIXTURE_V9_SQL.read_text()
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript(sql)
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _table_names(path: str) -> set[str]:
     conn = sqlite3.connect(path)
     try:
@@ -155,6 +167,16 @@ def _actions_columns(path: str) -> set[str]:
     conn = sqlite3.connect(path)
     try:
         return {r[1] for r in conn.execute("PRAGMA table_info(actions)").fetchall()}
+    finally:
+        conn.close()
+
+
+def _champion_pointer_row(path: str) -> tuple | None:
+    conn = sqlite3.connect(path)
+    try:
+        return conn.execute(
+            "SELECT strategy_id, profile, updated_wall_ts FROM champion_pointer WHERE id = 1"
+        ).fetchone()
     finally:
         conn.close()
 
@@ -1171,7 +1193,7 @@ def test_stale_v6_version_row_with_excursions_column_present_does_not_crash(tmp_
 def test_fresh_db_created_at_current_version_carries_excursions_column(tmp_path):
     store = JournalStore(str(tmp_path / "fresh7.db"), CONFIG)
     try:
-        assert store.schema_version() == CONFIG.journal_schema_version == 9
+        assert store.schema_version() == CONFIG.journal_schema_version
         assert "excursions" in _theses_columns(str(tmp_path / "fresh7.db"))
     finally:
         store.close()
@@ -1327,7 +1349,7 @@ def test_open_migrates_v8_to_v9_creating_pnl_ledger_table_and_bumping_version(tm
     _build_v8_db(db)
     store = JournalStore(db, CONFIG)
     try:
-        assert store.schema_version() == 9 == CONFIG.journal_schema_version
+        assert store.schema_version() == CONFIG.journal_schema_version
         assert "pnl_ledger" in _table_names(db)
         # The v2..v8 additions are untouched (the v8 -> v9 step only adds one NEW table).
         cols = _theses_columns(db)
@@ -1429,5 +1451,169 @@ def test_fresh_db_created_at_current_version_carries_pnl_ledger_table(tmp_path):
     try:
         assert store.schema_version() == CONFIG.journal_schema_version
         assert "pnl_ledger" in _table_names(str(tmp_path / "fresh9.db"))
+    finally:
+        store.close()
+
+
+# --- v9 -> v10: the J-07 champion_pointer table (era-3 capability 7, Data Contract row 33) --------
+# The ONE migration step this era SEEDS rather than leaves empty: every other table addition
+# (studies, backtests, pnl_ledger) arrives with zero rows (a migration never fabricates a research
+# RECORD); the champion pointer is not a record of something that happened, it is the product's
+# ONE required singleton setting, so seeding it to the documented founding default is the honest
+# behavior — never leaving it absent (every reader, ``get_champion_pointer``, refuses to serve a
+# missing pointer as an internal invariant violation rather than silently defaulting at READ time).
+
+
+def test_v9_fixture_starts_at_v9_without_the_champion_pointer_table(tmp_path):
+    db = str(tmp_path / "v9.db")
+    _build_v9_db(db)
+    names = _table_names(db)
+    assert "champion_pointer" not in names
+    # Every pre-v10 table IS present (the fixture is the full v9 shape, incl. pnl_ledger).
+    assert {"theses", "verdict_events", "hints", "actions", "studies", "study_occurrences",
+            "backtests", "pnl_ledger"} <= names
+    assert "excursions" in _theses_columns(db)
+    conn = sqlite3.connect(db)
+    try:
+        assert conn.execute("SELECT version FROM schema_version").fetchone()[0] == 9
+    finally:
+        conn.close()
+    # Research records ONLY — no tape-data tables in the fixture.
+    for forbidden in ("trades", "quotes", "candles", "features"):
+        assert forbidden not in names
+
+
+def test_open_migrates_v9_to_v10_creating_champion_pointer_table_and_bumping_version(tmp_path):
+    db = str(tmp_path / "v9.db")
+    _build_v9_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+        assert "champion_pointer" in _table_names(db)
+        # Seeded to the founding pair — never left absent (unlike every other table addition).
+        assert store.get_champion_pointer() == {"strategy_id": "v1", "profile": "default"}
+        # The v2..v9 additions are untouched (the v9 -> v10 step only adds one NEW table).
+        cols = _theses_columns(db)
+        assert "excursions" in cols and "risk_flags" in cols and "grades" in cols
+        assert "spread_at_mark" in _actions_columns(db)
+        assert {"rule_first_true_ts", "rule_first_true_price"} <= _verdict_event_columns(db)
+        assert "backtests" in _table_names(db)
+        assert "pnl_ledger" in _table_names(db)
+    finally:
+        store.close()
+
+
+def test_v10_migration_seeds_the_champion_pointer_and_leaves_other_rows_verbatim(tmp_path):
+    # The champion pointer is SEEDED (the one deliberate exception to "a migration never
+    # fabricates a row" — see the section docstring above); every OTHER pre-existing row
+    # (thesis, study, backtest, AND the pre-existing pnl_ledger row) round-trips verbatim.
+    db = str(tmp_path / "v9.db")
+    _build_v9_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        assert store.get_champion_pointer() == {"strategy_id": "v1", "profile": "default"}
+        thesis = store.get_thesis("v9thesis0001")
+        assert thesis is not None
+        assert thesis.status == "played_out"
+        assert thesis.config_fingerprint == "oldfingerprint09"
+        assert thesis.excursions == {"tracked": False, "populations": {}}
+        study = store.get_study("v9study00001")
+        assert study is not None and study.payload["status"] == "done"
+        backtest = store.get_backtest("v9backtest01")
+        assert backtest is not None and backtest.payload["status"] == "done"
+        assert backtest.payload["config_fingerprint"] == "oldfingerprint09"
+        ledger_row = store.get_pnl_ledger_row("v9-founding-row")
+        assert ledger_row is not None
+        assert ledger_row.payload["candidate"]["train"]["net_r"] == -0.1
+        assert [r.enhancement_id for r in store.list_pnl_ledger()] == ["v9-founding-row"]
+    finally:
+        store.close()
+
+
+def test_champion_pointer_persists_end_to_end_against_migrated_v9_db(tmp_path):
+    # The new table is writable against the MIGRATED DB and the moved pointer survives a full
+    # store reload — served verbatim (no recomputation at read).
+    db = str(tmp_path / "v9.db")
+    _build_v9_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        store.set_champion_pointer(strategy_id="v1", profile="candidate-faster-warmup", wall_ts=1700000300.0)
+    finally:
+        store.close()
+    reopened = JournalStore(db, CONFIG)
+    try:
+        assert reopened.get_champion_pointer() == {
+            "strategy_id": "v1",
+            "profile": "candidate-faster-warmup",
+        }
+        row = _champion_pointer_row(db)
+        assert row == ("v1", "candidate-faster-warmup", 1700000300.0)
+    finally:
+        reopened.close()
+
+
+def test_reopen_already_v10_is_idempotent_from_v9(tmp_path):
+    db = str(tmp_path / "v9.db")
+    _build_v9_db(db)
+    JournalStore(db, CONFIG).close()  # first open migrates v9 -> v10 and seeds the pointer
+    store = JournalStore(db, CONFIG)  # second open must be a no-op (never re-seed over a move)
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+        assert "champion_pointer" in _table_names(db)
+        assert store.get_champion_pointer() == {"strategy_id": "v1", "profile": "default"}
+    finally:
+        store.close()
+
+
+def test_reopen_after_a_promotion_never_re_seeds_over_the_moved_pointer(tmp_path):
+    # The idempotent seed guard ("insert only if no row exists") must never overwrite an ALREADY
+    # moved pointer on a later reopen — the single most important honesty property of a seed that
+    # runs unconditionally on every open.
+    db = str(tmp_path / "v9.db")
+    _build_v9_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        store.set_champion_pointer(strategy_id="v1", profile="candidate-faster-warmup", wall_ts=1700000400.0)
+    finally:
+        store.close()
+    reopened = JournalStore(db, CONFIG)  # a THIRD open — must still see the moved pointer
+    try:
+        assert reopened.get_champion_pointer() == {
+            "strategy_id": "v1",
+            "profile": "candidate-faster-warmup",
+        }
+    finally:
+        reopened.close()
+
+
+def test_stale_v9_version_row_with_champion_pointer_table_present_does_not_crash(tmp_path):
+    # Belt-and-braces: a DB that ALREADY carries the (empty) champion_pointer table but whose
+    # version row is stale at 9. CREATE TABLE IF NOT EXISTS makes the step a no-op, the open just
+    # bumps to 10, and the still-empty table gets seeded by the unconditional seed step.
+    db = str(tmp_path / "v9.db")
+    _build_v9_db(db)
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute(
+            "CREATE TABLE champion_pointer (id INTEGER PRIMARY KEY, strategy_id TEXT NOT NULL, "
+            "profile TEXT NOT NULL, updated_wall_ts REAL)"
+        )
+        conn.commit()  # version row still says 9; the table exists but is EMPTY
+    finally:
+        conn.close()
+    store = JournalStore(db, CONFIG)  # must not raise "table champion_pointer already exists"
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+        assert store.get_champion_pointer() == {"strategy_id": "v1", "profile": "default"}
+    finally:
+        store.close()
+
+
+def test_fresh_db_created_at_current_version_carries_champion_pointer_table(tmp_path):
+    store = JournalStore(str(tmp_path / "fresh10.db"), CONFIG)
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+        assert "champion_pointer" in _table_names(str(tmp_path / "fresh10.db"))
+        assert store.get_champion_pointer() == {"strategy_id": "v1", "profile": "default"}
     finally:
         store.close()

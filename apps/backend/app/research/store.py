@@ -33,10 +33,11 @@ import json
 import queue
 import sqlite3
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from ..config import Config
+from ..config import Config, PROFILE_DEFAULT, STRATEGY_V1_ID
 
 # --- Full versioned schema (capability 28) ------------------------------------------------------
 # Created at once. Only theses + verdict_events are written this iteration; the rest exist so the
@@ -128,6 +129,13 @@ CREATE TABLE IF NOT EXISTS pnl_ledger (
     enhancement_id      TEXT PRIMARY KEY,
     payload             TEXT NOT NULL,
     created_wall_ts     REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS champion_pointer (
+    id                  INTEGER PRIMARY KEY,   -- always 1: a singleton row, the ONE persisted pointer
+    strategy_id         TEXT NOT NULL,
+    profile             TEXT NOT NULL,
+    updated_wall_ts     REAL                    -- NULL = never moved (the seeded founding pointer)
 );
 """
 
@@ -397,6 +405,28 @@ class JournalStore:
                     (self._config.journal_schema_version,),
                 )
         self._migrate()
+        self._ensure_champion_pointer_seeded()
+
+    def _ensure_champion_pointer_seeded(self) -> None:
+        """Seed the champion pointer to the founding ``{v1, default}`` pair iff no row exists yet
+        (J-07, era-3 capability 7) — runs UNCONDITIONALLY on every open, covering BOTH a
+        brand-new store (the table arrives empty via ``_SCHEMA``; a fresh DB is already at the
+        target version, so the version-gated v9->v10 migration step never runs) and a store
+        migrated from a pre-v10 snapshot (that step creates the table empty). Idempotent — never
+        overwrites an existing (possibly promoted) pointer. ``updated_wall_ts`` is left ``NULL``
+        for the SEEDED row (it was never moved — a fabricated wall-clock instant for something
+        that did not happen would violate the no-fabricated-data discipline); ``set_champion_pointer``
+        stamps a real value only for an ACTUAL promotion move."""
+        with self._write_conn:
+            row = self._write_conn.execute(
+                "SELECT 1 FROM champion_pointer WHERE id = 1"
+            ).fetchone()
+            if row is None:
+                self._write_conn.execute(
+                    "INSERT INTO champion_pointer (id, strategy_id, profile, updated_wall_ts) "
+                    "VALUES (1, ?, ?, NULL)",
+                    (STRATEGY_V1_ID, PROFILE_DEFAULT),
+                )
 
     def _column_exists(self, table: str, column: str) -> bool:
         """True if ``column`` is present on ``table`` (drives the idempotent migration guards)."""
@@ -601,7 +631,38 @@ class JournalStore:
                 raise
             current = 9
 
-        # Future steps (current < 10, …) append here, each in its own BEGIN IMMEDIATE block.
+        # --- v9 -> v10: create the J-07 champion_pointer table (era-3 capability 7, row 33) --------
+        if current < 10:
+            self._write_conn.execute("BEGIN IMMEDIATE")
+            try:
+                # A NEW singleton-row table — the ONE persisted, movable champion pointer that
+                # replaces the retired hardcoded ``{STRATEGY_V1_ID, PROFILE_DEFAULT}`` constant in
+                # ``app/research/profiles.py``. ``CREATE TABLE IF NOT EXISTS`` is idempotent by
+                # construction, so a DB that already carries the table (only the version row is
+                # stale) skips straight to bumping the version. The table arrives EMPTY here — the
+                # founding seed (below, ``_ensure_champion_pointer_seeded``) runs UNCONDITIONALLY
+                # after migration on every open (fresh-create included, where a fresh DB is already
+                # at the target version and this block never runs at all), so seeding is NOT done
+                # inside this version-gated step: a DB migrated straight from an old snapshot must
+                # seed too, exactly once, regardless of which path created the table.
+                self._write_conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS champion_pointer (
+                        id                  INTEGER PRIMARY KEY,
+                        strategy_id         TEXT NOT NULL,
+                        profile             TEXT NOT NULL,
+                        updated_wall_ts     REAL
+                    )
+                    """
+                )
+                self._write_conn.execute("UPDATE schema_version SET version = 10")
+                self._write_conn.commit()
+            except Exception:
+                self._write_conn.rollback()
+                raise
+            current = 10
+
+        # Future steps (current < 11, …) append here, each in its own BEGIN IMMEDIATE block.
 
     def _read_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -1315,6 +1376,48 @@ class JournalStore:
             ]
         finally:
             conn.close()
+
+    # --- the champion pointer (era-3 capability 7, J-07, row 33) — the ONE persisted, movable ------
+    # source ``profiles_projection`` reads. Seeded to the founding ``{v1, default}`` pair at
+    # store-open (``_ensure_champion_pointer_seeded``); ``set_champion_pointer`` is the ONE mutation
+    # path, called ONLY by ``app/research/pnl_scan.py`` (source-scan-guard-enforced) on a genuine
+    # hold-out survivor. Unlike the append-only ``pnl_ledger`` / ``verdict_events`` tables, this row
+    # is INTENTIONALLY mutable (there is exactly one pointer, and promotion moves it) — the SAME
+    # single-writer-queue discipline still applies (``BEGIN IMMEDIATE``, never off the hot path).
+    def get_champion_pointer(self) -> dict:
+        """The single persisted champion pointer — ``{"strategy_id", "profile"}`` — never absent
+        (seeded at store-open). Every surface (``GET /research/profiles``, hence ``/performance``
+        and MCP) reads THIS verbatim; no surface may infer the champion from ledger provenance or
+        carry a second copy."""
+        conn = self._read_conn()
+        try:
+            row = conn.execute(
+                "SELECT strategy_id, profile FROM champion_pointer WHERE id = 1"
+            ).fetchone()
+            if row is None:
+                # An internal invariant violation (seeding runs at every store-open), not a normal
+                # empty state — surfaced explicitly rather than silently substituting a default.
+                raise RuntimeError(
+                    "champion pointer row missing — the store failed to seed it at open"
+                )
+            return {"strategy_id": row["strategy_id"], "profile": row["profile"]}
+        finally:
+            conn.close()
+
+    def set_champion_pointer(self, *, strategy_id: str, profile: str, wall_ts: float) -> None:
+        """Move the persisted champion pointer (J-07's ONE mutation path). Goes through the single
+        writer queue (``BEGIN IMMEDIATE``), the SAME discipline as every other write. ``wall_ts`` is
+        supplied by the CALLER (the sweep's own persist-once moment) — this method never reads the
+        wall clock itself, matching every other store write (e.g. ``expire_stale_actives``)."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            conn.execute(
+                "INSERT OR REPLACE INTO champion_pointer (id, strategy_id, profile, updated_wall_ts) "
+                "VALUES (1, ?, ?, ?)",
+                (strategy_id, profile, wall_ts),
+            )
+
+        self._do_write(_fn)
 
     # --- setup-forming hints (capability 33, J-65) — payload-blob writes to the hints table --------
     def insert_hint(self, record: HintRecord) -> None:

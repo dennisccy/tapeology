@@ -1607,17 +1607,17 @@ def get_pnl_ledger(registry: ResearchRegistry = Depends(get_registry)) -> dict:
 
 
 # --- Indicator profiles + champion pointer (Data Contract row 33; J-05 shipped the serving side,
-# J-06 registers the first candidate) ----------------------------------------------------------------
-# Exactly ONE route, GET only: the registry and the champion pointer are config-owned
-# (app/research/profiles.py projects Config.profile_registry() / the champion constants), so
-# there is NO write surface — any non-GET verb is FastAPI's default 405 (no handler exists). J-07
-# adds the only mechanics that may ever move the champion (a hold-out survivor).
+# J-06 registers the first candidate, J-07 turns the champion into a real persisted pointer) --------
+# Exactly ONE route, GET only: the registry is config-owned and the champion pointer is read
+# VERBATIM from the ONE persisted store source (app/research/profiles.py), so there is NO write
+# surface on THIS route — any non-GET verb is FastAPI's default 405 (no handler exists). J-07's
+# pnl_scan.py is the only code that may ever move the champion (a hold-out survivor).
 
 
 @router.get("/profiles")
-def get_profiles() -> dict:
-    """The profile registry (``default`` plus the registered J-06 candidate) + the current
-    champion pointer (the founding strategy ``v1`` on profile ``default`` — unmoved; no promotion
-    exists yet), served verbatim from the ONE config-owned projection. The J-05 champion summary
+def get_profiles(registry: ResearchRegistry = Depends(get_registry)) -> dict:
+    """The profile registry (``default`` plus every registered candidate) + the current champion
+    pointer — the founding strategy ``v1`` on profile ``default`` until a genuine hold-out
+    survivor moves it (J-07) — served verbatim from the ONE projection. The J-05 champion summary
     and the MCP ``get_endpoint`` proxy read THIS — never an inferred or duplicated copy."""
-    return profiles_projection()
+    return profiles_projection(registry.store, registry.config)

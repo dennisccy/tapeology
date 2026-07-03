@@ -433,9 +433,18 @@ class Config:
     #            (``CREATE TABLE IF NOT EXISTS`` — idempotent by construction) and arriving EMPTY:
     #            a migration never fabricates a ledger row, and no existing table or row is touched
     #            by this step.
+    #   v9 → v10: NEW ``champion_pointer`` table (era-3 capability 7, J-07; Data Contract row 33) —
+    #             a SINGLETON row (id=1) holding the ONE persisted, movable champion pointer that
+    #             replaces the retired hardcoded ``{STRATEGY_V1_ID, PROFILE_DEFAULT}`` constant.
+    #             Created by the migration (``CREATE TABLE IF NOT EXISTS`` — idempotent by
+    #             construction) and arriving EMPTY; seeded to the founding ``v1``/``default`` pair
+    #             by ``JournalStore._ensure_champion_pointer_seeded`` UNCONDITIONALLY on every open
+    #             (fresh-create included — a fresh DB is already at the target version, so this
+    #             version-gated step never runs for it) — never inside this gated step, so a DB
+    #             migrated straight from an old snapshot seeds too, exactly once.
     # Excluded from ``config_fingerprint`` (see the exclusion set below): a migration must NOT change
     # the fingerprint — verdicts depend on classifier thresholds, never on where/how the DB is stored.
-    journal_schema_version: int = 9
+    journal_schema_version: int = 10
 
     # --- Profit-research era: HISTORICAL TAPE DATASET STORE directory (capability 1, J-02) ------
     # Where the dataset store persists explicitly recorded historical tape (one JSON file per
@@ -981,6 +990,34 @@ class Config:
     # existing hasher, no second mechanism.
     profile_candidate_warmup_min_events: int = 30
 
+    # --- Profit-research era: THE CANDIDATE-SWEEP PROMOTION GATE (capability 7, J-07) -------------
+    # The minimum PER-SPLIT trade count (n) a candidate's HOLD-OUT measurement must reach before it
+    # is even ELIGIBLE for promotion — the config.py:920 note's "separate, future decision" for J-07,
+    # now made: a DEDICATED field rather than reusing ``pnl_min_sample_size``, because the two
+    # thresholds gate DIFFERENT things (that one labels a served split "insufficient sample" for
+    # display; this one decides whether a candidate may EVER become champion) even though they
+    # currently share the same floor value — the ``analytics_min_sample_size`` vs
+    # ``pnl_min_sample_size`` precedent (two distinct min-n fields for two distinct honesty
+    # purposes). Enforced BOTH ways by ``app/research/pnl_scan.py`` (the sweep's ONE reader): a
+    # below-minimum candidate is refused promotion even with a positive hold-out net R/$ delta; an
+    # at-or-above-minimum candidate with a positive hold-out net R AND net $ delta is promoted.
+    #
+    # EXCLUDED FROM ``config_fingerprint`` (see the exclusion set below), matching the
+    # ``pnl_min_sample_size`` discipline exactly: this gate decides WHICH candidate gets promoted
+    # and thus WHETHER a ledger row / champion move happens, but it never shapes the CONTENT of any
+    # persisted trade, fill, or aggregate — a promoted candidate's ledger row stores the SAME
+    # verbatim backtest aggregates whatever this threshold reads, exactly like the label minimum's
+    # "insufficient_sample" marker never touches a stored row's numbers. Two journals identical in
+    # every threshold but configured with a different promotion floor MUST share a fingerprint (else
+    # the very backtests this floor gates would be dishonestly fragmented across fingerprints for a
+    # presentation/decision-only reason). This is a FLAGGED JUDGMENT CALL (see the design notes in
+    # ``runs/goal-tape_to_profit-iter-7/plan.md``): the config.py:920 note could also be read as
+    # "the promotion gate should move the fingerprint" — but that note describes the ledger ROW's
+    # OWN existing provenance stamp (every backtest report already carries its own
+    # ``config_fingerprint``), not a mandate to fingerprint this threshold specifically. Verified
+    # against the pinned default fingerprint test in ``tests/test_profile_equivalence.py``.
+    promotion_min_sample_size: int = 5
+
     def profile_definition(self, profile_id: str) -> dict | None:
         """The config-owned descriptor for ``profile_id`` (Data Contract row 33) — the
         ``strategy_definition`` pattern applied to profiles: THIS method is the ONE place that
@@ -1231,6 +1268,14 @@ class Config:
             # measured by) the founding ledger row, so they MOVE the fingerprint (the intended
             # never-pool honesty mechanism). Pinned both ways in tests/test_pnl_ledger.py.
             "pnl_min_sample_size",
+            # The candidate-sweep PROMOTION minimum-n gate (era-3 capability 7 / J-07): a
+            # presentation/decision-only threshold by the identical ``pnl_min_sample_size``
+            # discipline directly above — it decides WHICH candidate may be promoted, never the
+            # CONTENT of any persisted trade, fill, or aggregate (a promoted row stores the same
+            # verbatim backtest aggregates whatever this floor reads). Two journals identical in
+            # every threshold but configured with a different promotion floor MUST share a
+            # fingerprint. See the field's own docstring for the full judgment-call rationale.
+            "promotion_min_sample_size",
             # The PnL-history markdown target path (era-3 capability 5 / J-04): an operational
             # storage location with the ``journal_db_path`` / ``dataset_dir`` discipline — WHERE
             # the pure render is written cannot affect any persisted research value, and the

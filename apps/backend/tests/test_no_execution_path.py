@@ -113,6 +113,7 @@ def test_scan_is_not_vacuous():
     assert len(files) > 100
     assert "backend/app/main.py" in rels
     assert "backend/app/research/backtests.py" in rels  # the module that ships simulated fills
+    assert "backend/app/research/pnl_scan.py" in rels  # the J-07 candidate-sweep harness
     assert any(r.startswith("frontend/") for r in rels)
 
 
