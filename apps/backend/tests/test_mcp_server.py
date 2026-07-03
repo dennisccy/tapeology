@@ -54,12 +54,10 @@ EXPECTED_TOOLS = (
     "get_endpoint",
 )
 
-# The honest-404 set: registered NOW, the endpoint lands at J-04 (``datasets`` shipped at J-02
-# and ``backtests`` at J-03 — each moved to the live byte-identity coverage below with zero MCP
-# code changes).
-NOT_YET_SHIPPED = {
-    "pnl_ledger": "/research/pnl/ledger",
-}
+# Every registered tool's endpoint has now shipped (``datasets`` at J-02, ``backtests`` at J-03,
+# ``pnl_ledger`` at J-04 — each moved to the live byte-identity coverage below with zero MCP code
+# changes), so the honest-404 premise set is retired; the honest-404 WIRE FORM remains covered by
+# the allowlisted-but-missing ``/research/profiles`` legs (J-06 has not shipped).
 
 # Live 2xx no-argument tools and their canonical endpoints.
 LIVE_STATIC = {
@@ -83,13 +81,23 @@ def _dead_base() -> str:
 
 
 @pytest.fixture(scope="module")
-def backend(tmp_path_factory):
+def backend_paths(tmp_path_factory):
+    """The test backend's persistence env (journal DB + dataset dir) — a separate fixture so the
+    J-04 seeding-CLI subprocess can write into the SAME store the backend serves (the ledger has
+    no REST write surface; the CLI is the machine action)."""
+    return {
+        "TAPEOLOGY_JOURNAL_DB": str(tmp_path_factory.mktemp("mcp-journal") / "journal.db"),
+        "TAPEOLOGY_DATASET_DIR": str(tmp_path_factory.mktemp("mcp-datasets")),
+    }
+
+
+@pytest.fixture(scope="module")
+def backend(backend_paths, tmp_path_factory):
     """A REAL uvicorn instance of the app on an ephemeral port with a temp journal DB."""
     port = _free_port()
     base = f"http://127.0.0.1:{port}"
     env = os.environ.copy()
-    env["TAPEOLOGY_JOURNAL_DB"] = str(tmp_path_factory.mktemp("mcp-journal") / "journal.db")
-    env["TAPEOLOGY_DATASET_DIR"] = str(tmp_path_factory.mktemp("mcp-datasets"))
+    env.update(backend_paths)
     log_path = tmp_path_factory.mktemp("mcp-uvicorn") / "uvicorn.log"
     with open(log_path, "wb") as log:
         proc = subprocess.Popen(
@@ -286,6 +294,38 @@ async def test_backtests_tool_byte_identical_on_a_non_empty_live_list(mcp_env):
 
 
 @pytest.mark.anyio
+async def test_pnl_ledger_tool_byte_identical_on_a_non_empty_200(mcp_env, backend_paths):
+    """J-04 flips ``pnl_ledger`` — the LAST honest 404 — to live data with ZERO MCP code changes
+    (the J-02 ``datasets`` / J-03 ``backtests`` precedent): after the REAL keyless seeding CLI
+    (``python -m app.research.pnl_baseline``) appends the founding baseline row into the SAME
+    journal DB the backend serves, the tool's JSON is byte-identical to its curl equivalent on a
+    NON-EMPTY 200 carrying the founding row. The CLI re-run is the honest idempotence leg: an
+    explicit "already present" no-op message and a clean exit — no duplicate row."""
+    env = os.environ.copy()
+    env.update(backend_paths)
+    first = subprocess.run(
+        [sys.executable, "-m", "app.research.pnl_baseline"],
+        cwd=BACKEND_DIR, env=env, capture_output=True, text=True, timeout=180,
+    )
+    assert first.returncode == 0, f"seeding CLI failed:\n{first.stderr}"
+    second = subprocess.run(
+        [sys.executable, "-m", "app.research.pnl_baseline"],
+        cwd=BACKEND_DIR, env=env, capture_output=True, text=True, timeout=180,
+    )
+    assert second.returncode == 0, f"seeding CLI re-run failed:\n{second.stderr}"
+    assert "already present" in second.stdout
+    result = await call_tool("pnl_ledger", {})
+    rest = httpx.get(f"{mcp_env}/research/pnl/ledger", timeout=5.0)
+    assert rest.status_code == 200
+    rows = rest.json()["rows"]
+    assert len(rows) == 1, "the live ledger must carry exactly the founding row for this proof"
+    assert rows[0]["founding"] is True and rows[0]["baseline"] is None
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "pnl_ledger not byte-identical"
+
+
+@pytest.mark.anyio
 async def test_tape_history_bar_argument_proxies_the_same_query(mcp_env):
     bar = CONFIG.history_bar_sizes[-1]
     result = await call_tool("tape_history", {"ticker": "SIM-BUYER", "bar": bar})
@@ -316,19 +356,6 @@ async def test_not_watched_ticker_404_proxied_verbatim(mcp_env):
     assert result.isError is True
     assert result.content[0].text.encode("utf-8") == rest.content
     assert result.content[1].text == "HTTP 404 from GET /tape/SIM-SELLER/state"
-
-
-@pytest.mark.anyio
-async def test_honest_404_tools_stay_registered_and_surface_the_real_status(mcp_env):
-    """``datasets`` / ``backtests`` / ``pnl_ledger`` have no endpoints until J-02+: they must
-    surface the backend's ACTUAL 404 byte-for-byte — never a placeholder payload."""
-    for name, path in NOT_YET_SHIPPED.items():
-        result = await call_tool(name, {})
-        rest = httpx.get(f"{mcp_env}{path}", timeout=5.0)
-        assert rest.status_code == 404, f"{path} unexpectedly exists — update this test's premise"
-        assert result.isError is True
-        assert result.content[0].text.encode("utf-8") == rest.content, f"{name} 404 not verbatim"
-        assert result.content[1].text == f"HTTP 404 from GET {path}"
 
 
 # --- get_endpoint allowlist -------------------------------------------------------------------
@@ -450,12 +477,14 @@ async def test_stdio_session_end_to_end(watched_backend):
                 assert result.content[0].text.encode("utf-8") == rest.content
 
             # Honest 404 over the wire: verbatim payload + explicit status, isError set.
-            # (``pnl_ledger`` is the not-yet-shipped example now that J-03 shipped ``backtests``.)
-            result = await session.call_tool("pnl_ledger", {})
-            rest = httpx.get(f"{watched_backend}/research/pnl/ledger", timeout=5.0)
+            # (Every registered tool's endpoint has shipped as of J-04, so the honest-404 wire
+            # form is proven on the allowlisted-but-missing ``/research/profiles`` — J-06.)
+            result = await session.call_tool("get_endpoint", {"path": "/research/profiles"})
+            rest = httpx.get(f"{watched_backend}/research/profiles", timeout=5.0)
+            assert rest.status_code == 404
             assert result.isError is True
             assert result.content[0].text.encode("utf-8") == rest.content
-            assert result.content[1].text == "HTTP 404 from GET /research/pnl/ledger"
+            assert result.content[1].text == "HTTP 404 from GET /research/profiles"
 
             # Refusal over the wire: the SDK surfaces the raised refusal as an isError result.
             result = await session.call_tool("get_endpoint", {"path": "/health"})

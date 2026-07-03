@@ -33,6 +33,7 @@ FIXTURE_V4_SQL = Path(__file__).parent / "fixtures" / "journal_v4_schema.sql"
 FIXTURE_V5_SQL = Path(__file__).parent / "fixtures" / "journal_v5_schema.sql"
 FIXTURE_V6_SQL = Path(__file__).parent / "fixtures" / "journal_v6_schema.sql"
 FIXTURE_V7_SQL = Path(__file__).parent / "fixtures" / "journal_v7_schema.sql"
+FIXTURE_V8_SQL = Path(__file__).parent / "fixtures" / "journal_v8_schema.sql"
 
 
 def _build_v1_db(path: str) -> None:
@@ -104,6 +105,17 @@ def _build_v6_db(path: str) -> None:
 def _build_v7_db(path: str) -> None:
     """Materialize the committed v7-schema SQL fixture into a real SQLite DB at ``path``."""
     sql = FIXTURE_V7_SQL.read_text()
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript(sql)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _build_v8_db(path: str) -> None:
+    """Materialize the committed v8-schema SQL fixture into a real SQLite DB at ``path``."""
+    sql = FIXTURE_V8_SQL.read_text()
     conn = sqlite3.connect(path)
     try:
         conn.executescript(sql)
@@ -1159,7 +1171,7 @@ def test_stale_v6_version_row_with_excursions_column_present_does_not_crash(tmp_
 def test_fresh_db_created_at_current_version_carries_excursions_column(tmp_path):
     store = JournalStore(str(tmp_path / "fresh7.db"), CONFIG)
     try:
-        assert store.schema_version() == CONFIG.journal_schema_version == 8
+        assert store.schema_version() == CONFIG.journal_schema_version == 9
         assert "excursions" in _theses_columns(str(tmp_path / "fresh7.db"))
     finally:
         store.close()
@@ -1190,7 +1202,9 @@ def test_open_migrates_v7_to_v8_creating_backtests_table_and_bumping_version(tmp
     _build_v7_db(db)
     store = JournalStore(db, CONFIG)
     try:
-        assert store.schema_version() == 8 == CONFIG.journal_schema_version
+        # The open carries the DB THROUGH v8 (backtests) to the current version (v9 added the
+        # pnl_ledger table on top); the v7 -> v8 step's own artifact is the backtests table.
+        assert store.schema_version() == CONFIG.journal_schema_version
         assert "backtests" in _table_names(db)
         # The v2..v7 additions are untouched (the v7 -> v8 step only adds one NEW table).
         cols = _theses_columns(db)
@@ -1283,5 +1297,137 @@ def test_fresh_db_created_at_current_version_carries_backtests_table(tmp_path):
     try:
         assert store.schema_version() == CONFIG.journal_schema_version
         assert "backtests" in _table_names(str(tmp_path / "fresh8.db"))
+    finally:
+        store.close()
+
+
+# --- v8 -> v9 migration on open (J-04: the pnl_ledger table) ----------------------------------------
+
+def test_v8_fixture_starts_at_v8_without_the_pnl_ledger_table(tmp_path):
+    db = str(tmp_path / "v8.db")
+    _build_v8_db(db)
+    names = _table_names(db)
+    assert "pnl_ledger" not in names
+    # Every pre-v9 table IS present (the fixture is the full v8 shape, incl. backtests).
+    assert {"theses", "verdict_events", "hints", "actions", "studies", "study_occurrences",
+            "backtests"} <= names
+    assert "excursions" in _theses_columns(db)
+    conn = sqlite3.connect(db)
+    try:
+        assert conn.execute("SELECT version FROM schema_version").fetchone()[0] == 8
+    finally:
+        conn.close()
+    # Research records ONLY — no tape-data tables in the fixture.
+    for forbidden in ("trades", "quotes", "candles", "features"):
+        assert forbidden not in names
+
+
+def test_open_migrates_v8_to_v9_creating_pnl_ledger_table_and_bumping_version(tmp_path):
+    db = str(tmp_path / "v8.db")
+    _build_v8_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        assert store.schema_version() == 9 == CONFIG.journal_schema_version
+        assert "pnl_ledger" in _table_names(db)
+        # The v2..v8 additions are untouched (the v8 -> v9 step only adds one NEW table).
+        cols = _theses_columns(db)
+        assert "excursions" in cols and "risk_flags" in cols and "grades" in cols
+        assert "spread_at_mark" in _actions_columns(db)
+        assert {"rule_first_true_ts", "rule_first_true_price"} <= _verdict_event_columns(db)
+        assert "backtests" in _table_names(db)
+    finally:
+        store.close()
+
+
+def test_v9_migration_never_backfills_a_ledger_row_and_leaves_rows_verbatim(tmp_path):
+    # A migration NEVER fabricates a PnL-ledger row: the new table arrives EMPTY, and every
+    # pre-existing research row (the resolved thesis, the done study, the DONE backtest report)
+    # round-trips verbatim across the open.
+    db = str(tmp_path / "v8.db")
+    _build_v8_db(db)
+    store = JournalStore(db, CONFIG)
+    try:
+        assert store.list_pnl_ledger() == []
+        thesis = store.get_thesis("v8thesis0001")
+        assert thesis is not None
+        assert thesis.status == "played_out"
+        assert thesis.config_fingerprint == "oldfingerprint08"
+        assert thesis.excursions == {"tracked": False, "populations": {}}
+        assert thesis.reviewed is True
+        study = store.get_study("v8study00001")
+        assert study is not None and study.payload["status"] == "done"
+        backtest = store.get_backtest("v8backtest01")
+        assert backtest is not None and backtest.payload["status"] == "done"
+        assert backtest.payload["config_fingerprint"] == "oldfingerprint08"
+        assert backtest.payload["result"]["aggregates"]["n"] == 0
+    finally:
+        store.close()
+
+
+def test_pnl_ledger_rows_persist_end_to_end_against_migrated_v8_db(tmp_path):
+    # The new table is writable against the MIGRATED DB and rows survive a full store reload —
+    # the persisted payload is served verbatim (no recomputation at read).
+    from app.research.store import PnlLedgerRecord
+
+    db = str(tmp_path / "v8.db")
+    _build_v8_db(db)
+    payload = {"enhancement_id": "e-mig-1", "title": "migration round-trip", "founding": True,
+               "baseline": None,
+               "candidate": {"train": {"net_r": -1.0, "net_usd": -100.0, "n": 5},
+                             "holdout": {"net_r": 0.5, "net_usd": 50.0, "n": 3}},
+               "created_wall_ts": 1700000300.0}
+    store = JournalStore(db, CONFIG)
+    try:
+        store.append_pnl_ledger_row(
+            PnlLedgerRecord(enhancement_id="e-mig-1", payload=payload, created_wall_ts=1700000300.0)
+        )
+    finally:
+        store.close()
+    reopened = JournalStore(db, CONFIG)
+    try:
+        assert reopened.get_pnl_ledger_row("e-mig-1").payload == payload
+        assert [r.enhancement_id for r in reopened.list_pnl_ledger()] == ["e-mig-1"]
+    finally:
+        reopened.close()
+
+
+def test_reopen_already_v9_is_idempotent_from_v8(tmp_path):
+    db = str(tmp_path / "v8.db")
+    _build_v8_db(db)
+    JournalStore(db, CONFIG).close()  # first open migrates v8 -> v9
+    store = JournalStore(db, CONFIG)  # second open must be a no-op
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+        assert "pnl_ledger" in _table_names(db)
+    finally:
+        store.close()
+
+
+def test_stale_v8_version_row_with_pnl_ledger_table_present_does_not_crash(tmp_path):
+    # Belt-and-braces: a DB that ALREADY carries the pnl_ledger table but whose version row is
+    # stale at 8. CREATE TABLE IF NOT EXISTS makes the step a no-op and the open just bumps to 9.
+    db = str(tmp_path / "v8.db")
+    _build_v8_db(db)
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute(
+            "CREATE TABLE pnl_ledger (enhancement_id TEXT PRIMARY KEY, payload TEXT NOT NULL, "
+            "created_wall_ts REAL NOT NULL)"
+        )
+        conn.commit()  # version row still says 8
+    finally:
+        conn.close()
+    store = JournalStore(db, CONFIG)  # must not raise "table pnl_ledger already exists"
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+    finally:
+        store.close()
+
+
+def test_fresh_db_created_at_current_version_carries_pnl_ledger_table(tmp_path):
+    store = JournalStore(str(tmp_path / "fresh9.db"), CONFIG)
+    try:
+        assert store.schema_version() == CONFIG.journal_schema_version
+        assert "pnl_ledger" in _table_names(str(tmp_path / "fresh9.db"))
     finally:
         store.close()

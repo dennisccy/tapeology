@@ -14,9 +14,10 @@ Result contract (locked by ``tests/test_mcp_server.py``):
   * 2xx — ``content[0].text`` == the response body byte-for-byte; ``isError`` false.
   * non-2xx — the backend's ACTUAL status and payload surfaced explicitly: ``content[0].text``
     == the response body byte-for-byte, ``content[1].text`` == ``"HTTP <status> from GET
-    <path>"``, ``isError`` true. Tools whose endpoints do not exist yet (``datasets`` /
-    ``backtests`` / ``pnl_ledger`` until J-02+) stay registered and surface their honest 404
-    this way — never placeholder data.
+    <path>"``, ``isError`` true. Every registered tool's endpoint has shipped (``datasets`` at
+    J-02, ``backtests`` at J-03, ``pnl_ledger`` at J-04); an allowlisted-but-missing path (e.g.
+    ``get_endpoint`` on ``/research/profiles`` before J-06) still surfaces the backend's honest
+    404 this way — never placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
     no offline snapshot exists anywhere in this module).
@@ -179,8 +180,9 @@ TOOLS: tuple[types.Tool, ...] = (
     types.Tool(
         name="pnl_ledger",
         description=(
-            "Read-only proxy of GET /research/pnl/ledger — the PnL ledger rows. 404 until J-04 "
-            "ships the ledger; the honest backend status is surfaced, never placeholder data."
+            "Read-only proxy of GET /research/pnl/ledger — the append-only PnL-ledger rows "
+            "(per-enhancement simulated net R and $ on train and hold-out separately, with n, "
+            "provenance, and the simulated register) JSON, verbatim."
         ),
         inputSchema=_object_schema({}),
     ),

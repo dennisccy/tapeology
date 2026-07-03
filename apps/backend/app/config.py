@@ -405,9 +405,15 @@ class Config:
     #            (``CREATE TABLE IF NOT EXISTS`` — idempotent by construction) and arriving EMPTY:
     #            a migration never fabricates a backtest report, and no existing table or row is
     #            touched by this step.
+    #   v8 → v9: NEW ``pnl_ledger`` table (era-3 capability 5, J-04; Data Contract row 32) in the
+    #            payload-blob shape with the ENHANCEMENT id as the primary key (one honest row per
+    #            enhancement — uniqueness is structural). Created by the migration
+    #            (``CREATE TABLE IF NOT EXISTS`` — idempotent by construction) and arriving EMPTY:
+    #            a migration never fabricates a ledger row, and no existing table or row is touched
+    #            by this step.
     # Excluded from ``config_fingerprint`` (see the exclusion set below): a migration must NOT change
     # the fingerprint — verdicts depend on classifier thresholds, never on where/how the DB is stored.
-    journal_schema_version: int = 8
+    journal_schema_version: int = 9
 
     # --- Profit-research era: HISTORICAL TAPE DATASET STORE directory (capability 1, J-02) ------
     # Where the dataset store persists explicitly recorded historical tape (one JSON file per
@@ -878,6 +884,50 @@ class Config:
     # (tests/test_backtests.py).
     backtest_list_max: int = 100
 
+    # --- Profit-research era: THE PnL LEDGER (capability 5, J-04; Data Contract row 32) ----------
+    # "INSUFFICIENT SAMPLE" LABEL MINIMUM: a ledger split (train or hold-out) whose ``n`` is BELOW
+    # this serves an explicit ``insufficient_sample`` marker (with ``n`` still present) on every
+    # surface — REST, the markdown render, and the MCP proxy of the same route — never a naked
+    # simulated PnL figure on a thin pool. This is a SERVING / PRESENTATION-ONLY threshold (the
+    # documented ``analytics_min_sample_size`` EXCLUSION rationale, J-59): it changes only what the
+    # ledger surfaces CHOOSE to label, never any persisted research value (the stored row keeps its
+    # verbatim copied aggregates whatever the minimum reads). It is therefore EXCLUDED from
+    # ``config_fingerprint`` (see the exclusion set below) — two journals identical in every
+    # threshold but viewed at different label minimums MUST share a fingerprint. Defaults to 5 (the
+    # ``analytics_min_sample_size`` floor — a small but non-trivial n under which a distribution
+    # claim would be dishonest). NOTE: J-07's PROMOTION minimum is a separate, future decision —
+    # a gate that decides what gets promoted shapes persisted rows and will be fingerprinted there.
+    # Pinned by a fingerprint-stability test + the founding-value counter-test
+    # (tests/test_pnl_ledger.py).
+    pnl_min_sample_size: int = 5
+    # THE FOUNDING BASELINE ROW's identity (config-owned — no literal in research code): the
+    # enhancement id and title of the era's FIRST ledger row, measuring strategy v1 on profile
+    # ``default`` over the frozen fixture train + hold-out pair. The id is the uniqueness key (one
+    # honest row per enhancement), so re-running the seeding CLI finds it and no-ops honestly.
+    # Both values are persisted VERBATIM into the row, so they are row-shaping and DELIBERATELY
+    # NOT excluded from ``config_fingerprint`` (the never-pool honesty mechanism — pinned by the
+    # counter-test in tests/test_pnl_ledger.py).
+    pnl_founding_enhancement_id: str = "founding-baseline-strategy-v1-default"
+    pnl_founding_enhancement_title: str = "founding baseline — strategy v1 on default"
+    # THE FOUNDING WINDOWS (UTC ISO start/end pairs): the exact slices of the committed keyless
+    # ``PG_SIP_REFERENCE`` window the founding row measures — chosen to reproduce the committed
+    # fixture dataset pair CONTENT-IDENTICALLY (the seeding CLI records through the real store
+    # path; content checksums equal the committed pair's, proven in tests/test_pnl_ledger.py).
+    # Frozen coordinates of frozen data: they select WHAT the founding row measures, so they are
+    # row-shaping and DELIBERATELY NOT excluded from ``config_fingerprint``.
+    pnl_founding_train_window: tuple = ("2026-06-09T17:00:00Z", "2026-06-09T17:01:00Z")
+    pnl_founding_holdout_window: tuple = ("2026-06-09T17:05:00Z", "2026-06-09T17:05:45Z")
+    # WHERE the pure-rendered PnL history markdown lives: the COMMITTED repo file
+    # ``reports/pnl/pnl-history.md`` (goal.md capability 5 / Product Shape names exactly this
+    # path). Package-anchored absolute default (the ``dataset_dir`` pattern) so the render CLI
+    # resolves it whatever the process cwd is; tests pass an explicit temp path to the write
+    # function instead. EXCLUDED FROM ``config_fingerprint`` (see the exclusion set below) with
+    # the ``journal_db_path`` / ``dataset_dir`` discipline: WHERE the render is written cannot
+    # affect any persisted research value, and the default embeds an absolute per-machine path.
+    pnl_history_md_path: str = str(
+        Path(__file__).resolve().parents[3] / "reports" / "pnl" / "pnl-history.md"
+    )
+
     def strategy_definition(self, strategy_id: str) -> dict | None:
         """The COMPLETE config-owned strategy definition for ``strategy_id`` (Data Contract row 34).
 
@@ -1069,6 +1119,24 @@ class Config:
             # persisted backtest reports, so they MOVE the fingerprint (the intended
             # never-pool-across-fingerprints honesty mechanism; the study-keys precedent).
             "backtest_list_max",
+            # The PnL-ledger "insufficient sample" LABEL minimum (era-3 capability 5 / J-04): a
+            # SERVING / PRESENTATION-ONLY threshold by the documented ``analytics_min_sample_size``
+            # precedent above — it changes only which ledger splits get LABELED at read, never any
+            # persisted ledger value (rows store verbatim copies of the row-31 aggregates whatever
+            # this reads). Two journals identical in every threshold but viewed at different label
+            # minimums MUST share a fingerprint. The founding-row identity values
+            # (``pnl_founding_enhancement_id`` / ``pnl_founding_enhancement_title``) and the
+            # founding windows (``pnl_founding_train_window`` / ``pnl_founding_holdout_window``)
+            # are DELIBERATELY NOT excluded — they are persisted verbatim into (or select the data
+            # measured by) the founding ledger row, so they MOVE the fingerprint (the intended
+            # never-pool honesty mechanism). Pinned both ways in tests/test_pnl_ledger.py.
+            "pnl_min_sample_size",
+            # The PnL-history markdown target path (era-3 capability 5 / J-04): an operational
+            # storage location with the ``journal_db_path`` / ``dataset_dir`` discipline — WHERE
+            # the pure render is written cannot affect any persisted research value, and the
+            # package-anchored default embeds an absolute path that would otherwise mint a
+            # different fingerprint per machine. Pinned in tests/test_pnl_ledger.py.
+            "pnl_history_md_path",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)

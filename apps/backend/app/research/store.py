@@ -123,6 +123,12 @@ CREATE TABLE IF NOT EXISTS backtests (
     payload             TEXT NOT NULL,
     created_wall_ts     REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS pnl_ledger (
+    enhancement_id      TEXT PRIMARY KEY,
+    payload             TEXT NOT NULL,
+    created_wall_ts     REAL NOT NULL
+);
 """
 
 
@@ -301,6 +307,35 @@ class HintRecord:
     ticker: str
     payload: dict
     created_wall_ts: float
+
+
+@dataclass(frozen=True)
+class PnlLedgerRecord:
+    """One persisted PnL-ledger row (era-3 capability 5, J-04) — read back as an immutable record.
+
+    The ``pnl_ledger`` table (added by the v8 -> v9 migration) uses the PAYLOAD-BLOB shape the
+    ``studies`` / ``backtests`` tables proved, keyed by the ENHANCEMENT id (one honest row per
+    enhancement — uniqueness is structural, enforced by the primary key; a duplicate append is the
+    explicit :class:`DuplicateEnhancementError` refusal, never an update). The ``payload`` carries
+    the complete row-32 record composed ONCE at validation time by ``app/research/pnl_ledger.py``
+    (the single writer): enhancement id + title, the baseline-vs-candidate net R AND net $ on
+    train AND hold-out SEPARATELY (verbatim copies of the persisted row-31 backtest aggregates —
+    never recomputed), n per split, full provenance (per-split source backtest report id +
+    dataset id + checksum; strategy id, profile id, ``config_fingerprint``), and the timestamp.
+
+    APPEND-ONLY at the repository level — the ``verdict_events`` standard: the repository exposes
+    NO update and NO delete for ledger rows; the only way the ledger changes is appending a new
+    row for a NEW enhancement. The routes, the markdown render, and the MCP ``pnl_ledger`` proxy
+    all serve these stored rows VERBATIM (labels are presentation applied at read)."""
+
+    enhancement_id: str
+    payload: dict
+    created_wall_ts: float
+
+
+class DuplicateEnhancementError(Exception):
+    """A ledger row for this enhancement id already exists — the append is REFUSED explicitly
+    (one honest row per enhancement; uniqueness enforcement is not an update path)."""
 
 
 class _StopSentinel:
@@ -540,7 +575,33 @@ class JournalStore:
                 raise
             current = 8
 
-        # Future steps (current < 9, …) append here, each in its own BEGIN IMMEDIATE block.
+        # --- v8 -> v9: create the J-04 pnl_ledger table (era-3 capability 5, row 32) --------------
+        if current < 9:
+            self._write_conn.execute("BEGIN IMMEDIATE")
+            try:
+                # A NEW payload-blob table keyed by the ENHANCEMENT id (one honest row per
+                # enhancement — uniqueness is structural). ``CREATE TABLE IF NOT EXISTS`` is
+                # idempotent by construction, so a DB that already carries the table (only the
+                # version row is stale) skips straight to bumping the version. The table arrives
+                # EMPTY and NO existing table or row is touched: a migration never fabricates a
+                # PnL-ledger row (the founding row is appended ONLY by the explicit seeding CLI).
+                self._write_conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS pnl_ledger (
+                        enhancement_id      TEXT PRIMARY KEY,
+                        payload             TEXT NOT NULL,
+                        created_wall_ts     REAL NOT NULL
+                    )
+                    """
+                )
+                self._write_conn.execute("UPDATE schema_version SET version = 9")
+                self._write_conn.commit()
+            except Exception:
+                self._write_conn.rollback()
+                raise
+            current = 9
+
+        # Future steps (current < 10, …) append here, each in its own BEGIN IMMEDIATE block.
 
     def _read_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -1183,6 +1244,70 @@ class JournalStore:
             return [
                 BacktestRecord(
                     id=r["id"],
+                    payload=json.loads(r["payload"]),
+                    created_wall_ts=r["created_wall_ts"],
+                )
+                for r in rows
+            ]
+        finally:
+            conn.close()
+
+    # --- the PnL ledger (era-3 capability 5, J-04, row 32) — APPEND-ONLY, the verdict_events standard
+    def append_pnl_ledger_row(self, record: PnlLedgerRecord) -> None:
+        """Append ONE PnL-ledger row (J-04). There is deliberately NO update/delete counterpart —
+        the ledger is append-only at the repository level (the ``verdict_events`` standard,
+        capability 28 / journal-integrity): the only way the product's honesty record changes is
+        appending a new row for a NEW enhancement. A row whose enhancement id already exists is
+        the explicit :class:`DuplicateEnhancementError` refusal (one honest row per enhancement —
+        the primary key makes uniqueness structural; nothing is overwritten, nothing mutates).
+        The write goes through the single writer queue (``BEGIN IMMEDIATE``), never from event
+        processing or the WS serialization path."""
+
+        def _fn(conn: sqlite3.Connection) -> None:
+            try:
+                conn.execute(
+                    "INSERT INTO pnl_ledger (enhancement_id, payload, created_wall_ts) VALUES (?,?,?)",
+                    (record.enhancement_id, json.dumps(record.payload), record.created_wall_ts),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise DuplicateEnhancementError(
+                    f"a PnL-ledger row for enhancement '{record.enhancement_id}' already exists — "
+                    f"the ledger is append-only (one honest row per enhancement), so the append is "
+                    f"refused"
+                ) from exc
+
+        self._do_write(_fn)
+
+    def get_pnl_ledger_row(self, enhancement_id: str) -> PnlLedgerRecord | None:
+        """One ledger row read back as an immutable record (the served projection is its payload)."""
+        conn = self._read_conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM pnl_ledger WHERE enhancement_id=?", (enhancement_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            return PnlLedgerRecord(
+                enhancement_id=row["enhancement_id"],
+                payload=json.loads(row["payload"]),
+                created_wall_ts=row["created_wall_ts"],
+            )
+        finally:
+            conn.close()
+
+    def list_pnl_ledger(self) -> list[PnlLedgerRecord]:
+        """Every ledger row in INSERTION order (rowid ascending — the honest chronology of an
+        append-only table that structurally has no delete: the record reads oldest-first, one row
+        per enhancement, exactly as appended). Read VERBATIM — the route, the markdown render, and
+        the MCP proxy all consume THIS one read (never recomputed, never a second query path).
+        No serving cap: the ledger grows one row per validated enhancement (a human-scale count),
+        and the honesty record is only honest when served whole."""
+        conn = self._read_conn()
+        try:
+            rows = conn.execute("SELECT * FROM pnl_ledger ORDER BY rowid ASC").fetchall()
+            return [
+                PnlLedgerRecord(
+                    enhancement_id=r["enhancement_id"],
                     payload=json.loads(r["payload"]),
                     created_wall_ts=r["created_wall_ts"],
                 )

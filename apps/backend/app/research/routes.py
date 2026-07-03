@@ -56,6 +56,7 @@ from .monitor import (
     compute_and_persist_final_statuses,
     compute_risk_flags,
 )
+from .pnl_ledger import ledger_projection
 from .feed_basis import data_feed_for_scenario
 from .journal_rows import journal_row
 from .store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
@@ -1583,3 +1584,20 @@ def cancel_backtest(
         )
     registry.backtest_jobs.cancel(backtest_id)
     return {"backtest_id": backtest_id, "cancelling": True}
+
+
+# --- The PnL ledger (era-3 capability 5, J-04) ------------------------------------------------------
+# Exactly ONE route, GET only (Product Shape): the ledger has NO REST write surface — rows are
+# appended solely by the validation path (today the founding-baseline seeding CLI), so any non-GET
+# verb on the path is FastAPI's default 405 (no handler exists). The route serves the stored rows
+# VERBATIM through the ONE ``ledger_projection`` read (app/research/pnl_ledger.py) — the same
+# function the committed markdown render walks, and the surface the MCP ``pnl_ledger`` tool
+# proxies byte-identically (Data Contract row 32: one computation, every surface reads it).
+
+
+@router.get("/pnl/ledger")
+def get_pnl_ledger(registry: ResearchRegistry = Depends(get_registry)) -> dict:
+    """The append-only PnL ledger (J-04): every stored row verbatim, in append order, wrapped
+    with the visible simulated register and the config-owned ``insufficient_sample`` labels
+    (``n`` always present). An empty ledger is an honest 200 empty list — never an error."""
+    return ledger_projection(registry.store, registry.config)

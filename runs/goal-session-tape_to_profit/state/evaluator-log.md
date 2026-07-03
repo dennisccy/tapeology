@@ -59,3 +59,18 @@
 **Reasoning:** J-03 passes on independently cross-checked evidence: full suite re-run green by this evaluator (952 collected — 951 passed / 1 skipped, exact match to dev + reviewer; +50 tests over iter-2, none deleted), the 42 new backtest/API/no-broker tests green, and all three J-03 screenshots inspected — the 404→200 flip, a done report carrying per-trade fills/fees/slippage, aggregates (net/gross R AND $, win rate 0.2, max drawdown, n=5), seeded null baseline (seed 1729, entry_count 100), full verbatim provenance, and the exact register string, plus honest 404/422 error legs. Byte-identity verified three ways (QA's two independent POSTs → identical 59,157-char result blocks; dev's live 59,844-byte re-POST; the API-level test). J-01/J-02/J-08 all re-verified with explicit result rows (replay lane crashed, browser-qa ran the fallback legs per the iter-1 lesson). Coherence: COHERENCE-PASS. Root cause found for this iteration's browser instability: the per-user tmpfs quota on /tmp (5.2G) is pinned by ~4.5G of accumulated pytest basetemp dirs — it killed Playwright at launch, starved Chrome, and initially broke this evaluator's own suite run; deletion was permission-denied, so it remains outstanding.
 
 **Next-step recommendation:** Iter-4 = J-04 (append-only PnL ledger: founding baseline row from strategy v1 on the fixture train AND hold-out datasets via this iteration's backtest reports; `GET /research/pnl/ledger`; pure-rendered `reports/pnl/pnl-history.md` with byte-level no-op regeneration; no update/delete paths; "insufficient sample" labeling; MCP `pnl_ledger` out of NOT_YET_SHIPPED with the non-empty-200 byte-identity test) at lean depth. Environment must-fix: clear `/tmp/pytest-of-dennis-chan` (~4.5G, pins the per-user tmpfs quota) or route pytest basetemp off tmpfs — otherwise browser lanes and large suite runs stay flaky.
+
+## Iteration 4 — goal-tape_to_profit-iter-4
+
+**Date:** 2026-07-03T10:17:12+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-04
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none
+
+**Reasoning:** J-04 verified passing on multi-surface evidence: iter-0 404 → live 200 with the founding row (explicit `baseline: null`, candidate net R+$ per split, n=1 both splits labeled insufficient sample, full provenance, register verbatim); POST/DELETE → 405; the row's aggregates equal the independent J-03 re-run capture EXACTLY and its dataset ids + checksums appear verbatim in the J-02 datasets-list capture; committed `reports/pnl/pnl-history.md` shows identical numbers; MCP `pnl_ledger` byte-identity tested (last tool out of honest-404). Evaluator independently confirmed the `app/mcp/__init__.py` diff is two documentation strings only and the only UPDATE SQL is schema_version bookkeeping. Suite 983 passed / 1 skipped, equivalence 7/7, replay lane 2/2 (J-01, J-08), COHERENCE-PASS.
+
+**Next-step recommendation:** Iter-5 = J-05 (`/performance` page: render `GET /research/pnl/ledger` verbatim — $ beside R beside n, register visible, train/hold-out separate, insufficient-sample labels exercised by the real n=1 founding row; champion summary per blueprint; Performance nav entry rendered from `/meta/ui-routes`, adding `/performance` to the route map — note the stored golden J-01 nav expectations must evolve with the 4th link) at lean depth. J-06 then J-07 after. J-07 planning heads-up: fixture windows arm n=1 per split (< min 5) — see lessons.md.

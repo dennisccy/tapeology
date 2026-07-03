@@ -1,0 +1,27 @@
+{
+  "phase": "goal-tape_to_profit-iter-4",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-03T09:55:00.000000Z",
+  "started_at": "2026-07-03T08:59:00.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/config.py",
+    "apps/backend/app/mcp/__init__.py",
+    "apps/backend/app/research/pnl_baseline.py",
+    "apps/backend/app/research/pnl_history.py",
+    "apps/backend/app/research/pnl_ledger.py",
+    "apps/backend/app/research/routes.py",
+    "apps/backend/app/research/store.py",
+    "apps/backend/tests/fixtures/journal_v8_schema.sql",
+    "apps/backend/tests/test_journal_migration.py",
+    "apps/backend/tests/test_mcp_server.py",
+    "apps/backend/tests/test_pnl_ledger.py",
+    "apps/backend/tests/test_pnl_ledger_api.py",
+    "reports/pnl/pnl-history.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "next_action": "review"
+}
