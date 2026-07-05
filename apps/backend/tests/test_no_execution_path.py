@@ -114,6 +114,7 @@ def test_scan_is_not_vacuous():
     assert "backend/app/main.py" in rels
     assert "backend/app/research/backtests.py" in rels  # the module that ships simulated fills
     assert "backend/app/research/pnl_scan.py" in rels  # the J-07 candidate-sweep harness
+    assert "backend/app/research/edge_report.py" in rels  # the J-09 baseline-edge report
     assert any(r.startswith("frontend/") for r in rels)
 
 

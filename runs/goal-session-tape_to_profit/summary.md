@@ -1,32 +1,32 @@
 # Goal Session Summary — tape_to_profit
 
-**Final verdict:** AWAITING_PUMP
-**Total iterations:** 6
-**Wall time (seconds):** 3009
+**Final verdict:** GOAL_ACHIEVED
+**Total iterations:** 8
+**Wall time (seconds):** 17091
 **Quota pauses:** 0
 **Started:** 2026-07-03T00:33:36.729156Z
-**Finished:** 2026-07-03T17:26:30.322204Z
+**Finished:** 2026-07-03T22:14:17.743033Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/tape_to_profit`. Open a PR with:
 
     gh pr create --base main --head goal/tape_to_profit \
-      --title "feat: tape_to_profit — AWAITING_PUMP" \
+      --title "feat: tape_to_profit — GOAL_ACHIEVED" \
       --body-file runs/goal-session-tape_to_profit/summary.md
 
 ## Final journey state
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-tape_to_profit-iter-5 |
-| J-02 | passing | goal-tape_to_profit-iter-5 |
-| J-03 | passing | goal-tape_to_profit-iter-5 |
-| J-04 | passing | goal-tape_to_profit-iter-5 |
-| J-05 | passing | goal-tape_to_profit-iter-5 |
-| J-06 | failing | - |
-| J-07 | failing | - |
-| J-08 | passing | goal-tape_to_profit-iter-5 |
+| J-01 | passing | goal-tape_to_profit-iter-7 |
+| J-02 | passing | goal-tape_to_profit-iter-7 |
+| J-03 | passing | goal-tape_to_profit-iter-7 |
+| J-04 | passing | goal-tape_to_profit-iter-7 |
+| J-05 | passing | goal-tape_to_profit-iter-7 |
+| J-06 | passing | goal-tape_to_profit-iter-7 |
+| J-07 | passing | goal-tape_to_profit-iter-7 |
+| J-08 | passing | goal-tape_to_profit-iter-7 |
 
 ## Anti-goal violations
 

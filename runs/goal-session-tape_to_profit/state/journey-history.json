@@ -4,75 +4,84 @@
       "id": "J-01",
       "name": "A read-only MCP server exposes the product over the canonical API",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-7",
-      "last_passing_iter": "goal-tape_to_profit-iter-7",
+      "last_verified_iter": "goal-tape_to_profit-iter-8",
+      "last_passing_iter": "goal-tape_to_profit-iter-8",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/J-01-verify.png"
+      "last_evidence_path": "apps/backend/app/mcp/ zero-diff since snapshot (git, evaluator-confirmed) — MCP read-only proxy unchanged; no new tool for J-09"
     },
     "J-02": {
       "id": "J-02",
       "name": "Historical tape datasets persist and replay byte-identically (train/hold-out registry)",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-7",
-      "last_passing_iter": "goal-tape_to_profit-iter-7",
+      "last_verified_iter": "goal-tape_to_profit-iter-8",
+      "last_passing_iter": "goal-tape_to_profit-iter-8",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/UT-J-02-result.png"
+      "last_evidence_path": "apps/backend/tests/test_datasets.py + test_datasets_api.py green (evaluator re-ran)"
     },
     "J-03": {
       "id": "J-03",
       "name": "Strategy grammar v1 backtests a dataset into a deterministic PnL report",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-7",
-      "last_passing_iter": "goal-tape_to_profit-iter-7",
+      "last_verified_iter": "goal-tape_to_profit-iter-8",
+      "last_passing_iter": "goal-tape_to_profit-iter-8",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/UT-J-03-result.png"
+      "last_evidence_path": "apps/backend/tests/test_backtests.py green (evaluator re-ran)"
     },
     "J-04": {
       "id": "J-04",
       "name": "Every enhancement lands one honest row in the PnL ledger",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-7",
-      "last_passing_iter": "goal-tape_to_profit-iter-7",
+      "last_verified_iter": "goal-tape_to_profit-iter-8",
+      "last_passing_iter": "goal-tape_to_profit-iter-8",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/UT-J-04-result.png"
+      "last_evidence_path": "apps/backend/tests/test_pnl_ledger.py + test_pnl_ledger_api.py green (evaluator re-ran); founding row config_fingerprint still 4d665603569b9dbf"
     },
     "J-05": {
       "id": "J-05",
       "name": "The /performance page reports PnL per enhancement honestly",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-7",
-      "last_passing_iter": "goal-tape_to_profit-iter-7",
+      "last_verified_iter": "goal-tape_to_profit-iter-8",
+      "last_passing_iter": "goal-tape_to_profit-iter-8",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/J-05-verify.png"
+      "last_evidence_path": "apps/backend/tests/test_profiles_api.py green (evaluator re-ran) + apps/frontend/ /performance page zero-diff since snapshot (git)"
     },
     "J-06": {
       "id": "J-06",
       "name": "Indicator profiles are versioned; the default stays byte-identical",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-7",
-      "last_passing_iter": "goal-tape_to_profit-iter-7",
+      "last_verified_iter": "goal-tape_to_profit-iter-8",
+      "last_passing_iter": "goal-tape_to_profit-iter-8",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/UT-J-06-result.png"
+      "last_evidence_path": "apps/backend/tests/test_profile_equivalence.py 15/15 green + CONFIG.config_fingerprint()==4d665603569b9dbf (evaluator recomputed live)"
     },
     "J-07": {
       "id": "J-07",
       "name": "The candidate sweep survives hold-out or says so honestly",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-7",
-      "last_passing_iter": "goal-tape_to_profit-iter-7",
+      "last_verified_iter": "goal-tape_to_profit-iter-8",
+      "last_passing_iter": "goal-tape_to_profit-iter-8",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "apps/backend/tests/test_pnl_scan.py (12 tests) + evaluator live CLI sweep: exit 0, 0 survivors, champion v1/default unmoved, byte-identical re-run"
+      "last_evidence_path": "apps/backend/tests/test_pnl_scan.py green (evaluator re-ran)"
     },
     "J-08": {
       "id": "J-08",
       "name": "The existing product is unchanged (regression sentinel)",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit-iter-7",
-      "last_passing_iter": "goal-tape_to_profit-iter-7",
+      "last_verified_iter": "goal-tape_to_profit-iter-8",
+      "last_passing_iter": "goal-tape_to_profit-iter-8",
       "first_seen_iter": "goal-tape_to_profit-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit-iter-6-evidence/J-08-verify.png"
+      "last_evidence_path": "apps/backend/tests/test_observer_equivalence.py 7/7 green (evaluator re-ran) + apps/frontend/ & apps/backend/app/mcp/ zero-diff since snapshot (git)"
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The champion's edge is measured honestly across a diverse dataset library",
+      "status": "passing",
+      "last_verified_iter": "goal-tape_to_profit-iter-8",
+      "last_passing_iter": "goal-tape_to_profit-iter-8",
+      "first_seen_iter": "goal-tape_to_profit-iter-8",
+      "last_evidence_path": "apps/backend/tests/test_edge_report.py 15/15 green (evaluator re-ran) + evaluator live CLI `python -m app.research.edge_report`: exit 0, finding 'no positive-edge dataset', REGISTER present, byte-identical re-run (sha256 c7b52dd9…), champion {v1,default} + pnl_ledger row_count 1 UNCHANGED after run (read-only proven)"
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-07-03T22:44:05+01:00"
+  "updated_at": "2026-07-05T15:38:00+01:00"
 }

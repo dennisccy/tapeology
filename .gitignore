@@ -81,3 +81,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 nul
+
+# Stray agent scratch dirs (belong under /tmp; never commit)
+scratchpad-tmp/

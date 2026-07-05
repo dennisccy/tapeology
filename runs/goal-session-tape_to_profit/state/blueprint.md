@@ -4,8 +4,10 @@
 > `docs/goal.md` (Product Shape, Key Capabilities 1–9, journeys J-01–J-08).
 > The archived eras' approved contract — Data Contract rows 1–29 in
 > `runs/goal-session-i_will_be_super_rich_with_my_loved_ones/state/blueprint.md` — remains
-> **in force, unchanged** (foundation invariant 13). This blueprint registers ONLY the
-> era-3 additions (rows 30–36) and one nav change.
+> **in force, unchanged** (foundation invariant 13). This blueprint registers the era-3
+> additions (rows 30–37) and one nav change. (Rows 30–36 and the nav change were registered
+> at baseline; row 37 + the J-09 machine-surface home were added additively at iter-8, when the
+> human-authored J-09 entered `docs/goal.md` — no nav-skeleton change, purely additive.)
 >
 > **Governing principles:** every value computed once and read verbatim by REST / WS / UI /
 > markdown reports / MCP; the `default` profile is frozen (byte-equivalence-tested) and the
@@ -38,6 +40,9 @@ Tapeology (top bar: Cockpit · Journal · Studies · Performance)
 - `python -m app.mcp` (stdio) — MCP tools proxying the canonical REST API over HTTP
   (`TAPEOLOGY_API_BASE`); registered via `project-extensions/mcp-servers.yaml`
 - `python -m app.research.pnl_scan --out <path>` — candidate sweep CLI
+- `python -m app.research.edge_report --out <path>` — baseline-edge report (J-09): ranks the
+  frozen champion's hold-out simulated edge per registered dataset; a pure render of stored
+  row-31 backtest aggregates — strictly read-only (promotes / appends / moves NOTHING)
 - `reports/pnl/pnl-history.md` — pure render of the stored PnL-ledger rows
 
 **Feature / journey homes** (≤2 clicks from nav where UI-facing):
@@ -52,6 +57,7 @@ Tapeology (top bar: Cockpit · Journal · Studies · Performance)
 | J-06 indicator profiles (frozen default) | API `/research/profiles` (MCP via `get_endpoint`) | machine |
 | J-07 candidate sweep (hold-out gate) | CLI `python -m app.research.pnl_scan` → scan report + ledger | machine |
 | J-08 regression sentinel | `/`, `/journal`, `/studies` unchanged + full backend suite | Cockpit/Journal/Studies |
+| J-09 champion edge across a diverse library | CLI `python -m app.research.edge_report` → ranked baseline-edge report over stored champion backtests | machine |
 
 No watchlist, no multi-symbol view, no order/execution affordance anywhere — unchanged.
 
@@ -71,6 +77,7 @@ Era-3 additions:
 | 34 | **Strategy definition v1** (entries from existing setup/state arming rules; exits: invalidation R-stop, horizon, state-flip; fee + slippage model; $-per-R notional) | config-owned strategy grammar (no ML, no runtime mutation) | read by the backtest runner; echoed verbatim in every report's provenance | all thresholds/fees/minimums from config — no magic numbers |
 | 35 | **UI route map** (the list of user-facing routes) | route-map owner module behind `GET /meta/ui-routes` | `GET /meta/ui-routes` | rendered nav AND MCP `ui_route_map` read it; the hand-maintained `NavBar.tsx` list is retired at J-01; lists exactly the live routes at all times |
 | 36 | **Scan reports** (per candidate: train + hold-out net R/$ deltas, n per split, per-dataset breakdown, `survivor`, `robustness: robust \| speculative`, overfit labels) | `app.research.pnl_scan` — computed once per run, written to the `--out` path (promotion additionally appends row 32 + moves the row-33 champion pointer) | scan report file (machine-readable) | deterministic under fixed seeds; zero candidates / zero survivors = honest report, exit 0; never modifies `default` or any engine default |
+| 37 | **Baseline-edge report** (per registered dataset: the CURRENT champion's `v1/default` net R AND $ AND n, its seeded null baseline; datasets ranked by hold-out edge; each flagged positive-edge ONLY when hold-out net R > 0 AND net $ > 0 AND n ≥ the configured minimum AND it beats its own null baseline; explicit "no positive-edge dataset" when none qualify) | `app.research.edge_report` — computed ONCE per run from the row-31 `aggregates` read VERBATIM (never a second R/$/edge computation; reuses the ONE `BacktestJobManager` runner exactly as `pnl_scan`/`pnl_baseline` do) | `--out` report file (machine-readable) | **strictly read-only: promotes / appends to the PnL ledger / moves the champion pointer NOTHING** (the only writes are the standard row-31 backtest rows the existing runner persists + the `--out` file); train and hold-out never pooled; every $ beside its R, its n, its null baseline, and the ONE `REGISTER` string; deterministic under fixed seeds — identical re-runs byte-identical (per-run-random report ids / wall-clock stripped, `pnl_scan` precedent); honest empty finding at exit 0; missing Alpaca credentials surface the EXISTING explicit unavailable state (503), never synthesized data; `default` engine stays byte-identical (equivalence-tested) |
 
 **Persistence (scoped, unchanged discipline).** Backtests + PnL ledger live in the
 journal-scoped SQLite (`TAPEOLOGY_JOURNAL_DB`) via the existing single writer queue and
@@ -82,4 +89,5 @@ cockpit's tape is never persisted — recording is an explicit research action.
 `tape_history`, `journal`, `analytics`, `studies`, `datasets`, `backtests`, `pnl_ledger`,
 `taxonomy`, `ui_route_map`, `get_endpoint` (GET-only, allowlisted to `/tape/*`,
 `/research/*`, `/meta/*`). Every tool's JSON byte-identical to its REST endpoint; backend
-down ⇒ explicit tool error, never cached/fabricated data.
+down ⇒ explicit tool error, never cached/fabricated data. (J-09 adds NO MCP tool — its edge
+report is a machine-surface CLI artifact, not a REST endpoint; MCP stays zero-diff.)
