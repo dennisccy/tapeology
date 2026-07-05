@@ -1,454 +1,343 @@
-# Tapeology — Project Goal (Era 3: the profit-research evolution)
+# Tapeology — Project Goal (Era 4: the structure-and-tape evolution)
 
-> Eras 1–2 (tape reading + the research evolution, journeys J-01 – J-68, GOAL_ACHIEVED across
-> three goal-mode sessions) are archived at [`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md).
-> Everything they shipped is the **foundation** of this goal and MUST NOT regress.
+> Eras 1–3 are the **foundation** of this goal and MUST NOT regress. Eras 1–2 (tape reading + the
+> research evolution, journeys J-01 – J-68, GOAL_ACHIEVED) are archived at
+> [`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md). Era 3 (the
+> profit-research evolution — the measurement machine, its own journeys J-01 – J-09, GOAL_ACHIEVED)
+> is now frozen foundation; its full record lives in git history and
+> `reports/goal-session-tape_to_profit-delivered.md`.
 
 ## Vision
 
-Tapeology already reads the tape: one US-stock ticker in, live order flow watched, and the
-current tape state classified into one of five states — `buyer_control`, `seller_control`,
-`bid_absorption`, `ask_absorption`, `unclear` — on the defining principle of **price impact,
-not raw aggression**. On top of that read sits a decision-support research layer: declared
-theses, tape-confirmation verdicts, an append-only journal, and replay studies with null
-baselines. Data comes from a deterministic seedable simulator (default, keyless) or from real
-US-equity vendors behind a provider-agnostic seam (Alpaca today: SIP historical, IEX live).
+Tapeology reads the tape — one US-stock ticker in, live order flow classified into five states
+(`buyer_control`, `seller_control`, `bid_absorption`, `ask_absorption`, `unclear`) on the defining
+principle of **price impact, not raw aggression**. Era 3 added an honest measurement machine —
+persisted train/hold-out datasets, deterministic backtests in R AND $ beside a null baseline, a
+hold-out promotion gate, a PnL ledger, and a baseline-edge report — and used it to prove that the first
+strategy, **v1** (enter WITH tape "control", no profit target), **loses money** on real tape.
 
-The **profit-research era** answers the question the first two eras deliberately refused to
-ask: **does the tape read convert to simulated profit — and does each enhancement to the read
-improve it?**
+The **structure-and-tape era** asks the sharper question: **does the tape read become profitable when
+it is anchored to price structure — support and resistance — instead of read in a vacuum?**
 
-To answer it honestly, the product gains:
+The strategy hypothesis, in the owner's terms:
 
-- **Persisted historical tape datasets** — recorded trade/quote streams that replay
-  byte-identically, split into **frozen train and hold-out sets**, so every measurement is
-  reproducible and nothing is ever judged on the data it was tuned on.
-- **A config-owned strategy grammar and a deterministic backtest engine** — simulated entries
-  and exits driven by the existing tape states and indicators, producing PnL in **R-multiples
-  AND dollars**, gross and net of an explicit fee/slippage model, always beside a seeded
-  random-entry null baseline.
-- **Versioned indicator profiles** — candidate indicator adjustments and additions live beside
-  the frozen `default` profile; the live cockpit never changes, and only the backtest layer may
-  opt into candidates.
-- **A read-only MCP server** — the whole product becomes machine-readable for the AI dev-chain
-  (the goal-mode MCP loop): every MCP tool is a thin proxy over the same canonical REST API a
-  human uses.
-- **An autonomous enhancement loop** — after every must-have journey passes, a proposer surveys
-  the product, screens candidate improvements against the hold-out data, promotes only
-  **hold-out survivors** as new journeys, and every promoted enhancement appends **one honest
-  row to the PnL ledger** so the operator can watch the PnL improve (or honestly not improve)
-  enhancement by enhancement.
+- **Multi-timeframe support/resistance.** Detect horizontal levels on long-term (1d / 1w / 1mo),
+  mid-term (1h / 4h / 8h), and shorter timeframes. Levels that align across timeframes matter more.
+- **Confluence → conviction classes.** Where levels from several timeframes cluster tightly, grade the
+  zone **A / B / C**; better confluence → higher conviction.
+- **Tape confirmation at the level.** When price reaches a level, read the tape to judge whether it
+  **rejects** (defenders hold — absorption / opposing control) or **breaks through** (control with real
+  price impact) — and take the long or short that implies.
+- **Class-scaled risk and size.** Better class → tighter stop (an A-class level defended on the tape can
+  justify a stop ~1bp beyond it), a more favourable reward target, and a larger **simulated** position;
+  worse class → wider stop, smaller size, or no trade.
 
-Absolutes, unchanged from day one: **no broker, no order placement (real or paper), no ML, no
-advice**. Every PnL figure is a measurement of the past under disclosed assumptions — never a
-forecast, never a promise.
+This rides the frozen foundation: the tape engine already emits exactly the "reject vs breakthrough"
+states, and the measurement machine already judges any strategy honestly on hold-out data. The genuinely
+new capability is **price structure** — the engine has never had a bar, a level, or a timeframe.
+
+Absolutes, unchanged from day one: **no broker, no order placement (real or paper), no ML, no advice.**
+Every PnL figure — and every "position size" — is a simulated measurement of the past under disclosed
+assumptions, sent nowhere.
 
 ## Target Users
 
-- The discretionary intraday trader (the project owner) using the tape read to support
-  decisions — now also as a **systematic researcher** measuring whether that read carries
-  simulated edge and which refinements improve it.
-- AI dev-chain agents (the goal-mode loop) surveying the product through its read-only MCP
-  tools and judging every enhancement by its hold-out simulated-PnL delta.
+- The discretionary intraday trader (the project owner), whose structure + tape method this era
+  formalizes into a deterministic, honestly-measured research strategy.
+- AI dev-chain agents (the goal-mode loop) building and judging it through the read-only MCP tools and
+  the hold-out edge report.
 
-## Foundation invariants (imported from the archived constitution — still law)
+## Foundation invariants (still law — eras 1–3)
 
-The archived goal's critical rules remain binding on ALL new code:
+The era-1–2 constitution is imported verbatim from
+[`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md) and remains binding on ALL new
+code: price-impact-over-aggression; honest uncertainty (`unclear` on weak/mixed evidence, feed- and
+halt-aware); no fabricated data (every failure surfaces an explicit state); single source of truth;
+no magic numbers (every threshold from config); provider-agnostic engine (vendor SDKs behind one
+adapter seam); deterministic & reproducible (byte-identical); no secrets in source; research stays
+read-only over the engine; journal/record integrity (append-only); source/feed/`config_fingerprint`
+honesty (never pool across feeds/fingerprints); dd-MM-yyyy dates; the existing surfaces
+(`/`, `/journal`, `/journal/[id]`, `/studies`, `/performance`) stay intact.
 
-1. **Price impact over raw aggression** — high one-sided aggression with no price progress is
-   absorption, never control.
-2. **Honest uncertainty** — weak/mixed evidence reads `unclear`; spread and impact are judged
-   relative to price, feed-aware and halt-aware; never manufacture a directional call.
-3. **No fabricated data** — every failure mode surfaces an explicit state (`stale`, error,
-   no-data, closed, unavailable); nothing is synthesized to force a green journey.
-4. **Single source of truth** — every value is computed exactly once and read identically by
-   REST, WebSocket, UI, MCP, and reports; nothing downstream recomputes it.
-5. **No magic numbers** — every threshold, window, fee, slippage, minimum-n, and cutoff comes
-   from config.
-6. **Provider-agnostic engine** — vendor SDKs live in one adapter behind the neutral seam.
-7. **Deterministic & reproducible** — same inputs, same seeds, same outputs, byte-identical.
-8. **No secrets in source** — keys only from environment; keyless runs are simulator-only with
-   explicit "unavailable" real modes.
-9. **Research stays read-only over the engine** — observers never mutate engine outputs
-   (byte-identical equivalence, exception-isolated).
-10. **Journal integrity** — research records are append-only, never backfilled, never inferred.
-11. **Source, feed, and config honesty** — every record stamps its source, `data_feed`, and
-    `config_fingerprint`; nothing pools across feeds or fingerprints.
-12. **Dates are dd-MM-yyyy everywhere**; times in the user's local timezone with US-session
-    quick-picks.
-13. **The existing surfaces stay intact** — cockpit `/`, `/journal`, `/journal/[id]`,
-    `/studies` keep working exactly as shipped.
+In addition, **era 3 (the profit-research measurement machine) is now frozen foundation**:
+
+1. The **tape engine** emits its five states byte-identically under the `default` profile; the live
+   cockpit and every archived surface stay unchanged (equivalence-tested; `config_fingerprint` pinned).
+2. The **measurement machine** — the dataset store (immutable, checksummed, frozen train/hold-out
+   splits), the deterministic backtest engine (R AND $, seeded null baseline, full provenance),
+   versioned profiles with the frozen `default`, the champion pointer, the append-only PnL ledger,
+   `/performance`, the candidate sweep (`pnl_scan`), the baseline-edge report (`edge_report`), and the
+   read-only MCP server — stays intact and is the **only** way this era judges profit.
+3. **v1 and `default` are frozen.** The new strategy is additive and versioned; it never mutates v1,
+   `default`, or any engine default, and never becomes the champion except by an honest hold-out
+   promotion.
 
 ## Success Criteria
 
 In priority order — honesty and non-regression outrank any profit number:
 
-1. **Nothing existing regresses.** The full backend suite stays green, the engine equivalence
-   test keeps proving byte-identical default outputs, and the archived-era surfaces keep
-   working (J-08).
-2. **Datasets are trustworthy.** A recorded dataset replays byte-identically to its source
-   stream, re-runs are identical, checksums verify, and train/hold-out tags are frozen at
-   registration.
-3. **Backtests are deterministic and honest.** PnL is reported in R AND $, gross and net of
-   the configured fee/slippage model, with trade count n, beside a seeded random-entry null
-   baseline, stamped with full provenance (dataset id + checksum, strategy config, profile id,
-   `config_fingerprint`).
-4. **Nothing is promoted on train performance alone.** A candidate becomes the champion only
-   by beating the incumbent on the frozen hold-out set with at least the configured minimum
-   trade count; train-only winners are labeled overfit and rejected.
-5. **The default read is frozen.** Indicator evolution is additive and versioned; the live
-   cockpit and every archived-era journey run on the byte-identical `default` profile.
-6. **Every enhancement reports its PnL delta.** One append-only PnL-ledger row per
-   enhancement (baseline vs candidate, train AND hold-out, R and $), surfaced at
-   `/performance`, in `reports/pnl/pnl-history.md`, and over REST/MCP.
-7. **The product is machine-readable.** Every MCP tool returns byte-identical JSON to its
-   canonical REST endpoint; everything an agent can do over MCP has a curl-equivalent.
+1. **Nothing existing regresses.** The full backend suite stays green, the engine equivalence test keeps
+   proving byte-identical `default` outputs, and every era-1–3 surface and capability keeps working.
+2. **Bars are trustworthy.** A recorded multi-timeframe bar series replays byte-identically, re-runs are
+   identical, checksums verify, and the feed is stamped; the free-plan capability is recorded honestly.
+3. **Levels and classes are deterministic and lookahead-free.** Support/resistance and A/B/C confluence
+   classes reproduce byte-identically and, at any as-of time T, use only bars at or before T.
+4. **The structure strategy is additive and honestly measured.** `structure_tape` is a registered
+   strategy beside a frozen v1; it is judged only by the era-3 machine and promoted only by beating the
+   champion on the frozen hold-out set at ≥ the configured minimum n — train-only wins are labelled
+   overfit and rejected.
+5. **PnL stays honest.** Every $ appears with its R, its n, its train/hold-out basis, its fee/slippage
+   assumptions, its null baseline, and the visible "simulated — not indicative of live results" register;
+   "position size" is an explicitly simulated notional that transmits nothing.
+6. **Determinism & single source of truth.** Bars, levels, and classes are each computed once, owned by
+   one canonical endpoint, and read verbatim by REST, MCP, and reports; every parameter comes from config.
 
 ## Key Capabilities
 
-Layered strictly on top of the archived eras' capabilities 1–34, which remain unchanged.
+Layered strictly on top of the era-1–3 capabilities, which remain unchanged.
 
-1. **Historical tape dataset store.** Recorded trade/quote event streams per
-   symbol + window + feed, stored under `TAPEOLOGY_DATASET_DIR` (default
-   `apps/backend/.data/datasets/`, gitignored), each with metadata (symbol, UTC window, feed,
-   event counts, checksum) and an immutable `train | holdout` split tag assigned at
-   registration. A committed miniature train + hold-out fixture pair proves the whole pipeline
-   keyless in CI. The live cockpit's tape is never persisted — recording is an explicit
-   research action.
-2. **Versioned indicator profiles.** Named engine-feature/classifier configurations. `default`
-   is the frozen legacy configuration, guarded by a byte-equivalence test against pinned
-   outputs. Candidate profiles may only add new feature keys or alternate threshold values;
-   they are selectable solely by backtest/study runs (never by the live cockpit) and the
-   profile id folds into `config_fingerprint`.
-3. **Strategy grammar v1.** Config-owned, human-readable rules: entries armed by the existing
-   setup/tape-state rules (setup type × direction), exits by invalidation R-stop, time horizon,
-   or state-flip; an explicit fee model (per-share + minimum) and slippage model (spread
-   fraction); a fixed $-per-R notional for dollar conversion. No ML anywhere.
-4. **Deterministic backtest engine.** Replays a dataset unpaced through a fresh engine (the
-   existing replay-study runner pattern), simulates fills at recorded prices adjusted by the
-   slippage model, and produces a persisted report: per-trade list and aggregates — net/gross
-   R and $, win rate, max drawdown (R), n — beside a seeded random-entry null baseline on the
-   same dataset. Runs as a cancellable job like studies.
-5. **The PnL ledger.** An append-only SQLite table (journal DB) + `GET /research/pnl/ledger` +
-   a pure-rendered `reports/pnl/pnl-history.md`. One row per enhancement: enhancement id and
-   title, baseline vs candidate net R and net $ on train AND hold-out, n per split, full
-   provenance, timestamp. No update or delete paths exist.
-6. **Read-only MCP server.** `python -m app.mcp` (stdio), spawned on demand by the AI CLI.
-   Tools are thin HTTP clients against the running backend (`TAPEOLOGY_API_BASE`, default
-   `http://localhost:8000`) — never a second app instance, never direct engine imports:
-   `tape_state`, `tape_features`, `tape_history`, `journal`, `analytics`, `studies`,
-   `datasets`, `backtests`, `pnl_ledger`, `taxonomy`, `ui_route_map`, plus a generic
-   `get_endpoint(path)` allowlisted to GET `/tape/*`, `/research/*`, `/meta/*`. Backend down →
-   explicit tool error. Registered for the dev-chain via `project-extensions/mcp-servers.yaml`.
-7. **Candidate sweep harness.** `python -m app.research.pnl_scan --out <path>` evaluates every
-   registered candidate (profile or strategy variant) against the champion over all train
-   datasets, validates survivors on the hold-out set, appends promotions to the PnL ledger,
-   and writes a machine-readable scan report. Zero candidates or zero survivors is an honest,
-   exit-0 outcome.
-8. **The `/performance` page.** A fourth top-level page rendering the PnL ledger and the
-   current champion (strategy + profile) verbatim from the canonical endpoints, in the
-   existing dark cockpit design language.
-9. **A canonical UI route map.** `GET /meta/ui-routes` owns the list of user-facing routes;
-   the rendered navigation and the MCP `ui_route_map` tool read it, never a hand-maintained
-   duplicate.
+1. **Multi-timeframe bar store.** Recorded OHLC bar series per symbol + timeframe + window + feed,
+   immutable and checksummed (mirroring the dataset store), stored under the research data dir
+   (gitignored except a committed multi-timeframe fixture). Fetched through a new neutral `RawBar` on
+   the adapter seam via Alpaca `get_stock_bars` (`TimeFrame` Minute/Hour/Day/Week/Month); recording is
+   an explicit credentialed research action.
+2. **Deterministic support/resistance detection.** A config-owned module deriving horizontal levels per
+   timeframe from bars — swing pivots (fractal extremes over ±N neighbours) and prior-period extremes
+   (prior day/week/month high/low/close) — each with a strength (timeframe weight × touch count),
+   computed with no lookahead. No ML, no fitting.
+3. **Confluence classification.** Deterministic clustering of levels across timeframes into confluence
+   zones graded **A / B / C** by config thresholds; served beside the levels.
+4. **The `structure_tape` strategy.** A second config-owned strategy in a strategy registry beside the
+   frozen `v1`: entries arm where price enters a classified level's proximity band AND the tape confirms
+   direction (rejection → fade; breakthrough → follow), reusing the engine's existing level-cross +
+   state-native arming. Exits and R/$ math reuse the era-3 backtest engine.
+5. **Class-scaled risk and simulated sizing.** Level class drives the stop distance (A ≈ 1bp), the reward
+   target (R:R toward the next opposing level), and a simulated position notional — all config-owned,
+   reported per class as caveated simulated PnL.
+6. **Strategy A/B on the measurement machine.** The edge-report / sweep path, generalized to evaluate a
+   named strategy (not only the champion), so `structure_tape` is compared to `v1` on train AND hold-out
+   with the same honesty guards and the same hold-out promotion gate.
 
 ## Non-Goals
 
-- No brokerage integration, order placement, routing, or execution of any kind — **neither
-  real-money nor paper-trading APIs**. Simulated fills exist only inside the offline
-  backtester, computed against recorded historical tape and sent nowhere.
-- No machine learning, no online/in-engine tuning, no fitted thresholds — candidate search is
-  bounded, config-enumerated, offline, and hold-out-validated.
-- No trading advice, no imperative cues ("buy", "sell", "enter now"), no prediction language,
-  no expected-return claims. Simulated PnL describes the past under stated assumptions.
-- No account, capital, portfolio, or position management; no compounding equity projections.
-- No stock scanning/screening, multi-symbol dashboards, news/sentiment, fundamentals, or
-  general-purpose charting — unchanged from the archived eras.
-- No auto-modification of the `default` profile or any live-cockpit behavior by the
-  enhancement loop.
+- No brokerage integration, order placement, routing, or execution of any kind — **neither real-money
+  nor paper-trading APIs**. Simulated fills exist only inside the offline backtester.
+- No machine learning, no online/in-engine tuning, no fitted thresholds — S/R detection, confluence
+  scoring, and class thresholds are bounded, config-enumerated, offline, and hold-out-validated.
+- No trading advice, imperative cues, prediction language, or expected-return claims. Simulated PnL and
+  simulated sizing describe the past under stated assumptions.
+- No account, capital, portfolio, or real position management; no compounding equity projections. Class
+  "position size" is a simulated per-trade notional only.
+- No stock scanning/screening, multi-symbol dashboards, news/sentiment, fundamentals, or general-purpose
+  charting — unchanged from the archived eras.
+- No auto-modification of the `default` profile, the `v1` strategy, or any live-cockpit behaviour.
 
 ## Constraints
 
-- **Stack (carried over):** Backend Python 3.12 + FastAPI (uvicorn, REST + WebSocket), tests
-  via pytest (venv at `apps/backend/.venv/`, package manager `uv`). Frontend Next.js 15 App
-  Router + TypeScript + Tailwind v3 (npm), charts via `lightweight-charts`. Research
-  persistence in the journal-scoped SQLite (`TAPEOLOGY_JOURNAL_DB`). Backend
-  `http://localhost:8000`, frontend `http://localhost:3000`. Reserved sim tickers
-  (`SIM-BUYER`, `SIM-SELLER`, `SIM-BIDABS`, `SIM-ASKABS`, `SIM-CHOP`) still work keyless.
-- **Dataset discipline:** datasets live under `TAPEOLOGY_DATASET_DIR` (gitignored except the
-  committed CI fixture pair), are immutable once registered (content checksum verified on
-  load), stamp their feed, and carry a split tag that can never be changed afterwards.
-- **Profile discipline:** the `default` profile is frozen and equivalence-tested; candidates
-  are additive-only; every artifact touching a non-default profile is stamped with the profile
-  id; profile id is part of `config_fingerprint`.
-- **Backtest determinism:** seeded, unpaced, single-threaded per run; identical inputs and
-  seeds reproduce byte-identical reports; the null baseline uses a seeded RNG recorded in the
-  report.
-- **PnL honesty register:** a dollar figure never appears without its R figure, its n, and the
-  visible register "simulated — assumed fees/slippage — not indicative of live results";
-  results with n below the configured minimum are labeled "insufficient sample"; train and
-  hold-out numbers are never pooled or averaged together.
-- **MCP read-only discipline:** the MCP server exposes no mutating tools, proxies the
-  canonical REST API over HTTP, adds no second computation path, and fails explicitly when the
-  backend is unreachable.
-- **Design direction:** the `/performance` page follows the existing dark tape-cockpit design
-  tokens; density and honesty over decoration.
+- **Stack (carried over):** Backend Python 3.12 + FastAPI (uvicorn, REST + WebSocket), pytest
+  (venv `apps/backend/.venv/`, `uv`). Frontend Next.js 15 + TypeScript + Tailwind v3 (npm),
+  `lightweight-charts`. Research persistence in journal-scoped SQLite (`TAPEOLOGY_JOURNAL_DB`).
+  Backend `http://localhost:8000`, frontend `http://localhost:3000`. Sim tickers stay keyless.
+- **Bar discipline:** bar series live under the research data dir (gitignored except a committed
+  multi-timeframe fixture), are immutable once recorded (checksum verified on load), and stamp their
+  symbol, timeframe, UTC window, and feed. Free-tier Alpaca serves historical bars with a ~15-minute
+  recency delay and a request-rate limit; bulk backfills throttle and never fetch the most recent bar.
+- **Structure discipline:** all S/R parameters (pivot lookback N, touch tolerance, confluence band,
+  class thresholds, proximity band) are config-owned; levels/classes are computed once, served from one
+  canonical endpoint, and carry **no lookahead** (as-of time T uses only bars ≤ T).
+- **Strategy discipline:** `v1` and `default` are frozen and equivalence-tested; `structure_tape` is
+  additive-only in a strategy registry; every artifact touching a non-default strategy is stamped with
+  its strategy id; the strategy id folds into the backtest provenance.
+- **PnL honesty register:** unchanged from era 3 — a $ never without its R, n, basis, assumptions, null
+  baseline, and the visible "simulated — not indicative of live results" register; sub-minimum-n results
+  labelled "insufficient sample"; train and hold-out never pooled.
+- **MCP read-only discipline:** the MCP server exposes no mutating tools, proxies the canonical REST API,
+  adds no second computation path, and fails explicitly when the backend is unreachable.
 
 ### Glossary (new terms; archived glossary still applies)
 
-- **Dataset** — an immutable recorded trade/quote event stream (symbol + window + feed) with
-  checksum and split tag.
-- **Train / hold-out** — the two frozen dataset splits; tuning may only ever see train;
-  promotion is decided only on hold-out.
-- **Profile** — a named, versioned engine indicator/classifier configuration; `default` is the
-  frozen legacy one.
-- **Strategy** — a config-owned rule set mapping tape states/features to simulated entries and
-  exits.
-- **Backtest** — a deterministic replay of one dataset under one strategy + profile, producing
-  a PnL report beside a null baseline.
-- **PnL ledger** — the append-only record of per-enhancement baseline-vs-candidate PnL deltas.
-- **Champion** — the currently promoted strategy + profile pair; only a hold-out survivor may
-  replace it.
+- **Bar / timeframe** — an OHLC candle for a symbol over a calendar interval (1m/1h/4h/8h/1d/1w/1mo); a
+  recorded, checksummed, immutable bar series is the multi-timeframe data foundation.
+- **Support / resistance level** — a horizontal price derived deterministically from bars (swing pivot or
+  prior-period extreme), carrying a timeframe, a type, a touch count, and a strength.
+- **Confluence zone / class** — a cluster of levels from several timeframes within a tolerance band,
+  scored and graded **A / B / C** by conviction.
+- **structure_tape** — the era-4 strategy: tape-confirmed entries at classified levels, with class-scaled
+  stop, reward, and simulated size.
+- **Reject / breakthrough** — the two tape readings at a level: rejection (absorption / opposing control
+  holds the level → fade) vs breakthrough (control with price impact through the level → follow).
 
 ## Product Shape
 
-Nav (top bar): **Cockpit `/` · Journal `/journal` (+ `/journal/[id]`) · Studies `/studies` ·
-Performance `/performance`** — the first three exactly as shipped in the archived eras.
+Nav (top bar) is unchanged: **Cockpit `/` · Journal `/journal` (+ `/journal/[id]`) · Studies `/studies`
+· Performance `/performance`**. This era's new surfaces are machine surfaces (REST + MCP) — a future
+levels view is optional and out of the data-foundation scope.
 
-**API surface.** The archived canonical endpoints are unchanged: `/health`,
-`POST/DELETE /watch/{ticker}` (+ `/pause`, `/resume`, `/speed`), `/symbols/search`,
-`/market/clock`, `GET /tape/{ticker}/state|features|events|summary|history`,
-`WS /tape/{ticker}/stream`, and `/research/*` (taxonomy, analytics, thesis, hints, journal,
-studies). The profit-research era adds, every projection computed once server-side:
+**API surface.** The archived + era-3 canonical endpoints are unchanged. The structure-and-tape era adds,
+every projection computed once server-side:
 
-- `POST /research/datasets` (record/register) · `GET /research/datasets` · `GET /research/datasets/{id}`
-- `POST /research/backtests` · `GET /research/backtests` · `GET /research/backtests/{id}` (+ cancel, mirroring studies)
-- `GET /research/pnl/ledger`
-- `GET /research/profiles`
-- `GET /meta/ui-routes`
+- `POST /research/bars` (record/register) · `GET /research/bars` · `GET /research/bars/{id}`
+- `GET /research/levels` (symbol + as-of → levels + confluence classes, from a recorded bar series)
+- `GET /research/strategies` (the strategy registry: `v1` + `structure_tape`, and the champion)
 
 MCP tools are thin proxies over exactly these — no new computation, no divergent serialization.
 
 **Data Contract (canonical values — each computed once, owned by one place):**
 
-- Tape state, confidence, features, history — computed in the engine (unchanged owner).
-- Dataset records and checksums — owned by the dataset store; served only via
-  `/research/datasets*`.
-- Backtest results (trades, R/$ aggregates, null baseline) — computed once by the backtest
-  runner and persisted; `/performance`, reports, and MCP read the stored rows verbatim.
-- PnL-ledger rows — appended once at validation time; every surface (REST, page, markdown,
-  MCP) renders the same stored rows.
-- Indicator profiles and the champion pointer — config-owned; served via `/research/profiles`.
-- The UI route map — owned by `/meta/ui-routes`; the nav renders it, never a second list.
+- Bar series and checksums — owned by the bar store; served only via `/research/bars*`.
+- Support/resistance levels and A/B/C confluence classes — computed once by the S/R module (no
+  lookahead); served via `/research/levels`; rendered verbatim by every surface (REST, MCP, reports).
+- Registered strategies and the champion pointer — config-owned; served via `/research/strategies` (and
+  the existing `/research/profiles` champion summary).
+- Everything era-3 owned (tape state/features/history, datasets, backtest results, PnL-ledger rows, the
+  UI route map) keeps its single owner unchanged.
 
 ## Must-have user journeys
 
-Journeys **J-01 – J-09** are the profit-research era. Each is sized for one lean iteration.
-J-01 – J-08 are verifiable **keyless** via the simulator and the committed fixture dataset
-pair; real-scale datasets are an operator action requiring Alpaca credentials and only enlarge
-the data — they change no behavior. **J-09 is that operator action made a first-class journey —
-it requires Alpaca credentials to record a real-scale library and measure the existing
-champion, adding a read-only edge report while changing no engine or `default` behavior.**
-Natural dependency order: J-02 → J-03 → J-04 → J-05 and J-06 → J-07; J-09 follows J-02 + J-03;
-J-01 is independent; J-08 guards continuously. The foundation (archived J-01 – J-68 behavior)
-MUST NOT regress.
+Journeys **J-01 – J-07** are the structure-and-tape era, staged **data-foundation-first**. J-01 – J-06
+are verifiable **keyless** on committed fixtures; real multi-timeframe bars and a real evaluation library
+are a credentialed operator action (Alpaca) that only enlarges the data. Natural dependency order:
+J-01 → J-02 → J-03 → J-04 → J-05 → J-06; J-07 guards continuously. The foundation (eras 1–3) MUST NOT
+regress.
 
-- **J-01: A read-only MCP server exposes the product over the canonical API**
+- **J-01: Multi-timeframe historical bars are ingested and persisted (data foundation + free-plan probe)**
   - Steps:
-    1. With the backend running, start a stdio MCP client session against `python -m app.mcp`
-       (as the AI CLI would) and list the tools
-    2. Watch `SIM-BUYER`, then call `tape_state`, `tape_features`, and `ui_route_map`
-    3. `curl` the corresponding REST endpoints and diff the payloads
-    4. Fill the real server entry into `project-extensions/mcp-servers.yaml`, run
-       `./scripts/automation/sync-cli-assets.sh`, then
-       `python3 scripts/automation/lib/mcp_sync_selftest.py self-test`
-    5. Stop the backend and call any tool again
-  - Acceptance: the advertised tool set matches capability 6 and every tool's JSON is
-    **byte-identical** to its canonical REST endpoint (an automated test asserts this per
-    tool); no tool mutates anything (tool list contains no write verbs; server code performs
-    only GETs); `get_endpoint` refuses paths outside `/tape/*`, `/research/*`, `/meta/*`;
-    with the backend down every tool returns an explicit error, never cached or fabricated
-    data; the MCP sync self-test passes, `.mcp.json` is generated at the repo root **and**
-    is gitignored; `GET /meta/ui-routes` lists exactly the live routes and the rendered
-    top-bar links match it (browser-verified). *(Keyless; automated + browser-verifiable.)*
-    [NEW] walkthrough: one MCP tool call narrated beside its curl equivalent.
+    1. Add a neutral `RawBar` to the adapter seam and an Alpaca `fetch_bars(symbol, start, end, timeframe)`
+       calling `get_stock_bars` with `TimeFrame` (Minute/Hour/Day/Week/Month); run a one-symbol capability
+       probe (daily/weekly/monthly/hourly) and record the plan's feed, lookback range, and rate behaviour
+    2. Record a bar series as an immutable, checksummed store entry (symbol + timeframe + UTC window +
+       feed), mirroring the dataset store; commit a miniature multi-timeframe bar fixture
+    3. Read the stored bars via `GET /research/bars` (and the MCP proxy); re-fetch/re-read identically
+  - Acceptance: a bar series stores symbol, timeframe, UTC window, feed, bar count, and checksum; reading
+    it is **byte-identical** across re-runs and checksum-verified on load; a corrupted file surfaces an
+    explicit error; a committed multi-timeframe bar fixture proves ingest→persist→read in CI **without
+    credentials**; the Alpaca path fetches real bars when creds are present and returns the existing
+    explicit **missing-credentials** state when absent (never fabricated bars); the probe's honest finding
+    (feed = SIP or IEX, lookback range, rate limit) is recorded. *(Keyless on the fixture; real bars are a
+    credentialed operator action.)*
 
-- **J-02: Historical tape datasets persist and replay byte-identically (train/hold-out registry)**
+- **J-02: Deterministic support/resistance levels per timeframe**
   - Steps:
-    1. Record a dataset from a historical fetch (the committed fixture window works keyless)
-       via `POST /research/datasets`
-    2. Register its split tag (`train` or `holdout`), then attempt to re-tag it
-    3. Replay the dataset unpaced through a fresh engine twice; separately replay the original
-       source stream
-    4. List datasets via REST and the MCP `datasets` tool
-  - Acceptance: the dataset stores symbol, UTC window, feed, event counts, and checksum;
-    replaying it yields tape snapshots **byte-identical** to replaying the source stream, and
-    re-runs are identical; the checksum is verified on load and a corrupted file surfaces an
-    explicit error; re-tagging a registered split returns a 409-style refusal; a committed
-    miniature train + hold-out fixture pair proves record→register→replay in CI without
-    credentials; watching a live or sim ticker writes **no** dataset rows. *(Keyless;
-    automated.)*
-
-- **J-03: Strategy grammar v1 backtests a dataset into a deterministic PnL report**
-  - Steps:
-    1. Read the v1 strategy definition from config (entries from the existing setup/state
-       arming rules; exits: invalidation R-stop, horizon, state-flip; fee + slippage model;
-       $-per-R notional)
-    2. `POST /research/backtests` with dataset id + strategy + profile `default`; poll the job
-       to completion
-    3. Open the result via `GET /research/backtests/{id}`, the MCP `backtests` tool, and re-run
-       the identical request
-  - Acceptance: the report lists per-trade entries/exits with simulated fills at recorded
-    prices adjusted by the configured slippage model, and aggregates — **net and gross R AND
-    $**, win rate, max drawdown (R), n — beside a seeded random-entry null baseline on the
-    same dataset; it is stamped with dataset id + checksum, strategy config, profile id, and
-    `config_fingerprint`; an identical re-run reproduces a byte-identical report; the rendered
-    copy carries "simulated — assumed fees/slippage — not indicative of live results"; no
-    broker, order, or account code exists anywhere in the repo (asserted by a grep-style
-    test). *(Keyless on the fixture datasets; automated.)*
-
-- **J-04: Every enhancement lands one honest row in the PnL ledger**
-  - Steps:
-    1. Append the founding baseline row (strategy v1 on profile `default`, evaluated on the
-       fixture train AND hold-out datasets) via the validation path
-    2. Read `GET /research/pnl/ledger`, the MCP `pnl_ledger` tool, and regenerate
-       `reports/pnl/pnl-history.md`
-  - Acceptance: a ledger row records enhancement id + title, baseline-vs-candidate net R and
-    net $ on train AND hold-out separately, n per split, dataset/profile/fingerprint
-    provenance, and timestamp; the store exposes **no update or delete** path (same standard
-    as verdict events); the markdown is a pure render of the stored rows (regenerating with
-    unchanged rows is a byte-level no-op); REST, markdown, and MCP show identical numbers;
-    under-minimum-n splits are labeled "insufficient sample". *(Keyless; automated.)*
-
-- **J-05: The /performance page reports PnL per enhancement honestly**
-  - Steps:
-    1. Visit `/performance` from the top-bar Performance link with the founding ledger row
-       present
-    2. Read the ledger table and the champion summary (current strategy + profile)
-    3. Check `GET /meta/ui-routes`
-  - Acceptance: the page renders `GET /research/pnl/ledger` verbatim (no client-side
-    recomputation — a value shown on the page equals the API value exactly); every $ figure
-    sits beside its R figure, its n, and the visible "simulated — assumed fees/slippage — not
-    indicative of live results" register; train and hold-out columns are separate and never
-    pooled; under-minimum-n rows read "insufficient sample"; the nav reads
-    Cockpit / Journal / Studies / Performance on every page and `/meta/ui-routes` includes
-    `/performance`; the page follows the existing dark cockpit design language.
-    *(Keyless; browser-verifiable.)* [NEW] walkthrough: narrate one enhancement's before/after
-    hold-out PnL delta.
-
-- **J-06: Indicator profiles are versioned; the default stays byte-identical**
-  - Steps:
-    1. List profiles via `GET /research/profiles` (and the MCP tool): `default` plus at least
-       one registered candidate (a new additive feature key or an alternate threshold set)
-    2. Run the same fixture-dataset backtest under `default` and under the candidate
-    3. Run the engine equivalence suite and the full backend suite
-  - Acceptance: an automated equivalence test replays fixed event streams under `default` and
-    asserts **byte-identical** state/confidence/features/history against pinned pre-profile
-    outputs; the live cockpit and every archived-era surface use `default` only (no UI path
-    selects a candidate); candidate outputs appear only in backtest/study artifacts stamped
-    with their profile id; the two backtests differ only where the candidate legitimately
-    changes behavior and both remain individually deterministic. *(Keyless; automated.)*
-
-- **J-07: The candidate sweep survives hold-out or says so honestly**
-  - Steps:
-    1. Run `python -m app.research.pnl_scan --out <path>` with at least one registered
-       candidate and the fixture datasets
-    2. Read the scan report and the PnL ledger afterwards; re-run the identical scan
-  - Acceptance: the scan evaluates every registered candidate against the champion over all
-    **train** datasets and validates apparent winners on the **hold-out** set; the report
-    records, per candidate: train and hold-out net R/$ deltas, n per split, per-dataset
-    breakdown, `survivor` (true iff it beats the champion on hold-out net R AND net $ with
-    n ≥ the configured minimum), and `robustness: robust|speculative` (robust iff positive on
-    every train dataset individually); train-only winners are explicitly labeled overfit and
-    never promoted; a promotion appends a PnL-ledger row and moves the champion pointer
-    **without modifying the `default` profile or any engine default**; the scan is
-    deterministic under fixed seeds and identical re-runs produce identical reports; zero
-    candidates or zero survivors produces an explicit honest report and **exit code 0**.
+    1. From a stored bar series, compute level candidates per timeframe — swing pivots (a bar's high/low
+       that is the extreme of its ±N neighbours) and prior-period extremes (prior day/week/month
+       high/low/close) — each with a strength (timeframe weight × touch count); every parameter from config
+    2. Compute levels "as of" a point in time using only bars at or before it (no lookahead); re-run
+    3. Read the levels via `GET /research/levels` (and the MCP proxy)
+  - Acceptance: levels are computed once, owned by the one canonical endpoint, and read verbatim by REST
+    and MCP; each level carries price, timeframe, type, touch count, and strength; the computation uses
+    **only bars at or before the as-of time** (a lookahead-free test proves a level at time T is unchanged
+    by any later bar); identical inputs reproduce **byte-identical** levels; every parameter is
+    config-sourced (no magic numbers, no fitting, no ML); keyless-verifiable on the committed bar fixture.
     *(Keyless; automated.)*
 
-- **J-08: The existing product is unchanged (regression sentinel)**
+- **J-03: Confluence zones and A/B/C conviction classes**
   - Steps:
-    1. With the profit-research layer deployed, run the sim cockpit flows (`SIM-BUYER` settles
-       `buyer_control`, `SIM-SELLER` settles `seller_control`) and spot-check `/journal` and
-       `/studies` in the browser
-    2. Run the full backend suite and the engine equivalence test
-  - Acceptance: the archived-era surfaces behave exactly as shipped (cockpit panels populate
-    and classify; journal and studies pages render their data); the full backend suite passes
-    (848+ tests and growing — no archived-era test is deleted or weakened to make new work
-    pass); the equivalence test proves a fixed event stream still yields **byte-identical**
-    state/confidence/features/history under the default configuration. The per-journey detail
-    lives in the archived goal; this sentinel makes "don't break the foundation" an enforced
-    must-have of this era. *(Keyless; browser-verifiable + automated.)*
+    1. Cluster levels across timeframes whose prices fall within a config tolerance band into confluence
+       zones; score each (sum of member strengths, timeframe-weighted) and grade it A/B/C by config thresholds
+    2. Read the classified zones via `GET /research/levels`; re-run identically
+  - Acceptance: each confluence zone records its member levels (with timeframes), its score, and its class
+    A/B/C; the clustering tolerance and class thresholds are config-owned (no magic numbers); a zone is
+    class A only when the confluence criteria are met (e.g. several timeframes including a long-term level
+    within tolerance), honestly labelled otherwise; **byte-identical** deterministic re-runs; served from
+    the one canonical owner and read verbatim by REST and MCP. *(Keyless; automated.)*
 
-- **J-09: The champion's edge is measured honestly across a diverse dataset library**
+- **J-04: Tape-confirmed structure entries as a registered strategy**
   - Steps:
-    1. With Alpaca credentials present, record a diverse real library via `POST /research/datasets`
-       — at least 3 symbols spanning different behavior (e.g. a mega-cap, a mid-cap, a high-beta
-       name) × at least 2 distinct session regimes each (e.g. market-open volatility vs midday
-       drift), each split-tagged `train`/`holdout`, with at least 2 independent hold-out windows
-    2. Backtest the champion (`v1`/`default`) on every registered dataset via
-       `POST /research/backtests`; read each result via `GET /research/backtests/{id}`
-    3. Generate the ranked baseline-edge report over the stored backtests, then re-run the identical
-       measurement
-  - Acceptance: each dataset is stored with symbol, UTC window, feed, event counts, and checksum,
-    split-tagged, with re-tagging refused (409-style) per J-02; a `v1`/`default` backtest is
-    persisted and retrievable per dataset, each carrying net and gross R AND $, win rate, max
-    drawdown (R), n, and a seeded random-entry null baseline (per J-03); the baseline-edge report is
-    a **pure render of the stored backtest aggregates** (a value shown equals its
-    `GET /research/backtests/{id}` value exactly — no second computation path), keeps **train and
-    hold-out separate and never pooled**, sets every $ beside its R, its n, its null baseline, and
-    the "simulated — assumed fees/slippage — not indicative of live results" register, and ranks the
-    champion's hold-out net R / net $ / n per dataset; it flags each dataset where the champion
-    clears a **positive** hold-out edge at **n ≥ the configured minimum AND beats its own null
-    baseline**, and states "no positive-edge dataset" explicitly when none qualifies (an honest
-    empty finding at **exit code 0** — never a fabricated edge); the report is deterministic under
-    fixed seeds and identical re-runs reproduce it byte-for-byte; the `default` profile and every
-    engine default stay **byte-identical** (equivalence test green); missing Alpaca credentials
-    surface the existing explicit missing-credentials state, never synthesized data.
-    *(Credentialed operator data; the record and backtest capabilities are keyless-tested by
-    J-02/J-03.)*
+    1. Register a second strategy `structure_tape` in a config-owned strategy registry (additive; `v1`
+       and `default` unchanged) whose entries arm when price enters a classified level's proximity band
+       AND the tape confirms direction — rejection (`ask_absorption`/`seller_control` at resistance → short;
+       `bid_absorption`/`buyer_control` at support → long) or breakthrough (`buyer_control` with price
+       impact through resistance → long; mirror for support) — reusing the engine's level-cross +
+       state-native arming
+    2. Backtest a fixture dataset under `structure_tape` with its symbol's precomputed levels injected;
+       run the engine equivalence suite and the full backend suite
+    3. Read the result via `GET /research/backtests/{id}` and the MCP tool; re-run identically
+  - Acceptance: `GET /research/strategies` lists `v1` plus the additive `structure_tape` (a registry, not a
+    single hard-coded strategy); the backtest arms only where a classified level and a confirming tape state
+    coincide, stamps strategy id + level provenance, and reports per-trade entries/exits with R AND $ beside
+    the seeded null baseline; the `default` profile and `v1` strategy stay **byte-identical** (equivalence
+    green, `config_fingerprint` unchanged); deterministic re-runs; no broker/order/execution code exists
+    (grep-guarded). *(Keyless on the fixture; automated.)*
+
+- **J-05: Class-scaled stop, reward, and simulated size**
+  - Steps:
+    1. From the entry level's class, derive the stop (A ≈ 1bp beyond the level; B/C wider — all config),
+       the reward target (R:R toward the next opposing level), and a simulated position notional (better
+       class → larger — config-owned), and feed them into the backtest's fill/PnL math
+    2. Backtest and read the report broken down by class
+  - Acceptance: every stop, target, and size multiple is config-owned (no magic numbers); the report shows
+    PnL per class (net R AND $, n, per split) each beside the visible "simulated — assumed fees/slippage —
+    not indicative of live results" register; "position size" is an explicitly **simulated notional** that
+    places, routes, or transmits nothing (grep-guarded, same standard as the no-execution gate); sub-minimum-n
+    classes are labelled "insufficient sample"; deterministic re-runs. *(Keyless; automated.)*
+
+- **J-06: `structure_tape` is measured honestly against the v1 champion**
+  - Steps:
+    1. Generalize the edge-report / sweep path to evaluate a **named** strategy (not only the champion), so
+       `structure_tape` is backtested across all datasets and compared to `v1` on train AND hold-out
+    2. Run the comparison over the fixture datasets (and, with creds, a real multi-symbol/multi-regime
+       library); read the report and the PnL ledger; re-run identically
+  - Acceptance: the report records, per split, `structure_tape` vs `v1` net R AND net $, n, and a per-dataset
+    breakdown, with a `survivor` flag true iff it beats the champion on **hold-out** net R AND net $ at
+    n ≥ the configured minimum; train-only wins are labelled overfit and never promoted; a promotion appends
+    one PnL-ledger row and moves the champion pointer **without modifying `default`, `v1`, or any engine
+    default**; on the fixtures (n below the minimum) it honestly reports **no survivor at exit 0**;
+    deterministic re-runs. *(Keyless-honest on the fixture; promotion-capable on a real library.)*
+
+- **J-07: The archived eras are unchanged (regression sentinel)**
+  - Steps:
+    1. Run the sim cockpit flows (`SIM-BUYER` settles `buyer_control`, `SIM-SELLER` settles `seller_control`)
+       and spot-check `/journal`, `/studies`, `/performance` in the browser; run the full backend suite and
+       the engine equivalence test
+    2. Confirm the era-3 measurement machine (datasets, backtests, PnL ledger, sweep, edge report, MCP)
+       behaves exactly as shipped
+  - Acceptance: the archived-era surfaces behave exactly as shipped; the full backend suite passes (no
+    archived-era test deleted or weakened to make new work pass); the equivalence test proves **byte-identical**
+    `default` state/confidence/features/history and the pinned `config_fingerprint`; `v1` and the champion
+    pointer are untouched except by an honest hold-out promotion. This sentinel makes "don't break the
+    foundation" an enforced must-have of this era. *(Keyless; browser-verifiable + automated.)*
 
 <!-- AUTO:journeys -->
 <!-- /AUTO:journeys -->
 
 ## Anti-goals
 
-- **No live execution path.** Tapeology MUST NOT place, route, or transmit orders anywhere —
-  no brokerage integration, no trading API, **no paper-trading API**, no order tickets, no
-  recommendation to execute. The ONLY permitted "fill" is the offline backtester's simulated
-  fill computed against recorded historical tape, clearly labeled simulated and sent nowhere.
+- **No live execution path.** Tapeology MUST NOT place, route, or transmit orders anywhere — no brokerage
+  integration, no trading API, **no paper-trading API**, no order tickets. The ONLY permitted "fill" is the
+  offline backtester's simulated fill against recorded historical tape, clearly labelled simulated and sent
+  nowhere; "position size" is a simulated notional, never a real order. *(critical)*
+- **No profit claims and no advice.** Simulated PnL is a caveated measurement: it MUST always appear with
+  its R counterpart, its n, its fee/slippage assumptions, its train-or-hold-out basis, and its null
+  baseline — never presented as expected live results, an edge claim, or a reason to trade. No imperative
+  cues, no prediction language. *(critical)*
+- **The tape engine, `default` profile, and `v1` strategy are frozen.** Structure work is additive and
+  versioned only: new bars/levels/classes and the `structure_tape` strategy may be added, but the `default`
+  profile's outputs stay byte-identical (equivalence-tested), the live cockpit uses `default` only, `v1`
+  stays byte-identical, and no enhancement may mutate an archived-era behaviour to pass. *(critical)*
+- **No train-only promotion.** Nothing becomes the champion on train data alone: hold-out survival (net R
+  AND net $, at the configured minimum n) is the only promotion gate; overfit results are labelled overfit.
   *(critical)*
-- **No profit claims and no advice.** Simulated PnL is a caveated measurement: it MUST always
-  appear with its R counterpart, its n, its fee/slippage assumptions, its train-or-hold-out
-  basis, and its null baseline — and MUST never be presented as expected live results, an edge
-  claim, or a reason to trade. No imperative cues, no prediction language. *(critical)*
-- **Default engine outputs are frozen.** Indicator evolution is additive and versioned only:
-  candidate profiles may add feature keys or alternate thresholds, but the `default` profile's
-  outputs stay byte-identical (equivalence-tested), the live cockpit uses `default` only, and
-  no enhancement may mutate an archived-era behavior to pass. *(critical)*
-- **No train-only promotion.** Nothing becomes the champion, a proposed journey, or a claimed
-  improvement on the strength of train data alone: hold-out survival (net R AND net $, with
-  the configured minimum n) is the only promotion gate; overfit results are labeled overfit.
+- **No lookahead.** Levels and classes computed "as of" time T use only bars at or before T; a backtest may
+  never see a level derived from data after the moment it is used. *(critical)*
+- **No ML, no online tuning.** S/R detection, confluence scoring, class thresholds, and class-based risk are
+  bounded, config-enumerated, offline, and deterministic; no fitted models, no optimizer loops in the engine,
+  no thresholds that move at runtime.
+- **No fabricated data — honest failure states.** No synthesized bars, levels, trades, fills, or PnL to force
+  a green journey; every failure mode (backend down, corrupt file, empty window, missing credentials,
+  rate-limited, no levels found, insufficient n) surfaces an explicit, distinct state. *(critical)*
+- **Single source of truth.** Every canonical value — bar series, levels, confluence classes, backtest
+  aggregates, PnL rows — is computed once and read verbatim by every surface (REST, WebSocket, UI, MCP,
+  reports). A second computation path or a diverging number across surfaces is a defect. *(critical)*
+- **No capital or portfolio management.** Class "position size" is a per-trade simulated notional only — no
+  account, no equity curve, no compounding projection, no real position tracking. *(critical)*
+- **MCP is read-only.** The MCP server exposes no mutating tools, proxies only the canonical GET surface
+  (plus the allowlisted `get_endpoint`), and MUST NOT become a second implementation of any computation.
   *(critical)*
-- **No ML, no online tuning.** Candidate search is bounded, config-enumerated, offline, and
-  deterministic; no fitted models, no optimizer loops inside the engine, no thresholds that
-  move at runtime.
-- **No fabricated data — honest failure states.** No synthesized trades, quotes, fills,
-  datasets, or PnL to force a green journey; every failure mode (backend down, corrupt
-  dataset, empty window, missing credentials, insufficient n) surfaces an explicit, distinct
-  state. *(critical)*
-- **Single source of truth.** Every canonical value in the Data Contract is computed once and
-  read verbatim by every surface — REST, WebSocket, UI, markdown reports, and MCP. A second
-  computation path or a diverging number across surfaces is a defect. *(critical)*
-- **MCP is read-only.** The MCP server exposes no mutating tools, proxies only the canonical
-  GET surface (plus the allowlisted `get_endpoint`), and MUST NOT become a second
-  implementation of any computation. *(critical)*
-- **Persistence stays scoped.** SQLite holds research records (now including backtests and the
-  PnL ledger); the dataset store holds explicitly recorded historical tape for research
-  replay. The live cockpit's tape remains unpersisted; no ambient recording. *(critical)*
-- **The enhancement loop stays inside its box.** The goal-proposer may append journeys ONLY
-  inside the AUTO:journeys marker block above — it MUST NOT edit human-authored journeys, this
-  Anti-goals section, or any other part of this file; proposed journeys MUST carry a
-  PnL-ledger acceptance criterion, keep the default profile byte-identical, and include a
-  [NEW]-flagged walkthrough. Manufacturing a low-value journey just to keep the loop alive is
-  a failure. *(critical)*
+- **Persistence stays scoped.** SQLite holds research records; the bar and dataset stores hold explicitly
+  recorded historical bars and tape for research replay. The live cockpit's tape remains unpersisted; no
+  ambient recording. *(critical)*
+- **The enhancement loop stays inside its box.** The goal-proposer may append journeys ONLY inside the
+  AUTO:journeys marker block above — it MUST NOT edit human-authored journeys, this Anti-goals section, or
+  any other part of this file; proposed journeys MUST carry a PnL-ledger acceptance criterion, keep the
+  `default` profile and `v1` byte-identical, and include a [NEW]-flagged walkthrough. Manufacturing a
+  low-value journey just to keep the loop alive is a failure. *(critical)*
