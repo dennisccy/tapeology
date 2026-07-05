@@ -1,7 +1,7 @@
-# Project Configuration
+# Project Configuration Template
 
-Filled for **Tapeology** (iteration 1). Agents read this file to understand the stack,
-conventions, and constraints. Keep edits surgical and additive.
+Copy this file into your project's `.claude/` directory and fill in every section.
+Agents read this file to understand your project's stack, conventions, and constraints.
 
 ---
 
@@ -11,116 +11,116 @@ conventions, and constraints. Keep edits surgical and additive.
 Goal document: docs/goal.md
 ```
 
-The goal doc defines the vision, target users, success criteria, key capabilities, and
-non-goals/anti-goals. All agents read it (and the approved coherence blueprint at
-`runs/goal-session-i_will_be_rich/state/blueprint.md`) before starting any iteration.
+Fill in `docs/goal.md` (use `templates/project-goal.md` as a starting point).
+The goal doc defines the project's vision, target users, success criteria, key capabilities, and non-goals/scope boundaries.
+All agents read this before starting any phase to ensure alignment.
 
 ---
 
 ## PROJECT
 
 ```
-Name:        Tapeology
-Description: Standalone real-time tape-reading system for US stocks — given one ticker, it
-             watches simulated order flow and classifies the current tape state
-             (price impact, not raw aggression). Phase 1 is in-memory and simulated.
-Repository:  (local)
+Name:        <your project name>
+Description: <one-line description of what this project does>
+Repository:  <git remote URL>
 ```
 
 ---
 
 ## STACK
 
+Define your technology stack. Agents use this to know which commands to run and which files to touch.
+
 ```
 Backend:
-  Language:    Python 3.12
-  Framework:   FastAPI (uvicorn ASGI), WebSocket + REST
-  ORM/DB lib:  N/A (Phase 1 is in-memory; no database)
-  Migrations:  N/A
-  Test runner: pytest (with the anyio plugin for async API tests)
-  Package mgr: uv (pip-compatible); venv at apps/backend/.venv/
-  Venv/env:    apps/backend/.venv/
+  Language:   <e.g., Python 3.12>
+  Framework:  <e.g., FastAPI, Django, Express, Rails>
+  ORM/DB lib: <e.g., SQLAlchemy 2.0, Prisma, ActiveRecord>
+  Migrations: <e.g., Alembic, Flyway, Prisma Migrate, rake db:migrate>
+  Test runner: <e.g., pytest, jest, rspec>
+  Package mgr: <e.g., pip + uv, npm, cargo, bundler>
+  Venv/env:   <e.g., apps/backend/.venv/, node_modules/ (auto)>
 
 Frontend:
-  Enabled:     yes
-  Framework:   Next.js 15 (App Router)
-  Language:    TypeScript
-  Styling:     Tailwind CSS v3
-  Package mgr: npm
+  Enabled:    yes/no
+  Framework:  <e.g., Next.js 15 App Router, Vue 3, SvelteKit> (or "N/A")
+  Language:   <e.g., TypeScript>
+  Styling:    <e.g., CSS modules, Tailwind, styled-components>
+  Package mgr: <e.g., npm, pnpm, yarn>
 
 Database:
-  Type:        None (Phase 1 in-memory)
-  Location:    N/A
+  Type:       <e.g., SQLite, PostgreSQL, MySQL, MongoDB>
+  Location:   <e.g., apps/backend/app.db, postgresql://localhost:5432/mydb>
 
 Services:
-  Backend URL:  http://localhost:8000  (QA harness uses a deterministic offset port, e.g. :8650)
-  Frontend URL: http://localhost:3000  (QA harness offset, e.g. :3650)
-  Health check: http://localhost:8000/health
+  Backend URL:  http://localhost:<port>
+  Frontend URL: http://localhost:<port>  (or "N/A")
+  Health check: <e.g., http://localhost:8000/health>
 ```
-
-The frontend reads the backend base URL from `NEXT_PUBLIC_API_URL` (the QA harness sets it;
-`NEXT_PUBLIC_API_BASE` is an accepted alias), defaulting to `http://localhost:8000`. The
-WebSocket URL is derived by swapping `http` → `ws`.
 
 ---
 
 ## DESIGN SYSTEM
 
+Define your project's visual identity. Agents use this to ensure consistent, polished UI output.
+
 ```
-Component library: none (hand-built panels; keep them clean and consistent)
-Icon library:      none (text/Unicode glyphs only)
+Component library: <e.g., shadcn/ui, Radix + Tailwind, Material UI, Chakra UI>
+Icon library:      <e.g., Lucide, Heroicons, Phosphor>
 
-Visual style:      instrument-panel "tape cockpit" — clean, dense, legible at a glance
-Color mode:        dark
+Visual style:      <e.g., cyber-dark, minimal-light, corporate-clean>
+Color mode:        <dark / light / system>
 
-Color palette (Tailwind tokens):
-  Background:      slate-950 (#020617)
-  Surface:         slate-900/60 panels, slate-800 borders
-  Buy / positive:  emerald-400 / emerald-500   (green)
-  Sell / negative: rose-400 / rose-500          (red)
-  Absorption/unclear: amber-400 / amber-500     (amber)
-  Text primary:    slate-200
-  Text muted:      slate-400 / slate-500
+Color palette:
+  Background:      <e.g., #0a0a0f — deep dark base>
+  Surface:         <e.g., #12121a — card/panel background>
+  Border:          <e.g., #1e1e2e — subtle borders>
+  Primary:         <e.g., #00f0ff — neon cyan accent>
+  Secondary:       <e.g., #7c3aed — electric purple>
+  Success:         <e.g., #10b981>
+  Warning:         <e.g., #f59e0b>
+  Danger:          <e.g., #ef4444>
+  Text primary:    <e.g., #e2e8f0 — high contrast on dark>
+  Text muted:      <e.g., #64748b>
 
 Typography:
-  Body:            system sans (Tailwind default stack)
-  Numerics:        font-mono (system monospace) for ALL prices / sizes / ratios
+  Font family:     <e.g., Inter for body, JetBrains Mono for code/data>
+  Scale:           <e.g., Tailwind default: text-sm/base/lg/xl/2xl>
 
-Spacing:           Tailwind default 4px grid
-Effects:           restrained — subtle borders, a confidence bar, status dot. No clutter.
-Responsive:        single-column on narrow, 2-col md, 3-col lg panel grid.
+Spacing:           <e.g., Tailwind default 4px grid: p-1/p-2/p-3/p-4/p-6/p-8>
+
+Effects (use sparingly):
+  - <e.g., glassmorphism on cards: backdrop-blur-md bg-white/5 border border-white/10>
+  - <e.g., glow on primary actions: shadow-[0_0_15px_rgba(0,240,255,0.3)]>
+  - <e.g., subtle gradient borders on hero sections>
+  - <e.g., smooth transitions: transition-all duration-200>
+
+Responsive breakpoints: <e.g., sm:640px md:768px lg:1024px xl:1280px>
 ```
-
-**Color semantics are load-bearing and consistent everywhere:** green = buy-side / positive
-impact, red = sell-side / negative impact, amber = absorption / unclear. No profitability
-claim and nothing presented as trading advice anywhere in the UI.
 
 ---
 
 ## TEST COMMANDS
 
+Agents will run these to validate their work. Be exact.
+
 ```
-Backend tests:  cd apps/backend && .venv/bin/python -m pytest tests/ -v
-Frontend build: cd apps/frontend && npm run build   (type-check + compile; no unit suite yet)
-Frontend tests: N/A (user-facing behavior is covered by browser QA)
-Migrations:     N/A
-Lint:           N/A
+Backend tests:  <e.g., cd apps/backend && .venv/bin/python -m pytest tests/ -v>
+Frontend tests: <e.g., cd apps/frontend && npm test -- --passWithNoTests> (or "N/A")
+Migrations:     <e.g., cd apps/backend && .venv/bin/alembic upgrade head> (or "N/A")
+Lint:           <e.g., cd apps/backend && .venv/bin/ruff check .> (or "N/A")
 ```
 
 ---
 
 ## SERVICE START COMMANDS
 
-The conventional framework scripts already match this layout (they use a deterministic
-per-project offset port and wire `NEXT_PUBLIC_API_URL` from the backend port):
+Used by qa-phase.sh to auto-start services during QA validation.
 
 ```
-Start backend:  bash scripts/start-backend.sh    (uvicorn main:app --app-dir apps/backend)
-Start frontend: bash scripts/start-frontend.sh   (npx next dev)
+Start backend:  <e.g., bash scripts/start-backend.sh> (or set CHAIN_START_BACKEND_CMD env var)
+Start frontend: <e.g., bash scripts/start-frontend.sh> (or set CHAIN_START_FRONTEND_CMD env var)
 ```
-
-Backend entrypoint: `apps/backend/main.py` re-exports the app, so both `main:app` and
-`app.main:app` resolve. Health endpoint: `GET /health`.
 
 ---
 
@@ -128,7 +128,8 @@ Backend entrypoint: `apps/backend/main.py` re-exports the app, so both `main:app
 
 ```
 Phase spec directory:   docs/phases/
-Phase spec naming:      <phase-id>.md   (goal mode: goal-<sid>-iter-<N>.md)
+Phase spec naming:      <phase-id>.md  OR  <phase-id>-<name>.md
+                        Example: phase-3.md  OR  phase-3-user-auth.md
 ```
 
 ---
@@ -137,40 +138,39 @@ Phase spec naming:      <phase-id>.md   (goal mode: goal-<sid>-iter-<N>.md)
 
 | Phase | Name | Status |
 |-------|------|--------|
-| iter-0 | Verify-only baseline + blueprint approval | ✅ Complete |
-| iter-1 | Tape-cockpit walking skeleton, proven on SIM-BUYER (J-01/J-02/J-08) | ✅ Complete |
-| iter-2+ | SIM-SELLER (J-03), absorption pair (J-04/J-05), unclear-chop (J-06), transitions (J-07), stop/re-watch (J-09) | Future |
+| phase-1 | ... | ✅ Complete / 🔄 In Progress / Future |
+| phase-2 | ... | Future |
 
 ---
 
 ## ARCHITECTURE PRINCIPLES
 
+List project-specific rules ALL agents must follow when writing code.
+Example:
+- Keep API routes thin — business logic lives in services, not routers
+- All database access goes through the repository layer
+- Frontend never contains business logic — calls backend APIs only
+- Every resource has explicit status transitions; invalid transitions are rejected
+
 ```
-- Single source of truth: every tape state, confidence, and feature is computed exactly
-  once in the engine (one immutable snapshot per tick). REST, WS, and the UI READ it —
-  they never recompute spread, ratios, impacts, or confidence.
-- Price impact, not raw aggression: directional states require real price progress on the
-  matching side; high one-sided aggression with no price progress is absorption, not control.
-- Provider-agnostic engine: the engine/API depend only on the provider interface
-  (TradeEvent / QuoteEvent); swapping the simulator for a live feed touches neither.
-- Deterministic engine: same ordered event stream (+ seed) ⇒ identical features/state/
-  confidence. No wall-clock or randomness in classification (wall-clock only paces delivery).
-- No magic numbers: every window/threshold/cutoff/confidence boundary lives in app/config.py;
-  none inline in engine/classifier code.
-- Honest uncertainty: weak/mixed/cold-start ⇒ unclear at low confidence; no fabricated data
-  (unknown ticker ⇒ 400, not-watched read ⇒ 404 — never a synthesized snapshot).
-- Frontend has no business logic — it renders engine values verbatim and calls the API only.
+- <principle 1>
+- <principle 2>
+- <principle 3>
 ```
 
 ---
 
 ## DATA MODEL RULES
 
+Project-specific conventions for data modeling.
+Example:
+- Use UUID string primary keys (not auto-increment integers)
+- All timestamps are UTC ISO 8601 strings
+- JSON fields only where schema flexibility is explicitly required
+
 ```
-- Events are immutable frozen dataclasses; timestamps are LOGICAL seconds (floats), never
-  wall-clock.
-- The engine snapshot is a frozen dataclass; API responses are pure projections of it.
-- No persistence in Phase 1 — all state is in process memory.
+- <rule 1>
+- <rule 2>
 ```
 
 ---
@@ -178,24 +178,23 @@ Phase spec naming:      <phase-id>.md   (goal mode: goal-<sid>-iter-<N>.md)
 ## GIT WORKFLOW
 
 ```
-Branch naming:      goal/<session-id>  (goal mode)
-PR title format:    goal(<sid>): iter <N> — <summary>
+Branch naming:      phase/<phase-id>
+PR title format:    feat: <phase-id> — <one-line summary>
 Main branch:        main
 Never commit:
-  - .env / .env.*        (except .env.example)
-  - apps/backend/.venv/  (virtualenv)
-  - node_modules/, .next/
-  - __pycache__/, .pytest_cache/
+  - .env
+  - *.db  (or your specific database file)
+  - credentials.json
+  - <any other project-specific secrets or large binaries>
 ```
 
 ---
 
 ## NOTES FOR AGENTS
 
+Any additional context that doesn't fit the above categories:
+
 ```
-- Reserved sim tickers: SIM-BUYER (live this iter), SIM-SELLER, SIM-BIDABS, SIM-ASKABS,
-  SIM-CHOP (registered but not driven to their states yet — later iterations).
-- SIM-BUYER resolves to buyer_control at confidence ~0.87 within ~3-4s of watching.
-- The buyer_control rule already REQUIRES positive buy_price_impact and is covered by a
-  negative guard test — do not relax it to an aggression-only shortcut.
+- <note 1>
+- <note 2>
 ```
