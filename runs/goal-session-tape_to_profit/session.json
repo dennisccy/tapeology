@@ -9,15 +9,15 @@
     "stall_window": 3,
     "regression_halt": true
   },
-  "status": "in_progress",
+  "status": "GOAL_ACHIEVED",
   "last_verdict": "GOAL_ACHIEVED",
   "next_depth": "lean",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/tape_to_profit",
   "updated_at": "2026-07-05T14:54:43.751514Z",
-  "finished_at": "2026-07-03T22:14:17.743033Z",
-  "total_iterations": 8,
-  "wall_time_seconds": 17091,
+  "finished_at": "2026-07-05T15:06:14.567379Z",
+  "total_iterations": 9,
+  "wall_time_seconds": 13124,
   "quota_pause_count": 0
 }

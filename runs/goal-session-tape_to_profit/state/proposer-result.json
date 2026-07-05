@@ -1,1 +1,7 @@
-{"extended": false, "n_new_journeys": 0, "n_proposals": 1, "dry": true, "summary": "Honest dry-stop: 0 hold-out survivors (founding baseline n=1 < promotion min 5; sole candidate faster-warmup already a non-survivor at 0-survivor sweep). The one keyless data source (single committed PG SIP reference window ~600 logical s) cannot reach n>=5 on both splits because study_arm_cooldown_seconds=180s caps arms at ~3-4/window; promotion-grade validation needs operator-registered real-scale datasets (Alpaca credentials), outside the loop. goal.md AUTO:journeys left untouched; resume when more data is registered."}
+{
+  "extended": false,
+  "n_new_journeys": 0,
+  "n_proposals": 0,
+  "dry": true,
+  "summary": "Honest dry-stop, re-confirmed post-J-09: no hold-out survivor (no pnl-scan.json; sole registered candidate candidate-faster-warmup already screened a non-survivor; champion still v1/default; PnL ledger still 1 row). All 7 datasets are keyless PG_SIP_REFERENCE slices of one symbol/one 10-min regime with n=1 per split (< config min 5) and no independent real hold-out; sim is not a dataset source and real diversity needs Alpaca (SOURCE_HISTORICAL). The only dataset-enabling idea is already in the backlog rejected as structurally infeasible keyless, and the sole structural surface idea (UI/REST for the J-09 edge report) renders only the honest empty finding until real data exists. Resume when the operator registers real-scale SOURCE_HISTORICAL datasets (hold-out n>=5) or the champion changes."
+}

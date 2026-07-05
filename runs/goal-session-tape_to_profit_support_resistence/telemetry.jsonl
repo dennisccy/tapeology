@@ -1,0 +1,18 @@
+{"mode":"new","max_iterations":60,"stall_window":3,"auto_release":false,"ts":"2026-07-05T23:05:29Z","session_id":"tape_to_profit_support_resistence","iter":null,"event":"session_start","cli":"claude"}
+{"iter_name":"goal-tape_to_profit_support_resistence-iter-0","prior_verdict":"null","prior_depth":"lean","snapshot_sha":"15eacab11989af5b19c908a18d8aa23886811237","ts":"2026-07-05T23:05:30Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"iter_start","cli":"claude"}
+{"agent":"goal-decomposer","ts":"2026-07-05T23:05:30Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-decomposer","status":"ok","wait_seconds":21,"run_seconds":923,"rc":"0","ts":"2026-07-05T23:21:14Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"dispatch_wait","cli":"claude"}
+{"agent":"goal-decomposer","exit_status":0,"duration_seconds":944,"retries":0,"ts":"2026-07-05T23:21:14Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"agent_invocation_end","cli":"claude"}
+{"depth":"lean","target_journeys":"J-01, J-02, J-03, J-04, J-05, J-06, J-07","ts":"2026-07-05T23:21:14Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"iter_dispatch","cli":"claude"}
+{"iter_name":"goal-tape_to_profit_support_resistence-iter-0","depth":"lean","ts":"2026-07-05T23:21:14Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"iter_dispatch","cli":"claude"}
+{"agent":"developer","ts":"2026-07-05T23:21:14Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"developer","status":"ok","wait_seconds":2,"run_seconds":744,"rc":"0","ts":"2026-07-05T23:33:40Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"dispatch_wait","cli":"claude"}
+{"agent":"developer","exit_status":0,"duration_seconds":746,"retries":0,"ts":"2026-07-05T23:33:40Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"agent_invocation_end","cli":"claude"}
+{"agent":"reviewer","ts":"2026-07-05T23:33:41Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"reviewer","status":"ok","wait_seconds":2,"run_seconds":187,"rc":"0","ts":"2026-07-05T23:36:50Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"dispatch_wait","cli":"claude"}
+{"agent":"reviewer","exit_status":0,"duration_seconds":189,"retries":0,"ts":"2026-07-05T23:36:50Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"agent_invocation_end","cli":"claude"}
+{"verdict":"PASS","attempt":1,"iter_name":"goal-tape_to_profit_support_resistence-iter-0","ts":"2026-07-05T23:36:50Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"review_verdict","cli":"claude"}
+{"agent":"goal-evaluator","ts":"2026-07-05T23:36:50Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-evaluator","status":"ok","wait_seconds":5,"run_seconds":407,"rc":"0","ts":"2026-07-05T23:43:42Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"dispatch_wait","cli":"claude"}
+{"agent":"goal-evaluator","exit_status":0,"duration_seconds":412,"retries":0,"ts":"2026-07-05T23:43:42Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"agent_invocation_end","cli":"claude"}
+{"iter_name":"goal-tape_to_profit_support_resistence-iter-0","verdict":"CONTINUE","next_depth":"full","journey_deltas":{"newly_passing":0,"newly_failing":6,"regressed":0,"anti_goal_violations":0},"ts":"2026-07-05T23:43:43Z","session_id":"tape_to_profit_support_resistence","iter":0,"event":"iter_end","cli":"claude"}

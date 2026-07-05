@@ -1,0 +1,69 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "Multi-timeframe historical bars are ingested and persisted (data foundation + free-plan probe)",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-01 section: GET /research/bars -> 404; no RawBar/fetch_bars on adapter seam; no bar-store module)"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Deterministic support/resistance levels per timeframe",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-02 section: GET /research/levels -> 404; no S/R config section; no levels module)"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Confluence zones and A/B/C conviction classes",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-03 section: no confluence/SRLevel code; served from same absent /research/levels)"
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Tape-confirmed structure entries as a registered strategy",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-04 section: GET /research/strategies -> 404; structure_tape backtest -> 422; verified by evaluator via config.py:1096 v1-only registry)"
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "Class-scaled stop, reward, and simulated size",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-05 section: no per-class PnL/sizing machinery; structure_tape backtest cannot run)"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "structure_tape is measured honestly against the v1 champion",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-06 section: pnl_scan/edge_report champion-only; no named-strategy evaluation path)"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The archived eras are unchanged (regression sentinel)",
+      "status": "already_passing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-07 section) + evaluator-run equivalence suite 7/7 + zero apps/ source diff (git diff 15eacab..HEAD -- apps/ empty)"
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-07-05T23:40:40Z"
+}

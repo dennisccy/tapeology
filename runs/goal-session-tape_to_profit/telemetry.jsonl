@@ -205,3 +205,9 @@
 {"agent":"readme-maintainer","ts":"2026-07-05T14:51:38Z","session_id":"tape_to_profit","iter":8,"event":"agent_invocation_start","cli":"claude"}
 {"agent":"readme-maintainer","exit_status":0,"duration_seconds":185,"retries":0,"ts":"2026-07-05T14:54:43Z","session_id":"tape_to_profit","iter":8,"event":"agent_invocation_end","cli":"claude"}
 {"iter_name":"goal-tape_to_profit-iter-8","verdict":"GOAL_ACHIEVED","next_depth":"lean","journey_deltas":{"newly_passing":9,"newly_failing":0,"regressed":0,"anti_goal_violations":0},"ts":"2026-07-05T14:54:43Z","session_id":"tape_to_profit","iter":8,"event":"iter_end","cli":"claude"}
+{"branch":"goal/tape_to_profit","commit_sha":"b4381d7a5bb6a61827bd618caa1b51f71fe985a6","success":true,"error":"","verdict":"GOAL_ACHIEVED","ts":"2026-07-05T14:54:45Z","session_id":"tape_to_profit","iter":8,"event":"iter_push","cli":"claude"}
+{"agent":"goal-proposer","ts":"2026-07-05T14:54:45Z","session_id":"tape_to_profit","iter":8,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-proposer","exit_status":0,"duration_seconds":450,"retries":0,"ts":"2026-07-05T15:02:15Z","session_id":"tape_to_profit","iter":8,"event":"agent_invocation_end","cli":"claude"}
+{"agent":"iteration-summarizer","ts":"2026-07-05T15:02:15Z","session_id":"tape_to_profit","iter":8,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"iteration-summarizer","exit_status":0,"duration_seconds":239,"retries":0,"ts":"2026-07-05T15:06:14Z","session_id":"tape_to_profit","iter":8,"event":"agent_invocation_end","cli":"claude"}
+{"final_verdict":"GOAL_ACHIEVED","total_iterations":9,"wall_time_seconds":13124,"quota_pause_count":0,"ts":"2026-07-05T15:06:14Z","session_id":"tape_to_profit","iter":8,"event":"session_end","cli":"claude"}
