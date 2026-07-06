@@ -172,3 +172,20 @@ def test_class_scaled_sizing_and_reward_target_code_carries_no_execution_vocabul
     assert "structure_tape_stop_bps_by_class" in text
     for pattern in TIER1_PATTERNS + TIER2_PATTERNS:
         assert pattern not in text, f"{pattern!r} found in the class-scaled sizing/exit code"
+
+
+def test_named_strategy_comparison_and_promotion_code_carries_no_execution_vocabulary():
+    """era-4 J-06: the named-strategy comparison (the ``--strategy`` CLI axis) and its promotion
+    path are new code in ``research/pnl_scan.py`` -- the champion move is a POINTER WRITE
+    (``JournalStore.set_champion_pointer``), never an order/route/broker call. The repo-wide sweeps
+    above already cover this file, but this test names the new capability explicitly, so the guard
+    is traceable to J-06, not merely inherited by accident."""
+    path = REPO_APPS / "backend" / "app" / "research" / "pnl_scan.py"
+    text = path.read_text()
+    # Confirm the scan actually sees the new axis code (a path/rename bug must never silently pass).
+    assert "candidate_strategy_id" in text
+    assert "set_champion_pointer" in text
+    for pattern in TIER1_PATTERNS + TIER2_PATTERNS:
+        assert pattern not in text, (
+            f"{pattern!r} found in the named-strategy comparison/promotion code"
+        )

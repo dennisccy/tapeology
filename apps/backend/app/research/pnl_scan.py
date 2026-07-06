@@ -77,6 +77,42 @@ Disciplines, clause by clause:
     partial report is a misleading report. A backtest that ends anything other than ``done``
     (e.g. a corrupt dataset caught at replay time) is the same explicit refusal. No trade, fill,
     dataset, or PnL figure is ever synthesized to force a result either way.
+
+era-4 J-06 — the STRATEGY axis (Data Contract row 43, ``structure_tape`` vs ``v1``): an ADDITIVE
+branch alongside the profile axis above, never a refactor of it.
+
+  * **``run_sweep(..., candidate_strategy_id=None)``.** With no named strategy (the default), the
+    profile axis behaves BYTE-IDENTICALLY to before this iteration: exactly one candidate per
+    registered non-default profile, strategy held at the champion's own current ``strategy_id``.
+    Given ``candidate_strategy_id`` (the CLI's ``--strategy``), the sweep instead evaluates EXACTLY
+    ONE candidate — the named strategy — backtest at ``strategy_id=<named>``,
+    ``profile=PROFILE_DEFAULT``, compared against the champion's CURRENT ``strategy_id`` (read
+    verbatim from ``store.get_champion_pointer()`` — never hardcoded ``"v1"``), also at
+    ``profile=PROFILE_DEFAULT``. The two axes never mix: a strategy-axis run holds profile fixed at
+    ``default``; a profile-axis run holds strategy fixed at the champion's own.
+  * **Same machinery, generalized.** ``_dataset_rows`` / ``_split_summary`` / ``_is_positive`` /
+    ``_promote`` are reused VERBATIM — they operate on ``(report_id, result)`` pairs, not on
+    "profile" specifically, so they are already axis-agnostic. A promoted strategy-axis survivor
+    moves the champion pointer to ``strategy_id=<named candidate>``, ``profile=PROFILE_DEFAULT`` —
+    still the ONE pointer, still a pointer write only, never touching ``default``/``v1``/any engine
+    default.
+  * **Unknown candidate strategy id: an explicit refusal, no new validation code.**
+    ``BacktestJobManager.create`` stamps ``strategy_id`` verbatim with no registry check; an
+    unregistered id is caught at RUN time (``BacktestRunner.run`` -> ``strategy_definition`` is
+    ``None`` -> persisted ``failed``, never raised out), which this module's EXISTING
+    ``_run_backtest`` status check already turns into an explicit ``ScanError`` — no new lookup or
+    allowlist needed here.
+  * **``bar_store`` (era-4 J-04's row-39 level source) is threaded through unconditionally**, exactly
+    like ``dataset_store`` — the SAME optional, call-time-only parameter ``BacktestRunner.run``
+    already accepts. ``v1`` ignores it entirely (byte-identical whether ``None`` or a real store),
+    so passing it through the profile axis too is harmless; only a ``structure_tape`` candidate/
+    champion backtest ever reads it, and honestly arms nothing without one (never a fabricated arm).
+  * **Audit B1, disclosed not re-armed.** The returned report's ``provenance.assumptions`` names the
+    ``structure_tape`` breakthrough arm's loose, sanctioned static-price-position anchor (a single
+    at-event position test, not a fresh event-to-event level cross) so a reader can never mistake the
+    reported edge for one measured under a tighter crossing rule. A static, config-independent string
+    — present on every report, on every axis — so it never perturbs the byte-identical-rerun
+    guarantee.
 """
 
 from __future__ import annotations
@@ -87,13 +123,31 @@ import sys
 import time
 from pathlib import Path
 
-from ..config import CONFIG, Config
+from ..config import CONFIG, Config, PROFILE_DEFAULT
 from .backtests import BacktestJobManager, REGISTER, STATUS_DONE
+from .bars import BarStore
 from .datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN
 from .pnl_ledger import LedgerCompositionError, append_validation_row
 from .store import DuplicateEnhancementError, JournalStore
 
 __all__ = ["ScanError", "run_sweep", "main"]
+
+# era-4 J-06 (audit item B1, carried from iter-4/iter-5): the structure_tape breakthrough arm
+# confirms via a STATIC price-position test (price already beyond the level at the read instant —
+# the studies' level-cross technique), not a FRESH event-to-event cross of the level. A sanctioned
+# but loose anchor that can inflate the measured breakthrough-arm frequency (and so the reported
+# edge) relative to a tighter crossing rule. Disclosed here rather than tightened: re-arming risks
+# perturbing the frozen J-04/J-05 arming, a second risky change this goal-completing iteration does
+# not make. A static, config-independent string (never wall-clock or per-run-random) so it never
+# perturbs the byte-identical-rerun guarantee.
+BREAKTHROUGH_ANCHOR_CAVEAT = (
+    "the structure_tape breakthrough arm confirms a STATIC price-position test (price already "
+    "beyond the level, read once at the event) rather than a FRESH event-to-event cross of the "
+    "level -- a sanctioned but loose anchor that can inflate the measured breakthrough-arm "
+    "frequency, and so the reported edge, relative to a tighter crossing rule. Disclosed rather "
+    "than tightened this iteration to avoid a second risky change to the frozen J-04/J-05 arming "
+    "(see docs/goal.md iter-6 NOTES, audit item B1)."
+)
 
 
 class ScanError(Exception):
@@ -113,13 +167,21 @@ def _run_backtest(
     *,
     strategy_id: str,
     profile: str,
+    bar_store: BarStore | None = None,
 ) -> tuple[str, dict]:
     """Run ONE backtest synchronously through the EXISTING public job API (the
     ``pnl_baseline._run_backtest`` pattern) and return ``(report_id, result_block)`` — refusing
     explicitly unless it completed ``done`` (a failed/cancelled report carries no served
-    aggregates, so nothing could be honestly compared against it)."""
+    aggregates, so nothing could be honestly compared against it).
+
+    ``bar_store`` (era-4 J-06) is threaded straight through to ``run_sync`` — the SAME optional,
+    call-time-only parameter the route already passes. ``v1`` ignores it (byte-identical either
+    way); only a ``structure_tape`` run ever reads it, honestly arming nothing without one. An
+    unregistered ``strategy_id`` needs no dedicated check here: ``BacktestRunner.run`` persists it
+    as an explicit ``failed`` record (never raises out), which the status check below already
+    turns into this same explicit ``ScanError``."""
     payload = jobs.create({"dataset_id": dataset_id, "strategy_id": strategy_id, "profile": profile})
-    jobs.run_sync(payload["id"], dataset_store=dataset_store)
+    jobs.run_sync(payload["id"], dataset_store=dataset_store, bar_store=bar_store)
     final = store.get_backtest(payload["id"]).payload
     if final.get("status") != STATUS_DONE:
         raise ScanError(
@@ -207,6 +269,8 @@ def _promote(
     *,
     champion: dict,
     candidate_id: str,
+    new_strategy_id: str,
+    new_profile: str,
     train_datasets: list[dict],
     holdout_datasets: list[dict],
     train_rows: list[dict],
@@ -217,7 +281,13 @@ def _promote(
     docstring). Requires EXACTLY one train and one hold-out dataset registered
     (``append_validation_row``'s structural shape, reused verbatim, never modified); with more of
     either, promotion is explicitly skipped with an honest note — the SCAN still evaluated and
-    reported every dataset."""
+    reported every dataset.
+
+    ``new_strategy_id`` / ``new_profile`` (era-4 J-06) are the exact ``(strategy_id, profile)``
+    pair the winning candidate's OWN backtests ran at — the profile axis passes
+    ``(champion['strategy_id'], candidate_id)`` (unchanged); the strategy axis passes
+    ``(candidate_id, PROFILE_DEFAULT)``. Either way the pointer moves to precisely what was
+    measured — never a third, re-derived pair."""
     if len(train_datasets) != 1 or len(holdout_datasets) != 1:
         return {
             "candidate_id": candidate_id,
@@ -253,28 +323,53 @@ def _promote(
         ) from exc
     # The ledger row is now durably committed — safe to move the pointer. A crash AFTER this
     # point leaves a correctly-attributed ledger row and a moved pointer: fully consistent.
-    store.set_champion_pointer(
-        strategy_id=champion["strategy_id"], profile=candidate_id, wall_ts=time.time()
-    )
+    store.set_champion_pointer(strategy_id=new_strategy_id, profile=new_profile, wall_ts=time.time())
     return {"candidate_id": candidate_id, "promoted": True, "enhancement_id": enhancement_id}
 
 
 # --- the ONE computer of Data Contract row 36 --------------------------------------------------
 
 
-def run_sweep(store: JournalStore, dataset_store: DatasetStore, config: Config) -> dict:
+def run_sweep(
+    store: JournalStore,
+    dataset_store: DatasetStore,
+    config: Config,
+    *,
+    candidate_strategy_id: str | None = None,
+    bar_store: BarStore | None = None,
+) -> dict:
     """Run the full candidate sweep ONCE. Returns the complete report dict — the SAME shape
     persisted to ``--out`` (the CLI is a thin wrapper). A genuine hold-out survivor is promoted
     INLINE (ledger row + champion-pointer move) before this returns, so the returned report
     already reflects the promotion outcome (``champion_after``). Raises ``ScanError`` for a
-    dishonest state — nothing is written, nothing promoted."""
+    dishonest state — nothing is written, nothing promoted.
+
+    ``candidate_strategy_id`` (era-4 J-06, the CLI's ``--strategy``) selects the axis this run
+    varies — an ADDITIVE branch, never a refactor of the other:
+
+      * ``None`` (the default): the PROFILE axis, UNCHANGED from before this iteration — every
+        registered non-default profile, one candidate each, strategy held at the champion's own
+        current ``strategy_id``.
+      * a strategy id: the STRATEGY axis — exactly ONE candidate (the named strategy), backtest at
+        ``strategy_id=candidate_strategy_id``, ``profile=PROFILE_DEFAULT``, compared against the
+        champion's CURRENT ``strategy_id`` (never hardcoded), also at ``profile=PROFILE_DEFAULT``.
+
+    ``bar_store`` (era-4 J-04's row-39 level source) is threaded through every backtest this run
+    makes, on either axis — ``v1`` ignores it; only a ``structure_tape`` run ever reads it."""
     champion = store.get_champion_pointer()
     jobs = BacktestJobManager(store, config)
 
-    # Candidate enumeration reads the ONE registry FIRST: zero registered candidates is an honest
-    # empty sweep, and skipping straight to the report avoids running the champion's own backtests
-    # for nothing (they exist only to be compared against a candidate).
-    candidates = [p for p in config.profile_registry() if not p["is_default"]]
+    if candidate_strategy_id is not None:
+        # STRATEGY axis (era-4 J-06): exactly one named candidate; profile held fixed at default.
+        candidates: list[dict] = [{"id": candidate_strategy_id}]
+        champion_strategy_id, champion_profile = champion["strategy_id"], PROFILE_DEFAULT
+    else:
+        # PROFILE axis (era-3 J-07, unchanged): candidate enumeration reads the ONE registry
+        # FIRST — zero registered candidates is an honest empty sweep, and skipping straight to
+        # the report avoids running the champion's own backtests for nothing (they exist only to
+        # be compared against a candidate).
+        candidates = [p for p in config.profile_registry() if not p["is_default"]]
+        champion_strategy_id, champion_profile = champion["strategy_id"], champion["profile"]
 
     train_datasets = _split_datasets(dataset_store, SPLIT_TRAIN)
     holdout_datasets = _split_datasets(dataset_store, SPLIT_HOLDOUT)
@@ -288,14 +383,14 @@ def run_sweep(store: JournalStore, dataset_store: DatasetStore, config: Config) 
         champion_train = [
             _run_backtest(
                 jobs, store, dataset_store, ds["id"],
-                strategy_id=champion["strategy_id"], profile=champion["profile"],
+                strategy_id=champion_strategy_id, profile=champion_profile, bar_store=bar_store,
             )
             for ds in train_datasets
         ]
         champion_holdout = [
             _run_backtest(
                 jobs, store, dataset_store, ds["id"],
-                strategy_id=champion["strategy_id"], profile=champion["profile"],
+                strategy_id=champion_strategy_id, profile=champion_profile, bar_store=bar_store,
             )
             for ds in holdout_datasets
         ]
@@ -304,17 +399,21 @@ def run_sweep(store: JournalStore, dataset_store: DatasetStore, config: Config) 
     promotion: dict | None = None
     for candidate in candidates:
         candidate_id = candidate["id"]
+        if candidate_strategy_id is not None:
+            cand_strategy_id, cand_profile = candidate_id, PROFILE_DEFAULT
+        else:
+            cand_strategy_id, cand_profile = champion_strategy_id, candidate_id
         candidate_train = [
             _run_backtest(
                 jobs, store, dataset_store, ds["id"],
-                strategy_id=champion["strategy_id"], profile=candidate_id,
+                strategy_id=cand_strategy_id, profile=cand_profile, bar_store=bar_store,
             )
             for ds in train_datasets
         ]
         candidate_holdout = [
             _run_backtest(
                 jobs, store, dataset_store, ds["id"],
-                strategy_id=champion["strategy_id"], profile=candidate_id,
+                strategy_id=cand_strategy_id, profile=cand_profile, bar_store=bar_store,
             )
             for ds in holdout_datasets
         ]
@@ -353,6 +452,8 @@ def run_sweep(store: JournalStore, dataset_store: DatasetStore, config: Config) 
                 config,
                 champion=champion,
                 candidate_id=candidate_id,
+                new_strategy_id=cand_strategy_id,
+                new_profile=cand_profile,
                 train_datasets=train_datasets,
                 holdout_datasets=holdout_datasets,
                 train_rows=train_rows,
@@ -366,6 +467,9 @@ def run_sweep(store: JournalStore, dataset_store: DatasetStore, config: Config) 
         "champion_after": store.get_champion_pointer(),
         "candidates": candidate_entries,
         "promotion": promotion,
+        # era-4 J-06 (audit item B1): disclosed, never re-armed this iteration — see the constant's
+        # own docstring. Static and config-independent, so it never perturbs byte-identical reruns.
+        "provenance": {"assumptions": [BREAKTHROUGH_ANCHOR_CAVEAT]},
     }
 
 
@@ -379,24 +483,42 @@ def _render_report(report: dict) -> str:
 
 
 def main() -> int:
-    """The CLI entry: sweep against the operator's journal DB + dataset dir (the SAME
-    ``TAPEOLOGY_JOURNAL_DB`` / ``TAPEOLOGY_DATASET_DIR`` resolution seams the backend and
-    ``pnl_baseline`` read), writing the report to ``--out``. Zero candidates or zero survivors is
-    an honest, exit-0 outcome; a ``ScanError`` prints an explicit message to stderr and exits 1
-    with NOTHING written."""
+    """The CLI entry: sweep against the operator's journal DB + dataset dir + bar dir (the SAME
+    ``TAPEOLOGY_JOURNAL_DB`` / ``TAPEOLOGY_DATASET_DIR`` / ``TAPEOLOGY_BAR_DIR`` resolution seams
+    the backend and ``pnl_baseline`` read), writing the report to ``--out``. Zero candidates or
+    zero survivors is an honest, exit-0 outcome; a ``ScanError`` prints an explicit message to
+    stderr and exits 1 with NOTHING written.
+
+    ``--strategy`` (era-4 J-06) selects the strategy axis (see ``run_sweep``); omitted, the
+    profile sweep runs exactly as before this iteration. The bar store is constructed
+    unconditionally (the route's own precedent) — ``v1`` ignores it either way, so this is a no-op
+    for the profile axis and lets a named ``structure_tape`` candidate read real recorded levels."""
     parser = argparse.ArgumentParser(
         description="J-07 candidate-sweep harness — evaluate every registered candidate profile "
-        "against the current champion, validated on the frozen hold-out set."
+        "(or, with --strategy, ONE named candidate strategy) against the current champion, "
+        "validated on the frozen hold-out set."
     )
     parser.add_argument("--out", required=True, help="path to write the scan report JSON")
+    parser.add_argument(
+        "--strategy",
+        default=None,
+        metavar="STRATEGY_ID",
+        help="evaluate ONE named candidate strategy (e.g. structure_tape) against the champion's "
+        "current strategy at profile=default (era-4 J-06), instead of sweeping every registered "
+        "candidate profile (the default behaviour when this is omitted)",
+    )
     args = parser.parse_args()
 
     config = CONFIG
     store = JournalStore(config.journal_db_path_resolved(), config)
     try:
         dataset_store = DatasetStore(config.dataset_dir_resolved())
+        bar_store = BarStore(config.bar_dir_resolved())
         try:
-            report = run_sweep(store, dataset_store, config)
+            report = run_sweep(
+                store, dataset_store, config,
+                candidate_strategy_id=args.strategy, bar_store=bar_store,
+            )
         except ScanError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
