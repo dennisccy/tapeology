@@ -26,7 +26,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..config import CONFIG, Config, STRATEGY_V1_ID
+from ..config import CONFIG, Config
 from ..providers.adapters.base import NoDataForWindow, SymbolNotTradable, VendorTimeout
 from .analytics import compute_analytics
 from .backtests import (
@@ -66,6 +66,7 @@ from .monitor import (
 )
 from .pnl_ledger import ledger_projection
 from .profiles import profiles_projection
+from .strategies import strategies_projection
 from .feed_basis import data_feed_for_scenario
 from .journal_rows import journal_row
 from .store import ActionRecord, JournalStore, ThesisRecord, VerdictEventRecord
@@ -1671,17 +1672,25 @@ def create_backtest(
     body: BacktestRequest,
     registry: ResearchRegistry = Depends(get_registry),
     store: DatasetStore = Depends(get_dataset_store),
+    bar_store: BarStore = Depends(get_bar_store),
 ) -> dict:
-    """Create + START a deterministic backtest job (J-03): the config-owned strategy v1 over one
-    registered dataset under ``default`` or a registered candidate profile (J-06). On success the
-    job is persisted ``queued`` with its identity stamps (request echo, recorded null-baseline
-    seed, config fingerprint of the RESOLVED per-run profile config) and started as a cancellable
-    background job; the queued payload is returned. Nothing is persisted on any rejection."""
-    # 422 — only the registered strategy exists (never a silently-coerced default strategy).
+    """Create + START a deterministic backtest job (J-03; era-4 J-04 adds the additive
+    ``structure_tape`` strategy) over one registered dataset under ``default`` or a registered
+    candidate profile (J-06). On success the job is persisted ``queued`` with its identity stamps
+    (request echo, recorded null-baseline seed, config fingerprint of the RESOLVED per-run profile
+    config) and started as a cancellable background job; the queued payload is returned. Nothing
+    is persisted on any rejection. ``bar_store`` (era-4 J-04) is threaded through to the runner
+    exactly like ``store`` (the dataset store) — v1 ignores it; ``structure_tape`` reads it for
+    the row-39 levels its entries arm against."""
+    # 422 — only a REGISTERED strategy exists (never a silently-coerced default strategy).
     if registry.config.strategy_definition(body.strategy_id) is None:
+        known_strategies = [s["strategy_id"] for s in registry.config.strategy_registry()]
         raise HTTPException(
             status_code=422,
-            detail=f"unknown strategy_id '{body.strategy_id}' — the registered strategy is '{STRATEGY_V1_ID}'",
+            detail=(
+                f"unknown strategy_id '{body.strategy_id}' — the registered strategies are "
+                f"{known_strategies}"
+            ),
         )
     # 422 — the profile must be REGISTERED (Config.profile_definition — the ONE registry this
     # route and GET /research/profiles both consult; never a second allowlist). ``default`` is
@@ -1704,7 +1713,7 @@ def create_backtest(
     payload = jobs.create(
         {"dataset_id": body.dataset_id, "strategy_id": body.strategy_id, "profile": body.profile}
     )
-    jobs.start(payload["id"], dataset_store=store)
+    jobs.start(payload["id"], dataset_store=store, bar_store=bar_store)
     return {"backtest": payload}
 
 
@@ -1780,3 +1789,21 @@ def get_profiles(registry: ResearchRegistry = Depends(get_registry)) -> dict:
     survivor moves it (J-07) — served verbatim from the ONE projection. The J-05 champion summary
     and the MCP ``get_endpoint`` proxy read THIS — never an inferred or duplicated copy."""
     return profiles_projection(registry.store, registry.config)
+
+
+# --- The strategy registry + champion pointer (Data Contract row 40; era-4 capability 4, J-04) ------
+# Exactly ONE route, GET only, mirroring ``GET /research/profiles`` above verbatim: the registry is
+# config-owned (``v1`` + the additive ``structure_tape``) and the champion pointer is read VERBATIM
+# from the SAME persisted store source ``profiles_projection`` reads (app/research/strategies.py) —
+# never a second champion source. No write surface exists on this route — any non-GET verb is
+# FastAPI's default 405. A hold-out promotion (J-06, out of scope this iteration) is the only future
+# path that ever moves the champion.
+
+
+@router.get("/strategies")
+def get_strategies(registry: ResearchRegistry = Depends(get_registry)) -> dict:
+    """The strategy registry (``v1`` plus the additive ``structure_tape``, in registration order)
+    + the current champion pointer — the founding strategy ``v1`` on profile ``default`` until a
+    genuine hold-out survivor moves it (J-06) — served verbatim from the ONE projection, reading
+    the SAME single ``store.get_champion_pointer()`` source ``GET /research/profiles`` reads."""
+    return strategies_projection(registry.store, registry.config)

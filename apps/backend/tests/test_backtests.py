@@ -36,7 +36,7 @@ from pathlib import Path
 
 import pytest
 
-from app.config import CONFIG, STRATEGY_V1_ID
+from app.config import CONFIG, STRATEGY_TAPE_ID, STRATEGY_V1_ID
 from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.providers.simulated import SIM_SCENARIOS, SimulatedProvider
 from app.research.backtests import (
@@ -53,9 +53,16 @@ from app.research.backtests import (
     STATUS_FAILED,
     STATUS_QUEUED,
 )
+from app.research.bars import BarStore
 from app.research.datasets import DatasetStore
 from app.research.marks import r_basis
 from app.research.store import JournalStore
+
+# The synthetic three-timeframe confluence fixture (class A/B/C zones at exact, known prices) --
+# REUSED verbatim from test_levels.py (the plan's own directive: the committed real PG bar fixture
+# stores only two timeframes and can NEVER produce a class-A zone, so any structure_tape arming
+# test that needs one must use THIS fixture, not a second copy of it).
+from test_levels import _BASE as _CONFLUENCE_BASE, _CONFLUENCE_SYMBOL, _DAY, _confluence_fixture
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 # The committed miniature train + holdout dataset pair (recorded ONCE through the real record
@@ -148,9 +155,18 @@ def jobs(store):
     return BacktestJobManager(store, CONFIG)
 
 
-def _run(jobs, store, dataset_store, dataset_id, *, strategy_id=STRATEGY_V1_ID, profile=PROFILE_DEFAULT) -> dict:
+def _run(
+    jobs,
+    store,
+    dataset_store,
+    dataset_id,
+    *,
+    strategy_id=STRATEGY_V1_ID,
+    profile=PROFILE_DEFAULT,
+    bar_store=None,
+) -> dict:
     payload = jobs.create({"dataset_id": dataset_id, "strategy_id": strategy_id, "profile": profile})
-    jobs.run_sync(payload["id"], dataset_store=dataset_store)
+    jobs.run_sync(payload["id"], dataset_store=dataset_store, bar_store=bar_store)
     return store.get_backtest(payload["id"]).payload
 
 
@@ -219,6 +235,218 @@ def test_runner_reads_horizon_from_config_not_literal(tmp_path, store):
     assert trade["exit"]["reason"] == EXIT_HORIZON
     assert trade["exit"]["logical_ts"] - trade["entry"]["logical_ts"] >= 30.0
     assert trade["exit"]["logical_ts"] - trade["entry"]["logical_ts"] < 120.0
+
+
+# --- Strategy grammar structure_tape: additive, config-owned (era-4 J-04; Data Contract row 41) ---
+# The SYN-CONFLUENCE synthetic bar fixture's own committed as-of instant (test_levels.py's own
+# proof point — "comfortably past every period's closure, 1w's 604800s is longest") is REUSED here
+# as the epoch_anchor for every structure_tape tape dataset below. ``epoch_anchor`` is PURELY
+# additive display metadata (app/engine/tape_engine.py — never read by classification), so a canned
+# SIM_SCENARIOS stream (whose own prices/timing are deterministic and already proven throughout
+# this file) can be recorded under ANY epoch_anchor without changing a single classified
+# tape_state or price — decoupling the tape's calendar reference from the bar series' calendar
+# reference lets BOTH fixtures be reused verbatim, unmodified.
+_STRUCTURE_TAPE_ANCHOR = _CONFLUENCE_BASE + 8 * _DAY
+
+
+@pytest.fixture
+def confluence_bar_store(tmp_path):
+    bar_store = BarStore(tmp_path / "confluence-bars")
+    _confluence_fixture(bar_store)
+    return bar_store
+
+
+def _record_structure_tape_dataset(
+    tmp_path, ticker, *, anchor=_STRUCTURE_TAPE_ANCHOR, max_logical=25.0, symbol=_CONFLUENCE_SYMBOL
+):
+    """Record ONE canned SIM_SCENARIOS stream (its price/state path already proven elsewhere in
+    this file) as a dataset stamped with the SYN-CONFLUENCE symbol (so the runner's
+    ``compute_levels`` call finds the confluence bar fixture) and the given epoch anchor."""
+    events, provider = _sim_events(ticker, max_logical)
+    return _record(
+        tmp_path / "datasets", events, symbol=symbol, scenario=provider.scenario, anchor=anchor
+    )
+
+
+def test_structure_tape_definition_is_config_owned_and_additive_beside_v1():
+    d = CONFIG.strategy_definition(STRATEGY_TAPE_ID)
+    assert d is not None
+    assert d["strategy_id"] == STRATEGY_TAPE_ID
+    assert d["entries"]["proximity_band_bps"] == CONFIG.structure_tape_proximity_band_bps
+    assert d["entries"]["rejection_states"] == CONFIG.structure_tape_rejection_state_by_direction
+    assert (
+        d["entries"]["breakthrough_states"] == CONFIG.structure_tape_breakthrough_state_by_direction
+    )
+    assert d["entries"]["arm_cooldown_seconds"] == CONFIG.study_arm_cooldown_seconds
+    # Exits/fees/slippage/dollars-per-r are IDENTICAL to v1's (class-scaled risk/size is J-05, out
+    # of scope this iteration) — the SAME config fields, never a second copy of any value.
+    v1 = CONFIG.strategy_definition(STRATEGY_V1_ID)
+    assert d["exits"] == v1["exits"]
+    assert d["fees"] == v1["fees"]
+    assert d["slippage"] == v1["slippage"]
+    assert d["dollars_per_r"] == v1["dollars_per_r"]
+    # v1 itself stays completely untouched — no structure_tape vocabulary leaked into its setups.
+    assert not any(
+        s["setup_type"] in ("rejection", "breakthrough") for s in v1["entries"]["setups"]
+    )
+
+
+def test_strategy_registry_lists_v1_then_structure_tape_in_registration_order():
+    registry = CONFIG.strategy_registry()
+    assert [s["strategy_id"] for s in registry] == [STRATEGY_V1_ID, STRATEGY_TAPE_ID]
+    assert registry[0] == CONFIG.strategy_definition(STRATEGY_V1_ID)
+    assert registry[1] == CONFIG.strategy_definition(STRATEGY_TAPE_ID)
+
+
+def test_structure_tape_breakthrough_long_arms_at_the_class_a_resistance_level(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    # SIM-BUYER: buyer_control reads from 19.5s at 100.18 — already beyond the class-A zone's
+    # 1h member at 100.00, so breakthrough arms immediately (the studies' level-cross technique:
+    # price beyond the level + the matching control state).
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-BUYER")
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    assert payload["status"] == STATUS_DONE
+    result = payload["result"]
+    assert result["strategy_id"] == STRATEGY_TAPE_ID
+    assert result["strategy"] == CONFIG.strategy_definition(STRATEGY_TAPE_ID)
+    trades = result["trades"]
+    assert len(trades) == 1
+    t = trades[0]
+    assert (t["setup_type"], t["direction"]) == ("breakthrough", "long")
+    assert t["entry"]["logical_ts"] == 19.5
+    assert t["entry"]["price"] == 100.18
+    assert t["level"] == {"price": 100.00, "timeframe": "1h", "class": "A"}
+    assert t["exit"]["reason"] == EXIT_DATASET_END
+    assert t["exit"]["logical_ts"] == 25.0
+    assert t["exit"]["price"] == 100.26
+    _assert_trade_arithmetic(t)
+
+
+def test_structure_tape_breakthrough_short_arms_at_the_class_a_support_level(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    # SIM-SELLER: seller_control reads from 19.5s at 99.84 — already beyond (below) the class-A
+    # zone's 1h member at 100.00.
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-SELLER")
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    trades = payload["result"]["trades"]
+    assert len(trades) == 1
+    t = trades[0]
+    assert (t["setup_type"], t["direction"]) == ("breakthrough", "short")
+    assert t["entry"]["logical_ts"] == 19.5
+    assert t["entry"]["price"] == 99.84
+    assert t["level"] == {"price": 100.00, "timeframe": "1h", "class": "A"}
+    assert t["exit"]["reason"] == EXIT_DATASET_END
+    assert t["exit"]["logical_ts"] == 25.0
+    assert t["exit"]["price"] == 99.76
+    _assert_trade_arithmetic(t)
+
+
+def test_structure_tape_rejection_long_arms_at_the_class_a_support_level(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    # SIM-BIDABS: bid_absorption reads from 19.5s, price HELD FLAT at 100.00 — exactly at the
+    # class-A zone's 1h member (within the proximity band; never crossing, genuinely new logic).
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-BIDABS")
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    trades = payload["result"]["trades"]
+    assert len(trades) == 1
+    t = trades[0]
+    assert (t["setup_type"], t["direction"]) == ("rejection", "long")
+    assert t["entry"]["logical_ts"] == 19.5
+    assert t["entry"]["price"] == 100.00
+    assert t["level"] == {"price": 100.00, "timeframe": "1h", "class": "A"}
+    assert t["exit"]["reason"] == EXIT_DATASET_END
+    assert t["exit"]["logical_ts"] == 25.0
+    assert t["exit"]["price"] == 100.00
+    _assert_trade_arithmetic(t)
+
+
+def test_structure_tape_rejection_short_arms_at_the_class_a_resistance_level(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    # SIM-ASKABS: ask_absorption reads from 19.5s, price HELD FLAT at 100.02 — within the class-A
+    # zone's 1h member (100.00) proximity band (0.02 <= 5bps of 100.00 == 0.05).
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-ASKABS")
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    trades = payload["result"]["trades"]
+    assert len(trades) == 1
+    t = trades[0]
+    assert (t["setup_type"], t["direction"]) == ("rejection", "short")
+    assert t["entry"]["logical_ts"] == 19.5
+    assert t["entry"]["price"] == 100.02
+    assert t["level"] == {"price": 100.00, "timeframe": "1h", "class": "A"}
+    assert t["exit"]["reason"] == EXIT_DATASET_END
+    assert t["exit"]["logical_ts"] == 25.0
+    assert t["exit"]["price"] == 100.02
+    _assert_trade_arithmetic(t)
+
+
+def test_structure_tape_no_arm_when_symbol_has_no_classified_levels(tmp_path, store, jobs):
+    # An empty bar store (nothing recorded for this symbol at all) -> compute_levels' own honest
+    # no_bar_series_for_symbol state -> zero fabricated arms, never a fallback to v1-like behaviour.
+    empty_bar_store = BarStore(tmp_path / "empty-bars")
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-BUYER")
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=empty_bar_store
+    )
+    assert payload["status"] == STATUS_DONE
+    assert payload["result"]["trades"] == []
+
+
+def test_structure_tape_no_arm_when_tape_state_is_unconfirmed(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    # SIM-CHOP never leaves unclear (the existing v1 zero-arm-window precedent) -- a classified
+    # level exists, but the tape never confirms either reading, so structure_tape arms nothing.
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-CHOP", max_logical=90.0)
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    assert payload["status"] == STATUS_DONE
+    assert payload["result"]["trades"] == []
+
+
+def test_structure_tape_no_arm_before_the_defining_bars_are_visible_no_lookahead(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    # The SAME confluence bar store and the SAME SIM-BUYER tape as the breakthrough-long test
+    # above, but anchored so the arm instant (19.5s) maps to an as_of of EXACTLY the fixture's own
+    # epoch base -- before even the earliest 1h swing pivot's defining neighbour bar (at base +
+    # 7200s) is visible, so compute_levels honestly derives NO levels yet and structure_tape arms
+    # NOTHING. Proves the runner computes levels AS OF EACH event's OWN timestamp (epoch_anchor +
+    # point.timestamp), never a single fixed whole-history snapshot -- the highest-risk
+    # correctness point flagged in the execution plan.
+    too_early_anchor = _CONFLUENCE_BASE - 19.5
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-BUYER", anchor=too_early_anchor)
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    assert payload["status"] == STATUS_DONE
+    assert payload["result"]["trades"] == []
+
+
+def test_structure_tape_identical_request_rerun_is_byte_identical(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-BUYER")
+    first = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    second = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    assert first["id"] != second["id"]
+    assert json.dumps(first["result"], sort_keys=True) == json.dumps(second["result"], sort_keys=True)
 
 
 # --- Exit coverage: every exit reason exercised deterministically ----------------------------------
@@ -592,6 +820,37 @@ def test_a_real_threshold_still_changes_the_fingerprint():
     assert dataclasses.replace(CONFIG, min_aggressive_buy_ratio=0.61).config_fingerprint() != CONFIG.config_fingerprint()
 
 
+def test_structure_tape_fields_are_serving_only_excluded_from_fingerprint():
+    # structure_tape is read ONLY when structure_tape itself is selected — never by a v1 backtest,
+    # the tape engine, or any study/PnL computation this fingerprint stamps — so its own fields'
+    # mere presence (at ANY value) must not move the frozen default/v1 fingerprint (the sr_*
+    # precedent, applied to a different, brand-new, unrelated strategy).
+    base = CONFIG.config_fingerprint()
+    assert (
+        dataclasses.replace(CONFIG, structure_tape_proximity_band_bps=999.0).config_fingerprint()
+        == base
+    )
+    assert (
+        dataclasses.replace(
+            CONFIG, structure_tape_rejection_state_by_direction={"long": "x", "short": "y"}
+        ).config_fingerprint()
+        == base
+    )
+    assert (
+        dataclasses.replace(
+            CONFIG, structure_tape_breakthrough_state_by_direction={"long": "x", "short": "y"}
+        ).config_fingerprint()
+        == base
+    )
+
+
+def test_default_fingerprint_still_pinned_with_the_new_structure_tape_fields_present():
+    # Ground truth (the test_profile_equivalence.py precedent): the founding PnL-ledger row was
+    # appended under THIS exact fingerprint. Every new structure_tape field above is present on
+    # CONFIG but excluded, so adding them must not move it.
+    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+
+
 # --- Single-source discipline: one R formula, one dataset reader ------------------------------------
 
 
@@ -604,3 +863,14 @@ def test_runner_consumes_the_shared_r_helper_and_the_public_dataset_api():
     assert ".replay(" in src
     for forbidden in ("json.load", "read_text", "open(", "_load("):
         assert forbidden not in src, f"backtests.py must not read dataset files itself: {forbidden}"
+
+
+def test_structure_tape_reads_levels_from_the_one_canonical_compute_levels_owner():
+    # era-4 J-04's coherence-critical guard: structure_tape MUST read levels/classes from the
+    # row-39 compute_levels owner (research/levels.py) — NEVER a second S/R computation inside the
+    # backtest runner (the highest coherence risk flagged in the execution plan).
+    src = (BACKEND_DIR / "app" / "research" / "backtests.py").read_text()
+    assert "from .levels import compute_levels" in src
+    assert "compute_levels(" in src
+    for forbidden in ("_swing_pivots", "_prior_period_extremes", "_cluster_levels", "_grade_zone"):
+        assert forbidden not in src, f"backtests.py must not recompute levels itself: {forbidden}"

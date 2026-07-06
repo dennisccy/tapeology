@@ -4,66 +4,66 @@
       "id": "J-01",
       "name": "Multi-timeframe historical bars are ingested and persisted (data foundation + free-plan probe)",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
-      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-4",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-4",
       "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
-      "last_evidence_path": "Required-still-passing; full backend suite green this iter (reports/qa/goal-tape_to_profit_support_resistence-iter-3-qa.md: 1107 passed incl. test_bars.py/test_bars_api.py) + evaluator-reran fingerprint 4d665603569b9dbf unmoved"
+      "last_evidence_path": "Required-still-passing; evaluator independently re-ran tests/test_bars.py green this iter (part of the 129-test targeted suite, exit 0) + fingerprint 4d665603569b9dbf unmoved. Bar store is the row-39 level source structure_tape now consumes, unchanged and single-sourced."
     },
     "J-02": {
       "id": "J-02",
       "name": "Deterministic support/resistance levels per timeframe",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
-      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-4",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-4",
       "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
-      "last_evidence_path": "Backend/machine-surface journey (no browser step). test_levels.py/test_levels_api.py green in full suite (reports/qa/goal-tape_to_profit_support_resistence-iter-3-qa.md); single-source S/R unchanged (route still spreads **result verbatim; coherence.md Row-39 OK)"
+      "last_evidence_path": "Machine surface (browser QA correctly SKIPPED). evaluator re-ran tests/test_levels.py green this iter (exit 0). compute_levels is the ONE owner structure_tape reads (coherence.md Row-39 OK; single-source source-scan test confirms no _swing_pivots/_cluster_levels re-impl in backtests.py)."
     },
     "J-03": {
       "id": "J-03",
       "name": "Confluence zones and A/B/C conviction classes",
       "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
-      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-4",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-4",
       "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
-      "last_evidence_path": "Machine surface (REST + MCP; browser QA correctly SKIPPED). Acceptance = test suite: test_levels.py confluence tests (clustering-within-band-across-timeframes, anchor-fixed-not-chained, timeframe-weighted score, A/B/C grading incl. PG fixture [C,C,C,C,C,B] + synthetic 3-tf class-A, no-lookahead-for-classes physical truncation, honest empty zones) + test_mcp_server.py byte-identity + test_levels.py fingerprint-exclusion; QA 14/14 TC PASS + audit PASS (3 OBSERVATION-only), both independently re-ran suite (1107 passed / 1 skipped; 114 targeted). reports/qa/goal-tape_to_profit_support_resistence-iter-3-qa.md + docs/handoffs/goal-tape_to_profit_support_resistence-iter-3-audit.md"
+      "last_evidence_path": "Machine surface (browser QA correctly SKIPPED). evaluator re-ran tests/test_levels.py green (confluence + A/B/C grading + no-lookahead). The A/B/C class is consumed verbatim by structure_tape's trade['level']['class'] provenance (compute_levels owner unchanged; coherence.md Row-39 OK). reports/qa/goal-tape_to_profit_support_resistence-iter-4-qa.md"
     },
     "J-04": {
       "id": "J-04",
       "name": "Tape-confirmed structure entries as a registered strategy",
-      "status": "failing",
-      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-4",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-4",
       "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
-      "last_evidence_path": "Out of scope this iter. evaluator grep -rn 'structure_tape|research/strategies|class_scaled' apps/backend/app/ => NO MATCHES; /research/strategies still absent (no strategy registry). Natural next journey (dependency order); consumes J-03's A/B/C zones."
+      "last_evidence_path": "Machine surface (browser QA SKIPPED, Frontend Present: no; acceptance = backend suite per spec DoD). evaluator verified live: Config().strategy_registry() == ['v1','structure_tape'], unknown id -> None (route 422), v1 entries.rule still 'state_native_sustained_premise'. Re-ran tests/test_backtests.py (13 structure_tape tests incl. 4 arming-direction positives at class-A + 2 discriminating negatives [no arm without a level; no arm without tape confirmation] + no_arm_before_the_defining_bars_are_visible_no_lookahead + reads_levels_from_the_one_canonical_compute_levels_owner + byte-identical rerun) + tests/test_strategies_api.py + tests/test_mcp_server.py (byte-identity) — all green (part of 129-test targeted run, exit 0). Review PASS / QA PASS (20/20 TC) / Audit PASS / Coherence PASS."
     },
     "J-05": {
       "id": "J-05",
       "name": "Class-scaled stop, reward, and simulated size",
       "status": "failing",
-      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-4",
       "last_passing_iter": null,
       "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
-      "last_evidence_path": "Out of scope this iter. No per-class stop/reward/sizing machinery; transitively absent (depends on the unbuilt structure_tape registry — grep-confirmed no structure_tape)"
+      "last_evidence_path": "Out of scope this iter (correctly). evaluator verified structure_tape grammar carries NO class-scaling: strategy_definition('structure_tape')['exits'] == v1['exits'] and dollars_per_r == v1's flat notional (no per-class stop/reward/size). Now UNBLOCKED: structure_tape trades carry the arming level's A/B/C class in trade['level']['class'] for J-05 to consume."
     },
     "J-06": {
       "id": "J-06",
       "name": "structure_tape is measured honestly against the v1 champion",
       "status": "failing",
-      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-4",
       "last_passing_iter": null,
       "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
-      "last_evidence_path": "Out of scope this iter. pnl_scan/edge_report remain champion-only; no named-strategy evaluation path added (grep-confirmed no structure_tape)"
+      "last_evidence_path": "Out of scope this iter (correctly). evaluator confirmed git diff HEAD -- pnl_scan.py edge_report.py EMPTY (no named-strategy evaluation path added); no set_champion_pointer call added (coherence.md: only pre-existing pnl_scan.py:256 caller). Now UNBLOCKED: structure_tape is a registered strategy the generalized edge-report can name."
     },
     "J-07": {
       "id": "J-07",
       "name": "The archived eras are unchanged (regression sentinel)",
       "status": "already_passing",
-      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
-      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-4",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-4",
       "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
-      "last_evidence_path": "evaluator live-computed Config().config_fingerprint()=='4d665603569b9dbf' (pinned, unmoved; 3 new sr_confluence_* fields verified excluded — band/classA changes do not move hash) + observer/profile equivalence 57 tests green (QA/audit re-ran) + git status apps/frontend/ empty (frozen)"
+      "last_evidence_path": "evaluator live-computed Config().config_fingerprint()=='4d665603569b9dbf' (pinned, unmoved; all 3 new structure_tape_* fields verified in the excluded set) + re-ran tests/test_profile_equivalence.py green (v1/default byte-identical) + tests/test_no_execution_path.py green + git status --short apps/frontend/ EMPTY (frozen) + git diff HEAD apps/backend/app/engine/ EMPTY (engine untouched)."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-07-06T09:40:08Z"
+  "updated_at": "2026-07-06T12:15:00Z"
 }

@@ -1,0 +1,69 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "Multi-timeframe historical bars are ingested and persisted (data foundation + free-plan probe)",
+      "status": "passing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "Required-still-passing; full backend suite green this iter (reports/qa/goal-tape_to_profit_support_resistence-iter-3-qa.md: 1107 passed incl. test_bars.py/test_bars_api.py) + evaluator-reran fingerprint 4d665603569b9dbf unmoved"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Deterministic support/resistance levels per timeframe",
+      "status": "passing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "Backend/machine-surface journey (no browser step). test_levels.py/test_levels_api.py green in full suite (reports/qa/goal-tape_to_profit_support_resistence-iter-3-qa.md); single-source S/R unchanged (route still spreads **result verbatim; coherence.md Row-39 OK)"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Confluence zones and A/B/C conviction classes",
+      "status": "passing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "Machine surface (REST + MCP; browser QA correctly SKIPPED). Acceptance = test suite: test_levels.py confluence tests (clustering-within-band-across-timeframes, anchor-fixed-not-chained, timeframe-weighted score, A/B/C grading incl. PG fixture [C,C,C,C,C,B] + synthetic 3-tf class-A, no-lookahead-for-classes physical truncation, honest empty zones) + test_mcp_server.py byte-identity + test_levels.py fingerprint-exclusion; QA 14/14 TC PASS + audit PASS (3 OBSERVATION-only), both independently re-ran suite (1107 passed / 1 skipped; 114 targeted). reports/qa/goal-tape_to_profit_support_resistence-iter-3-qa.md + docs/handoffs/goal-tape_to_profit_support_resistence-iter-3-audit.md"
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Tape-confirmed structure entries as a registered strategy",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "Out of scope this iter. evaluator grep -rn 'structure_tape|research/strategies|class_scaled' apps/backend/app/ => NO MATCHES; /research/strategies still absent (no strategy registry). Natural next journey (dependency order); consumes J-03's A/B/C zones."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "Class-scaled stop, reward, and simulated size",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "Out of scope this iter. No per-class stop/reward/sizing machinery; transitively absent (depends on the unbuilt structure_tape registry — grep-confirmed no structure_tape)"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "structure_tape is measured honestly against the v1 champion",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "Out of scope this iter. pnl_scan/edge_report remain champion-only; no named-strategy evaluation path added (grep-confirmed no structure_tape)"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The archived eras are unchanged (regression sentinel)",
+      "status": "already_passing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-3",
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "evaluator live-computed Config().config_fingerprint()=='4d665603569b9dbf' (pinned, unmoved; 3 new sr_confluence_* fields verified excluded — band/classA changes do not move hash) + observer/profile equivalence 57 tests green (QA/audit re-ran) + git status apps/frontend/ empty (frozen)"
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-07-06T09:40:08Z"
+}

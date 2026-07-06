@@ -83,8 +83,10 @@ import threading
 import time
 import uuid
 
-from ..config import Config, PROFILE_DEFAULT
+from ..config import Config, PROFILE_DEFAULT, STRATEGY_TAPE_ID
+from .bars import BarStore
 from .datasets import DatasetIntegrityError, DatasetNotFound, DatasetStore
+from .levels import compute_levels
 from .marks import r_basis
 from .store import BacktestRecord, JournalStore
 
@@ -146,6 +148,35 @@ def _opposing_control_state(direction: str) -> str:
     return _control_state("short" if direction == "long" else "long")
 
 
+# structure_tape's two "setup_type" values (era-4 J-04, its OWN vocabulary — never v1's setup
+# names): which of the two tape-confirmed readings armed the trade.
+_STRUCTURE_TAPE_REJECTION = "rejection"
+_STRUCTURE_TAPE_BREAKTHROUGH = "breakthrough"
+
+
+def _structure_tape_reading(tape_state: str, entries: dict) -> tuple[str, str] | None:
+    """``(direction, setup_type)`` for the reading ``tape_state`` confirms, or ``None`` if it
+    confirms NEITHER structure_tape reading (``unclear``, or any state this strategy does not
+    read). The rejection/breakthrough state maps are disjoint (the tape engine's five states are
+    mutually exclusive at any one instant), so at most one reading — and one direction — can ever
+    match a given state."""
+    for direction, state in entries["rejection_states"].items():
+        if tape_state == state:
+            return direction, _STRUCTURE_TAPE_REJECTION
+    for direction, state in entries["breakthrough_states"].items():
+        if tape_state == state:
+            return direction, _STRUCTURE_TAPE_BREAKTHROUGH
+    return None
+
+
+def _level_provenance(level: dict, zone: dict) -> dict:
+    """The arming level's stamped provenance (price/timeframe/class) — the ONE specific classified
+    level (never the whole zone) that armed the trade, carrying the CONFLUENCE ZONE's honest A/B/C
+    class (an unclassified lone level has no class and never reaches here — only zone members are
+    ever tested)."""
+    return {"price": level["price"], "timeframe": level["timeframe"], "class": zone["class"]}
+
+
 def _aggregate(trades: list[dict]) -> dict:
     """The report aggregates over one trade population (setup or null), computed ONCE here.
 
@@ -202,10 +233,17 @@ class BacktestRunner:
         params: dict,
         dataset_store: DatasetStore,
         is_cancelled,
+        bar_store: BarStore | None = None,
     ) -> None:
         """Execute the backtest, persisting status transitions through the store. Honors
         cancellation cooperatively (between events and before persist). Never raises out —
-        every failure is captured as an explicit ``failed`` record (never an empty success)."""
+        every failure is captured as an explicit ``failed`` record (never an empty success).
+
+        ``bar_store`` (era-4 J-04) is the run's row-39 level source, threaded in ONLY at call
+        time (the ``dataset_store`` precedent) — never baked into the constructor. It is read
+        ONLY by the ``structure_tape`` branch of ``_strategy_trades``; v1 never touches it.
+        ``None`` (the default — every existing v1 caller is unaffected) makes ``structure_tape``
+        honestly arm nothing, exactly like a symbol with no recorded bar series."""
         record = self._store.get_backtest(backtest_id)
         payload = dict(record.payload) if record is not None else dict(params)
         try:
@@ -233,7 +271,13 @@ class BacktestRunner:
             strategy = self._config.strategy_definition(params["strategy_id"])
             if strategy is None:  # route-guarded (422); defensive honesty here
                 raise ValueError(f"unknown strategy '{params['strategy_id']}'")
-            trades = self._strategy_trades(path, strategy)
+            trades = self._strategy_trades(
+                path,
+                strategy,
+                bar_store=bar_store,
+                symbol=dataset_meta.get("symbol"),
+                epoch_anchor=dataset_meta.get("epoch_anchor"),
+            )
             null_trades = self._null_trades(path, params["null_baseline_seed"])
             result = {
                 "register": REGISTER,
@@ -306,13 +350,27 @@ class BacktestRunner:
         return path, cancelled
 
     # --- strategy simulation (one pass, one open trade at a time) ------------------------------
-    def _strategy_trades(self, path: list[_PathPoint], strategy: dict) -> list[dict]:
-        """Arm and simulate the strategy's trades over the recorded path — ONE deterministic
-        interleaved pass: at each recorded event the open trade's exit is evaluated FIRST, then
-        (if flat) each declared setup x direction combo may arm per the sustained-premise rule.
-        Premise runs are tracked continuously (a run does not reset because a position was
-        open); a combo blocked by an open position arms at the first eligible later event of
-        the SAME sustained run. A trade still open at the last event exits ``dataset_end``."""
+    def _strategy_trades(
+        self,
+        path: list[_PathPoint],
+        strategy: dict,
+        *,
+        bar_store: BarStore | None = None,
+        symbol: str | None = None,
+        epoch_anchor: float | None = None,
+    ) -> list[dict]:
+        """Arm and simulate ONE registered strategy's trades over the recorded path (era-4 J-04:
+        dispatches to the additive ``structure_tape`` branch; v1's own branch — and the code
+        below it — is UNCHANGED, so v1 stays byte-identical).
+
+        v1: ONE deterministic interleaved pass: at each recorded event the open trade's exit is
+        evaluated FIRST, then (if flat) each declared setup x direction combo may arm per the
+        sustained-premise rule. Premise runs are tracked continuously (a run does not reset
+        because a position was open); a combo blocked by an open position arms at the first
+        eligible later event of the SAME sustained run. A trade still open at the last event
+        exits ``dataset_end``."""
+        if strategy["strategy_id"] == STRATEGY_TAPE_ID:
+            return self._structure_tape_trades(path, strategy, bar_store, symbol, epoch_anchor)
         config = self._config
         sustain = strategy["entries"]["arm_sustain_seconds"]
         cooldown = strategy["entries"]["arm_cooldown_seconds"]
@@ -358,6 +416,101 @@ class BacktestRunner:
             trades.append(self._close_trade(position, path[-1], EXIT_DATASET_END))
         return trades
 
+    # --- structure_tape simulation (era-4 J-04): one open trade at a time, tape-confirmed --------
+    def _structure_tape_trades(
+        self,
+        path: list[_PathPoint],
+        strategy: dict,
+        bar_store: BarStore | None,
+        symbol: str | None,
+        epoch_anchor: float | None,
+    ) -> list[dict]:
+        """Arm and simulate ``structure_tape``'s trades over the recorded path — the SAME
+        one-open-trade-at-a-time interleaved pass as v1 (exits evaluated FIRST, then, while flat,
+        one arming check per event), but with a DIFFERENT entry rule: price enters a classified
+        level's proximity band (rejection — fade) or moves beyond it (breakthrough — follow, the
+        studies' level-cross technique), confirmed by the matching tape state.
+
+        Levels are read from the row-39 canonical, lookahead-free ``research.levels.compute_levels``
+        — NEVER a second S/R computation — AS OF EACH flat event's OWN absolute timestamp
+        (``epoch_anchor + point.timestamp``; datasets carry only a LOGICAL clock, so this is the
+        one conversion back to the real UTC instant ``compute_levels`` expects), exactly like
+        ``GET /research/levels`` computes at any instant: a level used to arm at T never sees a
+        bar recorded after T. Levels are needed only for ENTRY arming (never for exits, which reuse
+        ``_exit_reason``/``_close_trade`` unchanged), so this is evaluated only while flat — the
+        same shape v1's combo loop already checks every event.
+
+        Honest emptiness, never a fabricated arm: a missing ``bar_store``/``symbol``/
+        ``epoch_anchor`` (a defensive floor — the route always wires a real ``BarStore``), a
+        symbol with no recorded bar series, and a corrupt SOLE bar series (``compute_levels``
+        aliases that to ``no_bar_series_for_symbol`` — the iter-2 seam, unchanged here) each yield
+        zero classified levels to test against, so ``structure_tape`` arms nothing rather than
+        fabricating a partial computation."""
+        if bar_store is None or not symbol or epoch_anchor is None:
+            return []
+        entries = strategy["entries"]
+        horizon = strategy["exits"]["horizon_seconds"]
+        cooldown = entries["arm_cooldown_seconds"]
+        config = self._config
+        position: dict | None = None
+        cooldown_until = float("-inf")
+        trades: list[dict] = []
+        for i, point in enumerate(path):
+            if position is not None and i > position["index"] and point.last is not None:
+                reason = self._exit_reason(position, point, horizon)
+                if reason is not None:
+                    trades.append(self._close_trade(position, point, reason))
+                    position = None
+            if (
+                position is None
+                and point.last is not None
+                and point.timestamp >= cooldown_until
+            ):
+                arm = self._structure_tape_arm(
+                    point, bar_store, symbol, epoch_anchor + point.timestamp, entries, config
+                )
+                if arm is not None:
+                    direction, setup_type, level = arm
+                    position = self._arm_trade(i, point, setup_type, direction, level=level)
+                    cooldown_until = point.timestamp + cooldown
+        if position is not None:
+            trades.append(self._close_trade(position, path[-1], EXIT_DATASET_END))
+        return trades
+
+    @staticmethod
+    def _structure_tape_arm(
+        point: _PathPoint,
+        bar_store: BarStore,
+        symbol: str,
+        as_of_epoch: float,
+        entries: dict,
+        config: Config,
+    ) -> tuple[str, str, dict] | None:
+        """One flat-event arming check: resolve which reading (if any) the CURRENT tape state
+        confirms, and — only then — read the row-39 levels as of THIS event's own absolute
+        timestamp and test every member level of every confluence zone (an unclassified lone
+        level carries no class and never arms) in the module's own served, deterministic order.
+        Returns ``(direction, setup_type, level_provenance)`` for the FIRST qualifying level, or
+        ``None``. The state check runs FIRST so a non-confirming tick (``unclear`` or a state
+        this strategy does not read) never pays for a levels computation at all."""
+        reading = _structure_tape_reading(point.tape_state, entries)
+        if reading is None:
+            return None
+        direction, setup_type = reading
+        result = compute_levels(bar_store, symbol, as_of_epoch, config)
+        band_bps = entries["proximity_band_bps"]
+        for zone in result["confluence_zones"]:
+            for level in zone["levels"]:
+                price = level["price"]
+                if setup_type == _STRUCTURE_TAPE_REJECTION:
+                    tolerance = price * (band_bps / 10_000.0)
+                    qualifies = abs(point.last - price) <= tolerance
+                else:  # breakthrough — the studies' level-cross technique (price beyond the level)
+                    qualifies = point.last > price if direction == "long" else point.last < price
+                if qualifies:
+                    return direction, setup_type, _level_provenance(level, zone)
+        return None
+
     # --- the seeded random-entry null baseline (same exits, fees, slippage) --------------------
     def _null_trades(self, path: list[_PathPoint], seed: int) -> list[dict]:
         """The seeded random-entry null baseline over the SAME recorded path: entry instants
@@ -401,12 +554,22 @@ class BacktestRunner:
         return chosen if chosen is not None else 0
 
     # --- one trade: arm, exit decision, close (the SINGLE fill/fee/R/$ arithmetic) -------------
-    def _arm_trade(self, index: int, point: _PathPoint, setup_type: str, direction: str) -> dict:
+    def _arm_trade(
+        self,
+        index: int,
+        point: _PathPoint,
+        setup_type: str,
+        direction: str,
+        *,
+        level: dict | None = None,
+    ) -> dict:
         """Open one simulated trade at a recorded event. The synthetic invalidation is the
         studies' REUSED helper (adverse side, spread multiple with floor) and R flows through
-        the ONE shared ``marks.r_basis`` — never a second formula."""
+        the ONE shared ``marks.r_basis`` — never a second formula. ``level`` (era-4 J-04) is the
+        arming level's provenance for a ``structure_tape`` trade; v1 and the null baseline never
+        pass it, so their trade dicts carry no ``level`` key at all (byte-identical to before)."""
         invalidation = _synthetic_invalidation(point.last, point.spread, direction, self._config)
-        return {
+        position = {
             "index": index,
             "entry_ts": point.timestamp,
             "entry_price": point.last,
@@ -417,6 +580,9 @@ class BacktestRunner:
             "direction": direction,
             "opposing_state": _opposing_control_state(direction),
         }
+        if level is not None:
+            position["level"] = level
+        return position
 
     def _exit_reason(self, trade: dict, point: _PathPoint, horizon: float) -> str | None:
         """The exit decision at ONE recorded event, in the documented fixed precedence:
@@ -469,7 +635,7 @@ class BacktestRunner:
         fee = max(config.strategy_fee_per_share * shares, config.strategy_fee_min_per_trade)
         fees_usd = 2.0 * fee
         net_usd = fill_move * shares - fees_usd
-        return {
+        closed = {
             "setup_type": trade["setup_type"],
             "direction": direction,
             "entry": {
@@ -495,6 +661,9 @@ class BacktestRunner:
             "fees_usd": fees_usd,
             "slippage_usd": (gross_move - fill_move) * shares,
         }
+        if "level" in trade:  # era-4 J-04: the arming level's provenance (structure_tape only)
+            closed["level"] = trade["level"]
+        return closed
 
     # --- persistence (single writer queue; result computed once, served verbatim) --------------
     def _persist_terminal(
@@ -574,9 +743,17 @@ class BacktestJobManager:
             "null_baseline_seed": payload["null_baseline_seed"],
         }
 
-    def start(self, backtest_id: str, *, dataset_store: DatasetStore) -> None:
+    def start(
+        self,
+        backtest_id: str,
+        *,
+        dataset_store: DatasetStore,
+        bar_store: BarStore | None = None,
+    ) -> None:
         """Start a queued backtest on a worker thread (background). Idempotent — a second start
-        for the same id is ignored (the job is already running/terminal)."""
+        for the same id is ignored (the job is already running/terminal). ``bar_store`` (era-4
+        J-04) is threaded through at call time exactly like ``dataset_store`` — never baked into
+        the constructor — so ``structure_tape`` can read the row-39 levels; v1 ignores it."""
         with self._lock:
             if backtest_id in self._threads:
                 return
@@ -594,6 +771,7 @@ class BacktestJobManager:
                     params=params,
                     dataset_store=dataset_store,
                     is_cancelled=cancel.is_set,
+                    bar_store=bar_store,
                 )
             finally:
                 with self._lock:
@@ -605,7 +783,13 @@ class BacktestJobManager:
             self._threads[backtest_id] = thread
         thread.start()
 
-    def run_sync(self, backtest_id: str, *, dataset_store: DatasetStore) -> None:
+    def run_sync(
+        self,
+        backtest_id: str,
+        *,
+        dataset_store: DatasetStore,
+        bar_store: BarStore | None = None,
+    ) -> None:
         """Run a queued backtest SYNCHRONOUSLY (the CI/unit path). Completes in-process; honors
         a pre-set cancellation flag so cancel-before-run is testable deterministically."""
         cancel = self._cancels.get(backtest_id, threading.Event())
@@ -617,6 +801,7 @@ class BacktestJobManager:
             params=self._run_params(record.payload),
             dataset_store=dataset_store,
             is_cancelled=cancel.is_set,
+            bar_store=bar_store,
         )
 
     def cancel(self, backtest_id: str) -> None:

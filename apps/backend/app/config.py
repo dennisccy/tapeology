@@ -21,6 +21,13 @@ from pathlib import Path
 # registers more; strategy VARIANT enumeration is J-07 sweep territory, deliberately not here.
 STRATEGY_V1_ID = "v1"
 
+# THE FIRST additive strategy candidate (era-4 capability 4, J-04; Data Contract row 41) — the
+# SAME "id constant + Config-owned definition method" pattern as STRATEGY_V1_ID above, registered
+# BESIDE it in the strategy registry (``Config.strategy_registry`` below). v1 stays byte-identical
+# (equivalence-tested) and remains the sole champion until an honest hold-out promotion (J-06,
+# out of scope this iteration) — registering structure_tape here never mutates v1's own branch.
+STRATEGY_TAPE_ID = "structure_tape"
+
 # The frozen legacy profile (era-3 capability 2, J-06; Data Contract row 33) — the SAME
 # "id constant + Config-owned definition method" pattern as STRATEGY_V1_ID above governs both the
 # strategy grammar (row 34, ``strategy_definition``) and the profile registry (row 33,
@@ -42,6 +49,12 @@ PROFILE_CANDIDATE_FASTER_WARMUP = "candidate-faster-warmup"
 # callers go through ``profile_definition`` (single lookup) or ``profile_registry`` (the full
 # list), never this tuple directly.
 _PROFILE_IDS_IN_ORDER: tuple[str, ...] = (PROFILE_DEFAULT, PROFILE_CANDIDATE_FASTER_WARMUP)
+
+# Registration order for the strategy registry projection (``Config.strategy_registry`` — era-4
+# J-04) — the IDENTICAL ``_PROFILE_IDS_IN_ORDER`` pattern applied to strategies: private, external
+# callers go through ``strategy_definition`` (single lookup) or ``strategy_registry`` (the full
+# list), never this tuple directly.
+_STRATEGY_IDS_IN_ORDER: tuple[str, ...] = (STRATEGY_V1_ID, STRATEGY_TAPE_ID)
 
 
 @dataclass(frozen=True)
@@ -1145,6 +1158,41 @@ class Config:
     # proximity (which each level's own ``touch_count`` already captures).
     sr_confluence_class_b_min_timeframes: int = 2
 
+    # --- Structure-and-tape era: the `structure_tape` STRATEGY (era-4 capability 4, J-04; Data
+    # Contract row 41) -- RESEARCH DEFAULTS, the SAME ``sr_pivot_lookback`` discipline: every
+    # research value lives in config with its rationale documented HERE, no literal in
+    # ``research/backtests.py``. Namespaced ``structure_tape_*`` so it never collides with the
+    # ``sr_*`` family above (J-02/J-03 -- read-only structural inputs to this strategy, untouched)
+    # or the studies' ``level_break``/``failed_move_fade`` namespace (an unrelated,
+    # operator-supplied-level concept).
+    #
+    # PROXIMITY BAND (basis points of the level's OWN price -- the ``sr_touch_tolerance_bps``
+    # "relative to the instrument's price level" discipline, never an absolute dollar constant):
+    # the REJECTION reading arms while price stays within
+    # ``price * structure_tape_proximity_band_bps / 10_000`` of a classified level's price ("price
+    # enters a classified level's proximity band", the fade reading -- genuinely new logic, no
+    # existing analog). The BREAKTHROUGH reading instead reuses the studies' level-cross technique
+    # verbatim (``studies.py``'s ``level_break`` setup inside ``_arm_setup_occurrences`` -- price
+    # strictly beyond the level, gated by ``_control_state``), so this band does not gate it. Same
+    # order of magnitude as ``sr_touch_tolerance_bps`` (5.0) -- close enough to the level's own
+    # price to be a genuine "at the level" test, never a whole-neighbourhood one.
+    structure_tape_proximity_band_bps: float = 5.0
+    # TAPE-CONFIRMATION MAPPING -- the EXISTING five-state tape vocabulary only, no new state (the
+    # goal.md structure-and-tape hypothesis, verbatim): which state confirms which reading, keyed
+    # by direction. Rejection (fade) reuses the studies' absorption-premise mapping
+    # (``_absorption_state``): ``bid_absorption`` defends a floor -> long; ``ask_absorption``
+    # defends a ceiling -> short. Breakthrough (follow) reuses the studies' control-state mapping
+    # (``_control_state``): ``buyer_control`` drives real price impact through a ceiling -> long;
+    # ``seller_control`` drives real price impact through a floor -> short. Config-owned (a dict,
+    # not an inline literal buried in the runner) so the runner reads it BY NAME through
+    # ``strategy_definition``'s returned grammar -- never a restated copy of a state-name string.
+    structure_tape_rejection_state_by_direction: dict = field(
+        default_factory=lambda: {"long": "bid_absorption", "short": "ask_absorption"}
+    )
+    structure_tape_breakthrough_state_by_direction: dict = field(
+        default_factory=lambda: {"long": "buyer_control", "short": "seller_control"}
+    )
+
     def profile_definition(self, profile_id: str) -> dict | None:
         """The config-owned descriptor for ``profile_id`` (Data Contract row 33) — the
         ``strategy_definition`` pattern applied to profiles: THIS method is the ONE place that
@@ -1193,12 +1241,13 @@ class Config:
         return replace(self, **definition["overrides"])
 
     def strategy_definition(self, strategy_id: str) -> dict | None:
-        """The COMPLETE config-owned strategy definition for ``strategy_id`` (Data Contract row 34).
+        """The COMPLETE config-owned strategy definition for ``strategy_id`` (Data Contract row 34;
+        ``structure_tape`` is row 41, era-4 J-04).
 
-        The SINGLE owner of the v1 strategy grammar: the backtest runner READS this (never a
-        restated copy) and echoes it VERBATIM into every report's provenance. Only
-        ``STRATEGY_V1_ID`` is registered; any other id returns ``None`` (the route maps that to an
-        explicit 422 — never a silently-coerced default strategy).
+        The SINGLE owner of every registered strategy's grammar: the backtest runner READS this
+        (never a restated copy) and echoes it VERBATIM into every report's provenance. Only
+        ``STRATEGY_V1_ID`` and ``STRATEGY_TAPE_ID`` are registered; any other id returns ``None``
+        (the route maps that to an explicit 422 — never a silently-coerced default strategy).
 
         v1 declares, entirely from named config values (no inline threshold anywhere):
           * ENTRIES — the EXISTING state-native setup arming (the studies' sustained-premise rule):
@@ -1219,7 +1268,48 @@ class Config:
           * SLIPPAGE MODEL — ``strategy_slippage_spread_fraction`` of the recorded spread, adverse
             at each fill.
           * DOLLAR CONVERSION — the fixed ``strategy_dollars_per_r`` notional.
+
+        ``structure_tape`` (era-4 capability 4, J-04) is additive beside v1 — this branch is
+        evaluated FIRST and returns before v1's own branch is ever reached, so v1's returned dict
+        is untouched byte-for-byte:
+          * ENTRIES — a NEW rule (``structure_level_tape_confirmation``): price enters a classified
+            level's proximity band (``structure_tape_proximity_band_bps``) AND the tape confirms
+            direction — rejection (fade, ``structure_tape_rejection_state_by_direction``) or
+            breakthrough (follow, ``structure_tape_breakthrough_state_by_direction``, the studies'
+            level-cross technique). The EXISTING five-state tape vocabulary only — no new state.
+            Still ``one_open_trade`` and reuses the EXISTING ``study_arm_cooldown_seconds``.
+          * EXITS / FEES / SLIPPAGE / DOLLAR CONVERSION — IDENTICAL to v1 (class-scaled
+            stop/reward/size is J-05, out of scope here): the same R-stop, horizon, state-flip,
+            dataset_end, fee model, slippage model, and dollars-per-R notional, unchanged.
         """
+        if strategy_id == STRATEGY_TAPE_ID:
+            return {
+                "strategy_id": STRATEGY_TAPE_ID,
+                "entries": {
+                    "rule": "structure_level_tape_confirmation",
+                    "proximity_band_bps": self.structure_tape_proximity_band_bps,
+                    "rejection_states": dict(self.structure_tape_rejection_state_by_direction),
+                    "breakthrough_states": dict(self.structure_tape_breakthrough_state_by_direction),
+                    "arm_cooldown_seconds": self.study_arm_cooldown_seconds,
+                    "concurrency": "one_open_trade",
+                },
+                "exits": {
+                    "r_stop": {
+                        "rule": "synthetic_invalidation_at_arm",
+                        "spread_multiple": self.study_occurrence_r_spread_multiple,
+                        "floor": self.study_occurrence_r_floor,
+                    },
+                    "horizon_seconds": self.strategy_exit_horizon_seconds,
+                    "state_flip": {"rule": "opposing_control_state"},
+                    "dataset_end": {"rule": "forced_exit_at_last_recorded_price"},
+                },
+                "fees": {
+                    "per_share": self.strategy_fee_per_share,
+                    "min_per_trade": self.strategy_fee_min_per_trade,
+                },
+                "slippage": {"spread_fraction": self.strategy_slippage_spread_fraction},
+                "dollars_per_r": self.strategy_dollars_per_r,
+            }
         if strategy_id != STRATEGY_V1_ID:
             return None
         return {
@@ -1253,6 +1343,13 @@ class Config:
             "slippage": {"spread_fraction": self.strategy_slippage_spread_fraction},
             "dollars_per_r": self.strategy_dollars_per_r,
         }
+
+    def strategy_registry(self) -> list[dict]:
+        """Every REGISTERED strategy's descriptor, in registration order (``v1`` first, then
+        ``structure_tape``) — the full ``GET /research/strategies`` list (era-4 J-04; Data
+        Contract row 40). Built ENTIRELY from ``strategy_definition`` (never a second copy of any
+        id or grammar value) — the identical ``profile_registry`` pattern applied to strategies."""
+        return [self.strategy_definition(sid) for sid in _STRATEGY_IDS_IN_ORDER]
 
     def window_label(self, window: int) -> str:
         return f"{window}s"
@@ -1468,6 +1565,20 @@ class Config:
             # carrying a different (unapplied) candidate override value MUST share a fingerprint.
             # Pinned both ways in tests/test_profile_equivalence.py.
             "profile_candidate_warmup_min_events",
+            # The structure_tape strategy's own config fields (era-4 capability 4, J-04): a
+            # SEPARATE, additive strategy registered beside the frozen v1 — read ONLY when
+            # structure_tape itself is selected (never by a v1 backtest, the tape engine, or any
+            # study/PnL-ledger computation this fingerprint stamps onto every persisted record for
+            # never-pool-across-fingerprints honesty), so their mere presence on ``Config`` must
+            # NOT move the frozen ``default``-profile/``v1``-strategy fingerprint this hash is
+            # pinned to (the identical ``sr_*`` rationale above, applied to a different brand-new,
+            # unrelated strategy). Two journals identical in every FINGERPRINTED threshold but
+            # configured with a different proximity band or tape-confirmation mapping MUST share a
+            # fingerprint. Pinned by a fingerprint-stability test + the real-threshold counter-test
+            # in tests/test_backtests.py.
+            "structure_tape_proximity_band_bps",
+            "structure_tape_rejection_state_by_direction",
+            "structure_tape_breakthrough_state_by_direction",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)

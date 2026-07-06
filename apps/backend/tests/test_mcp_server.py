@@ -39,9 +39,10 @@ from app.mcp import (
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
-# Capability 6, verbatim — order and content are the advertised contract. ``bars`` (era-4 J-01) and
-# ``levels`` (era-4 J-02) are the newest additions, positioned right after their ``datasets``
-# sibling in dependency order (the same store+route+MCP shape, mirrored end to end).
+# Capability 6, verbatim — order and content are the advertised contract. ``bars`` (era-4 J-01),
+# ``levels`` (era-4 J-02), and ``strategies`` (era-4 J-04) are the newest additions, each
+# positioned right after its dependency-order sibling (the same store/registry+route+MCP shape,
+# mirrored end to end).
 EXPECTED_TOOLS = (
     "tape_state",
     "tape_features",
@@ -53,6 +54,7 @@ EXPECTED_TOOLS = (
     "bars",
     "levels",
     "backtests",
+    "strategies",
     "pnl_ledger",
     "taxonomy",
     "ui_route_map",
@@ -361,6 +363,21 @@ async def test_backtests_tool_byte_identical_on_a_non_empty_live_list(mcp_env):
     assert result.isError is False
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "backtests not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_strategies_tool_byte_identical_on_a_non_empty_live_result(mcp_env):
+    """``strategies`` (era-4 J-04) ships in the SAME iteration as its endpoint — unlike
+    ``bars``/``levels``/``backtests``, the registry (``v1`` + ``structure_tape``) and the champion
+    pointer are ALWAYS present (config-owned + auto-seeded at store-open), so this proves
+    byte-identity on a NON-EMPTY result with no seeding at all."""
+    result = await call_tool("strategies", {})
+    rest = httpx.get(f"{mcp_env}/research/strategies", timeout=5.0)
+    assert rest.status_code == 200
+    assert len(rest.json()["strategies"]) >= 1, "the live registry must be non-empty for this proof"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "strategies not byte-identical"
 
 
 @pytest.mark.anyio
