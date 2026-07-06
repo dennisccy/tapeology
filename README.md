@@ -109,11 +109,13 @@ git subtree push --prefix incredible_auto_dev auto_dev main
 <!-- AUTO:how-to-run -->
 ## How to run
 
+<!-- TODO: .claude/project-template.md is currently unfilled (Stack / Test commands / Service start commands are still template placeholders) -- likely reset by a recent incredible_auto_dev framework sync. Commands below are verified directly against apps/backend/pyproject.toml, apps/backend/requirements.txt, apps/frontend/package.json, scripts/start-backend.sh, scripts/start-frontend.sh, and the .env.example files; re-fill project-template.md to restore it as the source of truth. -->
+
 ### Prerequisites
 
 - Python 3.12+
 - Node.js (for Next.js frontend)
-- `uv` package manager (pip-compatible); creates venv at `apps/backend/.venv/`
+- A Python virtual environment at `apps/backend/.venv/` (stdlib `venv`, or `uv`, which is pip-compatible)
 - (Optional) Alpaca API credentials in environment for real-data modes (`ALPACA_API_KEY`, `ALPACA_API_SECRET`); without them the app runs simulator-only.
 
 ### Install
@@ -121,7 +123,8 @@ git subtree push --prefix incredible_auto_dev auto_dev main
 ```bash
 # Backend
 cd apps/backend
-uv pip install -e .        # or: pip install -e . inside the venv
+python3 -m venv .venv                        # first time only
+.venv/bin/pip install -r requirements.txt    # or: uv pip install -r requirements.txt
 
 # Frontend
 cd apps/frontend

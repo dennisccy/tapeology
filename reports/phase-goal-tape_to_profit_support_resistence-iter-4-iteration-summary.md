@@ -1,6 +1,6 @@
 # Iteration Summary — goal-tape_to_profit_support_resistence-iter-4
 
-**Verdict:** PASS
+**Verdict:** CONTINUE
 **Iteration type:** goal-full
 **Date:** 2026-07-06
 **Iteration:** 4
@@ -9,52 +9,53 @@
 
 **What you can do now:** You can type in a stock ticker and watch Tapeology read live trade-by-trade order flow to see whether buyers or sellers are in control, write trading ideas into a journal, run replay studies, and view honest backtest and profit-and-loss results on a Performance page — all delivered in earlier rounds. The new support-and-resistance work is still being built behind the scenes and isn't ready to try yet.
 
-**What changed this time:** Behind-the-scenes work — nothing visibly new this round. Tapeology now has a second, additive simulated trading rule that only fires where price sits at one of its computed support-and-resistance zones and the live tape agrees — either defending that zone (so the simulated trade fades back) or breaking through it with real conviction (so the simulated trade follows through). Every such simulated trade records exactly which zone triggered it.
+**What changed this time:** Behind-the-scenes work — nothing visibly new this round. Tapeology now has a second, experimental trading rule alongside the original one: it only takes a simulated trade when price is sitting right at one of the graded support/resistance zones and the live tape agrees at that exact moment — either the zone holds and price bounces back, or the zone breaks and price keeps going with real conviction. Every such trade records exactly which zone triggered it.
 
-**What's next:** Next, Tapeology will scale each simulated trade's risk and size to how convincing its zone is, so a stronger zone gets a tighter stop and a larger (still simulated) position.
+**What's next:** Next, Tapeology will teach this new rule to size its bets and set its stops based on how strong each zone is.
 
 ## Headline
 
-Registered structure_tape, a second strategy that arms only at tape-confirmed support/resistance levels
+A second strategy, structure_tape, arms only where price structure and tape confirmation coincide.
 
 ## Direction
 
 **Signal:** improving
-**Why:** J-04 (the `structure_tape` strategy) was built end to end this iteration — review, QA (1128 passed/1 skipped, +21 tests), and audit each independently reran the arming suite and confirmed entries fire only where a classified level AND a confirming tape read coincide (proven by discriminating no-arm tests, not just happy-path asserts), while the frozen `v1`/`default` fingerprint (`4d665603569b9dbf`) stayed unmoved and `apps/frontend/` stayed untouched. The goal-evaluator had not yet written iter-4's own verdict at summarization time (`journey-history.json` and the evaluator log still reflect the iter-3 state), so the top verdict here is carried from the closure gate (CLOSURE-PASS); the closure/review/QA/audit evidence shows J-04 is the fourth consecutive iteration to move a new journey forward (J-01→J-02→J-03→J-04) with zero regressions and zero anti-goal violations.
+**Why:** J-04 (tape-confirmed `structure_tape` strategy) moved from failing to passing this iteration — the config-owned strategy registry, the arming logic (rejection/breakthrough confirmed by the tape), and `GET /research/strategies` + its MCP proxy were all built and independently re-verified (129 targeted tests, exit 0; QA 20/20 TC; audit PASS). J-01/J-02/J-03/J-07 remain required-still-passing and green with zero regressions and zero anti-goal violations; J-05/J-06 stay the scoped next targets, now unblocked since every `structure_tape` trade carries the arming level's A/B/C class. Iterations 1 through 4 have each advanced exactly one journey in dependency order, so direction is healthy.
 
 **Trend (last 5 iters):**
-- Newly passing this iter: J-04 (per closure/QA/audit evidence; not yet reflected in journey-history.json)
-- Newly passing in last 5 iters total: J-01, J-02, J-03, J-04
+- Newly passing this iter: J-04
+- Newly passing in last 5 iters total: J-01, J-02, J-03, J-04, J-07
 - Regressions in last 5 iters: none
 - Anti-goal violations in last 5 iters: none
 - Iters with no journey state change: 0 of last 5
 
-**Latest evaluator reasoning:** (most recent available — iter-3's; iter-4's own evaluator entry had not been written at summarization time) "QA (14/14 TC, 1107 passed) and the audit (114 targeted, exit 0, 3 OBSERVATION-only) both independently re-ran the suite. I personally re-verified the J-07 sentinel (config_fingerprint()=='4d665603569b9dbf' with the 3 new sr_confluence_* fields proven excluded), the frozen frontend (git status apps/frontend/ empty), no scope creep (grep structure_tape -> no matches), and single-owner confluence code (confined to research/levels.py). Not GOAL_ACHIEVED — J-04/J-05/J-06 remain failing/unbuilt."
+**Latest evaluator reasoning:** J-04 (`structure_tape` as a registered, tape-confirmed structure strategy) built end-to-end and is genuinely passing — I independently verified the registry (`['v1','structure_tape']`), the 13 structure_tape tests (4 arming-direction positives at class-A levels, the two discriminating negatives, no-lookahead, single-source, byte-identical rerun), the strategies API, and MCP byte-identity (129-test targeted run, exit 0). The frozen foundation is intact: I live-computed `config_fingerprint()=='4d665603569b9dbf'`, re-ran the v1/default equivalence and no-execution suites green, and confirmed `apps/frontend/` and `app/engine/` are untouched. J-05 and J-06 remain honestly `failing` (out of scope, next in the dependency queue), so this is not GOAL_ACHIEVED; coherence is PASS, so no consolidation is owed — clean forward progress.
 
 ## What was done
 
-- Registered `structure_tape` as a second config-owned strategy beside the frozen `v1` (`Config.strategy_definition`/`strategy_registry`), entries arming only where a classified support/resistance level and a confirming tape read coincide (rejection→fade, breakthrough→follow)
-- Extended the one backtest runner (`_strategy_trades` → new `_structure_tape_trades` branch) to read levels exclusively from the existing `research/levels.py` `compute_levels` owner as-of each event's own timestamp — no second S/R computation path, no lookahead
-- Added `GET /research/strategies` (mirrors `GET /research/profiles`), serving the registry plus the champion strategy id from the single existing champion pointer, plus a byte-identical MCP `strategies` proxy
-- Widened `POST /research/backtests` to accept `strategy_id=structure_tape` (previously 422) with no route-validation change; the unknown-strategy 422 now lists every registered id
-- Excluded all 3 new `structure_tape`-only config fields from `config_fingerprint()` — pinned `default` fingerprint `4d665603569b9dbf` unmoved
-- Added 21 new tests (13 in `test_backtests.py`, 7 in new `test_strategies_api.py`, 1 in `test_mcp_server.py`); full backend suite 1128 passed / 1 skipped (up from 1107), zero regressions
-- Browser QA correctly SKIPPED (`Frontend Present: no`, machine surface only); review, QA (20/20 test cases), and audit each independently reran the suite and the load-bearing guards rather than trusting the handoff
-- Extended the README capability bullets for the strategy registry + `structure_tape` + the `strategies` MCP tool (doc-parity rider closing iter-3's coherence WARN)
+- Registered `structure_tape` as a second, config-owned trading strategy beside the frozen `v1` — entries arm only when price sits at (or moves through) a classified support/resistance level AND the live tape confirms it (rejection → fade, breakthrough → follow)
+- Added `Config.strategy_registry()` (`['v1', 'structure_tape']`) and extended the backtest runner with a new `_structure_tape_trades` branch that reads levels only from the existing `compute_levels` owner — no second S/R computation
+- Every `structure_tape` trade is stamped with the exact level (price, timeframe, A/B/C class) that armed it; exits/fees/slippage/notional math reused unchanged from `v1` (class-scaled risk is next)
+- Shipped `GET /research/strategies` (+ byte-identical MCP `strategies` proxy) listing both strategies plus the current champion, read from the single existing champion pointer
+- Added 3 new `structure_tape`-only config fields, all excluded from `config_fingerprint()` — frozen `default` fingerprint stays pinned at `4d665603569b9dbf`
+- Extended README capability bullets to describe the new strategy registry and MCP tool (closes iter-3's coherence WARN)
+- Added 21 new tests — full backend suite 1128 passed / 1 skipped / 0 failed (up from 1107), zero regressions; browser QA correctly SKIPPED (backend-only, Frontend Present: no)
+- Review PASS, QA PASS (20/20 TC), Audit PASS (3 GAP/OBSERVATION-only), Closure CLOSURE-PASS — J-07 sentinel confirmed intact (fingerprint unmoved, equivalence green, empty frontend diff)
 
 ## What's left
 
-- Journey J-05 (Class-scaled stop, reward, and simulated size) failing — now unblocked by J-04's level provenance but not yet implemented
-- Journey J-06 (`structure_tape` measured honestly against the v1 champion) failing — no named-strategy edge-report/sweep path yet
-- `structure_tape`'s breakthrough arm is a static "price beyond the level" test rather than a fresh event-to-event cross (audit finding B1, OBSERVATION — matches the frozen studies precedent it was directed to reuse; not treated as a defect)
-- No dedicated corrupt-sole-bar-series test specific to `structure_tape` (audit finding T1, GAP — proven transitively equivalent to the already-tested no-series-recorded path; optional doc-parity only)
-- `compute_levels` is re-read from disk on every qualifying flat event, uncached (audit finding B2, OBSERVATION — correct but O(events × bar files); acceptable at fixture scale)
-- No screen in the website to view the strategy registry or run a `structure_tape` backtest yet — machine-only surface (REST + MCP) by design this iteration, same as every prior research-era capability
-- `runs/goal-session-tape_to_profit_support_resistence/state/journey-history.json` has not yet been refreshed to record J-04's pass (goal-evaluator for iter-4 had not run at summarization time)
+- Journey J-05 (Class-scaled stop, reward, and simulated size) failing — no per-class risk/size math yet; `structure_tape` currently reuses `v1`'s flat exits/notional unchanged
+- Journey J-06 (structure_tape is measured honestly against the v1 champion) failing — no named-strategy edge-report/comparison path or champion promotion yet
+- No dedicated corrupt-sole-bar-series test for `structure_tape` specifically — judged provably equivalent to the existing no-series-recorded path; optional documentation parity, not a correctness gap
+- `structure_tape`'s breakthrough arm is a static "price is beyond the level" test rather than a fresh event-to-event cross — mirrors an existing frozen precedent, carried forward as a disclosed limitation for J-06's honest edge measurement
+- `compute_levels` re-reads bar files from disk on every qualifying flat event (uncached) — acceptable at fixture scale, candidate for caching if a future iteration runs a much larger real bar library
+- No screen in the website to view the strategy registry or run a `structure_tape` backtest yet — machine-only surface (REST + MCP) by design this iteration
 
 ## Next step
 
-Per the audit's recommended next step (no goal-evaluator Next-Step Recommendation was available for iter-4 at summarization time): advance to J-05 — class-scaled stop, reward, and simulated size — now unblocked because every `structure_tape` trade already carries its arming level's A/B/C class in `trade["level"]["class"]`. Required-still-passing J-01/J-02/J-03/J-07 remain green. The three carried-forward GAP/OBSERVATION items (B1's static breakthrough test, B2's uncached `compute_levels` re-reads, T1's missing dedicated corrupt-file test) don't block J-05; revisit B1/B2 only if a future iteration backtests `structure_tape` over a much larger real bar library.
+Build J-05 — class-scaled stop, reward, and simulated size (Data Contract row 42), now unblocked since every `structure_tape` trade already carries `trade['level']['class']` (A/B/C). J-05 derives the stop (A ≈ 1bp beyond the level, B/C wider — all config-owned), the reward target (R:R toward the next opposing level), and a simulated position notional (better class → larger), feeding them into the backtest fill/PnL math, and reports PnL per class (net R AND $, n, per split) beside the "simulated — not indicative of live results" register, with sub-minimum-n classes labelled "insufficient sample".
+
+Run it full — it is a new canonical computation that splits the exit/size arithmetic `structure_tape` currently inherits byte-identically from `v1` (the next evaluator must re-verify v1/default byte-identity after that shared math is parameterized), and it introduces the "position size = simulated notional, transmits nothing" grep-guard, a critical anti-goal surface. Carry forward audit item B1 (the breakthrough arm is a static price-position test, not a fresh cross) as a disclosed limitation for J-06's honest edge measurement.
 
 ## Artifacts
 
@@ -72,4 +73,5 @@ Per the audit's recommended next step (no goal-evaluator Next-Step Recommendatio
 | QA | PASS | reports/qa/goal-tape_to_profit_support_resistence-iter-4-qa.md |
 | Audit | PASS | docs/handoffs/goal-tape_to_profit_support_resistence-iter-4-audit.md |
 | Closure | CLOSURE-PASS | reports/phase-goal-tape_to_profit_support_resistence-iter-4-closure-verdict.md |
+| Goal evaluation | CONTINUE | runs/goal-session-tape_to_profit_support_resistence/iter-4/eval.md |
 | Journey history | — | runs/goal-session-tape_to_profit_support_resistence/state/journey-history.json |
