@@ -1,0 +1,42 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The Structure tab renders S/R levels and A/B/C confluence zones",
+      "status": "failing",
+      "last_verified_iter": "goal-structure_ui-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-structure_ui-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-structure_ui-iter-0-dev.md"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The strategy registry and champion are visible",
+      "status": "failing",
+      "last_verified_iter": "goal-structure_ui-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-structure_ui-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-structure_ui-iter-0-dev.md"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "structure_tape is compared to v1 on screen, honestly",
+      "status": "failing",
+      "last_verified_iter": "goal-structure_ui-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-structure_ui-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-structure_ui-iter-0-dev.md"
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The foundation is unchanged (regression sentinel)",
+      "status": "already_passing",
+      "last_verified_iter": "goal-structure_ui-iter-0",
+      "last_passing_iter": "goal-structure_ui-iter-0",
+      "first_seen_iter": "goal-structure_ui-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-structure_ui-iter-0-dev.md"
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-07-06T23:28:23Z"
+}
