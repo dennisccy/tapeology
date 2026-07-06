@@ -1,0 +1,69 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "Multi-timeframe historical bars are ingested and persisted (data foundation + free-plan probe)",
+      "status": "passing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-1",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-1",
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "reports/qa/goal-tape_to_profit_support_resistence-iter-1-qa.md (TC-01..TC-19 all PASS: keyless-fixture ingest->persist->read, byte-identical re-read, 503 missing-cred, 422 out-of-set timeframe, 404 unknown id, integrity/empty-window refusals, MCP byte-identity) + evaluator-run tests/test_bars.py+test_bars_api.py (28 passed)"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Deterministic support/resistance levels per timeframe",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-1-dev.md (Known Issues: GET /research/levels still 404, no levels module) + evaluator grep confirmed no /research/levels route in app/ (as scoped — J-02 is next iteration)"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Confluence zones and A/B/C conviction classes",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-03 section: no confluence/SRLevel code; served from same absent /research/levels)"
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Tape-confirmed structure entries as a registered strategy",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-1-dev.md (Known Issues: GET /research/strategies still 404) + evaluator grep confirmed no /research/strategies route in app/ (as scoped)"
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "Class-scaled stop, reward, and simulated size",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-05 section: no per-class PnL/sizing machinery; structure_tape backtest cannot run)"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "structure_tape is measured honestly against the v1 champion",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-06 section: pnl_scan/edge_report champion-only; no named-strategy evaluation path)"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The archived eras are unchanged (regression sentinel)",
+      "status": "already_passing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-1",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-1",
+      "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_evidence_path": "evaluator-run tests/test_observer_equivalence.py + tests/test_profile_equivalence.py (22 passed, byte-identical default) + live-computed Config().config_fingerprint()=='4d665603569b9dbf' (pinned, unmoved) + git diff b576c8f..HEAD -- apps/frontend/ empty (no tracked or untracked frontend change)"
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-07-06T03:40:00Z"
+}

@@ -27,3 +27,18 @@
 **Reasoning:** J-01 built end to end and genuinely passing — I re-ran its acceptance suites myself (`test_bars.py`+`test_bars_api.py` = 28 passed: keyless-fixture ingest→persist→read, byte-identical re-read, double-checksum verify-on-load, honest failure taxonomy incl. 503 missing-cred / 422 out-of-set-timeframe / 404 unknown-id / integrity+empty-window refusals; MCP byte-identity). J-07 (eras-1–3 sentinel) re-verified intact: I live-computed `Config().config_fingerprint()`=='4d665603569b9dbf' (pinned, unmoved), ran the equivalence suites (22 passed byte-identical `default`), and confirmed `git diff b576c8f..HEAD -- apps/frontend/` empty (no tracked or untracked frontend change). All four new `Config` fields correctly joined the fingerprint `excluded` set. Review/QA/Audit/Coherence all PASS; scan CLEAN; grep confirmed no `/research/levels` or `/research/strategies` leaked (J-02–J-06 honestly still failing/404 as scoped). Not GOAL_ACHIEVED because J-02–J-06 remain unbuilt; not REGRESSION/ESCALATE/STALLED — clean forward progress with a tractable next step.
 
 **Next-step recommendation:** iter-2 builds **J-02** — deterministic support/resistance level detection consuming the J-01 bar store: a config-owned S/R module (swing pivots ±N + prior-period extremes, strength = timeframe-weight × touch-count), `GET /research/levels` + MCP proxy, keyless-verifiable on the committed PG fixture. Recommend **full**: J-02 introduces the critical **no-lookahead** anti-goal (as-of T uses only bars ≤ T — a subtle correctness property that silently invalidates all of J-03–J-06 if wrong) plus a brand-new canonical value + serving endpoint (Data-Contract levels row). Carry forward two disclosed probe findings: monthly-bar vendor depth stops at 2016-01-01 on this plan; unknown-symbol and empty/embargoed windows both surface as the same 422. Keep `default`/`v1` byte-identical (J-07).
+
+## Iteration 2 — goal-tape_to_profit_support_resistence-iter-2
+
+**Date:** 2026-07-06T05:15:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-02 (deterministic, lookahead-free S/R levels — GET /research/levels + MCP levels)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (scan CLEAN; coherence PASS)
+
+**Reasoning:** J-02 built end to end and genuinely passing — lookahead-free by construction (ts<=as_of filter before every detector), byte-identical, single-sourced across REST+MCP. Backend/machine-surface journey, so browser QA correctly SKIPPED and the acceptance IS the test suite: I independently reran tests/test_levels.py+test_levels_api.py+2 MCP tests+observer/profile equivalence => exit 0 (48 passed), not merely trusting the reports. J-07 sentinel intact (fingerprint 4d665603569b9dbf unmoved live, equivalence green, empty frontend diff vs 37d3ad2); 3 new sr_* config fields correctly excluded from the fingerprint. Review PASS / QA PASS / Audit PASS_WITH_GAPS (one minor documented gap B1, out of J-02 scope) / Coherence PASS. J-03–J-06 remain failing exactly as scoped (grep-confirmed no structure_tape/strategies; no classes field).
+
+**Next-step recommendation:** iter-3 builds J-03 — confluence zones + A/B/C classes clustering the J-02 levels, as an additive `classes` field on the existing GET /research/levels + MCP levels (no new endpoint/owner; the classes half of Data-Contract Row 39). Full depth (new canonical computation + new correctness tests beyond browser smoke + extends the critical no-lookahead property to classes; machine surface => tests are the acceptance). J-03 must also decide the audit's B1 seam: whether a corrupt *sole* bar series needs a distinct honest state vs an absent one when it consumes levels. Keep default/v1 byte-identical (J-07).

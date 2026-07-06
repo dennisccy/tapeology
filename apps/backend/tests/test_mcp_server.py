@@ -39,9 +39,9 @@ from app.mcp import (
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
-# Capability 6, verbatim — order and content are the advertised contract. ``bars`` (era-4 J-01) is
-# the newest addition, positioned right after its ``datasets`` sibling (the same store+route+MCP
-# shape, mirrored end to end).
+# Capability 6, verbatim — order and content are the advertised contract. ``bars`` (era-4 J-01) and
+# ``levels`` (era-4 J-02) are the newest additions, positioned right after their ``datasets``
+# sibling in dependency order (the same store+route+MCP shape, mirrored end to end).
 EXPECTED_TOOLS = (
     "tape_state",
     "tape_features",
@@ -51,6 +51,7 @@ EXPECTED_TOOLS = (
     "studies",
     "datasets",
     "bars",
+    "levels",
     "backtests",
     "pnl_ledger",
     "taxonomy",
@@ -181,7 +182,9 @@ async def test_advertised_tool_set_is_exactly_capability_6():
         for word in tool.name.lower().split("_"):
             assert word not in write_verbs, f"write verb {word!r} in tool name {tool.name!r}"
         # Arguments are read selectors only.
-        assert set(tool.inputSchema.get("properties", {})) <= {"ticker", "bar", "path"}
+        assert set(tool.inputSchema.get("properties", {})) <= {
+            "ticker", "bar", "path", "symbol", "as_of",
+        }
         assert tool.inputSchema.get("additionalProperties") is False
 
 
@@ -281,6 +284,38 @@ async def test_bars_tool_byte_identical_on_a_non_empty_live_list(mcp_env, backen
     assert result.isError is False
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "bars not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_levels_tool_byte_identical_on_a_non_empty_live_result(mcp_env, backend_paths):
+    """``levels`` (era-4 J-02) ships in the SAME iteration as its endpoint — the ``bars`` J-01
+    precedent: seed the live backend's bar directory with the committed KEYLESS fixture pair
+    directly (no vendor call, no credentials touched), then prove the two-argument tool's JSON is
+    byte-identical to its curl equivalent on a NON-EMPTY result."""
+    bar_dir = Path(backend_paths["TAPEOLOGY_BAR_DIR"])
+    fixtures = list(FIXTURE_BAR_DIR.glob("*.json"))
+    assert fixtures, "the committed bar fixture directory must not be empty"
+    for fixture in fixtures:
+        shutil.copy(fixture, bar_dir / fixture.name)
+    as_of = "2026-06-09T21:00:00Z"  # at/after both fixtures' window_end_utc
+    result = await call_tool("levels", {"symbol": "PG", "as_of": as_of})
+    rest = httpx.get(f"{mcp_env}/research/levels", params={"symbol": "PG", "as_of": as_of}, timeout=5.0)
+    assert rest.status_code == 200
+    assert len(rest.json()["levels"]) >= 1, "the live result must be non-empty for this proof"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "levels not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_levels_tool_requires_both_arguments(monkeypatch):
+    monkeypatch.setenv("TAPEOLOGY_API_BASE", _dead_base())
+    with pytest.raises(ToolArgumentError):
+        await call_tool("levels", {"as_of": "2026-06-09T21:00:00Z"})
+    with pytest.raises(ToolArgumentError):
+        await call_tool("levels", {"symbol": "PG"})
+    with pytest.raises(ToolArgumentError):
+        await call_tool("levels", {})
 
 
 @pytest.mark.anyio
@@ -473,6 +508,7 @@ async def test_backend_down_every_tool_raises_an_explicit_error(monkeypatch):
         "tape_state": {"ticker": "SIM-BUYER"},
         "tape_features": {"ticker": "SIM-BUYER"},
         "tape_history": {"ticker": "SIM-BUYER"},
+        "levels": {"symbol": "PG", "as_of": "2026-06-09T21:00:00Z"},
         "get_endpoint": {"path": "/meta/ui-routes"},
     }
     for name in EXPECTED_TOOLS:

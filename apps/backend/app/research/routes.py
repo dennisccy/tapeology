@@ -41,6 +41,7 @@ from .bars import (
     BarStore,
     EmptyBarWindowError,
 )
+from .levels import compute_levels
 from .datasets import (
     VALID_SOURCE_KINDS as DATASET_SOURCE_KINDS,
     VALID_SPLITS,
@@ -1621,6 +1622,35 @@ def get_bar_series(bar_series_id: str, store: BarStore = Depends(get_bar_store))
     except BarSeriesIntegrityError as exc:
         raise HTTPException(status_code=500, detail=f"bar series integrity check failed: {exc}")
     return {"bar_series": meta}
+
+
+# --- Deterministic support/resistance levels (era-4 capability 2, J-02) -----------------------------
+# ONE route: GET /research/levels?symbol=<S>&as_of=<ISO-T>. The S/R module (research/levels.py) is
+# the sole computer of levels; this route only parses/validates the query params and serves the
+# module's output VERBATIM (single source of truth -- the MCP `levels` tool proxies this
+# byte-identically; no second computation path). ``classes`` (J-03 confluence) is deliberately
+# ABSENT this iteration -- an additive-only field a later iteration can add without a breaking
+# change (the plan's explicit reserved-shape note).
+
+
+@router.get("/levels")
+def get_levels(symbol: str, as_of: str, store: BarStore = Depends(get_bar_store)) -> dict:
+    """Deterministic, lookahead-free support/resistance levels for ``symbol`` as of ``as_of``
+    (J-02). ``symbol``/``as_of`` are both REQUIRED query params (FastAPI 422s a missing one
+    before this body runs); an empty ``symbol`` or a malformed ``as_of`` are explicit 422s here
+    (never a silent "now" default, which would leak lookahead). A symbol with no recorded bar
+    series at all, and a symbol with series but nothing derivable at this instant, are TWO
+    distinct honest states -- see ``compute_levels``' ``no_bar_series_for_symbol`` flag -- never
+    one ambiguous bare empty ``levels`` array."""
+    if not symbol:
+        raise HTTPException(status_code=422, detail="a levels query requires a symbol")
+    try:
+        as_of_epoch = parse_utc_epoch(as_of)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="as_of must be an ISO date-time")
+    normalized_symbol = symbol.strip().upper()
+    result = compute_levels(store, normalized_symbol, as_of_epoch, CONFIG)
+    return {"symbol": normalized_symbol, "as_of": as_of, **result}
 
 
 # --- Deterministic backtests (era-3 capability 4, J-03) --------------------------------------------

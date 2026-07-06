@@ -1069,6 +1069,46 @@ class Config:
     # cadence, never a tape/backtest/study value.
     bar_rate_limit_per_minute: int = 200
 
+    # --- Structure-and-tape era: deterministic S/R LEVEL detection (era-4 capability 2, J-02) -----
+    # RESEARCH DEFAULTS -- a starting point, never a validated edge (the same
+    # ``verdict_dwell_seconds`` discipline: every research value lives in config with its
+    # rationale documented here; no literal in ``research/levels.py``). Namespaced ``sr_*``
+    # (support/resistance) so it never collides with the EXISTING, UNRELATED intraday tape setups
+    # ``level_break`` / ``failed_move_fade`` (above) -- a different "level" concept entirely (a
+    # structural price derived from bars, not a live tape-arming setup).
+    #
+    # PIVOT LOOKBACK N: a bar's high (or low) is a swing-high (swing-low) pivot iff it is STRICTLY
+    # greater (less) than BOTH its N neighbours on either side -- a ``2N+1``-bar fractal window.
+    # N=1 (a 3-bar window) is the smallest window that defines a local extreme at all; it already
+    # yields real pivots on the committed PG 1h/1d fixtures (verified in ``tests/test_levels.py``)
+    # without any fixture extension.
+    sr_pivot_lookback: int = 1
+    # TOUCH TOLERANCE (basis points of the level's OWN price -- the "RELATIVE ... judged relative
+    # to the instrument's price level" discipline above, not an absolute dollar constant that
+    # would not scale across instruments): a bar (other than the level's own originating bar,
+    # which always counts) registers an extra "touch" of a level iff its high OR low comes within
+    # ``price * sr_touch_tolerance_bps / 10_000`` of the level's price. Feeds ``touch_count`` and,
+    # through it, ``strength``.
+    sr_touch_tolerance_bps: float = 5.0
+    # PER-TIMEFRAME WEIGHT: ``strength = timeframe_weight * touch_count``. Ordinally increasing
+    # with timeframe length (goal.md's stated hypothesis -- "levels that align across timeframes
+    # matter more" -- long-term levels carry more conviction than short-term ones), covering every
+    # timeframe ``bar_timeframes`` registers (``tests/test_levels.py`` pins the set equality) so a
+    # weight lookup never silently falls back to a fabricated default.
+    sr_timeframe_weights: dict = field(
+        default_factory=lambda: {
+            "1m": 1.0,
+            "5m": 1.0,
+            "15m": 1.0,
+            "1h": 2.0,
+            "4h": 3.0,
+            "8h": 3.0,
+            "1d": 4.0,
+            "1w": 5.0,
+            "1mo": 6.0,
+        }
+    )
+
     def profile_definition(self, profile_id: str) -> dict | None:
         """The config-owned descriptor for ``profile_id`` (Data Contract row 33) — the
         ``strategy_definition`` pattern applied to profiles: THIS method is the ONE place that
@@ -1265,6 +1305,21 @@ class Config:
             "bar_timeframes",
             "bar_recency_delay_seconds",
             "bar_rate_limit_per_minute",
+            # The S/R level-detection parameters (era-4 capability 2, J-02): ``levels`` is a
+            # SEPARATE research computation from the tape engine / backtest / PnL-ledger /
+            # thesis-verdict pipeline this fingerprint stamps onto every persisted record for
+            # never-pool-across-fingerprints honesty -- a level is never itself stamped with (or
+            # compared across) a ``config_fingerprint`` anywhere. Two journals identical in every
+            # FINGERPRINTED threshold but configured with different pivot lookback / touch
+            # tolerance / timeframe weights MUST share a fingerprint (else every temp-config test
+            # of these brand-new, unrelated parameters would mint a different fingerprint and
+            # falsely fragment the tape/backtest/PnL pools those OTHER thresholds exist to
+            # protect) -- the identical ``bar_timeframes`` rationale directly above, applied to a
+            # different brand-new capability. Pinned by a fingerprint-stability test + the
+            # real-threshold counter-test in ``tests/test_levels.py``.
+            "sr_pivot_lookback",
+            "sr_touch_tolerance_bps",
+            "sr_timeframe_weights",
             "journal_list_default_limit",
             "journal_list_max_limit",
             "analytics_min_sample_size",

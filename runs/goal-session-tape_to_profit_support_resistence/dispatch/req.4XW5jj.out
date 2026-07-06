@@ -1,0 +1,18 @@
+All artifacts written. Pre-finalize self-check (methodology §E) passes on all five.
+
+## Verdict: CONTINUE (depth recommendation for iter-3: full)
+
+**Iteration 2 built J-02 (deterministic, lookahead-free support/resistance levels) — the only journey delta, `failing → passing`.** It is genuinely done, not merely claimed:
+
+- **Independently verified**, not trusted. Because J-02 is a backend/machine-surface journey, browser QA was correctly SKIPPED and the acceptance *is* the test suite — so I reran `tests/test_levels.py` + `test_levels_api.py` + the 2 MCP byte-identity/arg tests + observer/profile equivalence myself → **exit 0, 48 passed**. The headline no-lookahead property is proven by a *physical store-truncation* test that also asserts the truncation actually dropped bars (non-vacuous).
+- **J-07 sentinel intact**: live `Config().config_fingerprint()=='4d665603569b9dbf'` (unmoved; the 3 new `sr_*` fields correctly in the `excluded` set), equivalence suites green, and `git diff 37d3ad2..HEAD -- apps/frontend/` empty.
+- **Clean gates**: scan-report CLEAN, coherence **COHERENCE-PASS** (no structural veto), review PASS, QA PASS, audit PASS_WITH_GAPS. No anti-goal violated — all 12 goal-specific categories plus secrets/deps/license checked explicitly.
+- **No regression, no scope creep**: J-03–J-06 remain `failing` exactly as scoped (grep-confirmed no `structure_tape` / `/research/strategies`; `classes` field deliberately absent).
+
+**Next step**: J-03 (confluence zones + A/B/C classes) — the additive `classes` half of Data-Contract Row 39 on the same `GET /research/levels` + MCP `levels`, at **full** depth (new canonical computation, correctness tests beyond browser smoke, and it extends the critical no-lookahead property to classes). One forward carry captured in lessons.md: the audit's **B1 seam** — a corrupt *sole* bar series currently aliases to `no_bar_series_for_symbol: true`; J-03 must decide whether that needs a distinct honest state when it consumes levels.
+
+Files written (all absolute):
+- `/home/dennis-chan/Git/tapeology/runs/goal-session-tape_to_profit_support_resistence/iter-2/eval.md`
+- `/home/dennis-chan/Git/tapeology/runs/goal-session-tape_to_profit_support_resistence/state/journey-history.json`
+- `/home/dennis-chan/Git/tapeology/runs/goal-session-tape_to_profit_support_resistence/state/evaluator-log.md` (appended)
+- `/home/dennis-chan/Git/tapeology/runs/goal-session-tape_to_profit_support_resistence/state/lessons.md` (appended)

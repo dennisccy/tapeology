@@ -16,17 +16,17 @@ Result contract (locked by ``tests/test_mcp_server.py``):
     == the response body byte-for-byte, ``content[1].text`` == ``"HTTP <status> from GET
     <path>"``, ``isError`` true. Every registered tool's endpoint has shipped (``datasets`` at
     (era-3) J-02, ``backtests`` at J-03, ``pnl_ledger`` at J-04; ``/research/profiles`` — reached
-    via ``get_endpoint`` — at J-05; ``bars`` at era-4 J-01); an allowlisted-but-UNKNOWN path (any
-    unshipped ``/research/*``) still surfaces the backend's honest 404 this way — never
-    placeholder data.
+    via ``get_endpoint`` — at J-05; ``bars`` at era-4 J-01; ``levels`` at era-4 J-02); an
+    allowlisted-but-UNKNOWN path (any unshipped ``/research/*``) still surfaces the backend's
+    honest 404 this way — never placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
     no offline snapshot exists anywhere in this module).
   * ``get_endpoint`` — refuses any path outside GET ``/tape/*`` / ``/research/*`` / ``/meta/*``
     explicitly and WITHOUT sending a request (``PathRefusedError``).
 
-Read-only discipline: the advertised tool set is exactly capability 6's twelve read tools and
-the only HTTP verb this module ever issues is GET.
+Read-only discipline: the advertised tool set is exactly capability 6's read tools (plus each
+era-4 structural addition) and the only HTTP verb this module ever issues is GET.
 """
 
 from __future__ import annotations
@@ -98,6 +98,13 @@ _TAPE_PATHS: dict[str, str] = {
     "tape_features": "/tape/{ticker}/features",
     "tape_history": "/tape/{ticker}/history",
 }
+
+# The one parametrized tool that is neither a no-arg static path nor a single-ticker path
+# substitution: `levels` (era-4 J-02) needs TWO REQUIRED query params (`symbol`, `as_of`), so it
+# gets its own name + a dedicated branch in `_request_path` rather than reusing `_STATIC_PATHS` or
+# `_TAPE_PATHS`.
+_LEVELS_TOOL = "levels"
+_LEVELS_PATH = "/research/levels"
 
 _TICKER_PROPERTY = {
     "type": "string",
@@ -178,6 +185,24 @@ TOOLS: tuple[types.Tool, ...] = (
             "errors) JSON, verbatim."
         ),
         inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="levels",
+        description=(
+            "Read-only proxy of GET /research/levels — deterministic, lookahead-free "
+            "support/resistance levels (price, timeframe, type, touch_count, strength) for one "
+            "symbol as of one UTC instant, computed from the recorded bar store, JSON verbatim."
+        ),
+        inputSchema=_object_schema(
+            {
+                "symbol": {"type": "string", "description": "Symbol, e.g. PG."},
+                "as_of": {
+                    "type": "string",
+                    "description": "UTC ISO-8601 instant, e.g. 2026-06-09T21:00:00Z.",
+                },
+            },
+            ("symbol", "as_of"),
+        ),
     ),
     types.Tool(
         name="backtests",
@@ -269,6 +294,14 @@ def _request_path(name: str, arguments: dict) -> str:
         if name == "tape_history" and arguments.get("bar") is not None:
             path += f"?bar={arguments['bar']}"
         return path
+    if name == _LEVELS_TOOL:
+        symbol = arguments.get("symbol")
+        as_of = arguments.get("as_of")
+        if not isinstance(symbol, str) or not symbol:
+            raise ToolArgumentError(f"tool {name!r} requires a non-empty string 'symbol' argument")
+        if not isinstance(as_of, str) or not as_of:
+            raise ToolArgumentError(f"tool {name!r} requires a non-empty string 'as_of' argument")
+        return f"{_LEVELS_PATH}?symbol={quote(symbol, safe='')}&as_of={quote(as_of, safe='')}"
     if name == "get_endpoint":
         path = arguments.get("path")
         refusal = allowlist_refusal(path)
