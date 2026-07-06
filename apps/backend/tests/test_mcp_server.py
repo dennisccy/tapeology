@@ -288,10 +288,12 @@ async def test_bars_tool_byte_identical_on_a_non_empty_live_list(mcp_env, backen
 
 @pytest.mark.anyio
 async def test_levels_tool_byte_identical_on_a_non_empty_live_result(mcp_env, backend_paths):
-    """``levels`` (era-4 J-02) ships in the SAME iteration as its endpoint — the ``bars`` J-01
-    precedent: seed the live backend's bar directory with the committed KEYLESS fixture pair
-    directly (no vendor call, no credentials touched), then prove the two-argument tool's JSON is
-    byte-identical to its curl equivalent on a NON-EMPTY result."""
+    """``levels`` (era-4 J-02, confluence zones added at J-03) ships in the SAME iteration as its
+    endpoint — the ``bars`` J-01 precedent: seed the live backend's bar directory with the
+    committed KEYLESS fixture pair directly (no vendor call, no credentials touched), then prove
+    the two-argument tool's JSON is byte-identical to its curl equivalent on a NON-EMPTY result --
+    including the ``confluence_zones`` field (J-03), so this proxy proof meaningfully covers it too
+    (not merely a vacuous byte-match on an empty list)."""
     bar_dir = Path(backend_paths["TAPEOLOGY_BAR_DIR"])
     fixtures = list(FIXTURE_BAR_DIR.glob("*.json"))
     assert fixtures, "the committed bar fixture directory must not be empty"
@@ -302,6 +304,7 @@ async def test_levels_tool_byte_identical_on_a_non_empty_live_result(mcp_env, ba
     rest = httpx.get(f"{mcp_env}/research/levels", params={"symbol": "PG", "as_of": as_of}, timeout=5.0)
     assert rest.status_code == 200
     assert len(rest.json()["levels"]) >= 1, "the live result must be non-empty for this proof"
+    assert len(rest.json()["confluence_zones"]) >= 1, "the live zones must be non-empty for this proof"
     assert result.isError is False
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "levels not byte-identical"

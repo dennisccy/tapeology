@@ -1109,6 +1109,42 @@ class Config:
         }
     )
 
+    # --- Structure-and-tape era: confluence zones + A/B/C conviction classes (era-4 capability 3,
+    # J-03) -- RESEARCH DEFAULTS, the SAME ``sr_pivot_lookback`` discipline directly above: a
+    # starting point, never a validated edge; every research value lives in config with its
+    # rationale documented HERE, no literal in ``research/levels.py``. Namespaced ``sr_confluence_*``
+    # -- the same ``sr_`` family as the J-02 level-detection parameters above (one research
+    # computation), never colliding with the unrelated intraday tape setups.
+    #
+    # CONFLUENCE BAND (basis points of a zone's ANCHOR price -- its first, lowest-priced member):
+    # levels pooled across EVERY timeframe join the same confluence zone iff their price falls
+    # within ``price * sr_confluence_band_bps / 10_000`` of the zone's anchor (an anchor-fixed scan,
+    # never a pairwise/chained comparison, so a zone's price span is bounded by ONE tolerance window
+    # rather than an unbounded chain of near-neighbours -- see ``_cluster_levels``). Wider than
+    # ``sr_touch_tolerance_bps`` (5.0) because INDEPENDENT timeframes' own detected extremes rarely
+    # land on the exact same price the way a single series' own touches do, yet bounded so it does
+    # not smear together clearly distinct levels -- calibrated against the committed PG fixture: at
+    # 20 bps its real 1h/1d level set forms several distinct, informative zones (never one
+    # degenerate blob spanning the whole price range), verified by direct computation in
+    # ``tests/test_levels.py``.
+    sr_confluence_band_bps: float = 20.0
+    # CLASS A: a zone earns the highest conviction grade iff it has AT LEAST this many DISTINCT
+    # timeframes among its members AND at least one of those timeframes is in the long-term bucket
+    # (``PRIOR_PERIOD_TIMEFRAMES`` -- reused verbatim, no second "long-term" list) -- goal.md's own
+    # hypothesis ("levels that align across timeframes matter more"), with a long-term anchor
+    # specifically named ("a required long-term member"). The committed PG fixture stores only TWO
+    # timeframes (1h, 1d), so it can never itself produce a class A zone -- an honest, documented
+    # consequence of the committed data's own breadth, not a defect (proven instead on a dedicated
+    # synthetic 3-timeframe fixture; see ``tests/test_levels.py``).
+    sr_confluence_class_a_min_timeframes: int = 3
+    # CLASS B: the lesser bar -- at least this many DISTINCT timeframes (but not enough, or not
+    # long-term enough, to qualify for A). A qualifying cluster (>= 2 members, structurally
+    # guaranteed by ``_cluster_levels``) whose members are ALL from a SINGLE timeframe (e.g. two
+    # nearby swing pivots on the same 1h series) does not clear this floor and grades C instead --
+    # genuine cross-timeframe confluence is a strictly higher bar than mere same-timeframe price
+    # proximity (which each level's own ``touch_count`` already captures).
+    sr_confluence_class_b_min_timeframes: int = 2
+
     def profile_definition(self, profile_id: str) -> dict | None:
         """The config-owned descriptor for ``profile_id`` (Data Contract row 33) — the
         ``strategy_definition`` pattern applied to profiles: THIS method is the ONE place that
@@ -1320,6 +1356,16 @@ class Config:
             "sr_pivot_lookback",
             "sr_touch_tolerance_bps",
             "sr_timeframe_weights",
+            # The confluence-zone clustering band + A/B/C class-threshold parameters (era-4
+            # capability 3, J-03): the IDENTICAL ``sr_pivot_lookback`` rationale directly above --
+            # confluence zones/classes are the SAME separate research computation (never stamped
+            # with, or compared across, a ``config_fingerprint`` anywhere), so two journals
+            # identical in every FINGERPRINTED threshold but configured with a different confluence
+            # band or class-threshold MUST share a fingerprint. Pinned by a fingerprint-stability
+            # test + the real-threshold counter-test in ``tests/test_levels.py``.
+            "sr_confluence_band_bps",
+            "sr_confluence_class_a_min_timeframes",
+            "sr_confluence_class_b_min_timeframes",
             "journal_list_default_limit",
             "journal_list_max_limit",
             "analytics_min_sample_size",

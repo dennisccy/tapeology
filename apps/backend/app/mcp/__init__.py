@@ -190,8 +190,10 @@ TOOLS: tuple[types.Tool, ...] = (
         name="levels",
         description=(
             "Read-only proxy of GET /research/levels — deterministic, lookahead-free "
-            "support/resistance levels (price, timeframe, type, touch_count, strength) for one "
-            "symbol as of one UTC instant, computed from the recorded bar store, JSON verbatim."
+            "support/resistance levels (price, timeframe, type, touch_count, strength) PLUS their "
+            "confluence zones (member levels, timeframe-weighted score, honest A/B/C conviction "
+            "class) for one symbol as of one UTC instant, computed from the recorded bar store, "
+            "JSON verbatim."
         ),
         inputSchema=_object_schema(
             {

@@ -72,3 +72,11 @@
 {"agent":"readme-maintainer","ts":"2026-07-06T07:22:14Z","session_id":"tape_to_profit_support_resistence","iter":2,"event":"agent_invocation_start","cli":"claude"}
 {"agent":"readme-maintainer","status":"ok","wait_seconds":55,"run_seconds":276,"rc":"0","ts":"2026-07-06T07:27:45Z","session_id":"tape_to_profit_support_resistence","iter":2,"event":"dispatch_wait","cli":"claude"}
 {"agent":"readme-maintainer","exit_status":0,"duration_seconds":331,"retries":0,"ts":"2026-07-06T07:27:45Z","session_id":"tape_to_profit_support_resistence","iter":2,"event":"agent_invocation_end","cli":"claude"}
+{"agent":"coherence-auditor","ts":"2026-07-06T09:29:57Z","session_id":"tape_to_profit_support_resistence","iter":3,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"coherence-auditor","status":"ok","wait_seconds":7,"run_seconds":349,"rc":"0","ts":"2026-07-06T09:35:53Z","session_id":"tape_to_profit_support_resistence","iter":3,"event":"dispatch_wait","cli":"claude"}
+{"agent":"coherence-auditor","exit_status":0,"duration_seconds":356,"retries":0,"ts":"2026-07-06T09:35:53Z","session_id":"tape_to_profit_support_resistence","iter":3,"event":"agent_invocation_end","cli":"claude"}
+{"verdict":"COHERENCE-WARN","ts":"2026-07-06T09:35:53Z","session_id":"tape_to_profit_support_resistence","iter":3,"event":"coherence_audit","cli":"claude"}
+{"agent":"goal-evaluator","ts":"2026-07-06T09:35:53Z","session_id":"tape_to_profit_support_resistence","iter":3,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-evaluator","status":"ok","wait_seconds":6,"run_seconds":429,"rc":"0","ts":"2026-07-06T09:43:08Z","session_id":"tape_to_profit_support_resistence","iter":3,"event":"dispatch_wait","cli":"claude"}
+{"agent":"goal-evaluator","exit_status":0,"duration_seconds":435,"retries":0,"ts":"2026-07-06T09:43:08Z","session_id":"tape_to_profit_support_resistence","iter":3,"event":"agent_invocation_end","cli":"claude"}
+{"iter_name":"goal-tape_to_profit_support_resistence-iter-3","verdict":"CONTINUE","next_depth":"full","journey_deltas":{"newly_passing":3,"newly_failing":3,"regressed":0,"anti_goal_violations":0},"ts":"2026-07-06T09:43:08Z","session_id":"tape_to_profit_support_resistence","iter":3,"event":"iter_end","cli":"claude"}

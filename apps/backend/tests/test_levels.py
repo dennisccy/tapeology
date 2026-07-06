@@ -27,9 +27,13 @@ from app.config import CONFIG, Config
 from app.providers.adapters.base import RawBar
 from app.research.bars import BarStore
 from app.research.levels import (
+    CLASS_A,
+    CLASS_B,
+    CLASS_C,
     PRIOR_PERIOD_EXTREME,
     PRIOR_PERIOD_TIMEFRAMES,
     SWING_PIVOT,
+    compute_confluence_zones,
     compute_levels,
 )
 
@@ -45,6 +49,15 @@ def _epoch(iso: str) -> float:
 
 def _bar(symbol: str, timeframe: str, day_index: int, high: float, low: float, close: float) -> RawBar:
     return RawBar(symbol, timeframe, _BASE + day_index * _DAY, close, high, low, close, 1_000)
+
+
+def _lvl(price: float, timeframe: str, strength: float, level_type: str = SWING_PIVOT, touch_count: int = 1) -> dict:
+    """A hand-built level dict -- the exact shape ``research/levels.py``'s own ``_level()``
+    produces -- for testing ``compute_confluence_zones`` DIRECTLY as a pure function, independent
+    of any bar/store machinery (clustering/scoring/grading depend only on ``price``, ``timeframe``,
+    and ``strength``; ``type``/``touch_count`` are carried through unchanged and rarely matter
+    here)."""
+    return {"price": price, "timeframe": timeframe, "type": level_type, "touch_count": touch_count, "strength": strength}
 
 
 # --- Synthetic swing-pivot fixture: 6 "4h" bars (NOT a prior-period timeframe, so ONLY swing
@@ -192,6 +205,93 @@ def test_prior_period_extreme_does_not_apply_to_a_non_prior_period_timeframe(tmp
     assert all(lvl["type"] == SWING_PIVOT for lvl in result["levels"])
 
 
+# --- Confluence zones + A/B/C classes: the pure `compute_confluence_zones` function ----------------
+# Direct unit tests -- hand-built level dicts, no bar/store machinery -- isolate the
+# clustering/scoring/grading algorithm itself from the bar-derived integration proofs further below.
+
+
+def test_confluence_clustering_joins_within_band_across_timeframes_and_grades_class_a():
+    levels = [
+        _lvl(100.00, "1h", strength=2.0),
+        _lvl(100.05, "1d", strength=4.0),
+        _lvl(100.10, "1w", strength=5.0),
+        _lvl(500.00, "1h", strength=2.0),  # isolated -- no partner within band, joins no zone
+    ]
+    zones = compute_confluence_zones(levels, CONFIG)
+    assert len(zones) == 1
+    zone = zones[0]
+    assert [m["price"] for m in zone["levels"]] == [100.00, 100.05, 100.10]
+    assert {m["timeframe"] for m in zone["levels"]} == {"1h", "1d", "1w"}
+    assert zone["score"] == 11.0  # 2.0 + 4.0 + 5.0, timeframe-weighted sum of member strengths
+    assert zone["class"] == CLASS_A
+
+
+def test_confluence_class_a_requires_a_long_term_member_not_just_timeframe_count():
+    """Three DISTINCT timeframes clustering -- but NONE in the long-term bucket -- must grade B,
+    not A: the long-term-member condition is enforced INDEPENDENTLY of the distinct-timeframe
+    count (goal.md's "a required long-term member", not merely "several timeframes")."""
+    assert not (set(("1h", "4h", "8h")) & set(PRIOR_PERIOD_TIMEFRAMES)), "the setup's own premise"
+    levels = [
+        _lvl(50.00, "1h", strength=2.0),
+        _lvl(50.02, "4h", strength=3.0),
+        _lvl(50.04, "8h", strength=3.0),
+    ]
+    zones = compute_confluence_zones(levels, CONFIG)
+    assert len(zones) == 1
+    assert len({m["timeframe"] for m in zones[0]["levels"]}) == 3  # meets the COUNT floor...
+    assert zones[0]["class"] == CLASS_B  # ...but never A without a long-term member
+
+
+def test_confluence_class_b_two_distinct_timeframes_below_the_class_a_floor():
+    levels = [_lvl(75.00, "1h", strength=2.0), _lvl(75.03, "1d", strength=4.0)]
+    zones = compute_confluence_zones(levels, CONFIG)
+    assert len(zones) == 1
+    assert zones[0]["score"] == 6.0
+    assert zones[0]["class"] == CLASS_B
+
+
+def test_confluence_class_c_same_timeframe_cluster_below_the_class_b_floor():
+    levels = [_lvl(60.00, "1h", strength=2.0), _lvl(60.02, "1h", strength=2.0)]
+    zones = compute_confluence_zones(levels, CONFIG)
+    assert len(zones) == 1
+    assert zones[0]["score"] == 4.0
+    assert zones[0]["class"] == CLASS_C
+
+
+def test_confluence_clustering_is_anchor_fixed_not_chained_to_the_previous_member():
+    """A -> B is within band of the cluster's ANCHOR (A, the first/lowest member); B -> C is
+    within band of B but C is NOT within band of the anchor -- proves the scan re-checks every
+    candidate against the cluster's FIXED anchor, never against the most-recently-added member (a
+    naive chained scan would incorrectly admit C too, letting the cluster's price span drift
+    unbounded)."""
+    band_bps = CONFIG.sr_confluence_band_bps
+    a, b, c = 100.00, 100.15, 100.30
+    tol = a * band_bps / 10_000.0
+    assert abs(b - a) <= tol and abs(c - b) <= tol and abs(c - a) > tol, "the setup's own premise"
+    levels = [_lvl(a, "1h", strength=2.0), _lvl(b, "1d", strength=4.0), _lvl(c, "1w", strength=5.0)]
+    zones = compute_confluence_zones(levels, CONFIG)
+    assert len(zones) == 1  # {a, b} cluster; c is dropped as an isolated singleton
+    assert [m["price"] for m in zones[0]["levels"]] == [a, b]
+
+
+def test_confluence_singleton_level_produces_no_zone():
+    levels = [_lvl(10.0, "1h", strength=2.0), _lvl(900.0, "1d", strength=4.0)]
+    assert compute_confluence_zones(levels, CONFIG) == []
+
+
+def test_confluence_zones_sorted_by_explicit_total_order_ascending_by_lowest_member_price():
+    levels = [
+        _lvl(500.00, "1h", strength=2.0), _lvl(500.02, "1d", strength=4.0),
+        _lvl(100.00, "1h", strength=2.0), _lvl(100.01, "1d", strength=4.0),
+    ]
+    zones = compute_confluence_zones(levels, CONFIG)
+    assert [z["levels"][0]["price"] for z in zones] == [100.00, 500.00]
+
+
+def test_confluence_zones_empty_for_empty_levels():
+    assert compute_confluence_zones([], CONFIG) == []
+
+
 # --- Lookahead-free: the headline correctness property ---------------------------------------------
 
 
@@ -199,7 +299,11 @@ def test_lookahead_free_a_level_at_t_is_unchanged_by_any_bar_after_t():
     """The definitive proof: a store holding ONLY bars timestamped <= T produces the IDENTICAL
     result to a store holding the FULL committed fixture (including bars after T), both queried at
     the SAME as-of T. Uses the real committed PG 1h fixture, truncated at bar index 6 (2026-06-09
-    19:00Z) -- squarely inside the window, well before the last bar."""
+    19:00Z) -- squarely inside the window, well before the last bar. The full-dict
+    ``json.dumps(...) == json.dumps(...)`` comparison below covers ``confluence_zones``/``class``
+    too (J-03) -- extended below with an EXPLICIT non-vacuous zone assertion, since
+    ``compute_confluence_zones`` is a pure function of this SAME (already lookahead-free) `levels`
+    list and introduces no second truncation surface of its own."""
     full_store = BarStore(FIXTURE_BAR_DIR)
     as_of = _epoch("2026-06-09T19:00:00Z")  # bar index 6's own ts
     full_result = compute_levels(full_store, "PG", as_of, CONFIG)
@@ -230,6 +334,16 @@ def test_lookahead_free_a_level_at_t_is_unchanged_by_any_bar_after_t():
     assert json.dumps(truncated_result, sort_keys=True) == json.dumps(full_result, sort_keys=True)
     assert len(full_result["levels"]) >= 1, "the proof must exercise at least one real level"
 
+    # J-03 extension: at this EARLIER as_of the cross-timeframe zone has only TWO members --
+    # 148.095 (the 1h swing confirmed only once bar index 7 becomes visible) is NOT yet part of it
+    # -- proving idx6's not-yet-visible neighbour never leaked into the zone or its class either.
+    zones = full_result["confluence_zones"]
+    assert len(zones) == 6, "the proof must exercise a real, non-trivial set of zones"
+    cross_tf_zone = zones[-1]
+    assert [m["price"] for m in cross_tf_zone["levels"]] == [148.06, 148.23]
+    assert cross_tf_zone["score"] == 8.0
+    assert cross_tf_zone["class"] == CLASS_B
+
 
 # --- Byte-identical determinism ---------------------------------------------------------------------
 
@@ -240,6 +354,7 @@ def test_byte_identical_determinism_across_independent_runs():
     first = compute_levels(store, "PG", as_of, CONFIG)
     second = compute_levels(BarStore(FIXTURE_BAR_DIR), "PG", as_of, CONFIG)  # a FRESH store object
     assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+    assert len(first["confluence_zones"]) >= 1, "the proof must exercise at least one real zone"
 
 
 # --- The committed PG fixture: exact real-data acceptance values -----------------------------------
@@ -304,6 +419,134 @@ def test_committed_fixture_prior_period_extremes_exact_values_keyless():
     assert len(result["levels"]) == 20  # 15 prior-period + 1 daily swing + 4 hourly swing
 
 
+def test_committed_fixture_confluence_zones_exact_values_keyless():
+    """The real PG fixture (era-4 J-01) stores only TWO timeframes (1h, 1d) -- confirmed by direct
+    computation, not hand-derived: it produces SIX confluence zones, FIVE same-timeframe (1d-only)
+    C-grade zones and exactly ONE genuine cross-timeframe (1h+1d) B-grade zone -- and, honestly,
+    NEVER a class A zone (which needs a THIRD distinct timeframe the committed fixture does not
+    have; class A is instead proven reachable on the synthetic 3-timeframe fixture below)."""
+    store = BarStore(FIXTURE_BAR_DIR)
+    as_of = _epoch("2026-06-09T21:00:00Z")
+    result = compute_levels(store, "PG", as_of, CONFIG)
+    zones = result["confluence_zones"]
+
+    assert [z["class"] for z in zones] == [CLASS_C, CLASS_C, CLASS_C, CLASS_C, CLASS_C, CLASS_B]
+    assert CLASS_A not in {z["class"] for z in zones}, "unreachable on this 2-timeframe fixture"
+
+    def _prices(zone: dict) -> list[float]:
+        return [m["price"] for m in zone["levels"]]
+
+    assert _prices(zones[0]) == [138.86, 139.03] and zones[0]["score"] == 8.0
+    assert _prices(zones[1]) == [139.89, 139.89, 140.0] and zones[1]["score"] == 12.0
+    assert _prices(zones[2]) == [140.19, 140.28] and zones[2]["score"] == 8.0
+    assert _prices(zones[3]) == [140.78, 140.82] and zones[3]["score"] == 8.0
+    assert _prices(zones[4]) == [141.8, 141.82] and zones[4]["score"] == 16.0
+
+    cross_tf_zone = zones[5]
+    assert _prices(cross_tf_zone) == [148.06, 148.095, 148.23]
+    assert {m["timeframe"] for m in cross_tf_zone["levels"]} == {"1h", "1d"}
+    assert cross_tf_zone["score"] == 12.0
+
+
+# --- Confluence zones through `compute_levels`: a real bar-derived class A (the plan's own "Known
+# Consideration" -- the committed PG fixture stores only TWO timeframes and can never itself
+# produce a class A zone, so a synthetic THREE-timeframe fixture proves class A IS reachable
+# through the real, bar-driven `compute_levels` path, not merely the pure-function unit tests above)
+# ------------------------------------------------------------------------------------------------
+
+_CONFLUENCE_SYMBOL = "SYN-CONFLUENCE"
+
+
+def _confluence_fixture(store: BarStore) -> None:
+    """A three-timeframe (1h/1d/1w) synthetic fixture engineered for an exact A/B/C case. Every
+    "noise" extreme (each bar's OTHER high/low, engineered far outside any band) sits isolated --
+    verified by direct computation, not hand-derived:
+
+      * ~100.00 (1h swing-high) + ~100.05 (1d prior-period close) + ~100.10 (1w prior-period close)
+        -- THREE distinct timeframes including two long-term ones -- class A.
+      * ~200.00 (1h swing-high) + ~200.08 (1d prior-period close) -- TWO distinct timeframes --
+        class B.
+      * ~300.00 + ~300.05 (both 1h swing-highs) -- ONE distinct timeframe -- class C.
+      * ~500.00 (1h swing-high), isolated -- no confluence partner -- appears in NO zone.
+    """
+    hourly_specs = [
+        (50, 40, 45), (100.00, 41, 98), (55, 42, 50), (200.00, 43, 198), (57, 44, 52),
+        (300.00, 45, 298), (58, 46, 53), (300.05, 47, 297), (59, 48, 54), (500.00, 49, 498),
+        (60, 50, 55),
+    ]
+    hourly_bars = [
+        RawBar(_CONFLUENCE_SYMBOL, "1h", _BASE + i * 3600.0, close, high, low, close, 1_000)
+        for i, (high, low, close) in enumerate(hourly_specs)
+    ]
+    daily_bars = [
+        RawBar(_CONFLUENCE_SYMBOL, "1d", _BASE + 0 * _DAY, 100.05, 900, 10, 100.05, 1_000),
+        RawBar(_CONFLUENCE_SYMBOL, "1d", _BASE + 1 * _DAY, 200.08, 910, 20, 200.08, 1_000),
+    ]
+    weekly_bars = [
+        RawBar(_CONFLUENCE_SYMBOL, "1w", _BASE + 0 * _DAY, 100.10, 920, 30, 100.10, 1_000),
+    ]
+    store.record(
+        symbol=_CONFLUENCE_SYMBOL, timeframe="1h",
+        window_start_utc="2026-01-01T00:00:00Z", window_end_utc="2026-01-01T11:00:00Z",
+        feed="sip", bars=hourly_bars,
+    )
+    store.record(
+        symbol=_CONFLUENCE_SYMBOL, timeframe="1d",
+        window_start_utc="2026-01-01T00:00:00Z", window_end_utc="2026-01-03T00:00:00Z",
+        feed="sip", bars=daily_bars,
+    )
+    store.record(
+        symbol=_CONFLUENCE_SYMBOL, timeframe="1w",
+        window_start_utc="2026-01-01T00:00:00Z", window_end_utc="2026-01-08T00:00:00Z",
+        feed="sip", bars=weekly_bars,
+    )
+
+
+def test_synthetic_three_timeframe_fixture_produces_exact_a_b_c_zones_through_compute_levels(tmp_path):
+    store = BarStore(tmp_path / "bars")
+    _confluence_fixture(store)
+    as_of = _BASE + 8 * _DAY  # comfortably past every period's closure (1w's 604800s is longest)
+    result = compute_levels(store, _CONFLUENCE_SYMBOL, as_of, CONFIG)
+    assert result["no_bar_series_for_symbol"] is False
+    zones = result["confluence_zones"]
+    assert len(zones) == 3
+
+    zone_a, zone_b, zone_c = zones
+    assert [m["price"] for m in zone_a["levels"]] == [100.00, 100.05, 100.10]
+    assert {m["timeframe"] for m in zone_a["levels"]} == {"1h", "1d", "1w"}
+    assert zone_a["score"] == 11.0  # 2.0 (1h) + 4.0 (1d) + 5.0 (1w)
+    assert zone_a["class"] == CLASS_A
+
+    assert [m["price"] for m in zone_b["levels"]] == [200.00, 200.08]
+    assert {m["timeframe"] for m in zone_b["levels"]} == {"1h", "1d"}
+    assert zone_b["score"] == 6.0  # 2.0 (1h) + 4.0 (1d)
+    assert zone_b["class"] == CLASS_B
+
+    assert [m["price"] for m in zone_c["levels"]] == [300.00, 300.05]
+    assert {m["timeframe"] for m in zone_c["levels"]} == {"1h"}
+    assert zone_c["score"] == 8.0  # 4.0 + 4.0 (both touch_count 2 -- see the 130.0/130.03 precedent)
+    assert zone_c["class"] == CLASS_C
+
+    # The isolated 500.00 swing-high and every engineered noise extreme appear in NO zone.
+    all_zone_prices = {m["price"] for z in zones for m in z["levels"]}
+    assert 500.00 not in all_zone_prices
+    assert all(price not in all_zone_prices for price in (900, 10, 910, 20, 920, 30))
+
+
+def test_no_qualifying_cluster_on_bar_derived_levels_is_an_honest_empty_zones_list(tmp_path):
+    """The EXISTING J-02 swing fixture, unmodified: its four pivots (100.0/102.0/115.0/130.0) are
+    all far apart in price (the closest gap is 200+ bps, well outside the confluence band) -- an
+    honest empty ``confluence_zones`` list, never fabricated, and distinct from
+    ``no_bar_series_for_symbol`` (which stays False: the symbol DOES have levels, just no
+    qualifying cluster among them)."""
+    store = BarStore(tmp_path / "bars")
+    _swing_fixture(store)
+    result = compute_levels(store, _SWING_SYMBOL, _BASE + 5 * _DAY, CONFIG)
+    assert result["no_bar_series_for_symbol"] is False
+    assert len(result["levels"]) == 4
+    assert result["confluence_zones"] == []
+
+
 # --- Honest, distinct failure states (never one bare ambiguous empty array) ------------------------
 
 
@@ -311,20 +554,20 @@ def test_symbol_with_no_recorded_bar_series_is_a_distinct_honest_state(tmp_path)
     store = BarStore(tmp_path / "bars")
     _swing_fixture(store)  # records ONLY `_SWING_SYMBOL` -- never the queried symbol below
     result = compute_levels(store, "NEVER-RECORDED", _BASE + 100 * _DAY, CONFIG)
-    assert result == {"levels": [], "no_bar_series_for_symbol": True}
+    assert result == {"levels": [], "no_bar_series_for_symbol": True, "confluence_zones": []}
 
 
 def test_symbol_with_bar_series_but_nothing_derivable_yet_is_a_distinct_honest_state(tmp_path):
     store = BarStore(tmp_path / "bars")
     _swing_fixture(store)
     result = compute_levels(store, _SWING_SYMBOL, _BASE - 1, CONFIG)  # before the series even starts
-    assert result == {"levels": [], "no_bar_series_for_symbol": False}
+    assert result == {"levels": [], "no_bar_series_for_symbol": False, "confluence_zones": []}
 
 
 def test_empty_bar_store_is_no_bar_series_for_symbol(tmp_path):
     store = BarStore(tmp_path / "bars")  # never recorded anything at all
     result = compute_levels(store, "PG", _BASE, CONFIG)
-    assert result == {"levels": [], "no_bar_series_for_symbol": True}
+    assert result == {"levels": [], "no_bar_series_for_symbol": True, "confluence_zones": []}
 
 
 # --- Multiple series for the same (symbol, timeframe): most-recently-created wins ------------------
@@ -375,6 +618,12 @@ def test_sr_parameters_are_config_sourced_no_magic_numbers():
     assert isinstance(CONFIG.sr_touch_tolerance_bps, float) and CONFIG.sr_touch_tolerance_bps > 0
     assert isinstance(CONFIG.sr_timeframe_weights, dict) and CONFIG.sr_timeframe_weights
     assert set(CONFIG.sr_timeframe_weights) == set(CONFIG.bar_timeframes)
+    assert isinstance(CONFIG.sr_confluence_band_bps, float) and CONFIG.sr_confluence_band_bps > 0
+    assert isinstance(CONFIG.sr_confluence_class_a_min_timeframes, int)
+    assert isinstance(CONFIG.sr_confluence_class_b_min_timeframes, int)
+    assert CONFIG.sr_confluence_class_b_min_timeframes >= 2  # "distinct timeframes" needs >= 2
+    # A is the strictly higher bar -- its floor can never be laxer than B's.
+    assert CONFIG.sr_confluence_class_a_min_timeframes >= CONFIG.sr_confluence_class_b_min_timeframes
 
     import inspect
 
@@ -384,6 +633,9 @@ def test_sr_parameters_are_config_sourced_no_magic_numbers():
     assert "config.sr_pivot_lookback" in src
     assert "config.sr_touch_tolerance_bps" in src
     assert "config.sr_timeframe_weights" in src
+    assert "config.sr_confluence_band_bps" in src
+    assert "config.sr_confluence_class_a_min_timeframes" in src
+    assert "config.sr_confluence_class_b_min_timeframes" in src
 
 
 # --- config_fingerprint: sr_* fields excluded, default pinned unmoved -------------------------------
@@ -395,6 +647,15 @@ def test_sr_config_fields_are_excluded_from_config_fingerprint():
     assert Config(sr_touch_tolerance_bps=50.0).config_fingerprint() == CONFIG.config_fingerprint()
     assert (
         Config(sr_timeframe_weights={"1d": 99.0}).config_fingerprint() == CONFIG.config_fingerprint()
+    )
+    assert Config(sr_confluence_band_bps=999.0).config_fingerprint() == CONFIG.config_fingerprint()
+    assert (
+        Config(sr_confluence_class_a_min_timeframes=9).config_fingerprint()
+        == CONFIG.config_fingerprint()
+    )
+    assert (
+        Config(sr_confluence_class_b_min_timeframes=9).config_fingerprint()
+        == CONFIG.config_fingerprint()
     )
     # ...while a real classifier threshold still moves it (the counter-test).
     assert Config(min_trade_speed=0.51).config_fingerprint() != CONFIG.config_fingerprint()

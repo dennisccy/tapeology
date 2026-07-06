@@ -25,3 +25,9 @@ restating the verdict (the evaluator-log.md already does that).
 **Verdict:** CONTINUE
 **Lesson:** The levels endpoint aliases a corrupt *sole* bar series for a symbol to `no_bar_series_for_symbol: true` (identical to "never recorded") — `compute_levels` reads only the healthy half of `BarStore.list()` and discards `integrity_errors`. Honest-empty (nothing fabricated) and out of J-02's scoped states, but the session anti-goal lists "corrupt file" among the failure modes that must surface a *distinct* state, and the corrupt case IS surfaced distinctly at its owner (`GET /research/bars`) — so it is a deferred seam, not a defect.
 **Applies to:** J-03 (and any iter that consumes `compute_levels` / touches `apps/backend/app/research/levels.py`) — decide whether a corrupt sole series needs its own honest state at the levels endpoint before building on top of it.
+
+## iter-3 — 2026-07-06T09:40:08Z
+
+**Verdict:** CONTINUE
+**Lesson:** The committed real PG bar fixture stores only TWO timeframes (1h, 1d), so it can NEVER produce a class-A confluence zone (class A needs >=3 distinct timeframes incl. a long-term member); its honest real output is [C,C,C,C,C,B]. Class-A reachability is proven only on the synthetic 3-timeframe `SYN-CONFLUENCE` fixture in `test_levels.py`. Any later journey consuming A/B/C classes that asserts class-A behaviour against the committed PG fixture will fail by construction — use the synthetic fixture (or record a real 3+-timeframe series) for class-A cases.
+**Applies to:** any iter consuming J-03's A/B/C confluence classes — J-04 (`structure_tape` entries arming at classified levels) and J-05 (class-scaled stop/reward/size); any test asserting class-A on committed fixture data under `apps/backend/tests/test_levels*.py`.

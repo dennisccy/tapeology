@@ -1,14 +1,19 @@
-"""The ``GET /research/levels`` endpoint (era-4 capability 2, J-02) -- route-level integration.
+"""The ``GET /research/levels`` endpoint (era-4 capabilities 2 + 3, J-02 + J-03) -- route-level
+integration.
 
 Mirrors ``test_bars_api.py``'s ``ctx`` fixture (TestClient + temp bar dir + injected
 ``FakeAdapter``): a bar series is recorded through the REAL ``POST /research/bars`` route, then
 ``GET /research/levels`` is read back and asserted against exact values -- the full request path,
-not a direct module call (``test_levels.py`` covers the pure computation in isolation).
+not a direct module call (``test_levels.py`` covers the pure level/confluence computation in
+isolation). The committed real PG bar-fixture pair is also seeded directly into the temp bar dir
+(the ``test_mcp_server.py`` technique) to prove the confluence-zones field end to end on real data.
 """
 
 from __future__ import annotations
 
+import shutil
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,6 +24,8 @@ from app.providers.adapters.base import RawBar
 from app.research.routes import ResearchRegistry, set_registry
 from app.research.store import JournalStore
 from fakes import FakeAdapter
+
+FIXTURE_BAR_DIR = Path(__file__).parent / "fixtures" / "bars"
 
 SYMBOL = "LVL"
 TIMEFRAME = "4h"
@@ -109,6 +116,40 @@ def test_get_levels_happy_path_exact_values(ctx):
     assert by_price[130.0]["touch_count"] == 2
     assert by_price[130.0]["strength"] == weight * 2
 
+    # J-03: this single-timeframe fixture's four pivots are all far apart in price (the closest
+    # gap is 200+ bps, well outside the confluence band) -- an honest empty zones list, never
+    # fabricated (the pure-computation matrix lives in test_levels.py; this proves the SAME
+    # honesty holds through the real route).
+    assert body["confluence_zones"] == []
+
+
+def test_get_levels_confluence_zones_exact_values_on_the_committed_pg_fixture(ctx):
+    """The committed real PG bar-fixture pair (era-4 J-01, 2 timeframes: 1h + 1d), seeded directly
+    into the temp bar dir, read back through the REAL route -- proving `confluence_zones` is served
+    end to end on real data, not just via a direct module call (`test_levels.py`'s
+    ``test_committed_fixture_confluence_zones_exact_values_keyless`` owns the exhaustive exact-value
+    proof; this asserts the SAME shape survives the route's serialization unchanged)."""
+    client, bar_dir = ctx
+    bar_dir.mkdir(parents=True, exist_ok=True)  # BarStore only creates it lazily inside `record()`
+    fixtures = list(FIXTURE_BAR_DIR.glob("*.json"))
+    assert fixtures, "the committed bar fixture directory must not be empty"
+    for fixture in fixtures:
+        shutil.copy(fixture, bar_dir / fixture.name)
+
+    as_of = "2026-06-09T21:00:00Z"  # at/after both fixtures' window_end_utc
+    r = client.get("/research/levels", params={"symbol": "PG", "as_of": as_of})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["no_bar_series_for_symbol"] is False
+    zones = body["confluence_zones"]
+    assert len(zones) == 6
+    assert [z["class"] for z in zones] == ["C", "C", "C", "C", "C", "B"]
+
+    cross_tf_zone = zones[-1]
+    assert [m["price"] for m in cross_tf_zone["levels"]] == [148.06, 148.095, 148.23]
+    assert {m["timeframe"] for m in cross_tf_zone["levels"]} == {"1h", "1d"}
+    assert cross_tf_zone["score"] == 12.0
+
 
 def test_get_levels_lowercases_are_normalized_to_the_stored_uppercase_symbol(ctx):
     client, _bar_dir = ctx
@@ -131,6 +172,7 @@ def test_unrecorded_symbol_is_a_distinct_honest_state_not_an_ambiguous_empty_lis
     body = r.json()
     assert body["levels"] == []
     assert body["no_bar_series_for_symbol"] is True
+    assert body["confluence_zones"] == []
 
 
 def test_no_bar_series_recorded_at_all_is_the_same_distinct_state(ctx):
@@ -140,6 +182,7 @@ def test_no_bar_series_recorded_at_all_is_the_same_distinct_state(ctx):
     body = r.json()
     assert body["levels"] == []
     assert body["no_bar_series_for_symbol"] is True
+    assert body["confluence_zones"] == []
 
 
 def test_as_of_before_any_recorded_bar_is_honest_no_levels_found_not_the_prior_state(ctx):
@@ -150,6 +193,7 @@ def test_as_of_before_any_recorded_bar_is_honest_no_levels_found_not_the_prior_s
     body = r.json()
     assert body["levels"] == []
     assert body["no_bar_series_for_symbol"] is False  # distinct from the unrecorded-symbol state
+    assert body["confluence_zones"] == []
 
 
 # --- 422s: never a silent coercion, never a lookahead-leaking "now" default -------------------------

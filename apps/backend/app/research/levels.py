@@ -1,12 +1,13 @@
-"""Deterministic, lookahead-free support/resistance level detection (era-4 capability 2, J-02) --
-Data Contract row 39's LEVELS half (confluence classes are J-03; out of scope here).
+"""Deterministic, lookahead-free support/resistance level detection AND confluence-zone
+classification (era-4 capabilities 2 + 3, J-02 + J-03) -- Data Contract row 39's COMPLETE owner
+(levels AND their A/B/C confluence classes).
 
-THIS MODULE is the sole computer of support/resistance levels. It reads bars ONLY through the
-EXISTING ``BarStore`` (era-4 J-01, ``research/bars.py``) -- it owns no persistence and makes no
-network/vendor call (vendor-neutral by construction: it touches only stored ``RawBar`` rows, never
-a vendor SDK or vendor-specific field). ``GET /research/levels`` and the read-only MCP ``levels``
-tool both serve this module's output VERBATIM (single source of truth -- no second computation
-path).
+THIS MODULE is the sole computer of support/resistance levels and their confluence zones. It reads
+bars ONLY through the EXISTING ``BarStore`` (era-4 J-01, ``research/bars.py``) -- it owns no
+persistence and makes no network/vendor call (vendor-neutral by construction: it touches only
+stored ``RawBar`` rows, never a vendor SDK or vendor-specific field). ``GET /research/levels`` and
+the read-only MCP ``levels`` tool both serve this module's output VERBATIM (single source of truth
+-- no second computation path).
 
 Two DETERMINISTIC, config-owned detection methods, applied per stored bar series:
 
@@ -41,6 +42,24 @@ additive boolean flag -- the ``insufficient_sample`` / ``integrity_errors`` prec
 fabricated placeholder); a symbol WITH series but no derivable levels at the requested ``as_of``
 surfaces an empty ``levels`` list with that flag ``false`` -- an explicit "no levels found",
 never a bare, ambiguous empty array.
+
+**Confluence zones + A/B/C conviction classes (J-03).** ``compute_confluence_zones`` is a PURE
+function of the ``levels`` list above -- it touches no store/bar of its own, so it inherits the
+as-of lookahead-free truncation for free (no second truncation surface to get wrong). Levels
+pooled across EVERY timeframe are clustered by price proximity (``Config.sr_confluence_band_bps``,
+an anchor-fixed scan -- ``_cluster_levels``); only clusters with >= 2 members are "qualifying" and
+become a zone (a lone level has no confluence partner -- never a fabricated one-member "zone").
+Each zone carries its member levels (each already stamped with its own ``timeframe``), a
+timeframe-weighted ``score`` (the sum of member ``strength`` values -- each already folds in its
+OWN timeframe's weight, so the score is never double-weighted), and an honest ``class`` (A/B/C)
+graded purely by DISTINCT-TIMEFRAME breadth (``_grade_zone`` -- goal.md's "levels that align
+across timeframes matter more"), never by score: class A needs a config-owned minimum of distinct
+timeframes AND at least one long-term member (``PRIOR_PERIOD_TIMEFRAMES``, reused verbatim); class
+B needs only the (lower) distinct-timeframe floor; a qualifying cluster whose members share ONE
+timeframe grades C -- a real, honestly-reported zone of the lowest conviction, never suppressed.
+A symbol with levels but no qualifying cluster returns an explicit empty ``confluence_zones`` list
+(``no_bar_series_for_symbol`` is unaffected either way -- a SEPARATE, pre-existing honest flag).
+Zones are sorted by an explicit total order (``_zone_sort_key``) for byte-identical served JSON.
 """
 
 from __future__ import annotations
@@ -163,25 +182,130 @@ def _select_one_series_per_timeframe(records: list[dict]) -> dict[str, dict]:
     return by_timeframe
 
 
+# --- Confluence zones + A/B/C conviction classes (era-4 capability 3, J-03) ------------------------
+# The three honest grades a qualifying cluster (>= 2 price-clustered levels) can carry -- never a
+# fourth/fabricated grade, never assigned to a non-qualifying (< 2 member) cluster (which is simply
+# absent from the served list, per the module docstring).
+CLASS_A = "A"
+CLASS_B = "B"
+CLASS_C = "C"
+
+
+def _cluster_levels(levels: list[dict], band_bps: float) -> list[list[dict]]:
+    """Group ``levels`` (POOLED across every timeframe -- confluence is cross-timeframe by
+    definition) into confluence clusters.
+
+    An ANCHOR-FIXED scan over levels sorted ascending by price: the FIRST (lowest-priced) member of
+    a cluster fixes its tolerance window (``anchor * band_bps / 10_000``); every subsequent level
+    within that window of the ANCHOR (never the previous member) joins the SAME cluster -- so a
+    cluster's price span is bounded by ONE fixed tolerance rather than an unbounded chain of
+    near-neighbours (the classic chaining defect a naive pairwise-consecutive-gap scan would admit).
+
+    Only clusters with >= 2 members are returned -- a lone level has no confluence partner and is
+    silently dropped from the result (never a fabricated one-member "zone"; the module docstring's
+    "no qualifying cluster" honest-empty state)."""
+    ordered = sorted(levels, key=lambda lvl: (lvl["price"], lvl["timeframe"], lvl["type"]))
+    clusters: list[list[dict]] = []
+    current: list[dict] = []
+    anchor = 0.0
+    tolerance = 0.0
+    for level in ordered:
+        if current and abs(level["price"] - anchor) <= tolerance:
+            current.append(level)
+            continue
+        if len(current) >= 2:
+            clusters.append(current)
+        anchor = level["price"]
+        tolerance = anchor * (band_bps / 10_000.0)
+        current = [level]
+    if len(current) >= 2:
+        clusters.append(current)
+    return clusters
+
+
+def _grade_zone(members: list[dict], config: Config) -> str:
+    """A/B/C by DISTINCT-TIMEFRAME breadth alone (goal.md: "levels that align across timeframes
+    matter more") -- NEVER by score, so the class always answers "how many independent timeframes
+    agree here", while the score (``_confluence_zone``) stays a separate, additive number.
+
+    Class A needs BOTH a config-owned minimum distinct-timeframe count AND at least one long-term
+    member (the existing ``PRIOR_PERIOD_TIMEFRAMES`` bucket, reused verbatim -- no second "long-term"
+    list). Class B needs only the (lower) distinct-timeframe floor. Anything else -- structurally,
+    every member sharing exactly ONE timeframe -- grades C: a real, honestly-reported zone of the
+    lowest conviction (same-timeframe price proximity, which each level's own ``touch_count``
+    already captures), never suppressed and never upgraded."""
+    distinct_timeframes = {member["timeframe"] for member in members}
+    has_long_term = any(tf in PRIOR_PERIOD_TIMEFRAMES for tf in distinct_timeframes)
+    if len(distinct_timeframes) >= config.sr_confluence_class_a_min_timeframes and has_long_term:
+        return CLASS_A
+    if len(distinct_timeframes) >= config.sr_confluence_class_b_min_timeframes:
+        return CLASS_B
+    return CLASS_C
+
+
+def _confluence_zone(members: list[dict], config: Config) -> dict:
+    """One served zone: its members (sorted by the SAME total order ``_cluster_levels`` scans in),
+    its timeframe-weighted ``score`` (the sum of member ``strength`` values -- each already folds in
+    its own timeframe's weight via ``_level``, so this is never double-weighted), and its honest
+    ``class``."""
+    ordered_members = sorted(members, key=lambda lvl: (lvl["price"], lvl["timeframe"], lvl["type"]))
+    return {
+        "levels": ordered_members,
+        "score": sum(member["strength"] for member in ordered_members),
+        "class": _grade_zone(ordered_members, config),
+    }
+
+
+def _zone_sort_key(zone: dict) -> tuple:
+    """A total order over zones (lowest member price, then member count) so served JSON is never
+    perturbed by scan-order happenstance -- pairs with ``_sort_key``'s total order over levels."""
+    return (zone["levels"][0]["price"], len(zone["levels"]))
+
+
+def compute_confluence_zones(levels: list[dict], config: Config) -> list[dict]:
+    """The canonical confluence-zone computation (era-4 capability 3, J-03): a PURE function of the
+    ALREADY lookahead-free ``levels`` list ``compute_levels`` produces below -- no bar/store access
+    of its own, so it inherits the as-of truncation for free (no second truncation surface to get
+    wrong; the identical inputs always yield identical zones). Clusters ``levels`` (pooled across
+    every timeframe) within ``config.sr_confluence_band_bps``; each qualifying cluster becomes a
+    zone (member levels, timeframe-weighted score, honest A/B/C class). Sorted by an explicit total
+    order (``_zone_sort_key``) for byte-identical served JSON."""
+    clusters = _cluster_levels(levels, band_bps=config.sr_confluence_band_bps)
+    zones = [_confluence_zone(members, config) for members in clusters]
+    zones.sort(key=_zone_sort_key)
+    return zones
+
+
 def compute_levels(store: BarStore, symbol: str, as_of_epoch: float, config: Config) -> dict:
     """The canonical ``GET /research/levels`` + MCP ``levels`` computation (single source of
     truth) -- every level for ``symbol`` derived from its stored bar series, as of
     ``as_of_epoch`` (a UTC epoch-seconds instant; the ROUTE parses the ISO string once, never
     here, so this function itself carries no lookahead-leaking default).
 
-    Returns ``{"levels": [...], "no_bar_series_for_symbol": bool}`` -- an explicit, ADDITIVE
-    honesty flag (the ``insufficient_sample`` precedent) rather than an ambiguous bare empty
-    ``levels`` list: the flag is ``True`` only when NO stored, healthy series exists for
-    ``symbol`` at all; a symbol WITH series but nothing derivable at this ``as_of`` reports
-    ``False`` with an empty ``levels`` list -- an honest "no levels found", never fabricated.
+    Returns ``{"levels": [...], "no_bar_series_for_symbol": bool, "confluence_zones": [...]}`` --
+    ``no_bar_series_for_symbol`` is an explicit, ADDITIVE honesty flag (the ``insufficient_sample``
+    precedent) rather than an ambiguous bare empty ``levels`` list: the flag is ``True`` only when
+    NO stored, healthy series exists for ``symbol`` at all; a symbol WITH series but nothing
+    derivable at this ``as_of`` reports ``False`` with an empty ``levels`` list -- an honest "no
+    levels found", never fabricated. ``confluence_zones`` (J-03, additive beside the two J-02 keys)
+    is ``compute_confluence_zones``' output over the SAME ``levels`` list -- always ``[]`` when
+    ``levels`` is empty (whichever honest reason), never fabricated.
 
     A stored series whose timeframe is outside ``config.sr_timeframe_weights`` (impossible today
     -- that set covers every ``bar_timeframes`` entry, pinned by a dedicated config test) would
-    raise ``KeyError`` rather than silently skip or fabricate a weight."""
+    raise ``KeyError`` rather than silently skip or fabricate a weight.
+
+    Note on the corrupt-sole-series seam (iter-2 finding B1, revisited for J-03): this function
+    reads only ``store.list()``'s HEALTHY ``records`` half (the same as J-02) -- a symbol whose
+    ONLY bar series is corrupted therefore still aliases to ``no_bar_series_for_symbol: true`` with
+    an empty ``confluence_zones`` list, exactly as it aliased before confluence existed. J-03
+    introduces no new fabricated or aliased state here: the distinct corrupt-series honest state
+    remains owned by ``GET /research/bars`` (a deliberate, unchanged decision -- see the dev
+    handoff)."""
     records, _integrity_errors = store.list()
     matching = [r for r in records if r["symbol"] == symbol]
     if not matching:
-        return {"levels": [], "no_bar_series_for_symbol": True}
+        return {"levels": [], "no_bar_series_for_symbol": True, "confluence_zones": []}
 
     levels: list[dict] = []
     for timeframe, record in _select_one_series_per_timeframe(matching).items():
@@ -193,4 +317,8 @@ def compute_levels(store: BarStore, symbol: str, as_of_epoch: float, config: Con
                 _prior_period_extremes(bars, timeframe, config.sr_touch_tolerance_bps, weight, as_of_epoch)
             )
     levels.sort(key=_sort_key)
-    return {"levels": levels, "no_bar_series_for_symbol": False}
+    return {
+        "levels": levels,
+        "no_bar_series_for_symbol": False,
+        "confluence_zones": compute_confluence_zones(levels, config),
+    }
