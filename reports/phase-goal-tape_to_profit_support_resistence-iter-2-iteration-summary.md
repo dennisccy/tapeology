@@ -1,61 +1,59 @@
 # Iteration Summary — goal-tape_to_profit_support_resistence-iter-2
 
-**Verdict:** PASS
+**Verdict:** CONTINUE
 **Iteration type:** goal-full
 **Date:** 2026-07-06
 **Iteration:** 2
 
 ## In plain words
 
-**What you can do now:** You can type in a stock ticker and watch Tapeology read live trade-by-trade action to see whether buyers or sellers are in control, write trading ideas into a journal, run replay studies, and view honest backtest and profit-and-loss results on a Performance page — all delivered in earlier rounds. The new price-structure work (support and resistance) keeps progressing behind the scenes but isn't ready to try yet.
+**What you can do now:** You can type in a stock ticker and watch Tapeology read live trade-by-trade order flow to see whether buyers or sellers are in control, write trading ideas into a journal, run replay studies, and view honest backtest and profit-and-loss results on a Performance page — all delivered in earlier rounds. The new support-and-resistance work is still being built behind the scenes and isn't ready to try yet.
 
-**What changed this time:** Behind-the-scenes work — nothing visibly new this round. Tapeology can now find support and resistance price levels — points where a stock has tended to turn before, or a prior day, week, or month's high, low, or close — from the price history it started saving last round, and it scores each one for strength. This is still a plumbing-level capability, reachable only through the API/AI-tool interface, not yet through a screen in the app.
+**What changed this time:** Behind-the-scenes work — nothing visibly new this round. Tapeology now knows how to look at a stock's saved price history and work out the exact price levels where it has tended to turn — support and resistance — each one scored for strength, and it's been proven that a later price bar can never sneak into an earlier answer.
 
-**What's next:** Next, the team will teach Tapeology to group these price levels into graded "confluence zones" (A, B, or C), the next building block toward a strategy that reacts to real price structure.
+**What's next:** Next, Tapeology will start grouping these price levels together and grading how convincing each cluster is, on an A, B, or C scale.
 
 ## Headline
 
-Support/resistance level detection (J-02) shipped: swing pivots + prior-period extremes, lookahead-free.
+Support/resistance price levels now computed from saved bar data, lookahead-free and byte-identical.
 
 ## Direction
 
 **Signal:** improving
-**Why:** J-02 (deterministic S/R levels) was built end to end this iteration — swing pivots, prior-period extremes, `GET /research/levels`, and a byte-identical MCP `levels` proxy — and every pipeline gate independently confirms it: review PASS, QA 18/18 test cases PASS, audit PASS_WITH_GAPS (one minor, non-blocking documented gap), and closure CLOSURE-PASS with zero blockers. J-01 and the J-07 regression sentinel both stay green (fingerprint unmoved at `4d665603569b9dbf`, empty frontend diff), so this reads as genuine forward progress; the goal-evaluator's formal journey-history update for this iteration had not yet run at write time.
+**Why:** J-02 (deterministic, lookahead-free support/resistance levels) moved from failing to passing this iteration — the new `research/levels.py` module, `GET /research/levels` route, and MCP `levels` tool are real, tested (26 new tests, zero regressions), and proven lookahead-free by a physical bar-truncation test. J-07's regression sentinel stayed intact (fingerprint `4d665603569b9dbf` unmoved, equivalence suites green) and J-01 remains required-still-passing, so era-4 keeps advancing without touching the frozen foundation. J-03 (confluence zones + A/B/C classes) is the clear, already-scoped next target.
 
 **Trend (last 3 iters):**
-- Newly passing this iter: J-02 (confirmed by review/QA/audit/closure gates; the goal-evaluator's iter-2 journey-history update was not yet recorded at write time)
-- Newly passing in last 3 iters total: J-01 (iter-1), J-02 (iter-2, pipeline-confirmed)
+- Newly passing this iter: J-02
+- Newly passing in last 3 iters total: J-01, J-02, J-07
 - Regressions in last 3 iters: none
 - Anti-goal violations in last 3 iters: none
-- Iters with no journey state change: 1 of last 3 (iter-0, a verify-only baseline)
+- Iters with no journey state change: 0 of last 3
 
-**Latest evaluator reasoning (iteration 1, most recent formal entry — iter-2's had not been logged at write time):** J-01 built end to end and genuinely passing; J-07 sentinel re-verified intact (fingerprint 4d665603569b9dbf unmoved, equivalence 22 passed, empty frontend diff). All four new Config fields correctly excluded from fingerprint. Review/QA/Audit/Coherence all PASS.
+**Latest evaluator reasoning:** J-02 (deterministic, lookahead-free support/resistance levels) was built end to end and is genuinely passing: `GET /research/levels` + the read-only MCP `levels` tool serve one canonical `compute_levels` output, lookahead-free by construction (bars filtered `ts <= as_of` before any detector), byte-identical, and config-owned. I independently reran the J-02 acceptance suite plus the J-07 equivalence/fingerprint sentinel (exit 0, 48 tests) — the reports are corroborated, not merely trusted. Coherence is COHERENCE-PASS and the diff scan is CLEAN; no anti-goal violated; J-01/J-07 intact. J-03–J-06 remain failing exactly as scoped.
 
 ## What was done
 
-- Built `research/levels.py`: deterministic swing-pivot + prior-period-extreme S/R level detection, each level carrying price, timeframe, type, touch count, and a config-weighted strength score
-- Added `GET /research/levels?symbol=&as_of=` (422 validation, honest "no bar series"/"no levels found" states) and a byte-identical, read-only MCP `levels` tool
-- Proved the lookahead-free property directly: a level "as of" T is byte-identical whether or not bars after T are physically present in the store
-- Proved byte-identical determinism across independent runs, plus MCP-vs-REST byte-identity
-- Added three new config-owned S/R fields (`sr_pivot_lookback`, `sr_touch_tolerance_bps`, `sr_timeframe_weights`), all correctly excluded from `config_fingerprint()` — pinned `default` fingerprint (`4d665603569b9dbf`) unmoved
-- Added 26 new tests (15 unit + 9 route + 2 MCP); full backend suite: 1095 passed / 1 skipped / 0 failed, zero regressions
-- Browser QA correctly SKIPPED (backend-only, zero `apps/frontend/` diff); J-01/J-07 re-verified green instead via 18/18 QA test cases and the equivalence suite (57 passed)
-- Independent audit re-ran the suite and confirmed every DoD item genuinely met (PASS_WITH_GAPS, one non-blocking documented gap); closure gate CLOSURE-PASS, zero blockers
+- Built `research/levels.py` — swing-pivot + prior-period-extreme S/R detectors, lookahead-free by construction (bars filtered `ts <= as_of` before any windowing/detector runs)
+- Added `GET /research/levels?symbol=&as_of=` — each level carries price, timeframe, type, touch_count, and strength; an honest "no levels found" state, never fabricated
+- Added a read-only MCP `levels` tool, byte-identical to the REST response (a new two-required-argument dispatch branch)
+- Added 3 new config-owned S/R fields (pivot lookback, touch tolerance, per-timeframe weights) — all excluded from `config_fingerprint()`, keeping the pinned `default` fingerprint `4d665603569b9dbf` unchanged
+- Added 26 new tests (15 unit + 9 route + 2 MCP): exact fixture values, a physical-truncation lookahead-free proof, byte-identical determinism, honest empty states, no-magic-numbers introspection
+- Full backend suite: 1095 passed / 1 skipped (up from iter-1's 1069 baseline), zero regressions; equivalence + fingerprint suites 57/57 green
+- Browser QA correctly SKIPPED (backend/machine-surface journey); evaluator independently reran the acceptance suite instead — `test_levels.py` + `test_levels_api.py` + 2 MCP tests + observer/profile equivalence (48 tests, exit 0)
 
 ## What's left
 
-- Journey J-03 (Confluence zones and A/B/C conviction classes) failing — depends on J-02's levels, not yet built
-- Journey J-04 (Tape-confirmed structure entries as a registered strategy) failing — no `/research/strategies` route yet
-- Journey J-05 (Class-scaled stop, reward, and simulated size) failing — depends on J-04
-- Journey J-06 (`structure_tape` measured honestly against the v1 champion) failing — no named-strategy comparison path yet
-- Touch-tolerance (5bps) and per-timeframe strength weights are documented starting points, not yet validated against real trading outcomes
-- A corrupted sole bar series for a symbol surfaces as "no bar series" rather than a distinct integrity state (non-blocking gap, flagged for J-03 triage)
-- No UI/page to view levels yet — machine-only surface (REST + MCP), as scoped
-- `sr_pivot_lookback`/`sr_touch_tolerance_bps` are single global values rather than per-timeframe (flagged for a possible future iteration)
+- Journey J-03 (Confluence zones and A/B/C conviction classes) failing — no clustering/scoring/grading code yet; `classes` field deliberately absent from `GET /research/levels`
+- Journey J-04 (Tape-confirmed structure entries as a registered strategy) failing — no strategy registry; `/research/strategies` still 404s
+- Journey J-05 (Class-scaled stop, reward, and simulated size) failing — depends on J-04's unbuilt strategy
+- Journey J-06 (`structure_tape` measured honestly against the v1 champion) failing — no named-strategy edge-report/sweep path yet
+- No screen in the website to view levels yet — machine-only surface (REST + MCP) by design this iteration
+- Documented gap (audit B1, non-blocking): a corrupted sole bar series for a symbol aliases to "no bar series for symbol" instead of a distinct integrity state — deferred to J-03 to decide if it needs distinguishing
+- Touch tolerance (5bps) and per-timeframe strength weights are documented starting-point defaults, not yet validated against real trading outcomes
 
 ## Next step
 
-Proceed to J-03 (confluence zones and A/B/C classification). J-02 delivers the levels half of Data-Contract row 39 correctly — lookahead-free, deterministic, and single-sourced across REST and MCP — with the endpoint shape already reserving room for J-03's additive `classes` field. The one documented gap (a corrupted sole bar series aliasing to "no bar series" rather than a distinct integrity state) is minor and non-blocking; J-03 should decide, once it starts consuming levels, whether it needs to distinguish "corrupt" from "absent." No remediation is required before advancing.
+Advance to J-03 — confluence zones and A/B/C conviction classes (the natural dependency successor; it clusters the J-02 levels this iteration produced). It delivers the classes half of Data-Contract Row 39 via an additive `classes` field on the existing `GET /research/levels` + MCP `levels` — no new endpoint/owner. Depth full, by the same three triggers that justified J-02: (a) a new canonical computation (confluence scoring + A/B/C grading); (b) new correctness tests beyond browser smoke (deterministic clustering, byte-identical re-runs, config-owned tolerance/class thresholds, honest class labelling); (c) it extends the critical no-lookahead property to classes — and, being a machine surface, the tests ARE the acceptance (no browser smoke to catch a wiring slip), which warrants the fuller audit. Carry forward: the audit's B1 seam — J-03, when it consumes levels, must decide whether a corrupt sole series needs a distinct honest state vs an absent one.
 
 ## Artifacts
 
@@ -73,4 +71,5 @@ Proceed to J-03 (confluence zones and A/B/C classification). J-02 delivers the l
 | QA | PASS | reports/qa/goal-tape_to_profit_support_resistence-iter-2-qa.md |
 | Audit | PASS_WITH_GAPS | docs/handoffs/goal-tape_to_profit_support_resistence-iter-2-audit.md |
 | Closure | CLOSURE-PASS | reports/phase-goal-tape_to_profit_support_resistence-iter-2-closure-verdict.md |
+| Goal evaluation | CONTINUE | runs/goal-session-tape_to_profit_support_resistence/iter-2/eval.md |
 | Journey history | — | runs/goal-session-tape_to_profit_support_resistence/state/journey-history.json |
