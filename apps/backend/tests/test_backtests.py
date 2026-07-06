@@ -37,12 +37,14 @@ from pathlib import Path
 import pytest
 
 from app.config import CONFIG, STRATEGY_TAPE_ID, STRATEGY_V1_ID
+from app.providers.adapters.base import RawBar
 from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.providers.simulated import SIM_SCENARIOS, SimulatedProvider
 from app.research.backtests import (
     BacktestJobManager,
     EXIT_DATASET_END,
     EXIT_HORIZON,
+    EXIT_REWARD_TARGET,
     EXIT_R_STOP,
     EXIT_STATE_FLIP,
     NULL_SETUP_TYPE,
@@ -260,12 +262,86 @@ def _record_structure_tape_dataset(
     tmp_path, ticker, *, anchor=_STRUCTURE_TAPE_ANCHOR, max_logical=25.0, symbol=_CONFLUENCE_SYMBOL
 ):
     """Record ONE canned SIM_SCENARIOS stream (its price/state path already proven elsewhere in
-    this file) as a dataset stamped with the SYN-CONFLUENCE symbol (so the runner's
-    ``compute_levels`` call finds the confluence bar fixture) and the given epoch anchor."""
+    this file) as a dataset stamped with the given symbol (so the runner's ``compute_levels`` call
+    finds the matching bar fixture) and the given epoch anchor."""
     events, provider = _sim_events(ticker, max_logical)
     return _record(
         tmp_path / "datasets", events, symbol=symbol, scenario=provider.scenario, anchor=anchor
     )
+
+
+# --- Class-scaled stop/reward/size fixtures (era-4 capability 5, J-05; Data Contract row 41
+# extension) — the SAME SYN-CONFLUENCE class-A zone above already sits at ~100.00; these TWO
+# additional synthetic bar fixtures put a class-B and a class-C zone at the SAME ~100.00 price
+# SIM-BUYER's proven breakthrough-long path already crosses, so all three classes are measured via
+# the IDENTICAL tape stream — only the bar series (and therefore the confluence class) differs.
+_CLASS_B_SYMBOL = "SYN-CLASS-B"
+
+
+def _class_b_bar_fixture(store: BarStore) -> None:
+    """A TWO-timeframe (1h + 1d) fixture producing exactly ONE confluence zone at ~100.00 — class
+    B (2 distinct timeframes, below the class-A floor of 3 — the SAME mechanism the real committed
+    PG fixture already proves in ``tests/test_levels.py``). No other zone exists in this store, so
+    the reward-target's "next opposing level" search honestly finds none (the uncapped fallback)."""
+    hourly_specs = [(50, 40, 45), (100.00, 41, 98), (55, 42, 50)]
+    hourly_bars = [
+        RawBar(_CLASS_B_SYMBOL, "1h", _CONFLUENCE_BASE + i * 3600.0, close, high, low, close, 1_000)
+        for i, (high, low, close) in enumerate(hourly_specs)
+    ]
+    daily_bars = [
+        RawBar(_CLASS_B_SYMBOL, "1d", _CONFLUENCE_BASE + 0 * _DAY, 100.02, 900, 10, 100.02, 1_000),
+    ]
+    store.record(
+        symbol=_CLASS_B_SYMBOL, timeframe="1h",
+        window_start_utc="2026-01-01T00:00:00Z", window_end_utc="2026-01-01T03:00:00Z",
+        feed="sip", bars=hourly_bars,
+    )
+    store.record(
+        symbol=_CLASS_B_SYMBOL, timeframe="1d",
+        window_start_utc="2026-01-01T00:00:00Z", window_end_utc="2026-01-02T00:00:00Z",
+        feed="sip", bars=daily_bars,
+    )
+
+
+@pytest.fixture
+def class_b_bar_store(tmp_path):
+    bar_store = BarStore(tmp_path / "class-b-bars")
+    _class_b_bar_fixture(bar_store)
+    return bar_store
+
+
+_CLASS_C_SYMBOL = "SYN-CLASS-C"
+
+
+def _class_c_bar_fixture(store: BarStore) -> None:
+    """A ONE-timeframe (1h) fixture producing TWO confluence zones, both class C (a single
+    timeframe — below the class-B floor of 2 distinct timeframes): the NEAR zone at ~100.00/100.05
+    (the SAME price SIM-BUYER already breaks through — the arming zone) and a FAR zone at
+    ~100.30/100.32 — close enough to entry to become the reward-target's "next opposing level"
+    bound (proving the CAPPED branch of the class-scaled reward target), yet far enough from the
+    near zone's own anchor (100.00) to stay a SEPARATE cluster rather than merging into one (per
+    ``_cluster_levels``'s anchor-fixed confluence band — verified by direct computation, not
+    hand-derived)."""
+    hourly_specs = [
+        (50, 40, 45), (100.00, 41, 98), (52, 42, 50), (100.05, 43, 99), (54, 44, 53),
+        (100.30, 45, 101), (56, 46, 55), (100.32, 47, 102), (58, 48, 57),
+    ]
+    hourly_bars = [
+        RawBar(_CLASS_C_SYMBOL, "1h", _CONFLUENCE_BASE + i * 3600.0, close, high, low, close, 1_000)
+        for i, (high, low, close) in enumerate(hourly_specs)
+    ]
+    store.record(
+        symbol=_CLASS_C_SYMBOL, timeframe="1h",
+        window_start_utc="2026-01-01T00:00:00Z", window_end_utc="2026-01-01T09:00:00Z",
+        feed="sip", bars=hourly_bars,
+    )
+
+
+@pytest.fixture
+def class_c_bar_store(tmp_path):
+    bar_store = BarStore(tmp_path / "class-c-bars")
+    _class_c_bar_fixture(bar_store)
+    return bar_store
 
 
 def test_structure_tape_definition_is_config_owned_and_additive_beside_v1():
@@ -278,17 +354,31 @@ def test_structure_tape_definition_is_config_owned_and_additive_beside_v1():
         d["entries"]["breakthrough_states"] == CONFIG.structure_tape_breakthrough_state_by_direction
     )
     assert d["entries"]["arm_cooldown_seconds"] == CONFIG.study_arm_cooldown_seconds
-    # Exits/fees/slippage/dollars-per-r are IDENTICAL to v1's (class-scaled risk/size is J-05, out
-    # of scope this iteration) — the SAME config fields, never a second copy of any value.
+    # Era-4 J-05: the r_stop and reward_target exits are CLASS-SCALED (a NEW grammar shape,
+    # distinct from v1's own r_stop) — read by name from the three new config dicts.
+    assert d["exits"]["r_stop"]["stop_bps_by_class"] == CONFIG.structure_tape_stop_bps_by_class
+    assert (
+        d["exits"]["reward_target"]["r_multiple_by_class"]
+        == CONFIG.structure_tape_reward_r_multiple_by_class
+    )
+    assert d["size_multiple_by_class"] == CONFIG.structure_tape_size_multiple_by_class
+    # Horizon/state-flip/dataset_end/fees/slippage/dollars-per-r stay IDENTICAL to v1's — the SAME
+    # config fields, never a second copy of any value.
     v1 = CONFIG.strategy_definition(STRATEGY_V1_ID)
-    assert d["exits"] == v1["exits"]
+    assert d["exits"]["horizon_seconds"] == v1["exits"]["horizon_seconds"]
+    assert d["exits"]["state_flip"] == v1["exits"]["state_flip"]
+    assert d["exits"]["dataset_end"] == v1["exits"]["dataset_end"]
     assert d["fees"] == v1["fees"]
     assert d["slippage"] == v1["slippage"]
     assert d["dollars_per_r"] == v1["dollars_per_r"]
-    # v1 itself stays completely untouched — no structure_tape vocabulary leaked into its setups.
+    # v1 itself stays completely untouched — no structure_tape vocabulary leaked into its setups,
+    # its r_stop grammar, or a class-scaling key it never had.
     assert not any(
         s["setup_type"] in ("rejection", "breakthrough") for s in v1["entries"]["setups"]
     )
+    assert "stop_bps_by_class" not in v1["exits"]["r_stop"]
+    assert "reward_target" not in v1["exits"]
+    assert "size_multiple_by_class" not in v1
 
 
 def test_strategy_registry_lists_v1_then_structure_tape_in_registration_order():
@@ -322,7 +412,11 @@ def test_structure_tape_breakthrough_long_arms_at_the_class_a_resistance_level(
     assert t["exit"]["reason"] == EXIT_DATASET_END
     assert t["exit"]["logical_ts"] == 25.0
     assert t["exit"]["price"] == 100.26
-    _assert_trade_arithmetic(t)
+    # Class-scaled stop/size/target (era-4 J-05): the next opposing level on the long side is
+    # zone_b's nearest member (200.00, far beyond this trade's own class-A R-multiple distance) —
+    # the honest UNCAPPED case.
+    _assert_structure_tape_trade_arithmetic(t, opposing_price=200.00)
+    _assert_per_class_breakdown_isolates_one_trade(result, cls="A")
 
 
 def test_structure_tape_breakthrough_short_arms_at_the_class_a_support_level(
@@ -334,7 +428,8 @@ def test_structure_tape_breakthrough_short_arms_at_the_class_a_support_level(
     payload = _run(
         jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
     )
-    trades = payload["result"]["trades"]
+    result = payload["result"]
+    trades = result["trades"]
     assert len(trades) == 1
     t = trades[0]
     assert (t["setup_type"], t["direction"]) == ("breakthrough", "short")
@@ -344,7 +439,9 @@ def test_structure_tape_breakthrough_short_arms_at_the_class_a_support_level(
     assert t["exit"]["reason"] == EXIT_DATASET_END
     assert t["exit"]["logical_ts"] == 25.0
     assert t["exit"]["price"] == 99.76
-    _assert_trade_arithmetic(t)
+    # No zone exists BELOW entry in this fixture — the honest no-opposing-zone fallback.
+    _assert_structure_tape_trade_arithmetic(t, opposing_price=None)
+    _assert_per_class_breakdown_isolates_one_trade(result, cls="A")
 
 
 def test_structure_tape_rejection_long_arms_at_the_class_a_support_level(
@@ -356,7 +453,8 @@ def test_structure_tape_rejection_long_arms_at_the_class_a_support_level(
     payload = _run(
         jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
     )
-    trades = payload["result"]["trades"]
+    result = payload["result"]
+    trades = result["trades"]
     assert len(trades) == 1
     t = trades[0]
     assert (t["setup_type"], t["direction"]) == ("rejection", "long")
@@ -366,7 +464,10 @@ def test_structure_tape_rejection_long_arms_at_the_class_a_support_level(
     assert t["exit"]["reason"] == EXIT_DATASET_END
     assert t["exit"]["logical_ts"] == 25.0
     assert t["exit"]["price"] == 100.00
-    _assert_trade_arithmetic(t)
+    # The next opposing level on the long side is zone_b's nearest member (200.00) — far beyond
+    # this trade's own tiny class-A R-multiple distance, so uncapped.
+    _assert_structure_tape_trade_arithmetic(t, opposing_price=200.00)
+    _assert_per_class_breakdown_isolates_one_trade(result, cls="A")
 
 
 def test_structure_tape_rejection_short_arms_at_the_class_a_resistance_level(
@@ -378,7 +479,8 @@ def test_structure_tape_rejection_short_arms_at_the_class_a_resistance_level(
     payload = _run(
         jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
     )
-    trades = payload["result"]["trades"]
+    result = payload["result"]
+    trades = result["trades"]
     assert len(trades) == 1
     t = trades[0]
     assert (t["setup_type"], t["direction"]) == ("rejection", "short")
@@ -388,7 +490,12 @@ def test_structure_tape_rejection_short_arms_at_the_class_a_resistance_level(
     assert t["exit"]["reason"] == EXIT_DATASET_END
     assert t["exit"]["logical_ts"] == 25.0
     assert t["exit"]["price"] == 100.02
-    _assert_trade_arithmetic(t)
+    # No zone exists BELOW entry in this fixture — the honest no-opposing-zone fallback. Also
+    # proves the stop's ENTRY-relative fallback branch: the level-relative price (100.01) sits
+    # THROUGH this entry (100.02), so the invalidation re-anchors to the entry instead (still the
+    # SAME class-A bps distance) — see ``_assert_structure_tape_trade_arithmetic``.
+    _assert_structure_tape_trade_arithmetic(t, opposing_price=None)
+    _assert_per_class_breakdown_isolates_one_trade(result, cls="A")
 
 
 def test_structure_tape_no_arm_when_symbol_has_no_classified_levels(tmp_path, store, jobs):
@@ -447,6 +554,191 @@ def test_structure_tape_identical_request_rerun_is_byte_identical(
     )
     assert first["id"] != second["id"]
     assert json.dumps(first["result"], sort_keys=True) == json.dumps(second["result"], sort_keys=True)
+
+
+# --- Class-scaled stop, reward-target, and size (era-4 capability 5, J-05) --------------------------
+
+
+def test_structure_tape_class_b_stop_is_wider_and_size_smaller_than_class_a(
+    tmp_path, store, jobs, class_b_bar_store
+):
+    # The IDENTICAL SIM-BUYER breakthrough at the IDENTICAL ~100.00 price as the class-A test
+    # above — only the bar fixture (and therefore the confluence class) differs.
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-BUYER", symbol=_CLASS_B_SYMBOL)
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=class_b_bar_store
+    )
+    result = payload["result"]
+    trades = result["trades"]
+    assert len(trades) == 1
+    t = trades[0]
+    assert (t["setup_type"], t["direction"]) == ("breakthrough", "long")
+    assert t["entry"]["logical_ts"] == 19.5
+    assert t["entry"]["price"] == 100.18
+    assert t["level"] == {"price": 100.00, "timeframe": "1h", "class": "B"}
+    assert t["exit"]["reason"] == EXIT_DATASET_END
+    assert t["exit"]["logical_ts"] == 25.0
+    assert t["exit"]["price"] == 100.26
+    # No other zone exists in this fixture — the honest no-opposing-zone fallback.
+    _assert_structure_tape_trade_arithmetic(t, opposing_price=None)
+    _assert_per_class_breakdown_isolates_one_trade(result, cls="B")
+    # Class B is visibly wider/smaller than class A's own breakthrough-long trade (SAME entry
+    # price, SAME level price, SAME tape stream — only the class differs): a strictly wider stop
+    # (farther invalidation), a strictly smaller notional (fewer shares), traceable to the two
+    # named config dicts (never a magic number).
+    assert CONFIG.structure_tape_stop_bps_by_class["B"] > CONFIG.structure_tape_stop_bps_by_class["A"]
+    assert t["invalidation_price"] < 99.99  # class A's own invalidation on the identical level
+    assert (
+        CONFIG.structure_tape_size_multiple_by_class["B"]
+        < CONFIG.structure_tape_size_multiple_by_class["A"]
+    )
+    assert t["shares"] < 1052.6315789473024  # class A's own shares on the identical trade shape
+
+
+def test_structure_tape_class_c_widest_stop_smallest_size_and_reward_target_capped_by_next_opposing_level(
+    tmp_path, store, jobs, class_c_bar_store
+):
+    # The IDENTICAL SIM-BUYER breakthrough at the IDENTICAL ~100.00 price, arming against the NEAR
+    # class-C zone; a FAR class-C zone at ~100.30/100.32 sits closer to entry than this trade's own
+    # class-C R-multiple distance would reach, so the reward target is CAPPED by it (the "toward
+    # the next opposing level" clause, proven — not merely the uncapped R-multiple fallback the
+    # class-A/B tests above exercise).
+    dstore, meta = _record_structure_tape_dataset(
+        tmp_path, "SIM-BUYER", symbol=_CLASS_C_SYMBOL, max_logical=40.0
+    )
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=class_c_bar_store
+    )
+    result = payload["result"]
+    trades = result["trades"]
+    assert len(trades) == 1
+    t = trades[0]
+    assert (t["setup_type"], t["direction"]) == ("breakthrough", "long")
+    assert t["entry"]["logical_ts"] == 19.5
+    assert t["entry"]["price"] == 100.18
+    assert t["level"] == {"price": 100.00, "timeframe": "1h", "class": "C"}
+    # The reward-target exit fires at the CAPPED price (100.30, the far zone's nearest member) —
+    # well before dataset_end, and before the uncapped class-C R-multiple target (100.46) would
+    # ever be reached.
+    assert t["exit"]["reason"] == EXIT_REWARD_TARGET
+    assert t["exit"]["logical_ts"] == 29.0
+    assert t["exit"]["price"] == 100.30
+    assert t["target_price"] == 100.30
+    _assert_structure_tape_trade_arithmetic(t, opposing_price=100.30)
+    _assert_per_class_breakdown_isolates_one_trade(result, cls="C")
+    # Class C is the widest stop / smallest size of all three classes (SAME entry/level price).
+    assert (
+        CONFIG.structure_tape_stop_bps_by_class["C"]
+        > CONFIG.structure_tape_stop_bps_by_class["B"]
+        > CONFIG.structure_tape_stop_bps_by_class["A"]
+    )
+    assert t["invalidation_price"] < 99.95  # class B's own invalidation on the identical level
+    assert (
+        CONFIG.structure_tape_size_multiple_by_class["C"]
+        < CONFIG.structure_tape_size_multiple_by_class["B"]
+        < CONFIG.structure_tape_size_multiple_by_class["A"]
+    )
+    assert t["shares"] < 434.7826086956446  # class B's own shares on the identical trade shape
+
+
+def test_structure_tape_reward_target_exit_fires_lookahead_free(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    # The SAME SIM-BUYER breakthrough-long arm as the class-A test above, given enough room
+    # (max_logical=100.0, well short of the NEXT arm opportunity at 199.5s) to reach its own
+    # class-A reward target (100.75) before ``dataset_end`` or the 120s horizon — proving the
+    # take-profit exit genuinely FIRES, at the documented precedence (r_stop, then reward_target,
+    # then state_flip, then horizon), never merely computed and ignored.
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-BUYER", max_logical=100.0)
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    result = payload["result"]
+    trades = result["trades"]
+    assert len(trades) == 1
+    t = trades[0]
+    assert (t["setup_type"], t["direction"]) == ("breakthrough", "long")
+    assert t["entry"]["logical_ts"] == 19.5
+    assert t["entry"]["price"] == 100.18
+    assert t["exit"]["reason"] == EXIT_REWARD_TARGET
+    assert t["exit"]["logical_ts"] == 78.0
+    assert t["exit"]["price"] == 100.76
+    assert t["target_price"] == pytest.approx(100.75)
+    # Lookahead-free: the target was fixed AT ARM TIME (19.5s) from the levels visible then — the
+    # SAME 100.00 class-A level and the SAME zone_b-derived bound this file's other class-A tests
+    # already prove come from that one as-of read, never a later/future levels computation.
+    _assert_structure_tape_trade_arithmetic(t, opposing_price=200.00)
+    _assert_per_class_breakdown_isolates_one_trade(result, cls="A")
+
+
+def test_structure_tape_class_scaling_parameters_are_config_sourced_no_magic_numbers():
+    # Every class-scaling dict is keyed by exactly the three confluence-zone grades and read BY
+    # NAME in research/backtests.py — no inline literal duplicates them.
+    for field_name in (
+        "structure_tape_stop_bps_by_class",
+        "structure_tape_reward_r_multiple_by_class",
+        "structure_tape_size_multiple_by_class",
+    ):
+        value = getattr(CONFIG, field_name)
+        assert isinstance(value, dict)
+        assert set(value) == {"A", "B", "C"}
+
+    # Better class -> tighter stop, larger size, a more generous reward multiple (goal.md's own
+    # class-conviction ordering) -- never inverted.
+    stop = CONFIG.structure_tape_stop_bps_by_class
+    assert stop["A"] < stop["B"] < stop["C"]
+    size = CONFIG.structure_tape_size_multiple_by_class
+    assert size["A"] > size["B"] > size["C"]
+    reward = CONFIG.structure_tape_reward_r_multiple_by_class
+    assert reward["A"] >= reward["B"] >= reward["C"]
+
+    src = (BACKEND_DIR / "app" / "research" / "backtests.py").read_text()
+    assert "config.structure_tape_stop_bps_by_class" in src
+    assert "config.structure_tape_reward_r_multiple_by_class" in src
+    assert "config.structure_tape_size_multiple_by_class" in src
+
+
+def test_structure_tape_sub_minimum_n_and_zero_trade_class_are_never_fabricated(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    # SIM-CHOP never leaves unclear (the existing v1/structure_tape zero-arm precedent): zero
+    # structure_tape trades yields an honest all-empty per-class breakdown (n=0, rates None) for
+    # EVERY class, each still labeled insufficient_sample — never a dishonest 0% and never an
+    # omitted class.
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-CHOP", max_logical=90.0)
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    result = payload["result"]
+    assert result["trades"] == []
+    by_class = result["aggregates_by_class"]
+    assert set(by_class) == {"A", "B", "C"}
+    for cls in ("A", "B", "C"):
+        assert by_class[cls] == {
+            "n": 0,
+            "gross_r": 0.0,
+            "net_r": 0.0,
+            "gross_usd": 0.0,
+            "net_usd": 0.0,
+            "win_rate": None,
+            "max_drawdown_r": None,
+            "insufficient_sample": True,
+        }
+
+
+def test_v1_backtest_carries_an_honest_all_empty_per_class_breakdown(tmp_path, store, jobs):
+    # v1 trades carry no ``level`` key at all -- the per-class breakdown is computed the SAME way
+    # for every strategy (no strategy_id special-casing), so a v1 report honestly shows all THREE
+    # classes empty (v1 never touches levels/classes), never an omitted or fabricated field.
+    dstore, meta = _record_sim(tmp_path, "SIM-REVERSAL")
+    payload = _run(jobs, store, dstore, meta["id"])
+    result = payload["result"]
+    assert result["aggregates"]["n"] == 2  # the existing v1 precedent (two trades)
+    by_class = result["aggregates_by_class"]
+    assert set(by_class) == {"A", "B", "C"}
+    for cls in ("A", "B", "C"):
+        assert by_class[cls]["n"] == 0
+        assert by_class[cls]["insufficient_sample"] is True
 
 
 # --- Exit coverage: every exit reason exercised deterministically ----------------------------------
@@ -566,6 +858,94 @@ def _assert_trade_arithmetic(t: dict, config=CONFIG) -> None:
     assert t["slippage_usd"] == (gross_move - fill_move) * t["shares"]
     assert t["net_usd"] == fill_move * t["shares"] - t["fees_usd"]
     assert t["net_r"] == t["net_usd"] / config.strategy_dollars_per_r
+
+
+def _assert_structure_tape_trade_arithmetic(
+    t: dict, *, opposing_price: float | None, config=CONFIG
+) -> None:
+    """The EXACT class-scaled fill/fee/R/$ arithmetic a ``structure_tape`` trade must satisfy
+    (era-4 J-05) — independently re-derived here (the ``_assert_trade_arithmetic`` /
+    ``_expected_aggregates`` precedent: never a re-import of the production formula), so a bug
+    shared between the implementation and this helper cannot silently agree with itself.
+
+    ``opposing_price`` is the price the caller independently knows ``_next_opposing_zone_price``
+    ought to have resolved for this specific trade's fixture (or ``None`` when no zone qualifies
+    on that side) — the SAME class R-multiple-vs-opposing-level ``min()`` the production
+    ``_class_scaled_target`` applies is re-derived here from it, proving the reward target is
+    genuinely bounded both ways, not merely copied from the observed value."""
+    level = t["level"]
+    direction = t["direction"]
+    sign = 1.0 if direction == "long" else -1.0
+    entry_price = t["entry"]["price"]
+
+    # Class-scaled, LEVEL-relative invalidation, with the entry-relative fallback when the
+    # level-relative price would sit at/through the entry print itself.
+    stop_bps = config.structure_tape_stop_bps_by_class[level["class"]]
+    band = level["price"] * (stop_bps / 10_000.0)
+    if direction == "long":
+        level_relative = level["price"] - band
+        expected_invalidation = level_relative if level_relative < entry_price else entry_price - band
+    else:
+        level_relative = level["price"] + band
+        expected_invalidation = level_relative if level_relative > entry_price else entry_price + band
+    assert t["invalidation_price"] == expected_invalidation
+    assert t["r_basis"] == r_basis(entry_price, expected_invalidation)
+
+    # Class-scaled size multiple over the SAME fixed strategy_dollars_per_r notional.
+    size_multiple = config.structure_tape_size_multiple_by_class[level["class"]]
+    assert t["shares"] == size_multiple * config.strategy_dollars_per_r / t["r_basis"]
+
+    # Reward target: the class R-multiple times R basis, bounded by the distance to
+    # ``opposing_price`` when one exists.
+    reward_multiple = config.structure_tape_reward_r_multiple_by_class[level["class"]]
+    distance = reward_multiple * t["r_basis"]
+    if opposing_price is not None:
+        distance = min(distance, abs(opposing_price - entry_price))
+    assert t["target_price"] == entry_price + sign * distance
+
+    # Fills/fees/slippage/gross-vs-net: the IDENTICAL shape v1/null satisfy (only the
+    # invalidation/shares/target formulas above differ for structure_tape).
+    entry_spread = t["entry"]["spread"] if (t["entry"]["spread"] or 0) > 0 else 0.0
+    exit_spread = t["exit"]["spread"] if (t["exit"]["spread"] or 0) > 0 else 0.0
+    entry_slip = entry_spread * config.strategy_slippage_spread_fraction
+    exit_slip = exit_spread * config.strategy_slippage_spread_fraction
+    assert t["entry"]["fill_price"] == t["entry"]["price"] + sign * entry_slip
+    assert t["exit"]["fill_price"] == t["exit"]["price"] - sign * exit_slip
+    gross_move = sign * (t["exit"]["price"] - t["entry"]["price"])
+    fill_move = sign * (t["exit"]["fill_price"] - t["entry"]["fill_price"])
+    fee = max(config.strategy_fee_per_share * t["shares"], config.strategy_fee_min_per_trade)
+    assert t["gross_r"] == gross_move / t["r_basis"]
+    assert t["gross_usd"] == gross_move * t["shares"]
+    assert t["fees_usd"] == 2.0 * fee
+    assert t["slippage_usd"] == (gross_move - fill_move) * t["shares"]
+    assert t["net_usd"] == fill_move * t["shares"] - t["fees_usd"]
+    assert t["net_r"] == t["net_usd"] / config.strategy_dollars_per_r
+
+
+def _assert_per_class_breakdown_isolates_one_trade(result: dict, *, cls: str) -> None:
+    """era-4 J-05 (Data Contract row 42): given a report with EXACTLY one structure_tape trade in
+    class ``cls`` and none in the other two, the per-class breakdown must (a) mirror the
+    strategy-level aggregate exactly in ``cls``'s own bucket, (b) report the other two classes as
+    an honest empty (n=0, rates ``None``), (c) label EVERY bucket ``insufficient_sample`` (n=1 or
+    n=0 are both under the reused ``pnl_min_sample_size`` floor of 5), and (d) sum back to the
+    strategy-level aggregate's own n/net_r/net_usd — one aggregation, no second scan."""
+    by_class = result["aggregates_by_class"]
+    assert set(by_class) == {"A", "B", "C"}
+    assert by_class[cls] == {**result["aggregates"], "insufficient_sample": True}
+    for other in {"A", "B", "C"} - {cls}:
+        assert by_class[other] == {
+            "n": 0,
+            "gross_r": 0.0,
+            "net_r": 0.0,
+            "gross_usd": 0.0,
+            "net_usd": 0.0,
+            "win_rate": None,
+            "max_drawdown_r": None,
+            "insufficient_sample": True,
+        }
+    assert sum(v["n"] for v in by_class.values()) == result["aggregates"]["n"]
+    assert sum(v["net_r"] for v in by_class.values()) == result["aggregates"]["net_r"]
+    assert sum(v["net_usd"] for v in by_class.values()) == result["aggregates"]["net_usd"]
 
 
 def test_fill_honesty_exact_arithmetic_on_the_calibrated_trade(tmp_path, store, jobs):
@@ -839,6 +1219,28 @@ def test_structure_tape_fields_are_serving_only_excluded_from_fingerprint():
     assert (
         dataclasses.replace(
             CONFIG, structure_tape_breakthrough_state_by_direction={"long": "x", "short": "y"}
+        ).config_fingerprint()
+        == base
+    )
+    # era-4 J-05: the class-scaled stop/reward/size fields join the SAME exclusion — a structure_tape
+    # report's own class-scaled config is instead provenanced by its embedded ``strategy`` dict,
+    # never by ``config_fingerprint``.
+    assert (
+        dataclasses.replace(
+            CONFIG, structure_tape_stop_bps_by_class={"A": 999.0, "B": 999.0, "C": 999.0}
+        ).config_fingerprint()
+        == base
+    )
+    assert (
+        dataclasses.replace(
+            CONFIG,
+            structure_tape_reward_r_multiple_by_class={"A": 999.0, "B": 999.0, "C": 999.0},
+        ).config_fingerprint()
+        == base
+    )
+    assert (
+        dataclasses.replace(
+            CONFIG, structure_tape_size_multiple_by_class={"A": 999.0, "B": 999.0, "C": 999.0}
         ).config_fingerprint()
         == base
     )

@@ -32,26 +32,36 @@ The disciplines, clause by clause:
     BEFORE arming at each event, and concurrent eligibility resolves in the strategy's declared
     setup order — all deterministic, all documented in the config-owned definition.
 
-  * **Exits: R-stop / horizon / state-flip / dataset_end.** The R-stop is the studies'
-    arm-instant synthetic invalidation (the REUSED ``_synthetic_invalidation`` helper —
+  * **Exits: R-stop / reward-target / horizon / state-flip / dataset_end.** The R-stop is the
+    studies' arm-instant synthetic invalidation (the REUSED ``_synthetic_invalidation`` helper —
     ``study_occurrence_r_spread_multiple`` x arm spread, floored at ``study_occurrence_r_floor``,
     adverse side), with R via the shared ``marks.r_basis`` (row 27 — never a second formula); it
-    triggers on a recorded print at/through the invalidation. The state-flip exit fires when the
-    tape reads the OPPOSING control state (the studies' ``_control_state`` vocabulary). The time
-    horizon exits at the first recorded event at/after ``strategy_exit_horizon_seconds`` past
-    entry. A trade still open when the stream ends is handled EXPLICITLY and deterministically:
-    forced exit at the LAST recorded price, labeled ``dataset_end`` — documented, never silent.
-    Exit precedence within one event is fixed and documented: r_stop, then state_flip, then
-    horizon. Exit evaluation begins strictly AFTER the entry event.
+    triggers on a recorded print at/through the invalidation. ``structure_tape`` trades ONLY
+    (era-4 J-05, gated on the arming ``level``/class being present) instead use a class-scaled,
+    LEVEL-relative invalidation (``_class_scaled_invalidation``) and additionally carry a
+    reward-target exit (``_class_scaled_target`` — a class R-multiple bounded by the next opposing
+    level resolved at arm time); v1/null trades never carry a ``target_price`` and so can never
+    reach that exit. The state-flip exit fires when the tape reads the OPPOSING control state (the
+    studies' ``_control_state`` vocabulary). The time horizon exits at the first recorded event
+    at/after ``strategy_exit_horizon_seconds`` past entry. A trade still open when the stream ends
+    is handled EXPLICITLY and deterministically: forced exit at the LAST recorded price, labeled
+    ``dataset_end`` — documented, never silent. Exit precedence within one event is fixed and
+    documented: r_stop, then reward_target, then state_flip, then horizon. Exit evaluation begins
+    strictly AFTER the entry event.
 
   * **Fills, fees, and the two unit systems.** Entry fills at the recorded arm price adjusted
     ADVERSELY by ``strategy_slippage_spread_fraction`` x the recorded at-that-event spread; exit
     fills adversely likewise at the recorded exit price (a moment with no usable quote
     contributes zero slippage — honest absence, never a fabricated cost). Each fill pays
     ``max(strategy_fee_per_share x shares, strategy_fee_min_per_trade)``. Position size is the
-    fixed notional: ``shares = strategy_dollars_per_r / R basis``, so R and $ are two disclosed
-    unit systems over the SAME measurement — GROSS from recorded prices, NET from fills minus
-    fees, and a dollar figure never exists without its R counterpart.
+    fixed notional: ``shares = strategy_dollars_per_r / R basis`` (v1/null); ``structure_tape``
+    trades (era-4 J-05) scale that SAME fixed notional by the arming level's class size multiple
+    (``structure_tape_size_multiple_by_class``) — still a per-trade SIMULATED notional only. R and
+    $ are two disclosed unit systems over the SAME measurement — GROSS from recorded prices, NET
+    from fills minus fees, and a dollar figure never exists without its R counterpart. The
+    per-class (A/B/C) PnL breakdown (era-4 J-05, Data Contract row 42) partitions the SAME trade
+    population by ``trade["level"]["class"]`` — computed once, alongside the strategy-level
+    aggregate, and served verbatim.
 
   * **The seeded random-entry null baseline.** ``backtest_null_entry_count`` entry instants (and
     per-entry random directions) drawn from the recorded seed over the SAME dataset, exiting
@@ -86,7 +96,7 @@ import uuid
 from ..config import Config, PROFILE_DEFAULT, STRATEGY_TAPE_ID
 from .bars import BarStore
 from .datasets import DatasetIntegrityError, DatasetNotFound, DatasetStore
-from .levels import compute_levels
+from .levels import compute_levels, CLASS_A, CLASS_B, CLASS_C
 from .marks import r_basis
 from .store import BacktestRecord, JournalStore
 
@@ -113,6 +123,7 @@ __all__ = [
     "BacktestRunner",
     "EXIT_DATASET_END",
     "EXIT_HORIZON",
+    "EXIT_REWARD_TARGET",
     "EXIT_R_STOP",
     "EXIT_STATE_FLIP",
     "NULL_SETUP_TYPE",
@@ -136,6 +147,9 @@ NULL_SETUP_TYPE = "random_null"
 
 # Exit reasons (one explicit copy each — the iter-15 own-copy lesson).
 EXIT_R_STOP = "r_stop"
+# era-4 J-05: the class-scaled take-profit exit (structure_tape only — v1/null trades carry no
+# ``target_price`` and so can never reach this reason).
+EXIT_REWARD_TARGET = "reward_target"
 EXIT_HORIZON = "horizon"
 EXIT_STATE_FLIP = "state_flip"
 EXIT_DATASET_END = "dataset_end"
@@ -177,6 +191,84 @@ def _level_provenance(level: dict, zone: dict) -> dict:
     return {"price": level["price"], "timeframe": level["timeframe"], "class": zone["class"]}
 
 
+# --- class-scaled stop + reward-target (era-4 capability 5, J-05; structure_tape trades only) -----
+
+
+def _class_scaled_invalidation(
+    entry_price: float, level_price: float, level_class: str, direction: str, config: Config
+) -> float:
+    """The class-scaled, LEVEL-relative invalidation for a structure_tape trade (Data Contract row
+    41 extension): a stop placed ``config.structure_tape_stop_bps_by_class[level_class]`` basis
+    points beyond the ARMING LEVEL's own price (never the entry fill price — goal.md's "a stop
+    ~1bp beyond it" names the level, not wherever the entry print landed inside the confirmation
+    band), on the adverse side (below for a long, above for a short).
+
+    A rejection entry may arm anywhere inside the proximity band, on EITHER side of the level, so
+    the level-relative price alone could occasionally land AT OR THROUGH the entry print itself
+    (an invalid stop — one that would already be violated at arm time). The invalidation is
+    therefore the level-relative price when it is genuinely on the adverse side of entry, else a
+    fallback at the SAME class-bps distance measured from the entry price instead (still
+    config-owned, still the identical class distance — merely re-anchored so the stop is always
+    structurally valid). Distinct from the shared, spread-based ``_synthetic_invalidation``
+    v1/null keep calling unparameterized (v1 has no arming level to anchor a stop to)."""
+    band = level_price * (config.structure_tape_stop_bps_by_class[level_class] / 10_000.0)
+    if direction == "long":
+        level_relative = level_price - band
+        return level_relative if level_relative < entry_price else entry_price - band
+    level_relative = level_price + band
+    return level_relative if level_relative > entry_price else entry_price + band
+
+
+def _zone_nearest_price(zone: dict, entry_price: float) -> float:
+    """The zone's own member level NEAREST ``entry_price`` — a confluence zone spans a small price
+    range (bounded by ``sr_confluence_band_bps``); its nearest member is the honest "edge of
+    structure" price representing it for distance comparisons, never an arbitrary anchor."""
+    return min(zone["levels"], key=lambda lvl: abs(lvl["price"] - entry_price))["price"]
+
+
+def _next_opposing_zone_price(
+    zones: list[dict], arming_zone: dict, entry_price: float, direction: str
+) -> float | None:
+    """era-4 J-05: the nearest OTHER zone's representative price on the side ``direction`` implies
+    (above entry for a long, below for a short) — the reward-target's "next opposing level",
+    excluding the arming zone itself BY IDENTITY (a rejection entry sits AT its own arming level's
+    price, which must never be mistaken for its own target). ``None`` when nothing qualifies on
+    that side — an honest fallback; the reward-target then bounds by the class R-multiple alone,
+    never a fabricated level."""
+    candidates = [_zone_nearest_price(z, entry_price) for z in zones if z is not arming_zone]
+    if direction == "long":
+        side = [p for p in candidates if p > entry_price]
+    else:
+        side = [p for p in candidates if p < entry_price]
+    if not side:
+        return None
+    return min(side, key=lambda p: abs(p - entry_price))
+
+
+def _class_scaled_target(
+    entry_price: float,
+    direction: str,
+    level_class: str,
+    r_basis_value: float,
+    opposing_price: float | None,
+    config: Config,
+) -> float:
+    """era-4 J-05: the reward-target price for a structure_tape trade — "R:R toward the next
+    opposing level" (goal.md), genuinely config-bounded both ways. The take-profit distance is the
+    SMALLER of (a) this class's R-multiple (``structure_tape_reward_r_multiple_by_class``) times
+    the trade's own R basis, and (b) the distance to ``opposing_price`` (resolved at arm time from
+    the SAME as-of ``compute_levels`` read — never a second/future levels read) when one was
+    found. Bounding by the real next opposing level keeps the target honest (never demanding a
+    move past already-detected structure); bounding by the class multiple keeps it from demanding
+    an unrealistic R when that zone sits very far away. ``opposing_price`` is ``None`` when no
+    zone qualified on that side — an honest fallback to the pure R-multiple alone."""
+    sign = 1.0 if direction == "long" else -1.0
+    distance = config.structure_tape_reward_r_multiple_by_class[level_class] * r_basis_value
+    if opposing_price is not None:
+        distance = min(distance, abs(opposing_price - entry_price))
+    return entry_price + sign * distance
+
+
 def _aggregate(trades: list[dict]) -> dict:
     """The report aggregates over one trade population (setup or null), computed ONCE here.
 
@@ -211,6 +303,31 @@ def _aggregate(trades: list[dict]) -> dict:
         "win_rate": win_rate,
         "max_drawdown_r": max_dd,
     }
+
+
+def _aggregate_by_class(trades: list[dict], config: Config) -> dict:
+    """era-4 J-05 (Data Contract row 42): the per-class (A/B/C) PnL breakdown — the SAME
+    ``_aggregate`` computed over each class's OWN partition of ``trades`` (keyed by
+    ``trade["level"]["class"]``; structure_tape trades only — v1/null trades carry no ``level``
+    key and so contribute to NO class, an honest all-empty three-way split for a strategy that
+    never touches levels at all). Always all THREE classes, computed ONCE here at persist time —
+    this module's own established discipline (never re-derived at read, unlike
+    ``pnl_ledger.ledger_projection``'s read-time label). Sub-minimum-n classes carry
+    ``insufficient_sample`` (``n`` still present) — REUSES the existing ``pnl_min_sample_size``
+    floor (the ``edge_report.py`` precedent: "reuses that field rather than minting a third
+    minimum"), never a fourth new threshold. A class with zero trades is the honest
+    ``_aggregate([])`` emptiness (n=0, rates ``None``), never fabricated."""
+    by_class: dict[str, list[dict]] = {CLASS_A: [], CLASS_B: [], CLASS_C: []}
+    for t in trades:
+        level = t.get("level")
+        if level is not None:
+            by_class[level["class"]].append(t)
+    breakdown: dict[str, dict] = {}
+    for cls in (CLASS_A, CLASS_B, CLASS_C):
+        agg = _aggregate(by_class[cls])
+        agg["insufficient_sample"] = agg["n"] < config.pnl_min_sample_size
+        breakdown[cls] = agg
+    return breakdown
 
 
 class BacktestRunner:
@@ -294,6 +411,11 @@ class BacktestRunner:
                 "config_fingerprint": run_config.config_fingerprint(),
                 "trades": trades,
                 "aggregates": _aggregate(trades),
+                # era-4 J-05 (Data Contract row 42): the per-class (A/B/C) breakdown of the SAME
+                # trade population above — computed once here, alongside the strategy-level
+                # aggregate, and served verbatim ever after (never the null baseline, which is
+                # strategy-agnostic and carries no level/class provenance at all).
+                "aggregates_by_class": _aggregate_by_class(trades, self._config),
                 "null_baseline": {
                     "seed": params["null_baseline_seed"],
                     "entry_count": self._config.backtest_null_entry_count,
@@ -470,8 +592,10 @@ class BacktestRunner:
                     point, bar_store, symbol, epoch_anchor + point.timestamp, entries, config
                 )
                 if arm is not None:
-                    direction, setup_type, level = arm
-                    position = self._arm_trade(i, point, setup_type, direction, level=level)
+                    direction, setup_type, level, opposing_price = arm
+                    position = self._arm_trade(
+                        i, point, setup_type, direction, level=level, opposing_price=opposing_price
+                    )
                     cooldown_until = point.timestamp + cooldown
         if position is not None:
             trades.append(self._close_trade(position, path[-1], EXIT_DATASET_END))
@@ -485,21 +609,28 @@ class BacktestRunner:
         as_of_epoch: float,
         entries: dict,
         config: Config,
-    ) -> tuple[str, str, dict] | None:
+    ) -> tuple[str, str, dict, float | None] | None:
         """One flat-event arming check: resolve which reading (if any) the CURRENT tape state
         confirms, and — only then — read the row-39 levels as of THIS event's own absolute
         timestamp and test every member level of every confluence zone (an unclassified lone
         level carries no class and never arms) in the module's own served, deterministic order.
-        Returns ``(direction, setup_type, level_provenance)`` for the FIRST qualifying level, or
-        ``None``. The state check runs FIRST so a non-confirming tick (``unclear`` or a state
-        this strategy does not read) never pays for a levels computation at all."""
+        Returns ``(direction, setup_type, level_provenance, next_opposing_zone_price)`` for the
+        FIRST qualifying level, or ``None``. The state check runs FIRST so a non-confirming tick
+        (``unclear`` or a state this strategy does not read) never pays for a levels computation
+        at all.
+
+        ``next_opposing_zone_price`` (era-4 J-05) is resolved from this SAME ``compute_levels``
+        result (never a second/future levels read — the no-lookahead discipline) via
+        ``_next_opposing_zone_price``, feeding the class-scaled reward-target exit; ``None`` when
+        no zone qualifies on the side ``direction`` implies."""
         reading = _structure_tape_reading(point.tape_state, entries)
         if reading is None:
             return None
         direction, setup_type = reading
         result = compute_levels(bar_store, symbol, as_of_epoch, config)
         band_bps = entries["proximity_band_bps"]
-        for zone in result["confluence_zones"]:
+        zones = result["confluence_zones"]
+        for zone in zones:
             for level in zone["levels"]:
                 price = level["price"]
                 if setup_type == _STRUCTURE_TAPE_REJECTION:
@@ -508,7 +639,8 @@ class BacktestRunner:
                 else:  # breakthrough — the studies' level-cross technique (price beyond the level)
                     qualifies = point.last > price if direction == "long" else point.last < price
                 if qualifies:
-                    return direction, setup_type, _level_provenance(level, zone)
+                    opposing_price = _next_opposing_zone_price(zones, zone, point.last, direction)
+                    return direction, setup_type, _level_provenance(level, zone), opposing_price
         return None
 
     # --- the seeded random-entry null baseline (same exits, fees, slippage) --------------------
@@ -562,37 +694,60 @@ class BacktestRunner:
         direction: str,
         *,
         level: dict | None = None,
+        opposing_price: float | None = None,
     ) -> dict:
-        """Open one simulated trade at a recorded event. The synthetic invalidation is the
-        studies' REUSED helper (adverse side, spread multiple with floor) and R flows through
-        the ONE shared ``marks.r_basis`` — never a second formula. ``level`` (era-4 J-04) is the
-        arming level's provenance for a ``structure_tape`` trade; v1 and the null baseline never
-        pass it, so their trade dicts carry no ``level`` key at all (byte-identical to before)."""
-        invalidation = _synthetic_invalidation(point.last, point.spread, direction, self._config)
+        """Open one simulated trade at a recorded event. ``level`` (era-4 J-04) is the arming
+        level's provenance for a ``structure_tape`` trade; v1 and the null baseline never pass it,
+        so their trade dicts carry no ``level`` key at all (byte-identical to before).
+
+        v1/null (``level is None``): the invalidation is the studies' REUSED, spread-based helper
+        — UNCHANGED. ``structure_tape`` (``level is not None``, era-4 J-05): the invalidation is
+        the NEW class-scaled, level-relative ``_class_scaled_invalidation``, and the position also
+        carries a ``target_price`` (the class-scaled reward target, bounded by ``opposing_price`` —
+        the next opposing level resolved at arm time, or ``None``). Either way R flows through the
+        ONE shared ``marks.r_basis`` — never a second formula."""
+        if level is not None:
+            invalidation = _class_scaled_invalidation(
+                point.last, level["price"], level["class"], direction, self._config
+            )
+        else:
+            invalidation = _synthetic_invalidation(point.last, point.spread, direction, self._config)
+        r = r_basis(point.last, invalidation)
         position = {
             "index": index,
             "entry_ts": point.timestamp,
             "entry_price": point.last,
             "entry_spread": point.spread,
             "invalidation_price": invalidation,
-            "r_basis": r_basis(point.last, invalidation),
+            "r_basis": r,
             "setup_type": setup_type,
             "direction": direction,
             "opposing_state": _opposing_control_state(direction),
         }
         if level is not None:
             position["level"] = level
+            position["target_price"] = _class_scaled_target(
+                point.last, direction, level["class"], r, opposing_price, self._config
+            )
         return position
 
     def _exit_reason(self, trade: dict, point: _PathPoint, horizon: float) -> str | None:
         """The exit decision at ONE recorded event, in the documented fixed precedence:
-        r_stop (a recorded print at/through the synthetic invalidation), then state_flip (the
-        opposing control state reads), then horizon (logical time since entry at/past the
-        configured horizon). ``None`` = still open."""
+        r_stop (a recorded print at/through the synthetic invalidation), then reward_target (era-4
+        J-05: a recorded print at/through the class-scaled take-profit — ``structure_tape`` trades
+        only, via their ``target_price`` key; v1/null trades carry no such key and can never reach
+        this branch), then state_flip (the opposing control state reads), then horizon (logical
+        time since entry at/past the configured horizon). ``None`` = still open."""
         if trade["direction"] == "long" and point.last <= trade["invalidation_price"]:
             return EXIT_R_STOP
         if trade["direction"] == "short" and point.last >= trade["invalidation_price"]:
             return EXIT_R_STOP
+        target_price = trade.get("target_price")
+        if target_price is not None:
+            if trade["direction"] == "long" and point.last >= target_price:
+                return EXIT_REWARD_TARGET
+            if trade["direction"] == "short" and point.last <= target_price:
+                return EXIT_REWARD_TARGET
         if point.tape_state == trade["opposing_state"]:
             return EXIT_STATE_FLIP
         if point.timestamp - trade["entry_ts"] >= horizon:
@@ -619,7 +774,10 @@ class BacktestRunner:
         recorded spread contributes zero slippage — honest absence). GROSS is measured from the
         recorded prices; NET from the adjusted fills minus both fills' fees. The fixed
         ``strategy_dollars_per_r`` notional makes R and $ two views of one measurement:
-        ``shares = dollars_per_r / R basis``."""
+        ``shares = dollars_per_r / R basis`` — v1/null, UNCHANGED. ``structure_tape`` (era-4 J-05,
+        ``"level" in trade``): ``shares`` is scaled by the arming level's class size multiple
+        (``structure_tape_size_multiple_by_class``) over the SAME fixed notional — still a
+        PER-TRADE SIMULATED notional only, never a real order."""
         config = self._config
         direction = trade["direction"]
         sign = 1.0 if direction == "long" else -1.0
@@ -629,7 +787,11 @@ class BacktestRunner:
         exit_slip = exit_spread * config.strategy_slippage_spread_fraction
         entry_fill = trade["entry_price"] + sign * entry_slip
         exit_fill = point.last - sign * exit_slip
-        shares = config.strategy_dollars_per_r / trade["r_basis"]
+        if "level" in trade:
+            size_multiple = config.structure_tape_size_multiple_by_class[trade["level"]["class"]]
+            shares = size_multiple * config.strategy_dollars_per_r / trade["r_basis"]
+        else:
+            shares = config.strategy_dollars_per_r / trade["r_basis"]
         gross_move = sign * (point.last - trade["entry_price"])
         fill_move = sign * (exit_fill - entry_fill)
         fee = max(config.strategy_fee_per_share * shares, config.strategy_fee_min_per_trade)
@@ -663,6 +825,7 @@ class BacktestRunner:
         }
         if "level" in trade:  # era-4 J-04: the arming level's provenance (structure_tape only)
             closed["level"] = trade["level"]
+            closed["target_price"] = trade["target_price"]  # era-4 J-05: the reward-target price
         return closed
 
     # --- persistence (single writer queue; result computed once, served verbatim) --------------

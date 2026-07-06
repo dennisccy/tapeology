@@ -155,3 +155,20 @@ def test_vendor_trading_namespace_confined_to_the_read_only_adapter():
         "vendor trading-namespace symbols outside the one documented read-only adapter: "
         f"{offenders}"
     )
+
+
+def test_class_scaled_sizing_and_reward_target_code_carries_no_execution_vocabulary():
+    """era-4 J-05: the class-scaled position-size multiplier and the reward-target take-profit
+    exit are new code in ``research/backtests.py`` -- a SIMULATED notional (over the existing
+    fixed ``strategy_dollars_per_r``) and a take-profit PRICE, never an order/route/broker call.
+    The repo-wide sweeps above already cover this file, but this test names the new capability
+    explicitly, so the "position size places/routes/transmits nothing" guard is traceable to J-05,
+    not merely inherited by accident."""
+    path = REPO_APPS / "backend" / "app" / "research" / "backtests.py"
+    text = path.read_text()
+    # Confirm the scan actually sees the new code (a path/rename bug must never silently pass).
+    assert "structure_tape_size_multiple_by_class" in text
+    assert "structure_tape_reward_r_multiple_by_class" in text
+    assert "structure_tape_stop_bps_by_class" in text
+    for pattern in TIER1_PATTERNS + TIER2_PATTERNS:
+        assert pattern not in text, f"{pattern!r} found in the class-scaled sizing/exit code"

@@ -130,6 +130,13 @@ def test_backtest_accepts_structure_tape_strategy_id(ctx):
     # No classified levels were ever recorded for this symbol in this test -- an honest empty
     # trade list (zero fabricated arms), never a fallback to v1-like behaviour.
     assert payload["result"]["trades"] == []
+    # era-4 J-05 (Data Contract row 42): the per-class breakdown is served on this SAME route --
+    # no new endpoint -- honestly all-empty here (zero trades, so zero classified), never omitted.
+    by_class = payload["result"]["aggregates_by_class"]
+    assert set(by_class) == {"A", "B", "C"}
+    for cls in ("A", "B", "C"):
+        assert by_class[cls]["n"] == 0
+        assert by_class[cls]["insufficient_sample"] is True
 
 
 def test_unregistered_strategy_id_is_still_422_never_coerced(ctx):

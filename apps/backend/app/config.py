@@ -1193,6 +1193,48 @@ class Config:
         default_factory=lambda: {"long": "buyer_control", "short": "seller_control"}
     )
 
+    # --- Structure-and-tape era: CLASS-SCALED stop, reward, and simulated size for
+    # ``structure_tape`` (era-4 capability 5, J-05; Data Contract row 41 extension) -- the SAME
+    # RESEARCH-DEFAULT discipline as every field above: every value lives in config with its
+    # rationale documented HERE, no literal in ``research/backtests.py``. Each is a dict KEYED BY
+    # THE CONFLUENCE CLASS (``research/levels.py``'s ``CLASS_A``/``CLASS_B``/``CLASS_C`` strings --
+    # the only three grades a classified level ever carries), so a class-scaling read can never
+    # silently fall back to a fabricated default the way a single shared float would.
+    #
+    # PER-CLASS STOP (basis points of the ARMING LEVEL's OWN price -- never the entry fill price):
+    # goal.md's own "an A-class level defended on the tape can justify a stop ~1bp beyond it" names
+    # the LEVEL, not wherever the entry print happened to land inside the confirmation band, so the
+    # stop is anchored to the level's price. Class A earns the tightest (1.0 bps); B/C are
+    # progressively wider -- a lower-conviction level deserves more room, never less. This is a NEW,
+    # level-relative invalidation (``_class_scaled_invalidation``) -- distinct from the shared,
+    # spread-based ``_synthetic_invalidation`` v1/null keep calling unparameterized (v1 has no
+    # arming level to anchor a stop to).
+    structure_tape_stop_bps_by_class: dict = field(
+        default_factory=lambda: {"A": 1.0, "B": 5.0, "C": 10.0}
+    )
+    # PER-CLASS REWARD TARGET (an R-multiple of the trade's OWN R basis): "R:R toward the next
+    # opposing level" (goal.md), genuinely config-bounded BOTH ways -- the take-profit distance is
+    # the SMALLER of (a) this class's R-multiple times the trade's R basis, and (b) the distance
+    # from entry to the next confluence zone on the side ``direction`` implies, resolved from the
+    # SAME as-of ``compute_levels`` read already made to arm the trade (never a second/future levels
+    # read). Bounding by the real next opposing level keeps the target honest (never demanding a
+    # move past structure this classifier has itself already detected); bounding by the class-owned
+    # multiple keeps it from demanding an unrealistic R when the next opposing zone sits very far
+    # away, or none exists on that side at all -- an honest fallback, never a fabricated level.
+    # Class A is granted the most generous multiple (a tightly-defended level "justifies" reaching
+    # further -- goal.md's "a more favourable reward target"); B/C progressively smaller.
+    structure_tape_reward_r_multiple_by_class: dict = field(
+        default_factory=lambda: {"A": 3.0, "B": 2.0, "C": 1.0}
+    )
+    # PER-CLASS SIMULATED SIZE MULTIPLE (applied OVER the existing fixed ``strategy_dollars_per_r``
+    # notional -- never a second dollar constant): ``shares = multiple * strategy_dollars_per_r / R
+    # basis``. Better class -> larger simulated notional (goal.md: "better class -> ... a larger
+    # simulated position"), never a real order/position -- still a PER-TRADE SIMULATED notional only
+    # (the no-capital-management anti-goal), merely scaled by conviction.
+    structure_tape_size_multiple_by_class: dict = field(
+        default_factory=lambda: {"A": 2.0, "B": 1.0, "C": 0.5}
+    )
+
     def profile_definition(self, profile_id: str) -> dict | None:
         """The config-owned descriptor for ``profile_id`` (Data Contract row 33) — the
         ``strategy_definition`` pattern applied to profiles: THIS method is the ONE place that
@@ -1278,9 +1320,16 @@ class Config:
             breakthrough (follow, ``structure_tape_breakthrough_state_by_direction``, the studies'
             level-cross technique). The EXISTING five-state tape vocabulary only — no new state.
             Still ``one_open_trade`` and reuses the EXISTING ``study_arm_cooldown_seconds``.
-          * EXITS / FEES / SLIPPAGE / DOLLAR CONVERSION — IDENTICAL to v1 (class-scaled
-            stop/reward/size is J-05, out of scope here): the same R-stop, horizon, state-flip,
-            dataset_end, fee model, slippage model, and dollars-per-R notional, unchanged.
+          * EXITS — R-stop and reward-target are CLASS-SCALED (era-4 capability 5, J-05):
+            ``class_scaled_invalidation_beyond_level`` (``structure_tape_stop_bps_by_class``, a NEW
+            level-relative stop -- distinct from v1's spread-based one) and a NEW
+            ``class_r_multiple_bounded_by_next_opposing_level`` reward-target exit
+            (``structure_tape_reward_r_multiple_by_class``). Horizon, state-flip, and dataset_end
+            are IDENTICAL to v1 (the same config fields, unchanged).
+          * FEES / SLIPPAGE / DOLLAR CONVERSION — IDENTICAL to v1: the same fee model, slippage
+            model, and fixed ``strategy_dollars_per_r`` notional.
+          * SIZE — ``size_multiple_by_class`` (``structure_tape_size_multiple_by_class``, era-4
+            J-05) scales the v1-identical ``dollars_per_r`` notional by the arming level's class.
         """
         if strategy_id == STRATEGY_TAPE_ID:
             return {
@@ -1295,9 +1344,12 @@ class Config:
                 },
                 "exits": {
                     "r_stop": {
-                        "rule": "synthetic_invalidation_at_arm",
-                        "spread_multiple": self.study_occurrence_r_spread_multiple,
-                        "floor": self.study_occurrence_r_floor,
+                        "rule": "class_scaled_invalidation_beyond_level",
+                        "stop_bps_by_class": dict(self.structure_tape_stop_bps_by_class),
+                    },
+                    "reward_target": {
+                        "rule": "class_r_multiple_bounded_by_next_opposing_level",
+                        "r_multiple_by_class": dict(self.structure_tape_reward_r_multiple_by_class),
                     },
                     "horizon_seconds": self.strategy_exit_horizon_seconds,
                     "state_flip": {"rule": "opposing_control_state"},
@@ -1309,6 +1361,7 @@ class Config:
                 },
                 "slippage": {"spread_fraction": self.strategy_slippage_spread_fraction},
                 "dollars_per_r": self.strategy_dollars_per_r,
+                "size_multiple_by_class": dict(self.structure_tape_size_multiple_by_class),
             }
         if strategy_id != STRATEGY_V1_ID:
             return None
@@ -1565,7 +1618,8 @@ class Config:
             # carrying a different (unapplied) candidate override value MUST share a fingerprint.
             # Pinned both ways in tests/test_profile_equivalence.py.
             "profile_candidate_warmup_min_events",
-            # The structure_tape strategy's own config fields (era-4 capability 4, J-04): a
+            # The structure_tape strategy's own config fields (era-4 capability 4, J-04; era-4
+            # capability 5, J-05 adds the class-scaled stop/reward/size fields on the SAME basis): a
             # SEPARATE, additive strategy registered beside the frozen v1 — read ONLY when
             # structure_tape itself is selected (never by a v1 backtest, the tape engine, or any
             # study/PnL-ledger computation this fingerprint stamps onto every persisted record for
@@ -1573,12 +1627,18 @@ class Config:
             # NOT move the frozen ``default``-profile/``v1``-strategy fingerprint this hash is
             # pinned to (the identical ``sr_*`` rationale above, applied to a different brand-new,
             # unrelated strategy). Two journals identical in every FINGERPRINTED threshold but
-            # configured with a different proximity band or tape-confirmation mapping MUST share a
-            # fingerprint. Pinned by a fingerprint-stability test + the real-threshold counter-test
-            # in tests/test_backtests.py.
+            # configured with a different proximity band, tape-confirmation mapping, class-scaled
+            # stop, reward target, or size multiple MUST share a fingerprint. A structure_tape
+            # report's OWN class-scaled config is instead provenanced by the full ``strategy`` dict
+            # each report already embeds verbatim (never by ``config_fingerprint``, which stays
+            # scoped to the frozen default/v1 threshold set). Pinned by a fingerprint-stability test
+            # + the real-threshold counter-test in tests/test_backtests.py.
             "structure_tape_proximity_band_bps",
             "structure_tape_rejection_state_by_direction",
             "structure_tape_breakthrough_state_by_direction",
+            "structure_tape_stop_bps_by_class",
+            "structure_tape_reward_r_multiple_by_class",
+            "structure_tape_size_multiple_by_class",
         }
         payload = {k: v for k, v in asdict(self).items() if k not in excluded}
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
