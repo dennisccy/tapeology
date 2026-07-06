@@ -57,6 +57,7 @@ from .base import (
     LiveRecord,
     MarketClock,
     NoDataForWindow,
+    RawBar,
     RawQuote,
     RawTrade,
     SymbolMatch,
@@ -85,6 +86,25 @@ DEFAULT_FEED = "iex"
 # operational constant as the feeder's FEED_PACE_SECONDS / the API's WS_PUSH_INTERVAL).
 LIVE_TEARDOWN_GRACE_SECONDS = 6.0
 
+# --- Multi-timeframe bar fetch (era-4, J-01) -----------------------------------------------------
+# Maps each of ``CONFIG.bar_timeframes``' neutral strings to the vendor's ``TimeFrame(amount, unit)``
+# constructor arguments (``unit`` is a ``TimeFrameUnit`` MEMBER NAME, resolved against the lazily
+# imported enum inside ``fetch_bars`` — never at module import time, so the no-creds/simulated/test
+# paths still avoid the pandas/numpy-heavy SDK import cost). This is the ONE place a neutral
+# timeframe string is translated to a vendor type; ``config.py`` owns only the neutral vocabulary.
+# 4h/8h are expressed as Hour x amount (there is no dedicated vendor unit for them).
+_TIMEFRAME_PARTS: dict[str, tuple[int, str]] = {
+    "1m": (1, "Minute"),
+    "5m": (5, "Minute"),
+    "15m": (15, "Minute"),
+    "1h": (1, "Hour"),
+    "4h": (4, "Hour"),
+    "8h": (8, "Hour"),
+    "1d": (1, "Day"),
+    "1w": (1, "Week"),
+    "1mo": (1, "Month"),
+}
+
 # Process-lifetime cache of the (rarely-changing) tradable-symbol universe, so the search box
 # does not re-fetch ~14k assets on every keystroke. Warmed once at startup (J-30) via
 # ``warm_symbol_universe`` and otherwise populated lazily on first search. This module-level cell
@@ -97,6 +117,38 @@ _ASSET_UNIVERSE: list[SymbolMatch] | None = None
 # CONFIG.historical_cache_max_entries (LRU) + CONFIG.historical_cache_ttl_seconds (TTL) so memory
 # stays flat. Maps key -> (stored_at_monotonic, HistoricalWindow); insertion order = LRU order.
 _HISTORICAL_WINDOW_CACHE: "dict[tuple, tuple[float, HistoricalWindow]]" = {}
+
+# Process-lifetime timestamp (monotonic) of the last REAL bar-fetch vendor call (era-4, J-01),
+# read/written only by ``_throttle_bar_fetch`` below. ``None`` means no call has happened yet in
+# this process, so the very first call never waits.
+_LAST_BAR_FETCH_MONOTONIC: float | None = None
+
+
+def _bar_fetch_end_clamp(end: datetime, delay_seconds: float, now: datetime | None = None) -> datetime:
+    """The free-plan recency-delay guard (J-01): the effective bar-fetch window END, clamped so a
+    request never asks for (and so never receives) the still-embargoed most-recent bar. Alpaca's
+    free market-data plan serves historical bars roughly ``delay_seconds`` behind real time.
+
+    Pure and independently testable: accepts an explicit ``now`` (defaulting to the real wall
+    clock) so a test asserts the clamp deterministically with no time mocking."""
+    reference = now if now is not None else datetime.now(timezone.utc)
+    cutoff = reference - timedelta(seconds=delay_seconds)
+    return min(end, cutoff)
+
+
+def _throttle_bar_fetch() -> None:
+    """Space consecutive REAL bar-fetch vendor calls at least ``60 / CONFIG.bar_rate_limit_per_minute``
+    seconds apart (J-01 free-tier discipline): a bulk multi-timeframe backfill must throttle to the
+    entitlement rather than bursting past it. A single interactive record request only ever waits
+    behind its OWN immediately-prior call — never a fixed extra delay when nothing preceded it."""
+    global _LAST_BAR_FETCH_MONOTONIC
+    min_interval = 60.0 / CONFIG.bar_rate_limit_per_minute
+    now = time.monotonic()
+    if _LAST_BAR_FETCH_MONOTONIC is not None:
+        remaining = min_interval - (now - _LAST_BAR_FETCH_MONOTONIC)
+        if remaining > 0:
+            time.sleep(remaining)
+    _LAST_BAR_FETCH_MONOTONIC = time.monotonic()
 
 
 def _env(name: str) -> str:
@@ -169,13 +221,15 @@ def _cache_put(key: tuple, window: HistoricalWindow) -> None:
 
 
 def _clear_caches() -> None:
-    """Reset the process-lifetime caches (the window cache + the warmed universe).
+    """Reset the process-lifetime caches (the window cache + the warmed universe + the era-4
+    bar-fetch throttle timestamp).
 
     For tests/operators only — production never needs to clear; this keeps test isolation explicit
     rather than reaching into the module globals from the test files."""
-    global _ASSET_UNIVERSE
+    global _ASSET_UNIVERSE, _LAST_BAR_FETCH_MONOTONIC
     _ASSET_UNIVERSE = None
     _HISTORICAL_WINDOW_CACHE.clear()
+    _LAST_BAR_FETCH_MONOTONIC = None
 
 
 class AlpacaAdapter:
@@ -438,6 +492,63 @@ class AlpacaAdapter:
         trades.sort(key=lambda t: t.epoch)
         quotes.sort(key=lambda q: q.epoch)
         return trades, quotes
+
+    # --- Multi-timeframe historical bars (era-4, J-01) -----------------------------------
+
+    def fetch_bars(self, symbol: str, start, end, timeframe: str) -> tuple[RawBar, ...]:
+        """Fetch the REAL OHLC candle series for ``symbol`` over ``[start, end)`` at ``timeframe``
+        (one of ``CONFIG.bar_timeframes`` — the route validates this before calling in).
+
+        Free-tier discipline (J-01): the recency-delay guard clamps the effective fetch end so the
+        still-embargoed most-recent (~15-min-delayed) bar is never requested (an entirely-embargoed
+        window short-circuits to an empty tuple with NO vendor call); the rate-throttle spaces
+        consecutive real calls to the entitlement. Honest, never fabricated: an empty vendor
+        result is returned as an empty tuple (the caller — the bar store's ``record`` — decides how
+        to surface that). Runs under the SAME real call-level HTTP deadline as ``fetch_historical``
+        (``VendorTimeout`` propagates on a slow/oversized window).
+        """
+        from alpaca.data.historical import StockHistoricalDataClient
+        from alpaca.data.requests import StockBarsRequest
+        from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+
+        sym = symbol.strip().upper()
+        effective_end = _bar_fetch_end_clamp(end, CONFIG.bar_recency_delay_seconds)
+        if effective_end <= start:
+            return ()  # the whole requested window falls inside the free-plan recency embargo
+
+        feed = self._data_feed(self.historical_feed)  # SIP for historical (J-36), override-aware
+        amount, unit_name = _TIMEFRAME_PARTS[timeframe]
+        vendor_timeframe = TimeFrame(amount, TimeFrameUnit(unit_name))
+
+        _throttle_bar_fetch()
+        client = self._with_http_timeout(
+            StockHistoricalDataClient(_env(ENV_API_KEY), _env(ENV_API_SECRET))
+        )
+        with _mapped_vendor_timeout():
+            response = client.get_stock_bars(
+                StockBarsRequest(
+                    symbol_or_symbols=sym,
+                    timeframe=vendor_timeframe,
+                    start=start,
+                    end=effective_end,
+                    feed=feed,
+                )
+            )
+        bars = [
+            RawBar(
+                sym,
+                timeframe,
+                b.timestamp.timestamp(),
+                float(b.open),
+                float(b.high),
+                float(b.low),
+                float(b.close),
+                int(b.volume),
+            )
+            for b in response.data.get(sym, [])
+        ]
+        bars.sort(key=lambda b: b.epoch)
+        return tuple(bars)
 
     def _data_feed(self, feed_name: str | None = None):
         """Map a vendor-neutral feed NAME to the vendor's DataFeed enum (the ONLY place it appears).

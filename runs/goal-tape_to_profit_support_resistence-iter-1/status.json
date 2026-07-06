@@ -1,0 +1,28 @@
+{
+  "phase": "goal-tape_to_profit_support_resistence-iter-1",
+  "status": "complete",
+  "current_step": "closure_passed",
+  "updated_at": "2026-07-06T01:58:52.598865Z",
+  "started_at": "2026-07-05T23:51:50.377294Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/providers/adapters/base.py",
+    "apps/backend/app/providers/adapters/alpaca.py",
+    "apps/backend/app/research/bars.py",
+    "apps/backend/app/config.py",
+    "apps/backend/app/research/routes.py",
+    "apps/backend/app/mcp/__init__.py",
+    "apps/backend/tests/fakes.py",
+    "apps/backend/tests/test_bars.py",
+    "apps/backend/tests/test_bars_api.py",
+    "apps/backend/tests/test_mcp_server.py",
+    "apps/backend/tests/fixtures/bars/",
+    "apps/backend/scripts/generate_bar_fixtures.py",
+    "docs/handoffs/goal-tape_to_profit_support_resistence-iter-1-dev.md",
+    "reports/phase-goal-tape_to_profit_support_resistence-iter-1-implementation-summary.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "next_action": "review"
+}

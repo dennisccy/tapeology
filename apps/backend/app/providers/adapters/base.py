@@ -8,6 +8,11 @@ here — vendor specifics never leak outward, so a second vendor is one new adap
 The neutral contract is:
   * ``RawTrade`` / ``RawQuote`` — plain, vendor-free records (a UTC epoch-seconds timestamp
     plus the fields the engine needs). The adapter translates the vendor's response into these.
+  * ``RawBar`` (era-4, J-01) — a plain, vendor-free OHLC candle: symbol, timeframe label, a UTC
+    bar-open epoch-seconds timestamp, open/high/low/close, volume. ``fetch_bars`` is the
+    multi-timeframe historical-BAR counterpart to ``fetch_historical`` (which fetches raw
+    trades/quotes); the adapter translates the vendor's bar response into these — never a vendor
+    type crosses the seam.
   * ``HistoricalWindow`` — the result of one historical fetch (the symbol + its raw trades and
     quotes). ``HistoricalProvider`` maps these onto the engine's logical timeline.
   * ``SymbolNotTradable`` / ``NoDataForWindow`` — neutral failures the adapter raises so the
@@ -86,6 +91,24 @@ class HistoricalWindow:
 
 
 @dataclass(frozen=True)
+class RawBar:
+    """A vendor-neutral OHLC candle (era-4, J-01): symbol, timeframe label (e.g. ``"1d"``), the
+    UTC bar-OPEN epoch-seconds timestamp, open/high/low/close, volume. Self-describing (unlike
+    ``RawTrade``/``RawQuote``, which rely on the enclosing ``HistoricalWindow`` for their symbol)
+    because a stored bar series' individual candles are served directly (embedded on the series'
+    metadata) rather than through a second wrapper type."""
+
+    symbol: str
+    timeframe: str
+    epoch: float
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+
+
+@dataclass(frozen=True)
 class SymbolMatch:
     """One symbol-search suggestion."""
 
@@ -158,6 +181,14 @@ class MarketDataAdapter(Protocol):
     warmed, and it is the neutral entry the API's startup hook calls so ``main.py`` never names a
     vendor SDK or the universe cache. It MUST NOT raise (a warm failure is swallowed — search then
     falls back to its own lazy fetch).
+    ``fetch_bars`` (era-4, J-01) returns the REAL OHLC candle series for ``symbol`` over
+    ``[start, end)`` at the given neutral ``timeframe`` as an ordered tuple of ``RawBar`` (never a
+    vendor type) — a read-only reference call, like ``fetch_historical``. An empty tuple is a
+    normal, honest "no bars" answer (never fabricated); the caller (the bar store's ``record``)
+    decides how to surface that as an explicit refusal. Unlike ``fetch_historical``, there is no
+    separate unknown-symbol distinction here — a bar recording is an explicit, occasional research
+    action (not the watch hot-path), so a single round-trip returning empty is honest enough on
+    its own.
     """
 
     name: str
@@ -166,6 +197,9 @@ class MarketDataAdapter(Protocol):
         ...
 
     def fetch_historical(self, symbol: str, start, end) -> HistoricalWindow:
+        ...
+
+    def fetch_bars(self, symbol: str, start, end, timeframe: str) -> tuple[RawBar, ...]:
         ...
 
     def search_symbols(self, query: str) -> list[SymbolMatch]:

@@ -3,20 +3,20 @@
     "J-01": {
       "id": "J-01",
       "name": "Multi-timeframe historical bars are ingested and persisted (data foundation + free-plan probe)",
-      "status": "passing",
-      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-1",
-      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-1",
+      "status": "failing",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
-      "last_evidence_path": "reports/qa/goal-tape_to_profit_support_resistence-iter-1-qa.md (TC-01..TC-19 all PASS: keyless-fixture ingest->persist->read, byte-identical re-read, 503 missing-cred, 422 out-of-set timeframe, 404 unknown id, integrity/empty-window refusals, MCP byte-identity) + evaluator-run tests/test_bars.py+test_bars_api.py (28 passed)"
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-01 section: GET /research/bars -> 404; no RawBar/fetch_bars on adapter seam; no bar-store module)"
     },
     "J-02": {
       "id": "J-02",
       "name": "Deterministic support/resistance levels per timeframe",
       "status": "failing",
-      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-1",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
       "last_passing_iter": null,
       "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
-      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-1-dev.md (Known Issues: GET /research/levels still 404, no levels module) + evaluator grep confirmed no /research/levels route in app/ (as scoped — J-02 is next iteration)"
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-02 section: GET /research/levels -> 404; no S/R config section; no levels module)"
     },
     "J-03": {
       "id": "J-03",
@@ -31,10 +31,10 @@
       "id": "J-04",
       "name": "Tape-confirmed structure entries as a registered strategy",
       "status": "failing",
-      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-1",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
       "last_passing_iter": null,
       "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
-      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-1-dev.md (Known Issues: GET /research/strategies still 404) + evaluator grep confirmed no /research/strategies route in app/ (as scoped)"
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-04 section: GET /research/strategies -> 404; structure_tape backtest -> 422; verified by evaluator via config.py:1096 v1-only registry)"
     },
     "J-05": {
       "id": "J-05",
@@ -58,12 +58,12 @@
       "id": "J-07",
       "name": "The archived eras are unchanged (regression sentinel)",
       "status": "already_passing",
-      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-1",
-      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-1",
+      "last_verified_iter": "goal-tape_to_profit_support_resistence-iter-0",
+      "last_passing_iter": "goal-tape_to_profit_support_resistence-iter-0",
       "first_seen_iter": "goal-tape_to_profit_support_resistence-iter-0",
-      "last_evidence_path": "evaluator-run tests/test_observer_equivalence.py + tests/test_profile_equivalence.py (22 passed, byte-identical default) + live-computed Config().config_fingerprint()=='4d665603569b9dbf' (pinned, unmoved) + git diff b576c8f..HEAD -- apps/frontend/ empty (no tracked or untracked frontend change)"
+      "last_evidence_path": "docs/handoffs/goal-tape_to_profit_support_resistence-iter-0-dev.md (J-07 section) + evaluator-run equivalence suite 7/7 + zero apps/ source diff (git diff 15eacab..HEAD -- apps/ empty)"
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-07-06T03:40:00Z"
+  "updated_at": "2026-07-05T23:40:40Z"
 }

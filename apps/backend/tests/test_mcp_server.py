@@ -13,6 +13,7 @@ including the SDK's exception→``isError`` conversion.
 """
 
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -38,7 +39,9 @@ from app.mcp import (
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
-# Capability 6, verbatim — order and content are the advertised contract.
+# Capability 6, verbatim — order and content are the advertised contract. ``bars`` (era-4 J-01) is
+# the newest addition, positioned right after its ``datasets`` sibling (the same store+route+MCP
+# shape, mirrored end to end).
 EXPECTED_TOOLS = (
     "tape_state",
     "tape_features",
@@ -47,12 +50,15 @@ EXPECTED_TOOLS = (
     "analytics",
     "studies",
     "datasets",
+    "bars",
     "backtests",
     "pnl_ledger",
     "taxonomy",
     "ui_route_map",
     "get_endpoint",
 )
+
+FIXTURE_BAR_DIR = Path(__file__).parent / "fixtures" / "bars"
 
 # Every registered tool's endpoint has now shipped (``datasets`` at J-02, ``backtests`` at J-03,
 # ``pnl_ledger`` at J-04 — each moved to the live byte-identity coverage below with zero MCP code
@@ -90,6 +96,7 @@ def backend_paths(tmp_path_factory):
     return {
         "TAPEOLOGY_JOURNAL_DB": str(tmp_path_factory.mktemp("mcp-journal") / "journal.db"),
         "TAPEOLOGY_DATASET_DIR": str(tmp_path_factory.mktemp("mcp-datasets")),
+        "TAPEOLOGY_BAR_DIR": str(tmp_path_factory.mktemp("mcp-bars")),
     }
 
 
@@ -251,6 +258,29 @@ async def test_datasets_tool_byte_identical_on_a_non_empty_live_list(mcp_env):
     assert result.isError is False
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "datasets not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_bars_tool_byte_identical_on_a_non_empty_live_list(mcp_env, backend_paths):
+    """``bars`` (era-4 J-01) ships in the SAME iteration as its endpoint — there is no honest-404
+    state to prove a flip from (unlike the J-02/J-03/J-04 tools, which shipped after their MCP
+    entries already existed). Recording real bars needs live Alpaca credentials, which CI does not
+    have, so this proves byte-identity on a NON-EMPTY list by seeding the live backend's bar
+    directory with the committed KEYLESS fixture pair directly (no vendor call, no credentials
+    touched) — the same store directory the running backend's ``GET /research/bars`` reads fresh
+    on every call."""
+    bar_dir = Path(backend_paths["TAPEOLOGY_BAR_DIR"])
+    fixtures = list(FIXTURE_BAR_DIR.glob("*.json"))
+    assert fixtures, "the committed bar fixture directory must not be empty"
+    for fixture in fixtures:
+        shutil.copy(fixture, bar_dir / fixture.name)
+    result = await call_tool("bars", {})
+    rest = httpx.get(f"{mcp_env}/research/bars", timeout=5.0)
+    assert rest.status_code == 200
+    assert len(rest.json()["bar_series"]) >= 1, "the live list must be non-empty for this proof"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "bars not byte-identical"
 
 
 @pytest.mark.anyio

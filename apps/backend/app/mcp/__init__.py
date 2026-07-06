@@ -15,9 +15,10 @@ Result contract (locked by ``tests/test_mcp_server.py``):
   * non-2xx — the backend's ACTUAL status and payload surfaced explicitly: ``content[0].text``
     == the response body byte-for-byte, ``content[1].text`` == ``"HTTP <status> from GET
     <path>"``, ``isError`` true. Every registered tool's endpoint has shipped (``datasets`` at
-    J-02, ``backtests`` at J-03, ``pnl_ledger`` at J-04; ``/research/profiles`` — reached via
-    ``get_endpoint`` — at J-05); an allowlisted-but-UNKNOWN path (any unshipped ``/research/*``)
-    still surfaces the backend's honest 404 this way — never placeholder data.
+    (era-3) J-02, ``backtests`` at J-03, ``pnl_ledger`` at J-04; ``/research/profiles`` — reached
+    via ``get_endpoint`` — at J-05; ``bars`` at era-4 J-01); an allowlisted-but-UNKNOWN path (any
+    unshipped ``/research/*``) still surfaces the backend's honest 404 this way — never
+    placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
     no offline snapshot exists anywhere in this module).
@@ -85,6 +86,7 @@ _STATIC_PATHS: dict[str, str] = {
     "analytics": "/research/analytics",
     "studies": "/research/studies",
     "datasets": "/research/datasets",
+    "bars": "/research/bars",
     "backtests": "/research/backtests",
     "pnl_ledger": "/research/pnl/ledger",
     "taxonomy": "/research/taxonomy",
@@ -165,6 +167,15 @@ TOOLS: tuple[types.Tool, ...] = (
             "Read-only proxy of GET /research/datasets — recorded historical tape dataset "
             "metadata (checksum-verified on every load, with explicit integrity errors) JSON, "
             "verbatim."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="bars",
+        description=(
+            "Read-only proxy of GET /research/bars — recorded multi-timeframe OHLC bar-series "
+            "metadata and candles (checksum-verified on every load, with explicit integrity "
+            "errors) JSON, verbatim."
         ),
         inputSchema=_object_schema({}),
     ),

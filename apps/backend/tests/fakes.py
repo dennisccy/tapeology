@@ -19,6 +19,7 @@ from app.providers.adapters.base import (
     LiveRecord,
     MarketClock,
     NoDataForWindow,
+    RawBar,
     RawQuote,
     RawTrade,
     SymbolMatch,
@@ -124,6 +125,8 @@ class FakeAdapter:
         live_hold: asyncio.Event | None = None,
         fetch_timeout: bool = False,
         warm_raises: bool = False,
+        bars: tuple[RawBar, ...] | None = None,
+        bars_raise: Exception | None = None,
     ) -> None:
         self._available = available
         self._window = window
@@ -147,7 +150,13 @@ class FakeAdapter:
         self._warm_raises = warm_raises
         self._live_records = live_records or []
         self._live_hold = live_hold
+        # Era-4 (J-01) bar-fetch scripting: ``bars`` is the tuple ``fetch_bars`` returns on
+        # success (defaults to empty — a caller that needs real candles must pass some); a
+        # scripted ``bars_raise`` exception (e.g. ``VendorTimeout``) is raised instead when set.
+        self._bars = bars if bars is not None else ()
+        self._bars_raise = bars_raise
         self.fetch_calls: list[tuple] = []
+        self.fetch_bars_calls: list[tuple] = []
         self.search_calls: list[str] = []
         self.clock_calls = 0
         self.warm_calls = 0
@@ -203,6 +212,13 @@ class FakeAdapter:
             raise NoDataForWindow(symbol)
         assert self._window is not None, "FakeAdapter needs a window for a successful fetch"
         return self._window
+
+    def fetch_bars(self, symbol: str, start, end, timeframe: str) -> tuple[RawBar, ...]:
+        """The era-4 (J-01) bar-fetch analogue of ``fetch_historical`` — scripted, never real."""
+        self.fetch_bars_calls.append((symbol, start, end, timeframe))
+        if self._bars_raise is not None:
+            raise self._bars_raise
+        return self._bars
 
     def search_symbols(self, query: str) -> list[SymbolMatch]:
         self.search_calls.append(query)

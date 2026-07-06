@@ -1018,6 +1018,57 @@ class Config:
     # against the pinned default fingerprint test in ``tests/test_profile_equivalence.py``.
     promotion_min_sample_size: int = 5
 
+    # --- Structure-and-tape era: MULTI-TIMEFRAME BAR STORE (era-4 capability 1, J-01) -------------
+    # Where the bar store persists explicitly recorded multi-timeframe OHLC bar series (one JSON
+    # file per series) — mirrors ``dataset_dir`` exactly (the era-3 capability-1 precedent). It is
+    # ONLY a default here — the operator overrides it with the ``TAPEOLOGY_BAR_DIR`` env var (read
+    # in ``bar_dir_resolved`` below, the ``dataset_dir_resolved`` pattern) and tests point it at a
+    # temp dir the same way. The default is package-anchored (``apps/backend/.data/bars/``, covered
+    # by the repo's ``.data/`` gitignore entry) so it resolves identically whatever the process cwd
+    # is. Persistence is SCOPED: this dir holds explicitly recorded bar series ONLY — the live
+    # cockpit's tape is NEVER written here (recording is an explicit research action).
+    #
+    # EXCLUDED FROM ``config_fingerprint`` (see the exclusion set in ``config_fingerprint``) with
+    # the ``dataset_dir`` discipline: WHERE bar series are stored cannot affect any persisted
+    # research value, so two journals identical in every threshold but storing bars in different
+    # directories (or on different machines — the default embeds an absolute path) MUST share a
+    # fingerprint. Pinned by a fingerprint-stability test + the real-threshold counter-test
+    # (tests/test_bars.py).
+    bar_dir: str = str(Path(__file__).resolve().parents[1] / ".data" / "bars")
+
+    # The valid ``?timeframe=`` set for a bar recording — distinct from the EXISTING intra-second
+    # ``history_bar_sizes`` above (the tape engine's OHLC candle bin sizes in LOGICAL SECONDS for
+    # the live prediction chart; an unrelated concept that must not be conflated or collide). These
+    # are CALENDAR OHLC candle timeframes (goal.md's long-term/mid-term/shorter-timeframe
+    # hierarchy): minute-level (shorter), hour-level including 4h/8h (mid-term), and day/week/month
+    # (long-term). An out-of-set value is a 422 (never silently coerced) — mirrors the ``?bar=``
+    # validation precedent. A pure validation ALLOWLIST (it shapes no persisted tape/backtest/study
+    # value), so it is EXCLUDED FROM ``config_fingerprint`` alongside ``bar_dir`` (same rationale).
+    bar_timeframes: tuple[str, ...] = ("1m", "5m", "15m", "1h", "4h", "8h", "1d", "1w", "1mo")
+
+    # FREE-TIER RECENCY-DELAY GUARD (seconds): the configured market-data vendor's free plan serves
+    # historical bars with roughly a 15-minute delay — the vendor entitlement excludes the most
+    # recent 15 minutes of data. A bar-record request's effective vendor-fetch window end is
+    # clamped to ``min(requested_end, now - bar_recency_delay_seconds)`` (the one concrete adapter's
+    # ``fetch_bars``, via its ``_bar_fetch_end_clamp`` helper) so the adapter never asks for — and
+    # so never receives — the still-embargoed most-recent bar. A documented, disclosed OPERATIONAL
+    # assumption (the free-plan historical delay), never a validated edge. EXCLUDED FROM
+    # ``config_fingerprint``: it governs WHICH real bars a fetch can reach, not any
+    # tape/backtest/study computation. (Vendor specifics stay confined to the one adapter module —
+    # the provider-agnostic-engine anti-goal — so this value is deliberately described generically.)
+    bar_recency_delay_seconds: float = 900.0
+
+    # RATE-THROTTLE (a documented, disclosed operational assumption — the configured market-data
+    # vendor's published free-tier rate limit is 200 requests/minute): the minimum wall-clock
+    # spacing enforced between consecutive REAL bar-fetch vendor calls (the one concrete adapter's
+    # own throttle helper), so a bulk multi-timeframe backfill never bursts past the entitlement. A
+    # single interactive record request is unaffected beyond waiting behind its OWN
+    # immediately-prior call. This paces CALL FREQUENCY only — the EXISTING
+    # ``vendor_http_timeout_seconds`` still bounds each call's own duration; the two are independent
+    # and MUST NOT be conflated. EXCLUDED FROM ``config_fingerprint``: an operational vendor-call
+    # cadence, never a tape/backtest/study value.
+    bar_rate_limit_per_minute: int = 200
+
     def profile_definition(self, profile_id: str) -> dict | None:
         """The config-owned descriptor for ``profile_id`` (Data Contract row 33) — the
         ``strategy_definition`` pattern applied to profiles: THIS method is the ONE place that
@@ -1147,6 +1198,13 @@ class Config:
         without code change, while tests point it at a temp dir via the env var."""
         return os.environ.get("TAPEOLOGY_DATASET_DIR", self.dataset_dir)
 
+    def bar_dir_resolved(self) -> str:
+        """The effective bar-store directory: the ``TAPEOLOGY_BAR_DIR`` env var if set, else the
+        package-anchored config default (the ``dataset_dir_resolved`` pattern, era-4 J-01). Read at
+        store-construction time so an operator can point the bar store at a real location without
+        code change, while tests point it at a temp dir via the env var."""
+        return os.environ.get("TAPEOLOGY_BAR_DIR", self.bar_dir)
+
     def config_fingerprint(self) -> str:
         """A stable hash over the ENTIRE frozen config (capability 28 / honesty stamps).
 
@@ -1190,6 +1248,23 @@ class Config:
             # a different fingerprint per machine. Pinned by a fingerprint-stability test + the
             # real-threshold counter-test in tests/test_datasets.py.
             "dataset_dir",
+            # The bar-store directory (era-4 capability 1, J-01): the identical ``dataset_dir``
+            # storage-location discipline — it cannot affect any persisted research value, and the
+            # package-anchored default embeds an absolute path that would otherwise mint a
+            # different fingerprint per machine. Pinned by a fingerprint-stability test + the
+            # real-threshold counter-test in tests/test_bars.py.
+            "bar_dir",
+            # The bar-timeframe validation allowlist + the free-tier recency-delay/rate-throttle
+            # parameters (era-4 capability 1, J-01): none of these shape any persisted
+            # tape/backtest/study value — they only govern an unrelated, brand-new bar-storage
+            # capability's ``?timeframe=`` validation and vendor-fetch mechanics (which real bars a
+            # fetch can reach, and how fast consecutive vendor calls may run). Two journals
+            # identical in every threshold but configured with different bar-fetch mechanics MUST
+            # share a fingerprint. Pinned by a fingerprint-stability test + the real-threshold
+            # counter-test in tests/test_bars.py.
+            "bar_timeframes",
+            "bar_recency_delay_seconds",
+            "bar_rate_limit_per_minute",
             "journal_list_default_limit",
             "journal_list_max_limit",
             "analytics_min_sample_size",

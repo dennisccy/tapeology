@@ -34,6 +34,13 @@ from .backtests import (
     PROFILE_DEFAULT,
     TERMINAL_STATUSES as BACKTEST_TERMINAL_STATUSES,
 )
+from .bars import (
+    BarSeriesAlreadyRegistered,
+    BarSeriesIntegrityError,
+    BarSeriesNotFound,
+    BarStore,
+    EmptyBarWindowError,
+)
 from .datasets import (
     VALID_SOURCE_KINDS as DATASET_SOURCE_KINDS,
     VALID_SPLITS,
@@ -176,6 +183,20 @@ class DatasetRecordRequest(BaseModel):
     split: str
     start: str | None = None
     end: str | None = None
+
+
+class BarRecordRequest(BaseModel):
+    """Body for ``POST /research/bars`` (era-4 capability 1, J-01) — the explicit credentialed
+    record + register research action. All four fields are required: ``symbol``, ``timeframe``
+    (validated against the config-owned ``bar_timeframes`` set in the ROUTE — out-of-set is a 422,
+    never silently coerced), and the UTC ``[start, end)`` window fetched through the EXISTING
+    Alpaca adapter seam (``fetch_bars``). Unlike a dataset there is only one source (a real Alpaca
+    fetch), so there is no ``source_kind`` here."""
+
+    symbol: str
+    timeframe: str
+    start: str
+    end: str
 
 
 class ReviewRequest(BaseModel):
@@ -1494,6 +1515,112 @@ def get_dataset(dataset_id: str, store: DatasetStore = Depends(get_dataset_store
     except DatasetIntegrityError as exc:
         raise HTTPException(status_code=500, detail=f"dataset integrity check failed: {exc}")
     return {"dataset": meta}
+
+
+# --- Multi-timeframe OHLC bar store (era-4 capability 1, J-01) --------------------------------------
+# Exactly THREE routes (mirroring the ``/datasets`` trio above): record/register, list, detail.
+# There is NO PATCH/PUT/DELETE — a bar series is immutable (structurally: the store exposes no
+# update path at all; re-recording registered content is the 409 below). The bar store module is
+# the ONE reader/writer of bar-series files; these routes serve its metadata + candles VERBATIM
+# (the MCP ``bars`` tool proxies the list byte-identically).
+
+
+def get_bar_store() -> BarStore:
+    """The bar store rooted at the config-owned directory (``TAPEOLOGY_BAR_DIR`` override,
+    package-anchored default). A FastAPI dependency so tests can point it at a temp dir via the
+    env var or override it outright (the ``get_dataset_store`` pattern)."""
+    return BarStore(CONFIG.bar_dir_resolved())
+
+
+@router.post("/bars")
+def record_bar_series(
+    body: BarRecordRequest,
+    registry: ResearchRegistry = Depends(get_registry),
+    store: BarStore = Depends(get_bar_store),
+) -> dict:
+    """Record + register ONE multi-timeframe OHLC bar series (era-4 J-01 — the explicit
+    credentialed research action; recording is never ambient). Full validation (422, never silent
+    coercion): an out-of-set ``timeframe`` (the config-owned ``bar_timeframes`` set), a missing
+    symbol, a malformed ISO ``start``/``end``, or ``end`` not after ``start``. Missing credentials
+    -> the EXISTING explicit unavailable (503) state — never fabricated bars. Content already
+    registered is the 409-style refusal; an empty fetched window (e.g. entirely inside the
+    free-plan recency embargo) is an explicit 422 — nothing is written, nothing fabricated."""
+    if body.timeframe not in CONFIG.bar_timeframes:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"unknown timeframe '{body.timeframe}' — the registered timeframes are "
+                f"{list(CONFIG.bar_timeframes)}"
+            ),
+        )
+    if not body.symbol:
+        raise HTTPException(status_code=422, detail="a bar recording requires a symbol")
+    try:
+        start_epoch = parse_utc_epoch(body.start)
+        end_epoch = parse_utc_epoch(body.end)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="start and end must be ISO date-times")
+    if end_epoch <= start_epoch:
+        raise HTTPException(status_code=422, detail="end must be after start")
+
+    adapter = get_study_market_adapter()
+    if not adapter.is_available():
+        # No credentials -> the EXISTING explicit unavailable (503) state (never a fabricated bar
+        # series) — the DoD-mandated status for this gap, distinct from the historical-dataset
+        # path's 422 for the analogous case.
+        raise HTTPException(
+            status_code=503,
+            detail="real-data provider unavailable — a historical bar recording needs credentials",
+        )
+
+    from datetime import datetime, timezone
+
+    symbol = body.symbol.strip().upper()
+    start_dt = datetime.fromtimestamp(start_epoch, tz=timezone.utc)
+    end_dt = datetime.fromtimestamp(end_epoch, tz=timezone.utc)
+    try:
+        raw_bars = adapter.fetch_bars(symbol, start_dt, end_dt, body.timeframe)
+    except VendorTimeout as exc:
+        raise HTTPException(status_code=504, detail=exc.detail)
+
+    try:
+        meta = store.record(
+            symbol=symbol,
+            timeframe=body.timeframe,
+            window_start_utc=body.start,
+            window_end_utc=body.end,
+            feed=registry.config.historical_feed,
+            bars=list(raw_bars),
+        )
+    except BarSeriesAlreadyRegistered as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except EmptyBarWindowError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {"bar_series": meta}
+
+
+@router.get("/bars")
+def list_bar_series(store: BarStore = Depends(get_bar_store)) -> dict:
+    """List every registered bar series' metadata + candles (each file checksum-verified on
+    load), oldest first. A file that fails verification is surfaced EXPLICITLY in
+    ``integrity_errors`` — never silently hidden, never served as data. The MCP ``bars`` tool
+    proxies this byte-for-byte."""
+    records, errors = store.list()
+    return {"bar_series": records, "integrity_errors": errors}
+
+
+@router.get("/bars/{bar_series_id}")
+def get_bar_series(bar_series_id: str, store: BarStore = Depends(get_bar_store)) -> dict:
+    """One bar series' stored metadata + candles, verbatim (checksum-verified on load). 404 for an
+    unknown id; an explicit 500 integrity error for a corrupted/tampered file (never a fabricated
+    series)."""
+    try:
+        meta = store.get(bar_series_id)
+    except BarSeriesNotFound:
+        raise HTTPException(status_code=404, detail=f"no bar series with id '{bar_series_id}'")
+    except BarSeriesIntegrityError as exc:
+        raise HTTPException(status_code=500, detail=f"bar series integrity check failed: {exc}")
+    return {"bar_series": meta}
 
 
 # --- Deterministic backtests (era-3 capability 4, J-03) --------------------------------------------
