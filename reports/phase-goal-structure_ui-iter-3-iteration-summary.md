@@ -1,59 +1,60 @@
 # Iteration Summary — goal-structure_ui-iter-3
 
-**Verdict:** FAIL
+**Verdict:** CONTINUE
 **Iteration type:** goal-full
 **Date:** 2026-07-07
 **Iteration:** 3
 
 ## In plain words
 
-**What you can do now:** On the Structure page, you can look up support-and-resistance price levels and confidence zones on a price chart for a symbol and time you choose, and see the registry of trading strategies together with a badge showing which strategy is the current reigning "champion."
+**What you can do now:** You can type in a stock ticker to watch live trade-by-trade tape reading, write trading ideas into a journal, run replay studies, and check an honest profit-and-loss scorecard. On the Structure tab, picking a stock and a point in time draws its key price levels on a chart, grouped into zones graded by strength, and you can see the two trading approaches the system knows about side by side, plus which one currently holds the "champion" title.
 
-**What changed this time:** The team built a new side-by-side comparison of the two trading strategies, showing trade counts, returns, win rates, and an honest "not enough data yet" label whenever a strategy hasn't traded enough to judge — with a standing reminder that every figure shown is simulated, not live money. It worked correctly in every check the team ran by hand, but one more independent, hands-on check is still pending before it's marked ready for regular use.
+**What changed this time:** The team built a new head-to-head comparison screen for the Structure tab: pick a dataset that's already been recorded, click one button, and watch the app test both trading approaches against it side by side — trade counts, returns, win rates, and a grade-by-grade breakdown, each carrying a clear "not enough data yet" label wherever a grade hasn't traded enough to judge, plus a standing reminder that every dollar figure is simulated, not real money. The team's own hands-on testing showed it works correctly, including the honest result that the newer approach still finds no trades on the sample data at hand — but the separate, independent check that's supposed to confirm this before it's called finished couldn't reach the app when it ran, so this screen is being held back for a fresh confirmation pass rather than released on the team's own testing alone.
 
-**What's next:** Next, the team will re-run an independent check with the app live to confirm the new comparison screen works as expected, then finalize it for everyday use.
+**What's next:** Next, the team plans to restart the app and re-run that independent check on the new comparison screen, so it can be confirmed complete and released.
 
 ## Headline
 
-J-03 comparison built and functionally verified; blocked at closure pending independent browser-QA evidence
+J-03 Comparison section built & audit-verified live; independent browser-QA evidence still missing
 
 ## Direction
 
 **Signal:** holding
-**Why:** J-03 (the structure_tape-vs-v1 comparison) was built this iteration and independently confirmed correct by both the developer and the auditor via live data-path checks — byte-matched aggregates, the honest keyless non-survivor outcome, and an untouched champion/ledger — but the dispatched browser-qa-agent run recorded SKIPPED (0/26) because both services were down at dispatch time. The Definition of Done's required independent populated-state screenshot evidence for J-03 still doesn't exist, so the closure gate correctly held at CLOSURE-FAIL rather than accepting self-verification in its place. J-01/J-02/J-04 remain solid with no regression, so this is a hold at the finish line on an evidence/process gap, not a functional setback.
+**Why:** J-03 (structure_tape vs v1 comparison) was fully built and independently confirmed correct by a live audit run — byte-matched aggregates, champion unmoved, ledger unwritten — but the dedicated browser-QA pass recorded 0/26 SKIPPED because the frontend was down when it ran, so J-03 moved only from `failing` to `unknown`, not to `passing`, and no journey newly passed this iteration. J-01, J-02, and J-04 all hold green with zero anti-goal violations or regressions, and the one gap blocking GOAL_ACHIEVED is an operational re-run of ordinary QA work (start the services, re-dispatch browser-qa), not a design or code problem — hence holding rather than stalling or regressing.
 
-**Trend (last 3 iters):**
-- Newly passing this iter: none (iteration 3's evaluator has not yet run — blocked at the closure gate before evaluation)
-- Newly passing in last 3 iters total: J-01 (iter-2), J-02 (iter-2)
-- Regressions in last 3 iters: none
-- Anti-goal violations in last 3 iters: 1 critical (iter-1, resolved same iteration)
-- Iters with no journey state change: 0 of last 3
+**Trend (last 4 iters):**
+- Newly passing this iter: none
+- Newly passing in last 4 iters total: J-01, J-02
+- Regressions in last 4 iters: none
+- Anti-goal violations in last 4 iters: 1 critical (iter-1, resolved)
+- Iters with no journey state change: 0 of last 4
 
-**Latest evaluator reasoning:** (from iteration 2 — the evaluator has not yet run for iteration 3, which is blocked at the closure gate) "Backend diff is empty (frozen foundation intact), config_fingerprint recomputes live to 4d665603569b9dbf, /performance is unaffected (UT-12) and the nav stays 5-link (UT-14) → J-04 holds; coherence COHERENCE-PASS, scan CLEAN, no anti-goal violation. Not GOAL_ACHIEVED (J-03 still failing — the comparison surface is out of scope this iter and unbuilt); not REGRESSION/STALLED; not ESCALATE (full pipeline all-green, no fail-open, no surfaced ambiguity) → CONTINUE."
+**Latest evaluator reasoning:** The J-03 `structure_tape`-vs-`v1` Comparison section was built (frontend-only), is coherent (COHERENCE-PASS), scan-CLEAN, review-PASS, and the auditor independently ran both backtests to `done` and confirmed the byte-match, champion-unmoved, and ledger-unwritten rails from a real run. But the DoD-required independent populated-state browser evidence for J-03 does not exist: browser-qa recorded SKIPPED 0/26 and demo-narrator SKIPPED because the frontend was down by the time they ran, so the only screenshots on disk show the pre-run idle state. Per this iteration's own cited lessons (iter-0, iter-1(b)) J-03 is `unknown`, not `passing` — the same conclusion the audit (PASS_WITH_GAPS), ux-regression (WARN), and phase-closure (CLOSURE-FAIL) all independently reached. Not GOAL_ACHIEVED; the next iteration must bring the services up and re-run browser-qa to capture the populated render.
 
 ## What was done
 
-- Built the Comparison section (J-03) on `/structure`: dataset picker, dual `v1`-vs-`structure_tape` backtest run + poll loop, side-by-side aggregates, per-class A/B/C breakdown, and the verbatim simulated-PnL register.
-- Added a read-only champion badge and a founding-baseline (PnL ledger) panel beside the comparison — the champion pointer never moves and no promotion control exists.
-- Implemented 6+ distinct honest states (no datasets, dataset-list unreachable, idle, queued/running, failed, cancelled, poll-unreachable) — no fabricated result anywhere.
-- Added 3 new verbatim-read API helpers and matching types; zero backend edits (`apps/backend/` diff empty, `config_fingerprint` unchanged at `4d665603569b9dbf`, backend suite 1146 passed / 1 skipped).
-- Fixed a copy-discipline lint flag (bare "win rate" label/testid renamed to `win_rate`).
-- Developer and auditor each independently drove the live app end-to-end and confirmed byte-for-byte match against the API, the honest keyless `structure_tape` non-survivor outcome, and an unmoved champion/ledger.
-- Verified 0 target journeys pass browser QA this iteration — the dispatched `browser-qa-agent` run recorded SKIPPED (0/26) because both services were unreachable at dispatch time, so J-03 still lacks its Definition-of-Done-required independent populated-state screenshot evidence.
+- Built the Comparison section (J-03) on `/structure`: choose a dataset, run `v1` and `structure_tape` as dual backtests, poll both to completion
+- Render side-by-side aggregates (n, net R, net $, win_rate, max_drawdown_r) and a per-class A/B/C breakdown with `insufficient_sample` labeling, every value read verbatim from the backend payload
+- Render the simulated-PnL honesty register string verbatim from the payload, never hardcoded
+- Add a read-only champion badge and a founding-baseline row beside the comparison — champion never mutated, no promotion control
+- Implement six honest, distinct states (no datasets, unreachable, idle, failed, cancelled, poll-error) — zero fabricated results
+- Updated the Structure page header subtitle and README to describe all three sections (non-gating polish)
+- Zero backend changes — confirmed `apps/backend/` diff empty before and after; backend suite held at 1146 passed / 1 skipped, `config_fingerprint` pinned at `4d665603569b9dbf`
+- Verified 0 target journeys pass browser QA this iteration — the browser-qa-agent run was 100% SKIPPED (0/26 cases) because the frontend was unreachable at dispatch time
 
 ## What's left
 
-- Journey J-03 ("structure_tape is compared to v1 on screen, honestly") remains `failing` until an independent browser-QA re-run confirms the populated render.
-- Closure blocker: re-run `browser-qa-agent` (and ideally `demo-narrator`) against the live app to capture populated-state screenshots — a completed comparison, the per-class `insufficient_sample` chips, the verbatim register, the unchanged champion, and the keyless non-survivor outcome — then re-run the closure gate.
-- Not yet exercised live (code-complete): the per-side `failed`/`cancelled` states, the poll-time `comparison-poll-error` notice, and the "no datasets registered" empty state.
-- `result.null_baseline` (already served by the backend) is not rendered anywhere on the Comparison section.
-- No cancel control for a running comparison (explicitly out of scope this iteration).
-- No history of past comparisons — reloading `/structure` always resets to the idle state, even if a comparison already ran.
-- A `/datasets` library/inventory page still does not exist (out of scope; roadmap item).
+- Journey J-03 ("structure_tape is compared to v1 on screen, honestly") is status `unknown` — built and audit-verified live, but not yet independently confirmed passing via browser QA
+- Closure blocker: the DoD-required populated-state browser-QA evidence for J-03 doesn't exist — the dedicated browser-qa-agent run was 100% SKIPPED, and the only 3 screenshots on disk show only the pre-run idle state, not a completed comparison
+- Not visible yet: the backend's `null_baseline` (random-entry baseline) aggregate isn't rendered anywhere on the Comparison section, though the backend already computes it for every backtest
+- Not visible yet: no cancel control on the Comparison section — the backend's cancel endpoint exists but has no UI trigger here (explicitly out of scope this iteration)
+- Not visible yet: no history of past comparisons — reloading `/structure` always resets to the idle state; there's no way to browse or resume a previously-run comparison from the UI
+- Not visible yet: no `/datasets` library/inventory page — the dataset selector shows only symbol/split/id-prefix, not full metadata (explicitly out of scope, roadmap item)
+- Known limitation: three rarer honest states (failed, cancelled, poll-error, no-datasets-registered) are code-complete but were not individually exercised live this pass — flagged for the next browser-qa run to exercise independently
 
 ## Next step
 
-Per the closure verdict's remediation: start both services live (`bash scripts/dev.sh`, backend `:8301` / frontend `:3301`) and confirm both respond, then re-dispatch `browser-qa-agent` against the full 26-case test plan with the frontend reachable so it actually executes (rather than precondition-skipping) — at minimum the 10 P1 happy-path and 6 P1 regression cases — capturing populated-state screenshots into `reports/qa/goal-structure_ui-iter-3-evidence/` (a completed comparison, the per-class `insufficient_sample` chips, the verbatim register, the champion unchanged at `v1`/`default`, and the keyless non-survivor outcome). Re-dispatch `phase-closure-auditor` once that evidence exists to confirm CLOSURE-PASS before the goal-evaluator is asked to certify GOAL_ACHIEVED. No code change is required or recommended — both the developer and the auditor independently verified the implementation itself is correct, minimal, and honest.
+Full depth, evidence-capture iteration — no code change expected. Start both services first (`bash scripts/dev.sh`) and confirm they respond before dispatching QA, since the sole cause of this iteration's SKIPs was the frontend being down. Re-dispatch browser-qa-agent with `Frontend available: yes` to execute all 26 cases and capture populated J-03 evidence (a dataset chosen, both backtests polled to `done`, side-by-side aggregates byte-matching the API, the per-class `insufficient_sample` chips, the verbatim register, the champion unchanged at `v1`/`default`, and the keyless `structure_tape` non-survivor outcome). Re-verify J-01, J-02, and J-04 on the now-3-section page, exercise at least one additional honest state if practical, and re-run demo-narrator and phase-closure-auditor to flip CLOSURE-FAIL to CLOSURE-PASS. Only after an independent browser-qa PASS on the populated J-03 render may J-03 be marked passing — at which point all four journeys are green and this becomes a GOAL_ACHIEVED candidate; if the browser run surfaces a genuine render defect, fix it minimally and re-audit.
 
 ## Quick verify
 
@@ -82,4 +83,5 @@ From `reports/phase-goal-structure_ui-iter-3-what-to-click.md`:
 | QA | PASS | reports/qa/goal-structure_ui-iter-3-qa.md |
 | Audit | PASS_WITH_GAPS | docs/handoffs/goal-structure_ui-iter-3-audit.md |
 | Closure | CLOSURE-FAIL | reports/phase-goal-structure_ui-iter-3-closure-verdict.md |
+| Goal evaluation | CONTINUE | runs/goal-session-structure_ui/iter-3/eval.md |
 | Journey history | — | runs/goal-session-structure_ui/state/journey-history.json |
