@@ -2,6 +2,7 @@ import { API_BASE, WATCH_REQUEST_TIMEOUT_MS } from "./config";
 import type {
   Analytics,
   AnalyticsResult,
+  BarSeriesListResult,
   CreateStudyParams,
   CreateStudyResult,
   DeclareResult,
@@ -9,6 +10,7 @@ import type {
   JournalDetail,
   JournalFilters,
   JournalRow,
+  LevelsResponse,
   MarketClock,
   PnlLedger,
   ProfilesPayload,
@@ -844,5 +846,60 @@ export async function fetchProfiles(): Promise<{
     return { ok: false, profiles: null, error: "The profile registry could not be loaded." };
   } catch {
     return { ok: false, profiles: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// --- Structure: S/R levels + confluence zones + recorded bar series (Data Contract row 39/38,
+// surfaced this interlude at /structure, J-01) -----------------------------------------------------
+
+// GET /research/levels?symbol=&as_of= — the S/R levels + confluence zones, served VERBATIM. The
+// backend's own 422 (empty symbol / malformed as_of) is folded into the SAME `ok:false` result as
+// an unreachable backend — the page renders one shared degraded state for both, surfacing the
+// backend's `detail` message verbatim rather than fabricating a distinct copy for a rare
+// client-input mistake. `data: null` on any failure so the caller never shows a stale/fabricated
+// chart or zones table in its place.
+export async function fetchLevels(
+  symbol: string,
+  asOf: string,
+): Promise<{ ok: boolean; data: LevelsResponse | null; error?: string; status?: number }> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/levels?symbol=${encodeURIComponent(symbol)}&as_of=${encodeURIComponent(asOf)}`,
+    );
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as LevelsResponse, status: res.status };
+    }
+    let error = "The levels could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error, status: res.status };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/bars (Data Contract row 38) — every registered bar series, served VERBATIM. This
+// is a LIST endpoint with no symbol query param (mirroring /research/datasets); the Structure page
+// filters the returned array client-side by the already-served `symbol` field — the SAME
+// filtering discipline NavBar already applies to `nav: true` (filtering already-served rows is not
+// a recomputation of any value). `data: null` on any failure so the caller shows an explicit
+// unavailable state rather than a fabricated/empty chart.
+export async function fetchBarSeriesList(): Promise<{
+  ok: boolean;
+  data: BarSeriesListResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/bars`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as BarSeriesListResult };
+    }
+    return { ok: false, data: null, error: "The bar series list could not be loaded." };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
   }
 }

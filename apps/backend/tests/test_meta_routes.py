@@ -18,7 +18,7 @@ client = TestClient(app)
 
 
 def test_ui_routes_lists_exactly_the_live_routes():
-    """The payload is byte-stable and lists exactly the five live routes, in nav order."""
+    """The payload is byte-stable and lists exactly the six live routes, in nav order."""
     response = client.get("/meta/ui-routes")
     assert response.status_code == 200
     assert response.json() == {
@@ -28,6 +28,7 @@ def test_ui_routes_lists_exactly_the_live_routes():
             {"path": "/journal/[id]", "label": "Journal detail", "nav": False},
             {"path": "/studies", "label": "Studies", "nav": True},
             {"path": "/performance", "label": "Performance", "nav": True},
+            {"path": "/structure", "label": "Structure", "nav": True},
         ]
     }
 
@@ -51,17 +52,28 @@ def test_ui_routes_includes_performance_now_its_page_ships():
     assert performance[0] == {"path": "/performance", "label": "Performance", "nav": True}
 
 
+def test_ui_routes_includes_structure_now_its_page_ships():
+    """J-01 (this interlude) ships /structure WITH its nav entry (page and entry land in the SAME
+    iteration — the no-dead-link rule): exactly one ``/structure`` entry, labeled Structure,
+    nav-true."""
+    routes = client.get("/meta/ui-routes").json()["routes"]
+    structure = [r for r in routes if r["path"] == "/structure"]
+    assert len(structure) == 1
+    assert structure[0] == {"path": "/structure", "label": "Structure", "nav": True}
+
+
 def test_ui_routes_top_bar_entries_match_the_rendered_nav_set():
-    """The nav filters ``nav: true`` — exactly Cockpit / Journal / Studies / Performance (five
-    entries in the map, four of them top-bar destinations)."""
+    """The nav filters ``nav: true`` — exactly Cockpit / Journal / Studies / Performance /
+    Structure (six entries in the map, five of them top-bar destinations)."""
     routes = client.get("/meta/ui-routes").json()["routes"]
     top_bar = [(r["path"], r["label"]) for r in routes if r["nav"]]
-    assert len(routes) == 5
+    assert len(routes) == 6
     assert top_bar == [
         ("/", "Cockpit"),
         ("/journal", "Journal"),
         ("/studies", "Studies"),
         ("/performance", "Performance"),
+        ("/structure", "Structure"),
     ]
 
 

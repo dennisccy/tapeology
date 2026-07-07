@@ -27,6 +27,7 @@ UI_ROUTES: tuple[dict[str, object], ...] = (
     {"path": "/journal/[id]", "label": "Journal detail", "nav": False},
     {"path": "/studies", "label": "Studies", "nav": True},
     {"path": "/performance", "label": "Performance", "nav": True},
+    {"path": "/structure", "label": "Structure", "nav": True},
 )
 
 

@@ -952,3 +952,77 @@ export interface ProfilesPayload {
   profiles: IndicatorProfile[];
   champion: { strategy_id: string; profile: string };
 }
+
+// --- Structure: S/R levels, confluence zones, and recorded bar series ---------------------------
+// (era-4 capabilities 1-3, surfaced this interlude at /structure, J-01). Every field below is read
+// VERBATIM from its canonical endpoint (GET /research/levels, GET /research/bars) — the Structure
+// page recomputes no price, class, score, or candle.
+
+// One recorded OHLC candle row, as stored (GET /research/bars — Data Contract row 38). Distinct
+// shape from `OhlcBar` above (that one is the tape engine's LOGICAL-second candle from
+// GET /tape/{ticker}/history); this is a bar-store row with a real UTC-epoch-seconds `ts` and a
+// `volume` field.
+export interface BarRow {
+  ts: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+// One registered bar series' metadata + embedded candles, served verbatim by GET /research/bars
+// (list) and GET /research/bars/{id} (detail).
+export interface BarSeriesRecord {
+  id: string;
+  symbol: string;
+  timeframe: string;
+  window_start_utc: string;
+  window_end_utc: string;
+  feed: string;
+  bar_count: number;
+  checksum: string;
+  created_utc: string;
+  bars: BarRow[];
+}
+
+// GET /research/bars — the full list payload (no symbol query param; callers filter the returned
+// array client-side by the already-served `symbol` field). A corrupt file surfaces explicitly in
+// `integrity_errors` (never silently hidden, never served as data) — unused by the Structure page
+// this iteration, but part of the endpoint's real shape.
+export interface BarSeriesListResult {
+  bar_series: BarSeriesRecord[];
+  integrity_errors: { file: string; error: string }[];
+}
+
+// One deterministic support/resistance level (GET /research/levels — Data Contract row 39). `type`
+// is one of "swing-pivot" | "prior-period-extreme" — kept as `string` (not a union) so an
+// unrecognized future type still renders rather than silently vanishing at a type guard.
+export interface SrLevel {
+  price: number;
+  timeframe: string;
+  type: string;
+  touch_count: number;
+  strength: number;
+}
+
+// One A/B/C confluence zone (GET /research/levels' `confluence_zones` — Data Contract row 39). The
+// `class` badge and `score` are read VERBATIM here — never recomputed from the member levels'
+// breadth or strength.
+export interface ConfluenceZone {
+  levels: SrLevel[];
+  score: number;
+  class: "A" | "B" | "C";
+}
+
+// GET /research/levels?symbol=&as_of= — the full served projection, read VERBATIM. Two fields
+// together carry THREE honest, distinct states: `no_bar_series_for_symbol: true` (no recorded
+// series at all) vs. `false` with an empty `levels` (series exist, nothing derivable at `as_of`)
+// vs. non-empty `levels` with an empty `confluence_zones` (levels exist, no qualifying cluster).
+export interface LevelsResponse {
+  symbol: string;
+  as_of: string;
+  levels: SrLevel[];
+  no_bar_series_for_symbol: boolean;
+  confluence_zones: ConfluenceZone[];
+}
