@@ -1,25 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import { fetchBarSeriesList, fetchLevels } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { fetchBarSeriesList, fetchLevels, fetchProfiles, fetchStrategies } from "@/lib/api";
 import type {
   BarSeriesListResult,
   BarSeriesRecord,
   ConfluenceZone,
   LevelsResponse,
+  ProfilesPayload,
+  Strategy,
+  StrategiesPayload,
 } from "@/lib/types";
 import { SymbolSearch } from "@/components/SymbolSearch";
 import { StructureChart } from "@/components/StructureChart";
 import { Panel } from "@/components/Panel";
 
-// The /structure page (J-01) — the era-4 structure stack's first browser home. For a chosen symbol
-// + as-of time it renders a price chart with one dashed line per S/R level plus a confluence-zones
-// table badged A/B/C. Reached from the new top-bar link, which is served by GET /meta/ui-routes
-// (data-driven NavBar — no client hardcoding; see apps/backend/app/meta.py UI_ROUTES). Follows the
-// /performance page pattern: client component, no business logic, canonical endpoints read
-// verbatim, `{ok, data, error}`-shaped fetch results.
+// The /structure page (J-01 + J-02) — the era-4 structure stack's browser home. For a chosen
+// symbol + as-of time it renders a price chart with one dashed line per S/R level plus a
+// confluence-zones table badged A/B/C (J-01); below that, a read-only Registry section shows the
+// two registered strategies plus the current champion (J-02). Reached from the top-bar link,
+// served by GET /meta/ui-routes (data-driven NavBar — no client hardcoding; see
+// apps/backend/app/meta.py UI_ROUTES). Follows the /performance page pattern: client component, no
+// business logic, canonical endpoints read verbatim, `{ok, data, error}`-shaped fetch results.
 //
-// TWO canonical endpoints, rendered VERBATIM and nothing else:
+// FOUR canonical endpoints, rendered VERBATIM and nothing else:
 //   * GET /research/levels?symbol=&as_of=  (Data Contract row 39) — levels + confluence zones +
 //     the `no_bar_series_for_symbol` honesty flag. The A/B/C badge is `zone.class`, the score is
 //     `zone.score` — neither is ever recomputed from breadth or member strength.
@@ -27,10 +31,17 @@ import { Panel } from "@/components/Panel";
 //     endpoint with no symbol query param, so this page filters the returned array CLIENT-SIDE by
 //     the already-served `symbol` field to find candles for the chart — the SAME filtering
 //     discipline NavBar already applies to `nav: true` (filtering already-served rows is not a
-//     recomputation of any value). J-02 (strategy registry) and J-03 (backtest comparison) are
-//     LATER sections of this same page — not built this iteration.
+//     recomputation of any value).
+//   * GET /research/strategies  (Data Contract row 40/41, J-02) — the strategy registry (`v1` +
+//     `structure_tape`) + the champion pointer. Fetched on mount, independent of the Levels & Zones
+//     Load button (the registry and champion are populated even keyless).
+//   * GET /research/profiles  (Data Contract row 33) — read ONLY to cross-check its `champion`
+//     against `/research/strategies`'s own `champion` (both read the SAME store pointer — never a
+//     second champion source). J-03 (backtest comparison) is a LATER section of this same page —
+//     not built this iteration.
 //
-// Four distinct honest states (never share copy, never fabricate a chart/level/zone):
+// Four distinct honest states for the Levels & Zones section (never share copy, never fabricate a
+// chart/level/zone):
 //   1. no_bar_series_for_symbol: true            -> explicit "needs provider credentials" state
 //   2. no_bar_series_for_symbol: false, levels: []  -> distinct "no levels found" state
 //   3. levels non-empty, confluence_zones: []     -> distinct "no qualifying confluence zone"
@@ -40,6 +51,9 @@ import { Panel } from "@/components/Panel";
 //      degraded state (the NavBar/UnavailablePanel pattern), surfacing the backend's own message
 //      verbatim — folding a validation refusal into the same honest "couldn't load" treatment
 //      satisfies the "never crash, never fabricate" bar without inventing a fifth copy.
+//
+// The Registry section (J-02) has its own distinct honest states — loading, registry-unavailable
+// (`/research/strategies` unreachable/non-200), and populated — see `structure-registry-*` testids.
 //
 // Dark instrument-panel style consistent with /journal, /studies, /performance: slate surfaces,
 // restrained borders, font-mono numerics, amber for the honest-empty/degraded states.
@@ -187,11 +201,182 @@ function ZoneRow({ zone, index }: { zone: ConfluenceZone; index: number }) {
   );
 }
 
+// --- Registry section (J-02) ---------------------------------------------------------------------
+
+// The exit-precedence caption is prose framing describing the runner's general exit-check order
+// (goal.md / the phase spec's own phrase), NOT a literal field read out of the JSON — v1's `exits`
+// object has no `reward_target` key at all, and neither strategy's raw dict key order matches this
+// phrase exactly. Each exit field below still renders its OWN actual value verbatim; this caption
+// only explains the fixed display order chosen for them.
+const EXIT_PRECEDENCE_CAPTION =
+  "Exit precedence: r_stop → reward_target → state_flip → horizon (dataset_end forces a close at stream end).";
+
+// One class-scaled map (`stop_bps_by_class` / `r_multiple_by_class` / `size_multiple_by_class`), a
+// small table of class -> value. Rows render in the SAME key order the payload itself carries
+// (Object.entries — never re-sorted, never assumed to be exactly A/B/C: an unrecognized class key
+// still renders, the SAME tolerance `SrLevel.type` already established for this page).
+function ClassMapTable({
+  label,
+  testid,
+  map,
+}: {
+  label: string;
+  testid: string;
+  map: Record<string, number>;
+}) {
+  return (
+    <div data-testid={testid} className="mt-2">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</p>
+      <table className="mt-1 w-full border-collapse">
+        <tbody>
+          {Object.entries(map).map(([cls, value]) => (
+            <tr key={cls} className="border-b border-slate-800/60 last:border-b-0">
+              <td className={LABEL_CELL}>{cls}</td>
+              <td className={NUMERIC_CELL}>{String(value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// One registered strategy: entry rule, the exit fields in the caption's fixed order, then (only
+// where the payload itself carries them — never assumed by strategy_id) the three class-scaled
+// maps. Every value is `String(...)`-rendered verbatim from the prop, the page's established
+// precedent (matching `ZoneRow`'s `String(zone.score)` / `String(lvl.price)`).
+function StrategyCard({ strategy }: { strategy: Strategy }) {
+  const { exits } = strategy;
+  return (
+    <article
+      data-testid="strategy-card"
+      data-strategy-id={strategy.strategy_id}
+      className="rounded-lg border border-slate-800 bg-slate-900/60 p-4"
+    >
+      <header className="mb-3">
+        <h3 className="font-mono text-sm font-semibold text-slate-200">
+          {String(strategy.strategy_id)}
+        </h3>
+      </header>
+
+      <dl className="space-y-1.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="text-xs text-slate-500">entry rule</dt>
+          <dd data-testid="strategy-entry-rule" className="font-mono text-xs text-slate-200">
+            {String(strategy.entries.rule)}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="text-xs text-slate-500">r_stop</dt>
+          <dd data-testid="strategy-exit-r-stop" className="font-mono text-xs text-slate-200">
+            {String(exits.r_stop.rule)}
+          </dd>
+        </div>
+        {exits.reward_target && (
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-xs text-slate-500">reward_target</dt>
+            <dd
+              data-testid="strategy-exit-reward-target"
+              className="font-mono text-xs text-slate-200"
+            >
+              {String(exits.reward_target.rule)}
+            </dd>
+          </div>
+        )}
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="text-xs text-slate-500">state_flip</dt>
+          <dd data-testid="strategy-exit-state-flip" className="font-mono text-xs text-slate-200">
+            {String(exits.state_flip.rule)}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="text-xs text-slate-500">horizon (seconds)</dt>
+          <dd data-testid="strategy-exit-horizon" className="font-mono text-xs text-slate-200">
+            {String(exits.horizon_seconds)}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="text-xs text-slate-500">dataset_end</dt>
+          <dd
+            data-testid="strategy-exit-dataset-end"
+            className="font-mono text-xs text-slate-200"
+          >
+            {String(exits.dataset_end.rule)}
+          </dd>
+        </div>
+      </dl>
+
+      <p className="mt-2 text-[11px] text-slate-600">{EXIT_PRECEDENCE_CAPTION}</p>
+
+      {exits.r_stop.stop_bps_by_class && (
+        <ClassMapTable
+          label="stop (bps by class)"
+          testid="strategy-stop-bps-by-class"
+          map={exits.r_stop.stop_bps_by_class}
+        />
+      )}
+      {exits.reward_target && exits.reward_target.r_multiple_by_class && (
+        <ClassMapTable
+          label="reward target (R-multiple by class)"
+          testid="strategy-r-multiple-by-class"
+          map={exits.reward_target.r_multiple_by_class}
+        />
+      )}
+      {strategy.size_multiple_by_class && (
+        <ClassMapTable
+          label="size (multiple by class)"
+          testid="strategy-size-multiple-by-class"
+          map={strategy.size_multiple_by_class}
+        />
+      )}
+    </article>
+  );
+}
+
+// Deep-equal over the small flat `{strategy_id, profile}` champion shape only (no generic deep-
+// equal utility needed for two known string fields) — used ONLY to narrate agreement/disagreement
+// between the two endpoints that share one store source; it never picks a value (no "champion
+// resolution" — the anti-goal this interlude names explicitly).
+function championsMatch(
+  a: { strategy_id: string; profile: string },
+  b: { strategy_id: string; profile: string },
+): boolean {
+  return a.strategy_id === b.strategy_id && a.profile === b.profile;
+}
+
 export default function StructurePage() {
   const [symbolInput, setSymbolInput] = useState("");
   const [asOfInput, setAsOfInput] = useState("");
   const [levelsState, setLevelsState] = useState<LoadState<LevelsResponse>>({ phase: "idle" });
   const [barsState, setBarsState] = useState<LoadState<BarSeriesListResult>>({ phase: "idle" });
+
+  // J-02 Registry section state — fetched once on mount, independent of the Levels & Zones Load
+  // button (the registry and champion are populated even keyless). `null` = fetch in flight;
+  // `{ok: false}` resolves to the explicit registry-unavailable state — mirrors
+  // /performance/page.tsx's own null-then-resolved pattern byte-for-byte.
+  const [strategiesResult, setStrategiesResult] = useState<{
+    ok: boolean;
+    strategies: StrategiesPayload | null;
+    error?: string;
+  } | null>(null);
+  const [profilesResult, setProfilesResult] = useState<{
+    ok: boolean;
+    profiles: ProfilesPayload | null;
+    error?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetchStrategies().then((result) => {
+      if (alive) setStrategiesResult(result);
+    });
+    fetchProfiles().then((result) => {
+      if (alive) setProfilesResult(result);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   async function handleLoad(symbol: string, asOf: string) {
     const trimmedSymbol = symbol.trim();
@@ -242,6 +427,34 @@ export default function StructurePage() {
     representative && !Number.isNaN(asOfEpochMs)
       ? representative.bars.filter((b) => b.ts * 1000 <= asOfEpochMs)
       : (representative?.bars ?? []);
+
+  // J-02 Registry section derived values.
+  const registry = strategiesResult?.ok ? strategiesResult.strategies : null;
+  const profiles = profilesResult?.ok ? profilesResult.profiles : null;
+  // The cross-check caption: a plain-language narration of agreement between the two endpoints
+  // that share one store source — it never picks a value (no "champion resolution"). Distinct,
+  // honest copy per state: still loading, the profiles cross-check itself unavailable (registry
+  // still renders — profiles is not required to show the strategies-sourced badge), confirmed
+  // match, or (structurally near-impossible given one shared store call, but never silently
+  // hidden) a disagreement.
+  const championCrossCheck = !registry
+    ? null
+    : profilesResult === null
+      ? { testid: "structure-champion-crosscheck-pending", text: "Cross-checking against GET /research/profiles…" }
+      : !profiles
+        ? {
+            testid: "structure-champion-crosscheck-unavailable",
+            text: "Cross-check against GET /research/profiles: unavailable.",
+          }
+        : championsMatch(registry.champion, profiles.champion)
+          ? {
+              testid: "structure-champion-crosscheck-match",
+              text: "Confirmed identical to the champion served by GET /research/profiles — one store pointer, two read views.",
+            }
+          : {
+              testid: "structure-champion-crosscheck-mismatch",
+              text: "Warning: does not match the champion served by GET /research/profiles.",
+            };
 
   return (
     <div className="min-h-screen">
@@ -367,6 +580,68 @@ export default function StructurePage() {
                 </Panel>
               </div>
             ))}
+        </section>
+
+        {/* J-02: the strategy registry + champion — fetched on mount (see the useEffect above),
+            independent of the Load button above; populated even without any recorded bars. */}
+        <section aria-label="Strategy registry" className="mt-6">
+          {strategiesResult === null ? (
+            <LoadingPanel testid="structure-registry-loading" />
+          ) : !strategiesResult.ok || !registry ? (
+            <UnavailablePanel
+              testid="structure-registry-unavailable"
+              message={strategiesResult.error ?? "The strategy registry could not be loaded."}
+            />
+          ) : (
+            <Panel title="Registry">
+              <p className="mb-3 -mt-1 max-w-3xl text-xs text-slate-600">
+                Read-only: every strategy field and the champion below are read verbatim from
+                GET /research/strategies — nothing here is recomputed in the browser.
+              </p>
+              <div className="space-y-4">
+                <div
+                  data-testid="champion-summary"
+                  className="rounded-lg border border-slate-800 bg-slate-900/60 p-4"
+                >
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Champion
+                  </h3>
+                  <dl className="space-y-2">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs text-slate-500">strategy</dt>
+                      <dd
+                        data-testid="champion-strategy"
+                        className="font-mono text-sm text-slate-200"
+                      >
+                        {registry.champion.strategy_id}
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs text-slate-500">profile</dt>
+                      <dd
+                        data-testid="champion-profile"
+                        className="font-mono text-sm text-slate-200"
+                      >
+                        {registry.champion.profile}
+                      </dd>
+                    </div>
+                  </dl>
+                  {championCrossCheck && (
+                    <p
+                      data-testid={championCrossCheck.testid}
+                      className="mt-2 text-[11px] text-slate-600"
+                    >
+                      {championCrossCheck.text}
+                    </p>
+                  )}
+                </div>
+
+                {registry.strategies.map((strategy) => (
+                  <StrategyCard key={strategy.strategy_id} strategy={strategy} />
+                ))}
+              </div>
+            </Panel>
+          )}
         </section>
       </main>
     </div>

@@ -3,20 +3,20 @@
     "J-01": {
       "id": "J-01",
       "name": "The Structure tab renders S/R levels and A/B/C confluence zones",
-      "status": "partial",
-      "last_verified_iter": "goal-structure_ui-iter-1",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-structure_ui-iter-2",
+      "last_passing_iter": "goal-structure_ui-iter-2",
       "first_seen_iter": "goal-structure_ui-iter-0",
-      "last_evidence_path": "reports/qa/goal-structure_ui-iter-1-evidence/UT-06-populated-chart.png"
+      "last_evidence_path": "reports/qa/goal-structure_ui-iter-2-evidence/UT-07-populated-chart-zones.png"
     },
     "J-02": {
       "id": "J-02",
       "name": "The strategy registry and champion are visible",
-      "status": "failing",
-      "last_verified_iter": "goal-structure_ui-iter-0",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-structure_ui-iter-2",
+      "last_passing_iter": "goal-structure_ui-iter-2",
       "first_seen_iter": "goal-structure_ui-iter-0",
-      "last_evidence_path": "docs/handoffs/goal-structure_ui-iter-0-dev.md"
+      "last_evidence_path": "reports/qa/goal-structure_ui-iter-2-evidence/UT-04-structure-tape-card.png"
     },
     "J-03": {
       "id": "J-03",
@@ -31,10 +31,10 @@
       "id": "J-04",
       "name": "The foundation is unchanged (regression sentinel)",
       "status": "already_passing",
-      "last_verified_iter": "goal-structure_ui-iter-1",
-      "last_passing_iter": "goal-structure_ui-iter-1",
+      "last_verified_iter": "goal-structure_ui-iter-2",
+      "last_passing_iter": "goal-structure_ui-iter-2",
       "first_seen_iter": "goal-structure_ui-iter-0",
-      "last_evidence_path": "reports/qa/goal-structure_ui-iter-1-evidence/UT-14-sim-buyer-cockpit.png"
+      "last_evidence_path": "reports/qa/goal-structure_ui-iter-2-evidence/UT-12-performance-unaffected.png"
     }
   },
   "anti_goal_violations": [
@@ -42,9 +42,9 @@
       "iter": "goal-structure_ui-iter-1",
       "anti_goal": "Honest UI states only. No fabricated chart, level, zone, trade, fill, or PnL to force a green journey; every failure mode (no bar series, no levels, no zones, insufficient n, missing credentials, backend unreachable) surfaces an explicit, distinct state.",
       "severity": "critical",
-      "evidence": "levels-but-no-zones state rendered a silent blank chart box (ui-test-results.md UT-10 FAIL + ux-regression UX-REGRESSION-FAIL): StructureChart.tsx empty-hint overlay was occluded by lightweight-charts canvases via CSS z-index. Fixed by auditor at apps/frontend/components/StructureChart.tsx:99 (added z-10 + copy 'No candles to draw at this as-of time.'); fix present in working tree (evaluator-read) and verified live in reports/qa/goal-structure_ui-iter-1-evidence/AUDIT-UT10-after-fix.png. Independent browser-QA re-verification and closure-record reconciliation still pending (closure-verdict.md = CLOSURE-FAIL).",
+      "evidence": "iter-1: levels-but-no-zones state rendered a silent blank chart box (ui-test-results UT-10 FAIL + ux-regression FAIL): StructureChart.tsx empty-hint overlay occluded by lightweight-charts canvases via CSS z-index. Auditor fixed at apps/frontend/components/StructureChart.tsx:99 (z-10 + copy 'No candles to draw at this as-of time.'). RESOLVED and independently confirmed in iter-2: browser-QA UT-06 re-ran on the fixed code and used getComputedStyle to prove the hint wrapper computes z-index:10 above the canvases' z-index:1/2 (evidence reports/qa/goal-structure_ui-iter-2-evidence/UT-06-zero-candle-hint.png, evaluator-opened: hint legibly centered, not blank), and phase-closure returned CLOSURE-PASS with ui-test-results/ux-regression/status.json mutually consistent — closing the exact process gap that produced iter-1's CLOSURE-FAIL.",
       "resolved": true
     }
   ],
-  "updated_at": "2026-07-07T02:44:28Z"
+  "updated_at": "2026-07-07T05:42:49Z"
 }

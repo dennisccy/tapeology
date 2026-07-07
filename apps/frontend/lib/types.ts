@@ -1026,3 +1026,54 @@ export interface LevelsResponse {
   no_bar_series_for_symbol: boolean;
   confluence_zones: ConfluenceZone[];
 }
+
+// --- Structure: strategy registry + champion (era-4 capability 4, surfaced this interlude at the
+// /structure Registry section, J-02). Every field is read VERBATIM from GET /research/strategies
+// (app/research/strategies.py's `strategies_projection`, built entirely from
+// `Config.strategy_definition`) — the Registry section recomputes no entry/exit rule and no
+// class-scaled value.
+
+// One exit rule's own descriptor. `rule` is the one field every exit shares; the class-scaled maps
+// are present ONLY where the backend's OWN grammar carries them (`stop_bps_by_class` on
+// structure_tape's `r_stop`; `r_multiple_by_class` on its `reward_target`) — v1's `r_stop` carries
+// neither (an honest field omission, never a fabricated map for v1). One shared shape for both
+// `r_stop` and `reward_target` rather than two near-duplicate interfaces, mirroring `SrLevel.type`'s
+// existing precedent of tolerating a broader shape rather than a rigid per-strategy union.
+export interface StrategyExitRule {
+  rule: string;
+  stop_bps_by_class?: Record<string, number>;
+  r_multiple_by_class?: Record<string, number>;
+}
+
+// One strategy's exit block. `reward_target` is present ONLY on structure_tape — v1 genuinely has
+// no reward-target exit (an honest omission, not a gap; see the dev handoff for why this and
+// `dataset_end` are modelled even though the spec's "r_stop -> reward_target -> state_flip ->
+// horizon" precedence phrase itself only names four of these five fields).
+export interface StrategyExits {
+  r_stop: StrategyExitRule;
+  reward_target?: StrategyExitRule;
+  horizon_seconds: number;
+  state_flip: { rule: string };
+  dataset_end: { rule: string };
+}
+
+// One registered strategy (GET /research/strategies — Data Contract row 40/41). `size_multiple_by_class`
+// is present ONLY on structure_tape (v1 has no class-scaled simulated size) — an honest field
+// omission, never a fabricated map for v1.
+export interface Strategy {
+  strategy_id: string;
+  entries: { rule: string };
+  exits: StrategyExits;
+  fees: { per_share: number; min_per_trade: number };
+  slippage: { spread_fraction: number };
+  dollars_per_r: number;
+  size_multiple_by_class?: Record<string, number>;
+}
+
+// GET /research/strategies — the full served projection, read VERBATIM. `champion` reuses
+// `ProfilesPayload`'s own champion shape byte-for-byte (the backend serves both from the identical
+// `store.get_champion_pointer()` call) — this is NOT a second champion shape.
+export interface StrategiesPayload {
+  strategies: Strategy[];
+  champion: ProfilesPayload["champion"];
+}

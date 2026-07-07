@@ -15,6 +15,7 @@ import type {
   PnlLedger,
   ProfilesPayload,
   ResearchTaxonomy,
+  StrategiesPayload,
   Study,
   SymbolMatch,
   TapeHistory,
@@ -846,6 +847,28 @@ export async function fetchProfiles(): Promise<{
     return { ok: false, profiles: null, error: "The profile registry could not be loaded." };
   } catch {
     return { ok: false, profiles: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/strategies (Data Contract row 40/41; era-4 capability 4, surfaced this interlude
+// at the /structure Registry section, J-02) — the strategy registry (`v1` + `structure_tape`) +
+// the current champion pointer, served VERBATIM. This is the SAME store-owned champion pointer
+// `fetchProfiles` reads (one pointer, two read views — never a second champion source). On any
+// failure the caller shows an explicit unavailable state: `strategies: null` — never a fabricated
+// registry, mirroring `fetchProfiles`'s pattern byte-for-byte.
+export async function fetchStrategies(): Promise<{
+  ok: boolean;
+  strategies: StrategiesPayload | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/strategies`);
+    if (res.ok) {
+      return { ok: true, strategies: (await res.json()) as StrategiesPayload };
+    }
+    return { ok: false, strategies: null, error: "The strategy registry could not be loaded." };
+  } catch {
+    return { ok: false, strategies: null, error: "Backend unreachable — is the API running?" };
   }
 }
 
