@@ -1,58 +1,61 @@
 # Iteration Summary — goal-structure_ui-iter-2
 
-**Verdict:** PASS
+**Verdict:** CONTINUE
 **Iteration type:** goal-full
 **Date:** 2026-07-07
 **Iteration:** 2
 
 ## In plain words
 
-**What you can do now:** You can type in a stock ticker to watch live trade-by-trade tape reading, write trading ideas into a journal, run replay studies, and check an honest profit-and-loss scorecard on a Performance page. On the Structure tab, picking a stock and a point in time draws its key price levels on a chart, grouped into zones graded by strength, and now also shows the two trading approaches the system knows about side by side, plus which one currently holds the "champion" title.
+**What you can do now:** You can type in a stock ticker to watch live trade-by-trade tape reading, write trading ideas into a journal, run replay studies, and check an honest profit-and-loss scorecard. On the Structure tab, picking a stock and a point in time draws its key price levels on a chart, grouped into zones graded by strength, and you can now also see the two trading approaches the system knows about side by side, plus which one currently holds the "champion" title.
 
-**What changed this time:** The Structure page gained a new Strategy Registry: two cards showing the original trading approach and a newer, zone-aware one side by side, including how the newer one scales its risk and reward by level strength, plus a "Champion" badge confirming which approach is favored today (still the original) and that this matches what the Performance page already shows. If the system can't be reached, this new section now says so plainly instead of showing nothing. Also confirmed this round: the price-chart blank-screen issue flagged last time was re-tested from scratch and the fix holds.
+**What changed this time:** The Structure page gained a new Strategy Registry: two cards showing the original trading approach and a newer, zone-aware one side by side, including how the newer one scales its risk and reward by level strength, plus a "Champion" badge confirming which approach is favored today (still the original) and that this matches what the Performance page already shows. If the backend can't be reached, this new section now says so plainly instead of showing nothing. Also confirmed this round: the price-chart blank-screen issue flagged last time was independently re-tested from scratch, and the fix holds for good.
 
-**What's next:** Next, the plan is to add a side-by-side comparison on the same screen showing how the newer trading approach would have performed against the original one.
+**What's next:** Next, the plan is to add a side-by-side comparison on the same screen showing how the newer trading approach would have performed against the original one, using real historical data.
 
 ## Headline
 
-Registry section (J-02) ships on /structure; J-01's blank-chart fix independently re-verified and closed
+Strategy registry & champion badge ship on /structure; J-01 closed to passing after re-verify
 
 ## Direction
 
 **Signal:** improving
-**Why:** This iteration closed the exact gap that left iteration 1's J-01 unresolved (UT-06 independently re-verified the StructureChart.tsx z-index fix live via computed style, flipping the closure verdict from iteration 1's CLOSURE-FAIL to this iteration's CLOSURE-PASS) and built + verified J-02 (the strategy registry and champion badge), passing all of its browser-QA checks with zero anti-goal violations and zero regressions (J-04's sentinel stays green). The goal-evaluator has not logged this iteration yet at summary time — this file's Verdict is carried forward from the closure gate per the verdict-resolution fallback, so `journey-history.json` still shows J-01 as `partial` and J-02 as `failing` pending that formal review — but every other same-iteration gate (review, QA, audit, closure, ux-regression) independently agrees, with no unresolved issue found.
+**Why:** J-01 closed from `partial` to `passing` this iteration — browser-QA independently re-verified the `StructureChart.tsx` z-index fix live via `getComputedStyle` (UT-06), and phase-closure returned CLOSURE-PASS, resolving iteration 1's CLOSURE-FAIL. J-02 (strategy registry + champion badge) moved from `failing` to `passing`, verified byte-for-byte against `GET /research/strategies` and `GET /research/profiles`. J-04 held green with zero anti-goal violations or regressions, and only J-03 (the on-screen `structure_tape`-vs-`v1` comparison) remains before all four Must-have journeys are green.
 
-**Trend (last 2 iters):**
-- Newly passing this iter: none logged yet (evaluator run pending at summary time; see Why)
-- Newly passing in last 2 iters total: none (J-04's `already_passing` status was an inherited iteration-0 baseline, not newly earned)
-- Regressions in last 2 iters: none
-- Anti-goal violations in last 2 iters: 1 critical (iteration 1, "Honest UI states only" — resolved in-iteration, independently re-verified live this iteration)
-- Iters with no journey state change: 0 of last 2
+**Trend (last 3 iters):**
+- Newly passing this iter: J-01, J-02
+- Newly passing in last 3 iters total: J-01, J-02
+- Regressions in last 3 iters: none
+- Anti-goal violations in last 3 iters: 1 critical (iter-1, "Honest UI states only" — resolved and independently re-verified in iter-2)
+- Iters with no journey state change: 0 of last 3
 
-**Latest evaluator reasoning:** *(Most recent logged entry — iteration 1; iteration 2's own evaluator reasoning had not been logged at summary time.)* J-01's `/structure` page is substantially built and honest — the populated chart + 6 zone cards render byte-for-byte from `GET /research/levels` (UT-06: `140`, not `140.00`), the nav is data-driven (UT-04, no hardcoded href), and 4/5 honest/degraded states pass independent browser QA. The levels-but-no-zones state rendered a silent blank chart box (browser-QA UT-10 FAIL + ux-regression FAIL — a critical honest-state violation); the auditor fixed it (z-index at StructureChart.tsx:99) and I confirmed the fix by opening AUDIT-UT10-after-fix.png (hint "No candles to draw at this as-of time." now renders vs the blank UT-10-no-zones.png). But the independent browser-QA lane never re-ran and phase-closure is CLOSURE-FAIL over three unreconciled records (ui-test-results FAIL / ux-regression FAIL / status.json PASS), so J-01 is `partial`, not `passing`.
+**Latest evaluator reasoning:** Two journeys advanced with independent browser evidence: J-01 closed from `partial` to `passing` (the levels-but-zero-candles honest hint now renders legibly, getComputedStyle-confirmed above the chart canvases, and phase-closure is CLOSURE-PASS — resolving the exact three-record contradiction that produced iter-1's CLOSURE-FAIL), and J-02 built from `failing` to `passing` (both strategy cards + the v1/default champion badge render verbatim from `GET /research/strategies`, cross-checked byte-for-byte against `/research/profiles`, with an honest registry-unavailable state). The frozen foundation holds (empty `apps/backend/` diff, live `config_fingerprint` = `4d665603569b9dbf`, `/performance` unaffected, 5-link nav intact), coherence is COHERENCE-PASS, and the scan is CLEAN with zero anti-goal violations. Only J-03 (the on-screen `structure_tape`-vs-`v1` comparison) remains — explicitly out of scope this iteration and still unbuilt — so this is not yet GOAL_ACHIEVED.
 
 ## What was done
 
-- Built the Registry section (J-02) on `/structure`: two strategy cards (`v1`, `structure_tape`) showing entry/exit rules and `structure_tape`'s three class-scaled tables (stop/reward/size by class), read verbatim from `GET /research/strategies`.
-- Added a champion badge (`v1`/`default`) with a live cross-check caption confirming it matches `GET /research/profiles`'s champion — single source of truth made visible in the browser for the first time.
-- Added an honest "registry unavailable" state for when the backend can't be reached — no fabricated cards, no hardcoded fallback.
-- Zero backend changes this iteration — diff is frontend-only (`types.ts`, `api.ts`, `page.tsx`); no new endpoint, no champion mutation.
-- Independently re-verified J-01's prior blank-chart fix live in the browser (UT-06: computed `z-index:10` confirmed above the chart canvases), closing the exact gap that caused iteration 1's CLOSURE-FAIL.
-- Verified both target journeys (J-01, J-02) pass browser QA: 14 of 15 tests passed (all seven P1 tests green, including the two elevated-P1 J-01 closure/regression cases); one P3 test skipped for a documented, non-blocking tooling limitation.
-- Phase-closure verdict flipped to CLOSURE-PASS (from iteration 1's CLOSURE-FAIL) — review, QA, and audit gates all passed with zero CRITICAL/IMPORTANT findings.
-- Confirmed the J-04 regression sentinel green: backend suite 1146 passed/1 skipped, `config_fingerprint` pinned at `4d665603569b9dbf`, and all four prior surfaces plus the 5-link nav intact.
+- Built the Registry section (J-02) on `/structure`: two strategy cards (`v1`, `structure_tape`) showing entry/exit rules and `structure_tape`'s three class-scaled tables (stop/reward/size by class), read verbatim from `GET /research/strategies`
+- Added a champion badge (`v1`/`default`) with a live cross-check caption confirming it matches `GET /research/profiles`'s champion byte-for-byte — single source of truth made visible in the browser for the first time
+- Added an honest "registry unavailable" state for when the backend can't be reached — no fabricated cards, no hardcoded fallback
+- Zero backend changes this iteration — diff is frontend-only (`types.ts`, `api.ts`, `page.tsx`); no new endpoint, no champion mutation
+- Independently re-verified J-01's prior blank-chart fix live in the browser (UT-06: computed `z-index:10` confirmed above the chart canvases), closing journey J-01 from `partial` to `passing` and resolving iteration 1's CLOSURE-FAIL
+- Reconciled `ui-test-results.md` / `ux-regression.md` / `status.json` into a mutually consistent record; phase-closure verdict is CLOSURE-PASS
+- Verified 2 target journeys (J-01, J-02) pass browser QA: 14 of 15 tests passed (all seven P1 tests green, including the two elevated-P1 J-01 closure/regression cases); one P3 test skipped for a documented, non-blocking tooling limitation
+- Confirmed the J-04 regression sentinel green: backend suite 1146 passed/1 skipped, `config_fingerprint` pinned at `4d665603569b9dbf`, and all four prior surfaces plus the 5-link nav intact
 
 ## What's left
 
-- Journey J-03 ("`structure_tape` is compared to `v1` on screen, honestly") — not yet built; explicitly deferred to iteration 3 per the goal's J-01→J-02→J-03 dependency order.
-- This iteration's goal-evaluator and coherence-auditor passes had not yet run at summary time — `journey-history.json` still shows J-01 `partial` (iteration 1) and J-02 `failing` (iteration 0); this iteration's own closure verdict (CLOSURE-PASS), browser QA (14/15 pass, all J-01/J-02 P1 tests green), and audit (PASS) all point to both advancing, but that determination belongs to the evaluator and is not yet reflected in tracked journey state.
-- Not visible yet: the side-by-side `structure_tape`-vs-`v1` backtest comparison — no comparison or backtest-triggering UI exists anywhere in the app yet.
-- Non-blocking cosmetic: `/structure`'s header subtitle doesn't yet preview the new Registry section (flagged by both audit and ux-regression) — deferred to a future `/structure`-touching iteration.
-- Carry-forward (non-blocking): `PriceChart.tsx` (Cockpit chart, serving J-04) shares the same latent z-index empty-state occlusion pattern `StructureChart.tsx` had before its iteration-1 fix — pre-existing, out of scope.
+- Journey J-03 ("`structure_tape` is compared to `v1` on screen, honestly") failing — not yet built, targeted for iteration 3 per the goal's J-01→J-02→J-03 dependency order
+- Not visible yet: the side-by-side `structure_tape`-vs-`v1` backtest comparison — no comparison or backtest-triggering UI exists anywhere in the app yet
+- Three of the four champion cross-check messages ("still checking," "cross-check unavailable," "mismatch") are unreachable in normal use today — honest safety nets for a state the system can't currently produce, not a gap
+- Non-blocking: `README.md`'s "Structure page" bullet still documents only J-01's levels/zones and is now stale re: the shipped Registry/champion
+- Non-blocking: `/structure`'s header subtitle doesn't yet preview the new Registry section, unlike `/performance`'s subtitle precedent
+- Carry-forward (non-blocking, pre-existing): `PriceChart.tsx` (Cockpit chart, serving J-04) shares the same latent z-index empty-state occlusion pattern `StructureChart.tsx` had before its iteration-1 fix — out of scope for a Structure-focused iteration
 
 ## Next step
 
-Proceed to iteration 3 and build J-03 — the `structure_tape`-vs-`v1` on-screen backtest comparison with its per-class A/B/C breakdown — per the goal's J-01→J-02→J-03 dependency order: J-01 is independently re-verified and closed, J-02 is built and verified, and the J-04 regression sentinel is green. Carry forward one non-blocking polish item to whichever iteration next touches `/structure`: update the page's header subtitle to preview the Registry section, matching `/performance`'s own subtitle precedent.
+Full depth. Build **J-03** — the last remaining journey (`structure_tape`-vs-`v1` on-screen comparison): choose a dataset via `GET /research/datasets`, run both strategies via `POST /research/backtests` at `profile=default` (reuse the Studies job/poll pattern), poll `GET /research/backtests/{id}` to `done`, then render side-by-side aggregates (n, net R, net $, `win_rate`, `max_drawdown_r`) plus the per-class A/B/C `aggregates_by_class` breakdown with `insufficient_sample` verbatim, beside the champion pointer and the founding baseline row from `/research/pnl/ledger`. This is the highest-risk journey (simulated PnL → the "simulated — not indicative of live results" register must appear verbatim; insufficient-sample labeling; champion-moved-never + no-promotion rails), so the full pipeline's audit + coherence + ux-regression + closure lanes are warranted; on the committed keyless reference dataset it must honestly show `structure_tape` as a **non-survivor** with the champion unchanged at `v1`/`default`. J-03 passing makes all four Must-have journeys green → a GOAL_ACHIEVED candidate for iter-3.
+
+Carry two non-blocking polish items (do not gate on them, but ideally fold into the J-03 iteration since it touches `/structure`): (1) `README.md`'s "Structure page" bullet documents only J-01's levels/zones and is now stale re: the shipped Registry/champion; (2) `/structure`'s header subtitle undershoots `/performance`'s precedent by not previewing the Registry section — matters slightly more because on the keyless fixture the Registry is the only default-populated content.
 
 ## Quick verify
 
@@ -81,4 +84,5 @@ From `reports/phase-goal-structure_ui-iter-2-what-to-click.md`:
 | QA | PASS | reports/qa/goal-structure_ui-iter-2-qa.md |
 | Audit | PASS | docs/handoffs/goal-structure_ui-iter-2-audit.md |
 | Closure | CLOSURE-PASS | reports/phase-goal-structure_ui-iter-2-closure-verdict.md |
+| Goal evaluation | CONTINUE | runs/goal-session-structure_ui/iter-2/eval.md |
 | Journey history | — | runs/goal-session-structure_ui/state/journey-history.json |

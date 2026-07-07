@@ -55,6 +55,7 @@ below are the *single* existing owners — the Structure page may only re-format
 | Backtest aggregates (n, net R, net $, `win_rate`, `max_drawdown_r`) | `research/backtests.py:_aggregate` | `GET /research/backtests/{backtest_id}` | run via `POST /research/backtests` (Studies job/poll pattern) |
 | Per-class A/B/C breakdown + `insufficient_sample` | `research/backtests.py:_aggregate_by_class` | `GET /research/backtests/{backtest_id}` (`aggregates_by_class`) | sub-minimum-n shown "insufficient sample" verbatim |
 | PnL-ledger rows + founding baseline | `research/pnl_ledger.py:ledger_projection` | `GET /research/pnl/ledger` | baseline row beside the comparison |
+| Simulated-honesty register string ("simulated — assumed fees/slippage — not indicative of live results") | `REGISTER` constant (`research/backtests.py:142`; imported — never re-defined — by `research/pnl_ledger.py`) | `GET /research/backtests/{backtest_id}` (`register`) + `GET /research/pnl/ledger` (`register`) | read from the payload verbatim; **never** a hardcoded frontend literal (mirrors `/performance` `pnl-register`, whose page notes "no frontend copy of it exists"). Surfaced on `/structure` for the first time by J-03 (iter-3). |
 | Datasets (for choosing the comparison input) | dataset store (`research/datasets`) | `GET /research/datasets` | immutable, checksummed |
 | UI route map (the nav itself) | `apps/backend/app/meta.py` `UI_ROUTES` | `GET /meta/ui-routes` | Structure entry added here; nav renders it verbatim |
 
