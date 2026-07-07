@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "journey": "J-04",
+  "name": "Top navigation stays intact (5 links) and /performance renders the champion unaffected by Structure work",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {"n": 1, "journey": "J-04", "action": {"type": "goto", "url": "/"}, "expect": {"text": "Try: SIM-BUYER"}},
+    {"n": 2, "journey": "J-04", "action": {"type": "click", "target": {"role": "link", "name": "Structure"}}, "expect": {"text": "Structure"}},
+    {"n": 3, "journey": "J-04", "action": {"type": "click", "target": {"role": "link", "name": "Performance"}}, "expect": {"text": "v1"}}
+  ]
+}

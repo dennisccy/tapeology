@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-structure_ui-iter-4",
+  "base_url": "http://localhost:3301",
+  "iteration": 4,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Welcome to the cockpit",
+      "narration": "This is Tapeology's home screen, where anyone can type in a stock ticker and watch live trade-by-trade tape reading unfold.",
+      "point_out": "The hint text shows you can try a built-in demo ticker, SIM-BUYER, right away — no live market data needed.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Try: SIM-BUYER" }
+    },
+    {
+      "n": 2,
+      "title": "Head to the Structure tab",
+      "narration": "One click on \"Structure\" in the top menu opens the newest part of the app — the team's price-level research.",
+      "point_out": "The page loads immediately with three sections stacked top to bottom.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "link", "name": "Structure" } },
+      "expect": { "text": "Structure" }
+    },
+    {
+      "n": 3,
+      "title": "Choose a stock to look at",
+      "narration": "At the top of the Structure page, type in the stock symbol you want to examine.",
+      "point_out": "The field sits right where you'd expect it, no extra clicks needed.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "e.g. PG" }, "text": "PG" }
+    },
+    {
+      "n": 4,
+      "title": "Choose a point in time",
+      "narration": "Then enter the exact date and time you want the chart to look back from.",
+      "point_out": "Both fields sit side by side, ready before you click Load.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "2026-06-09T21:00:00Z" }, "text": "2026-06-09T21:00:00Z" }
+    },
+    {
+      "n": 5,
+      "title": "An honest answer, not a guess",
+      "narration": "Click Load, and the app tells you straight away whether it actually has recorded price history for that moment.",
+      "point_out": "This particular moment has no recorded price history loaded yet, so the app says so plainly instead of drawing up a fake chart.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "No bar series recorded for PG." }
+    },
+    {
+      "n": 6,
+      "title": "Two strategies, side by side",
+      "narration": "Scroll down to the Registry to see both trading approaches laid out together, each with its own rules for entering and exiting a trade.",
+      "point_out": "A badge confirms which approach currently holds the title of champion — right now, the original one.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "heading", "name": "Registry" } },
+      "expect": { "text": "class_r_multiple_bounded_by_next_opposing_level" }
+    },
+    {
+      "n": 7,
+      "title": "Put both strategies to the test",
+      "narration": "Further down, the Comparison section lets anyone pick a recorded dataset and, with one click, run both strategies over it side by side.",
+      "point_out": "The champion box never changes from this screen, and a reference panel already shows a real, simulated profit-and-loss result, clearly labeled as not real money.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "text": "Founding baseline (PnL ledger)" } },
+      "expect": { "text": "founding baseline — strategy v1 on default" }
+    },
+    {
+      "n": 8,
+      "title": "Everything else still works",
+      "narration": "Last stop: the Performance page, opened from that same top menu, to confirm this deeper research work didn't disturb anything already running in the app.",
+      "point_out": "The same champion badge shows up here too, staying consistent everywhere it appears.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "link", "name": "Performance" } },
+      "expect": { "text": "v1" }
+    }
+  ]
+}
