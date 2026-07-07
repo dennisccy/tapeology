@@ -2,9 +2,12 @@ import { API_BASE, WATCH_REQUEST_TIMEOUT_MS } from "./config";
 import type {
   Analytics,
   AnalyticsResult,
+  Backtest,
   BarSeriesListResult,
+  CreateBacktestParams,
   CreateStudyParams,
   CreateStudyResult,
+  DatasetsListResult,
   DeclareResult,
   Hint,
   JournalDetail,
@@ -924,5 +927,73 @@ export async function fetchBarSeriesList(): Promise<{
     return { ok: false, data: null, error: "The bar series list could not be loaded." };
   } catch {
     return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// --- structure_tape-vs-v1 backtest comparison (era-3 capability 4 / era-4 capability 5, surfaced
+// this interlude at /structure's Comparison section, J-03) ---------------------------------------
+
+// GET /research/datasets (Data Contract row 30) — every registered dataset's metadata, served
+// VERBATIM (each file checksum-verified on load). Mirrors `fetchBarSeriesList()`'s shape byte-for-
+// byte (a LIST endpoint with no query params). `data: null` on any failure so the caller shows an
+// explicit unavailable state rather than a fabricated/empty selector.
+export async function fetchDatasets(): Promise<{
+  ok: boolean;
+  data: DatasetsListResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/datasets`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DatasetsListResult };
+    }
+    return { ok: false, data: null, error: "The dataset list could not be loaded." };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/backtests (era-3 capability 4, J-03) — create + START a deterministic backtest
+// job over one registered dataset. Exactly the three fields `BacktestRequest` accepts
+// (routes.py:160-171) — no `null_baseline_seed` field exists on this request. The backend's 404
+// (unknown dataset) / 422 (unknown strategy/profile) detail is surfaced VERBATIM — never coerced.
+// On success the queued payload is returned; the frontend computes nothing.
+export async function createBacktest(
+  params: CreateBacktestParams,
+): Promise<{ ok: boolean; backtest?: Backtest; status?: number; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/backtests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, backtest: data.backtest as Backtest, status: res.status };
+    }
+    let error = "The backtest could not be created.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, status: res.status, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/backtests/{id} (era-3 capability 4, J-03) — one backtest's status + stored
+// report, served VERBATIM. Returns `null` on a 404 / any error (the caller keeps the prior view;
+// never fabricates a backtest) — mirrors `fetchStudy()`'s pattern byte-for-byte.
+export async function fetchBacktest(backtestId: string): Promise<Backtest | null> {
+  try {
+    const res = await fetch(`${API_BASE}/research/backtests/${encodeURIComponent(backtestId)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data?.backtest as Backtest) ?? null;
+  } catch {
+    return null;
   }
 }

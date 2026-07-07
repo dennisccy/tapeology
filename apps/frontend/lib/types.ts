@@ -1077,3 +1077,105 @@ export interface StrategiesPayload {
   strategies: Strategy[];
   champion: ProfilesPayload["champion"];
 }
+
+// --- Structure: the structure_tape-vs-v1 backtest comparison (era-3 capability 4 / era-4
+// capability 5, surfaced this interlude at the /structure Comparison section, J-03). Every field
+// below is read VERBATIM from GET /research/datasets and GET /research/backtests/{id}
+// (app/research/backtests.py's `_aggregate` / `_aggregate_by_class`, the runner's persisted
+// `result` block) — the Comparison section recomputes no R, $, win-rate, or class partition.
+
+// One registered dataset's metadata (GET /research/datasets — Data Contract row 30). A dataset is
+// a checksum-verified store record like `BarSeriesRecord`, but carries no embedded `bars` field —
+// its content is a raw trade/quote event stream, not candles.
+export interface Dataset {
+  id: string;
+  symbol: string;
+  window_start_utc: string;
+  window_end_utc: string;
+  data_feed: string;
+  event_counts: { trades: number; quotes: number; total: number };
+  checksum: string;
+  split: string;
+  source: string;
+  source_kind: string;
+  source_id: string;
+  epoch_anchor: number | null;
+  created_utc: string;
+}
+
+// GET /research/datasets — the full list payload (mirrors `BarSeriesListResult`'s shape: a LIST
+// endpoint with no query params). A corrupt file surfaces explicitly in `integrity_errors` — never
+// silently hidden, never served as data.
+export interface DatasetsListResult {
+  datasets: Dataset[];
+  integrity_errors: { file: string; error: string }[];
+}
+
+// One population's aggregate (`GET /research/backtests/{id}`'s `result.aggregates` /
+// `result.null_baseline.aggregates` — `backtests.py`'s `_aggregate()`). `win_rate` /
+// `max_drawdown_r` are honestly `null` on an empty population (n=0) — never a fabricated 0.
+export interface BacktestAggregate {
+  n: number;
+  gross_r: number;
+  net_r: number;
+  gross_usd: number;
+  net_usd: number;
+  win_rate: number | null;
+  max_drawdown_r: number | null;
+}
+
+// One class's aggregate inside `result.aggregates_by_class` — the SAME `BacktestAggregate` shape
+// plus the config-owned `insufficient_sample` label (`backtests.py`'s `_aggregate_by_class()`,
+// reusing the existing `pnl_min_sample_size` floor — never a fourth minimum). Rendered via
+// `Object.entries()` in the payload's own key order (the `ClassMapTable` precedent) — always all
+// three classes (A/B/C), even a class with zero trades (the honest `_aggregate([])` emptiness).
+export interface BacktestClassAggregate extends BacktestAggregate {
+  insufficient_sample: boolean;
+}
+
+// The terminal `result` block (`GET /research/backtests/{id}`) — present ONLY once `status` is
+// "done". A `cancelled` backtest carries NO result block at all (`backtests.py`'s own docstring:
+// "a cancelled backtest carries NO result block" — a partial simulated PnL is never served, unlike
+// a Study's cancelled-but-partial results). `dataset`/`strategy` reuse the EXISTING `Dataset` /
+// `Strategy` types verbatim (the report echoes the exact stored dataset metadata and the resolved
+// strategy config — never a second shape).
+export interface BacktestResult {
+  register: string;
+  dataset: Dataset;
+  strategy: Strategy;
+  config_fingerprint: string;
+  aggregates: BacktestAggregate;
+  aggregates_by_class: Record<string, BacktestClassAggregate>;
+  null_baseline: {
+    seed: number;
+    entry_count: number;
+    aggregates: BacktestAggregate;
+  };
+}
+
+// GET /research/backtests/{id} (and each `GET /research/backtests` list row) — the full backtest
+// projection, read VERBATIM. `result` is present only once `status` is "done"; `error` is present
+// only once `status` is "failed" (an explicit error, never an empty success); `events_processed` is
+// present only while "running" (throttled progress, the `Study.events_processed` precedent). The
+// Comparison section renders nothing until `status === "done"` (and `result` itself is present) —
+// mirroring `StudyResultsView`'s terminal-with-results gate, but WITHOUT including "cancelled"
+// (which never carries a result here).
+export interface Backtest {
+  id: string;
+  status: "queued" | "running" | "done" | "cancelled" | "failed";
+  dataset_id: string;
+  strategy_id: string;
+  profile: string;
+  events_processed?: number;
+  error?: string;
+  result?: BacktestResult;
+}
+
+// Body for POST /research/backtests (era-3 capability 4, J-03) — exactly the three fields
+// `BacktestRequest` accepts (routes.py:160-171); no `null_baseline_seed` field exists on this
+// request (the backend always falls back to its own config-owned default seed).
+export interface CreateBacktestParams {
+  dataset_id: string;
+  strategy_id: string;
+  profile: string;
+}
