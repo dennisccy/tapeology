@@ -1,0 +1,18 @@
+{
+  "extended": false,
+  "n_new_journeys": 0,
+  "n_proposals": 0,
+  "dry": true,
+  "summary": "Honest dry stop: bars store empty so structure_tape is unevaluable (n=0-3 < min 5) on all 7 single-symbol PG datasets, no pnl-scan and backend down => no hold-out survivor; dataset-library diversification needs operator-gated real bars and belongs to the separate Era-5 goal (out of this UI-interlude's Non-Goals); all 4 Key Capabilities already ship browser-verified and the remaining surfaces are explicit Non-Goals — nothing honest to promote, goal.md left untouched.",
+  "screen": {
+    "pnl_scan_present": false,
+    "backend_reachable": false,
+    "bars_store_recorded_series": 0,
+    "registered_datasets": 7,
+    "distinct_symbols": ["PG"],
+    "structure_tape_max_n": 3,
+    "config_min_sample": 5,
+    "champion": "v1/default (unmoved)",
+    "verdict": "no_survivor_insufficient_n"
+  }
+}
