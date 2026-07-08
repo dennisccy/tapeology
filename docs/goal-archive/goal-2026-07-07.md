@@ -1,0 +1,296 @@
+# Tapeology — Project Goal (Interlude: Structure, made visible — UI surfacing)
+
+> Eras 1–4 are the **foundation** of this goal and MUST NOT regress. Eras 1–2 (tape reading + the
+> research evolution, journeys J-01 – J-68, GOAL_ACHIEVED) are archived at
+> [`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md). Era 3 (the profit-research
+> measurement machine, J-01 – J-09, GOAL_ACHIEVED) and Era 4 (the structure-and-tape evolution,
+> J-01 – J-07, GOAL_ACHIEVED) are now frozen foundation; their full records live in git history and in
+> `reports/goal-session-tape_to_profit-delivered.md` and
+> `reports/goal-session-tape_to_profit_support_resistence-delivered.md`.
+>
+> **This chapter is an operator-directed UI-surfacing interlude, not one of the numbered research eras.**
+> It pulls forward the intent of Card 5.9 ("Library health & UI") in
+> [`docs/research-directions.md`](research-directions.md). Era 5 "The Library" (recording real
+> multi-symbol/multi-regime data) remains the next headline research era per that document's router
+> (Part 5.1); this interlude does not consume the Era-5 slot and adds no research finding — it makes the
+> era-4 structure work visible in the app.
+
+## Vision
+
+The era-4 structure-and-tape stack is real and honest — multi-timeframe support/resistance **levels**,
+**A/B/C confluence zones**, a **strategy registry** (`v1` + `structure_tape`), and the honest
+`structure_tape`-vs-`v1` **backtest comparison** with its per-class PnL breakdown. But every one of these
+lives ONLY on REST / MCP / CLI surfaces: the web app still shows its four pre-era-4 tabs, and a person
+cannot **see** any of it. Research a human cannot inspect erodes trust.
+
+This interlude gives the structure work a browser home: a read-only **Structure** view that renders levels
+and confluence zones on a price chart, the strategy registry and current champion, and the honest
+`structure_tape`-vs-`v1` comparison with its per-class A/B/C breakdown. It reads **every** value verbatim
+from its existing canonical endpoint, recomputes nothing, and is honest about the mostly-empty keyless data
+reality. It changes **no** computation, strategy, promotion, or measurement — it is pure visibility.
+
+Data reality, stated up front: on the committed **keyless** fixture there are no recorded multi-timeframe
+bars, so levels/zones are largely empty and `structure_tape` is honestly unevaluable (n below the minimum).
+The UI is built to say that plainly. Real levels, real zones, and a genuine hold-out comparison await Era 5
+"The Library" recording real bars; this interlude surfaces what exists and is honest about what does not.
+
+## Target Users
+
+- The project owner (a discretionary intraday trader) who wants to **see** the computed structure and the
+  honest `structure_tape`-vs-`v1` comparison inside the app — not only via `curl` or the MCP tools.
+- AI dev-chain agents (the goal-mode UI chain) building and browser-verifying the new surface.
+
+## Foundation invariants (still law — eras 1–4)
+
+The era-1–2 constitution ([`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md)) and the
+era-3 measurement machine remain binding verbatim on ALL new code: price-impact-over-aggression; honest
+uncertainty; no fabricated data; single source of truth; no magic numbers; provider-agnostic engine;
+deterministic & reproducible; no secrets in source; research read-only over the engine; journal/record
+integrity; source/feed/`config_fingerprint` honesty; the existing surfaces (`/`, `/journal`,
+`/journal/[id]`, `/studies`, `/performance`) stay intact.
+
+In addition, **era 4 (the structure-and-tape stack) is now frozen foundation**:
+
+1. The **tape engine** emits its five states byte-identically under `default`; the live cockpit and every
+   archived surface stay unchanged (equivalence-tested; `config_fingerprint` `4d665603569b9dbf` pinned).
+2. The **structure computations** — the bar store, the deterministic S/R levels module, the confluence
+   A/B/C grading, the strategy registry (`v1` + `structure_tape`), the class-scaled stop/reward/size math,
+   the per-class backtest breakdown, and the named-strategy sweep — stay byte-identical and are the **only**
+   owners of those values. This interlude reads them; it never recomputes or re-implements them.
+3. **`v1`, `default`, and the champion pointer are frozen.** This interlude adds a read surface only; it
+   never mutates a strategy, a profile, an engine default, or the champion pointer, and it moves the
+   champion **never** (promotion remains the sweep's act on hold-out data).
+
+## Success Criteria
+
+In priority order — honesty and non-regression outrank everything:
+
+1. **Nothing existing regresses.** The full backend suite stays green, the engine equivalence test keeps
+   proving byte-identical `default` outputs, `config_fingerprint` stays `4d665603569b9dbf`, and every
+   era-1–4 surface and capability keeps working.
+2. **The structure stack is visible.** A **Structure** tab renders, for a chosen symbol, its S/R levels and
+   A/B/C confluence zones on a price chart; the strategy registry (`v1` + `structure_tape`) with the current
+   champion; and a `structure_tape`-vs-`v1` backtest comparison with the per-class A/B/C breakdown.
+3. **Single source of truth is visibly preserved.** Every displayed value — a level's price/timeframe/class,
+   a zone's class, net R, net $, n, `insufficient_sample`, the champion — is read **verbatim** from its
+   canonical endpoint and matches the REST/MCP payload byte-for-byte. The UI recomputes nothing (no
+   client-side grading, PnL math, or aggregation).
+4. **Honesty is visible.** Empty and degraded states — no recorded bars, no levels, no zones, insufficient
+   n, missing credentials — each render as an explicit, distinct state; nothing is fabricated; the
+   "simulated — not indicative of live results" register appears verbatim wherever simulated PnL or size is
+   shown.
+
+## Key Capabilities
+
+Layered strictly on top of the era-1–4 capabilities, which remain unchanged. This interlude adds **no**
+backend computation and **no** new canonical value — only a read surface and one additive nav entry.
+
+1. **A Structure route/tab.** A new `/structure` page following the `/performance` page pattern; its nav
+   entry is owned by the backend route registry (`GET /meta/ui-routes`), so the client NavBar surfaces it
+   without a hardcoded list.
+2. **Levels & confluence-zones visualization.** For a chosen symbol + as-of time, a `lightweight-charts`
+   price chart (candles from the symbol's recorded bar series) with one price line per level labelled by
+   timeframe, plus a confluence-zones table badged **A/B/C** — the class read verbatim from the served
+   `zone.class`.
+3. **Strategy registry & champion view.** `v1` and `structure_tape` shown side by side (entry rule, exit
+   precedence, `structure_tape`'s class-scaled `stop_bps_by_class` / `r_multiple_by_class` /
+   `size_multiple_by_class`), with the champion (founding `v1`/`default`) badged.
+4. **`structure_tape`-vs-`v1` comparison.** Run both strategies on a chosen dataset via the existing
+   backtest job (reusing the Studies job/poll pattern), then render side-by-side aggregates + the per-class
+   A/B/C breakdown (`aggregates_by_class`, `insufficient_sample` shown verbatim), beside the champion
+   pointer and founding baseline row. On the keyless reference dataset it honestly shows `structure_tape`
+   as a non-survivor and the champion unchanged.
+
+## Non-Goals
+
+- **No new backend computation or endpoint for the UI.** The Structure view consumes existing canonical
+  endpoints only; it introduces no second source of truth. If a genuinely new value were ever needed it
+  would get exactly one owning endpoint — but the intent here is **zero** new computation.
+- No brokerage integration, order placement, routing, or execution of any kind — **neither real-money nor
+  paper-trading APIs**. Running a backtest is an offline research job over already-recorded immutable
+  datasets, exactly as the Studies page already does; it places nothing.
+- No machine learning, no trading advice, no imperative cues, no prediction or expected-return language in
+  any UI copy.
+- No general-purpose charting, multi-symbol dashboards, stock scanning/screening, news/sentiment, or
+  fundamentals — unchanged from the archived eras.
+- No mutation of `default`, `v1`, the engine, the `config_fingerprint`, or any era-1–4 behaviour; the only
+  backend edit is the additive `/structure` entry in the route registry.
+- **No champion promotion from the UI.** The comparison view runs backtests and diffs their reports; it
+  never moves the champion pointer — promotion stays the sweep's hold-out act.
+- **No `/datasets` library-inventory page** (that is roadmap Card 5.9's own scope, dependent on Era-5
+  regime/tradeability data) — out of scope for this interlude.
+
+## Constraints
+
+- **Stack (carried over):** Frontend Next.js 15 + TypeScript + Tailwind v3 (npm), `lightweight-charts`,
+  dark-only. Backend Python 3.12 + FastAPI. Backend `http://localhost:8000`, frontend
+  `http://localhost:3000`. Sim tickers stay keyless.
+- **UI read discipline:** the Structure view reads ONLY canonical endpoints — `/research/bars`,
+  `/research/levels`, `/research/strategies`, `/research/profiles`, `/research/datasets`,
+  `/research/backtests` (+ `/{id}`), `/research/pnl/ledger`, and `/meta/ui-routes` — and renders their
+  values **verbatim**. Zero client-side recomputation of levels, classes, PnL, aggregates, or the champion.
+- **Nav discipline:** the Structure tab is registered in the backend route registry
+  (`apps/backend/app/meta.py` `UI_ROUTES`, the owner) and surfaced via `GET /meta/ui-routes`; the client
+  NavBar is data-driven and MUST NOT hardcode the route.
+- **Honest-state discipline:** no fabricated data; `no_bar_series_for_symbol`, `insufficient_sample`, empty
+  arrays, and the missing-credentials (503) state each render as an explicit, distinct UI state.
+- **PnL honesty register:** unchanged from eras 3–4 — a $ never without its R, n, basis, assumptions, null
+  baseline, and the visible "simulated — not indicative of live results" register; sub-minimum-n results
+  labelled "insufficient sample"; train and hold-out never pooled.
+- **Frozen-foundation discipline:** no edits to `config.py` (fingerprint `4d665603569b9dbf`),
+  `research/levels.py`, `research/backtests.py`, `research/strategies.py`, the engine, or any existing
+  surface's behaviour, beyond the additive nav-registry entry.
+- **MCP read-only discipline:** unchanged — the MCP server stays a byte-identical proxy of the GET surface
+  and gains no new tool for this interlude.
+
+## Product Shape
+
+Nav (top bar) gains exactly ONE tab: **Cockpit `/` · Journal `/journal` (+ `/journal/[id]`) · Studies
+`/studies` · Performance `/performance` · Structure `/structure` (new)**. The new tab's entry is owned by
+`apps/backend/app/meta.py` `UI_ROUTES` and served via `GET /meta/ui-routes`; the client renders it verbatim
+(no hardcoded nav list).
+
+**Data Contract (canonical values — unchanged; the Structure view owns NONE of them):** the Structure
+surface renders values already owned by their era-1–4 owners and adds no new owned value and no new
+computation:
+
+- Bar series and checksums — owned by the bar store; read via `/research/bars*`.
+- Support/resistance levels and A/B/C confluence classes — owned by the S/R module (no lookahead); read via
+  `/research/levels`; rendered verbatim (class from `zone.class`).
+- Registered strategies and the champion pointer — config-owned; read via `/research/strategies` and
+  `/research/profiles`.
+- Backtest aggregates and the per-class `aggregates_by_class` breakdown — owned by the backtest runner; read
+  via `/research/backtests/{id}`.
+- PnL-ledger rows and the founding baseline — owned by the PnL ledger; read via `/research/pnl/ledger`.
+- The UI route map — owned by `apps/backend/app/meta.py`; read via `/meta/ui-routes`.
+
+No new server-side computation, no new owned value, no divergent serialization — the Structure view is a
+pure read/visualize surface.
+
+## Must-have user journeys
+
+Journeys **J-01 – J-04** are the visibility interlude. **Frontend is present** (browser-verifiable). All are
+verifiable **keyless** on committed fixtures — the levels/zones surfaces render honest empty states where no
+bars are recorded, and the comparison is demoable on the committed keyless reference dataset. Natural
+dependency order: J-01 → J-02 → J-03; J-04 guards continuously. The foundation (eras 1–4) MUST NOT regress.
+
+- **J-01: The Structure tab renders S/R levels and A/B/C confluence zones**
+  - Steps:
+    1. Create the `/structure` route (`apps/frontend/app/structure/page.tsx`, following the `/performance`
+       page pattern) and add `{"path": "/structure", "label": "Structure", "nav": true}` to
+       `apps/backend/app/meta.py` `UI_ROUTES` so the tab appears via `GET /meta/ui-routes` (extend the
+       owner, not the client NavBar)
+    2. Choose a symbol (reuse `SymbolSearch`) and an as-of time; fetch `GET /research/levels?symbol=&as_of=`;
+       render a `lightweight-charts` price chart (candles from that symbol's `/research/bars` series) with
+       one dashed price line per level labelled by timeframe, plus a confluence-zones table badged **A/B/C**
+       read verbatim from `zone.class`, listing member levels (price + timeframe) and the served `score`
+    3. Exercise the empty states (a symbol with no recorded bars; a series with no levels; levels with no
+       qualifying zone)
+  - Acceptance: the Structure tab is reachable from the nav (proving the `meta.py`-owned route, not a
+    hardcoded client link); for a symbol with a recorded bar series, the rendered level lines and the zone
+    table match `GET /research/levels` **byte-for-byte** (A/B/C taken from `zone.class`, never recomputed
+    from breadth or score); `no_bar_series_for_symbol` → an explicit "no bar series recorded — recording
+    historical bars needs provider credentials" state; series-but-no-levels and no-zones each render a
+    distinct honest state; nothing is fabricated. *(Keyless; browser-verifiable.)*
+
+- **J-02: The strategy registry and champion are visible**
+  - Steps:
+    1. Fetch `GET /research/strategies`; render `v1` and `structure_tape` as two cards showing each entry
+       rule, the exit precedence (`r_stop → reward_target → state_flip → horizon`), and `structure_tape`'s
+       class-scaled `stop_bps_by_class` / `r_multiple_by_class` / `size_multiple_by_class`
+    2. Badge the champion (`champion.strategy_id` / `champion.profile`), cross-checking `/research/profiles`
+  - Acceptance: both registered strategies are shown with their config-owned parameters read verbatim from
+    `GET /research/strategies` (no client-side reconstruction of the registry); the champion (founding
+    `v1`/`default`) is badged and matches both `/research/strategies` and `/research/profiles`; the registry
+    view fabricates no strategy or parameter. *(Keyless; browser-verifiable.)*
+
+- **J-03: `structure_tape` is compared to `v1` on screen, honestly**
+  - Steps:
+    1. Choose a dataset (`GET /research/datasets`); run `structure_tape` and the champion strategy (`v1`) on
+       it via `POST /research/backtests` at `profile=default`, polling `GET /research/backtests/{id}` (reuse
+       the Studies job/poll pattern) until both are `done`
+    2. Render side-by-side aggregates (n, net R, net $, `win_rate`, `max_drawdown_r`) plus the per-class
+       **A/B/C** table from `aggregates_by_class` (with `insufficient_sample` shown verbatim), beside the
+       champion pointer and the founding baseline row from `/research/pnl/ledger`
+    3. Show the honest keyless outcome on the committed reference dataset
+  - Acceptance: the comparison renders both strategies' aggregates and the per-class breakdown read
+    **verbatim** from `GET /research/backtests/{id}` (no recomputed R, $, win-rate, or class partition);
+    sub-minimum-n classes and splits show "insufficient sample"; the "simulated — not indicative of live
+    results" register appears verbatim; on the committed keyless reference dataset it honestly shows
+    `structure_tape` as a **non-survivor** with insufficient n and the champion unchanged at `v1`/`default`;
+    the UI moves the champion pointer **never**; deterministic. *(Keyless-demoable on the reference dataset;
+    real comparisons await Era-5 data; browser-verifiable.)*
+
+- **J-04: The foundation is unchanged (regression sentinel)**
+  - Steps:
+    1. Run the sim cockpit flows (`SIM-BUYER` settles `buyer_control`, `SIM-SELLER` settles `seller_control`)
+       and spot-check `/journal`, `/studies`, `/performance` in the browser; run the full backend suite and
+       the engine equivalence test
+    2. Confirm `config_fingerprint` is still `4d665603569b9dbf` and the ONLY backend diff is the additive
+       `meta.py` `UI_ROUTES` entry — `config.py`, `research/levels.py`, `research/backtests.py`,
+       `research/strategies.py`, and the engine are untouched
+  - Acceptance: the archived-era surfaces behave exactly as shipped; the full backend suite passes (no test
+    deleted or weakened to make new work pass); the equivalence test proves **byte-identical** `default`
+    state/confidence/features/history and the pinned `config_fingerprint`; `v1` and the champion pointer are
+    untouched; the Structure UI adds no backend computation and no new endpoint and reads only canonical
+    endpoints. This sentinel makes "don't break the foundation, don't create a second source of truth" an
+    enforced must-have of this interlude. *(Browser-verifiable + automated.)*
+
+<!-- AUTO:journeys -->
+<!-- /AUTO:journeys -->
+
+## Anti-goals
+
+**Immutable rails — the identity of the project (copied verbatim from
+[`docs/research-directions.md`](research-directions.md) §0.3; enforced by existing tests and audits; only
+ever grow more specific, never weaker):**
+
+1. **No execution path, ever** — no brokerage/trading API, no order tickets, no live OR paper trading, no
+   "just to test" exceptions. (`apps/backend/tests/test_no_execution_path.py` is the tier-1 guard; new
+   research code adds matching guard tests, never weakens them.) *(critical)*
+2. **No profit claims and no advice** — every $ figure is a simulated measurement carrying R, n,
+   fee/slippage assumptions, and its train/hold-out/forward basis. No prediction language, no imperative
+   trading cues. *(critical)*
+3. **Frozen foundations** — the `v1` strategy, the `default` profile, the tape engine's five states and
+   thresholds, and archived-era behavior stay byte-identical. New work is additive and versioned beside
+   them, never a mutation of them. *(critical)*
+4. **Hold-out-only promotion** — the champion pointer moves only on a genuine hold-out survival through the
+   sweep gate (plus the era-6 statistical gates once they exist). Train-only wins are labeled overfit. Never
+   lower a minimum sample size, widen a gate, or pool across feeds/fingerprints to manufacture a survivor.
+   *(critical)*
+5. **No lookahead** — every value computed as-of T uses only events/bars fully completed at T. (See the
+   forming-bar rule in card 6.4.) *(critical)*
+6. **Single source of truth** — each shared value is computed once, owned by one canonical endpoint, and
+   read verbatim by REST/WS/UI/MCP/reports. The coherence-auditor hard-fails violations. *(critical)*
+7. **Deterministic and seeded** — every random draw uses a config-owned recorded seed; identical requests
+   reproduce byte-identical results; no wall-clock, no unseeded randomness in any research artifact.
+8. **Read-only MCP** — MCP tools remain byte-identical proxies of GET endpoints; nothing on the MCP surface
+   can change state. *(critical)*
+9. **Immutable data** — registered datasets and bar series are append-only, checksummed, never re-tagged,
+   never deleted, never content-perturbed. Splits are frozen at registration. *(critical)*
+10. **Persistence stays scoped** — no ambient recording of live streams; recording is an explicit, logged
+    act. *(critical)*
+
+**Interlude-specific anti-goals (added, not weakening any rail above):**
+
+- **The Structure UI recomputes nothing.** Every displayed value — level price/timeframe/type, zone class,
+  net R, net $, n, `insufficient_sample`, the champion — is read verbatim from its canonical endpoint. No
+  client-side grading, PnL math, aggregation, or champion resolution. A number that diverges from its API/MCP
+  payload is a defect (trap T10). *(critical)*
+- **No new backend computation or endpoint.** This interlude consumes the existing canonical endpoints; the
+  only backend edit is the additive `/structure` entry in the `meta.py` route registry (the nav owner). It
+  creates no second implementation of any value. *(critical)*
+- **Honest UI states only.** No fabricated chart, level, zone, trade, fill, or PnL to force a green journey;
+  every failure mode (no bar series, no levels, no zones, insufficient n, missing credentials, backend
+  unreachable) surfaces an explicit, distinct state. *(critical)*
+- **The UI never promotes.** The comparison view runs backtests and diffs their reports; it MUST NOT move
+  the champion pointer or write the PnL ledger — promotion remains the sweep's hold-out act. *(critical)*
+- **No vocabulary drift** (trap T9). No "paper trading", "shadow trading", "annualized", "expected profit",
+  or advice/imperative phrasing anywhere in the UI copy; simulated PnL and simulated size always carry the
+  visible "simulated — not indicative of live results" register.
+- **The enhancement loop stays inside its box.** The goal-proposer may append journeys ONLY inside the
+  AUTO:journeys marker block above — it MUST NOT edit human-authored journeys, this Anti-goals section, or
+  any other part of this file; proposed journeys MUST carry a PnL-ledger (or, for a read surface, a
+  single-source-of-truth) acceptance criterion, keep the `default` profile and `v1` byte-identical, and
+  include a [NEW]-flagged walkthrough. Manufacturing a low-value journey just to keep the loop alive is a
+  failure. *(critical)*
