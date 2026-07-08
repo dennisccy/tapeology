@@ -1,0 +1,387 @@
+# Tapeology — Project Goal (Era 5 — The Library: real bars, fetched keyless from Yahoo Finance)
+
+> Eras 1–4 are the **foundation** of this goal and MUST NOT regress. Eras 1–2 (tape reading + the research
+> evolution, journeys J-01 – J-68, GOAL_ACHIEVED) are archived at
+> [`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md). Era 3 (the profit-research
+> measurement machine, J-01 – J-09) and Era 4 (the structure-and-tape evolution, J-01 – J-07) are frozen
+> foundation; their records live in git history and in `reports/goal-session-tape_to_profit-delivered.md` and
+> `reports/goal-session-tape_to_profit_support_resistence-delivered.md`. The **structure-UI interlude**
+> (surfacing era-4 onto `/structure`, J-01 – J-04, GOAL_ACHIEVED 2026-07-07) is archived at
+> [`docs/goal-archive/goal-2026-07-07.md`](goal-archive/goal-2026-07-07.md); its `/structure` page is the
+> read surface this era now fills with real data.
+>
+> **This IS Era 5 "The Library"** — the next headline research era per
+> [`docs/research-directions.md`](research-directions.md) Part 5.1 (Card 5.2). It is opened here on the
+> **bars / structure** side, **keyless**: the operator fetches real historical OHLCV bars from **Yahoo
+> Finance** directly in the app, and the era-4 structure stack finally computes on real data. The
+> **tick-tape** side of Era 5 (the Alpaca free-tier trades/quotes backfill recorder, the frozen 15-symbol
+> panel, regime taxonomy, tradeability scoring, the forward ledger, and a full datasets-library UI — roadmap
+> cards 5.2 tick-side – 5.9) remains the **credentialed continuation** and is explicitly out of scope for
+> this chapter.
+
+## Vision
+
+The measurement machine has never had enough real data to say anything: every era-3/4 result is
+`insufficient sample`, and era-4 `structure_tape` is honestly **unevaluable** (n=1 < 5). The one missing
+ingredient is real bars — and recording them has always needed provider credentials the operator does not
+have, so every run "dry-stopped."
+
+**Yahoo Finance (`yfinance`) is a keyless source of real OHLCV bars.** This era ends the *bar-data* starvation
+honestly and for **$0**: a person opens the app, picks a symbol / timeframe / date range on the **Structure**
+page, clicks **Fetch from Yahoo Finance**, and real candles appear — with real support/resistance **levels**
+and **A/B/C confluence zones** computed by the existing era-4 module on that real data. Fetched data is stored
+immutably (append-only, checksummed) and indexed so a second look is instant and never re-downloads. It is
+**additive**: Yahoo becomes the default bar source (keyless), while the Alpaca path (tick tape + live) stays
+byte-identical and opt-in for when credentials exist.
+
+Data reality, stated up front: `yfinance` serves unlimited daily/weekly history but limits intraday (`1m` ≈
+the last few days, `5m` ≈ two months, `1h`/`4h` ≈ two years), and does not provide `4h` natively — this era
+derives it deterministically from `1h`. Where Yahoo cannot serve a window, the app says so plainly; it never
+fabricates a bar.
+
+## Target Users
+
+- The project owner (a discretionary intraday trader) who wants to **fetch real bars from the app, with no
+  credentials**, and **see** the computed structure on real data — not only on the empty keyless fixture.
+- AI dev-chain agents (the goal-mode chain) building and browser-verifying the fetch surface and the keyless
+  data path.
+
+## Foundation invariants (still law — eras 1–4)
+
+The era-1–2 constitution ([`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md)), the
+era-3 measurement machine, and the era-4 structure stack remain binding verbatim on ALL new code:
+price-impact-over-aggression; honest uncertainty; **no fabricated data**; single source of truth; no magic
+numbers; provider-agnostic engine; deterministic & reproducible; no secrets in source; research read-only over
+the engine; journal/record integrity; source/feed/`config_fingerprint` honesty; the existing surfaces (`/`,
+`/journal`, `/journal/[id]`, `/studies`, `/performance`, `/structure`) stay intact.
+
+In addition, these stay **frozen foundation**:
+
+1. The **tape engine** emits its five states byte-identically under `default`; the live cockpit and every
+   archived surface stay unchanged (equivalence-tested; `config_fingerprint` `4d665603569b9dbf` pinned).
+2. The **structure computations** — the deterministic S/R levels module, the confluence A/B/C grading, the
+   strategy registry (`v1` + `structure_tape`), the class-scaled math, the per-class backtest breakdown, and
+   the named-strategy sweep — stay byte-identical and are the **only** owners of those values. This era feeds
+   them real bars; it never recomputes or re-implements them.
+3. The **canonical bar store** (`apps/backend/app/research/bars.py`, the append-only double-sha256 JSON
+   `BarStore`) stays byte-identical and remains the **one source of truth** for bar data. New work reads and
+   writes through it; it is never replaced by a second bar store.
+4. **`v1`, `default`, and the champion pointer are frozen.** This era fetches and displays data; it never
+   mutates a strategy, a profile, an engine default, or the champion pointer, and it moves the champion
+   **never** (promotion remains the sweep's act on hold-out data).
+5. The **Alpaca adapter and its credentialed path** (bars, ticks, live, search, clock) stay byte-identical and
+   selectable (opt-in). Making Yahoo the default bar vendor never removes or degrades the Alpaca path.
+
+## Success Criteria
+
+In priority order — honesty and non-regression outrank everything:
+
+1. **Nothing existing regresses.** The full backend suite stays green, the engine equivalence test keeps
+   proving byte-identical `default` outputs, `config_fingerprint` stays `4d665603569b9dbf`, the JSON `BarStore`
+   and the Alpaca path stay byte-identical, and every era-1–4 surface keeps working.
+2. **Real bars are fetched, keyless.** With **no credentials**, fetching a symbol/timeframe/window from Yahoo
+   Finance stores a real bar series stamped `feed="yahoo"`, append-only and checksum-verified; `GET
+   /research/bars` and the MCP `bars` proxy return it byte-for-byte.
+3. **Stored in a DB for quick reuse.** A re-fetch of an already-stored window is served from storage with **no
+   second Yahoo call**, via a derived SQLite index that is a rebuildable cache — never a second source of
+   truth (every served candle is checksum-verified from the canonical JSON).
+4. **Real structure is visible, fetched from the app.** The Structure page fetches Yahoo bars on an explicit
+   click and renders real candles + real S/R levels + A/B/C zones (from the existing owners, read verbatim),
+   badged with the taxonomy-owned "Yahoo Finance" provenance.
+5. **Single source of truth is preserved.** Every displayed value is read verbatim from its canonical endpoint;
+   the UI recomputes nothing; the SQLite index owns nothing; Yahoo-sourced research is honestly segregated from
+   Alpaca `sip` (never pooled).
+6. **Honesty is visible.** Out-of-retention windows, unsupported timeframes, network failure, and
+   no-bars-for-symbol each render as an explicit, distinct state; the derived `4h` is labelled as resampled
+   from `1h`; nothing is fabricated.
+
+## Key Capabilities
+
+Layered strictly on top of the era-1–4 capabilities, which remain unchanged.
+
+1. **A keyless Yahoo Finance bar adapter.** A new adapter behind the existing vendor-neutral seam
+   (`apps/backend/app/providers/adapters/`), `name="yahoo"`, keyless, made the **default** bar vendor; the
+   Alpaca adapter stays opt-in. Confined to one module; `yfinance` pinned and allowlisted.
+2. **Multi-timeframe fetch, including derived 4h.** `1w, 1d, 4h, 1h, 5m, 1m` — each within Yahoo's real
+   retention window; `4h` deterministically **resampled from 1h** (documented, tested, never presented as
+   native).
+3. **A DB-backed quick-reuse cache.** A derived, rebuildable SQLite index (mirroring the stdlib-`sqlite3`
+   journal store `apps/backend/app/research/store.py`) enabling **store-first** fetch (already-stored windows
+   are served without re-hitting Yahoo) and a fast `symbol`/`timeframe` filter on `GET /research/bars`.
+4. **Real S/R levels & confluence zones on real bars.** The existing era-4 `research/levels.py` computes real
+   levels + A/B/C zones from the fetched bars — no new computation, no lookahead.
+5. **Fetch-from-the-app on `/structure`.** A fetch control (symbol + timeframe + date range + a **"Fetch from
+   Yahoo Finance"** button) — the one new explicit write action from the UI — after which the chart populates
+   with real data and a "Yahoo Finance" provenance badge.
+
+## Non-Goals
+
+- **The only new backend computation is the Yahoo fetch + the `4h` resample** (confined to
+  `adapters/yahoo.py`) **and the derived lookup index.** No new computation of levels, zones, PnL, aggregates,
+  strategies, or the champion — those stay owned by their existing era-4 endpoints. No second bar store.
+- No brokerage integration, order placement, routing, or execution of any kind — **neither real-money nor
+  paper-trading APIs**. Fetching historical bars is a read of public market data; it places nothing.
+- No machine learning, no trading advice, no imperative cues, no prediction or expected-return language in any
+  UI copy.
+- No general-purpose charting, multi-symbol dashboards, stock scanning/screening, news/sentiment, or
+  fundamentals — unchanged from the archived eras.
+- No mutation of `default`, `v1`, the engine, the `config_fingerprint`, the frozen structure computations, the
+  JSON `BarStore`, or the Alpaca path.
+- **No champion promotion from the UI.** Fetching and displaying data never moves the champion pointer.
+- **No tick-tape backfill recorder job** and **no frozen 15-symbol panel bulk recording** — the credentialed
+  Era-5 continuation (roadmap Card 5.2 tick-side). This chapter fetches bars single-shot, on demand.
+- **No full `/datasets` library-management UI** (list/health/delete/regime) — roadmap Card 5.9, deferred. The
+  only new surface here is the `/structure` fetch control.
+
+## Constraints
+
+- **Stack (carried over):** Frontend Next.js 15 + TypeScript + Tailwind v3 (npm), `lightweight-charts`,
+  dark-only. Backend Python 3.12 + FastAPI. Backend `http://localhost:8000`, frontend
+  `http://localhost:3000`. Sim tickers stay keyless.
+- **Fetch discipline (recording → fetching):** fetching historical data is an **explicit, user-triggered,
+  single-shot** act; there is no ambient or background polling. An already-stored window is served
+  **store-first** (no re-fetch). Fetched data is stored **append-only + checksummed** so the cache is stable
+  and reproducible.
+- **Storage discipline:** the checksummed JSON `BarStore` is the **immutable single source of truth**; the
+  SQLite index (mirroring `apps/backend/app/research/store.py`, stdlib `sqlite3` + WAL, config-owned DB path,
+  gitignored `*.db`) holds **metadata only**, is **rebuildable** via `reindex()`, and is **never** authoritative
+  — every served candle is checksum-verified from the JSON.
+- **UI read discipline:** the Structure view reads canonical endpoints (`/research/bars`, `/research/levels`,
+  `/research/strategies`, `/research/profiles`, `/research/datasets`, `/research/backtests`,
+  `/research/pnl/ledger`, `/research/taxonomy`, `/meta/ui-routes`) and renders their values **verbatim**; the
+  ONE new write action is the explicit Yahoo fetch. Zero client-side recomputation of levels, classes, PnL,
+  aggregates, provenance labels, or the champion.
+- **Honest-state discipline:** no fabricated data; `no_bar_series_for_symbol`, out-of-retention window,
+  unsupported timeframe, network failure, and `insufficient_sample` each render as an explicit, distinct state.
+- **PnL honesty register:** unchanged from eras 3–4 — a $ never without its R, n, basis, assumptions, null
+  baseline, and the visible "simulated — not indicative of live results" register; sub-minimum-n results
+  labelled "insufficient sample"; train and hold-out never pooled; results never pooled across feeds.
+- **Frozen-foundation discipline:** the additive changes permitted are exactly the Yahoo adapter, the bar-
+  vendor selector, sourcing the `feed` stamp from the adapter, the SQLite index + store-first coordinator, the
+  additive `symbol`/`timeframe` filter on `GET /research/bars`, the `"yahoo"` taxonomy label, the `/structure`
+  fetch control + provenance badge, and the pinned dependency + allowlist entry. `config.py` (fingerprint
+  `4d665603569b9dbf`), `research/levels.py`, `research/backtests.py`, `research/strategies.py`, the engine, the
+  JSON `BarStore`, and the Alpaca adapter stay byte-identical.
+- **Test discipline:** the standard suite stays hermetic — `FakeAdapter` injected via `dependency_overrides`,
+  a committed Yahoo fixture, and a rebuildable in-`tmp` index; **no network** in the default suite. The live
+  Yahoo fetch is exercised only under the `integration` marker gated on `TAPEOLOGY_LIVE_INTEGRATION=1`.
+- **Dependency discipline:** `yfinance` is pinned in `apps/backend/requirements.txt` (with the confined-to-
+  adapter comment convention) and added to the `config/install-security-policy.json` python allowlist; no
+  other new runtime dependency.
+- **MCP read-only discipline:** unchanged — the MCP server stays a byte-identical proxy of the GET surface and
+  gains no new tool.
+
+## Product Shape
+
+Nav (top bar) is unchanged: **Cockpit `/` · Journal `/journal` (+ `/journal/[id]`) · Studies `/studies` ·
+Performance `/performance` · Structure `/structure`**. The Structure page gains a **fetch control** — the one
+new explicit write action in the app.
+
+**Data Contract (canonical values):** this era adds **exactly one** new owned value and no new computation of
+any existing value:
+
+- **Bar-series provenance `feed="yahoo"`** — NEW; owned by the canonical `BarStore` + the Yahoo adapter (the
+  adapter is the source of the `feed` stamp); its human label ("Yahoo Finance") owned by
+  `apps/backend/app/research/taxonomy.py` `FEED_BASIS_LABELS`; read via `/research/bars*` and
+  `/research/taxonomy`.
+- Bar series and checksums — owned by the `BarStore`; read via `/research/bars*`. The **SQLite index owns
+  nothing** — it is a derived, rebuildable cache over the store, never a serialization or a source of truth.
+- Support/resistance levels and A/B/C confluence classes — owned by `research/levels.py` (no lookahead); read
+  via `/research/levels`; rendered verbatim.
+- Registered strategies and the champion pointer — config-owned; read via `/research/strategies` and
+  `/research/profiles`.
+- Backtest aggregates and per-class breakdown — owned by the backtest runner; read via
+  `/research/backtests/{id}`.
+- PnL-ledger rows and the founding baseline — owned by the PnL ledger; read via `/research/pnl/ledger`.
+- The UI route map — owned by `apps/backend/app/meta.py`; read via `/meta/ui-routes`.
+
+## Must-have user journeys
+
+Journeys **J-01 – J-06** open Era 5 on the bars/structure side. **Frontend is present** (J-05 is
+browser-verifiable). J-01/J-02 carry a `*(Verified with network available; keyless)*` tag — the live Yahoo
+fetch runs under the `integration` marker, while a committed Yahoo fixture proves the store/read path keyless
+in CI. Natural dependency order: J-01 → J-02 → J-03 → J-04 → J-05; **J-06 guards continuously.** The foundation
+(eras 1–4) MUST NOT regress.
+
+- **J-01: Fetch real historical bars from Yahoo Finance, keyless**
+  - Steps:
+    1. Add `apps/backend/app/providers/adapters/yahoo.py` implementing the `MarketDataAdapter` protocol
+       (`name="yahoo"`, keyless `is_available()`, `fetch_bars` mapping the neutral timeframes to `yfinance`
+       intervals); its tick/live/search methods honestly raise or return empty (Yahoo is bars-only). Add a
+       bar-vendor selector so the fetch path defaults to Yahoo (extend `get_adapter` /
+       `get_study_market_adapter`), keeping Alpaca selectable (opt-in). Pin `yfinance==<version>` in
+       `apps/backend/requirements.txt` (confined-to-adapter comment) and add it to
+       `config/install-security-policy.json` python allowlist.
+    2. With **no credentials configured**, fetch a daily window for a symbol (e.g. `AAPL`); the fetch stamps
+       `feed="yahoo"` sourced from the adapter (not the hardcoded `sip`) and stores the series through the
+       canonical `BarStore` (append-only; double-sha256; `409` on duplicate content); `volume` is coerced to
+       `int`.
+    3. Read it back via `GET /research/bars`, `GET /research/bars/{id}`, and the MCP `bars` tool.
+  - Acceptance: with no credentials, fetching stores a real Yahoo daily series stamped `feed="yahoo"`,
+    append-only and checksum-verified; `GET /research/bars/{id}` and the MCP `bars` proxy return it
+    byte-for-byte; the `feed` value has exactly one owner (the adapter), never route- or client-hardcoded; a
+    duplicate content fetch is refused (`409`); an unservable symbol/window returns a clean neutral error, never
+    empty-but-present or fabricated bars. Verified deterministically via a `FakeAdapter`-injected route test
+    plus a committed Yahoo fixture; the live fetch is exercised under the `integration` marker.
+    *(Verified with network available; keyless.)*
+
+- **J-02: The full timeframe set, including honestly-resampled 4h**
+  - Steps:
+    1. Fetch each supported timeframe — `1w, 1d, 4h, 1h, 5m, 1m` — for a symbol, each within its real Yahoo
+       retention window (`1m` ≈ last ≤7 days; `5m` ≈ 60 days; `1h`/`4h` ≈ 730 days; `1d`/`1w` unlimited).
+    2. Confirm `4h` is produced by fetching `1h` and **deterministically resampling** into aligned 4-hour
+       buckets (open=first, high=max, low=min, close=last, volume=sum; aligned to the session/regular-hours
+       boundary; a partial trailing bucket handled honestly), documented as derived-from-`1h`.
+    3. Request an out-of-retention window (e.g. `1m` two years ago) and an unsupported timeframe (`8h`/`1mo`,
+       which `yfinance` lacks) and observe the responses.
+  - Acceptance: all six timeframes fetch real bars with correct OHLCV and monotonically increasing timestamps;
+    the `4h` series is a deterministic, unit-tested resampling of the real `1h` bars (byte-identical across
+    identical requests) and is never represented as a vendor-native fetch nor fabricated; an out-of-retention
+    or unsupported-timeframe request returns an explicit neutral error (`NoDataForWindow` / unsupported-
+    timeframe) with no partial or synthesized bars; fetching remains an explicit single-shot act. Verified via
+    unit tests on the interval mapping + the `4h` resampler + a committed fixture; live-verified under the
+    `integration` marker. *(Verified with network available; keyless.)*
+
+- **J-03: Quick reuse — store-first fetch backed by a derived SQLite index**
+  - Steps:
+    1. Add a derived SQLite index (`apps/backend/app/research/bar_index.py`, mirroring the stdlib-`sqlite3`
+       pattern of `apps/backend/app/research/store.py`) keyed by `(symbol, timeframe, window_start,
+       window_end)` → `series_id`, `checksum`, `bar_count`, maintained additively whenever a series is stored
+       (leaving the frozen `BarStore.record` untouched — a store-first coordinator calls it, then updates the
+       index).
+    2. Fetch a window once (stores + indexes); fetch the **same** window again and confirm it is served from
+       storage with **no** Yahoo call (store-first idempotence).
+    3. Query `GET /research/bars?symbol=<S>&timeframe=<T>` and confirm it returns only that series via the
+       index; confirm the no-param `GET /research/bars` call is byte-identical to before. Delete the index file,
+       run `reindex()`, and confirm lookups are reproduced.
+  - Acceptance: a repeat fetch of an already-stored window performs **no** network call and returns the stored
+    series (store-first); `GET /research/bars?symbol=&timeframe=` is served fast via the index while the
+    no-param call is unchanged; every candle served is checksum-verified from the canonical JSON, and the index
+    is a rebuildable cache (`reindex()` reproduces identical lookups) that is **never** the source of truth —
+    its loss loses or fabricates nothing. Verified via index unit tests + a store-first "no network on a cache
+    hit" test. *(Keyless; automated.)*
+
+- **J-04: Real S/R levels and confluence zones on real Yahoo bars**
+  - Steps:
+    1. With real Yahoo bars stored for a symbol, call `GET /research/levels?symbol=<S>&as_of=<ISO-T>` and
+       confirm the existing era-4 `research/levels.py` computes real levels + A/B/C confluence zones from them
+       (no lookahead; as-of T uses only completed bars).
+    2. Confirm the levels/zones are owned solely by `research/levels.py` — this era supplies real input and adds
+       no second computation — and that REST and the MCP `levels` proxy agree byte-for-byte.
+    3. Contrast with the prior keyless-empty state (levels now populate where before they were empty).
+  - Acceptance: `GET /research/levels` returns real, non-empty levels + confluence zones computed by the
+    existing module from the real Yahoo bars; REST and MCP agree byte-for-byte; no lookahead; **no second
+    levels/zone computation path** exists (single source of truth — the coherence-auditor stays clean); the
+    previously-empty keyless structure surface now populates from real data. *(Keyless on the committed Yahoo
+    fixture; also live-verifiable.)*
+
+- **J-05: Fetch from the app — the Structure page fetch control with "Yahoo Finance" provenance**
+  - Steps:
+    1. On `/structure`, add a fetch control — symbol (reuse `SymbolSearch`) + timeframe + date range + a
+       **"Fetch from Yahoo Finance"** button (the one new explicit write action from the UI). Add the
+       `"yahoo"` → "Yahoo Finance" label to `taxonomy.FEED_BASIS_LABELS` so `GET /research/taxonomy` owns it.
+    2. Submit the fetch; the store-first flow serves or fetches, and the `lightweight-charts` chart renders the
+       real candles + real level lines + A/B/C zone table read **verbatim** from `/research/bars` +
+       `/research/levels`, with a provenance badge reading "Yahoo Finance" from the taxonomy label (the
+       `FeedBasisBadge` pattern — never client-hardcoded).
+    3. Exercise the honest states: a symbol with no stored bars shows the empty state; a store-first hit renders
+       instantly.
+  - Acceptance: clicking **Fetch from Yahoo Finance** populates the chart with real candles + levels + zones
+    read byte-for-byte from their canonical endpoints (zero client recomputation); the series provenance shows
+    "Yahoo Finance" from the taxonomy-owned label (single source of truth); Yahoo research is honestly
+    segregated from Alpaca `sip` (analytics never pool across feeds); honest empty/degraded states remain; no
+    advice/prediction/vocabulary drift in copy. Browser-verified **keyless on a pre-seeded committed fixture**
+    (the click serves store-first, no network); the live cache-miss fetch is integration-gated. *(Keyless on
+    the committed fixture; browser-verifiable.)*
+
+- **J-06: The foundation is unchanged (regression sentinel)**
+  - Steps:
+    1. Run the sim cockpit flows (`SIM-BUYER` settles `buyer_control`, `SIM-SELLER` settles `seller_control`)
+       and spot-check `/journal`, `/studies`, `/performance`, and the interlude `/structure` read behaviours in
+       the browser; run the full backend suite and the engine equivalence test.
+    2. Confirm `config_fingerprint` is still `4d665603569b9dbf` and that the tape engine's five states, `v1`,
+       `default`, the champion pointer, `research/levels.py`, `research/backtests.py`,
+       `research/strategies.py`, the JSON `BarStore`, and the Alpaca adapter + its credentialed path are
+       byte-identical; confirm `GET /research/bars` with no params returns the same shape as before (the
+       `symbol`/`timeframe` filter is additive).
+  - Acceptance: the full backend suite passes (no test deleted or weakened to make new work pass); the
+    equivalence test proves byte-identical `default` state/confidence/features/history and the pinned
+    `config_fingerprint`; eras 1–4 surfaces behave exactly as shipped; the Alpaca credentialed path still works
+    when creds are present (opt-in) and is unchanged; the only additive changes are the Yahoo adapter, the
+    vendor selector, the `feed` stamp sourcing, the SQLite index + store-first flow, the `symbol`/`timeframe`
+    filter, the taxonomy label, the `/structure` fetch control + provenance badge, and the pinned dependency +
+    allowlist entry; Yahoo data is a distinct checksum-segregated `feed="yahoo"` lineage never re-tagged or
+    pooled with `sip`; no new second source of truth for any value. *(Browser-verifiable + automated.)*
+
+<!-- AUTO:journeys -->
+<!-- /AUTO:journeys -->
+
+## Anti-goals
+
+**Immutable rails — the identity of the project (copied verbatim from
+[`docs/research-directions.md`](research-directions.md) §0.3; enforced by existing tests and audits; only
+ever grow more specific, never weaker):**
+
+1. **No execution path, ever** — no brokerage/trading API, no order tickets, no live OR paper trading, no
+   "just to test" exceptions. (`apps/backend/tests/test_no_execution_path.py` is the tier-1 guard; new
+   research code adds matching guard tests, never weakens them.) *(critical)*
+2. **No profit claims and no advice** — every $ figure is a simulated measurement carrying R, n,
+   fee/slippage assumptions, and its train/hold-out/forward basis. No prediction language, no imperative
+   trading cues. *(critical)*
+3. **Frozen foundations** — the `v1` strategy, the `default` profile, the tape engine's five states and
+   thresholds, the frozen structure computations, the JSON `BarStore`, and archived-era behaviour stay
+   byte-identical. New work is additive and versioned beside them, never a mutation of them. *(critical)*
+4. **Hold-out-only promotion** — the champion pointer moves only on a genuine hold-out survival through the
+   sweep gate (plus the era-6 statistical gates once they exist). Train-only wins are labeled overfit. Never
+   lower a minimum sample size, widen a gate, or pool across feeds/fingerprints to manufacture a survivor.
+   *(critical)*
+5. **No lookahead** — every value computed as-of T uses only events/bars fully completed at T. *(critical)*
+6. **Single source of truth** — each shared value is computed once, owned by one canonical endpoint, and
+   read verbatim by REST/WS/UI/MCP/reports. The coherence-auditor hard-fails violations. *(critical)*
+7. **Deterministic and seeded** — every random draw uses a config-owned recorded seed; identical requests
+   reproduce byte-identical results; no wall-clock, no unseeded randomness in any research artifact.
+8. **Read-only MCP** — MCP tools remain byte-identical proxies of GET endpoints; nothing on the MCP surface
+   can change state. *(critical)*
+9. **Immutable data** — registered datasets and bar series are append-only, checksummed, never re-tagged,
+   never deleted, never content-perturbed. Splits are frozen at registration. *(critical)*
+10. **Persistence stays scoped** — no ambient recording of live streams; recording/fetching is an explicit,
+    logged act. *(critical)*
+
+**Era-5-specific anti-goals (added, not weakening any rail above):**
+
+- **The SQLite index is a derived cache, never a source of truth.** Canonical bars stay the append-only,
+  checksummed JSON `BarStore`; every served candle is checksum-verified from it; the index holds metadata
+  only, is rebuildable via `reindex()`, and its loss or corruption loses and fabricates nothing. A second
+  authoritative bar store is a defect. *(critical)*
+- **Fetching is explicit and store-first.** Historical data is fetched only on an explicit user action; an
+  already-stored window is served from storage without re-hitting Yahoo; there is no ambient or background
+  polling. *(critical)*
+- **Yahoo data is fetched-and-stored only, never re-tagged or pooled across feeds.** A `feed="yahoo"` series
+  is append-only and checksummed; it is never merged with, re-tagged to, or analytically pooled with `sip` or
+  any other feed. *(critical)*
+- **`4h` is honestly derived.** It is a pure, deterministic resample of real `1h` bars, unit-tested for OHLC
+  aggregation and bucket alignment, documented as derived; it is never presented as a vendor-native fetch and
+  never fabricated. *(critical)*
+- **No fabricated bars, ever.** A symbol/window/timeframe Yahoo cannot serve (out of retention, unsupported
+  interval, network failure) returns an explicit neutral error; the fetch never synthesizes, forward-fills
+  across gaps, or pads a partial window to force a green journey. *(critical)*
+- **No new levels/PnL/strategy/champion computation.** This era feeds real bars to the existing era-4 owners
+  and adds no second computation of levels, zones, PnL, aggregates, strategies, or the champion; the only new
+  backend computation is the Yahoo fetch + `4h` resample confined to `adapters/yahoo.py` and the derived
+  lookup index. *(critical)*
+- **The UI fetch stores bars only.** The `/structure` fetch control performs an explicit bar fetch/store; it
+  computes no levels, PnL, or champion, and it never promotes. *(critical)*
+- **Yahoo default must not break the Alpaca path.** Making Yahoo the default bar vendor is additive: the
+  Alpaca adapter, its credential gate, and its bar/tick/live paths stay byte-identical and selectable
+  (opt-in). *(critical)*
+- **Dependency discipline.** `yfinance` is pinned in `requirements.txt` (confined to `adapters/yahoo.py`) and
+  added to the install-security-policy allowlist; no unpinned/dynamic install, no other new runtime
+  dependency. *(critical)*
+- **No vocabulary drift.** No "paper trading", "shadow trading", "annualized", "expected profit", or
+  advice/imperative phrasing anywhere in the UI copy; simulated PnL and simulated size always carry the
+  visible "simulated — not indicative of live results" register.
+- **The enhancement loop stays inside its box.** The goal-proposer may append journeys ONLY inside the
+  `AUTO:journeys` marker block above — it MUST NOT edit human-authored journeys, this Anti-goals section, or
+  any other part of this file; proposed journeys MUST carry a single-source-of-truth (or PnL-ledger) acceptance
+  criterion, keep the `default` profile and `v1` byte-identical, and include a `[NEW]`-flagged walkthrough.
+  Manufacturing a low-value journey just to keep the loop alive is a failure. *(critical)*
