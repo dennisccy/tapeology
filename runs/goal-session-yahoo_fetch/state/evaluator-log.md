@@ -95,3 +95,61 @@ derived-`4h` value stays single-owner and honestly labelled). Carry the fixture-
 > then wrote the missing `eval.md` and re-affirmed `journey-history.json` (identical content).
 > No status changed; the iter-1 verdict above stands as the single authoritative record — this
 > note is not a second evaluation.
+
+## Iteration 2 — goal-yahoo_fetch-iter-2
+
+**Date:** 2026-07-09T17:20:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-02 (full timeframe set 1w/1d/1h/5m/1m + deterministically-derived 4h; three-way honest error taxonomy)
+- Newly failing: none
+- Regressed: none (J-01, J-06 re-verified green by backend + structural evidence)
+- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS; all critical era-5 rails independently re-checked)
+
+**Reasoning:** J-02 verified `passing` on primary evidence I generated and read myself, not the
+handoffs. I read `yahoo.py` in full: `_INTERVAL_MAP` now maps the five direct timeframes
+(`1d/1w->1wk/1h/5m/1m`); `_resample_4h` is a pure function (open=first/high=max/low=min/close=last/
+volume=sum, session-gap bucketing at `>_SESSION_GAP_SECONDS`, honest shorter trailing bucket built
+only from real bars — no pad/forward-fill/lookahead); `fetch_bars` special-cases `4h` into a local
+resample of real `1h` and deliberately never uses yfinance's own native `"4h"` interval (satisfying
+the "`4h` honestly derived" critical rail). I confirmed the three-way taxonomy at
+`routes.py:1621-1633` — `VendorTimeout`->504, `UnsupportedTimeframe`->422, `NoDataForWindow`->422
+(both new exceptions raise BEFORE `store.record` at 1643, so no bar is written on any error path ->
+"no fabricated bars" holds) with observably-distinct detail text. I ran the J-02 test files myself:
+49 pass (`test_yahoo_adapter.py` + `test_bars_api.py`); the committed `1h` fixture is real AAPL OHLCV
+correctly placed under `tests/fixtures/yahoo/` (iter-1 lesson honored). Live integration (all six
+timeframes + `4h==resample(1h)` + out-of-retention->`NoDataForWindow` + `8h`->`UnsupportedTimeframe`)
+passed 5/5 for dev, QA, and the auditor independently. J-02's acceptance is explicitly unit +
+committed-fixture + integration-marker (not browser), so its evidence bar is fully met. Frozen rails
+independently re-verified by me: `git diff ad71dfed <working tree>` empty for config.py/main.py/
+alpaca.py/adapters/__init__.py/levels.py/backtests.py/strategies.py/bars.py/requirements.txt/
+install-security-policy.json AND all of `apps/frontend/**`; `config_fingerprint` recomputed
+`4d665603569b9dbf`; engine equivalence 22/22; frozen `test_post_records_and_registers_a_bar_series`
+(Alpaca `sip`) passes; `yfinance==1.5.1` still the single pinned+allowlisted dependency (not
+re-touched); `_resample_4h` grep-confirmed single-owner in `yahoo.py`. J-03/J-04/J-05 remain
+`failing` (out of scope this iteration, not attempted-and-failed) -> not GOAL_ACHIEVED; J-02 newly
+passing -> CONTINUE.
+
+**Evidence gap (noted, not verdict-changing):** the browser-qa lane did NOT run this iteration —
+`status.json browser_checks_run:false`; `ui-test-results.md` records SKIPPED 0/10 (frontend+backend
+unreachable at :3301/:8301, curl exit 7); evidence dir empty. The spec's DoD item 7 asked for a
+browser re-verification screenshot of J-01/J-06. Because this iteration changed **zero** frontend
+bytes (working tree byte-identical to iter-1, where the browser lane DID pass with a real-candle
+UT-07 screenshot), a UI regression is structurally impossible from this diff; J-01's keyless daily
+fetch was re-run live (auditor section 3) and J-06's foundation was re-verified by me via fingerprint
++ equivalence + byte-identity. The gap does not move any status — but J-05 (the first iteration with
+genuinely new UI) MUST have both services reachable and Chrome MCP available so this recurring
+environment gap is finally closed and the carried "a passing without a screenshot is unevidenced"
+lesson is satisfied end-to-end.
+
+**Next-step recommendation:** Iteration 3 targets **J-03** — the derived SQLite index
+(`apps/backend/app/research/bar_index.py`, mirroring the stdlib-`sqlite3` `store.py` pattern), the
+store-first coordinator (calls the frozen `BarStore.record`, then updates the index — never mutating
+`record`), the additive `?symbol=&timeframe=` filter on `GET /research/bars`, and `reindex()`
+rebuildability. Recommend **full** depth: J-03 introduces a new persistence module carrying its own
+critical anti-goals ("the SQLite index is a derived cache, never a source of truth" + "fetching is
+explicit and store-first"), so the audit + coherence lanes must run to confirm the index owns
+nothing, every served candle stays checksum-verified from the canonical JSON `BarStore`, and a
+cache-hit performs no second Yahoo call. J-03 is backend-only too — the browser-env fix can wait for
+J-05, but flag it now so the orchestrator provisions reachable services before J-05.

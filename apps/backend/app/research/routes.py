@@ -27,7 +27,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..config import CONFIG, Config
-from ..providers.adapters.base import NoDataForWindow, SymbolNotTradable, VendorTimeout
+from ..providers.adapters.base import (
+    NoDataForWindow,
+    SymbolNotTradable,
+    UnsupportedTimeframe,
+    VendorTimeout,
+)
 from ..providers.adapters.yahoo import YahooAdapter
 from .analytics import compute_analytics
 from .backtests import (
@@ -1559,16 +1564,24 @@ def record_bar_series(
     registry: ResearchRegistry = Depends(get_registry),
     store: BarStore = Depends(get_bar_store),
 ) -> dict:
-    """Record + register ONE multi-timeframe OHLC bar series (era-4 J-01, era-5 J-01 — the
+    """Record + register ONE multi-timeframe OHLC bar series (era-4 J-01, era-5 J-01/J-02 — the
     explicit research action; recording is never ambient). Full validation (422, never silent
     coercion): an out-of-set ``timeframe`` (the config-owned ``bar_timeframes`` set), a missing
     symbol, a malformed ISO ``start``/``end``, or ``end`` not after ``start``. The bar-fetch vendor
     defaults to the KEYLESS Yahoo adapter (``get_bar_fetch_adapter`` — era-5 J-01); Alpaca stays
     selectable via the existing ``get_market_adapter`` override, where missing credentials still
     surface the EXISTING explicit unavailable (503) state — never fabricated bars. Content already
-    registered is the 409-style refusal; an empty fetched window (e.g. an unknown symbol, a window
-    outside Yahoo's retention, or — for Alpaca — entirely inside the free-plan recency embargo) is
-    an explicit 422 — nothing is written, nothing fabricated."""
+    registered is the 409-style refusal.
+
+    Era-5 J-02: the Yahoo path's honest-error taxonomy is now THREE observably distinct 4xx/5xx
+    states (each nothing-written, nothing-fabricated) — a config-valid timeframe Yahoo does not
+    serve (``UnsupportedTimeframe``, 422, e.g. ``8h``/``1mo``/``15m``), a mapped/servable timeframe
+    whose specific symbol/window returns nothing from the vendor (``NoDataForWindow``, 422 — an
+    unknown symbol or a window outside that timeframe's retention), and a real vendor timeout
+    (``VendorTimeout``, 504, unchanged). A non-Yahoo adapter (e.g. Alpaca/fake, via the
+    ``get_market_adapter`` override) that returns an empty tuple directly still hits the existing,
+    unchanged ``EmptyBarWindowError`` 422 path below — this taxonomy is additive, not a
+    replacement."""
     if body.timeframe not in CONFIG.bar_timeframes:
         raise HTTPException(
             status_code=422,
@@ -1607,6 +1620,17 @@ def record_bar_series(
         raw_bars = adapter.fetch_bars(symbol, start_dt, end_dt, body.timeframe)
     except VendorTimeout as exc:
         raise HTTPException(status_code=504, detail=exc.detail)
+    except UnsupportedTimeframe as exc:
+        # Era-5 J-02, error-taxonomy case 1: a config-valid timeframe this VENDOR does not serve
+        # (e.g. "8h"/"1mo"/"15m") — statically distinct from "no data for that window" below
+        # (different detail text; the adapter raised this with zero vendor call). Nothing written.
+        raise HTTPException(status_code=422, detail=str(exc))
+    except NoDataForWindow as exc:
+        # Era-5 J-02, error-taxonomy case 2: a MAPPED/servable timeframe whose specific
+        # symbol/window genuinely returned nothing from the vendor (out of retention, or an
+        # unknown symbol) — observably distinct from the unsupported-timeframe case above. Nothing
+        # written (mirrors the analogous ``record_dataset`` mapping above for the same exception).
+        raise HTTPException(status_code=422, detail=str(exc))
 
     # feed provenance (era-5 J-01): sourced from the ADAPTER — its single owner — only when Yahoo
     # served this fetch; otherwise the EXISTING config-owned historical feed, byte-identical to

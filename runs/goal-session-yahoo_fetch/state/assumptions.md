@@ -28,3 +28,16 @@ same absence / unchanged surfaces.
 **Ambiguity:** `docs/goal.md` (J-02 + Key Capability 2) enumerates exactly six era-5 Yahoo timeframes — `1w, 1d, 4h, 1h, 5m, 1m` — and names `8h`/`1mo` as unsupported examples, but is silent on `15m`, which is both a valid `CONFIG.bar_timeframes` entry AND a `yfinance`-native interval. The goal does not say whether `15m` is a fetchable Yahoo timeframe this era or an unsupported one.
 **We chose:** Treat `15m` as Yahoo-unsupported this era (era-5 Yahoo maps exactly the six enumerated timeframes); `15m`/`8h`/`1mo` all exercise the explicit unsupported-timeframe honest-neutral state. This follows the goal's explicit six-timeframe enumeration and the "only new backend computation is the Yahoo fetch + 4h resample" non-goal, rather than expanding scope to a seventh timeframe the goal never lists.
 **Reversible:** yes
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** The iter-2 spec's DEFINITION OF DONE item 7 explicitly required the browser lane to
+re-verify J-01/J-06 and "emit a screenshot," but the lane ran with no services reachable and produced
+none. The goal is silent on whether a required-still-passing UI journey may stay `passing` on
+backend + structural evidence alone when the spec-mandated browser re-verification did not execute.
+**We chose:** Kept J-01 and J-06 `passing` on non-browser evidence — J-06's regression sentinel is
+defined by `config_fingerprint`/engine-equivalence/frozen-file byte-identity (all re-run by me and
+green), and J-01's core keyless-fetch was re-run live (auditor); the iteration changed zero frontend
+bytes, so no UI regression is structurally possible. The spec's screenshot was a re-verification
+nicety, not either journey's defining acceptance in `docs/goal.md`.
+**Reversible:** yes

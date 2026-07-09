@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>goal-yahoo_fetch-iter-2 — Iteration Summary</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0; padding: 0; color: #1f2328; background: #f6f8fa; line-height: 1.5;
+}
+.container { max-width: 880px; margin: 0 auto; padding: 24px 16px 80px; }
+.hero {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 28px; margin-bottom: 16px; text-align: center;
+}
+.hero.pass { border-top: 6px solid #1a7f37; }
+.hero.fail { border-top: 6px solid #cf222e; }
+.hero.inprogress { border-top: 6px solid #d4a72c; }
+.hero h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+.hero h2 { margin: 0 0 14px 0; font-size: 1rem; color: #57606a; font-weight: 500; }
+.badge-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.95rem;
+}
+.badge.pass { background: #dafbe1; color: #1a7f37; }
+.badge.fail { background: #ffebe9; color: #cf222e; }
+.badge.inprogress { background: #fff8c5; color: #9a6700; }
+.signal-badge { padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; }
+.signal-badge.improving { background: #dafbe1; color: #1a7f37; }
+.signal-badge.holding { background: #ddf4ff; color: #0969da; }
+.signal-badge.stalling { background: #fff8c5; color: #9a6700; }
+.signal-badge.regressing { background: #ffebe9; color: #cf222e; }
+.signal-badge.na { background: #f6f8fa; color: #57606a; }
+.meta { color: #57606a; font-size: 0.875rem; margin: 10px 0 16px; }
+.journey-row {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 4px;
+}
+.journey-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 0.85rem;
+  background: #f6f8fa; border: 1px solid #d0d7de;
+}
+.journey-pill.passing, .journey-pill.already_passing { background: #dafbe1; color: #1a7f37; border-color: #b4e2c0; }
+.journey-pill.failing, .journey-pill.regressed { background: #ffebe9; color: #cf222e; border-color: #f1aeb0; }
+.journey-pill.partial { background: #fff8c5; color: #9a6700; border-color: #eed888; }
+.journey-pill.unknown { background: #f6f8fa; color: #57606a; }
+.hero-image { margin-top: 18px; }
+.hero-image img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+details {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  margin-bottom: 12px;
+}
+details > summary {
+  cursor: pointer; padding: 14px 18px; font-weight: 600; font-size: 1.05rem;
+  list-style: none; user-select: none; display: flex; align-items: center; gap: 8px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: '▶'; transition: transform 0.15s; font-size: 0.75rem; color: #57606a;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+.accordion-body { padding: 0 18px 18px; }
+.accordion-body h3 { font-size: 0.95rem; color: #57606a; margin: 16px 0 6px; }
+.why-text { background: #f6f8fa; padding: 10px 12px; border-radius: 6px; margin: 4px 0 12px; }
+ul.bullets { margin: 6px 0 14px; padding-left: 22px; }
+ul.bullets li { margin-bottom: 4px; }
+ol.steps { padding-left: 0; list-style: none; counter-reset: step; }
+ol.steps > li {
+  counter-increment: step; padding: 12px 0 12px 44px;
+  border-top: 1px solid #eaeef2; position: relative;
+}
+ol.steps > li:first-child { border-top: none; }
+ol.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 14px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #0969da; color: white; display: flex;
+  align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600;
+}
+.step-shot { margin-top: 10px; }
+.step-shot img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+.next-step-box {
+  background: #ddf4ff; padding: 12px 16px; border-radius: 6px;
+  border-left: 4px solid #0969da; margin: 12px 0;
+}
+.drill-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.drill-table th, .drill-table td {
+  text-align: left; padding: 8px 6px; border-bottom: 1px solid #eaeef2;
+}
+.drill-table th { background: #f6f8fa; }
+.verdict-cell.PASS, .verdict-cell.CLOSURE-PASS, .verdict-cell.GOAL_ACHIEVED { color: #1a7f37; font-weight: 600; }
+.verdict-cell.FAIL, .verdict-cell.CLOSURE-FAIL, .verdict-cell.REGRESSION { color: #cf222e; font-weight: 600; }
+.verdict-cell.CONTINUE, .verdict-cell.ESCALATE, .verdict-cell.STALLED { color: #9a6700; font-weight: 600; }
+.verdict-cell.SKIPPED, .verdict-cell.UNKNOWN, .verdict-cell.IN-PROGRESS { color: #57606a; }
+.footer-note { text-align: center; color: #6e7781; font-size: 0.8rem; margin-top: 24px; }
+.iter-card {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 16px 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 14px;
+}
+.iter-card .left { flex-shrink: 0; }
+.iter-card .body { flex: 1 1 auto; }
+.iter-card .body .title { font-weight: 600; }
+.iter-card .body .sub { color: #57606a; font-size: 0.88rem; margin-top: 2px; }
+.iter-card a.open { color: #0969da; text-decoration: none; font-weight: 500; }
+.iter-card a.open:hover { text-decoration: underline; }
+.matrix { width: 100%; border-collapse: collapse; margin: 12px 0 22px; font-size: 0.88rem; }
+.matrix th, .matrix td { padding: 6px 8px; border: 1px solid #d0d7de; text-align: center; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix .cell-passing, .matrix .cell-already_passing { background: #dafbe1; color: #1a7f37; }
+.matrix .cell-failing, .matrix .cell-regressed { background: #ffebe9; color: #cf222e; }
+.matrix .cell-partial { background: #fff8c5; color: #9a6700; }
+.matrix .cell-unknown { background: #f6f8fa; color: #57606a; }
+.no-summary {
+  background: #fff8c5; border: 1px solid #eed888; padding: 14px 18px;
+  border-radius: 8px; color: #9a6700; margin-bottom: 14px;
+}
+/* Plain-language layer — the primary, non-technical view. */
+.plain-words {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 24px; margin: 18px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.plain-words .pw-heading {
+  margin: 0 0 14px; font-size: 1.15rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.pw-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.pw-card {
+  background: white; border-radius: 8px; padding: 14px 16px;
+  border: 1px solid #e3eaf3;
+}
+.pw-card .pw-label {
+  font-size: 0.78rem; font-weight: 600; color: #57606a;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.pw-card .pw-text {
+  margin: 0; font-size: 1rem; color: #1f2328; line-height: 1.45;
+}
+.pw-empty { color: #8c959f; font-style: italic; font-size: 0.95rem; }
+.tech-divider {
+  margin: 18px 0 8px; text-align: center;
+  color: #6e7781; font-size: 0.82rem; font-style: italic;
+  border-top: 1px dashed #d0d7de; padding-top: 12px;
+}
+/* Watch-it-work — narrated screenshot gallery from demo-narrator. */
+.watch-it-work {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 18px 22px; margin: 10px 0 6px;
+}
+.wiw-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.wiw-heading {
+  margin: 0; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.demo-badge {
+  font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 12px;
+  border: 1px solid transparent; letter-spacing: 0.04em;
+}
+.demo-badge.demo-recorded { background: #dafbe1; color: #1a7f37; border-color: #aceebb; }
+.demo-badge.demo-notes    { background: #fff8c5; color: #9a6700; border-color: #e8d97e; }
+.demo-badge.demo-skipped  { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+.demo-badge.demo-pending  { background: #ddf4ff; color: #0969da; border-color: #b6e3ff; }
+.demo-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.demo-step {
+  margin: 0; padding: 12px; background: #f6f8fa;
+  border: 1px solid #d0d7de; border-radius: 8px;
+}
+.demo-step-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.demo-step-num {
+  font-weight: 600; color: #57606a; font-variant-numeric: tabular-nums;
+}
+.demo-step-title { color: #1f2328; font-weight: 500; }
+.demo-new {
+  background: #ddf4ff; color: #0969da; font-size: 0.7rem; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px; letter-spacing: 0.06em;
+}
+.demo-shot { margin-bottom: 8px; }
+.demo-shot img {
+  width: 100%; height: auto; border-radius: 4px; border: 1px solid #d0d7de;
+  display: block;
+}
+.demo-narration {
+  margin: 0; color: #1f2328; font-size: 0.92rem; line-height: 1.4;
+}
+.demo-empty {
+  margin: 8px 0 0; color: #57606a; font-style: italic;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.demo-notes-wrap { margin-top: 14px; }
+.demo-notes-wrap summary {
+  cursor: pointer; color: #9a6700; font-weight: 500; font-size: 0.9rem;
+}
+.demo-notes-wrap[open] summary { margin-bottom: 6px; }
+/* Story so far + latest demo (session index plain-language top). */
+.story-so-far {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 14px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.story-heading {
+  margin: 0 0 12px; font-size: 1.1rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.story-body { font-size: 1rem; color: #1f2328; line-height: 1.55; }
+.story-body .story-h { margin: 14px 0 6px; color: #1f2328; }
+.story-body p { margin: 0 0 10px; }
+.session-demo {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 0; margin: 8px 0 6px; overflow: hidden;
+}
+.session-demo-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 22px;
+  background: #f6f8fa; border-bottom: 1px solid #d6e4f0;
+  font-weight: 600; color: #1f2328; font-size: 0.95rem;
+}
+.session-demo-head a.open { color: #0969da; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+.session-demo-head a.open:hover { text-decoration: underline; }
+.session-demo .watch-it-work {
+  border: none; border-radius: 0; box-shadow: none; margin: 0;
+}
+/* Delivered link banner — sits on the session index when GOAL_ACHIEVED. */
+.delivered-link {
+  margin: 14px 0; padding: 14px 22px;
+  background: #dafbe1; border: 1px solid #aceebb; border-radius: 10px;
+  color: #1a7f37; font-size: 1rem;
+}
+.delivered-link a {
+  color: #1a7f37; font-weight: 600; text-decoration: none; margin-left: 8px;
+}
+.delivered-link a:hover { text-decoration: underline; }
+.delivered-back {
+  margin: 8px 0 14px; padding: 0; font-size: 0.9rem;
+}
+.delivered-back a { color: #0969da; text-decoration: none; }
+.delivered-back a:hover { text-decoration: underline; }
+.delivered-body {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 28px; margin: 12px 0;
+}
+.delivered-body h2.story-h { margin-top: 0; }
+/* Feature manual (session index, top of page). */
+.cover-vision {
+  margin: 8px 0 14px; color: #57606a; font-size: 1.02rem;
+  font-style: italic; max-width: 60ch;
+}
+.feature-toc {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 20px 26px; margin: 14px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.feature-toc-heading {
+  margin: 0 0 14px; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.feature-toc-list {
+  margin: 0; padding-left: 22px; font-size: 1rem; line-height: 1.7;
+}
+.feature-toc-list li { padding: 2px 0; }
+.feature-toc-list a {
+  color: #1f2328; text-decoration: none; font-weight: 500;
+}
+.feature-toc-list a:hover { color: #0969da; text-decoration: underline; }
+.toc-extra-header {
+  list-style: none; margin: 10px 0 4px -22px;
+  font-size: 0.82rem; color: #57606a; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.feature-manual { margin: 14px 0; }
+.feature-section {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 16px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+  scroll-margin-top: 12px;
+}
+.feature-heading {
+  margin: 0 0 10px; font-size: 1.2rem; color: #1f2328;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.feature-description {
+  margin: 0 0 16px; color: #1f2328; font-size: 1rem; line-height: 1.55;
+}
+.feature-description-label {
+  font-weight: 600; color: #57606a; margin-right: 4px;
+}
+.feature-note {
+  margin: 8px 0 12px; padding: 8px 12px;
+  background: #fff8c5; border: 1px solid #eed888; border-radius: 6px;
+  color: #9a6700; font-size: 0.88rem;
+}
+.feature-source {
+  margin: 12px 0 0; font-size: 0.88rem; color: #57606a;
+}
+.feature-source a { color: #0969da; text-decoration: none; }
+.feature-source a:hover { text-decoration: underline; }
+.feature-empty {
+  margin: 10px 0; padding: 12px 16px;
+  background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+  color: #57606a; font-style: italic;
+}
+.status-pill {
+  font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+  letter-spacing: 0.04em; white-space: nowrap; display: inline-block;
+}
+.status-pill-passing { background: #dafbe1; color: #1a7f37; border: 1px solid #aceebb; }
+.status-pill-failing { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-regressed { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-partial { background: #fff8c5; color: #9a6700; border: 1px solid #e8d97e; }
+.status-pill-unknown { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.status-pill-coming-soon { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.developer-view {
+  margin: 28px 0 6px;
+  border: 1px dashed #d0d7de; border-radius: 8px;
+}
+.developer-view > summary {
+  cursor: pointer; padding: 12px 16px;
+  color: #57606a; font-size: 0.92rem; font-weight: 500;
+  background: #f6f8fa; border-radius: 8px;
+}
+.developer-view[open] > summary {
+  border-bottom: 1px dashed #d0d7de;
+  border-radius: 8px 8px 0 0;
+}
+.developer-view-body { padding: 12px 18px; }
+</style>
+</head><body><div class='container'>
+<section class='hero pass'><div class='badge-row'><div class='badge pass'><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+<circle cx="12" cy="12" r="11" fill="#1a7f37"/>
+<path d="M7 12.5l3 3 7-7" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg><span>PASS</span></div><span class='signal-badge improving'>Direction: improving</span></div><h1>Iteration 2  ·  session yahoo_fetch</h1><h2>Yahoo bar-fetch now covers all six timeframes, with an honest 4h resample and clearer error messages</h2><div class='meta'>2026-07-09 · goal-full</div><div class='meta'>Journeys: 2/6 passing</div><div class='journey-row'><span class='journey-pill passing' title='Fetch real historical bars from Yahoo Finance, keyless'>J-01 · passing</span><span class='journey-pill failing' title='The full timeframe set, including honestly-resampled 4h'>J-02 · failing</span><span class='journey-pill failing' title='Quick reuse — store-first fetch backed by a derived SQLite index'>J-03 · failing</span><span class='journey-pill failing' title='Real S/R levels and confluence zones on real Yahoo bars'>J-04 · failing</span><span class='journey-pill failing' title='Fetch from the app — the Structure page fetch control with Yahoo Finance provenance'>J-05 · failing</span><span class='journey-pill passing' title='The foundation is unchanged (regression sentinel)'>J-06 · passing</span></div></section>
+<section class='plain-words'><h2 class='pw-heading'>In plain words</h2><div class='pw-grid'><div class='pw-card'><div class='pw-label'>What you can do now</div><p class='pw-text'>You can already pick a stock on the Structure page to see its support-and-resistance price levels and zones, compare two trading strategies side by side with a &quot;Champion&quot; badge, watch a live simulated price tape, keep a trading journal, run replay research studies, and check an honest profit scorecard.</p></div><div class='pw-card'><div class='pw-label'>What changed this time</div><p class='pw-text'>Behind-the-scenes work — nothing visibly new this round. The app quietly learned to pull five more time windows of real stock history from Yahoo Finance — weekly, hourly, 5-minute, and 1-minute, alongside the daily view it already had — and to build an extra 4-hour view itself out of real hourly prices, never inventing numbers, honestly leaving the last stretch of a trading day shorter rather than padded out. When a request can&#x27;t be filled, the app now explains more clearly why: a timeframe it doesn&#x27;t offer yet, versus no data for that particular stock or date range.</p></div><div class='pw-card'><div class='pw-label'>What&#x27;s next</div><p class='pw-text'>Next, the app will build a fast local memory so that looking up a stock&#x27;s history a second time is instant instead of re-fetching it from scratch every time.</p></div></div></section>
+<section class='watch-it-work'><div class='wiw-head'><h2 class='wiw-heading'>Watch it work</h2><span class='demo-badge demo-skipped'>SKIPPED</span></div><p class='demo-empty'>Frontend at http://localhost:3301 did not respond after 90s of retries. No browser walkthrough was performed.
+
+Frontend log tail (/tmp/fanout-frontend-8301.log):
+```
+   ▲ Next.js 15.5.19
+   - Local:        http://localhost:3301
+   - Network:      http://192.168.1.68:3301
+
+ ✓ Starting...
+ ✓ Ready in 1348ms
+ ○ Compiling / ...
+ ✓ Compiled / in 760ms (654 modules)
+ GET / 200 in 1068ms
+ GET / 200 in 34ms
+```</p></section>
+<div class='tech-divider'><span>Technical detail below — open if you want the developer view.</span></div>
+<details><summary>What was done</summary><div class='accordion-body'><ul class='bullets'><li>Expanded the Yahoo adapter&#x27;s timeframe map to fetch `1w`, `1d`, `1h`, `5m`, and `1m` bars directly and keylessly from Yahoo Finance (only `1d` worked before this iteration).</li><li>Added a deterministic, session-aligned `4h` resample built purely from real `1h` bars (open=first/high=max/low=min/close=last/volume=sum), with an honest, unpadded partial trailing bucket — confined entirely to `adapters/yahoo.py` (single owner, per the anti-goal).</li><li>Split the old single generic &quot;no bars&quot; error into a three-way honest taxonomy: `UnsupportedTimeframe` (Yahoo doesn&#x27;t serve this timeframe this era), `NoDataForWindow` (real timeframe, no data for that symbol/window), and the existing `VendorTimeout` — none ever writes or fabricates a bar.</li><li>Verified live against the real Yahoo Finance service: all six timeframes fetch real bars, the live `4h` matched the deterministic resample of live `1h` byte-for-byte, and both new error cases fired correctly on real out-of-retention/unsupported requests.</li><li>Full backend suite grew to 1189 tests (0 failed, 6 skipped); `config_fingerprint` unchanged, engine equivalence stayed 22/22, and the Alpaca adapter plus all frontend files remained byte-identical (zero regression).</li><li>Browser-QA lane recorded SKIPPED this iteration (frontend/backend both unreachable at run time); J-01/J-06 regression was instead independently re-verified via live integration tests and byte-identical frozen-file diffs — a documented, non-blocking gap per the audit and closure verdict.</li></ul></div></details>
+<details><summary>What's left + Next step</summary><div class='accordion-body'><h3>Still open</h3><ul class='bullets'><li>Journey J-03 (Quick reuse — store-first fetch backed by a derived SQLite index) not yet built — the next targeted journey.</li><li>Journey J-04 (Real S/R levels and confluence zones on real Yahoo bars) not yet built.</li><li>Journey J-05 (Fetch from the app — the Structure page fetch control with Yahoo Finance provenance) not yet built — this is also where the on-screen &quot;Fetch from Yahoo Finance&quot; button and provenance labeling ship.</li><li>No on-screen control exists yet to trigger any Yahoo fetch, at any timeframe — reachable only via direct API/MCP call today.</li><li>Browser-regression screenshot evidence for J-01/J-06 still not captured this iteration (carried gap); the closure verdict sets an explicit escalation condition that J-05 must capture it for real.</li><li>Latent `pickRepresentativeSeries()` risk flagged for J-05 design: once a fetch control exists, fetching an intraday timeframe could silently and permanently switch a symbol&#x27;s displayed timeframe on `/structure`, with no confirmation step.</li></ul><h3>Next step</h3><div class='next-step-box'>The goal-evaluator has not yet produced iter-2&#x27;s formal verdict (no `eval.md`; `journey-history.json` still reflects iter-1), so this is carried from the audit&#x27;s Recommended Next Step, the most specific available guidance: proceed to J-03 — the store-first SQLite index for quick reuse of already-fetched bar series. Carry forward the one open gap: J-05 (the iteration that ships the actual `/structure` fetch control) must be the point where the J-01/J-06 browser-regression screenshot evidence is finally captured for real — the closure verdict sets that as an explicit escalation condition.</div></div></details>
+<details><summary>Assumptions made</summary><div class='accordion-body'><div class='why-text'>none recorded</div></div></details>
+<details><summary>Direction signal</summary><div class='accordion-body'><div class='why-text'><strong>Why:</strong> Iteration 2 completed J-02 — expanding the Yahoo adapter to all six era-5 timeframes, including a deterministic, session-aligned `4h` resample and a three-way honest error taxonomy — and it cleared every pipeline gate (review PASS, QA PASS, audit PASS_WITH_GAPS, closure CLOSURE-PASS), independently re-verified live against the real Yahoo Finance service with zero regression to J-01/J-06. The goal-evaluator has not yet produced iter-2&#x27;s `eval.md` or updated `journey-history.json`, so J-02&#x27;s formal journey status is still pending that step, but the convergent gate evidence reads as clear forward progress. One documented gap: the browser-QA lane recorded SKIPPED (both services unreachable at run time), a non-blocking issue the audit and closure verdict say must be closed for real by J-05.</div><h3>Trend</h3><ul class='bullets'><li>Newly passing this iter: none logged yet — goal-evaluator has not run for iter-2 (see Why above); J-02 cleared review/QA/audit/closure independently</li><li>Newly passing in last 2 iters total: J-01</li><li>Regressions in last 2 iters: none</li><li>Anti-goal violations in last 2 iters: none (iter-1 logged one WARN for the sanctioned, allowlisted `yfinance` dependency — not a violation)</li><li>Iters with no journey state change: 1 of last 2 (iter-0, the verify-only baseline)</li></ul><h3>Latest evaluator reasoning</h3><div class='why-text'>(iter-2&#x27;s goal-evaluator has not yet run; most recent recorded reasoning is from iter-1) &quot;Coherence PASS, review PASS, QA PASS, audit PASS_WITH_GAPS (B1 = no production Alpaca opt-in on the bar-fetch endpoint — documented, regresses nothing, out of scope). `config_fingerprint` `4d665603569b9dbf` and equivalence 22/22 hold, so J-06 stays green. J-02–J-05 remain `failing` (out of scope this iteration, not attempted-and-failed) → not GOAL_ACHIEVED; progress made → CONTINUE.&quot;</div></div></details>
+<details><summary>Quick verify (5 min)</summary><div class='accordion-body'><ol class='steps'><li><span class='step-action'>Open `http://localhost:3301/structure` in your browser</span></li><li><span class='step-action'>Type `AAPL` into the &quot;Symbol&quot; field and `2026-07-02T00:00:00Z` into the &quot;As-of (UTC, ISO-8601)&quot; field, then click &quot;Load&quot;</span></li><li><span class='step-action'>Change the &quot;Symbol&quot; field to `MSFT` (leave the As-of field as it is), then click &quot;Load&quot; again</span></li><li><span class='step-action'>Click &quot;Cockpit&quot; in the top navigation, type `SIM-BUYER` into the ticker field, and click &quot;Watch&quot;</span></li><li><span class='step-action'>Look at the small badge that says &quot;feed&quot; next to &quot;Watching SIM-BUYER&quot;</span></li></ol></div></details>
+<details><summary>Artifacts</summary><div class='accordion-body'><table class='drill-table'><thead><tr><th>Report</th><th>Verdict</th><th>Path</th></tr></thead><tbody><tr><td>Iter spec</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/phases/goal-yahoo_fetch-iter-2.md'>docs/phases/goal-yahoo_fetch-iter-2.md</a></td></tr><tr><td>Dev handoff</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/handoffs/goal-yahoo_fetch-iter-2-dev.md'>docs/handoffs/goal-yahoo_fetch-iter-2-dev.md</a></td></tr><tr><td>Review</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='reviews/goal-yahoo_fetch-iter-2-review.md'>reports/reviews/goal-yahoo_fetch-iter-2-review.md</a></td></tr><tr><td>Browser QA</td><td><span class='verdict-cell SKIPPED'>SKIPPED</span></td><td><a href='phase-goal-yahoo_fetch-iter-2-ui-test-results.md'>reports/phase-goal-yahoo_fetch-iter-2-ui-test-results.md</a></td></tr><tr><td>Implementation summary</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-yahoo_fetch-iter-2-implementation-summary.md'>reports/phase-goal-yahoo_fetch-iter-2-implementation-summary.md</a></td></tr><tr><td>User-visible changes</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-yahoo_fetch-iter-2-user-visible-changes.md'>reports/phase-goal-yahoo_fetch-iter-2-user-visible-changes.md</a></td></tr><tr><td>What to click</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-yahoo_fetch-iter-2-what-to-click.md'>reports/phase-goal-yahoo_fetch-iter-2-what-to-click.md</a></td></tr><tr><td>UI surface map</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-yahoo_fetch-iter-2-ui-surface-map.md'>reports/phase-goal-yahoo_fetch-iter-2-ui-surface-map.md</a></td></tr><tr><td>UI test plan</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-yahoo_fetch-iter-2-ui-test-plan.md'>reports/phase-goal-yahoo_fetch-iter-2-ui-test-plan.md</a></td></tr><tr><td>UX regression</td><td><span class='verdict-cell UX-REGRESSION-WARN'>UX-REGRESSION-WARN</span></td><td><a href='phase-goal-yahoo_fetch-iter-2-ux-regression.md'>reports/phase-goal-yahoo_fetch-iter-2-ux-regression.md</a></td></tr><tr><td>QA</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='qa/goal-yahoo_fetch-iter-2-qa.md'>reports/qa/goal-yahoo_fetch-iter-2-qa.md</a></td></tr><tr><td>Audit</td><td><span class='verdict-cell PASS_WITH_GAPS'>PASS_WITH_GAPS</span></td><td><a href='../docs/handoffs/goal-yahoo_fetch-iter-2-audit.md'>docs/handoffs/goal-yahoo_fetch-iter-2-audit.md</a></td></tr><tr><td>Closure</td><td><span class='verdict-cell CLOSURE-PASS'>CLOSURE-PASS</span></td><td><a href='phase-goal-yahoo_fetch-iter-2-closure-verdict.md'>reports/phase-goal-yahoo_fetch-iter-2-closure-verdict.md</a></td></tr><tr><td>Journey history</td><td><span class='verdict-cell —'>—</span></td><td><a href='../runs/goal-session-yahoo_fetch/state/journey-history.json'>runs/goal-session-yahoo_fetch/state/journey-history.json</a></td></tr></tbody></table></div></details>
+<details><summary>Timing — where this iteration's wall time went</summary><div class='accordion-body'><pre>== Wall-time report: session yahoo_fetch
+  goal-yahoo_fetch-iter-2  depth=full  verdict=?  wall=?  (incomplete/interrupted attempt)
+      iteration-summarizer         8.7m  calls=1
+      goal-decomposer              8.7m  calls=1
+      readme-maintainer            4.7m  calls=1
+      pump-wait                  0.3m</pre></div></details>
+<div class='footer-note'>Generated 2026-07-09 17:06 by <code>render_iteration_summary.py</code> · source: <a href='phase-goal-yahoo_fetch-iter-2-iteration-summary.md'>phase-goal-yahoo_fetch-iter-2-iteration-summary.md</a></div>
+</div></body></html>

@@ -226,7 +226,8 @@ def test_corrupted_bar_series_file_surfaces_explicitly_on_detail_and_list(ctx):
     assert f"{corrupt['id']}.json" in listed["integrity_errors"][0]["file"]
 
 
-# --- era-5 J-01: Yahoo is the default bar-fetch vendor; feed is sourced from the adapter ----------
+# --- era-5 J-01/J-02: Yahoo is the default bar-fetch vendor; feed is sourced from the adapter,
+# and (J-02) the honest error taxonomy is observably distinct ---------------------------------------
 # Every test above injects a FakeAdapter via `_inject_adapter` (overriding `get_market_adapter`),
 # so all 12 keep passing UNMODIFIED — proving Alpaca/fake stays selectable, opt-in, and
 # byte-identical (the vendor-selector contract). The tests below deliberately do NOT override
@@ -313,13 +314,65 @@ def test_bar_fetch_adapter_resolver_defaults_to_yahoo_with_no_override(ctx):
     assert adapter.name == "yahoo"
 
 
-def test_yahoo_empty_vendor_response_is_the_existing_422_no_new_exception_type(ctx, monkeypatch):
-    """A genuinely unservable Yahoo request (unknown symbol / no data) reuses the EXISTING
-    ``EmptyBarWindowError`` 422 path — no new exception type, nothing fabricated or padded."""
+def test_yahoo_out_of_retention_or_unknown_symbol_is_422_no_data_for_window(ctx, monkeypatch):
+    """A genuinely unservable Yahoo request on a MAPPED timeframe (unknown symbol, or a real
+    window outside that timeframe's retention — yfinance answers both with an empty frame) is
+    era-5 J-02's error-taxonomy case 2: an explicit, neutral ``NoDataForWindow`` 422 — nothing
+    fabricated, nothing written. (Evolved from J-01's "reuses the existing EmptyBarWindowError, no
+    new exception type" test now that this case is its own explicit, distinct signal — see
+    ``yahoo.py``'s module docstring for the full three-way taxonomy this iteration adds.)"""
     client, bar_dir = ctx
     _install_fake_yahoo_ticker(monkeypatch, pd.DataFrame())  # yfinance's own honest-empty answer
 
     r = client.post("/research/bars", json=_body(symbol="ZZZZZNOTREAL"))
     assert r.status_code == 422
-    assert "no bars" in r.json()["detail"]
+    assert "no data" in r.json()["detail"]
+    assert "window" in r.json()["detail"]
     assert not bar_dir.exists() or list(bar_dir.glob("*.json")) == []
+
+
+# --- era-5 J-02: the honest error taxonomy is THREE observably distinct states ------------------
+
+
+def test_yahoo_unsupported_timeframe_is_422_with_zero_vendor_calls(ctx, monkeypatch):
+    """A config-valid ``bar_timeframes`` entry Yahoo simply does not serve this era (``8h`` — still
+    passes the route's OWN out-of-set pre-check, since it IS in ``CONFIG.bar_timeframes``) is
+    era-5 J-02's error-taxonomy case 1: a distinct, explicit ``UnsupportedTimeframe`` 422,
+    statically knowable with ZERO vendor calls — never the generic "no data for that window" text,
+    and never a fabricated/padded bar."""
+    client, bar_dir = ctx
+    assert "8h" in CONFIG.bar_timeframes
+    calls = _install_fake_yahoo_ticker(monkeypatch, pd.DataFrame())
+
+    r = client.post("/research/bars", json=_body(timeframe="8h"))
+
+    assert r.status_code == 422
+    assert "8h" in r.json()["detail"]
+    assert calls == []  # zero vendor round-trips for a statically-unsupported timeframe
+    assert not bar_dir.exists() or list(bar_dir.glob("*.json")) == []
+
+
+def test_unsupported_timeframe_and_no_data_for_window_are_observably_distinct(ctx, monkeypatch):
+    """The two era-5 J-02 error states never collapse into the same generic response — proven by
+    directly diffing their detail text (both currently 422; the plan's own explicit requirement is
+    "different detail text and/or status", so a distinct message is sufficient)."""
+    client, _bar_dir = ctx
+    _install_fake_yahoo_ticker(monkeypatch, pd.DataFrame())
+
+    unsupported = client.post("/research/bars", json=_body(timeframe="8h"))
+    no_data = client.post("/research/bars", json=_body(symbol="ZZZZZNOTREAL"))
+
+    assert unsupported.status_code == no_data.status_code == 422
+    assert unsupported.json()["detail"] != no_data.json()["detail"]
+
+
+def test_multiple_yahoo_unsupported_timeframes_all_raise_the_same_taxonomy(ctx, monkeypatch):
+    """``1mo`` and ``15m`` (both config-valid, both Yahoo-unsupported this era per the goal's
+    six-timeframe enumeration) hit the SAME case-1 taxonomy as ``8h`` above."""
+    client, _bar_dir = ctx
+    _install_fake_yahoo_ticker(monkeypatch, pd.DataFrame())
+    for timeframe in ("1mo", "15m"):
+        assert timeframe in CONFIG.bar_timeframes
+        r = client.post("/research/bars", json=_body(timeframe=timeframe))
+        assert r.status_code == 422
+        assert timeframe in r.json()["detail"]

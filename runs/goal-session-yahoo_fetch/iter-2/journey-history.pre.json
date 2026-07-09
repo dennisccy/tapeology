@@ -4,20 +4,20 @@
       "id": "J-01",
       "name": "Fetch real historical bars from Yahoo Finance, keyless",
       "status": "passing",
-      "last_verified_iter": "goal-yahoo_fetch-iter-2",
-      "last_passing_iter": "goal-yahoo_fetch-iter-2",
+      "last_verified_iter": "goal-yahoo_fetch-iter-1",
+      "last_passing_iter": "goal-yahoo_fetch-iter-1",
       "first_seen_iter": "goal-yahoo_fetch-iter-0",
-      "last_evidence_path": "docs/handoffs/goal-yahoo_fetch-iter-2-audit.md",
+      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-1-evidence/UT-07-result.png",
       "spec_hash": "ce0eae4f07c831d586ff1b28b2dbe13bcee35d7f2e5f361e280e614b83b73723"
     },
     "J-02": {
       "id": "J-02",
       "name": "The full timeframe set, including honestly-resampled 4h",
-      "status": "passing",
-      "last_verified_iter": "goal-yahoo_fetch-iter-2",
-      "last_passing_iter": "goal-yahoo_fetch-iter-2",
+      "status": "failing",
+      "last_verified_iter": "goal-yahoo_fetch-iter-0",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-yahoo_fetch-iter-0",
-      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-2-qa.md",
+      "last_evidence_path": "docs/handoffs/goal-yahoo_fetch-iter-0-dev.md",
       "spec_hash": "38747f5fb7bd25bcba6bdd8af2a6d5434dc8f08053f46a9c3fcd60016c128c63"
     },
     "J-03": {
@@ -54,13 +54,13 @@
       "id": "J-06",
       "name": "The foundation is unchanged (regression sentinel)",
       "status": "passing",
-      "last_verified_iter": "goal-yahoo_fetch-iter-2",
-      "last_passing_iter": "goal-yahoo_fetch-iter-2",
+      "last_verified_iter": "goal-yahoo_fetch-iter-1",
+      "last_passing_iter": "goal-yahoo_fetch-iter-1",
       "first_seen_iter": "goal-yahoo_fetch-iter-0",
-      "last_evidence_path": "docs/handoffs/goal-yahoo_fetch-iter-2-audit.md",
+      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-1-evidence/UT-01-result.png",
       "spec_hash": "24f8bf8ba8baca3e9d52d76a0d54c9138edf8f388069541cb24932dfc9904b86"
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-07-09T17:20:00Z"
+  "updated_at": "2026-07-09T03:30:00Z"
 }

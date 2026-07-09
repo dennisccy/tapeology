@@ -145,6 +145,15 @@ class NoDataForWindow(Exception):
     """The symbol is tradable but the requested window returned no trades/quotes (neutral)."""
 
 
+class UnsupportedTimeframe(Exception):
+    """A ``fetch_bars`` ``timeframe`` this vendor does not serve at all (neutral; no vendor type;
+    era-5 J-02). Distinct from ``NoDataForWindow``: this is statically knowable from the
+    timeframe value alone, with NO vendor call — e.g. a config-registered ``bar_timeframes``
+    entry (``8h`` / ``1mo`` / ``15m``) that Yahoo Finance's adapter does not map this era, as
+    opposed to a mapped/servable timeframe whose specific symbol/window legitimately returns
+    nothing (that stays ``NoDataForWindow``). Raised by the adapter BEFORE any network call."""
+
+
 class VendorTimeout(Exception):
     """A vendor call exceeded the real call-level HTTP deadline (J-28 / bounded-honest-vendor).
 
