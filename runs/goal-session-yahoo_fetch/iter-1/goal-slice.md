@@ -296,7 +296,7 @@ in CI. Natural dependency order: J-01 → J-02 → J-03 → J-04 → J-05; **J-0
     advice/prediction/vocabulary drift in copy. Browser-verified **keyless on a pre-seeded committed fixture**
     (the click serves store-first, no network); the live cache-miss fetch is integration-gated. *(Keyless on
     the committed fixture; browser-verifiable.)*
-- **J-06: The foundation is unchanged (regression sentinel)** — already_passing (stable; digested)
+- **J-06: The foundation is unchanged (regression sentinel)** — passing (stable; digested)
 <!-- AUTO:journeys -->
 <!-- /AUTO:journeys -->
 

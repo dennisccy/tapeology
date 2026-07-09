@@ -16,14 +16,18 @@ DISTINCT from the 422 the historical-DATASET path uses for the analogous credent
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
+import pandas as pd
 import pytest
+import yfinance
 from fastapi.testclient import TestClient
 
 from app.config import CONFIG
 from app.main import app, get_market_adapter, manager
 from app.providers.adapters.base import RawBar, VendorTimeout
-from app.research.routes import ResearchRegistry, set_registry
+from app.providers.adapters.yahoo import YahooAdapter
+from app.research.routes import ResearchRegistry, get_bar_fetch_adapter, set_registry
 from app.research.store import JournalStore
 from fakes import FakeAdapter
 
@@ -220,3 +224,102 @@ def test_corrupted_bar_series_file_surfaces_explicitly_on_detail_and_list(ctx):
     assert [row["id"] for row in listed["bar_series"]] == [healthy["id"]]
     assert len(listed["integrity_errors"]) == 1
     assert f"{corrupt['id']}.json" in listed["integrity_errors"][0]["file"]
+
+
+# --- era-5 J-01: Yahoo is the default bar-fetch vendor; feed is sourced from the adapter ----------
+# Every test above injects a FakeAdapter via `_inject_adapter` (overriding `get_market_adapter`),
+# so all 12 keep passing UNMODIFIED — proving Alpaca/fake stays selectable, opt-in, and
+# byte-identical (the vendor-selector contract). The tests below deliberately do NOT override
+# `get_market_adapter`, so the bar-fetch resolver falls through to its real, keyless default:
+# `YahooAdapter`. The underlying yfinance call is mocked (no network); the committed REAL Yahoo
+# capture (tests/fixtures/yahoo/) drives the mocked response so the adapter's real parsing runs
+# end to end through the actual route.
+
+YAHOO_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "yahoo" / "AAPL_1d_20260601_20260604.json"
+
+
+def _load_yahoo_fixture() -> dict:
+    return json.loads(YAHOO_FIXTURE_PATH.read_text())
+
+
+def _yahoo_fixture_dataframe(fixture: dict) -> pd.DataFrame:
+    index = pd.to_datetime([b["epoch"] for b in fixture["bars"]], unit="s", utc=True)
+    return pd.DataFrame(
+        {
+            "Open": [b["open"] for b in fixture["bars"]],
+            "High": [b["high"] for b in fixture["bars"]],
+            "Low": [b["low"] for b in fixture["bars"]],
+            "Close": [b["close"] for b in fixture["bars"]],
+            "Volume": [b["volume"] for b in fixture["bars"]],
+        },
+        index=index,
+    )
+
+
+def _install_fake_yahoo_ticker(monkeypatch, df: pd.DataFrame) -> list[dict]:
+    calls: list[dict] = []
+
+    class _FakeTicker:
+        def __init__(self, symbol: str) -> None:
+            self.symbol = symbol
+
+        def history(self, *, start, end, interval):
+            calls.append({"symbol": self.symbol, "start": start, "end": end, "interval": interval})
+            return df
+
+    monkeypatch.setattr(yfinance, "Ticker", _FakeTicker)
+    return calls
+
+
+def test_yahoo_is_the_default_bar_fetch_vendor_with_no_override(ctx, monkeypatch):
+    """No ``_inject_adapter`` override this time — proves the bar-fetch path resolves to the REAL,
+    keyless ``YahooAdapter`` by default. ``feed`` is sourced from the adapter (never
+    ``CONFIG.historical_feed``); ``GET .../{id}`` reads the stored series back byte-for-byte
+    (single source of truth — nothing recomputed at read)."""
+    client, bar_dir = ctx
+    fixture = _load_yahoo_fixture()
+    _install_fake_yahoo_ticker(monkeypatch, _yahoo_fixture_dataframe(fixture))
+
+    r = client.post(
+        "/research/bars",
+        json={
+            "symbol": fixture["symbol"],
+            "timeframe": fixture["timeframe"],
+            "start": fixture["start"],
+            "end": fixture["end"],
+        },
+    )
+    assert r.status_code == 200
+    meta = r.json()["bar_series"]
+    assert meta["symbol"] == fixture["symbol"]
+    assert meta["timeframe"] == fixture["timeframe"]
+    assert meta["feed"] == "yahoo"  # sourced from the adapter, NOT CONFIG.historical_feed ("sip")
+    assert meta["feed"] != CONFIG.historical_feed
+    assert meta["bar_count"] == len(fixture["bars"]) == 3
+    assert len(list(bar_dir.glob("*.json"))) == 1
+
+    detail = client.get(f"/research/bars/{meta['id']}")
+    assert detail.status_code == 200
+    assert detail.json()["bar_series"] == meta
+
+
+def test_bar_fetch_adapter_resolver_defaults_to_yahoo_with_no_override(ctx):
+    """A direct, hermetic proof of the resolver itself: with NO ``dependency_overrides`` on
+    ``get_market_adapter``, ``get_bar_fetch_adapter()`` constructs a real ``YahooAdapter`` — never
+    Alpaca (``get_study_market_adapter()``'s own Alpaca-only default stays untouched, used only by
+    the study/historical-dataset paths, not this resolver)."""
+    adapter = get_bar_fetch_adapter()
+    assert isinstance(adapter, YahooAdapter)
+    assert adapter.name == "yahoo"
+
+
+def test_yahoo_empty_vendor_response_is_the_existing_422_no_new_exception_type(ctx, monkeypatch):
+    """A genuinely unservable Yahoo request (unknown symbol / no data) reuses the EXISTING
+    ``EmptyBarWindowError`` 422 path — no new exception type, nothing fabricated or padded."""
+    client, bar_dir = ctx
+    _install_fake_yahoo_ticker(monkeypatch, pd.DataFrame())  # yfinance's own honest-empty answer
+
+    r = client.post("/research/bars", json=_body(symbol="ZZZZZNOTREAL"))
+    assert r.status_code == 422
+    assert "no bars" in r.json()["detail"]
+    assert not bar_dir.exists() or list(bar_dir.glob("*.json")) == []

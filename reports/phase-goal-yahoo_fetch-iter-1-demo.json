@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-yahoo_fetch-iter-1",
+  "base_url": "http://localhost:3301",
+  "iteration": 1,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the cockpit",
+      "narration": "Let's start at Tapeology's home page — the live cockpit where a trader watches a ticker's tape in real time.",
+      "point_out": "The Live / Historical / Simulated toggle at the top, and a friendly empty state waiting for a ticker to watch.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Choose a ticker to watch",
+      "narration": "Type in a ticker to watch — here, the app's own built-in simulated ticker, SIM-BUYER, which needs no real market data or credentials.",
+      "point_out": "The ticker field now reads SIM-BUYER.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "Watch the live tape",
+      "narration": "Click Watch, and the cockpit springs to life with a full set of live tape-reading panels.",
+      "point_out": "Six live panels appear — Tape State, Quote, Recent Trades, Features, Observations, and Event Log — with a feed badge confirming the data source.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Watching SIM-BUYER" }
+    },
+    {
+      "n": 4,
+      "title": "Open Structure",
+      "narration": "Now let's look at the Structure page, where Tapeology maps out a stock's key support-and-resistance price levels.",
+      "point_out": "A Symbol and As-of form, plus a Registry panel naming the reigning Champion trading strategy.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Choose a symbol and an as-of time, then Load, to see its S/R levels and confluence zones." }
+    },
+    {
+      "n": 5,
+      "title": "Pick a symbol",
+      "narration": "Enter a real stock symbol — AAPL — to pull up its price structure.",
+      "point_out": "The Symbol field now reads AAPL.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 6,
+      "title": "Set the as-of time",
+      "narration": "Set the as-of time so the chart shows exactly what was known at that moment.",
+      "point_out": "The As-of field is filled in and ready to load.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "As-of (UTC, ISO-8601)" }, "text": "2026-06-05T00:00:00Z" }
+    },
+    {
+      "n": 7,
+      "title": "Load the price structure",
+      "narration": "Click Load, and the chart renders that symbol's real price history with support-and-resistance levels drawn on top.",
+      "point_out": "A full candlestick chart appears with level lines, plus a row of confluence zone cards below showing where several levels cluster together.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "Candles: 1d series (24 of 24 recorded bars, as of the query time). Level lines span every recorded timeframe." }
+    },
+    {
+      "n": 8,
+      "title": "Open the Journal",
+      "narration": "Next, the Journal — where every trade idea gets logged and later graded against what the tape actually did.",
+      "point_out": "A table of past theses, each tagged with its data feed and outcome.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/journal" },
+      "expect": { "text": "SIM-SELLER" }
+    },
+    {
+      "n": 9,
+      "title": "Review a trade idea",
+      "narration": "Click into a thesis to see its full review — what was expected, what actually happened, and how it graded.",
+      "point_out": "The review page breaks down entry risk, execution checks, and the tape's verdict timeline for this trade.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "link", "name": "SIM-SELLER" } },
+      "expect": { "text": "Back to journal" }
+    },
+    {
+      "n": 10,
+      "title": "Open Studies",
+      "narration": "Over on Studies, you can replay past trade setups against historical data to see how a strategy would have performed.",
+      "point_out": "A study-creation form on the left, and a results panel on the right ready to show whatever you select.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/studies" },
+      "expect": { "text": "Create a study, or select one from the list, to read its results." }
+    },
+    {
+      "n": 11,
+      "title": "Watch the study form respond live",
+      "narration": "Switch the study's data source to a seeded simulation, and a scenario picker appears live — every field in the form responds instantly.",
+      "point_out": "A new \"Sim scenario\" dropdown shows up with options like SIM-REVERSAL and SIM-BUYER.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "radio", "name": "Seeded sim scenario" } },
+      "expect": { "text": "Sim scenario" }
+    },
+    {
+      "n": 12,
+      "title": "Open Performance",
+      "narration": "Finally, Performance — an honest scorecard of how each strategy has actually done, including on data it's never seen before.",
+      "point_out": "A PnL ledger on the left, and the current Champion strategy summary on the right.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/performance" },
+      "expect": { "text": "PnL ledger" }
+    },
+    {
+      "n": 13,
+      "title": "A broken link stays graceful",
+      "narration": "Even a broken link stays graceful — if a thesis doesn't exist, the Journal shows a clear message instead of a blank screen or a crash.",
+      "point_out": "A clear notice appears, with a link straight back to the Journal.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/journal/does-not-exist-12345" },
+      "expect": { "text": "This thesis was not found." }
+    }
+  ]
+}

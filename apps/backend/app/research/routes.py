@@ -28,6 +28,7 @@ from pydantic import BaseModel
 
 from ..config import CONFIG, Config
 from ..providers.adapters.base import NoDataForWindow, SymbolNotTradable, VendorTimeout
+from ..providers.adapters.yahoo import YahooAdapter
 from .analytics import compute_analytics
 from .backtests import (
     BacktestJobManager,
@@ -188,12 +189,13 @@ class DatasetRecordRequest(BaseModel):
 
 
 class BarRecordRequest(BaseModel):
-    """Body for ``POST /research/bars`` (era-4 capability 1, J-01) — the explicit credentialed
-    record + register research action. All four fields are required: ``symbol``, ``timeframe``
-    (validated against the config-owned ``bar_timeframes`` set in the ROUTE — out-of-set is a 422,
-    never silently coerced), and the UTC ``[start, end)`` window fetched through the EXISTING
-    Alpaca adapter seam (``fetch_bars``). Unlike a dataset there is only one source (a real Alpaca
-    fetch), so there is no ``source_kind`` here."""
+    """Body for ``POST /research/bars`` (era-4 capability 1, J-01; era-5 J-01 makes Yahoo the
+    default vendor) — the explicit record + register research action. All four fields are
+    required: ``symbol``, ``timeframe`` (validated against the config-owned ``bar_timeframes`` set
+    in the ROUTE — out-of-set is a 422, never silently coerced), and the UTC ``[start, end)``
+    window fetched through the adapter seam (``fetch_bars`` — Yahoo by default, keyless; Alpaca
+    stays selectable). Unlike a dataset there is only one source per request, so there is no
+    ``source_kind`` here."""
 
     symbol: str
     timeframe: str
@@ -1534,19 +1536,39 @@ def get_bar_store() -> BarStore:
     return BarStore(CONFIG.bar_dir_resolved())
 
 
+def get_bar_fetch_adapter():
+    """The market adapter for the BAR-FETCH path ONLY (``POST /research/bars`` — era-5 J-01).
+
+    Defaults to the keyless ``YahooAdapter`` (era-5's headline capability) while STILL honoring any
+    existing test override on ``get_market_adapter`` — the SAME dependency key every
+    ``test_bars_api.py`` test already injects a ``FakeAdapter`` through — so every pre-iteration
+    test keeps passing UNMODIFIED (Alpaca/fake stays selectable, opt-in, byte-identical).
+    Deliberately DISTINCT from ``get_study_market_adapter()`` above (used by ``create_study``
+    SOURCE_HISTORICAL and historical-dataset recording, both of which call ``fetch_historical`` — a
+    capability Yahoo honestly does not have): flipping THAT shared resolver's own default to Yahoo
+    would silently break those two paths, a real J-06 regression. Lazy import avoids an import
+    cycle (mirrors ``get_study_market_adapter``)."""
+    from ..main import app, get_market_adapter
+
+    return app.dependency_overrides.get(get_market_adapter, YahooAdapter)()
+
+
 @router.post("/bars")
 def record_bar_series(
     body: BarRecordRequest,
     registry: ResearchRegistry = Depends(get_registry),
     store: BarStore = Depends(get_bar_store),
 ) -> dict:
-    """Record + register ONE multi-timeframe OHLC bar series (era-4 J-01 — the explicit
-    credentialed research action; recording is never ambient). Full validation (422, never silent
+    """Record + register ONE multi-timeframe OHLC bar series (era-4 J-01, era-5 J-01 — the
+    explicit research action; recording is never ambient). Full validation (422, never silent
     coercion): an out-of-set ``timeframe`` (the config-owned ``bar_timeframes`` set), a missing
-    symbol, a malformed ISO ``start``/``end``, or ``end`` not after ``start``. Missing credentials
-    -> the EXISTING explicit unavailable (503) state — never fabricated bars. Content already
-    registered is the 409-style refusal; an empty fetched window (e.g. entirely inside the
-    free-plan recency embargo) is an explicit 422 — nothing is written, nothing fabricated."""
+    symbol, a malformed ISO ``start``/``end``, or ``end`` not after ``start``. The bar-fetch vendor
+    defaults to the KEYLESS Yahoo adapter (``get_bar_fetch_adapter`` — era-5 J-01); Alpaca stays
+    selectable via the existing ``get_market_adapter`` override, where missing credentials still
+    surface the EXISTING explicit unavailable (503) state — never fabricated bars. Content already
+    registered is the 409-style refusal; an empty fetched window (e.g. an unknown symbol, a window
+    outside Yahoo's retention, or — for Alpaca — entirely inside the free-plan recency embargo) is
+    an explicit 422 — nothing is written, nothing fabricated."""
     if body.timeframe not in CONFIG.bar_timeframes:
         raise HTTPException(
             status_code=422,
@@ -1565,11 +1587,12 @@ def record_bar_series(
     if end_epoch <= start_epoch:
         raise HTTPException(status_code=422, detail="end must be after start")
 
-    adapter = get_study_market_adapter()
+    adapter = get_bar_fetch_adapter()
     if not adapter.is_available():
         # No credentials -> the EXISTING explicit unavailable (503) state (never a fabricated bar
         # series) — the DoD-mandated status for this gap, distinct from the historical-dataset
-        # path's 422 for the analogous case.
+        # path's 422 for the analogous case. Yahoo is always available (keyless); this only fires
+        # when an override (e.g. a credentialless Alpaca selection) reports unavailable.
         raise HTTPException(
             status_code=503,
             detail="real-data provider unavailable — a historical bar recording needs credentials",
@@ -1585,13 +1608,20 @@ def record_bar_series(
     except VendorTimeout as exc:
         raise HTTPException(status_code=504, detail=exc.detail)
 
+    # feed provenance (era-5 J-01): sourced from the ADAPTER — its single owner — only when Yahoo
+    # served this fetch; otherwise the EXISTING config-owned historical feed, byte-identical to
+    # every pre-iteration stamp. NOT ``adapter.name`` applied uniformly: ``AlpacaAdapter.name ==
+    # "alpaca"``, not ``"sip"`` — doing so would silently rename Alpaca's stamp and break the
+    # frozen ``test_post_records_and_registers_a_bar_series`` assertion.
+    feed = adapter.name if isinstance(adapter, YahooAdapter) else registry.config.historical_feed
+
     try:
         meta = store.record(
             symbol=symbol,
             timeframe=body.timeframe,
             window_start_utc=body.start,
             window_end_utc=body.end,
-            feed=registry.config.historical_feed,
+            feed=feed,
             bars=list(raw_bars),
         )
     except BarSeriesAlreadyRegistered as exc:
