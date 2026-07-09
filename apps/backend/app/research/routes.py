@@ -20,6 +20,7 @@ WatchManager through ``dependency_overrides`` exactly like the market-adapter se
 from __future__ import annotations
 
 import math
+import os
 import time
 import uuid
 
@@ -40,6 +41,7 @@ from .backtests import (
     PROFILE_DEFAULT,
     TERMINAL_STATUSES as BACKTEST_TERMINAL_STATUSES,
 )
+from .bar_index import BarIndex
 from .bars import (
     BarSeriesAlreadyRegistered,
     BarSeriesIntegrityError,
@@ -1541,6 +1543,20 @@ def get_bar_store() -> BarStore:
     return BarStore(CONFIG.bar_dir_resolved())
 
 
+def get_bar_index() -> BarIndex:
+    """The derived SQLite bar-lookup index (era-5 J-03) — a config-DERIVED, env-overridable path
+    so ``config.py`` stays byte-identical (``config_fingerprint`` unaffected, the spec's preferred
+    path over a fingerprint-excluded field): the ``TAPEOLOGY_BAR_INDEX_DB`` env var if set, else a
+    file co-located as a SIBLING of the config-owned bar directory (``get_bar_store``'s own
+    ``bar_dir_resolved()``, e.g. ``.data/bars`` -> ``.data/bar_index.db``). A FastAPI dependency so
+    tests can override it outright, exactly like ``get_bar_store`` — though every existing bar
+    test already gets this hermetically for free, since the derived default lives right beside
+    whatever ``TAPEOLOGY_BAR_DIR`` a test points at."""
+    override = os.environ.get("TAPEOLOGY_BAR_INDEX_DB")
+    db_path = override if override else os.path.join(os.path.dirname(CONFIG.bar_dir_resolved()), "bar_index.db")
+    return BarIndex(db_path)
+
+
 def get_bar_fetch_adapter():
     """The market adapter for the BAR-FETCH path ONLY (``POST /research/bars`` — era-5 J-01).
 
@@ -1563,6 +1579,7 @@ def record_bar_series(
     body: BarRecordRequest,
     registry: ResearchRegistry = Depends(get_registry),
     store: BarStore = Depends(get_bar_store),
+    index: BarIndex = Depends(get_bar_index),
 ) -> dict:
     """Record + register ONE multi-timeframe OHLC bar series (era-4 J-01, era-5 J-01/J-02 — the
     explicit research action; recording is never ambient). Full validation (422, never silent
@@ -1571,7 +1588,8 @@ def record_bar_series(
     defaults to the KEYLESS Yahoo adapter (``get_bar_fetch_adapter`` — era-5 J-01); Alpaca stays
     selectable via the existing ``get_market_adapter`` override, where missing credentials still
     surface the EXISTING explicit unavailable (503) state — never fabricated bars. Content already
-    registered is the 409-style refusal.
+    registered (a DIFFERENT window whose fetched content happens to match content already on
+    file) is still the 409-style refusal from the frozen ``store.record``.
 
     Era-5 J-02: the Yahoo path's honest-error taxonomy is now THREE observably distinct 4xx/5xx
     states (each nothing-written, nothing-fabricated) — a config-valid timeframe Yahoo does not
@@ -1581,7 +1599,16 @@ def record_bar_series(
     (``VendorTimeout``, 504, unchanged). A non-Yahoo adapter (e.g. Alpaca/fake, via the
     ``get_market_adapter`` override) that returns an empty tuple directly still hits the existing,
     unchanged ``EmptyBarWindowError`` 422 path below — this taxonomy is additive, not a
-    replacement."""
+    replacement.
+
+    Era-5 J-03: a STORE-FIRST coordinator runs immediately after validation, BEFORE any adapter is
+    touched — an exact-key ``(symbol, timeframe, window_start, window_end)`` index hit returns the
+    ALREADY-STORED series (checksum-verified via ``store.get``) with ZERO adapter/network calls,
+    so an identical repeat POST is served instantly and never re-hits Yahoo. On a miss — or on a
+    hit whose indexed series the canonical JSON store can no longer verify (deleted or corrupted
+    since indexing) — the fetch flow below runs exactly as before, then additively updates the
+    index once ``store.record`` succeeds. The index is a derived cache ONLY; it never substitutes
+    for the checksum-verified JSON read, and its own loss/corruption never fabricates a series."""
     if body.timeframe not in CONFIG.bar_timeframes:
         raise HTTPException(
             status_code=422,
@@ -1600,6 +1627,22 @@ def record_bar_series(
     if end_epoch <= start_epoch:
         raise HTTPException(status_code=422, detail="end must be after start")
 
+    # Normalized HERE (era-5 J-03 moves this earlier than the pre-J-03 code) so the store-first
+    # lookup key below matches EXACTLY what a successful fetch later stores — an unnormalized
+    # lookup key would silently never hit.
+    symbol = body.symbol.strip().upper()
+
+    hit = index.lookup(symbol, body.timeframe, body.start, body.end)
+    if hit is not None:
+        try:
+            return {"bar_series": store.get(hit.series_id)}
+        except (BarSeriesNotFound, BarSeriesIntegrityError):
+            # The index pointed at a series the canonical JSON store can no longer verify
+            # (deleted or corrupted since indexing) -- never fabricate or serve partial data.
+            # Fall through and treat this exactly like a first-time miss; a real re-fetch below
+            # additively overwrites this stale entry once it succeeds.
+            pass
+
     adapter = get_bar_fetch_adapter()
     if not adapter.is_available():
         # No credentials -> the EXISTING explicit unavailable (503) state (never a fabricated bar
@@ -1613,7 +1656,6 @@ def record_bar_series(
 
     from datetime import datetime, timezone
 
-    symbol = body.symbol.strip().upper()
     start_dt = datetime.fromtimestamp(start_epoch, tz=timezone.utc)
     end_dt = datetime.fromtimestamp(end_epoch, tz=timezone.utc)
     try:
@@ -1652,16 +1694,54 @@ def record_bar_series(
         raise HTTPException(status_code=409, detail=str(exc))
     except EmptyBarWindowError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    # Era-5 J-03: additively index the freshly-recorded series ONLY after store.record succeeds —
+    # using the returned meta dict's fields (the values that actually got written), never
+    # re-derived from the request body.
+    index.insert(meta)
     return {"bar_series": meta}
 
 
 @router.get("/bars")
-def list_bar_series(store: BarStore = Depends(get_bar_store)) -> dict:
-    """List every registered bar series' metadata + candles (each file checksum-verified on
-    load), oldest first. A file that fails verification is surfaced EXPLICITLY in
-    ``integrity_errors`` — never silently hidden, never served as data. The MCP ``bars`` tool
-    proxies this byte-for-byte."""
-    records, errors = store.list()
+def list_bar_series(
+    symbol: str | None = None,
+    timeframe: str | None = None,
+    store: BarStore = Depends(get_bar_store),
+    index: BarIndex = Depends(get_bar_index),
+) -> dict:
+    """List registered bar series' metadata + candles (each file checksum-verified on load),
+    oldest first. A file that fails verification is surfaced EXPLICITLY in ``integrity_errors`` —
+    never silently hidden, never served as data. The MCP ``bars`` tool proxies the NO-PARAM call
+    byte-for-byte.
+
+    Era-5 J-03: optional ``?symbol=`` / ``?timeframe=`` query params (either or both, independently
+    combinable) serve an ADDITIVE filter through the index — same response shape, just narrowed.
+    With NEITHER param present the response is BYTE-IDENTICAL to before this iteration: still
+    ``store.list()`` verbatim, and the index is never consulted on that path. ``symbol`` is
+    normalized the SAME way the record path stores it (stripped + uppercased) so the filter is
+    case-insensitive; an indexed hit whose series the JSON store can no longer verify (deleted or
+    corrupted since indexing) is skipped and surfaced in ``integrity_errors`` — never fabricated or
+    silently dropped."""
+    if symbol is None and timeframe is None:
+        records, errors = store.list()
+        return {"bar_series": records, "integrity_errors": errors}
+
+    normalized_symbol = symbol.strip().upper() if symbol else None
+    normalized_timeframe = timeframe.strip() if timeframe else None
+    records: list[dict] = []
+    errors: list[dict] = []
+    for hit in index.list(symbol=normalized_symbol, timeframe=normalized_timeframe):
+        try:
+            records.append(store.get(hit.series_id))
+        except BarSeriesNotFound:
+            errors.append(
+                {
+                    "file": f"{hit.series_id}.json",
+                    "error": f"indexed series '{hit.series_id}' no longer exists in the store",
+                }
+            )
+        except BarSeriesIntegrityError as exc:
+            errors.append({"file": f"{hit.series_id}.json", "error": str(exc)})
+    records.sort(key=lambda meta: (meta.get("created_utc", ""), meta.get("id", "")))
     return {"bar_series": records, "integrity_errors": errors}
 
 

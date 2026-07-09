@@ -2,15 +2,23 @@
 
 Exactly THREE routes exist (Product Shape, the ``test_datasets_api.py`` precedent): ``POST
 /research/bars`` (the explicit credentialed record/register action — recording is never
-ambient), ``GET /research/bars`` (list), and ``GET /research/bars/{id}`` (detail). There is NO
-PATCH/PUT/DELETE — immutability is structural. Validation is explicit and never silent coercion:
-an out-of-set timeframe / missing symbol / bad window are 422; an unknown id is 404;
-re-recording already-registered content is 409; a corrupted file is an explicit 500 integrity
-error surfaced in ``integrity_errors`` on list rather than hidden.
+ambient), ``GET /research/bars`` (list, plus the era-5 J-03 ``?symbol=&timeframe=`` filter), and
+``GET /research/bars/{id}`` (detail). There is NO PATCH/PUT/DELETE — immutability is structural.
+Validation is explicit and never silent coercion: an out-of-set timeframe / missing symbol / bad
+window are 422; an unknown id is 404; re-recording DIFFERENT-window-but-identical CONTENT is 409
+(the frozen ``store.record`` duplicate-content refusal); a corrupted file is an explicit 500
+integrity error surfaced in ``integrity_errors`` on list rather than hidden.
 
 Missing credentials on ``POST`` is the EXISTING explicit unavailable (503) state (never
 fabricated bars) — per the spec's explicit Definition-of-Done/Testing-Requirements text, this is
 DISTINCT from the 422 the historical-DATASET path uses for the analogous credentials gap.
+
+Era-5 J-03 adds a STORE-FIRST coordinator ahead of the fetch: an identical repeat ``POST`` (same
+symbol/timeframe/window) is now served from storage with ZERO adapter calls instead of re-hitting
+the vendor (see ``test_duplicate_window_post_is_served_store_first_no_second_fetch`` below — this
+REPLACES the old route-level "exact repeat is a 409" expectation, which was exactly the
+Yahoo-re-hit behavior J-03 exists to end; the frozen store-level content-duplicate refusal is
+unaffected and still covered directly in ``tests/test_bars.py``).
 """
 
 from __future__ import annotations
@@ -27,7 +35,8 @@ from app.config import CONFIG
 from app.main import app, get_market_adapter, manager
 from app.providers.adapters.base import RawBar, VendorTimeout
 from app.providers.adapters.yahoo import YahooAdapter
-from app.research.routes import ResearchRegistry, get_bar_fetch_adapter, set_registry
+from app.research.bar_index import BarIndex
+from app.research.routes import ResearchRegistry, get_bar_fetch_adapter, get_bar_index, set_registry
 from app.research.store import JournalStore
 from fakes import FakeAdapter
 
@@ -119,22 +128,127 @@ def test_unknown_bar_series_id_is_404(ctx):
     assert "no-such-id" in r.json()["detail"]
 
 
-# --- immutability over REST: re-recording identical content is a 409 ------------------------------
+# --- era-5 J-03: store-first idempotence -- an identical repeat POST is served from storage -------
 
 
-def test_duplicate_content_is_refused_409(ctx):
-    client, _bar_dir = ctx
-    _inject_adapter(bars=_bars())
+def test_duplicate_window_post_is_served_store_first_no_second_fetch(ctx):
+    """Era-5 J-03 REPLACES the old "an exact repeat POST is a 409" expectation: a second POST of
+    the SAME ``(symbol, timeframe, window)`` is now served from storage — the store-first
+    coordinator intercepts BEFORE the adapter is ever touched, so the second call makes ZERO
+    ``fetch_bars`` calls and returns the identical stored series. (Content-duplicate refusal for a
+    DIFFERENT window that happens to fetch identical content is still the frozen ``store.record``
+    409 — unaffected, and directly covered at the store level in
+    ``tests/test_bars.py::test_rerecording_identical_content_is_refused``.)"""
+    client, bar_dir = ctx
+    adapter = _inject_adapter(bars=_bars())
     first = client.post("/research/bars", json=_body())
     assert first.status_code == 200
     original = first.json()["bar_series"]
 
     duplicate = client.post("/research/bars", json=_body())
-    assert duplicate.status_code == 409
-    assert original["id"] in duplicate.json()["detail"]
+    assert duplicate.status_code == 200
+    served = duplicate.json()["bar_series"]
+    assert served["id"] == original["id"]
+    assert served["checksum"] == original["checksum"]
+    assert served == original
 
-    # The registered series is untouched — exactly one file still on disk.
-    assert client.get(f"/research/bars/{original['id']}").json()["bar_series"]["bar_count"] == 3
+    # The adapter was touched exactly once -- the store-first hit made zero fetch_bars calls.
+    assert len(adapter.fetch_bars_calls) == 1
+
+    # Still exactly one file on disk -- no second write either.
+    assert len(list(bar_dir.glob("*.json"))) == 1
+
+
+def test_store_first_hit_pointing_at_a_corrupted_series_self_heals_via_a_refetch(ctx):
+    """Edge case (flagged in the plan for deliberate handling, not explicitly specced): an index
+    entry whose underlying JSON file was corrupted since indexing must NEVER be served fabricated
+    or partial -- the coordinator treats this as a miss and falls through to a REAL refetch, which
+    additively overwrites the stale index entry. Nothing is silently hidden: the orphaned corrupt
+    file still surfaces in ``integrity_errors`` on list, exactly as it would have without J-03."""
+    client, bar_dir = ctx
+    adapter = _inject_adapter(bars=_bars())
+    first = client.post("/research/bars", json=_body())
+    assert first.status_code == 200
+    original = first.json()["bar_series"]
+
+    path = bar_dir / f"{original['id']}.json"
+    data = json.loads(path.read_text())
+    data["record"]["bars"][0]["close"] = data["record"]["bars"][0]["close"] + 1.0
+    path.write_text(json.dumps(data))
+
+    second = client.post("/research/bars", json=_body())
+    assert second.status_code == 200
+    healed = second.json()["bar_series"]
+    assert healed["id"] != original["id"]  # a NEW series was written -- nothing fabricated/partial
+    assert healed["bar_count"] == 3
+    assert len(adapter.fetch_bars_calls) == 2  # the corrupted hit fell through to a REAL 2nd fetch
+
+    listed = client.get("/research/bars").json()
+    assert len(listed["integrity_errors"]) == 1  # the orphaned corrupt file is still surfaced
+
+
+# --- era-5 J-03: the additive ?symbol=&timeframe= filter, and no-param byte-identity ---------------
+
+
+def test_symbol_and_timeframe_filter_returns_only_the_matching_series(ctx):
+    client, _bar_dir = ctx
+    _inject_adapter(bars=_bars())
+    pg = client.post("/research/bars", json=_body()).json()["bar_series"]
+    _inject_adapter(bars=_bars(symbol="F", timeframe="1h"))
+    f_hourly = client.post(
+        "/research/bars", json=_body(symbol="F", timeframe="1h")
+    ).json()["bar_series"]
+
+    both = client.get("/research/bars", params={"symbol": "PG", "timeframe": "1d"})
+    assert both.status_code == 200
+    assert [row["id"] for row in both.json()["bar_series"]] == [pg["id"]]
+    assert both.json()["integrity_errors"] == []
+
+    symbol_only = client.get("/research/bars", params={"symbol": "f"})  # lowercase -- normalized
+    assert [row["id"] for row in symbol_only.json()["bar_series"]] == [f_hourly["id"]]
+
+    timeframe_only = client.get("/research/bars", params={"timeframe": "1h"})
+    assert [row["id"] for row in timeframe_only.json()["bar_series"]] == [f_hourly["id"]]
+
+    no_match = client.get("/research/bars", params={"symbol": "ZZZZ"})
+    assert no_match.status_code == 200
+    assert no_match.json()["bar_series"] == []
+
+
+def test_no_param_get_is_byte_identical_to_a_direct_store_list_call(ctx):
+    """Era-5 J-03: the NO-PARAM ``GET /research/bars`` path is UNCHANGED — it still calls
+    ``store.list()`` verbatim and never consults the index. Proven by diffing the route's response
+    against a DIRECT ``store.list()`` call against the SAME underlying directory."""
+    client, bar_dir = ctx
+    _inject_adapter(bars=_bars())
+    client.post("/research/bars", json=_body())
+    _inject_adapter(bars=_bars(symbol="F", timeframe="1h"))
+    client.post("/research/bars", json=_body(symbol="F", timeframe="1h"))
+
+    from app.research.bars import BarStore as _BarStore
+
+    direct_records, direct_errors = _BarStore(str(bar_dir)).list()
+
+    r = client.get("/research/bars")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["bar_series"] == direct_records
+    assert body["integrity_errors"] == direct_errors
+
+
+def test_get_bar_index_resolves_to_a_sibling_of_the_bar_dir_by_default(ctx, monkeypatch):
+    """A direct, hermetic proof of the ``get_bar_index`` resolver itself (the
+    ``test_bar_fetch_adapter_resolver_defaults_to_yahoo_with_no_override`` pattern): with NO
+    ``TAPEOLOGY_BAR_INDEX_DB`` override, the index DB lands as a SIBLING file next to the
+    config-owned bar directory; the env override wins when set."""
+    _client, bar_dir = ctx
+    index = get_bar_index()
+    assert isinstance(index, BarIndex)
+    assert index.db_path == str(bar_dir.parent / "bar_index.db")
+
+    monkeypatch.setenv("TAPEOLOGY_BAR_INDEX_DB", str(bar_dir.parent / "custom_index.db"))
+    overridden = get_bar_index()
+    assert overridden.db_path == str(bar_dir.parent / "custom_index.db")
 
 
 # --- validation: 422 matrix (never silent coercion) -----------------------------------------------

@@ -41,3 +41,17 @@ screenshot the spec's DoD asked for was never the load-bearing evidence for thos
 browser lane MUST have both services started and Chrome MCP available or J-05 cannot be evidenced at
 all (the zero-frontend-diff fallback that covered iter-2 will not exist once the fetch control lands).
 The orchestrator should provision/verify reachable :3301/:8301 before the J-05 pipeline run.
+
+## iter-3 — 2026-07-09T21:05:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** The route-level semantics of a duplicate `POST /research/bars` CHANGED this iter: an
+exact-repeat POST of the same `(symbol, timeframe, window)` now returns **200, served store-first**
+(zero adapter calls), NOT the old **409**. The decomposer's spec asserted "no route-level test asserts
+409 on a duplicate-window POST," but one existed (`test_duplicate_content_is_refused_409`); the dev
+correctly transformed it into `test_duplicate_window_post_is_served_store_first_no_second_fetch`. The
+FROZEN store-LEVEL content-duplicate 409 (a DIFFERENT window whose fetched content happens to match)
+is untouched and still covered by `test_bars.py::test_rerecording_identical_content_is_refused`.
+**Applies to:** any future iter touching `POST /research/bars` or bar-series duplicate/idempotence
+semantics — "repeat window = 200 store-first" is now the route contract; do not "restore" a 409 there.
+Directly relevant to J-05's `/structure` fetch-control test expectations.

@@ -1,3 +1,46 @@
+You are the goal-evaluator agent for goal-mode iteration evaluation.
+
+Session ID: yahoo_fetch
+Iteration index: 3
+Iter name: goal-yahoo_fetch-iter-3
+Depth dispatched: full
+
+Project goal (SLICED — vision + anti-goals + target/failing journeys verbatim; stable passing journeys digested): /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-3/goal-slice.md
+  Full goal file: /home/dennis-chan/Git/tapeology/docs/goal.md — Read it ONLY if a digested journey becomes relevant.
+Iter spec: /home/dennis-chan/Git/tapeology/docs/phases/goal-yahoo_fetch-iter-3.md
+Agent instructions: .claude/agents/goal-evaluator.md  <-- read this first
+(CLAUDE.md is already in your system prompt — do not Read it again.)
+
+Iteration artifacts (read what exists):
+  Deterministic diff scan (FULL diff — secrets/deps/license): /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-3/scan-report.md
+  Bounded diff view (complete file list; hunks capped, header lists omissions): /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-3/iter-diff.md
+  Dev handoff: docs/handoffs/goal-yahoo_fetch-iter-3-dev.md
+  Review report: reports/reviews/goal-yahoo_fetch-iter-3-review.md
+  QA report: reports/qa/goal-yahoo_fetch-iter-3-qa.md (full mode only)
+  Audit handoff: docs/handoffs/goal-yahoo_fetch-iter-3-audit.md (full mode only)
+  Browser QA results: reports/phase-goal-yahoo_fetch-iter-3-ui-test-results.md
+  Evidence: reports/qa/goal-yahoo_fetch-iter-3-evidence/
+  Coherence audit: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-3/coherence.md  <-- COHERENCE-FAIL vetoes GOAL_ACHIEVED and drives a consolidation CONTINUE
+  Goal-edit drift note: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-3/journeys-changed.md  <-- if present, each listed journey's prior pass is VOID until re-verified against the CURRENT goal text (your step 3)
+
+Journey state (inline digest — your methodology's section A table starts here):
+```
+J-01 | passing         | last_passing=goal-yahoo_fetch-iter-2 | Fetch real historical bars from Yahoo Finance, keyless
+J-02 | passing         | last_passing=goal-yahoo_fetch-iter-2 | The full timeframe set, including honestly-resampled 4h
+J-03 | failing         | last_passing=- | Quick reuse — store-first fetch backed by a derived SQLite index
+J-04 | failing         | last_passing=- | Real S/R levels and confluence zones on real Yahoo bars
+J-05 | failing         | last_passing=- | Fetch from the app — the Structure page fetch control with Yahoo Finance provenance
+J-06 | passing         | last_passing=goal-yahoo_fetch-iter-2 | The foundation is unchanged (regression sentinel)
+```
+
+Prior session state:
+  Journey history: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/journey-history.json  <-- update this with new state (full atomic write)
+  Evaluator log: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/evaluator-log.md  <-- append a new entry; do not overwrite or read the full file (last 5 entries pre-trimmed below)
+  Lessons file: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/lessons.md  <-- append a brief lesson entry capturing a non-obvious takeaway (1-3 sentences). Skip if nothing surprising happened.
+  Assumption ledger: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/assumptions.md  <-- append an entry when a scoring decision required interpreting an ambiguous goal (step 5b of your instructions). Skip when none — zero entries is normal.
+
+Recent evaluator log entries (last 5, pre-trimmed):
+```
 # Goal Session yahoo_fetch — Evaluator Log
 
 Chronological record of goal-evaluator verdicts. Append-only.
@@ -153,20 +196,83 @@ explicit and store-first"), so the audit + coherence lanes must run to confirm t
 nothing, every served candle stays checksum-verified from the canonical JSON `BarStore`, and a
 cache-hit performs no second Yahoo call. J-03 is backend-only too — the browser-env fix can wait for
 J-05, but flag it now so the orchestrator provisions reachable services before J-05.
+```
 
-## Iteration 3 — goal-yahoo_fetch-iter-3
+Recent assumption entries (pre-trimmed):
+```
+# Goal Session yahoo_fetch — Assumption Ledger
 
-**Date:** 2026-07-09T21:05:00Z
-**Verdict:** CONTINUE
-**Depth dispatched:** full
-**Journey deltas:**
-- Newly passing: J-03 (store-first quick-reuse via the derived SQLite `bar_index`; additive `?symbol=&timeframe=` filter; byte-identical no-param GET)
-- Newly failing: none
-- Regressed: none (J-01, J-02, J-06 re-verified green by frozen byte-identity + a first-hand test/fingerprint/equivalence re-run)
-- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS; every critical J-03 rail independently re-checked)
+Append-only. Agents log interpretation calls here (a goal/journey ambiguity + the
+reading chosen) so the product owner can veto a wrong reading early. Signal only —
+routine evidence reading is not an assumption.
 
-**Reasoning:** J-03 verified `passing` on primary evidence I generated and read myself, not the handoffs. I read the new `bar_index.py` in full (metadata-only schema `(symbol,timeframe,window_start_utc,window_end_utc)->series_id,checksum,bar_count`; `lookup`/`insert`/`list`/`reindex`; owns nothing) and the store-first coordinator in `routes.py` (index lookup runs BEFORE `get_bar_fetch_adapter()`; a hit returns `store.get(hit.series_id)` — the checksum-verified canonical JSON read — with ZERO adapter calls; a corrupt/missing hit falls through to a real re-fetch, never serving stale/partial data; `index.insert(meta)` runs only AFTER the frozen `store.record` succeeds). I re-ran the targeted subset myself (`test_bar_index.py` + `test_bars_api.py` + `test_bars.py` + both equivalence suites = 70/70, zero `F`), confirmed `config_fingerprint == 4d665603569b9dbf` from the live working-tree `config.py`, and confirmed the crux tests pass: `test_duplicate_window_post_is_served_store_first_no_second_fetch` (2nd identical POST -> 200, `fetch_bars_calls == 1`, one file on disk), `test_no_param_get_is_byte_identical_to_a_direct_store_list_call`, and the `reindex()`/self-heal suite. Frozen rails independently re-verified: `git diff 78a7e556 -- <frozen set>` EMPTY (config.py, bars.py, store.py, levels.py, strategies.py, backtests.py, both adapters, mcp/__init__.py, requirements.txt, install allowlist, all of apps/frontend/ byte-identical); the entire source diff is exactly `bar_index.py`(new) + `routes.py` + `test_bars_api.py` + `test_bar_index.py`(new) + a README sentence fix — precisely the spec's additive scope. Coherence COHERENCE-PASS (index owns nothing; no duplicate computation; no new IA surface), review PASS_WITH_NOTES (3 non-blocking minors), QA PASS (19/19), audit PASS_WITH_GAPS (B1 per-request connection / B2 empty-string `?symbol=` / B3 legacy data not auto-indexed / T1 untested GET-filter corrupt branch — all documented, none compromise acceptance). J-04 and J-05 remain `failing` (out of scope this iteration, not attempted-and-failed) -> not GOAL_ACHIEVED; J-03 newly passing, coherence clean -> CONTINUE.
+## iter-0 — goal-evaluator
 
-**Note on a reporting discrepancy (not verdict-changing):** the dev handoff + QA state "1203 passed"; that is a transcription typo (1203 *collected* minus 6 skipped = 1197 *passed*). The auditor's independent full-suite re-run (1197 passed / 6 skipped / 0 failed, exit 0, +14 delta matching the 14 new tests exactly) is internally consistent and authoritative; my own targeted re-run had zero failures. No regression.
+**Ambiguity:** The spec's TESTING REQUIREMENTS named browser checks for J-05 (locate the
+`/structure` fetch control) and J-06 (spot-check existing surfaces), but the lean baseline
+pipeline never ran the browser-qa lane (no screenshots, no `ui-test-results.md`). The spec
+does not say whether an absent-capability journey may be scored without the browser leg it names.
+**We chose:** Score J-05 `failing` and J-06 `already_passing` on code/test evidence instead —
+J-05's fetch control and `"yahoo"` taxonomy label are provably absent by source inspection, and
+J-06 rests on the green suite (1146 passed) + `config_fingerprint` match + an empty `apps/` diff
+(regression is impossible with zero source change). A browser screenshot would only re-show the
+same absence / unchanged surfaces.
+**Reversible:** yes
 
-**Next-step recommendation:** Iteration 4 targets **J-04** — feed the already-stored real Yahoo bars to the FROZEN era-4 `research/levels.py` and confirm `GET /research/levels?symbol=&as_of=` returns real, non-empty levels + A/B/C confluence zones, that REST and the MCP `levels` proxy agree byte-for-byte, no lookahead, and — the defining acceptance — that NO second levels/zone computation path exists (single source of truth; the coherence-auditor stays clean). Recommend **full** depth: J-04's acceptance is coherence-critical (it hard-fails on any duplicate computation), so the coherence + audit lanes must run even though `levels.py` itself must not be touched. J-04 is keyless on a committed Yahoo fixture (backend-verifiable). Two carry-forwards for J-05 (the run after): (1) close audit **B2** (normalize a blank `?symbol=`/`?timeframe=` to `None`) before/at J-05, when the `/structure` form becomes a real caller that can submit empty fields; (2) any J-05 browser test that pre-seeds a committed fixture must ensure that series is INDEXED (recorded through the store-first POST path, or a one-off `reindex()`) or the store-first "instant serve" will not trigger for it (audit B3) — and the orchestrator must finally provision reachable :3301/:8301 + Chrome MCP before J-05.
+## iter-1 — goal-evaluator
+
+**Ambiguity:** J-01's acceptance requires "`GET /research/bars/{id}` AND the MCP `bars` proxy return it byte-for-byte." The REST half was proven directly (new `test_bars_api.py` byte-for-byte `GET .../{id}`), but no Yahoo-SPECIFIC MCP `bars` test was added — the goal text does not say whether a per-feed MCP proof is required or whether the generic proxy guarantee suffices.
+**We chose:** Scored J-01 `passing` accepting the MCP half on the architectural byte-identity argument (audit T1): `app/mcp/__init__.py` maps `"bars" -> "/research/bars"` and passes `response.text` verbatim with ZERO `feed`-awareness anywhere in the MCP layer, and the existing unmodified `test_mcp_server.py::test_bars_tool_byte_identical_on_a_non_empty_live_list` (real uvicorn subprocess) already proves the proxy generically — a Yahoo-stamped series traverses it identically to any other, so a Yahoo-specific duplicate would be redundant coverage, not new defense.
+**Reversible:** yes
+
+## iter-2 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md` (J-02 + Key Capability 2) enumerates exactly six era-5 Yahoo timeframes — `1w, 1d, 4h, 1h, 5m, 1m` — and names `8h`/`1mo` as unsupported examples, but is silent on `15m`, which is both a valid `CONFIG.bar_timeframes` entry AND a `yfinance`-native interval. The goal does not say whether `15m` is a fetchable Yahoo timeframe this era or an unsupported one.
+**We chose:** Treat `15m` as Yahoo-unsupported this era (era-5 Yahoo maps exactly the six enumerated timeframes); `15m`/`8h`/`1mo` all exercise the explicit unsupported-timeframe honest-neutral state. This follows the goal's explicit six-timeframe enumeration and the "only new backend computation is the Yahoo fetch + 4h resample" non-goal, rather than expanding scope to a seventh timeframe the goal never lists.
+**Reversible:** yes
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** The iter-2 spec's DEFINITION OF DONE item 7 explicitly required the browser lane to
+re-verify J-01/J-06 and "emit a screenshot," but the lane ran with no services reachable and produced
+none. The goal is silent on whether a required-still-passing UI journey may stay `passing` on
+backend + structural evidence alone when the spec-mandated browser re-verification did not execute.
+**We chose:** Kept J-01 and J-06 `passing` on non-browser evidence — J-06's regression sentinel is
+defined by `config_fingerprint`/engine-equivalence/frozen-file byte-identity (all re-run by me and
+green), and J-01's core keyless-fetch was re-run live (auditor); the iteration changed zero frontend
+bytes, so no UI regression is structurally possible. The spec's screenshot was a re-verification
+nicety, not either journey's defining acceptance in `docs/goal.md`.
+**Reversible:** yes
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** The Era-5 constraints require the SQLite index to have a "config-owned DB path ...
+gitignored `*.db`" (mirroring `store.py`'s `journal_db_path`) AND state that `config.py` (fingerprint
+`4d665603569b9dbf`) "stays byte-identical." Adding a `journal_db_path`-style config field for the
+index DB would change `config.py`'s source (even if the field is fingerprint-excluded), which the
+"byte-identical config.py" phrasing arguably forbids — the goal does not resolve which reading wins.
+**We chose:** Plan the index DB path as config-owned by ANCHORING it to the existing config-owned
+`bar_dir_resolved()` (a co-located sibling DB file), with a `TAPEOLOGY_BAR_INDEX_DB` env override read
+inside the new `bar_index.py` for hermetic test injection — so `config.py` stays byte-identical and
+`config_fingerprint` stays `4d665603569b9dbf`. If the developer instead adds a config field, it MUST
+join the fingerprint exclusion set with an exclusion test mirroring
+`test_bar_dir_is_excluded_from_config_fingerprint`; either way the unchanged fingerprint is the hard
+invariant, not the field's location.
+**Reversible:** yes
+```
+
+Apply the TOKEN AND QUESTIONING POLICY from .claude/core.md strictly.
+
+Write your verdict to: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-3/eval.md
+
+The verdict line MUST appear at the top of /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-3/eval.md and start exactly with:
+**Verdict:** GOAL_ACHIEVED
+  or **Verdict:** CONTINUE
+  or **Verdict:** ESCALATE
+  or **Verdict:** REGRESSION
+  or **Verdict:** STALLED
+
+Also include a 'Depth Recommendation For Next Iteration:' line: lean or full.
+
+Then update /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/journey-history.json (full atomic write) and append an entry to /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/evaluator-log.md.
+STOP.

@@ -57,3 +57,21 @@ join the fingerprint exclusion set with an exclusion test mirroring
 `test_bar_dir_is_excluded_from_config_fingerprint`; either way the unchanged fingerprint is the hard
 invariant, not the field's location.
 **Reversible:** yes
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** J-03's acceptance and the "fetching is explicit and store-first" anti-goal require that
+"an already-stored window is served from storage without re-hitting Yahoo," but the goal is silent on
+bar series recorded BEFORE this iteration. The index grows additively only on a store-first POST
+(index-on-write); the 8 legacy series already in `.data/bars/` from iter-1/iter-2 are NOT auto-indexed,
+so a repeat POST of a legacy window misses the index, runs a real Yahoo fetch, then hits the frozen
+`store.record` 409 — i.e. store-first does NOT hold for pre-iter-3 data until a one-time explicit
+`reindex()` (which the dev ran against the real `.data/`). "No ambient/background re-indexing" is itself
+an explicit anti-goal, so an auto-reindex-on-startup would brush that rail.
+**We chose:** Scored J-03 `passing` — treating store-first as satisfied for every window recorded
+through the era-5 index-on-write flow (exactly what the goal's own acceptance STEPS describe: "fetch a
+window once (stores + indexes); fetch the same window again ... no Yahoo call"), and treating pre-iter-3
+legacy data as an explicit-migration concern (one-off `reindex()`), NOT a violation of the "served from
+storage" anti-goal. A product owner who wants store-first to cover legacy data with no manual step could
+veto this and require a (non-ambient) reindex trigger/endpoint.
+**Reversible:** yes
