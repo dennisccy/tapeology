@@ -41,3 +41,19 @@ green), and J-01's core keyless-fetch was re-run live (auditor); the iteration c
 bytes, so no UI regression is structurally possible. The spec's screenshot was a re-verification
 nicety, not either journey's defining acceptance in `docs/goal.md`.
 **Reversible:** yes
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** The Era-5 constraints require the SQLite index to have a "config-owned DB path ...
+gitignored `*.db`" (mirroring `store.py`'s `journal_db_path`) AND state that `config.py` (fingerprint
+`4d665603569b9dbf`) "stays byte-identical." Adding a `journal_db_path`-style config field for the
+index DB would change `config.py`'s source (even if the field is fingerprint-excluded), which the
+"byte-identical config.py" phrasing arguably forbids — the goal does not resolve which reading wins.
+**We chose:** Plan the index DB path as config-owned by ANCHORING it to the existing config-owned
+`bar_dir_resolved()` (a co-located sibling DB file), with a `TAPEOLOGY_BAR_INDEX_DB` env override read
+inside the new `bar_index.py` for hermetic test injection — so `config.py` stays byte-identical and
+`config_fingerprint` stays `4d665603569b9dbf`. If the developer instead adds a config field, it MUST
+join the fingerprint exclusion set with an exclusion test mirroring
+`test_bar_dir_is_excluded_from_config_fingerprint`; either way the unchanged fingerprint is the hard
+invariant, not the field's location.
+**Reversible:** yes
