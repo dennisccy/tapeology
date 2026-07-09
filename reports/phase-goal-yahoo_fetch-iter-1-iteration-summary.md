@@ -9,9 +9,9 @@
 
 **What you can do now:** You can already pick a stock on the Structure page to see its support-and-resistance price levels and zones, compare two trading strategies side by side with a "Champion" badge, watch a live simulated price tape, keep a trading journal, run replay research studies, and check an honest profit scorecard.
 
-**What changed this time:** Behind-the-scenes work — nothing new to click yet. The app quietly gained the ability to pull real historical daily stock prices from Yahoo Finance for free, with no account or signup needed, and to save that history permanently so it's never silently changed or duplicated. A real fetch for a real stock was tested live and worked. Every existing part of the app was re-checked and still behaves exactly as before — the new data source was carefully confirmed to never leak into the wrong place.
+**What changed this time:** Behind-the-scenes work — nothing new to click yet. The app quietly gained the ability to pull real daily stock prices from Yahoo Finance for free, with no account needed, and to save that history permanently and safely. Everything that already worked was re-checked and still behaves exactly as before, including a careful check that the new data source never shows up in the wrong place.
 
-**What's next:** Next, the app will learn to fetch more time windows (weekly, hourly, and a derived 4-hour view) directly from Yahoo Finance, honestly built from what Yahoo actually provides, on the way to a real "Fetch from Yahoo Finance" button on the Structure page.
+**What's next:** Next, the app will learn to fetch more time windows — weekly, hourly, and a derived 4-hour view — from Yahoo Finance, honestly, on the way to a real "Fetch from Yahoo Finance" button on the Structure page.
 
 ## Headline
 
@@ -27,9 +27,9 @@ Keyless Yahoo Finance daily bar adapter ships as the default bar-fetch vendor (A
 - Newly passing in last 2 iters total: J-01
 - Regressions in last 2 iters: none
 - Anti-goal violations in last 2 iters: none
-- Iters with no journey state change: 1 of 2 (iter-0, the verify-only baseline)
+- Iters with no journey state change: 1 of last 2 (iter-0, the verify-only baseline)
 
-**Latest evaluator reasoning:** "Coherence PASS (single `feed` owner = adapter), review PASS, QA PASS, audit PASS_WITH_GAPS (B1 = no production Alpaca opt-in on the bar-fetch endpoint — documented, regresses nothing, out of scope). `config_fingerprint` `4d665603569b9dbf` and equivalence 22/22 hold, so J-06 stays green. J-02–J-05 remain `failing` (out of scope this iteration, not attempted-and-failed) → not GOAL_ACHIEVED; progress made → CONTINUE."
+**Latest evaluator reasoning:** The keyless Yahoo daily-bar adapter plus the bar-fetch vendor default landed and J-01 is now `passing` on convergent evidence: a real `POST /research/bars` (AAPL) returns HTTP 200 with `feed="yahoo"`, `bar_count=24`, real bars, which render on `/structure` as a genuine AAPL candlestick chart (~$270–320, high-precision prices — not fabricated round numbers) with S/R lines and 28 Class-C zones. The crux anti-goal ("Yahoo default must not break the Alpaca path") is cleanly met — `main.py` has zero diff, the new default is confined to `get_bar_fetch_adapter()` on `POST /research/bars`, and the live/simulated feed badge still reads "Simulated" (UT-06). J-06 foundation sentinel stays green; J-02–J-05 remain `failing` (out of scope this iteration, not attempted-and-failed), so this is not GOAL_ACHIEVED — progress was made, so CONTINUE.
 
 ## What was done
 
@@ -39,7 +39,7 @@ Keyless Yahoo Finance daily bar adapter ships as the default bar-fetch vendor (A
 - Pinned `yfinance==1.5.1` in `requirements.txt` (confined-to-adapter comment) and added it to the `python.allowlist` in `config/install-security-policy.json`; the supply-chain install gate returned ALLOW.
 - Added 18 new tests (14 adapter unit tests, 3 route/store tests, 1 gated live-integration test) plus a committed real Yahoo fixture; full suite now 1163 passed / 2 skipped, `config_fingerprint` unchanged (`4d665603569b9dbf`), and the two equivalence suites (22/22) stayed byte-identical.
 - Ran a real, live, keyless Yahoo daily fetch for AAPL under the `integration` marker (`TAPEOLOGY_LIVE_INTEGRATION=1`) — passed.
-- Verified 1 target journey (J-06, the foundation regression sentinel) passes browser QA — 14/14 UI tests passed, including the two named crux-risk regression checks (UT-06 feed badge, UT-07 Structure render).
+- Verified 2 target journey(s) pass browser QA (J-01, J-06) — 14/14 UI tests passed, including the two named crux-risk regression checks (UT-06 feed badge, UT-07 Structure render) and the exploratory UT-14 proof that a live Yahoo fetch reaches the Structure chart.
 
 ## What's left
 
@@ -54,11 +54,12 @@ Keyless Yahoo Finance daily bar adapter ships as the default bar-fetch vendor (A
 
 ## Next step
 
-Iteration 2 targets J-02 — the full timeframe set (`1w/1d/4h/1h/5m/1m`) with the deterministic `4h` resample-from-`1h` (open=first/high=max/low=min/close=last/volume=sum, session-aligned, honest partial trailing bucket) and the out-of-retention / unsupported-timeframe honest-neutral-error taxonomy. Recommended depth: **full** — the `4h` resampler is the era's single named new backend computation and carries its own critical anti-goal ("`4h` is honestly derived") plus the "no fabricated bars" rail, so the audit and coherence lanes must run (coherence should confirm the derived-`4h` value stays single-owner and honestly labelled). Carry the fixture-location lesson forward (a `feed="yahoo"` fixture cannot live under `tests/fixtures/bars/` — a frozen test blanket-asserts `feed=="sip"` over that whole directory) into J-02's committed 1h/4h fixtures.
+Iteration 2 targets **J-02** — the full timeframe set (`1w/1d/4h/1h/5m/1m`) with the deterministic `4h` resample-from-`1h` (open=first/high=max/low=min/close=last/volume=sum, session-aligned, honest partial trailing bucket) and the out-of-retention / unsupported-timeframe honest-neutral-error taxonomy. Run **full** depth: the `4h` resampler is the era's single named new backend computation and carries its own critical anti-goal ("`4h` is honestly derived") plus the "no fabricated bars" rail, so the audit + coherence lanes must run (coherence should confirm the derived-`4h` value stays single-owner and honestly labelled). Carry forward the fixture-location lesson: a `feed="yahoo"` fixture must live under `apps/backend/tests/fixtures/yahoo/`, never `tests/fixtures/bars/` (a frozen test blanket-asserts `feed=="sip"` over that whole dir).
 
 ## Assumptions made
 
-none recorded
+- iter-1 · goal-evaluator — Ambiguity: J-01's acceptance requires both `GET /research/bars/{id}` and the MCP `bars` proxy to return the series byte-for-byte, but no Yahoo-specific MCP test was added — the goal text doesn't say whether a per-feed MCP proof is required or the generic proxy guarantee suffices. We chose: Scored J-01 passing, accepting the MCP half on the architectural byte-identity argument — the MCP layer has zero feed-awareness and passes `response.text` verbatim, already proven byte-identical by an existing, unmodified test. A Yahoo-specific duplicate would be redundant coverage, not new defense. Reversible: yes
+- iter-0 · goal-evaluator — Ambiguity: The spec's TESTING REQUIREMENTS named browser checks for J-05 and J-06, but the lean baseline pipeline never ran the browser-qa lane (no screenshots, no `ui-test-results.md`); the spec doesn't say whether an absent-capability journey may be scored without the browser leg it names. We chose: Scored J-05 failing and J-06 already_passing on code/test evidence instead — both provably supported by source inspection, the green suite, the `config_fingerprint` match, and an empty `apps/` diff; a browser screenshot would only re-show the same absence/unchanged surfaces. Reversible: yes
 
 ## Quick verify
 
@@ -87,4 +88,5 @@ From `reports/phase-goal-yahoo_fetch-iter-1-what-to-click.md`:
 | QA | PASS | reports/qa/goal-yahoo_fetch-iter-1-qa.md |
 | Audit | PASS_WITH_GAPS | docs/handoffs/goal-yahoo_fetch-iter-1-audit.md |
 | Closure | CLOSURE-PASS | reports/phase-goal-yahoo_fetch-iter-1-closure-verdict.md |
+| Goal evaluation | CONTINUE | runs/goal-session-yahoo_fetch/iter-1/eval.md |
 | Journey history | — | runs/goal-session-yahoo_fetch/state/journey-history.json |
