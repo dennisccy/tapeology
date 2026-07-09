@@ -75,3 +75,21 @@ legacy data as an explicit-migration concern (one-off `reindex()`), NOT a violat
 storage" anti-goal. A product owner who wants store-first to cover legacy data with no manual step could
 veto this and require a (non-ambient) reindex trigger/endpoint.
 **Reversible:** yes
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** The critical anti-goal "Yahoo data ... never re-tagged or pooled across feeds"
+plus J-04's acceptance require real levels/zones on real Yahoo bars, but the FROZEN
+`compute_levels` (`research/levels.py`, byte-identical) selects a symbol's stored series by
+SYMBOL alone (feed-blind, `routes`/module never pass a feed) — so a symbol that happened to hold
+BOTH a `feed="yahoo"` and an Alpaca `feed="sip"` series for overlapping timeframes could mix them.
+The goal is silent on whether J-04 must add feed-segregated levels, and `levels.py` cannot be
+touched (frozen), so no `?feed=` scoping can be introduced this iteration.
+**We chose:** Scope J-04 to the keyless single-feed path — the committed Yahoo fixture and the
+default keyless fetch flow give a symbol only `feed="yahoo"` series, so `compute_levels` reads
+exactly those and pools nothing across feeds in the tested/accepted path. A genuine mixed-feed
+segregation guard (a feed-scoped levels read) would require touching frozen `levels.py` and is
+NOT in J-04's acceptance; it is deferred. J-05's "honestly segregated from Alpaca `sip`" is met at
+the fetch/display layer (a Yahoo series is separately identified and badged), not by a new levels
+computation.
+**Reversible:** yes

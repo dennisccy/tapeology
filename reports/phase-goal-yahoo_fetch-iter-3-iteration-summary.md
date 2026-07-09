@@ -1,6 +1,6 @@
 # Iteration Summary — goal-yahoo_fetch-iter-3
 
-**Verdict:** PASS
+**Verdict:** CONTINUE
 **Iteration type:** goal-full
 **Date:** 2026-07-09
 **Iteration:** 3
@@ -9,9 +9,9 @@
 
 **What you can do now:** You can already pick a stock on the Structure page to see its support-and-resistance price levels and zones, compare two trading strategies side by side with a "Champion" badge, watch a live simulated price tape, keep a trading journal, run replay research studies, and check an honest profit scorecard.
 
-**What changed this time:** Behind-the-scenes work — nothing visibly new this round. The app got better at not repeating itself: asking for the same stock's price history a second time now comes back instantly from what's already saved instead of re-downloading it from Yahoo Finance, and saved price history can now be searched by stock symbol and time window instead of only ever listing everything at once. If that internal lookup memory were ever lost, the app can rebuild it perfectly from the permanent data it already has.
+**What changed this time:** Behind-the-scenes work — nothing visibly new this round. The app got quicker and smarter about reusing data it already has: asking for the same stock history twice no longer goes back out to Yahoo Finance — it's handed back instantly from what was already saved (proven live at 19 milliseconds), and saved data can now be searched by stock symbol and time window. If that internal search memory were ever lost, the app rebuilds it perfectly from the safely-saved data, losing nothing.
 
-**What's next:** Next, the app will start computing real support-and-resistance levels and price zones on this real stock data — the step before a genuine on-screen "Fetch from Yahoo Finance" button arrives.
+**What's next:** Next, the app will start computing real support-and-resistance price levels and zones from this real stock data, using the same tools it already trusts for that job, instead of only ever working on empty or simulated data.
 
 ## Headline
 
@@ -20,43 +20,49 @@ Fetching the same data twice no longer re-downloads it from Yahoo Finance.
 ## Direction
 
 **Signal:** improving
-**Why:** Every completed gate for this iteration's work (review PASS_WITH_NOTES, QA 19/19, audit PASS_WITH_GAPS, closure CLOSURE-PASS) independently confirms the new store-first lookup is correct: a repeat fetch now serves in 19ms with zero adapter calls, the symbol/timeframe filter works, the rebuild-from-scratch path is faithful, and J-01/J-02/J-06 all re-verified green with `config_fingerprint` unchanged and zero regressions. The formal iter-3 goal-evaluator run had not completed at the time this summary was written, so J-03's `journey-history.json` status flip to `passing` is still pending that record step — but every other signal this iteration points the same direction as iter-1 and iter-2: another journey moved from unimplemented to independently-verified-complete with zero regressions or anti-goal violations.
+**Why:** J-03 (the store-first SQLite bar index) moved from failing to passing this iteration on independently re-verified evidence — a repeat POST makes zero adapter calls, the additive `?symbol=&timeframe=` filter is index-backed, and `reindex()` rebuilds cleanly after DB loss — while J-01, J-02, and J-06 stayed green with zero regression (frozen files byte-identical, `config_fingerprint` unchanged, equivalence 22/22). This is the third consecutive iteration to move a journey from failing to passing with no regressions or anti-goal violations, so direction is healthy. Only J-04 and J-05 remain, and the evaluator's next-step recommendation targets J-04 (real levels on real Yahoo bars) next.
 
-**Trend (last 3 iters):**
-- Newly passing this iter: none recorded yet (iter-3 goal-evaluator pending — see Why)
-- Newly passing in last 3 iters total: J-01, J-02
-- Regressions in last 3 iters: none
-- Anti-goal violations in last 3 iters: none
-- Iters with no journey state change: 1 of last 3
+**Trend (last 4 iters):**
+- Newly passing this iter: J-03
+- Newly passing in last 4 iters total: J-01, J-02, J-03
+- Regressions in last 4 iters: none
+- Anti-goal violations in last 4 iters: none
+- Iters with no journey state change: 1 of last 4
 
-**Latest evaluator reasoning:** (from iteration 2 — the most recent completed evaluator entry; iter-3's evaluator has not yet run) "J-02 verified `passing` on primary evidence I generated and read myself, not the handoffs. Live integration (all six timeframes + `4h==resample(1h)` + out-of-retention->`NoDataForWindow` + `8h`->`UnsupportedTimeframe`) passed 5/5 for dev, QA, and the auditor independently. J-03/J-04/J-05 remain `failing` (out of scope this iteration, not attempted-and-failed) -> not GOAL_ACHIEVED; J-02 newly passing -> CONTINUE."
+**Latest evaluator reasoning:** J-03 (quick reuse — store-first fetch backed by a derived SQLite `bar_index`) is newly passing, verified first-hand: the store-first coordinator serves a repeat `(symbol,timeframe,window)` POST from storage with zero adapter calls, the additive `?symbol=&timeframe=` GET filter is index-backed while the no-param GET stays a byte-identical `store.list()`, every served candle is checksum-verified through the frozen JSON `BarStore`, and `reindex()` rebuilds the index after DB loss. The required-still-passing foundation (J-01, J-02, J-06) is re-verified green by frozen byte-identity plus my own test / `config_fingerprint` / engine-equivalence re-run; J-04 and J-05 remain out-of-scope failing. Coherence is COHERENCE-PASS and no anti-goal is violated, so the loop continues toward J-04.
 
 ## What was done
 
-- Added a derived, rebuildable SQLite index (`apps/backend/app/research/bar_index.py`) over the canonical JSON `BarStore`, storing lookup metadata only — never a second source of truth.
-- Wired a store-first coordinator into `POST /research/bars`: a repeat fetch of an already-stored `(symbol, timeframe, window)` is now served from storage in ~19ms with zero adapter/Yahoo calls; a genuine miss still fetches, stores, then indexes.
-- Added an additive `?symbol=&timeframe=` filter on `GET /research/bars`, served via the index; the no-param call stays byte-identical to before (proven by a direct diff against `store.list()`).
-- Added `reindex()` to rebuild the index from `BarStore.list()` after deletion or corruption, reproducing identical lookups; a store-first hit whose backing file is corrupted/deleted self-heals by falling through to a real re-fetch rather than serving stale data.
-- Added 14 new tests (10 for `BarIndex`, 4 for the store-first/filter API paths); full suite now 1203 collected / 1197 passed / 6 skipped / 0 failed (net +14, zero regressions, per the audit's independent re-run).
-- Re-verified zero regression: `config.py` has a zero diff, `config_fingerprint` unchanged (`4d665603569b9dbf`), engine equivalence 22/22, and J-01/J-02/J-06 all re-confirmed green.
-- Verified 0 target journey(s) pass browser QA — lane SKIPPED by design (`Frontend Present: no`); J-01/J-02/J-06 regression instead re-confirmed via the full backend suite, equivalence tests, and the config-fingerprint check.
+- Added `apps/backend/app/research/bar_index.py` — a new derived, rebuildable SQLite index over the canonical JSON `BarStore` (metadata-only: `(symbol, timeframe, window)` → `series_id`/`checksum`/`bar_count`).
+- Added a store-first coordinator to `POST /research/bars`: a repeat fetch of an already-stored window is now served instantly from storage with zero Yahoo Finance calls — verified live against real data at 19ms.
+- Added an additive `?symbol=&timeframe=` filter to `GET /research/bars`; the no-param response stays byte-identical to before (proven by a dedicated diff test).
+- Added `reindex()` — the index can rebuild itself from the permanent saved data after deletion/corruption, reproducing identical lookups.
+- Added 14 new tests (10 index unit tests + 4 API tests); full suite now 1197 passed / 6 skipped / 0 failed (audit-confirmed), zero regressions; `config_fingerprint` unchanged (`4d665603569b9dbf`), engine equivalence 22/22.
+- Re-verified J-01, J-02, J-06 stay green via frozen-file byte-identity plus an independent test/fingerprint/equivalence re-run.
+- Verified 0 target journey(s) pass browser QA — lane SKIPPED (backend-only iteration, `Frontend Present: no`; no UI surface exists to test).
 
 ## What's left
 
-- Journey J-04 (Real S/R levels and confluence zones on real Yahoo bars) failing — not yet started; next in the dependency chain.
-- Journey J-05 (Fetch from the app — the Structure page fetch control with Yahoo Finance provenance) failing — not yet started; the first genuinely-new-UI iteration, so reachable `:3301`/`:8301` plus Chrome MCP must be provisioned before it runs.
-- J-03's formal status flip to `passing` in `journey-history.json`/`eval.md` is pending — the iter-3 goal-evaluator had not yet run at the time of writing, though review, QA, audit, and closure all independently confirm the implementation is complete and correct.
-- Deferred, non-blocking findings from review/audit: the new lookup index opens a fresh database connection per request with no explicit close/lifecycle hook; the listing filter's corrupted-series error branch is untested (mirrors an already-tested path); an explicit empty-string `?symbol=`/`?timeframe=` silently bypasses the byte-identical no-param path (no in-scope caller today — should close before or with J-05).
-- Bar series recorded before this iteration aren't automatically searchable until a one-time rebuild runs (by design — no ambient re-indexing); already remediated for the current live data directory, but any fresh deployment needs the same one-time step.
-- No on-screen way to trigger any of this yet — the fetch button lands with J-05.
+- Journey J-04 (Real S/R levels and confluence zones on real Yahoo bars) failing.
+- Journey J-05 (Fetch from the app — the Structure page fetch control with Yahoo Finance provenance) failing.
+- No on-screen control exists yet to trigger a Yahoo fetch or use the new store-first/filter behavior — still deferred to J-05.
+- Bar series recorded before this iteration are not auto-indexed; they need a one-time `reindex()` to become store-first/filterable (already run for the current environment; new fetches index automatically going forward).
+- An explicit blank `?symbol=`/`?timeframe=` query silently bypasses the byte-identical no-param path (audit B2, non-blocking) — should be closed before/at J-05 when the Structure page becomes a real caller.
+- The GET-filter's corrupted/deleted-indexed-series error branch is untested (audit T1, non-blocking) — the logic mirrors an already-tested POST path.
+- `scripts/dev.sh` doesn't reliably kill the full frontend process tree on shutdown — a pre-existing gap, unrelated to this iteration's code.
 
 ## Next step
 
-Let the iter-3 goal-evaluator formally run to confirm J-03's newly-passing status and update the record — implementation is already independently verified complete by review, QA, audit, and closure, so this is a confirmation step, not further dev work. Then target J-04 next: real S/R levels and A/B/C confluence zones computed by the existing era-4 levels module on the now-fetchable real Yahoo bars, the next unblocker in the goal's J-01→J-02→J-03→J-04→J-05 chain. Carry forward: provision reachable `:3301`/`:8301` plus Chrome MCP before J-05 runs, since J-05 is the first genuinely new-UI iteration and cannot be evidenced without it.
+Target **J-04** — real S/R levels and confluence zones on real Yahoo bars. Feed the already-stored real Yahoo bars to the FROZEN era-4 `research/levels.py` and confirm `GET /research/levels?symbol=&as_of=` returns real, non-empty levels and A/B/C confluence zones; that REST and the MCP `levels` proxy agree byte-for-byte; no lookahead (as-of T uses only completed bars); and — the defining acceptance — that no second levels/zone computation path exists (single source of truth; the coherence-auditor stays clean; `levels.py` is read, never re-implemented). Keyless on a committed Yahoo fixture (backend-verifiable). Recommend **full** depth: J-04's acceptance is coherence-critical, so the coherence + audit lanes must run even though no frozen module is touched. Carry-forwards for J-05 (not J-04 blockers): close audit B2 (normalize a blank `?symbol=`/`?timeframe=` to `None`) before/at J-05; ensure any J-05 browser test that pre-seeds a fixture is indexed (via the store-first POST path or a one-off `reindex()`); and the orchestrator must finally provision reachable `:3301`/`:8301` + Chrome MCP before the J-05 pipeline run.
 
 ## Assumptions made
 
-none recorded
+- iter-3 · goal-evaluator — Ambiguity: J-03's acceptance and the "fetching is explicit and store-first" anti-goal require that an already-stored window be served without re-hitting Yahoo, but the goal is silent on bar series recorded before this iteration (8 legacy series from iter-1/iter-2 are not auto-indexed). We chose: Scored J-03 passing, treating store-first as satisfied for every window recorded through the era-5 index-on-write flow, and treating pre-iter-3 legacy data as an explicit-migration concern (a one-off `reindex()`), not a violation. Reversible: yes
+- iter-3 · goal-decomposer — Ambiguity: the Era-5 constraints require the SQLite index to have a config-owned DB path while also requiring `config.py` to stay byte-identical — unclear which reading wins if a config field were added for the index DB. We chose: Plan the index DB path as config-owned by anchoring it to the existing config-owned `bar_dir_resolved()` (a co-located sibling DB file), with a `TAPEOLOGY_BAR_INDEX_DB` env override for hermetic tests, so `config.py` stays byte-identical and `config_fingerprint` stays `4d665603569b9dbf`. Reversible: yes
+- iter-2 · goal-evaluator — Ambiguity: the iter-2 spec required the browser lane to re-verify J-01/J-06 and emit a screenshot, but the lane ran with no services reachable and produced none — the goal is silent on whether a required-still-passing journey may stay passing on non-browser evidence in that case. We chose: Kept J-01 and J-06 passing on backend/structural evidence (`config_fingerprint`, equivalence, and frozen-file byte-identity all re-run and green; J-01's core fetch re-run live; zero frontend bytes changed). Reversible: yes
+- iter-2 · goal-decomposer — Ambiguity: `docs/goal.md` enumerates exactly six era-5 Yahoo timeframes and names `8h`/`1mo` as unsupported, but is silent on `15m`, which is both a valid config entry and a yfinance-native interval. We chose: Treat `15m` as Yahoo-unsupported this era, alongside `8h`/`1mo`, following the goal's explicit six-timeframe enumeration rather than expanding scope to a seventh timeframe it never lists. Reversible: yes
+- iter-1 · goal-evaluator — Ambiguity: J-01's acceptance requires both `GET /research/bars/{id}` and the MCP `bars` proxy to return the series byte-for-byte, but no Yahoo-specific MCP test was added — unclear whether a per-feed MCP proof is required or the generic proxy guarantee suffices. We chose: Scored J-01 passing, accepting the MCP half on the architectural byte-identity argument — the MCP layer has zero feed-awareness and already passes `response.text` verbatim, proven byte-identical by an existing unmodified test. Reversible: yes
+- iter-0 · goal-evaluator — Ambiguity: the spec named browser checks for J-05/J-06, but the lean baseline pipeline never ran the browser-qa lane — unclear whether an absent-capability journey may be scored without the browser leg the spec names. We chose: Scored J-05 failing and J-06 already_passing on code/test evidence instead — both provably supported by source inspection, the green suite, the config-fingerprint match, and an empty `apps/` diff. Reversible: yes
 
 ## Artifacts
 
@@ -74,4 +80,5 @@ none recorded
 | QA | PASS | reports/qa/goal-yahoo_fetch-iter-3-qa.md |
 | Audit | PASS_WITH_GAPS | docs/handoffs/goal-yahoo_fetch-iter-3-audit.md |
 | Closure | CLOSURE-PASS | reports/phase-goal-yahoo_fetch-iter-3-closure-verdict.md |
+| Goal evaluation | CONTINUE | runs/goal-session-yahoo_fetch/iter-3/eval.md |
 | Journey history | — | runs/goal-session-yahoo_fetch/state/journey-history.json |
