@@ -55,3 +55,9 @@ is untouched and still covered by `test_bars.py::test_rerecording_identical_cont
 **Applies to:** any future iter touching `POST /research/bars` or bar-series duplicate/idempotence
 semantics — "repeat window = 200 store-first" is now the route contract; do not "restore" a 409 there.
 Directly relevant to J-05's `/structure` fetch-control test expectations.
+
+## iter-4 — 2026-07-10T00:50:13Z
+
+**Verdict:** CONTINUE
+**Lesson:** J-04 was a clean verify-and-lock (zero production diff) but it LOCKS IN a latent trap: frozen `compute_levels` (`levels.py:306`) selects a symbol's series by SYMBOL ALONE (feed-blind), and `_select_one_series_per_timeframe` (`levels.py:171-182`) dedups only WITHIN a (symbol, timeframe) pair — so across different timeframes it will pool a `feed="yahoo"` series and a `feed="sip"` series into one confluence cluster. The critical "never pooled across feeds" rail is currently satisfied ONLY because the keyless path gives a symbol a single feed; it is avoided-by-scoping, not enforced.
+**Applies to:** any iter (J-05+) that lets a symbol accumulate more than one feed over overlapping timeframes, or any iter tempted to "fix" segregation inside `levels.py` — the fix MUST be a versioned feed-scoped path BESIDE frozen `levels.py` (fingerprint-locked; mutating it is itself a critical anti-goal), never an edit to it.

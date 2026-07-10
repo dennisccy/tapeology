@@ -4,40 +4,40 @@
       "id": "J-01",
       "name": "Fetch real historical bars from Yahoo Finance, keyless",
       "status": "passing",
-      "last_verified_iter": "goal-yahoo_fetch-iter-4",
-      "last_passing_iter": "goal-yahoo_fetch-iter-4",
+      "last_verified_iter": "goal-yahoo_fetch-iter-3",
+      "last_passing_iter": "goal-yahoo_fetch-iter-3",
       "first_seen_iter": "goal-yahoo_fetch-iter-0",
-      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-4-qa.md",
+      "last_evidence_path": "docs/handoffs/goal-yahoo_fetch-iter-3-audit.md",
       "spec_hash": "ce0eae4f07c831d586ff1b28b2dbe13bcee35d7f2e5f361e280e614b83b73723"
     },
     "J-02": {
       "id": "J-02",
       "name": "The full timeframe set, including honestly-resampled 4h",
       "status": "passing",
-      "last_verified_iter": "goal-yahoo_fetch-iter-4",
-      "last_passing_iter": "goal-yahoo_fetch-iter-4",
+      "last_verified_iter": "goal-yahoo_fetch-iter-3",
+      "last_passing_iter": "goal-yahoo_fetch-iter-3",
       "first_seen_iter": "goal-yahoo_fetch-iter-0",
-      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-4-qa.md",
+      "last_evidence_path": "docs/handoffs/goal-yahoo_fetch-iter-3-audit.md",
       "spec_hash": "38747f5fb7bd25bcba6bdd8af2a6d5434dc8f08053f46a9c3fcd60016c128c63"
     },
     "J-03": {
       "id": "J-03",
       "name": "Quick reuse — store-first fetch backed by a derived SQLite index",
       "status": "passing",
-      "last_verified_iter": "goal-yahoo_fetch-iter-4",
-      "last_passing_iter": "goal-yahoo_fetch-iter-4",
+      "last_verified_iter": "goal-yahoo_fetch-iter-3",
+      "last_passing_iter": "goal-yahoo_fetch-iter-3",
       "first_seen_iter": "goal-yahoo_fetch-iter-0",
-      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-4-qa.md",
+      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-3-qa.md",
       "spec_hash": "f0e6de4e6938cd4e5045d3d4426b577bb3668c1a7c5feadbb47a9e12a88b5981"
     },
     "J-04": {
       "id": "J-04",
       "name": "Real S/R levels and confluence zones on real Yahoo bars",
-      "status": "passing",
-      "last_verified_iter": "goal-yahoo_fetch-iter-4",
-      "last_passing_iter": "goal-yahoo_fetch-iter-4",
+      "status": "failing",
+      "last_verified_iter": "goal-yahoo_fetch-iter-0",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-yahoo_fetch-iter-0",
-      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-4-qa.md",
+      "last_evidence_path": "docs/handoffs/goal-yahoo_fetch-iter-0-dev.md",
       "spec_hash": "5c832e735b37e2cc1762311aee708498701a464bcc5e83d3cafe5a4b0b1a705c"
     },
     "J-05": {
@@ -54,13 +54,13 @@
       "id": "J-06",
       "name": "The foundation is unchanged (regression sentinel)",
       "status": "passing",
-      "last_verified_iter": "goal-yahoo_fetch-iter-4",
-      "last_passing_iter": "goal-yahoo_fetch-iter-4",
+      "last_verified_iter": "goal-yahoo_fetch-iter-3",
+      "last_passing_iter": "goal-yahoo_fetch-iter-3",
       "first_seen_iter": "goal-yahoo_fetch-iter-0",
-      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-4-qa.md",
+      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-3-qa.md",
       "spec_hash": "24f8bf8ba8baca3e9d52d76a0d54c9138edf8f388069541cb24932dfc9904b86"
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-07-10T00:50:13Z"
+  "updated_at": "2026-07-09T21:05:00Z"
 }

@@ -11,21 +11,27 @@ isolation). The committed real PG bar-fixture pair is also seeded directly into 
 
 from __future__ import annotations
 
+import json
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pandas as pd
 import pytest
+import yfinance
 from fastapi.testclient import TestClient
 
 from app.config import CONFIG
 from app.main import app, get_market_adapter, manager
 from app.providers.adapters.base import RawBar
+from app.research.bars import BarStore
+from app.research.levels import compute_levels
 from app.research.routes import ResearchRegistry, set_registry
 from app.research.store import JournalStore
 from fakes import FakeAdapter
 
 FIXTURE_BAR_DIR = Path(__file__).parent / "fixtures" / "bars"
+YAHOO_FIXTURE_DIR = Path(__file__).parent / "fixtures" / "yahoo"
 
 SYMBOL = "LVL"
 TIMEFRAME = "4h"
@@ -149,6 +155,156 @@ def test_get_levels_confluence_zones_exact_values_on_the_committed_pg_fixture(ct
     assert [m["price"] for m in cross_tf_zone["levels"]] == [148.06, 148.095, 148.23]
     assert {m["timeframe"] for m in cross_tf_zone["levels"]} == {"1h", "1d"}
     assert cross_tf_zone["score"] == 12.0
+
+
+# --- era-5 J-04: real S/R levels + confluence zones on REAL Yahoo bars (not the synthetic PG
+# fixture) -- proves the SAME frozen `research/levels.py` populates from `feed="yahoo"` data with
+# zero second computation path. Seeding mirrors `test_bars_api.py`'s established technique: only
+# the `yfinance.Ticker` boundary is mocked (no network), so `YahooAdapter`, `BarStore.record`, and
+# the REAL route all run end to end -- exactly as J-01/J-02 already prove for `POST /research/bars`,
+# now carried through to `GET /research/levels`. The two fixtures below are the SAME committed
+# `tests/fixtures/yahoo/*.json` files `test_bars_api.py` uses (real captured AAPL OHLCV, roughly
+# $305-$317) -- never `tests/fixtures/bars/` (the iter-1 lesson: that directory's own frozen test
+# blanket-asserts `feed=="sip"`).
+
+
+def _load_yahoo_fixture(name: str) -> dict:
+    """The committed real-Yahoo RAW-CAPTURE fixture format (``{symbol, timeframe, start, end,
+    bars: [{epoch, open, high, low, close, volume}]}``) -- distinct from the ``BarStore``
+    per-record file format the PG fixture uses. Mirrors ``test_bars_api.py``'s helper of the same
+    name."""
+    return json.loads((YAHOO_FIXTURE_DIR / name).read_text())
+
+
+def _yahoo_fixture_dataframe(fixture: dict) -> pd.DataFrame:
+    index = pd.to_datetime([b["epoch"] for b in fixture["bars"]], unit="s", utc=True)
+    return pd.DataFrame(
+        {
+            "Open": [b["open"] for b in fixture["bars"]],
+            "High": [b["high"] for b in fixture["bars"]],
+            "Low": [b["low"] for b in fixture["bars"]],
+            "Close": [b["close"] for b in fixture["bars"]],
+            "Volume": [b["volume"] for b in fixture["bars"]],
+        },
+        index=index,
+    )
+
+
+def _install_fake_yahoo_ticker(monkeypatch, dataframes_by_interval: dict[str, pd.DataFrame]) -> None:
+    """The ``test_bars_api.py::_install_fake_yahoo_ticker`` technique, keyed by ``yfinance``
+    interval string so a SINGLE test can seed more than one timeframe (J-04 needs both the
+    committed 1d AND 1h Yahoo fixtures for a cross-timeframe confluence zone, mirroring the PG
+    fixture pair)."""
+
+    class _FakeTicker:
+        def __init__(self, symbol: str) -> None:
+            self.symbol = symbol
+
+        def history(self, *, start, end, interval):
+            return dataframes_by_interval[interval]
+
+    monkeypatch.setattr(yfinance, "Ticker", _FakeTicker)
+
+
+def _record_yahoo_fixture(client, fixture: dict) -> dict:
+    r = client.post(
+        "/research/bars",
+        json={
+            "symbol": fixture["symbol"],
+            "timeframe": fixture["timeframe"],
+            "start": fixture["start"],
+            "end": fixture["end"],
+        },
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["bar_series"]
+
+
+def test_get_levels_confluence_zones_exact_values_on_the_committed_yahoo_fixture(ctx, monkeypatch):
+    """The committed real Yahoo bar-fixture pair (era-5 J-01, 2 timeframes: 1h + 1d), recorded
+    through the REAL route -- proving `confluence_zones` is served end to end on REAL Yahoo data,
+    mirroring `test_get_levels_confluence_zones_exact_values_on_the_committed_pg_fixture` above but
+    sourced from `tests/fixtures/yahoo/`. This is J-04's defining acceptance: the previously-empty
+    keyless structure surface now shows real, non-empty levels + an A/B/C zone once Yahoo bars are
+    stored for a symbol -- with ZERO new computation (this test only proves the EXISTING, frozen
+    `research/levels.py` output on new input; exact values verified directly against the real
+    fixture data, independently confirmed via a standalone probe before this test was written)."""
+    client, _bar_dir = ctx
+    daily = _load_yahoo_fixture("AAPL_1d_20260601_20260604.json")
+    hourly = _load_yahoo_fixture("AAPL_1h_20260601_20260603.json")
+    _install_fake_yahoo_ticker(
+        monkeypatch, {"1d": _yahoo_fixture_dataframe(daily), "1h": _yahoo_fixture_dataframe(hourly)}
+    )
+    daily_meta = _record_yahoo_fixture(client, daily)
+    hourly_meta = _record_yahoo_fixture(client, hourly)
+    assert daily_meta["feed"] == "yahoo"
+    assert hourly_meta["feed"] == "yahoo"
+
+    as_of = "2026-06-05T00:00:00Z"  # at/after both fixtures' actual last bar and declared window_end
+    r = client.get("/research/levels", params={"symbol": "AAPL", "as_of": as_of})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["no_bar_series_for_symbol"] is False
+    assert len(body["levels"]) == 14
+
+    zones = body["confluence_zones"]
+    assert len(zones) == 4
+    assert [z["class"] for z in zones] == ["B", "B", "B", "B"]
+
+    cross_tf_zone = zones[-1]
+    assert [m["price"] for m in cross_tf_zone["levels"]] == [
+        315.20001220703125,
+        315.45001220703125,
+        315.45001220703125,
+    ]
+    assert {m["timeframe"] for m in cross_tf_zone["levels"]} == {"1h", "1d"}
+    assert cross_tf_zone["score"] == 12.0
+
+
+def test_levels_no_lookahead_holds_on_real_committed_yahoo_bars(ctx, monkeypatch):
+    """era-5 J-04's no-lookahead acceptance: the SAME lookahead-free proof
+    `test_levels.py::test_lookahead_free_a_level_at_t_is_unchanged_by_any_bar_after_t` already
+    establishes on the PG fixture, re-run on REAL Yahoo bars recorded through the REAL route -- a
+    level computed at `as_of` T is unchanged whether or not bars timestamped strictly after T exist
+    in the store. Uses the committed 15-bar hourly Yahoo fixture, truncated at bar index 6
+    (2026-06-01T19:30:00Z) -- squarely inside the window, well before the last bar (2026-06-03
+    13:30Z). The "full" side goes through the REAL route (real Yahoo-shaped data, mocked only at the
+    `yfinance.Ticker` boundary); the "truncated" side calls the frozen `compute_levels` directly
+    over a store holding ONLY the bars at-or-before T -- both must agree byte-for-byte."""
+    client, bar_dir = ctx
+    hourly = _load_yahoo_fixture("AAPL_1h_20260601_20260603.json")
+    _install_fake_yahoo_ticker(monkeypatch, {"1h": _yahoo_fixture_dataframe(hourly)})
+    recorded = _record_yahoo_fixture(client, hourly)
+    assert recorded["feed"] == "yahoo"
+
+    as_of = "2026-06-01T19:30:00Z"  # bar index 6's own ts
+    full = client.get("/research/levels", params={"symbol": "AAPL", "as_of": as_of})
+    assert full.status_code == 200
+    full_body = full.json()
+    assert full_body["levels"], "the truncated as-of view must still be non-vacuous"
+
+    full_bars = BarStore(bar_dir).load_bars(recorded["id"])
+    as_of_epoch = datetime(2026, 6, 1, 19, 30, tzinfo=timezone.utc).timestamp()
+    truncated_bars = [b for b in full_bars if b.epoch <= as_of_epoch]
+    assert len(truncated_bars) < len(full_bars), "the truncation must actually drop bars"
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        truncated_store = BarStore(Path(td) / "bars")
+        truncated_store.record(
+            symbol="AAPL",
+            timeframe="1h",
+            window_start_utc=hourly["start"],
+            window_end_utc=as_of,
+            feed="yahoo",
+            bars=truncated_bars,
+        )
+        truncated_result = compute_levels(truncated_store, "AAPL", as_of_epoch, CONFIG)
+
+    assert truncated_result["levels"] == full_body["levels"]
+    assert truncated_result["confluence_zones"] == full_body["confluence_zones"]
+    assert truncated_result["no_bar_series_for_symbol"] == full_body["no_bar_series_for_symbol"]
 
 
 def test_get_levels_lowercases_are_normalized_to_the_stored_uppercase_symbol(ctx):

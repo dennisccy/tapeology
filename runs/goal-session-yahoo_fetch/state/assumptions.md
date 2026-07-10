@@ -93,3 +93,10 @@ NOT in J-04's acceptance; it is deferred. J-05's "honestly segregated from Alpac
 the fetch/display layer (a Yahoo series is separately identified and badged), not by a new levels
 computation.
 **Reversible:** yes
+
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** J-04's "never pooled across feeds" rail vs. the frozen `compute_levels`, which selects a symbol's series by SYMBOL alone (`levels.py:306`, feed-blind) and can mix feeds across timeframes — so the rail is *avoided by single-feed scoping*, not *enforced*. Scoring J-04 `passing` ratifies the goal-decomposer's iter-4 reading as the basis of an actual passing verdict.
+**We chose:** Scored J-04 `passing` — the tested/accepted keyless path gives AAPL only `feed="yahoo"` series, so `compute_levels` pools nothing across feeds in the evidence I verified. This pass is valid ONLY while a symbol holds a single feed; it silently degrades the instant a symbol accumulates a second feed over overlapping timeframes (audit B1). A product owner wanting enforced (not merely scoped-away) segregation could veto and require a feed-scoped levels read — a versioned path beside frozen `levels.py`, deferred to J-05+.
+**Reversible:** yes

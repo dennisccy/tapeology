@@ -12,6 +12,7 @@ module's result contract; ``test_stdio_session_end_to_end`` additionally spawns 
 including the SDK's exception→``isError`` conversion.
 """
 
+import json
 import os
 import shutil
 import socket
@@ -36,6 +37,8 @@ from app.mcp import (
     call_tool,
     list_tools,
 )
+from app.providers.adapters.base import RawBar
+from app.research.bars import BarStore
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -62,6 +65,7 @@ EXPECTED_TOOLS = (
 )
 
 FIXTURE_BAR_DIR = Path(__file__).parent / "fixtures" / "bars"
+YAHOO_FIXTURE_DIR = Path(__file__).parent / "fixtures" / "yahoo"
 
 # Every registered tool's endpoint has now shipped (``datasets`` at J-02, ``backtests`` at J-03,
 # ``pnl_ledger`` at J-04 — each moved to the live byte-identity coverage below with zero MCP code
@@ -310,6 +314,57 @@ async def test_levels_tool_byte_identical_on_a_non_empty_live_result(mcp_env, ba
     assert result.isError is False
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "levels not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_levels_tool_byte_identical_on_a_non_empty_live_result_on_the_yahoo_fixture(
+    mcp_env, backend_paths
+):
+    """era-5 J-04: the SAME byte-identity proof as
+    `test_levels_tool_byte_identical_on_a_non_empty_live_result` above, re-run on a REAL Yahoo
+    (`feed="yahoo"`) bar series instead of the PG/`sip` fixture -- confirms the levels/MCP glue
+    serves Yahoo-sourced data identically, with no second, feed-specific code path anywhere (the
+    defining "single source of truth" acceptance). Seeded HERMETICALLY (no network, no `yfinance`
+    call): the committed raw-capture Yahoo fixtures (`tests/fixtures/yahoo/`) are written directly
+    through the real `BarStore.record()` API (bypassing the adapter/route -- this test's backend is
+    a SEPARATE subprocess, so `test_levels_api.py`'s in-process `yfinance.Ticker` monkeypatch seam
+    is not reachable here; `BarStore.record()` is the SAME persistence call the route itself makes,
+    just invoked directly with the real captured Yahoo OHLCV, stamped `feed="yahoo"`) into the live
+    backend's bar dir -- the SAME `shutil.copy`-into-`bar_dir` precedent
+    `test_bars_tool_byte_identical_on_a_non_empty_live_list` and the PG version of this test already
+    use, just generated from the committed Yahoo capture instead of pre-existing in `BarStore`'s
+    on-disk format (independently confirmed to reproduce byte-identical levels/zones to the real
+    adapter+route path via a standalone probe before this test was written)."""
+    bar_dir = Path(backend_paths["TAPEOLOGY_BAR_DIR"])
+    store = BarStore(bar_dir)
+    for name in ("AAPL_1d_20260601_20260604.json", "AAPL_1h_20260601_20260603.json"):
+        fixture = json.loads((YAHOO_FIXTURE_DIR / name).read_text())
+        bars = [
+            RawBar(
+                fixture["symbol"], fixture["timeframe"], b["epoch"],
+                b["open"], b["high"], b["low"], b["close"], b["volume"],
+            )
+            for b in fixture["bars"]
+        ]
+        store.record(
+            symbol=fixture["symbol"],
+            timeframe=fixture["timeframe"],
+            window_start_utc=fixture["start"],
+            window_end_utc=fixture["end"],
+            feed="yahoo",
+            bars=bars,
+        )
+
+    as_of = "2026-06-05T00:00:00Z"  # at/after both fixtures' actual last bar
+    result = await call_tool("levels", {"symbol": "AAPL", "as_of": as_of})
+    rest = httpx.get(f"{mcp_env}/research/levels", params={"symbol": "AAPL", "as_of": as_of}, timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json()["no_bar_series_for_symbol"] is False
+    assert len(rest.json()["levels"]) >= 1, "the live result must be non-empty for this proof"
+    assert len(rest.json()["confluence_zones"]) >= 1, "the live zones must be non-empty for this proof"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "levels not byte-identical on Yahoo data"
 
 
 @pytest.mark.anyio
