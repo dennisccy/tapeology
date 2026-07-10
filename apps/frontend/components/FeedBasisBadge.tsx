@@ -11,6 +11,11 @@ import type { ResearchTaxonomy } from "@/lib/types";
 // renders beside it. The frontend hardcodes NO feed label or disclosure text — both come from
 // `GET /research/taxonomy`'s `feed_basis` block.
 //
+// Era-5 J-05 reuse: the `/structure` fetch-control's provenance badge reuses this SAME component,
+// keyed off a bar series' own `feed` field (e.g. `"yahoo"`) rather than a live-watch snapshot — the
+// taxonomy already carries a label for any registered feed id (`sim`/`iex`/`sip`/`yahoo`), so no new
+// component or fetch is needed, only the widened prop type below.
+//
 // Honest absence (J-67): when no watch is active there is no served basis, so the badge renders
 // NOTHING — never a fabricated "live"/"iex" guess. The badge is driven SOLELY by the served
 // `dataFeed` value; it never derives the basis from the scenario string client-side.
@@ -24,9 +29,12 @@ import type { ResearchTaxonomy } from "@/lib/types";
 export function FeedBasisBadge({
   dataFeed,
 }: {
-  // The served current-watch feed basis off the snapshot's `data_feed` key (row 29), or
-  // null/undefined when there is no watch / a pre-J-67 backend — in which case the badge is ABSENT.
-  dataFeed: "sim" | "iex" | "sip" | null | undefined;
+  // The served feed basis — either the current-watch snapshot's `data_feed` (row 29: sim | iex |
+  // sip) or a bar series' own `feed` (era-5 J-05: e.g. "yahoo"). A plain `string` (not a narrow
+  // union) so ANY registered feed id renders via the SAME taxonomy-driven label lookup below —
+  // never a per-feed frontend branch. `null`/`undefined` (no watch / no series) => the badge is
+  // ABSENT.
+  dataFeed: string | null | undefined;
 }) {
   const [taxonomy, setTaxonomy] = useState<ResearchTaxonomy | null>(null);
 

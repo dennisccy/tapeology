@@ -4,6 +4,7 @@ import type {
   AnalyticsResult,
   Backtest,
   BarSeriesListResult,
+  BarSeriesRecord,
   CreateBacktestParams,
   CreateStudyParams,
   CreateStudyResult,
@@ -17,6 +18,7 @@ import type {
   MarketClock,
   PnlLedger,
   ProfilesPayload,
+  RecordBarSeriesResult,
   ResearchTaxonomy,
   StrategiesPayload,
   Study,
@@ -927,6 +929,45 @@ export async function fetchBarSeriesList(): Promise<{
     return { ok: false, data: null, error: "The bar series list could not be loaded." };
   } catch {
     return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/bars (era-5 J-05) — the ONE new explicit write action in the app: the
+// `/structure` "Fetch from Yahoo Finance" control. The store-first coordinator either serves an
+// already-stored window from storage (zero adapter/network calls) or fetches it fresh — both
+// resolve `200` (a repeat window is NEVER a `409` — the iter-3 lesson; a `409` here means a
+// DIFFERENT window whose fetched content happens to duplicate content already on file). The
+// backend's own 422 (unsupported timeframe / no data for that window / malformed window) / 503
+// (adapter unavailable, e.g. a non-Yahoo override with no credentials) / 504 (vendor timeout) /
+// 409 (content-duplicate refusal) detail is surfaced VERBATIM — never coerced into one generic
+// message. The frontend computes nothing: on success the caller re-reads the canonical
+// bars/levels endpoints (the existing read path) rather than rendering this response directly.
+export async function recordBarSeries(params: {
+  symbol: string;
+  timeframe: string;
+  start: string;
+  end: string;
+}): Promise<RecordBarSeriesResult> {
+  try {
+    const res = await fetch(`${API_BASE}/research/bars`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, bar_series: data.bar_series as BarSeriesRecord, status: res.status };
+    }
+    let error = "The bar series could not be fetched.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, status: res.status, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
   }
 }
 

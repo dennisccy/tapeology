@@ -33,10 +33,16 @@ DIRECTIONS: dict[str, str] = {
 # it. The served basis VALUE comes from the ONE config-aligned mapping (``feed_basis`` module / row
 # 29) — this block is only the DISPLAY copy. Descriptive, present-tense, never imperative/predictive
 # (J-66). The disclosure string is VERBATIM from goal.md (J-67's acceptance copy).
+#
+# Era-5 J-05 additive entry: ``"yahoo"`` — the keyless Yahoo Finance bar-fetch feed stamped by
+# ``YahooAdapter``/``BarStore`` (era-5 J-01). The `/structure` fetch-control's provenance badge reads
+# this label VERBATIM via ``GET /research/taxonomy`` (the SAME ``FeedBasisBadge`` component the
+# cockpit uses) — the frontend hardcodes no "Yahoo Finance" string anywhere.
 FEED_BASIS_LABELS: dict[str, str] = {
     "sim": "Simulated",
     "iex": "IEX (live)",
     "sip": "SIP (consolidated)",
+    "yahoo": "Yahoo Finance",
 }
 FEED_BASIS_LIVE_DISCLOSURE: str = (
     "live verdicts read the single-venue IEX feed; historical replay and studies use SIP "

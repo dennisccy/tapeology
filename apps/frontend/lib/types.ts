@@ -995,6 +995,18 @@ export interface BarSeriesListResult {
   integrity_errors: { file: string; error: string }[];
 }
 
+// POST /research/bars (era-5 J-05) result — the ONE new explicit write action in the app: fetch
+// (or store-first serve) a real bar series for a chosen symbol/timeframe/date-range. Mirrors
+// `CreateStudyResult`/`DeclareResult`'s shape byte-for-byte: `{ok, bar_series}` on success (a
+// fresh Yahoo fetch OR a store-first hit — both `200`, never `409` for a repeat window), or
+// `{ok:false, error, status}` with the backend's own 422/503/504/409 detail surfaced verbatim.
+export interface RecordBarSeriesResult {
+  ok: boolean;
+  bar_series?: BarSeriesRecord;
+  status?: number;
+  error?: string;
+}
+
 // One deterministic support/resistance level (GET /research/levels — Data Contract row 39). `type`
 // is one of "swing-pivot" | "prior-period-extreme" — kept as `string` (not a union) so an
 // unrecognized future type still renders rather than silently vanishing at a type guard.

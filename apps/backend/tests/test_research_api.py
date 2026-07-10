@@ -151,7 +151,10 @@ def test_taxonomy_serves_feed_basis_copy_canary(client):
     assert "feed_basis" in payload
     feed_basis = payload["feed_basis"]
     labels = {f["id"]: f["name"] for f in feed_basis["feeds"]}
-    assert set(labels.keys()) == {"sim", "iex", "sip"}
+    # Era-5 J-05: "yahoo" -> "Yahoo Finance" is the additive entry the /structure fetch-control's
+    # provenance badge reads (the frontend hardcodes no "Yahoo Finance" string anywhere).
+    assert set(labels.keys()) == {"sim", "iex", "sip", "yahoo"}
+    assert labels["yahoo"] == "Yahoo Finance"
     for name in labels.values():
         assert name  # every feed carries a non-empty display label
     # The live IEX-vs-SIP disclosure line is verbatim from goal.md (J-67 acceptance).

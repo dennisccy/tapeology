@@ -1720,13 +1720,21 @@ def list_bar_series(
     normalized the SAME way the record path stores it (stripped + uppercased) so the filter is
     case-insensitive; an indexed hit whose series the JSON store can no longer verify (deleted or
     corrupted since indexing) is skipped and surfaced in ``integrity_errors`` — never fabricated or
-    silently dropped."""
-    if symbol is None and timeframe is None:
+    silently dropped.
+
+    Era-5 J-05 (audit carry-forward B2 fix): the blank-string normalization runs BEFORE the
+    no-param short-circuit test, so a blank ``?symbol=`` and/or ``?timeframe=`` (present but empty)
+    normalizes to ``None`` and is treated as ABSENT — taking the exact same byte-identical
+    ``store.list()`` path as a true no-param call. Previously the short-circuit tested the raw
+    (un-normalized) params, so a blank ``?symbol=`` fell through to ``index.list(None, None)``
+    instead — silently missing any series the index never learned of (e.g. a legacy un-indexed
+    record). The real-filter path's behavior below is unchanged."""
+    normalized_symbol = symbol.strip().upper() if symbol else None
+    normalized_timeframe = timeframe.strip() if timeframe else None
+    if normalized_symbol is None and normalized_timeframe is None:
         records, errors = store.list()
         return {"bar_series": records, "integrity_errors": errors}
 
-    normalized_symbol = symbol.strip().upper() if symbol else None
-    normalized_timeframe = timeframe.strip() if timeframe else None
     records: list[dict] = []
     errors: list[dict] = []
     for hit in index.list(symbol=normalized_symbol, timeframe=normalized_timeframe):

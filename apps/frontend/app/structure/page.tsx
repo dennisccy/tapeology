@@ -10,6 +10,7 @@ import {
   fetchPnlLedger,
   fetchProfiles,
   fetchStrategies,
+  recordBarSeries,
 } from "@/lib/api";
 import type {
   Backtest,
@@ -29,8 +30,9 @@ import type {
 import { SymbolSearch } from "@/components/SymbolSearch";
 import { StructureChart } from "@/components/StructureChart";
 import { Panel } from "@/components/Panel";
+import { FeedBasisBadge } from "@/components/FeedBasisBadge";
 
-// The /structure page (J-01 + J-02 + J-03) — the era-4 structure stack's browser home, now
+// The /structure page (J-01 + J-02 + J-03 + J-05) — the era-4 structure stack's browser home, now
 // complete. For a chosen symbol + as-of time it renders a price chart with one dashed line per S/R
 // level plus a confluence-zones table badged A/B/C (J-01); below that, a read-only Registry section
 // shows the two registered strategies plus the current champion (J-02); below THAT, a Comparison
@@ -41,7 +43,16 @@ import { Panel } from "@/components/Panel";
 // UI_ROUTES). Follows the /performance page pattern: client component, no business logic,
 // canonical endpoints read verbatim, `{ok, data, error}`-shaped fetch results.
 //
-// EIGHT canonical endpoints, rendered VERBATIM and nothing else:
+// Era-5 J-05 adds the page's ONE new explicit write action: a fetch-control section (symbol +
+// timeframe + UTC date range + a "Fetch from Yahoo Finance" button) above the Levels & Zones form.
+// Submitting POSTs `/research/bars` (keyless; store-first — an already-fetched window is served
+// from storage with zero network calls, never a `409`), then loads the fetched symbol/window-end
+// through the EXISTING Levels & Zones read path (`handleLoad` — zero new rendering code, zero
+// client recomputation). A "Yahoo Finance" provenance badge (the SAME `FeedBasisBadge` the cockpit
+// uses, keyed off the charted series' own `feed` field) renders beside the chart. The fetch
+// control computes no level/zone/PnL/champion value and never promotes.
+//
+// NINE canonical endpoints (eight read, one write), rendered VERBATIM and nothing else:
 //   * GET /research/levels?symbol=&as_of=  (Data Contract row 39) — levels + confluence zones +
 //     the `no_bar_series_for_symbol` honesty flag. The A/B/C badge is `zone.class`, the score is
 //     `zone.score` — neither is ever recomputed from breadth or member strength.
@@ -50,6 +61,10 @@ import { Panel } from "@/components/Panel";
 //     the already-served `symbol` field to find candles for the chart — the SAME filtering
 //     discipline NavBar already applies to `nav: true` (filtering already-served rows is not a
 //     recomputation of any value).
+//   * POST /research/bars  (Data Contract row 38, J-05) — the fetch control's one write action:
+//     fetch-or-store-first-serve a real Yahoo bar series for {symbol, timeframe, start, end}. The
+//     response's own `feed`/`symbol`/`window_end_utc` seed the existing read path above; nothing
+//     from this response is rendered directly.
 //   * GET /research/strategies  (Data Contract row 40/41, J-02) — the strategy registry (`v1` +
 //     `structure_tape`) + the champion pointer. Fetched on mount, independent of the Levels & Zones
 //     Load button (the registry and champion are populated even keyless).
@@ -66,6 +81,13 @@ import { Panel } from "@/components/Panel";
 //   * GET /research/pnl/ledger  (Data Contract row 32, J-03) — read ONLY for the founding baseline
 //     row (`rows.find(r => r.founding)`) shown beside the comparison; the champion badge reuses the
 //     ALREADY-fetched `/research/strategies` champion (no second champion fetch).
+//
+// The fetch control (J-05) has its own distinct honest states — see `fetch-yahoo-*` testids: idle
+// (fields unset, button disabled), fetching (button disabled, "Fetching…" label), success (folds
+// into the Levels & Zones states below via `handleLoad`), and a POST error surfaced VERBATIM via
+// `UnavailablePanel` (distinct backend `detail` text per 422/503/504/409 — never one generic
+// message). The provenance badge is absent whenever no series is charted (honest absence, the SAME
+// rule `FeedBasisBadge` already enforces for the cockpit).
 //
 // Four distinct honest states for the Levels & Zones section (never share copy, never fabricate a
 // chart/level/zone):
@@ -143,6 +165,16 @@ function pickRepresentativeSeries(seriesForSymbol: BarSeriesRecord[]): BarSeries
   });
   return ranked[0];
 }
+
+// The era-5 J-05 fetch-control's OWN timeframe set — the SIX Yahoo-supported neutral timeframes
+// (goal.md's enumeration), in display order. Deliberately a SUBSET of the backend's full
+// `CONFIG.bar_timeframes` (nine entries, mirrored in `TIMEFRAME_ORDER` above): `15m`/`8h`/`1mo` are
+// valid `bar_timeframes` entries the Yahoo adapter itself does not map (`UnsupportedTimeframe`) —
+// offering them here would let a click reach a statically-known vendor-unsupported 422 the control
+// can instead simply never offer. This is a DISPLAY CHOICE (which already-known-good options to
+// list), not a second validation authority — the backend's own `bar_timeframes` + Yahoo-adapter
+// checks remain the sole enforcement (an out-of-set value still 422s server-side either way).
+const YAHOO_TIMEFRAMES = ["1w", "1d", "4h", "1h", "5m", "1m"];
 
 type LoadState<T> =
   | { phase: "idle" }
@@ -615,6 +647,18 @@ export default function StructurePage() {
   const [levelsState, setLevelsState] = useState<LoadState<LevelsResponse>>({ phase: "idle" });
   const [barsState, setBarsState] = useState<LoadState<BarSeriesListResult>>({ phase: "idle" });
 
+  // J-05 fetch-control state — the page's ONE new explicit write action. Independent of
+  // `symbolInput`/`asOfInput` above (the pre-existing read-only Load form) until a successful
+  // fetch seeds them (see `handleFetchYahoo` below). `fetchError` carries the backend's own
+  // 422/503/504/409 `detail` VERBATIM — folded into the shared `UnavailablePanel` treatment, never
+  // a single generic message.
+  const [fetchSymbolInput, setFetchSymbolInput] = useState("");
+  const [fetchTimeframeInput, setFetchTimeframeInput] = useState("");
+  const [fetchStartInput, setFetchStartInput] = useState("");
+  const [fetchEndInput, setFetchEndInput] = useState("");
+  const [fetchSubmitting, setFetchSubmitting] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   // J-02 Registry section state — fetched once on mount, independent of the Levels & Zones Load
   // button (the registry and champion are populated even keyless). `null` = fetch in flight;
   // `{ok: false}` resolves to the explicit registry-unavailable state — mirrors
@@ -727,6 +771,37 @@ export default function StructurePage() {
     handleLoad(symbolInput, asOfInput);
   }
 
+  // J-05: the fetch control's submit — POST /research/bars (store-first: serves-or-fetches, both
+  // `200`), then load the fetched symbol/window-end through the EXISTING read path (`handleLoad`)
+  // so the Levels & Zones section below renders the real candles + levels + zones with ZERO new
+  // rendering code. `symbolInput`/`asOfInput` are updated too, so the pre-existing read-only Load
+  // form reflects what is now shown (a manual re-submit of THAT form repeats the same read, never a
+  // second write). A failure surfaces the backend's own distinct 422/503/504/409 detail verbatim —
+  // nothing is loaded, nothing fabricated.
+  async function handleFetchYahoo() {
+    const symbol = fetchSymbolInput.trim();
+    const timeframe = fetchTimeframeInput;
+    const start = fetchStartInput.trim();
+    const end = fetchEndInput.trim();
+    if (!symbol || !timeframe || !start || !end) return; // the button is already disabled otherwise
+    setFetchSubmitting(true);
+    setFetchError(null);
+    const result = await recordBarSeries({ symbol, timeframe, start, end });
+    setFetchSubmitting(false);
+    if (!result.ok || !result.bar_series) {
+      setFetchError(result.error ?? "The bar series could not be fetched.");
+      return;
+    }
+    setSymbolInput(result.bar_series.symbol);
+    setAsOfInput(result.bar_series.window_end_utc);
+    await handleLoad(result.bar_series.symbol, result.bar_series.window_end_utc);
+  }
+
+  function handleFetchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    handleFetchYahoo();
+  }
+
   // J-03: start BOTH backtests (v1 + structure_tape, both profile=default) on the chosen dataset
   // via Promise.all (the plan's own grounding — never sequential, never one without the other).
   // Resets any prior run's state first so a re-run never shows a stale mix of an old and a new
@@ -772,6 +847,11 @@ export default function StructurePage() {
   }
 
   const canSubmit = symbolInput.trim() !== "" && asOfInput.trim() !== "";
+  const canFetch =
+    fetchSymbolInput.trim() !== "" &&
+    fetchTimeframeInput !== "" &&
+    fetchStartInput.trim() !== "" &&
+    fetchEndInput.trim() !== "";
   const levels = levelsState.phase === "ready" ? levelsState.data : null;
   const seriesForSymbol =
     barsState.phase === "ready" && levels
@@ -836,17 +916,100 @@ export default function StructurePage() {
             Structure
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
-            Deterministic support/resistance levels and A/B/C confluence zones for a chosen symbol
-            and as-of time, the registered strategies and current champion, and a
-            structure_tape-vs-v1 backtest comparison.
+            Fetch real historical bars from Yahoo Finance (keyless), then see deterministic
+            support/resistance levels and A/B/C confluence zones for a chosen symbol and as-of
+            time, the registered strategies and current champion, and a structure_tape-vs-v1
+            backtest comparison.
           </p>
           <p data-testid="structure-framing" className="mt-2 max-w-3xl text-xs text-slate-600">
-            Read-only, in three sections: S/R levels and confluence zones on a price chart; the
-            strategy registry and champion; and a structure_tape-vs-v1 comparison you can run over
-            a chosen dataset. Every value below is read verbatim from its canonical endpoint —
-            nothing here is recomputed in the browser.
+            One explicit write action — fetching bars from Yahoo Finance below — everything else on
+            this page is read-only: S/R levels and confluence zones on a price chart; the strategy
+            registry and champion; and a structure_tape-vs-v1 comparison you can run over a chosen
+            dataset. Every value below is read verbatim from its canonical endpoint — nothing here
+            is recomputed in the browser.
           </p>
         </header>
+
+        <section aria-label="Fetch from Yahoo Finance" className="mb-4">
+          <Panel title="Fetch from Yahoo Finance">
+            <p className="mb-3 -mt-1 max-w-3xl text-xs text-slate-600">
+              Fetch a real historical bar series from Yahoo Finance for a symbol, timeframe, and
+              UTC date range — keyless, on this explicit click. An already-fetched window is
+              served from storage with no repeat network call. On success, the Levels &amp; Zones
+              section below loads the fetched symbol and window automatically.
+            </p>
+            <form onSubmit={handleFetchSubmit} className="flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                  Symbol
+                </span>
+                <SymbolSearch
+                  value={fetchSymbolInput}
+                  onChange={setFetchSymbolInput}
+                  onPick={setFetchSymbolInput}
+                  placeholder="e.g. AAPL"
+                  ariaLabel="Fetch symbol"
+                  inputClassName={INPUT_CLASS}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                  Timeframe
+                </span>
+                <select
+                  data-testid="fetch-timeframe-select"
+                  value={fetchTimeframeInput}
+                  onChange={(e) => setFetchTimeframeInput(e.target.value)}
+                  className={INPUT_CLASS}
+                >
+                  <option value="">Choose…</option>
+                  {YAHOO_TIMEFRAMES.map((tf) => (
+                    <option key={tf} value={tf}>
+                      {tf}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                  Start (UTC, ISO-8601)
+                </span>
+                <input
+                  data-testid="fetch-start-input"
+                  value={fetchStartInput}
+                  onChange={(e) => setFetchStartInput(e.target.value)}
+                  placeholder="2026-06-01T00:00:00Z"
+                  className={INPUT_CLASS}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                  End (UTC, ISO-8601)
+                </span>
+                <input
+                  data-testid="fetch-end-input"
+                  value={fetchEndInput}
+                  onChange={(e) => setFetchEndInput(e.target.value)}
+                  placeholder="2026-06-04T00:00:00Z"
+                  className={INPUT_CLASS}
+                />
+              </label>
+              <button
+                type="submit"
+                data-testid="fetch-yahoo-button"
+                disabled={!canFetch || fetchSubmitting}
+                className="rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-600 disabled:hover:bg-slate-800"
+              >
+                {fetchSubmitting ? "Fetching…" : "Fetch from Yahoo Finance"}
+              </button>
+            </form>
+            {fetchError && (
+              <div className="mt-3">
+                <UnavailablePanel testid="fetch-yahoo-error" message={fetchError} />
+              </div>
+            )}
+          </Panel>
+        </section>
 
         <form
           onSubmit={handleSubmit}
@@ -924,6 +1087,15 @@ export default function StructurePage() {
                     />
                   ) : (
                     <>
+                      {/* J-05 provenance badge: reuses the SAME taxonomy-driven FeedBasisBadge the
+                          cockpit uses, keyed off the charted series' own `feed` field (verbatim off
+                          GET /research/bars — zero client recomputation). Honestly absent when no
+                          series is charted (the component's own no-fabrication rule). */}
+                      {representative && (
+                        <div className="mb-2">
+                          <FeedBasisBadge dataFeed={representative.feed} />
+                        </div>
+                      )}
                       <StructureChart
                         key={`${levels.symbol}|${levels.as_of}`}
                         bars={chartBars}

@@ -236,6 +236,43 @@ def test_no_param_get_is_byte_identical_to_a_direct_store_list_call(ctx):
     assert body["integrity_errors"] == direct_errors
 
 
+def test_blank_symbol_param_is_byte_identical_to_no_param_even_with_an_unindexed_series(ctx):
+    """Era-5 J-05 audit carry-forward B2: a blank ``?symbol=`` (present but empty) must normalize
+    to ``None`` BEFORE the no-param short-circuit, so it takes the exact same byte-identical
+    ``store.list()`` path as a true no-param call — never the index-only path (which would miss a
+    series the index never learned of, e.g. an un-indexed legacy record). Proven with an actual
+    UN-INDEXED record present: written directly through the store (bypassing the route's
+    ``index.insert()`` entirely), so if the blank-param path fell through to
+    ``index.list(None, None)`` (the pre-fix bug) this record would silently be absent from the
+    blank-param response while still present in the no-param response."""
+    client, bar_dir = ctx
+    from app.research.bars import BarStore as _BarStore
+
+    direct_store = _BarStore(str(bar_dir))
+    direct_store.record(
+        symbol="UNINDEXED",
+        timeframe="1d",
+        window_start_utc=START,
+        window_end_utc=END,
+        feed="yahoo",
+        bars=list(_bars(symbol="UNINDEXED")),
+    )
+
+    no_param = client.get("/research/bars")
+    assert no_param.status_code == 200
+    assert any(row["symbol"] == "UNINDEXED" for row in no_param.json()["bar_series"])
+
+    blank_symbol = client.get("/research/bars", params={"symbol": ""})
+    assert blank_symbol.status_code == 200
+    assert blank_symbol.json() == no_param.json()
+
+    blank_timeframe = client.get("/research/bars", params={"timeframe": ""})
+    assert blank_timeframe.json() == no_param.json()
+
+    both_blank = client.get("/research/bars", params={"symbol": "", "timeframe": ""})
+    assert both_blank.json() == no_param.json()
+
+
 def test_get_bar_index_resolves_to_a_sibling_of_the_bar_dir_by_default(ctx, monkeypatch):
     """A direct, hermetic proof of the ``get_bar_index`` resolver itself (the
     ``test_bar_fetch_adapter_resolver_defaults_to_yahoo_with_no_override`` pattern): with NO
