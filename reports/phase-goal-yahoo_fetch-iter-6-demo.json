@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-yahoo_fetch-iter-6",
+  "base_url": "http://localhost:3301",
+  "iteration": 6,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Structure page",
+      "narration": "Let's open the Structure page, where real stock price history and its support-and-resistance levels come together in one view.",
+      "point_out": "The 'Fetch from Yahoo Finance' panel at the top, and a second 'Load' form just below it.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Choose a symbol and an as-of time, then Load, to see its S/R levels and confluence zones." }
+    },
+    {
+      "n": 2,
+      "title": "Type in a stock symbol",
+      "narration": "Type a stock symbol into the fetch panel — we'll use AAPL.",
+      "point_out": "The Symbol field now reads AAPL.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Fetch symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 3,
+      "title": "Pick a daily timeframe",
+      "narration": "Choose the daily timeframe, so each candle represents one trading day.",
+      "point_out": "The Timeframe dropdown now reads 1d.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Timeframe" }, "text": "1d" }
+    },
+    {
+      "n": 4,
+      "title": "Set the start of the date range",
+      "narration": "Enter the start of the window of history to fetch, in UTC.",
+      "point_out": "The Start field is filled in.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Start (UTC, ISO-8601)" }, "text": "2026-06-01T00:00:00Z" }
+    },
+    {
+      "n": 5,
+      "title": "Set the end of the date range",
+      "narration": "And the end of that window.",
+      "point_out": "The End field is filled in, and the Fetch button is no longer greyed out.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "End (UTC, ISO-8601)" }, "text": "2026-06-04T00:00:00Z" }
+    },
+    {
+      "n": 6,
+      "title": "Fetch real bars from Yahoo Finance",
+      "narration": "Click once and the app pulls real historical prices straight from Yahoo Finance — no signup, no fee — and draws the chart immediately.",
+      "point_out": "A real candlestick chart appears with dashed support-and-resistance lines, and a 'Confluence zones' list below shows Class A/B/C zones with scores.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Fetch from Yahoo Finance" } },
+      "expect": { "text": "Level lines span every recorded timeframe." }
+    },
+    {
+      "n": 7,
+      "title": "See exactly where the data came from",
+      "narration": "A small badge above the chart names the real source of this data, so where the numbers came from is never a mystery.",
+      "point_out": "A dark chip reading 'feed' next to 'Yahoo Finance' in bold sits cleanly above the chart, fully readable with nothing overlapping it.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='structure-title']" } },
+      "expect": { "target": { "css": "[data-testid='feed-basis-label']" } }
+    },
+    {
+      "n": 8,
+      "title": "Ask about a symbol with no saved history",
+      "narration": "Now let's try a symbol that has never been fetched before — TSLA — using the separate Load form below.",
+      "point_out": "The Symbol field in the Load form now reads TSLA.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Structure symbol" }, "text": "TSLA" }
+    },
+    {
+      "n": 9,
+      "title": "Set the as-of time",
+      "narration": "Enter a time to check its levels as of.",
+      "point_out": "The As-of field is filled in.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "As-of (UTC, ISO-8601)" }, "text": "2026-06-05T00:00:00Z" }
+    },
+    {
+      "n": 10,
+      "title": "An honest message when there's no data yet",
+      "narration": "Instead of a blank or broken-looking chart, the app plainly tells you there's nothing recorded for this symbol yet.",
+      "point_out": "The message 'No bar series recorded for TSLA.' appears, with 'Recording historical bars needs provider credentials.' underneath — no chart, no badge, no zones.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "No bar series recorded for TSLA." }
+    },
+    {
+      "n": 11,
+      "title": "Switch back to a symbol with real data",
+      "narration": "Switch the symbol back to AAPL, which does have saved history.",
+      "point_out": "The Symbol field now reads AAPL again.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Structure symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 12,
+      "title": "The original Load button still works",
+      "narration": "The original Load button — the one that predates today's fetch feature — still pulls up a real chart exactly as it always has.",
+      "point_out": "The candlestick chart and confluence zones reappear for AAPL.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "Level lines span every recorded timeframe." }
+    },
+    {
+      "n": 13,
+      "title": "Try an invalid date range",
+      "narration": "Let's see what happens if the dates are entered backwards — end before start.",
+      "point_out": "The Start field in the fetch panel now holds the later date.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Start (UTC, ISO-8601)" }, "text": "2026-06-04T00:00:00Z" }
+    },
+    {
+      "n": 14,
+      "title": "Finish the backwards range",
+      "narration": "And the End field now holds the earlier date.",
+      "point_out": "The End field now holds a date before the Start field's date.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "End (UTC, ISO-8601)" }, "text": "2026-06-01T00:00:00Z" }
+    },
+    {
+      "n": 15,
+      "title": "Nothing is ever faked",
+      "narration": "The app refuses to guess — it shows a clear, honest error instead of ever making up data.",
+      "point_out": "An amber panel reads 'end must be after start,' followed by 'Nothing cached and nothing fabricated is shown in its place.' The chart above stays exactly as it was.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Fetch from Yahoo Finance" } },
+      "expect": { "text": "end must be after start" }
+    }
+  ]
+}

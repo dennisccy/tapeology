@@ -204,3 +204,50 @@ J-05, but flag it now so the orchestrator provisions reachable services before J
 **Reasoning:** J-05's feature is genuinely built and mostly evidenced — I opened TC-05/06/07/08 myself: the "Fetch from Yahoo Finance" control renders, and an AAPL 1d fetch draws real ~$305–311 candles + level lines + a Class-A/B/C confluence-zone table store-first. Coherence COHERENCE-PASS; review PASS; QA PASS (15/15, :3301 reachable, Chrome MCP available); audit PASS_WITH_GAPS ("genuinely achieved"). I independently confirmed frozen-file byte-identity (`git diff 59a29817..worktree` empty over levels/backtests/strategies/config/bars/bar_index/adapters/tape/mcp), fingerprint, equivalence. BUT: (1) phase-closure = **CLOSURE-FAIL** — 3 of 6 UI-visibility artifacts never landed (`ui-test-results.md` absent; `ui-test-plan.md` + `what-to-click.md` are SKIPPED stubs from a signal-killed step, consistent with this session's quota-throttle history); (2) J-05's defining "Yahoo Finance" provenance badge is NOT cleanly captured in any screenshot — the F1 `SymbolSearch` dropdown occludes it in the only two post-fetch shots (ux-regression UX-REGRESSION-WARN + audit F1 confirm this in TC-07/TC-08); (3) TC-11 honest empty state was not browser-exercised (unit-covered only). So J-05 = `partial`, not `passing` → not GOAL_ACHIEVED → CONTINUE. Independently, the deterministic gate would demote a GOAL_ACHIEVED anyway: goal-gates.sh:126 greps scan-report for `**Result:** CRITICAL`, which the framework-vendoring churn trips.
 
 **Next-step recommendation:** J-05 closure remediation (full depth) — NOT new feature work. Re-run `browser-qa-phase.sh` + `ui-test-design-phase.sh` (:3301/:8301 + Chrome MCP up, all reachable this iter) to land the 3 missing UI-visibility artifacts; capture the "Yahoo Finance" badge cleanly (dismiss the F1 dropdown before the shot, or fix `SymbolSearch.tsx` to not auto-open on a programmatic value set); record a browser TC-11 empty state; and — operational, human/orchestrator-owned — land the `incredible_auto_dev/**` subtree sync OUTSIDE the evaluated `snapshot..HEAD` so the product-scoped scan-report is CLEAN. Then closure → CLOSURE-PASS, J-05 → passing, and GOAL_ACHIEVED becomes clean (all other Must-haves already pass; coherence clean).
+
+## Iteration 6 — goal-yahoo_fetch-iter-6
+
+**Date:** 2026-07-11T03:05:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: **J-05** (partial → passing) — closure remediation complete: clean unoccluded "Yahoo Finance" badge + browser-captured honest empty state + all UI-visibility artifacts landed
+- Newly failing: none
+- Regressed: none (J-01/J-02/J-03/J-04/J-06 re-verified passing via frozen-file byte-identity `git diff dbb66609 -- apps/` empty + suite 1207/1201/6 + equivalence 22/22 + fingerprint 4d665603569b9dbf recomputed + UT-07/UT-08 browser regression checks)
+- Anti-goal violations: **1 minor, non-product false positive** — scan-report `**Result:** CRITICAL` = AWS's public placeholder `AKIAIOSFODNN7EXAMPLE` quoted in the iter-6 spec's own NOTES prose (`docs/phases/goal-yahoo_fetch-iter-6.md:178`); grep-confirmed absent from `apps/`; not a real secret, not product source, resolved:false (blocks deterministic gate only)
+
+**Reasoning:** J-05 verified `passing` on primary evidence I opened myself, not the handoffs. I viewed
+`UT-03-result.png` (the "feed **Yahoo Finance**" chip fully legible directly above a real candlestick
+chart with S/R lines + a 16-row A/B/C confluence table, zero dropdown overlap — the exact defect-F1
+occlusion that blocked iter-5, now cleanly captured), `UT-06-result.png` (a distinct neutral "∅ No bar
+series recorded for TSLA. Recording historical bars needs provider credentials." panel with no
+chart/candle/badge/zone — the browser TC-11 that was unit-only in iter-5), and `UT-02-result.png` (real
+~$305–311 candles + dashed level lines + 16 Class-A/B/C zones; caption "234 of 2028 recorded bars"). The
+badge derives from `taxonomy.FEED_BASIS_LABELS` (single source of truth), not a hardcoded literal. Every
+gate certified: coherence COHERENCE-PASS (zero product diff independently confirmed), closure
+CLOSURE-PASS (all six UI-visibility artifacts have real content, no SKIPPED stubs), review
+PASS_WITH_NOTES (1 MINOR: `scripts/dev.sh` process-group cleanup — tooling, deferred 4 iters), QA PASS,
+audit PASS_WITH_GAPS (F1/B1/T1 all pre-existing/deferred/observation), ux-regression UX-REGRESSION-PASS
+(UT-07/UT-08 explicit regression checks green). Zero product source change confirmed by me + coherence +
+review + QA + audit + ux-regression (`git diff dbb66609 -- apps/` empty; full working-tree diff is only
+README.md + showcase reports + pipeline bookkeeping). All six spec-hashes match stored (no drift;
+`journeys-changed.md` absent). So all six Must-have journeys pass — BUT NOT GOAL_ACHIEVED, because the
+deterministic achievement gate (`goal-gates.sh:126`) greps the full-diff `scan-report.md` for
+`**Result:** CRITICAL`, which is present. That CRITICAL resolves to `AKIAIOSFODNN7EXAMPLE` — AWS's
+*public documentation example key* (authenticates nothing) — quoted verbatim in the iter-6 spec's own
+NOTES paragraph warning about this very trip-wire; grep-confirmed it appears NOWHERE in `apps/` or
+product source. This is a self-referential scan-hygiene false positive on a non-product pipeline file,
+not a genuine secret-in-source anti-goal violation → NOT REGRESSION (no real credential, no product
+defect, no journey regressed), but it blocks a clean GOAL_ACHIEVED until the scan is CLEAN → CONTINUE.
+Consistent with iter-5's disposition of its analogous framework-fixture scan trip (pre-flight #2 DID
+remove the 12 `incredible_auto_dev/**` CRITICALs — only this new spec-prose trip remains).
+
+**Next-step recommendation:** **Clear the scan-hygiene blocker, then re-attempt GOAL_ACHIEVED (lean).**
+No product/feature work remains — all six journeys pass, all gates green, `git diff -- apps/` empty. The
+blocker is orchestrator/human-owned (like iter-5's framework carve-out): keep `docs/phases/*.md` specs
+OUT of the evaluated `snapshot..HEAD` diff, OR redact the literal `AKIAIOSFODNN7EXAMPLE` token in the
+iter-6 spec NOTES, OR allowlist the well-known AWS example key in the scanner. Once `scan-report.md` has
+no `**Result:** CRITICAL`, the next evaluation returns a clean GOAL_ACHIEVED (J-05 already passing;
+two-key confirm spot-checks the UT-03 badge screenshot + the UT-02 browser-results row — both present and
+legible). Recommend lean depth: zero product source to change; the full pipeline already certified this
+iteration.

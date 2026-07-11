@@ -67,3 +67,19 @@ Directly relevant to J-05's `/structure` fetch-control test expectations.
 **Verdict:** CONTINUE
 **Lesson:** A UI journey can pass every functional check yet fail phase-closure on pure artifact plumbing: `browser-qa-phase.sh` deliberately writes NO stub when signal-killed (SIGKILL/SIGTERM, per anti-patterns #20), so a quota-throttle interruption leaves `ui-test-results.md` entirely absent → CLOSURE-FAIL even though the QA agent independently captured a real Chrome-MCP browser pass + screenshots under `reports/qa/.../-evidence/`. Also: the deterministic GOAL_ACHIEVED gate (goal-gates.sh:126) greps the FULL-diff `scan-report.md` for `**Result:** CRITICAL` — so vendored `incredible_auto_dev/**` judgment-test fixtures (deliberately-planted fake secrets) will block certification unless that framework churn is kept OUT of the evaluated `snapshot..HEAD`. And an interaction defect (F1: `SymbolSearch` auto-opening its dropdown on a programmatic `value` set) can occlude the headline element in the very "proof" screenshots — a badge verified in the DOM is not a badge captured in a screenshot.
 **Applies to:** any iter whose final evidence is browser-side (esp. the last Must-have UI journey before a GOAL_ACHIEVED attempt); any session doing an `incredible_auto_dev` subtree sync mid-goal-run; any `/structure` change that seeds `SymbolSearch`'s value programmatically.
+
+## iter-6 — 2026-07-11T03:05:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A spec/docs file that QUOTES a live secret-scanner trigger token verbatim becomes the
+trip-wire it warns about. iter-5's scan CRITICAL came from vendored `incredible_auto_dev/**` judgment
+fixtures; the iter-6 pre-flight correctly moved those out — but the iter-6 spec's own NOTES paragraph,
+explaining the risk, wrote `AKIAIOSFODNN7EXAMPLE` (AWS's public example key) inline, and the
+deterministic full-diff scan (`lib/scan_diff.py`, which includes `docs/phases/*.md`) then flagged the
+spec file itself. All six journeys passed and `git diff -- apps/` was empty, yet `goal-gates.sh:126`
+still blocks GOAL_ACHIEVED on that one line. Non-product scan hygiene — not product code — was the last
+mile to done, twice in a row from different sources.
+**Applies to:** any iteration approaching a GOAL_ACHIEVED attempt (verify `scan-report.md` has no
+`**Result:** CRITICAL` and, if it does, confirm the match is product source vs. a docs/framework
+placeholder before scoring); any spec/handoff author documenting scanner behavior (describe trigger
+tokens, never paste them verbatim into a file that lands in the evaluated diff).

@@ -112,3 +112,21 @@ computation.
 **Ambiguity:** J-05's acceptance/DoD says the fetch renders candles + levels + zones + a "Yahoo Finance" provenance badge "captured in a screenshot." This iteration captured candles/levels/zones in screenshots, but the badge is only DOM/unit/source-verified (occluded by the F1 dropdown in TC-07/TC-08), and the DoD's honest-empty-state item allows "browser OR unit" (unit is covered). The goal does not say whether a DOM-verified-but-not-screenshotted headline element + a missing canonical `ui-test-results.md` clears the "captured in a screenshot" bar for the era's FINAL journey.
 **We chose:** Scored J-05 `partial` (not `passing`) and held GOAL_ACHIEVED — treating "the defining new provenance badge must be cleanly visible in a real screenshot, and the iteration's closure gate must certify" as the evidence bar for the last Must-have UI journey, rather than accepting DOM+unit+source proof plus a CLOSURE-FAIL. A product owner who considers DOM+unit verification of the badge sufficient (and the missing `ui-test-results.md` a mere bookkeeping gap) could veto and treat J-05 as already `passing`, making the remediation purely a re-close of the pipeline artifacts.
 **Reversible:** yes
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** A deterministic `scan-report.md` `**Result:** CRITICAL` (which the achievement gate
+`goal-gates.sh:126` keys off) resolved to AWS's PUBLIC example key `AKIAIOSFODNN7EXAMPLE` quoted in the
+iter-6 SPEC file's own warning prose (`docs/phases/goal-yahoo_fetch-iter-6.md:178`), not in product
+source (grep-confirmed absent from `apps/`). The framework is silent on whether a scan CRITICAL that
+resolves to a well-known public placeholder in a non-product pipeline file (a) triggers the REGRESSION
+rail (critical anti-goal violation), or (b) merely blocks GOAL_ACHIEVED pending scan hygiene.
+**We chose:** (b) — scored it a MINOR, non-product false positive and returned CONTINUE, not REGRESSION.
+`AKIAIOSFODNN7EXAMPLE` is AWS's published documentation placeholder (authenticates nothing, on every
+standard scanner's built-in allowlist), it is not product source, and no journey regressed, so treating
+it as a committed-secret/security-backdoor REGRESSION would be a false halt. It still blocks a clean
+GOAL_ACHIEVED because the deterministic gate greps the literal `**Result:** CRITICAL` line — an
+orchestrator-owned scan-hygiene fix, not a product defect. A product owner who wants ANY scan CRITICAL
+(even a docs-file placeholder) to hard-halt the loop for human acknowledgement could veto and require a
+REGRESSION verdict here instead.
+**Reversible:** yes

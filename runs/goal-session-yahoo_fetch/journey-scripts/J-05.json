@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "journey": "J-05",
+  "name": "Fetch from the app — the Structure page fetch control with \"Yahoo Finance\" provenance",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {"n": 1, "journey": "J-05", "action": {"type": "goto", "url": "/structure"}, "expect": {"text": "Fetch from Yahoo Finance"}},
+    {"n": 2, "journey": "J-05", "action": {"type": "fill", "target": {"placeholder": "e.g. PG"}, "text": "AAPL"}},
+    {"n": 3, "journey": "J-05", "action": {"type": "fill", "target": {"placeholder": "2026-06-09T21:00:00Z"}, "text": "2026-06-05T00:00:00Z"}},
+    {"n": 4, "journey": "J-05", "action": {"type": "click", "target": {"role": "button", "name": "Load"}}, "expect": {"target": {"testid": "feed-basis-label"}}}
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "session_id": "yahoo_fetch",
   "started_at": "2026-07-08T23:31:20.432118Z",
-  "current_iter": 6,
+  "current_iter": 7,
   "cli": "claude",
   "agent_backend": "interactive",
   "halt_config": {
@@ -11,11 +11,11 @@
   },
   "status": "in_progress",
   "last_verdict": "CONTINUE",
-  "next_depth": "full",
+  "next_depth": "lean",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/yahoo_fetch",
-  "updated_at": "2026-07-10T22:37:32.315432Z",
+  "updated_at": "2026-07-11T01:46:49.128379Z",
   "finished_at": "2026-07-10T18:18:40.203465Z",
   "total_iterations": 5,
   "wall_time_seconds": 17414,
