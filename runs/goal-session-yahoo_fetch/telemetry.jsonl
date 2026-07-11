@@ -172,3 +172,15 @@
 {"agent":"goal-evaluator","status":"ok","wait_seconds":3,"run_seconds":761,"rc":"0","ts":"2026-07-11T01:46:48Z","session_id":"yahoo_fetch","iter":6,"event":"dispatch_wait","cli":"claude"}
 {"agent":"goal-evaluator","exit_status":0,"duration_seconds":765,"retries":0,"ts":"2026-07-11T01:46:49Z","session_id":"yahoo_fetch","iter":6,"event":"agent_invocation_end","cli":"claude"}
 {"iter_name":"goal-yahoo_fetch-iter-6","verdict":"CONTINUE","next_depth":"lean","journey_deltas":{"newly_passing":6,"newly_failing":0,"regressed":0,"anti_goal_violations":1},"ts":"2026-07-11T01:46:49Z","session_id":"yahoo_fetch","iter":6,"event":"iter_end","cli":"claude"}
+{"branch":"goal/yahoo_fetch","commit_sha":"d140e68c7dd024984e98f2ec91cc34c629350649","success":true,"error":"","verdict":"CONTINUE","ts":"2026-07-11T01:46:52Z","session_id":"yahoo_fetch","iter":6,"event":"iter_push","cli":"claude"}
+{"agent":"iteration-summarizer","ts":"2026-07-11T01:46:52Z","session_id":"yahoo_fetch","iter":6,"event":"agent_invocation_start","cli":"claude"}
+{"iter_name":"goal-yahoo_fetch-iter-7","prior_verdict":"CONTINUE","prior_depth":"lean","snapshot_sha":"36e430c266bbb94c2cffc439548de20d05120a01","ts":"2026-07-11T01:46:52Z","session_id":"yahoo_fetch","iter":7,"event":"iter_start","cli":"claude"}
+{"agent":"goal-decomposer","ts":"2026-07-11T01:46:52Z","session_id":"yahoo_fetch","iter":7,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"iteration-summarizer","status":"ok","wait_seconds":1,"run_seconds":626,"rc":"0","ts":"2026-07-11T01:57:19Z","session_id":"yahoo_fetch","iter":6,"event":"dispatch_wait","cli":"claude"}
+{"agent":"goal-decomposer","status":"ok","wait_seconds":1,"run_seconds":626,"rc":"0","ts":"2026-07-11T01:57:19Z","session_id":"yahoo_fetch","iter":7,"event":"dispatch_wait","cli":"claude"}
+{"agent":"iteration-summarizer","exit_status":0,"duration_seconds":627,"retries":0,"ts":"2026-07-11T01:57:19Z","session_id":"yahoo_fetch","iter":6,"event":"agent_invocation_end","cli":"claude"}
+{"agent":"goal-decomposer","exit_status":0,"duration_seconds":627,"retries":0,"ts":"2026-07-11T01:57:19Z","session_id":"yahoo_fetch","iter":7,"event":"agent_invocation_end","cli":"claude"}
+{"agent":"readme-maintainer","ts":"2026-07-11T01:57:19Z","session_id":"yahoo_fetch","iter":6,"event":"agent_invocation_start","cli":"claude"}
+{"depth":"lean","target_journeys":"none new — J-01, J-02, J-03, J-04, J-05, J-06 are ALL already `passing`; this is a certification / clean-scan GOAL_ACHIEVED attempt, not feature work","ts":"2026-07-11T01:57:19Z","session_id":"yahoo_fetch","iter":7,"event":"iter_dispatch","cli":"claude"}
+{"agent":"readme-maintainer","status":"ok","wait_seconds":4,"run_seconds":199,"rc":"0","ts":"2026-07-11T02:00:42Z","session_id":"yahoo_fetch","iter":6,"event":"dispatch_wait","cli":"claude"}
+{"agent":"readme-maintainer","exit_status":0,"duration_seconds":203,"retries":0,"ts":"2026-07-11T02:00:42Z","session_id":"yahoo_fetch","iter":6,"event":"agent_invocation_end","cli":"claude"}
