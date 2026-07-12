@@ -1,0 +1,19 @@
+{
+  "phase": "goal-yahoo_fetch-iter-8",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-12T22:20:55.000000Z",
+  "started_at": "2026-07-12T21:56:07.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "runs/goal-session-yahoo_fetch/journey-scripts/J-06.json",
+    "docs/handoffs/goal-yahoo_fetch-iter-8-dev.md"
+  ],
+  "tests_run": true,
+  "tests_passed": true,
+  "browser_checks_run": true,
+  "fix_mode": false,
+  "notes": "Test-tooling-only iteration per spec: zero apps/ change (git diff -- apps/ empty, confirmed). Fixed runs/goal-session-yahoo_fetch/journey-scripts/J-06.json step 3 -- expect.text changed from the async-only taxonomy string 'Absorption reversal' to the /studies page's own statically-rendered <h1> shell title 'Replay studies' (present in the raw SSR HTML before any client fetch; confirmed via curl and via apps/frontend/app/studies/page.tsx:114-116). Self-verified live: started backend (:8301) + frontend (:3301), ran demo_runner.py --mode verify on J-04/J-05/J-06 -- 3/3 PASS, 0 failed, goal_gate.py results rc=0 (evidence: reports/qa/goal-yahoo_fetch-iter-8-devcheck/). Backend suite 1207 collected/1201 passed/6 skipped/0 failed (matches iter-6/iter-7 baseline exactly -- full-suite run hit the same known summary-line flush quirk iter-7 documented; counts independently reconciled via a fresh --collect-only run plus a dot/skip character count of the log). Engine equivalence (test_observer_equivalence.py + test_profile_equivalence.py) 22 passed. config_fingerprint recompute == 4d665603569b9dbf. Both dev servers stopped cleanly after verification; ports 8301/3301 confirmed free.",
+  "next_action": "review"
+}

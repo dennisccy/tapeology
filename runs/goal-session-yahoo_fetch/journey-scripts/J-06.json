@@ -6,7 +6,7 @@
   "steps": [
     {"n": 1, "journey": "J-06", "action": {"type": "goto", "url": "/"}, "expect": {"text": "No ticker watched"}},
     {"n": 2, "journey": "J-06", "action": {"type": "goto", "url": "/journal"}, "expect": {"text": "SIM-BUYER"}},
-    {"n": 3, "journey": "J-06", "action": {"type": "goto", "url": "/studies"}, "expect": {"text": "Absorption reversal"}},
+    {"n": 3, "journey": "J-06", "action": {"type": "goto", "url": "/studies"}, "expect": {"text": "Replay studies"}},
     {"n": 4, "journey": "J-06", "action": {"type": "goto", "url": "/performance"}, "expect": {"text": "4d665603569b9dbf"}}
   ]
 }

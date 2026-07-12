@@ -1,0 +1,14 @@
+Wrote both required outputs for goal-yahoo_fetch-iter-7:
+
+1. Iteration summary — reports/phase-goal-yahoo_fetch-iter-7-iteration-summary.md
+   - Verdict: CONTINUE (carried from iter-7/eval.md, re-run entry dated 2026-07-12)
+   - Iteration type: goal-lean (no closure-verdict.md for this iteration)
+   - Signal: holding (all six journeys re-verified passing, zero newly-passing, zero regressed, no failing journeys remain)
+   - Captures the resolved scan-hygiene blocker and the new UT-J-06 false-negative replay cell now blocking a clean GOAL_ACHIEVED
+   - 14-entry assumption ledger (newest-first, incl. the iter-8 decomposer entry that already picked the fix)
+   - Artifacts table limited to what exists for this lean iteration
+
+2. Project story — runs/goal-session-yahoo_fetch/state/project-story.md
+   - Rewritten end-to-end to fold in iter-7's outcome: scan-hygiene item cleared, but a new testing-tooling false-negative surfaced during the double-check, so the chapter's official close is one round away. No product-facing change this round.
+
+Both files follow the exact template section headings. No other files modified.

@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-yahoo_fetch-iter-8",
+  "base_url": "http://localhost:3301",
+  "iteration": 8,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Structure page",
+      "narration": "Let's open the Structure page — this is where Tapeology fetches real stock price history straight from Yahoo Finance, no sign-up or fee required, and turns it into support-and-resistance levels.",
+      "point_out": "A 'Fetch from Yahoo Finance' panel sits at the top of the page, with a simpler, read-only 'Load' form just below it.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Choose a symbol and an as-of time, then Load, to see its S/R levels and confluence zones." }
+    },
+    {
+      "n": 2,
+      "title": "Type in a stock symbol",
+      "narration": "Type in a stock symbol to fetch its real history — we'll use AAPL.",
+      "point_out": "The Symbol field in the fetch panel now reads AAPL.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Fetch symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 3,
+      "title": "Choose a real timeframe",
+      "narration": "Pick a timeframe. Six real choices are on offer here — weekly down to 1-minute, including an honestly self-computed 4-hour view — and every one of them is genuine, never invented.",
+      "point_out": "The Timeframe field now reads 1d.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Timeframe" }, "text": "1d" }
+    },
+    {
+      "n": 4,
+      "title": "Set the start of the date range",
+      "narration": "Set the start of the date range to fetch, in UTC.",
+      "point_out": "The Start field is filled in.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Start (UTC, ISO-8601)" }, "text": "2026-06-01T00:00:00Z" }
+    },
+    {
+      "n": 5,
+      "title": "Set the end of the date range",
+      "narration": "And the end of that range.",
+      "point_out": "The End field is filled in, and the fetch button is no longer greyed out.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "End (UTC, ISO-8601)" }, "text": "2026-06-04T00:00:00Z" }
+    },
+    {
+      "n": 6,
+      "title": "Fetch real bars from Yahoo Finance",
+      "narration": "Click once, and the app pulls real historical prices straight from Yahoo Finance — no sign-up, no API key, no fee — and draws the chart immediately.",
+      "point_out": "A real candlestick chart appears with dashed support-and-resistance lines, and a 'Confluence zones' list below shows Class A/B/C zones with scores drawn from several real timeframes together.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Fetch from Yahoo Finance" } },
+      "expect": { "text": "Level lines span every recorded timeframe." }
+    },
+    {
+      "n": 7,
+      "title": "See exactly where the data came from",
+      "narration": "A small badge above the chart names exactly where this data came from, so it's never a mystery.",
+      "point_out": "A dark chip reading 'feed' next to 'Yahoo Finance' in bold sits cleanly above the chart.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='structure-title']" } },
+      "expect": { "target": { "css": "[data-testid='feed-basis-label']" } }
+    },
+    {
+      "n": 8,
+      "title": "Ask for the same window again",
+      "narration": "Ask for that exact same window again, and it comes right back instantly — this history is already safely stored, so there's nothing new to fetch and nothing gets duplicated.",
+      "point_out": "The identical chart and confluence zones reappear immediately.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Fetch from Yahoo Finance" } },
+      "expect": { "text": "Level lines span every recorded timeframe." }
+    },
+    {
+      "n": 9,
+      "title": "Look up the same stock a simpler way",
+      "narration": "The page also has a simpler, read-only Load form below the fetch panel — let's look up AAPL through that instead.",
+      "point_out": "The Symbol field in the Load form now reads AAPL.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Structure symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 10,
+      "title": "Set the as-of time",
+      "narration": "Enter a point in time to check its levels as of.",
+      "point_out": "The As-of field is filled in.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "As-of (UTC, ISO-8601)" }, "text": "2026-06-05T00:00:00Z" }
+    },
+    {
+      "n": 11,
+      "title": "Load the same real levels from storage",
+      "narration": "Click Load, and the same real support-and-resistance levels and confluence zones appear again, this time read straight from storage rather than a fresh fetch.",
+      "point_out": "The candlestick chart and confluence-zone list reappear for AAPL.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "Confluence zones" }
+    },
+    {
+      "n": 12,
+      "title": "Confirm the rest of the app still works",
+      "narration": "Finally, a quick check that nothing else broke while this chapter was being finished: the replay studies lab — where past trade setups get tested against history — still opens exactly as it always has.",
+      "point_out": "The 'Replay studies' heading renders cleanly at the top of the page.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/studies" },
+      "expect": { "text": "Replay studies" }
+    }
+  ]
+}
