@@ -1,3 +1,46 @@
+You are the goal-evaluator agent for goal-mode iteration evaluation.
+
+Session ID: yahoo_fetch
+Iteration index: 7
+Iter name: goal-yahoo_fetch-iter-7
+Depth dispatched: lean
+
+Project goal (SLICED — vision + anti-goals + target/failing journeys verbatim; stable passing journeys digested): /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-7/goal-slice.md
+  Full goal file: /home/dennis-chan/Git/tapeology/docs/goal.md — Read it ONLY if a digested journey becomes relevant.
+Iter spec: /home/dennis-chan/Git/tapeology/docs/phases/goal-yahoo_fetch-iter-7.md
+Agent instructions: .claude/agents/goal-evaluator.md  <-- read this first
+(CLAUDE.md is already in your system prompt — do not Read it again.)
+
+Iteration artifacts (read what exists):
+  Deterministic diff scan (product diff; harness bookkeeping excluded — secrets/deps/license): /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-7/scan-report.md
+  Bounded diff view (complete file list; hunks capped, header lists omissions): /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-7/iter-diff.md
+  Dev handoff: docs/handoffs/goal-yahoo_fetch-iter-7-dev.md
+  Review report: reports/reviews/goal-yahoo_fetch-iter-7-review.md
+  QA report: reports/qa/goal-yahoo_fetch-iter-7-qa.md (full mode only)
+  Audit handoff: docs/handoffs/goal-yahoo_fetch-iter-7-audit.md (full mode only)
+  Browser QA results: reports/phase-goal-yahoo_fetch-iter-7-ui-test-results.md
+  Evidence: reports/qa/goal-yahoo_fetch-iter-7-evidence/
+  Coherence audit: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-7/coherence.md  <-- COHERENCE-FAIL vetoes GOAL_ACHIEVED and drives a consolidation CONTINUE
+  Goal-edit drift note: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-7/journeys-changed.md  <-- if present, each listed journey's prior pass is VOID until re-verified against the CURRENT goal text (your step 3)
+
+Journey state (inline digest — your methodology's section A table starts here):
+```
+J-01 | passing         | last_passing=goal-yahoo_fetch-iter-7 | Fetch real historical bars from Yahoo Finance, keyless
+J-02 | passing         | last_passing=goal-yahoo_fetch-iter-7 | The full timeframe set, including honestly-resampled 4h
+J-03 | passing         | last_passing=goal-yahoo_fetch-iter-7 | Quick reuse — store-first fetch backed by a derived SQLite index
+J-04 | passing         | last_passing=goal-yahoo_fetch-iter-7 | Real S/R levels and confluence zones on real Yahoo bars
+J-05 | passing         | last_passing=goal-yahoo_fetch-iter-7 | Fetch from the app — the Structure page fetch control with Yahoo Finance provenance
+J-06 | passing         | last_passing=goal-yahoo_fetch-iter-7 | The foundation is unchanged (regression sentinel)
+```
+
+Prior session state:
+  Journey history: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/journey-history.json  <-- update this with new state (full atomic write)
+  Evaluator log: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/evaluator-log.md  <-- append a new entry; do not overwrite or read the full file (last 5 entries pre-trimmed below)
+  Lessons file: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/lessons.md  <-- append a brief lesson entry capturing a non-obvious takeaway (1-3 sentences). Skip if nothing surprising happened.
+  Assumption ledger: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/assumptions.md  <-- append an entry when a scoring decision required interpreting an ambiguous goal (step 5b of your instructions). Skip when none — zero entries is normal.
+
+Recent evaluator log entries (last 5, pre-trimmed):
+```
 # Goal Session yahoo_fetch — Evaluator Log
 
 Chronological record of goal-evaluator verdicts. Append-only.
@@ -267,20 +310,164 @@ iteration.
 **Reasoning:** This iteration's ONLY job was to clear the iter-6 scan-hygiene false positive so a clean GOAL_ACHIEVED could be certified — and it FAILED. I did not trust the dev/review/coherence "scan is CLEAN" prose (all three dated 08:39–08:50); I reconstructed the deterministic gate's EXACT evaluated diff (`git diff 36e430c` + the untracked-file branch, per `goal_gate_build_diff_artifacts`) and re-ran `scan_diff.py` myself: it reports CRITICAL (3 critical, 3 warn, and compounding). The canonical `scan-report.md` (regenerated at 09:05, AFTER those three agents ran) already shows CRITICAL (1 critical, 1 warn); the three CLEAN claims are stale — they reconstructed-and-scanned before the pipeline's final artifact regeneration and raced the recursion. Root cause: the pipeline's own generated bookkeeping artifacts `runs/**/iter-diff.md` + `scan-report.md` are UNTRACKED, so the gate folds them into `$full_diff` and re-scans them; they quote `scan_diff.py`'s self-test fake-password fixture (the canonical `hunter2`-family joke token), and this iteration's `scan_diff.py` self-test edit re-added that fixture as a literal added line (it built the AWS fixture by concatenation but left the generic-secret fixtures as literals — and the new `_KNOWN_FAKE_CREDENTIALS` allowlist only covers the AKIA/AIza critical-pattern path, NOT the generic `secret-assignment` path). `goal-gates.sh:126` greps the anchored CRITICAL result line → the deterministic achievement gate WILL fail the scan check. Per the methodology rule and the iter-7 spec's own "Honesty rail," a residual scan CRITICAL blocks a clean GOAL_ACHIEVED → **CONTINUE, never a false GOAL_ACHIEVED.** NOT REGRESSION: every CRITICAL resolves to a non-product fake DETECTION fixture (`hunter2`-family joke password) or AWS's public example key — none in product source (`git diff 36e430c --stat -- apps/` empty, independently confirmed), no real credential, no security backdoor (allowlist is exact-match, per-match `finditer`, opt-in `--include-known-fakes` bypass never used by the production gate, monotonic — reviewer verified a real key co-located with a placeholder still fires), and no journey regressed. All six journeys re-verified `passing`: `config_fingerprint` `4d665603569b9dbf`, all six goal.md spec-hashes match stored (no drift; `journeys-changed.md` absent), UT-J-06 `/performance` shows the pinned fingerprint + frozen champion, UT-J-01 `/structure` shows real Yahoo candles + S/R lines + A/B/C zone table + legible "Yahoo Finance" badge. NOT STALLED: a concrete, agent-doable structural fix remains untried (below); unblock paths are code/config, not human-owned credentials/network/paid-service. NOT ESCALATE: review is a genuine PASS (not fail-open); no journey failing; a scan-scope tooling fix needs no full audit/ux/closure lanes.
 
 **Next-step recommendation:** **Fix the scan recursion STRUCTURALLY, then re-attempt GOAL_ACHIEVED (lean).** The allowlist remedy iter-7 chose cannot work and made it worse (1→3+ criticals, self-propagating). Two agent-doable tooling edits, BOTH needed: (1) **exclude the pipeline's own generated diff-bookkeeping** — `runs/**/iter-diff.md` and `runs/**/scan-report.md` — from the scanned `$full_diff` (in `goal_gate_build_diff_artifacts`'s untracked-file enumeration, or in `scan_diff.py`), which breaks the self-referential recursion at its root; and (2) **build `scan_diff.py`'s self-test `password`/`test_password` fixtures via concatenation** (as was already done for the AWS `_fake_aws_key`) so `scan_diff.py`'s own diff carries no literal generic-secret assignment. MANDATORY verification discipline: confirm success by reading the FINAL canonical `scan-report.md` that `goal-gates.sh` consumes (post artifact regeneration), NOT by an early reconstruct-and-scan — that check is unreliable here because it races the regeneration (it gave dev/review/coherence a false CLEAN this iter). ESCALATION TRIP-WIRE: this is now the 2nd consecutive iteration blocked solely on scan-hygiene and the automated fix failed + produced false-CLEAN self-reports across 3 agents; if iter-8 also cannot obtain a genuinely CLEAN final `scan-report.md`, return STALLED for direct human/orchestrator ownership of the scan-scope policy.
+```
 
-## Iteration 7 (re-run after the structural scan-hygiene fix landed) — goal-yahoo_fetch-iter-7
+Recent assumption entries (pre-trimmed):
+```
+# Goal Session yahoo_fetch — Assumption Ledger
 
-**Date:** 2026-07-12T21:27:40Z
-**Verdict:** CONTINUE
-**Depth dispatched:** lean
-**Note:** This supersedes the 2026-07-11 iter-7 entry above (which returned CONTINUE on the STILL-CRITICAL scan). Between the two, the proper PATH-based scan fix recommended there landed on the branch during the AWAITING_PUMP pause (commits `f40a91a` + merge `5316d53`), and the iter-7 pipeline artifacts were regenerated. The scan is now genuinely CLEAN — but a NEW, different pipeline-artifact blocker surfaced (a deterministic-replay false-negative FAIL row), so still CONTINUE, not a clean GOAL_ACHIEVED.
-**Journey deltas:**
-- Newly passing: none (all six were already `passing` as of iter-6; re-verified here)
-- Re-verified still-passing this iter: J-01, J-02, J-03 (fresh 2026-07-12 browser screenshots — real Yahoo candles + "Yahoo Finance" badge + 16-zone A/B/C table + store-first re-fetch), J-04, J-05 (fresh 2026-07-12 deterministic-replay PASS), J-06 (screenshot `J-06-verify.png` shows `/studies` rendering "Absorption reversal"; fingerprint `4d665603569b9dbf` corroborated by reviewer recompute + `UT-J-06-performance.png`)
-- Newly failing: none
-- Regressed: none (empty `apps/` diff vs snapshot 36e430c; suite 1207/1201 passed/6 skipped/0 failed; equivalence 22/22; fingerprint 4d665603569b9dbf; goal_gate regressions rc=0)
-- Anti-goal violations: **none unresolved.** Both prior non-product scan false positives (iter-6 AWS example key; iter-7 hunter2hunter2 self-test recursion) are now RESOLVED by the structural `CHAIN_SCAN_BOOKKEEPING_EXCLUDES` path-exclusion fix — scan-report.md CLEAN, independently reproduced.
+Append-only. Agents log interpretation calls here (a goal/journey ambiguity + the
+reading chosen) so the product owner can veto a wrong reading early. Signal only —
+routine evidence reading is not an assumption.
 
-**Reasoning:** The prior blocker is gone: I did NOT trust the "scan CLEAN" prose (the 07-11 instance was burned by a raced early scan). I reconstructed the deterministic gate's EXACT evaluated diff (`git diff 36e430c` with the `:(exclude)runs reports docs/handoffs docs/phases` pathspec + untracked enumeration) and re-ran `scan_diff.py` myself → `**Result:** CLEAN`, 0 untracked scanned, 21 framework-only files (all `incredible_auto_dev/**`), byte-matching the canonical report; `goal-gates.sh --self-test` 19/19 confirms the fix is path-based (a real credential in product source still fires CRITICAL). `git diff 36e430c -- apps/` is EMPTY (zero product source), coherence COHERENCE-PASS, review PASS, all six goal.md spec-hashes match stored (no drift; `journeys-changed.md` absent). BUT the merged `ui-test-results.md` carries ONE `| FAIL |` cell — UT-J-06, the regression sentinel — because the deterministic replay's step-3 assertion (`/studies` expect "Absorption reversal") did not match. That is a proven FALSE NEGATIVE: I opened `J-06-verify.png` and the page plainly renders "Absorption reversal" in two places (the SETUP `<select><option>` and the async-loaded Studies list row "DONE Absorption reversal · long"); the headless text-matcher misses `<option>` text + a not-yet-loaded async row at check time. The page is byte-identical to iter-6 (empty frontend diff) and "Absorption reversal" is backend-taxonomy-owned (`taxonomy.py:949`, also byte-identical), so a code regression is structurally impossible; the real J-06 invariant (pinned fingerprint on `/performance`, replay step 4 — never reached) is independently green. So all six journeys are genuinely `passing` and NOT REGRESSION. It is NOT GOAL_ACHIEVED, however, because the deterministic achievement gate independently re-runs `goal_gate.py results` on the merged results-md → **rc=1** (its `\|\s*FAIL\s*\|` cell regex matches the UT-J-06 row), so a clean certification cannot be obtained this iteration. Per the iter-7 spec's own Honesty rail ("never a false GOAL_ACHIEVED; return CONTINUE if a clean [certification] cannot be obtained") and the two-key design (evaluator + dumb-but-incorruptible gate must AGREE) → **CONTINUE.** NOT STALLED: the unblock path (make the J-06 replay assertion robust / re-run so the results-md has zero FAIL rows) is agent-doable, not human-owned, and real progress was made (the 2-iteration scan blocker is finally resolved).
+## iter-0 — goal-evaluator
 
-**Next-step recommendation:** **Clear the single UT-J-06 false-negative FAIL row, then re-attempt GOAL_ACHIEVED (lean).** No product work remains (`git diff -- apps/` empty; all six journeys pass; scan CLEAN; coherence PASS). One agent-doable test-tooling fix: make the J-06 deterministic-replay step-3 `/studies` assertion robust — change `runs/goal-session-yahoo_fetch/journey-scripts/J-06.json` step 3 `expect.text` from "Absorption reversal" (which lives only inside a `<select><option>` + an async-loaded Studies-list row the headless matcher misses) to a statically-rendered, always-present `/studies` string the matcher reliably extracts (e.g. the "Replay studies" heading or the "New study" / "Run study" label), OR add an explicit wait for the async studies list — then re-run the regression-replay lane so the merged `ui-test-results.md` has ZERO `| FAIL |` cells. This is test-assertion robustness only; the real sentinel (step 4, `config_fingerprint 4d665603569b9dbf` on `/performance`) stays unchanged, and `J-06-verify.png` already proves `/studies` renders correctly. After that, `goal_gate.py results` returns rc=0 and — with scan CLEAN + coherence PASS + 6/6 journeys passing + no drift/regression — the next evaluation returns a clean GOAL_ACHIEVED (both keys agree; the two-key confirm spot-checks the UT-J-01 badge/candles + the UT-J-06 fingerprint). ESCALATION TRIP-WIRE (fresh, re-scoped — the prior scan trip-wire is retired now that the scan is clean): if the next iteration still cannot produce a results-md with zero FAIL rows for J-06, hand the replay-golden-script robustness to direct human/orchestrator attention rather than looping a third certification pass.
+**Ambiguity:** The spec's TESTING REQUIREMENTS named browser checks for J-05 (locate the
+`/structure` fetch control) and J-06 (spot-check existing surfaces), but the lean baseline
+pipeline never ran the browser-qa lane (no screenshots, no `ui-test-results.md`). The spec
+does not say whether an absent-capability journey may be scored without the browser leg it names.
+**We chose:** Score J-05 `failing` and J-06 `already_passing` on code/test evidence instead —
+J-05's fetch control and `"yahoo"` taxonomy label are provably absent by source inspection, and
+J-06 rests on the green suite (1146 passed) + `config_fingerprint` match + an empty `apps/` diff
+(regression is impossible with zero source change). A browser screenshot would only re-show the
+same absence / unchanged surfaces.
+**Reversible:** yes
+
+## iter-1 — goal-evaluator
+
+**Ambiguity:** J-01's acceptance requires "`GET /research/bars/{id}` AND the MCP `bars` proxy return it byte-for-byte." The REST half was proven directly (new `test_bars_api.py` byte-for-byte `GET .../{id}`), but no Yahoo-SPECIFIC MCP `bars` test was added — the goal text does not say whether a per-feed MCP proof is required or whether the generic proxy guarantee suffices.
+**We chose:** Scored J-01 `passing` accepting the MCP half on the architectural byte-identity argument (audit T1): `app/mcp/__init__.py` maps `"bars" -> "/research/bars"` and passes `response.text` verbatim with ZERO `feed`-awareness anywhere in the MCP layer, and the existing unmodified `test_mcp_server.py::test_bars_tool_byte_identical_on_a_non_empty_live_list` (real uvicorn subprocess) already proves the proxy generically — a Yahoo-stamped series traverses it identically to any other, so a Yahoo-specific duplicate would be redundant coverage, not new defense.
+**Reversible:** yes
+
+## iter-2 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md` (J-02 + Key Capability 2) enumerates exactly six era-5 Yahoo timeframes — `1w, 1d, 4h, 1h, 5m, 1m` — and names `8h`/`1mo` as unsupported examples, but is silent on `15m`, which is both a valid `CONFIG.bar_timeframes` entry AND a `yfinance`-native interval. The goal does not say whether `15m` is a fetchable Yahoo timeframe this era or an unsupported one.
+**We chose:** Treat `15m` as Yahoo-unsupported this era (era-5 Yahoo maps exactly the six enumerated timeframes); `15m`/`8h`/`1mo` all exercise the explicit unsupported-timeframe honest-neutral state. This follows the goal's explicit six-timeframe enumeration and the "only new backend computation is the Yahoo fetch + 4h resample" non-goal, rather than expanding scope to a seventh timeframe the goal never lists.
+**Reversible:** yes
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** The iter-2 spec's DEFINITION OF DONE item 7 explicitly required the browser lane to
+re-verify J-01/J-06 and "emit a screenshot," but the lane ran with no services reachable and produced
+none. The goal is silent on whether a required-still-passing UI journey may stay `passing` on
+backend + structural evidence alone when the spec-mandated browser re-verification did not execute.
+**We chose:** Kept J-01 and J-06 `passing` on non-browser evidence — J-06's regression sentinel is
+defined by `config_fingerprint`/engine-equivalence/frozen-file byte-identity (all re-run by me and
+green), and J-01's core keyless-fetch was re-run live (auditor); the iteration changed zero frontend
+bytes, so no UI regression is structurally possible. The spec's screenshot was a re-verification
+nicety, not either journey's defining acceptance in `docs/goal.md`.
+**Reversible:** yes
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** The Era-5 constraints require the SQLite index to have a "config-owned DB path ...
+gitignored `*.db`" (mirroring `store.py`'s `journal_db_path`) AND state that `config.py` (fingerprint
+`4d665603569b9dbf`) "stays byte-identical." Adding a `journal_db_path`-style config field for the
+index DB would change `config.py`'s source (even if the field is fingerprint-excluded), which the
+"byte-identical config.py" phrasing arguably forbids — the goal does not resolve which reading wins.
+**We chose:** Plan the index DB path as config-owned by ANCHORING it to the existing config-owned
+`bar_dir_resolved()` (a co-located sibling DB file), with a `TAPEOLOGY_BAR_INDEX_DB` env override read
+inside the new `bar_index.py` for hermetic test injection — so `config.py` stays byte-identical and
+`config_fingerprint` stays `4d665603569b9dbf`. If the developer instead adds a config field, it MUST
+join the fingerprint exclusion set with an exclusion test mirroring
+`test_bar_dir_is_excluded_from_config_fingerprint`; either way the unchanged fingerprint is the hard
+invariant, not the field's location.
+**Reversible:** yes
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** J-03's acceptance and the "fetching is explicit and store-first" anti-goal require that
+"an already-stored window is served from storage without re-hitting Yahoo," but the goal is silent on
+bar series recorded BEFORE this iteration. The index grows additively only on a store-first POST
+(index-on-write); the 8 legacy series already in `.data/bars/` from iter-1/iter-2 are NOT auto-indexed,
+so a repeat POST of a legacy window misses the index, runs a real Yahoo fetch, then hits the frozen
+`store.record` 409 — i.e. store-first does NOT hold for pre-iter-3 data until a one-time explicit
+`reindex()` (which the dev ran against the real `.data/`). "No ambient/background re-indexing" is itself
+an explicit anti-goal, so an auto-reindex-on-startup would brush that rail.
+**We chose:** Scored J-03 `passing` — treating store-first as satisfied for every window recorded
+through the era-5 index-on-write flow (exactly what the goal's own acceptance STEPS describe: "fetch a
+window once (stores + indexes); fetch the same window again ... no Yahoo call"), and treating pre-iter-3
+legacy data as an explicit-migration concern (one-off `reindex()`), NOT a violation of the "served from
+storage" anti-goal. A product owner who wants store-first to cover legacy data with no manual step could
+veto this and require a (non-ambient) reindex trigger/endpoint.
+**Reversible:** yes
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** The critical anti-goal "Yahoo data ... never re-tagged or pooled across feeds"
+plus J-04's acceptance require real levels/zones on real Yahoo bars, but the FROZEN
+`compute_levels` (`research/levels.py`, byte-identical) selects a symbol's stored series by
+SYMBOL alone (feed-blind, `routes`/module never pass a feed) — so a symbol that happened to hold
+BOTH a `feed="yahoo"` and an Alpaca `feed="sip"` series for overlapping timeframes could mix them.
+The goal is silent on whether J-04 must add feed-segregated levels, and `levels.py` cannot be
+touched (frozen), so no `?feed=` scoping can be introduced this iteration.
+**We chose:** Scope J-04 to the keyless single-feed path — the committed Yahoo fixture and the
+default keyless fetch flow give a symbol only `feed="yahoo"` series, so `compute_levels` reads
+exactly those and pools nothing across feeds in the tested/accepted path. A genuine mixed-feed
+segregation guard (a feed-scoped levels read) would require touching frozen `levels.py` and is
+NOT in J-04's acceptance; it is deferred. J-05's "honestly segregated from Alpaca `sip`" is met at
+the fetch/display layer (a Yahoo series is separately identified and badged), not by a new levels
+computation.
+**Reversible:** yes
+
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** J-04's "never pooled across feeds" rail vs. the frozen `compute_levels`, which selects a symbol's series by SYMBOL alone (`levels.py:306`, feed-blind) and can mix feeds across timeframes — so the rail is *avoided by single-feed scoping*, not *enforced*. Scoring J-04 `passing` ratifies the goal-decomposer's iter-4 reading as the basis of an actual passing verdict.
+**We chose:** Scored J-04 `passing` — the tested/accepted keyless path gives AAPL only `feed="yahoo"` series, so `compute_levels` pools nothing across feeds in the evidence I verified. This pass is valid ONLY while a symbol holds a single feed; it silently degrades the instant a symbol accumulates a second feed over overlapping timeframes (audit B1). A product owner wanting enforced (not merely scoped-away) segregation could veto and require a feed-scoped levels read — a versioned path beside frozen `levels.py`, deferred to J-05+.
+**Reversible:** yes
+
+## iter-5 — goal-decomposer
+
+**Ambiguity:** J-05's acceptance requires Yahoo research be "honestly segregated from Alpaca `sip` (analytics never pool across feeds)", but J-05 is the FIRST surface whose UI write action can make one symbol hold BOTH a `feed="yahoo"` and an Alpaca `feed="sip"` series over overlapping timeframes — and the FROZEN, fingerprint-locked `compute_levels` (`levels.py:306`) selects a symbol's series by SYMBOL alone (feed-blind), so it would pool them into one confluence cluster. The goal is silent on whether J-05 must ENFORCE feed segregation (a feed-scoped levels read) or whether fetch/store/display-layer segregation suffices; `levels.py` cannot be touched (critical frozen-foundation anti-goal).
+**We chose:** Scope J-05's "honestly segregated" acceptance to the fetch/store/display layer — a `feed="yahoo"` series is a distinct append-only, checksummed `BarStore` record, never re-tagged or merged, separately identified and badged "Yahoo Finance" (taxonomy-owned) — and browser-verify KEYLESS on a single-feed (yahoo-only) pre-seeded fixture so no cross-feed pooling occurs in the accepted path (the same scoping J-04 passed under). A genuine mixed-feed segregation guard (a feed-scoped levels computation) would require mutating frozen `levels.py` and is explicitly OUT OF SCOPE / deferred (audit B1); if ever built it is a versioned path BESIDE `levels.py`, never an edit. A product owner wanting enforced (not scoped-away) segregation could veto and require that versioned feed-scoped read.
+**Reversible:** yes
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** J-05's acceptance/DoD says the fetch renders candles + levels + zones + a "Yahoo Finance" provenance badge "captured in a screenshot." This iteration captured candles/levels/zones in screenshots, but the badge is only DOM/unit/source-verified (occluded by the F1 dropdown in TC-07/TC-08), and the DoD's honest-empty-state item allows "browser OR unit" (unit is covered). The goal does not say whether a DOM-verified-but-not-screenshotted headline element + a missing canonical `ui-test-results.md` clears the "captured in a screenshot" bar for the era's FINAL journey.
+**We chose:** Scored J-05 `partial` (not `passing`) and held GOAL_ACHIEVED — treating "the defining new provenance badge must be cleanly visible in a real screenshot, and the iteration's closure gate must certify" as the evidence bar for the last Must-have UI journey, rather than accepting DOM+unit+source proof plus a CLOSURE-FAIL. A product owner who considers DOM+unit verification of the badge sufficient (and the missing `ui-test-results.md` a mere bookkeeping gap) could veto and treat J-05 as already `passing`, making the remediation purely a re-close of the pipeline artifacts.
+**Reversible:** yes
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** A deterministic `scan-report.md` `**Result:** CRITICAL` (which the achievement gate
+`goal-gates.sh:126` keys off) resolved to AWS's PUBLIC example key `AKIAIOSFODNN7EXAMPLE` quoted in the
+iter-6 SPEC file's own warning prose (`docs/phases/goal-yahoo_fetch-iter-6.md:178`), not in product
+source (grep-confirmed absent from `apps/`). The framework is silent on whether a scan CRITICAL that
+resolves to a well-known public placeholder in a non-product pipeline file (a) triggers the REGRESSION
+rail (critical anti-goal violation), or (b) merely blocks GOAL_ACHIEVED pending scan hygiene.
+**We chose:** (b) — scored it a MINOR, non-product false positive and returned CONTINUE, not REGRESSION.
+`AKIAIOSFODNN7EXAMPLE` is AWS's published documentation placeholder (authenticates nothing, on every
+standard scanner's built-in allowlist), it is not product source, and no journey regressed, so treating
+it as a committed-secret/security-backdoor REGRESSION would be a false halt. It still blocks a clean
+GOAL_ACHIEVED because the deterministic gate greps the literal `**Result:** CRITICAL` line — an
+orchestrator-owned scan-hygiene fix, not a product defect. A product owner who wants ANY scan CRITICAL
+(even a docs-file placeholder) to hard-halt the loop for human acknowledgement could veto and require a
+REGRESSION verdict here instead.
+**Reversible:** yes
+
+## iter-7 — goal-evaluator
+
+**Ambiguity:** The deterministic scan is `**Result:** CRITICAL`, and `goal-gates.sh:126` keys the achievement gate off exactly that line. This iteration's CRITICAL resolves to a fake-secret DETECTION FIXTURE inside the secret-scanner's OWN self-test (the canonical `hunter2`-family joke password), re-scanned recursively because the pipeline's untracked `runs/**/iter-diff.md` + `scan-report.md` bookkeeping artifacts are folded into the evaluated diff and quote that fixture. The framework is silent on whether a scan CRITICAL that resolves to the scanner's own self-test fixtures propagated through generated bookkeeping (a) trips the REGRESSION rail (committed-secret anti-goal), or (b) merely blocks GOAL_ACHIEVED pending scan hygiene.
+**We chose:** (b) — scored it a MINOR, non-product false positive and returned CONTINUE, not REGRESSION (extending the iter-6 disposition from AWS's public example key to this new token class + recursion). `hunter2hunter2` authenticates nothing and exists only as a scanner detection fixture; `test_password`/`example-not-real` is a labeled placeholder (correctly WARN); none appear in product source (`git diff --stat -- apps/` empty); no journey regressed; the allowlist change is not a security backdoor. It still blocks a clean GOAL_ACHIEVED because the gate greps the literal CRITICAL result line — an agent-doable scan-scope/self-test-hygiene fix, not a product defect. A product owner who wants ANY residual scan CRITICAL (even a self-test fixture in generated bookkeeping) to hard-halt the loop for human acknowledgement could veto and require a REGRESSION verdict here instead.
+**Reversible:** yes
+```
+
+Apply the TOKEN AND QUESTIONING POLICY from .claude/core.md strictly.
+
+Write your verdict to: /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-7/eval.md
+
+The verdict line MUST appear at the top of /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/iter-7/eval.md and start exactly with:
+**Verdict:** GOAL_ACHIEVED
+  or **Verdict:** CONTINUE
+  or **Verdict:** ESCALATE
+  or **Verdict:** REGRESSION
+  or **Verdict:** STALLED
+
+Also include a 'Depth Recommendation For Next Iteration:' line: lean or full.
+
+Then update /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/journey-history.json (full atomic write) and append an entry to /home/dennis-chan/Git/tapeology/runs/goal-session-yahoo_fetch/state/evaluator-log.md.
+STOP.
+
+Environment note: this pipeline run isolates temp files. Before running tests or any command that writes temporary files, run: export TMPDIR="/var/tmp/iad.goal-yahoo_fetch-iter-7.1930468" TMP="/var/tmp/iad.goal-yahoo_fetch-iter-7.1930468" TEMP="/var/tmp/iad.goal-yahoo_fetch-iter-7.1930468"

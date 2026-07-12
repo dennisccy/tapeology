@@ -37,7 +37,7 @@
       "last_verified_iter": "goal-yahoo_fetch-iter-7",
       "last_passing_iter": "goal-yahoo_fetch-iter-7",
       "first_seen_iter": "goal-yahoo_fetch-iter-0",
-      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-7-evidence/J-04-verify.png",
+      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-7-evidence/UT-J-04-result.png",
       "spec_hash": "5c832e735b37e2cc1762311aee708498701a464bcc5e83d3cafe5a4b0b1a705c"
     },
     "J-05": {
@@ -57,7 +57,7 @@
       "last_verified_iter": "goal-yahoo_fetch-iter-7",
       "last_passing_iter": "goal-yahoo_fetch-iter-7",
       "first_seen_iter": "goal-yahoo_fetch-iter-0",
-      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-7-evidence/J-06-verify.png",
+      "last_evidence_path": "reports/qa/goal-yahoo_fetch-iter-7-evidence/UT-J-06-performance.png",
       "spec_hash": "24f8bf8ba8baca3e9d52d76a0d54c9138edf8f388069541cb24932dfc9904b86"
     }
   },
@@ -66,16 +66,16 @@
       "iter": "goal-yahoo_fetch-iter-6",
       "anti_goal": "No secrets in source (immutable rail — no committed credentials)",
       "severity": "minor",
-      "evidence": "scan-report.md Result: CRITICAL — aws-access-key literal 'AKIAIOSFODNN7EXAMPLE' (AWS's PUBLIC documentation placeholder, authenticates nothing) quoted in the iter-6 spec NOTES. Non-product false positive; grep-confirmed absent from apps/. RESOLVED by the structural SEC-5 scan-hygiene fix (CHAIN_SCAN_BOOKKEEPING_EXCLUDES path-excludes docs/phases + runs/reports/handoffs from the scanned diff, landed via commits f40a91a + merge 5316d53). iter-7 (2026-07-12) scan-report.md is CLEAN; independent reconstruction of the gate's evaluated diff and re-run of scan_diff.py reproduces CLEAN.",
+      "evidence": "scan-report.md Result: CRITICAL — aws-access-key literal 'AKIAIOSFODNN7EXAMPLE' (AWS's PUBLIC documentation placeholder, authenticates nothing) quoted in the iter-6 spec NOTES. Non-product false positive; grep-confirmed absent from apps/. RESOLVED in iter-7: the dev added an exact-match _KNOWN_FAKE_CREDENTIALS allowlist to incredible_auto_dev/scripts/automation/lib/scan_diff.py; my independent reconstruction of the gate's evaluated diff now shows ZERO aws-access-key findings. This specific AWS-key trip is cleared — but a NEW, different scan CRITICAL emerged (see the iter-7 entry below), so the overall scan is still not CLEAN.",
       "resolved": true
     },
     {
       "iter": "goal-yahoo_fetch-iter-7",
       "anti_goal": "No secrets in source (immutable rail — no committed credentials)",
       "severity": "minor",
-      "evidence": "PRIOR (2026-07-11 failed attempt): scan-report.md Result: CRITICAL — secret-assignment 'password = \"hunter2hunter2\"' (scan_diff.py's own self-test detection fixture) attributed to the pipeline's UNTRACKED bookkeeping (runs/**/iter-diff.md + scan-report.md) folded into the scanned diff — a self-referential recursion; the value-based allowlist workaround failed and compounded it (1->3 criticals). NON-PRODUCT false positive; grep-confirmed absent from apps/ (product diff empty); no real credential; no security backdoor. RESOLVED (2026-07-12 re-run): the proper PATH-based fix landed (CHAIN_SCAN_BOOKKEEPING_EXCLUDES='runs reports docs/handoffs docs/phases', goal-gates.sh goal_gate_build_diff_artifacts applies it as :(exclude) to BOTH the tracked diff and untracked enumeration; scan_diff.py self-test fixtures assembled at runtime). The recursion is broken at the root: 0 untracked files scanned, 21 framework-only files in the evaluated diff, scan_diff.py independently re-run reports CLEAN, canonical scan-report.md reports CLEAN, and goal-gates.sh --self-test (19/19) proves a real credential in product source still fires CRITICAL (no detection blind spot introduced).",
-      "resolved": true
+      "evidence": "scan-report.md Result: CRITICAL — secret-assignment on `password = \"hunter2hunter2\"` (the canonical joke fake password) attributed to runs/goal-session-yahoo_fetch/iter-7/iter-diff.md. NON-PRODUCT FALSE POSITIVE, self-referential recursion: (1) the value is a fake-secret DETECTION FIXTURE inside scan_diff.py's OWN self-test; (2) the pipeline's generated bookkeeping artifacts runs/**/iter-diff.md and scan-report.md are UNTRACKED, so goal_gate_build_diff_artifacts includes them in $full_diff and re-scans them, and they quote scan_diff.py's self-test fixture; (3) this iteration's scan_diff.py self-test edit re-added the literal `password = \"hunter2hunter2\"` as an ADDED line (it built the AWS fixture by concatenation but left the password fixtures as literals). Independent reconstruction of the gate's exact evaluated diff (git diff 36e430c + untracked) yields '**Result:** CRITICAL — 3 critical, 3 warn' and COMPOUNDING (scan-report.md now flags its own prior findings). grep-confirmed absent from apps/ (product diff empty); no real credential; NOT a security backdoor (the allowlist is exact-match, per-match via finditer, opt-in --include-known-fakes bypass, monotonic — reviewer verified a real key co-located with a placeholder still fires). Blocks a clean GOAL_ACHIEVED via goal-gates.sh:126 (greps '**Result:** CRITICAL'). Durable fix (untried): exclude the pipeline's own generated runs/**/{iter-diff,scan-report}.md from the scanned $full_diff (breaks the recursion) AND build scan_diff.py's self-test password/test_password fixtures via concatenation. Both are agent-doable tooling edits, not human-owned.",
+      "resolved": false
     }
   ],
-  "updated_at": "2026-07-12T21:27:40Z"
+  "updated_at": "2026-07-11T09:35:00Z"
 }

@@ -83,3 +83,21 @@ mile to done, twice in a row from different sources.
 `**Result:** CRITICAL` and, if it does, confirm the match is product source vs. a docs/framework
 placeholder before scoring); any spec/handoff author documenting scanner behavior (describe trigger
 tokens, never paste them verbatim into a file that lands in the evaluated diff).
+
+## iter-7 — 2026-07-11T09:35:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A secret-scanner that scans the pipeline's OWN generated diff-bookkeeping is self-referentially recursive: `goal_gate_build_diff_artifacts` folds the UNTRACKED `runs/**/iter-diff.md` + `scan-report.md` into `$full_diff`, and those artifacts quote `scan_diff.py`'s self-test fake-secret fixtures — so the scan re-flags them and COMPOUNDS each regeneration (iter-7 went 1→3+ criticals, the scan-report even flagging its own prior findings). Worse, the "reconstruct-the-diff-and-scan-it-yourself → CLEAN" verification is UNRELIABLE here because it races the pipeline's final artifact regeneration: dev, reviewer, AND coherence all reported false-CLEAN (08:39–08:50) while the canonical `scan-report.md` regenerated at 09:05 said CRITICAL. Only reading the FINAL canonical `scan-report.md` that `goal-gates.sh` consumes is trustworthy. Durable fix is STRUCTURAL (exclude the scanner's own generated artifacts from the scan scope) + self-test hygiene (build generic-secret fixtures by concatenation, not literals); an allowlist entry cannot fix it (the generic `secret-assignment` path is not allowlist-covered).
+**Applies to:** any GOAL_ACHIEVED / clean-scan attempt; any iter touching `incredible_auto_dev/scripts/automation/lib/scan_diff.py`, `goal-gates.sh` diff-building, or the `runs/**` diff-artifact scan scope — and any evaluator adjudicating a scan-report CLEAN claim (re-derive from the FINAL artifact, distrust early reconstructions).
+
+## iter-7 (re-run) — 2026-07-12T21:27:40Z
+
+**Verdict:** CONTINUE
+**Lesson:** The deterministic regression-replay (`demo_runner.py`) text-matcher gives FALSE NEGATIVES on strings that live only inside a `<select><option>` or an async-loaded list row — J-06 step 3 (`/studies` expect "Absorption reversal") FAILED while `J-06-verify.png` plainly shows the text rendered twice. That single `| FAIL |` cell blocks the deterministic achievement gate (`goal_gate.py results`, rc=1 on `\|\s*FAIL\s*\|`) even when the journey genuinely passes and the evaluator has proven it via screenshot — so a substantively-complete goal still can't certify. Two takeaways: (1) regression-sentinel golden scripts must assert on STATICALLY-rendered, always-present headings/labels (not `<option>` text or async rows); (2) the evaluator MUST open the failing-step screenshot before honoring a replay FAIL — the screenshot outranks the replay verdict.
+**Applies to:** any goal-mode iteration whose GOAL_ACHIEVED depends on a clean `ui-test-results.md`; any `journey-scripts/*.json` golden replay whose `expect.text` targets dropdown/`<option>`/async-list content; certification/declare-victory passes where a pipeline artifact (not the product) is the last blocker.
+
+## iter-7 (re-run) — 2026-07-12T21:27:40Z — scan-hygiene resolution
+
+**Verdict:** CONTINUE
+**Lesson:** The scan-recursion CRITICAL that blocked this session for two iterations was cured ONLY by the PATH-based fix (`CHAIN_SCAN_BOOKKEEPING_EXCLUDES` excluding `runs reports docs/handoffs docs/phases` from both the tracked diff and the untracked enumeration in `goal_gate_build_diff_artifacts`) — the earlier VALUE-based allowlist made it worse (1->3 compounding criticals). Confirmed durable by independently reconstructing the gate's evaluated diff and re-running `scan_diff.py` (CLEAN, 0 untracked scanned) rather than trusting the canonical report's prose. The distinction is path (generated bookkeeping vs product source), never value.
+**Applies to:** any future scan-hygiene / secret-scan false-positive blocker in goal mode; anyone tempted to allowlist a token value instead of excluding the generated-artifact path.
