@@ -251,3 +251,10 @@
 {"agent":"goal-evaluator","status":"ok","wait_seconds":35,"run_seconds":1108,"rc":"0","ts":"2026-07-12T21:32:22Z","session_id":"yahoo_fetch","iter":7,"event":"dispatch_wait","cli":"claude"}
 {"agent":"goal-evaluator","exit_status":0,"duration_seconds":1143,"retries":0,"ts":"2026-07-12T21:32:22Z","session_id":"yahoo_fetch","iter":7,"event":"agent_invocation_end","cli":"claude"}
 {"iter_name":"goal-yahoo_fetch-iter-7","verdict":"CONTINUE","next_depth":"lean","journey_deltas":{"newly_passing":6,"newly_failing":0,"regressed":0,"anti_goal_violations":2},"ts":"2026-07-12T21:32:22Z","session_id":"yahoo_fetch","iter":7,"event":"iter_end","cli":"claude"}
+{"branch":"goal/yahoo_fetch","commit_sha":"349a60006fe2ca5785d566cc4d2e56cb7dfc58cf","success":true,"error":"","verdict":"CONTINUE","ts":"2026-07-12T21:32:25Z","session_id":"yahoo_fetch","iter":7,"event":"iter_push","cli":"claude"}
+{"iter_name":"goal-yahoo_fetch-iter-8","prior_verdict":"CONTINUE","prior_depth":"lean","snapshot_sha":"2873e47b35f6411c4ca2b4e4250d4050041a2ba5","ts":"2026-07-12T21:32:25Z","session_id":"yahoo_fetch","iter":8,"event":"iter_start","cli":"claude"}
+{"agent":"goal-decomposer","ts":"2026-07-12T21:32:25Z","session_id":"yahoo_fetch","iter":8,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-decomposer","status":"ok","wait_seconds":3,"run_seconds":513,"rc":"0","ts":"2026-07-12T21:41:01Z","session_id":"yahoo_fetch","iter":8,"event":"dispatch_wait","cli":"claude"}
+{"agent":"goal-decomposer","exit_status":0,"duration_seconds":516,"retries":0,"ts":"2026-07-12T21:41:01Z","session_id":"yahoo_fetch","iter":8,"event":"agent_invocation_end","cli":"claude"}
+{"depth":"lean","target_journeys":"J-06","ts":"2026-07-12T21:41:01Z","session_id":"yahoo_fetch","iter":8,"event":"iter_dispatch","cli":"claude"}
+{"agent":"iteration-summarizer","ts":"2026-07-12T21:54:10Z","session_id":"yahoo_fetch","iter":7,"event":"agent_invocation_start","cli":"claude"}

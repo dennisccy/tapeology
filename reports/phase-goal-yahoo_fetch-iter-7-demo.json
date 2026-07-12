@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-yahoo_fetch-iter-7",
+  "base_url": "http://localhost:3301",
+  "iteration": 7,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Structure page",
+      "narration": "Let's open the Structure page — home to real stock price history and the support-and-resistance levels built from it, all sourced straight from Yahoo Finance with no sign-up, no API key, and no fee.",
+      "point_out": "A 'Fetch from Yahoo Finance' panel sits at the top, and a simpler, read-only 'Load' form sits just below it.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Choose a symbol and an as-of time, then Load, to see its S/R levels and confluence zones." }
+    },
+    {
+      "n": 2,
+      "title": "Preview the Yahoo Finance fetch panel",
+      "narration": "This top panel is where you'd request brand-new history from Yahoo Finance for any symbol — type a ticker, like AAPL, choose one of six real timeframes (weekly down to 1-minute, including an honestly-computed 4-hour view), pick a date range, and fetch with one click.",
+      "point_out": "The Symbol field in the Fetch panel now reads AAPL.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Fetch symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 3,
+      "title": "Look up AAPL's saved history",
+      "narration": "AAPL's history is already saved from an earlier fetch, so let's pull it up using the simpler, read-only Load form just below.",
+      "point_out": "The Symbol field in the Load form now reads AAPL.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Structure symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 4,
+      "title": "Set the as-of time",
+      "narration": "Enter a point in time to check its levels as of.",
+      "point_out": "The As-of field is filled in.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "As-of (UTC, ISO-8601)" }, "text": "2026-06-05T00:00:00Z" }
+    },
+    {
+      "n": 5,
+      "title": "See the real chart and its levels",
+      "narration": "Click Load, and the app draws a real candlestick chart with support-and-resistance levels, plus a confluence-zone breakdown — all computed from real, previously-fetched Yahoo Finance data.",
+      "point_out": "A real candlestick chart appears with dashed support-and-resistance lines, and a 'Confluence zones' list below shows Class A/B/C zones with scores.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "Confluence zones" }
+    },
+    {
+      "n": 6,
+      "title": "See exactly where the data came from",
+      "narration": "A small badge above the chart names the real source of this data, so where the numbers came from is never a mystery.",
+      "point_out": "A dark chip reading 'feed' next to 'Yahoo Finance' in bold sits cleanly above the chart, fully legible with nothing overlapping it.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='structure-title']" } },
+      "expect": { "target": { "css": "[data-testid='feed-basis-label']" } }
+    },
+    {
+      "n": 7,
+      "title": "Ask for the same window again",
+      "narration": "Ask for the same window again, and it comes right back instantly — this history is already safely stored, so there's nothing new to fetch.",
+      "point_out": "The identical chart and confluence zones reappear immediately.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "Confluence zones" }
+    }
+  ]
+}
