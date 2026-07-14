@@ -50,6 +50,7 @@ from .bars import (
     EmptyBarWindowError,
 )
 from .levels import compute_levels
+from .setups import BROKE, CHOPPED, REJECTED, compute_setups
 from .tradability import compute_tradability
 from .datasets import (
     VALID_SOURCE_KINDS as DATASET_SOURCE_KINDS,
@@ -1829,6 +1830,74 @@ def get_tradability(symbol: str, as_of: str, store: BarStore = Depends(get_bar_s
     normalized_symbol = symbol.strip().upper()
     result = compute_tradability(store, normalized_symbol, as_of_epoch, CONFIG)
     return {"symbol": normalized_symbol, "as_of": as_of, **result}
+
+
+# --- The touch-event scanner + case-study registry (era-5B capability 2, J-02) ------------------
+# TWO routes (list + detail, the ``/datasets``/``/bars`` trio's read half): ``research/setups.py``
+# is the sole computer of the touch-event/case-registry value -- a scanner over
+# ``compute_tradability``'s frozen output (never a second map/levels computation); these routes
+# only parse/validate the optional filter params and serve the module's output VERBATIM (single
+# source of truth -- the MCP `setups` tool proxies the UNFILTERED list byte-identically; no second
+# computation path). Unlike ``get_levels``/``get_tradability`` immediately above, NEITHER route
+# takes a required ``symbol``/``as_of`` -- the scan itself already walks every config-owned panel
+# symbol and every session in its stored ``"5m"`` series, so ``GET /research/setups`` takes no
+# required params at all (the ``list_bar_series`` optional-filter shape, era-5 J-03).
+
+_VALID_REACTIONS = (REJECTED, BROKE, CHOPPED)
+_VALID_BAND_CLASSES = ("A", "B", "C")
+
+
+@router.get("/setups")
+def list_setups(
+    symbol: str | None = None,
+    reaction: str | None = None,
+    band_class: str | None = None,
+    store: BarStore = Depends(get_bar_store),
+) -> dict:
+    """The touch-event/case-study registry (J-02): every band-touch event ``compute_setups`` finds
+    across the config-owned 12-symbol panel's stored ``"5m"`` bars, served VERBATIM -- one scan,
+    filtered in-memory (never a second, per-filter computation). Filters (``symbol`` / ``reaction``
+    / ``band_class``) are server-side and AND-combined when more than one is given.
+
+    ``reaction`` and ``band_class`` are FIXED enums: an unknown value is an explicit 422, never
+    silently coerced (the ``list_journal`` ``setup_type``/``direction``/``resolution``/``status``
+    discipline). ``symbol`` is free-form (the ``ticker`` precedent): a blank ``?symbol=`` normalizes
+    to ABSENT (the ``list_bar_series`` era-5 J-05 audit-fixed precedent -- taking the exact same
+    byte-identical no-filter path as a true no-param call), and a well-formed but unmatched symbol
+    honestly returns zero events, never an error (the ``no_bar_series_for_symbol`` analog: a symbol
+    outside the panel, or one with no stored bars yet, simply never emits any event)."""
+    if reaction is not None and reaction not in _VALID_REACTIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown reaction filter '{reaction}' -- valid reactions are {list(_VALID_REACTIONS)}",
+        )
+    if band_class is not None and band_class not in _VALID_BAND_CLASSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"unknown band_class filter '{band_class}' -- valid classes are {list(_VALID_BAND_CLASSES)}",
+        )
+    normalized_symbol = symbol.strip().upper() if symbol else None
+
+    events = compute_setups(store, CONFIG)["events"]
+    if normalized_symbol is not None:
+        events = [e for e in events if e["symbol"] == normalized_symbol]
+    if reaction is not None:
+        events = [e for e in events if e["reaction"] == reaction]
+    if band_class is not None:
+        events = [e for e in events if e["band"]["class"] == band_class]
+    return {"events": events}
+
+
+@router.get("/setups/{setup_id}")
+def get_setup(setup_id: str, store: BarStore = Depends(get_bar_store)) -> dict:
+    """One touch event's drill-in -- band, reaction, forward returns, and the ``tape_timeline``
+    field (present but honestly empty until J-03 records) -- served VERBATIM. 404 for an unknown
+    id (never a fabricated event)."""
+    events = compute_setups(store, CONFIG)["events"]
+    event = next((e for e in events if e["id"] == setup_id), None)
+    if event is None:
+        raise HTTPException(status_code=404, detail=f"no setup event with id '{setup_id}'")
+    return {"event": event}
 
 
 # --- Deterministic backtests (era-3 capability 4, J-03) --------------------------------------------

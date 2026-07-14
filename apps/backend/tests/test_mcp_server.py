@@ -38,14 +38,14 @@ from app.mcp import (
     list_tools,
 )
 from app.providers.adapters.base import RawBar
-from app.research.bars import BarStore
+from app.research.bars import BarSeriesAlreadyRegistered, BarStore
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 # Capability 6, verbatim — order and content are the advertised contract. ``bars`` (era-4 J-01),
-# ``levels`` (era-4 J-02), ``strategies`` (era-4 J-04), and ``tradability`` (era-5B J-01) are the
-# newest additions, each positioned right after its dependency-order sibling (the same
-# store/registry+route+MCP shape, mirrored end to end).
+# ``levels`` (era-4 J-02), ``strategies`` (era-4 J-04), ``tradability`` (era-5B J-01), and
+# ``setups`` (era-5B J-02) are the newest additions, each positioned right after its
+# dependency-order sibling (the same store/registry+route+MCP shape, mirrored end to end).
 EXPECTED_TOOLS = (
     "tape_state",
     "tape_features",
@@ -57,6 +57,7 @@ EXPECTED_TOOLS = (
     "bars",
     "levels",
     "tradability",
+    "setups",
     "backtests",
     "strategies",
     "pnl_ledger",
@@ -430,6 +431,51 @@ async def test_tradability_tool_requires_both_arguments(monkeypatch):
         await call_tool("tradability", {"symbol": "AAPL"})
     with pytest.raises(ToolArgumentError):
         await call_tool("tradability", {})
+
+
+@pytest.mark.anyio
+async def test_setups_tool_byte_identical_on_a_non_empty_live_result(mcp_env, backend_paths):
+    """``setups`` (era-5B J-02) ships in the SAME iteration as its endpoint -- the ``bars``/
+    ``tradability`` J-01 precedent: seed the live backend's bar directory with the committed real
+    AAPL daily fixture PLUS the committed real AAPL 5-minute slice (``BarStore.record()`` directly
+    -- this test's backend is a SEPARATE subprocess, so an in-process fixture-seeding seam is not
+    reachable here), then prove the NO-ARGUMENT tool's JSON is byte-identical to its curl
+    equivalent on a NON-EMPTY result, including J-02's pinned AAPL 2026-06-22 `rejected` event (not
+    a vacuous empty-list match)."""
+    bar_dir = Path(backend_paths["TAPEOLOGY_BAR_DIR"])
+    store = BarStore(bar_dir)
+    for name in ("AAPL_1d_20260101_20260626.json", "AAPL_5m_20260615_20260630.json"):
+        fixture = json.loads((YAHOO_FIXTURE_DIR / name).read_text())
+        bars = [
+            RawBar(
+                fixture["symbol"], fixture["timeframe"], b["epoch"],
+                b["open"], b["high"], b["low"], b["close"], b["volume"],
+            )
+            for b in fixture["bars"]
+        ]
+        try:
+            store.record(
+                symbol=fixture["symbol"], timeframe=fixture["timeframe"],
+                window_start_utc=fixture["start"], window_end_utc=fixture["end"],
+                feed="yahoo", bars=bars,
+            )
+        except BarSeriesAlreadyRegistered:
+            pass  # already recorded by an earlier test sharing this module-scoped bar_dir/backend
+
+    result = await call_tool("setups", {})
+    rest = httpx.get(f"{mcp_env}/research/setups", timeout=5.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert len(body["events"]) >= 1, "the live result must be non-empty for this proof"
+    pinned = next(
+        e for e in body["events"]
+        if e["session_date"] == "2026-06-22" and e["band"]["side"] == "resistance"
+        and e["band"]["price_low"] <= 300.48 and e["band"]["price_high"] >= 302.07
+    )
+    assert pinned["reaction"] == "rejected"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "setups not byte-identical"
 
 
 @pytest.mark.anyio

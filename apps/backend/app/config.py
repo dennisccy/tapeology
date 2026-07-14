@@ -1218,6 +1218,62 @@ class Config:
     tradability_round_number_increment: float = 50.0
     tradability_round_number_tolerance_bps: float = 50.0
 
+    # --- Era 5B: the touch-event scanner + case registry (capability 2, J-02) -- RESEARCH
+    # DEFAULTS, the SAME sr_pivot_lookback discipline: every research value lives in config with
+    # its rationale documented HERE, no literal in research/setups.py. Namespaced setups_* so it
+    # never collides with the sr_*/tradability_* families directly above (read-only inputs this
+    # module consumes VERBATIM -- it reuses compute_tradability per session, never a second
+    # map/levels computation) NOR with studies.py's own, UNRELATED study_* vocabulary
+    # (level_break/absorption_reversal/trend_continuation/failed_move_fade -- a live tape-arming
+    # OCCURRENCE checked against an ENGINE state; a band-touch EVENT here is checked against a
+    # STORED bar's OHLC range against a tradable-map band -- different concepts that happen to
+    # share the English word "setup").
+    #
+    # PANEL: goal.md's config-owned 12-symbol scan universe, verbatim (order matches goal.md's own
+    # listing). Selects WHICH symbols compute_setups walks and which symbols the operational
+    # population script (scripts/populate_panel_bars.py) fetches -- it never shapes any persisted
+    # tape/backtest/PnL value, so it is EXCLUDED from config_fingerprint below (the bar_timeframes
+    # rationale).
+    setups_panel_symbols: tuple[str, ...] = (
+        "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "AMD", "NFLX", "SPY", "QQQ", "JPM",
+    )
+    # FORWARD-RETURN HORIZONS (5-minute bars strictly AFTER the touch bar -- goal.md's "measured
+    # strictly after the touch"): 78 bars is ONE regular 6.5-hour NYSE session at 5-minute bars (12
+    # bars/hour x 6.5h open-to-close); 234 is three sessions. Two horizons -- a same/next-session
+    # read and a multi-day confirmation read -- mirror goal.md's own pinned narrative (four/six
+    # daily rejections THEN a three-day, -6% collapse). Verified against this environment's own
+    # live 5m AAPL data before being pinned (the test_tradability.py "calibrated against the
+    # committed fixture" discipline, never post-hoc tuned to force the answer): at the pinned
+    # 2026-06-22 touch, the 1-session-forward return is already negative and the 3-session-forward
+    # return is decisively so, while a much shorter horizon (e.g. 12 bars/60 minutes) is still
+    # noisy/positive in that SAME real window -- a horizon that only caught the first intrabar poke
+    # would mis-signal, so both chosen horizons are session-scale, not intrabar-scale. The FIRST
+    # (shortest) horizon doubles as the reaction-classification window (``_reaction_and_returns``
+    # in setups.py) -- one config surface drives both, never two overlapping ones.
+    setups_forward_return_horizons_bars: tuple[int, ...] = (78, 234)
+    # REACTION THRESHOLD (bps of the relevant band edge): the reaction window's FINAL close must
+    # clear a band edge by this many bps to read as a decisive `broke`/`rejected` reaction rather
+    # than `chopped` -- the SAME "relative to the instrument's price level, never an absolute
+    # dollar constant" discipline as sr_touch_tolerance_bps, sized larger than a mere touch (5.0
+    # bps) but well inside a tradable band's own width (tradability_band_width_bps, 70.0 bps) so it
+    # demands a genuine, non-noise move beyond the edge, never a brief wick.
+    setups_reaction_threshold_bps: float = 30.0
+    # RE-ARM RULE: at most this many events per (band, session) -- goal.md's own wording, "first
+    # touch per band per session": once a band is touched in a session it does not re-arm again
+    # until the NEXT session's own (freshly computed) map, so a choppy afternoon bouncing on the
+    # same band never double- or triple-counts. Pinned at 1 by the DoD; config-owned (never a bare
+    # literal in the scan loop) so the rule is a visible, documented, testable constant rather than
+    # an unexplained magic number.
+    setups_max_events_per_band_per_session: int = 1
+    # 5-MINUTE FETCH RETENTION (days): the real-world Yahoo Finance 5-minute historical retention
+    # boundary (the era-5 YahooAdapter docstring / goal.md: "~60 days") -- consulted ONLY by the
+    # operational panel-population script (scripts/populate_panel_bars.py), which fetches the
+    # config-owned panel's bars through the EXISTING POST /research/bars store-first route; never
+    # read by compute_setups itself (which only ever reads whatever 5m bars are ALREADY stored, no
+    # wall-clock of its own). Config-owned so that operational fetch window is never a hardcoded
+    # magic number either.
+    setups_5m_fetch_retention_days: int = 60
+
     # --- Structure-and-tape era: the `structure_tape` STRATEGY (era-4 capability 4, J-04; Data
     # Contract row 41) -- RESEARCH DEFAULTS, the SAME ``sr_pivot_lookback`` discipline: every
     # research value lives in config with its rationale documented HERE, no literal in
@@ -1592,6 +1648,22 @@ class Config:
             "tradability_quality_weights",
             "tradability_round_number_increment",
             "tradability_round_number_tolerance_bps",
+            # The touch-event scanner's panel/horizon/threshold/re-arm/retention parameters
+            # (era-5B capability 2, J-02): the IDENTICAL ``tradability_*`` rationale directly
+            # above -- ``setups.py`` is a SEPARATE, additive derived computation over
+            # ``compute_tradability``'s frozen output (never stamped with, or compared across, a
+            # ``config_fingerprint`` anywhere), so two journals identical in every FINGERPRINTED
+            # threshold but configured with a different scan panel, forward-return horizon,
+            # reaction threshold, re-arm cap, or fetch-retention window MUST share a fingerprint
+            # (else every temp-config test of these brand-new, unrelated parameters would mint a
+            # different fingerprint and falsely fragment the tape/backtest/PnL pools those OTHER
+            # thresholds exist to protect). Pinned by a fingerprint-stability test + the
+            # real-threshold counter-test in ``tests/test_setups.py``.
+            "setups_panel_symbols",
+            "setups_forward_return_horizons_bars",
+            "setups_reaction_threshold_bps",
+            "setups_max_events_per_band_per_session",
+            "setups_5m_fetch_retention_days",
             "journal_list_default_limit",
             "journal_list_max_limit",
             "analytics_min_sample_size",
