@@ -100,3 +100,15 @@
 {"agent":"goal-evaluator","status":"ok","wait_seconds":3,"run_seconds":611,"rc":"0","ts":"2026-07-14T21:07:24Z","session_id":"tradable_wall","iter":4,"event":"dispatch_wait","cli":"claude"}
 {"agent":"goal-evaluator","exit_status":0,"duration_seconds":614,"retries":0,"ts":"2026-07-14T21:07:24Z","session_id":"tradable_wall","iter":4,"event":"agent_invocation_end","cli":"claude"}
 {"iter_name":"goal-tradable_wall-iter-4","verdict":"CONTINUE","next_depth":"full","journey_deltas":{"newly_passing":3,"newly_failing":0,"regressed":0,"anti_goal_violations":0},"ts":"2026-07-14T21:07:24Z","session_id":"tradable_wall","iter":4,"event":"iter_end","cli":"claude"}
+{"branch":"goal/tradable_wall","commit_sha":"d4214b681e17155fc9e682a0643e8e9dc5a09bf2","success":true,"error":"","verdict":"CONTINUE","ts":"2026-07-14T21:07:26Z","session_id":"tradable_wall","iter":4,"event":"iter_push","cli":"claude"}
+{"agent":"iteration-summarizer","ts":"2026-07-14T21:07:26Z","session_id":"tradable_wall","iter":4,"event":"agent_invocation_start","cli":"claude"}
+{"iter_name":"goal-tradable_wall-iter-5","prior_verdict":"CONTINUE","prior_depth":"full","snapshot_sha":"832ea80b4d855befab3be68542c977bc0e9ad8b9","ts":"2026-07-14T21:07:26Z","session_id":"tradable_wall","iter":5,"event":"iter_start","cli":"claude"}
+{"agent":"goal-decomposer","ts":"2026-07-14T21:07:26Z","session_id":"tradable_wall","iter":5,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"iteration-summarizer","status":"ok","wait_seconds":1,"run_seconds":474,"rc":"0","ts":"2026-07-14T21:15:21Z","session_id":"tradable_wall","iter":4,"event":"dispatch_wait","cli":"claude"}
+{"agent":"iteration-summarizer","exit_status":0,"duration_seconds":475,"retries":0,"ts":"2026-07-14T21:15:21Z","session_id":"tradable_wall","iter":4,"event":"agent_invocation_end","cli":"claude"}
+{"agent":"readme-maintainer","ts":"2026-07-14T21:15:21Z","session_id":"tradable_wall","iter":4,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-decomposer","status":"ok","wait_seconds":1,"run_seconds":711,"rc":"0","ts":"2026-07-14T21:19:18Z","session_id":"tradable_wall","iter":5,"event":"dispatch_wait","cli":"claude"}
+{"agent":"goal-decomposer","exit_status":0,"duration_seconds":712,"retries":0,"ts":"2026-07-14T21:19:18Z","session_id":"tradable_wall","iter":5,"event":"agent_invocation_end","cli":"claude"}
+{"depth":"full","target_journeys":"J-05","ts":"2026-07-14T21:19:18Z","session_id":"tradable_wall","iter":5,"event":"iter_dispatch","cli":"claude"}
+{"agent":"readme-maintainer","status":"ok","wait_seconds":244,"run_seconds":197,"rc":"0","ts":"2026-07-14T21:22:42Z","session_id":"tradable_wall","iter":4,"event":"dispatch_wait","cli":"claude"}
+{"agent":"readme-maintainer","exit_status":0,"duration_seconds":441,"retries":0,"ts":"2026-07-14T21:22:42Z","session_id":"tradable_wall","iter":4,"event":"agent_invocation_end","cli":"claude"}

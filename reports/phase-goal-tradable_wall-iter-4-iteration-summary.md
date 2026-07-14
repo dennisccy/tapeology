@@ -1,6 +1,6 @@
 # Iteration Summary — goal-tradable_wall-iter-4
 
-**Verdict:** PASS
+**Verdict:** CONTINUE
 **Iteration type:** goal-full
 **Date:** 2026-07-14
 **Iteration:** 4
@@ -9,53 +9,55 @@
 
 **What you can do now:** You can watch simulated buy and sell pressure in the trading cockpit, keep a trading journal, replay past trading studies, check an honest profit scorecard, and view a stock's price structure — including fetching real historical prices from Yahoo Finance with one click — on the Structure page.
 
-**What changed this time:** Behind-the-scenes work — nothing visibly new this round. The team added a new, third way of simulating trades that follows the same short list of important price zones the map is meant to show (instead of the long raw list), and built a report that honestly compares how well each of the three trading approaches would actually have done — though nothing about this is shown on any page yet.
+**What changed this time:** Behind-the-scenes work — nothing visibly new this round. The team taught the product a third way to simulate trades — one that follows the same short list of important price zones the upcoming map will show, instead of the long raw list — and built an honest report comparing how well each of the three trading approaches would actually have done, broken down by zone quality, market side, and how price reacted at the touch. None of this shows up on a page yet; it is ready for a future round to display.
 
-**What's next:** Next we'll put the price-zone map, the example browser, and this new profit comparison onto the Structure page so you can actually see and use them.
+**What's next:** Next we'll bring the price-zone map, the example browser, and this new profit comparison onto the Structure page so people can actually see and use them.
 
 ## Headline
 
-New structure_tape_map strategy + 3-way edge report endpoint added (backend-only, keyless)
+J-04's honest 3-way edge report (v1 vs structure_tape vs new structure_tape_map) passes its keyless core
 
 ## Direction
 
-**Signal:** holding
-**Why:** J-04 (the 3-way edge report + `structure_tape_map` strategy) was built this iteration and cleared review, QA, audit, and closure with zero blocking issues, but the goal-evaluator has not yet independently re-verified it (no `eval.md`/journey-history update exists for iter-4 yet), so no journey moved to a confirmed newly-passing state this iteration. J-05 and J-06 remain failing and J-03 remains partial, both untouched by design; with zero regressions and the prior three logged iterations each advancing a journey (J-01, J-02, then J-03 to partial), direction reads as holding pending that evaluation rather than confirmed improving or stalling.
+**Signal:** improving
+**Why:** J-04's keyless core — the honest 3-way edge report comparing v1, structure_tape, and the newly registered structure_tape_map — moved failing to passing this iteration, independently re-verified by the evaluator via fingerprint recomputation, frozen-file diff-absence, and re-run gate-integrity/byte-identity tests. J-01, J-02, and J-07 all re-verified green with zero regressions and no anti-goal violations; only J-03 stays partial (its credentialed enrichment remains operator-gated) and J-05/J-06 are the next agent-buildable, browser-verifiable targets. Three of the last four build iterations (iter-1, iter-2, iter-4) have each landed a newly-passing journey, so direction reads healthy and improving.
 
-**Trend (last 4 iters):**
-- Newly passing this iter: none (goal-evaluator has not yet run for iter-4)
-- Newly passing in last 4 iters total: J-07, J-01, J-02
-- Regressions in last 4 iters: none
-- Anti-goal violations in last 4 iters: none
-- Iters with no journey state change: 0 of 4
+**Trend (last 5 iters):**
+- Newly passing this iter: J-04
+- Newly passing in last 5 iters total: J-07, J-01, J-02, J-04
+- Regressions in last 5 iters: none
+- Anti-goal violations in last 5 iters: none
+- Iters with no journey state change: 0 of 5
 
-**Latest evaluator reasoning:** "J-03's KEYLESS substrate is genuinely delivered — I re-ran 9 keyless join-path/guard/no-credential tests (all pass), confirmed the join replays through the FROZEN TapeEngine via DatasetStore.replay (never a second engine), verified compute_setups/list_setups byte-identical, the ONE committed sip fixture present, all frozen files (engine/, datasets.py, levels.py, tradability.py, backtests.py, bars.py, adapters/) absent from the diff, and independently recomputed config_fingerprint == 4d665603569b9dbf (4 new recording_* constants correctly in the exclusion set). I did NOT accept the dev/QA "credentialed headline MET" framing: the auditor (PASS_WITH_GAPS) and my own checks agree it is only partial/unknown — the integration test was INTERRUPTED with no pytest PASS, the pinned-AAPL 06-22 drill-in five-state timeline was NEVER demonstrated end-to-end (only a JPM 295-entry proxy), and I confirmed the persistent apps/backend/.data/datasets/ store holds ONLY 7 pre-existing Jul-3 datasets (the 15 recorded ones were ephemeral, in a since-GC-eligible pytest temp dir). So J-03 = partial (failing->partial), not passing." (most recent logged evaluator entry, iter-3 — iter-4 evaluation has not yet run)
+**Latest evaluator reasoning:** "J-04 — the honest 3-way edge report (v1 vs frozen structure_tape vs the new registered structure_tape_map) — moved failing → passing on its keyless core, the passing bar the goal and the iter-4 decomposer assumption scoped. The measurement machinery is genuinely built, gate-abiding, and independently re-verified by the evaluator (fingerprint frozen, frozen files absent from the diff, load-bearing guard tests re-run green, MCP proxy byte-identical). No journey regressed, no anti-goal was violated, coherence is COHERENCE-PASS. J-03 stays partial (credentialed headline still operator-gated); J-05/J-06 remain failing (out of scope)."
 
 ## What was done
 
-- Registered `structure_tape_map` as a third trading strategy beside frozen `v1` and `structure_tape`, reusing the identical stop/target/position-sizing rules — only which price levels it watches (the distilled tradable-map bands) differs.
-- Built the honest 3-way edge report (`GET /research/edge-report`): runs all three strategies over every recorded practice-tape window and reports results by price-level quality (A/B/C), market side, touch reaction, and data feed, with every dollar figure carrying its sample size, a null-baseline comparison, and the standard "simulated, not real trading" disclaimer.
-- Added a byte-identical read-only MCP proxy (`edge_report`) so AI tools see exactly what a person sees at the same web address.
-- Verified zero behavior change to any existing capability: full automated suite (1,338 tests) re-run with zero failures; the app's internal consistency fingerprint reconfirmed unchanged; the champion strategy pointer untouched.
-- Cleared review (PASS), QA (PASS, 13/13 functional checks, 1331 passed/7 skipped/0 failed), audit (PASS, zero CRITICAL/IMPORTANT findings), and closure (CLOSURE-PASS); browser QA correctly SKIPPED (backend-only iteration, no on-screen surface yet).
+- Registered `structure_tape_map` as a new third strategy (`config.py`) beside frozen `v1`/`structure_tape`, reusing the same stop/target/position-sizing rules but arming off the tradable-band map instead of raw levels.
+- Built the honest 3-way edge report (`v1` vs `structure_tape` vs `structure_tape_map`) aggregating backtests into per strategy × class × side × reaction × feed cells (n≥5 or `insufficient_sample`, train/hold-out and feeds never pooled, full PnL register, null baseline).
+- Shipped the canonical `GET /research/edge-report` endpoint plus a byte-identical read-only MCP proxy.
+- Verified zero behavior change to existing capabilities — full 1,338-test suite green (1331 passed / 7 skipped / 0 failed), `config_fingerprint` pinned at `4d665603569b9dbf`, champion pointer untouched.
+- Cleared review (PASS), QA (PASS, 13/13 functional checks), audit (PASS, zero critical/important findings), and closure (CLOSURE-PASS); browser QA correctly SKIPPED (backend-only iteration, no on-screen change yet).
 
 ## What's left
 
-- Journey J-04 (The edge report — what actually profits, under the existing gates) shows failing in the journey ledger — stale as of iter-3; this iteration's build cleared review, QA, audit, and closure cleanly (zero blocking issues), and awaits the goal-evaluator's independent re-verification (not yet run) before the ledger updates.
-- Journey J-05 (/structure decluttered — the map is the default, the noise is a toggle) failing — no on-screen rendering yet; real level, case-registry, tape-timeline, and now edge-report data all exist and are ready to render.
+- Journey J-05 (`/structure` decluttered — the map is the default, the noise is a toggle) failing — no on-screen change yet; all three backend values (map, case registry, edge report) are now ready to render.
 - Journey J-06 (Cockpit confluence — bands + tape markers + a descriptive chip) failing — credential-gated and no on-screen change yet.
-- Journey J-03 (Real tape at the wall — credentialed event-window recording) remains partial, not passing — untouched this iteration; still needs an operator to run the recording tool directly (or re-run the integration test to a clean pass) and demonstrate the pinned-AAPL drill-in end-to-end.
-- Carried gap (owned by J-05, unresolved): 13 of 801 recorded events carry a definitive reaction label alongside a missing forward-return number.
-- Carried performance note (owned by J-05, unresolved): the full-panel scan behind both the case registry and the new edge report can take several minutes against a fully populated store; a cached/faster version is still unbuilt.
-- Carried verification note (owned by a future iteration): the only populated demonstration of the edge report's cell structure today is synthetic (a test-only panel, not the real committed fixture); worth re-checking against a real recorded fixture once credentialed data is available.
+- Journey J-03 (Real tape at the wall — credentialed event-window recording) still partial — the credentialed ≥10-window headline remains operator-gated: an operator must run the recording tool directly or re-run the credentialed integration test to a clean pass with the pinned-AAPL drill-in demonstrated end-to-end.
+- Blocking watch-item for J-05: resolve the boundary case where 13 of 801 recorded events carry a definitive reaction label beside a missing forward-return number, with a regression test, before rendering setups events.
+- Blocking watch-item for J-05: add a bounded cache/persisted scan for the ~4m43s full-panel scan behind the case registry before the Edge Report section reads it live on every page load.
+- Carried, non-blocking: once credentialed/panel-symbol recordings exist, re-verify the edge report produces populated, correctly-labeled cells under the real panel — currently only proven via a synthetic-panel test.
 
 ## Next step
 
-Proceed to J-05 — render the tradable map, case browser, and edge report on `/structure`; the canonical `GET /research/edge-report` (+ MCP `edge_report`) read surface is byte-verified and ready to render. Carry two items into J-05 planning: add a bounded cache/memoization for the underlying full-panel scan before the Edge Report section reads live on every page load, and re-verify the endpoint produces populated, correctly-labeled cells against a real panel-symbol recorded fixture once credentialed data is available. Separately, this iteration's own local pipeline gates (review/QA/audit/closure) all passed cleanly; the goal-evaluator's independent re-verification of J-04 is the immediate next automated step before J-05 begins.
+Build J-05 (`/structure` decluttered — map default + raw-levels toggle, Case Studies browser, Edge Report section) at depth full. It is the dependency-order next and the first iteration to render three canonical endpoints (`/research/tradability`, `/research/setups` + `/research/setups/{id}`, `/research/edge-report`) verbatim in the browser. Full depth because it is browser-verifiable, coherence-relevant (new UI surfaces), and must resolve two blocking watch-items before it can ship honestly: (1) the boundary case where a definitive reaction label sits beside a missing forward-return number (13/801 events), with a regression test, before rendering setups events; (2) the Edge Report section render hits the ~4m43s full-panel scan on a populated store, so add a bounded cache/persisted-scan read before it loads live. Separate operator-gated carries that do not block J-05: complete J-03's credentialed headline, and once panel-symbol/credentialed recordings exist, re-verify J-04's endpoint produces populated, correctly-labeled cells under the real panel.
 
 ## Assumptions made
 
-none recorded
+- iter-4 · goal-evaluator — Ambiguity: J-04's acceptance ("an all-insufficient report is a valid outcome") tagged "(Keyless via the committed fixture; full run credentialed)" leaves open whether the keyless committed-fixture run must produce a POPULATED all-insufficient_sample report, or whether a vacuously-empty report (`cells: []`) on the literal fixture plus a synthetic-panel proof of the populated cell structure satisfies J-04's passing bar. We chose: the empty-is-valid reading — J-04 = passing on its keyless core, since the goal explicitly names an empty/all-insufficient_sample report a valid outcome and the populated cell structure is proven by a synthetic test. Reversible: yes
+- iter-4 · goal-decomposer — Ambiguity: whether J-04 can be scored passing on the keyless committed-fixture run alone, or whether the credentialed ≥10-window recorded data (tied to J-03's still-blocked credentialed portion) is required before J-04 can pass. We chose: the keyless reading — a correct, gate-honoring, all-insufficient_sample report is J-04's passing core; the credentialed enrichment is an operator-gated carry parallel to J-03, not a blocker. Reversible: yes
+- iter-3 · goal-evaluator — Ambiguity: whether J-03's "exist"/"shows" acceptance requires durable persistence in the canonical store plus the specific pinned-AAPL drill-in, or whether a demonstrated-but-ephemeral recording run is enough to score the credentialed headline met. We chose: the stricter reading — the credentialed headline is met only when the datasets persist in the canonical store and the pinned-AAPL drill-in is demonstrated end-to-end; under this bar J-03 = partial. Reversible: yes
+- iter-0 · goal-evaluator — Ambiguity: the iteration spec instructs recording credential-gated J-03 and J-06 as `blocked`, but the journey-history status vocabulary has no `blocked` value. We chose: `failing` for both, since there is positive evidence their features are entirely absent at baseline; the credential gate is preserved as a note field rather than the primary status. Reversible: yes
 
 ## Artifacts
 
@@ -73,4 +75,5 @@ none recorded
 | QA | PASS | reports/qa/goal-tradable_wall-iter-4-qa.md |
 | Audit | PASS | docs/handoffs/goal-tradable_wall-iter-4-audit.md |
 | Closure | CLOSURE-PASS | reports/phase-goal-tradable_wall-iter-4-closure-verdict.md |
+| Goal evaluation | CONTINUE | runs/goal-session-tradable_wall/iter-4/eval.md |
 | Journey history | — | runs/goal-session-tradable_wall/state/journey-history.json |
