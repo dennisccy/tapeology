@@ -1,0 +1,78 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The tradable level map — from 1,800 levels to <=10 bands",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/phase-goal-tradable_wall-iter-0-ui-test-results.md",
+      "spec_hash": "2b8c0a6189c4f9c8a6bd31211ab262e6fc3b6e2be1a12f64477e118fa4e63931"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The wide scan — a case-study registry across the 12-symbol panel",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/phase-goal-tradable_wall-iter-0-ui-test-results.md",
+      "spec_hash": "ead37b78df23be6f935035a6684560bd1ddcd99ad11042f234176aed54a43297"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Real tape at the wall — credentialed event-window recording",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/phase-goal-tradable_wall-iter-0-ui-test-results.md",
+      "spec_hash": "3b3dd4e4a6fcdef1781f95793bcfb2160d3483f7557f32c26d8166448e63290c",
+      "note": "Feature absent at baseline (setups.py scanner + recorder path not built); credentialed verification ALSO blocked (Alpaca env vars unset, presence-only check). Both agent-buildable code AND operator credentials required before this can pass."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The edge report — what actually profits, under the existing gates",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-05-structure-baseline-raw-levels.png",
+      "spec_hash": "2ff75d9ef80fa726bd75ccfbd419a61b34f87084c16f20174e933ffb1239bb0c"
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "/structure decluttered — the map is the default, the noise is a toggle",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-05-structure-baseline-raw-levels.png",
+      "spec_hash": "c02116277b50277f2e5f4268f03c7e348bf26199039bd928e94b5ec09bf7d122"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Cockpit confluence — bands + tape markers + a descriptive chip",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-06-cockpit-historical-mode-baseline.png",
+      "spec_hash": "f3ef213046e642d7df3f552b7a95d4fff9cf0792ea0058ac4596753b1c338ea7",
+      "note": "Overlay/chip code absent in PriceChart.tsx at baseline; credentialed AAPL 06-22 replay portion ALSO blocked (Alpaca env vars unset). SIM-ticker honest-empty-state check was performed (no band/chip present)."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The foundation is unchanged (regression sentinel)",
+      "status": "already_passing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": "goal-tradable_wall-iter-0",
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-07-sim-buyer-control.png",
+      "spec_hash": "a72b60f1255c1c81af6f3248c5fa34761bf218857ac848b20ecb9829a309ddd0"
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-07-14T01:04:01Z"
+}

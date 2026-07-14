@@ -17,8 +17,8 @@ Result contract (locked by ``tests/test_mcp_server.py``):
     <path>"``, ``isError`` true. Every registered tool's endpoint has shipped (``datasets`` at
     (era-3) J-02, ``backtests`` at J-03, ``pnl_ledger`` at J-04; ``/research/profiles`` — reached
     via ``get_endpoint`` — at J-05; ``bars`` at era-4 J-01; ``levels`` at era-4 J-02; ``strategies``
-    at era-4 J-04); an allowlisted-but-UNKNOWN path (any unshipped ``/research/*``) still surfaces
-    the backend's honest 404 this way — never placeholder data.
+    at era-4 J-04; ``tradability`` at era-5B J-01); an allowlisted-but-UNKNOWN path (any unshipped
+    ``/research/*``) still surfaces the backend's honest 404 this way — never placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
     no offline snapshot exists anywhere in this module).
@@ -106,6 +106,12 @@ _TAPE_PATHS: dict[str, str] = {
 # `_TAPE_PATHS`.
 _LEVELS_TOOL = "levels"
 _LEVELS_PATH = "/research/levels"
+
+# `tradability` (era-5B J-01) is the IDENTICAL two-required-param shape as `levels` directly above
+# (`symbol` + `as_of`) -- its own name + path constants, sharing the same dedicated branch in
+# `_request_path` (see below) rather than a third near-duplicate branch.
+_TRADABILITY_TOOL = "tradability"
+_TRADABILITY_PATH = "/research/tradability"
 
 _TICKER_PROPERTY = {
     "type": "string",
@@ -202,6 +208,26 @@ TOOLS: tuple[types.Tool, ...] = (
                 "as_of": {
                     "type": "string",
                     "description": "UTC ISO-8601 instant, e.g. 2026-06-09T21:00:00Z.",
+                },
+            },
+            ("symbol", "as_of"),
+        ),
+    ),
+    types.Tool(
+        name="tradability",
+        description=(
+            "Read-only proxy of GET /research/tradability — the tradable level map (a lens over "
+            "the frozen levels/confluence-zone computation): at most a handful of quality-scored "
+            "support/resistance price bands per symbol, computed under morning-markup as-of "
+            "discipline (price range, side, quality score, member levels, round-number flag, "
+            "inherited A/B/C class) for one symbol as of one UTC instant, JSON verbatim."
+        ),
+        inputSchema=_object_schema(
+            {
+                "symbol": {"type": "string", "description": "Symbol, e.g. AAPL."},
+                "as_of": {
+                    "type": "string",
+                    "description": "UTC ISO-8601 instant, e.g. 2026-06-22T15:00:00Z.",
                 },
             },
             ("symbol", "as_of"),
@@ -306,14 +332,15 @@ def _request_path(name: str, arguments: dict) -> str:
         if name == "tape_history" and arguments.get("bar") is not None:
             path += f"?bar={arguments['bar']}"
         return path
-    if name == _LEVELS_TOOL:
+    if name in (_LEVELS_TOOL, _TRADABILITY_TOOL):
         symbol = arguments.get("symbol")
         as_of = arguments.get("as_of")
         if not isinstance(symbol, str) or not symbol:
             raise ToolArgumentError(f"tool {name!r} requires a non-empty string 'symbol' argument")
         if not isinstance(as_of, str) or not as_of:
             raise ToolArgumentError(f"tool {name!r} requires a non-empty string 'as_of' argument")
-        return f"{_LEVELS_PATH}?symbol={quote(symbol, safe='')}&as_of={quote(as_of, safe='')}"
+        path = _LEVELS_PATH if name == _LEVELS_TOOL else _TRADABILITY_PATH
+        return f"{path}?symbol={quote(symbol, safe='')}&as_of={quote(as_of, safe='')}"
     if name == "get_endpoint":
         path = arguments.get("path")
         refusal = allowlist_refusal(path)

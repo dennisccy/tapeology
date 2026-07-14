@@ -50,6 +50,7 @@ from .bars import (
     EmptyBarWindowError,
 )
 from .levels import compute_levels
+from .tradability import compute_tradability
 from .datasets import (
     VALID_SOURCE_KINDS as DATASET_SOURCE_KINDS,
     VALID_SPLITS,
@@ -1795,6 +1796,38 @@ def get_levels(symbol: str, as_of: str, store: BarStore = Depends(get_bar_store)
         raise HTTPException(status_code=422, detail="as_of must be an ISO date-time")
     normalized_symbol = symbol.strip().upper()
     result = compute_levels(store, normalized_symbol, as_of_epoch, CONFIG)
+    return {"symbol": normalized_symbol, "as_of": as_of, **result}
+
+
+# --- The tradable level map (era-5B capability 1, J-01) ----------------------------------------
+# ONE route: GET /research/tradability?symbol=<S>&as_of=<ISO-T>. ``research/tradability.py`` is the
+# sole computer of the tradable level map -- a LENS over ``compute_levels``' frozen output (never a
+# second levels engine); this route only parses/validates the query params and serves the module's
+# output VERBATIM (single source of truth -- the MCP `tradability` tool proxies this
+# byte-identically; no second computation path). Mirrors ``get_levels`` immediately above
+# byte-for-byte in structure (parse-ISO-once-then-return-verbatim).
+
+
+@router.get("/tradability")
+def get_tradability(symbol: str, as_of: str, store: BarStore = Depends(get_bar_store)) -> dict:
+    """The tradable level map (bands: price range, side, quality score, member levels,
+    round-number flag, inherited A/B/C class) for ``symbol`` as of ``as_of``, computed under
+    morning-markup as-of discipline from the frozen ``compute_levels`` output. ``symbol``/``as_of``
+    are both REQUIRED query params (FastAPI 422s a missing one before this body runs); an empty
+    ``symbol`` or a malformed ``as_of`` are explicit 422s here (never a silent "now" default, which
+    would leak lookahead) -- the identical ``get_levels`` discipline. A symbol with no recorded bar
+    series at all, and a symbol with series but nothing derivable (no daily series to resolve a
+    basis from, or no prior session yet), are honest distinct states -- see
+    ``compute_tradability``'s ``no_bar_series_for_symbol`` flag and ``basis_as_of`` (``null`` when
+    no basis could be resolved) -- never one ambiguous bare empty ``bands`` array."""
+    if not symbol:
+        raise HTTPException(status_code=422, detail="a tradability query requires a symbol")
+    try:
+        as_of_epoch = parse_utc_epoch(as_of)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="as_of must be an ISO date-time")
+    normalized_symbol = symbol.strip().upper()
+    result = compute_tradability(store, normalized_symbol, as_of_epoch, CONFIG)
     return {"symbol": normalized_symbol, "as_of": as_of, **result}
 
 

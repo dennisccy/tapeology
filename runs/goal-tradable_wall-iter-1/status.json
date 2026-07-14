@@ -1,0 +1,35 @@
+{
+  "phase": "goal-tradable_wall-iter-1",
+  "status": "complete",
+  "current_step": "closure_passed",
+  "updated_at": "2026-07-14T08:07:48.329969Z",
+  "started_at": "2026-07-14T01:32:24.043648Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/research/tradability.py",
+    "apps/backend/app/config.py",
+    "apps/backend/app/research/routes.py",
+    "apps/backend/app/mcp/__init__.py",
+    "apps/backend/tests/fixtures/yahoo/AAPL_1d_20260101_20260626.json",
+    "apps/backend/tests/fixtures/yahoo/AAPL_1h_20260601_20260618.json",
+    "apps/backend/tests/fixtures/yahoo/AAPL_4h_20260601_20260618.json",
+    "apps/backend/tests/fixtures/yahoo/AAPL_5m_20260601_20260618.json",
+    "apps/backend/tests/fixtures/yahoo/AAPL_1w_20260601_20260615.json",
+    "apps/backend/tests/test_tradability.py",
+    "apps/backend/tests/test_tradability_api.py",
+    "apps/backend/tests/test_mcp_server.py",
+    "docs/handoffs/goal-tradable_wall-iter-1-dev.md",
+    "reports/phase-goal-tradable_wall-iter-1-implementation-summary.md"
+  ],
+  "tests_run": true,
+  "test_result": "1240 collected, 1234 passed, 6 skipped, 0 failed (full backend suite; +1 regression test this round; was 1239/1233/6). config_fingerprint frozen 4d665603569b9dbf; live acceptance probe against real .data/bars: pinned 300.48-302.07 wall ranks #1 (top-2), 10 bands, basis 2026-06-18.",
+  "fix_round": 1,
+  "fixes_applied": [
+    "CRITICAL (tradability.py:_quality_score): touch factor now counts DAILY (1d) touch count only, not an all-timeframe sum -- pinned AAPL wall goes from live-rank #7 to #1; spec-aligned ('daily touch count'); weights/band-width unchanged; fingerprint unchanged.",
+    "MINOR (test_tradability.py): added committed multi-timeframe fixtures (1h/4h/5m/1w real Yahoo slices) + regression test asserting the pinned wall ranks top-2 under realistic density, with a guard that a higher-raw-touch band ranks below it.",
+    "NOTE (deferred): per-timeframe cutoff for _PriorSessionBarView -- proven to not affect any DoD assertion (pinned rank/score identical with/without); current behavior is on the safe side of the no-lookahead rail; safe fix documented for a future iteration."
+  ],
+  "browser_checks_run": false,
+  "next_action": "review"
+}

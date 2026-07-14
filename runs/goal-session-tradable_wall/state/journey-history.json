@@ -3,12 +3,13 @@
     "J-01": {
       "id": "J-01",
       "name": "The tradable level map — from 1,800 levels to <=10 bands",
-      "status": "failing",
-      "last_verified_iter": "goal-tradable_wall-iter-0",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-tradable_wall-iter-1",
+      "last_passing_iter": "goal-tradable_wall-iter-1",
       "first_seen_iter": "goal-tradable_wall-iter-0",
-      "last_evidence_path": "reports/phase-goal-tradable_wall-iter-0-ui-test-results.md",
-      "spec_hash": "2b8c0a6189c4f9c8a6bd31211ab262e6fc3b6e2be1a12f64477e118fa4e63931"
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-1-qa.md",
+      "spec_hash": "2b8c0a6189c4f9c8a6bd31211ab262e6fc3b6e2be1a12f64477e118fa4e63931",
+      "note": "Backend-only iteration (Frontend Present: no) — verified via live API + MCP probes, not a screenshot. Evaluator independently reproduced the pinned AAPL 2026-06-22 acceptance via a direct compute_tradability call on the committed real fixture: 10 bands (5+5), basis 2026-06-18T04:00Z (holiday 06-19 skipped), pinned resistance band [300.23,302.25] (contains 300.48+302.07, round-number 300 flagged) ranks #1; daily-only score 123.0 (matches audit) / multi-timeframe 153.0 class A (matches dev probe). config_fingerprint==4d665603569b9dbf, REST==MCP byte-identity, levels.py byte-identity, and 3 no-lookahead guards all green (33 tradability tests passed)."
     },
     "J-02": {
       "id": "J-02",
@@ -18,7 +19,8 @@
       "last_passing_iter": null,
       "first_seen_iter": "goal-tradable_wall-iter-0",
       "last_evidence_path": "reports/phase-goal-tradable_wall-iter-0-ui-test-results.md",
-      "spec_hash": "ead37b78df23be6f935035a6684560bd1ddcd99ad11042f234176aed54a43297"
+      "spec_hash": "ead37b78df23be6f935035a6684560bd1ddcd99ad11042f234176aed54a43297",
+      "note": "Not targeted in iter-1. Feature (setups.py scanner + case registry) confirmed still absent by iter-1 diff (only tradability.py + endpoint + MCP proxy added). Next up: iter-1 built its J-01 dependency (the tradable map)."
     },
     "J-03": {
       "id": "J-03",
@@ -29,7 +31,7 @@
       "first_seen_iter": "goal-tradable_wall-iter-0",
       "last_evidence_path": "reports/phase-goal-tradable_wall-iter-0-ui-test-results.md",
       "spec_hash": "3b3dd4e4a6fcdef1781f95793bcfb2160d3483f7557f32c26d8166448e63290c",
-      "note": "Feature absent at baseline (setups.py scanner + recorder path not built); credentialed verification ALSO blocked (Alpaca env vars unset, presence-only check). Both agent-buildable code AND operator credentials required before this can pass."
+      "note": "Feature absent at baseline (setups.py scanner + recorder path not built); credentialed verification ALSO blocked (Alpaca env vars unset, presence-only check). Both agent-buildable code AND operator credentials required before this can pass. Not targeted in iter-1."
     },
     "J-04": {
       "id": "J-04",
@@ -39,7 +41,8 @@
       "last_passing_iter": null,
       "first_seen_iter": "goal-tradable_wall-iter-0",
       "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-05-structure-baseline-raw-levels.png",
-      "spec_hash": "2ff75d9ef80fa726bd75ccfbd419a61b34f87084c16f20174e933ffb1239bb0c"
+      "spec_hash": "2ff75d9ef80fa726bd75ccfbd419a61b34f87084c16f20174e933ffb1239bb0c",
+      "note": "Not targeted in iter-1. WATCH-ITEM carried forward: extend the existing era-3 edge_report.py additively for the 3-way report — never fork a second edge computation."
     },
     "J-05": {
       "id": "J-05",
@@ -49,7 +52,8 @@
       "last_passing_iter": null,
       "first_seen_iter": "goal-tradable_wall-iter-0",
       "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-05-structure-baseline-raw-levels.png",
-      "spec_hash": "c02116277b50277f2e5f4268f03c7e348bf26199039bd928e94b5ec09bf7d122"
+      "spec_hash": "c02116277b50277f2e5f4268f03c7e348bf26199039bd928e94b5ec09bf7d122",
+      "note": "Not targeted in iter-1. Will render the J-01 /research/tradability value (now shipped) verbatim; browser-verifiable."
     },
     "J-06": {
       "id": "J-06",
@@ -60,19 +64,20 @@
       "first_seen_iter": "goal-tradable_wall-iter-0",
       "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-06-cockpit-historical-mode-baseline.png",
       "spec_hash": "f3ef213046e642d7df3f552b7a95d4fff9cf0792ea0058ac4596753b1c338ea7",
-      "note": "Overlay/chip code absent in PriceChart.tsx at baseline; credentialed AAPL 06-22 replay portion ALSO blocked (Alpaca env vars unset). SIM-ticker honest-empty-state check was performed (no band/chip present)."
+      "note": "Overlay/chip code absent in PriceChart.tsx at baseline; credentialed AAPL 06-22 replay portion ALSO blocked (Alpaca env vars unset). SIM-ticker honest-empty-state check was performed (no band/chip present). Not targeted in iter-1. Iter-1 audit flagged B1 (prior-session intraday recency / _PriorSessionBarView over-exclusion) as naturally owned here — carry the recorded date-based cutoff forward with its own no-lookahead tests."
     },
     "J-07": {
       "id": "J-07",
       "name": "The foundation is unchanged (regression sentinel)",
       "status": "already_passing",
-      "last_verified_iter": "goal-tradable_wall-iter-0",
-      "last_passing_iter": "goal-tradable_wall-iter-0",
+      "last_verified_iter": "goal-tradable_wall-iter-1",
+      "last_passing_iter": "goal-tradable_wall-iter-1",
       "first_seen_iter": "goal-tradable_wall-iter-0",
-      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-07-sim-buyer-control.png",
-      "spec_hash": "a72b60f1255c1c81af6f3248c5fa34761bf218857ac848b20ecb9829a309ddd0"
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-1-qa.md",
+      "spec_hash": "a72b60f1255c1c81af6f3248c5fa34761bf218857ac848b20ecb9829a309ddd0",
+      "note": "Re-verified green in iter-1: evaluator independently ran engine observer equivalence (7/7) + profile equivalence (15/15) = 22 passed; config_fingerprint==4d665603569b9dbf confirmed; levels.py/backtests.py/edge_report.py/tape absent from the iter-1 diff (byte-untouched); QA full backend suite 1240 collected / 1234 passed / 6 skipped / 0 failed."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-07-14T01:04:01Z"
+  "updated_at": "2026-07-14T08:25:54Z"
 }

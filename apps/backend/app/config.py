@@ -1158,6 +1158,66 @@ class Config:
     # proximity (which each level's own ``touch_count`` already captures).
     sr_confluence_class_b_min_timeframes: int = 2
 
+    # --- Era 5B: the tradable level map (capability 1, J-01) -- RESEARCH DEFAULTS, the SAME
+    # ``sr_pivot_lookback`` discipline: every research value lives in config with its rationale
+    # documented HERE, no literal in ``research/tradability.py``. Namespaced ``tradability_*`` so
+    # it never collides with the ``sr_*`` family directly above (J-02/J-03 raw levels/zones --
+    # read-only inputs this NEW derived lens consumes VERBATIM, never mutates) or the unrelated
+    # ``structure_tape_*`` strategy namespace below.
+    #
+    # BAND CAP K (per side): goal.md's "cluster levels into at most K bands per side" -- K <= 5 so
+    # the served map is never more than 10 bands total (5 support + 5 resistance), the headline
+    # 1,800-levels -> handful-of-bands distillation this era exists to prove.
+    tradability_band_cap_per_side: int = 5
+    # BAND WIDTH (basis points of a band's ANCHOR price -- its first, lowest-priced member; the
+    # SAME anchor-fixed-scan TECHNIQUE ``sr_confluence_band_bps`` drives in ``levels.py``, reused
+    # only as a technique -- this is a SEPARATE, deliberately WIDER tolerance for this coarser
+    # lens): raw levels within ``price * tradability_band_width_bps / 10_000`` of a band's anchor
+    # join the SAME band. Wider than ``sr_confluence_band_bps`` (20.0) because a TRADABLE band
+    # exists to merge nearby REAL rejection highs into ONE wall a trader would mark -- the pinned
+    # AAPL cluster (300.48 / 302.07) sits ~53 bps apart, wider than a raw confluence zone would
+    # ever join. Calibrated against the committed AAPL fixture (verified by direct computation): at
+    # 70 bps the pinned cluster joins one band without smearing together the fixture's other,
+    # clearly distinct price levels into an uninformatively wide band.
+    tradability_band_width_bps: float = 70.0
+    # QUALITY-SCORE WEIGHTS: the four config-owned factors goal.md names (multi-timeframe breadth,
+    # DAILY touch count, recency, round-number confluence), combined as a weighted sum -- a
+    # dict (not four bare floats) so a weight lookup can never silently fall back to a fabricated
+    # default, the SAME ``sr_timeframe_weights`` discipline. TOUCH COUNT here is the DAILY (``"1d"``)
+    # touch count ONLY (see ``tradability.py._quality_score``) -- goal.md's "daily touch count",
+    # never a sum across every timeframe: on REAL multi-timeframe data it is the PRIMARY
+    # discriminator that lifts a genuine multi-day rejection wall (the pinned AAPL 300-302 band's
+    # daily series rejected it dozens of times) above the far more numerous but individually shallow
+    # intraday (5m/1h) levels clustered near the current price -- summing every member's touch_count
+    # instead inverts that, letting intraday VOLUME outscore the wall. ROUND NUMBER is weighted
+    # heavily (goal.md pins the psychological 300 level as a first-class signal, not a tiebreaker)
+    # and RECENCY meaningfully (a wall that rejected price last week matters more than one from
+    # January); TIMEFRAME BREADTH rewards cross-timeframe agreement (intraday members still count
+    # here even though they do not feed the daily touch total). Calibrated + regression-guarded
+    # against BOTH the committed daily-only AAPL fixture AND a committed multi-timeframe
+    # (1d/1h/4h/5m/1w) slice in ``tests/test_tradability.py`` (the ``levels.py`` class-A
+    # multi-timeframe-fixture precedent).
+    tradability_quality_weights: dict = field(
+        default_factory=lambda: {
+            "timeframe_breadth": 10.0,
+            "touch_count": 2.0,
+            "recency": 15.0,
+            "round_number": 20.0,
+        }
+    )
+    # ROUND-NUMBER RULE: a band is flagged iff either edge sits within
+    # ``tradability_round_number_tolerance_bps`` of a multiple of ``tradability_round_number_increment``
+    # -- goal.md's own example ("the 300 wall IS a round number") names $50 increments (300 is a
+    # multiple of 50, 100, AND 25 alike; 50 is the tightest of the common round increments that
+    # still flags 300, so it never over-flags nearby non-round bands). The tolerance is the SAME
+    # order of magnitude as ``sr_touch_tolerance_bps``'s "relative to the instrument's price level"
+    # discipline, wide enough that a band edge a few ticks off an exact round number (a real level
+    # rarely prints on the EXACT round price) still honestly flags -- calibrated against the
+    # committed AAPL fixture: the pinned band's low edge (300.48) is verified by direct computation
+    # to sit within tolerance of 300.
+    tradability_round_number_increment: float = 50.0
+    tradability_round_number_tolerance_bps: float = 50.0
+
     # --- Structure-and-tape era: the `structure_tape` STRATEGY (era-4 capability 4, J-04; Data
     # Contract row 41) -- RESEARCH DEFAULTS, the SAME ``sr_pivot_lookback`` discipline: every
     # research value lives in config with its rationale documented HERE, no literal in
@@ -1516,6 +1576,22 @@ class Config:
             "sr_confluence_band_bps",
             "sr_confluence_class_a_min_timeframes",
             "sr_confluence_class_b_min_timeframes",
+            # The tradable-level-map band cap / band width / quality weights / round-number rule
+            # (era-5B capability 1, J-01): the IDENTICAL ``sr_pivot_lookback`` rationale directly
+            # above -- the tradable map is a SEPARATE, additive derived-lens computation over
+            # ``levels.py``'s frozen output (never stamped with, or compared across, a
+            # ``config_fingerprint`` anywhere), so two journals identical in every FINGERPRINTED
+            # threshold but configured with a different band cap, band width, quality weight, or
+            # round-number rule MUST share a fingerprint (else every temp-config test of these
+            # brand-new, unrelated parameters would mint a different fingerprint and falsely
+            # fragment the tape/backtest/PnL pools those OTHER thresholds exist to protect).
+            # Pinned by a fingerprint-stability test + the real-threshold counter-test in
+            # ``tests/test_tradability.py``.
+            "tradability_band_cap_per_side",
+            "tradability_band_width_bps",
+            "tradability_quality_weights",
+            "tradability_round_number_increment",
+            "tradability_round_number_tolerance_bps",
             "journal_list_default_limit",
             "journal_list_max_limit",
             "analytics_min_sample_size",
