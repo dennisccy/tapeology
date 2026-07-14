@@ -60,6 +60,7 @@ EXPECTED_TOOLS = (
     "setups",
     "backtests",
     "strategies",
+    "edge_report",
     "pnl_ledger",
     "taxonomy",
     "ui_route_map",
@@ -533,6 +534,47 @@ async def test_strategies_tool_byte_identical_on_a_non_empty_live_result(mcp_env
     assert result.isError is False
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "strategies not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_edge_report_tool_byte_identical_to_rest(mcp_env):
+    """``edge_report`` (era-5B J-04) ships in the SAME iteration as its endpoint — the report
+    dict (``register``/``pnl_min_sample_size``/``train``/``holdout``/``surviving_train_cells``)
+    is ALWAYS present (an empty dataset registry is an honest, well-formed 200 — never an error),
+    so this proves byte-identity with no seeding at all, the ``strategies`` tool's own precedent."""
+    result = await call_tool("edge_report", {})
+    rest = httpx.get(f"{mcp_env}/research/edge-report", timeout=5.0)
+    assert rest.status_code == 200
+    payload = rest.json()
+    assert set(payload) >= {"register", "pnl_min_sample_size", "train", "holdout", "surviving_train_cells"}
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "edge_report not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_edge_report_tool_byte_identical_after_recording_a_real_dataset(mcp_env):
+    """The IDENTICAL ``datasets``/``backtests`` "flips from empty to a real state with ZERO MCP
+    code changes" precedent: after recording a real dataset through the live backend, the tool's
+    JSON is still byte-identical to its curl equivalent (still an honest empty ``cells`` list here
+    — PG, the reference fixture's symbol, is not a config-owned panel symbol — but the byte-proxy
+    discipline itself is what this test exists to prove, on a request that now does real work)."""
+    recorded = httpx.post(
+        f"{mcp_env}/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:01:00Z",
+            "end": "2026-06-09T17:01:30Z",
+        },
+        timeout=15.0,
+    )
+    assert recorded.status_code in (200, 409)  # 409 = already recorded by an earlier test
+    result = await call_tool("edge_report", {})
+    rest = httpx.get(f"{mcp_env}/research/edge-report", timeout=15.0)
+    assert rest.status_code == 200
+    assert result.isError is False
+    assert result.content[0].text.encode("utf-8") == rest.content, "edge_report not byte-identical"
 
 
 @pytest.mark.anyio

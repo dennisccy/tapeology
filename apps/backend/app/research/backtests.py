@@ -36,12 +36,13 @@ The disciplines, clause by clause:
     studies' arm-instant synthetic invalidation (the REUSED ``_synthetic_invalidation`` helper —
     ``study_occurrence_r_spread_multiple`` x arm spread, floored at ``study_occurrence_r_floor``,
     adverse side), with R via the shared ``marks.r_basis`` (row 27 — never a second formula); it
-    triggers on a recorded print at/through the invalidation. ``structure_tape`` trades ONLY
-    (era-4 J-05, gated on the arming ``level``/class being present) instead use a class-scaled,
-    LEVEL-relative invalidation (``_class_scaled_invalidation``) and additionally carry a
-    reward-target exit (``_class_scaled_target`` — a class R-multiple bounded by the next opposing
-    level resolved at arm time); v1/null trades never carry a ``target_price`` and so can never
-    reach that exit. The state-flip exit fires when the tape reads the OPPOSING control state (the
+    triggers on a recorded print at/through the invalidation. ``structure_tape`` AND
+    ``structure_tape_map`` trades (era-4 J-05 / era-5B J-04, gated on the arming ``level``/class
+    being present, never on the strategy id) instead use a class-scaled, LEVEL-relative
+    invalidation (``_class_scaled_invalidation``) and additionally carry a reward-target exit
+    (``_class_scaled_target`` — a class R-multiple bounded by the next opposing level/band resolved
+    at arm time); v1/null trades never carry a ``target_price`` and so can never reach that exit.
+    The state-flip exit fires when the tape reads the OPPOSING control state (the
     studies' ``_control_state`` vocabulary). The time horizon exits at the first recorded event
     at/after ``strategy_exit_horizon_seconds`` past entry. A trade still open when the stream ends
     is handled EXPLICITLY and deterministically: forced exit at the LAST recorded price, labeled
@@ -55,13 +56,13 @@ The disciplines, clause by clause:
     contributes zero slippage — honest absence, never a fabricated cost). Each fill pays
     ``max(strategy_fee_per_share x shares, strategy_fee_min_per_trade)``. Position size is the
     fixed notional: ``shares = strategy_dollars_per_r / R basis`` (v1/null); ``structure_tape``
-    trades (era-4 J-05) scale that SAME fixed notional by the arming level's class size multiple
-    (``structure_tape_size_multiple_by_class``) — still a per-trade SIMULATED notional only. R and
-    $ are two disclosed unit systems over the SAME measurement — GROSS from recorded prices, NET
-    from fills minus fees, and a dollar figure never exists without its R counterpart. The
-    per-class (A/B/C) PnL breakdown (era-4 J-05, Data Contract row 42) partitions the SAME trade
-    population by ``trade["level"]["class"]`` — computed once, alongside the strategy-level
-    aggregate, and served verbatim.
+    AND ``structure_tape_map`` trades (era-4 J-05 / era-5B J-04) scale that SAME fixed notional by
+    the arming level's class size multiple (``structure_tape_size_multiple_by_class``) — still a
+    per-trade SIMULATED notional only. R and $ are two disclosed unit systems over the SAME
+    measurement — GROSS from recorded prices, NET from fills minus fees, and a dollar figure never
+    exists without its R counterpart. The per-class (A/B/C) PnL breakdown (era-4 J-05, Data
+    Contract row 42) partitions the SAME trade population by ``trade["level"]["class"]`` —
+    computed once, alongside the strategy-level aggregate, and served verbatim.
 
   * **The seeded random-entry null baseline.** ``backtest_null_entry_count`` entry instants (and
     per-entry random directions) drawn from the recorded seed over the SAME dataset, exiting
@@ -93,12 +94,13 @@ import threading
 import time
 import uuid
 
-from ..config import Config, PROFILE_DEFAULT, STRATEGY_TAPE_ID
+from ..config import Config, PROFILE_DEFAULT, STRATEGY_TAPE_ID, STRATEGY_TAPE_MAP_ID
 from .bars import BarStore
 from .datasets import DatasetIntegrityError, DatasetNotFound, DatasetStore
 from .levels import compute_levels, CLASS_A, CLASS_B, CLASS_C
 from .marks import r_basis
 from .store import BacktestRecord, JournalStore
+from .tradability import RESISTANCE, SUPPORT, compute_tradability
 
 # The status vocabulary and the state-native helpers are REUSED from the studies module (one
 # owner per literal / per mapping — never a second copy): the premise-state arming map, the
@@ -147,8 +149,8 @@ NULL_SETUP_TYPE = "random_null"
 
 # Exit reasons (one explicit copy each — the iter-15 own-copy lesson).
 EXIT_R_STOP = "r_stop"
-# era-4 J-05: the class-scaled take-profit exit (structure_tape only — v1/null trades carry no
-# ``target_price`` and so can never reach this reason).
+# era-4 J-05: the class-scaled take-profit exit (structure_tape / structure_tape_map trades only —
+# v1/null trades carry no ``target_price`` and so can never reach this reason).
 EXIT_REWARD_TARGET = "reward_target"
 EXIT_HORIZON = "horizon"
 EXIT_STATE_FLIP = "state_flip"
@@ -243,6 +245,66 @@ def _next_opposing_zone_price(
     if not side:
         return None
     return min(side, key=lambda p: abs(p - entry_price))
+
+
+# --- structure_tape_map candidate sourcing (era-5B capability 5, J-04): the IDENTICAL zone/level
+# helpers directly above, twinned for TRADABLE-MAP BANDS (``research/tradability.py``) instead of
+# raw confluence zones (``research/levels.py``) — never imported from ``tradability.py`` itself
+# (that module owns band COMPUTATION; arming candidate SELECTION over an already-computed band
+# list is this module's own, existing "reused technique, twinned container" idiom — the identical
+# relationship ``_next_opposing_zone_price``/``_zone_nearest_price`` already have to their zone
+# input). A band's ``members`` list is the EXACT SAME level-dict shape (price/timeframe/type/
+# touch_count) a zone's ``levels`` list carries, and a band's ``class`` key is read the identical
+# way a zone's is — so ``_level_provenance`` above is REUSED UNCHANGED for a band, no twin needed. --
+
+
+def _band_nearest_price(band: dict, entry_price: float) -> float:
+    """The band's own member level NEAREST ``entry_price`` — the ``_zone_nearest_price`` technique,
+    applied to a band's ``members`` list."""
+    return min(band["members"], key=lambda lvl: abs(lvl["price"] - entry_price))["price"]
+
+
+def _next_opposing_band_price(
+    bands: list[dict], arming_band: dict, entry_price: float, direction: str
+) -> float | None:
+    """era-5B J-04: the nearest OTHER band's representative price on the side ``direction`` implies
+    — the ``_next_opposing_zone_price`` technique, applied to the tradable map's bands. Considers
+    EVERY other band regardless of its own inherited class (including an unclassified ``class:
+    null`` band — the reward-target's "next opposing level" is a PRICE-STRUCTURE question, not a
+    conviction one; only the ARMING band's own class scales the stop/reward/size, exactly as an
+    unclassified zone never existed for ``_next_opposing_zone_price`` to consider in the first
+    place). Excludes the arming band itself BY IDENTITY. ``None`` when nothing qualifies on that
+    side — the identical honest fallback."""
+    candidates = [_band_nearest_price(b, entry_price) for b in bands if b is not arming_band]
+    if direction == "long":
+        side = [p for p in candidates if p > entry_price]
+    else:
+        side = [p for p in candidates if p < entry_price]
+    if not side:
+        return None
+    return min(side, key=lambda p: abs(p - entry_price))
+
+
+def _structure_tape_map_side_for_reading(direction: str, setup_type: str) -> str:
+    """Which tradable-map SIDE (``tradability.SUPPORT`` / ``RESISTANCE``) a (direction, setup_type)
+    reading tests — goal.md's own floor/ceiling language for the tape-confirmation mapping
+    (``structure_tape_rejection_state_by_direction`` / ``..._breakthrough_state_by_direction``'s
+    own docstring in ``config.py``), made MECHANICAL now that a BAND — unlike a raw classified
+    level/zone, which carries no side at all — has an explicit ``side`` field to test it against: a
+    REJECTION defends the level it sits at (long defends a FLOOR — a support band; short defends a
+    CEILING — a resistance band); a BREAKTHROUGH moves BEYOND the level in its own direction (long
+    breaks a CEILING — resistance; short breaks a FLOOR — support).
+
+    A deliberate, flagged judgment call (see the dev handoff): ``_structure_tape_arm`` above has no
+    equivalent side filter because raw confluence zones carry no side at all, so it tests every
+    zone regardless of which side of price it sits on. Bands make the correct, side-aware test
+    possible for the first time — without it, a short "breakthrough" could arm against a distant
+    RESISTANCE band merely because price sits numerically below it, which is not a breakthrough of
+    anything. This never changes ``structure_tape``'s own byte-identical behaviour (a separate
+    branch, untouched)."""
+    if setup_type == _STRUCTURE_TAPE_REJECTION:
+        return SUPPORT if direction == "long" else RESISTANCE
+    return RESISTANCE if direction == "long" else SUPPORT
 
 
 def _class_scaled_target(
@@ -482,8 +544,9 @@ class BacktestRunner:
         epoch_anchor: float | None = None,
     ) -> list[dict]:
         """Arm and simulate ONE registered strategy's trades over the recorded path (era-4 J-04:
-        dispatches to the additive ``structure_tape`` branch; v1's own branch — and the code
-        below it — is UNCHANGED, so v1 stays byte-identical).
+        dispatches to the additive ``structure_tape`` branch; era-5B J-04 adds the additive
+        ``structure_tape_map`` branch beside it; v1's own branch — and the code below it — is
+        UNCHANGED, so v1 stays byte-identical).
 
         v1: ONE deterministic interleaved pass: at each recorded event the open trade's exit is
         evaluated FIRST, then (if flat) each declared setup x direction combo may arm per the
@@ -493,6 +556,8 @@ class BacktestRunner:
         exits ``dataset_end``."""
         if strategy["strategy_id"] == STRATEGY_TAPE_ID:
             return self._structure_tape_trades(path, strategy, bar_store, symbol, epoch_anchor)
+        if strategy["strategy_id"] == STRATEGY_TAPE_MAP_ID:
+            return self._structure_tape_map_trades(path, strategy, bar_store, symbol, epoch_anchor)
         config = self._config
         sustain = strategy["entries"]["arm_sustain_seconds"]
         cooldown = strategy["entries"]["arm_cooldown_seconds"]
@@ -643,6 +708,121 @@ class BacktestRunner:
                     return direction, setup_type, _level_provenance(level, zone), opposing_price
         return None
 
+    # --- structure_tape_map simulation (era-5B J-04): the IDENTICAL one-open-trade-at-a-time
+    # interleaved pass as structure_tape directly above (exits evaluated FIRST, then, while flat,
+    # one arming check per event), a NEW arming source only -------------------------------------
+    def _structure_tape_map_trades(
+        self,
+        path: list[_PathPoint],
+        strategy: dict,
+        bar_store: BarStore | None,
+        symbol: str | None,
+        epoch_anchor: float | None,
+    ) -> list[dict]:
+        """Arm and simulate ``structure_tape_map``'s trades over the recorded path — BYTE-IDENTICAL
+        control flow to ``_structure_tape_trades`` above (same one-open-trade loop, same
+        ``_exit_reason``/``_close_trade``/``_arm_trade`` calls — reused, never duplicated); the
+        ONLY difference is the arming SOURCE: ``_structure_tape_map_arm`` (tradable-map bands)
+        instead of ``_structure_tape_arm`` (raw classified levels/zones). See
+        ``_structure_tape_map_arm``'s own docstring for the arming rule and its honest-emptiness
+        floors (missing bar_store/symbol/epoch_anchor, no bar series, no classified band)."""
+        if bar_store is None or not symbol or epoch_anchor is None:
+            return []
+        entries = strategy["entries"]
+        horizon = strategy["exits"]["horizon_seconds"]
+        cooldown = entries["arm_cooldown_seconds"]
+        config = self._config
+        position: dict | None = None
+        cooldown_until = float("-inf")
+        trades: list[dict] = []
+        for i, point in enumerate(path):
+            if position is not None and i > position["index"] and point.last is not None:
+                reason = self._exit_reason(position, point, horizon)
+                if reason is not None:
+                    trades.append(self._close_trade(position, point, reason))
+                    position = None
+            if (
+                position is None
+                and point.last is not None
+                and point.timestamp >= cooldown_until
+            ):
+                arm = self._structure_tape_map_arm(
+                    point, bar_store, symbol, epoch_anchor + point.timestamp, entries, config
+                )
+                if arm is not None:
+                    direction, setup_type, level, opposing_price = arm
+                    position = self._arm_trade(
+                        i, point, setup_type, direction, level=level, opposing_price=opposing_price
+                    )
+                    cooldown_until = point.timestamp + cooldown
+        if position is not None:
+            trades.append(self._close_trade(position, path[-1], EXIT_DATASET_END))
+        return trades
+
+    @staticmethod
+    def _structure_tape_map_arm(
+        point: _PathPoint,
+        bar_store: BarStore,
+        symbol: str,
+        as_of_epoch: float,
+        entries: dict,
+        config: Config,
+    ) -> tuple[str, str, dict, float | None] | None:
+        """One flat-event arming check — the IDENTICAL shape ``_structure_tape_arm`` performs
+        (resolve which reading the CURRENT tape state confirms FIRST, so a non-confirming tick
+        never pays for a map computation at all; then test candidates AS OF this event's own
+        absolute timestamp; return the FIRST qualifying candidate's ``(direction, setup_type,
+        level_provenance, next_opposing_price)``, or ``None``), sourcing candidates from the
+        row-"Tradable level map" canonical ``compute_tradability`` BANDS (era-5B J-01) instead of
+        ``compute_levels`` confluence-zone levels — never levels.py's raw output directly (the
+        tradable map is the ONLY lens this strategy reads; never a second, independent levels
+        computation).
+
+        A band's ``members`` list is the SAME level-dict shape a zone's ``levels`` list carries, so
+        the per-member proximity/breakthrough test below and the class-scaled exit math it feeds
+        (via ``_level_provenance``, reused UNCHANGED) are IDENTICAL to ``_structure_tape_arm`` —
+        only the outer container, and which side of that container is searched, differ:
+
+          * An UNCLASSIFIED band (``class: null`` — no overlapping confluence zone, an honest
+            absence ``tradability.py`` itself documents) is skipped BEFORE any member test: there
+            is no A/B/C to scale a stop/reward/size against, so a band with no inherited class arms
+            nothing (the identical "an unclassified lone level never joins a zone and never arms"
+            discipline ``structure_tape`` already relies on — ``compute_tradability`` merely makes
+            the null case reachable here, since EVERY level joins some band, unlike zone
+            membership, which requires >= 2 members).
+          * Only bands on the SIDE ``_structure_tape_map_side_for_reading`` names for this
+            (direction, setup_type) reading are tested (a genuine, flagged judgment call — see that
+            function's own docstring and the dev handoff): a band, unlike a raw zone, carries an
+            explicit support/resistance side, so this arming can finally test the semantically
+            correct side rather than every band regardless of position.
+
+        ``next_opposing_price`` is resolved from this SAME ``compute_tradability`` result (never a
+        second/future map read) via ``_next_opposing_band_price``, feeding the identical
+        class-scaled reward-target exit ``structure_tape`` uses; ``None`` when no band qualifies on
+        the side ``direction`` implies."""
+        reading = _structure_tape_reading(point.tape_state, entries)
+        if reading is None:
+            return None
+        direction, setup_type = reading
+        result = compute_tradability(bar_store, symbol, as_of_epoch, config)
+        band_bps = entries["proximity_band_bps"]
+        bands = result["bands"]
+        wanted_side = _structure_tape_map_side_for_reading(direction, setup_type)
+        for band in bands:
+            if band["class"] is None or band["side"] != wanted_side:
+                continue
+            for level in band["members"]:
+                price = level["price"]
+                if setup_type == _STRUCTURE_TAPE_REJECTION:
+                    tolerance = price * (band_bps / 10_000.0)
+                    qualifies = abs(point.last - price) <= tolerance
+                else:  # breakthrough — the studies' level-cross technique (price beyond the level)
+                    qualifies = point.last > price if direction == "long" else point.last < price
+                if qualifies:
+                    opposing_price = _next_opposing_band_price(bands, band, point.last, direction)
+                    return direction, setup_type, _level_provenance(level, band), opposing_price
+        return None
+
     # --- the seeded random-entry null baseline (same exits, fees, slippage) --------------------
     def _null_trades(self, path: list[_PathPoint], seed: int) -> list[dict]:
         """The seeded random-entry null baseline over the SAME recorded path: entry instants
@@ -697,12 +877,15 @@ class BacktestRunner:
         opposing_price: float | None = None,
     ) -> dict:
         """Open one simulated trade at a recorded event. ``level`` (era-4 J-04) is the arming
-        level's provenance for a ``structure_tape`` trade; v1 and the null baseline never pass it,
-        so their trade dicts carry no ``level`` key at all (byte-identical to before).
+        level's provenance for a ``structure_tape`` OR ``structure_tape_map`` trade (era-5B J-04
+        reuses this same gate — the CALLER, never this method, decides which strategy passes
+        ``level``); v1 and the null baseline never pass it, so their trade dicts carry no ``level``
+        key at all (byte-identical to before).
 
         v1/null (``level is None``): the invalidation is the studies' REUSED, spread-based helper
-        — UNCHANGED. ``structure_tape`` (``level is not None``, era-4 J-05): the invalidation is
-        the NEW class-scaled, level-relative ``_class_scaled_invalidation``, and the position also
+        — UNCHANGED. structure_tape / structure_tape_map (``level is not None``, era-4 J-05): the
+        invalidation is the NEW class-scaled, level-relative ``_class_scaled_invalidation``, and
+        the position also
         carries a ``target_price`` (the class-scaled reward target, bounded by ``opposing_price`` —
         the next opposing level resolved at arm time, or ``None``). Either way R flows through the
         ONE shared ``marks.r_basis`` — never a second formula."""
@@ -774,10 +957,10 @@ class BacktestRunner:
         recorded spread contributes zero slippage — honest absence). GROSS is measured from the
         recorded prices; NET from the adjusted fills minus both fills' fees. The fixed
         ``strategy_dollars_per_r`` notional makes R and $ two views of one measurement:
-        ``shares = dollars_per_r / R basis`` — v1/null, UNCHANGED. ``structure_tape`` (era-4 J-05,
-        ``"level" in trade``): ``shares`` is scaled by the arming level's class size multiple
-        (``structure_tape_size_multiple_by_class``) over the SAME fixed notional — still a
-        PER-TRADE SIMULATED notional only, never a real order."""
+        ``shares = dollars_per_r / R basis`` — v1/null, UNCHANGED. structure_tape /
+        structure_tape_map (era-4 J-05 / era-5B J-04, ``"level" in trade``): ``shares`` is scaled
+        by the arming level's class size multiple (``structure_tape_size_multiple_by_class``) over
+        the SAME fixed notional — still a PER-TRADE SIMULATED notional only, never a real order."""
         config = self._config
         direction = trade["direction"]
         sign = 1.0 if direction == "long" else -1.0

@@ -34,18 +34,35 @@ from pathlib import Path
 
 import pytest
 
-from app.config import CONFIG, PROFILE_CANDIDATE_FASTER_WARMUP, PROFILE_DEFAULT, STRATEGY_V1_ID
+from app.config import (
+    CONFIG,
+    PROFILE_CANDIDATE_FASTER_WARMUP,
+    PROFILE_DEFAULT,
+    STRATEGY_TAPE_ID,
+    STRATEGY_TAPE_MAP_ID,
+    STRATEGY_V1_ID,
+)
 from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.research import edge_report
 from app.research.backtests import BacktestJobManager, REGISTER, STATUS_DONE
+from app.research.bars import BarStore
 from app.research.datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN
-from app.research.edge_report import EdgeReportError, NO_POSITIVE_EDGE_FINDING, run_edge_report
+from app.research.edge_report import (
+    EdgeReportError,
+    NO_POSITIVE_EDGE_FINDING,
+    run_edge_report,
+    run_strategy_comparison_report,
+)
 from app.research.store import JournalStore
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 # The committed miniature train + hold-out dataset pair (the SAME fixture test_backtests.py's /
 # test_pnl_scan.py's own fixture-pair tests use) — the keyless CI substrate.
 FIXTURE_DATASET_DIR = Path(__file__).parent / "fixtures" / "datasets"
+# The committed J-03 event-window fixture (symbol PG -- NOT a config-owned panel symbol, so it
+# never resolves an owning compute_setups event under the REAL registered panel; see
+# test_keyless_committed_j03_fixture_with_the_real_panel_is_an_honest_empty_report below).
+FIXTURE_J03_DATASET_DIR = Path(__file__).parent / "fixtures" / "datasets_j03"
 
 
 # --- deterministic synthetic substrates (recorded through the REAL store path) -------------------
@@ -404,9 +421,9 @@ def test_run_backtest_raises_explicit_error_when_status_is_not_done(tmp_path):
         jobs = BacktestJobManager(store, CONFIG)
         real_run_sync = jobs.run_sync
 
-        def _cancel_before_running(backtest_id, *, dataset_store):
+        def _cancel_before_running(backtest_id, *, dataset_store, bar_store=None):
             jobs.cancel(backtest_id)  # sets the cooperative-cancellation flag BEFORE the real run
-            real_run_sync(backtest_id, dataset_store=dataset_store)
+            real_run_sync(backtest_id, dataset_store=dataset_store, bar_store=bar_store)
 
         jobs.run_sync = _cancel_before_running
 
@@ -453,3 +470,356 @@ def test_cli_main_writes_a_report_and_exits_zero_on_the_fixture_pair(tmp_path, m
     assert payload["champion"] == {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
     assert len(payload["train"]["datasets"]) == 1
     assert len(payload["holdout"]["datasets"]) == 1
+
+
+# ==================================================================================================
+# The 3-way strategy-comparison report (era-5B capability 6, J-04) — ``run_strategy_comparison_
+# report``. ``run_edge_report``/``main``/every fixture and test above this marker are UNTOUCHED —
+# the era-3 champion-only CLI stays byte-identical (proven by the whole suite above still passing).
+# ==================================================================================================
+
+from test_backtests import _sim_events  # noqa: E402
+from test_setups import SYM_A, _seed_full, _syn_config  # noqa: E402
+
+
+def _record_windowed(
+    dstore: DatasetStore, events: list, *, symbol: str, scenario: str, anchor: float,
+    split: str, feed: str, window_start: str, window_end: str,
+) -> dict:
+    """The IDENTICAL ``DatasetStore.record`` public path ``test_backtests._record`` /
+    ``test_edge_report._record`` already use, with EVERY provenance field (split/feed/window)
+    caller-controlled — the ONLY thing those two existing helpers hard-code that this section's
+    tests genuinely need to vary (a recorded window must CONTAIN a specific known scan event's
+    ``touch_ts``; a feed must genuinely differ to prove the no-pooling guard)."""
+    return dstore.record(
+        symbol=symbol, source=scenario, source_kind="reference", source_id=symbol,
+        split=split, window_start_utc=window_start, window_end_utc=window_end,
+        data_feed=feed, epoch_anchor=anchor, events=events,
+    )
+
+
+# The SAME synthetic multi-timeframe/multi-session scan fixture ``test_setups.py`` already proves
+# exhaustively (touch detection, reaction classification, forward returns) — reused VERBATIM here
+# (never a second copy) purely as the KNOWN, pinned SOURCE of classified touch events this report
+# joins recorded datasets against. Verified by direct computation (not hand-derived): scanning
+# ``_seed_full`` under ``_syn_config()`` emits exactly one clean, SINGLE-event session with a
+# classified band -- 2026-01-05 (SYM_A, resistance, class C, band [250.10, 250.20], reaction
+# "broke", touch_ts "2026-01-05T00:00:00.000000Z") -- so every dataset window below is sized to
+# contain THAT one touch_ts, keeping every scenario a clean, single, known cell.
+_SCAN_WINDOW = {"window_start": "2026-01-04T23:00:00Z", "window_end": "2026-01-05T01:00:00Z"}
+
+
+@pytest.fixture
+def scan_bar_store(tmp_path):
+    store = BarStore(tmp_path / "scan-bars")
+    _seed_full(store)
+    return store
+
+
+@pytest.fixture
+def scan_config():
+    return _syn_config()
+
+
+def _record_v1_arming_dataset(
+    dstore: DatasetStore, *, max_logical: float, split: str, feed: str, label: str
+) -> dict:
+    """One dataset recorded from a truncated SIM-BUYER stream (the EXISTING ``_sim_events`` fixture
+    reused verbatim): arms exactly one deterministic v1 trend_continuation-long trade (entry
+    24.5s@100.24, horizon exit 144.5s@101.28 -- the SAME pinned shape ``test_backtests.py``'s own
+    ``test_sim_buyer_arms_one_trend_continuation_long_with_horizon_exit`` proves), so its net_r/
+    net_usd are IDENTICAL across every recording (only the truncation length -- hence the file
+    checksum -- differs, avoiding ``DatasetAlreadyRegistered`` while keeping pooled sums exact and
+    predictable: n datasets pool to net_r == n * 5.050000000001056)."""
+    events, provider = _sim_events("SIM-BUYER", max_logical)
+    return _record_windowed(
+        dstore, events, symbol=SYM_A, scenario=f"edge-report-{label}", anchor=provider.epoch_anchor,
+        split=split, feed=feed, **_SCAN_WINDOW,
+    )
+
+
+# --- The keyless committed-fixture run (Key Test Scenario: exact cell shape) ---------------------
+
+
+def test_keyless_committed_j03_fixture_with_the_real_panel_is_an_honest_empty_report(tmp_path, store):
+    """The literal DoD scenario: ``run_strategy_comparison_report`` over the COMMITTED
+    ``datasets_j03/`` fixture (symbol PG) under the REAL, shipped ``CONFIG`` (the config-owned
+    12-symbol panel, which does NOT include PG). PG can never resolve an owning scan event under
+    the real panel, so every cell is honestly absent — the degenerate, valid case of "all cells
+    insufficient_sample" (vacuously: there are none to violate the gate). An empty ``BarStore`` is
+    sufficient (and proves ``compute_setups`` never needs PG's own bars to reach this honest
+    empty state — the panel-symbol filter excludes it before any bar read)."""
+    dataset_store = DatasetStore(FIXTURE_J03_DATASET_DIR)
+    bar_store = BarStore(tmp_path / "empty-bars")
+
+    report = run_strategy_comparison_report(store, dataset_store, bar_store, CONFIG)
+
+    assert report["register"] == REGISTER
+    assert report["pnl_min_sample_size"] == CONFIG.pnl_min_sample_size
+    assert report["train"]["cells"] == []
+    assert report["holdout"]["cells"] == []
+    assert report["surviving_train_cells"] == []
+    assert "champion" not in report  # this report is never about a single champion pointer
+
+
+def test_empty_registry_3way_report_is_honest_and_empty(tmp_path, store):
+    dataset_store = DatasetStore(tmp_path / "datasets")  # never populated
+    bar_store = BarStore(tmp_path / "empty-bars")
+
+    report = run_strategy_comparison_report(store, dataset_store, bar_store, CONFIG)
+
+    assert report["train"]["cells"] == []
+    assert report["holdout"]["cells"] == []
+    assert report["surviving_train_cells"] == []
+
+
+# --- Real join + real cells over a synthetic scan (Key Test Scenario: exact cell structure) -------
+
+
+def test_synthetic_scan_join_produces_real_cells_all_insufficient_sample(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    """ONE recorded dataset, windowed around the KNOWN 2026-01-05 class-C/broke/resistance scan
+    event, produces exactly THREE cells (v1 / structure_tape / structure_tape_map) — the exact
+    strategy x class x side x reaction shape the DoD names. v1 arms its one deterministic
+    trend_continuation trade (this fixture's bars are unrelated to structure_tape/
+    structure_tape_map's OWN arming source, so both honestly arm zero — never fabricated). Every
+    cell is ``insufficient_sample`` at n=1/n=0, below the shipped default minimum of 5 — the
+    literal "keyless run is expected all-insufficient_sample" DoD phrasing, realized here with a
+    genuinely non-empty, real cell set (not the vacuous empty case above)."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+
+    report = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config)
+
+    cells = report["train"]["cells"]
+    assert {c["strategy_id"] for c in cells} == {STRATEGY_V1_ID, STRATEGY_TAPE_ID, STRATEGY_TAPE_MAP_ID}
+    for cell in cells:
+        assert cell["band_class"] == "C"
+        assert cell["band_side"] == "resistance"
+        assert cell["reaction"] == "broke"
+        assert cell["feed"] == "sim"
+        assert cell["dataset_ids"] == [meta["id"]]
+        assert cell["insufficient_sample"] is True  # every n below the shipped minimum of 5
+
+    v1_cell = next(c for c in cells if c["strategy_id"] == STRATEGY_V1_ID)
+    assert v1_cell["measurement"]["n"] == 1
+    assert v1_cell["measurement"]["net_r"] == pytest.approx(5.050000000001056)
+    assert v1_cell["measurement"]["win_rate"] == 1.0
+    for other_id in (STRATEGY_TAPE_ID, STRATEGY_TAPE_MAP_ID):
+        other_cell = next(c for c in cells if c["strategy_id"] == other_id)
+        assert other_cell["measurement"] == {
+            "n": 0, "gross_r": 0.0, "net_r": 0.0, "gross_usd": 0.0, "net_usd": 0.0,
+            "win_rate": None, "max_drawdown_r": None,
+        }
+    assert report["holdout"]["cells"] == []
+    assert report["surviving_train_cells"] == []  # n=1 fails the n>=5 gate on every cell
+    assert "champion" not in report
+
+
+def test_every_cell_carries_the_full_register_and_a_null_baseline(tmp_path, store, scan_bar_store, scan_config):
+    _record_v1_arming_dataset(
+        DatasetStore(tmp_path / "datasets"), max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a"
+    )
+    dataset_store = DatasetStore(tmp_path / "datasets")
+
+    report = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config)
+
+    assert report["register"] == REGISTER == "simulated — assumed fees/slippage — not indicative of live results"
+    for cell in report["train"]["cells"]:
+        for key in ("n", "gross_r", "net_r", "gross_usd", "net_usd", "win_rate", "max_drawdown_r"):
+            assert key in cell["measurement"]
+            assert key in cell["null_baseline"]
+        assert cell["null_baseline"]["n"] == CONFIG.backtest_null_entry_count
+
+
+# --- No feed pooling (a two-feed input never merges into one cell) -------------------------------
+
+
+def test_two_same_feed_datasets_pool_and_a_different_feed_never_pools(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta_a = _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    meta_b = _record_v1_arming_dataset(dataset_store, max_logical=200.0, split=SPLIT_TRAIN, feed="sim", label="b")
+    meta_c = _record_v1_arming_dataset(dataset_store, max_logical=175.0, split=SPLIT_TRAIN, feed="iex", label="c")
+
+    report = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config)
+
+    v1_cells = [c for c in report["train"]["cells"] if c["strategy_id"] == STRATEGY_V1_ID]
+    assert len(v1_cells) == 2  # sim and iex NEVER merge into one cell
+    by_feed = {c["feed"]: c for c in v1_cells}
+    assert set(by_feed) == {"sim", "iex"}
+
+    sim_cell = by_feed["sim"]
+    assert sim_cell["dataset_ids"] == sorted([meta_a["id"], meta_b["id"]])
+    assert sim_cell["measurement"]["n"] == 2
+    assert sim_cell["measurement"]["net_r"] == pytest.approx(2 * 5.050000000001056)
+    assert sim_cell["measurement"]["win_rate"] == 1.0  # both pooled trades are winners
+
+    iex_cell = by_feed["iex"]
+    assert iex_cell["dataset_ids"] == [meta_c["id"]]
+    assert iex_cell["measurement"]["n"] == 1
+    assert iex_cell["measurement"]["net_r"] == pytest.approx(5.050000000001056)
+
+    # No pooled/merged/combined key exists anywhere in the report (the run_edge_report precedent).
+    text = json.dumps(report)
+    for forbidden_key in ('"combined"', '"pooled"', '"all_feeds"'):
+        assert forbidden_key not in text
+
+
+# --- Train and hold-out stay in separate sections, never pooled (Key Test Scenario) ---------------
+
+
+def test_train_and_holdout_cells_stay_separate_never_pooled(tmp_path, store, scan_bar_store, scan_config):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    train_meta = _record_v1_arming_dataset(
+        dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="train"
+    )
+    holdout_meta = _record_v1_arming_dataset(
+        dataset_store, max_logical=225.0, split=SPLIT_HOLDOUT, feed="sim", label="holdout"
+    )
+
+    report = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config)
+
+    train_v1 = next(c for c in report["train"]["cells"] if c["strategy_id"] == STRATEGY_V1_ID)
+    holdout_v1 = next(c for c in report["holdout"]["cells"] if c["strategy_id"] == STRATEGY_V1_ID)
+    assert train_v1["dataset_ids"] == [train_meta["id"]]
+    assert holdout_v1["dataset_ids"] == [holdout_meta["id"]]
+    assert train_v1["measurement"]["n"] == 1
+    assert holdout_v1["measurement"]["n"] == 1  # NEVER 2 -- the two splits never pool together
+    assert set(report.keys()) >= {"train", "holdout"}
+    assert "cells" not in report  # no top-level pooled cell list outside the two sections
+
+
+# --- The champion pointer is never read, moved, or promoted (no-hand-promotion guard) -------------
+
+
+def test_champion_pointer_unchanged_after_a_3way_report_run(tmp_path, store, scan_bar_store, scan_config):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    before = store.get_champion_pointer()
+
+    run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config)
+
+    assert store.get_champion_pointer() == before == {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
+
+
+# --- Hot-path guard: compute_setups runs at most ONCE per report call (audit B2 carry-item) --------
+
+
+def test_compute_setups_runs_at_most_once_per_report_call(tmp_path, store, scan_bar_store, scan_config, monkeypatch):
+    calls = []
+    real_compute_setups = edge_report.compute_setups
+
+    def _counting_compute_setups(*args, **kwargs):
+        calls.append(1)
+        return real_compute_setups(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report, "compute_setups", _counting_compute_setups)
+
+    # Empty registry: never even worth a full panel scan.
+    run_strategy_comparison_report(store, DatasetStore(tmp_path / "empty-datasets"), scan_bar_store, scan_config)
+    assert len(calls) == 0
+
+    # Non-empty registry: exactly ONE call for the WHOLE report (never once per dataset, never
+    # once per split — train + holdout share the SAME scan).
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    _record_v1_arming_dataset(dataset_store, max_logical=225.0, split=SPLIT_HOLDOUT, feed="sim", label="b")
+    run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config)
+    assert len(calls) == 1
+
+
+# --- Determinism: two independent runs of the identical scenario are byte-identical ---------------
+
+
+def test_3way_report_determinism_two_independent_runs_are_byte_identical(
+    tmp_path, scan_bar_store, scan_config
+):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+
+    store_a = JournalStore(str(tmp_path / "journal-a.db"), scan_config)
+    store_b = JournalStore(str(tmp_path / "journal-b.db"), scan_config)
+    try:
+        first = run_strategy_comparison_report(store_a, dataset_store, scan_bar_store, scan_config)
+        second = run_strategy_comparison_report(store_b, dataset_store, scan_bar_store, scan_config)
+        assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+    finally:
+        store_a.close()
+        store_b.close()
+
+
+# --- Gate-integrity: the ranking/surviving-cell logic itself (a pure-function proof, the
+# ``test_rank_orders_by_net_r_descending_with_dataset_id_tiebreak`` precedent -- representative
+# already-computed measurement rows, never a fabricated backtest) --------------------------------
+
+
+def _cell(strategy_id, band_class, reaction, *, n, net_r, net_usd, null_net_r, null_net_usd, feed="sim"):
+    return {
+        "strategy_id": strategy_id,
+        "band_class": band_class,
+        "band_side": "resistance",
+        "reaction": reaction,
+        "feed": feed,
+        "dataset_ids": ["x"],
+        "measurement": {
+            "n": n, "gross_r": net_r, "net_r": net_r, "gross_usd": net_usd, "net_usd": net_usd,
+            "win_rate": 1.0 if n else None, "max_drawdown_r": 0.0 if n else None,
+        },
+        "null_baseline": {
+            "n": 100, "gross_r": null_net_r, "net_r": null_net_r, "gross_usd": null_net_usd,
+            "net_usd": null_net_usd, "win_rate": 0.4, "max_drawdown_r": 1.0,
+        },
+        "insufficient_sample": n < CONFIG.pnl_min_sample_size,
+    }
+
+
+def test_surviving_train_cells_clears_every_gate_and_carries_holdout_status():
+    clearing = _cell("v1", "A", "broke", n=5, net_r=4.0, net_usd=400.0, null_net_r=1.0, null_net_usd=100.0)
+    below_minimum_n = _cell("v1", "B", "broke", n=2, net_r=4.0, net_usd=400.0, null_net_r=1.0, null_net_usd=100.0)
+    fails_beat_null = _cell("v1", "C", "broke", n=5, net_r=0.5, net_usd=50.0, null_net_r=1.0, null_net_usd=100.0)
+    negative_net_r = _cell("v1", "A", "chopped", n=5, net_r=-1.0, net_usd=-100.0, null_net_r=-2.0, null_net_usd=-200.0)
+    train_cells = [clearing, below_minimum_n, fails_beat_null, negative_net_r]
+
+    matching_holdout = _cell("v1", "A", "broke", n=5, net_r=3.0, net_usd=300.0, null_net_r=0.5, null_net_usd=50.0)
+    holdout_cells = [matching_holdout]
+
+    survivors = edge_report._surviving_train_cells(train_cells, holdout_cells, CONFIG)
+
+    assert len(survivors) == 1
+    assert survivors[0]["train_cell"] == clearing
+    assert survivors[0]["holdout_cell"] == matching_holdout
+    assert survivors[0]["holdout_positive_edge"] is True
+
+
+def test_surviving_train_cells_honest_absence_when_no_holdout_data_exists_yet():
+    clearing = _cell("v1", "A", "broke", n=5, net_r=4.0, net_usd=400.0, null_net_r=1.0, null_net_usd=100.0)
+
+    survivors = edge_report._surviving_train_cells([clearing], [], CONFIG)
+
+    assert len(survivors) == 1
+    assert survivors[0]["holdout_cell"] is None
+    assert survivors[0]["holdout_positive_edge"] is False  # never fabricated True on absent data
+
+
+def test_surviving_train_cells_ranks_by_net_r_descending_with_deterministic_tiebreak():
+    lower = _cell("v1", "A", "broke", n=5, net_r=2.0, net_usd=200.0, null_net_r=0.1, null_net_usd=10.0)
+    higher = _cell("structure_tape", "A", "broke", n=5, net_r=3.0, net_usd=300.0, null_net_r=0.1, null_net_usd=10.0)
+
+    survivors = edge_report._surviving_train_cells([lower, higher], [], CONFIG)
+
+    assert [s["train_cell"]["strategy_id"] for s in survivors] == ["structure_tape", "v1"]
+
+
+# --- Coherence: this section reuses the ONE BacktestJobManager path, never a second computation ---
+
+
+def test_3way_report_source_reuses_the_shared_aggregate_and_never_a_second_edge_formula():
+    src = (BACKEND_DIR / "app" / "research" / "edge_report.py").read_text()
+    assert "from .backtests import BacktestJobManager, REGISTER, STATUS_DONE, _aggregate" in src
+    assert "def run_strategy_comparison_report(" in src
+    # No second R/$/win-rate/drawdown formula anywhere in the new section.
+    for forbidden in ("sum(t[", "win_rate =", "max_dd", "cum +="):
+        assert forbidden not in src, f"a second aggregate formula leaked into edge_report.py: {forbidden}"

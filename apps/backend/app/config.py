@@ -28,6 +28,18 @@ STRATEGY_V1_ID = "v1"
 # out of scope this iteration) — registering structure_tape here never mutates v1's own branch.
 STRATEGY_TAPE_ID = "structure_tape"
 
+# THE SECOND additive strategy candidate (era-5B capability 5, J-04; Data Contract row "edge-report
+# cells") — the IDENTICAL "id constant + Config-owned definition method" pattern, registered BESIDE
+# v1/structure_tape in the strategy registry. ``strategy_definition`` below returns the EXACT SAME
+# grammar dict for this id as it does for ``STRATEGY_TAPE_ID`` (same entry/exit/fee/slippage/
+# size-scaling fields, verbatim, no new magic number) — the two ids share one branch. What differs
+# is NEVER the grammar; it is which candidates the backtest runner (``research/backtests.py``) arms
+# against: ``structure_tape`` reads raw classified levels/zones (``research/levels.py``),
+# ``structure_tape_map`` reads the derived tradable-map BANDS (``research/tradability.py``) instead
+# — a lens over the identical archetype, never a re-tuning of it. v1 and structure_tape stay
+# byte-identical (equivalence-tested); registering this id never mutates either of their branches.
+STRATEGY_TAPE_MAP_ID = "structure_tape_map"
+
 # The frozen legacy profile (era-3 capability 2, J-06; Data Contract row 33) — the SAME
 # "id constant + Config-owned definition method" pattern as STRATEGY_V1_ID above governs both the
 # strategy grammar (row 34, ``strategy_definition``) and the profile registry (row 33,
@@ -51,10 +63,10 @@ PROFILE_CANDIDATE_FASTER_WARMUP = "candidate-faster-warmup"
 _PROFILE_IDS_IN_ORDER: tuple[str, ...] = (PROFILE_DEFAULT, PROFILE_CANDIDATE_FASTER_WARMUP)
 
 # Registration order for the strategy registry projection (``Config.strategy_registry`` — era-4
-# J-04) — the IDENTICAL ``_PROFILE_IDS_IN_ORDER`` pattern applied to strategies: private, external
-# callers go through ``strategy_definition`` (single lookup) or ``strategy_registry`` (the full
-# list), never this tuple directly.
-_STRATEGY_IDS_IN_ORDER: tuple[str, ...] = (STRATEGY_V1_ID, STRATEGY_TAPE_ID)
+# J-04, era-5B J-04 adds ``structure_tape_map``) — the IDENTICAL ``_PROFILE_IDS_IN_ORDER`` pattern
+# applied to strategies: private, external callers go through ``strategy_definition`` (single
+# lookup) or ``strategy_registry`` (the full list), never this tuple directly.
+_STRATEGY_IDS_IN_ORDER: tuple[str, ...] = (STRATEGY_V1_ID, STRATEGY_TAPE_ID, STRATEGY_TAPE_MAP_ID)
 
 
 @dataclass(frozen=True)
@@ -1440,12 +1452,13 @@ class Config:
 
     def strategy_definition(self, strategy_id: str) -> dict | None:
         """The COMPLETE config-owned strategy definition for ``strategy_id`` (Data Contract row 34;
-        ``structure_tape`` is row 41, era-4 J-04).
+        ``structure_tape`` is row 41, era-4 J-04; ``structure_tape_map`` is era-5B J-04).
 
         The SINGLE owner of every registered strategy's grammar: the backtest runner READS this
         (never a restated copy) and echoes it VERBATIM into every report's provenance. Only
-        ``STRATEGY_V1_ID`` and ``STRATEGY_TAPE_ID`` are registered; any other id returns ``None``
-        (the route maps that to an explicit 422 — never a silently-coerced default strategy).
+        ``STRATEGY_V1_ID``, ``STRATEGY_TAPE_ID``, and ``STRATEGY_TAPE_MAP_ID`` are registered; any
+        other id returns ``None`` (the route maps that to an explicit 422 — never a
+        silently-coerced default strategy).
 
         v1 declares, entirely from named config values (no inline threshold anywhere):
           * ENTRIES — the EXISTING state-native setup arming (the studies' sustained-premise rule):
@@ -1486,10 +1499,20 @@ class Config:
             model, and fixed ``strategy_dollars_per_r`` notional.
           * SIZE — ``size_multiple_by_class`` (``structure_tape_size_multiple_by_class``, era-4
             J-05) scales the v1-identical ``dollars_per_r`` notional by the arming level's class.
+
+        ``structure_tape_map`` (era-5B capability 5, J-04; Data Contract row "edge-report cells")
+        returns the EXACT SAME dict as ``structure_tape`` above — same branch, same six
+        ``structure_tape_*`` config fields read verbatim, no new magic number, the only difference
+        the ``strategy_id`` key itself. The grammar (entry/exit/fee/slippage/size rules) is
+        identical; what genuinely differs lives OUTSIDE this method, in the backtest runner's
+        arming dispatch (``research/backtests.py``): ``structure_tape`` arms against raw classified
+        levels/zones (``research/levels.py``), ``structure_tape_map`` arms against the DERIVED
+        tradable-map bands (``research/tradability.py``) instead — a new lens over the identical
+        archetype, never a second grammar to keep in sync.
         """
-        if strategy_id == STRATEGY_TAPE_ID:
+        if strategy_id in (STRATEGY_TAPE_ID, STRATEGY_TAPE_MAP_ID):
             return {
-                "strategy_id": STRATEGY_TAPE_ID,
+                "strategy_id": strategy_id,
                 "entries": {
                     "rule": "structure_level_tape_confirmation",
                     "proximity_band_bps": self.structure_tape_proximity_band_bps,
@@ -1555,9 +1578,10 @@ class Config:
 
     def strategy_registry(self) -> list[dict]:
         """Every REGISTERED strategy's descriptor, in registration order (``v1`` first, then
-        ``structure_tape``) — the full ``GET /research/strategies`` list (era-4 J-04; Data
-        Contract row 40). Built ENTIRELY from ``strategy_definition`` (never a second copy of any
-        id or grammar value) — the identical ``profile_registry`` pattern applied to strategies."""
+        ``structure_tape``, then ``structure_tape_map``) — the full ``GET /research/strategies``
+        list (era-4 J-04; era-5B J-04 adds ``structure_tape_map``; Data Contract row 40). Built
+        ENTIRELY from ``strategy_definition`` (never a second copy of any id or grammar value) —
+        the identical ``profile_registry`` pattern applied to strategies."""
         return [self.strategy_definition(sid) for sid in _STRATEGY_IDS_IN_ORDER]
 
     def window_label(self, window: int) -> str:
@@ -1823,20 +1847,23 @@ class Config:
             # Pinned both ways in tests/test_profile_equivalence.py.
             "profile_candidate_warmup_min_events",
             # The structure_tape strategy's own config fields (era-4 capability 4, J-04; era-4
-            # capability 5, J-05 adds the class-scaled stop/reward/size fields on the SAME basis): a
-            # SEPARATE, additive strategy registered beside the frozen v1 — read ONLY when
-            # structure_tape itself is selected (never by a v1 backtest, the tape engine, or any
-            # study/PnL-ledger computation this fingerprint stamps onto every persisted record for
+            # capability 5, J-05 adds the class-scaled stop/reward/size fields on the SAME basis) —
+            # ALSO read verbatim by the era-5B ``structure_tape_map`` strategy (J-04), which shares
+            # this EXACT SAME six-field grammar (see ``strategy_definition`` above: one branch,
+            # keyed by either id) and introduces NO field of its own: a SEPARATE, additive strategy
+            # registered beside the frozen v1 — read ONLY when structure_tape or structure_tape_map
+            # itself is selected (never by a v1 backtest, the tape engine, or any study/PnL-ledger
+            # computation this fingerprint stamps onto every persisted record for
             # never-pool-across-fingerprints honesty), so their mere presence on ``Config`` must
             # NOT move the frozen ``default``-profile/``v1``-strategy fingerprint this hash is
             # pinned to (the identical ``sr_*`` rationale above, applied to a different brand-new,
             # unrelated strategy). Two journals identical in every FINGERPRINTED threshold but
             # configured with a different proximity band, tape-confirmation mapping, class-scaled
-            # stop, reward target, or size multiple MUST share a fingerprint. A structure_tape
-            # report's OWN class-scaled config is instead provenanced by the full ``strategy`` dict
-            # each report already embeds verbatim (never by ``config_fingerprint``, which stays
-            # scoped to the frozen default/v1 threshold set). Pinned by a fingerprint-stability test
-            # + the real-threshold counter-test in tests/test_backtests.py.
+            # stop, reward target, or size multiple MUST share a fingerprint. A structure_tape /
+            # structure_tape_map report's OWN class-scaled config is instead provenanced by the full
+            # ``strategy`` dict each report already embeds verbatim (never by ``config_fingerprint``,
+            # which stays scoped to the frozen default/v1 threshold set). Pinned by a
+            # fingerprint-stability test + the real-threshold counter-test in tests/test_backtests.py.
             "structure_tape_proximity_band_bps",
             "structure_tape_rejection_state_by_direction",
             "structure_tape_breakthrough_state_by_direction",

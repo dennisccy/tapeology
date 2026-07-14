@@ -1,0 +1,83 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The tradable level map — from 1,800 levels to <=10 bands",
+      "status": "passing",
+      "last_verified_iter": "goal-tradable_wall-iter-3",
+      "last_passing_iter": "goal-tradable_wall-iter-3",
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-2-qa.md",
+      "spec_hash": "2b8c0a6189c4f9c8a6bd31211ab262e6fc3b6e2be1a12f64477e118fa4e63931",
+      "note": "Required-still-passing this iter (iter-3), re-verified green via structural spot-check: research/tradability.py is ABSENT from the product diff (evaluator ran `git diff --name-only <snapshot> -- .../tradability.py` = no output, byte-identical/frozen), and config_fingerprint independently recomputed to 4d665603569b9dbf. J-01's owning module unchanged this iteration."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The wide scan — a case-study registry across the 12-symbol panel",
+      "status": "passing",
+      "last_verified_iter": "goal-tradable_wall-iter-3",
+      "last_passing_iter": "goal-tradable_wall-iter-3",
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-2-qa.md",
+      "spec_hash": "ead37b78df23be6f935035a6684560bd1ddcd99ad11042f234176aed54a43297",
+      "note": "Required-still-passing this iter (iter-3), re-verified green. setups.py WAS edited this iteration but only ADDITIVELY (J-03's enrich_with_tape_timeline, called ONLY from the GET /research/setups/{id} detail route). compute_setups + the GET /research/setups list route are byte-identical: the guard test test_compute_setups_itself_never_touches_the_dataset_store PASSED in the evaluator's own keyless run, and coherence.md confirms list_setups/routes.py list route unmodified. J-02's registry contract (801 events / 12 symbols, pinned AAPL 2026-06-22 rejected) is served verbatim. CARRIED GAP (audit B1, J-05 scope, neither resolved nor regressed here): 13/801 most-recent-session events carry a definitive reaction label beside None forward returns."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Real tape at the wall — credentialed event-window recording",
+      "status": "partial",
+      "last_verified_iter": "goal-tradable_wall-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-tradable_wall-iter-3-audit.md",
+      "spec_hash": "3b3dd4e4a6fcdef1781f95793bcfb2160d3483f7557f32c26d8166448e63290c",
+      "note": "PARTIAL (failing->partial; first build iteration). KEYLESS SUBSTRATE DELIVERED AND VERIFIED: enrich_with_tape_timeline joins a matched DatasetStore window onto GET /research/setups/{id} by replaying through the FROZEN TapeEngine via DatasetStore.replay (never a second engine — static guard test passed); compute_setups/list_setups byte-identical; ONE committed sip-stamped tick fixture (tests/fixtures/datasets_j03/); 4 new recording_* config constants in the fingerprint exclusion set (fingerprint independently recomputed == 4d665603569b9dbf); frozen files (engine/, datasets.py, levels.py, tradability.py, backtests.py, bars.py, adapters/) all ABSENT from the diff; evaluator RE-RAN 9 keyless join-path/guard/no-credential tests = all pass; full suite 1300 passed/0 failed/7 skipped (review+QA). CREDENTIALED >=10-WINDOW HEADLINE NOT DURABLY ESTABLISHED (hence partial, not passing): the auditor (PASS_WITH_GAPS) and the evaluator's own checks agree — (a) the integration test test_event_recording_integration.py was INTERRUPTED (process killed) before returning any pytest PASS; (b) the pinned-AAPL 06-22 drill-in five-state timeline was NEVER demonstrated end-to-end (only a JPM 295-entry proxy); (c) the 15 recorded datasets were EPHEMERAL — evaluator confirmed the persistent apps/backend/.data/datasets/ store holds ONLY 7 pre-existing Jul-3 datasets, none from this Jul-14 run. Alpaca creds ARE present in this env (apps/backend/.env, untracked+gitignored — keys never committed; scan CLEAN; no-credential grep test passed). Dev/QA framed the headline as 'MET'; evaluator scored it not-durably-met per the auditor's skeptical read and the goal's 'datasets EXIST / pinned-AAPL drill-in shows the timeline' acceptance bar. OPERATOR-GATED TO COMPLETE: run apps/backend/scripts/record_event_windows.py directly (writes the persistent .data/datasets store), or re-run the integration test to a clean pytest PASS and demonstrate the pinned-AAPL drill-in."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The edge report — what actually profits, under the existing gates",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-05-structure-baseline-raw-levels.png",
+      "spec_hash": "2ff75d9ef80fa726bd75ccfbd419a61b34f87084c16f20174e933ffb1239bb0c",
+      "note": "Out of scope this iter (J-03 target). structure_tape_map registration + edge_report.py extension + GET /research/edge-report + MCP proxy NOT built (backtests.py absent from the iter-3 diff, confirmed). Now UNBLOCKED by J-03's keyless join substrate (J-04 backtests over recorded event datasets; the committed datasets_j03/ fixture gives it a keyless recorded window). WATCH-ITEMS carried (iter-1/2/3): (1) EXTEND the existing era-3 edge_report.py additively — NEVER fork a second edge computation; (2) no-pooling-across-feeds (iex/sip/yahoo) rail becomes ACTIVELY load-bearing at the edge report; (3) the ~4m43s full-panel compute_setups scan (audit B2) is J-04's hot path — plan a persisted/cached scan; (4) champion pointer moves ONLY through the existing sweep gate on hold-out — never hand-promote structure_tape_map; keep config_fingerprint 4d665603569b9dbf (new strategy config in exclusion set)."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "/structure decluttered — the map is the default, the noise is a toggle",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-05-structure-baseline-raw-levels.png",
+      "spec_hash": "c02116277b50277f2e5f4268f03c7e348bf26199039bd928e94b5ec09bf7d122",
+      "note": "Out of scope this iter (Frontend Present: no in iter-3). Now has backend values to render verbatim: J-01 /research/tradability (map default + raw toggle), J-02 /research/setups + /research/setups/{id} (case browser + drill-in), and (after J-03) the drill-in tape_timeline for recorded events; the Edge Report section still depends on J-04. Browser-verifiable, keyless. BLOCKING WATCH-ITEM (audit B1) owned by J-05: before rendering setups events, resolve the boundary case where a definitive reaction label sits beside None forward returns (surface effective horizon / flag-suppress / exclude + a regression test)."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Cockpit confluence — bands + tape markers + a descriptive chip",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-06-cockpit-historical-mode-baseline.png",
+      "spec_hash": "f3ef213046e642d7df3f552b7a95d4fff9cf0792ea0058ac4596753b1c338ea7",
+      "note": "Out of scope this iter (credential-gated + Frontend Present: no). PriceChart band-overlay + descriptive confluence chip not built; credentialed AAPL 06-22 replay portion operator-Alpaca-gated (creds ARE present in this env — see J-03 note — but the browser replay + chip UI is the deliverable, not built). SIM-ticker honest-empty-state was confirmed at baseline. The chip's rejection/breakthrough mapping must be read from /research/strategies, never hardcoded; descriptive-never-imperative rail applies to all chip copy."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The foundation is unchanged (regression sentinel)",
+      "status": "already_passing",
+      "last_verified_iter": "goal-tradable_wall-iter-3",
+      "last_passing_iter": "goal-tradable_wall-iter-3",
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-3-qa.md",
+      "spec_hash": "a72b60f1255c1c81af6f3248c5fa34761bf218857ac848b20ecb9829a309ddd0",
+      "note": "Required-still-passing this iter (iter-3), re-verified green by the evaluator directly: all frozen foundations (app/engine/, research/datasets.py, levels.py, tradability.py, backtests.py, bars.py, adapters/ incl. Alpaca) ABSENT from the product diff (git diff --name-only = no output); config_fingerprint independently recomputed to 4d665603569b9dbf; the 4 new recording_* constants are all in the fingerprint exclusion set; full backend suite 1300 passed / 0 failed / 0 errors / 7 skipped (review + QA, corroborated by the frozen-file diff-absence + re-verified fingerprint). No test deleted or weakened; the iter-3 setups.py edit is purely additive (detail-route-only join)."
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-07-14T17:28:17Z"
+}

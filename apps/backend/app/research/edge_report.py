@@ -1,5 +1,8 @@
 """The baseline-edge report (era-3 capability 9 groundwork, J-09) —
-``python -m app.research.edge_report --out <path>``.
+``python -m app.research.edge_report --out <path>`` — PLUS the era-5B J-04 additive 3-way
+strategy-comparison report served by ``GET /research/edge-report`` (see
+``run_strategy_comparison_report`` near the bottom of this module for that section's own detailed
+docstring; every helper/CLI above it is UNTOUCHED, byte-identical to before).
 
 Answers the era's founding question for the FROZEN champion ALONE — no candidate, no comparison,
 no promotion: does the currently persisted champion (read verbatim via
@@ -53,12 +56,31 @@ import json
 import sys
 from pathlib import Path
 
-from ..config import CONFIG, Config
-from .backtests import BacktestJobManager, REGISTER, STATUS_DONE
-from .datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN
+from ..config import (
+    CONFIG,
+    Config,
+    PROFILE_DEFAULT,
+    STRATEGY_TAPE_ID,
+    STRATEGY_TAPE_MAP_ID,
+    STRATEGY_V1_ID,
+)
+from .bars import BarStore
+# ``_aggregate`` is imported PRIVATE (the ``datasets.py`` -> ``from .studies import
+# _load_reference_window as _load_reference`` precedent): the ONE trade-population aggregator
+# every other report in this codebase already computes with (n/gross/net R and $/win_rate/
+# max_drawdown_r) -- reused VERBATIM for a strategy-comparison cell's pooled trade list, never a
+# second R/$/edge formula.
+from .backtests import BacktestJobManager, REGISTER, STATUS_DONE, _aggregate
+from .datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN, parse_utc_epoch
+from .setups import compute_setups
 from .store import JournalStore
 
-__all__ = ["EdgeReportError", "run_edge_report", "main"]
+__all__ = ["EdgeReportError", "run_edge_report", "run_strategy_comparison_report", "main"]
+
+# era-5B J-04: the three registered strategies a comparison cell may ever carry, in the SAME
+# registration order ``Config.strategy_registry()`` serves -- read here so a cell's own
+# ``strategy_id`` is never a restated literal.
+_ALL_STRATEGY_IDS: tuple[str, ...] = (STRATEGY_V1_ID, STRATEGY_TAPE_ID, STRATEGY_TAPE_MAP_ID)
 
 # The exact, honest empty finding (DoD-mandated literal string) — emitted whenever zero hold-out
 # datasets clear the positive-edge gate, including the true-empty-registry case.
@@ -94,13 +116,19 @@ def _run_backtest(
     *,
     strategy_id: str,
     profile: str,
+    bar_store: BarStore | None = None,
 ) -> dict:
     """Run ONE backtest synchronously through the EXISTING public job API (the
     ``pnl_scan._run_backtest`` pattern) and return its persisted ``result`` block — refusing
     explicitly unless it completed ``done`` (a failed/cancelled report carries no served
-    aggregates, so nothing could be honestly measured from it)."""
+    aggregates, so nothing could be honestly measured from it).
+
+    ``bar_store`` (era-5B J-04, optional, defaults ``None`` — every EXISTING champion-only caller
+    below is unaffected byte-for-byte) is threaded through to ``run_sync`` exactly like the
+    backtest route's own seam: ``structure_tape``/``structure_tape_map`` read it to arm; v1
+    ignores it."""
     payload = jobs.create({"dataset_id": dataset_id, "strategy_id": strategy_id, "profile": profile})
-    jobs.run_sync(payload["id"], dataset_store=dataset_store)
+    jobs.run_sync(payload["id"], dataset_store=dataset_store, bar_store=bar_store)
     final = store.get_backtest(payload["id"]).payload
     if final.get("status") != STATUS_DONE:
         raise EdgeReportError(
@@ -216,6 +244,217 @@ def run_edge_report(store: JournalStore, dataset_store: DatasetStore, config: Co
         "holdout": {"datasets": holdout_rows},
         "positive_edge_dataset_ids": positive_edge_ids,
         "finding": finding,
+    }
+
+
+# --- The 3-way strategy-comparison report (era-5B capability 6, J-04; Data Contract row
+# "edge-report cells") -- an ADDITIVE extension of THIS module, never a fork: reuses the ONE
+# ``BacktestJobManager.create`` + ``run_sync`` path above (``_run_backtest``, now threading
+# ``bar_store`` through, see its own docstring), the verbatim ``_aggregate`` trade-population
+# arithmetic (imported from ``backtests.py`` — never re-derived), and ``_split_datasets``' ONE
+# checksum-verified ``DatasetStore.list()`` read per split (a dataset failing integrity
+# verification anywhere aborts the WHOLE report explicitly, same as ``run_edge_report`` above).
+# ``run_edge_report``/``main``/``_render_report`` and every helper above this comment stay
+# UNTOUCHED — the era-3 champion-only CLI's behaviour is byte-identical to before.
+#
+# Answers a DIFFERENT question than the champion-only report above: not "does the CURRENT
+# champion show a hold-out edge", but "which of the three REGISTERED strategies (v1 /
+# structure_tape / structure_tape_map) actually profits, broken down by the tradable-map class,
+# side, and touch reaction the recorded window was scanned FROM" — v1/structure_tape/
+# structure_tape_map are all measured, never just the champion; the champion pointer itself is
+# never read, moved, or promoted by this section (there is nothing here to promote — the identical
+# "no train-only promotion, by construction" property ``run_edge_report`` already has).
+#
+# A "cell" is EXACTLY one (strategy_id, band_class, band_side, reaction, feed) combination —
+# strategy x class x side x reaction is the DoD's named shape; ``feed`` is carried as a FIFTH,
+# additive dimension so two different feeds' recordings NEVER pool into one measurement (the
+# never-pool-across-feeds anti-goal, actively load-bearing here for the first time: unlike every
+# EARLIER era-3/4/5 surface, which only ever sees one feed's data per call, this report can
+# genuinely receive a mixed-feed dataset registry). Cells are materialized LAZILY -- only for
+# (dataset, event) pairs that genuinely attribute -- rather than pre-registering every
+# combinatorial slot: unlike the class-only ``_aggregate_by_class`` breakdown (a FIXED, three-value
+# enum with no further sub-dimension), a cell's own ``feed`` value is data-driven and unbounded, so
+# there is no fixed "every combination" skeleton to pre-populate honestly. An all-empty ``cells``
+# list (every registered dataset's window contains no scan event at all, e.g. a symbol outside the
+# config-owned panel) is therefore a valid degenerate case of "all cells insufficient_sample" — a
+# report with a smaller-than-expected cell count is never an error.
+
+
+def _dataset_event(dataset_meta: dict, events: list[dict]) -> dict | None:
+    """The ``compute_setups`` event this dataset was recorded around, or ``None`` when no scan
+    event's own touch falls inside the dataset's registered window — datasets do not carry
+    class/side/reaction themselves; only events do (module docstring). The
+    ``setups._matching_dataset`` window-containment TEST, mirrored (numeric epoch comparison,
+    inclusive both ends — the identical ``parse_utc_epoch`` discipline, never a lexicographic
+    string compare) but in the OPPOSITE direction: given ONE already-verified dataset (from THIS
+    module's own ``_split_datasets`` read), scan the already-computed ``events`` list for a match,
+    rather than re-opening a second ``DatasetStore.list()`` read the way ``_matching_dataset``
+    itself does internally (which silently drops a corrupt file's error — inconsistent with this
+    module's OWN all-or-nothing integrity discipline, so it is never called from here). Ties (more
+    than one event's touch falling inside the SAME window) break on the earliest ``touch_ts``, then
+    event ``id`` — deterministic, never insertion-order happenstance."""
+    window_start = parse_utc_epoch(dataset_meta["window_start_utc"])
+    window_end = parse_utc_epoch(dataset_meta["window_end_utc"])
+    candidates = [
+        e for e in events
+        if e["symbol"] == dataset_meta["symbol"]
+        and window_start <= parse_utc_epoch(e["touch_ts"]) <= window_end
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda e: (e["touch_ts"], e["id"]))
+
+
+def _cell_key(cell: dict) -> tuple:
+    """The full identity tuple a cell is pooled/matched by — strategy x class x side x reaction x
+    feed, the never-pool-across-feeds dimension included."""
+    return (cell["strategy_id"], cell["band_class"], cell["band_side"], cell["reaction"], cell["feed"])
+
+
+def _split_cells(
+    jobs: BacktestJobManager,
+    store: JournalStore,
+    dataset_store: DatasetStore,
+    bar_store: BarStore,
+    datasets: list[dict],
+    events: list[dict],
+    config: Config,
+) -> list[dict]:
+    """One split's (train or hold-out) cells: for every dataset that resolves an owning event with
+    a genuinely inherited class (an unclassified ``class: null`` band is honestly excluded — there
+    is no A/B/C to report a cell under), run ALL THREE registered strategies over it and pool their
+    trades (and null-baseline trades) into the matching (strategy, class, side, reaction, feed)
+    cell. Trades from MULTIPLE datasets sharing a cell are ordered by their reconstructed REAL UTC
+    entry instant (``dataset["epoch_anchor"] + trade["entry"]["logical_ts"]`` — the identical
+    reconstruction ``setups.py``'s own tape-timeline join and ``serializers.serialize_history``
+    already use) before the ONE shared ``_aggregate`` call, so a pooled cell's ``win_rate``/
+    ``max_drawdown_r`` reflect a genuine chronological trade sequence — never scan-order/dataset-id
+    happenstance (max_drawdown_r is peak-to-trough IN TRADE ORDER; summing already-aggregated
+    numbers cannot recover that without the raw, correctly-ordered trade list)."""
+    pools: dict[tuple, dict] = {}
+    for dataset_meta in datasets:
+        event = _dataset_event(dataset_meta, events)
+        if event is None or event["band"]["class"] is None:
+            continue
+        feed = dataset_meta["data_feed"]
+        for strategy_id in _ALL_STRATEGY_IDS:
+            result = _run_backtest(
+                jobs, store, dataset_store, dataset_meta["id"],
+                strategy_id=strategy_id, profile=PROFILE_DEFAULT, bar_store=bar_store,
+            )
+            key = (strategy_id, event["band"]["class"], event["band"]["side"], event["reaction"], feed)
+            pool = pools.setdefault(key, {"trades": [], "null_trades": [], "dataset_ids": []})
+            anchor = dataset_meta.get("epoch_anchor") or 0.0
+            pool["trades"].extend(
+                (anchor + t["entry"]["logical_ts"], t) for t in result["trades"]
+            )
+            pool["null_trades"].extend(
+                (anchor + t["entry"]["logical_ts"], t) for t in result["null_baseline"]["trades"]
+            )
+            pool["dataset_ids"].append(dataset_meta["id"])
+
+    cells: list[dict] = []
+    for (strategy_id, band_class, band_side, reaction, feed), pool in pools.items():
+        ordered_trades = [t for _, t in sorted(pool["trades"], key=lambda pair: pair[0])]
+        ordered_null = [t for _, t in sorted(pool["null_trades"], key=lambda pair: pair[0])]
+        measurement = _aggregate(ordered_trades)
+        cells.append({
+            "strategy_id": strategy_id,
+            "band_class": band_class,
+            "band_side": band_side,
+            "reaction": reaction,
+            "feed": feed,
+            "dataset_ids": sorted(pool["dataset_ids"]),
+            "measurement": measurement,
+            "null_baseline": _aggregate(ordered_null),
+            "insufficient_sample": measurement["n"] < config.pnl_min_sample_size,
+        })
+    cells.sort(key=_cell_key)
+    return cells
+
+
+def _cell_beats_null(cell: dict) -> bool:
+    """"Beats its own null baseline" — the ``_beats_null`` gate, applied to a strategy-comparison
+    CELL instead of a per-dataset champion row (a genuine twin, not a re-derived formula: BOTH net
+    R AND net $ must exceed the cell's own seeded null baseline)."""
+    return (
+        cell["measurement"]["net_r"] > cell["null_baseline"]["net_r"]
+        and cell["measurement"]["net_usd"] > cell["null_baseline"]["net_usd"]
+    )
+
+
+def _cell_clears_gate(cell: dict, config: Config) -> bool:
+    """The identical ``_is_positive_edge`` four-part gate (positive net R AND net $, at least
+    ``Config.pnl_min_sample_size``, and beating the cell's own null baseline), applied to a
+    strategy-comparison cell. Used ONLY to rank/annotate a cell in the informational
+    ``surviving_train_cells`` list below — this module promotes nothing (see the module docstring);
+    the champion moves ONLY through the existing sweep gate on hold-out data."""
+    m = cell["measurement"]
+    return (
+        m["net_r"] > 0
+        and m["net_usd"] > 0
+        and m["n"] >= config.pnl_min_sample_size
+        and _cell_beats_null(cell)
+    )
+
+
+def _surviving_train_cells(
+    train_cells: list[dict], holdout_cells: list[dict], config: Config
+) -> list[dict]:
+    """A ranked, informational list of TRAIN cells that clear the positivity gate, each carrying
+    its OWN matching hold-out cell's status (an honest ``holdout_cell: None`` /
+    ``holdout_positive_edge: False`` when no hold-out data exists yet for that exact key — never a
+    fabricated verdict). Ranked by the train cell's OWN net R (descending), tie-broken by its full
+    identity key — the ``_rank`` pattern, applied to cells."""
+    holdout_by_key = {_cell_key(c): c for c in holdout_cells}
+    survivors: list[dict] = []
+    for cell in train_cells:
+        if not _cell_clears_gate(cell, config):
+            continue
+        holdout_cell = holdout_by_key.get(_cell_key(cell))
+        survivors.append({
+            "train_cell": cell,
+            "holdout_cell": holdout_cell,
+            "holdout_positive_edge": holdout_cell is not None and _cell_clears_gate(holdout_cell, config),
+        })
+    survivors.sort(
+        key=lambda s: (-s["train_cell"]["measurement"]["net_r"], _cell_key(s["train_cell"]))
+    )
+    return survivors
+
+
+def run_strategy_comparison_report(
+    store: JournalStore, dataset_store: DatasetStore, bar_store: BarStore, config: Config
+) -> dict:
+    """The ONE computer of the 3-way strategy-comparison report (era-5B J-04; ``GET
+    /research/edge-report`` + the MCP ``edge_report`` proxy serve this VERBATIM). Measures ``v1``,
+    ``structure_tape``, and ``structure_tape_map`` over EVERY registered event-window dataset that
+    resolves an owning, classified scan event, aggregated into per strategy x class x side x
+    reaction x feed cells. Raises ``EdgeReportError`` for a dishonest state (the identical
+    ``_split_datasets`` integrity discipline ``run_edge_report`` uses) — nothing is written by the
+    CALLER in that case. Strictly read-only: promotes nothing, appends no ledger row, moves no
+    champion pointer (see the module docstring)."""
+    jobs = BacktestJobManager(store, config)
+    train_datasets = _split_datasets(dataset_store, SPLIT_TRAIN)
+    holdout_datasets = _split_datasets(dataset_store, SPLIT_HOLDOUT)
+
+    # ONE ``compute_setups`` call for the WHOLE report (audit B2 hot-path guard) — never per
+    # dataset, never per split; reused for both the train and hold-out join below. Skipped
+    # entirely when the registry is empty (nothing to join against), so the empty-registry case
+    # never pays for a full panel scan at all.
+    events: list[dict] = []
+    if train_datasets or holdout_datasets:
+        events = compute_setups(bar_store, config)["events"]
+
+    train_cells = _split_cells(jobs, store, dataset_store, bar_store, train_datasets, events, config)
+    holdout_cells = _split_cells(jobs, store, dataset_store, bar_store, holdout_datasets, events, config)
+
+    return {
+        "register": REGISTER,
+        "pnl_min_sample_size": config.pnl_min_sample_size,
+        "train": {"cells": train_cells},
+        "holdout": {"cells": holdout_cells},
+        "surviving_train_cells": _surviving_train_cells(train_cells, holdout_cells, config),
     }
 
 

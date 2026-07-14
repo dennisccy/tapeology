@@ -17,8 +17,8 @@ Result contract (locked by ``tests/test_mcp_server.py``):
     <path>"``, ``isError`` true. Every registered tool's endpoint has shipped (``datasets`` at
     (era-3) J-02, ``backtests`` at J-03, ``pnl_ledger`` at J-04; ``/research/profiles`` — reached
     via ``get_endpoint`` — at J-05; ``bars`` at era-4 J-01; ``levels`` at era-4 J-02; ``strategies``
-    at era-4 J-04; ``tradability`` at era-5B J-01; ``setups`` at era-5B J-02); an
-    allowlisted-but-UNKNOWN path (any unshipped
+    at era-4 J-04; ``tradability`` at era-5B J-01; ``setups`` at era-5B J-02; ``edge_report`` at
+    era-5B J-04); an allowlisted-but-UNKNOWN path (any unshipped
     ``/research/*``) still surfaces the backend's honest 404 this way — never placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
@@ -100,6 +100,10 @@ _STATIC_PATHS: dict[str, str] = {
     # `symbol`/`reaction`/`band_class` filters are NOT exposed here -- this tool always proxies the
     # UNFILTERED list, byte-identical to `GET /research/setups` with no query string.
     "setups": "/research/setups",
+    # `edge_report` (era-5B J-04) is the IDENTICAL no-required-param shape: the 3-way
+    # strategy-comparison report takes no query params at all -- it aggregates over the WHOLE
+    # registered dataset registry on its own.
+    "edge_report": "/research/edge-report",
 }
 
 _TAPE_PATHS: dict[str, str] = {
@@ -269,6 +273,20 @@ TOOLS: tuple[types.Tool, ...] = (
             "Read-only proxy of GET /research/strategies — the registered strategy grammar "
             "registry (v1 plus the additive structure_tape) and the current champion strategy id, "
             "JSON verbatim."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="edge_report",
+        description=(
+            "Read-only proxy of GET /research/edge-report -- the 3-way strategy-comparison report "
+            "(v1 vs the frozen structure_tape vs the additive structure_tape_map) aggregated into "
+            "per strategy x class x side x reaction x feed cells over every registered "
+            "event-window dataset that resolves an owning, classified touch event (n, gross/net R "
+            "and $, win rate, max drawdown, a seeded null baseline, and an insufficient_sample "
+            "label below the configured minimum n), plus a ranked list of train cells clearing the "
+            "positivity gate with their own hold-out status -- JSON verbatim. Never pools across "
+            "feeds, and never pools train with hold-out."
         ),
         inputSchema=_object_schema({}),
     ),

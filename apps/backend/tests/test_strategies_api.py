@@ -12,7 +12,14 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import CONFIG, PROFILE_CANDIDATE_FASTER_WARMUP, PROFILE_DEFAULT, STRATEGY_TAPE_ID, STRATEGY_V1_ID
+from app.config import (
+    CONFIG,
+    PROFILE_CANDIDATE_FASTER_WARMUP,
+    PROFILE_DEFAULT,
+    STRATEGY_TAPE_ID,
+    STRATEGY_TAPE_MAP_ID,
+    STRATEGY_V1_ID,
+)
 from app.main import app, manager
 from app.research.routes import ResearchRegistry, set_registry
 from app.research.store import JournalStore
@@ -34,16 +41,22 @@ def ctx(tmp_path, monkeypatch):
     store.close()
 
 
-def test_strategies_lists_v1_and_structure_tape_in_registration_order(ctx):
+def test_strategies_lists_v1_structure_tape_then_structure_tape_map_in_registration_order(ctx):
     """The exact config-owned registry state, pinned: ``v1`` (frozen) plus the additive
-    ``structure_tape`` — a registry, never a single hard-coded strategy."""
+    ``structure_tape`` and ``structure_tape_map`` — a registry, never a single hard-coded
+    strategy."""
     client, _store = ctx
     response = client.get("/research/strategies")
     assert response.status_code == 200
     payload = response.json()
-    assert [s["strategy_id"] for s in payload["strategies"]] == [STRATEGY_V1_ID, STRATEGY_TAPE_ID]
+    assert [s["strategy_id"] for s in payload["strategies"]] == [
+        STRATEGY_V1_ID,
+        STRATEGY_TAPE_ID,
+        STRATEGY_TAPE_MAP_ID,
+    ]
     assert payload["strategies"][0] == CONFIG.strategy_definition(STRATEGY_V1_ID)
     assert payload["strategies"][1] == CONFIG.strategy_definition(STRATEGY_TAPE_ID)
+    assert payload["strategies"][2] == CONFIG.strategy_definition(STRATEGY_TAPE_MAP_ID)
 
 
 def test_strategies_serves_the_founding_champion(ctx):
@@ -72,6 +85,7 @@ def test_strategies_champion_reflects_a_moved_pointer_the_same_pointer_profiles_
     assert [s["strategy_id"] for s in strategies_payload["strategies"]] == [
         STRATEGY_V1_ID,
         STRATEGY_TAPE_ID,
+        STRATEGY_TAPE_MAP_ID,
     ]
 
 
@@ -90,7 +104,11 @@ def test_strategies_module_carries_no_second_copy_of_the_id_strings():
     source = (
         Path(__file__).resolve().parents[1] / "app" / "research" / "strategies.py"
     ).read_text()
-    for literal in ('"v1"', "'v1'", f'"{STRATEGY_TAPE_ID}"', f"'{STRATEGY_TAPE_ID}'"):
+    for literal in (
+        '"v1"', "'v1'",
+        f'"{STRATEGY_TAPE_ID}"', f"'{STRATEGY_TAPE_ID}'",
+        f'"{STRATEGY_TAPE_MAP_ID}"', f"'{STRATEGY_TAPE_MAP_ID}'",
+    ):
         assert literal not in source, f"duplicated id literal {literal} in app/research/strategies.py"
 
 
@@ -132,6 +150,50 @@ def test_backtest_accepts_structure_tape_strategy_id(ctx):
     assert payload["result"]["trades"] == []
     # era-4 J-05 (Data Contract row 42): the per-class breakdown is served on this SAME route --
     # no new endpoint -- honestly all-empty here (zero trades, so zero classified), never omitted.
+    by_class = payload["result"]["aggregates_by_class"]
+    assert set(by_class) == {"A", "B", "C"}
+    for cls in ("A", "B", "C"):
+        assert by_class[cls]["n"] == 0
+        assert by_class[cls]["insufficient_sample"] is True
+
+
+def test_backtest_accepts_structure_tape_map_strategy_id(ctx):
+    """era-5B J-04: ``POST /research/backtests`` accepts ``structure_tape_map`` with NO
+    route-validation change (the identical ``structure_tape`` precedent directly above —
+    ``Config.strategy_definition`` is the one registry both this route and ``GET
+    /research/strategies`` consult)."""
+    client, _store = ctx
+    dataset = client.post(
+        "/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:00:30Z",
+        },
+    ).json()["dataset"]
+    r = client.post(
+        "/research/backtests",
+        json={"dataset_id": dataset["id"], "strategy_id": STRATEGY_TAPE_MAP_ID, "profile": PROFILE_DEFAULT},
+    )
+    assert r.status_code == 200, r.text
+    created = r.json()["backtest"]
+    assert created["strategy_id"] == STRATEGY_TAPE_MAP_ID
+
+    import time
+
+    deadline = time.time() + 30
+    payload = None
+    while time.time() < deadline:
+        payload = client.get(f"/research/backtests/{created['id']}").json()["backtest"]
+        if payload["status"] in ("done", "failed", "cancelled"):
+            break
+        time.sleep(0.05)
+    assert payload["status"] == "done", payload.get("error")
+    assert payload["result"]["strategy_id"] == STRATEGY_TAPE_MAP_ID
+    # No tradable-map bands were ever recorded for this symbol in this test -- an honest empty
+    # trade list (zero fabricated arms), never a fallback to v1-like behaviour.
+    assert payload["result"]["trades"] == []
     by_class = payload["result"]["aggregates_by_class"]
     assert set(by_class) == {"A", "B", "C"}
     for cls in ("A", "B", "C"):

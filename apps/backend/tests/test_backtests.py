@@ -36,12 +36,13 @@ from pathlib import Path
 
 import pytest
 
-from app.config import CONFIG, STRATEGY_TAPE_ID, STRATEGY_V1_ID
+from app.config import CONFIG, STRATEGY_TAPE_ID, STRATEGY_TAPE_MAP_ID, STRATEGY_V1_ID
 from app.providers.adapters.base import RawBar
 from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.providers.simulated import SIM_SCENARIOS, SimulatedProvider
 from app.research.backtests import (
     BacktestJobManager,
+    BacktestRunner,
     EXIT_DATASET_END,
     EXIT_HORIZON,
     EXIT_REWARD_TARGET,
@@ -59,6 +60,7 @@ from app.research.bars import BarStore
 from app.research.datasets import DatasetStore
 from app.research.marks import r_basis
 from app.research.store import JournalStore
+from app.research.studies import _PathPoint
 
 # The synthetic three-timeframe confluence fixture (class A/B/C zones at exact, known prices) --
 # REUSED verbatim from test_levels.py (the plan's own directive: the committed real PG bar fixture
@@ -381,11 +383,35 @@ def test_structure_tape_definition_is_config_owned_and_additive_beside_v1():
     assert "size_multiple_by_class" not in v1
 
 
-def test_strategy_registry_lists_v1_then_structure_tape_in_registration_order():
+def test_strategy_registry_lists_v1_structure_tape_then_structure_tape_map_in_registration_order():
     registry = CONFIG.strategy_registry()
-    assert [s["strategy_id"] for s in registry] == [STRATEGY_V1_ID, STRATEGY_TAPE_ID]
+    assert [s["strategy_id"] for s in registry] == [
+        STRATEGY_V1_ID,
+        STRATEGY_TAPE_ID,
+        STRATEGY_TAPE_MAP_ID,
+    ]
     assert registry[0] == CONFIG.strategy_definition(STRATEGY_V1_ID)
     assert registry[1] == CONFIG.strategy_definition(STRATEGY_TAPE_ID)
+    assert registry[2] == CONFIG.strategy_definition(STRATEGY_TAPE_MAP_ID)
+
+
+def test_structure_tape_map_definition_is_config_owned_and_identical_to_structure_tape_except_id():
+    """era-5B J-04: ``structure_tape_map`` reuses the EXACT SAME grammar as ``structure_tape`` —
+    same entries/exits/fees/slippage/size fields, verbatim, no new magic number — differing ONLY
+    in its own ``strategy_id``. What genuinely differs (arming candidate source: tradable-map
+    bands instead of raw levels/zones) lives in the backtest runner, not in this definition."""
+    tape = CONFIG.strategy_definition(STRATEGY_TAPE_ID)
+    tape_map = CONFIG.strategy_definition(STRATEGY_TAPE_MAP_ID)
+    assert tape_map is not None
+    assert tape_map["strategy_id"] == STRATEGY_TAPE_MAP_ID
+    assert {**tape_map, "strategy_id": "x"} == {**tape, "strategy_id": "x"}
+
+
+def test_default_fingerprint_still_pinned_after_registering_structure_tape_map():
+    # structure_tape_map introduces NO new Config field (it reuses the six structure_tape_* fields
+    # verbatim — see strategy_definition), so no new exclusion-set entry is needed at all; the
+    # fingerprint stays pinned trivially. Verified by direct computation, not assumed.
+    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
 
 
 def test_structure_tape_breakthrough_long_arms_at_the_class_a_resistance_level(
@@ -739,6 +765,210 @@ def test_v1_backtest_carries_an_honest_all_empty_per_class_breakdown(tmp_path, s
     for cls in ("A", "B", "C"):
         assert by_class[cls]["n"] == 0
         assert by_class[cls]["insufficient_sample"] is True
+
+
+# --- Strategy grammar structure_tape_map: additive over compute_tradability BANDS (era-5B
+# capability 5, J-04) -- REUSES the confluence_bar_store fixture directly above (genuinely
+# multi-timeframe: 1h + 1d + 1w -- the iter-1 lesson: a daily-only fixture previously hid a real
+# ranking bug, so every arming test below runs against a fixture that mixes timeframes). Every
+# value below is VERIFIED BY DIRECT COMPUTATION against this exact fixture (never hand-derived --
+# the test_tradability.py/test_setups.py precedent). Through ``compute_tradability`` (as of
+# ``_STRUCTURE_TAPE_ANCHOR``, whose basis is the "1d" bar at BASE+1*DAY, close=200.08), the ~100.00
+# confluence zone becomes a SUPPORT band [100.00, 100.05] class B (the weekly member has not yet
+# closed at this basis, so B -- not the class-A zone test_synthetic_three_timeframe_fixture...
+# proves through the DIRECT, far-future compute_levels call above); ~300.00/300.05 becomes a
+# RESISTANCE band class C; 500/900/910/20/10 are each unclassified (``class: null``) singleton
+# bands with no overlapping confluence zone. --------------------------------------------------------
+
+
+def test_structure_tape_map_breakthrough_short_arms_at_the_class_b_support_band(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    # SIM-SELLER: seller_control reads from 19.5s at 99.84 -- beyond (below) the support band's
+    # 1h member at 100.00. seller_control -> breakthrough short -> a FLOOR break (goal.md's own
+    # floor/ceiling language) -> the SUPPORT side, which is exactly this band's own side.
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-SELLER")
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_MAP_ID, bar_store=confluence_bar_store
+    )
+    assert payload["status"] == STATUS_DONE
+    result = payload["result"]
+    assert result["strategy_id"] == STRATEGY_TAPE_MAP_ID
+    assert result["strategy"] == CONFIG.strategy_definition(STRATEGY_TAPE_MAP_ID)
+    trades = result["trades"]
+    assert len(trades) == 1
+    t = trades[0]
+    assert (t["setup_type"], t["direction"]) == ("breakthrough", "short")
+    assert t["entry"]["logical_ts"] == 19.5
+    assert t["entry"]["price"] == 99.84
+    # The inherited class is B here (a genuinely DIFFERENT class from structure_tape's own class-A
+    # test above) -- the tradable map's own morning-markup basis, not compute_levels' far-future
+    # as-of, so the arming level's class is READ from the band, never assumed identical.
+    assert t["level"] == {"price": 100.00, "timeframe": "1h", "class": "B"}
+    assert t["exit"]["reason"] == EXIT_DATASET_END
+    assert t["exit"]["logical_ts"] == 25.0
+    assert t["exit"]["price"] == 99.76
+    # Next opposing band price on the short side: the support band at [200.00, 200.08]'s nearest
+    # member (200.00) -- EVERY level joins some band (unlike zone membership), so this search finds
+    # more candidates than structure_tape's own zone-based one did on the identical trade shape.
+    _assert_structure_tape_trade_arithmetic(t, opposing_price=20.0)
+    _assert_per_class_breakdown_isolates_one_trade(result, cls="B")
+
+
+def test_structure_tape_map_rejection_long_arms_at_the_class_b_support_band(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    # SIM-BIDABS: bid_absorption reads from 19.5s, price HELD FLAT at 100.00 -- inside the support
+    # band's own [100.00, 100.05] range. bid_absorption -> rejection long -> defends a FLOOR -> the
+    # SUPPORT side, matching this band's own side.
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-BIDABS")
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_MAP_ID, bar_store=confluence_bar_store
+    )
+    result = payload["result"]
+    trades = result["trades"]
+    assert len(trades) == 1
+    t = trades[0]
+    assert (t["setup_type"], t["direction"]) == ("rejection", "long")
+    assert t["entry"]["logical_ts"] == 19.5
+    assert t["entry"]["price"] == 100.00
+    assert t["level"] == {"price": 100.00, "timeframe": "1h", "class": "B"}
+    assert t["exit"]["reason"] == EXIT_DATASET_END
+    assert t["exit"]["logical_ts"] == 25.0
+    assert t["exit"]["price"] == 100.00
+    _assert_structure_tape_trade_arithmetic(t, opposing_price=200.00)
+    _assert_per_class_breakdown_isolates_one_trade(result, cls="B")
+
+
+def test_structure_tape_map_side_aware_reading_never_arms_on_the_wrong_side_band(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    """A deliberate, flagged design decision (see the dev handoff and
+    ``_structure_tape_map_side_for_reading``'s own docstring): unlike ``structure_tape`` (which has
+    no side concept and tests every zone regardless of position), ``structure_tape_map`` only tests
+    bands on the semantically correct side of a reading. SIM-BUYER's breakthrough-long premise
+    (buyer_control -> break a CEILING -> RESISTANCE) and SIM-ASKABS's rejection-short premise
+    (ask_absorption -> defend a CEILING -> RESISTANCE) both confirm at price ~100 -- but the ONLY
+    classified band there is the SUPPORT band [100.00, 100.05] (class B), so BOTH arm nothing, even
+    though structure_tape's OWN zone-based arm (no side filter) DOES arm on the identical zone at
+    the identical price (proven directly below as the contrasting positive control)."""
+    buyer_dstore, buyer_meta = None, None
+    for ticker in ("SIM-BUYER", "SIM-ASKABS"):
+        dstore, meta = _record_structure_tape_dataset(tmp_path, ticker)
+        if ticker == "SIM-BUYER":
+            buyer_dstore, buyer_meta = dstore, meta
+        payload = _run(
+            jobs, store, dstore, meta["id"],
+            strategy_id=STRATEGY_TAPE_MAP_ID, bar_store=confluence_bar_store,
+        )
+        assert payload["status"] == STATUS_DONE
+        assert payload["result"]["trades"] == [], f"{ticker} must not arm on the wrong-side band"
+
+    # Positive control: the IDENTICAL recorded SIM-BUYER dataset, but run under structure_tape's
+    # OWN raw-levels arm (no side filter at all) -- DOES arm at this exact zone, proving the empty
+    # result above is this iteration's deliberate side-awareness, not an accidental "nothing there".
+    tape_payload = _run(
+        jobs, store, buyer_dstore, buyer_meta["id"],
+        strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store,
+    )
+    assert len(tape_payload["result"]["trades"]) == 1
+
+
+def test_structure_tape_map_skips_an_unclassified_band_even_when_price_and_state_qualify(
+    confluence_bar_store,
+):
+    """An UNCLASSIFIED band (``class: null`` -- no overlapping confluence zone, an honest absence
+    ``tradability.py`` documents) never arms, even when price sits within its own proximity band
+    and the tape state confirms the matching reading -- there is no A/B/C to scale a stop/reward/
+    size against. Exercised directly against ``_structure_tape_map_arm`` (never through a full
+    backtest run) so the SAME reading/price/side can be tested against BOTH an unclassified band
+    (900.0, resistance, singleton, no zone) and a classified one (300.0/300.05, resistance, class
+    C) as a clean positive/negative contrast."""
+    entries = CONFIG.strategy_definition(STRATEGY_TAPE_MAP_ID)["entries"]
+    # ask_absorption -> rejection short -> defends a CEILING -> RESISTANCE side (matches both
+    # bands' own side, isolating the class check alone).
+    null_point = _PathPoint(timestamp=0.0, last=900.2, spread=0.02, tape_state="ask_absorption")
+    arm = BacktestRunner._structure_tape_map_arm(
+        null_point, confluence_bar_store, _CONFLUENCE_SYMBOL, _STRUCTURE_TAPE_ANCHOR, entries, CONFIG
+    )
+    assert arm is None, "an unclassified band must never arm"
+
+    classified_point = _PathPoint(timestamp=0.0, last=300.02, spread=0.02, tape_state="ask_absorption")
+    arm2 = BacktestRunner._structure_tape_map_arm(
+        classified_point, confluence_bar_store, _CONFLUENCE_SYMBOL, _STRUCTURE_TAPE_ANCHOR, entries, CONFIG
+    )
+    assert arm2 is not None, "the SAME reading against a classified band at a nearby price must arm"
+    direction, setup_type, level, _opposing = arm2
+    assert (direction, setup_type) == ("short", "rejection")
+    assert level == {"price": 300.0, "timeframe": "1h", "class": "C"}
+
+
+def test_structure_tape_map_no_arm_when_symbol_has_no_recorded_bands(tmp_path, store, jobs):
+    # An empty bar store -> compute_tradability's own honest no_bar_series_for_symbol state ->
+    # zero fabricated arms (the identical structure_tape precedent, era-5B J-04 twinned).
+    empty_bar_store = BarStore(tmp_path / "empty-bars")
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-SELLER")
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_MAP_ID, bar_store=empty_bar_store
+    )
+    assert payload["status"] == STATUS_DONE
+    assert payload["result"]["trades"] == []
+
+
+def test_structure_tape_map_identical_request_rerun_is_byte_identical(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-SELLER")
+    first = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_MAP_ID, bar_store=confluence_bar_store
+    )
+    second = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_MAP_ID, bar_store=confluence_bar_store
+    )
+    assert first["id"] != second["id"]
+    assert json.dumps(first["result"], sort_keys=True) == json.dumps(second["result"], sort_keys=True)
+
+
+def test_structure_tape_map_reads_tradability_never_recomputes_levels_or_zones():
+    """Coherence-critical guard (the ``test_structure_tape_reads_levels_from_the_one_canonical_
+    compute_levels_owner`` precedent, applied to the NEW arming path): ``_structure_tape_map_arm``
+    itself must read the row-"Tradable level map" canonical ``compute_tradability`` owner and must
+    NEVER call ``compute_levels`` or re-derive pivots/zones directly -- the tradable map is the
+    ONLY lens this strategy reads."""
+    import inspect
+
+    src = inspect.getsource(BacktestRunner._structure_tape_map_arm)
+    assert "compute_tradability(" in src
+    for forbidden in ("compute_levels(", "_swing_pivots", "_prior_period_extremes", "_cluster_levels", "_grade_zone"):
+        assert forbidden not in src, f"_structure_tape_map_arm must not recompute levels itself: {forbidden}"
+
+
+def test_v1_and_structure_tape_byte_identical_after_structure_tape_map_added(
+    tmp_path, store, jobs, confluence_bar_store
+):
+    """Frozen-foundation regression guard (era-5B J-04 DoD): v1's and structure_tape's OWN pinned
+    outputs, re-asserted on the EXACT SAME fixtures/inputs their own tests above already prove,
+    now that structure_tape_map's additive dispatch branch exists beside them -- the ONE explicit,
+    named before/after checkpoint the DoD requires (not a second source of truth; every value here
+    is already independently pinned by a dedicated test earlier in this file)."""
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-BUYER")
+    tape_payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    t = tape_payload["result"]["trades"][0]
+    assert (t["setup_type"], t["direction"]) == ("breakthrough", "long")
+    assert t["entry"]["logical_ts"] == 19.5 and t["entry"]["price"] == 100.18
+    assert t["level"] == {"price": 100.00, "timeframe": "1h", "class": "A"}
+    assert t["exit"]["reason"] == EXIT_DATASET_END
+    _assert_structure_tape_trade_arithmetic(t, opposing_price=200.00)
+
+    dstore2, meta2 = _record_sim(tmp_path, "SIM-BUYER")
+    v1_payload = _run(jobs, store, dstore2, meta2["id"])
+    v1t = v1_payload["result"]["trades"][0]
+    assert (v1t["setup_type"], v1t["direction"]) == ("trend_continuation", "long")
+    assert v1t["entry"]["logical_ts"] == 24.5 and v1t["entry"]["price"] == 100.24
+    assert v1t["exit"]["reason"] == EXIT_HORIZON
+    assert "level" not in v1t
 
 
 # --- Exit coverage: every exit reason exercised deterministically ----------------------------------

@@ -49,6 +49,7 @@ from .bars import (
     BarStore,
     EmptyBarWindowError,
 )
+from .edge_report import EdgeReportError, run_strategy_comparison_report
 from .levels import compute_levels
 from .setups import BROKE, CHOPPED, REJECTED, compute_setups, enrich_with_tape_timeline
 from .tradability import compute_tradability
@@ -2059,3 +2060,34 @@ def get_strategies(registry: ResearchRegistry = Depends(get_registry)) -> dict:
     genuine hold-out survivor moves it (J-06) — served verbatim from the ONE projection, reading
     the SAME single ``store.get_champion_pointer()`` source ``GET /research/profiles`` reads."""
     return strategies_projection(registry.store, registry.config)
+
+
+# --- The 3-way strategy-comparison edge report (era-5B capability 6, J-04; Data Contract row
+# "edge-report cells") ---------------------------------------------------------------------------
+# Exactly ONE route, GET only, mirroring ``GET /research/strategies`` immediately above in shape:
+# ``research/edge_report.py``'s ``run_strategy_comparison_report`` is the SOLE computer of this
+# value; this route only wires the three existing dependency seams (journal store, dataset store,
+# bar store — the identical ``create_backtest`` seam trio) and serves the module's output VERBATIM
+# (the MCP ``edge_report`` tool proxies this byte-identically; no second computation path). No
+# write surface exists on this route — any non-GET verb is FastAPI's default 405. This route never
+# reads or moves the champion pointer — see the module's own "no champion, no promotion" docstring.
+
+
+@router.get("/edge-report")
+def get_edge_report(
+    registry: ResearchRegistry = Depends(get_registry),
+    dataset_store: DatasetStore = Depends(get_dataset_store),
+    bar_store: BarStore = Depends(get_bar_store),
+) -> dict:
+    """The 3-way strategy-comparison report (``v1`` / ``structure_tape`` / ``structure_tape_map``)
+    aggregated into per strategy x class x side x reaction x feed cells over every registered
+    event-window dataset that resolves an owning, classified scan event — served VERBATIM from
+    ``run_strategy_comparison_report`` (era-5B J-04). A dataset failing integrity verification
+    aborts the whole report with an explicit 500 (the ``create_backtest``/``EdgeReportError``
+    precedent) — partial results are never served. An all-empty or all-``insufficient_sample``
+    report (the expected shape on a keyless, single-fixture registry) is a valid 200, never an
+    error."""
+    try:
+        return run_strategy_comparison_report(registry.store, dataset_store, bar_store, registry.config)
+    except EdgeReportError as exc:
+        raise HTTPException(status_code=500, detail=f"edge report could not complete: {exc}")
