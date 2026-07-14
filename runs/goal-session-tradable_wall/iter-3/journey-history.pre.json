@@ -1,0 +1,83 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The tradable level map — from 1,800 levels to <=10 bands",
+      "status": "passing",
+      "last_verified_iter": "goal-tradable_wall-iter-2",
+      "last_passing_iter": "goal-tradable_wall-iter-2",
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-2-qa.md",
+      "spec_hash": "2b8c0a6189c4f9c8a6bd31211ab262e6fc3b6e2be1a12f64477e118fa4e63931",
+      "note": "Required-still-passing this iter (iter-2). Re-verified: tradability.py absent from the product diff (frozen); the setups suite's byte-identity guard test_aapl_frozen_tradability_and_levels_output_is_byte_identical_to_before passed; and the evaluator's own iter-2 reproduction transitively drove compute_tradability per session, yielding the pinned resistance band [300.23,302.25] (round-number flagged) — byte-identical to iter-1's own evaluator reproduction. config_fingerprint independently recomputed to 4d665603569b9dbf."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The wide scan — a case-study registry across the 12-symbol panel",
+      "status": "passing",
+      "last_verified_iter": "goal-tradable_wall-iter-2",
+      "last_passing_iter": "goal-tradable_wall-iter-2",
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-2-qa.md",
+      "spec_hash": "ead37b78df23be6f935035a6684560bd1ddcd99ad11042f234176aed54a43297",
+      "note": "Newly passing (failing->passing). Backend+MCP-only journey verified by evaluator API/MCP reproduction, not a screenshot (Frontend Present: no). Evaluator INDEPENDENTLY reproduced the pinned AAPL 2026-06-22 headline on the two committed keyless real fixtures via a direct compute_setups call: resistance band [300.23,302.25] (contains 300.48+302.07), round_number=True, reaction=rejected, forward returns [-0.462%, -4.269%] (byte-matching the dev handoff), touch_ts 2026-06-22T13:30:00Z, tape_timeline=[] (J-03 not run). config_fingerprint==4d665603569b9dbf and byte-identical repeat-scan determinism both reproduced; the 33-test setups suite (test_setups.py + test_setups_api.py) passed keyless. The >=15-events/>=8-symbols headline: the live store is genuinely populated across ALL 12 panel symbols with real Yahoo 5m+1d series (47 files, feed=yahoo, zero Alpaca — evaluator-enumerated), and the reviewer AND auditor each independently re-ran the full scan to 801 events across 12/12 symbols with the pinned event present. Frozen foundations (levels/tradability/backtests/tape/BarStore/Alpaca) absent from the diff; coherence COHERENCE-PASS (setups.py sole owner, byte-identical MCP proxy). CARRIED GAP (audit B1, review MINOR, NOT a J-02 blocker): 13/801 most-recent-session events carry a definitive reaction label with None forward returns (reaction-horizon capped past the store end) — must be resolved before J-05 renders these events."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Real tape at the wall — credentialed event-window recording",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/phase-goal-tradable_wall-iter-0-ui-test-results.md",
+      "spec_hash": "3b3dd4e4a6fcdef1781f95793bcfb2160d3483f7557f32c26d8166448e63290c",
+      "note": "Out of scope in iter-2 (credential-gated; excluded by the single-risky-journey rule). Recorder path / tape-timeline join not yet built (the setups/{id} tape_timeline field ships present-but-empty, DoD-specified). NOW UNBLOCKED for its event pool: J-02's registry (801 real events across 12/12 panel symbols) gives J-03 a rich pool of top-ranked events to record around. Full recording acceptance (>=10 windows across >=5 symbols incl. pinned AAPL 06-22) remains operator-Alpaca-credential-gated — honestly reports blocked when keys absent, never simulated; the committed keyless fixture-slice join path is agent-buildable now."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The edge report — what actually profits, under the existing gates",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-05-structure-baseline-raw-levels.png",
+      "spec_hash": "2ff75d9ef80fa726bd75ccfbd419a61b34f87084c16f20174e933ffb1239bb0c",
+      "note": "Out of scope in iter-2. structure_tape_map registration + edge_report.py extension + endpoint + MCP not built. WATCH-ITEMS carried: (1) EXTEND the existing era-3 edge_report.py additively — never fork a second edge computation (iter-1 + iter-2 both flagged); (2) it will run the same compute_setups on its hot path — plan for audit B2's ~4m43s full-panel scan latency (persisted/cached scan result)."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "/structure decluttered — the map is the default, the noise is a toggle",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-05-structure-baseline-raw-levels.png",
+      "spec_hash": "c02116277b50277f2e5f4268f03c7e348bf26199039bd928e94b5ec09bf7d122",
+      "note": "Out of scope in iter-2 (Frontend Present: no). Now has BOTH backend values to render verbatim: J-01 /research/tradability (map default + raw toggle) and J-02 /research/setups + /research/setups/{id} (case browser + drill-in with rejected + forward returns); the Edge Report section depends on J-04. Browser-verifiable, keyless. BLOCKING WATCH-ITEM (audit B1): before rendering setups events, resolve the boundary case where a definitive reaction label sits beside None forward returns (surface effective horizon / flag-suppress / exclude + a regression test)."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Cockpit confluence — bands + tape markers + a descriptive chip",
+      "status": "failing",
+      "last_verified_iter": "goal-tradable_wall-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-0-evidence/J-06-cockpit-historical-mode-baseline.png",
+      "spec_hash": "f3ef213046e642d7df3f552b7a95d4fff9cf0792ea0058ac4596753b1c338ea7",
+      "note": "Out of scope in iter-2 (credential-gated + Frontend Present: no). PriceChart band-overlay + confluence chip not built; credentialed AAPL 06-22 replay portion operator-Alpaca-gated (honest blocked when keys absent). SIM-ticker honest-empty-state was confirmed at baseline. The chip's rejection/breakthrough mapping is read from /research/strategies, never hardcoded."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The foundation is unchanged (regression sentinel)",
+      "status": "already_passing",
+      "last_verified_iter": "goal-tradable_wall-iter-2",
+      "last_passing_iter": "goal-tradable_wall-iter-2",
+      "first_seen_iter": "goal-tradable_wall-iter-0",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-2-qa.md",
+      "spec_hash": "a72b60f1255c1c81af6f3248c5fa34761bf218857ac848b20ecb9829a309ddd0",
+      "note": "Required-still-passing this iter (iter-2), re-verified green. Frozen foundations (levels.py / tradability.py / backtests.py / tape engine / bars.py / Alpaca adapter) all absent from the product diff (evaluator git-diff scope check); config_fingerprint independently recomputed to 4d665603569b9dbf; the 5 new setups_* constants are all in the fingerprint exclusion set; full backend suite 1268 passed / 6 skipped / 0 failed (QA), and the audit independently re-ran 33 observer/profile-equivalence + dense-replay guards + 20 tradability tests all green (engine equivalence 22/22). No test deleted or weakened."
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-07-14T11:06:04Z"
+}

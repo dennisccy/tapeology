@@ -32,7 +32,8 @@ import pytest
 from app.config import CONFIG, Config
 from app.providers.adapters.base import RawBar
 from app.research.bars import BarStore
-from app.research.setups import BROKE, CHOPPED, REJECTED, compute_setups
+from app.research.datasets import DatasetStore
+from app.research.setups import BROKE, CHOPPED, REJECTED, compute_setups, enrich_with_tape_timeline
 
 FIXTURE_YAHOO_DIR = Path(__file__).parent / "fixtures" / "yahoo"
 
@@ -540,3 +541,233 @@ def test_aapl_frozen_tradability_and_levels_output_is_byte_identical_to_before(t
 
     assert json.dumps(levels_before, sort_keys=True) == json.dumps(levels_after, sort_keys=True)
     assert json.dumps(tradability_before, sort_keys=True) == json.dumps(tradability_after, sort_keys=True)
+
+
+# --- Tape-at-the-wall join (era-5B capability 4, J-03): a committed real-tick dataset joined
+# onto a synthetic PG touch event -----------------------------------------------------------------
+#
+# ONE synthetic PG event whose touch lands inside the REAL committed PG SIP reference window
+# (tests/fixtures/alpaca/PG_20260609_170000_171000_sip.json, 2026-06-09T17:00-17:10). Bars are
+# ENGINEERED (the test_tradability.py/test_setups.py synthetic-fixture precedent: full control
+# over exact expected numbers), but the recorded TICK data the join replays is REAL, never
+# fabricated: tests/fixtures/datasets_j03/ was generated ONCE, through the real record path, by
+# scripts/generate_setups_join_fixture.py (see that script's own docstring for provenance) --
+# never hand-crafted JSON.
+
+FIXTURE_DATASETS_J03_DIR = Path(__file__).parent / "fixtures" / "datasets_j03"
+
+_PG_SESSION_BASE = datetime(2026, 6, 9, 17, 0, 0, tzinfo=timezone.utc).timestamp()
+
+
+def _pg_5m(offset_seconds: float, o: float, h: float, l: float, c: float, v: int) -> RawBar:
+    return RawBar("PG", "5m", _PG_SESSION_BASE + offset_seconds, o, h, l, c, v)
+
+
+_PG_DAILY_BASIS = RawBar(
+    "PG", "1d", datetime(2026, 6, 8, tzinfo=timezone.utc).timestamp(),
+    100.0, 110.00, 90.00, 100.00, 1_000,
+)
+# Touch bar at 17:02:30Z -- 30s inside the committed fixture's own recorded [17:02:00, 17:03:00)
+# window -- touching the lone resistance level (2026-06-08's daily high, 110.00).
+_PG_TOUCH_BAR = _pg_5m(150.0, 109.80, 110.05, 109.70, 110.02, 5_000)
+_PG_REACTION_BAR_1 = _pg_5m(450.0, 110.02, 110.10, 109.00, 109.20, 4_000)  # +1 horizon
+_PG_REACTION_BAR_2 = _pg_5m(750.0, 109.20, 109.30, 108.50, 108.80, 3_000)  # +2 horizon -- REJECTED
+
+
+def _pg_join_config() -> Config:
+    return Config(setups_panel_symbols=("PG",), setups_forward_return_horizons_bars=(1, 2))
+
+
+def _seed_pg_join_bars(store: BarStore) -> None:
+    store.record(
+        symbol="PG", timeframe="1d", window_start_utc="2026-06-08T00:00:00Z",
+        window_end_utc="2026-06-09T00:00:00Z", feed="sip", bars=[_PG_DAILY_BASIS],
+    )
+    store.record(
+        symbol="PG", timeframe="5m", window_start_utc="2026-06-09T17:00:00Z",
+        window_end_utc="2026-06-09T17:15:00Z", feed="sip",
+        bars=[_PG_TOUCH_BAR, _PG_REACTION_BAR_1, _PG_REACTION_BAR_2],
+    )
+
+
+def _pg_join_event(bar_store: BarStore) -> dict:
+    result = compute_setups(bar_store, _pg_join_config())
+    assert len(result["events"]) == 1, "the engineered PG fixture must emit exactly one event"
+    return result["events"][0]
+
+
+def test_pg_join_event_has_the_expected_shape_before_any_join(tmp_path):
+    """Verified by direct computation against the engineered fixture (never hand-derived) -- the
+    UN-enriched event compute_setups emits, before the join runs at all."""
+    bar_store = BarStore(tmp_path / "bars")
+    _seed_pg_join_bars(bar_store)
+    event = _pg_join_event(bar_store)
+
+    assert event["id"] == "77e4900ec3089ded"
+    assert event["symbol"] == "PG"
+    assert event["session_date"] == "2026-06-09"
+    assert event["touch_ts"] == "2026-06-09T17:02:30.000000Z"
+    assert event["reaction"] == REJECTED
+    assert event["band"] == {
+        "side": "resistance",
+        "price_low": 110.0,
+        "price_high": 110.0,
+        "class": None,
+        "quality_score": 27.0,
+        "round_number": False,
+        "member_count": 1,
+        "members": [
+            {
+                "price": 110.0, "strength": 4.0, "timeframe": "1d",
+                "touch_count": 1, "type": "prior-period-extreme",
+            },
+        ],
+    }
+    assert event["forward_returns"] == [
+        {"horizon_bars": 1, "return_fraction": pytest.approx(-0.007453190329031024)},
+        {"horizon_bars": 2, "return_fraction": pytest.approx(-0.011088892928558435)},
+    ]
+    assert event["tape_timeline"] == [], "un-joined -- honestly empty, exactly like every other event"
+
+
+def test_join_path_matches_the_committed_fixture_and_returns_the_exact_five_state_timeline(tmp_path):
+    """J-03's headline join-path proof: the committed real-tick fixture
+    (tests/fixtures/datasets_j03/) covers the engineered touch's own [17:02:00, 17:03:00) window,
+    so ``enrich_with_tape_timeline`` matches it by symbol + window containment, replays it through
+    the FROZEN ``TapeEngine``, and returns the EXACT state/confidence/order sequence -- verified by
+    direct computation against the real committed fixture (never hand-derived), collapsed from
+    1,963 raw trade+quote events down to 4 meaningful state-transition entries (the
+    ``HistoryBuffer.note_state`` idiom this module's join mirrors)."""
+    bar_store = BarStore(tmp_path / "bars")
+    _seed_pg_join_bars(bar_store)
+    event = _pg_join_event(bar_store)
+
+    dataset_store = DatasetStore(FIXTURE_DATASETS_J03_DIR)
+    enriched = enrich_with_tape_timeline(event, dataset_store, _pg_join_config())
+
+    # Every OTHER field is served verbatim -- the join touches tape_timeline alone.
+    unchanged = {k: v for k, v in enriched.items() if k != "tape_timeline"}
+    assert unchanged == {k: v for k, v in event.items() if k != "tape_timeline"}
+
+    assert enriched["tape_timeline"] == [
+        {
+            "timestamp": "2026-06-09T17:02:08.926045Z", "state": "seller_control",
+            "confidence": pytest.approx(0.600948859073259),
+        },
+        {
+            "timestamp": "2026-06-09T17:02:10.313400Z", "state": "seller_control",
+            "confidence": pytest.approx(0.6186718843924585),
+        },
+        {
+            "timestamp": "2026-06-09T17:02:13.893943Z", "state": "seller_control",
+            "confidence": pytest.approx(0.6827213366979764),
+        },
+        {
+            "timestamp": "2026-06-09T17:02:55.616940Z", "state": "seller_control",
+            "confidence": pytest.approx(0.7506461682283672),
+        },
+    ]
+    # Chronological order (never insertion-order happenstance).
+    timestamps = [entry["timestamp"] for entry in enriched["tape_timeline"]]
+    assert timestamps == sorted(timestamps)
+
+
+def test_join_path_is_deterministic_across_repeat_calls(tmp_path):
+    bar_store = BarStore(tmp_path / "bars")
+    _seed_pg_join_bars(bar_store)
+    event = _pg_join_event(bar_store)
+    dataset_store = DatasetStore(FIXTURE_DATASETS_J03_DIR)
+
+    first = enrich_with_tape_timeline(event, dataset_store, _pg_join_config())
+    second = enrich_with_tape_timeline(event, dataset_store, _pg_join_config())
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+
+
+def test_unmatched_event_keeps_an_honestly_empty_tape_timeline(tmp_path):
+    """An event with NO recorded dataset covering its touch -- here, a differently-timed touch (3h
+    later) the committed fixture's [17:02, 17:03) window does not cover -- stays honestly empty,
+    never fabricated. Verified by direct computation: an otherwise-identical fixture, time-shifted,
+    still emits exactly one REJECTED event -- only ``touch_ts``/``id`` differ."""
+    bar_store = BarStore(tmp_path / "bars")
+    bar_store.record(
+        symbol="PG", timeframe="1d", window_start_utc="2026-06-08T00:00:00Z",
+        window_end_utc="2026-06-09T00:00:00Z", feed="sip", bars=[_PG_DAILY_BASIS],
+    )
+    late_offset = 3 * 3600  # three hours later than the committed fixture's own window
+    bar_store.record(
+        symbol="PG", timeframe="5m", window_start_utc="2026-06-09T17:00:00Z",
+        window_end_utc="2026-06-09T21:00:00Z", feed="sip",
+        bars=[
+            _pg_5m(late_offset + 150.0, 109.80, 110.05, 109.70, 110.02, 5_000),
+            _pg_5m(late_offset + 450.0, 110.02, 110.10, 109.00, 109.20, 4_000),
+            _pg_5m(late_offset + 750.0, 109.20, 109.30, 108.50, 108.80, 3_000),
+        ],
+    )
+    event = _pg_join_event(bar_store)
+    assert event["touch_ts"] == "2026-06-09T20:02:30.000000Z"
+    assert event["reaction"] == REJECTED
+
+    dataset_store = DatasetStore(FIXTURE_DATASETS_J03_DIR)  # the SAME real committed fixture
+    enriched = enrich_with_tape_timeline(event, dataset_store, _pg_join_config())
+    assert enriched == event, "no matching dataset -> the event is returned completely unchanged"
+    assert enriched["tape_timeline"] == []
+
+
+def test_empty_dataset_store_leaves_every_event_honestly_empty(tmp_path):
+    bar_store = BarStore(tmp_path / "bars")
+    _seed_pg_join_bars(bar_store)
+    event = _pg_join_event(bar_store)
+
+    empty_dataset_store = DatasetStore(tmp_path / "no-datasets-here")
+    enriched = enrich_with_tape_timeline(event, empty_dataset_store, _pg_join_config())
+    assert enriched == event
+    assert enriched["tape_timeline"] == []
+
+
+# --- Single source of truth: the join reuses the frozen TapeEngine/DatasetStore.replay, and stays
+# confined to the detail route's own wiring -- never inside compute_setups' shared scan loop ------
+
+
+def test_setups_join_reuses_dataset_store_replay_never_a_second_tape_engine():
+    """era-5B J-03 critical anti-goal (mirrors
+    ``test_setups_module_reuses_compute_tradability_verbatim_never_a_second_map_engine``): the tape
+    join must replay through the FROZEN ``TapeEngine`` via ``DatasetStore.replay`` -- never
+    construct a second engine, never reimplement classification."""
+    from app.research import setups as setups_module
+
+    src = inspect.getsource(setups_module)
+    assert "dataset_store.replay(" in src
+    assert "TapeEngine(" not in src, "setups.py must never construct a second TapeEngine"
+    assert "TapeStateClassifier" not in src, "setups.py must never reimplement classification"
+
+    import_lines = [
+        line.strip() for line in src.splitlines() if line.strip().startswith(("import ", "from "))
+    ]
+    dataset_imports = [
+        line for line in import_lines
+        if line.endswith(".datasets import DatasetStore, parse_utc_epoch")
+    ]
+    assert dataset_imports, "setups.py must import DatasetStore (+ parse_utc_epoch) from .datasets"
+
+
+def test_compute_setups_itself_never_touches_the_dataset_store():
+    """Architecture guard: the join lives ONLY in ``enrich_with_tape_timeline``, called ONLY from
+    the ``GET /research/setups/{id}`` route -- ``compute_setups``'s own shared scan loop (used by
+    BOTH the list and detail routes) must stay completely free of any ``DatasetStore`` reference,
+    so the join never adds an O(events) dataset-store scan to the already-slow full-panel list
+    route."""
+    src = inspect.getsource(compute_setups)
+    assert "dataset" not in src.lower(), "compute_setups must never reference the dataset store"
+
+
+# --- Config: the recording constants are excluded from config_fingerprint -----------------------
+
+
+def test_recording_config_fields_are_excluded_from_config_fingerprint():
+    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert Config(recording_pre_touch_minutes=1.0).config_fingerprint() == CONFIG.config_fingerprint()
+    assert Config(recording_post_touch_minutes=1.0).config_fingerprint() == CONFIG.config_fingerprint()
+    assert Config(recording_event_selection_cap=1).config_fingerprint() == CONFIG.config_fingerprint()
+    assert Config(recording_holdout_fraction=0.99).config_fingerprint() == CONFIG.config_fingerprint()
+    # ...while a real classifier threshold still moves it (the counter-test).
+    assert Config(min_trade_speed=0.51).config_fingerprint() != CONFIG.config_fingerprint()

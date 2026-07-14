@@ -1274,6 +1274,46 @@ class Config:
     # magic number either.
     setups_5m_fetch_retention_days: int = 60
 
+    # --- Era 5B: event-window tape recording (capability 3, J-03) -- RESEARCH DEFAULTS, the SAME
+    # sr_pivot_lookback discipline: every research value lives in config with its rationale
+    # documented HERE, no literal in scripts/record_event_windows.py or research/setups.py.
+    # Namespaced recording_* so it never collides with the tradability_*/setups_* families above
+    # (read-only inputs the recording driver consumes VERBATIM -- it selects from compute_setups'
+    # own events, never a second scan) nor the datasets.py SPLIT_TRAIN/SPLIT_HOLDOUT vocabulary it
+    # reuses unmodified.
+    #
+    # RECORDING WINDOW PADDING: goal.md's own pinned "touch -60 min ... +90 min" spec -- wide
+    # enough before the touch to capture the tape's approach to the wall, wider after (90 vs 60)
+    # because the REACTION (what the tape says AFTER a rejection/break) is the entire point of
+    # J-03's "tape-at-the-wall" join. A single config-owned pair, never a per-event literal.
+    recording_pre_touch_minutes: float = 60.0
+    recording_post_touch_minutes: float = 90.0
+    # TOP-RANKED EVENT-SELECTION CAP: the recording driver's own operational ceiling on how many
+    # events it POSTs /research/datasets for in one run (goal.md: "top-ranked scan events"). 15
+    # mirrors the SAME scale as the J-02 scan's own ">= 15 events" registry-size floor
+    # (setups_panel_symbols has 12 members) -- comfortably above the J-03 ">= 10 windows across
+    # >= 5 symbols" credentialed headline even after the pinned AAPL event and the driver's own
+    # one-best-per-symbol-first selection spread consume part of the budget. Governs ONLY the
+    # operational driver script's own POST count -- it never shapes any persisted tape/backtest/
+    # PnL value, so it is EXCLUDED from config_fingerprint below (the bar_timeframes /
+    # setups_panel_symbols rationale).
+    recording_event_selection_cap: int = 15
+    # SPLIT-ASSIGNMENT RATIO: the NEW config-owned deterministic seeded rule this iteration adds
+    # (no pre-existing "seeded split rule" exists in the codebase to reuse verbatim -- confirmed by
+    # a direct grep across app/ and tests/; see the plan's own architecture notes). A pure sha256
+    # digest of each recorded event's OWN stable id (the setups.py _event_id idiom, reused as a
+    # technique) is mapped into [0, 1) and compared against this ratio -- deterministic and
+    # reproducible (the identical event id always resolves to the identical split, every run), no
+    # wall-clock, no unseeded randomness (the deterministic-and-seeded anti-goal). 0.2 is the
+    # conventional 80/20 train/holdout research proportion, sized so a recording run of >= 10
+    # events still plausibly populates BOTH splits (an all-one-split run would starve J-04's
+    # hold-out cells before they even exist). Governs ONLY which frozen split TAG a NEWLY recorded
+    # dataset gets -- it never re-derives or alters any EXISTING dataset's frozen tag (structural
+    # immutability; datasets.py has no update path at all), so it is EXCLUDED from
+    # config_fingerprint below (the tradability_*/setups_* "separate additive computation"
+    # rationale).
+    recording_holdout_fraction: float = 0.2
+
     # --- Structure-and-tape era: the `structure_tape` STRATEGY (era-4 capability 4, J-04; Data
     # Contract row 41) -- RESEARCH DEFAULTS, the SAME ``sr_pivot_lookback`` discipline: every
     # research value lives in config with its rationale documented HERE, no literal in
@@ -1664,6 +1704,22 @@ class Config:
             "setups_reaction_threshold_bps",
             "setups_max_events_per_band_per_session",
             "setups_5m_fetch_retention_days",
+            # The event-window recording driver's padding / selection-cap / split-ratio parameters
+            # (era-5B capability 3, J-03): the IDENTICAL tradability_*/setups_* rationale directly
+            # above -- the recording driver and the tape-timeline join are a SEPARATE, additive
+            # capability over compute_setups' and DatasetStore's frozen output (never stamped
+            # with, or compared across, a config_fingerprint anywhere; a recorded dataset's OWN
+            # provenance is its stored metadata, never this fingerprint), so two journals identical
+            # in every FINGERPRINTED threshold but configured with different recording padding, a
+            # different selection cap, or a different split ratio MUST share a fingerprint (else
+            # every temp-config test of these brand-new, unrelated parameters would mint a
+            # different fingerprint and falsely fragment the tape/backtest/PnL pools those OTHER
+            # thresholds exist to protect). Pinned by a fingerprint-stability test + the
+            # real-threshold counter-test in tests/test_setups.py.
+            "recording_pre_touch_minutes",
+            "recording_post_touch_minutes",
+            "recording_event_selection_cap",
+            "recording_holdout_fraction",
             "journal_list_default_limit",
             "journal_list_max_limit",
             "analytics_min_sample_size",

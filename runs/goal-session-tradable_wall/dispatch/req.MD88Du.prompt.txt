@@ -1,3 +1,47 @@
+You are the goal-evaluator agent for goal-mode iteration evaluation.
+
+Session ID: tradable_wall
+Iteration index: 3
+Iter name: goal-tradable_wall-iter-3
+Depth dispatched: full
+
+Project goal (SLICED — vision + anti-goals + target/failing journeys verbatim; stable passing journeys digested): /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-3/goal-slice.md
+  Full goal file: /home/dennis-chan/Git/tapeology/docs/goal.md — Read it ONLY if a digested journey becomes relevant.
+Iter spec: /home/dennis-chan/Git/tapeology/docs/phases/goal-tradable_wall-iter-3.md
+Agent instructions: .claude/agents/goal-evaluator.md  <-- read this first
+(CLAUDE.md is already in your system prompt — do not Read it again.)
+
+Iteration artifacts (read what exists):
+  Deterministic diff scan (product diff; harness bookkeeping excluded — secrets/deps/license): /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-3/scan-report.md
+  Bounded diff view (complete file list; hunks capped, header lists omissions): /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-3/iter-diff.md
+  Dev handoff: docs/handoffs/goal-tradable_wall-iter-3-dev.md
+  Review report: reports/reviews/goal-tradable_wall-iter-3-review.md
+  QA report: reports/qa/goal-tradable_wall-iter-3-qa.md (full mode only)
+  Audit handoff: docs/handoffs/goal-tradable_wall-iter-3-audit.md (full mode only)
+  Browser QA results: reports/phase-goal-tradable_wall-iter-3-ui-test-results.md
+  Evidence: reports/qa/goal-tradable_wall-iter-3-evidence/
+  Coherence audit: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-3/coherence.md  <-- COHERENCE-FAIL vetoes GOAL_ACHIEVED and drives a consolidation CONTINUE
+  Goal-edit drift note: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-3/journeys-changed.md  <-- if present, each listed journey's prior pass is VOID until re-verified against the CURRENT goal text (your step 3)
+
+Journey state (inline digest — your methodology's section A table starts here):
+```
+J-01 | passing         | last_passing=goal-tradable_wall-iter-2 | The tradable level map — from 1,800 levels to <=10 bands
+J-02 | passing         | last_passing=goal-tradable_wall-iter-2 | The wide scan — a case-study registry across the 12-symbol panel
+J-03 | failing         | last_passing=- | Real tape at the wall — credentialed event-window recording
+J-04 | failing         | last_passing=- | The edge report — what actually profits, under the existing gates
+J-05 | failing         | last_passing=- | /structure decluttered — the map is the default, the noise is a toggle
+J-06 | failing         | last_passing=- | Cockpit confluence — bands + tape markers + a descriptive chip
+J-07 | already_passing | last_passing=goal-tradable_wall-iter-2 | The foundation is unchanged (regression sentinel)
+```
+
+Prior session state:
+  Journey history: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/journey-history.json  <-- update this with new state (full atomic write)
+  Evaluator log: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/evaluator-log.md  <-- append a new entry; do not overwrite or read the full file (last 5 entries pre-trimmed below)
+  Lessons file: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/lessons.md  <-- append a brief lesson entry capturing a non-obvious takeaway (1-3 sentences). Skip if nothing surprising happened.
+  Assumption ledger: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/assumptions.md  <-- append an entry when a scoring decision required interpreting an ambiguous goal (step 5b of your instructions). Skip when none — zero entries is normal.
+
+Recent evaluator log entries (last 5, pre-trimmed):
+```
 # Evaluator Log — session tradable_wall (Era 5B "The Tradable Wall")
 
 ## Iteration 0 — goal-tradable_wall-iter-0
@@ -44,18 +88,33 @@
 **Reasoning:** J-02 is genuinely achieved — I did not trust the review/QA/audit PASS reports; I independently reproduced the pinned AAPL 2026-06-22 headline via a direct `compute_setups` call on the two committed keyless real fixtures: resistance band [300.23,302.25] (contains 300.48+302.07), round-number flagged, reaction `rejected`, forward returns [-0.462%, -4.269%] (byte-matching the dev handoff), touch_ts 2026-06-22T13:30:00Z, tape_timeline empty (J-03 not run) — plus byte-identical repeat-scan determinism and `config_fingerprint`==`4d665603569b9dbf`, all reproduced by me. The 33-test setups suite passed keyless. The >=15-events/>=8-symbols headline: I enumerated the live store and confirmed ALL 12 panel symbols are genuinely populated with real Yahoo 5m+1d series (47 files, feed=yahoo, zero Alpaca), and the reviewer AND auditor each independently re-ran the full scan to 801 events across 12/12 symbols with the pinned event present — so I did not redundantly repeat the 4m43s recompute a fourth time. Frozen foundations (levels/tradability/backtests/tape/BarStore/Alpaca) absent from the diff; J-01/J-07 re-verified green (frozen-file-absence + fingerprint + byte-identity guard + audit's 22/22 equivalence). Not GOAL_ACHIEVED (J-03/J-04/J-05/J-06 still failing); not REGRESSION (nothing regressed, no critical anti-goal); not STALLED (J-03 keyless code+fixture, J-04, J-05 are all agent-buildable next); not ESCALATE (already full depth, all lanes pass-class, nothing cross-cutting surfaced). Carried GAP (audit B1, review MINOR, NOT a J-02 blocker): 13/801 most-recent-session events carry a definitive reaction label beside None forward returns — must be resolved before J-05 renders them.
 
 **Next-step recommendation:** Build J-03 (credentialed event-window tape recording) at depth **full** — the dependency-order next, now unblocked for its event pool by J-02's 801-event registry. Split by the credential gate: the recorder wiring + tape-timeline join onto `GET /research/setups/{id}` + ONE committed keyless tick-fixture slice are agent-buildable now; the full >=10-window/>=5-symbol recording (incl. pinned AAPL 06-22) is operator-Alpaca-credential-gated (honestly blocked when keys absent, never simulated). Central rails: feed-honesty (iex verbatim, never pooled with sip), append-only/checksummed/split-frozen DatasetStore, keys-never-committed. Carry three watch-items: (1) audit B1 boundary (blocking for J-05) — resolve the definitive-label-beside-None-returns case with a regression test before any UI renders setups events; (2) audit B2 latency — the ~4m43s full-panel scan is on J-04's + J-05's hot path, plan a persisted/cached scan result; (3) J-04 must EXTEND edge_report.py additively, never fork.
+```
 
-## Iteration 3 — goal-tradable_wall-iter-3
+Recent assumption entries (pre-trimmed):
+```
+# Assumption Ledger — session tradable_wall
 
-**Date:** 2026-07-14T17:28:17Z
-**Verdict:** CONTINUE
-**Depth dispatched:** full
-**Journey deltas:**
-- Newly passing: none — but J-03 moved failing -> **partial** (its keyless tape-at-the-wall substrate genuinely landed; forward progress)
-- Newly failing: none
-- Regressed: none
-- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS; all frozen files absent from the diff; config_fingerprint independently recomputed to 4d665603569b9dbf; apps/backend/.env untracked + gitignored; no-credential grep test passed in evaluator's own run)
+## iter-0 — goal-evaluator
 
-**Reasoning:** J-03's KEYLESS substrate is genuinely delivered — I re-ran 9 keyless join-path/guard/no-credential tests (all pass), confirmed the join replays through the FROZEN TapeEngine via DatasetStore.replay (never a second engine), verified compute_setups/list_setups byte-identical, the ONE committed sip fixture present, all frozen files (engine/, datasets.py, levels.py, tradability.py, backtests.py, bars.py, adapters/) absent from the diff, and independently recomputed config_fingerprint == 4d665603569b9dbf (4 new recording_* constants correctly in the exclusion set). I did NOT accept the dev/QA "credentialed headline MET" framing: the auditor (PASS_WITH_GAPS) and my own checks agree it is only partial/unknown — the integration test was INTERRUPTED with no pytest PASS, the pinned-AAPL 06-22 drill-in five-state timeline was NEVER demonstrated end-to-end (only a JPM 295-entry proxy), and I confirmed the persistent apps/backend/.data/datasets/ store holds ONLY 7 pre-existing Jul-3 datasets (the 15 recorded ones were ephemeral, in a since-GC-eligible pytest temp dir). So J-03 = partial (failing->partial), not passing. Not REGRESSION (J-01/J-02/J-07 all re-verified green — frozen files absent, fingerprint frozen, suite 1300 passed/0 failed; no critical anti-goal); not STALLED (abundant agent-buildable work — J-04 next in dependency order, then J-05/J-06); not GOAL_ACHIEVED (J-03 partial, J-04/J-05/J-06 failing); not ESCALATE (already full depth, all lanes pass-class, nothing cross-cutting surfaced). coherence COHERENCE-PASS (no consolidation owed); no journeys-changed.md drift note; all 7 journey spec-hashes match current goal text.
+**Ambiguity:** The iteration spec instructs recording credential-gated J-03 and J-06 as `blocked` (Alpaca env unset, not simulated), but the journey-history status vocabulary (`passing`/`failing`/`partial`/`already_passing`/`regressed`/`unknown`) has no `blocked` value.
+**We chose:** `failing` for both — there is positive evidence their features are entirely absent at baseline (setups.py/recorder path for J-03; PriceChart overlay+chip for J-06), so they are definitively not-passing, not merely untested. The credential gate is preserved as a `note` field on each journey rather than as the primary status. `unknown` was rejected because it means "not tested this iteration; carry over" — but both were exercised and found absent.
+**Reversible:** yes
+```
 
-**Next-step recommendation:** Build J-04 (the 3-way edge report + structure_tape_map) at depth **full** — the dependency-order next, now unblocked by J-03's keyless join substrate (J-04 backtests over recorded event datasets; the committed datasets_j03/ fixture gives it a keyless recorded window). It introduces a new canonical value + owner (edge_report cells / GET /research/edge-report + MCP proxy) and a new registered strategy (structure_tape_map beside frozen v1/structure_tape), and it makes several critical rails simultaneously load-bearing — hence full depth. Carry FOUR watch-items: (1) EXTEND the existing era-3 edge_report.py additively — NEVER fork a second edge computation (flagged iter-1/2/3); (2) the no-pooling-across-feeds rail (iex/sip/yahoo) becomes ACTIVELY load-bearing at the edge report; (3) champion pointer moves ONLY through the existing sweep gate on hold-out — never hand-promote structure_tape_map; keep config_fingerprint 4d665603569b9dbf (new strategy config in the exclusion set); (4) the ~4m43s full-panel compute_setups scan (audit B2) is J-04's hot path — plan a persisted/cached scan. SEPARATE operator-gated carry (does NOT block J-04): to durably complete J-03's credentialed headline, an operator runs apps/backend/scripts/record_event_windows.py directly (writes the persistent .data/datasets store) or re-runs the integration test to a clean pytest PASS + demonstrates the pinned-AAPL drill-in — then J-03 can move partial -> passing. Also carried to J-05: audit-B1 boundary-label fix before rendering setups events.
+Apply the TOKEN AND QUESTIONING POLICY from .claude/core.md strictly.
+
+Write your verdict to: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-3/eval.md
+
+The verdict line MUST appear at the top of /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-3/eval.md and start exactly with:
+**Verdict:** GOAL_ACHIEVED
+  or **Verdict:** CONTINUE
+  or **Verdict:** ESCALATE
+  or **Verdict:** REGRESSION
+  or **Verdict:** STALLED
+
+Also include a 'Depth Recommendation For Next Iteration:' line: lean or full.
+
+Then update /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/journey-history.json (full atomic write) and append an entry to /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/evaluator-log.md.
+STOP.
+
+Environment note: this pipeline run isolates temp files. Before running tests or any command that writes temporary files, run: export TMPDIR="/tmp/iad.goal-tradable_wall-iter-3.2865738" TMP="/tmp/iad.goal-tradable_wall-iter-3.2865738" TEMP="/tmp/iad.goal-tradable_wall-iter-3.2865738"

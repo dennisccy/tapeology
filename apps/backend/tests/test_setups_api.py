@@ -23,6 +23,7 @@ from app.config import CONFIG
 from app.main import app, get_market_adapter, manager
 from app.providers.adapters.base import RawBar
 from app.research.bars import BarStore
+from app.research.datasets import DatasetStore
 from app.research.routes import ResearchRegistry, set_registry
 from app.research.setups import compute_setups
 from app.research.store import JournalStore
@@ -31,11 +32,20 @@ YAHOO_FIXTURE_DIR = Path(__file__).parent / "fixtures" / "yahoo"
 AAPL_DAILY_FIXTURE = "AAPL_1d_20260101_20260626.json"
 AAPL_5M_SETUPS_FIXTURE = "AAPL_5m_20260615_20260630.json"
 
+# The committed J-03 tape-at-the-wall join fixture (see test_setups.py's own header + generation
+# script scripts/generate_setups_join_fixture.py for provenance).
+FIXTURE_DATASETS_J03_DIR = Path(__file__).parent / "fixtures" / "datasets_j03"
+
 
 @pytest.fixture
 def ctx(tmp_path, monkeypatch):
     bar_dir = tmp_path / "bars"
     monkeypatch.setenv("TAPEOLOGY_BAR_DIR", str(bar_dir))
+    # Era-5B J-03: get_setup now also depends on the DatasetStore. Point it at an EMPTY temp dir by
+    # default (the test_datasets_api.py ctx precedent) so this file's route-level assertions never
+    # accidentally read a real operator's local (gitignored) recorded datasets -- hermetic by
+    # construction, exactly like the bar-dir override directly above.
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(tmp_path / "datasets"))
     store = JournalStore(str(tmp_path / "journal.db"), CONFIG)
     registry = ResearchRegistry(store, CONFIG)
     set_registry(registry)
@@ -256,3 +266,97 @@ def test_get_setup_unknown_id_on_an_empty_store_is_still_404_never_an_error(ctx)
     client, _bar_dir = ctx  # nothing seeded
     r = client.get("/research/setups/anything")
     assert r.status_code == 404
+
+
+# --- Tape-at-the-wall join through the REAL route (era-5B capability 4, J-03) -------------------
+#
+# ``list_setups``/``get_setup`` read the process-global ``CONFIG`` (this file's own header
+# docstring), so ``setups_panel_symbols`` cannot be overridden per-request -- every route-level
+# event here is necessarily a REAL shipped-panel symbol (AAPL). No committed REAL tick fixture
+# exists for any shipped panel symbol (only the era-3 PG/F reference captures, neither in the
+# panel), so a route-level proof of "a REAL committed dataset ENRICHES a REAL panel event" is only
+# reachable with real Alpaca credentials (J-03's own operator-gated headline) -- exactly what
+# ``test_setups.py``'s module-level tests already prove keylessly for the join MECHANISM itself
+# (bypassing the route's fixed panel via a directly-passed ``Config(setups_panel_symbols=("PG",))``).
+# What IS honestly provable here, keyless, through the REAL route: the join is correctly wired
+# (never crashes, never silently mismatches) and correctly SYMBOL-SCOPED (a real recorded dataset
+# for an off-panel symbol never leaks into an on-panel event's timeline).
+
+
+def test_get_setup_pinned_aapl_event_through_the_real_route_is_keyless_honest_empty(ctx):
+    """The pinned AAPL 2026-06-22 event's drill-in, read through the REAL detail route: keyless (no
+    Alpaca credentials, no recorded AAPL dataset in this hermetic dataset dir), so
+    ``tape_timeline`` is honestly empty -- the credentialed recording (J-03's operator-gated
+    headline) is what fills this in for real."""
+    client, bar_dir = ctx
+    _seed_aapl(bar_dir)
+    listed = client.get(
+        "/research/setups", params={"symbol": "AAPL", "reaction": "rejected"}
+    ).json()["events"]
+    pinned = next(
+        e for e in listed
+        if e["session_date"] == "2026-06-22" and e["band"]["side"] == "resistance"
+        and e["band"]["price_low"] <= 300.48 and e["band"]["price_high"] >= 302.07
+    )
+
+    r = client.get(f"/research/setups/{pinned['id']}")
+    assert r.status_code == 200
+    event = r.json()["event"]
+    assert event["reaction"] == "rejected"
+    assert event["tape_timeline"] == []
+
+
+def test_get_setup_detail_stays_unenriched_when_no_dataset_matches_the_symbol(ctx, monkeypatch):
+    """A REAL recorded dataset (the committed J-03 fixture) sits in the dataset store, but its
+    symbol ("PG") matches no AAPL event -- ``GET /research/setups/{id}`` must stay byte-identical
+    to the list entry (the join is correctly symbol-scoped, never a blind "first dataset found"
+    attach)."""
+    client, bar_dir = ctx
+    _seed_aapl(bar_dir)
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(FIXTURE_DATASETS_J03_DIR))
+
+    listed = client.get("/research/setups").json()["events"]
+    assert listed
+    target = listed[0]
+
+    r = client.get(f"/research/setups/{target['id']}")
+    assert r.status_code == 200
+    assert r.json() == {"event": target}
+    assert r.json()["event"]["tape_timeline"] == []
+
+
+def test_list_setups_never_enriches_even_when_a_matching_dataset_exists(ctx, monkeypatch):
+    """The LIST route (``GET /research/setups``) must stay UN-enriched no matter what the dataset
+    store holds -- the join lives ONLY in the detail route (architecture guard: a per-event dataset
+    lookup inside the shared scan would regress the already-slow full-panel list route)."""
+    client, bar_dir = ctx
+    _seed_aapl(bar_dir)
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(FIXTURE_DATASETS_J03_DIR))
+
+    events = client.get("/research/setups").json()["events"]
+    assert events
+    assert all(e["tape_timeline"] == [] for e in events)
+
+
+def test_get_setup_rest_matches_direct_module_join_byte_for_byte(ctx, monkeypatch):
+    """``GET /research/setups/{id}``'s enriched output matches a direct ``compute_setups`` +
+    ``enrich_with_tape_timeline`` call byte-for-byte -- single source of truth, no second
+    computation path (the ``test_list_setups_rest_matches_module_output_byte_for_byte`` precedent,
+    extended to the join)."""
+    client, bar_dir = ctx
+    _seed_aapl(bar_dir)
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(FIXTURE_DATASETS_J03_DIR))
+
+    listed = client.get("/research/setups").json()["events"]
+    target = listed[0]
+    r = client.get(f"/research/setups/{target['id']}")
+    assert r.status_code == 200
+
+    from app.research.setups import enrich_with_tape_timeline
+
+    direct_events = compute_setups(BarStore(bar_dir), CONFIG)["events"]
+    direct_event = next(e for e in direct_events if e["id"] == target["id"])
+    direct_enriched = enrich_with_tape_timeline(
+        direct_event, DatasetStore(FIXTURE_DATASETS_J03_DIR), CONFIG
+    )
+    assert r.json() == {"event": direct_enriched}

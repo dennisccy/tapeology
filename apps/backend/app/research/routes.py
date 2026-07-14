@@ -50,7 +50,7 @@ from .bars import (
     EmptyBarWindowError,
 )
 from .levels import compute_levels
-from .setups import BROKE, CHOPPED, REJECTED, compute_setups
+from .setups import BROKE, CHOPPED, REJECTED, compute_setups, enrich_with_tape_timeline
 from .tradability import compute_tradability
 from .datasets import (
     VALID_SOURCE_KINDS as DATASET_SOURCE_KINDS,
@@ -1889,14 +1889,22 @@ def list_setups(
 
 
 @router.get("/setups/{setup_id}")
-def get_setup(setup_id: str, store: BarStore = Depends(get_bar_store)) -> dict:
+def get_setup(
+    setup_id: str,
+    store: BarStore = Depends(get_bar_store),
+    dataset_store: DatasetStore = Depends(get_dataset_store),
+) -> dict:
     """One touch event's drill-in -- band, reaction, forward returns, and the ``tape_timeline``
-    field (present but honestly empty until J-03 records) -- served VERBATIM. 404 for an unknown
-    id (never a fabricated event)."""
+    field, served VERBATIM. 404 for an unknown id (never a fabricated event). The tape join
+    (era-5B J-03) happens ONLY here, never inside ``compute_setups``'s shared scan loop
+    (``list_setups`` above stays byte-identical, unenriched): a recorded ``DatasetStore`` dataset
+    whose window covers this event's ``touch_ts`` is replayed through the frozen ``TapeEngine`` and
+    joined onto ``tape_timeline``; an event with no recorded dataset keeps it honestly empty."""
     events = compute_setups(store, CONFIG)["events"]
     event = next((e for e in events if e["id"] == setup_id), None)
     if event is None:
         raise HTTPException(status_code=404, detail=f"no setup event with id '{setup_id}'")
+    event = enrich_with_tape_timeline(event, dataset_store, CONFIG)
     return {"event": event}
 
 

@@ -16,8 +16,9 @@ module. ``research/studies.py`` owns an UNRELATED, pre-existing concept: a live 
 OCCURRENCE (``level_break`` / ``failed_move_fade`` / ``absorption_reversal`` / ``trend_continuation``)
 checked against the frozen ``TapeEngine``'s live STATE. THIS module's "event" is a completely
 different thing: a STORED 2026-dated 5m bar's OHLC range intersecting a tradable-map BAND, checked
-purely against historical bars -- no engine, no live state, no tape at all (the tape join is J-03,
-out of scope here; every event's ``tape_timeline`` field is present but honestly empty until then).
+purely against historical bars -- no engine, no live state, no tape at all (a recorded event's
+``tape_timeline`` field is joined on by ``enrich_with_tape_timeline`` below, era-5B J-03; an event
+with no recorded dataset keeps an honestly empty ``tape_timeline``).
 The two vocabularies happen to share the English word "setup"; they are never conflated, never
 share config, and never share code.
 
@@ -72,6 +73,30 @@ identity fields, never ``uuid4`` or any other unseeded/wall-clock source -- and 
 sorted by an explicit total order). Panel symbols are walked in the config-owned order; sessions
 within a symbol are walked oldest-first; each session's bands are read in ``compute_tradability``'s
 own served order.
+
+**Tape-at-the-wall join (era-5B capability 4, J-03).** ``enrich_with_tape_timeline`` -- called
+ONLY from the ``GET /research/setups/{id}`` route, NEVER from ``compute_setups``'s shared scan
+loop above (a per-event ``DatasetStore`` lookup inside that loop would add an O(events) dataset
+scan to the already-slow full-panel list route, and would entangle the join with the scan's own
+determinism guarantees) -- matches a recorded ``DatasetStore`` dataset to ONE event by ``symbol``
+equality plus the dataset's own ``[window_start_utc, window_end_utc]`` containing the event's
+``touch_ts`` (``DatasetStore``'s meta schema is frozen with no "associated event" field, so this
+containment test is the only available join key; ties -- more than one dataset's window covering
+the same touch -- break on the earliest ``created_utc``, then id, for determinism). A match is
+replayed through the FROZEN ``TapeEngine`` via ``DatasetStore.replay`` VERBATIM -- this module
+never constructs a second engine and never reimplements classification -- and the per-tick
+snapshot stream is collapsed to STATE-TRANSITION entries only, mirroring
+``engine.history.HistoryBuffer.note_state``'s own idiom (a marker only when ``tape_state``
+CHANGES) rather than one row per raw tick, and -- the SAME idiom -- a transition into a state
+outside ``Config.history_marker_states`` (i.e. ``unclear``) is not marked: an "uncertain" read is
+not itself a meaningful "the tape said X" call, and reusing ``history_marker_states`` (rather than
+a second hardcoded "unclear" literal) keeps "which states count as meaningful" owned in exactly
+one place. Each recorded window's replay uses LOGICAL per-window timestamps (``HistoricalProvider``'s
+"logical, not wall-clock" scheme), so a timeline entry's real UTC instant is reconstructed as the
+dataset's OWN stamped ``epoch_anchor`` plus the snapshot's logical timestamp -- the identical
+``epoch_anchor + logical_ts`` reconstruction ``serializers.serialize_history``'s chart projection
+already uses, never a raw logical offset (which would misread as a bogus near-1970 date). An event
+with no matching recorded dataset keeps its honestly empty ``tape_timeline`` -- never fabricated.
 """
 
 from __future__ import annotations
@@ -82,6 +107,7 @@ from datetime import date, datetime, timezone
 from ..config import Config
 from ..providers.adapters.base import RawBar
 from .bars import BarStore
+from .datasets import DatasetStore, parse_utc_epoch
 from .tradability import RESISTANCE, SUPPORT, compute_tradability
 
 REJECTED = "rejected"
@@ -288,3 +314,72 @@ def compute_setups(store: BarStore, config: Config) -> dict:
                     ))
     events.sort(key=_event_sort_key)
     return {"events": events}
+
+
+# --- Tape-at-the-wall join (era-5B capability 4, J-03) -- see the module docstring's own section
+# for the full design. Called ONLY from the GET /research/setups/{id} route, never from
+# compute_setups' shared scan loop above. -----------------------------------------------------
+
+
+def _matching_dataset(symbol: str, touch_ts: str, dataset_store: DatasetStore) -> dict | None:
+    """The recorded ``DatasetStore`` dataset whose window covers ``touch_ts`` for ``symbol``, or
+    ``None``. Match = symbol equality + ``[window_start_utc, window_end_utc]`` containing
+    ``touch_ts`` (inclusive both ends). Every timestamp is parsed to an epoch via the SAME
+    ``parse_utc_epoch`` the ``/research/datasets`` route itself uses -- a deliberately NUMERIC
+    comparison, never a lexicographic string one: two otherwise-equal ISO instants stamped at
+    different fractional-second precision (a real possibility -- a caller-supplied window bound
+    need not carry the same microsecond precision this module's own ``_iso`` always emits for
+    ``touch_ts``) can sort in the WRONG order as plain strings (``"...:00Z"`` > ``"...:00.000001Z"``
+    lexicographically, since ``"Z" > "."`` in ASCII), so this join never risks that. Datasets
+    already known-healthy: ``DatasetStore.list()`` verifies every file's checksum and separates any
+    corrupt file into its own ``errors`` return before this function ever sees a candidate. Ties
+    (more than one dataset's window covering the same touch) break on the earliest ``created_utc``,
+    then ``id`` -- deterministic, never insertion-order happenstance."""
+    touch_epoch = parse_utc_epoch(touch_ts)
+    records, _errors = dataset_store.list()
+    candidates = [
+        r for r in records
+        if r["symbol"] == symbol
+        and parse_utc_epoch(r["window_start_utc"]) <= touch_epoch <= parse_utc_epoch(r["window_end_utc"])
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda r: (r["created_utc"], r["id"]))
+
+
+def _tape_timeline(dataset_meta: dict, dataset_store: DatasetStore, config: Config) -> list[dict]:
+    """The five-state timeline for one matched dataset: replay it through the FROZEN ``TapeEngine``
+    via ``DatasetStore.replay`` (never reimplemented here) and collapse the per-tick snapshot
+    stream to state-TRANSITION entries only -- the ``HistoryBuffer.note_state`` idiom (a marker
+    only when ``tape_state`` changes, and only into a state ``Config.history_marker_states`` marks
+    as meaningful -- a transition into ``unclear`` is not itself a meaningful "the tape said X"
+    call, mirrored here rather than inventing a second "which states matter" concept). Real UTC
+    instants are reconstructed as the dataset's own ``epoch_anchor`` plus each snapshot's LOGICAL
+    timestamp (``HistoricalProvider``'s "logical, not wall-clock" replay scheme) -- the identical
+    reconstruction ``serializers.serialize_history`` already uses for chart markers."""
+    epoch_anchor = dataset_meta["epoch_anchor"]
+    meaningful = frozenset(config.history_marker_states)
+    prev_state: str | None = None
+    timeline: list[dict] = []
+    for snapshot in dataset_store.replay(dataset_meta["id"], config):
+        if snapshot.tape_state != prev_state:
+            if snapshot.tape_state in meaningful:
+                timeline.append({
+                    "timestamp": _iso(epoch_anchor + snapshot.timestamp) if epoch_anchor is not None else None,
+                    "state": snapshot.tape_state,
+                    "confidence": snapshot.confidence,
+                })
+            prev_state = snapshot.tape_state
+    return timeline
+
+
+def enrich_with_tape_timeline(event: dict, dataset_store: DatasetStore, config: Config) -> dict:
+    """Join the tape-at-the-wall timeline onto ONE event's drill-in (era-5B J-03). Returns a NEW
+    dict (never mutates ``event``) with ``tape_timeline`` replaced by the matched dataset's replay,
+    or the event UNCHANGED (still an honestly empty ``tape_timeline``) when no recorded dataset
+    matches. Every other field is served verbatim -- this function never touches band, reaction,
+    or forward-return values (single source of truth: ``compute_setups`` owns those alone)."""
+    dataset = _matching_dataset(event["symbol"], event["touch_ts"], dataset_store)
+    if dataset is None:
+        return event
+    return {**event, "tape_timeline": _tape_timeline(dataset, dataset_store, config)}
