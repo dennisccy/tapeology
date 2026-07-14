@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-tradable_wall-iter-0",
+  "base_url": "http://localhost:3301",
+  "iteration": 0,
+  "default_timeout_ms": 15000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the cockpit",
+      "narration": "Start on the home page, where you can watch any ticker's live tape.",
+      "point_out": "The page opens with no ticker watched yet — the natural starting point before choosing one.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Type a ticker to watch",
+      "narration": "Enter SIM-BUYER, one of the app's built-in simulated tickers used to demonstrate how the tape reading works.",
+      "point_out": "The Ticker field is ready to accept a symbol.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "Watch the simulated buyer tape",
+      "narration": "Click Watch, and the cockpit reads the live tape and settles on a state once there's enough evidence.",
+      "point_out": "The tape settles to \"buyer_control,\" with an event log explaining why — rising prints and a tightening spread.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "buyer_control" }
+    },
+    {
+      "n": 4,
+      "title": "Return to the cockpit",
+      "narration": "Head back to the home page to pick a different ticker.",
+      "point_out": "The cockpit resets cleanly, ready for the next symbol.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 5,
+      "title": "Type a second ticker to watch",
+      "narration": "This time enter SIM-SELLER — the matching simulated ticker for seller-driven tape.",
+      "point_out": "The Ticker field accepts a new symbol before clicking Watch again.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "SIM-SELLER" }
+    },
+    {
+      "n": 6,
+      "title": "Watch the simulated seller tape",
+      "narration": "Click Watch again, and this time the tape reads the other way.",
+      "point_out": "The state settles to \"seller_control,\" driven by falling prints and rising seller aggression.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "seller_control" }
+    },
+    {
+      "n": 7,
+      "title": "Check the trade journal",
+      "narration": "The Journal page keeps a running record of what the cockpit has observed.",
+      "point_out": "The Journal page loads and is ready to hold entries.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/journal" },
+      "expect": { "text": "Journal" }
+    },
+    {
+      "n": 8,
+      "title": "Replay past studies",
+      "narration": "The Studies page lets you replay historical tape sessions to study how they played out.",
+      "point_out": "\"Replay studies\" confirms the replay tools are ready to use.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/studies" },
+      "expect": { "text": "Replay studies" }
+    },
+    {
+      "n": 9,
+      "title": "Review strategy performance",
+      "narration": "The Performance page tracks how each strategy has done, anchored to a fixed research configuration so results stay comparable over time.",
+      "point_out": "The configuration fingerprint shown on screen confirms the underlying research setup hasn't drifted.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/performance" },
+      "expect": { "text": "4d665603569b9dbf" }
+    },
+    {
+      "n": 10,
+      "title": "Explore price structure",
+      "narration": "The Structure page shows the price-structure research tools, including the strategies registered so far for backtesting on real market bars.",
+      "point_out": "The strategy registry confirms the research tools are present and loaded.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "structure_tape" }
+    }
+  ]
+}
