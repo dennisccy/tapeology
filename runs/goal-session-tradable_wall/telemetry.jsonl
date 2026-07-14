@@ -1,0 +1,22 @@
+{"mode":"new","max_iterations":60,"stall_window":3,"auto_release":false,"ts":"2026-07-14T00:14:13Z","session_id":"tradable_wall","iter":null,"event":"session_start","cli":"claude"}
+{"iter_name":"goal-tradable_wall-iter-0","prior_verdict":"null","prior_depth":"lean","snapshot_sha":"ad8d57dec362dcf16deed8ea4f0ae021637139dc","ts":"2026-07-14T00:14:14Z","session_id":"tradable_wall","iter":0,"event":"iter_start","cli":"claude"}
+{"agent":"goal-decomposer","ts":"2026-07-14T00:14:14Z","session_id":"tradable_wall","iter":0,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-decomposer","status":"ok","wait_seconds":41,"run_seconds":362,"rc":"0","ts":"2026-07-14T00:20:57Z","session_id":"tradable_wall","iter":0,"event":"dispatch_wait","cli":"claude"}
+{"agent":"goal-decomposer","exit_status":0,"duration_seconds":403,"retries":0,"ts":"2026-07-14T00:20:57Z","session_id":"tradable_wall","iter":0,"event":"agent_invocation_end","cli":"claude"}
+{"depth":"lean","target_journeys":"J-01, J-02, J-03, J-04, J-05, J-06, J-07","ts":"2026-07-14T00:20:57Z","session_id":"tradable_wall","iter":0,"event":"iter_dispatch","cli":"claude"}
+{"iter_name":"goal-tradable_wall-iter-0","depth":"lean","ts":"2026-07-14T00:20:57Z","session_id":"tradable_wall","iter":0,"event":"iter_dispatch","cli":"claude"}
+{"agent":"developer","ts":"2026-07-14T00:20:57Z","session_id":"tradable_wall","iter":0,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"developer","status":"ok","wait_seconds":7,"run_seconds":1122,"rc":"0","ts":"2026-07-14T00:39:46Z","session_id":"tradable_wall","iter":0,"event":"dispatch_wait","cli":"claude"}
+{"agent":"developer","exit_status":0,"duration_seconds":1129,"retries":0,"ts":"2026-07-14T00:39:46Z","session_id":"tradable_wall","iter":0,"event":"agent_invocation_end","cli":"claude"}
+{"agent":"reviewer","ts":"2026-07-14T00:39:46Z","session_id":"tradable_wall","iter":0,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"reviewer","status":"ok","wait_seconds":68,"run_seconds":233,"rc":"0","ts":"2026-07-14T00:44:47Z","session_id":"tradable_wall","iter":0,"event":"dispatch_wait","cli":"claude"}
+{"agent":"reviewer","exit_status":0,"duration_seconds":301,"retries":0,"ts":"2026-07-14T00:44:47Z","session_id":"tradable_wall","iter":0,"event":"agent_invocation_end","cli":"claude"}
+{"verdict":"PASS","attempt":1,"iter_name":"goal-tradable_wall-iter-0","ts":"2026-07-14T00:44:47Z","session_id":"tradable_wall","iter":0,"event":"review_verdict","cli":"claude"}
+{"agent":"browser-qa-agent","ts":"2026-07-14T00:44:55Z","session_id":"tradable_wall","iter":0,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"browser-qa-agent","status":"ok","wait_seconds":0,"run_seconds":901,"rc":"0","ts":"2026-07-14T00:59:56Z","session_id":"tradable_wall","iter":0,"event":"dispatch_wait","cli":"claude"}
+{"agent":"browser-qa-agent","exit_status":0,"duration_seconds":901,"retries":0,"ts":"2026-07-14T00:59:56Z","session_id":"tradable_wall","iter":0,"event":"agent_invocation_end","cli":"claude"}
+{"passing":2,"missing_goldens":"J-05","iter_name":"goal-tradable_wall-iter-0","ts":"2026-07-14T00:59:56Z","session_id":"tradable_wall","iter":0,"event":"golden_coverage","cli":"claude"}
+{"agent":"goal-evaluator","ts":"2026-07-14T00:59:56Z","session_id":"tradable_wall","iter":0,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-evaluator","status":"ok","wait_seconds":6,"run_seconds":501,"rc":"0","ts":"2026-07-14T01:08:23Z","session_id":"tradable_wall","iter":0,"event":"dispatch_wait","cli":"claude"}
+{"agent":"goal-evaluator","exit_status":0,"duration_seconds":507,"retries":0,"ts":"2026-07-14T01:08:23Z","session_id":"tradable_wall","iter":0,"event":"agent_invocation_end","cli":"claude"}
+{"iter_name":"goal-tradable_wall-iter-0","verdict":"CONTINUE","next_depth":"full","journey_deltas":{"newly_passing":0,"newly_failing":6,"regressed":0,"anti_goal_violations":0},"ts":"2026-07-14T01:08:23Z","session_id":"tradable_wall","iter":0,"event":"iter_end","cli":"claude"}

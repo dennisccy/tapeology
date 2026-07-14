@@ -1,0 +1,16 @@
+{
+  "phase": "goal-tradable_wall-iter-0",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-14T00:37:06.000000Z",
+  "started_at": "2026-07-14T00:37:06.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [],
+  "tests_run": true,
+  "tests_passed": true,
+  "browser_checks_run": false,
+  "fix_mode": false,
+  "notes": "Verify-only baseline per spec BACKGROUND (developer step is an explicit no-op): zero apps/ change (git status --short -- apps/ and git diff --stat -- apps/ both empty, confirmed). Ran full backend suite: 1201 passed, 6 skipped, 1207 collected, 0 failed, 366.28s -- byte-identical to the era-5 closing baseline (goal-yahoo_fetch-iter-8). Equivalence suites (test_observer_equivalence.py + test_profile_equivalence.py) 22/22 passed. config_fingerprint live-recomputed == 4d665603569b9dbf, matches pinned value. Probed all 4 Era 5B endpoints (/research/tradability, /research/setups, /research/setups/{id}, /research/edge-report) on a live backend (:8301) -- all HTTP 404, confirmed absent, matching spec prediction. Confirmed AAPL 2026-06-22 raw levels == 1800 levels / 212 confluence_zones, byte-exact match to goal.md's cited noise baseline. Confirmed /research/strategies has only v1 + structure_tape (no structure_tape_map yet), /meta/ui-routes has the unchanged 6-entry nav, champion pointer untouched (v1/default). Alpaca credentials (ALPACA_API_KEY, ALPACA_API_SECRET) confirmed NOT SET (presence-only check, no value read/logged) -- J-03 and J-06 recorded as blocked per spec, not simulated. Frontend /structure and PriceChart.tsx grepped -- no Era 5B UI markers found (Tradable Map/Case Studies/Edge Report/band/confluence/chip all absent); era-5 fetch control + Yahoo Finance provenance badge confirmed still present in /structure's raw HTML. Dev stack (scripts/dev.sh, ports 8301/3301) started, health-checked, stopped, restarted cleanly with no port conflicts, stopped again -- both ports confirmed free. Full journey-by-journey evidence (J-01 through J-07) recorded in the dev handoff for the goal-evaluator. Browser-qa-agent's step per TESTING REQUIREMENTS still needed for full click-through (J-05, J-06, J-07 sim-cockpit spot-checks) -- not run by this developer step.",
+  "next_action": "none"
+}
