@@ -1,0 +1,7 @@
+{
+  "extended": false,
+  "n_new_journeys": 0,
+  "n_proposals": 3,
+  "dry": true,
+  "summary": "Dry stop: no hold-out survivor possible and no in-scope structural gap. The pnl sweep runs on tick-tape feed=sip datasets (champion n=1 < pnl_min_sample_size=5, insufficient sample); Era 5's real Yahoo BARS cannot feed the tick-tape sweep and cannot be fabricated-into-events or pooled with sip (Anti-goals). The only unblock is more Alpaca SOURCE_HISTORICAL hold-out tick data = credential-gated, explicitly deferred to the credentialed Era-5 continuation. No vision gap: every Vision claim and all 5 Key Capabilities are covered by passing J-01..J-06; the one UX candidate (stored-series library) is the deferred /datasets UI (Non-Goal, Card 5.9). goal.md untouched."
+}
