@@ -1,63 +1,73 @@
 # Iteration Summary — goal-tradable_wall-iter-9
 
-**Verdict:** PASS
+**Verdict:** CONTINUE
 **Iteration type:** goal-full
 **Date:** 2026-07-15
 **Iteration:** 9
 
 ## In plain words
 
-**What you can do now:** Today you can open the Structure page and see a short, focused list of the handful of price levels that actually matter for a stock, instead of hundreds of noisy lines; browse a searchable library of real historical examples of how price reacted at those levels across a panel of 12 well-known stocks, including the real recorded trade-by-trade activity around a touch once it has been captured; and read an honest report comparing whether any of three trading strategies actually made money on recorded market data. In the cockpit you can also watch live, simulated, or replayed charts that highlight nearby key price levels with a plain-language note about what the tape is doing. Everything you could already do continues to work the same way from update to update.
+**What you can do now:** You can watch simulated or real historical stock price action with live buy-and-sell-pressure readings, keep a trading journal, and run replay research studies. On the Structure page you can fetch real price history for a stock with one click, see a short list of at most ten price zones that actually matter for a stock (instead of a wall of thousands of lines), and open a real pinned Apple example to see exactly how price reacted at that zone. Those same important zones also show up on the live cockpit chart, with a plain-language note when the reading agrees. There's also an honest profit-comparison report — though it's still slow to load the very first time someone lets it finish computing.
 
-**What changed this time:** Behind-the-scenes work — nothing visibly new this round. We built the plumbing so the Edge Report panel can eventually load in seconds instead of many hours, but that speed-up hasn't been switched on with real data yet, so the page looks and behaves exactly as it did before.
+**What changed this time:** Behind-the-scenes work — nothing visibly new this round. The team built machinery so the profit-comparison report will remember its answer and load in seconds on every future visit (even after restarting the app) once someone lets it finish computing one time — but that first long computation, and the resulting fast page, hasn't actually happened or been seen working yet.
 
-**What's next:** Next, the team will keep running the usual round of building, checking, and testing to move the project forward.
+**What's next:** A short follow-up pass to make that fast, remembered answer actually show up on screen, using a quick practice run instead of the full multi-hour one — which should be the last piece needed before this feature is fully done.
 
 ## Headline
 
-Edge Report gains a rebuildable, checksum-keyed cache so warm reads resolve in seconds, not hours
+Built a rebuildable Edge Report cache; browser-observed warm render still not achieved (3rd iter).
 
 ## Direction
 
 **Signal:** holding
-**Why:** All seven required Must-have journeys (J-01–J-07) remain passing/already_passing with zero regressions and zero anti-goal violations, so the floor stays fully intact. This iteration's own target — the enhancement journey J-08 (a rebuildable, checksum-keyed Edge Report cache) — passed dev, review, QA, and closure-audit with its keyless core thoroughly verified (44 net-new tests, full suite 1392 passed/7 skipped/0 failed, `config_fingerprint` unchanged at `4d665603569b9dbf`), but journey-history hasn't been updated to reflect it yet pending the evaluator's own run, and the real ~10+h cache warm-up remains an untouched operator-gated carry — so this reads as holding rather than a confirmed improving step.
+**Why:** J-08's cache machinery (determinism, concurrency, restart durability, byte-identity) is built and independently verified — the failing→partial move is real progress — but DoD item 1 (a browser-observed warm-cache render) still wasn't captured because the pipeline backend was mid-flight on the real ~10h corpus compute, so J-08 stays short of a full pass for the third straight iteration (iter-6/8/9). J-01–J-07 all re-verified green with zero regressions and no anti-goal violation, so the seven-journey foundation holds steady while the loop needs one more lean pass to close the render gap.
 
 **Trend (last 5 iters):**
-- Newly passing this iter: none recorded (eval.md for iter-9 not yet produced at summary time)
-- Newly passing in last 5 iters total: J-04 (iter-4), J-05 (iter-6), J-06 (iter-7), J-03 (iter-8)
+- Newly passing this iter: none
+- Newly passing in last 5 iters total: J-03, J-05, J-06
 - Regressions in last 5 iters: none
 - Anti-goal violations in last 5 iters: none
-- Iters with no journey state change: 1 of last 5 (iter-5, a backend-only enabler pass)
+- Iters with no journey state change: 1 of last 5 (iter-5)
 
-**Latest evaluator reasoning:** "GOAL_ACHIEVED — all seven Must-have journeys are passing/already_passing, no unresolved anti-goal violation, coherence COHERENCE-PASS, no journeys-changed.md drift (all 7 spec-hashes match current goal text)." "Not REGRESSION (nothing regressed, no critical anti-goal); not STALLED (the blocker is resolved); not CONTINUE/ESCALATE (every journey passes, no fail-open, no cross-cutting ambiguity)."
+**Latest evaluator reasoning:** J-08's rebuildable, checksum-keyed edge-report result cache is genuinely built and correct — I ran the load-bearing determinism/concurrency/warm-serve/no-pool tests myself (all green), independently recomputed `config_fingerprint == 4d665603569b9dbf`, and confirmed every frozen foundation + all of `apps/frontend/` + the committed `reports/pnl/pnl-history.md` are ABSENT from the diff. But J-08 is **partial, not passing**: its DoD item 1 (a browser-observed warm-cache Edge Report render), the iteration's own lessons-applied instruction ("the warm-cache render must be observed in a real browser, not left to a loading carve-out"), and the decomposer's keyless-core passing bar all require the warm render — and the crux screenshot (UT-01) shows only the loading skeleton; UT-02/UT-03/UT-06 were SKIPPED because the pipeline backend ran against the real corpus with a genuine cold ~10h compute in flight.
 
 ## What was done
 
-- Added `EdgeReportCache`, a rebuildable two-layer result cache (durable SQLite WAL layer + in-process atomic fast path) around the ~10+h `run_strategy_comparison_report` sweep, keyed on dataset checksums + strategy registry + `config_fingerprint` + a justified, tested 4th whole-config-content hash.
-- Wired `GET /research/edge-report` (and its byte-identical MCP proxy) through the new cache via a DI'd `get_edge_report_cache()` dependency; response shape and byte-identity unchanged, `edge_report.py` stays the sole computer.
-- Built and unit-tested the keyless PnL-history append machinery (`pnl_ledger.py`/`pnl_history.py`) that records a completed 3-way comparison to `reports/pnl/pnl-history.md`, additive beside the existing two-way row branch, train/hold-out and feeds never pooled.
-- Caught and fixed a real byte-identity bug found during implementation (sorted-key JSON serialization broke REST/MCP wire-byte identity on a durable-cache hit); added a dedicated regression test.
-- Added 44 net-new backend tests (16 cache-unit incl. a 16-thread torn-read guard, +7 edge-report wiring, +4 API-level, +9 pnl-ledger, +7 pnl-history CLI); full suite 1392 passed / 7 skipped / 0 failed, `config_fingerprint` unchanged at `4d665603569b9dbf`.
-- Review PASS, QA PASS, audit PASS_WITH_GAPS (machinery independently re-verified; sole gap is the warm render never observed live), closure-verdict CLOSURE-PASS.
-- Browser QA: 7 of 11 tests passed (4 skipped under a documented, independently-verified cold-cache carve-out; 0 failed) — J-03/J-05/J-06/J-07 regression checks all confirmed green with screenshot/DOM evidence.
+- Built `EdgeReportCache`, a two-layer rebuildable, checksum-keyed result cache (durable SQLite + in-process fast path) around the Edge Report's ~10+h backtest sweep, keyed on dataset checksums + strategy registry + `config_fingerprint` + a justified, tested 4th whole-config-content hash.
+- Wired `GET /research/edge-report` and its MCP proxy to serve through the cache via a thin `cache=None` dispatcher; `edge_report.py`'s actual computation is untouched (renamed only), so a cache miss still recomputes byte-identically.
+- Added keyless PnL-history append machinery (`append_strategy_comparison_row`, CLI `--append-report` flags) so a completed 3-way comparison can eventually be recorded to `reports/pnl/pnl-history.md`, never pooling train/holdout or feeds.
+- Added 44 net-new backend tests — determinism/byte-identity, a 16-thread concurrency/torn-read guard, six-way cache-key-busting, restart durability, MCP byte-identity; full suite now 1392 passed / 7 skipped / 0 failed.
+- Caught and fixed a real bug during implementation: the stored cache blob was serialized sorted, silently breaking response byte-order versus a fresh compute; added a dedicated regression test.
+- Re-verified J-01–J-07 unregressed via frozen-file diff-absence, an independently-recomputed `config_fingerprint`, and fresh browser QA (UT-07/08/09/10/11).
+- Verified 0 target journey(s) pass browser QA this iteration (J-08 stayed partial): browser QA opened 7/11 UI checks PASS overall, but the crux warm-render check (UT-02) stayed in a documented, independently-verified cold-cache carve-out.
 
 ## What's left
 
-- Operator must run the real ~10+h Edge Report compute over the 11 credentialed `sip` datasets to warm the cache for real — the machinery is built and tested keyless but never exercised against the live corpus.
-- Once warmed, the finished 3-way comparison still needs to be appended to `reports/pnl/pnl-history.md` via the new (tested but unused) CLI tool; the committed ledger file remains untouched.
-- The warm-cache Edge Report render has never been observed live in a browser — third consecutive iteration (iter-6/8/9) showing only the loading state, because a real compute was genuinely in flight during this iteration's QA session.
-- A future iteration must add a `/structure` render path for the new `strategy_comparison` PnL-ledger row type — today's page only looks up a single `founding` row, so a real append would otherwise stay invisible in the app.
-- UT-11's band-overlay/confluence-chip did not appear in any of 4 sampled historical AAPL windows despite price sitting inside the pinned band's range twice — plausibly tied to the cold edge-report cache but not independently confirmed.
-- The `[NEW]`-flagged demo-narrator walkthrough was SKIPPED this iteration (an unrelated schema-validation bug on an empty-string filter-clear step in the demo script) — no captured demo evidence yet.
-- Pre-existing `scripts/dev.sh` process-cleanup gap (uvicorn/next-server grandchildren survive a plain kill) remains unfixed, first flagged at iter-8.
+- J-08 (edge-report result cache) is `partial`: the browser-observed warm-cache Edge Report render (DoD item 1) hasn't been captured in 3 straight iterations (iter-6/8/9) — the cache machinery is built and verified, only the observed render is missing, and it is agent-achievable with a scoped keyless dataset dir.
+- The real ~10+h compute over the 11 credentialed `sip` datasets has not been triggered — an explicit operator-gated action, needed before the Edge Report shows real populated numbers end to end.
+- The real PnL-history append (recording the first genuine 3-way comparison to `reports/pnl/pnl-history.md`) hasn't happened yet — the append machinery is built and tested, but the committed file is still untouched.
+- Even after a future real append, `/structure` has no render path yet for the new `strategy_comparison` ledger-row type — the page currently only looks up a single `founding` row.
+- UT-11's band-overlay/confluence-chip did not appear in any of 4 sampled historical AAPL windows despite price sitting inside the pinned band twice — open, non-blocking observation, plausibly tied to the cold edge-report cache but not confirmed.
+- Pre-existing `scripts/dev.sh` process-cleanup gap (uvicorn/`next-server` child processes survive a plain stop) — documented since iter-8, still not fixed.
 
 ## Next step
 
-Run the full pipeline on the next phase.
+LEAN iteration to close the single missing DoD element — the browser-observed warm-cache render for J-08 (no new product code expected; the render path is unchanged, already-verified J-05 code). Provision a scoped keyless dataset dir (`TAPEOLOGY_DATASET_DIR` + `TAPEOLOGY_EDGE_REPORT_CACHE_DB`, e.g. the committed fixture or a couple of reference datasets that resolve to classified scan events) so `GET /research/edge-report` warms in seconds, then have browser-QA open a screenshot of the resolved `/structure` Edge Report section (populated cells or the honest all-`insufficient_sample`/empty state) within an interactive budget — closing UT-02/UT-03/UT-06 and DoD item 1, which flips J-08 partial to passing and yields GOAL_ACHIEVED (subject to the deterministic gate + two-key confirm). Fold in the two coherence-WARN advisories while here: register `pnl_ledger.py`/`pnl_history.py` in `blueprint.md`'s owners table, and rename the `pnl-history.md` 3-way table's `side` column to `band side`. The first real ~10h corpus warm and its real PnL-history append remain an operator-gated carry that does not block J-08 passing.
 
 ## Assumptions made
 
-none recorded
+- iter-9 · goal-evaluator — Ambiguity: Is the browser-observed warm-cache Edge Report render a REQUIRED, agent-achievable element of J-08's passing bar, or is it substantively covered by route-level warm-serve proof? We chose: REQUIRED and unmet — J-08 stays partial (CONTINUE), since the only Edge Report screenshot (UT-01) showed the loading state and the render is agent-achievable keyless, not an operator carry. Reversible: yes — a human accepting route-level tests as sufficient evidence can flip J-08 to passing, yielding GOAL_ACHIEVED on --resume.
+- iter-9 · goal-decomposer — Ambiguity: Does J-08 pass on its keyless core, or does it require the operator's full ~10+h real compute AND the real pnl-history append before passing? We chose: the keyless-core reading (mirrors iter-4's J-04 decision) — cache machinery + determinism + concurrency + byte-identity + the warm-cache render + append machinery, all keyless; the real compute and its ledger append are the operator-gated carry. Reversible: yes.
+- iter-8 · goal-evaluator — Ambiguity: Does GOAL_ACHIEVED require the populated Edge Report cells to be rendered/observed, given the ~10+h compute never finished this session? We chose: acceptable to declare GOAL_ACHIEVED without observing populated cells — populated cells are not a journey acceptance criterion and an empty/all-insufficient_sample report is an explicitly valid outcome. Reversible: yes — a human requiring the observed render could reverse to CONTINUE.
+- iter-8 · goal-decomposer — Ambiguity: Does J-03's feed-honesty acceptance require an `iex` stamp specifically, or the feed stamped verbatim from whatever tier the adapter returns (here `sip`)? We chose: the verbatim-stamp reading — `iex` was only an illustrative free-tier example; the operator's paid SIP tier is honest and richer, not a violation. Reversible: yes.
+- iter-7 · goal-evaluator — Ambiguity: (a) does J-06 require the credentialed tick-recording replay, or is the keyless overlay+chip+empty-state core sufficient; (b) with J-03 still partial and zero agent-buildable work left, is STALLED the right verdict? We chose: (a) J-06 passes on its keyless core; (b) STALLED, not GOAL_ACHIEVED/CONTINUE — every J-03 unblock path is operator-owned. Reversible: yes.
+- iter-7 · goal-decomposer — Ambiguity: Does J-06's "labels... never hardcoded" require a backend change to add a served label field, or is reading the served rejection/breakthrough mapping plus the served tape-state token enough? We chose: no-backend-change reading — the served mapping IS the vocabulary; no new served label field added. Reversible: yes.
+- iter-6 · goal-evaluator — Ambiguity: Is J-05 fully passing with an honest empty tape-timeline state on the pinned case, or only partial until J-03 populates it? We chose: passing — the acceptance text explicitly conditions the tape timeline on "once J-03 ran," and the honest empty-state is a sanctioned pass condition. Reversible: yes.
+- iter-6 · goal-decomposer — Ambiguity: Does "/structure decluttered" require removing the era-5 Registry/Comparison sections, or only moving the raw-levels rendering behind a toggle? We chose: the non-regressing reading — only raw levels move behind an off-by-default toggle; Registry/Comparison stay intact below the new Tradable Map. Reversible: yes.
+- iter-5 · goal-decomposer — Ambiguity: How should a touch event whose reaction is computed from a truncated sub-horizon (the audit-B1 boundary case) be presented — disclosed, suppressed, or excluded? We chose: additive disclosure — keep the existing reaction/forward_returns and additionally carry an effective-horizon + boundary flag for honest UI rendering. Reversible: yes.
+- iter-4 · goal-evaluator — Ambiguity: Does J-04's keyless run need to produce a POPULATED all-insufficient_sample report, or is a vacuously-empty `cells: []` report on the literal fixture sufficient (with a synthetic-panel test proving the populated shape)? We chose: empty-is-valid — J-04 passes on its keyless core; the goal explicitly names an empty/all-insufficient_sample report a valid, publishable outcome. Reversible: yes.
+- iter-4 · goal-decomposer — Ambiguity: Can J-04 be scored passing on the keyless committed-fixture run alone, or does it require the credentialed >=10-window recorded data? We chose: the keyless reading — a correct, gate-honoring, all-insufficient_sample report over the committed fixture is J-04's passing core; credentialed enrichment is an operator-gated carry. Reversible: yes.
+- iter-3 · goal-evaluator — Ambiguity: Does J-03's ">=10 datasets exist"/"shows the timeline" require durable persistence in the canonical store plus the specific pinned-AAPL drill-in, or is a demonstrated-but-ephemeral recording run enough? We chose: the stricter reading — the credentialed headline is met only when datasets persist in the canonical store AND the pinned-AAPL drill-in is demonstrated end-to-end; under this bar J-03 = partial. Reversible: yes.
 
 ## Quick verify
 
@@ -86,4 +96,5 @@ From `reports/phase-goal-tradable_wall-iter-9-what-to-click.md`:
 | QA | PASS | reports/qa/goal-tradable_wall-iter-9-qa.md |
 | Audit | PASS_WITH_GAPS | docs/handoffs/goal-tradable_wall-iter-9-audit.md |
 | Closure | CLOSURE-PASS | reports/phase-goal-tradable_wall-iter-9-closure-verdict.md |
+| Goal evaluation | CONTINUE | runs/goal-session-tradable_wall/iter-9/eval.md |
 | Journey history | — | runs/goal-session-tradable_wall/state/journey-history.json |
