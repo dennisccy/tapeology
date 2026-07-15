@@ -1,0 +1,195 @@
+You are the goal-evaluator agent for goal-mode iteration evaluation.
+
+Session ID: tradable_wall
+Iteration index: 6
+Iter name: goal-tradable_wall-iter-6
+Depth dispatched: full
+
+Project goal (SLICED — vision + anti-goals + target/failing journeys verbatim; stable passing journeys digested): /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-6/goal-slice.md
+  Full goal file: /home/dennis-chan/Git/tapeology/docs/goal.md — Read it ONLY if a digested journey becomes relevant.
+Iter spec: /home/dennis-chan/Git/tapeology/docs/phases/goal-tradable_wall-iter-6.md
+Agent instructions: .claude/agents/goal-evaluator.md  <-- read this first
+(CLAUDE.md is already in your system prompt — do not Read it again.)
+
+Iteration artifacts (read what exists):
+  Deterministic diff scan (product diff; harness bookkeeping excluded — secrets/deps/license): /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-6/scan-report.md
+  Bounded diff view (complete file list; hunks capped, header lists omissions): /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-6/iter-diff.md
+  Dev handoff: docs/handoffs/goal-tradable_wall-iter-6-dev.md
+  Review report: reports/reviews/goal-tradable_wall-iter-6-review.md
+  QA report: reports/qa/goal-tradable_wall-iter-6-qa.md (full mode only)
+  Audit handoff: docs/handoffs/goal-tradable_wall-iter-6-audit.md (full mode only)
+  Browser QA results: reports/phase-goal-tradable_wall-iter-6-ui-test-results.md
+  Evidence: reports/qa/goal-tradable_wall-iter-6-evidence/
+  Coherence audit: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-6/coherence.md  <-- COHERENCE-FAIL vetoes GOAL_ACHIEVED and drives a consolidation CONTINUE
+  Goal-edit drift note: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-6/journeys-changed.md  <-- if present, each listed journey's prior pass is VOID until re-verified against the CURRENT goal text (your step 3)
+
+Journey state (inline digest — your methodology's section A table starts here):
+```
+J-01 | passing         | last_passing=goal-tradable_wall-iter-5 | The tradable level map — from 1,800 levels to <=10 bands
+J-02 | passing         | last_passing=goal-tradable_wall-iter-5 | The wide scan — a case-study registry across the 12-symbol panel
+J-03 | partial         | last_passing=- | Real tape at the wall — credentialed event-window recording
+J-04 | passing         | last_passing=goal-tradable_wall-iter-5 | The edge report — what actually profits, under the existing gates
+J-05 | failing         | last_passing=- | /structure decluttered — the map is the default, the noise is a toggle
+J-06 | failing         | last_passing=- | Cockpit confluence — bands + tape markers + a descriptive chip
+J-07 | already_passing | last_passing=goal-tradable_wall-iter-5 | The foundation is unchanged (regression sentinel)
+```
+
+Prior session state:
+  Journey history: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/journey-history.json  <-- update this with new state (full atomic write)
+  Evaluator log: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/evaluator-log.md  <-- append a new entry; do not overwrite or read the full file (last 5 entries pre-trimmed below)
+  Lessons file: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/lessons.md  <-- append a brief lesson entry capturing a non-obvious takeaway (1-3 sentences). Skip if nothing surprising happened.
+  Assumption ledger: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/assumptions.md  <-- append an entry when a scoring decision required interpreting an ambiguous goal (step 5b of your instructions). Skip when none — zero entries is normal.
+
+Recent evaluator log entries (last 5, pre-trimmed):
+```
+# Evaluator Log — session tradable_wall (Era 5B "The Tradable Wall")
+
+## Iteration 0 — goal-tradable_wall-iter-0
+
+**Date:** 2026-07-14T01:04:01Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-07 (already_passing — baseline foundation sentinel)
+- Newly failing: J-01, J-02, J-03, J-04, J-05, J-06 (all features confirmed absent at baseline; J-03 + J-06 additionally credential-blocked)
+- Regressed: none (first iteration — no prior passing state)
+- Anti-goal violations: none (scan-report CLEAN; zero `apps/` diff; J-03/J-06 honestly blocked, not simulated)
+
+**Reasoning:** Verify-only baseline exactly as the spec mandated (developer no-op, review PASS, `git diff --stat apps/` empty). Browser QA overall-FAIL is the intended honest baseline signal: 1/7 pass. J-07 verified via screenshots (SIM-BUYER->buyer_control, SIM-SELLER->seller_control, confidence 0.925, nav unchanged) + suite 1201 pass/6 skip + live `config_fingerprint` `4d665603569b9dbf` + champion `v1`/`default` untouched. J-01/J-02/J-04/J-05 fail on confirmed-absent modules/endpoints (404s + DOM inspection); J-05 raw-levels-only page (~74k px, 1,801 rows) is the "1,800-level noise" anchor to distill. J-03/J-06 credentialed acts recorded `blocked` (Alpaca env unset, presence-only), never simulated. No REGRESSION (no prior pass), not STALLED (abundant agent-buildable work: J-01/J-02/J-04/J-05 + code portions of J-03/J-06), not GOAL_ACHIEVED (6 failing), not ESCALATE (baseline confirmed every prediction — no surprise). coherence.md absent (expected at zero-diff baseline; not a veto since GOAL_ACHIEVED not a candidate).
+
+**Next-step recommendation:** Build J-01 alone (`tradability.py` + `GET /research/tradability` + MCP proxy; band clustering/scoring; morning-markup as-of; AAPL 06-22 -> <=10 bands, 300.48–302.07 band top-2). Recommend depth **full** — it establishes a new canonical value/owner whose central risk is a critical single-source-of-truth violation (must consume `compute_levels` verbatim, never fork a second levels engine). Watch-item for the later J-04 iter: extend the existing era-3 `edge_report.py` additively, never fork.
+
+## Iteration 1 — goal-tradable_wall-iter-1
+
+**Date:** 2026-07-14T08:25:54Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-01 (failing -> passing; first build iteration)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (scan-report CLEAN; coherence PASS; no frozen file in the diff)
+
+**Reasoning:** J-01's tradable level map is genuinely achieved — I did not trust the three PASS reports; I independently reproduced the headline via a direct `compute_tradability` call on the committed real AAPL fixture: 10 bands (5+5), basis 2026-06-18T04:00Z (holiday 06-19 skipped by the data, no hardcoded calendar), pinned resistance band [300.23,302.25] (contains 300.48+302.07, round-number 300 flagged) ranks #1 — daily-only score 123.0 matches the audit, multi-timeframe 153.0/class-A matches the dev live probe. I personally confirmed config_fingerprint==4d665603569b9dbf, ran the REST==MCP byte-identity + levels.py byte-identity + 3 no-lookahead + lens-static guards (33 tradability tests green), and re-ran the J-07 sentinel myself (engine 7/7 + profile 15/15 equivalence = 22 passed; frozen levels/backtests/edge_report/tape all absent from the diff). The round-1 review CRITICAL (all-timeframe touch sum buried the wall to 7th) was caught pre-ship and fixed to daily-touch-only with a biting multi-timeframe regression fixture. Not GOAL_ACHIEVED (J-02..J-06 still failing); not REGRESSION (nothing regressed, no critical anti-goal); not STALLED (J-02/J-04/J-05 are agent-buildable next); not ESCALATE (this was already full depth, review PASSed round 2, nothing cross-cutting surfaced).
+
+**Next-step recommendation:** Build J-02 (the touch-event scanner + case registry: new `apps/backend/app/research/setups.py`, `GET /research/setups` + `/research/setups/{id}` + MCP `setups`) at depth **full**. It is the next dependency-order unblocker (J-03 records tape at its top events; J-04 arms structure_tape_map; J-05 renders the case browser), introduces a new canonical value + owner across the backend+MCP boundary, and its central risk is the no-lookahead rail (each event's morning map must derive only from data before its session) — the exact `_PriorSessionBarView` consecutive-session subtlety J-01 surfaced. Carry two watch-items: (1) reaction-classification/forward-return scoring needs a realistic MULTI-TIMEFRAME fixture, not daily-only (the round-1 CRITICAL only appeared under multi-timeframe density); (2) J-04 must EXTEND edge_report.py additively, never fork. J-03/J-06 stay operator-credential-gated (deferred).
+
+## Iteration 2 — goal-tradable_wall-iter-2
+
+**Date:** 2026-07-14T11:06:04Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-02 (failing -> passing; the touch-event scanner + case registry)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (scan CLEAN; coherence COHERENCE-PASS; no frozen file in the diff; no credential/vocabulary violation on grep)
+
+**Reasoning:** J-02 is genuinely achieved — I did not trust the review/QA/audit PASS reports; I independently reproduced the pinned AAPL 2026-06-22 headline via a direct `compute_setups` call on the two committed keyless real fixtures: resistance band [300.23,302.25] (contains 300.48+302.07), round-number flagged, reaction `rejected`, forward returns [-0.462%, -4.269%] (byte-matching the dev handoff), touch_ts 2026-06-22T13:30:00Z, tape_timeline empty (J-03 not run) — plus byte-identical repeat-scan determinism and `config_fingerprint`==`4d665603569b9dbf`, all reproduced by me. The 33-test setups suite passed keyless. The >=15-events/>=8-symbols headline: I enumerated the live store and confirmed ALL 12 panel symbols are genuinely populated with real Yahoo 5m+1d series (47 files, feed=yahoo, zero Alpaca), and the reviewer AND auditor each independently re-ran the full scan to 801 events across 12/12 symbols with the pinned event present — so I did not redundantly repeat the 4m43s recompute a fourth time. Frozen foundations (levels/tradability/backtests/tape/BarStore/Alpaca) absent from the diff; J-01/J-07 re-verified green (frozen-file-absence + fingerprint + byte-identity guard + audit's 22/22 equivalence). Not GOAL_ACHIEVED (J-03/J-04/J-05/J-06 still failing); not REGRESSION (nothing regressed, no critical anti-goal); not STALLED (J-03 keyless code+fixture, J-04, J-05 are all agent-buildable next); not ESCALATE (already full depth, all lanes pass-class, nothing cross-cutting surfaced). Carried GAP (audit B1, review MINOR, NOT a J-02 blocker): 13/801 most-recent-session events carry a definitive reaction label beside None forward returns — must be resolved before J-05 renders them.
+
+**Next-step recommendation:** Build J-03 (credentialed event-window tape recording) at depth **full** — the dependency-order next, now unblocked for its event pool by J-02's 801-event registry. Split by the credential gate: the recorder wiring + tape-timeline join onto `GET /research/setups/{id}` + ONE committed keyless tick-fixture slice are agent-buildable now; the full >=10-window/>=5-symbol recording (incl. pinned AAPL 06-22) is operator-Alpaca-credential-gated (honestly blocked when keys absent, never simulated). Central rails: feed-honesty (iex verbatim, never pooled with sip), append-only/checksummed/split-frozen DatasetStore, keys-never-committed. Carry three watch-items: (1) audit B1 boundary (blocking for J-05) — resolve the definitive-label-beside-None-returns case with a regression test before any UI renders setups events; (2) audit B2 latency — the ~4m43s full-panel scan is on J-04's + J-05's hot path, plan a persisted/cached scan result; (3) J-04 must EXTEND edge_report.py additively, never fork.
+
+## Iteration 3 — goal-tradable_wall-iter-3
+
+**Date:** 2026-07-14T17:28:17Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: none — but J-03 moved failing -> **partial** (its keyless tape-at-the-wall substrate genuinely landed; forward progress)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS; all frozen files absent from the diff; config_fingerprint independently recomputed to 4d665603569b9dbf; apps/backend/.env untracked + gitignored; no-credential grep test passed in evaluator's own run)
+
+**Reasoning:** J-03's KEYLESS substrate is genuinely delivered — I re-ran 9 keyless join-path/guard/no-credential tests (all pass), confirmed the join replays through the FROZEN TapeEngine via DatasetStore.replay (never a second engine), verified compute_setups/list_setups byte-identical, the ONE committed sip fixture present, all frozen files (engine/, datasets.py, levels.py, tradability.py, backtests.py, bars.py, adapters/) absent from the diff, and independently recomputed config_fingerprint == 4d665603569b9dbf (4 new recording_* constants correctly in the exclusion set). I did NOT accept the dev/QA "credentialed headline MET" framing: the auditor (PASS_WITH_GAPS) and my own checks agree it is only partial/unknown — the integration test was INTERRUPTED with no pytest PASS, the pinned-AAPL 06-22 drill-in five-state timeline was NEVER demonstrated end-to-end (only a JPM 295-entry proxy), and I confirmed the persistent apps/backend/.data/datasets/ store holds ONLY 7 pre-existing Jul-3 datasets (the 15 recorded ones were ephemeral, in a since-GC-eligible pytest temp dir). So J-03 = partial (failing->partial), not passing. Not REGRESSION (J-01/J-02/J-07 all re-verified green — frozen files absent, fingerprint frozen, suite 1300 passed/0 failed; no critical anti-goal); not STALLED (abundant agent-buildable work — J-04 next in dependency order, then J-05/J-06); not GOAL_ACHIEVED (J-03 partial, J-04/J-05/J-06 failing); not ESCALATE (already full depth, all lanes pass-class, nothing cross-cutting surfaced). coherence COHERENCE-PASS (no consolidation owed); no journeys-changed.md drift note; all 7 journey spec-hashes match current goal text.
+
+**Next-step recommendation:** Build J-04 (the 3-way edge report + structure_tape_map) at depth **full** — the dependency-order next, now unblocked by J-03's keyless join substrate (J-04 backtests over recorded event datasets; the committed datasets_j03/ fixture gives it a keyless recorded window). It introduces a new canonical value + owner (edge_report cells / GET /research/edge-report + MCP proxy) and a new registered strategy (structure_tape_map beside frozen v1/structure_tape), and it makes several critical rails simultaneously load-bearing — hence full depth. Carry FOUR watch-items: (1) EXTEND the existing era-3 edge_report.py additively — NEVER fork a second edge computation (flagged iter-1/2/3); (2) the no-pooling-across-feeds rail (iex/sip/yahoo) becomes ACTIVELY load-bearing at the edge report; (3) champion pointer moves ONLY through the existing sweep gate on hold-out — never hand-promote structure_tape_map; keep config_fingerprint 4d665603569b9dbf (new strategy config in the exclusion set); (4) the ~4m43s full-panel compute_setups scan (audit B2) is J-04's hot path — plan a persisted/cached scan. SEPARATE operator-gated carry (does NOT block J-04): to durably complete J-03's credentialed headline, an operator runs apps/backend/scripts/record_event_windows.py directly (writes the persistent .data/datasets store) or re-runs the integration test to a clean pytest PASS + demonstrates the pinned-AAPL drill-in — then J-03 can move partial -> passing. Also carried to J-05: audit-B1 boundary-label fix before rendering setups events.
+
+## Iteration 4 — goal-tradable_wall-iter-4
+
+**Date:** 2026-07-14T21:03:13Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-04 (failing -> passing; the keyless core of the honest 3-way edge report — v1 vs frozen structure_tape vs the new registered structure_tape_map)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS; all frozen files absent from the product diff; config_fingerprint independently recomputed to 4d665603569b9dbf; no Alpaca credential in the diff — evaluator's own grep + test_no_credential_in_artifacts.py green)
+
+**Reasoning:** J-04 is genuinely achieved on its keyless core and I did not trust the three PASS reports. I independently recomputed config_fingerprint == 4d665603569b9dbf and the registry order == (v1, structure_tape, structure_tape_map); confirmed every frozen file (levels.py, tradability.py, bars.py, datasets.py, engine/, adapters/ incl. Alpaca, setups.py, strategies.py, store.py) is ABSENT from `git diff --name-only 218a0979 -- apps/` with config.py touched additively only (goal-permitted); grepped the product diff for Alpaca key patterns (clean); and re-ran the load-bearing guard tests MYSELF — test_edge_report.py + test_edge_report_api.py + test_no_credential_in_artifacts.py (37 green), test_backtests.py + test_strategies_api.py (frozen v1/structure_tape byte-identical, side-aware arming, unclassified-band skip, compute_tradability-not-compute_levels, champion-unchanged, train/holdout non-pool, feed non-pool, 422 refusal, determinism — all green), and both MCP edge_report byte-identity proxy tests (green). The auditor independently re-ran the full suite (1331 passed / 7 skipped / 0 failed) + the live endpoint (200 honest-empty / 405 POST). INTERPRETATION CALL (assumptions.md iter-4): the literal committed datasets_j03/ fixture (symbol PG, not a panel symbol) yields cells:[] under the real panel — a vacuously-empty report the goal EXPLICITLY names valid; the populated all-insufficient_sample cell structure (DoD item 1) is proven by test_synthetic_scan_join_produces_real_cells_all_insufficient_sample. Every REQUIRED acceptance element (3-way, full register on every $, train/holdout never pooled, feeds never pooled via a required 5th cell dimension, n>=5-or-insufficient, no gate weakened, champion untouched, MCP byte-identical) is delivered on the keyless path; the credentialed populated-cell enrichment is the operator-gated carry parallel to J-03, not a blocker. This differs materially from J-03's partial (which has a required, named, credentialed deliverable still pending). Not GOAL_ACHIEVED (J-03 partial, J-05/J-06 failing); not REGRESSION (nothing regressed — J-01/J-02/J-07 re-verified green via frozen-file diff-absence + fingerprint + re-run guards; no critical anti-goal); not STALLED (J-05/J-06 are agent-buildable, browser-verifiable frontend work); not ESCALATE (already full depth, review PASS not fail-open, nothing cross-cutting surfaced). coherence COHERENCE-PASS (no consolidation owed); no journeys-changed.md drift; all 7 spec-hashes match current goal text.
+
+**Next-step recommendation:** Build J-05 (`/structure` decluttered — map default + raw-levels toggle, Case Studies browser, Edge Report section) at depth **full** — the dependency-order next, now unblocked with all three backend read surfaces (tradability, setups, edge-report) available. Full depth: browser-verifiable, coherence-relevant (new UI surfaces → nav/duplicate-home/parallel-shell checks), zero-client-recomputation across three endpoints, and it must resolve TWO blocking watch-items before it ships honestly: (1) audit B1 — the definitive-reaction-label-beside-None-forward-returns boundary (13/801 events) with a regression test, BEFORE rendering setups events; (2) audit B3 — the ~4m43s compute_setups full-panel scan is on the Edge Report render hot path, add a bounded cache/persisted scan before it reads live per page load. SEPARATE operator-gated carries (do NOT block J-05): complete J-03's credentialed headline (persisted datasets + pinned-AAPL drill-in), and re-verify J-04's endpoint on populated panel-symbol/credentialed cells (audit B2).
+
+## Iteration 5 — goal-tradable_wall-iter-5
+
+**Date:** 2026-07-15T00:02:18Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: none (backend-only enabler; J-05 stays `failing` BY DESIGN — its two named blockers B1+B3 are resolved on the substrate, but the `/structure` UI render is deferred to iter-6)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS; every frozen file absent from the product diff; config_fingerprint independently recomputed to 4d665603569b9dbf; evaluator credential-grep of the 3 changed files clean)
+
+**Reasoning:** A backend-only enabler pass resolving the two blocking watch-items the iter-4 evaluator named as owned by J-05 — audit B1 (recency-boundary honesty) and audit B3 (a bounded shared scan cache), both entirely inside `apps/backend/app/research/setups.py`. I did NOT trust the three PASS-class reports: I confirmed the product diff is EXACTLY `setups.py` + `test_setups.py` + `test_setups_api.py` (`git diff --name-only 832ea80b -- apps/`; every frozen file — levels.py, tradability.py, engine/, strategies.py, bars.py, datasets.py, adapters/, edge_report.py, backtests.py, config.py, routes.py — absent), independently recomputed `config_fingerprint == 4d665603569b9dbf`, and confirmed all 7 goal-slice spec-hashes match `goal_gate.py hash-journeys` (no drift; no journeys-changed.md). The real regression surfaces are J-02 (owns the setups registry) and J-04 (edge report reads `compute_setups`): I RE-RAN the blast radius myself — 8 named DoD tests (pinned AAPL 2026-06-22 byte-identical `rejected`/78-bar/boundary-false; B1 boundary exact-values REJECTED/effective-horizon-4/None; B3 cache-hit==fresh, computed-once, checksum-bust, enriched-read-never-leaks) = 8 passed; and test_setups.py + test_setups_api.py + test_edge_report.py + test_edge_report_api.py + test_strategies_api.py (~92 tests) exit 0 / [100%] / zero failure markers. B1 is purely additive disclosure (never mutates `reaction`, never excludes an event — the decomposer's reversible additive-disclosure interpretation), verified by a purpose-built SYN-SETUPS-BOUNDARY fixture that genuinely reaches the recency boundary at the shipped 78-bar horizon. B3 is a rebuildable, store-checksum-keyed, byte-identical in-process memoization of the ONE `compute_setups` owner (coherence COHERENCE-PASS: a cache/accelerator, not a second source). Not GOAL_ACHIEVED (J-03 partial, J-05/J-06 failing); not REGRESSION (nothing regressed — J-02/J-04 re-verified byte-identical; no critical anti-goal); not STALLED (iter-6's pure-frontend J-05 render is abundant agent-buildable work on a now-proven-stable substrate); not ESCALATE (already full depth, review PASS_WITH_NOTES / QA PASS / audit PASS_WITH_GAPS with only non-blocking concurrency observations / coherence PASS — no fail-open, no cross-cutting ambiguity; J-05 was a planned dependency-ordered build, not a repeatedly-failing flip target).
+
+**Next-step recommendation:** Build J-05 at depth **full** — the pure-frontend `/structure` render (Tradable Map default + raw-levels toggle, Case Studies browser + drill-in rendering boundary events honestly via the new `reaction_boundary_truncated`/`effective_reaction_horizon_bars` fields, Edge Report section), every value read verbatim from `/research/tradability` + `/research/setups`(/{id}) + `/research/edge-report`, era-5 fetch control/badge preserved. Full depth: browser-verifiable + coherence-relevant (new UI surfaces) + zero-recomputation across three endpoints. NON-BLOCKING carry-forward: iter-6's browser page-load may fire the setups list + edge-report concurrently against a cold B3 cache — close the review/audit/coherence-flagged non-atomic two-key cache-write torn-read window (`setups.py:377-378`) with a one-line atomic tuple rebind or a Lock (hardening, not a single-operator correctness prerequisite). Operator-gated carries (do NOT block J-05): complete J-03's credentialed >=10-window headline + pinned-AAPL 06-22 drill-in; J-06 cockpit overlay+chip queued for iter-7.
+```
+
+Recent assumption entries (pre-trimmed):
+```
+# Assumption Ledger — session tradable_wall
+
+## iter-0 — goal-evaluator
+
+**Ambiguity:** The iteration spec instructs recording credential-gated J-03 and J-06 as `blocked` (Alpaca env unset, not simulated), but the journey-history status vocabulary (`passing`/`failing`/`partial`/`already_passing`/`regressed`/`unknown`) has no `blocked` value.
+**We chose:** `failing` for both — there is positive evidence their features are entirely absent at baseline (setups.py/recorder path for J-03; PriceChart overlay+chip for J-06), so they are definitively not-passing, not merely untested. The credential gate is preserved as a `note` field on each journey rather than as the primary status. `unknown` was rejected because it means "not tested this iteration; carry over" — but both were exercised and found absent.
+**Reversible:** yes
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** J-03's acceptance says ">=10 event-window datasets EXIST ... the pinned event's drill-in SHOWS the five-state timeline at the 300-test." Alpaca creds turned out present (unexpected), so the credentialed recording genuinely ran — but the process was interrupted, producing 15 real datasets in an ephemeral pytest temp dir (GC-eligible, NOT the persistent store), with only a JPM proxy timeline shown and the pinned-AAPL drill-in never demonstrated. Does "exist"/"shows" require durable persistence in the canonical store + the specific pinned-AAPL drill-in, or is a demonstrated-but-ephemeral recording run enough to score the credentialed headline met?
+**We chose:** The stricter reading — the credentialed headline is met only when the datasets PERSIST in apps/backend/.data/datasets/ (append-only/checksummed/split-frozen, re-openable) AND the pinned-AAPL 06-22 drill-in five-state timeline is demonstrated end-to-end. Under this bar the credentialed portion is not-yet-met, so J-03 = partial (keyless substrate passing), matching the auditor's explicit recommendation and the spec's own stated expectation ("land partial, not full passing"). The dev/QA "MET" framing was not accepted. A human who considers a demonstrated-but-ephemeral real run sufficient could reverse this to passing.
+**Reversible:** yes
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** J-04's acceptance ("the report compares all three strategies on identical data ... each cell either has n>=5 or is labelled insufficient_sample ... an all-insufficient report is a valid outcome") plus the tag "(Keyless via the committed fixture; full run credentialed)" leaves open whether J-04 can be scored passing on the KEYLESS committed-fixture run alone (one recorded window -> cells honestly all insufficient_sample), or whether the credentialed >=10-window recorded data (operator-gated, tied to J-03's still-blocked credentialed portion) is required before J-04 can pass.
+**We chose:** The keyless reading — this iteration builds the full 3-way report machinery (structure_tape_map registration + additive arming path + edge_report.py 3-way extension + GET /research/edge-report + MCP proxy) and verifies it end-to-end over the committed datasets_j03/ fixture, treating a correct, gate-honoring, all-insufficient_sample report as J-04's passing core (success criterion 5 and the acceptance line both state an all-insufficient / empty-survivor report is a valid outcome). The credentialed >=10-window enrichment (richer n>=5 cells) is an operator-gated carry parallel to J-03's blocked recording, not a blocker for J-04's core acceptance. A human who requires credentialed multi-window data before J-04 passes could reverse this to partial.
+**Reversible:** yes
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** J-04's acceptance ("the report compares all three strategies on identical data ... each cell either has n>=5 or is labelled insufficient_sample ... an all-insufficient report is a valid outcome") tagged "(Keyless via the committed fixture; full run credentialed)" leaves open whether the KEYLESS committed-fixture run must produce a POPULATED (non-empty) all-`insufficient_sample` report, or whether a vacuously-EMPTY report (`cells: []`) on the literal fixture — plus a synthetic-panel proof of the populated cell structure — satisfies J-04's passing bar. The literal committed `datasets_j03/` fixture (symbol PG, not a config-owned panel symbol) yields `cells: []` under the real panel; the populated cell shape is proven only by a test-local panel override.
+**We chose:** The empty-is-valid reading → J-04 = passing on its keyless core. The goal explicitly and repeatedly names an empty / all-`insufficient_sample` report a valid, publishable outcome (Success Criterion 5, the J-04 acceptance line, the "No gate bending for a headline" anti-goal), and DoD item 1's "exact cell structure" assertion is met by `test_synthetic_scan_join_produces_real_cells_all_insufficient_sample` (real PG ticks + test-local panel). Every REQUIRED acceptance element (3-way, full register, no train/holdout pooling, no feed pooling, n>=5-or-insufficient, no gate weakened, champion untouched, MCP byte-identical) is delivered and independently verified; the credentialed populated-cell enrichment is treated as the operator-gated carry parallel to J-03, not a J-04 blocker. A human who requires the committed fixture (or a credentialed panel-symbol recording) to produce a genuinely NON-EMPTY report before J-04 passes could reverse this to `partial`.
+**Reversible:** yes
+
+## iter-5 — goal-decomposer
+
+**Ambiguity:** The goal (J-02/J-05 acceptance, Data Contract) is silent on how a touch event in the most-recent stored session should be presented when its reaction is computed from a truncated sub-horizon (`setups.py` caps the reaction read at `min(touch_index + horizons[0], len(all_bars)-1)`) while its horizon-0 forward return honestly reports `None` — the audit-B1 case, 13/801 live events. Should such a boundary event surface its (shorter) effective horizon, have its reaction flag-suppressed, or be excluded entirely from the registry/edge-report?
+**We chose:** Additive disclosure — the event KEEPS its existing `reaction` label and `forward_returns`, and additively carries the effective reaction horizon + a boundary flag so the iter-6 UI can render it honestly as truncated-horizon. No label mutation, no exclusion. This preserves byte-identity of every non-boundary event (J-02 pinned AAPL 06-22 unchanged; J-04 edge-report cells unchanged) and keeps the gate-honesty rails intact, while resolving the "definitive label beside None returns" inconsistency by disclosing it rather than hiding it. A human who prefers suppressing the boundary reaction or excluding boundary events from the registry could reverse this.
+**Reversible:** yes
+
+## iter-6 — goal-decomposer
+
+**Ambiguity:** J-05 says "`/structure` decluttered" and the Vision says `/structure` "defaults to the clean map + case browser + edge report" — leaving open whether the era-5 **Registry** and **Comparison** sections (era-5 J-02/J-03, currently on the page below the levels/zones) must be REMOVED to declutter, or whether "declutter" means only that the raw all-levels rendering moves behind a toggle while everything else stays.
+**We chose:** The non-regressing reading — "declutter" applies to the raw levels/zones rendering only (it moves behind an explicit off-by-default "raw levels" toggle, restored byte-identically). The era-5 Fetch control, provenance badge, Registry, and Comparison sections are PRESERVED intact (Foundation invariant: "the existing surfaces … `/structure` stay intact"; J-07 sentinel), positioned below the new Tradable Map (default) · Case Studies · Edge Report sections so the map still leads the page. A human who reads "declutter" as stripping `/structure` down to only map+cases+edge-report could reverse this.
+**Reversible:** yes
+```
+
+Apply the TOKEN AND QUESTIONING POLICY from .claude/core.md strictly.
+
+Write your verdict to: /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-6/eval.md
+
+The verdict line MUST appear at the top of /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/iter-6/eval.md and start exactly with:
+**Verdict:** GOAL_ACHIEVED
+  or **Verdict:** CONTINUE
+  or **Verdict:** ESCALATE
+  or **Verdict:** REGRESSION
+  or **Verdict:** STALLED
+
+Also include a 'Depth Recommendation For Next Iteration:' line: lean or full.
+
+Then update /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/journey-history.json (full atomic write) and append an entry to /home/dennis-chan/Git/tapeology/runs/goal-session-tradable_wall/state/evaluator-log.md.
+STOP.
+
+Environment note: this pipeline run isolates temp files. Before running tests or any command that writes temporary files, run: export TMPDIR="/tmp/iad.goal-tradable_wall-iter-6.2865738" TMP="/tmp/iad.goal-tradable_wall-iter-6.2865738" TEMP="/tmp/iad.goal-tradable_wall-iter-6.2865738"

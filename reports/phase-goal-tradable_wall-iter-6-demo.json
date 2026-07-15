@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-tradable_wall-iter-6",
+  "base_url": "http://localhost:3301",
+  "iteration": 6,
+  "default_timeout_ms": 20000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open Tapeology",
+      "narration": "Start on the Cockpit, the app's home screen for watching a stock's simulated tape.",
+      "point_out": "The navigation bar across the top, with Structure as one of its five pages.",
+      "journey": "",
+      "new": false,
+      "verified": false,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Open the Structure page",
+      "narration": "Click into Structure, home of the app's price-structure research tools.",
+      "point_out": "The page now opens to a simple prompt instead of a wall of numbers — pick a symbol and a moment in time to see its map.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "link", "name": "Structure" } },
+      "expect": { "text": "Choose a symbol and an as-of time, then Load, to see its tradable level map." }
+    },
+    {
+      "n": 3,
+      "title": "Pick a stock",
+      "narration": "Type AAPL into the Symbol field.",
+      "point_out": "The Symbol field now reads AAPL.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Structure symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 4,
+      "title": "Pick a moment in time",
+      "narration": "Enter an as-of time from the middle of a real trading session — everything shown afterward is built only from data available up to that exact moment, never a peek into the future.",
+      "point_out": "The As-of field now reads the chosen date and time.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "As-of (UTC, ISO-8601)" }, "text": "2026-06-22T15:00:00Z" }
+    },
+    {
+      "n": 5,
+      "title": "See the short list of zones that matter",
+      "narration": "Click Load. Instead of a giant list of every minor price level, the page now shows a short, ranked list of the handful of zones that actually matter for this stock.",
+      "point_out": "Exactly ten rows appear, with the zone around $300 to $302 near the top, marked Class A and flagged as a round number.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "Map basis (prior completed session close)" }
+    },
+    {
+      "n": 6,
+      "title": "Peek behind the curtain",
+      "narration": "Curious how this page used to look? Click Show raw levels to bring back the original, longer view.",
+      "point_out": "The original chart and level list reappear completely unchanged — now tucked one click away instead of being the only option.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Show raw levels" } },
+      "expect": { "text": "Price chart — S/R levels" }
+    },
+    {
+      "n": 7,
+      "title": "Search real examples",
+      "narration": "Scroll down to Case Studies and narrow its history to one stock by typing into its Symbol box.",
+      "point_out": "The list narrows down to AAPL's own history of price touching a mapped zone.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "testid": "case-studies-filter-symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 8,
+      "title": "Open a real example",
+      "narration": "Click one of the AAPL rows from June 22, 2026 — a day price actually tested that same top zone.",
+      "point_out": "The example opens to show exactly what happened: the touch was rejected, and price moved lower afterward across both tracked follow-up windows.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "tr[data-testid=\"case-studies-row\"]:has-text(\"2026-06-22\")" } },
+      "expect": { "text": "symbol / session" }
+    },
+    {
+      "n": 9,
+      "title": "An honest too-soon-to-know case",
+      "narration": "Now click the most recent AAPL example instead, the one marked truncated horizon.",
+      "point_out": "Rather than guessing at an outcome, the app says plainly that not enough time has passed yet to know how this one turned out.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "tr[data-testid=\"case-studies-row\"]:has-text(\"2026-07-13\")" } },
+      "expect": { "text": "Reaction read at a truncated" }
+    },
+    {
+      "n": 10,
+      "title": "Check the honest scorecard",
+      "narration": "Further down, the new Edge Report compares three trading approaches side by side.",
+      "point_out": "Right now it states plainly that there isn't qualifying trade data yet, rather than making up a result.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "edge-report-register" } },
+      "expect": { "text": "No edge-report cells yet." }
+    },
+    {
+      "n": 11,
+      "title": "Confirm nothing else moved",
+      "narration": "Scroll further still, and the strategy list and current champion are exactly where they've always worked.",
+      "point_out": "Fetching real prices from Yahoo Finance, the strategy list, and the head-to-head comparison tool are all still here, just moved below the new sections.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "champion-summary" } },
+      "expect": { "text": "Champion" }
+    }
+  ]
+}

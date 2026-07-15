@@ -6,14 +6,19 @@ import {
   fetchBacktest,
   fetchBarSeriesList,
   fetchDatasets,
+  fetchEdgeReport,
   fetchLevels,
   fetchPnlLedger,
   fetchProfiles,
+  fetchSetupDetail,
+  fetchSetups,
   fetchStrategies,
+  fetchTradability,
   recordBarSeries,
 } from "@/lib/api";
 import type {
   Backtest,
+  BacktestAggregate,
   BacktestClassAggregate,
   BacktestResult,
   BarSeriesListResult,
@@ -21,38 +26,56 @@ import type {
   ConfluenceZone,
   Dataset,
   DatasetsListResult,
+  EdgeReportCell,
+  EdgeReportResponse,
+  EdgeReportSurvivingCell,
   LevelsResponse,
   PnlLedger,
   ProfilesPayload,
+  SetupEvent,
   Strategy,
   StrategiesPayload,
+  TradabilityBand,
+  TradabilityResponse,
 } from "@/lib/types";
 import { SymbolSearch } from "@/components/SymbolSearch";
 import { StructureChart } from "@/components/StructureChart";
 import { Panel } from "@/components/Panel";
 import { FeedBasisBadge } from "@/components/FeedBasisBadge";
 
-// The /structure page (J-01 + J-02 + J-03 + J-05) — the era-4 structure stack's browser home, now
-// complete. For a chosen symbol + as-of time it renders a price chart with one dashed line per S/R
-// level plus a confluence-zones table badged A/B/C (J-01); below that, a read-only Registry section
-// shows the two registered strategies plus the current champion (J-02); below THAT, a Comparison
-// section runs `structure_tape` against the champion `v1` over a chosen dataset and renders both
-// strategies' aggregates + per-class A/B/C breakdown side by side, beside the champion pointer and
-// the founding PnL-ledger baseline row (J-03). Reached from the top-bar link, served by
+// The /structure page — the era-4/5/5B structure stack's browser home. For a chosen symbol +
+// as-of time it renders a price chart with one dashed line per S/R level plus a confluence-zones
+// table badged A/B/C (era-4 J-01); below that, a read-only Registry section shows the registered
+// strategies plus the current champion (era-4 J-02); below THAT, a Comparison section runs
+// `structure_tape` against the champion `v1` over a chosen dataset and renders both strategies'
+// aggregates + per-class A/B/C breakdown side by side, beside the champion pointer and the
+// founding PnL-ledger baseline row (era-4 J-03). Reached from the top-bar link, served by
 // GET /meta/ui-routes (data-driven NavBar — no client hardcoding; see apps/backend/app/meta.py
 // UI_ROUTES). Follows the /performance page pattern: client component, no business logic,
 // canonical endpoints read verbatim, `{ok, data, error}`-shaped fetch results.
 //
-// Era-5 J-05 adds the page's ONE new explicit write action: a fetch-control section (symbol +
-// timeframe + UTC date range + a "Fetch from Yahoo Finance" button) above the Levels & Zones form.
-// Submitting POSTs `/research/bars` (keyless; store-first — an already-fetched window is served
-// from storage with zero network calls, never a `409`), then loads the fetched symbol/window-end
-// through the EXISTING Levels & Zones read path (`handleLoad` — zero new rendering code, zero
-// client recomputation). A "Yahoo Finance" provenance badge (the SAME `FeedBasisBadge` the cockpit
-// uses, keyed off the charted series' own `feed` field) renders beside the chart. The fetch
-// control computes no level/zone/PnL/champion value and never promotes.
+// Era-5 J-05 added the page's first explicit write action: a fetch-control section (symbol +
+// timeframe + UTC date range + a "Fetch from Yahoo Finance" button). Submitting POSTs
+// `/research/bars` (keyless; store-first — an already-fetched window is served from storage with
+// zero network calls, never a `409`), then loads the fetched symbol/window-end through the
+// EXISTING Load path (`handleLoad`). A "Yahoo Finance" provenance badge (the SAME `FeedBasisBadge`
+// the cockpit uses, keyed off the charted series' own `feed` field) renders beside the raw-levels
+// chart. The fetch control computes no level/zone/PnL/champion value and never promotes.
 //
-// NINE canonical endpoints (eight read, one write), rendered VERBATIM and nothing else:
+// Era-5B J-05 (this iteration) DECLUTTERS the page: **Tradable Map** (era-5B J-01's ≤10
+// quality-scored bands) is now the default view the Load form drives, with the prior raw
+// levels/confluence-zones rendering moved behind an explicit, off-by-default "Show raw levels"
+// toggle (byte-identical when on — zero change to that code path). Two new sections follow:
+// **Case Studies** (era-5B J-02's touch-event registry, filterable by symbol/reaction, with a
+// row drill-in showing the era-5B J-03 tape-at-the-wall timeline when a dataset was recorded) and
+// **Edge Report** (era-5B J-04's 3-way `v1` / `structure_tape` / `structure_tape_map` comparison,
+// register-carrying, honest even when every cell is `insufficient_sample`). The era-5 fetch
+// control, provenance badge, Registry, and Comparison sections are unchanged, only repositioned
+// below the three new sections (Foundation invariant — nothing existing regresses). Every new
+// value is read VERBATIM from its owning endpoint; this iteration recomputes nothing (the
+// coherence-auditor's central rail for J-05).
+//
+// THIRTEEN canonical endpoints (twelve read, one write), rendered VERBATIM and nothing else:
 //   * GET /research/levels?symbol=&as_of=  (Data Contract row 39) — levels + confluence zones +
 //     the `no_bar_series_for_symbol` honesty flag. The A/B/C badge is `zone.class`, the score is
 //     `zone.score` — neither is ever recomputed from breadth or member strength.
@@ -61,36 +84,56 @@ import { FeedBasisBadge } from "@/components/FeedBasisBadge";
 //     the already-served `symbol` field to find candles for the chart — the SAME filtering
 //     discipline NavBar already applies to `nav: true` (filtering already-served rows is not a
 //     recomputation of any value).
-//   * POST /research/bars  (Data Contract row 38, J-05) — the fetch control's one write action:
-//     fetch-or-store-first-serve a real Yahoo bar series for {symbol, timeframe, start, end}. The
-//     response's own `feed`/`symbol`/`window_end_utc` seed the existing read path above; nothing
-//     from this response is rendered directly.
-//   * GET /research/strategies  (Data Contract row 40/41, J-02) — the strategy registry (`v1` +
-//     `structure_tape`) + the champion pointer. Fetched on mount, independent of the Levels & Zones
-//     Load button (the registry and champion are populated even keyless).
+//   * POST /research/bars  (Data Contract row 38, era-5 J-05) — the fetch control's one write
+//     action: fetch-or-store-first-serve a real Yahoo bar series for {symbol, timeframe, start,
+//     end}. The response's own `feed`/`symbol`/`window_end_utc` seed the existing read path above;
+//     nothing from this response is rendered directly.
+//   * GET /research/strategies  (Data Contract row 40/41, era-4 J-02) — the strategy registry
+//     (`v1` + `structure_tape` + `structure_tape_map`) + the champion pointer. Fetched on mount,
+//     independent of the Load button (the registry and champion are populated even keyless).
 //   * GET /research/profiles  (Data Contract row 33) — read ONLY to cross-check its `champion`
 //     against `/research/strategies`'s own `champion` (both read the SAME store pointer — never a
 //     second champion source).
-//   * GET /research/datasets  (Data Contract row 30, J-03) — every registered dataset, fetched on
-//     mount to populate the Comparison section's dataset selector.
-//   * POST /research/backtests + GET /research/backtests/{id}  (Data Contract row 31, J-03) — the
-//     Comparison section's "Run comparison" starts TWO backtests (`v1` + `structure_tape`, both
-//     `profile=default`) on the chosen dataset and polls both to a terminal status, reusing the
-//     Studies job/poll PATTERN (not its endpoint). Every aggregate, per-class value, and the
+//   * GET /research/datasets  (Data Contract row 30, era-4 J-03) — every registered dataset,
+//     fetched on mount to populate the Comparison section's dataset selector.
+//   * POST /research/backtests + GET /research/backtests/{id}  (Data Contract row 31, era-4 J-03)
+//     — the Comparison section's "Run comparison" starts TWO backtests (`v1` + `structure_tape`,
+//     both `profile=default`) on the chosen dataset and polls both to a terminal status, reusing
+//     the Studies job/poll PATTERN (not its endpoint). Every aggregate, per-class value, and the
 //     register line is read verbatim from the terminal payload — zero recomputation.
-//   * GET /research/pnl/ledger  (Data Contract row 32, J-03) — read ONLY for the founding baseline
-//     row (`rows.find(r => r.founding)`) shown beside the comparison; the champion badge reuses the
-//     ALREADY-fetched `/research/strategies` champion (no second champion fetch).
+//   * GET /research/pnl/ledger  (Data Contract row 32, era-4 J-03) — read ONLY for the founding
+//     baseline row (`rows.find(r => r.founding)`) shown beside the comparison; the champion badge
+//     reuses the ALREADY-fetched `/research/strategies` champion (no second champion fetch).
+//   * GET /research/tradability?symbol=&as_of=  (era-5B J-01, THIS iteration) — the tradable
+//     level map (bands: range, side, quality score, inherited class, member count, round-number
+//     flag, `basis_as_of`), driven by the SAME Load form as the raw-levels read above. Every band
+//     field is `String(...)`-rendered verbatim — never recomputed, clustered, or re-scored here.
+//   * GET /research/setups (optionally `?symbol=&reaction=`) + GET /research/setups/{id}  (era-5B
+//     J-02/J-03, THIS iteration) — the case-study registry, fetched once on mount and filtered
+//     client-side (the SAME `bar_series.filter` display-filter precedent above — never a second
+//     computation); a row click fetches the drill-in, whose `tape_timeline` is present-but-empty
+//     until a recorded dataset covers the touch.
+//   * GET /research/edge-report  (era-5B J-04, THIS iteration) — the 3-way strategy-comparison
+//     report, fetched once on mount and rendered verbatim, including the honest empty /
+//     all-`insufficient_sample` shape on the keyless PG-only-dataset fixture.
 //
-// The fetch control (J-05) has its own distinct honest states — see `fetch-yahoo-*` testids: idle
-// (fields unset, button disabled), fetching (button disabled, "Fetching…" label), success (folds
-// into the Levels & Zones states below via `handleLoad`), and a POST error surfaced VERBATIM via
-// `UnavailablePanel` (distinct backend `detail` text per 422/503/504/409 — never one generic
+// The fetch control (era-5 J-05) has its own distinct honest states — see `fetch-yahoo-*`
+// testids: idle (fields unset, button disabled), fetching (button disabled, "Fetching…" label),
+// success (folds into the Load states below via `handleLoad`), and a POST error surfaced VERBATIM
+// via `UnavailablePanel` (distinct backend `detail` text per 422/503/504/409 — never one generic
 // message). The provenance badge is absent whenever no series is charted (honest absence, the SAME
 // rule `FeedBasisBadge` already enforces for the cockpit).
 //
-// Four distinct honest states for the Levels & Zones section (never share copy, never fabricate a
-// chart/level/zone):
+// The Tradable Map section (era-5B J-01, THIS iteration's new default view) has its own distinct
+// honest states — see `tradable-map-*` testids — mirroring the raw-levels section's own four-state
+// shape: idle, loading, `no_bar_series_for_symbol` (needs provider credentials), a resolved basis
+// with zero bands is not a reachable state per `tradability.py`'s own docstring so no such empty
+// copy exists, an UNRESOLVED basis (`basis_as_of: null`, `bands: []` — "nothing derivable yet"),
+// and backend-unreachable/any non-200 (folded into the shared degraded state, the SAME
+// validation-refusal-folding precedent immediately below).
+//
+// Four distinct honest states for the raw-levels section (toggle-gated, off by default; never
+// share copy, never fabricate a chart/level/zone):
 //   1. no_bar_series_for_symbol: true            -> explicit "needs provider credentials" state
 //   2. no_bar_series_for_symbol: false, levels: []  -> distinct "no levels found" state
 //   3. levels non-empty, confluence_zones: []     -> distinct "no qualifying confluence zone"
@@ -101,16 +144,31 @@ import { FeedBasisBadge } from "@/components/FeedBasisBadge";
 //      verbatim — folding a validation refusal into the same honest "couldn't load" treatment
 //      satisfies the "never crash, never fabricate" bar without inventing a fifth copy.
 //
-// The Registry section (J-02) has its own distinct honest states — loading, registry-unavailable
-// (`/research/strategies` unreachable/non-200), and populated — see `structure-registry-*` testids.
+// The Registry section (era-4 J-02) has its own distinct honest states — loading,
+// registry-unavailable (`/research/strategies` unreachable/non-200), and populated — see
+// `structure-registry-*` testids.
 //
-// The Comparison section (J-03) has several distinct honest states — see `comparison-*` testids:
-// no datasets registered, the dataset list unreachable, idle (a dataset list is populated but Run
-// has not been clicked), a backtest queued/running (per side, independently), a backtest failed
-// (per side), a backtest cancelled (per side, carrying NO result — never a partial simulated PnL),
-// a poll-time backend-unreachable notice, and done (aggregates + per-class table,
-// `insufficient_sample` shown inline — never a separate "insufficient" state). The section NEVER
-// moves the champion pointer and writes NOTHING to the PnL ledger.
+// The Comparison section (era-4 J-03) has several distinct honest states — see `comparison-*`
+// testids: no datasets registered, the dataset list unreachable, idle (a dataset list is
+// populated but Run has not been clicked), a backtest queued/running (per side, independently), a
+// backtest failed (per side), a backtest cancelled (per side, carrying NO result — never a
+// partial simulated PnL), a poll-time backend-unreachable notice, and done (aggregates + per-class
+// table, `insufficient_sample` shown inline — never a separate "insufficient" state). The section
+// NEVER moves the champion pointer and writes NOTHING to the PnL ledger.
+//
+// The Case Studies section (era-5B J-02/J-03, THIS iteration) has its own distinct honest states —
+// see `case-studies-*` testids: loading, unavailable, a true-empty registry (zero events scanned
+// anywhere), a filtered-to-zero result (distinct from true-empty — the registry has rows, this
+// filter combination simply matches none), and populated. The drill-in (`case-drillin-*` testids)
+// adds its own loading/unavailable states plus two more: a recency-boundary disclosure
+// (`reaction_boundary_truncated: true` — never presented as a full-horizon reaction) and an
+// honest "no recorded tape" state (`tape_timeline: []`, distinct from a populated timeline list).
+//
+// The Edge Report section (era-5B J-04, THIS iteration) has its own distinct honest states — see
+// `edge-report-*` testids: loading, unavailable, and an honest empty/all-`insufficient_sample`
+// report (a valid, first-class, never-hidden outcome per goal.md's own "no gate bending for a
+// headline" anti-goal) versus a populated report — `insufficient_sample` renders INLINE on each
+// cell's real numbers, the SAME `BacktestClassTable` precedent the Comparison section established.
 //
 // Dark instrument-panel style consistent with /journal, /studies, /performance: slate surfaces,
 // restrained borders, font-mono numerics, amber for the honest-empty/degraded states.
@@ -175,6 +233,14 @@ function pickRepresentativeSeries(seriesForSymbol: BarSeriesRecord[]): BarSeries
 // list), not a second validation authority — the backend's own `bar_timeframes` + Yahoo-adapter
 // checks remain the sole enforcement (an out-of-set value still 422s server-side either way).
 const YAHOO_TIMEFRAMES = ["1w", "1d", "4h", "1h", "5m", "1m"];
+
+// era-5B J-05 (THIS iteration): the Case Studies reaction filter's <select> options — mirrors
+// `research/setups.py`'s own config-owned, pre-registered `REJECTED`/`BROKE`/`CHOPPED` constants
+// (route-level enforced by `routes.py`'s `_VALID_REACTIONS`). The SAME `YAHOO_TIMEFRAMES` display-
+// choice precedent immediately above: a courtesy option list, never a second validation authority
+// — an out-of-set value would still 422 server-side (this page never sends one; the filter is
+// applied client-side over the already-served, unfiltered event list — see `handleSetupsFilter*`).
+const SETUP_REACTIONS = ["rejected", "broke", "chopped"];
 
 type LoadState<T> =
   | { phase: "idle" }
@@ -285,6 +351,439 @@ function ZoneRow({ zone, index }: { zone: ConfluenceZone; index: number }) {
         </table>
       </div>
     </article>
+  );
+}
+
+// --- Tradable Map section (era-5B J-01, THIS iteration's new default view) ----------------------
+
+// One tradable band row: side, range, inherited class, quality score, member count, round-number
+// flag — every value `String(...)`-rendered verbatim off the prop (the `ZoneRow` precedent).
+// `class: null` renders an honest "Unclassified" label — never a fabricated grade (a band with no
+// overlapping confluence zone genuinely has none; `levels.py` alone owns A/B/C).
+function BandRow({ band }: { band: TradabilityBand }) {
+  return (
+    <tr
+      data-testid="tradable-band-row"
+      data-band-side={band.side}
+      className="border-b border-slate-800/60 last:border-b-0"
+    >
+      <td className={LABEL_CELL}>{band.side}</td>
+      <td className={NUMERIC_CELL} data-testid="tradable-band-range">
+        {String(band.price_low)}–{String(band.price_high)}
+      </td>
+      <td className={LABEL_CELL} data-testid="tradable-band-class">
+        {band.class !== null ? `Class ${band.class}` : "Unclassified"}
+      </td>
+      <td className={NUMERIC_CELL} data-testid="tradable-band-score">
+        {String(band.quality_score)}
+      </td>
+      <td className={NUMERIC_CELL}>{String(band.member_count)}</td>
+      <td className="px-2 py-1.5 text-left">
+        {band.round_number && (
+          <span
+            data-testid="tradable-band-round-number"
+            className="inline-block whitespace-nowrap rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[11px] text-slate-300"
+          >
+            round number
+          </span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+// The bands table (range/side/quality-score/class/member-count/round-number — the DoD's exact
+// column list). `bands` is rendered in the endpoint's OWN served order (side, then descending
+// quality score — never re-sorted here).
+function BandsTable({ bands }: { bands: TradabilityBand[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="tradable-map-table" className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-slate-800">
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">side</th>
+            <th className={HEADER_CELL}>range</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">class</th>
+            <th className={HEADER_CELL}>score</th>
+            <th className={HEADER_CELL}>members</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500" />
+          </tr>
+        </thead>
+        <tbody>
+          {bands.map((band, i) => (
+            <BandRow key={i} band={band} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// --- Case Studies section (era-5B J-02/J-03, THIS iteration) -------------------------------------
+
+// Every configured forward-return horizon rendered verbatim (horizon_bars + the RAW
+// return_fraction — never a client-side percentage conversion or rounding). `return_fraction:
+// null` renders an honest "—" (that horizon reaches past the end of the stored series; never a
+// fabricated number).
+function ForwardReturnsList({ forwardReturns }: { forwardReturns: SetupEvent["forward_returns"] }) {
+  return (
+    <span data-testid="case-forward-returns" className="font-mono text-xs text-slate-300">
+      {forwardReturns.map((fr, i) => (
+        <span key={fr.horizon_bars} className="whitespace-nowrap">
+          {i > 0 && " · "}
+          {String(fr.horizon_bars)}b: {fr.return_fraction === null ? "—" : String(fr.return_fraction)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+// One case-registry row: symbol, session date, band range/side/class, reaction, forward returns —
+// the DoD's exact column list. Clicking anywhere on the row opens the drill-in below the table.
+function SetupRow({
+  event,
+  selected,
+  onSelect,
+}: {
+  event: SetupEvent;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <tr
+      data-testid="case-studies-row"
+      data-reaction={event.reaction}
+      onClick={onSelect}
+      aria-selected={selected}
+      className={`cursor-pointer border-b border-slate-800/60 last:border-b-0 hover:bg-slate-800/40 ${
+        selected ? "bg-slate-800/60" : ""
+      }`}
+    >
+      <td className={LABEL_CELL}>{event.symbol}</td>
+      <td className={LABEL_CELL}>{event.session_date}</td>
+      <td className={LABEL_CELL}>
+        {event.band.side} · {String(event.band.price_low)}–{String(event.band.price_high)} ·{" "}
+        {event.band.class !== null ? `Class ${event.band.class}` : "Unclassified"}
+      </td>
+      <td className={LABEL_CELL} data-testid="case-studies-row-reaction">
+        {event.reaction}
+        {event.reaction_boundary_truncated && (
+          <span
+            data-testid="case-studies-row-boundary-flag"
+            className="ml-1 inline-block whitespace-nowrap rounded border border-amber-800/60 bg-amber-900/20 px-1 py-0.5 text-[10px] text-amber-300"
+          >
+            truncated horizon
+          </span>
+        )}
+      </td>
+      <td className="px-2 py-1.5 text-left">
+        <ForwardReturnsList forwardReturns={event.forward_returns} />
+      </td>
+    </tr>
+  );
+}
+
+// The tape-at-the-wall timeline (era-5B J-03) — a list of state-transition entries, or an honest
+// "no recorded tape" empty state (distinct from a populated list — never silently omitted).
+function TapeTimelineList({ timeline }: { timeline: SetupEvent["tape_timeline"] }) {
+  if (timeline.length === 0) {
+    return (
+      <p data-testid="case-drillin-tape-timeline-empty" className="text-xs text-slate-600">
+        No recorded tape for this event.
+      </p>
+    );
+  }
+  return (
+    <ol data-testid="case-drillin-tape-timeline" className="space-y-1">
+      {timeline.map((entry, i) => (
+        <li
+          key={i}
+          data-testid="case-drillin-tape-timeline-entry"
+          className="flex items-baseline justify-between gap-2 font-mono text-xs text-slate-300"
+        >
+          <span className="text-slate-500">{entry.timestamp ?? "—"}</span>
+          <span>{entry.state}</span>
+          <span className="text-slate-500">{String(entry.confidence)}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// The row drill-in: band, reaction (+ the honest recency-boundary disclosure), forward returns,
+// and the tape timeline. Renders whichever `LoadState<SetupEvent>` phase is current — its own
+// distinct loading/unavailable states, the page's established `LoadState<T>` pattern.
+function SetupDrillIn({ state }: { state: LoadState<SetupEvent> }) {
+  return (
+    <Panel title="Case Studies — drill-in" className="mt-3">
+      {state.phase === "loading" && <LoadingPanel testid="case-drillin-loading" />}
+      {state.phase === "error" && (
+        <UnavailablePanel testid="case-drillin-unavailable" message={state.message} />
+      )}
+      {state.phase === "ready" && (
+        <div data-testid="case-drillin" className="space-y-3">
+          <dl className="space-y-1.5">
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-xs text-slate-500">symbol / session</dt>
+              <dd className="font-mono text-xs text-slate-200">
+                {state.data.symbol} · {state.data.session_date}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-xs text-slate-500">band</dt>
+              <dd className="font-mono text-xs text-slate-200">
+                {state.data.band.side} · {String(state.data.band.price_low)}–
+                {String(state.data.band.price_high)} ·{" "}
+                {state.data.band.class !== null ? `Class ${state.data.band.class}` : "Unclassified"}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-xs text-slate-500">reaction</dt>
+              <dd data-testid="case-drillin-reaction" className="font-mono text-xs text-slate-200">
+                {state.data.reaction}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-xs text-slate-500">forward returns</dt>
+              <dd>
+                <ForwardReturnsList forwardReturns={state.data.forward_returns} />
+              </dd>
+            </div>
+          </dl>
+          {state.data.reaction_boundary_truncated && (
+            <p
+              data-testid="case-drillin-boundary-note"
+              className="rounded border border-amber-800/60 bg-amber-900/20 px-2 py-1.5 text-[11px] text-amber-200"
+            >
+              Reaction read at a truncated {String(state.data.effective_reaction_horizon_bars)}-bar
+              horizon — the store does not yet hold the full configured horizon past this touch.
+            </p>
+          )}
+          <div>
+            <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
+              Tape timeline
+            </p>
+            <TapeTimelineList timeline={state.data.tape_timeline} />
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+// --- Edge Report section (era-5B J-04, THIS iteration) --------------------------------------------
+
+// One measurement's four headline numbers (n / net R / net $ / win_rate) — reuses
+// `formatNullableAggregateField` (defined below, alongside the Comparison section) for the honest
+// n=0 "no trades" reading; labeled "win_rate" (the literal field name, no space or hyphen) — the
+// SAME copy-discipline precedent `BacktestResultBlock` already established on this page. A
+// function DECLARATION (hoisted), so this forward reference is safe.
+function EdgeReportMeasurementCells({ measurement }: { measurement: BacktestAggregate }) {
+  return (
+    <>
+      <td className={NUMERIC_CELL}>{String(measurement.n)}</td>
+      <td className={NUMERIC_CELL}>{String(measurement.net_r)}</td>
+      <td className={NUMERIC_CELL}>{String(measurement.net_usd)}</td>
+      <td className={NUMERIC_CELL}>{formatNullableAggregateField(measurement.win_rate)}</td>
+    </>
+  );
+}
+
+// One edge-report cell row: strategy × class × side × reaction × feed identity, then the
+// measurement's headline numbers with `insufficient_sample` shown INLINE on the real numbers —
+// never a separate hidden state (the `BacktestClassTable` precedent this page already
+// established, copy included: `insufficient sample (n < ${minSampleSize})`).
+function EdgeReportCellRow({
+  cell,
+  minSampleSize,
+}: {
+  cell: EdgeReportCell;
+  minSampleSize: number;
+}) {
+  return (
+    <tr data-testid="edge-report-cell-row" className="border-b border-slate-800/60 last:border-b-0">
+      <td className={LABEL_CELL}>{cell.strategy_id}</td>
+      <td className={LABEL_CELL}>Class {cell.band_class}</td>
+      <td className={LABEL_CELL}>{cell.band_side}</td>
+      <td className={LABEL_CELL}>{cell.reaction}</td>
+      <td className={LABEL_CELL}>{cell.feed}</td>
+      <EdgeReportMeasurementCells measurement={cell.measurement} />
+      <td className="px-2 py-1.5 text-left">
+        {cell.insufficient_sample ? (
+          <span
+            data-testid="edge-report-insufficient-sample"
+            className="inline-block whitespace-nowrap rounded border border-amber-800/60 bg-amber-900/20 px-1.5 py-0.5 text-[11px] text-amber-300"
+          >
+            {`insufficient sample (n < ${minSampleSize})`}
+          </span>
+        ) : (
+          <span className="text-[11px] text-slate-500">ok</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+// One split's cells table (train or hold-out) — an EMPTY split is its own honest, first-class
+// state (never hidden, never treated as an error): the DoD's own "an empty edge report is a
+// valid, publishable outcome" clause, applied per-split.
+function EdgeReportCellsTable({
+  cells,
+  minSampleSize,
+  testid,
+}: {
+  cells: EdgeReportCell[];
+  minSampleSize: number;
+  testid: string;
+}) {
+  if (cells.length === 0) {
+    return (
+      <EmptyState
+        testid={`${testid}-empty`}
+        title="No cells in this split."
+        detail="No recorded dataset resolved an owning, classified scan event for this split yet."
+      />
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid={testid} className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-slate-800">
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">strategy</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">class</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">side</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">reaction</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">feed</th>
+            <th className={HEADER_CELL}>n</th>
+            <th className={HEADER_CELL}>net R</th>
+            <th className={HEADER_CELL}>net $</th>
+            <th className={HEADER_CELL}>win_rate</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">sample</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cells.map((cell, i) => (
+            <EdgeReportCellRow key={i} cell={cell} minSampleSize={minSampleSize} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// A ranked, informational list of TRAIN cells that clear the positivity gate, each paired with its
+// own hold-out cell's status. This list promotes nothing — the champion pointer moves ONLY through
+// the existing sweep gate on hold-out data (goal.md's own anti-goal); it is purely informational.
+function SurvivingCellRow({ survivor }: { survivor: EdgeReportSurvivingCell }) {
+  const cell = survivor.train_cell;
+  return (
+    <tr
+      data-testid="edge-report-surviving-row"
+      className="border-b border-slate-800/60 last:border-b-0"
+    >
+      <td className={LABEL_CELL}>{cell.strategy_id}</td>
+      <td className={LABEL_CELL}>Class {cell.band_class}</td>
+      <td className={LABEL_CELL}>{cell.band_side}</td>
+      <td className={LABEL_CELL}>{cell.reaction}</td>
+      <td className={LABEL_CELL}>{cell.feed}</td>
+      <td className={NUMERIC_CELL}>{String(cell.measurement.net_r)}</td>
+      <td className={LABEL_CELL} data-testid="edge-report-surviving-holdout-status">
+        {survivor.holdout_cell === null
+          ? "no hold-out data yet for this cell"
+          : survivor.holdout_positive_edge
+            ? "hold-out: clears the gate"
+            : "hold-out: does not clear the gate"}
+      </td>
+    </tr>
+  );
+}
+
+function SurvivingCellsTable({ survivors }: { survivors: EdgeReportSurvivingCell[] }) {
+  if (survivors.length === 0) {
+    return (
+      <p data-testid="edge-report-surviving-empty" className="text-xs text-slate-600">
+        No train cell currently clears the positivity gate.
+      </p>
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="edge-report-surviving-table" className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-slate-800">
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">strategy</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">class</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">side</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">reaction</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">feed</th>
+            <th className={HEADER_CELL}>train net R</th>
+            <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">
+              hold-out status
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {survivors.map((s, i) => (
+            <SurvivingCellRow key={i} survivor={s} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// The full Edge Report body: the register + both splits' cell tables + the surviving-cells
+// ranking. An all-empty report (train AND hold-out both carry zero cells) is its own distinct
+// honest state — never hidden, never a fabricated survivor (goal.md's "no gate bending for a
+// headline" anti-goal; the DoD's own "an empty edge report is a valid, publishable outcome").
+function EdgeReportBody({ report }: { report: EdgeReportResponse }) {
+  const isEmpty = report.train.cells.length === 0 && report.holdout.cells.length === 0;
+  return (
+    <div className="space-y-4">
+      <p
+        data-testid="edge-report-register"
+        className="rounded border border-amber-800/60 bg-amber-900/20 px-2 py-1.5 text-[11px] text-amber-200"
+      >
+        {report.register}
+      </p>
+      {isEmpty ? (
+        <EmptyState
+          testid="edge-report-empty"
+          title="No edge-report cells yet."
+          detail="No recorded dataset has resolved an owning, classified scan event — an honest, valid outcome, never hidden."
+        />
+      ) : (
+        <>
+          <div>
+            <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
+              Train
+            </p>
+            <EdgeReportCellsTable
+              cells={report.train.cells}
+              minSampleSize={report.pnl_min_sample_size}
+              testid="edge-report-train-table"
+            />
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
+              Hold-out
+            </p>
+            <EdgeReportCellsTable
+              cells={report.holdout.cells}
+              minSampleSize={report.pnl_min_sample_size}
+              testid="edge-report-holdout-table"
+            />
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
+              Surviving train cells (informational — never a promotion)
+            </p>
+            <SurvivingCellsTable survivors={report.surviving_train_cells} />
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -647,6 +1146,38 @@ export default function StructurePage() {
   const [levelsState, setLevelsState] = useState<LoadState<LevelsResponse>>({ phase: "idle" });
   const [barsState, setBarsState] = useState<LoadState<BarSeriesListResult>>({ phase: "idle" });
 
+  // era-5B J-01 Tradable Map state (THIS iteration's new default view) — driven by the SAME Load
+  // form/button as `levelsState`/`barsState` above (see `handleLoad`), never a second trigger.
+  const [tradabilityState, setTradabilityState] = useState<LoadState<TradabilityResponse>>({
+    phase: "idle",
+  });
+  // The raw-levels toggle (era-5B J-05) — OFF by default (the DoD's own requirement); toggling it
+  // on renders the pre-existing Levels & Zones section byte-identically to before this iteration.
+  const [showRawLevels, setShowRawLevels] = useState(false);
+
+  // era-5B J-02/J-03 Case Studies state — the FULL, unfiltered registry is fetched ONCE on mount
+  // (the `strategiesResult`/`datasetsResult` null-then-resolved pattern below); the symbol/reaction
+  // filters are applied CLIENT-SIDE over the already-served rows (a display filter of served rows,
+  // the SAME `bar_series.filter` precedent this page already established — never a second
+  // computation or a re-fetch per keystroke). `selectedSetupId`/`setupDetailState` drive the
+  // row-click drill-in (its own independent fetch of `GET /research/setups/{id}`).
+  const [setupsResult, setSetupsResult] = useState<{
+    ok: boolean;
+    events: SetupEvent[];
+    error?: string;
+  } | null>(null);
+  const [setupsFilterSymbol, setSetupsFilterSymbol] = useState("");
+  const [setupsFilterReaction, setSetupsFilterReaction] = useState("");
+  const [selectedSetupId, setSelectedSetupId] = useState<string | null>(null);
+  const [setupDetailState, setSetupDetailState] = useState<LoadState<SetupEvent>>({ phase: "idle" });
+
+  // era-5B J-04 Edge Report state — fetched once on mount, the SAME null-then-resolved pattern.
+  const [edgeReportResult, setEdgeReportResult] = useState<{
+    ok: boolean;
+    data: EdgeReportResponse | null;
+    error?: string;
+  } | null>(null);
+
   // J-05 fetch-control state — the page's ONE new explicit write action. Independent of
   // `symbolInput`/`asOfInput` above (the pre-existing read-only Load form) until a successful
   // fetch seeds them (see `handleFetchYahoo` below). `fetchError` carries the backend's own
@@ -708,10 +1239,44 @@ export default function StructurePage() {
     fetchPnlLedger().then((result) => {
       if (alive) setLedgerResult(result);
     });
+    // era-5B J-02/J-03: the full, UNFILTERED case-study registry — fetched once, filtered
+    // client-side by `setupsFilterSymbol`/`setupsFilterReaction` below (never a per-keystroke
+    // re-fetch).
+    fetchSetups().then((result) => {
+      if (alive) setSetupsResult({ ok: result.ok, events: result.data?.events ?? [], error: result.error });
+    });
+    // era-5B J-04: the 3-way edge report.
+    fetchEdgeReport().then((result) => {
+      if (alive) setEdgeReportResult(result);
+    });
     return () => {
       alive = false;
     };
   }, []);
+
+  // era-5B J-02/J-03: fetch the drill-in whenever a Case Studies row is selected. Clears to
+  // `{phase: "idle"}` when nothing is selected (e.g. never rendered — the drill-in Panel only
+  // mounts once a row has been clicked, so "idle" is never actually shown, but keeps the state
+  // machine total).
+  useEffect(() => {
+    if (selectedSetupId === null) {
+      setSetupDetailState({ phase: "idle" });
+      return;
+    }
+    let alive = true;
+    setSetupDetailState({ phase: "loading" });
+    fetchSetupDetail(selectedSetupId).then((result) => {
+      if (!alive) return;
+      setSetupDetailState(
+        result.ok && result.data
+          ? { phase: "ready", data: result.data.event }
+          : { phase: "error", message: result.error ?? "The case-study event could not be loaded." },
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, [selectedSetupId]);
 
   // Poll both backtests while EITHER is non-terminal (mirrors studies/page.tsx's
   // `setInterval(loadStudies, 700)` poll-while-active pattern, reusing the PATTERN not the
@@ -747,9 +1312,13 @@ export default function StructurePage() {
     if (!trimmedSymbol || !trimmedAsOf) return; // the Load button is already disabled in this case
     setLevelsState({ phase: "loading" });
     setBarsState({ phase: "loading" });
-    const [levelsResult, barsResult] = await Promise.all([
+    // era-5B J-01 (THIS iteration): the SAME Load form now also drives the Tradable Map — fetched
+    // alongside levels/bars via the SAME Promise.all, never a second trigger.
+    setTradabilityState({ phase: "loading" });
+    const [levelsResult, barsResult, tradabilityResult] = await Promise.all([
       fetchLevels(trimmedSymbol, trimmedAsOf),
       fetchBarSeriesList(),
+      fetchTradability(trimmedSymbol, trimmedAsOf),
     ]);
     setLevelsState(
       levelsResult.ok && levelsResult.data
@@ -762,6 +1331,14 @@ export default function StructurePage() {
         : {
             phase: "error",
             message: barsResult.error ?? "The bar series list could not be loaded.",
+          },
+    );
+    setTradabilityState(
+      tradabilityResult.ok && tradabilityResult.data
+        ? { phase: "ready", data: tradabilityResult.data }
+        : {
+            phase: "error",
+            message: tradabilityResult.error ?? "The tradable map could not be loaded.",
           },
     );
   }
@@ -871,6 +1448,40 @@ export default function StructurePage() {
       ? representative.bars.filter((b) => b.ts * 1000 <= asOfEpochMs)
       : (representative?.bars ?? []);
 
+  // era-5B J-01 (THIS iteration): the Tradable Map's OWN candle selection, mirroring
+  // `seriesForSymbol`/`representative`/`asOfEpochMs`/`chartBars` above line-for-line but keyed off
+  // `tradability` instead of `levels` — kept as a SEPARATE block (never a shared helper) so the
+  // raw-levels section above stays byte-identical, untouched code, and so the Tradable Map's own
+  // chart renders correctly even in the rare case `GET /research/tradability` and
+  // `GET /research/levels` resolve to DIFFERENT honest states for the identical symbol/as-of (e.g.
+  // a symbol with levels on a non-daily timeframe but no "1d" series to resolve a tradability
+  // basis from — see `tradability.py`'s own docstring).
+  const tradability = tradabilityState.phase === "ready" ? tradabilityState.data : null;
+  const tradabilitySeriesForSymbol =
+    barsState.phase === "ready" && tradability
+      ? barsState.data.bar_series.filter((s) => s.symbol === tradability.symbol)
+      : [];
+  const tradabilityRepresentative = pickRepresentativeSeries(tradabilitySeriesForSymbol);
+  const tradabilityAsOfEpochMs = tradability ? Date.parse(tradability.as_of) : NaN;
+  const tradabilityChartBars =
+    tradabilityRepresentative && !Number.isNaN(tradabilityAsOfEpochMs)
+      ? tradabilityRepresentative.bars.filter((b) => b.ts * 1000 <= tradabilityAsOfEpochMs)
+      : (tradabilityRepresentative?.bars ?? []);
+
+  // era-5B J-02/J-03 (THIS iteration) Case Studies derived values. `filteredSetupsEvents` is a
+  // CLIENT-SIDE display filter of the already-served, unfiltered registry (never a recomputation
+  // or a second fetch) — the SAME `bar_series.filter` precedent this page already established.
+  const setupsEvents = setupsResult?.ok ? setupsResult.events : [];
+  const trimmedSetupsFilterSymbol = setupsFilterSymbol.trim().toUpperCase();
+  const filteredSetupsEvents = setupsEvents.filter(
+    (e) =>
+      (trimmedSetupsFilterSymbol === "" || e.symbol === trimmedSetupsFilterSymbol) &&
+      (setupsFilterReaction === "" || e.reaction === setupsFilterReaction),
+  );
+
+  // era-5B J-04 (THIS iteration) Edge Report derived value.
+  const edgeReport = edgeReportResult?.ok ? edgeReportResult.data : null;
+
   // J-02 Registry section derived values.
   const registry = strategiesResult?.ok ? strategiesResult.strategies : null;
   const profiles = profilesResult?.ok ? profilesResult.profiles : null;
@@ -916,27 +1527,351 @@ export default function StructurePage() {
             Structure
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
-            Fetch real historical bars from Yahoo Finance (keyless), then see deterministic
-            support/resistance levels and A/B/C confluence zones for a chosen symbol and as-of
-            time, the registered strategies and current champion, and a structure_tape-vs-v1
-            backtest comparison.
+            Load a symbol and an as-of time to see its tradable level map — at most a handful of
+            quality-scored bands, not the full raw level set — browse every historical band-touch
+            case with its reaction and tape timeline, and read the 3-way strategy edge report.
           </p>
           <p data-testid="structure-framing" className="mt-2 max-w-3xl text-xs text-slate-600">
-            One explicit write action — fetching bars from Yahoo Finance below — everything else on
-            this page is read-only: S/R levels and confluence zones on a price chart; the strategy
-            registry and champion; and a structure_tape-vs-v1 comparison you can run over a chosen
-            dataset. Every value below is read verbatim from its canonical endpoint — nothing here
-            is recomputed in the browser.
+            Tradable Map is the default view, read verbatim from GET /research/tradability; toggle
+            &quot;Show raw levels&quot; for the underlying S/R levels and confluence zones (off by
+            default). Case Studies lists every band-touch event with its reaction, forward returns,
+            and — once recorded — its tape timeline; Edge Report compares v1, structure_tape, and
+            structure_tape_map over recorded windows, register included. Fetching bars from Yahoo
+            Finance below is this page's one explicit write action — everything else, including the
+            strategy registry/champion and the structure_tape-vs-v1 comparison, is read-only. Every
+            value on this page is read verbatim from its canonical endpoint — nothing here is
+            recomputed in the browser.
           </p>
         </header>
 
-        <section aria-label="Fetch from Yahoo Finance" className="mb-4">
+        <form
+          onSubmit={handleSubmit}
+          className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4"
+        >
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+              Symbol
+            </span>
+            <SymbolSearch
+              value={symbolInput}
+              onChange={setSymbolInput}
+              onPick={setSymbolInput}
+              placeholder="e.g. PG"
+              ariaLabel="Structure symbol"
+              inputClassName={INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+              As-of (UTC, ISO-8601)
+            </span>
+            <input
+              data-testid="structure-as-of-input"
+              value={asOfInput}
+              onChange={(e) => setAsOfInput(e.target.value)}
+              placeholder="2026-06-09T21:00:00Z"
+              className={INPUT_CLASS}
+            />
+          </label>
+          <button
+            type="submit"
+            data-testid="structure-load-button"
+            disabled={!canSubmit}
+            className="rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-600 disabled:hover:bg-slate-800"
+          >
+            Load
+          </button>
+        </form>
+
+        {/* era-5B J-01 (THIS iteration) — the NEW default view: at most a handful of
+            quality-scored bands, read verbatim from GET /research/tradability. Driven by the SAME
+            Load form above. */}
+        <section aria-label="Tradable map">
+          <Panel title="Tradable Map">
+            <p className="mb-3 -mt-1 max-w-3xl text-xs text-slate-600">
+              A distilled tradable level map — at most a handful of quality-scored bands per side,
+              clustered and scored from the raw S/R levels under morning-markup as-of discipline.
+              Every band's range, side, class, quality score, member count, and round-number flag
+              below is read verbatim from GET /research/tradability — nothing here is recomputed.
+            </p>
+            {tradabilityState.phase === "idle" && (
+              <EmptyState
+                testid="tradable-map-idle"
+                title="Choose a symbol and an as-of time, then Load, to see its tradable level map."
+              />
+            )}
+            {tradabilityState.phase === "loading" && <LoadingPanel testid="tradable-map-loading" />}
+            {tradabilityState.phase === "error" && (
+              <UnavailablePanel testid="tradable-map-unavailable" message={tradabilityState.message} />
+            )}
+            {tradabilityState.phase === "ready" &&
+              tradability &&
+              (tradability.no_bar_series_for_symbol ? (
+                <EmptyState
+                  testid="tradable-map-no-bar-series"
+                  title={`No bar series recorded for ${tradability.symbol}.`}
+                  detail="Recording historical bars needs provider credentials."
+                />
+              ) : tradability.bands.length === 0 ? (
+                <EmptyState
+                  testid="tradable-map-no-bands"
+                  title={`No tradable map derivable for ${tradability.symbol} as of ${tradability.as_of}.`}
+                  detail="A bar series is recorded, but no prior-session basis is derivable yet."
+                />
+              ) : (
+                <div className="space-y-4">
+                  <p data-testid="tradable-map-basis" className="text-xs text-slate-500">
+                    Map basis (prior completed session close):{" "}
+                    <span className="font-mono text-slate-300">{tradability.basis_as_of}</span>
+                  </p>
+                  {barsState.phase === "loading" ? (
+                    <LoadingPanel testid="tradable-map-chart-loading" />
+                  ) : barsState.phase === "error" ? (
+                    <UnavailablePanel
+                      testid="tradable-map-chart-unavailable"
+                      message={barsState.message}
+                    />
+                  ) : (
+                    <StructureChart
+                      key={`tradability|${tradability.symbol}|${tradability.as_of}`}
+                      bars={tradabilityChartBars}
+                      levels={[]}
+                      bands={tradability.bands}
+                    />
+                  )}
+                  <BandsTable bands={tradability.bands} />
+                </div>
+              ))}
+          </Panel>
+        </section>
+
+        {/* era-5B J-05 (THIS iteration) — the raw-levels toggle, OFF by default. Toggling it on
+            renders the pre-existing Levels & Zones section, byte-identically to before this
+            iteration (the section immediately below is untouched code). */}
+        <div className="mt-4">
+          <button
+            type="button"
+            data-testid="raw-levels-toggle"
+            onClick={() => setShowRawLevels((prev) => !prev)}
+            className="rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-slate-900"
+          >
+            {showRawLevels ? "Hide raw levels" : "Show raw levels"}
+          </button>
+        </div>
+
+        {showRawLevels && (
+          <div className="mt-4">
+            <section aria-label="Levels and zones">
+              {levelsState.phase === "idle" && (
+                <EmptyState
+                  testid="structure-idle"
+                  title="Choose a symbol and an as-of time, then Load, to see its S/R levels and confluence zones."
+                />
+              )}
+              {levelsState.phase === "loading" && <LoadingPanel testid="structure-loading" />}
+              {levelsState.phase === "error" && (
+                <UnavailablePanel testid="structure-degraded" message={levelsState.message} />
+              )}
+              {levelsState.phase === "ready" &&
+                levels &&
+                (levels.no_bar_series_for_symbol ? (
+                  <EmptyState
+                    testid="structure-no-bar-series"
+                    title={`No bar series recorded for ${levels.symbol}.`}
+                    detail="Recording historical bars needs provider credentials."
+                  />
+                ) : levels.levels.length === 0 ? (
+                  <EmptyState
+                    testid="structure-no-levels"
+                    title={`No levels found for ${levels.symbol} as of ${levels.as_of}.`}
+                    detail="A bar series is recorded, but nothing is derivable at this as-of time."
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    <Panel title="Price chart — S/R levels">
+                      {barsState.phase === "loading" ? (
+                        <LoadingPanel testid="structure-chart-loading" />
+                      ) : barsState.phase === "error" ? (
+                        <UnavailablePanel
+                          testid="structure-chart-unavailable"
+                          message={barsState.message}
+                        />
+                      ) : (
+                        <>
+                          {/* J-05 provenance badge: reuses the SAME taxonomy-driven FeedBasisBadge the
+                              cockpit uses, keyed off the charted series' own `feed` field (verbatim off
+                              GET /research/bars — zero client recomputation). Honestly absent when no
+                              series is charted (the component's own no-fabrication rule). */}
+                          {representative && (
+                            <div className="mb-2">
+                              <FeedBasisBadge dataFeed={representative.feed} />
+                            </div>
+                          )}
+                          <StructureChart
+                            key={`${levels.symbol}|${levels.as_of}`}
+                            bars={chartBars}
+                            levels={levels.levels}
+                          />
+                          <p className="mt-2 text-[11px] text-slate-600">
+                            {representative
+                              ? `Candles: ${representative.timeframe} series (${chartBars.length} of ${representative.bar_count} recorded bars, as of the query time). Level lines span every recorded timeframe.`
+                              : "No recorded candle series available to draw for this symbol."}
+                          </p>
+                        </>
+                      )}
+                    </Panel>
+
+                    <Panel title="Confluence zones">
+                      {levels.confluence_zones.length === 0 ? (
+                        <EmptyState
+                          testid="structure-no-zones"
+                          title="No qualifying confluence zone among these levels."
+                          detail="Levels exist, but none cluster closely enough across timeframes to form a zone."
+                        />
+                      ) : (
+                        <div className="space-y-3">
+                          {levels.confluence_zones.map((zone, i) => (
+                            <ZoneRow key={i} zone={zone} index={i} />
+                          ))}
+                        </div>
+                      )}
+                    </Panel>
+                  </div>
+                ))}
+            </section>
+          </div>
+        )}
+
+        {/* era-5B J-02/J-03 (THIS iteration) — the case-study registry: every historical
+            band-touch event, filterable by symbol/reaction, with a row drill-in showing the tape
+            timeline once a dataset was recorded around that event. */}
+        <section aria-label="Case studies" className="mt-6">
+          <Panel title="Case Studies">
+            <p className="mb-3 -mt-1 max-w-3xl text-xs text-slate-600">
+              Every band-touch event this store has scanned, read verbatim from GET
+              /research/setups — reaction, forward returns, and (once a dataset was recorded around
+              it) the tape timeline. The filters below narrow the already-served rows; nothing here
+              is recomputed.
+            </p>
+            <div className="mb-3 flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                  Symbol
+                </span>
+                <input
+                  data-testid="case-studies-filter-symbol"
+                  value={setupsFilterSymbol}
+                  onChange={(e) => setSetupsFilterSymbol(e.target.value)}
+                  placeholder="e.g. AAPL"
+                  className={INPUT_CLASS}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                  Reaction
+                </span>
+                <select
+                  data-testid="case-studies-filter-reaction"
+                  value={setupsFilterReaction}
+                  onChange={(e) => setSetupsFilterReaction(e.target.value)}
+                  className={INPUT_CLASS}
+                >
+                  <option value="">All</option>
+                  {SETUP_REACTIONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {setupsResult === null ? (
+              <LoadingPanel testid="case-studies-loading" />
+            ) : !setupsResult.ok ? (
+              <UnavailablePanel
+                testid="case-studies-unavailable"
+                message={setupsResult.error ?? "The case-study registry could not be loaded."}
+              />
+            ) : setupsEvents.length === 0 ? (
+              <EmptyState testid="case-studies-empty" title="No band-touch events scanned yet." />
+            ) : filteredSetupsEvents.length === 0 ? (
+              <EmptyState
+                testid="case-studies-no-match"
+                title="No events match these filters."
+                detail="The registry has rows — this filter combination simply matches none."
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table data-testid="case-studies-table" className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800">
+                      <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">
+                        symbol
+                      </th>
+                      <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">
+                        session
+                      </th>
+                      <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">
+                        band
+                      </th>
+                      <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">
+                        reaction
+                      </th>
+                      <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">
+                        forward returns
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSetupsEvents.map((event) => (
+                      <SetupRow
+                        key={event.id}
+                        event={event}
+                        selected={event.id === selectedSetupId}
+                        onSelect={() => setSelectedSetupId(event.id)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {selectedSetupId !== null && <SetupDrillIn state={setupDetailState} />}
+          </Panel>
+        </section>
+
+        {/* era-5B J-04 (THIS iteration) — the 3-way strategy-comparison edge report. */}
+        <section aria-label="Edge report" className="mt-6">
+          <Panel title="Edge Report">
+            <p className="mb-3 -mt-1 max-w-3xl text-xs text-slate-600">
+              The v1 / structure_tape / structure_tape_map comparison over recorded event windows,
+              read verbatim from GET /research/edge-report — per-cell n, R, and $ carry the full
+              simulated register; train and hold-out are never pooled. An empty or
+              all-insufficient-sample report is an honest, valid outcome.
+            </p>
+            {edgeReportResult === null ? (
+              <LoadingPanel testid="edge-report-loading" />
+            ) : !edgeReportResult.ok || !edgeReport ? (
+              <UnavailablePanel
+                testid="edge-report-unavailable"
+                message={edgeReportResult.error ?? "The edge report could not be loaded."}
+              />
+            ) : (
+              <EdgeReportBody report={edgeReport} />
+            )}
+          </Panel>
+        </section>
+
+        {/* era-5 J-05 — the Fetch-from-Yahoo control, repositioned below the three new sections
+            above (Foundation invariant: unchanged behavior, only moved). */}
+        <section aria-label="Fetch from Yahoo Finance" className="mt-6">
           <Panel title="Fetch from Yahoo Finance">
             <p className="mb-3 -mt-1 max-w-3xl text-xs text-slate-600">
               Fetch a real historical bar series from Yahoo Finance for a symbol, timeframe, and
               UTC date range — keyless, on this explicit click. An already-fetched window is
-              served from storage with no repeat network call. On success, the Levels &amp; Zones
-              section below loads the fetched symbol and window automatically.
+              served from storage with no repeat network call. On success, the Tradable Map and
+              Levels &amp; Zones sections above load the fetched symbol and window automatically.
             </p>
             <form onSubmit={handleFetchSubmit} className="flex flex-wrap items-end gap-3">
               <label className="block">
@@ -1009,124 +1944,6 @@ export default function StructurePage() {
               </div>
             )}
           </Panel>
-        </section>
-
-        <form
-          onSubmit={handleSubmit}
-          className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4"
-        >
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
-              Symbol
-            </span>
-            <SymbolSearch
-              value={symbolInput}
-              onChange={setSymbolInput}
-              onPick={setSymbolInput}
-              placeholder="e.g. PG"
-              ariaLabel="Structure symbol"
-              inputClassName={INPUT_CLASS}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
-              As-of (UTC, ISO-8601)
-            </span>
-            <input
-              data-testid="structure-as-of-input"
-              value={asOfInput}
-              onChange={(e) => setAsOfInput(e.target.value)}
-              placeholder="2026-06-09T21:00:00Z"
-              className={INPUT_CLASS}
-            />
-          </label>
-          <button
-            type="submit"
-            data-testid="structure-load-button"
-            disabled={!canSubmit}
-            className="rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-600 disabled:hover:bg-slate-800"
-          >
-            Load
-          </button>
-        </form>
-
-        <section aria-label="Levels and zones">
-          {levelsState.phase === "idle" && (
-            <EmptyState
-              testid="structure-idle"
-              title="Choose a symbol and an as-of time, then Load, to see its S/R levels and confluence zones."
-            />
-          )}
-          {levelsState.phase === "loading" && <LoadingPanel testid="structure-loading" />}
-          {levelsState.phase === "error" && (
-            <UnavailablePanel testid="structure-degraded" message={levelsState.message} />
-          )}
-          {levelsState.phase === "ready" &&
-            levels &&
-            (levels.no_bar_series_for_symbol ? (
-              <EmptyState
-                testid="structure-no-bar-series"
-                title={`No bar series recorded for ${levels.symbol}.`}
-                detail="Recording historical bars needs provider credentials."
-              />
-            ) : levels.levels.length === 0 ? (
-              <EmptyState
-                testid="structure-no-levels"
-                title={`No levels found for ${levels.symbol} as of ${levels.as_of}.`}
-                detail="A bar series is recorded, but nothing is derivable at this as-of time."
-              />
-            ) : (
-              <div className="space-y-4">
-                <Panel title="Price chart — S/R levels">
-                  {barsState.phase === "loading" ? (
-                    <LoadingPanel testid="structure-chart-loading" />
-                  ) : barsState.phase === "error" ? (
-                    <UnavailablePanel
-                      testid="structure-chart-unavailable"
-                      message={barsState.message}
-                    />
-                  ) : (
-                    <>
-                      {/* J-05 provenance badge: reuses the SAME taxonomy-driven FeedBasisBadge the
-                          cockpit uses, keyed off the charted series' own `feed` field (verbatim off
-                          GET /research/bars — zero client recomputation). Honestly absent when no
-                          series is charted (the component's own no-fabrication rule). */}
-                      {representative && (
-                        <div className="mb-2">
-                          <FeedBasisBadge dataFeed={representative.feed} />
-                        </div>
-                      )}
-                      <StructureChart
-                        key={`${levels.symbol}|${levels.as_of}`}
-                        bars={chartBars}
-                        levels={levels.levels}
-                      />
-                      <p className="mt-2 text-[11px] text-slate-600">
-                        {representative
-                          ? `Candles: ${representative.timeframe} series (${chartBars.length} of ${representative.bar_count} recorded bars, as of the query time). Level lines span every recorded timeframe.`
-                          : "No recorded candle series available to draw for this symbol."}
-                      </p>
-                    </>
-                  )}
-                </Panel>
-
-                <Panel title="Confluence zones">
-                  {levels.confluence_zones.length === 0 ? (
-                    <EmptyState
-                      testid="structure-no-zones"
-                      title="No qualifying confluence zone among these levels."
-                      detail="Levels exist, but none cluster closely enough across timeframes to form a zone."
-                    />
-                  ) : (
-                    <div className="space-y-3">
-                      {levels.confluence_zones.map((zone, i) => (
-                        <ZoneRow key={i} zone={zone} index={i} />
-                      ))}
-                    </div>
-                  )}
-                </Panel>
-              </div>
-            ))}
         </section>
 
         {/* J-02: the strategy registry + champion — fetched on mount (see the useEffect above),

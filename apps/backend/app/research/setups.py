@@ -109,13 +109,17 @@ than silently pairing a definitive ``reaction`` label with a horizon-0 ``forward
 exactly when it did not). Neither field ever changes ``reaction`` itself or excludes the event --
 see ``_reaction_and_forward_returns``'s own docstring for the exact boundary condition.
 
-**B3 -- a process-local memoized scan (era-5B iter-5).** ``GET /research/setups``,
-``GET /research/setups/{id}``, and ``edge_report.run_strategy_comparison_report`` each call
-``compute_setups(store, config)`` independently; on the populated 12-symbol panel the underlying
-scan takes minutes, so without a cache a single page load could trigger it multiple times over. The
-PUBLIC ``compute_setups`` below is now a thin, byte-identical memoizing wrapper around the real scan
-(renamed ``_run_full_panel_scan``) -- see its own docstring for the caching contract (process-local,
+**B3 -- a process-local memoized scan (era-5B iter-5; made atomic in iter-6).** ``GET
+/research/setups``, ``GET /research/setups/{id}``, and
+``edge_report.run_strategy_comparison_report`` each call ``compute_setups(store, config)``
+independently; on the populated 12-symbol panel the underlying scan takes minutes, so without a
+cache a single page load could trigger it multiple times over. The PUBLIC ``compute_setups`` below
+is now a thin, byte-identical memoizing wrapper around the real scan (renamed
+``_run_full_panel_scan``) -- see its own docstring for the caching contract (process-local,
 store-content-keyed, rebuildable, never a second source of truth -- the ``bar_index.py`` precedent).
+iter-6 hardened the publish to a single atomic ``(key, result)`` tuple rebind (see the ``_SCAN_CACHE``
+block comment below) once this iteration became the first caller to fire all three consumers
+concurrently from one browser page load.
 """
 
 from __future__ import annotations
@@ -344,7 +348,25 @@ def _event_sort_key(event: dict) -> tuple:
 # unbounded dict) is intentional: this codebase runs ONE bar store behind ONE process, so there is
 # never more than one "current" scan worth remembering, and a single slot cannot grow unbounded
 # across a long-lived process or an entire test suite's run.
-_SCAN_CACHE: dict[str, object] = {"key": None, "result": None}
+#
+# --- Atomic publish (era-5B iter-6 B3 hardening) ------------------------------------------------
+# The slot is ONE immutable ``(key, result)`` tuple (or ``None`` before anything is ever cached) --
+# NEVER a two-key mutable dict written in two separate statements. iter-6 is the first caller to
+# fire ``/setups`` + ``/setups/{id}`` + ``/edge-report`` concurrently from a single page load (a
+# FastAPI sync route handler runs in a thread pool), and the PRIOR two-write dict form
+# (``_SCAN_CACHE["key"] = key`` THEN ``_SCAN_CACHE["result"] = result``) had a genuine torn-read
+# window: a late-arriving reader could observe a freshly-published ``key`` paired with the SLOT'S
+# STILL-STALE (possibly ``None``, on a first-ever cold cache) ``result``, since the two writes are
+# not one atomic step. Publishing a single already-built ``(key, result)`` tuple removes that window
+# by construction: CPython rebinds a module-level name via one bytecode store, so a concurrent
+# reader always observes EITHER the entire previous publish (fully paired) or nothing yet (a safe
+# cache miss that recomputes) -- never a half-written pairing. Readers likewise take exactly ONE
+# local reference to the slot (`cached = _SCAN_CACHE`) before inspecting it, so a rebind by another
+# thread mid-check can never be observed as two different values within the same read. See
+# ``tests/test_setups.py``'s
+# ``test_concurrent_cold_cache_reads_never_observe_a_torn_key_result_pair`` for the regression
+# proof.
+_SCAN_CACHE: tuple[tuple, dict] | None = None
 
 
 def _store_signature(store: BarStore) -> tuple:
@@ -369,13 +391,21 @@ def compute_setups(store: BarStore, config: Config) -> dict:
     Served from the B3 process-local scan cache (see the block comment above) whenever ``store``'s
     content signature and ``config``'s identity match the last computed call; otherwise this runs
     the real scan (``_run_full_panel_scan``) once and remembers it. Byte-identical either way -- the
-    cache changes nothing about WHAT is returned, only whether it is recomputed."""
+    cache changes nothing about WHAT is returned, only whether it is recomputed.
+
+    Atomic against concurrent callers (era-5B iter-6 B3 hardening): ``cached`` is read ONCE into a
+    local (never re-read mid-function, so a concurrent rebind by another thread cannot be observed
+    as two different values here), and a cache miss publishes the freshly computed ``(key, result)``
+    as a SINGLE rebind of the module-level slot -- never two separate writes a reader could observe
+    half-done. A racing cache miss on another thread only ever costs redundant, harmless recompute
+    (the scan is a pure function of its inputs); it can never produce a torn key/result pairing."""
+    global _SCAN_CACHE
     key = (id(config), _store_signature(store))
-    if _SCAN_CACHE["key"] == key:
-        return _SCAN_CACHE["result"]
+    cached = _SCAN_CACHE
+    if cached is not None and cached[0] == key:
+        return cached[1]
     result = _run_full_panel_scan(store, config)
-    _SCAN_CACHE["key"] = key
-    _SCAN_CACHE["result"] = result
+    _SCAN_CACHE = (key, result)
     return result
 
 

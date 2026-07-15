@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { BarRow, SrLevel } from "@/lib/types";
+import type { BarRow, SrLevel, TradabilityBand } from "@/lib/types";
 import { EmptyHint } from "./Panel";
 
 // The /structure page's price chart (J-01): candles from ONE representative recorded bar series
@@ -15,7 +15,20 @@ import { EmptyHint } from "./Panel";
 // PriceChart.tsx polls the tape engine's `/tape/{ticker}/history` (logical-second candles + live
 // tape-state markers); this component renders ONE already-fetched query result from
 // `/research/bars` (real UTC-epoch-seconds candles, no polling, no markers).
-export function StructureChart({ bars, levels }: { bars: BarRow[]; levels: SrLevel[] }) {
+//
+// era-5B J-05 (additive): an optional `bands` prop overlays the tradable map's price bands
+// (GET /research/tradability, read verbatim by the page) beside the existing level lines. Default
+// `[]` means every EXISTING caller (the raw-levels toggle's "on" render) draws byte-identically to
+// before this iteration — this is a pure additive prop, never a rewrite of the level-line path.
+export function StructureChart({
+  bars,
+  levels,
+  bands = [],
+}: {
+  bars: BarRow[];
+  levels: SrLevel[];
+  bands?: TradabilityBand[];
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -81,6 +94,31 @@ export function StructureChart({ bars, levels }: { bars: BarRow[]; levels: SrLev
         });
       }
 
+      // era-5B J-05: one SOLID price line per tradable-band edge (visually distinct from the
+      // dashed raw-level lines above), colored by side — the SAME up/down palette the candle
+      // series itself uses, so resistance/support read as one visual family with the candles.
+      // price_low/price_high/side/class/quality_score/round_number are read verbatim off the
+      // prop; this component performs no scoring or clustering of its own. A single-price band
+      // (price_low === price_high) draws one line, never a duplicate.
+      for (const band of bands) {
+        const color = band.side === "resistance" ? "#fb7185" : "#34d399"; // rose-400 / emerald-400
+        const sideLabel = band.side === "resistance" ? "R" : "S";
+        const classLabel = band.class ? ` class ${band.class}` : "";
+        const title = `${sideLabel}${classLabel} · score ${band.quality_score}${band.round_number ? " · round" : ""}`;
+        const edges =
+          band.price_low === band.price_high ? [band.price_low] : [band.price_low, band.price_high];
+        for (const price of edges) {
+          series.createPriceLine({
+            price,
+            color,
+            lineWidth: 2,
+            lineStyle: 0, // LineStyle.Solid — distinct from the dashed raw-level lines
+            axisLabelVisible: true,
+            title,
+          });
+        }
+      }
+
       if (candles.length > 0) chart.timeScale().fitContent();
     })();
 
@@ -88,7 +126,7 @@ export function StructureChart({ bars, levels }: { bars: BarRow[]; levels: SrLev
       disposed = true;
       if (chart) chart.remove();
     };
-  }, [bars, levels]);
+  }, [bars, levels, bands]);
 
   const hasBars = bars.length > 0;
 

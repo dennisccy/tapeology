@@ -10,6 +10,7 @@ import type {
   CreateStudyResult,
   DatasetsListResult,
   DeclareResult,
+  EdgeReportResponse,
   Hint,
   JournalDetail,
   JournalFilters,
@@ -20,12 +21,15 @@ import type {
   ProfilesPayload,
   RecordBarSeriesResult,
   ResearchTaxonomy,
+  SetupDetailResult,
+  SetupsListResult,
   StrategiesPayload,
   Study,
   SymbolMatch,
   TapeHistory,
   TapeSnapshot,
   ThesisProjection,
+  TradabilityResponse,
   WatchParams,
 } from "./types";
 
@@ -1036,5 +1040,126 @@ export async function fetchBacktest(backtestId: string): Promise<Backtest | null
     return (data?.backtest as Backtest) ?? null;
   } catch {
     return null;
+  }
+}
+
+// --- Era-5B: tradable map, case-study setups, and the 3-way edge report (capabilities 1/2/6,
+// J-01/J-02/J-04), wired to the browser this iteration (J-05) at /structure's three new sections.
+// All four functions follow `fetchLevels`/`fetchStrategies` immediately above byte-for-byte: the
+// `{ok, data, error}` shape, the backend's own `detail` surfaced verbatim on a non-200 (folding a
+// validation refusal — e.g. a malformed `as_of` 422 — into the SAME degraded-state treatment as an
+// unreachable backend), and `data: null` on any failure so the caller never shows a stale or
+// fabricated view in its place.
+
+// GET /research/tradability?symbol=&as_of= — the tradable level map, served VERBATIM. Mirrors
+// `fetchLevels` exactly (same required params, same 422/unreachable folding).
+export async function fetchTradability(
+  symbol: string,
+  asOf: string,
+): Promise<{ ok: boolean; data: TradabilityResponse | null; error?: string; status?: number }> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/tradability?symbol=${encodeURIComponent(symbol)}&as_of=${encodeURIComponent(asOf)}`,
+    );
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as TradabilityResponse, status: res.status };
+    }
+    let error = "The tradable map could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error, status: res.status };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/setups (optionally filtered by symbol/reaction/band_class — server-side,
+// AND-combined; an unknown enum `reaction`/`band_class` is a backend 422) — the touch-event
+// case-study registry, served VERBATIM. `filters` mirrors `fetchJournal`'s optional-filter-params
+// pattern; an omitted filter is left off the query string entirely (never sent as an empty param).
+export async function fetchSetups(filters?: {
+  symbol?: string;
+  reaction?: string;
+  band_class?: string;
+}): Promise<{ ok: boolean; data: SetupsListResult | null; error?: string }> {
+  const params = new URLSearchParams();
+  if (filters?.symbol) params.set("symbol", filters.symbol);
+  if (filters?.reaction) params.set("reaction", filters.reaction);
+  if (filters?.band_class) params.set("band_class", filters.band_class);
+  const qs = params.toString();
+  try {
+    const res = await fetch(`${API_BASE}/research/setups${qs ? `?${qs}` : ""}`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as SetupsListResult };
+    }
+    let error = "The case-study registry could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/setups/{id} — one event's drill-in (band, reaction, forward returns, and the J-03
+// `tape_timeline` — present-but-empty when no recorded dataset covers the touch), served VERBATIM.
+// A 404 (unknown id) folds into the same `ok:false` degraded result as any other failure — the
+// backend's own `detail` ("no setup event with id '…'") is surfaced verbatim, so the caller never
+// needs a separate not-found branch (mirrors `fetchLevels`'s "fold validation refusals into the
+// shared degraded state" precedent, applied to a 404 instead of a 422).
+export async function fetchSetupDetail(
+  id: string,
+): Promise<{ ok: boolean; data: SetupDetailResult | null; error?: string; status?: number }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/setups/${encodeURIComponent(id)}`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as SetupDetailResult, status: res.status };
+    }
+    let error = "The case-study event could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error, status: res.status };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/edge-report — the 3-way strategy-comparison report (`v1` / `structure_tape` /
+// `structure_tape_map`), served VERBATIM. Mirrors `fetchDatasets`/`fetchBarSeriesList` (a LIST-
+// shaped endpoint with no query params). An all-empty or all-`insufficient_sample` report is a
+// valid `ok:true` result — the caller renders it as an honest first-class state, never as a
+// failure; `data: null` is reserved for a genuine non-200 / unreachable backend.
+export async function fetchEdgeReport(): Promise<{
+  ok: boolean;
+  data: EdgeReportResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/edge-report`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as EdgeReportResponse };
+    }
+    let error = "The edge report could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
   }
 }

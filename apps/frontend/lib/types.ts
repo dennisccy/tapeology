@@ -1191,3 +1191,154 @@ export interface CreateBacktestParams {
   strategy_id: string;
   profile: string;
 }
+
+// --- Era-5B: the tradable level map (capability 1, J-01), surfaced this iteration (J-05) at
+// /structure's new default Tradable Map view. Every field below is read VERBATIM from
+// GET /research/tradability (app/research/tradability.py's `compute_tradability` — a LENS over
+// the frozen `compute_levels` output, never a second levels engine) — the page recomputes no
+// price, class, or score.
+
+// One tradable band (GET /research/tradability's `bands[]`). `class` is a PROJECTION of the
+// band's best overlapping confluence zone (owned by levels.py) — `null` is an honest "no
+// overlapping zone", never a fabricated/defaulted grade. `members` reuses the EXISTING
+// `SrLevel`-shaped entry byte-for-byte (the backend's own band member IS a levels.py level dict).
+export interface TradabilityBand {
+  side: "support" | "resistance";
+  price_low: number;
+  price_high: number;
+  class: "A" | "B" | "C" | null;
+  quality_score: number;
+  round_number: boolean;
+  member_count: number;
+  members: SrLevel[];
+}
+
+// GET /research/tradability?symbol=&as_of= — the full served projection, read VERBATIM. Two
+// fields together carry the SAME three honest, distinct states `LevelsResponse` already
+// established: `no_bar_series_for_symbol: true` (no recorded series at all) vs. `false` with an
+// empty `bands` + `basis_as_of: null` (series exist, no basis derivable at `as_of`) vs. a
+// resolved `basis_as_of` with non-empty `bands` (once a basis resolves, at least one band always
+// exists — the module's own docstring: a resolved basis with zero bands is not a reachable state).
+export interface TradabilityResponse {
+  symbol: string;
+  as_of: string;
+  bands: TradabilityBand[];
+  no_bar_series_for_symbol: boolean;
+  basis_as_of: string | null;
+}
+
+// --- Era-5B: the touch-event scanner + case-study registry (capability 2, J-02) + the
+// tape-at-the-wall join (capability 4, J-03), surfaced this iteration (J-05) at /structure's new
+// Case Studies section. Every field is read VERBATIM from GET /research/setups /
+// GET /research/setups/{id} (app/research/setups.py's `compute_setups` /
+// `enrich_with_tape_timeline`) — the page recomputes no reaction, forward return, or tape state.
+
+// One forward-return reading at a config-owned horizon. `return_fraction` is honestly `null` when
+// that horizon reaches past the end of the stored series — never a fabricated number.
+export interface SetupForwardReturn {
+  horizon_bars: number;
+  return_fraction: number | null;
+}
+
+// One meaningful tape-state-transition entry in an event's `tape_timeline` (J-03's tape-at-the-
+// wall join). `timestamp` is honestly `null` only when the joined dataset carries no
+// `epoch_anchor` (the identical `epoch_anchor + logical_ts` reconstruction the chart already
+// uses) — state/confidence are the FROZEN engine's own classifier values, reused verbatim.
+export interface SetupTapeTimelineEntry {
+  timestamp: string | null;
+  state: string;
+  confidence: number;
+}
+
+// The three config-owned, pre-registered reaction labels (`setups.py`'s own `REJECTED` / `BROKE`
+// / `CHOPPED` constants, mirrored — never re-derived). Kept as `string` (not a narrowed literal
+// union) on the served event below, the SAME `SrLevel.type` tolerance already established on this
+// page: an unrecognized future value still renders rather than silently vanishing at a guard.
+export type SetupReaction = "rejected" | "broke" | "chopped";
+
+// One band-touch event (GET /research/setups' `events[]`, and GET /research/setups/{id}'s
+// `event`). `tape_timeline` is present-but-empty until a recorded dataset's window covers the
+// touch (J-03) — an honest absence, never fabricated. `effective_reaction_horizon_bars` /
+// `reaction_boundary_truncated` are the iter-5 B1 additive recency-boundary disclosure: a touch
+// inside the store's most-recent session may have its `reaction` read from a TRUNCATED
+// sub-horizon (the store simply has not accumulated `horizons[0]` bars past it yet) — disclosed
+// here, never silently presented as a full-horizon reaction.
+export interface SetupEvent {
+  id: string;
+  symbol: string;
+  session_date: string;
+  band: TradabilityBand;
+  touch_ts: string;
+  touch_open: number;
+  touch_high: number;
+  touch_low: number;
+  touch_close: number;
+  touch_volume: number;
+  reaction: SetupReaction;
+  forward_returns: SetupForwardReturn[];
+  effective_reaction_horizon_bars: number;
+  reaction_boundary_truncated: boolean;
+  tape_timeline: SetupTapeTimelineEntry[];
+}
+
+// GET /research/setups (optionally filtered by symbol/reaction/band_class — server-side,
+// AND-combined) — read VERBATIM. An empty list is an honest "nothing scanned/touched yet", never
+// an error.
+export interface SetupsListResult {
+  events: SetupEvent[];
+}
+
+// GET /research/setups/{id} — the SAME event shape as a list row, plus the J-03 tape join applied
+// (list rows never carry a non-empty `tape_timeline`; only this detail read does).
+export interface SetupDetailResult {
+  event: SetupEvent;
+}
+
+// --- Era-5B: the 3-way strategy-comparison edge report (capability 6, J-04), surfaced this
+// iteration (J-05) at /structure's new Edge Report section. Every field is read VERBATIM from
+// GET /research/edge-report (app/research/edge_report.py's `run_strategy_comparison_report`) —
+// the page recomputes no R, $, win-rate, or class/side/reaction partition. `measurement` /
+// `null_baseline` reuse the EXISTING `BacktestAggregate` shape byte-for-byte (both are built by
+// the SAME `_aggregate()` the Comparison section's own backtest results already render).
+
+// One strategy x class x side x reaction x feed cell (never pooled across feeds — the
+// never-pool-across-feeds anti-goal). `dataset_ids` are the recorded windows this cell pooled
+// trades from (sorted); `insufficient_sample` gates DISPLAY only — the real measurement is always
+// shown alongside it (the `BacktestClassTable` precedent: never a separate hidden state).
+export interface EdgeReportCell {
+  strategy_id: string;
+  band_class: "A" | "B" | "C";
+  band_side: "support" | "resistance";
+  reaction: SetupReaction;
+  feed: string;
+  dataset_ids: string[];
+  measurement: BacktestAggregate;
+  null_baseline: BacktestAggregate;
+  insufficient_sample: boolean;
+}
+
+// One ranked, informational TRAIN cell that clears the positivity gate, paired with its own
+// matching hold-out cell's status. `holdout_cell` is honestly `null` when no hold-out data exists
+// yet for that exact (strategy, class, side, reaction, feed) key — never a fabricated verdict.
+// This list promotes nothing (the champion pointer is untouched by this report — see
+// edge_report.py's own module docstring); it is purely informational ranking.
+export interface EdgeReportSurvivingCell {
+  train_cell: EdgeReportCell;
+  holdout_cell: EdgeReportCell | null;
+  holdout_positive_edge: boolean;
+}
+
+// GET /research/edge-report — the full served projection, read VERBATIM. `register` is the
+// backend's ONE simulated-PnL disclosure string (the page renders THIS string, never a frontend
+// copy — mirrors `PnlLedger.register` / `BacktestResult.register`). An all-empty
+// (`train.cells: []` and `holdout.cells: []`) or all-`insufficient_sample` report is a valid,
+// honest outcome — never hidden, never a fabricated survivor. No `champion` key exists on this
+// report (it is never about a single champion pointer — unlike the era-3 champion-only CLI
+// report this module also computes).
+export interface EdgeReportResponse {
+  register: string;
+  pnl_min_sample_size: number;
+  train: { cells: EdgeReportCell[] };
+  holdout: { cells: EdgeReportCell[] };
+  surviving_train_cells: EdgeReportSurvivingCell[];
+}

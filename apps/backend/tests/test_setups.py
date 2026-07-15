@@ -975,3 +975,100 @@ def test_enriched_detail_read_never_leaks_into_the_shared_cached_list(tmp_path):
         "the enriched read must never leak into the shared cached list"
     )
     assert json.dumps(listed_before, sort_keys=True) == json.dumps(listed_after, sort_keys=True)
+
+
+# --- B3 atomicity hardening (era-5B iter-6) ------------------------------------------------------
+# iter-6 is the first caller to fire `/setups` + `/setups/{id}` + `/edge-report` concurrently from
+# one browser page load against a possibly-cold scan cache -- see the `_SCAN_CACHE` block comment
+# in setups.py for the exact torn-read hazard the prior two-key dict form had. TWO tests, each
+# covering a different failure mode:
+#   * the STRUCTURAL guard below proves the fix DETERMINISTICALLY (never relies on winning a GIL
+#     timing race): the historical bug was two SEPARATE writes to two dict keys, and the narrow
+#     window between them is far too small for any wall-clock trick in a test to land on reliably
+#     (confirmed empirically while developing this test: the behavioral test below passed 5/5 runs
+#     against the deliberately-reverted OLD two-key-dict implementation -- a real proof that a
+#     purely behavioral/timing-based test alone would give false confidence here);
+#   * the BEHAVIORAL test after it proves the CURRENT implementation genuinely tolerates concurrent
+#     callers under real thread contention -- no crash, no None, byte-identical results everywhere.
+
+
+def test_scan_cache_publish_is_a_single_atomic_rebind_never_two_separate_writes():
+    """The DETERMINISTIC half of the B3 atomicity proof (see the section comment above for why a
+    timing-based test alone cannot be trusted here): ``compute_setups`` must publish the cache via
+    EXACTLY ONE assignment to the shared module-level slot -- never the old two-key-dict shape
+    (``_SCAN_CACHE["key"] = ...`` THEN ``_SCAN_CACHE["result"] = ...``), which is the literal
+    torn-read hazard this iteration closes. Mirrors this file's own established
+    ``inspect.getsource``-based architecture guards (e.g.
+    ``test_setups_module_reuses_compute_tradability_verbatim_never_a_second_map_engine``,
+    ``test_compute_setups_itself_never_touches_the_dataset_store``)."""
+    src = inspect.getsource(compute_setups)
+
+    # The exact historical bug shape must never reappear.
+    assert '_SCAN_CACHE["key"]' not in src, "the old two-key dict publish must not return"
+    assert '_SCAN_CACHE["result"]' not in src, "the old two-key dict publish must not return"
+    assert "_SCAN_CACHE.update(" not in src, "an in-place dict update is the identical hazard"
+
+    # Exactly one publish, and it is a single rebind of the whole slot (`global` + one `= (` on the
+    # module-level name) -- never two statements that could be observed half-done.
+    rebinds = [line for line in src.splitlines() if line.strip().startswith("_SCAN_CACHE = ")]
+    assert len(rebinds) == 1, (
+        f"expected exactly ONE atomic rebind of _SCAN_CACHE, found {len(rebinds)}: {rebinds}"
+    )
+    assert "global _SCAN_CACHE" in src, "a module-level rebind from inside the function needs `global`"
+
+
+def test_concurrent_cold_cache_reads_never_observe_a_torn_key_result_pair(tmp_path, monkeypatch):
+    """Many threads racing a COLD cache (nothing published yet) with a deliberately widened publish
+    window (a small sleep injected into the scan, forcing genuine overlap around the moment the
+    winning thread's result would be published) must ALL return a real, non-`None`,
+    byte-identical result -- never a crash and never a torn key/result pairing (a result that is
+    `None`, or one that fails to match every other thread's own result). Uses a fresh `Config(...)`
+    (never previously cached, per the module's own `id(config)` keying) so this test can never
+    accidentally observe a DIFFERENT test's leftover cache entry."""
+    import threading
+    import time
+
+    import app.research.setups as setups_module
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+
+    real_scan = setups_module._run_full_panel_scan
+
+    def _slow_scan(*args, **kwargs):
+        result = real_scan(*args, **kwargs)
+        time.sleep(0.05)  # widen the window so concurrent callers genuinely overlap the publish
+        return result
+
+    monkeypatch.setattr(setups_module, "_run_full_panel_scan", _slow_scan)
+
+    thread_count = 16
+    results: list[dict | None] = [None] * thread_count
+    errors: list[BaseException] = []
+    start_barrier = threading.Barrier(thread_count)
+
+    def _call(index: int) -> None:
+        start_barrier.wait()  # every thread reaches compute_setups at roughly the same instant
+        try:
+            results[index] = compute_setups(store, config)
+        except BaseException as exc:  # pragma: no cover -- failure path only
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_call, args=(i,)) for i in range(thread_count)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10.0)
+
+    assert errors == [], f"a concurrent cold-cache read raised (never a torn read, never a crash): {errors}"
+    assert all(r is not None for r in results), (
+        "every concurrent caller must return a real result -- a None here IS the torn-read bug "
+        "(a published key paired with the slot's still-stale/None result)"
+    )
+    expected = json.dumps(results[0], sort_keys=True)
+    assert all(json.dumps(r, sort_keys=True) == expected for r in results), (
+        "every concurrent caller must observe the SAME byte-identical result -- a mismatch would "
+        "mean some reader saw a torn/partial key-result pairing"
+    )
+    assert len(results[0]["events"]) >= 1, "the proof must exercise at least one real event"
