@@ -97,6 +97,25 @@ dataset's OWN stamped ``epoch_anchor`` plus the snapshot's logical timestamp -- 
 ``epoch_anchor + logical_ts`` reconstruction ``serializers.serialize_history``'s chart projection
 already uses, never a raw logical offset (which would misread as a bogus near-1970 date). An event
 with no matching recorded dataset keeps its honestly empty ``tape_timeline`` -- never fabricated.
+
+**B1 -- additive recency-boundary disclosure (era-5B iter-5).** A touch inside the store's MOST
+RECENT stored session may not yet have ``Config.setups_forward_return_horizons_bars[0]`` bars of
+history past it -- the store simply has not accumulated that much real data yet, the SAME shape
+every freshly-fetched panel symbol's latest session is in until enough later bars arrive. Rather
+than silently pairing a definitive ``reaction`` label with a horizon-0 ``forward_returns`` entry of
+``None`` with no explanation, every event additively carries ``effective_reaction_horizon_bars``
+(the bar count the reaction close was ACTUALLY read at -- equal to the full configured
+``horizons[0]`` whenever the store held enough bars) and ``reaction_boundary_truncated`` (``True``
+exactly when it did not). Neither field ever changes ``reaction`` itself or excludes the event --
+see ``_reaction_and_forward_returns``'s own docstring for the exact boundary condition.
+
+**B3 -- a process-local memoized scan (era-5B iter-5).** ``GET /research/setups``,
+``GET /research/setups/{id}``, and ``edge_report.run_strategy_comparison_report`` each call
+``compute_setups(store, config)`` independently; on the populated 12-symbol panel the underlying
+scan takes minutes, so without a cache a single page load could trigger it multiple times over. The
+PUBLIC ``compute_setups`` below is now a thin, byte-identical memoizing wrapper around the real scan
+(renamed ``_run_full_panel_scan``) -- see its own docstring for the caching contract (process-local,
+store-content-keyed, rebuildable, never a second source of truth -- the ``bar_index.py`` precedent).
 """
 
 from __future__ import annotations
@@ -196,12 +215,23 @@ def _touches(price_low: float, price_high: float, session_bars: list[RawBar], ma
 
 def _reaction_and_forward_returns(
     all_bars: list[RawBar], touch_index: int, side: str, price_low: float, price_high: float, config: Config,
-) -> tuple[str, list[dict]] | None:
-    """The touch's reaction label + forward-return list, or ``None`` when NO bar at all follows the
-    touch (nothing to react with -- the event is excluded, never fabricated). Reaction is decided
-    from the CLOSE at the shortest configured horizon (never an intrabar wick, never volume) versus
-    each band edge widened by ``Config.setups_reaction_threshold_bps``; every configured horizon is
-    then reported, honestly ``None`` for any horizon reaching past the end of the store."""
+) -> tuple[str, list[dict], int, bool] | None:
+    """The touch's reaction label + forward-return list + the B1 recency-boundary disclosure, or
+    ``None`` when NO bar at all follows the touch (nothing to react with -- the event is excluded,
+    never fabricated). Reaction is decided from the CLOSE at the shortest configured horizon (never
+    an intrabar wick, never volume) versus each band edge widened by
+    ``Config.setups_reaction_threshold_bps``; every configured horizon is then reported, honestly
+    ``None`` for any horizon reaching past the end of the store.
+
+    **B1 -- additive recency-boundary disclosure (era-5B iter-5).** When the store does not YET
+    hold ``horizons[0]`` bars past the touch (a touch inside the most-recent stored session), the
+    reaction is still read from whatever close IS available -- honest, never suppressed -- but its
+    horizon is a TRUNCATED sub-horizon of the configured one. This is disclosed, never hidden: the
+    returned ``effective_reaction_horizon_bars`` is the bar count the reaction close was ACTUALLY
+    read at (``== horizons[0]`` whenever untruncated), and ``reaction_boundary_truncated`` is
+    ``True`` exactly when ``touch_index + horizons[0] >= len(all_bars)``. Neither value ever
+    changes the ``reaction`` label itself -- a caller decides how to present a truncated-horizon
+    label; this function only discloses the truncation honestly."""
     if touch_index >= len(all_bars) - 1:
         return None
     horizons = config.setups_forward_return_horizons_bars
@@ -209,6 +239,8 @@ def _reaction_and_forward_returns(
     threshold = config.setups_reaction_threshold_bps / 10_000.0
 
     reaction_index = min(touch_index + horizons[0], len(all_bars) - 1)
+    effective_reaction_horizon_bars = reaction_index - touch_index
+    reaction_boundary_truncated = touch_index + horizons[0] >= len(all_bars)
     reaction_close = all_bars[reaction_index].close
     if side == RESISTANCE:
         broke_level = price_high * (1.0 + threshold)
@@ -231,7 +263,7 @@ def _reaction_and_forward_returns(
                 "horizon_bars": horizon,
                 "return_fraction": (all_bars[target_index].close - touch_close) / touch_close,
             })
-    return reaction, forward_returns
+    return reaction, forward_returns, effective_reaction_horizon_bars, reaction_boundary_truncated
 
 
 def _event_id(symbol: str, session_date_iso: str, band: dict, touch_ts: str) -> str:
@@ -247,6 +279,7 @@ def _event_id(symbol: str, session_date_iso: str, band: dict, touch_ts: str) -> 
 
 def _event(
     symbol: str, session_date_value: date, band: dict, touch_bar: RawBar, reaction: str, forward_returns: list[dict],
+    effective_reaction_horizon_bars: int, reaction_boundary_truncated: bool,
 ) -> dict:
     session_date_iso = session_date_value.isoformat()
     touch_ts = _iso(touch_bar.epoch)
@@ -263,6 +296,11 @@ def _event(
         "touch_volume": touch_bar.volume,
         "reaction": reaction,
         "forward_returns": forward_returns,
+        # B1 (era-5B iter-5): additive recency-boundary disclosure -- see
+        # `_reaction_and_forward_returns`'s own docstring. Never mutates `reaction` above, never
+        # excludes an event -- a truncated-horizon label is disclosed, not suppressed.
+        "effective_reaction_horizon_bars": effective_reaction_horizon_bars,
+        "reaction_boundary_truncated": reaction_boundary_truncated,
         # Present-but-empty until J-03 records the real tape and joins its five-state timeline
         # onto this event (goal.md capability 4) -- never omitted, never fabricated meanwhile.
         "tape_timeline": [],
@@ -279,10 +317,73 @@ def _event_sort_key(event: dict) -> tuple:
     )
 
 
+# --- B3 (era-5B iter-5): a process-local, rebuildable, byte-identical memoization of the ONE
+# full-panel scan `compute_setups` performs -- see the module docstring's own B3 note.
+# `GET /research/setups`, `GET /research/setups/{id}`, and
+# `edge_report.run_strategy_comparison_report` each call `compute_setups(store, config)`
+# independently (routes.py's `list_setups`/`get_setup`, `edge_report.py`'s
+# `run_strategy_comparison_report`); on the populated 12-symbol store the underlying scan takes
+# minutes, so without this layer a single page load could trigger it several times over, well past
+# browser-QA timeouts. This is the SAME "rebuildable accelerator, never a second source of truth"
+# contract `bar_index.py` lives under (see that module's own docstring), but PROCESS-LOCAL and
+# in-memory only -- never SQLite/disk-persisted, and never itself read by anything outside this
+# module. `compute_setups`'s own signature is UNCHANGED, so every caller (routes.py, edge_report.py)
+# needs zero changes -- only ITS body differs (a cache check wrapping the real scan, renamed
+# `_run_full_panel_scan` below).
+#
+# Keyed on (a) the config object's OWN identity -- every production caller shares the ONE imported
+# `CONFIG` singleton (routes.py, edge_report.py), so this is stable for the life of the process;
+# a test constructing its own `Config(...)` keeps it alive for that call's duration (referenced
+# locally), so a fresh id is never reused mid-call -- and (b) a deterministic content signature over
+# `store.list()` (sorted `(symbol, timeframe, id, checksum)` tuples -- `bars.py` already exposes a
+# per-series `checksum` in every list record, so this reuses an existing value rather than hashing
+# raw bars). `Config` cannot be used as a key directly (it carries plain `dict` fields, e.g.
+# `tradability_quality_weights`, so it is not hashable). Any change to the store's registered series
+# set -- a new recording, a symbol's series replaced -- changes the signature and busts the cache;
+# an untouched store always replays the identical cached result. A single most-recent SLOT (not an
+# unbounded dict) is intentional: this codebase runs ONE bar store behind ONE process, so there is
+# never more than one "current" scan worth remembering, and a single slot cannot grow unbounded
+# across a long-lived process or an entire test suite's run.
+_SCAN_CACHE: dict[str, object] = {"key": None, "result": None}
+
+
+def _store_signature(store: BarStore) -> tuple:
+    """A deterministic fingerprint of everything ``compute_setups`` can possibly read from
+    ``store``: every HEALTHY series' ``(symbol, timeframe, id, checksum)``, sorted for
+    order-independence. A corrupt file (``store.list()``'s own ``errors`` return) is excluded --
+    ``compute_setups`` itself never reads a corrupt file's content either (``_select_5m_series``
+    only ever sees ``records``), so a corrupt file's mere presence/absence can never change the
+    scan's OWN output and is rightly left out of what busts the cache."""
+    records, _errors = store.list()
+    return tuple(sorted(
+        (record["symbol"], record["timeframe"], record["id"], record["checksum"])
+        for record in records
+    ))
+
+
 def compute_setups(store: BarStore, config: Config) -> dict:
     """The canonical ``GET /research/setups`` + MCP ``setups`` computation (single source of
     truth) -- see module docstring for the full algorithm. Returns ``{"events": [...]}``; an empty
-    list is an honest "nothing scanned yet / nothing touched", never an error."""
+    list is an honest "nothing scanned yet / nothing touched", never an error.
+
+    Served from the B3 process-local scan cache (see the block comment above) whenever ``store``'s
+    content signature and ``config``'s identity match the last computed call; otherwise this runs
+    the real scan (``_run_full_panel_scan``) once and remembers it. Byte-identical either way -- the
+    cache changes nothing about WHAT is returned, only whether it is recomputed."""
+    key = (id(config), _store_signature(store))
+    if _SCAN_CACHE["key"] == key:
+        return _SCAN_CACHE["result"]
+    result = _run_full_panel_scan(store, config)
+    _SCAN_CACHE["key"] = key
+    _SCAN_CACHE["result"] = result
+    return result
+
+
+def _run_full_panel_scan(store: BarStore, config: Config) -> dict:
+    """The real, uncached full-panel scan -- unchanged algorithm from before B3, only renamed so
+    the public ``compute_setups`` above can wrap it with the process-local cache. See the module
+    docstring for the full algorithm; never called directly by any route or report -- only through
+    ``compute_setups``."""
     events: list[dict] = []
     for symbol in config.setups_panel_symbols:
         five_min_bars = _select_5m_series(store, symbol)
@@ -307,10 +408,10 @@ def compute_setups(store: BarStore, config: Config) -> dict:
                     )
                     if outcome is None:
                         continue  # no bar at all follows the touch -- nothing to react with
-                    reaction, forward_returns = outcome
+                    reaction, forward_returns, effective_horizon, boundary_truncated = outcome
                     events.append(_event(
                         symbol, session_date_value, band, five_min_bars[touch_index],
-                        reaction, forward_returns,
+                        reaction, forward_returns, effective_horizon, boundary_truncated,
                     ))
     events.sort(key=_event_sort_key)
     return {"events": events}

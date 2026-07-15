@@ -85,6 +85,8 @@ def _seed_aapl(bar_dir: Path) -> None:
 _EVENT_FIELDS = {
     "id", "symbol", "session_date", "band", "touch_ts", "touch_open", "touch_high",
     "touch_low", "touch_close", "touch_volume", "reaction", "forward_returns", "tape_timeline",
+    # B1 (era-5B iter-5): additive recency-boundary disclosure fields.
+    "effective_reaction_horizon_bars", "reaction_boundary_truncated",
 }
 
 

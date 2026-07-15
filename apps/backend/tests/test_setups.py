@@ -492,7 +492,8 @@ def test_aapl_pinned_2026_06_22_event_is_rejected_with_negative_forward_returns(
     _seed_yahoo_fixture(store, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
     _seed_yahoo_fixture(store, _load_yahoo_fixture(AAPL_5M_SETUPS_FIXTURE))
 
-    result = compute_setups(store, Config(setups_panel_symbols=("AAPL",)))
+    config = Config(setups_panel_symbols=("AAPL",))
+    result = compute_setups(store, config)
     day_events = _events_for(result, "AAPL", "2026-06-22")
     assert day_events, "the pinned 2026-06-22 session must emit at least one event"
 
@@ -509,6 +510,10 @@ def test_aapl_pinned_2026_06_22_event_is_rejected_with_negative_forward_returns(
     assert pinned["touch_ts"] == "2026-06-22T13:30:00.000000Z"
     assert pinned["band"]["round_number"] is True
     assert pinned["tape_timeline"] == []
+    # B1 (era-5B iter-5): the pinned event is nowhere near the store's recency boundary -- byte-
+    # identical to before, plus the two new additive fields at their honest "untruncated" values.
+    assert pinned["reaction_boundary_truncated"] is False
+    assert pinned["effective_reaction_horizon_bars"] == config.setups_forward_return_horizons_bars[0] == 78
 
 
 def test_aapl_repeat_scan_determinism(tmp_path):
@@ -752,12 +757,18 @@ def test_setups_join_reuses_dataset_store_replay_never_a_second_tape_engine():
 
 def test_compute_setups_itself_never_touches_the_dataset_store():
     """Architecture guard: the join lives ONLY in ``enrich_with_tape_timeline``, called ONLY from
-    the ``GET /research/setups/{id}`` route -- ``compute_setups``'s own shared scan loop (used by
-    BOTH the list and detail routes) must stay completely free of any ``DatasetStore`` reference,
-    so the join never adds an O(events) dataset-store scan to the already-slow full-panel list
-    route."""
-    src = inspect.getsource(compute_setups)
-    assert "dataset" not in src.lower(), "compute_setups must never reference the dataset store"
+    the ``GET /research/setups/{id}`` route -- neither the public ``compute_setups`` (the B3 cache
+    wrapper, era-5B iter-5) nor its internal ``_run_full_panel_scan`` (the actual shared scan loop
+    used by BOTH the list and detail routes) may ever reference the ``DatasetStore``, so the join
+    never adds an O(events) dataset-store scan to the already-slow full-panel list route."""
+    from app.research.setups import _run_full_panel_scan
+
+    assert "dataset" not in inspect.getsource(compute_setups).lower(), (
+        "compute_setups must never reference the dataset store"
+    )
+    assert "dataset" not in inspect.getsource(_run_full_panel_scan).lower(), (
+        "_run_full_panel_scan must never reference the dataset store"
+    )
 
 
 # --- Config: the recording constants are excluded from config_fingerprint -----------------------
@@ -771,3 +782,196 @@ def test_recording_config_fields_are_excluded_from_config_fingerprint():
     assert Config(recording_holdout_fraction=0.99).config_fingerprint() == CONFIG.config_fingerprint()
     # ...while a real classifier threshold still moves it (the counter-test).
     assert Config(min_trade_speed=0.51).config_fingerprint() != CONFIG.config_fingerprint()
+
+
+# --- B1 (era-5B iter-5): the recency-boundary regression -- a purpose-built fixture whose final
+# touch has FEWER than the shipped ``setups_forward_return_horizons_bars[0]`` (78) bars remaining
+# anywhere in the store, mirroring SYN-SETUPS-A's proven ``_DAILY_A``/``_SESSION_DAY3`` shape (a
+# singleton 250.10 resistance level, a touch that decisively fails back off it) but with only 5
+# total "5m" bars in the WHOLE store -- so the store runs out of bars LONG before the real 78-bar
+# horizon elapses, the exact shape a freshly-fetched panel symbol's latest session is in every day
+# until enough later bars accumulate. The committed AAPL fixtures (`AAPL_5m_20260615_20260630.json`)
+# stop 2026-06-30 -- comfortably far from any recency boundary -- so they cannot exercise this path
+# (iter-2 + iter-4 lesson): this dedicated symbol/fixture is required. -------------------------------
+
+SYM_BOUNDARY = "SYN-SETUPS-BOUNDARY"
+
+_DAILY_BOUNDARY: tuple[RawBar, ...] = (
+    _daily(SYM_BOUNDARY, 0, 210.00, 190.00, 200.00),  # filler -- far from the target level
+    _daily(SYM_BOUNDARY, 1, 215.00, 185.00, 200.00),  # filler -- far from the target level
+    _daily(SYM_BOUNDARY, 2, 250.10, 150.10, 200.00),  # the ONE level-forming daily bar
+)
+
+# Day 3's own (and ONLY) "5m" session: deliberately just 5 bars -- the exact SYN-SETUPS-A
+# ``_SESSION_DAY3`` touch/price shape (a clean REJECTED example), truncated after its former +2
+# reaction-close bar so the WHOLE store ends there. With the real horizons[0]=78, the reaction
+# close for the touch at index 0 is capped at index 4 (the last bar in the store) -- an
+# effective horizon of 4 bars, not 78.
+_SESSION_BOUNDARY: tuple[RawBar, ...] = (
+    _bar5m(SYM_BOUNDARY, 3, 0, 249.80, 250.15, 249.70, 250.05, 5_000),  # touch (index 0)
+    _bar5m(SYM_BOUNDARY, 3, 1, 250.05, 250.10, 249.00, 249.20, 4_000),
+    _bar5m(SYM_BOUNDARY, 3, 2, 249.20, 249.30, 248.50, 248.80, 3_000),
+    _bar5m(SYM_BOUNDARY, 3, 3, 248.80, 249.00, 248.00, 248.30, 3_000),
+    _bar5m(SYM_BOUNDARY, 3, 4, 248.30, 248.50, 247.80, 248.00, 3_000),  # last bar in the store
+)
+
+
+def _seed_boundary(store: BarStore) -> None:
+    store.record(
+        symbol=SYM_BOUNDARY, timeframe="1d", window_start_utc="2026-01-01T00:00:00Z",
+        window_end_utc="2026-01-04T00:00:00Z", feed="sip", bars=list(_DAILY_BOUNDARY),
+    )
+    store.record(
+        symbol=SYM_BOUNDARY, timeframe="5m", window_start_utc="2026-01-04T00:00:00Z",
+        window_end_utc="2026-01-04T00:25:00Z", feed="sip", bars=list(_SESSION_BOUNDARY),
+    )
+
+
+def test_boundary_touch_discloses_truncated_horizon_with_a_definitive_reaction(tmp_path):
+    """B1 (era-5B iter-5) headline regression: a touch inside the store's MOST RECENT (and only)
+    session, with fewer than the shipped ``setups_forward_return_horizons_bars[0]`` (78) bars
+    remaining anywhere in the store, still gets a DEFINITIVE reaction label -- but the event now
+    additively discloses that the horizon was truncated, rather than silently pairing a definitive
+    label with a bare ``None`` horizon-0 return. All values verified by direct computation against
+    this exact fixture (never hand-derived): touch at index 0 of a 5-bar store, reaction read at
+    the last available bar (index 4, close 248.00) -- decisively below the 30bps-widened reject
+    level of a singleton 250.10 resistance band -> REJECTED, effective horizon 4 (not 78)."""
+    store = BarStore(tmp_path / "bars")
+    _seed_boundary(store)
+    config = Config(setups_panel_symbols=(SYM_BOUNDARY,))
+    assert config.setups_forward_return_horizons_bars[0] == 78, (
+        "this regression must exercise the REAL shipped horizon, never a small test-only override"
+    )
+
+    result = compute_setups(store, config)
+    events = result["events"]
+    assert len(events) == 1, "the engineered fixture emits exactly one boundary touch event"
+    event = events[0]
+
+    assert event["band"]["side"] == "resistance"
+    assert event["band"]["price_low"] == event["band"]["price_high"] == 250.10
+    assert event["touch_ts"] == "2026-01-04T00:00:00.000000Z"
+    assert event["reaction"] in (REJECTED, BROKE, CHOPPED), "a definitive label, never suppressed"
+    assert event["reaction"] == REJECTED
+    assert event["forward_returns"][0] == {"horizon_bars": 78, "return_fraction": None}
+    assert event["reaction_boundary_truncated"] is True
+    assert event["effective_reaction_horizon_bars"] == 4
+    assert event["effective_reaction_horizon_bars"] < config.setups_forward_return_horizons_bars[0]
+
+
+def test_boundary_regression_is_deterministic_across_repeat_scans(tmp_path):
+    store = BarStore(tmp_path / "bars")
+    _seed_boundary(store)
+    config = Config(setups_panel_symbols=(SYM_BOUNDARY,))
+    first = compute_setups(store, config)
+    second = compute_setups(BarStore(tmp_path / "bars"), config)
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+
+
+# --- B3 (era-5B iter-5): the process-local memoized scan cache ----------------------------------
+# `compute_setups` is now a thin cache wrapper around the real scan (`_run_full_panel_scan`,
+# exercised directly here to prove cache vs. fresh byte-identity). All four tests below use the
+# SYN-SETUPS-A/B fixtures (`_seed_full`) except the immutable-safety test, which reuses the PG
+# tape-join fixtures below (a real, non-empty ``tape_timeline`` is the only genuine proof that an
+# enriched read could corrupt the shared cache if it were not copy-on-write).
+
+
+def test_cache_hit_is_byte_identical_to_a_fresh_uncached_scan(tmp_path):
+    """A cache HIT (the second ``compute_setups`` call) must be byte-identical to a genuinely
+    fresh, uncached scan (``_run_full_panel_scan``, called directly, bypassing the cache entirely)
+    -- the cache changes only WHETHER the scan runs, never WHAT it returns."""
+    from app.research.setups import _run_full_panel_scan
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+
+    first = compute_setups(store, config)  # populates the cache
+    cached = compute_setups(store, config)  # a cache HIT
+    fresh = _run_full_panel_scan(store, config)  # bypasses the cache entirely
+
+    first_json = json.dumps(first, sort_keys=True)
+    assert first_json == json.dumps(cached, sort_keys=True) == json.dumps(fresh, sort_keys=True)
+    assert len(fresh["events"]) >= 1, "the proof must exercise at least one real event"
+
+
+def test_scan_runs_at_most_once_across_repeated_reads_of_an_unchanged_store(tmp_path, monkeypatch):
+    """The underlying scan body runs exactly ONCE across repeated ``compute_setups`` calls against
+    an unchanged store/config (a call-count spy, never wall-clock) -- the
+    ``test_compute_setups_runs_at_most_once_per_report_call`` precedent in
+    ``test_edge_report.py``, applied one layer down to the scan itself."""
+    import app.research.setups as setups_module
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+
+    calls: list[int] = []
+    real_scan = setups_module._run_full_panel_scan
+
+    def _counting_scan(*args, **kwargs):
+        calls.append(1)
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(setups_module, "_run_full_panel_scan", _counting_scan)
+
+    for _ in range(4):
+        compute_setups(store, config)
+    assert len(calls) == 1, "an unchanged store/config must only ever trigger ONE real scan"
+
+
+def test_cache_busts_and_rescans_when_the_store_gains_a_new_series(tmp_path, monkeypatch):
+    """Mutating the store (registering a brand-new series) must bust the cache and re-run the
+    scan on the VERY NEXT read -- never serve a stale result computed before the mutation."""
+    import app.research.setups as setups_module
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+
+    calls: list[int] = []
+    real_scan = setups_module._run_full_panel_scan
+
+    def _counting_scan(*args, **kwargs):
+        calls.append(1)
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(setups_module, "_run_full_panel_scan", _counting_scan)
+
+    compute_setups(store, config)
+    compute_setups(store, config)
+    assert len(calls) == 1, "unchanged store so far -- still just the one real scan"
+
+    # A brand-new registered series -- any content -- changes the store's own content signature.
+    store.record(
+        symbol=SYM_B, timeframe="1d", window_start_utc="2026-03-01T00:00:00Z",
+        window_end_utc="2026-03-02T00:00:00Z", feed="sip",
+        bars=[_daily(SYM_B, 60, 999.0, 998.0, 998.5)],
+    )
+    compute_setups(store, config)
+    assert len(calls) == 2, "a newly registered series must bust the cache and re-run the scan"
+
+
+def test_enriched_detail_read_never_leaks_into_the_shared_cached_list(tmp_path):
+    """The B3 immutable-safety guard: a ``/setups/{id}``-style enriched read
+    (``enrich_with_tape_timeline``, already copy-on-write per its own docstring) must never
+    corrupt the SHARED cached list a subsequent ``/setups``-style list read serves. Uses the real
+    committed J-03 tape-join fixture so the enrichment is genuinely non-empty -- an empty-to-empty
+    enrichment would prove nothing."""
+    store = BarStore(tmp_path / "bars")
+    _seed_pg_join_bars(store)
+    config = _pg_join_config()
+
+    listed_before = compute_setups(store, config)
+    event = listed_before["events"][0]
+    assert event["tape_timeline"] == [], "unenriched, exactly like every fresh scan result"
+
+    dataset_store = DatasetStore(FIXTURE_DATASETS_J03_DIR)
+    enriched = enrich_with_tape_timeline(event, dataset_store, config)
+    assert enriched["tape_timeline"], "the join must have actually attached a real, non-empty timeline"
+
+    listed_after = compute_setups(store, config)  # a cache HIT -- the SAME shared object
+    assert listed_after["events"][0]["tape_timeline"] == [], (
+        "the enriched read must never leak into the shared cached list"
+    )
+    assert json.dumps(listed_before, sort_keys=True) == json.dumps(listed_after, sort_keys=True)
