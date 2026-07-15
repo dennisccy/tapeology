@@ -14,16 +14,28 @@
 // affordance (Stay-in-scope / No-execution anti-goals).
 
 import { useEffect, useRef, useState } from "react";
-import { fetchHistory } from "@/lib/api";
+import { fetchHistory, fetchStrategies, fetchTradability } from "@/lib/api";
 import { formatDateTimeDMY } from "@/lib/datetime";
 import {
   HISTORY_BAR_SIZES,
   type HistoryBarSize,
+  type StrategiesPayload,
   type TapeHistory,
   type ThesisGeometry,
   type ThesisProjection,
+  type TradabilityResponse,
 } from "@/lib/types";
 import { Panel, EmptyHint } from "./Panel";
+
+// era-5B J-06 (additive): the cockpit gains a tradable-band overlay + a descriptive confluence
+// chip beside the existing candles/tape-state markers/thesis geometry above — sim/historical modes
+// only (the parent's existing mode gate in app/page.tsx already fully unmounts this component in
+// live mode; untouched by this addition). Bands come from GET /research/tradability (era-5B J-01);
+// the chip's rejection/breakthrough state mapping comes from GET /research/strategies's
+// `structure_tape_map` entry (era-5B J-04). Both are read VERBATIM — this component computes no
+// score, cluster, class, or mapping of its own; it only draws served fields and evaluates a display
+// conjunction (is the last price inside a served band AND does the served tape state match the
+// served mapping for that band's side).
 
 // How often we re-pull `…/history` while a ticker is watched — matches the cockpit's WS push
 // cadence so the chart accrues new candles in step with the rest of the cockpit (no 2nd socket).
@@ -68,20 +80,45 @@ const PRICE_LINE_COLORS: Record<string, string> = {
 // Entry/exit marks render in their own slate-200 treatment, distinct from the verdict palette.
 const MARK_COLOR = "#e2e8f0"; // slate-200
 
+// The registered structure_tape_map strategy id (era-5B J-04) — mirrors app/structure/page.tsx's
+// OWN `STRATEGY_TAPE_ID = "structure_tape"` constant precedent byte-for-byte: this is a
+// REGISTRY-LOOKUP key (which entry to read off the fetched strategies list), never tape-state
+// confirmation vocabulary. The confirmation mapping itself is read off that entry's OWN
+// `rejection_states`/`breakthrough_states` fields below — never restated as a literal here.
+const STRATEGY_TAPE_MAP_ID = "structure_tape_map";
+
 export function PriceChart({
   ticker,
   thesis,
+  tapeState,
 }: {
   ticker: string | null;
   // The live thesis projection (WS `thesis` key) or null. Read VERBATIM for its `geometry`; the
   // chart derives nothing. `null` (no/cleared/resolved-non-invalidated thesis) => no overlay.
   thesis?: ThesisProjection | null;
+  // The engine-owned CURRENT tape state (era-5B J-06), read VERBATIM off the WS snapshot's own
+  // `tape_state` field — page.tsx passes `snapshot?.tape_state ?? null`, the SAME value
+  // Cockpit.tsx already renders. Drives the confluence chip's matching decision below; NEVER
+  // derived from `history.markers` here — a silent transition into `unclear` is never marked, so
+  // scanning markers for "the latest state" can go stale/wrong.
+  tapeState: string | null;
 }) {
   const [barSize, setBarSize] = useState<HistoryBarSize>(HISTORY_BAR_SIZES[0]);
   const [history, setHistory] = useState<TapeHistory | null>(null);
   // `loaded` distinguishes "haven't fetched yet" (connecting) from "fetched, genuinely empty"
   // (an empty window) so the empty treatment reads honestly in both cases.
   const [loaded, setLoaded] = useState(false);
+  // The watched symbol's tradable bands (era-5B J-06) — `phase` distinguishes "not fetched yet"
+  // from "fetched, genuinely empty" (SIM-*/no-bar-series), mirroring `loaded` above so the empty
+  // treatment is honest in both cases. Additive/non-blocking: `idle`/`loading`/`error` render
+  // nothing extra — the chart + tape markers never wait on this fetch.
+  const [tradabilityState, setTradabilityState] = useState<{
+    phase: "idle" | "loading" | "ready" | "error";
+    data: TradabilityResponse | null;
+  }>({ phase: "idle", data: null });
+  // The strategy registry (era-5B J-06) — ticker-independent config/registry data, fetched once.
+  // Supplies the confluence chip's rejection/breakthrough state mapping.
+  const [strategies, setStrategies] = useState<StrategiesPayload | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Library object handles kept across renders; typed loosely because the module is loaded
@@ -94,6 +131,9 @@ export function PriceChart({
   // update REMOVES the prior lines before adding the new ones (no stale/duplicate lines) and so a
   // cleared/resolved thesis removes them entirely.
   const priceLinesRef = useRef<any[]>([]);
+  // The tradable-band price-line handles (era-5B J-06) — tracked SEPARATELY from `priceLinesRef`
+  // (the thesis geometry's own dashed lines) so redrawing one family never clobbers the other.
+  const bandPriceLinesRef = useRef<any[]>([]);
   // The latest tape-state markers (engine-owned) and thesis markers (research-owned). They share the
   // ONE series-marker primitive, so both effects funnel through `setCombinedMarkers` which sets the
   // union in a single call (lightweight-charts' setMarkers replaces the whole set).
@@ -134,6 +174,62 @@ export function PriceChart({
       clearInterval(id);
     };
   }, [ticker, barSize]);
+
+  // --- Fetch the watched symbol's tradable bands (era-5B J-06) -------------------------------
+  // Keyed on `[ticker, history?.epoch_anchor]` (not `barSize`, not polled every second): the
+  // morning-markup basis is date-bounded and does not move intraday, unlike the 1s `…/history`
+  // poll above — `epoch_anchor` itself is a STABLE per-watch value (the engine sets it once at
+  // watch-start; it never changes while the SAME ticker stays watched), so this still fetches at
+  // most once per watch, not on every poll tick.
+  //
+  // `as_of` is the WATCHED SESSION's own current moment, verbatim: `history.epoch_anchor` (Data
+  // Contract row 13, ALREADY fetched by the poll above — no new fetch) is "the real UTC epoch a
+  // watched session's logical time 0 maps to" — a real market epoch for a historical replay, so
+  // during e.g. the 2026-06-22 replay this correctly resolves THAT session's own prior-close basis
+  // (2026-06-18) rather than today's. Falls back to the current wall-clock time only before the
+  // first `history` response lands (first paint) or for a SIM ticker (whose synthetic anchor is
+  // moot anyway — SIM-* symbols resolve `no_bar_series_for_symbol` regardless of `as_of`). This is
+  // STILL zero client "which session" math (no-lookahead): `_resolve_basis` (tradability.py) alone
+  // decides the prior session server-side; converting an epoch-seconds field to an ISO string is
+  // the SAME pure unit/format conversion this file already does for candle timestamps above
+  // (`toClock`), never a date computation of "which session."
+  useEffect(() => {
+    if (!ticker) {
+      setTradabilityState({ phase: "idle", data: null });
+      return;
+    }
+    let cancelled = false;
+    setTradabilityState({ phase: "loading", data: null });
+    const asOf =
+      history?.epoch_anchor != null
+        ? new Date(history.epoch_anchor * 1000).toISOString()
+        : new Date().toISOString();
+    fetchTradability(ticker, asOf).then((res) => {
+      if (cancelled) return;
+      if (res.ok && res.data) {
+        setTradabilityState({ phase: "ready", data: res.data });
+      } else {
+        setTradabilityState({ phase: "error", data: null });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ticker, history?.epoch_anchor]);
+
+  // --- Fetch the strategy registry ONCE (era-5B J-06) -----------------------------------------
+  // Ticker-independent config/registry data (the SAME GET /research/strategies read `/structure`'s
+  // Registry section already established). Supplies the confluence chip's rejection/breakthrough
+  // state mapping — read verbatim below, never restated as a client-side literal.
+  useEffect(() => {
+    let cancelled = false;
+    fetchStrategies().then((res) => {
+      if (!cancelled && res.ok) setStrategies(res.strategies);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // --- Create the chart once (client-only dynamic import, never at SSR) ---------------------
   useEffect(() => {
@@ -325,9 +421,92 @@ export function PriceChart({
     setCombinedMarkers();
   }, [thesis, history]);
 
+  // --- Draw the tradable-band overlay VERBATIM (era-5B J-06) ---------------------------------
+  // One SOLID price line per band edge, colored by side — reuses StructureChart.tsx's L97-120
+  // pattern byte-for-byte. Bands are read off the served prop only; this component performs no
+  // scoring or clustering of its own. Keyed on `[tradabilityState, history]` rather than just
+  // `tradabilityState`: `history` polls every second (see POLL_INTERVAL_MS above), so if the chart
+  // series is not yet created the very first time bands resolve, the next poll tick re-runs this
+  // effect and draws them — the SAME self-healing dependency the thesis-geometry effect just above
+  // already relies on for the identical series-not-ready race.
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    // Always clear prior band lines first (mirrors the thesis-geometry effect's own clear-then-
+    // redraw pattern) so a re-fetch or ticker change never leaves a stale/duplicate line.
+    for (const line of bandPriceLinesRef.current) {
+      try {
+        series.removePriceLine(line);
+      } catch {
+        // The series may have been disposed between renders — ignore (it is being torn down).
+      }
+    }
+    bandPriceLinesRef.current = [];
+
+    const bands = tradabilityState.data?.bands ?? [];
+    for (const band of bands) {
+      const color = band.side === "resistance" ? "#fb7185" : "#34d399"; // rose-400 / emerald-400
+      const sideLabel = band.side === "resistance" ? "R" : "S";
+      const classLabel = band.class ? ` class ${band.class}` : "";
+      const title = `${sideLabel}${classLabel} · score ${band.quality_score}${band.round_number ? " · round" : ""}`;
+      const edges =
+        band.price_low === band.price_high ? [band.price_low] : [band.price_low, band.price_high];
+      for (const price of edges) {
+        const handle = series.createPriceLine({
+          price,
+          color,
+          lineWidth: 2,
+          lineStyle: 0, // LineStyle.Solid — distinct from this component's own DASHED thesis lines
+          axisLabelVisible: true,
+          title,
+        });
+        bandPriceLinesRef.current.push(handle);
+      }
+    }
+  }, [tradabilityState, history]);
+
   if (!ticker) return null;
 
   const hasBars = !!history && history.bars.length > 0;
+
+  // --- Confluence chip (era-5B J-06) ----------------------------------------------------------
+  // A pure DISPLAY CONJUNCTION over already-fetched/served values — price-in-band × served tape
+  // state × the served rejection/breakthrough mapping. No scoring, no clustering, no client-side
+  // mapping literal: `rejectionState`/`breakthroughState` are read off the FETCHED
+  // structure_tape_map entry, never restated (the only place this file hardcodes the four tape-
+  // state names is the pre-existing MARKER_COLORS/STATE_LABELS cosmetic dicts above, unrelated to
+  // this decision).
+  const lastPrice =
+    history && history.bars.length > 0 ? history.bars[history.bars.length - 1].close : null;
+  const bands = tradabilityState.data?.bands ?? [];
+  const matchedBand =
+    lastPrice != null
+      ? bands.find((b) => lastPrice >= b.price_low && lastPrice <= b.price_high) ?? null
+      : null;
+  // Structural side->direction reading (named explicitly in the phase spec's Notes — NOT tape-state
+  // vocabulary): a resistance band defends a ceiling (a short-direction reading); a support band
+  // defends a floor (a long-direction reading).
+  const direction: "long" | "short" | null =
+    matchedBand == null ? null : matchedBand.side === "resistance" ? "short" : "long";
+  const mapEntry = strategies?.strategies.find((s) => s.strategy_id === STRATEGY_TAPE_MAP_ID)?.entries;
+  const rejectionState = direction ? mapEntry?.rejection_states?.[direction] : undefined;
+  const breakthroughState = direction ? mapEntry?.breakthrough_states?.[direction] : undefined;
+  const matchKind: "rejection" | "breakthrough" | null =
+    tapeState != null && tapeState === rejectionState
+      ? "rejection"
+      : tapeState != null && tapeState === breakthroughState
+        ? "breakthrough"
+        : null;
+  const confluence = matchedBand && matchKind ? { band: matchedBand, kind: matchKind } : null;
+
+  // Honest "no tradable map" state (SIM-*/no-bar-series symbols) — shown ONLY once the bands fetch
+  // genuinely resolved empty, never while still loading/failed (the overlay/chip are a pure
+  // ADDITION that never blocks or degrades the chart/markers above).
+  const tradabilityEmpty =
+    tradabilityState.phase === "ready" &&
+    !!tradabilityState.data &&
+    (tradabilityState.data.no_bar_series_for_symbol || tradabilityState.data.bands.length === 0);
 
   return (
     <Panel title="Price Chart — Tape-State Markers" className="mb-4">
@@ -368,6 +547,29 @@ export function PriceChart({
           </div>
         )}
       </div>
+
+      {/* era-5B J-06: the tradable-band overlay's companion strip. Additive/non-blocking — while
+          the bands fetch is idle/loading/failed this renders nothing, so the chart + tape markers
+          above never wait on it. Neutral slate "factual stamp" styling (mirrors
+          FeedBasisBadge.tsx's chip family) — this app reserves amber for degraded/empty/truncated
+          states; a confluence chip is a positive descriptive signal, not a warning. */}
+      {confluence && (
+        <div
+          data-testid="confluence-chip"
+          className="mt-3 rounded bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300"
+        >
+          Inside {confluence.band.side === "resistance" ? "R" : "S"}-band{" "}
+          {confluence.band.price_low.toFixed(2)}–{confluence.band.price_high.toFixed(2)}
+          {confluence.band.class ? ` (class ${confluence.band.class})` : ""} · tape:{" "}
+          {STATE_LABELS[tapeState ?? ""] ?? tapeState} ({confluence.kind}) · measured history:{" "}
+          edge report
+        </div>
+      )}
+      {tradabilityEmpty && (
+        <div className="mt-3" data-testid="no-tradable-map">
+          <EmptyHint>No tradable map for {ticker}.</EmptyHint>
+        </div>
+      )}
     </Panel>
   );
 }

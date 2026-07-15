@@ -239,14 +239,21 @@ export default function Page() {
         {/* Tape-state prediction chart — above the cockpit, for Simulated + Historical only
             (hidden for Live, per the blueprint IA). Hidden while the stream has failed (pre- or
             post-connect) or is still waiting for its first event — there is nothing to chart yet,
-            and the chart must never invent candles. Reads GET …/history verbatim. */}
+            and the chart must never invent candles. Reads GET …/history verbatim.
+            era-5B J-06 (additive): also passes the WS snapshot's own `tape_state` so the chart can
+            draw its tradable-band overlay + confluence chip — this render gate is UNCHANGED, so
+            live mode stays byte-identical (the chart, overlay, and chip all stay hidden there). */}
         {ticker &&
           !streamFailed &&
           !snapshotFailed &&
           !snapshotWaiting &&
           !snapshotConnecting &&
           (mode === "sim" || mode === "historical") && (
-            <PriceChart ticker={ticker} thesis={snapshot?.thesis ?? null} />
+            <PriceChart
+              ticker={ticker}
+              thesis={snapshot?.thesis ?? null}
+              tapeState={snapshot?.tape_state ?? null}
+            />
           )}
         {pending && !ticker ? (
           // J-21: pending acknowledgement — shown the instant Watch is clicked, before any data.

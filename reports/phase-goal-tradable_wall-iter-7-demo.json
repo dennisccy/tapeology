@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-tradable_wall-iter-7",
+  "base_url": "http://localhost:3301",
+  "iteration": 7,
+  "default_timeout_ms": 20000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open Tapeology",
+      "narration": "Start on the Cockpit, the screen where a stock's tape is actually watched.",
+      "point_out": "The data-source control at top-left, already set to Simulated.",
+      "journey": "",
+      "new": false,
+      "verified": false,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Pick the practice ticker",
+      "narration": "Type SIM-BUYER, the app's built-in practice ticker, into the Ticker field.",
+      "point_out": "The Ticker field now reads SIM-BUYER.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "An honest \"nothing here\" instead of a fake zone",
+      "narration": "Click Watch. SIM-BUYER is a made-up practice ticker with no real trading history behind it, so there's no real price zone to show for it — and Tapeology says so plainly instead of guessing.",
+      "point_out": "Right below the live chart, a small note reads \"No tradable map for SIM-BUYER.\" — never a fabricated line.",
+      "journey": "J-06",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "No tradable map for SIM-BUYER." }
+    },
+    {
+      "n": 4,
+      "title": "Switch to a real trading day",
+      "narration": "Click Historical to replay a real recorded trading session instead of a simulation.",
+      "point_out": "The controls change to a real symbol search plus a date and time window.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Historical" } }
+    },
+    {
+      "n": 5,
+      "title": "Pick a real stock",
+      "narration": "Type AAPL into the symbol search.",
+      "point_out": "The Symbol field now reads AAPL.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Symbol search" }, "text": "AAPL" }
+    },
+    {
+      "n": 6,
+      "title": "Pick the day",
+      "narration": "Type in a real June trading day.",
+      "point_out": "The Date field now reads 22-06-2026.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Date" }, "text": "22-06-2026" }
+    },
+    {
+      "n": 7,
+      "title": "Fill the whole session in one click",
+      "narration": "Click the Full RTH quick-pick to fill in the entire regular trading session automatically.",
+      "point_out": "The start and end time fields fill in for you.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Full RTH 9:30–16:00 ET" } }
+    },
+    {
+      "n": 8,
+      "title": "The tradable wall, live on the chart",
+      "narration": "Click Watch to start replaying that real session. This time the chart also draws the stock's own short list of important price zones directly over the candles — the same zones the Structure page maps out, now visible at the exact moment and place a trade would be watched.",
+      "point_out": "Solid rose and green lines appear on the chart near $300 — real support and resistance zones, not simulated ones. When price sits right on one of these lines and the live tape reading agrees, a small descriptive note also appears just below the chart.",
+      "journey": "J-06",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Tape State" }
+    },
+    {
+      "n": 9,
+      "title": "Visit where the map is built",
+      "narration": "Head over to the Structure page — the research view where these price zones are worked out in the first place.",
+      "point_out": "The top navigation, unchanged, with Structure as one of its five pages.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "link", "name": "Structure" } }
+    },
+    {
+      "n": 10,
+      "title": "Pick the same stock",
+      "narration": "Type AAPL into the Symbol field.",
+      "point_out": "The Symbol field now reads AAPL.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Structure symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 11,
+      "title": "Pick the same moment",
+      "narration": "Enter that same June session as an as-of time.",
+      "point_out": "The As-of field now reads the chosen date and time.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "As-of (UTC, ISO-8601)" }, "text": "2026-06-22T21:00:00Z" }
+    },
+    {
+      "n": 12,
+      "title": "The same short list, still intact",
+      "narration": "Click Load. This is the very same short, ranked list of price zones the cockpit chart just drew — nothing about this page moved when the cockpit gained its new view.",
+      "point_out": "A short, ranked list of price zones tops the page, with the $300–$302 zone still near the top.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "Map basis (prior completed session close)" }
+    }
+  ]
+}

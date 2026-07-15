@@ -1069,12 +1069,28 @@ export interface StrategyExits {
   dataset_end: { rule: string };
 }
 
+// One strategy's `entries` block (GET /research/strategies). `rule` is the one field every
+// strategy shares; the rest are present ONLY where the backend's OWN grammar carries them
+// (`structure_tape` / `structure_tape_map`'s `structure_level_tape_confirmation` rule —
+// config.py:1516-1523) — v1's `entries` carries only `rule` (an honest field omission, never a
+// fabricated value for v1). `rejection_states`/`breakthrough_states` are the era-5B J-06 cockpit
+// confluence chip's OWN mapping source (Record<direction, tape-state-name>) — read verbatim by
+// PriceChart.tsx, never restated as a client-side literal.
+export interface StrategyEntries {
+  rule: string;
+  proximity_band_bps?: number;
+  rejection_states?: Record<"long" | "short", string>;
+  breakthrough_states?: Record<"long" | "short", string>;
+  arm_cooldown_seconds?: number;
+  concurrency?: string;
+}
+
 // One registered strategy (GET /research/strategies — Data Contract row 40/41). `size_multiple_by_class`
 // is present ONLY on structure_tape (v1 has no class-scaled simulated size) — an honest field
 // omission, never a fabricated map for v1.
 export interface Strategy {
   strategy_id: string;
-  entries: { rule: string };
+  entries: StrategyEntries;
   exits: StrategyExits;
   fees: { per_share: number; min_per_trade: number };
   slippage: { spread_fraction: number };
