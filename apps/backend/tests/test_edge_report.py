@@ -823,3 +823,159 @@ def test_3way_report_source_reuses_the_shared_aggregate_and_never_a_second_edge_
     # No second R/$/win-rate/drawdown formula anywhere in the new section.
     for forbidden in ("sum(t[", "win_rate =", "max_dd", "cum +="):
         assert forbidden not in src, f"a second aggregate formula leaked into edge_report.py: {forbidden}"
+
+
+# ==================================================================================================
+# The rebuildable result cache (era-5B J-08) — ``run_strategy_comparison_report``'s optional
+# ``cache=`` param, wired to ``edge_report_cache.EdgeReportCache``. Every test ABOVE this marker
+# calls ``run_strategy_comparison_report`` WITHOUT a cache (``cache=None``, the default) and stays
+# green UNMODIFIED — proof by construction that the pre-J-08 uncached path is byte-for-byte
+# untouched. ``EdgeReportCache``'s OWN mechanics (keying, durability, concurrency, torn-read
+# safety) are unit-tested in isolation in ``tests/test_edge_report_cache.py`` against a cheap
+# counting stub; this section proves the WIRING into the real ``_compute_strategy_comparison_
+# report`` — byte-identity against a real, non-degenerate report shape (the iter-4 lesson: never
+# merely the vacuous ``cells: []`` case) and that a warmed cache genuinely skips recomputation.
+# ==================================================================================================
+
+from app.research.edge_report_cache import EdgeReportCache  # noqa: E402
+
+
+def test_cache_none_default_is_byte_identical_to_the_pre_j08_uncached_call(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    """The literal DoD default: omitting ``cache=`` recomputes directly, exactly as every OTHER
+    test in this file already proves implicitly by staying green unmodified — this test makes the
+    claim explicit and non-degenerate (the real 3-cell synthetic-scan-join shape, not ``[]``)."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+
+    without_kwarg = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config)
+    with_explicit_none = run_strategy_comparison_report(
+        store, dataset_store, scan_bar_store, scan_config, cache=None
+    )
+
+    assert json.dumps(without_kwarg, sort_keys=True) == json.dumps(with_explicit_none, sort_keys=True)
+    assert len(without_kwarg["train"]["cells"]) == 3  # non-degenerate: the real 3-cell shape
+
+
+def test_warm_cache_report_is_byte_identical_to_a_fresh_cache_cleared_compute(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    """era-5B J-08 determinism (DoD-mandated; the iter-4 lesson: proven on a NON-degenerate report
+    shape — the real synthetic scan-join fixture, never merely the vacuous empty case). A warm
+    cache's served report is byte-identical to an INDEPENDENT fresh, uncached compute — the cache
+    changes nothing about WHAT is returned, only whether it is recomputed."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+
+    warm = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+    fresh = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config)  # cache=None
+
+    assert json.dumps(warm, sort_keys=True) == json.dumps(fresh, sort_keys=True)
+    assert len(warm["train"]["cells"]) == 3  # non-degenerate: the real 3-cell shape, not []
+
+
+def test_second_call_on_a_warmed_cache_never_recomputes(tmp_path, store, scan_bar_store, scan_config, monkeypatch):
+    """The whole point of J-08: a SECOND call against an identical, already-warmed cache must never
+    re-enter ``_compute_strategy_comparison_report`` at all (the ``test_compute_setups_runs_at_
+    most_once_per_report_call`` counting-wrapper pattern, applied to the NEW cache-aware entry
+    point)."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+
+    calls = []
+    real_compute = edge_report._compute_strategy_comparison_report
+
+    def _counting_compute(*args, **kwargs):
+        calls.append(1)
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report, "_compute_strategy_comparison_report", _counting_compute)
+
+    first = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+    second = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+
+    assert len(calls) == 1  # the SECOND call served entirely from the cache
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+
+
+def test_a_new_recorded_dataset_busts_the_wired_cache(tmp_path, store, scan_bar_store, scan_config):
+    """Adding a NEW registered dataset changes the checksum set the cache is keyed on, so the very
+    next call must recompute and reflect the new dataset — never serve the stale pre-addition
+    report."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta_a = _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+
+    first = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+    first_v1_cell = next(c for c in first["train"]["cells"] if c["strategy_id"] == STRATEGY_V1_ID)
+    assert first_v1_cell["dataset_ids"] == [meta_a["id"]]
+
+    meta_b = _record_v1_arming_dataset(dataset_store, max_logical=200.0, split=SPLIT_TRAIN, feed="sim", label="b")
+    second = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+    second_v1_cell = next(c for c in second["train"]["cells"] if c["strategy_id"] == STRATEGY_V1_ID)
+
+    assert second_v1_cell["dataset_ids"] == sorted([meta_a["id"], meta_b["id"]])
+    assert second_v1_cell["measurement"]["n"] == 2  # both datasets pooled into the recomputed cell
+
+
+def test_durability_across_a_simulated_backend_restart_via_the_wired_function(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    """The DoD's literal restart scenario, exercised through the REAL public entry point (not just
+    ``EdgeReportCache`` in isolation): a BRAND NEW ``EdgeReportCache`` at the SAME persisted path
+    (simulating a backend restart) serves the prior warm report WITHOUT ever calling
+    ``_compute_strategy_comparison_report`` again."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    db_path = str(tmp_path / "cache.db")
+
+    original_cache = EdgeReportCache(db_path)
+    warm = run_strategy_comparison_report(
+        store, dataset_store, scan_bar_store, scan_config, cache=original_cache
+    )
+
+    restarted_cache = EdgeReportCache(db_path)  # no in-process state carried over
+    calls = []
+    real_compute = edge_report._compute_strategy_comparison_report
+
+    def _counting_compute(*args, **kwargs):
+        calls.append(1)
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report, "_compute_strategy_comparison_report", _counting_compute)
+
+    served = run_strategy_comparison_report(
+        store, dataset_store, scan_bar_store, scan_config, cache=restarted_cache
+    )
+
+    assert len(calls) == 0  # never recomputed post-"restart" — served from the durable row alone
+    assert json.dumps(served, sort_keys=True) == json.dumps(warm, sort_keys=True)
+
+
+def test_cached_report_never_moves_the_champion_pointer(tmp_path, store, scan_bar_store, scan_config):
+    """The no-hand-promotion guard, re-proven through the cached path specifically: a cache is an
+    accelerator over a strictly read-only report, never a new surface that could promote."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+    before = store.get_champion_pointer()
+
+    run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+    run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)  # warm hit too
+
+    assert store.get_champion_pointer() == before == {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
+
+
+def test_cache_wiring_source_never_duplicates_the_computation():
+    """A coherence guard: the cache-aware ``run_strategy_comparison_report`` is a thin dispatcher —
+    it calls ``_compute_strategy_comparison_report`` (directly or via ``cache.get_or_compute``) and
+    nothing else computes a cell."""
+    src = (BACKEND_DIR / "app" / "research" / "edge_report.py").read_text()
+    assert "def _compute_strategy_comparison_report(" in src
+    assert "cache.get_or_compute(dataset_store, config, compute)" in src
+    # Exactly ONE definition of each — never a second copy under a different name.
+    assert src.count("def run_strategy_comparison_report(") == 1
+    assert src.count("def _compute_strategy_comparison_report(") == 1

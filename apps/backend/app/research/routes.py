@@ -50,6 +50,7 @@ from .bars import (
     EmptyBarWindowError,
 )
 from .edge_report import EdgeReportError, run_strategy_comparison_report
+from .edge_report_cache import EdgeReportCache
 from .levels import compute_levels
 from .setups import BROKE, CHOPPED, REJECTED, compute_setups, enrich_with_tape_timeline
 from .tradability import compute_tradability
@@ -1560,6 +1561,22 @@ def get_bar_index() -> BarIndex:
     return BarIndex(db_path)
 
 
+def get_edge_report_cache() -> EdgeReportCache:
+    """The persisted, rebuildable 3-way strategy-comparison result cache (era-5B J-08) — a
+    config-DERIVED, env-overridable path so ``config.py`` stays byte-identical
+    (``config_fingerprint`` unaffected — the identical ``get_bar_index`` rationale): the
+    ``TAPEOLOGY_EDGE_REPORT_CACHE_DB`` env var if set, else a file co-located as a SIBLING of the
+    config-owned dataset directory (``get_dataset_store``'s own ``dataset_dir_resolved()``, e.g.
+    ``.data/datasets`` -> ``.data/edge_report_cache.db`` — the SAME ``.data/`` directory
+    ``bar_index.db`` already lives in). A FastAPI dependency so tests can override it outright or
+    point it at a temp path via the env var — the ``get_bar_index`` pattern, exactly."""
+    override = os.environ.get("TAPEOLOGY_EDGE_REPORT_CACHE_DB")
+    db_path = override if override else os.path.join(
+        os.path.dirname(CONFIG.dataset_dir_resolved()), "edge_report_cache.db"
+    )
+    return EdgeReportCache(db_path)
+
+
 def get_bar_fetch_adapter():
     """The market adapter for the BAR-FETCH path ONLY (``POST /research/bars`` — era-5 J-01).
 
@@ -2078,16 +2095,23 @@ def get_edge_report(
     registry: ResearchRegistry = Depends(get_registry),
     dataset_store: DatasetStore = Depends(get_dataset_store),
     bar_store: BarStore = Depends(get_bar_store),
+    cache: EdgeReportCache = Depends(get_edge_report_cache),
 ) -> dict:
     """The 3-way strategy-comparison report (``v1`` / ``structure_tape`` / ``structure_tape_map``)
     aggregated into per strategy x class x side x reaction x feed cells over every registered
     event-window dataset that resolves an owning, classified scan event — served VERBATIM from
-    ``run_strategy_comparison_report`` (era-5B J-04). A dataset failing integrity verification
-    aborts the whole report with an explicit 500 (the ``create_backtest``/``EdgeReportError``
-    precedent) — partial results are never served. An all-empty or all-``insufficient_sample``
-    report (the expected shape on a keyless, single-fixture registry) is a valid 200, never an
-    error."""
+    ``run_strategy_comparison_report`` (era-5B J-04), through the rebuildable result cache
+    (era-5B J-08 — ``edge_report_cache.get_edge_report_cache``, the SAME DI-overridable seam
+    ``get_bar_index`` uses) so a warm cache answers within an interactive budget instead of the
+    documented ~10+h sweep. The cache is an accelerator only: a miss recomputes byte-identically
+    through the SAME one function; this route's response shape is UNCHANGED either way. A dataset
+    failing integrity verification aborts the whole report with an explicit 500 (the
+    ``create_backtest``/``EdgeReportError`` precedent) — partial results are never served, and
+    never cached. An all-empty or all-``insufficient_sample`` report (the expected shape on a
+    keyless, single-fixture registry) is a valid 200, never an error."""
     try:
-        return run_strategy_comparison_report(registry.store, dataset_store, bar_store, registry.config)
+        return run_strategy_comparison_report(
+            registry.store, dataset_store, bar_store, registry.config, cache=cache
+        )
     except EdgeReportError as exc:
         raise HTTPException(status_code=500, detail=f"edge report could not complete: {exc}")

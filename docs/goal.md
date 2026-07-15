@@ -367,6 +367,51 @@ guards continuously.** The foundation (eras 1–5) MUST NOT regress.
     + automated.)*
 
 <!-- AUTO:journeys -->
+
+- **J-08: The edge report becomes observable — a rebuildable, checksum-keyed result cache**
+  - Steps:
+    1. Add a **rebuildable result cache** around the `run_strategy_comparison_report` backtest sweep in
+       `apps/backend/app/research/edge_report.py` — the documented ~10+h / ~9.1M-tick cost is the
+       `BacktestJobManager` runs over the recorded event-window datasets for all three strategies, NOT the
+       already-memoized `compute_setups` scan. Mirror the established *rebuildable-accelerator* precedents
+       (`_SCAN_CACHE` in `setups.py`; the persisted derived `bar_index`): key the cache on the `DatasetStore`'s
+       per-dataset checksums (append-only / immutable) + the strategy registry + `config_fingerprint`
+       (`4d665603569b9dbf`), and make it durable enough that the first (operator-run) full compute is not
+       repeated on every request or backend restart. `edge_report.py` stays the SOLE computer; the cache is a
+       rebuildable accelerator, **never a source of truth**; a miss recomputes byte-identically; any change to
+       the dataset set, the registry, or the config busts the key.
+    2. `GET /research/edge-report` and its read-only MCP proxy `edge_report` keep serving
+       `run_strategy_comparison_report`'s output **verbatim** through the cache — one owner, one endpoint, no
+       second computation path, zero client recomputation on `/structure`'s Edge Report section. Add a
+       determinism test (the cached report is byte-identical to a fresh cache-cleared compute over the same
+       store) and a concurrency test (a cold-cache read never observes a torn / half-written result, mirroring
+       `setups.py`'s atomic-publish guard).
+    3. After the first full real compute (operator-run, credentialed datasets present), append the completed
+       three-way comparison to the PnL history record (`reports/pnl/pnl-history.md` via `pnl_history.py`):
+       `v1` (null / baseline) vs `structure_tape` vs `structure_tape_map`, per split with **train and hold-out
+       never pooled** and **feeds never pooled**, each cell carrying net R, net $, n, fee/slippage assumptions,
+       basis, null baseline, and the "simulated — not indicative of live results" register; n<5 cells labelled
+       `insufficient_sample` (an all-`insufficient_sample` outcome is valid and still recorded).
+  - Acceptance: on a warm cache `GET /research/edge-report` returns the full three-way register (`v1` /
+    `structure_tape` / `structure_tape_map`, per strategy × class × side × reaction cell, train and hold-out
+    separate and never pooled, feeds never pooled, n<5 cells `insufficient_sample`, null baseline, every $
+    carrying its R, n, assumptions and basis with the "simulated — not indicative of live results" note) within
+    an interactive time budget, and the cached output is **byte-identical** to a fresh cache-cleared compute (a
+    determinism test proves it; a concurrency test proves no torn read); the cache is keyed on dataset
+    checksums + strategy registry + `config_fingerprint`, is rebuildable and never a source of truth, and any
+    input change busts it; `edge_report.py` remains the single owner and `GET /research/edge-report` the single
+    endpoint, with the MCP `edge_report` proxy byte-identical and zero client recomputation; `edge_report.py`'s
+    computation, `levels.py`, `setups.py`, `tradability.py`, `v1`, `structure_tape`, `structure_tape_map`, the
+    `default` profile, and `config_fingerprint` `4d665603569b9dbf` stay byte-identical to before (equivalence
+    test green; the cache is additive only); the **champion pointer is untouched** — this journey makes the
+    report observable and never promotes, promotion staying the existing sweep gate's job on hold-out; the
+    first completed real three-way comparison is appended to `reports/pnl/pnl-history.md` with per-split net R,
+    net $, n, assumptions, basis and null baseline; the full backend suite stays green (new determinism +
+    concurrency tests, no test deleted or weakened); and a **[NEW]-flagged demo-narrator walkthrough** shows
+    `/structure`'s Edge Report section rendering the now-observable cells (or the honest all-`insufficient_sample`
+    state) verbatim from the endpoint. *(Keyless determinism / equivalence on the committed fixture + a
+    warm-cache render; the full real compute is credentialed / operator-run.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

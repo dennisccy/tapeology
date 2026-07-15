@@ -1,0 +1,7 @@
+{
+  "extended": true,
+  "n_new_journeys": 1,
+  "n_proposals": 2,
+  "dry": false,
+  "summary": "No vision gaps (all 5 Vision points + 9 Key Capabilities are covered by J-01..J-07); no hold-out survivor is observable (pnl-scan.json absent and the survivor screen GET /research/edge-report never completes at ~10+h uncached), so no profile/strategy promotion is proposable. Promoted J-08 = a rebuildable, dataset-checksum + config_fingerprint keyed result cache for the edge-report backtest sweep (audit B2 / iter-8 lesson: 'the natural next enhancement, mirror _SCAN_CACHE') so the era's central edge report AND the future survivor screen become byte-identically observable; champion untouched. Backlogged enlarge-recorded-window-library (speculative, operator-gated, premature) but did NOT promote it."
+}

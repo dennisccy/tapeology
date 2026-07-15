@@ -53,6 +53,14 @@ from .backtests import REGISTER, STATUS_DONE
 from .datasets import SPLIT_HOLDOUT, SPLIT_TRAIN
 from .store import JournalStore, PnlLedgerRecord
 
+# The NEW row-shape discriminator ``render_history_markdown`` branches on (era-5B J-08) — present
+# ONLY on a row appended by ``append_strategy_comparison_row`` below; every EXISTING/OLD row
+# (appended by ``append_validation_row`` above) carries no ``kind`` key at all, so
+# ``row.get("kind")`` reads ``None`` for them — an explicit tag rather than inferring the shape
+# from "has no 'candidate' key" (the codebase's ``_ROW_TRADE``/``_ROW_QUOTE`` tagged-shape
+# precedent in ``datasets.py``, applied here).
+_KIND_STRATEGY_COMPARISON = "strategy_comparison"
+
 
 class LedgerCompositionError(Exception):
     """A ledger row could not be composed from its source backtest reports — missing report,
@@ -190,6 +198,105 @@ def append_validation_row(
     return row
 
 
+# --- The 3-way strategy-comparison append (era-5B J-08) — an ADDITIVE second writer beside
+# ``append_validation_row`` above (untouched by this section), composing a DIFFERENT row shape
+# from a DIFFERENT source. --------------------------------------------------------------------
+
+
+def _ledger_cell(cell: dict, basis: str) -> dict:
+    """One report cell, denormalized for a ledger row: a COPY of the source ``edge_report.py``
+    cell (never mutated) with ``basis`` (``"train"`` / ``"holdout"``) added — the split a cell
+    floating alone (e.g. copy-pasted out of the row) still honestly names. ``measurement``,
+    ``null_baseline``, and ``insufficient_sample`` are copied VERBATIM — ``edge_report.py``'s
+    ``_split_cells`` already computed all three against the SAME ``pnl_min_sample_size`` this
+    row's own ``pnl_min_sample_size`` field carries, so re-deriving any of them here would risk a
+    second, driftable copy of that gate (never recomputed, per this module's own writer
+    discipline)."""
+    return {**copy.deepcopy(cell), "basis": basis}
+
+
+def append_strategy_comparison_row(
+    store: JournalStore,
+    config: Config,
+    *,
+    enhancement_id: str,
+    title: str,
+    report: dict,
+) -> dict:
+    """Compose and append ONE 3-way strategy-comparison PnL-ledger row (era-5B J-08) from an
+    ALREADY-COMPLETED ``run_strategy_comparison_report`` output — the identical "verbatim copy,
+    never recompute" discipline ``append_validation_row`` uses for its own two source reports,
+    applied here to the report's OWN cells (never a dataset/engine/aggregate call of any kind;
+    this function takes no dataset store, bar store, or backtest-job manager of any kind — its
+    only inputs are the journal store it appends through, the config it reads assumptions from,
+    and the already-completed report dict itself).
+
+    Distinct from ``append_validation_row`` above (untouched by this function): that writer
+    composes a TWO-SIDED (baseline vs ONE candidate) row from two PERSISTED BACKTEST reports
+    fetched by id; THIS writer composes a THREE-STRATEGY (``v1`` / ``structure_tape`` /
+    ``structure_tape_map``) row DIRECTLY from an in-memory 3-way comparison report's own cells —
+    the report itself already IS the single completed measurement (no per-report id to fetch, no
+    provenance to cross-check between two sources). Both writers share the SAME append mechanism
+    (``store.append_pnl_ledger_row``) and the SAME structural append-only/no-update-or-delete
+    guarantee; ``ledger_projection`` below needs NO change to serve either shape verbatim (a new
+    row's absent ``"baseline"``/``"candidate"`` keys make its existing per-row label loop skip it
+    silently — see that function's own docstring).
+
+    The appended row NEVER pools: every cell keeps its own (strategy, class, side, reaction, feed)
+    identity and its own ``basis`` (train/holdout — kept as two separate top-level lists,
+    mirroring the report's own ``train``/``holdout`` shape); this function only re-shapes/labels
+    the report's cells (adding ``basis``), it never sums, averages, or merges any two of them, and
+    it never touches a cell's ``feed`` (so two feeds recorded into the SAME report stay exactly as
+    un-pooled as ``edge_report.py`` already left them). Every cell carries its measurement
+    (n/gross/net R/$), its OWN null baseline, and the row-level fee/slippage/dollars-per-R
+    assumptions read VERBATIM from ``config`` (never re-derived) — a single shared block rather
+    than repeated per cell, since every registered strategy currently shares the identical fee/
+    slippage model (``config.strategy_definition``'s own documented "FEES / SLIPPAGE / DOLLAR
+    CONVERSION — IDENTICAL to v1" clause). ``insufficient_sample`` is copied VERBATIM from the
+    source cell.
+
+    Raises ``LedgerCompositionError`` (never appends a partial row) if ``report`` does not carry
+    the expected ``train.cells`` / ``holdout.cells`` shape — the identical honest-failure
+    discipline ``_completed_report`` enforces for the two-way writer above. A duplicate
+    ``enhancement_id`` raises the store's own ``DuplicateEnhancementError`` (unchanged, structural,
+    the SAME one row per enhancement guarantee every ledger row shares)."""
+    for split in (SPLIT_TRAIN, SPLIT_HOLDOUT):
+        section = report.get(split)
+        if not isinstance(section, dict) or "cells" not in section:
+            raise LedgerCompositionError(
+                f"the report does not carry a '{split}.cells' section — a 3-way comparison row "
+                f"is only ever composed from a genuinely completed run_strategy_comparison_report "
+                f"output, so nothing was appended"
+            )
+    now = time.time()
+    row = {
+        "kind": _KIND_STRATEGY_COMPARISON,
+        "enhancement_id": enhancement_id,
+        "title": title,
+        "register": report.get("register", REGISTER),
+        "pnl_min_sample_size": report.get("pnl_min_sample_size", config.pnl_min_sample_size),
+        "config_fingerprint": config.config_fingerprint(),
+        "assumptions": {
+            "fees": {
+                "per_share": config.strategy_fee_per_share,
+                "min_per_trade": config.strategy_fee_min_per_trade,
+            },
+            "slippage": {"spread_fraction": config.strategy_slippage_spread_fraction},
+            "dollars_per_r": config.strategy_dollars_per_r,
+        },
+        "cells": {
+            SPLIT_TRAIN: [_ledger_cell(cell, SPLIT_TRAIN) for cell in report[SPLIT_TRAIN]["cells"]],
+            SPLIT_HOLDOUT: [_ledger_cell(cell, SPLIT_HOLDOUT) for cell in report[SPLIT_HOLDOUT]["cells"]],
+        },
+        "created_wall_ts": now,
+        "created_utc": _iso_utc(now),
+    }
+    store.append_pnl_ledger_row(
+        PnlLedgerRecord(enhancement_id=enhancement_id, payload=row, created_wall_ts=now)
+    )
+    return row
+
+
 # --- the ONE serving read (REST, markdown, and — via the route — MCP all consume this) -------------
 
 
@@ -224,6 +331,53 @@ def _ddmmyyyy(created_utc: str) -> str:
     return datetime.fromisoformat(created_utc.replace("Z", "+00:00")).strftime("%d-%m-%Y")
 
 
+def _render_strategy_comparison_row_lines(row: dict, index: int) -> list[str]:
+    """The era-5B J-08 rendering branch for a ``_KIND_STRATEGY_COMPARISON`` row — a per-cell
+    table (strategy x class x side x reaction x feed) for each split, mirroring the EXISTING
+    two-way row's table shape (one line per measurement, net R beside net $ beside n beside its
+    sample label) but WITHOUT a ``side`` column (there is no baseline/candidate distinction here —
+    ``strategy_id`` already carries that role, comparing all three registered strategies
+    side-by-side)."""
+    lines = [
+        f"## {index}. {row['title']}",
+        "",
+        f"- Enhancement id: `{row['enhancement_id']}`",
+        f"- Appended (UTC): {_ddmmyyyy(row['created_utc'])}",
+        f"- Config fingerprint `{row['config_fingerprint']}`",
+        f"- Register: {row['register']}",
+        f"- Assumptions: fees `{row['assumptions']['fees']['per_share']}`/share (minimum "
+        f"`{row['assumptions']['fees']['min_per_trade']}`/trade) · slippage "
+        f"`{row['assumptions']['slippage']['spread_fraction']}` of spread · "
+        f"`{row['assumptions']['dollars_per_r']}` per R",
+        "- Three-way strategy comparison (`v1` / `structure_tape` / `structure_tape_map`) — "
+        "train and hold-out separate, feeds never pooled.",
+        "",
+    ]
+    min_n = row["pnl_min_sample_size"]
+    for split in (SPLIT_TRAIN, SPLIT_HOLDOUT):
+        cells = row["cells"][split]
+        lines += [f"### {split}", ""]
+        if not cells:
+            lines += ["No cells for this split.", ""]
+            continue
+        lines += [
+            "| strategy | class | side | reaction | feed | net R | net $ | n | sample |",
+            "|----------|-------|------|----------|------|------:|------:|--:|--------|",
+        ]
+        for cell in cells:
+            measurement = cell["measurement"]
+            label = (
+                f"insufficient sample (n < {min_n})" if cell["insufficient_sample"] else "ok"
+            )
+            lines.append(
+                f"| {cell['strategy_id']} | {cell['band_class']} | {cell['band_side']} | "
+                f"{cell['reaction']} | {cell['feed']} | {measurement['net_r']} | "
+                f"{measurement['net_usd']} | {measurement['n']} | {label} |"
+            )
+        lines.append("")
+    return lines
+
+
 def render_history_markdown(store: JournalStore, config: Config) -> str:
     """Render the ledger to markdown — a PURE function of the stored rows via the SAME
     ``ledger_projection`` read the route serves (never a second query or labeling path).
@@ -253,6 +407,9 @@ def render_history_markdown(store: JournalStore, config: Config) -> str:
         ]
         return "\n".join(lines)
     for index, row in enumerate(rows, start=1):
+        if row.get("kind") == _KIND_STRATEGY_COMPARISON:
+            lines += _render_strategy_comparison_row_lines(row, index)
+            continue
         provenance = row["provenance"]
         lines += [
             f"## {index}. {row['title']}",

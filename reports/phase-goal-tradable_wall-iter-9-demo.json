@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-tradable_wall-iter-9",
+  "base_url": "http://localhost:3301",
+  "iteration": 9,
+  "default_timeout_ms": 20000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Structure page",
+      "narration": "We start on the Structure page — Tapeology's map of where a stock's price tends to react. Nothing to sign into anywhere in this app.",
+      "point_out": "The page opens straight into a short, clean tradable map rather than a wall of raw levels — that decluttering is the foundation this chapter's new work sits on top of.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Choose a symbol and an as-of time, then Load, to see its tradable level map." }
+    },
+    {
+      "n": 2,
+      "title": "The edge report keeps computing quietly",
+      "narration": "Scrolling down to the Edge Report — the honest scorecard comparing three trading strategies over every recorded price reaction.",
+      "point_out": "This report used to restart its multi-hour computation from scratch on every single visit. Now, once it finishes computing one time, that answer is saved — every later visit, even after a restart, loads in seconds instead of hours. Right now it's still on that very first real run, so what's on screen is its own honest \"still working, nothing faked yet\" state.",
+      "journey": "J-08",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "heading", "name": "Edge Report" } },
+      "expect": { "text": "The v1 / structure_tape / structure_tape_map comparison over recorded event windows" }
+    },
+    {
+      "n": 3,
+      "title": "Enter a symbol",
+      "narration": "Typing AAPL into the Symbol field at the top of the page.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Structure symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 4,
+      "title": "Pick the pinned session",
+      "narration": "Typing in the as-of time for a real AAPL session that tested its own resistance zone.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "As-of (UTC, ISO-8601)" }, "text": "2026-06-22T21:00:00Z" }
+    },
+    {
+      "n": 5,
+      "title": "Load the tradable map",
+      "narration": "Clicking Load turns thousands of raw price levels into a short, ranked list of the ones that actually matter.",
+      "point_out": "The map resolves to a ten-row table, and the top resistance zone lands right around $300-302 — the real Apple wall — ranked Class A, exactly where it should be.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "structure-load-button" } },
+      "expect": { "text": "Map basis (prior completed session close): 2026-06-18T04:00:00.000000Z" }
+    },
+    {
+      "n": 6,
+      "title": "Reveal the full raw levels, on demand",
+      "narration": "The clean map is the default view — clicking \"Show raw levels\" reveals the older, denser picture underneath, for anyone who wants it.",
+      "point_out": "A dense multi-timeframe level chart and a confluence-zones panel appear below — the same underlying level data as before, just tucked behind a toggle instead of leading the page.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "raw-levels-toggle" } },
+      "expect": { "text": "Price chart — S/R levels" }
+    },
+    {
+      "n": 7,
+      "title": "Search the case-study registry",
+      "narration": "Further down the page, every recorded price-zone touch across twelve stocks is browsable and filterable — over 800 real examples. Typing a symbol that doesn't exist proves the filter is real, not decoration.",
+      "point_out": "The table honestly reports no matches for this filter, with a note confirming the registry still has real rows — this combination simply matches none.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "fill", "target": { "testid": "case-studies-filter-symbol" }, "text": "ZZZZNOPE" },
+      "expect": { "text": "No events match these filters." }
+    },
+    {
+      "n": 8,
+      "title": "Clear the filter",
+      "narration": "Clearing the field instantly brings every recorded touch back — this is just filtering data that's already loaded, no new fetch needed.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "testid": "case-studies-filter-symbol" }, "text": "" },
+      "expect": { "target": { "testid": "case-studies-table" } }
+    },
+    {
+      "n": 9,
+      "title": "Back to the live cockpit",
+      "narration": "Moving over to the cockpit — the page traders actually watch while a session is live.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 10,
+      "title": "Watch a simulated ticker",
+      "narration": "Typing in a simulated ticker before clicking Watch.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 11,
+      "title": "Simulated chart, honest empty state",
+      "narration": "The candlestick chart and tape-state markers appear immediately for the simulated ticker.",
+      "point_out": "Directly below the chart, an honest \"No tradable map for SIM-BUYER.\" message shows instead of a fake band — simulated tickers have no real market structure to compare against, and the app says so plainly.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "No tradable map for SIM-BUYER." }
+    },
+    {
+      "n": 12,
+      "title": "Stop watching",
+      "narration": "Stopping the simulated watch before switching over to a real symbol.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Stop watching" } }
+    },
+    {
+      "n": 13,
+      "title": "Switch to Live mode",
+      "narration": "Switching the data source over to Live.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Live" } }
+    },
+    {
+      "n": 14,
+      "title": "Type a real symbol",
+      "narration": "Typing AAPL into the symbol field again, this time for the live feed.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Symbol search" }, "text": "AAPL" }
+    },
+    {
+      "n": 15,
+      "title": "Live mode: its own dedicated view",
+      "narration": "Clicking Watch in Live mode.",
+      "point_out": "The price chart and band overlay from Simulated and Historical modes are completely absent here — Live mode stays a pure real-time tape reader, never anything trade-related.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Watching" }
+    }
+  ]
+}

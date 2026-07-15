@@ -122,3 +122,97 @@ def test_edge_report_route_wired_through_the_existing_get_bar_store_seam():
     assert "Depends(get_bar_store)" in src
     assert "Depends(get_dataset_store)" in src
     assert get_bar_store is routes.get_bar_store
+
+
+# --- The rebuildable result cache (era-5B J-08) — route-level wiring -----------------------------
+
+
+def test_edge_report_route_wired_through_the_new_cache_dependency():
+    """The route depends on the NEW ``get_edge_report_cache`` seam — the identical
+    ``Depends(get_bar_index)`` pattern ``record_bar_series``/``list_bar_series`` already use for
+    their own derived, DI-overridable cache."""
+    import inspect
+
+    from app.research import routes
+
+    src = inspect.getsource(routes.get_edge_report)
+    assert "Depends(get_edge_report_cache)" in src
+    assert "cache=cache" in src
+
+
+def test_edge_report_route_serves_a_warm_result_on_the_second_call_without_recomputing(ctx, monkeypatch):
+    """The end-to-end proof J-08 exists for: TWO real HTTP requests against the SAME running
+    backend, the second of which must never re-enter the expensive computation — proven by
+    counting calls to ``_compute_strategy_comparison_report`` (the ONE real computer), not merely
+    inferring it from response shape."""
+    client, _store, _tmp_path = ctx
+    recorded = client.post(
+        "/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:00:30Z",
+        },
+    )
+    assert recorded.status_code == 200, recorded.text
+
+    from app.research import edge_report as edge_report_module
+
+    calls = []
+    real_compute = edge_report_module._compute_strategy_comparison_report
+
+    def _counting_compute(*args, **kwargs):
+        calls.append(1)
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report_module, "_compute_strategy_comparison_report", _counting_compute)
+
+    first = client.get("/research/edge-report")
+    second = client.get("/research/edge-report")
+
+    assert first.status_code == 200 and second.status_code == 200
+    assert len(calls) == 1  # the SECOND request served entirely from the warm cache
+    assert first.json() == second.json()
+
+
+def test_edge_report_route_response_is_byte_identical_whether_cache_is_cold_or_warm(ctx):
+    client, _store, _tmp_path = ctx
+    recorded = client.post(
+        "/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:00:30Z",
+        },
+    )
+    assert recorded.status_code == 200, recorded.text
+
+    cold = client.get("/research/edge-report")
+    warm = client.get("/research/edge-report")
+
+    assert cold.status_code == 200 and warm.status_code == 200
+    assert json.dumps(cold.json(), sort_keys=True) == json.dumps(warm.json(), sort_keys=True)
+
+
+def test_edge_report_route_cache_db_lives_hermetically_beside_the_test_dataset_dir(ctx):
+    """The ``get_bar_index`` "every existing test gets this hermetically for free" property,
+    proven for the NEW cache seam too: the ``ctx`` fixture only points ``TAPEOLOGY_DATASET_DIR`` at
+    a temp dir (never a dedicated cache env var), yet the cache DB must land inside that SAME temp
+    tree — never the real package-anchored default (which would leak state across test runs)."""
+    client, _store, tmp_path = ctx
+    recorded = client.post(
+        "/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:00:30Z",
+        },
+    )
+    assert recorded.status_code == 200, recorded.text
+
+    response = client.get("/research/edge-report")
+    assert response.status_code == 200
+    assert (tmp_path / "edge_report_cache.db").exists()

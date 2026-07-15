@@ -72,6 +72,7 @@ from .bars import BarStore
 # second R/$/edge formula.
 from .backtests import BacktestJobManager, REGISTER, STATUS_DONE, _aggregate
 from .datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN, parse_utc_epoch
+from .edge_report_cache import EdgeReportCache
 from .setups import compute_setups
 from .store import JournalStore
 
@@ -424,16 +425,49 @@ def _surviving_train_cells(
 
 
 def run_strategy_comparison_report(
+    store: JournalStore,
+    dataset_store: DatasetStore,
+    bar_store: BarStore,
+    config: Config,
+    *,
+    cache: EdgeReportCache | None = None,
+) -> dict:
+    """The public entry point for the 3-way strategy-comparison report (era-5B J-04; ``GET
+    /research/edge-report`` + the MCP ``edge_report`` proxy serve this VERBATIM). See
+    ``_compute_strategy_comparison_report`` below for the full algorithm docstring — this function
+    is now a thin dispatcher over that ONE computation, never a second copy of it.
+
+    era-5B J-08: ``cache`` is an OPTIONAL rebuildable result cache
+    (``edge_report_cache.EdgeReportCache``). ``cache=None`` (the default) is the EXACT pre-J-08
+    behaviour — always calls ``_compute_strategy_comparison_report`` directly, byte-for-byte
+    identical to before — so every EXISTING call site (every test in ``test_edge_report.py``, and
+    any future caller with no cache to offer) is untouched and stays uncached. When a cache IS
+    supplied (the route's DI-wired path — see ``routes.get_edge_report``), this function serves
+    ``_compute_strategy_comparison_report``'s output VERBATIM through it: the cache never
+    re-derives a cell, a measurement, or a null baseline — a miss recomputes byte-identically
+    through the SAME one function below (single source of truth; no second computation path,
+    anywhere)."""
+
+    def compute() -> dict:
+        return _compute_strategy_comparison_report(store, dataset_store, bar_store, config)
+
+    if cache is None:
+        return compute()
+    return cache.get_or_compute(dataset_store, config, compute)
+
+
+def _compute_strategy_comparison_report(
     store: JournalStore, dataset_store: DatasetStore, bar_store: BarStore, config: Config
 ) -> dict:
-    """The ONE computer of the 3-way strategy-comparison report (era-5B J-04; ``GET
-    /research/edge-report`` + the MCP ``edge_report`` proxy serve this VERBATIM). Measures ``v1``,
-    ``structure_tape``, and ``structure_tape_map`` over EVERY registered event-window dataset that
-    resolves an owning, classified scan event, aggregated into per strategy x class x side x
-    reaction x feed cells. Raises ``EdgeReportError`` for a dishonest state (the identical
-    ``_split_datasets`` integrity discipline ``run_edge_report`` uses) — nothing is written by the
-    CALLER in that case. Strictly read-only: promotes nothing, appends no ledger row, moves no
-    champion pointer (see the module docstring)."""
+    """The ONE computer of the 3-way strategy-comparison report (era-5B J-04; renamed from
+    ``run_strategy_comparison_report`` at era-5B J-08 — see that function's own docstring for why:
+    this is the byte-identical pure-compute body, now wrapped by an optional cache rather than
+    called directly). Measures ``v1``, ``structure_tape``, and ``structure_tape_map`` over EVERY
+    registered event-window dataset that resolves an owning, classified scan event, aggregated
+    into per strategy x class x side x reaction x feed cells. Raises ``EdgeReportError`` for a
+    dishonest state (the identical ``_split_datasets`` integrity discipline ``run_edge_report``
+    uses) — nothing is written by the CALLER in that case. Strictly read-only: promotes nothing,
+    appends no ledger row, moves no champion pointer (see the module docstring)."""
     jobs = BacktestJobManager(store, config)
     train_datasets = _split_datasets(dataset_store, SPLIT_TRAIN)
     holdout_datasets = _split_datasets(dataset_store, SPLIT_HOLDOUT)

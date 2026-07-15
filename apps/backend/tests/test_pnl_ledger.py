@@ -43,6 +43,7 @@ from app.research.datasets import DatasetStore
 from app.research.pnl_baseline import seed_founding_row
 from app.research.pnl_ledger import (
     LedgerCompositionError,
+    append_strategy_comparison_row,
     append_validation_row,
     ledger_projection,
     render_history_markdown,
@@ -519,3 +520,230 @@ def test_row_shaping_founding_values_still_move_the_fingerprint():
     # the fingerprint (the never-pool honesty mechanism) — the exclusion above is not a blanket.
     base = Config().config_fingerprint()
     assert Config(pnl_founding_enhancement_id="other-id").config_fingerprint() != base
+
+
+# ==================================================================================================
+# The 3-way strategy-comparison append (era-5B J-08) — ``append_strategy_comparison_row``. Every
+# test above this marker exercises ``append_validation_row``/the two-way row shape UNMODIFIED —
+# proof by construction that writer (and its row shape) is byte-for-byte untouched. This section
+# feeds ``append_strategy_comparison_row`` a HAND-BUILT, report-shaped dict (the
+# ``test_edge_report.py`` ``_cell()`` / ``test_surviving_train_cells_...`` precedent: what is under
+# test here is the COMPOSITION/labeling logic, never PnL math, which is already exhaustively
+# proven in ``test_edge_report.py``) — never the committed ``reports/pnl/pnl-history.md`` file,
+# which every test below writes to an explicit ``tmp_path`` target instead.
+# ==================================================================================================
+
+
+def _comparison_cell(
+    strategy_id: str, band_class: str, band_side: str, reaction: str, feed: str,
+    *, n: int, net_r: float, net_usd: float, null_net_r: float = -1.0, null_net_usd: float = -100.0,
+) -> dict:
+    return {
+        "strategy_id": strategy_id,
+        "band_class": band_class,
+        "band_side": band_side,
+        "reaction": reaction,
+        "feed": feed,
+        "dataset_ids": ["ds-1"],
+        "measurement": {
+            "n": n, "gross_r": net_r, "net_r": net_r, "gross_usd": net_usd, "net_usd": net_usd,
+            "win_rate": 1.0 if n else None, "max_drawdown_r": 0.0 if n else None,
+        },
+        "null_baseline": {
+            "n": 100, "gross_r": null_net_r, "net_r": null_net_r, "gross_usd": null_net_usd,
+            "net_usd": null_net_usd, "win_rate": 0.4, "max_drawdown_r": 1.0,
+        },
+        "insufficient_sample": n < CONFIG.pnl_min_sample_size,
+    }
+
+
+def _comparison_report(train_cells: list[dict], holdout_cells: list[dict]) -> dict:
+    """A hand-built ``run_strategy_comparison_report``-SHAPED dict — never a real backtest sweep;
+    see this section's own header comment for why this is a legitimate, precedented technique for
+    testing composition logic in isolation."""
+    return {
+        "register": REGISTER,
+        "pnl_min_sample_size": CONFIG.pnl_min_sample_size,
+        "train": {"cells": train_cells},
+        "holdout": {"cells": holdout_cells},
+        "surviving_train_cells": [],
+    }
+
+
+def test_append_strategy_comparison_row_composes_cells_verbatim_with_basis_added(fresh_store):
+    train_cell = _comparison_cell("v1", "A", "resistance", "broke", "sim", n=6, net_r=3.0, net_usd=300.0)
+    holdout_cell = _comparison_cell(
+        "structure_tape_map", "B", "support", "rejected", "iex", n=2, net_r=-0.5, net_usd=-50.0
+    )
+    report = _comparison_report([train_cell], [holdout_cell])
+
+    row = append_strategy_comparison_row(
+        fresh_store, CONFIG, enhancement_id="e-3way", title="3-way test", report=report
+    )
+
+    assert fresh_store.get_pnl_ledger_row("e-3way").payload == row  # served-verbatim
+    assert row["kind"] == "strategy_comparison"
+    assert row["register"] == REGISTER
+    assert row["pnl_min_sample_size"] == CONFIG.pnl_min_sample_size
+    assert row["config_fingerprint"] == CONFIG.config_fingerprint()
+    assert row["assumptions"] == {
+        "fees": {
+            "per_share": CONFIG.strategy_fee_per_share,
+            "min_per_trade": CONFIG.strategy_fee_min_per_trade,
+        },
+        "slippage": {"spread_fraction": CONFIG.strategy_slippage_spread_fraction},
+        "dollars_per_r": CONFIG.strategy_dollars_per_r,
+    }
+    (train_out,) = row["cells"]["train"]
+    (holdout_out,) = row["cells"]["holdout"]
+    # Every source field survives verbatim, PLUS the added `basis`.
+    assert train_out == {**train_cell, "basis": "train"}
+    assert holdout_out == {**holdout_cell, "basis": "holdout"}
+    # measurement/null_baseline/insufficient_sample are the SOURCE cell's own values, unchanged.
+    assert train_out["measurement"]["net_r"] == 3.0
+    assert train_out["insufficient_sample"] is False  # n=6 >= 5
+    assert holdout_out["insufficient_sample"] is True  # n=2 < 5
+    assert holdout_out["null_baseline"]["net_r"] == -1.0
+
+
+def test_append_never_pools_train_and_holdout(fresh_store):
+    train_cell = _comparison_cell("v1", "A", "resistance", "broke", "sim", n=6, net_r=1.0, net_usd=100.0)
+    holdout_cell = _comparison_cell("v1", "A", "resistance", "broke", "sim", n=6, net_r=2.0, net_usd=200.0)
+    report = _comparison_report([train_cell], [holdout_cell])
+
+    row = append_strategy_comparison_row(
+        fresh_store, CONFIG, enhancement_id="e-split", title="split test", report=report
+    )
+
+    assert len(row["cells"]["train"]) == 1
+    assert len(row["cells"]["holdout"]) == 1
+    assert row["cells"]["train"][0]["measurement"]["net_r"] == 1.0
+    assert row["cells"]["holdout"][0]["measurement"]["net_r"] == 2.0  # NEVER summed/averaged
+    assert "cells" not in row or set(row["cells"].keys()) == {"train", "holdout"}  # no pooled 3rd key
+
+
+def test_append_never_pools_feeds(fresh_store):
+    sim_cell = _comparison_cell("v1", "A", "resistance", "broke", "sim", n=6, net_r=1.0, net_usd=100.0)
+    iex_cell = _comparison_cell("v1", "A", "resistance", "broke", "iex", n=6, net_r=9.0, net_usd=900.0)
+    report = _comparison_report([sim_cell, iex_cell], [])
+
+    row = append_strategy_comparison_row(
+        fresh_store, CONFIG, enhancement_id="e-feeds", title="feed test", report=report
+    )
+
+    assert len(row["cells"]["train"]) == 2  # two DISTINCT entries — never merged
+    feeds = {c["feed"]: c["measurement"]["net_r"] for c in row["cells"]["train"]}
+    assert feeds == {"sim": 1.0, "iex": 9.0}
+
+
+def test_append_refuses_a_report_missing_a_split_section(fresh_store):
+    malformed = {"register": REGISTER, "pnl_min_sample_size": 5, "train": {"cells": []}}  # no "holdout"
+    with pytest.raises(LedgerCompositionError, match="holdout"):
+        append_strategy_comparison_row(
+            fresh_store, CONFIG, enhancement_id="e-bad", title="bad", report=malformed
+        )
+    assert fresh_store.list_pnl_ledger() == []  # nothing appended on the honest refusal
+
+
+def test_append_duplicate_enhancement_id_is_refused(fresh_store):
+    report = _comparison_report([], [])
+    append_strategy_comparison_row(fresh_store, CONFIG, enhancement_id="e-dup3", title="t", report=report)
+    with pytest.raises(DuplicateEnhancementError):
+        append_strategy_comparison_row(fresh_store, CONFIG, enhancement_id="e-dup3", title="t2", report=report)
+    assert len(fresh_store.list_pnl_ledger()) == 1
+
+
+def test_empty_report_appends_an_honest_all_empty_row(fresh_store):
+    """An all-empty (or, equivalently, all-``insufficient_sample``) comparison report is a VALID
+    outcome to record, never refused — the identical "empty is honest, not an error" discipline
+    ``edge_report.py`` itself already establishes for the source report."""
+    report = _comparison_report([], [])
+    row = append_strategy_comparison_row(
+        fresh_store, CONFIG, enhancement_id="e-empty", title="empty", report=report
+    )
+    assert row["cells"] == {"train": [], "holdout": []}
+
+
+# --- projection: the new row shape passes through verbatim, unlabeled --------------------------
+
+
+def test_projection_serves_the_new_row_shape_verbatim_without_baseline_candidate_labeling(fresh_store):
+    """``ledger_projection`` needs NO change for the new row shape (see
+    ``append_strategy_comparison_row``'s own docstring): its per-row ``baseline``/``candidate``
+    labeling loop finds neither key on a NEW row and silently skips both — the row is served
+    exactly as stored, cells' own ``insufficient_sample`` untouched by the projection."""
+    train_cell = _comparison_cell("v1", "A", "resistance", "broke", "sim", n=2, net_r=1.0, net_usd=100.0)
+    report = _comparison_report([train_cell], [])
+    append_strategy_comparison_row(fresh_store, CONFIG, enhancement_id="e-proj", title="t", report=report)
+
+    projection = ledger_projection(fresh_store, CONFIG)
+
+    (row,) = projection["rows"]
+    assert row["kind"] == "strategy_comparison"
+    assert row["cells"]["train"][0]["insufficient_sample"] is True  # n=2 < 5, from the SOURCE cell
+    assert "baseline" not in row and "candidate" not in row
+
+
+# --- markdown: the new branch, and old rows staying byte-identical alongside it -----------------
+
+
+def test_regenerating_markdown_from_an_unchanged_comparison_row_is_a_byte_level_no_op(fresh_store):
+    train_cell = _comparison_cell("v1", "A", "resistance", "broke", "sim", n=6, net_r=1.0, net_usd=100.0)
+    report = _comparison_report([train_cell], [])
+    append_strategy_comparison_row(fresh_store, CONFIG, enhancement_id="e-md3", title="md test", report=report)
+
+    first = render_history_markdown(fresh_store, CONFIG)
+    second = render_history_markdown(fresh_store, CONFIG)
+
+    assert first == second
+    assert "md test" in first
+    assert "strategy" in first and "class" in first  # the new per-cell table header
+
+
+def test_existing_two_way_rows_render_unchanged_alongside_a_new_3way_row(fresh_store, tmp_path):
+    """The critical non-regression proof: an OLD (two-way) row and a NEW (3-way) row in the SAME
+    ledger each render through their OWN branch. Two independent checks:
+      1. the OLD row's rendered SECTION (from its own heading up to the next row's heading) is
+         BYTE-IDENTICAL to what a ledger containing ONLY that old row renders (proving the new
+         branch's mere presence in the source never perturbs the old branch's own output);
+      2. the NEW row's section additionally exists, with its own distinct per-cell table shape.
+    """
+    old_row = _ledger_row("e-old", train_n=5, holdout_n=3)
+    _append(fresh_store, old_row)
+    train_cell = _comparison_cell("v1", "A", "resistance", "broke", "sim", n=6, net_r=1.0, net_usd=100.0)
+    append_strategy_comparison_row(
+        fresh_store, CONFIG, enhancement_id="e-new", title="new 3way", report=_comparison_report([train_cell], [])
+    )
+
+    combined_md = render_history_markdown(fresh_store, CONFIG)
+
+    only_old_store = JournalStore(str(tmp_path / "only-old.db"), CONFIG)
+    try:
+        _append(only_old_store, old_row)
+        only_old_md = render_history_markdown(only_old_store, CONFIG)
+    finally:
+        only_old_store.close()
+
+    # (1) The OLD row's own section renders byte-identically whether or not a NEW row follows it
+    # in the SAME ledger: `only_old_md` (one row only) is everything render_history_markdown
+    # produces for that row; `combined_md` must carry that EXACT text as its prefix, immediately
+    # followed by the new row's own heading (never anything perturbed at the boundary).
+    assert combined_md.startswith(only_old_md)
+    assert combined_md[len(only_old_md):].startswith("\n## 2. new 3way")
+    assert "insufficient sample" in only_old_md  # holdout_n=3 < 5, the OLD label logic unchanged
+    # (2) The NEW row's own section follows, with its own distinct per-cell table shape.
+    assert "## 2. new 3way" in combined_md
+    assert "e-new" in combined_md
+    assert "strategy | class | side | reaction | feed" in combined_md
+
+
+def test_committed_pnl_history_file_is_not_a_default_target_of_these_tests(fresh_store):
+    """A guardrail against accidentally writing the REAL committed file: every test in this
+    section calls ``render_history_markdown`` (pure, in-memory) or, when writing to disk, passes
+    an explicit ``tmp_path`` target — never bare ``write_history_markdown(store, config)``. This
+    test only documents/pins that discipline; it does not itself touch the filesystem."""
+    src = Path(__file__).read_text()
+    # Every call in THIS test module either omits write_history_markdown entirely or passes an
+    # explicit path=... — never the bare two-arg form that would target the committed file.
+    assert "write_history_markdown(fresh_store, CONFIG)\n" not in src
+    assert "write_history_markdown(store, CONFIG)\n" not in src
