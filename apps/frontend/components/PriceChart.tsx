@@ -186,24 +186,34 @@ export function PriceChart({
   // Contract row 13, ALREADY fetched by the poll above — no new fetch) is "the real UTC epoch a
   // watched session's logical time 0 maps to" — a real market epoch for a historical replay, so
   // during e.g. the 2026-06-22 replay this correctly resolves THAT session's own prior-close basis
-  // (2026-06-18) rather than today's. Falls back to the current wall-clock time only before the
-  // first `history` response lands (first paint) or for a SIM ticker (whose synthetic anchor is
-  // moot anyway — SIM-* symbols resolve `no_bar_series_for_symbol` regardless of `as_of`). This is
-  // STILL zero client "which session" math (no-lookahead): `_resolve_basis` (tradability.py) alone
-  // decides the prior session server-side; converting an epoch-seconds field to an ISO string is
-  // the SAME pure unit/format conversion this file already does for candle timestamps above
-  // (`toClock`), never a date computation of "which session."
+  // (2026-06-18) rather than today's. The fetch is DEFERRED — no request issued — until this
+  // anchor resolves: there is NO wall-clock fallback anywhere in this computation. Before the
+  // first `history` response lands (first paint), or while a ticker's window has not yet warmed,
+  // the effect below early-returns and stays in `phase: "loading"` (never `"idle"`, so the
+  // ready-only empty-state/`tradabilityEmpty` logic further down never activates prematurely, and
+  // never a fetch against the browser's wall-clock "now", which would resolve TODAY's basis
+  // instead of the replayed session's own). The next 1s `history` poll tick simply re-runs this
+  // effect once the anchor lands (a SIM ticker still resolves `no_bar_series_for_symbol` once it
+  // does fetch, same as before — deferring the fetch is a no-op for SIM since its anchor is always
+  // non-null). This is STILL zero client "which session" math (no-lookahead): `_resolve_basis`
+  // (tradability.py) alone decides the prior session server-side; converting an epoch-seconds
+  // field to an ISO string is the SAME pure unit/format conversion this file already does for
+  // candle timestamps above (`toClock`), never a date computation of "which session."
   useEffect(() => {
     if (!ticker) {
       setTradabilityState({ phase: "idle", data: null });
       return;
     }
+    if (history?.epoch_anchor == null) {
+      // The watched session's own anchor has not resolved yet — defer the fetch entirely (issue
+      // no request) rather than falling back to wall-clock "now". Stay in "loading", not "idle",
+      // so the ready-only tradabilityEmpty/confluence logic never fires on a stale/absent read.
+      setTradabilityState({ phase: "loading", data: null });
+      return;
+    }
     let cancelled = false;
     setTradabilityState({ phase: "loading", data: null });
-    const asOf =
-      history?.epoch_anchor != null
-        ? new Date(history.epoch_anchor * 1000).toISOString()
-        : new Date().toISOString();
+    const asOf = new Date(history.epoch_anchor * 1000).toISOString();
     fetchTradability(ticker, asOf).then((res) => {
       if (cancelled) return;
       if (res.ok && res.data) {

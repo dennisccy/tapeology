@@ -4,80 +4,80 @@
       "id": "J-01",
       "name": "The tradable level map — from 1,800 levels to <=10 bands",
       "status": "passing",
-      "last_verified_iter": "goal-tradable_wall-iter-7",
-      "last_passing_iter": "goal-tradable_wall-iter-7",
+      "last_verified_iter": "goal-tradable_wall-iter-8",
+      "last_passing_iter": "goal-tradable_wall-iter-8",
       "first_seen_iter": "goal-tradable_wall-iter-0",
-      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-7-evidence/UT-10-structure-tradable-map.png",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-8-evidence/UT-02-result.png",
       "spec_hash": "2b8c0a6189c4f9c8a6bd31211ab262e6fc3b6e2be1a12f64477e118fa4e63931",
-      "note": "Required-still-passing this iter (iter-7, pure-frontend J-06). Re-verified green two ways by the evaluator directly. (1) FROZEN: tradability.py + levels.py ABSENT from the product diff — evaluator ran `git diff --name-only 2bd25627 -- apps/backend/app/` = EMPTY (only untracked new test file test_price_chart_confluence.py); product diff is exactly page.tsx + PriceChart.tsx + types.ts, so config_fingerprint is necessarily frozen at 4d665603569b9dbf (config.py untouched). (2) RENDERED: iter-7 UT-10 (/structure) shows the tradable map with pinned resistance band 300.1700134277344-302.2699890136719 Class A score 153 round (top resistance), map basis 2026-06-18T04:00Z (morning-markup), 10 bands — evaluator opened the screenshot; and the SAME bands (300.17 score 153, 300.05/298.04 score 77) render verbatim on the iter-7 cockpit overlay (UT-03), confirming single-source-of-truth. Spec-hash matches current goal text."
+      "note": "Required-still-passing this iter (iter-8). Backend byte-identical: tradability.py + levels.py ABSENT from the product diff (evaluator ran `git diff --name-only 2ddac049 -- apps/` = exactly PriceChart.tsx + test_price_chart_confluence.py); config_fingerprint independently recomputed to 4d665603569b9dbf. Read path serves MORE real data now but the owning module is unchanged. The pinned resistance band (300.17-302.27, class A, round, quality_score 153.0) renders verbatim on the iter-8 cockpit overlay UT-02 ('R class A · score 153 · round' @300.17, 'score 77' @300.05/298.04) — evaluator opened the screenshot — and the dev live-read GET /research/tradability returned the same pinned band. Spec-hash matches current goal text."
     },
     "J-02": {
       "id": "J-02",
       "name": "The wide scan — a case-study registry across the 12-symbol panel",
       "status": "passing",
-      "last_verified_iter": "goal-tradable_wall-iter-7",
-      "last_passing_iter": "goal-tradable_wall-iter-7",
+      "last_verified_iter": "goal-tradable_wall-iter-8",
+      "last_passing_iter": "goal-tradable_wall-iter-8",
       "first_seen_iter": "goal-tradable_wall-iter-0",
-      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-6-evidence/UT-06-drillin-pinned-event.png",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-8-evidence/UT-06-result.png",
       "spec_hash": "ead37b78df23be6f935035a6684560bd1ddcd99ad11042f234176aed54a43297",
-      "note": "Required-still-passing this iter (iter-7). setups.py ABSENT from the iter-7 product diff (empty apps/backend/app/ diff — evaluator verified), so the registry contract (compute_setups) is byte-identical to iter-6. No cockpit change reads or recomputes setups. Registry CONTRACT carried green from iter-6 (UT-05 801 rows + client filters; UT-06 pinned AAPL 2026-06-22 = rejected, forward returns 78b -0.00462/234b -0.04269). Full suite 1348 passed/7 skipped/0 failed (+9 new frontend-guard tests, none removed). Spec-hash matches current goal text."
+      "note": "Required-still-passing this iter (iter-8). setups.py ABSENT from the product diff (only PriceChart.tsx + test file changed), so compute_setups is byte-identical. Registry re-verified rendered green this iter: iter-8 UT-06 shows the /structure Case Studies registry populated (801 rows across many symbols; Symbol/Reaction filters; the pinned AAPL 2026-06-22 rejected row with negative forward returns; the amber 'truncated horizon' boundary badge intact). Dev live-read GET /research/setups = 801 events across all 12 panel symbols. Full suite 1348 passed/7 skipped/0 failed. Spec-hash matches current goal text."
     },
     "J-03": {
       "id": "J-03",
       "name": "Real tape at the wall — credentialed event-window recording",
-      "status": "partial",
-      "last_verified_iter": "goal-tradable_wall-iter-7",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-tradable_wall-iter-8",
+      "last_passing_iter": "goal-tradable_wall-iter-8",
       "first_seen_iter": "goal-tradable_wall-iter-0",
-      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-6-evidence/UT-06-drillin-pinned-event.png",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-8-evidence/UT-07-result.png",
       "spec_hash": "3b3dd4e4a6fcdef1781f95793bcfb2160d3483f7557f32c26d8166448e63290c",
-      "note": "PARTIAL, unchanged this iter (iter-7 was pure-frontend J-06 and did not touch the recording path — datasets.py absent from the empty backend diff). KEYLESS SUBSTRATE remains unbroken (join path + committed fixture). CREDENTIALED >=10-WINDOW HEADLINE STILL NOT DURABLY MET (hence still partial) — evaluator re-checked the persistent store directly this iter: `ls apps/backend/.data/datasets/` = the SAME 7 datasets, ALL dated Jul 3 (nothing written this session), NO AAPL/panel-symbol window (`grep '\"symbol\": \"AAPL\"'` = none); count 7 < 10, pinned AAPL 06-22 absent. iter-7 QA TC-17 = BLOCKED (Alpaca creds not exercised for RECORDING this run; the credentialed AAPL replay the dev/browser-QA ran reads existing Yahoo bars + sip-feed historical replay, NOT a record_from_source dataset write). OPERATOR-GATED to move partial -> passing: run apps/backend/scripts/record_event_windows.py with Alpaca creds writing to the PERSISTENT .data/datasets store (NOT /tmp — a prior interactive run's 15 datasets were ephemeral and GC'd), then demonstrate the populated pinned-AAPL 06-22 drill-in tape timeline + populated Edge Report cells. This is now the SOLE remaining blocker to GOAL_ACHIEVED (drives the STALLED verdict)."
+      "note": "PARTIAL -> PASSING this iter (iter-8, target journey). The iter-7 STALLED blocker was resolved by OPERATOR ACTION (not a goal edit; spec_hash unchanged so the credentialed acceptance stands). Evaluator INDEPENDENTLY enumerated apps/backend/.data/datasets/ from disk: 18 files, 11 source_kind=historical event-window recordings created 2026-07-15 across 10 distinct panel symbols (AAPL,AMD,AMZN,GOOGL,META,MSFT,NFLX,NVDA,SPY,TSLA), splits 7 train / 4 holdout, EVERY data_feed='sip' (no iex/yahoo pooling), all checksummed, all window_start/end present, 0 tracked by git (gitignored) — EXCEEDS the >=10-window/>=5-symbol/pinned-AAPL headline. Pinned 5c7f1a44 = AAPL 2026-06-22 window 12:30->15:00Z (touch -60/+90 min), feed sip, split train, 555,382 real trades+quotes, checksummed. Pinned drill-in POPULATED TIMELINE verified in a real browser: iter-8 UT-07 (evaluator opened the screenshot) shows AAPL·2026-06-22, band 300.17-302.27 Class A, reaction rejected, forward returns 78b -0.00462/234b -0.04269 (both negative, byte-matching iter-2), and a Tape timeline of 426 dated five-state entries (bid_absorption/buyer_control/seller_control/ask_absorption) — 'No recorded tape for this event.' absent (0 occurrences). Dev independently read GET /research/setups/13e24a2f185b1299 to the SAME 426-entry timeline. Engine/recorder byte-identical (engine/, adapters/, datasets.py absent from diff); no credential (test_no_credential_in_artifacts.py 4/4 + evaluator grep of all 18 dataset bodies CLEAN + scan-report CLEAN); default suite passes keyless via the committed fixture (1348 passed). Every J-03 acceptance clause met with positive, independently-verified evidence. Spec-hash matches current goal text."
     },
     "J-04": {
       "id": "J-04",
       "name": "The edge report — what actually profits, under the existing gates",
       "status": "passing",
-      "last_verified_iter": "goal-tradable_wall-iter-7",
-      "last_passing_iter": "goal-tradable_wall-iter-7",
+      "last_verified_iter": "goal-tradable_wall-iter-8",
+      "last_passing_iter": "goal-tradable_wall-iter-8",
       "first_seen_iter": "goal-tradable_wall-iter-0",
-      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-6-evidence/UT-11-edge-report-empty-state.png",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-8-evidence/UT-12-result.png",
       "spec_hash": "2ff75d9ef80fa726bd75ccfbd419a61b34f87084c16f20174e933ffb1239bb0c",
-      "note": "Required-still-passing this iter (iter-7). edge_report.py + backtests.py + strategies.py + config.py ALL ABSENT from the iter-7 product diff (empty apps/backend/app/ diff — evaluator verified); registry order (v1, structure_tape, structure_tape_map) + champion pointer frozen. config_fingerprint necessarily frozen at 4d665603569b9dbf (config.py untouched). The Edge Report honest all-empty state carried green from iter-6 (UT-11); empty/all-insufficient_sample is a goal-sanctioned valid outcome (only PG datasets persisted, no panel-symbol credentialed data). Credentialed populated-cell enrichment stays operator-gated parallel to J-03. Spec-hash matches current goal text."
+      "note": "Required-still-passing this iter (iter-8). edge_report.py + backtests.py + strategies.py + config.py ALL ABSENT from the product diff; registry order (v1, structure_tape, structure_tape_map) + champion pointer frozen (registry in UT-07 shows champion still v1/default); config_fingerprint frozen at 4d665603569b9dbf. The 3-way edge-report machinery is byte-identical and correct on its keyless core (iter-4 passing bar). With the 11 real credentialed datasets now present, the endpoint genuinely computes over real data (dev cross-checked all 11/11 datasets resolve to classified scan events spanning classes A/B/C, both sides, reactions rejected/broke/chopped, 7 train/4 holdout, all feed=sip) — NOT vacuously empty. NOTE: the fully-rendered populated cells were NOT observed end-to-end this session (GET /research/edge-report is a documented ~10+h uncached compute over ~9.1M ticks; UT-13/14/15 resolved to the test plan's sanctioned loading carve-out, backend verified genuinely computing at 98%+ CPU, not hung). This does NOT regress J-04 and does NOT block GOAL_ACHIEVED: an empty/all-insufficient_sample report is an explicitly goal-sanctioned valid outcome (Success Criterion 5, anti-goal 6), populated cells are not a journey acceptance criterion, and J-05 renders an honest loading state (UT-12). The ~10+h runtime is a real usability limitation flagged for a post-goal caching enhancement (audit B2). Spec-hash matches current goal text."
     },
     "J-05": {
       "id": "J-05",
       "name": "/structure decluttered — the map is the default, the noise is a toggle",
       "status": "passing",
-      "last_verified_iter": "goal-tradable_wall-iter-7",
-      "last_passing_iter": "goal-tradable_wall-iter-7",
+      "last_verified_iter": "goal-tradable_wall-iter-8",
+      "last_passing_iter": "goal-tradable_wall-iter-8",
       "first_seen_iter": "goal-tradable_wall-iter-0",
-      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-7-evidence/UT-10-structure-tradable-map.png",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-8-evidence/UT-06-result.png",
       "spec_hash": "c02116277b50277f2e5f4268f03c7e348bf26199039bd928e94b5ec09bf7d122",
-      "note": "Required-still-passing this iter (iter-7). Directly spot-checked green: evaluator opened iter-7 UT-10 — /structure Tradable Map is STILL the default view (map basis 2026-06-18 morning-markup; pinned band 300.17-302.27 Class A score 153 round; exactly 10 bands = 5 resistance A + 5 support C; 'Show raw levels' toggle present off-by-default). structure/page.tsx + StructureChart.tsx ABSENT from the iter-7 diff (J-05's own files untouched — the only frontend changes are the cockpit's page.tsx/PriceChart.tsx/types.ts), and UT-10 confirmed the cockpit-only testids (confluence-chip / no-tradable-map) do NOT leak onto /structure. Not regressed. Spec-hash matches current goal text."
+      "note": "Required-still-passing this iter (iter-8). Directly spot-checked green: evaluator opened iter-8 UT-06 — /structure LEADS with the Tradable Map (default), 'Show raw levels' toggle present and OFF by default, Case Studies registry populated (801 rows, Symbol/Reaction filters, pinned AAPL 2026-06-22 rejected row, truncated-horizon boundary badge), Edge Report section present (UT-12 shows its honest loading state immediately, no error). structure/page.tsx + StructureChart.tsx ABSENT from the iter-8 diff (J-05's own files untouched; only the cockpit PriceChart.tsx + a backend test changed). Case Studies drill-in now renders the real recorded tape timeline for the pinned case (UT-07) — an enrichment through the same unchanged read path. Not regressed. Spec-hash matches current goal text."
     },
     "J-06": {
       "id": "J-06",
       "name": "Cockpit confluence — bands + tape markers + a descriptive chip",
       "status": "passing",
-      "last_verified_iter": "goal-tradable_wall-iter-7",
-      "last_passing_iter": "goal-tradable_wall-iter-7",
+      "last_verified_iter": "goal-tradable_wall-iter-8",
+      "last_passing_iter": "goal-tradable_wall-iter-8",
       "first_seen_iter": "goal-tradable_wall-iter-0",
-      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-7-evidence/UT-04-confluence-chip.png",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-8-evidence/UT-02-result.png",
       "spec_hash": "f3ef213046e642d7df3f552b7a95d4fff9cf0792ea0058ac4596753b1c338ea7",
-      "note": "FAILING -> PASSING this iter (iter-7, target journey; pure-frontend cockpit overlay + chip). Browser-QA PASS 13/13; evaluator opened four acceptance screenshots directly. UT-03: tradable-band overlay renders on the REAL AAPL 2026-06-22 cockpit historical replay — solid rose R-bands labeled 'R class A · score 153 · round' at 300.17 and 'score 77 · round' at 300.05/298.04, byte-matching GET /research/tradability (as-of resolved to the 2026-06-18 basis via history.epoch_anchor — no client date math, no-lookahead). UT-04: confluence chip fired LIVE and was paused-captured at the pinned ~300 wall reading EXACTLY 'Inside R-band 300.17-302.27 (class A) · tape: Seller Control (breakthrough) · measured history: edge report' with Last 301.06 (inside band) + Tape State 'Seller Control' (breakthrough_states.short) — descriptive, neutral-slate, no imperative/prediction. UT-02: SIM-BUYER shows chart + tape markers + honest 'No tradable map for SIM-BUYER.' empty state, no band, no chip. UT-08: Live mode fully hides the PriceChart (overlay + chip absent) — gate byte-identical. Chip mapping read from served /research/strategies structure_tape_map .rejection_states/.breakthrough_states (no hardcoded tape-state literal — 9 source-inspection tests + coherence COHERENCE-PASS). PASSING on the keyless core (spec's defined bar); the credentialed AAPL tick-RECORDING replay (TC-17) is honestly BLOCKED/operator-gated = J-03's deliverable, does NOT block J-06 (the chip was verified on the keyless historical replay). Non-blocking follow-up carried: review MINOR / audit F1 transient wall-clock as_of fallback (~1s today's-basis bands before epoch_anchor resolves; self-correcting, pinned case unaffected, does not reach the steady-state decision surface) + T1 stale test docstring. Spec-hash matches current goal text."
+      "note": "Required-still-passing this iter (iter-8), re-verified rendered green after the F1 cleanup. Cleanup A (the ONLY frontend change) gates the tradability fetch on history?.epoch_anchor != null, dropping the wall-clock as_of fallback — this STRENGTHENS the no-lookahead / morning-markup rail. Evaluator opened iter-8 UT-02: the AAPL 2026-06-22 cockpit historical replay draws the tradable-band overlay at the correct 06-18-basis ~300 wall ('R class A · score 153 · round' @300.17, 'score 77' @300.05/298.04, byte-matching GET /research/tradability; feed 'SIP (consolidated)' badge; 'Descriptive only — not trading advice'). UT-02 fetch-interceptor captured exactly one /research/tradability request with as_of = the watched session's own anchor (2026-06-22T13:30:00.001Z), never today's wall-clock (2026-07-15) — F1 confirmed, no transient. UT-03 SIM honest 'no tradable map' empty state; UT-04 Live mode fully hides the PriceChart; UT-05 descriptive-only copy (no buy/sell/target/recommend). Chip mapping still read from served /research/strategies (coherence COHERENCE-PASS, zero client recomputation). Not regressed. Spec-hash matches current goal text."
     },
     "J-07": {
       "id": "J-07",
       "name": "The foundation is unchanged (regression sentinel)",
       "status": "already_passing",
-      "last_verified_iter": "goal-tradable_wall-iter-7",
-      "last_passing_iter": "goal-tradable_wall-iter-7",
+      "last_verified_iter": "goal-tradable_wall-iter-8",
+      "last_passing_iter": "goal-tradable_wall-iter-8",
       "first_seen_iter": "goal-tradable_wall-iter-0",
-      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-3-qa.md",
+      "last_evidence_path": "reports/qa/goal-tradable_wall-iter-8-evidence/UT-04-result.png",
       "spec_hash": "a72b60f1255c1c81af6f3248c5fa34761bf218857ac848b20ecb9829a309ddd0",
-      "note": "Required-still-passing this iter (iter-7), re-verified green by the evaluator directly. `git diff --name-only 2bd25627 -- apps/backend/app/` = EMPTY: every frozen foundation (app/engine/, research/datasets.py, levels.py, tradability.py, bars.py, adapters/ incl. Alpaca, strategies.py, edge_report.py, backtests.py, setups.py, config.py, routes.py) ABSENT from the product diff. The only backend addition is the untracked new test file test_price_chart_confluence.py (additive guard tests, no source touched). config_fingerprint necessarily frozen at 4d665603569b9dbf (config.py untouched). Full suite 1348 passed / 7 skipped / 0 failed (+9 vs iter-6's 1339 = the new source-inspection tests; skip count identical; no test deleted or weakened). Reviewer PASS_WITH_NOTES + QA PASS + auditor PASS_WITH_GAPS (B1: backend genuinely untouched, fingerprint confirmed) + coherence COHERENCE-PASS corroborate. scan-report CLEAN; evaluator's own credential grep on the diff empty."
+      "note": "Required-still-passing this iter (iter-8), re-verified green by the evaluator directly. `git diff --name-only 2ddac049 -- apps/` = exactly apps/frontend/components/PriceChart.tsx + apps/backend/tests/test_price_chart_confluence.py — every frozen foundation (app/engine/, research/datasets.py, levels.py, tradability.py, bars.py, adapters/ incl. Alpaca, strategies.py, edge_report.py, backtests.py, setups.py, config.py, routes.py) ABSENT from the product diff. config_fingerprint independently recomputed to 4d665603569b9dbf. Full suite 1348 passed / 7 skipped / 0 failed (identical baseline to iter-7; no test deleted or weakened; the T1 change only realigns a docstring + inverts one assertion to match the shipped F1 behavior, TDD red->green confirmed by dev/reviewer/auditor). Nav unchanged (Cockpit · Journal · Studies · Performance · Structure) — visible intact in UT-02/UT-04/UT-06 screenshots. scan-report CLEAN; coherence COHERENCE-PASS; reviewer PASS_WITH_NOTES + QA PASS + auditor PASS_WITH_GAPS (frozen foundations byte-identical) all corroborate."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-07-15T08:36:45Z"
+  "updated_at": "2026-07-15T17:17:08Z"
 }

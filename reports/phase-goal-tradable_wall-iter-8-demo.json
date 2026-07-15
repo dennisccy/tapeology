@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-tradable_wall-iter-8",
+  "base_url": "http://localhost:3301",
+  "iteration": 8,
+  "default_timeout_ms": 20000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the cockpit",
+      "narration": "We start at Tapeology's live cockpit — there's nothing to sign into, it's ready immediately.",
+      "point_out": "Simulated mode is already selected by default, so you can start watching a ticker right away.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" }
+    },
+    {
+      "n": 2,
+      "title": "Watch a simulated ticker",
+      "narration": "Typing in a simulated ticker and clicking Watch.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "Simulated chart, honest empty state",
+      "narration": "The candlestick chart and tape-state markers appear right away for the simulated ticker.",
+      "point_out": "Directly below the chart, an honest \"No tradable map for SIM-BUYER.\" message shows instead of a fake band — simulated tickers have no real market structure to compare against, and the app says so plainly.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "No tradable map for SIM-BUYER." }
+    },
+    {
+      "n": 4,
+      "title": "Switch to a real historical session",
+      "narration": "Now switching to Historical mode to replay a real trading session — AAPL testing its own $300 resistance level.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Historical" } }
+    },
+    {
+      "n": 5,
+      "title": "Search for AAPL",
+      "narration": "Typing AAPL into the symbol search.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Symbol search" }, "text": "AAPL" }
+    },
+    {
+      "n": 6,
+      "title": "Pick June 22, 2026",
+      "narration": "Typing in the exact date of the pinned resistance test.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Date" }, "text": "22-06-2026" }
+    },
+    {
+      "n": 7,
+      "title": "Use the market-open preset",
+      "narration": "One click fills in the correct trading-session time window.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Open 9:30 ET" } }
+    },
+    {
+      "n": 8,
+      "title": "Replay the real AAPL session",
+      "narration": "Clicking Watch replays this real historical session from its very first candle.",
+      "point_out": "The tradable band overlay is drawn directly on the chart with the correct prior-session basis from the first moment — no flash of today's date first. The chart now waits until it genuinely knows which session it's replaying before it ever asks for bands.",
+      "journey": "J-06",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } }
+    },
+    {
+      "n": 9,
+      "title": "Open the Structure page",
+      "narration": "Moving to the Structure page, where every historical band-touch event is catalogued.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/structure" }
+    },
+    {
+      "n": 10,
+      "title": "Filter Case Studies to AAPL",
+      "narration": "Narrowing the case-study registry down to AAPL's own history.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "testid": "case-studies-filter-symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 11,
+      "title": "The measured edge report",
+      "narration": "Further down the page, the Edge Report compares three trading strategies over every recorded event window — the honest scorecard for whether any of this actually works.",
+      "point_out": "It starts computing automatically the moment the page loads. With the operator's 11 real recorded market-data windows now on the books, this is the first run with real data behind it — though as a genuine, uncached, from-scratch computation it can take hours to fully resolve, so what's captured here is its correctly-started, honestly-loading state, not the final numbers.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "heading", "name": "Edge Report" } },
+      "expect": { "target": { "role": "heading", "name": "Edge Report" } }
+    },
+    {
+      "n": 12,
+      "title": "Open the pinned AAPL case study",
+      "narration": "This row is the pinned AAPL test from June 22, 2026 — a real touch of its ~$300 resistance band, marked rejected. Clicking it starts a genuine replay of the real recorded tick data behind this exact event.",
+      "point_out": "A drill-in panel opens below the table with a loading indicator.",
+      "journey": "J-03",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "text": "2026-06-22" } },
+      "expect": { "text": "Case Studies — drill-in" }
+    },
+    {
+      "n": 13,
+      "title": "Real recorded tape now backs this event",
+      "narration": "Here is that drill-in panel, mid-computation.",
+      "point_out": "The animated loading skeleton confirms a real computation is under way over real recorded tick data, not a synthetic placeholder. It resolves — typically within about fifteen minutes, since nothing here is cached — to a five-state tape timeline of hundreds of real entries tracking buyer control, seller control, and absorption around the touch. This pinned event used to show \"No recorded tape for this event.\"; now it shows the real tape.",
+      "journey": "J-03",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "text": "Case Studies — drill-in" } },
+      "expect": { "text": "Case Studies — drill-in" }
+    },
+    {
+      "n": 14,
+      "title": "Back to the cockpit",
+      "narration": "One last check back at the cockpit, to confirm nothing about live trading data has changed.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" }
+    },
+    {
+      "n": 15,
+      "title": "Confirm Live mode stays untouched",
+      "narration": "Switching to Live mode with a real symbol.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Live" } }
+    },
+    {
+      "n": 16,
+      "title": "Watch AAPL live",
+      "narration": "Typing AAPL into the symbol field again, this time for the live feed.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Symbol search" }, "text": "AAPL" }
+    },
+    {
+      "n": 17,
+      "title": "Live mode: its own dedicated view",
+      "narration": "Live mode always uses its own real-time monitoring view.",
+      "point_out": "The price-chart and band overlay from Simulated and Historical modes are completely absent here — Live mode stays a pure real-time tape reader, never anything trade-related.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Watching" }
+    }
+  ]
+}
