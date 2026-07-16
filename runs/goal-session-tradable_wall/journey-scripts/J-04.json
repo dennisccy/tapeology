@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "journey": "J-04",
+  "name": "The edge report — what actually profits, under the existing gates",
+  "default_timeout_ms": 20000,
+  "steps": [
+    {"n": 1, "journey": "J-04", "action": {"type": "goto", "url": "/structure"}, "expect": {"text": "Structure"}},
+    {"n": 2, "journey": "J-04", "action": {"type": "fill", "target": {"placeholder": "e.g. PG"}, "text": "AAPL"}},
+    {"n": 3, "journey": "J-04", "action": {"type": "fill", "target": {"placeholder": "2026-06-09T21:00:00Z"}, "text": "2026-06-22T21:00:00Z"}},
+    {"n": 4, "journey": "J-04", "action": {"type": "click", "target": {"role": "button", "name": "Load"}}, "expect": {"text": "simulated — assumed fees/slippage — not indicative of live results"}}
+  ]
+}

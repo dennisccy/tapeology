@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-tradable_wall-iter-10",
+  "base_url": "http://localhost:3301",
+  "iteration": 10,
+  "default_timeout_ms": 20000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the cockpit",
+      "narration": "Start at Tapeology's cockpit — the screen for watching any stock's live tape. There's nothing to sign into; it's ready right away.",
+      "point_out": "The data-source control at top-left is already set to Simulated, so there's a ticker ready to watch immediately.",
+      "journey": "",
+      "new": false,
+      "verified": false,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Pick the practice ticker",
+      "narration": "Type SIM-BUYER, the app's built-in practice ticker, into the Ticker field.",
+      "point_out": "The Ticker field now reads SIM-BUYER.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "An honest empty state for a made-up ticker",
+      "narration": "Click Watch. SIM-BUYER is a made-up practice ticker with no real trading history behind it, so there's no real price zone to show for it.",
+      "point_out": "Right below the live chart, a small honest note reads \"No tradable map for SIM-BUYER.\" — the app never invents a price zone that isn't really there.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "No tradable map for SIM-BUYER." }
+    },
+    {
+      "n": 4,
+      "title": "Switch to a real trading day",
+      "narration": "Click Historical to replay a real recorded trading session instead of a simulation.",
+      "point_out": "The controls switch to a real symbol search plus a date and time window.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Historical" } }
+    },
+    {
+      "n": 5,
+      "title": "Search for AAPL",
+      "narration": "Type AAPL into the symbol search.",
+      "point_out": "The Symbol field now reads AAPL.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Symbol search" }, "text": "AAPL" }
+    },
+    {
+      "n": 6,
+      "title": "Pick the pinned session",
+      "narration": "Type in a real June trading day — the session where AAPL tested its own $300 ceiling.",
+      "point_out": "The Date field now reads 22-06-2026.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Date" }, "text": "22-06-2026" }
+    },
+    {
+      "n": 7,
+      "title": "Fill the whole session in one click",
+      "narration": "Click the full-session quick-pick to fill the whole trading day's time window in one click.",
+      "point_out": "The start and end time fields fill in automatically.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Full RTH 9:30–16:00 ET" } }
+    },
+    {
+      "n": 8,
+      "title": "Replay a real AAPL session",
+      "narration": "Click Watch to replay that real session from its first candle.",
+      "point_out": "Real support and resistance lines are drawn directly over the candles near $300 — the same price map the Structure page builds — and where the tape sits right on one of them, a short factual note explains what's happening, never what to trade.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Tape State" }
+    },
+    {
+      "n": 9,
+      "title": "Open Structure — still decluttered",
+      "narration": "Now to the Structure page, where this price map gets researched and studied in depth.",
+      "point_out": "It still opens straight to a short, clean list of price zones by default — the thousands of raw underlying levels stay tucked out of sight until asked for.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Choose a symbol and an as-of time, then Load, to see its tradable level map." }
+    },
+    {
+      "n": 10,
+      "title": "Pick the same stock",
+      "narration": "Type AAPL into the Symbol field.",
+      "point_out": "The Symbol field now reads AAPL.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Structure symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 11,
+      "title": "Pick the same moment",
+      "narration": "Enter that same June session as an as-of time.",
+      "point_out": "The As-of field now reads the chosen date and time.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "testid": "structure-as-of-input" }, "text": "2026-06-22T21:00:00Z" }
+    },
+    {
+      "n": 12,
+      "title": "The short list, not the flood",
+      "narration": "Click Load to build the price map for that exact moment.",
+      "point_out": "Instead of a flood of raw levels, this session boils down to no more than ten price bands — and the $300 zone from the cockpit chart shows up again here, ranked as the single strongest resistance band on the list.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "structure-load-button" } },
+      "expect": { "text": "Map basis (prior completed session close)" }
+    },
+    {
+      "n": 13,
+      "title": "Peek behind the curtain",
+      "narration": "Click \"Show raw levels\" to see the full underlying detail this short list was distilled from.",
+      "point_out": "The original, denser price-level chart and its confluence zones reveal themselves — still there for anyone who wants it, just no longer the first thing anyone sees.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "raw-levels-toggle" } },
+      "expect": { "text": "Confluence zones" }
+    },
+    {
+      "n": 14,
+      "title": "Every recorded band touch, filterable",
+      "narration": "Further down the page, the Case Studies registry lists every recorded touch of a price band across a whole panel of stocks. Typing AAPL narrows it to this stock's own history.",
+      "point_out": "Each row names the band that was touched, whether price got rejected or broke through, and what happened afterward — a real, measured track record.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "fill", "target": { "testid": "case-studies-filter-symbol" }, "text": "AAPL" },
+      "expect": { "target": { "testid": "case-studies-table" } }
+    },
+    {
+      "n": 15,
+      "title": "The edge report finally resolves",
+      "narration": "Scrolling to the Edge Report — the honest scorecard comparing trading strategies over everything ever recorded.",
+      "point_out": "This panel used to sit loading indefinitely, because building it from scratch could take upwards of ten hours. Today it resolves in seconds, and reports the honest truth for what's recorded so far — including saying plainly when nothing yet clears this project's own strict bar for a reportable result, rather than hiding the question.",
+      "journey": "J-08",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "heading", "name": "Edge Report" } },
+      "expect": { "text": "No edge-report cells yet." }
+    }
+  ]
+}

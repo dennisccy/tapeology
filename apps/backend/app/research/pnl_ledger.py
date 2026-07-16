@@ -333,11 +333,15 @@ def _ddmmyyyy(created_utc: str) -> str:
 
 def _render_strategy_comparison_row_lines(row: dict, index: int) -> list[str]:
     """The era-5B J-08 rendering branch for a ``_KIND_STRATEGY_COMPARISON`` row — a per-cell
-    table (strategy x class x side x reaction x feed) for each split, mirroring the EXISTING
+    table (strategy x class x band side x reaction x feed) for each split, mirroring the EXISTING
     two-way row's table shape (one line per measurement, net R beside net $ beside n beside its
-    sample label) but WITHOUT a ``side`` column (there is no baseline/candidate distinction here —
-    ``strategy_id`` already carries that role, comparing all three registered strategies
-    side-by-side)."""
+    sample label) WITH a ``band side`` column (iter-10 rename — the column holds
+    ``cell["band_side"]``, i.e. ``support``/``resistance``). It is labelled ``band side`` rather
+    than the pre-existing two-way row's own ``side`` column (below) specifically to avoid
+    collision: THAT column holds the baseline/candidate role, while THIS column holds a band's
+    support/resistance side — two different meanings that would otherwise share one ambiguous
+    header. ``strategy_id`` carries the three-way comparison role, comparing all three registered
+    strategies side-by-side."""
     lines = [
         f"## {index}. {row['title']}",
         "",
@@ -361,8 +365,8 @@ def _render_strategy_comparison_row_lines(row: dict, index: int) -> list[str]:
             lines += ["No cells for this split.", ""]
             continue
         lines += [
-            "| strategy | class | side | reaction | feed | net R | net $ | n | sample |",
-            "|----------|-------|------|----------|------|------:|------:|--:|--------|",
+            "| strategy | class | band side | reaction | feed | net R | net $ | n | sample |",
+            "|----------|-------|-----------|----------|------|------:|------:|--:|--------|",
         ]
         for cell in cells:
             measurement = cell["measurement"]

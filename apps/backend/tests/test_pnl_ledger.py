@@ -734,7 +734,7 @@ def test_existing_two_way_rows_render_unchanged_alongside_a_new_3way_row(fresh_s
     # (2) The NEW row's own section follows, with its own distinct per-cell table shape.
     assert "## 2. new 3way" in combined_md
     assert "e-new" in combined_md
-    assert "strategy | class | side | reaction | feed" in combined_md
+    assert "strategy | class | band side | reaction | feed" in combined_md
 
 
 def test_committed_pnl_history_file_is_not_a_default_target_of_these_tests(fresh_store):

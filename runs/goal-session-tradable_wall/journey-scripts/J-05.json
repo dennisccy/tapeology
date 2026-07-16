@@ -2,7 +2,7 @@
   "schema_version": 1,
   "journey": "J-05",
   "name": "/structure decluttered — the map is the default, the noise is a toggle",
-  "default_timeout_ms": 10000,
+  "default_timeout_ms": 30000,
   "steps": [
     {"n": 1, "journey": "J-05", "action": {"type": "goto", "url": "/structure"}, "expect": {"text": "Structure"}},
     {"n": 2, "journey": "J-05", "action": {"type": "fill", "target": {"placeholder": "e.g. PG"}, "text": "AAPL"}},

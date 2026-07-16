@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "journey": "J-06",
+  "name": "Cockpit confluence — bands + tape markers + a descriptive chip",
+  "default_timeout_ms": 20000,
+  "steps": [
+    {"n": 1, "journey": "J-06", "action": {"type": "goto", "url": "/"}, "expect": {"text": "No ticker watched"}},
+    {"n": 2, "journey": "J-06", "action": {"type": "fill", "target": {"label": "Symbol search"}, "text": "SIM-BUYER"}},
+    {"n": 3, "journey": "J-06", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "No tradable map for SIM-BUYER."}},
+    {"n": 4, "journey": "J-06", "action": {"type": "click", "target": {"role": "button", "name": "Stop"}}},
+    {"n": 5, "journey": "J-06", "action": {"type": "click", "target": {"role": "button", "name": "Live"}}},
+    {"n": 6, "journey": "J-06", "action": {"type": "fill", "target": {"label": "Symbol search"}, "text": "AAPL"}},
+    {"n": 7, "journey": "J-06", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "market is closed"}},
+    {"n": 8, "journey": "J-06", "action": {"type": "click", "target": {"role": "button", "name": "Historical"}}},
+    {"n": 9, "journey": "J-06", "action": {"type": "fill", "target": {"label": "Symbol search"}, "text": "AAPL"}},
+    {"n": 10, "journey": "J-06", "action": {"type": "fill", "target": {"label": "Date"}, "text": "22-06-2026"}},
+    {"n": 11, "journey": "J-06", "action": {"type": "fill", "target": {"label": "Start time"}, "text": "15:20"}},
+    {"n": 12, "journey": "J-06", "action": {"type": "fill", "target": {"label": "End time"}, "text": "15:21"}},
+    {"n": 13, "journey": "J-06", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Inside R-band 300.17"}}
+  ]
+}

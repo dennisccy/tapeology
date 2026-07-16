@@ -77,7 +77,7 @@ def test_append_and_render_writes_the_new_row_and_regenerates_markdown(tmp_path)
     text = out_path.read_text()
     assert "cli append test" in text
     assert "e-cli-1" in text
-    assert "strategy | class | side | reaction | feed" in text
+    assert "strategy | class | band side | reaction | feed" in text
 
 
 def test_append_and_render_raises_and_writes_nothing_on_a_malformed_report(tmp_path):
