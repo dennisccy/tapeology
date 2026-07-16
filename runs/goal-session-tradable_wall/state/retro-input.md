@@ -6,10 +6,10 @@ scripts/automation/lib/retro_collect.sh — no model wrote this. Counters marked
 
 ## Outcome
 
-- **Terminal status:** STALLED
-- **Final verdict:** STALLED
-- **Iterations used:** 8
-- **Halted at (UTC):** 2026-07-15T08:52:31.549372Z
+- **Terminal status:** GOAL_ACHIEVED
+- **Final verdict:** GOAL_ACHIEVED
+- **Iterations used:** 11
+- **Halted at (UTC):** 2026-07-16T01:18:26.853250Z
 
 ## Verdict sequence
 
@@ -24,6 +24,9 @@ iter 4: CONTINUE
 iter 5: CONTINUE
 iter 6: CONTINUE
 iter 7: STALLED
+iter 8: GOAL_ACHIEVED
+iter 9: CONTINUE
+iter 10: GOAL_ACHIEVED
 ```
 
 ## Agent economics
@@ -100,15 +103,41 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       coherence-auditor            6.1m  calls=1
       pump-wait                  3.7m
       unattributed (glue)      226.0m
-  session: 8 completed iteration(s), mean wall 244.7m
-      total goal-evaluator              89.7m
-      total goal-decomposer             82.6m
-      total iteration-summarizer        66.7m
-      total readme-maintainer           45.9m
-      total coherence-auditor           36.6m
-      total developer                   18.8m
-      total browser-qa-agent            15.0m
-      total reviewer                     5.0m
+  goal-tradable_wall-iter-8  depth=full  verdict=GOAL_ACHIEVED  wall=334.1m
+      goal-evaluator              14.0m  calls=1
+      goal-decomposer             12.5m  calls=1
+      iteration-summarizer         8.1m  calls=1
+      readme-maintainer            5.5m  calls=1
+      coherence-auditor            3.3m  calls=1
+      pump-wait                  1.0m
+      unattributed (glue)      290.7m
+  goal-tradable_wall-iter-9  depth=full  verdict=CONTINUE  wall=266.1m
+      goal-decomposer             26.9m  calls=1
+      goal-evaluator              13.5m  calls=1
+      coherence-auditor            8.0m  calls=1
+      pump-wait                  0.1m
+      unattributed (glue)      217.7m
+  goal-tradable_wall-iter-10  depth=lean  verdict=GOAL_ACHIEVED  wall=171.6m
+      browser-qa-agent            59.4m  calls=1
+      developer                   39.8m  calls=1
+      iteration-summarizer        18.1m  calls=2
+      goal-evaluator              17.3m  calls=1
+      goal-decomposer             10.8m  calls=1
+      readme-maintainer            8.6m  calls=2
+      coherence-auditor            5.8m  calls=1
+      reviewer                     4.0m  calls=1
+      (resume-skipped: coherence-auditor)
+      pump-wait                  4.5m
+      unattributed (glue)        7.8m
+  session: 11 completed iteration(s), mean wall 248.2m
+      total goal-evaluator             134.5m
+      total goal-decomposer            132.8m
+      total iteration-summarizer        93.0m
+      total browser-qa-agent            74.4m
+      total readme-maintainer           60.0m
+      total developer                   58.6m
+      total coherence-auditor           53.7m
+      total reviewer                     9.1m
       halts: STALLED
 ```
 
@@ -123,26 +152,26 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
 Last 20 lines of state/lessons.md:
 
 ```
-**Lesson:** A keyless committed fixture that PREDATES the feature can fail to exercise the feature's populated path under the real config. The J-03-era `datasets_j03/` fixture uses symbol `PG`, which is not in the config-owned 12-symbol panel, so `edge_report.run_strategy_comparison_report` resolves no owning `compute_setups` event for it and returns `cells: []` (a vacuously-empty report) under the shipped panel — the populated all-`insufficient_sample` cell structure had to be proven by a SYNTHETIC companion test (`test_synthetic_scan_join_produces_real_cells_all_insufficient_sample`) that overrides the panel test-locally. This was honestly disclosed (dev Known Issues #2/#6, audit B2) and the goal explicitly blesses an empty report as valid, so J-04 passed on its keyless core — but the ONLY non-empty demonstration is synthetic. General pattern: when a feature's acceptance is "measure over the committed fixture", check that the committed fixture actually PRODUCES the non-degenerate output shape under the real config, not just under a test override; a fixture committed for an earlier journey's narrower need (here J-03's tape-join, which only needed symbol+window containment) may not satisfy a later journey's panel-membership dependency.
-**Applies to:** J-05 (which first RENDERS the edge report — verify it shows populated cells on a real/credentialed panel-symbol dataset, audit B2, not just the empty shape) and any future iter whose acceptance leans on a committed keyless fixture to demonstrate a populated output — confirm the fixture's symbol/shape satisfies the feature's real-config dependencies, or commit a purpose-built panel-symbol fixture.
-
-## iter-5 — 2026-07-15T00:02:18Z
-
-**Verdict:** CONTINUE
-**Lesson:** The B3 fix bounded the ~4m43s full-panel `compute_setups` scan with a process-local, store-checksum-keyed memoization inside `setups.py` (276s cold -> 0.28-0.40s cached across all three consumers) — correct and byte-identical for a single operator, but it carries a real, thrice-flagged (review MINOR / audit GAP / coherence advisory) concurrency edge the current single-request tests do NOT bite: the cache write is two non-atomic dict-key assignments (`_SCAN_CACHE["key"]=key` then `["result"]=result`), so a second concurrent caller landing in that one-bytecode gap on a cold process can read the NEW key paired with the PREVIOUS `None` result -> a possible 500. It is also keyed on `id(config)`, safe only because production shares the one immortal `CONFIG` singleton. Neither bites now (single-operator, single request), but iter-6 is the FIRST caller that fires these endpoints concurrently from a browser page-load against a possibly-cold cache.
-**Applies to:** iter-6's J-05 `/structure` render (a single page-load fires `/setups` + `/setups/{id}` + `/edge-report` — potentially concurrently against a cold B3 cache) and any future concurrent access to the `setups.py` `_SCAN_CACHE`. Close the window with a one-line atomic tuple rebind (`_SCAN_CACHE = (key, result)`) or a `threading.Lock` before/with the browser render; it is hardening, not a single-operator correctness prerequisite. General pattern: an in-process memoization proven only by single-threaded byte-identity/spy tests can hide a torn-read that only appears under the concurrency the NEXT iteration introduces.
-
-## iter-6 — 2026-07-15T03:56:29Z
-
-**Verdict:** CONTINUE
-**Lesson:** The `/structure` Case Studies table renders all 801 matching rows with no pagination/virtualization, making the page 8,000–33,000px tall; the Chrome MCP screenshot tool then produced blank/double-exposed frames at deep scroll offsets, so browser-QA had to verify the Registry (UT-13) and Comparison (UT-14) sections via direct `innerText` DOM extraction instead of pixels. That is a legitimate pass (arguably more precise than a screenshot), NOT a skipped test — but future browser-QA on this page family must expect it and fall back to DOM-text capture for deep-scroll sections. Separately: the test plan's "pinned band = highest score of all 10" reference datum had drifted (support bands now outscore the 153 resistance band on the live store); the actual goal criterion is "top-2 *resistance* bands", which held — anchor acceptance on the goal's structural criterion, not a snapshot's numeric ranking.
-**Applies to:** any iter running browser-QA on `/structure` (esp. iter-7's J-06 cockpit, which shares the render stack) or any iter whose acceptance references a specific numeric rank/score on live, mutable store data.
-
-## iter-7 — 2026-07-15T08:36:45Z
-
-**Verdict:** STALLED
 **Lesson:** When the LAST agent-buildable journey passes, a long-tolerated "operator-gated carry" flips from a non-blocking note into the SOLE remaining blocker — and the verdict flips with it: J-03 stayed `partial` for iters 3-6 as a carry (fine, because J-04/J-05/J-06 were still agent-buildable), but once J-06 passed here the only remaining work was J-03's credentialed recording, whose every unblock path is operator-owned -> STALLED (decision-tree C.2), NOT GOAL_ACHIEVED (partial != passing) or CONTINUE (no agent work left). Also: verify credentialed-headline durability against the artifact, never memory — `ls apps/backend/.data/datasets/` showed the same 7 Jul-3 PG datasets with no AAPL/panel-symbol, contradicting the ambient "J-03 headline MET (15 windows)" note (those datasets went to /tmp and were GC'd).
 **Applies to:** any goal-mode session with an operator-credential-gated journey (here J-03 Alpaca recording) — the moment all keyless/agent-buildable journeys are green, re-evaluate whether the credentialed remainder is now the sole blocker (STALLED-with-options) rather than a carry; and require a persisted, re-openable dataset in the canonical store (not /tmp) before scoring a credentialed headline met.
+
+## iter-8 — 2026-07-15T17:17:08Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The audit lane can be STALE relative to the browser-qa lane. Here the QA agent failed to launch Chrome and SKIPPED all browser tests; the auditor (reading that QA report) wrote PASS_WITH_GAPS with "do not certify J-03 passing on this evidence alone." But the separate browser-qa-agent then ran successfully via a documented Chrome-sharing workaround (attach to an already-listening instance) and delivered the exact missing artifact — UT-07, the pinned AAPL 06-22 drill-in rendering its real 426-entry five-state timeline. The evaluator must open `reports/phase-<iter>-ui-test-results.md` (the browser-qa-agent's own file) directly and not let the audit's characterization of a Chrome-down QA run stand in for it; the audit even pre-stated its condition #1 ("a real browser-QA pass of the pinned drill-in") which that later lane satisfied. Corollary: a long-running honest endpoint (the ~10+h uncached `GET /research/edge-report` over the real ~9.1M-tick corpus) resolving to a "still computing, backend at 98% CPU" carve-out is neither a FAIL nor a GOAL_ACHIEVED-blocker when the goal explicitly sanctions an empty/all-`insufficient_sample` report — but it IS a real usability limitation and the natural next enhancement (add a result cache mirroring `_SCAN_CACHE`).
+**Applies to:** any GOAL_ACHIEVED-candidate iteration where QA reports Chrome/browser infra failure (always check for a separately-dispatched browser-qa-agent result before down-scoring a journey to partial/unknown); any journey whose acceptance is served by an uncached, minutes-to-hours backend computation over a real credentialed corpus.
+
+## iter-9 — 2026-07-15T22:12:56Z
+
+**Verdict:** CONTINUE
+**Lesson:** A proposer-created "make X observable" journey is not met until X is actually OBSERVED — route-level warm-serve tests + unchanged-verified render code do NOT substitute for the browser warm-RENDER the DoD names (J-08's UT-01 showed only the loading skeleton; UT-02 the warm-render headline was SKIPPED, for the 3rd straight iter). The structural trap: browser-QA runs against the shared pipeline backend pointed at the REAL corpus, where a genuine cold ~10h edge-report compute keeps the cache empty the whole session, so the warm render is unreachable by design. An "observability" iteration MUST provision a SCOPED, keyless dataset dir (TAPEOLOGY_DATASET_DIR + TAPEOLOGY_EDGE_REPORT_CACHE_DB) for the browser pass to warm-up in seconds — relying on the real-corpus backend guarantees the loading carve-out recurs.
+**Applies to:** any future iter whose acceptance is "a value/report becomes observable/faster in the UI" and whose real compute is long/credentialed — plan a scoped keyless warm-up for browser-QA, and do not accept unit/route proof as the browser render evidence.
+
+## iter-10 — 2026-07-16T00:26:48Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A deterministic golden-replay of the `/structure` Tradable Map page false-negatives when it runs against the UNSCOPED real-corpus backend: the page's own Edge Report fetch triggers `GET /research/edge-report`'s ~10h/9.1M-tick compute, which CPU-pins the backend and starves the tradability render, so the replay's expected band string (e.g. "300.1700134277344") never appears in time and its screenshot shows only the loading skeleton (exactly what J-05-verify.png captured in iter-10, and the same mode that blocked iters 6/8/9). The evidence that it is a false-negative and not a regression: unchanged render code (zero `apps/frontend/` diff) + a positive counter-screenshot on the scoped/warm backend.
+**Applies to:** any iteration whose regression-replay set includes a `/structure` journey (J-05, and J-01/J-02 when replayed through that page) — the replay lane must be pointed at the scoped-keyless backend (`TAPEOLOGY_DATASET_DIR` fixture + pre-warmed `TAPEOLOGY_EDGE_REPORT_CACHE_DB`), not the pipeline's default real-corpus backend, or its `/structure` steps will false-fail on backend saturation.
 ```
 
 ## Halt context
@@ -151,8 +180,8 @@ session.json halt-relevant fields:
 
 ```json
 {
-  "status": "STALLED",
-  "last_verdict": "STALLED",
+  "status": "GOAL_ACHIEVED",
+  "last_verdict": "GOAL_ACHIEVED",
   "parked_wip_sha": "8c1e7a3"
 }
 ```

@@ -1,7 +1,7 @@
 {
-  "extended": true,
-  "n_new_journeys": 1,
+  "extended": false,
+  "n_new_journeys": 0,
   "n_proposals": 2,
-  "dry": false,
-  "summary": "No vision gaps (all 5 Vision points + 9 Key Capabilities are covered by J-01..J-07); no hold-out survivor is observable (pnl-scan.json absent and the survivor screen GET /research/edge-report never completes at ~10+h uncached), so no profile/strategy promotion is proposable. Promoted J-08 = a rebuildable, dataset-checksum + config_fingerprint keyed result cache for the edge-report backtest sweep (audit B2 / iter-8 lesson: 'the natural next enhancement, mirror _SCAN_CACHE') so the era's central edge report AND the future survivor screen become byte-identically observable; champion untouched. Backlogged enlarge-recorded-window-library (speculative, operator-gated, premature) but did NOT promote it."
+  "dry": true,
+  "summary": "Honest dry-stop: Era-5B complete (J-01..J-08 all passing). No hold-out survivor to screen -- GET /research/edge-report resolves to the goal-sanctioned all-empty report (train.cells:[] / holdout.cells:[]; champion v1 unbeaten at n=1) and the real ~10h corpus compute is operator-gated, so no candidate is screenable. Vision/Key-Capabilities coverage: 0 uncovered claims (all 5 vision items + 9 capabilities map onto J-01..J-08). 2 standing backlog proposals, 0 new/promotable this cycle: edge-report-result-cache already shipped as J-08; enlarge-recorded-window-library stays backlogged (premature -- real report unread -- AND Alpaca-credential/operator-gated; re-propose only after the operator runs the cached real compute and it shows insufficient_sample). era-6 'Referee' statistical gates are an explicit Non-Goal of this era. goal.md untouched; no low-value journey manufactured."
 }
