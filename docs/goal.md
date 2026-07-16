@@ -1,416 +1,494 @@
-# Tapeology — Project Goal (Era 5B — The Tradable Wall: structure × real tape at real levels)
+# Tapeology — Project Goal (Interlude: The Fast Wall — /structure at interactive speed & the operator-run edge report)
 
-> Eras 1–5 are the **foundation** of this goal and MUST NOT regress. Eras 1–2 (tape reading + the research
+> Eras 1–5B are the **foundation** of this goal and MUST NOT regress. Eras 1–2 (tape reading + the research
 > evolution, J-01 – J-68, GOAL_ACHIEVED) are archived at
 > [`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md); the structure-UI interlude at
-> [`docs/goal-archive/goal-2026-07-07.md`](goal-archive/goal-2026-07-07.md); **Era 5 "The Library"** (keyless
-> Yahoo bars + derived SQLite index + the `/structure` fetch control, J-01 – J-06, GOAL_ACHIEVED 2026-07-12) at
+> [`docs/goal-archive/goal-2026-07-07.md`](goal-archive/goal-2026-07-07.md); **Era 5 "The Library"** at
 > [`docs/goal-archive/goal-2026-07-14.md`](goal-archive/goal-2026-07-14.md). Era 3 (the profit-research
-> measurement machine) and Era 4 (the structure-and-tape evolution) are frozen foundation; their records live in
-> git history and in `reports/goal-session-tape_to_profit-delivered.md` and
-> `reports/goal-session-tape_to_profit_support_resistence-delivered.md`.
+> measurement machine), Era 4 (the structure-and-tape evolution), and **Era 5B "The Tradable Wall"
+> (GOAL_ACHIEVED 2026-07-16, session `tradable_wall`, J-01 – J-08)** are frozen foundation; their records live
+> in git history and in `reports/goal-session-tape_to_profit-delivered.md`,
+> `reports/goal-session-tape_to_profit_support_resistence-delivered.md`, and
+> `reports/goal-session-tradable_wall-delivered.md`.
 >
-> **This is Era 5B "The Tradable Wall"** — the **credentialed continuation** of Era 5 (roadmap cards 5.2
-> tick-side and 5.7) fused with the trade-craft question the operator actually asked. The operator now supplies
-> **Alpaca credentials**, unblocking real trade/quote recording for the first time. Deliberately NOT pulled
-> forward: the era-6 "Referee" statistical gates (bootstrap CIs, multiple-testing control) and the `/datasets`
-> library UI (card 5.9) — this era measures with the existing era-3/4 gates.
+> **This chapter is an operator-directed performance interlude, not one of the numbered research eras** (the
+> [`docs/goal-archive/goal-2026-07-07.md`](goal-archive/goal-2026-07-07.md) UI interlude is the precedent). It
+> adds **no research finding and changes no research value** — every number the product serves stays
+> byte-identical. It is *enabling work* for the router
+> ([`docs/research-directions.md`](research-directions.md) Part 5.1): era 6 "Referee" needs the three-way edge
+> report as its input, and that report has **never once completed** on the real corpus — the compute cost
+> era 5B honestly documented is, measured, ~99% redundant recomputation. This interlude removes the waste,
+> makes the sweep an explicit resumable operator act, and makes `/structure` load at interactive speed.
 
 ## Vision
 
-Era 5 filled the library with real bars — and exposed the next honest problem: the structure computed on them
-is **untradable as displayed**. Measured on real data: AAPL as of 2026-06-22 returns **1,800 levels and 212
-confluence zones** (26 A / 13 B / 173 C), every one drawn on the chart; the strongest zone sits at ≈296.9
-while the wall a trader actually saw was **300–302.4** — four daily rejection highs before 06-22 (300.75,
-300.48, 302.07, 300.57), two more after (302.42 on 06-22, 301.64 on 06-23), then a −6% collapse to 275.15 on
-06-25. The signal exists in the data; the product buries it.
+Era 5B filled `.data/` with real ticks (18 registered datasets, 882MB) and shipped the three-way edge report —
+and exposed the next honest problem: **the product cannot serve its own evidence**. Measured on the real
+corpus (2026-07-16, 16-core operator machine):
 
-This era turns structure into something the operator can trade **with the tape**:
+- Opening `/structure` fires `GET /research/edge-report`; with the result cache empty (0 rows — the real
+  compute has never finished) the route **synchronously starts the full backtest sweep inside the page's own
+  request**, with no single-flight guard — every page load piles on another sweep. Observed: the backend
+  worker pinned at 98% CPU for hours after a single page visit, degrading every other endpoint through the
+  GIL, while the Edge Report section spins forever.
+- `GET /research/datasets` takes **31.4s to return 8.6KB of metadata**, because `DatasetStore.list()`
+  re-reads, re-parses, and double-sha256s all 882MB on every call (~30MB/s measured).
+- `GET /research/setups` takes **minutes** when cold: ~456 `compute_tradability` calls, each re-reading and
+  re-hashing all 47 bar files — **~17GB of cumulative re-read observed** for one request — plus O(n²) pivot
+  math; its only cache is one in-process slot wiped by every dev-server reload.
+- The sweep's documented "~10+h" is not real work. Raw engine replay runs at **12,829 events/s** (the whole
+  ~9.1M-event corpus ≈ 12 min per strategy); a `v1` backtest of a 14,241-event dataset takes **1.37s** — but
+  `structure_tape` on the SAME dataset could not finish in 9.3 minutes (**≥400×**), because the arming check
+  re-runs the FULL levels pipeline (including a whole-bar-store re-read + re-hash) **per confirming tick**.
+  Yet levels are a pure function of the as-of bar prefix, which changes only when a bar closes (~100 distinct
+  states per session), and the tradable map's basis is constant per UTC session date.
 
-1. **Distill** — a *tradable level map*: at most a handful of price **bands** per symbol per side, scored for
-   quality (multi-timeframe breadth, daily touch history, recency, round-number confluence — the 300 wall IS a
-   round number) and computed with **morning-markup discipline** (only data through the prior completed
-   session's close), exactly like a trader marking charts before the open.
-2. **Find the examples** — a scanner over the 12-symbol panel's stored 5m bars that finds every historical
-   *band-touch event* and classifies what happened next (rejected / broke / chopped), building a case-study
-   registry with AAPL 22-Jun-2026 ~300 as the pinned ground-truth case.
-3. **Put the tape at the wall** — with the operator's Alpaca credentials, record real trade/quote windows
-   around the best events, replay them through the frozen five-state tape engine, and show what the tape said
-   at each touch (`ask_absorption` into a rejection, `buyer_control` through a break…).
-4. **Measure what profits** — backtest `v1` vs the frozen `structure_tape` vs a new registered
-   `structure_tape_map` (same archetype, armed on the tradable map) over identical recorded windows, and
-   publish an honest edge report: per class × side × reaction cells, n≥5 or `insufficient_sample`,
-   train/hold-out never pooled, null baseline, the full PnL register.
-5. **Surface it where trading happens** — `/structure` defaults to the clean map + case browser + edge report;
-   the **cockpit price chart** overlays the bands next to its existing tape-state markers and shows a
-   **descriptive confluence chip** when price is inside a band and the tape state matches the config-owned
-   rejection/breakthrough mapping — conditions and measured history, never advice.
+This interlude makes the wall fast without moving a single brick:
+
+1. **`/structure` never computes** — `GET /research/edge-report` answers instantly from the durable cache or
+   with an honest "not computed" state; the sweep runs only as an explicit operator act.
+2. **The stores stop re-reading** — verified-content caches (stat-keyed, tamper-safe, rebuildable) end the
+   882MB-per-call and 17GB-per-scan festivals; restarts stop re-paying minutes.
+3. **The sweep stops wasting** — a per-run memo serves the arming checks from the ~100 real level states per
+   session instead of recomputing per tick, byte-identically.
+4. **The compute becomes an operator act** — a single-flight, cancellable, progress-reporting background job
+   (UI button + CLI warmer), **resumable** (durable per-dataset×strategy sub-results) and **parallel**
+   (process pool), so the first-ever completed real edge report costs minutes, not "never" — and a future
+   dataset costs only its own three backtests.
+
+Every accelerator is a **rebuildable derived value, never a source of truth**: deleting any of them loses
+nothing and fabricates nothing, and equivalence tests prove the accelerated outputs byte-identical to fresh
+computes. The measured baselines above are this interlude's ground truth; the deliverable is the same product,
+served at the speed its own honesty deserves.
 
 ## Target Users
 
-- The project owner (a discretionary intraday trader) who wants the handful of levels worth trading — not
-  1,800 — and the tape evidence at those levels, in the cockpit where trades are watched. The operator now
-  supplies **Alpaca credentials** (env-only) for real tick recording.
-- AI dev-chain agents (the goal-mode chain) building and browser-verifying the map, scanner, recordings,
-  report, and both UI surfaces.
+- The project owner (a discretionary intraday trader) whose `/structure` page currently hangs for minutes and
+  whose machine burns hours of CPU per page visit — and who has never yet been able to SEE the real-corpus
+  edge report era 5B built.
+- AI dev-chain agents (the goal-mode chain) building and browser-verifying the fast path, the honest
+  not-computed state, and the operator-run compute.
 
-## Foundation invariants (still law — eras 1–5)
+## Foundation invariants (still law — eras 1–5B)
 
 The era-1–2 constitution ([`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md)), the
-era-3 measurement machine, the era-4 structure stack, and the era-5 keyless bar library remain binding
-verbatim on ALL new code: price-impact-over-aggression; honest uncertainty; **no fabricated data**; single
-source of truth; no magic numbers; provider-agnostic engine; deterministic & reproducible; no secrets in
-source; research read-only over the engine; journal/record integrity; source/feed/`config_fingerprint`
-honesty; the existing surfaces (`/`, `/journal`, `/journal/[id]`, `/studies`, `/performance`, `/structure`)
-stay intact.
+era-3 measurement machine, the era-4 structure stack, the era-5 keyless bar library, and the era-5B tradable
+wall remain binding verbatim on ALL new code: price-impact-over-aggression; honest uncertainty; **no
+fabricated data**; single source of truth; no magic numbers; provider-agnostic engine; deterministic &
+reproducible; no secrets in source; research read-only over the engine; journal/record integrity;
+source/feed/`config_fingerprint` honesty; the existing surfaces (`/`, `/journal`, `/journal/[id]`, `/studies`,
+`/performance`, `/structure`) stay intact.
 
 In addition, these stay **frozen foundation**:
 
-1. The **tape engine** emits its five states (`buyer_control`, `seller_control`, `bid_absorption`,
-   `ask_absorption`, `unclear`) byte-identically under `default`; `config_fingerprint` stays
-   `4d665603569b9dbf` (equivalence-tested). Config additions for this era MUST NOT alter it.
-2. The **structure computations** — `research/levels.py` (raw levels + A/B/C zones, its 5 bps touch and
-   20 bps cluster parameters included), the strategy registry entries `v1` + `structure_tape`, the
-   class-scaled math, the per-class backtest breakdown, and the named-strategy sweep — stay behaviorally
-   byte-identical: identical inputs keep producing identical outputs. `research/backtests.py` and `config.py`
-   may gain **additive** code/entries for `structure_tape_map` only; no existing definition, parameter, or
-   output changes.
-3. The **canonical bar store** (`apps/backend/app/research/bars.py`) and the era-5 layer over it — the Yahoo
-   adapter (`adapters/yahoo.py`), the derived SQLite `bar_index` (a rebuildable cache, never a source of
-   truth), the store-first coordinator, and the `/structure` fetch control + "Yahoo Finance" provenance badge
-   — keep working exactly as shipped.
-4. **`v1`, `default`, `structure_tape`, and the champion pointer are frozen.** New strategy work is a NEW
-   registered definition beside them. The champion moves only through the existing sweep gate on hold-out
-   data; this era may finally feed that gate real data, but it never hand-promotes.
-5. The **Alpaca adapter and its credentialed path** stay byte-identical; this era USES them (recording) and
-   never rewrites them. The **DatasetStore** stays the one owner of recorded tick datasets (append-only,
-   checksummed, splits frozen at registration).
+1. The **tape engine** emits its five states byte-identically under `default`; `config_fingerprint` stays
+   `4d665603569b9dbf` (equivalence-tested). **This interlude adds ZERO `Config` fields** — every new
+   operational knob is an env var + derived sibling path (the `bar_index` / `TAPEOLOGY_BAR_INDEX_DB`
+   precedent), so the fingerprint cannot move.
+2. The **research computations** — `levels.py` (raw levels + A/B/C zones and its parameters),
+   `tradability.py` (the ≤10-band map), `setups.py` (the scan + reactions + forward returns),
+   `edge_report.py` (the three-way cells, gates, null baseline, register), the strategy registry
+   (`v1` + `structure_tape` + `structure_tape_map`), the class-scaled math, and the backtest runner's
+   simulated trades — stay **behaviorally byte-identical: identical inputs keep producing identical
+   outputs.** This interlude changes only *when and how often* they are computed, never *what* they compute.
+3. The **stores** — the JSON `BarStore` and `DatasetStore` file formats, checksums, append-only immutability,
+   and split freezing — are untouched on disk; the verification discipline (a corrupt or tampered file is an
+   explicit error, never silently served) is preserved at every read that loads content.
+4. **`v1`, `default`, `structure_tape`, `structure_tape_map`, and the champion pointer are frozen.** The
+   champion moves only through the existing sweep gate on hold-out data; nothing here promotes.
+5. The **era-5B UI surfaces** — `/structure`'s Tradable Map / Case Studies / Edge Report sections, the raw
+   toggle, the era-5 fetch control + provenance badge, and the cockpit band overlay + confluence chip — keep
+   working exactly as shipped, including the frozen warm-cache texts ("No edge-report cells yet.", the
+   "simulated — assumed fees/slippage — not indicative of live results" register).
+6. The **existing rebuildable accelerators** — the derived `bar_index`, the J-08 `EdgeReportCache`, and the
+   setups `_SCAN_CACHE` discipline — keep their contracts (rebuildable, never a source of truth, loss loses
+   nothing); this interlude extends the same discipline, it never weakens it.
 
 ## Success Criteria
 
-In priority order — honesty and non-regression outrank everything:
+In priority order — honesty and non-regression outrank speed:
 
-1. **Nothing existing regresses.** Full backend suite green, engine equivalence proves byte-identical
-   `default` outputs, `config_fingerprint` stays `4d665603569b9dbf`, frozen strategies/levels/BarStore/Alpaca
-   paths unchanged, every era-1–5 surface keeps working.
-2. **Noise becomes signal on the pinned case.** For AAPL as of the 2026-06-22 session (map basis = the
-   2026-06-18 close), the tradable map has **≤10 bands total**, and a resistance band covering the rejection
-   cluster (containing 300.48 through 302.07, round-number 300 flagged) ranks in the **top 2** resistance
-   bands by quality score — versus the 1,800-level / 212-zone raw output it distills.
-3. **More examples exist.** The scanner finds **≥15 band-touch events across ≥8 of the 12 panel symbols**
-   within the stored 5m window, each with a deterministic reaction classification and forward returns; the
-   pinned AAPL 06-22 event appears as `rejected` with negative forward reaction.
-4. **Real tape is recorded at the walls.** With operator credentials, **≥10 event windows across ≥5 symbols**
-   (including the pinned AAPL 06-22 window) are recorded as registered datasets — append-only, checksummed,
-   feed stamped verbatim, split-frozen — and each event's five-state timeline at the touch is visible.
-5. **The edge report answers the profit question honestly.** `v1` vs `structure_tape` vs `structure_tape_map`
-   on identical recorded windows; per-cell n≥5 or `insufficient_sample`; train/hold-out never pooled; null
-   baseline; the full register. An empty-survivor report is a valid outcome.
-6. **Both surfaces read canonical values verbatim.** `/structure` (map / cases / report) and the cockpit
-   (band overlay + chip) recompute nothing; every displayed value is byte-equal to its owning endpoint.
-7. **The rails hold.** Descriptive language only; no execution path; no lookahead (morning-markup as-of
-   discipline); feeds never pooled; keys never committed.
+1. **Nothing existing regresses.** Full backend suite green (no test deleted or weakened), engine equivalence
+   proves byte-identical `default` outputs, `config_fingerprint` stays `4d665603569b9dbf`, every era-1–5B
+   surface behaves exactly as shipped, and the warm-cache Edge Report render (cells or the honest
+   "No edge-report cells yet." empty state, register visible) is byte-equal to before.
+2. **`/structure` never triggers compute.** `GET /research/edge-report` answers within an interactive budget
+   in every state — a warm cache serves the report verbatim; a cold cache returns an honest, explicit
+   "not computed" payload and **starts nothing**. Opening the page never costs the machine hours (or even
+   seconds) of sweep CPU.
+3. **The heavy reads answer at interactive speed when content is unchanged.** With stores unchanged since the
+   last verified read, `GET /research/datasets` and `GET /research/setups` serve from verified-content caches
+   without re-reading the corpus (proven by zero-re-read spy tests keyless; observed sub-second on the real
+   corpus by the operator), and a backend restart no longer re-pays the 31.4s / minutes cold costs (durable
+   accelerators).
+4. **The first full real edge report completes — as one resumable operator act.** The sweep runs only via the
+   explicit trigger (UI button or CLI warmer): single-flight, cancellable, progress-visible, **resumable**
+   (a killed run re-computes only missing dataset×strategy pairs) and **parallel** (process pool; expected
+   ~10–20 min on the operator's 16-core machine vs never-completing today). Once computed it serves instantly
+   from the durable cache, and the completed three-way comparison is appended to
+   `reports/pnl/pnl-history.md` — closing era-5B J-08's still-outstanding step 3.
+5. **Every accelerator is rebuildable and proven byte-identical.** Deleting any cache/index DB loses nothing
+   (the next read re-verifies/recomputes); determinism and equivalence tests prove cached/memoized/parallel
+   outputs byte-identical to fresh sequential computes; a tampered store file is still detected on every
+   content change.
 
 ## Key Capabilities
 
-Layered strictly on top of the era-1–5 capabilities, which remain unchanged.
+Layered strictly on top of the era-1–5B capabilities, which remain unchanged.
 
-1. **The tradable level map** — new module `apps/backend/app/research/tradability.py`: consumes
-   `compute_levels` output **verbatim** (plus bars for price-scale context), clusters into ≤K bands per side
-   (config-owned cap), scores quality (distinct-timeframe breadth, daily touch count, recency, round-number
-   confluence), inherits each band's A/B/C class from its best member zone (class stays owned by
-   `levels.py`), and enforces prior-session-close as-of discipline. Owned endpoint: `GET /research/tradability`.
-2. **The touch-event scanner + case registry** — new module `apps/backend/app/research/setups.py`: walks each
-   panel symbol's stored 5m bars session by session against that session's morning map; emits band-touch
-   events with deterministic reaction labels (`rejected` / `broke` / `chopped`, config-owned pre-registered
-   definitions) and forward returns; pinned case: AAPL 2026-06-22 at the ~300–302 band. Owned endpoints:
-   `GET /research/setups`, `GET /research/setups/{id}`.
-3. **Event-windowed real tape recording (credentialed)** — the EXISTING recorder (`record_from_source`)
-   records trade/quote windows around top scan events (config-owned padding, e.g. touch −60 min … +90 min)
-   into registered datasets; feed stamp verbatim from the adapter tier (`iex` on free keys — honestly thinner
-   than SIP and labeled as such); a committed fixture slice keeps CI keyless.
-4. **Tape-at-the-wall join** — each recorded event's window replayed through the frozen `TapeEngine`; the
-   five-state timeline and transitions joined onto the event drill-in (engine remains the state owner).
-5. **`structure_tape_map`** — a NEW config-owned registry entry beside frozen `v1`/`structure_tape`: same
-   entry/exit archetype as `structure_tape`, armed on tradable-map bands with the inherited class driving the
-   existing class-scaled stops/rewards/size. Additive arming path in the backtest runner.
-6. **The edge report** — new module `apps/backend/app/research/edge_report.py` aggregating the three
-   strategies' backtests over the recorded windows into per strategy × class × side × reaction cells under
-   the era-3/4 gates. Owned endpoint: `GET /research/edge-report`.
-7. **`/structure` decluttered** — default view = the tradable map (bands on the chart + quality table), with
-   the raw 1,800-level view behind an explicit toggle; a Case Studies browser (registry + per-event drill-in
-   with chart, band, reaction, tape timeline); an Edge Report section. Era-5 fetch control preserved.
-8. **Cockpit confluence** — `PriceChart` overlays the watched symbol's tradable bands (honest empty state for
-   SIM-*/no-bars symbols) beside its existing tape-state markers, and shows a **descriptive confluence chip**
-   when last price is inside a band AND the current tape state matches the config-owned
-   rejection/breakthrough mapping for that side (mapping + labels read from `/research/strategies`).
-9. **MCP read-only proxies** for the new GETs (`tradability`, `setups`, `edge_report`) — byte-identical
-   proxies, read-only, superseding era-5's "no new tool" clause (which was era-scoped).
+1. **Cache-or-honest-absence GET** — `EdgeReportCache` gains `lookup(records, config)` (serve the current
+   key's row, hot-slot then durable, never computing) and `compute_and_publish(...)` (the always-recompute
+   operator path); `edge_report.py` gains `peek_strategy_comparison_report(...)`: store-integrity errors keep
+   raising `EdgeReportError` (the route's explicit 500); a warm key serves the report **verbatim**; an
+   **empty dataset registry still computes inline** (O(1) — zero backtests — preserving the existing
+   empty-registry response shape and MCP byte-identity); a cold key returns the honest not-computed payload.
+   The route swaps one call; the payload's `register` field is read from `backtests.REGISTER`, never a
+   restated literal. Path policy for the cache DB is extracted to one shared resolver
+   (`TAPEOLOGY_EDGE_REPORT_CACHE_DB` env else sibling of the dataset dir — exactly today's rule).
+2. **Verified-content store caches** — `bars.py` and `datasets.py` gain module-level stat-keyed caches of
+   VERIFIED loads: key `(absolute path, st_size, st_mtime_ns)`; a stat match serves the already-verified
+   record with zero I/O; ANY mismatch re-runs the full existing verifier (both checksums); integrity errors
+   are never cached; a ~2s "racy write" guard refuses to cache freshly-written files (same-granularity
+   rewrites can never be served stale); atomic single-slot publish (the `_SCAN_CACHE` read-local-ref
+   discipline). `BarStore` caches meta + rows (6.5MB total; `get`/`list` serve per-row copies so a caller
+   mutation can never poison the cache; `load_bars` builds fresh `RawBar`s). `DatasetStore` caches
+   **metadata ONLY** (882MB of rows never live in RAM) and only for `get()`/`list()` — **`load_events()` and
+   `replay()` keep full verification on every load** (the trust boundary, pinned by tests). A durable sibling
+   **dataset metadata index** (`dataset_index.db`; env `TAPEOLOGY_DATASET_INDEX_DB`; `bar_index.py`'s
+   "derived, rebuildable, owns nothing" shape; meta JSON stored WITHOUT `sort_keys`) makes restarts stop
+   re-paying the 882MB parse.
+3. **The arm memo** — `levels.py` gains `level_change_points(store, symbol)` (the sorted union of every
+   healthy series' bar epochs for the symbol plus each prior-period bar's `epoch + period_seconds` close
+   instant — a conservative superset; between two consecutive change points `compute_levels` is a constant
+   function of `as_of`); `tradability.py` gains `basis_day_key(as_of_epoch)` (its basis resolution is
+   constant per UTC session date). `backtests.py` gains a small per-run `_StructureArmMemo` with
+   `levels_at(as_of)` / `tradability_at(as_of)` (keyed by change-point interval / day key; a miss calls the
+   one canonical owner), built once per `structure_tape` / `structure_tape_map` run and threaded into the
+   arming checks as an optional keyword — collapsing thousands of per-tick recomputes into the ~100 real
+   level states per session, byte-identically.
+4. **The operator-run compute** — new `edge_report_compute.py`: `EdgeReportComputeManager` (registry-scoped
+   like the existing job managers; single-flight; cooperative cancel; an atomic progress snapshot:
+   `{id, state, force, started_utc, finished_utc, error, progress: {phase, backtests_total, backtests_done,
+   backtests_from_cache, current}}`), driving the ONE computer `run_strategy_comparison_report` with new
+   additive keyword-only hooks (`progress=`, `should_abort=`, `sub_cache=`, `workers=`, `force=` — all
+   defaulting to today's exact behavior). Routes: `POST /research/edge-report/compute` (idempotent
+   single-flight: a second POST returns the running snapshot with `started: false`),
+   `GET /research/edge-report/compute` (snapshot or `null`), `POST /research/edge-report/compute/cancel`
+   (409 when idle; a cancelled sweep caches no report). A CLI warmer — `python -m
+   app.research.edge_report_compute --workers N [--force] [--out report.json]` — resolves the same seams the
+   backend reads, prints per-backtest progress, is nohup-able, and survives backend restarts because it
+   writes the same durable SQLite caches the GET serves. **No new MCP tool** (MCP stays a read-only proxy
+   surface; the new GET status route is additive REST only).
+5. **The resumable + parallel sweep** — `EdgeReportBacktestCache`: one durable row per (dataset × strategy)
+   result block, keyed by `{dataset_id, dataset_checksum, strategy_id, profile, config_fingerprint,
+   config_content_hash, strategy_registry, bar_store_signature}` — the bar-store term (the sorted
+   `(symbol, timeframe, id, checksum)` tuples `setups._store_signature` already computes) is load-bearing:
+   the structure strategies read bar content per event, and the EXISTING persisted backtest journal rows are
+   NOT a safe resume source precisely because their `config_fingerprint` excludes the
+   `sr_*`/`tradability_*`/`setups_*` families and records no bar content. Values are the runner's `result`
+   blocks verbatim (stored WITHOUT `sort_keys`; the null-baseline seed is the config-owned constant, so a
+   cached block is byte-identical to a re-run by the runner's own documented contract). `_split_cells` gains
+   a `run_pair(dataset_meta, strategy_id)` provider seam (default = today's inline call; pooling and ordering
+   code untouched, so reassembly from cached blocks is byte-identical **by construction**). Each pair
+   publishes durably the moment it completes → a killed sweep resumes with only the missing pairs; a newly
+   recorded dataset costs exactly its own three backtests + reassembly. Parallel mode (CLI `--workers` / env
+   `TAPEOLOGY_EDGE_SWEEP_WORKERS`, default 4, ceiling documented ~6): `ProcessPoolExecutor` with the `spawn`
+   context; **task = one dataset (all three strategies)** so peak memory is bounded to ~one parsed dataset
+   per worker; largest-first (LPT) scheduling by event count; each worker uses a throwaway temp journal DB
+   for job bookkeeping (the report never references backtest ids) and hands results back through the durable
+   sub-cache. Parallelism runs ONLY in the CLI/background job — never inside a request thread.
+6. **The setups durable scan cache** — new `setups_scan_cache.py` (same SQLite shape, env
+   `TAPEOLOGY_SETUPS_CACHE_DB` else a sibling of the bar dir); `compute_setups`' cache key becomes
+   `(config content hash, store signature)` — the content hash reused from `edge_report_cache.py`, replacing
+   the fragile `id(config)` — checked hot-slot → durable → real scan; publish failures never block serving.
+   With capability 2, the remaining cold cost is the O(n²) scan math, paid once per (store, config) content
+   ever instead of on every backend restart.
+7. **The honest not-computed UI state** — `/structure`'s Edge Report section renders the not-computed payload
+   as a distinct panel ("**Edge report not computed yet.**" — deliberately NOT the frozen
+   "No edge-report cells yet." empty-report text, which remains the warm all-empty-cache render) with a
+   **"Compute edge report" button**: POST the trigger, poll the status route with the existing
+   poll-while-active pattern, render `backtests_done / backtests_total` (+ `backtests_from_cache`) verbatim,
+   and on `done` re-fetch the report into the existing `EdgeReportBody`; a `failed` snapshot surfaces its
+   `error` verbatim. Zero client recomputation anywhere.
 
 ## Non-Goals
 
-- **No execution path, ever** — no brokerage/order/trading integration of any kind, real or paper. Recording
-  historical trades/quotes is a read of market data.
-- **No era-6 "Referee" gates yet** — no bootstrap CIs, no multiple-testing control, no new statistical
-  machinery; this era measures with the existing era-3/4 gates. (Era 6 remains the roadmap's next headline.)
-- **No `/datasets` library-management UI** (roadmap card 5.9 stays deferred) and **no bulk full-day panel
-  recording** — recording is event-windowed only (scoped persistence).
-- **No mutation of the frozen raw structure computation** — `levels.py` and its 5 bps / 20 bps parameters stay
-  untouched; the tradable map is a NEW derived layer with its own owner, not a re-tuning.
-- **No ML, no prediction language, no trading advice, no imperative cues** — the chip and every report are
-  descriptive and cite measured history.
-- **No champion hand-promotion** — the pointer moves only if the existing sweep gate promotes on hold-out.
-- **No new nav entry** — the era lives inside `/structure` and the cockpit; no new page.
-- **No live-mode cockpit changes** — the price chart stays hidden in live mode, exactly as today.
-- **No pooling** — `iex`, `sip`, and Yahoo-bar lineages never merge in any analysis cell, report row, or claim.
+- **No research-value change of any kind** — no level/band/reaction/cell/PnL number moves; no parameter
+  re-tuning; no gate, minimum-n, split, or register change. This interlude is pure serving-cost work.
+- **No auto-compute on page load** — visiting `/structure` (or any GET) never starts the sweep; compute is
+  operator-run only (button or CLI). No scheduled/ambient compute either.
+- **No engine hot-loop rewrites** — the TapeEngine replay path and its throughput are untouched; the win
+  comes from removing redundant recomputation, not from micro-optimizing frozen code.
+- **No new Config fields** (the fingerprint is frozen) and **no new runtime dependencies** — stdlib only
+  (`sqlite3`, `concurrent.futures`, `multiprocessing`).
+- **No new nav entries or pages** — the interlude lives inside the existing `/structure` Edge Report section.
+- **No MCP write surface** — MCP tools stay byte-identical read-only GET proxies; the compute trigger is
+  REST-only.
+- **No recording, no new data, no credential work** — the corpus is what era 5B recorded; W1 top-ups remain a
+  separate workstream.
+- **No editing of archived eras' artifacts** — `docs/goal-archive/`, the era-5B journey scripts under
+  `runs/goal-session-tradable_wall/`, and `reports/goal-session-*-delivered.md` are read-only history.
 
 ## Constraints
 
 - **Stack (carried over):** Frontend Next.js 15 + TypeScript + Tailwind v3 (npm), `lightweight-charts`,
   dark-only. Backend Python 3.12 + FastAPI. Backend `http://localhost:8000`, frontend
-  `http://localhost:3000`. Sim tickers stay keyless. No new runtime dependency.
-- **Credentials discipline:** Alpaca keys live ONLY in the operator's environment (the existing adapter's
-  variables); never committed, never logged, never echoed into artifacts/reports/fixtures. **Operator act
-  required:** J-03 and J-06 verification need the keys configured; without them those journeys honestly
-  report blocked — never simulated.
-- **Feed honesty:** the `feed` stamp comes verbatim from the adapter/key tier. Free-tier historical ticks are
-  `iex` — a thin slice of consolidated volume; every tape-derived surface labels the feed, and nothing
-  equates `iex` with `sip`. Analyses never pool across feeds.
-- **Morning-markup as-of discipline:** the tradable map used for any session's events, chips, or UI derives
-  ONLY from bars fully completed by the prior session's close (e.g. the 2026-06-22 map derives from
-  2026-06-18 — 06-19 was a market holiday). No forming-bar data enters a map, an event, or a chip.
-- **Recording discipline:** recording is an explicit, logged, event-windowed act around registered scan
-  events with config-owned padding; no ambient or scheduled recording; datasets append-only, checksummed,
-  splits frozen at registration (config-owned seeded rule).
-- **Config-owned everything:** the 12-symbol panel (`AAPL MSFT NVDA TSLA AMZN GOOGL META AMD NFLX SPY QQQ
-  JPM`), band cap K, band-width scaling, quality-score weights, reaction definitions, forward-return
-  horizons, recording padding, and split rule are config-owned constants — **pre-registered before
-  measurement, no magic numbers, no post-hoc tuning to manufacture survivors.**
-- **PnL honesty register (unchanged):** a $ never without its R, n, fee/slippage assumptions, basis
-  (train/hold-out/forward), null baseline, and the visible "simulated — not indicative of live results"
-  register; sub-minimum-n results labelled `insufficient_sample`; train and hold-out never pooled.
-- **UI read discipline:** both pages read canonical endpoints (`/research/tradability`, `/research/setups`,
-  `/research/edge-report`, `/research/bars`, `/research/levels`, `/research/strategies`, `/research/taxonomy`,
-  `/tape/{ticker}/history`, `/meta/ui-routes`) and render values **verbatim**. The chip's condition is a
-  display conjunction of two canonical values (price-in-band × mapped tape state); its mapping and labels are
-  read from `/research/strategies` — never client-hardcoded. Zero client recomputation of scores, classes,
-  reactions, PnL, or provenance.
-- **Test discipline:** the default suite stays hermetic and keyless — `FakeAdapter` injection, the existing
-  committed fixtures, plus ONE new small committed tick-fixture slice for the tape-at-the-wall path; live
-  Yahoo fetch and credentialed Alpaca recording run only under the `integration` marker
-  (`TAPEOLOGY_LIVE_INTEGRATION=1`) or as explicit operator-run steps.
-- **MCP read-only discipline:** the MCP server stays a byte-identical read-only proxy of GET endpoints; the
-  only additions are proxies of the new GETs.
+  `http://localhost:3000`. No new runtime dependency.
+- **Fingerprint discipline:** `config_fingerprint` stays `4d665603569b9dbf`; all new knobs/paths are env vars
+  with derived sibling defaults (`TAPEOLOGY_DATASET_INDEX_DB`, `TAPEOLOGY_SETUPS_CACHE_DB`,
+  `TAPEOLOGY_EDGE_SWEEP_CACHE_DB`, `TAPEOLOGY_EDGE_SWEEP_WORKERS`) — the `get_bar_index` /
+  `get_edge_report_cache` resolution pattern, dependency-injectable and hermetic in tests.
+- **Byte-identity discipline:** every persisted cache value (edge report, sub-results, dataset metadata, scan
+  results) is stored `json.dumps` **WITHOUT `sort_keys`** so a durable-cache-served response is byte-identical
+  to a fresh compute's response (the existing `EdgeReportCache._insert` rule; REST↔MCP raw-byte proxy tests
+  enforce it). Determinism/equivalence tests accompany every accelerator.
+- **Verification trust boundary:** stat-keyed caches serve only content that WAS fully verified, keyed by
+  `(path, size, mtime_ns)`, with the ~2s racy-write guard and integrity-errors-never-cached; any stat change
+  re-verifies fully; `DatasetStore.load_events()`/`replay()` (the paths that feed research values) verify
+  fully on EVERY load, cache or no cache. Store docstrings are updated to state exactly this ("re-verified on
+  every content change"), and tests pin both sides of the boundary.
+- **Source-introspection guard tests (existing; the dev agent MUST respect them, never edit them):**
+  `tests/test_backtests.py:1500-1508` forbids the level-internal substrings (`_swing_pivots`,
+  `_prior_period_extremes`, `_cluster_levels`, `_grade_zone`) anywhere in `backtests.py` — hence the
+  change-point helper lives in `levels.py` and the memo methods are named `levels_at`/`tradability_at`;
+  `tests/test_backtests.py:932-943` requires `compute_tradability(` present and `compute_levels(` absent in
+  the map-arm source; `tests/test_setups.py:995-1017` requires exactly ONE `_SCAN_CACHE = (key, result)`
+  rebind; `tests/test_setups.py:758-771` forbids the substring "dataset" inside the scan functions;
+  `tests/test_edge_report_api.py:114-141` pins the route's `Depends` set and the literal `cache=cache` kwarg.
+- **Concurrency discipline:** in-process caches publish complete immutable tuples atomically
+  (read-local-reference-before-inspect — the iter-6 `_SCAN_CACHE` hardening); durable writes are single
+  atomic transactions over short-lived connections (WAL + busy_timeout — the `JournalStore._read_conn`
+  precedent); the compute manager is single-flight; a concurrent miss only ever costs a redundant,
+  harmless, byte-identical recompute.
+- **Test discipline:** the default suite stays hermetic and keyless — committed fixtures only; no test
+  deleted or weakened; counting-spy tests prove zero re-reads; tamper tests prove detection survives the
+  caches; the real-corpus timings and the full real compute are operator-run verifications, never CI gates.
+- **UI read discipline:** `/structure` renders endpoint values verbatim — the not-computed `detail`, the
+  progress counts, the report cells, and the register string are all server-owned; zero client recomputation.
 
 ## Design Direction
 
-Unchanged from eras 4–5: dark-only, dense, professional, terminal-grade; `lightweight-charts` overlays
-(price lines/areas for bands); no marketing gloss; honest empty/degraded states are first-class UI.
+Unchanged from eras 4–5B: dark-only, dense, professional, terminal-grade; honest empty/degraded states are
+first-class UI. The not-computed panel and compute progress reuse the existing panel/empty-state/poll
+patterns — no new visual language.
 
 ## Product Shape
 
 Nav (top bar) is unchanged: **Cockpit `/` · Journal `/journal` (+ `/journal/[id]`) · Studies `/studies` ·
-Performance `/performance` · Structure `/structure`**. Inside `/structure`: **Tradable Map (default) · Case
-Studies · Edge Report** sections (era-5 fetch control preserved). The cockpit `PriceChart` gains the band
-overlay + confluence chip.
+Performance `/performance` · Structure `/structure`**. Inside `/structure`, the existing **Tradable Map ·
+Case Studies · Edge Report** sections are unchanged except the Edge Report section, which gains the honest
+not-computed state, the "Compute edge report" button, and the progress line.
 
-**Data Contract (canonical values):** new owned values, each with exactly one owner:
+**Data Contract (canonical values):** additions, each with exactly one owner:
 
-- **Tradable level map** (bands: price range, side, quality score, member refs, round-number flag, inherited
-  class) — owned by `research/tradability.py`; read via `GET /research/tradability`. Band **class** is a
-  projection of the member zones' A/B/C (class itself stays owned by `research/levels.py`).
-- **Touch events + reactions + forward returns + case registry** — owned by `research/setups.py`; read via
-  `GET /research/setups` and `GET /research/setups/{id}` (drill-in includes the tape timeline for recorded
-  events; tape **states** remain owned by the frozen engine replay).
-- **Edge-report cells** — owned by `research/edge_report.py`; read via `GET /research/edge-report`.
-- **`structure_tape_map` definition + the chip's rejection/breakthrough state mapping** — config-owned; read
-  via `GET /research/strategies`.
-- **Recorded tick datasets** — owned by the existing `DatasetStore` (append-only, checksummed, split-frozen);
-  read via `GET /research/datasets`.
-- Raw levels/zones, bar series + checksums, backtest aggregates, PnL ledger, taxonomy labels, UI route map —
-  unchanged existing owners.
+- **The not-computed edge-report payload** (`status: "not_computed"`, `detail`, `dataset_count`, `register`
+  read from the backtests register constant, embedded `compute` snapshot or `null`) — owned by
+  `research/edge_report.py` (`peek_strategy_comparison_report`); read via the EXISTING
+  `GET /research/edge-report` (the `status` key is the discriminator; a real report never carries one). The
+  MCP `edge_report` proxy mirrors whichever payload the route serves, byte-identically, unchanged.
+- **The compute-job snapshot** (state, progress counts, error) — owned by `research/edge_report_compute.py`;
+  read via `GET /research/edge-report/compute`; started/cancelled via the two POST routes. Job state is
+  process-scoped bookkeeping (honestly lost on restart, like the existing job managers) — never a research
+  value.
+- **Rebuildable accelerators (explicitly NOT canonical values; deleting any loses nothing):** the two
+  in-process verified-content store caches; `dataset_index.db`; `setups_scan_cache.db`;
+  `edge_report_backtests.db` (the per-pair sub-results); and the existing `edge_report_cache.db`. Owners
+  remain the stores/computers they accelerate; every one recomputes byte-identically on loss.
+- Everything else — bands, events, cells, ledger, registries, datasets, bars, levels — unchanged existing
+  owners.
 
 ## Must-have user journeys
 
-Journeys **J-01 – J-07** open Era 5B. **Frontend is present** (J-05/J-06 are browser-verifiable). J-03 and
-J-06 carry a `*(Verified with Alpaca credentials configured)*` tag — the credentialed acts are
-operator-gated and honestly report blocked when keys are absent; committed fixtures keep the default suite
-and CI keyless. Natural dependency order: J-01 → J-02 → J-03 → J-04, then J-05/J-06 surface them; **J-07
-guards continuously.** The foundation (eras 1–5) MUST NOT regress.
+Journeys **J-01 – J-07** open the interlude. **Frontend is present** (J-01, J-04, J-06 are
+browser-verifiable). The default suite and CI stay keyless on committed fixtures; the real-corpus timings and
+the first full real compute are operator-run verifications tagged *(operator-verified on the real corpus)* —
+honestly reported blocked/absent when the corpus isn't present, never simulated. Natural dependency order:
+J-01 → J-02 → J-03 → J-04 → J-05, with J-06 riding on J-02's durable index and **J-07 guarding
+continuously.** The foundation (eras 1–5B) MUST NOT regress.
 
-- **J-01: The tradable level map — from 1,800 levels to ≤10 bands**
+- **J-01: Stop the bleeding — `GET /research/edge-report` never computes**
   - Steps:
-    1. Add `apps/backend/app/research/tradability.py`: consume `compute_levels(symbol, as_of)` output
-       verbatim (never re-detect pivots/extremes), cluster levels into price **bands** with a config-owned
-       price-scale-aware width, score each band (distinct-timeframe breadth, daily touch count, recency,
-       round-number confluence), inherit the band class from its best member zone, keep at most K bands per
-       side (config-owned cap, K ≤ 5), and enforce the morning-markup rule: for any `as_of`, use only bars
-       fully completed by the prior session's close.
-    2. Expose `GET /research/tradability?symbol=&as_of=` as the single owner; add the read-only MCP proxy
-       `tradability`; repeat-call determinism (byte-identical JSON for identical requests).
-    3. Pinned case: request AAPL with `as_of` inside the 2026-06-22 session (map basis = the 2026-06-18
-       close, which already contained rejection highs 300.75 / 300.48 / 302.07 / 300.57).
-  - Acceptance: the AAPL 2026-06-22 map has ≤10 bands total; a resistance band containing both 300.48 and
-    302.07 (round-number 300 flagged) ranks in the top 2 resistance bands by quality score; identical
-    requests return byte-identical JSON; REST and the MCP proxy agree byte-for-byte; the map derives from no
-    bar newer than the 2026-06-18 close; `research/levels.py` and its raw output are byte-identical to
-    before. *(Keyless on stored bars; automated.)*
+    1. Add `EdgeReportCache.lookup(records, config)` (derive the existing key; check the hot slot then the
+       durable row; NEVER compute) and `EdgeReportCache.compute_and_publish(dataset_store, config,
+       compute_fn)` (always recompute + republish — the operator/`force` path) beside the untouched
+       `get_or_compute`; extract the DB-path policy (`TAPEOLOGY_EDGE_REPORT_CACHE_DB` env else
+       dataset-dir sibling) into one shared resolver used by the route and (later) the CLI.
+    2. Add `edge_report.peek_strategy_comparison_report(store, dataset_store, bar_store, config, *, cache)`:
+       store-integrity errors raise `EdgeReportError` exactly as today (the route keeps its explicit 500);
+       a warm key returns the cached report **verbatim**; an **empty dataset registry computes inline**
+       (O(1), zero backtests — the existing empty-registry response shape and its MCP byte-identity stay
+       untouched); a cold key returns the honest not-computed payload — `status: "not_computed"`, a
+       `detail` naming the trigger, `dataset_count`, the register string read from the backtests register
+       constant, and the current compute snapshot (or `null`). Rewire `GET /research/edge-report` to call it
+       (same dependency seams, the literal `cache=cache` kwarg preserved).
+    3. On `/structure`, render the not-computed payload as a distinct panel — headline
+       "**Edge report not computed yet.**", the server `detail` verbatim — leaving the frozen warm-cache
+       texts ("No edge-report cells yet.", the register line) byte-identical and reachable.
+  - Acceptance: on a cold cache with a non-empty registry, `GET /research/edge-report` returns the
+    not-computed payload within an interactive budget and a compute-spy proves **zero** sweep/backtest
+    invocations from the GET path; on a warm cache the response is **byte-identical** to a fresh
+    cache-cleared compute of the same store (determinism test); on an empty registry the response keeps
+    today's full report shape; REST and the MCP `edge_report` proxy agree byte-for-byte in every state; the
+    warm scoped-fixture cache still renders "No edge-report cells yet." verbatim in the browser; no journey
+    or test is served by computing inside a GET. *(Keyless; browser-verifiable.)*
 
-- **J-02: The wide scan — a case-study registry across the 12-symbol panel**
+- **J-02: The stores stop re-reading — verified-content caches + the durable dataset index**
   - Steps:
-    1. Fetch panel bars via the existing era-5 Yahoo store-first flow (explicit acts): `1d` (long window),
-       `1h`, `5m` (retention window) for the config-owned 12-symbol panel.
-    2. Add `apps/backend/app/research/setups.py`: for each symbol and each session in the stored 5m window,
-       compute that session's morning map (J-01), detect band-touch events in the session's 5m bars (first
-       touch per band per session, config-owned re-arm rule), classify the reaction deterministically
-       (`rejected` / `broke` / `chopped` — config-owned pre-registered definitions), and record forward
-       returns at config-owned horizons (event-relative, measured strictly after the touch).
-    3. Expose `GET /research/setups` (registry: filterable by symbol / reaction / band class) and
-       `GET /research/setups/{id}` (drill-in); add the read-only MCP proxy `setups`.
-  - Acceptance: the registry contains ≥15 events across ≥8 panel symbols; the AAPL 2026-06-22 event on the
-    ~300–302 band appears with reaction `rejected` and negative forward-return fields; every event's map
-    derives only from data before its session (no lookahead: shifting `as_of` earlier never changes an
-    already-emitted event); identical scans are byte-identical; REST and MCP agree. *(Keyless on stored
-    bars; automated.)*
+    1. `bars.py`: add the module-level stat-keyed verified-record cache (key `(path, st_size, st_mtime_ns)`;
+       hit = zero I/O; miss = the full existing `_load` verifier; integrity errors never cached; the ~2s
+       racy-write guard; atomic tuple publish) and route `get`/`list`/`load_bars` through it — `get`/`list`
+       serving per-row copies, `load_bars` building fresh `RawBar`s from cached rows. Add a public
+       `BarStore.root` property and a test-only cache-reset helper (+ autouse conftest reset).
+    2. `datasets.py`: the same cache for **metadata only**, used ONLY by `get()`/`list()`;
+       `load_events()`/`replay()` keep full verification on every load. Update both stores' docstrings to
+       the honest new contract: "re-verified on every content change (stat-keyed)".
+    3. Add `dataset_index.py` — a durable sibling SQLite metadata index (`dataset_index(path PRIMARY KEY,
+       size, mtime_ns, meta_json, created_utc)`, meta JSON stored without `sort_keys`, `bar_index.py`'s
+       rebuildable-derived-value shape); `DatasetStore` gains keyword-only `index_db_path=None` (default =
+       today's behavior); the route dependency injects `TAPEOLOGY_DATASET_INDEX_DB` else the
+       `.data/dataset_index.db` sibling.
+  - Acceptance: counting-spy tests prove a second `list()` performs **zero file reads** on both stores while
+    content is unchanged, and that a tampered file is still detected (explicit integrity error) after a warm
+    read once its stat changes; a freshly-written file inside the racy window is never served from cache;
+    served bar rows are copies (a caller mutation never leaks back); cache-hit responses are byte-identical
+    to cleared-cache responses (REST and MCP); `load_events`/`replay` fully verify even when the metadata
+    cache is warm (spy test pins the trust boundary); a fresh `DatasetStore` (simulated restart) serves
+    `list()` metadata from the durable index with zero content re-reads, and deleting the index DB merely
+    costs one re-verify pass; `GET /research/datasets` on the real corpus drops from the measured 31.4s to
+    sub-second warm *(operator-verified on the real corpus)*. *(Keyless; automated.)*
 
-- **J-03: Real tape at the wall — credentialed event-window recording**
+- **J-03: The arm memo — per-tick levels recompute becomes ~100 memo hits per session**
   - Steps:
-    1. With operator Alpaca credentials in env, record trade/quote windows around the top-ranked scan events
-       — ≥10 events across ≥5 symbols, ALWAYS including the pinned AAPL 2026-06-22 ~300 test — via the
-       existing `record_from_source` recorder with config-owned padding (touch −60 min … +90 min); each
-       becomes a registered dataset: append-only, checksummed, `feed` stamped verbatim from the adapter tier,
-       split assigned at registration by the config-owned seeded rule.
-    2. Join the tape to each recorded event: replay the window through the frozen `TapeEngine` and attach the
-       five-state timeline (states + transition times around the touch) to `GET /research/setups/{id}`.
-    3. Commit ONE small fixture slice (a short recorded window) under `apps/backend/tests/fixtures/` so the
-       join path is tested keyless in CI; full recording runs under the `integration` marker / as an
-       operator-run step.
-  - Acceptance: ≥10 event-window datasets exist (≥5 symbols, pinned AAPL 06-22 included), each append-only,
-    checksum-verified, honestly feed-stamped, split-frozen at registration; the pinned event's drill-in shows
-    the five-state timeline at the 300-test; the engine and recorder are byte-identical (reused, not
-    modified); no credential appears in any file, log, or artifact; the default suite passes keyless via the
-    committed fixture. *(Verified with Alpaca credentials configured.)*
+    1. `levels.py`: add `level_change_points(store, symbol) -> tuple[float, ...]` — the sorted, deduped
+       union of every healthy series' bar epochs for the symbol plus, for each prior-period-timeframe bar,
+       its `epoch + period_seconds` close instant; document the contract: between two consecutive change
+       points, `compute_levels` is a constant function of `as_of` (a SUPERSET of change points is always
+       safe; a subset never is).
+    2. `tradability.py`: add `basis_day_key(as_of_epoch) -> str` — the UTC session date key, citing the
+       basis resolution's per-date constancy.
+    3. `backtests.py`: add the small per-run `_StructureArmMemo` (`levels_at(as_of)` keyed by
+       `bisect_right(change_points, as_of)`; `tradability_at(as_of)` keyed by the day key; a miss calls the
+       one canonical owner function); build one memo per `structure_tape` / `structure_tape_map` run and
+       thread it into the arming checks as an optional keyword (`memo=None` preserves today's direct-call
+       behavior for existing tests), keeping the literal `compute_tradability(` / `compute_levels(` owner
+       calls in the fallback branch and introducing NO forbidden level-internal names (the guard tests pin
+       both).
+  - Acceptance: memoized `structure_tape` and `structure_tape_map` backtests are **byte-identical** to
+    fresh unmemoized runs on the committed fixtures (sorted-dump equality — the J-08 determinism-test
+    discipline), including a fixture where a daily period closes between bar epochs and one spanning a UTC
+    date boundary (both memo-bust legs proven); a counting spy proves `compute_levels` is called once per
+    change interval instead of per confirming tick; the committed tick-fixture structure backtests complete
+    within an interactive test budget; every existing pinned-value backtest test passes unmodified; the
+    source-introspection guard tests pass unmodified. *(Keyless; automated.)*
 
-- **J-04: The edge report — what actually profits, under the existing gates**
+- **J-04: The operator-run compute — button, background job, CLI warmer**
   - Steps:
-    1. Register `structure_tape_map` as a NEW config-owned strategy beside frozen `v1`/`structure_tape`: the
-       `structure_tape` entry/exit archetype armed on tradable-map bands (band proximity + the config-owned
-       rejection/breakthrough tape-state mapping), the inherited band class driving the existing class-scaled
-       stops/rewards/size. Extend the backtest runner with an additive arming path; existing strategies'
-       outputs stay byte-identical on identical inputs.
-    2. Run backtests for all three strategies over EACH recorded event dataset (levels/map from the bar
-       store, tape from the dataset replay).
-    3. Add `apps/backend/app/research/edge_report.py` + `GET /research/edge-report` (+ MCP proxy
-       `edge_report`): aggregate per strategy × class × side × reaction cells — train cells with hold-out
-       rows separate; each cell carries n, R stats, and $ with the full register; n<5 cells labelled
-       `insufficient_sample`; a null-baseline comparison; a ranked list of surviving train cells with their
-       hold-out status.
-  - Acceptance: the report compares all three strategies on identical data; every $ carries R, n,
-    fee/slippage assumptions, basis, null baseline, and the "simulated — not indicative of live results"
-    register; train and hold-out are never pooled; feeds are never pooled; each cell either has n≥5 or is
-    labelled `insufficient_sample` (an all-insufficient report is a valid outcome); no existing gate,
-    minimum-n, or split rule is weakened; the champion pointer is untouched unless the EXISTING sweep gate
-    independently promotes on hold-out. *(Keyless via the committed fixture; full run credentialed.)*
+    1. Add `edge_report_compute.py`: `EdgeReportComputeManager` — registry-scoped (the existing job-manager
+       home), **single-flight** (a trigger while one is in flight returns the running snapshot,
+       `started: false`), cooperative cancel between backtests, and an atomically-republished progress
+       snapshot (`state`, `backtests_total/done/from_cache`, `current`, `error`). Thread additive
+       keyword-only hooks through the ONE computer (`run_strategy_comparison_report(..., force=, progress=,
+       should_abort=, sub_cache=, workers=)` — every default reproduces today's byte-identical behavior); a
+       cancelled or failed sweep caches nothing (publish only after the compute function returns).
+    2. Add the routes: `POST /research/edge-report/compute` (body `{"force": bool=false}`),
+       `GET /research/edge-report/compute`, `POST /research/edge-report/compute/cancel` (409 when idle) —
+       a subpath, so non-GET verbs on `/research/edge-report` itself stay 405 and **no MCP tool is added**.
+    3. Add the CLI warmer — `python -m app.research.edge_report_compute --workers N [--force] [--out
+       report.json]` — resolving the same env/config seams the backend reads (journal, dataset dir, bar dir,
+       both cache DBs), printing per-backtest progress lines, exiting 0 with a summary; nohup-able and
+       restart-proof (it writes the same durable caches the GET serves). The existing era-3 J-09
+       `edge_report.main()` CLI stays untouched.
+    4. On `/structure`, wire the not-computed panel's **"Compute edge report"** button: POST the trigger,
+       poll the status route with the existing poll-while-active pattern, render the progress counts
+       verbatim, re-fetch the report on `done` (falling into the existing `EdgeReportBody`), surface a
+       `failed` snapshot's `error` verbatim.
+    5. *(Operator-run, real corpus present:)* run the warmer to completion once and append the completed
+       three-way comparison to `reports/pnl/pnl-history.md` via the existing `pnl_history.py` discipline —
+       per split, train/hold-out never pooled, feeds never pooled, every cell carrying n / R / $ /
+       assumptions / basis / null baseline and the register (an all-`insufficient_sample` outcome is valid
+       and still recorded) — closing era-5B J-08 step 3.
+  - Acceptance: a second POST during a run returns the SAME job (`started: false`, single-flight proven);
+    cancel resolves `cancelled` and the caches hold no partial report; `force` recomputes over a warm key
+    and republishes; after `done`, `GET /research/edge-report` serves the report and `/structure` renders it
+    in the existing section (browser-verified: button → progress → cells or the honest empty state);
+    non-GET verbs on `/research/edge-report` stay 405 and the MCP tool list is unchanged; the CLI completes
+    on fixtures, prints progress, and a repeat invocation without `--force` exits fast on the warm key; the
+    pnl-history append happens only from a genuinely completed real compute *(operator-verified on the real
+    corpus)*. *(Keyless via fixtures; browser-verifiable.)*
 
-- **J-05: `/structure` decluttered — the map is the default, the noise is a toggle**
+- **J-05: The sweep becomes resumable and parallel — durable pair results + process pool**
   - Steps:
-    1. On `/structure`, make **Tradable Map** the default view: the chart renders candles + ≤10 band overlays
-       (price areas/lines) + a map table (band range, side, quality score, inherited class, member count,
-       round-number flag) read verbatim from `GET /research/tradability`; the prior all-levels rendering
-       moves behind an explicit "raw levels" toggle (era-5 behavior preserved, off by default).
-    2. Add the **Case Studies** section: the registry table from `GET /research/setups` with
-       symbol/reaction filters; clicking a row opens the drill-in (5m chart around the event + band + reaction
-       + forward returns + the tape timeline when recorded).
-    3. Add the **Edge Report** section rendering `GET /research/edge-report` verbatim (register visible).
-    4. Load AAPL as of 2026-06-22 and open the pinned case.
-  - Acceptance: the default AAPL 2026-06-22 view shows ≤10 bands including the ~300–302 resistance band —
-    not 1,800 lines; the toggle restores the raw view unchanged; the pinned case drill-in shows `rejected`
-    with its forward returns (and the tape timeline once J-03 ran); every displayed value is byte-equal to
-    its owning endpoint (zero client recomputation); the era-5 fetch control and provenance badge still work.
-    *(Keyless on stored data; browser-verifiable.)*
+    1. Add `EdgeReportBacktestCache` (beside `EdgeReportCache`, same durable discipline): one row per
+       (dataset × strategy) `result` block, key = the canonical hash of `{dataset_id, dataset_checksum,
+       strategy_id, profile, config_fingerprint, config_content_hash, strategy_registry,
+       bar_store_signature}` — the bar-store signature (the sorted per-series `(symbol, timeframe, id,
+       checksum)` tuples the setups signature already computes) is REQUIRED because the structure strategies
+       read bar content per event; the existing persisted backtest journal rows are NOT a safe resume source
+       (their fingerprint excludes the `sr_*`/`tradability_*`/`setups_*` families and records no bar
+       content) and are never consulted. Values stored verbatim without `sort_keys`. Path: env
+       `TAPEOLOGY_EDGE_SWEEP_CACHE_DB` else the `.data/edge_report_backtests.db` sibling.
+    2. Give `_split_cells` a `run_pair(dataset_meta, strategy_id)` provider seam (default = today's inline
+       call, byte-identical); the caching provider serves a hit verbatim and publishes each miss **the
+       moment it completes**; the pooling/ordering/aggregation code is untouched so reassembly from cached
+       blocks is byte-identical by construction. Progress counts `backtests_from_cache` distinctly from
+       `backtests_done`.
+    3. Add the parallel provider (CLI `--workers` / env, default 4, documented ceiling ~6; used ONLY by the
+       CLI/background job, never a request thread): `ProcessPoolExecutor` with the `spawn` context; **task =
+       one dataset, all three strategies** (bounds peak memory to ~one parsed dataset per worker);
+       largest-first (LPT) scheduling by event count; each worker builds its own stores from explicit paths,
+       uses a throwaway temp journal DB for job bookkeeping (the report never references backtest ids), and
+       hands results back through the durable sub-cache; cancellation stops submitting and lets in-flight
+       tasks persist their pairs.
+  - Acceptance: a key-busting matrix test proves each component (dataset checksum, strategy, profile, config
+    content, strategy registry, **bar-store signature**) independently busts a pair; killing a sweep
+    mid-run and re-triggering computes ONLY the missing pairs (run-count spy; the snapshot shows
+    `backtests_from_cache > 0`); recording one additional dataset re-runs exactly three backtests plus
+    reassembly; a `workers=2` parallel report over the committed fixtures is **byte-identical** to the
+    sequential report; deleting the sub-cache DB loses nothing (full recompute, identical bytes); the full
+    real-corpus compute completes as one resumable operator act in minutes, not hours *(operator-verified on
+    the real corpus)*. *(Keyless on fixtures; automated.)*
 
-- **J-06: Cockpit confluence — bands + tape markers + a descriptive chip**
+- **J-06: Restarts stop hurting — the durable setups scan cache**
   - Steps:
-    1. In the cockpit `PriceChart` (sim/historical modes; live stays hidden), overlay the watched symbol's
-       tradable bands (from `GET /research/tradability`, as-of the prior session close) beside the existing
-       tape-state markers; symbols with no bar series (e.g. SIM-*) show an honest "no tradable map" state.
-    2. Add the **confluence chip**: visible only while last price is inside a band AND the current tape state
-       matches the config-owned rejection/breakthrough mapping for that band's side — mapping and labels read
-       from `GET /research/strategies`, never hardcoded. Chip text is descriptive and cites the edge report
-       (e.g. "Inside R-band 300.4–302.1 (class A) · tape: ask_absorption · measured history: edge report") —
-       no imperative, no prediction.
-    3. With credentials configured, watch AAPL in historical mode over the 2026-06-22 300-test window;
-       observe markers, bands, and the chip during the test; screenshot. Verify a SIM ticker shows the chart
-       + markers + the honest empty state, and that live mode is unchanged.
-  - Acceptance: during the credentialed AAPL 06-22 replay the band overlay is visible and the chip appears at
-    the 300-test with descriptive copy (and is absent when price is outside every band or the state is
-    unmapped/`unclear`); the mapping/labels/bands are all endpoint-read (zero client recomputation and no
-    client-hardcoded vocabulary); SIM tickers degrade honestly; the live-mode surface is byte-identical to
-    before. *(Verified with Alpaca credentials configured; browser-verifiable.)*
+    1. Add `setups_scan_cache.py` — `lookup(key)`/`publish(key, result)` over a sibling SQLite (env
+       `TAPEOLOGY_SETUPS_CACHE_DB` else beside the bar dir via the new `BarStore.root`), result JSON stored
+       without `sort_keys`, publish failures swallowed (an accelerator never blocks serving).
+    2. In `setups.compute_setups`, replace the `id(config)` key leg with the config CONTENT hash (reused
+       from `edge_report_cache.py` — never a second derivation) alongside the existing store signature;
+       check hot slot → durable → real scan; keep exactly ONE `_SCAN_CACHE = (key, result)` rebind and keep
+       the scan functions' source free of the forbidden substring (both structural guard tests pass
+       unmodified); refresh the stale block-comment wording.
+  - Acceptance: with the hot slot cleared (simulated restart), `compute_setups` serves the scan from the
+    durable cache with **zero** rescans (spy) and the served result is byte-identical to a fresh scan; an
+    equal-content but distinct `Config` object is now a cache HIT (identity-key fragility gone); recording a
+    new bar series busts the key (fresh scan); deleting the scan-cache DB merely costs one rescan; on the
+    real corpus, a backend restart followed by `/structure` no longer re-pays the multi-minute scan — every
+    section reaches its ready state (no loading panel remains anywhere on the page) within 10 seconds of
+    navigation *(operator-verified on the real corpus)*. *(Keyless; browser-verifiable.)*
 
 - **J-07: The foundation is unchanged (regression sentinel)**
   - Steps:
-    1. Run the full backend suite and the engine equivalence test; run the sim cockpit flows (`SIM-BUYER`
-       settles `buyer_control`, `SIM-SELLER` settles `seller_control`) and spot-check `/journal`, `/studies`,
-       `/performance`, and the era-5 `/structure` behaviors (fetch control, store-first reuse, provenance
-       badge) in the browser.
-    2. Confirm `config_fingerprint` is still `4d665603569b9dbf`; confirm `research/levels.py` raw output,
-       `v1`, `structure_tape`, `default`, the champion pointer, the JSON `BarStore`, the `bar_index`
-       store-first flow, the Alpaca adapter, and the recorder produce byte-identical results on identical
-       inputs; confirm the only additive surfaces are those this era names.
-  - Acceptance: the full backend suite passes (no test deleted or weakened); the equivalence test proves
-    byte-identical `default` outputs and the pinned fingerprint; era-1–5 surfaces behave exactly as shipped;
-    existing strategies' backtest outputs on identical inputs are byte-identical; the additive changes are
-    exactly: `tradability.py`, `setups.py`, `edge_report.py`, the `structure_tape_map` registry entry + its
-    additive arming path, the new config constants, the event-window recordings + one committed fixture, the
-    three MCP read-only proxies, the `/structure` sections, and the cockpit overlay + chip. *(Browser-verifiable
-    + automated.)*
+    1. Run the full backend suite and the engine equivalence test; browser-check the sim cockpit flows
+       (`SIM-BUYER` settles `buyer_control`, `SIM-SELLER` settles `seller_control`) and spot-check
+       `/journal`, `/studies`, `/performance`, and `/structure`'s era-5/5B behaviors (fetch control +
+       provenance badge, tradable map default + raw toggle, case studies drill-in, warm-cache Edge Report
+       render with its frozen texts).
+    2. Confirm `config_fingerprint` is still `4d665603569b9dbf`; confirm `levels.py`, `tradability.py`,
+       `setups.py`, `edge_report.py` computations, `v1`, `structure_tape`, `structure_tape_map`, `default`,
+       the champion pointer, both store file formats, the `bar_index` flow, and the recorder produce
+       byte-identical results on identical inputs; confirm the additive surfaces are exactly those this
+       interlude names.
+  - Acceptance: the full backend suite passes (no test deleted or weakened — the source-introspection guards
+    included); the equivalence test proves byte-identical `default` outputs and the pinned fingerprint;
+    era-1–5B surfaces behave exactly as shipped; the additive changes are exactly: the two store caches +
+    `BarStore.root`, `dataset_index.py`, the levels/tradability change-point + day-key helpers, the
+    per-run arm memo, `EdgeReportCache.lookup`/`compute_and_publish` + the shared path resolver,
+    `peek_strategy_comparison_report` + the not-computed payload, `edge_report_compute.py` (manager + CLI) +
+    its three routes, `EdgeReportBacktestCache` + the `run_pair` seam + the parallel provider,
+    `setups_scan_cache.py` + the content-hash key, the frontend not-computed panel + Compute button +
+    progress poll, and the new env-var knobs — nothing else. *(Automated + browser-verifiable.)*
 
 <!-- AUTO:journeys -->
-
-- **J-08: The edge report becomes observable — a rebuildable, checksum-keyed result cache**
-  - Steps:
-    1. Add a **rebuildable result cache** around the `run_strategy_comparison_report` backtest sweep in
-       `apps/backend/app/research/edge_report.py` — the documented ~10+h / ~9.1M-tick cost is the
-       `BacktestJobManager` runs over the recorded event-window datasets for all three strategies, NOT the
-       already-memoized `compute_setups` scan. Mirror the established *rebuildable-accelerator* precedents
-       (`_SCAN_CACHE` in `setups.py`; the persisted derived `bar_index`): key the cache on the `DatasetStore`'s
-       per-dataset checksums (append-only / immutable) + the strategy registry + `config_fingerprint`
-       (`4d665603569b9dbf`), and make it durable enough that the first (operator-run) full compute is not
-       repeated on every request or backend restart. `edge_report.py` stays the SOLE computer; the cache is a
-       rebuildable accelerator, **never a source of truth**; a miss recomputes byte-identically; any change to
-       the dataset set, the registry, or the config busts the key.
-    2. `GET /research/edge-report` and its read-only MCP proxy `edge_report` keep serving
-       `run_strategy_comparison_report`'s output **verbatim** through the cache — one owner, one endpoint, no
-       second computation path, zero client recomputation on `/structure`'s Edge Report section. Add a
-       determinism test (the cached report is byte-identical to a fresh cache-cleared compute over the same
-       store) and a concurrency test (a cold-cache read never observes a torn / half-written result, mirroring
-       `setups.py`'s atomic-publish guard).
-    3. After the first full real compute (operator-run, credentialed datasets present), append the completed
-       three-way comparison to the PnL history record (`reports/pnl/pnl-history.md` via `pnl_history.py`):
-       `v1` (null / baseline) vs `structure_tape` vs `structure_tape_map`, per split with **train and hold-out
-       never pooled** and **feeds never pooled**, each cell carrying net R, net $, n, fee/slippage assumptions,
-       basis, null baseline, and the "simulated — not indicative of live results" register; n<5 cells labelled
-       `insufficient_sample` (an all-`insufficient_sample` outcome is valid and still recorded).
-  - Acceptance: on a warm cache `GET /research/edge-report` returns the full three-way register (`v1` /
-    `structure_tape` / `structure_tape_map`, per strategy × class × side × reaction cell, train and hold-out
-    separate and never pooled, feeds never pooled, n<5 cells `insufficient_sample`, null baseline, every $
-    carrying its R, n, assumptions and basis with the "simulated — not indicative of live results" note) within
-    an interactive time budget, and the cached output is **byte-identical** to a fresh cache-cleared compute (a
-    determinism test proves it; a concurrency test proves no torn read); the cache is keyed on dataset
-    checksums + strategy registry + `config_fingerprint`, is rebuildable and never a source of truth, and any
-    input change busts it; `edge_report.py` remains the single owner and `GET /research/edge-report` the single
-    endpoint, with the MCP `edge_report` proxy byte-identical and zero client recomputation; `edge_report.py`'s
-    computation, `levels.py`, `setups.py`, `tradability.py`, `v1`, `structure_tape`, `structure_tape_map`, the
-    `default` profile, and `config_fingerprint` `4d665603569b9dbf` stay byte-identical to before (equivalence
-    test green; the cache is additive only); the **champion pointer is untouched** — this journey makes the
-    report observable and never promotes, promotion staying the existing sweep gate's job on hold-out; the
-    first completed real three-way comparison is appended to `reports/pnl/pnl-history.md` with per-split net R,
-    net $, n, assumptions, basis and null baseline; the full backend suite stays green (new determinism +
-    concurrency tests, no test deleted or weakened); and a **[NEW]-flagged demo-narrator walkthrough** shows
-    `/structure`'s Edge Report section rendering the now-observable cells (or the honest all-`insufficient_sample`
-    state) verbatim from the endpoint. *(Keyless determinism / equivalence on the committed fixture + a
-    warm-cache render; the full real compute is credentialed / operator-run.)*
 
 <!-- /AUTO:journeys -->
 
@@ -445,37 +523,29 @@ ever grow more specific, never weaker):**
 10. **Persistence stays scoped** — no ambient recording of live streams; recording/fetching is an explicit,
     logged act. *(critical)*
 
-**Era-5B-specific anti-goals (added, not weakening any rail above):**
+**Interlude-specific anti-goals (added, not weakening any rail above):**
 
-- **The tradable map is a lens, never a second levels engine.** `research/tradability.py` consumes
-  `compute_levels` output verbatim (plus bars for scale context); it never re-detects pivots/extremes and
-  never alters the frozen raw computation or its parameters. *(critical)*
-- **Morning-markup discipline.** Any session's map derives only from bars fully completed by the prior
-  session's close; no forming-bar data enters a map, an event, or a chip. *(critical)*
-- **Descriptive, never imperative.** Chips, case studies, and reports state conditions and cite measured
-  history — never "buy/sell/short now", no prediction or expected-return language, anywhere in UI copy.
-  *(critical)*
-- **Recording stays explicit, windowed, and logged** — only around registered scan events with config-owned
-  padding; no ambient, scheduled, or full-day bulk recording; every dataset append-only, checksummed,
-  split-frozen at registration. *(critical)*
-- **Feed honesty — never pool across feeds.** The `feed` stamp comes verbatim from the adapter/key tier;
-  `iex`, `sip`, and Yahoo-bar lineages are never pooled in any analysis cell, report row, or claim; `iex` is
-  never presented as the consolidated tape. *(critical)*
-- **No gate bending for a headline.** n≥5 per reported cell, train/hold-out separation, null baseline, and
-  the full PnL register hold everywhere; an empty or all-`insufficient_sample` edge report is a valid,
-  publishable outcome. *(critical)*
-- **The champion moves only through the existing sweep gate on hold-out data.** This era may feed the gate;
-  it never hand-promotes `structure_tape_map` or anything else. *(critical)*
-- **New strategy code is additive and registered — never a mutation.** `structure_tape_map` is a new
-  config-owned registry entry beside frozen `v1`/`structure_tape`; no frozen definition, parameter, or output
-  changes; the `config_fingerprint` stays `4d665603569b9dbf`. *(critical)*
-- **Keys never committed, never logged.** Alpaca credentials live only in the operator's environment; no
-  secret in source, fixtures, logs, artifacts, or reports. *(critical)*
-- **Live mode stays untouched.** The cockpit price chart remains hidden in live mode; no execution path,
-  ever. *(critical)*
-- **No vocabulary drift.** No "paper trading", "shadow trading", "annualized", "expected profit", or
-  advice/imperative phrasing anywhere in the UI copy; simulated PnL and simulated size always carry the
-  visible "simulated — not indicative of live results" register.
+- **Accelerators are never sources of truth.** Every cache/index/memo this interlude adds is a rebuildable
+  derived value: deleting it loses nothing and fabricates nothing; a miss recomputes byte-identically through
+  the one canonical owner; no research value is ever read FROM a cache that could not be re-derived
+  identically without it. *(critical)*
+- **No compute on page load — operator-run only.** No GET (page, REST, or MCP proxy) ever starts, resumes, or
+  extends the backtest sweep; the only compute entry points are the explicit POST trigger and the CLI warmer.
+  No scheduled, ambient, or retry-driven compute either. *(critical)*
+- **The verification trust boundary never weakens.** Stat-keyed serving applies only to content already fully
+  verified in this process's lifetime, keyed by `(path, size, mtime_ns)` with the racy-write guard; ANY stat
+  change re-verifies fully; integrity failures are never cached; `DatasetStore.load_events()`/`replay()` —
+  the paths that feed research values — verify fully on every load, forever. *(critical)*
+- **No divergent accelerator output.** An accelerated read (cached, memoized, resumed, or parallel) whose
+  bytes differ from the fresh sequential compute of the same inputs is a veto-class defect, never a tolerable
+  approximation; no accelerator ships without a passing determinism/equivalence test proving that
+  byte-identity. *(critical)*
+- **No gate, register, or vocabulary drift.** The PnL register, `insufficient_sample` labeling,
+  train/hold-out separation, feed separation, and the "simulated — not indicative of live results" language
+  are untouched; the not-computed state introduces no prediction/advice/imperative phrasing. *(critical)*
+- **No source-guard weakening.** The existing source-introspection tests (forbidden substrings, single
+  rebind, pinned dependency wiring) are respected as written — never edited, renamed, or loosened to make a
+  change fit. *(critical)*
 - **The enhancement loop stays inside its box.** The goal-proposer may append journeys ONLY inside the
   `AUTO:journeys` marker block above — it MUST NOT edit human-authored journeys, this Anti-goals section, or
   any other part of this file; proposed journeys MUST carry a single-source-of-truth (or PnL-ledger)
