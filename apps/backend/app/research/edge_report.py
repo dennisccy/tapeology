@@ -76,7 +76,13 @@ from .edge_report_cache import EdgeReportCache
 from .setups import compute_setups
 from .store import JournalStore
 
-__all__ = ["EdgeReportError", "run_edge_report", "run_strategy_comparison_report", "main"]
+__all__ = [
+    "EdgeReportError",
+    "run_edge_report",
+    "run_strategy_comparison_report",
+    "peek_strategy_comparison_report",
+    "main",
+]
 
 # era-5B J-04: the three registered strategies a comparison cell may ever carry, in the SAME
 # registration order ``Config.strategy_registry()`` serves -- read here so a cell's own
@@ -87,6 +93,14 @@ _ALL_STRATEGY_IDS: tuple[str, ...] = (STRATEGY_V1_ID, STRATEGY_TAPE_ID, STRATEGY
 # datasets clear the positive-edge gate, including the true-empty-registry case.
 NO_POSITIVE_EDGE_FINDING = "no positive-edge dataset"
 
+# era-fast_wall J-01: the not-computed payload's own explanatory ``detail`` string (DoD: "a detail
+# naming the trigger") — ONE canonical literal, never restated inline at ``peek_strategy_
+# comparison_report``'s own call site.
+EDGE_REPORT_NOT_COMPUTED_DETAIL = (
+    "The 3-way strategy-comparison sweep has not been run for the current dataset registry and "
+    "configuration. It never runs automatically on a GET -- an operator must trigger the compute."
+)
+
 
 class EdgeReportError(Exception):
     """The report could not complete honestly — a dataset failed integrity verification or a
@@ -96,17 +110,26 @@ class EdgeReportError(Exception):
 # --- reused computation: ONE backtest per dataset, via the EXISTING runner ----------------------
 
 
-def _split_datasets(dataset_store: DatasetStore, split: str) -> list[dict]:
-    """Every registered dataset metadata row for ``split`` (checksum-verified on load, the ONE
-    ``DatasetStore.list`` read). A file that fails integrity verification anywhere in the store
-    aborts the whole report explicitly — a partial report is a misleading report."""
+def _verified_records(dataset_store: DatasetStore) -> list[dict]:
+    """Every registered dataset metadata row, checksum-verified (the ONE ``DatasetStore.list``
+    read). A file that fails integrity verification anywhere in the store aborts explicitly — a
+    partial report is a misleading report. Shared by ``_split_datasets`` (below, filtered to one
+    split) and ``peek_strategy_comparison_report`` (era-fast_wall J-01, which needs the FULL,
+    unfiltered registry to key the cache and report ``dataset_count``) — ONE list-and-verify call
+    site, never a second copy of this error-formatting."""
     records, errors = dataset_store.list()
     if errors:
         raise EdgeReportError(
             f"{len(errors)} dataset file(s) failed integrity verification "
             f"({[e['file'] for e in errors]}) — the report stops with nothing written"
         )
-    return [r for r in records if r["split"] == split]
+    return records
+
+
+def _split_datasets(dataset_store: DatasetStore, split: str) -> list[dict]:
+    """Every registered dataset metadata row for ``split`` — see ``_verified_records`` for the
+    integrity discipline."""
+    return [r for r in _verified_records(dataset_store) if r["split"] == split]
 
 
 def _run_backtest(
@@ -432,21 +455,26 @@ def run_strategy_comparison_report(
     *,
     cache: EdgeReportCache | None = None,
 ) -> dict:
-    """The public entry point for the 3-way strategy-comparison report (era-5B J-04; ``GET
-    /research/edge-report`` + the MCP ``edge_report`` proxy serve this VERBATIM). See
-    ``_compute_strategy_comparison_report`` below for the full algorithm docstring — this function
-    is now a thin dispatcher over that ONE computation, never a second copy of it.
+    """The always-recompute-or-serve-through-a-cache entry point for the 3-way strategy-comparison
+    report (era-5B J-04). See ``_compute_strategy_comparison_report`` below for the full algorithm
+    docstring — this function is a thin dispatcher over that ONE computation, never a second copy
+    of it.
+
+    era-fast_wall J-01: ``GET /research/edge-report`` calls ``peek_strategy_comparison_report``
+    (below) instead of this function — ``peek_...`` NEVER computes on a cold cache key. This
+    function remains the module's ONE optionally-cached compute dispatcher: every direct test in
+    ``tests/test_edge_report.py`` still exercises it unmodified, and it is the exact shape
+    ``EdgeReportCache.compute_and_publish``'s future operator/CLI "force" callers (J-04) wrap.
 
     era-5B J-08: ``cache`` is an OPTIONAL rebuildable result cache
     (``edge_report_cache.EdgeReportCache``). ``cache=None`` (the default) is the EXACT pre-J-08
     behaviour — always calls ``_compute_strategy_comparison_report`` directly, byte-for-byte
     identical to before — so every EXISTING call site (every test in ``test_edge_report.py``, and
     any future caller with no cache to offer) is untouched and stays uncached. When a cache IS
-    supplied (the route's DI-wired path — see ``routes.get_edge_report``), this function serves
-    ``_compute_strategy_comparison_report``'s output VERBATIM through it: the cache never
-    re-derives a cell, a measurement, or a null baseline — a miss recomputes byte-identically
-    through the SAME one function below (single source of truth; no second computation path,
-    anywhere)."""
+    supplied, this function serves ``_compute_strategy_comparison_report``'s output VERBATIM
+    through it: the cache never re-derives a cell, a measurement, or a null baseline — a miss
+    recomputes byte-identically through the SAME one function below (single source of truth; no
+    second computation path, anywhere)."""
 
     def compute() -> dict:
         return _compute_strategy_comparison_report(store, dataset_store, bar_store, config)
@@ -454,6 +482,47 @@ def run_strategy_comparison_report(
     if cache is None:
         return compute()
     return cache.get_or_compute(dataset_store, config, compute)
+
+
+def peek_strategy_comparison_report(
+    store: JournalStore,
+    dataset_store: DatasetStore,
+    bar_store: BarStore,
+    config: Config,
+    *,
+    cache: EdgeReportCache,
+) -> dict:
+    """The GET-path's EXCLUSIVE entry point (era-fast_wall J-01) — ``routes.get_edge_report`` calls
+    ONLY this, never ``run_strategy_comparison_report``, so opening ``/structure`` (or any GET, or
+    the MCP ``edge_report`` proxy) can NEVER start the sweep (the interlude's headline CRITICAL
+    anti-goal — "no compute on page load, operator-run only"). Three branches:
+
+      * A store-integrity failure raises ``EdgeReportError`` exactly as today (``_verified_
+        records``, above) — the route's existing explicit 500; the cache is never even keyed.
+      * An EMPTY dataset registry still computes inline — the pre-J-01 O(1), zero-backtest shape
+        (``_compute_strategy_comparison_report`` skips the whole scan/backtest path when both
+        splits are empty; see that function's own docstring) — the response carries no ``status``
+        key, byte-identical to before J-01 shipped.
+      * A NON-EMPTY registry consults the cache's READ-ONLY ``lookup`` — NEVER ``get_or_compute``
+        or ``compute_and_publish`` (pinned by ``tests/test_edge_report.py``'s ``test_peek_source_
+        never_calls_a_compute_triggering_cache_method``): a warm key returns the cached report
+        VERBATIM; a cold key returns the honest not-computed payload (``status: "not_computed"``,
+        the canonical ``EDGE_REPORT_NOT_COMPUTED_DETAIL``, ``dataset_count``, ``register`` read
+        from ``backtests.REGISTER`` — never a restated literal — and ``compute: null``, since no
+        compute manager exists until J-04)."""
+    records = _verified_records(dataset_store)
+    if not records:
+        return _compute_strategy_comparison_report(store, dataset_store, bar_store, config)
+    cached = cache.lookup(records, config)
+    if cached is not None:
+        return cached
+    return {
+        "status": "not_computed",
+        "detail": EDGE_REPORT_NOT_COMPUTED_DETAIL,
+        "dataset_count": len(records),
+        "register": REGISTER,
+        "compute": None,
+    }
 
 
 def _compute_strategy_comparison_report(

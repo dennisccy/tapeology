@@ -22,3 +22,17 @@ gap.
 lands — run the frontend against a SCOPED/keyless dataset dir (or a warmed cache), never the default
 882MB `.data/datasets`; and re-run J-07's deferred `/structure` era-5/5B spot-check once J-01 makes the
 cold GET safe.
+
+## iter-1 — 2026-07-17T04:59:39Z
+
+**Verdict:** CONTINUE
+**Lesson:** The QA report marked the browser tests TC-11/TC-12 as SKIP ("Chrome session timed out")
+and `status.json` said `browser_checks_run: false`, yet the merged
+`reports/phase-goal-fast_wall-iter-1-ui-test-results.md` recorded 7/7 PASS with real screenshots
+(UT-02/UT-03) that the auditor and I both opened and confirmed. A QA "SKIP due to browser timeout"
+is a superseded *attempt*, not the absence of browser evidence — trust the merged ui-test-results.md
++ evidence PNGs over a QA SKIP. Separately, `test_edge_report_tool_byte_identical_to_rest`
+(`test_mcp_server.py`) was made order-coupled this iteration (fails in isolation on `assert 0 >= 1`,
+passes in the canonical module run) — flagged loud, not a false-green, but a known future-cleanup.
+**Applies to:** any iter reconciling a QA SKIP against merged browser results; any J-02+ iter that
+next touches `test_mcp_server.py` (self-seed TC-6's own dataset).

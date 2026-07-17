@@ -29,3 +29,16 @@ iteration that makes the cold GET safe (J-01); if it ever fails, J-07 flips to `
 **Ambiguity:** J-07's deferred acceptance (iter-0 `assumptions.md`) says its live `/structure` interactive spot-check should be "re-run the first iteration that makes the cold GET safe (J-01)", but a full `/structure` page load on the default real-corpus backend still separately waits on `GET /research/setups`'s cold-scan cost (268.95s measured at iter-0) until J-06 ships — a hazard J-01 does not touch.
 **We chose:** Scope this iteration's J-07 closure to the specific leg J-01 actually fixes (the Edge-Report mount-time GET, mechanically proven safe by the compute-spy test and by the old hazardous code path no longer existing) rather than requiring a full live page load that would still cost several minutes for an unrelated, already-diagnosed reason. A full live spot-check is encouraged as bonus evidence if time allows, not required to close this gap.
 **Reversible:** yes — if future evidence shows the Edge-Report leg was NOT actually safe, J-07 flips to `regressed` and this reading is revisited; the setups-leg speed gap remains explicitly tracked for J-06, not silently closed.
+
+## iter-1 — goal-evaluator
+
+**Ambiguity:** The iteration spec's "New information displayed" prose says both `detail` AND
+`dataset_count` "become newly visible" in the not-computed panel, but the shipped `NotComputedPanel`
+renders only the headline + `detail` (`dataset_count` reaches typed frontend state but is never
+painted) — flagged non-blocking by both coherence.md and the audit (F1).
+**We chose:** Score J-01 `passing` by treating the goal.md journey acceptance + TC-11 (which require
+only the "Edge report not computed yet." headline and the verbatim `detail`, and are met exactly) as
+authoritative over the downstream iter-spec prose's stronger "dataset_count also visible" claim; the
+unrendered `dataset_count` is a spec-completeness gap, not a J-01 acceptance miss.
+**Reversible:** yes — a later iteration can render `dataset_count` in the same panel with no contract
+change; if the human deems its visibility binding, J-01 can be reopened for that one addition.

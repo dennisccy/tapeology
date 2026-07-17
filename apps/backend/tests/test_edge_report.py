@@ -979,3 +979,110 @@ def test_cache_wiring_source_never_duplicates_the_computation():
     # Exactly ONE definition of each — never a second copy under a different name.
     assert src.count("def run_strategy_comparison_report(") == 1
     assert src.count("def _compute_strategy_comparison_report(") == 1
+
+
+# ==================================================================================================
+# The honest not-computed peek (era-fast_wall J-01) — ``peek_strategy_comparison_report``, the
+# GET-path's EXCLUSIVE entry point from this iteration on (``routes.get_edge_report`` calls ONLY
+# this, never ``run_strategy_comparison_report`` — see ``routes.py``). Proves the three branches
+# named in the function's own docstring: a cold key on a non-empty registry returns the honest
+# not-computed payload and NEVER calls the compute path; a warm key (published via
+# ``EdgeReportCache.compute_and_publish`` — the future operator/CLI path, J-04) returns THAT exact
+# result verbatim; an empty registry keeps the pre-J-01 O(1) full-report shape untouched.
+# ==================================================================================================
+
+from app.research.edge_report import peek_strategy_comparison_report  # noqa: E402
+
+
+def test_peek_on_a_cold_key_returns_the_not_computed_payload_and_never_computes(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+
+    calls = []
+    real_compute = edge_report._compute_strategy_comparison_report
+
+    def _counting_compute(*args, **kwargs):
+        calls.append(1)
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report, "_compute_strategy_comparison_report", _counting_compute)
+
+    result = peek_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+
+    assert calls == []  # a cold GET-path call NEVER computes -- the whole point of J-01
+    assert result["status"] == "not_computed"
+    assert isinstance(result["detail"], str) and result["detail"] != ""
+    assert result["dataset_count"] == 1
+    assert result["register"] == REGISTER
+    assert result["compute"] is None
+
+
+def test_peek_on_a_warm_key_returns_the_published_result_verbatim(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+    published = cache.compute_and_publish(
+        dataset_store, scan_config,
+        lambda: edge_report._compute_strategy_comparison_report(
+            store, dataset_store, scan_bar_store, scan_config
+        ),
+    )
+
+    result = peek_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+
+    assert json.dumps(result, sort_keys=True) == json.dumps(published, sort_keys=True)
+    assert "status" not in result
+    assert len(result["train"]["cells"]) == 3  # non-degenerate, the real 3-cell shape
+
+
+def test_peek_on_an_empty_registry_keeps_the_pre_j01_full_report_shape(tmp_path, store):
+    dataset_store = DatasetStore(tmp_path / "datasets")  # never populated
+    bar_store = BarStore(tmp_path / "empty-bars")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+
+    result = peek_strategy_comparison_report(store, dataset_store, bar_store, CONFIG, cache=cache)
+
+    assert "status" not in result
+    assert result["train"]["cells"] == []
+    assert result["holdout"]["cells"] == []
+    assert result["surviving_train_cells"] == []
+
+
+def test_peek_raises_on_a_dataset_integrity_error_before_ever_touching_the_cache(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    path = tmp_path / "datasets" / f"{meta['id']}.json"
+    data = json.loads(path.read_text())
+    data["record"]["meta"]["checksum"] = "0" * 64  # tamper
+    path.write_text(json.dumps(data))
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("cache.lookup must never be called on an integrity-error path")
+
+    monkeypatch.setattr(cache, "lookup", _boom)
+
+    with pytest.raises(EdgeReportError, match="integrity"):
+        peek_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+
+
+def test_peek_source_never_calls_a_compute_triggering_cache_method():
+    """A coherence guard, mechanically pinning the GET-path's central promise: ``peek_strategy_
+    comparison_report``'s OWN source never calls a cache method that could compute and persist a
+    fresh report (``cache.get_or_compute``/``cache.compute_and_publish``) — only the read-only
+    ``cache.lookup``. The one legitimate direct call to ``_compute_strategy_comparison_report`` is
+    the documented empty-registry O(1) branch (see the function's own docstring), not a cache
+    method at all."""
+    import inspect
+
+    src = inspect.getsource(edge_report.peek_strategy_comparison_report)
+    assert "cache.lookup(" in src
+    for forbidden in ("cache.get_or_compute(", "cache.compute_and_publish("):
+        assert forbidden not in src

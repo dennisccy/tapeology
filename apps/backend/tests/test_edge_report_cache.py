@@ -21,7 +21,7 @@ import pytest
 from app.config import CONFIG
 from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.research.datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN
-from app.research.edge_report_cache import EdgeReportCache
+from app.research.edge_report_cache import EdgeReportCache, resolve_cache_db_path
 
 WINDOW_START, WINDOW_END = "2026-01-02T14:30:00Z", "2026-01-02T14:30:05Z"
 
@@ -419,3 +419,178 @@ def test_cache_source_never_computes_a_research_value_itself():
         assert forbidden_import not in src, (
             f"a second computation path leaked into edge_report_cache.py: {forbidden_import}"
         )
+
+
+# ==================================================================================================
+# era-fast_wall J-01: ``lookup`` (the GET-path's read-only half) and ``compute_and_publish`` (the
+# operator/CLI "force" half, J-04's future path) beside the untouched ``get_or_compute`` above —
+# every test above this marker is UNMODIFIED, proof by construction that ``get_or_compute``'s own
+# behaviour stays byte-for-byte identical.
+# ==================================================================================================
+
+
+# --- lookup: never computes, hot slot then durable row, None on a genuine miss -----------------
+
+
+def test_lookup_returns_none_on_a_genuine_miss_and_persists_nothing(tmp_path):
+    dstore = DatasetStore(tmp_path / "datasets")
+    _record(dstore, "SYN-A", split=SPLIT_TRAIN)
+    db_path = str(tmp_path / "cache.db")
+    cache = EdgeReportCache(db_path)
+    records, errors = dstore.list()
+    assert errors == []
+
+    result = cache.lookup(records, CONFIG)
+
+    assert result is None
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute("SELECT * FROM edge_report_cache").fetchall()
+    finally:
+        conn.close()
+    assert rows == []  # a miss never persists anything -- lookup never computes, never writes a row
+
+
+def test_lookup_never_calls_any_compute_function(tmp_path):
+    """TC-8, literally: ``lookup`` has no ``compute_fn`` parameter at all, so nothing could ever be
+    called even on a miss. Pinned against an EXTERNAL counting stub standing in for 'the real
+    sweep', proving no such function is reachable from ``lookup``'s own call graph."""
+    dstore = DatasetStore(tmp_path / "datasets")
+    _record(dstore, "SYN-A", split=SPLIT_TRAIN)
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+    compute = _CountingCompute()
+    records, errors = dstore.list()
+    assert errors == []
+
+    result = cache.lookup(records, CONFIG)
+
+    assert result is None
+    assert compute.calls == 0  # never invoked -- lookup was never given a way to call it
+
+
+def test_lookup_serves_a_value_published_via_compute_and_publish_from_the_durable_row(tmp_path):
+    """The DoD's literal restart scenario, for ``lookup`` specifically: a FRESH ``EdgeReportCache``
+    instance (no in-process state carried over) still serves a value an EARLIER instance published
+    via ``compute_and_publish`` — proof ``lookup`` reads the durable row, not merely its own hot
+    slot."""
+    dstore = DatasetStore(tmp_path / "datasets")
+    _record(dstore, "SYN-A", split=SPLIT_TRAIN)
+    db_path = str(tmp_path / "cache.db")
+    published = EdgeReportCache(db_path).compute_and_publish(
+        dstore, CONFIG, _CountingCompute({"train": {"cells": ["warm"]}, "holdout": {"cells": []}})
+    )
+
+    records, errors = dstore.list()
+    assert errors == []
+    restarted = EdgeReportCache(db_path)  # no in-process state carried over
+    result = restarted.lookup(records, CONFIG)
+
+    assert result == published == {"train": {"cells": ["warm"]}, "holdout": {"cells": []}}
+
+
+def test_lookup_serves_the_in_process_hot_slot_without_a_second_durable_read(tmp_path):
+    """The identical ``get_or_compute`` hot-slot discipline, proven for ``lookup``: a SECOND
+    ``lookup`` on the SAME instance must be servable even if the durable file is deleted out from
+    under it in between — proof the second call never re-touches the durable row at all."""
+    dstore = DatasetStore(tmp_path / "datasets")
+    _record(dstore, "SYN-A", split=SPLIT_TRAIN)
+    db_path = str(tmp_path / "cache.db")
+    cache = EdgeReportCache(db_path)
+    cache.compute_and_publish(dstore, CONFIG, _CountingCompute({"v": "hot"}))
+    records, errors = dstore.list()
+    assert errors == []
+    first = cache.lookup(records, CONFIG)
+    assert first == {"v": "hot"}
+
+    import os as _os
+
+    _os.remove(db_path)  # the durable file is now gone -- a durable re-read would raise/miss
+
+    second = cache.lookup(records, CONFIG)
+
+    assert second == {"v": "hot"}  # served from the hot slot alone
+
+
+# --- compute_and_publish: always recomputes, republishes both layers ---------------------------
+
+
+def test_compute_and_publish_calls_compute_fn_exactly_once_and_publishes_both_layers(tmp_path):
+    dstore = DatasetStore(tmp_path / "datasets")
+    _record(dstore, "SYN-A", split=SPLIT_TRAIN)
+    db_path = str(tmp_path / "cache.db")
+    cache = EdgeReportCache(db_path)
+    compute = _CountingCompute({"train": {"cells": ["fresh"]}, "holdout": {"cells": []}})
+
+    result = cache.compute_and_publish(dstore, CONFIG, compute)
+
+    assert compute.calls == 1
+    assert result == {"train": {"cells": ["fresh"]}, "holdout": {"cells": []}}
+    records, errors = dstore.list()
+    assert errors == []
+    assert cache.lookup(records, CONFIG) == result  # TC-9's own follow-up lookup
+
+
+def test_compute_and_publish_always_recomputes_even_over_an_already_warm_key(tmp_path):
+    """The defining difference from ``get_or_compute``: ``compute_and_publish`` is the FORCE path —
+    it recomputes UNCONDITIONALLY, even when a value is already cached, and republishes the new
+    result over the old one (the future operator/CLI J-04 "force" semantics)."""
+    dstore = DatasetStore(tmp_path / "datasets")
+    _record(dstore, "SYN-A", split=SPLIT_TRAIN)
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+    cache.compute_and_publish(dstore, CONFIG, _CountingCompute({"v": 1}))
+
+    second = _CountingCompute({"v": 2})
+    result = cache.compute_and_publish(dstore, CONFIG, second)
+
+    assert second.calls == 1  # recomputed despite an already-warm key
+    assert result == {"v": 2}
+    records, errors = dstore.list()
+    assert cache.lookup(records, CONFIG) == {"v": 2}  # the NEW result, not the stale one
+
+
+def test_compute_and_publish_bypasses_the_cache_on_a_store_integrity_error(tmp_path):
+    dstore = DatasetStore(tmp_path / "datasets")
+    meta = _record(dstore, "SYN-A", split=SPLIT_TRAIN)
+    path = tmp_path / "datasets" / f"{meta['id']}.json"
+    data = json.loads(path.read_text())
+    data["record"]["meta"]["checksum"] = "0" * 64  # tamper
+    path.write_text(json.dumps(data))
+    db_path = str(tmp_path / "cache.db")
+    cache = EdgeReportCache(db_path)
+
+    class _Boom(Exception):
+        pass
+
+    def _raising_compute():
+        raise _Boom("the real EdgeReportError path, standing in for it here")
+
+    with pytest.raises(_Boom):
+        cache.compute_and_publish(dstore, CONFIG, _raising_compute)
+
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute("SELECT * FROM edge_report_cache").fetchall()
+    finally:
+        conn.close()
+    assert rows == []  # nothing persisted on the integrity-error bypass path
+
+
+# --- the shared cache-DB-path resolver (era-fast_wall J-01) -------------------------------------
+
+
+def test_resolve_cache_db_path_uses_the_env_override_when_set(monkeypatch, tmp_path):
+    override = str(tmp_path / "custom" / "cache.db")
+    monkeypatch.setenv("TAPEOLOGY_EDGE_REPORT_CACHE_DB", override)
+
+    assert resolve_cache_db_path(str(tmp_path / "anything" / "datasets")) == override
+
+
+def test_resolve_cache_db_path_defaults_to_a_sibling_of_the_dataset_dir(monkeypatch, tmp_path):
+    monkeypatch.delenv("TAPEOLOGY_EDGE_REPORT_CACHE_DB", raising=False)
+    dataset_dir = str(tmp_path / "datasets")
+
+    assert resolve_cache_db_path(dataset_dir) == str(tmp_path / "edge_report_cache.db")

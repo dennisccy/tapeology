@@ -49,8 +49,8 @@ from .bars import (
     BarStore,
     EmptyBarWindowError,
 )
-from .edge_report import EdgeReportError, run_strategy_comparison_report
-from .edge_report_cache import EdgeReportCache
+from .edge_report import EdgeReportError, peek_strategy_comparison_report
+from .edge_report_cache import EdgeReportCache, resolve_cache_db_path
 from .levels import compute_levels
 from .setups import BROKE, CHOPPED, REJECTED, compute_setups, enrich_with_tape_timeline
 from .tradability import compute_tradability
@@ -1569,12 +1569,13 @@ def get_edge_report_cache() -> EdgeReportCache:
     config-owned dataset directory (``get_dataset_store``'s own ``dataset_dir_resolved()``, e.g.
     ``.data/datasets`` -> ``.data/edge_report_cache.db`` — the SAME ``.data/`` directory
     ``bar_index.db`` already lives in). A FastAPI dependency so tests can override it outright or
-    point it at a temp path via the env var — the ``get_bar_index`` pattern, exactly."""
-    override = os.environ.get("TAPEOLOGY_EDGE_REPORT_CACHE_DB")
-    db_path = override if override else os.path.join(
-        os.path.dirname(CONFIG.dataset_dir_resolved()), "edge_report_cache.db"
-    )
-    return EdgeReportCache(db_path)
+    point it at a temp path via the env var — the ``get_bar_index`` pattern, exactly.
+
+    era-fast_wall J-01: the path policy itself now lives in ONE shared ``edge_report_cache.
+    resolve_cache_db_path`` function — this dependency's whole body is just resolving-then-
+    constructing — so a future CLI caller (J-04's warmer) resolves the IDENTICAL path with zero
+    duplicated logic. This function's own resolved path is unchanged for every existing test."""
+    return EdgeReportCache(resolve_cache_db_path(CONFIG.dataset_dir_resolved()))
 
 
 def get_bar_fetch_adapter():
@@ -2082,12 +2083,15 @@ def get_strategies(registry: ResearchRegistry = Depends(get_registry)) -> dict:
 # --- The 3-way strategy-comparison edge report (era-5B capability 6, J-04; Data Contract row
 # "edge-report cells") ---------------------------------------------------------------------------
 # Exactly ONE route, GET only, mirroring ``GET /research/strategies`` immediately above in shape:
-# ``research/edge_report.py``'s ``run_strategy_comparison_report`` is the SOLE computer of this
-# value; this route only wires the three existing dependency seams (journal store, dataset store,
-# bar store — the identical ``create_backtest`` seam trio) and serves the module's output VERBATIM
-# (the MCP ``edge_report`` tool proxies this byte-identically; no second computation path). No
-# write surface exists on this route — any non-GET verb is FastAPI's default 405. This route never
-# reads or moves the champion pointer — see the module's own "no champion, no promotion" docstring.
+# ``research/edge_report.py``'s ``peek_strategy_comparison_report`` (era-fast_wall J-01) is the
+# SOLE computer this route calls; this route only wires the four existing dependency seams
+# (journal store, dataset store, bar store, cache) and serves the module's output VERBATIM (the
+# MCP ``edge_report`` tool proxies this byte-identically; no second computation path). J-01: a GET
+# NEVER computes the sweep — a cold cache key on a non-empty registry returns the honest
+# ``status: "not_computed"`` payload instead of starting it; only the future operator/CLI compute
+# (J-04) ever calls ``run_strategy_comparison_report``'s always-compute path. No write surface
+# exists on this route — any non-GET verb is FastAPI's default 405. This route never reads or
+# moves the champion pointer — see the module's own "no champion, no promotion" docstring.
 
 
 @router.get("/edge-report")
@@ -2100,17 +2104,17 @@ def get_edge_report(
     """The 3-way strategy-comparison report (``v1`` / ``structure_tape`` / ``structure_tape_map``)
     aggregated into per strategy x class x side x reaction x feed cells over every registered
     event-window dataset that resolves an owning, classified scan event — served VERBATIM from
-    ``run_strategy_comparison_report`` (era-5B J-04), through the rebuildable result cache
-    (era-5B J-08 — ``edge_report_cache.get_edge_report_cache``, the SAME DI-overridable seam
-    ``get_bar_index`` uses) so a warm cache answers within an interactive budget instead of the
-    documented ~10+h sweep. The cache is an accelerator only: a miss recomputes byte-identically
-    through the SAME one function; this route's response shape is UNCHANGED either way. A dataset
-    failing integrity verification aborts the whole report with an explicit 500 (the
-    ``create_backtest``/``EdgeReportError`` precedent) — partial results are never served, and
-    never cached. An all-empty or all-``insufficient_sample`` report (the expected shape on a
-    keyless, single-fixture registry) is a valid 200, never an error."""
+    ``peek_strategy_comparison_report`` (era-fast_wall J-01; the rebuildable result cache DI-wired
+    through the SAME seam shape ``get_bar_index`` uses). era-fast_wall J-01: this GET NEVER
+    computes the sweep — a warm cache key answers instantly with the report; a cold key on a
+    non-empty registry answers instantly too, with the honest ``status: "not_computed"`` payload,
+    rather than starting the multi-hour compute inside this request. An empty dataset registry
+    keeps the pre-J-01 O(1), zero-backtest full-report shape. A dataset failing integrity
+    verification aborts the whole report with an explicit 500 (the ``create_backtest``/
+    ``EdgeReportError`` precedent) — partial results are never served, and never cached. An
+    all-empty or all-``insufficient_sample`` WARM report is a valid 200, never an error."""
     try:
-        return run_strategy_comparison_report(
+        return peek_strategy_comparison_report(
             registry.store, dataset_store, bar_store, registry.config, cache=cache
         )
     except EdgeReportError as exc:

@@ -27,6 +27,7 @@ import type {
   Dataset,
   DatasetsListResult,
   EdgeReportCell,
+  EdgeReportPayload,
   EdgeReportResponse,
   EdgeReportSurvivingCell,
   LevelsResponse,
@@ -274,6 +275,23 @@ function LoadingPanel({ testid }: { testid: string }) {
       <div className="h-3 w-1/3 rounded bg-slate-800" />
       <div className="mt-3 h-3 w-2/3 rounded bg-slate-800" />
       <div className="mt-3 h-3 w-1/2 rounded bg-slate-800" />
+    </div>
+  );
+}
+
+// The honest not-computed state (era-fast_wall J-01): a cold cache with a non-empty registry —
+// distinct from `UnavailablePanel` (a fetch/backend failure) and `EmptyState` (a genuinely
+// computed, empty result). Reuses `UnavailablePanel`'s amber degraded-state treatment (no new
+// visual language) with its own testid + its own headline/detail copy; `detail` is the backend's
+// OWN trigger explanation, rendered verbatim — never a frontend-authored string.
+function NotComputedPanel({ detail }: { detail: string }) {
+  return (
+    <div
+      data-testid="edge-report-not-computed"
+      className="rounded-lg border border-amber-800/60 bg-amber-900/20 px-4 py-6 text-center"
+    >
+      <p className="text-sm font-medium text-amber-300">Edge report not computed yet.</p>
+      <p className="mt-1 text-xs text-amber-200/70">{detail}</p>
     </div>
   );
 }
@@ -1172,9 +1190,11 @@ export default function StructurePage() {
   const [setupDetailState, setSetupDetailState] = useState<LoadState<SetupEvent>>({ phase: "idle" });
 
   // era-5B J-04 Edge Report state — fetched once on mount, the SAME null-then-resolved pattern.
+  // era-fast_wall J-01: `data` is now the discriminated `EdgeReportPayload` union (a real report
+  // or the honest not-computed shape) -- see the render branch below.
   const [edgeReportResult, setEdgeReportResult] = useState<{
     ok: boolean;
-    data: EdgeReportResponse | null;
+    data: EdgeReportPayload | null;
     error?: string;
   } | null>(null);
 
@@ -1857,6 +1877,8 @@ export default function StructurePage() {
                 testid="edge-report-unavailable"
                 message={edgeReportResult.error ?? "The edge report could not be loaded."}
               />
+            ) : edgeReport.status === "not_computed" ? (
+              <NotComputedPanel detail={edgeReport.detail} />
             ) : (
               <EdgeReportBody report={edgeReport} />
             )}

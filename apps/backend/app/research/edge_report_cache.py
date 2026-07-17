@@ -81,6 +81,19 @@ the signature (the ``setups.py`` ``_store_signature`` precedent) would otherwise
 file that is NOT part of any previously-cached healthy subset coincidentally matching a stale
 cached key and silently serving a result that never saw the corruption — never worth the risk for
 what is already the rare, explicit-failure path.
+
+**era-fast_wall J-01 additions — ``lookup``/``compute_and_publish`` beside ``get_or_compute``.**
+``get_or_compute`` stays UNTOUCHED (byte-identical, every one of its own tests unmodified). Two
+new methods split its "check cache, else compute" behaviour into its two named halves, for the
+interlude's headline "no compute on a GET, ever" anti-goal: ``lookup(records, config)`` is the
+READ-ONLY half (hot slot then durable row, returns ``None`` on a miss, NEVER calls a compute
+function) — the sole method the route now calls; ``compute_and_publish(dataset_store, config,
+compute_fn)`` is the WRITE half (always recomputes unconditionally, republishes to both layers) —
+the future operator/CLI "force" path (J-04). Both share the identical key derivation
+(``_cache_key``) and store-integrity-bypass discipline ``get_or_compute`` already established
+above. ``resolve_cache_db_path`` (module-level, not a method) is the DB-path resolution policy
+itself, extracted from ``routes.py``'s inline dependency body so a future CLI caller resolves the
+IDENTICAL path with zero duplicated logic.
 """
 
 from __future__ import annotations
@@ -88,6 +101,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -96,7 +110,11 @@ from typing import Callable
 from ..config import Config
 from .datasets import DatasetStore
 
-__all__ = ["EdgeReportCache"]
+__all__ = ["EdgeReportCache", "resolve_cache_db_path"]
+
+# The env var this cache's DB path resolution checks first (era-5B J-08, extracted to a shared
+# resolver at era-fast_wall J-01 — see ``resolve_cache_db_path`` below).
+_CACHE_DB_ENV = "TAPEOLOGY_EDGE_REPORT_CACHE_DB"
 
 # Mirrors ``bar_index.py``'s ``_BUSY_TIMEOUT_MS`` (5000ms) — the identical brief writer-contention
 # tolerance a low-frequency, small-payload cache needs.
@@ -152,6 +170,22 @@ def _cache_key(records: list[dict], config: Config) -> str:
         "config_content_hash": _config_content_hash(config),
     }
     return hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest()
+
+
+def resolve_cache_db_path(dataset_dir_resolved: str) -> str:
+    """The cache DB path resolution policy (era-fast_wall J-01) — extracted from ``routes.py``'s
+    inline ``get_edge_report_cache()`` body into ONE shared function (the ``get_bar_index``
+    env-else-sibling shape) so a future CLI caller (J-04's warmer) resolves the IDENTICAL path with
+    zero duplicated logic: the ``TAPEOLOGY_EDGE_REPORT_CACHE_DB`` env var if set, else a file
+    co-located as a SIBLING of the caller's OWN already-resolved dataset directory. Takes the
+    resolved dataset directory as a plain string rather than a ``Config`` — this module never
+    imports ``config.py``'s singleton or its resolution helpers, only the ``Config`` dataclass type
+    (unchanged import list) — so the caller (``routes.py``, and later the CLI) resolves its own
+    dataset directory first, exactly as it already does today."""
+    override = os.environ.get(_CACHE_DB_ENV)
+    if override:
+        return override
+    return os.path.join(os.path.dirname(dataset_dir_resolved), "edge_report_cache.db")
 
 
 class EdgeReportCache:
@@ -259,6 +293,56 @@ class EdgeReportCache:
         if persisted is not None:
             self._hot = (key, persisted)  # single atomic rebind
             return persisted
+
+        result = compute_fn()
+        self._insert(key, result)
+        self._hot = (key, result)  # single atomic rebind, published AFTER the durable write
+        return result
+
+    def lookup(self, records: list[dict], config: Config) -> dict | None:
+        """era-fast_wall J-01 — the GET-path's EXCLUSIVE read method: serve the CURRENT
+        ``(records, config)`` key's cached result (hot slot then durable row), or ``None`` on a
+        genuine miss. NEVER calls a compute function (unlike ``get_or_compute``) — there is no
+        ``compute_fn`` parameter to call, so a miss is mechanically incapable of starting the
+        sweep. Callers MUST have already confirmed ``records`` came from an error-free
+        ``dataset_store.list()`` call — the identical ``get_or_compute``/``_cache_key`` contract
+        (see that method's own docstring and the module docstring's key-derivation section).
+
+        Atomic against concurrent callers, the identical ``get_or_compute`` discipline: ``self.
+        _hot`` is read ONCE into a local before any inspection, and a durable hit republishes it to
+        the hot slot in one atomic rebind (harmless if raced — the republished value is always the
+        SAME already-persisted row)."""
+        key = _cache_key(records, config)
+
+        hot = self._hot  # read-local-reference-before-inspect
+        if hot is not None and hot[0] == key:
+            return hot[1]
+
+        persisted = self._select(key)
+        if persisted is not None:
+            self._hot = (key, persisted)  # single atomic rebind
+        return persisted
+
+    def compute_and_publish(
+        self,
+        dataset_store: DatasetStore,
+        config: Config,
+        compute_fn: Callable[[], dict],
+    ) -> dict:
+        """era-fast_wall J-01 — the operator/CLI "force" half (J-04's future compute manager and
+        CLI warmer both republish through this exact method; this iteration exercises it directly
+        since no route calls it yet — see the module docstring). Always calls ``compute_fn``
+        exactly once — UNCONDITIONALLY, never checking the cache first, unlike ``get_or_compute``
+        — and republishes its result to both layers under the CURRENT ``(dataset_store, config)``
+        key, so a subsequent ``lookup`` for the same key returns it verbatim.
+
+        A store-integrity failure still bypasses the cache and calls ``compute_fn`` directly,
+        propagating its exception unchanged — the identical ``get_or_compute`` discipline (see the
+        module docstring's own "store-integrity failures bypass the cache entirely" section)."""
+        records, errors = dataset_store.list()
+        if errors:
+            return compute_fn()
+        key = _cache_key(records, config)
 
         result = compute_fn()
         self._insert(key, result)

@@ -18,6 +18,7 @@ from app.main import app, manager
 from app.research.bars import BarStore
 from app.research.datasets import DatasetStore
 from app.research.edge_report import REGISTER, run_strategy_comparison_report
+from app.research.edge_report_cache import EdgeReportCache
 from app.research.routes import ResearchRegistry, get_bar_store, set_registry
 from app.research.store import JournalStore
 
@@ -52,9 +53,13 @@ def test_edge_report_empty_registry_is_an_honest_200(ctx):
 
 
 def test_edge_report_matches_the_module_function_byte_for_byte(ctx):
-    """Single source of truth: the route's JSON is a VERBATIM serving of
-    ``run_strategy_comparison_report`` — never a second computation. Recording one dataset
-    through the real API first proves this on a genuinely non-trivial (if still
+    """Single source of truth (TC-4): a WARM route response is a VERBATIM serving of
+    ``run_strategy_comparison_report``'s own output — never a second computation. era-fast_wall
+    J-01: a cold GET no longer computes at all (see the not-computed tests below), so this test
+    now pre-warms the cache directly via ``EdgeReportCache.compute_and_publish`` — standing in for
+    the future operator/CLI trigger (J-04) — at the SAME hermetic path the route's own dependency
+    resolves to (see ``test_edge_report_route_cache_db_lives_hermetically_beside_the_test_dataset_
+    dir`` below), before asserting byte-identity on a genuinely non-trivial (if still
     ``insufficient_sample``-shaped) payload, not merely the vacuous empty case."""
     client, store, tmp_path = ctx
     recorded = client.post(
@@ -68,10 +73,14 @@ def test_edge_report_matches_the_module_function_byte_for_byte(ctx):
     )
     assert recorded.status_code == 200, recorded.text
 
-    route_payload = client.get("/research/edge-report").json()
     dataset_store = DatasetStore(tmp_path / "datasets")
     bar_store = BarStore(tmp_path / "bars")
     direct = run_strategy_comparison_report(store, dataset_store, bar_store, CONFIG)
+    EdgeReportCache(str(tmp_path / "edge_report_cache.db")).compute_and_publish(
+        dataset_store, CONFIG, lambda: direct
+    )
+
+    route_payload = client.get("/research/edge-report").json()
     assert json.dumps(route_payload, sort_keys=True) == json.dumps(direct, sort_keys=True)
     # PG (the reference fixture's own symbol) is not a config-owned panel symbol, so this
     # recording honestly resolves no owning scan event -- still an empty, valid cell list.
@@ -140,12 +149,15 @@ def test_edge_report_route_wired_through_the_new_cache_dependency():
     assert "cache=cache" in src
 
 
-def test_edge_report_route_serves_a_warm_result_on_the_second_call_without_recomputing(ctx, monkeypatch):
-    """The end-to-end proof J-08 exists for: TWO real HTTP requests against the SAME running
-    backend, the second of which must never re-enter the expensive computation — proven by
-    counting calls to ``_compute_strategy_comparison_report`` (the ONE real computer), not merely
-    inferring it from response shape."""
-    client, _store, _tmp_path = ctx
+def test_edge_report_route_serves_a_warm_result_on_repeated_calls_without_recomputing(ctx, monkeypatch):
+    """The end-to-end proof J-08 exists for, updated for era-fast_wall J-01's new contract: a GET
+    itself no longer WARMS the cache (see the not-computed tests below), so this pre-warms directly
+    via ``EdgeReportCache.compute_and_publish`` — standing in for the future operator/CLI trigger
+    (J-04) — at the SAME hermetic path the route's own dependency resolves to, then proves TWO real
+    HTTP requests against the SAME running backend never re-enter the expensive computation —
+    proven by counting calls to ``_compute_strategy_comparison_report`` (the ONE real computer),
+    not merely inferring it from response shape."""
+    client, store, tmp_path = ctx
     recorded = client.post(
         "/research/datasets",
         json={
@@ -156,6 +168,13 @@ def test_edge_report_route_serves_a_warm_result_on_the_second_call_without_recom
         },
     )
     assert recorded.status_code == 200, recorded.text
+
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    bar_store = BarStore(tmp_path / "bars")
+    EdgeReportCache(str(tmp_path / "edge_report_cache.db")).compute_and_publish(
+        dataset_store, CONFIG,
+        lambda: run_strategy_comparison_report(store, dataset_store, bar_store, CONFIG),
+    )
 
     from app.research import edge_report as edge_report_module
 
@@ -172,11 +191,18 @@ def test_edge_report_route_serves_a_warm_result_on_the_second_call_without_recom
     second = client.get("/research/edge-report")
 
     assert first.status_code == 200 and second.status_code == 200
-    assert len(calls) == 1  # the SECOND request served entirely from the warm cache
+    assert len(calls) == 0  # already warm BEFORE either request -- neither recomputes
     assert first.json() == second.json()
+    assert "status" not in first.json()  # the genuine warm report shape, never not-computed
 
 
-def test_edge_report_route_response_is_byte_identical_whether_cache_is_cold_or_warm(ctx):
+def test_edge_report_route_cold_response_is_byte_identical_across_repeated_calls(ctx):
+    """era-fast_wall J-01 retires this test's ORIGINAL claim (a cold GET used to compute-and-cache,
+    so cold and warm bytes matched by construction) — a cold GET now returns the intentionally
+    DIFFERENT not-computed shape (TC-1/TC-4 above), so cold-vs-warm byte-identity is no longer the
+    right property. What's still genuinely true and worth proving: the not-computed payload itself
+    is STABLE — repeated cold GETs (nothing here ever warms the cache) return byte-identical
+    responses, never a flapping ``dataset_count``/``detail``."""
     client, _store, _tmp_path = ctx
     recorded = client.post(
         "/research/datasets",
@@ -189,11 +215,53 @@ def test_edge_report_route_response_is_byte_identical_whether_cache_is_cold_or_w
     )
     assert recorded.status_code == 200, recorded.text
 
-    cold = client.get("/research/edge-report")
-    warm = client.get("/research/edge-report")
+    first = client.get("/research/edge-report")
+    second = client.get("/research/edge-report")
 
-    assert cold.status_code == 200 and warm.status_code == 200
-    assert json.dumps(cold.json(), sort_keys=True) == json.dumps(warm.json(), sort_keys=True)
+    assert first.status_code == 200 and second.status_code == 200
+    assert first.json()["status"] == "not_computed"
+    assert json.dumps(first.json(), sort_keys=True) == json.dumps(second.json(), sort_keys=True)
+
+
+def test_edge_report_cold_cache_returns_the_not_computed_payload_and_never_computes(ctx, monkeypatch):
+    """TC-1 + TC-2: a cold cache with a non-empty registry answers instantly with the honest
+    not-computed shape, and a counting spy proves the expensive sweep is NEVER entered — the
+    mechanical proof era-fast_wall J-01 exists to deliver."""
+    client, _store, _tmp_path = ctx
+    recorded = client.post(
+        "/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:00:30Z",
+        },
+    )
+    assert recorded.status_code == 200, recorded.text
+    dataset_count = client.get("/research/datasets").json()
+    assert len(dataset_count["datasets"]) == 1
+
+    from app.research import edge_report as edge_report_module
+
+    calls = []
+    real_compute = edge_report_module._compute_strategy_comparison_report
+
+    def _counting_compute(*args, **kwargs):
+        calls.append(1)
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report_module, "_compute_strategy_comparison_report", _counting_compute)
+
+    response = client.get("/research/edge-report")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "not_computed"
+    assert isinstance(payload["detail"], str) and payload["detail"] != ""
+    assert payload["dataset_count"] == 1
+    assert payload["register"] == REGISTER
+    assert payload["compute"] is None
+    assert calls == []  # the GET path never enters the sweep
 
 
 def test_edge_report_route_cache_db_lives_hermetically_beside_the_test_dataset_dir(ctx):

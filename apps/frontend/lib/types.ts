@@ -1357,4 +1357,24 @@ export interface EdgeReportResponse {
   train: { cells: EdgeReportCell[] };
   holdout: { cells: EdgeReportCell[] };
   surviving_train_cells: EdgeReportSurvivingCell[];
+  status?: undefined;
 }
+
+// GET /research/edge-report — the honest not-computed payload (era-fast_wall J-01): a cold cache
+// key with a non-empty dataset registry. `status` is the sole discriminator against
+// `EdgeReportResponse` above (absent -- `undefined` -- on a real report). `detail` is the
+// backend's OWN trigger explanation, rendered verbatim, never a frontend-authored string.
+// `compute` is always `null` this iteration (no compute manager exists until J-04 -- see
+// `peek_strategy_comparison_report`'s own docstring).
+export interface EdgeReportNotComputed {
+  status: "not_computed";
+  detail: string;
+  dataset_count: number;
+  register: string;
+  compute: null;
+}
+
+// The discriminated union `fetchEdgeReport()` actually returns -- a real report or the
+// not-computed payload. `payload.status === "not_computed"` is the render branch's discriminator
+// (see `structure/page.tsx`'s Edge Report section).
+export type EdgeReportPayload = EdgeReportResponse | EdgeReportNotComputed;

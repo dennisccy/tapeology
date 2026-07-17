@@ -538,15 +538,25 @@ async def test_strategies_tool_byte_identical_on_a_non_empty_live_result(mcp_env
 
 @pytest.mark.anyio
 async def test_edge_report_tool_byte_identical_to_rest(mcp_env):
-    """``edge_report`` (era-5B J-04) ships in the SAME iteration as its endpoint — the report
-    dict (``register``/``pnl_min_sample_size``/``train``/``holdout``/``surviving_train_cells``)
-    is ALWAYS present (an empty dataset registry is an honest, well-formed 200 — never an error),
-    so this proves byte-identity with no seeding at all, the ``strategies`` tool's own precedent."""
+    """``edge_report`` (era-5B J-04) ships in the SAME iteration as its endpoint. era-fast_wall
+    J-01 (TC-6): by this point in the module, an earlier test
+    (``test_datasets_tool_byte_identical_on_a_non_empty_live_list``) has already registered a
+    dataset against this SAME shared backend, and nothing in this module has called
+    ``/research/edge-report`` before now — so the registry is genuinely non-empty and the cache is
+    genuinely cold, and this GET naturally returns the not-computed payload rather than the
+    era-5B full-report shape. Proves REST<->MCP byte-identity in exactly that new state, with no
+    seeding of this test's own."""
+    datasets = httpx.get(f"{mcp_env}/research/datasets", timeout=5.0).json()["datasets"]
+    assert len(datasets) >= 1, "an earlier test in this module must have already registered one"
+
     result = await call_tool("edge_report", {})
     rest = httpx.get(f"{mcp_env}/research/edge-report", timeout=5.0)
     assert rest.status_code == 200
     payload = rest.json()
-    assert set(payload) >= {"register", "pnl_min_sample_size", "train", "holdout", "surviving_train_cells"}
+    assert payload.get("status") == "not_computed", (
+        "expected the not-computed shape: registry is non-empty and nothing has warmed the cache"
+    )
+    assert set(payload) == {"status", "detail", "dataset_count", "register", "compute"}
     assert result.isError is False
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "edge_report not byte-identical"
@@ -555,10 +565,11 @@ async def test_edge_report_tool_byte_identical_to_rest(mcp_env):
 @pytest.mark.anyio
 async def test_edge_report_tool_byte_identical_after_recording_a_real_dataset(mcp_env):
     """The IDENTICAL ``datasets``/``backtests`` "flips from empty to a real state with ZERO MCP
-    code changes" precedent: after recording a real dataset through the live backend, the tool's
-    JSON is still byte-identical to its curl equivalent (still an honest empty ``cells`` list here
-    — PG, the reference fixture's symbol, is not a config-owned panel symbol — but the byte-proxy
-    discipline itself is what this test exists to prove, on a request that now does real work)."""
+    code changes" precedent: after recording ANOTHER real dataset through the live backend, the
+    tool's JSON is still byte-identical to its curl equivalent — still the not-computed shape here
+    (era-fast_wall J-01: nothing in this module ever warms the cache, so the cache stays cold for
+    the rest of the module too) — but the byte-proxy discipline itself is what this test exists to
+    prove, on a request whose ``dataset_count`` has now genuinely changed."""
     recorded = httpx.post(
         f"{mcp_env}/research/datasets",
         json={

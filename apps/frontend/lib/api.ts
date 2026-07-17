@@ -10,7 +10,7 @@ import type {
   CreateStudyResult,
   DatasetsListResult,
   DeclareResult,
-  EdgeReportResponse,
+  EdgeReportPayload,
   Hint,
   JournalDetail,
   JournalFilters,
@@ -1143,13 +1143,13 @@ export async function fetchSetupDetail(
 // failure; `data: null` is reserved for a genuine non-200 / unreachable backend.
 export async function fetchEdgeReport(): Promise<{
   ok: boolean;
-  data: EdgeReportResponse | null;
+  data: EdgeReportPayload | null;
   error?: string;
 }> {
   try {
     const res = await fetch(`${API_BASE}/research/edge-report`);
     if (res.ok) {
-      return { ok: true, data: (await res.json()) as EdgeReportResponse };
+      return { ok: true, data: (await res.json()) as EdgeReportPayload };
     }
     let error = "The edge report could not be loaded.";
     try {
