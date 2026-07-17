@@ -17,6 +17,11 @@ pre-registered at baseline; no new row, no nav change.
 iter-5 update: refined the "edge_report_backtests.db" rebuildable-accelerator bullet (below) to its
 exact key composition now that J-05 actually builds `EdgeReportBacktestCache` — additive detail
 only, same non-canonical accelerator status pre-registered at baseline; no new row, no nav change.
+
+iter-6 update: refined the "setups_scan_cache.db" rebuildable-accelerator bullet (below) to its exact
+key composition now that J-06 actually builds it — additive detail only, same non-canonical
+accelerator status pre-registered at baseline; no new row, no nav change. This is the interlude's
+seventh and final journey.
 -->
 
 ## Information Architecture
@@ -71,7 +76,7 @@ read/compute re-verifies or recomputes byte-identically through the one canonica
 
 - the two in-process verified-content stat-keyed caches added to `bars.py` / `datasets.py` (metadata only for `datasets.py`; `load_events`/`replay` always re-verify)
 - `dataset_index.db` (`app/research/dataset_index.py`) — durable sibling of the metadata cache
-- `setups_scan_cache.db` (`app/research/setups_scan_cache.py`)
+- `setups_scan_cache.db` (`app/research/setups_scan_cache.py`) — one durable row per `(config content hash, store signature)` pair; key = sha256 of the canonical JSON of `{config_content_hash, store_signature}` — `config_content_hash` reuses `edge_report_cache.py`'s `_config_content_hash(config)` verbatim (never re-derived; the fingerprint-exclusion-safe whole-config hash, since `config.config_fingerprint()` alone excludes exactly the `setups_*`/`tradability_*`/`sr_*` families this scan reads), `store_signature` reuses `setups._store_signature(bar_store)` verbatim; value = the scan's own `{"events": [...]}` result stored WITHOUT `sort_keys`; path env `TAPEOLOGY_SETUPS_CACHE_DB` else a `.data/setups_scan_cache.db` sibling of `BarStore.root`'s parent directory (`bar_index.db`'s own sibling-of-bar-dir shape); checked between `compute_setups`'s existing in-process `_SCAN_CACHE` hot slot and the real scan — a durable hit republishes to the hot slot in one atomic rebind, a full miss publishes to both layers — iter-6, J-06
 - `edge_report_backtests.db` (`EdgeReportBacktestCache` — one durable row per dataset×strategy pair sub-result; key = sha256 of the canonical JSON of `{dataset_id, dataset_checksum, strategy_id, profile, config_fingerprint, config_content_hash, strategy_registry, bar_store_signature}` — `bar_store_signature` reuses `setups._store_signature(bar_store)` verbatim, never re-derived; value = the runner's own per-pair `result` block stored WITHOUT `sort_keys`; path env `TAPEOLOGY_EDGE_SWEEP_CACHE_DB` else a `.data/edge_report_backtests.db` sibling of the dataset dir — iter-5, J-05)
 - the existing `edge_report_cache.db` (`EdgeReportCache`)
 - the per-run `_StructureArmMemo` (in-memory, one instance per backtest run — never persisted)
@@ -126,3 +131,18 @@ existing bar-store-signature precedent this iteration reuses, never re-derives. 
 `partial` (backend/API/CLI fully proven; the required browser click-through has no screenshot — Chrome
 MCP failed to start in the prior session, reproduced by 4 agents) — this iteration re-attempts that
 screenshot with zero new code before building J-05. -->
+
+<!-- Codebase probe at iter-6 (before J-06 build, the interlude's closing journey): confirmed
+setups_scan_cache.py does not exist anywhere yet. compute_setups(store, config) is called from exactly
+4 sites — routes.py:1945 (list_setups), routes.py:1967 (get_setup), edge_report.py:582, edge_report.py:932
+— all 2-arg, none passing a cache; its in-process `_SCAN_CACHE` hot slot is still keyed
+`(id(config), _store_signature(store))` (setups.py:403), the fragile leg this iteration replaces with a
+config CONTENT hash. `BarStore.root` (bars.py:177-184) already exists as a public read-only property
+(added at J-02 TC-11 specifically for a future sibling-path consumer). `edge_report_cache._config_content_hash`/
+`_canonical` are already imported cross-module by edge_report_backtest_cache.py — the identical import
+pattern this iteration repeats into setups.py. Both source-introspection guard tests are confirmed at
+the exact lines goal.md cites: test_compute_setups_itself_never_touches_the_dataset_store at
+tests/test_setups.py:758, test_scan_cache_publish_is_a_single_atomic_rebind_never_two_separate_writes at
+tests/test_setups.py:995. Full backend suite re-run clean (all-dots, exit 0) at decompose time, matching
+iter-5's reported 1517 passed / 7 skipped / 0 failed baseline; config_fingerprint unchanged at
+4d665603569b9dbf. J-06 is the ONLY remaining `failing` journey — all of J-01–J-05 and J-07 are `passing`. -->
