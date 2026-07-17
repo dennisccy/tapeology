@@ -838,6 +838,7 @@ def test_3way_report_source_reuses_the_shared_aggregate_and_never_a_second_edge_
 # ==================================================================================================
 
 from app.research.edge_report_cache import EdgeReportCache  # noqa: E402
+from app.research.edge_report_backtest_cache import EdgeReportBacktestCache  # noqa: E402
 
 
 def test_cache_none_default_is_byte_identical_to_the_pre_j08_uncached_call(
@@ -1104,13 +1105,21 @@ from app.research.edge_report import EdgeReportComputeCancelled  # noqa: E402
 def test_progress_and_should_abort_supplied_but_unused_is_byte_identical_to_the_default_path(
     tmp_path, store, scan_bar_store, scan_config
 ):
-    """TC-14a: the hooked path (every new kwarg actively supplied but never triggered to abort)
-    produces a report byte-identical to the pre-existing default path — on the REAL, non-degenerate
-    3-cell synthetic-scan-join shape (the iter-4 lesson: never merely the vacuous empty case)."""
+    """TC-14a: the hooked path (every new kwarg actively supplied, ``should_abort`` never firing,
+    ``workers`` never resolving above 1 so the parallel branch never triggers) produces a report
+    byte-identical to the pre-existing default path — on the REAL, non-degenerate 3-cell
+    synthetic-scan-join shape (the iter-4 lesson: never merely the vacuous empty case).
+
+    era-fast_wall J-05: ``sub_cache`` is now threaded through as a REAL ``EdgeReportBacktestCache``
+    (no longer the J-04 placeholder sentinel ``object()`` — J-05 gives it genuine caching effect,
+    still producing byte-identical output; the dedicated ``sub_cache=None``-vs-warm claim is proven
+    in isolation by ``test_sub_cache_supplied_report_is_byte_identical_to_the_default_path``,
+    below the J-05 marker)."""
     dataset_store = DatasetStore(tmp_path / "datasets")
     _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
     cache_a = EdgeReportCache(str(tmp_path / "cache-a.db"))
     cache_b = EdgeReportCache(str(tmp_path / "cache-b.db"))
+    sub_cache = EdgeReportBacktestCache(str(tmp_path / "sub-cache.db"))
 
     progress_events: list[dict] = []
 
@@ -1122,7 +1131,7 @@ def test_progress_and_should_abort_supplied_but_unused_is_byte_identical_to_the_
     )
     hooked_path = run_strategy_comparison_report(
         store, dataset_store, scan_bar_store, scan_config, cache=cache_b,
-        progress=_progress, should_abort=lambda: False, sub_cache=object(), workers=7,
+        progress=_progress, should_abort=lambda: False, sub_cache=sub_cache, workers=1,
     )
 
     assert json.dumps(default_path, sort_keys=True) == json.dumps(hooked_path, sort_keys=True)
@@ -1320,9 +1329,326 @@ def test_peek_compute_field_embeds_whatever_is_passed_verbatim(
 
 def test_run_strategy_comparison_report_source_documents_the_five_new_hooks():
     """A coherence guard: the five new keyword-only params exist textually on the function's OWN
-    signature (never silently absorbed into ``**kwargs`` or dropped)."""
+    signature (never silently absorbed into ``**kwargs`` or dropped). era-fast_wall J-05: ``sub_
+    cache``/``workers`` now carry real type hints (``EdgeReportBacktestCache | None`` / ``int |
+    None``) since they gained real effect — the literal substrings below are updated to match."""
     import inspect
 
     src = inspect.getsource(edge_report.run_strategy_comparison_report)
-    for hook in ("force: bool = False", "progress=None", "should_abort=None", "sub_cache=None", "workers=None"):
+    for hook in (
+        "force: bool = False",
+        "progress=None",
+        "should_abort=None",
+        'sub_cache: "EdgeReportBacktestCache | None" = None',
+        "workers: int | None = None",
+    ):
         assert hook in src
+
+
+# ==================================================================================================
+# The resumable + parallel sweep (era-fast_wall J-05) — ``EdgeReportBacktestCache`` given real
+# effect: ``_split_cells``'s ``run_pair`` seam, ``_build_caching_run_pair``, and the CLI-only
+# ``_parallel_prewarm_sub_cache``. ``EdgeReportBacktestCache``'s OWN mechanics (keying, durability,
+# corrupted-DB tolerance, concurrency) are unit-tested in isolation in
+# ``tests/test_edge_report_backtest_cache.py`` against a cheap counting stub — this section proves
+# the WIRING into the real ``_split_cells``/``_run_backtest``/``run_strategy_comparison_report``
+# path (byte-identity, kill-and-resume, new-dataset-costs-three, cache-loss recompute, the
+# non-vacuous multi-process parallel proof).
+# ==================================================================================================
+
+
+def test_build_caching_run_pair_computes_signature_and_config_hashes_once_per_sweep_not_per_pair():
+    """Coherence guard (the NOTES' own implementation hint): ``bar_store_signature``/
+    ``config_fingerprint``/``config_content_hash``/``strategy_registry`` are computed OUTSIDE the
+    ``run_pair`` closure — textually BEFORE ``def run_pair(`` — so they run ONCE per sweep, never
+    once per pair (the exact wasteful-recomputation pattern this whole interlude exists to
+    remove)."""
+    import inspect
+
+    src = inspect.getsource(edge_report._build_caching_run_pair)
+    closure_start = src.index("def run_pair(")
+    setup, closure_body = src[:closure_start], src[closure_start:]
+
+    assert "_store_signature(bar_store)" in setup
+    assert "config.config_fingerprint()" in setup
+    assert "_config_content_hash(config)" in setup
+    assert "config.strategy_registry()" in setup
+    for forbidden in (
+        "_store_signature(", "config.config_fingerprint(",
+        "_config_content_hash(", "config.strategy_registry(",
+    ):
+        assert forbidden not in closure_body, f"{forbidden} must not be recomputed per pair"
+
+
+def test_sub_cache_supplied_report_is_byte_identical_to_the_default_path(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    """TC-13: ``sub_cache=None`` (today's pre-J-05 shape) vs a genuinely warm ``sub_cache``
+    produce byte-identical reports for the SAME inputs."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    sub_cache = EdgeReportBacktestCache(str(tmp_path / "sub-cache.db"))
+
+    without_sub_cache = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config)
+    with_sub_cache = run_strategy_comparison_report(
+        store, dataset_store, scan_bar_store, scan_config, sub_cache=sub_cache,
+    )
+
+    assert json.dumps(without_sub_cache, sort_keys=True) == json.dumps(with_sub_cache, sort_keys=True)
+    assert len(without_sub_cache["train"]["cells"]) == 3  # non-degenerate: the real 3-cell shape
+
+
+def test_a_fully_cached_sweep_publishes_every_eligible_pair_and_is_byte_identical(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    """TC-4: given the fixture dataset registry and a fresh, empty ``EdgeReportBacktestCache`` DB,
+    a full sweep publishes a durable row for EVERY eligible (dataset, strategy) pair, and the
+    returned report is byte-identical to the SAME inputs computed with ``sub_cache=None``."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    sub_cache_db_path = tmp_path / "sub-cache.db"
+    sub_cache = EdgeReportBacktestCache(str(sub_cache_db_path))
+
+    warm = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, sub_cache=sub_cache)
+    fresh = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config)  # sub_cache=None
+
+    assert json.dumps(warm, sort_keys=True) == json.dumps(fresh, sort_keys=True)
+
+    import sqlite3
+
+    conn = sqlite3.connect(str(sub_cache_db_path))
+    try:
+        (count,) = conn.execute("SELECT COUNT(*) FROM edge_report_backtest_cache").fetchone()
+    finally:
+        conn.close()
+    assert count == 3  # one row per (dataset, strategy) pair -- 1 dataset x 3 registered strategies
+
+
+def test_kill_and_resume_recomputes_only_the_missing_pairs(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    """TC-6: a sweep aborted (via ``should_abort``) after publishing N pairs, re-triggered with the
+    SAME ``sub_cache``, makes fresh ``_run_backtest`` calls for ONLY the remaining pairs, and the
+    progress snapshot's ``backtests_from_cache`` equals N."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    sub_cache = EdgeReportBacktestCache(str(tmp_path / "sub-cache.db"))
+
+    should_abort_calls = {"n": 0}
+
+    def _should_abort() -> bool:
+        should_abort_calls["n"] += 1
+        return should_abort_calls["n"] > 1  # fires at the top of the 2nd pair -- never before the 1st
+
+    with pytest.raises(EdgeReportComputeCancelled):
+        run_strategy_comparison_report(
+            store, dataset_store, scan_bar_store, scan_config,
+            sub_cache=sub_cache, should_abort=_should_abort,
+        )
+
+    import sqlite3
+
+    conn = sqlite3.connect(sub_cache.db_path)
+    try:
+        (published_before_resume,) = conn.execute("SELECT COUNT(*) FROM edge_report_backtest_cache").fetchone()
+    finally:
+        conn.close()
+    assert published_before_resume == 1  # exactly the first (v1) pair persisted before the abort
+
+    calls = []
+    real_run_backtest = edge_report._run_backtest
+
+    def _counting_run_backtest(*args, **kwargs):
+        calls.append(1)
+        return real_run_backtest(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report, "_run_backtest", _counting_run_backtest)
+
+    progress_events: list[dict] = []
+    result = run_strategy_comparison_report(
+        store, dataset_store, scan_bar_store, scan_config,
+        sub_cache=sub_cache, progress=progress_events.append,
+    )
+
+    assert len(calls) == 2  # only the 2 REMAINING (of 3 total) pairs recomputed
+    pair_done_events = [e for e in progress_events if e.get("event") == "pair_done"]
+    assert pair_done_events[-1]["backtests_from_cache"] == 1  # the ONE pair served from cache
+    assert len(result["train"]["cells"]) == 3  # the reassembled report is still complete/correct
+
+
+def test_a_new_dataset_costs_exactly_three_fresh_backtests_on_a_warm_sub_cache(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    """TC-7: given a fully-warm sub-cache for the existing fixture registry, registering ONE
+    additional dataset and re-triggering the sweep costs EXACTLY three new ``_run_backtest`` calls
+    (one per registered strategy), zero for the pre-existing dataset."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    sub_cache = EdgeReportBacktestCache(str(tmp_path / "sub-cache.db"))
+    run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, sub_cache=sub_cache)
+
+    _record_v1_arming_dataset(dataset_store, max_logical=200.0, split=SPLIT_TRAIN, feed="sim", label="b")
+
+    calls = []
+    real_run_backtest = edge_report._run_backtest
+
+    def _counting_run_backtest(*args, **kwargs):
+        calls.append(1)
+        return real_run_backtest(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report, "_run_backtest", _counting_run_backtest)
+
+    result = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, sub_cache=sub_cache)
+
+    assert len(calls) == 3  # exactly 3 fresh backtests for the ONE new dataset, 0 for the pre-existing one
+    v1_cell = next(c for c in result["train"]["cells"] if c["strategy_id"] == STRATEGY_V1_ID)
+    assert v1_cell["measurement"]["n"] == 2  # both datasets pooled into the recomputed cell
+
+
+def test_deleting_the_sub_cache_db_triggers_a_full_recompute_byte_identical_to_the_original(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    """TC-9: deleting the sub-cache DB file loses nothing — the next sweep fully recomputes every
+    pair (a call-counting spy confirms it, never merely inferred from the output alone) and
+    republishes, producing a report byte-identical to the original warm-cache report."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    sub_cache_db_path = tmp_path / "sub-cache.db"
+    sub_cache = EdgeReportBacktestCache(str(sub_cache_db_path))
+
+    original = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, sub_cache=sub_cache)
+
+    for suffix in ("", "-wal", "-shm"):
+        sidecar = Path(str(sub_cache_db_path) + suffix)
+        if sidecar.exists():
+            sidecar.unlink()
+
+    calls = []
+    real_run_backtest = edge_report._run_backtest
+
+    def _counting_run_backtest(*args, **kwargs):
+        calls.append(1)
+        return real_run_backtest(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report, "_run_backtest", _counting_run_backtest)
+
+    fresh_sub_cache = EdgeReportBacktestCache(str(sub_cache_db_path))
+    store2 = JournalStore(str(tmp_path / "journal-2.db"), scan_config)
+    try:
+        recomputed = run_strategy_comparison_report(
+            store2, dataset_store, scan_bar_store, scan_config, sub_cache=fresh_sub_cache,
+        )
+    finally:
+        store2.close()
+
+    assert len(calls) == 3  # every pair genuinely re-run, never silently served from stale state
+    assert json.dumps(recomputed, sort_keys=True) == json.dumps(original, sort_keys=True)
+
+
+def test_a_corrupted_sub_cache_db_is_treated_as_a_full_miss_never_a_crash(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    """Error case: a corrupted/unreadable sub-cache DB is treated as a full miss (recompute), never
+    a crash — proven through the REAL sweep end to end, not merely ``EdgeReportBacktestCache`` in
+    isolation (see ``test_edge_report_backtest_cache.py`` for that isolated proof)."""
+    garbage_path = tmp_path / "garbage.db"
+    garbage_path.write_bytes(b"not a real sqlite file, just garbage bytes " * 20)
+    sub_cache = EdgeReportBacktestCache(str(garbage_path))
+
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+
+    result = run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, sub_cache=sub_cache)
+
+    assert len(result["train"]["cells"]) == 3  # a full, correct recompute despite the corrupt DB
+
+
+def test_a_worker_side_backtest_failure_propagates_as_a_genuine_sweep_failure(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    """Error case: a pair's ``_run_backtest`` raising propagates as a genuine sweep failure — never
+    a silently-dropped pair, and nothing is published for that pair."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    sub_cache = EdgeReportBacktestCache(str(tmp_path / "sub-cache.db"))
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("synthetic backtest failure")
+
+    monkeypatch.setattr(edge_report, "_run_backtest", _boom)
+
+    with pytest.raises(RuntimeError, match="synthetic backtest failure"):
+        run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, sub_cache=sub_cache)
+
+    assert sub_cache.lookup("anything") is None  # sanity: cache is still genuinely empty (no crash-loop artifact)
+
+
+# --- The parallel provider (CLI-only) — a non-vacuous, genuinely multi-process proof (TC-8) -------
+
+
+def test_parallel_prewarm_uses_at_least_two_distinct_worker_processes_and_reassembles_byte_identically(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    """TC-8 (non-vacuous): two datasets, each resolving the SAME real classified scan event,
+    pre-warmed via ``_parallel_prewarm_sub_cache(..., workers=2)`` — the RETURNED per-task
+    ``{"dataset_id", "pid"}`` bookkeeping proves at least two DISTINCT worker process ids were
+    genuinely used (never a silent sequential fallback: pids can only cross a process boundary via
+    a real child process's own ``os.getpid()``, pickled back through the future's result — this
+    could not be faked by a same-process shortcut), and the reassembled report (via the SAME
+    untouched sequential ``run_strategy_comparison_report`` call, now 100% cache hits) is
+    byte-identical to an INDEPENDENT, wholly sequential compute of the SAME inputs.
+
+    ``_parallel_prewarm_sub_cache`` derives its workers' dataset directory from
+    ``config.dataset_dir_resolved()`` (the CLI's OWN construction invariant — see that function's
+    own docstring), so this test sets ``TAPEOLOGY_DATASET_DIR`` to match ``dataset_store``'s actual
+    root, exactly as the real CLI's ``main()`` always does."""
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(tmp_path / "datasets"))
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    _record_v1_arming_dataset(dataset_store, max_logical=200.0, split=SPLIT_TRAIN, feed="sim", label="b")
+
+    sub_cache = EdgeReportBacktestCache(str(tmp_path / "sub-cache-parallel.db"))
+    task_results = edge_report._parallel_prewarm_sub_cache(
+        dataset_store, scan_bar_store, scan_config, sub_cache=sub_cache, workers=2,
+    )
+
+    assert len(task_results) == 2  # one task per dataset -- "task = one dataset, all 3 strategies"
+    pids = {r["pid"] for r in task_results}
+    assert len(pids) >= 2, f"expected >=2 distinct worker pids, got {pids}"
+
+    parallel_report = run_strategy_comparison_report(
+        store, dataset_store, scan_bar_store, scan_config, sub_cache=sub_cache,
+    )  # 100% cache hits -- pure sequential reassembly, never a fresh backtest
+
+    sequential_store = JournalStore(str(tmp_path / "journal-seq.db"), scan_config)
+    try:
+        sequential_report = run_strategy_comparison_report(
+            sequential_store, dataset_store, scan_bar_store, scan_config,
+        )  # sub_cache=None -- a wholly independent fresh compute
+    finally:
+        sequential_store.close()
+
+    assert json.dumps(parallel_report, sort_keys=True) == json.dumps(sequential_report, sort_keys=True)
+    assert len(parallel_report["train"]["cells"]) == 3  # non-degenerate: the real 3-cell shape
+
+
+def test_parallel_prewarm_with_zero_eligible_datasets_never_spins_up_a_process_pool(
+    tmp_path, store, monkeypatch
+):
+    """A registry with zero eligible pairs (the committed J-03 fixture's own PG symbol, not a
+    config-owned panel symbol) returns immediately without ever constructing a
+    ``ProcessPoolExecutor`` — no wasted worker-startup cost for nothing to do."""
+    dataset_store = DatasetStore(FIXTURE_J03_DATASET_DIR)
+    bar_store = BarStore(tmp_path / "empty-bars")
+    sub_cache = EdgeReportBacktestCache(str(tmp_path / "sub-cache.db"))
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("ProcessPoolExecutor must never be constructed with zero eligible tasks")
+
+    monkeypatch.setattr(edge_report, "ProcessPoolExecutor", _boom)
+
+    results = edge_report._parallel_prewarm_sub_cache(
+        dataset_store, bar_store, CONFIG, sub_cache=sub_cache, workers=4,
+    )
+
+    assert results == []

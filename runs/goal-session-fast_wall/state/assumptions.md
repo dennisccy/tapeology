@@ -166,3 +166,25 @@ load" sits right beside it in the same section of goal.md).
 **Reversible:** yes — a follow-up iteration can add a `workers=` passthrough to `trigger()`/the
 route with no signature-breaking change, exactly mirroring how J-04 itself forward-declared
 `sub_cache=`/`workers=` as accepted-but-inert for this iteration to later resolve.
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** J-04's acceptance / DoD names a browser-verified "button → progress →
+terminal-state" cycle, but both committed keyless fixtures resolve 0 eligible pairs, so the
+captured browser evidence is button → (instant) terminal honest-empty-state, never a live
+nonzero progress tick or the "(N from cache)" annotation. The status enum forces one label for a
+journey whose required browser leg is now genuinely captured at its terminal/failed states but
+whose intermediate progress-tick sub-leg is un-showable on the mandated fixtures.
+**We chose:** Score J-04 `passing` (flip from iter-4's `partial`), not keep it `partial`. The
+iter-4 rationale for `partial` was strictly "no screenshot exists" (Chrome MCP down); that
+blocker is now resolved — I personally opened real screenshots of the enabled "Compute edge
+report" button (UT-01), the click-through to the acceptance's explicitly-allowed terminal honest
+empty state with no button/no reload (UT-02-after-empty-state), the failed-state verbatim
+`EdgeReportError` + "Retry compute" (UT-06), and the warm reload serving directly (UT-04). The
+single unshown sub-leg is fixture-bound, openly disclosed across three lanes, and proven
+non-vacuously at the pytest level — a documented limitation, not a missing-evidence gap. Requiring
+the nonzero-tick screenshot would hold J-04 hostage to a keyless-fixture limitation the spec
+itself mandated (the methodology's #1 "vague criteria → infinite loop" anti-pattern).
+**Reversible:** yes — a future iteration with a fixture/corpus carrying genuinely eligible pairs
+(after J-06, or a recorded corpus) can add the live-tick + "(N from cache)" browser evidence
+(currently UT-07 SKIP); if that render ever contradicts the pytest proof, J-04 reopens.

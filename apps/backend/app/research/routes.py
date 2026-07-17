@@ -50,6 +50,7 @@ from .bars import (
     EmptyBarWindowError,
 )
 from .edge_report import EdgeReportError, peek_strategy_comparison_report
+from .edge_report_backtest_cache import EdgeReportBacktestCache, resolve_backtest_cache_db_path
 from .edge_report_cache import EdgeReportCache, resolve_cache_db_path
 from .edge_report_compute import EdgeReportComputeManager
 from .levels import compute_levels
@@ -1612,6 +1613,16 @@ def get_edge_report_cache() -> EdgeReportCache:
     return EdgeReportCache(resolve_cache_db_path(CONFIG.dataset_dir_resolved()))
 
 
+def get_edge_report_backtest_cache() -> EdgeReportBacktestCache:
+    """The persisted, rebuildable per-(dataset x strategy)-pair backtest sub-cache (era-fast_wall
+    J-05) — the ``get_edge_report_cache`` precedent, mirrored for a DIFFERENT durable file: the
+    ``TAPEOLOGY_EDGE_SWEEP_CACHE_DB`` env var if set, else a file co-located as a SIBLING of the
+    config-owned dataset directory (``resolve_backtest_cache_db_path`` — the shared resolver, the
+    ``resolve_cache_db_path`` pattern). A FastAPI dependency so tests can override it outright or
+    point it at a temp path via the env var."""
+    return EdgeReportBacktestCache(resolve_backtest_cache_db_path(CONFIG.dataset_dir_resolved()))
+
+
 def get_bar_fetch_adapter():
     """The market adapter for the BAR-FETCH path ONLY (``POST /research/bars`` — era-5 J-01).
 
@@ -2180,15 +2191,21 @@ def trigger_edge_report_compute(
     dataset_store: DatasetStore = Depends(get_dataset_store),
     bar_store: BarStore = Depends(get_bar_store),
     cache: EdgeReportCache = Depends(get_edge_report_cache),
+    sub_cache: EdgeReportBacktestCache = Depends(get_edge_report_backtest_cache),
 ) -> dict:
     """Start the single-flight edge-report compute job, or — if one is already running — return it
     UNCHANGED (``started: False``, never a second concurrent job). Returns
     ``{"started": bool, "compute": <snapshot>}``; the actual sweep runs on a background worker
     thread, off this request (``EdgeReportComputeManager.trigger`` — the ``create_backtest``/
     ``jobs.start`` precedent), so this route returns immediately regardless of how long the sweep
-    takes."""
+    takes.
+
+    era-fast_wall J-05: also injects the durable per-pair sub-cache
+    (``get_edge_report_backtest_cache``), threaded into ``trigger()`` so a browser-triggered
+    compute is resumable too — a killed-and-retriggered job skips already-published pairs."""
     return registry.edge_report_compute.trigger(
-        registry.store, dataset_store, bar_store, registry.config, cache, force=body.force,
+        registry.store, dataset_store, bar_store, registry.config, cache,
+        force=body.force, sub_cache=sub_cache,
     )
 
 

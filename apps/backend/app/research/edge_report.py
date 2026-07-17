@@ -53,7 +53,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing
+import os
 import sys
+import tempfile
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from ..config import (
@@ -72,8 +76,15 @@ from .bars import BarStore
 # second R/$/edge formula.
 from .backtests import BacktestJobManager, REGISTER, STATUS_DONE, _aggregate
 from .datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN, parse_utc_epoch
-from .edge_report_cache import EdgeReportCache
-from .setups import compute_setups
+# era-fast_wall J-05: ``pair_cache_key``/``EdgeReportBacktestCache`` for the per-pair sub-cache;
+# ``_config_content_hash`` reused VERBATIM from ``edge_report_cache.py`` (never re-derived a
+# second time -- see ``edge_report_backtest_cache.py``'s own module docstring for the full "why").
+from .edge_report_backtest_cache import EdgeReportBacktestCache, pair_cache_key
+from .edge_report_cache import EdgeReportCache, _config_content_hash
+# ``_store_signature`` imported PRIVATE (the identical ``_aggregate`` precedent above, and the
+# phase plan's own explicit suggestion): the ONE bar-store-signature tuple shape ``setups.py``
+# already computes for its OWN scan cache, reused verbatim here rather than duplicated.
+from .setups import _store_signature, compute_setups
 from .store import JournalStore
 
 __all__ = [
@@ -394,6 +405,16 @@ class _ProgressReporter:
             "current": {"dataset_id": dataset_id, "strategy_id": strategy_id},
         })
 
+    def note_cache_hit(self) -> None:
+        """era-fast_wall J-05: bumps the running from-cache count WITHOUT emitting a sink patch of
+        its own. Called by the caching ``run_pair`` closure (``_build_caching_run_pair``, below)
+        the INSTANT it serves a sub-cache hit -- strictly BEFORE this pair's own ``pair_done()``
+        (UNCHANGED) fires. ``pair_done()``'s EXISTING patch already reads ``self._from_cache``, so
+        this single additive method is enough to make ``backtests_from_cache`` genuinely increment
+        without widening ``run_pair``'s own 2-arg-in/1-dict-out shape (the NOTES' own
+        implementation hint)."""
+        self._from_cache += 1
+
     def pair_done(self) -> None:
         self._done += 1
         self._sink({
@@ -413,6 +434,7 @@ def _split_cells(
     *,
     reporter: "_ProgressReporter | None" = None,
     should_abort=None,
+    run_pair=None,
 ) -> list[dict]:
     """One split's (train or hold-out) cells: for every dataset that resolves an owning event with
     a genuinely inherited class (an unclassified ``class: null`` band is honestly excluded — there
@@ -427,12 +449,21 @@ def _split_cells(
     numbers cannot recover that without the raw, correctly-ordered trade list).
 
     era-fast_wall J-04: ``reporter``/``should_abort`` (both optional, default ``None`` — the exact
-    pre-J-04 loop when omitted) are the ONLY additions to this loop's body — the pooling/ordering/
+    pre-J-04 loop when omitted) are additions to this loop's body — the pooling/ordering/
     aggregation code below is byte-for-byte untouched. ``should_abort`` (a zero-arg callable) is
-    checked ONCE per pair, strictly BEFORE that pair's ``_run_backtest`` call — cooperative
+    checked ONCE per pair, strictly BEFORE that pair's backtest call — cooperative
     cancellation observed BETWEEN dataset x strategy pairs, never mid-backtest — and raises
     ``EdgeReportComputeCancelled`` the instant it returns ``True``, so an already-completed pair's
-    trades are never discarded and a not-yet-started pair never begins."""
+    trades are never discarded and a not-yet-started pair never begins.
+
+    era-fast_wall J-05: ``run_pair`` (optional, default ``None`` — the EXACT pre-J-05 inline
+    ``_run_backtest`` call when omitted, so this stays BYTE-IDENTICAL to before whenever a caller
+    does not supply one) is a ``(dataset_meta, strategy_id) -> dict`` callable (the SAME return
+    shape ``_run_backtest`` itself returns) built by ``_build_caching_run_pair`` whenever a
+    ``sub_cache`` is threaded in from ``_compute_strategy_comparison_report``. This is the ONLY
+    other change to this loop's body — a cache hit notifies ``reporter`` from INSIDE that closure
+    (see ``_ProgressReporter.note_cache_hit``), so this call site's own ``reporter.pair_done()``
+    below stays textually unchanged."""
     pools: dict[tuple, dict] = {}
     for dataset_meta in datasets:
         event = _dataset_event(dataset_meta, events)
@@ -444,10 +475,13 @@ def _split_cells(
                 raise EdgeReportComputeCancelled()
             if reporter is not None:
                 reporter.start_pair(dataset_meta["id"], strategy_id)
-            result = _run_backtest(
-                jobs, store, dataset_store, dataset_meta["id"],
-                strategy_id=strategy_id, profile=PROFILE_DEFAULT, bar_store=bar_store,
-            )
+            if run_pair is not None:
+                result = run_pair(dataset_meta, strategy_id)
+            else:
+                result = _run_backtest(
+                    jobs, store, dataset_store, dataset_meta["id"],
+                    strategy_id=strategy_id, profile=PROFILE_DEFAULT, bar_store=bar_store,
+                )
             if reporter is not None:
                 reporter.pair_done()
             key = (strategy_id, event["band"]["class"], event["band"]["side"], event["reaction"], feed)
@@ -479,6 +513,196 @@ def _split_cells(
         })
     cells.sort(key=_cell_key)
     return cells
+
+
+# --- era-fast_wall J-05: the resumable sub-cache's run_pair provider + the CLI-only parallel
+# pre-warm. See ``EdgeReportBacktestCache``'s own module docstring for the durable cache's
+# discipline; the functions below are the ONLY code that ever keys/consults it. -----------------
+
+
+def _build_caching_run_pair(
+    jobs: BacktestJobManager,
+    store: JournalStore,
+    dataset_store: DatasetStore,
+    bar_store: BarStore,
+    config: Config,
+    sub_cache: EdgeReportBacktestCache,
+    reporter: "_ProgressReporter | None",
+):
+    """Builds the caching ``run_pair(dataset_meta, strategy_id)`` closure ``_split_cells`` calls in
+    place of its inline ``_run_backtest`` when a ``sub_cache`` is supplied. Every key component
+    that is constant across the WHOLE sweep (``bar_store_signature``, ``config_fingerprint``,
+    ``config_content_hash``, ``strategy_registry``) is computed EXACTLY ONCE here, outside the pair
+    loop, and closed over — never once per pair (the exact wasteful-recomputation pattern this
+    whole interlude exists to remove; the NOTES' own implementation hint). A cache hit notifies
+    ``reporter`` (if any) via ``note_cache_hit()`` BEFORE returning, so the caller's UNCHANGED
+    ``reporter.pair_done()`` call picks up the incremented ``backtests_from_cache`` count — without
+    widening ``run_pair``'s own 2-arg-in/1-dict-out return shape. A cache MISS runs the SAME
+    ``_run_backtest`` every uncached caller uses (single source of truth) and publishes the result
+    — ``EdgeReportBacktestCache.publish`` itself swallows a persistence failure (see its own
+    docstring), so a sub-cache write hiccup never blocks this pair's already-computed result from
+    being returned and pooled normally."""
+    bar_store_signature = _store_signature(bar_store)
+    config_fingerprint = config.config_fingerprint()
+    config_content_hash = _config_content_hash(config)
+    strategy_registry = config.strategy_registry()
+
+    def run_pair(dataset_meta: dict, strategy_id: str) -> dict:
+        key = pair_cache_key(
+            dataset_id=dataset_meta["id"],
+            dataset_checksum=dataset_meta["checksum"],
+            strategy_id=strategy_id,
+            profile=PROFILE_DEFAULT,
+            config_fingerprint=config_fingerprint,
+            config_content_hash=config_content_hash,
+            strategy_registry=strategy_registry,
+            bar_store_signature=bar_store_signature,
+        )
+        cached = sub_cache.lookup(key)
+        if cached is not None:
+            if reporter is not None:
+                reporter.note_cache_hit()
+            return cached
+        result = _run_backtest(
+            jobs, store, dataset_store, dataset_meta["id"],
+            strategy_id=strategy_id, profile=PROFILE_DEFAULT, bar_store=bar_store,
+        )
+        sub_cache.publish(key, result)
+        return result
+
+    return run_pair
+
+
+def _eligible_datasets(dataset_store: DatasetStore, bar_store: BarStore, config: Config) -> list[dict]:
+    """Every registered dataset (both splits, combined) that resolves an owning, classified scan
+    event — the IDENTICAL eligibility test ``_split_cells``'s own loop applies per pair, reused
+    here to determine the parallel pre-warm's task set BEFORE any worker process starts (never a
+    second eligibility rule)."""
+    records = _verified_records(dataset_store)
+    events = compute_setups(bar_store, config)["events"] if records else []
+    return [
+        r for r in records
+        if (lambda e: e is not None and e["band"]["class"] is not None)(_dataset_event(r, events))
+    ]
+
+
+def _run_dataset_pairs_in_worker(
+    *,
+    dataset_id: str,
+    dataset_dir: str,
+    bar_dir: str,
+    sub_cache_db_path: str,
+    config: Config,
+    profile: str,
+    bar_store_signature: tuple,
+    config_fingerprint: str,
+    config_content_hash: str,
+    strategy_registry: list[dict],
+) -> dict:
+    """era-fast_wall J-05 — ONE ``ProcessPoolExecutor`` task: runs ALL THREE registered strategies'
+    backtests for ONE dataset in a FRESH worker process. Builds its own ``DatasetStore``/
+    ``BarStore`` from the EXPLICIT paths given (never a shared object across the process boundary —
+    these cannot be usefully pickled anyway) and its own THROWAWAY temp ``JournalStore`` for job
+    bookkeeping ONLY (discarded on return; the report never references backtest ids — goal.md's own
+    wording). Publishes each completed pair to the durable ``sub_cache`` (a FRESH connection —
+    SQLite/WAL tolerates many concurrent writer processes) the INSTANT it finishes, and SKIPS any
+    pair the cache already holds (so a resumed sweep — e.g. re-running the CLI after a prior
+    partial parallel run — never redoes already-published work even inside the parallel path
+    itself). MUST be a MODULE-LEVEL function (picklable by reference) for the ``spawn`` context.
+    Returns ``{"dataset_id", "pid"}`` — bookkeeping/test-observability ONLY; the actual report is
+    reassembled by the orchestrator afterward via the untouched sequential ``_split_cells``/
+    ``run_pair`` sub-cache-hit path."""
+    with tempfile.TemporaryDirectory(prefix="edge-report-sweep-worker-") as tmp_dir:
+        store = JournalStore(os.path.join(tmp_dir, "journal.db"), config)
+        try:
+            dataset_store = DatasetStore(dataset_dir)
+            bar_store = BarStore(bar_dir)
+            jobs = BacktestJobManager(store, config)
+            sub_cache = EdgeReportBacktestCache(sub_cache_db_path)
+            dataset_meta = dataset_store.get(dataset_id)
+            for strategy_id in _ALL_STRATEGY_IDS:
+                key = pair_cache_key(
+                    dataset_id=dataset_meta["id"],
+                    dataset_checksum=dataset_meta["checksum"],
+                    strategy_id=strategy_id,
+                    profile=profile,
+                    config_fingerprint=config_fingerprint,
+                    config_content_hash=config_content_hash,
+                    strategy_registry=strategy_registry,
+                    bar_store_signature=bar_store_signature,
+                )
+                if sub_cache.lookup(key) is not None:
+                    continue  # already durable -- resumable even inside the parallel path itself
+                result = _run_backtest(
+                    jobs, store, dataset_store, dataset_meta["id"],
+                    strategy_id=strategy_id, profile=profile, bar_store=bar_store,
+                )
+                sub_cache.publish(key, result)
+        finally:
+            store.close()
+    return {"dataset_id": dataset_id, "pid": os.getpid()}
+
+
+def _parallel_prewarm_sub_cache(
+    dataset_store: DatasetStore,
+    bar_store: BarStore,
+    config: Config,
+    *,
+    sub_cache: EdgeReportBacktestCache,
+    workers: int,
+    should_abort=None,
+) -> list[dict]:
+    """era-fast_wall J-05 — CLI-ONLY parallel pre-warm (see ``EdgeReportComputeManager.trigger``'s
+    own ``workers<=1`` guard/test — this branch is never reachable from a request thread in this
+    iteration's shipped callers; ``run_strategy_comparison_report``'s own ``compute()`` dispatch is
+    the ONLY call site). Determines the ELIGIBLE (dataset, all 3 strategies) task set with the SAME
+    eligibility test ``_split_cells`` itself uses (``_eligible_datasets``, above), schedules
+    eligible datasets LARGEST-FIRST (LPT) by their own recorded ``event_counts.total``, and runs
+    them across ``workers`` worker PROCESSES (``ProcessPoolExecutor``, ``spawn`` context) — task =
+    ONE dataset (its three strategies) each, so peak memory is bounded to ~one parsed dataset per
+    worker. Each worker builds its OWN stores from EXPLICIT paths — derived here from
+    ``config.dataset_dir_resolved()``/``bar_store.root`` (the CLI's own construction invariant:
+    this path is CLI-only, and the CLI's ``dataset_store``/``bar_store`` are ALWAYS built from
+    exactly those resolved paths — see ``edge_report_compute.main``) — and a THROWAWAY temp journal
+    DB for job bookkeeping, publishing each completed pair to the durable ``sub_cache`` the INSTANT
+    it finishes. Returns the raw per-task ``{"dataset_id", "pid"}`` results (bookkeeping/test-
+    observability only) — the caller (``run_strategy_comparison_report``) reassembles the ACTUAL
+    report afterward through the UNTOUCHED sequential ``_split_cells``/``run_pair`` sub-cache-hit
+    path, byte-identical to a fresh sequential run BY CONSTRUCTION (the pooling/aggregation code
+    never changed). A registry with ZERO eligible pairs never spins up a process pool at all
+    (returns ``[]`` immediately) — no wasted worker-startup cost for nothing to do. Cooperative
+    cancellation (``should_abort``) is checked before EACH new task submission — an already-
+    in-flight task always finishes and persists its own pairs (goal.md's own wording)."""
+    eligible = _eligible_datasets(dataset_store, bar_store, config)
+    if not eligible:
+        return []
+    eligible.sort(key=lambda r: r["event_counts"]["total"], reverse=True)  # LPT: largest first
+
+    bar_store_signature = _store_signature(bar_store)
+    config_fingerprint = config.config_fingerprint()
+    config_content_hash = _config_content_hash(config)
+    strategy_registry = config.strategy_registry()
+    dataset_dir = config.dataset_dir_resolved()
+    bar_dir = str(bar_store.root)
+
+    results: list[dict] = []
+    ctx = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=max(1, workers), mp_context=ctx) as executor:
+        futures: dict = {}
+        for dataset_meta in eligible:
+            if should_abort is not None and should_abort():
+                break  # stop SUBMITTING -- already-submitted futures below still finish/persist
+            future = executor.submit(
+                _run_dataset_pairs_in_worker,
+                dataset_id=dataset_meta["id"], dataset_dir=dataset_dir, bar_dir=bar_dir,
+                sub_cache_db_path=sub_cache.db_path, config=config, profile=PROFILE_DEFAULT,
+                bar_store_signature=bar_store_signature, config_fingerprint=config_fingerprint,
+                config_content_hash=config_content_hash, strategy_registry=strategy_registry,
+            )
+            futures[future] = dataset_meta["id"]
+        for future in as_completed(futures):
+            results.append(future.result())
+    return results
 
 
 def _cell_beats_null(cell: dict) -> bool:
@@ -541,8 +765,8 @@ def run_strategy_comparison_report(
     force: bool = False,
     progress=None,
     should_abort=None,
-    sub_cache=None,
-    workers=None,
+    sub_cache: "EdgeReportBacktestCache | None" = None,
+    workers: int | None = None,
 ) -> dict:
     """The always-recompute-or-serve-through-a-cache entry point for the 3-way strategy-comparison
     report (era-5B J-04). See ``_compute_strategy_comparison_report`` below for the full algorithm
@@ -580,16 +804,31 @@ def run_strategy_comparison_report(
         which propagates UNCHANGED through ``cache.get_or_compute``/``compute_and_publish``
         (both publish ONLY after ``compute_fn`` returns normally) — a cancelled run publishes
         NOTHING, by construction, with zero change to either cache method's body.
-      * ``sub_cache``/``workers`` are ACCEPTED this iteration but currently INERT (a logged
-        assumption — see the dev handoff): every compute this iteration triggers runs strictly
-        sequentially regardless of their value. J-05's resumable/parallel sweep (the
-        ``EdgeReportBacktestCache`` per-pair sub-cache + the ``ProcessPoolExecutor`` provider)
-        gives them real effect; their signature exists NOW so J-05 adds no further parameter
-        churn to this function."""
+      * ``sub_cache`` (era-fast_wall J-05, real effect now — see ``_build_caching_run_pair``):
+        the durable per-(dataset x strategy)-pair ``EdgeReportBacktestCache``. Threaded straight
+        into ``_compute_strategy_comparison_report`` so every backtest pair is served/published
+        through it — a killed-and-retriggered sweep with the SAME ``sub_cache`` skips every
+        already-published pair (resumable).
+      * ``workers`` (era-fast_wall J-05, real effect now): when ``sub_cache`` is ALSO supplied and
+        ``workers`` resolves to more than one, this function FIRST pre-warms ``sub_cache`` via
+        ``_parallel_prewarm_sub_cache`` (a ``ProcessPoolExecutor``, CLI-only — see that function's
+        own docstring for why this is safe to call from ANY caller: the manager's own ``trigger()``
+        never supplies ``workers > 1``, a logged, tested assumption) BEFORE calling
+        ``_compute_strategy_comparison_report`` — which then finds every eligible pair already
+        cached and simply reassembles the report sequentially, byte-identical to a wholly
+        sequential run BY CONSTRUCTION (the pooling/aggregation code never changed). ``workers in
+        (None, 0, 1)`` (the default, and every caller before this iteration) skips the pre-warm
+        entirely — byte-identical to the pre-J-05 body."""
 
     def compute() -> dict:
+        if sub_cache is not None and workers is not None and workers > 1:
+            _parallel_prewarm_sub_cache(
+                dataset_store, bar_store, config,
+                sub_cache=sub_cache, workers=workers, should_abort=should_abort,
+            )
         return _compute_strategy_comparison_report(
-            store, dataset_store, bar_store, config, progress=progress, should_abort=should_abort,
+            store, dataset_store, bar_store, config,
+            progress=progress, should_abort=should_abort, sub_cache=sub_cache,
         )
 
     if cache is None:
@@ -655,6 +894,7 @@ def _compute_strategy_comparison_report(
     *,
     progress=None,
     should_abort=None,
+    sub_cache: "EdgeReportBacktestCache | None" = None,
 ) -> dict:
     """The ONE computer of the 3-way strategy-comparison report (era-5B J-04; renamed from
     ``run_strategy_comparison_report`` at era-5B J-08 — see that function's own docstring for why:
@@ -671,7 +911,14 @@ def _compute_strategy_comparison_report(
     ``_ProgressReporter`` (never a separate reporter per split — its running totals must span both
     splits). ``backtests_total`` is sized ONCE, right after ``events`` resolves (the earliest point
     both splits' eligible-pair counts are knowable), via ``_count_eligible_pairs`` — never inside
-    ``_split_cells`` itself, so that function's own loop stays untouched."""
+    ``_split_cells`` itself, so that function's own loop stays untouched.
+
+    era-fast_wall J-05: ``sub_cache`` (optional, default ``None`` — byte-identical to the pre-J-05
+    body when omitted) is the durable per-pair ``EdgeReportBacktestCache``. When supplied, ONE
+    caching ``run_pair`` provider (``_build_caching_run_pair``) is built HERE — after ``reporter``
+    resolves, so a cache hit can notify it — and threaded into BOTH the train and hold-out
+    ``_split_cells`` calls below: the SAME provider/cache instance serves both splits (goal.md's
+    own wording), never a second cache/provider per split."""
     jobs = BacktestJobManager(store, config)
     train_datasets = _split_datasets(dataset_store, SPLIT_TRAIN)
     holdout_datasets = _split_datasets(dataset_store, SPLIT_HOLDOUT)
@@ -689,13 +936,17 @@ def _compute_strategy_comparison_report(
         total = _count_eligible_pairs(train_datasets, events) + _count_eligible_pairs(holdout_datasets, events)
         reporter = _ProgressReporter(progress, total)
 
+    run_pair = None
+    if sub_cache is not None:
+        run_pair = _build_caching_run_pair(jobs, store, dataset_store, bar_store, config, sub_cache, reporter)
+
     train_cells = _split_cells(
         jobs, store, dataset_store, bar_store, train_datasets, events, config,
-        reporter=reporter, should_abort=should_abort,
+        reporter=reporter, should_abort=should_abort, run_pair=run_pair,
     )
     holdout_cells = _split_cells(
         jobs, store, dataset_store, bar_store, holdout_datasets, events, config,
-        reporter=reporter, should_abort=should_abort,
+        reporter=reporter, should_abort=should_abort, run_pair=run_pair,
     )
 
     return {

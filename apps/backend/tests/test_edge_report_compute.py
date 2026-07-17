@@ -270,6 +270,113 @@ def test_cache_kwarg_is_threaded_through_unchanged(tmp_path, store, monkeypatch)
     manager.join_all(timeout=5)
 
 
+# === era-fast_wall J-05: sub_cache resumability wiring + the never-workers>1 guard ================
+
+
+def test_trigger_sub_cache_default_is_none_unchanged_for_every_pre_j05_caller(
+    tmp_path, store, monkeypatch
+):
+    """Every EXISTING test above this marker calls ``trigger()`` without ``sub_cache`` and stays
+    green unmodified — proof by construction that the default preserves byte-identical behavior.
+    This test makes the claim explicit: the omitted kwarg reaches the compute call as ``None``."""
+    manager = EdgeReportComputeManager()
+    seen = {}
+    _, dataset_store, bar_store, config, cache = _trigger_args(tmp_path, store)
+
+    def fake_run(*args, **kwargs):
+        seen["sub_cache"] = kwargs.get("sub_cache")
+        return _EMPTY_REPORT
+
+    monkeypatch.setattr(edge_report_compute, "run_strategy_comparison_report", fake_run)
+
+    manager.trigger(store, dataset_store, bar_store, config, cache)
+    _wait_for_terminal(manager)
+
+    assert seen["sub_cache"] is None
+    manager.join_all(timeout=5)
+
+
+def test_trigger_sub_cache_kwarg_is_threaded_through_to_the_compute_call(tmp_path, store, monkeypatch):
+    """era-fast_wall J-05: a REAL ``sub_cache`` supplied to ``trigger()`` reaches ``run_strategy_
+    comparison_report`` verbatim (never re-derived, never dropped)."""
+    from app.research.edge_report_backtest_cache import EdgeReportBacktestCache
+
+    manager = EdgeReportComputeManager()
+    seen = {}
+    _, dataset_store, bar_store, config, cache = _trigger_args(tmp_path, store)
+    sub_cache = EdgeReportBacktestCache(str(tmp_path / "sub-cache.db"))
+
+    def fake_run(*args, **kwargs):
+        seen["sub_cache"] = kwargs.get("sub_cache")
+        return _EMPTY_REPORT
+
+    monkeypatch.setattr(edge_report_compute, "run_strategy_comparison_report", fake_run)
+
+    manager.trigger(store, dataset_store, bar_store, config, cache, sub_cache=sub_cache)
+    _wait_for_terminal(manager)
+
+    assert seen["sub_cache"] is sub_cache
+    manager.join_all(timeout=5)
+
+
+def test_trigger_never_passes_a_workers_value_greater_than_one(tmp_path, store, monkeypatch):
+    """TC-12: ``trigger()`` must never supply ``workers > 1`` to ``run_strategy_comparison_report``
+    -- process-pool parallelism stays CLI-only this iteration (a logged, tested assumption)."""
+    manager = EdgeReportComputeManager()
+    seen = {}
+
+    def fake_run(*args, **kwargs):
+        seen.update(kwargs)
+        return _EMPTY_REPORT
+
+    monkeypatch.setattr(edge_report_compute, "run_strategy_comparison_report", fake_run)
+
+    manager.trigger(*_trigger_args(tmp_path, store))
+    _wait_for_terminal(manager)
+
+    workers = seen.get("workers")
+    assert workers is None or workers <= 1
+    manager.join_all(timeout=5)
+
+
+def test_trigger_resumability_end_to_end_via_a_real_sub_cache(tmp_path, store):
+    """TC-11 (manager resumability wiring, end to end — NOT monkeypatched this time, the real
+    ``run_strategy_comparison_report``): ``trigger()`` completing once over a real, non-degenerate
+    2-eligible-pair-strategy fixture (via an injected ``sub_cache``) publishes durable rows for
+    every pair; a SECOND ``trigger()`` call over the SAME dataset/bar stores and the SAME
+    ``sub_cache`` (``force=True``, bypassing the now-warm WHOLE-report cache so the compute genuinely
+    re-enters) resolves with ``backtests_from_cache > 0`` — proving ``trigger()`` genuinely threads
+    a REAL cache through to ``run_strategy_comparison_report``, not the ``None`` default (which
+    would leave ``backtests_from_cache`` permanently 0, as J-04 shipped it)."""
+    from app.research.bars import BarStore
+    from app.research.datasets import DatasetStore, SPLIT_TRAIN
+    from app.research.edge_report_backtest_cache import EdgeReportBacktestCache
+    from test_edge_report import _record_v1_arming_dataset
+    from test_setups import _seed_full, _syn_config
+
+    config = _syn_config()
+    bar_store = BarStore(tmp_path / "bars")
+    _seed_full(bar_store)
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+    sub_cache = EdgeReportBacktestCache(str(tmp_path / "sub-cache.db"))
+
+    manager = EdgeReportComputeManager()
+    manager.trigger(store, dataset_store, bar_store, config, cache, sub_cache=sub_cache)
+    first_snap = _wait_for_terminal(manager)
+    assert first_snap["state"] == "done"
+    assert first_snap["progress"]["backtests_from_cache"] == 0  # cold -- nothing cached yet
+    manager.join_all(timeout=5)
+
+    manager.trigger(store, dataset_store, bar_store, config, cache, force=True, sub_cache=sub_cache)
+    second_snap = _wait_for_terminal(manager)
+
+    assert second_snap["state"] == "done"
+    assert second_snap["progress"]["backtests_from_cache"] > 0
+    manager.join_all(timeout=5)
+
+
 def test_cancel_while_idle_is_a_harmless_no_op_the_route_owns_the_409():
     """The manager itself never raises on an idle cancel -- ``cancel_edge_report_compute`` (the
     ROUTE) is the one that checks idle-vs-running and raises the 409, mirroring
@@ -319,6 +426,10 @@ def _set_cli_env(monkeypatch, tmp_path):
     # The explicit override keeps every CLI test hermetic, exactly like every other test in this
     # suite that touches a cache.
     monkeypatch.setenv("TAPEOLOGY_EDGE_REPORT_CACHE_DB", str(tmp_path / "edge_report_cache.db"))
+    # era-fast_wall J-05: the SAME hazard/fix, for the NEW per-pair sub-cache the CLI's main() now
+    # ALSO constructs (resolve_backtest_cache_db_path's own env-else-sibling-of-dataset-dir default
+    # would otherwise ALSO land beside the committed fixture dir).
+    monkeypatch.setenv("TAPEOLOGY_EDGE_SWEEP_CACHE_DB", str(tmp_path / "edge_report_backtests.db"))
 
 
 def test_cli_completes_on_the_fixture_and_a_subsequent_get_path_serves_it_byte_identically(
@@ -411,13 +522,127 @@ def test_cli_out_flag_writes_the_report_json(tmp_path, monkeypatch):
     assert payload["holdout"]["cells"] == []
 
 
-def test_cli_workers_flag_is_accepted_and_inert_this_iteration(tmp_path, monkeypatch):
-    """The CLI's own usage string documents ``--workers N`` (goal.md's J-04 step 3); this
-    iteration's IN SCOPE / OUT OF SCOPE explicitly logs it as accepted-but-inert (J-05 gives it
-    real effect) -- a non-default value must still exit 0 and change nothing observable."""
+def test_cli_workers_flag_on_a_zero_eligible_fixture_still_exits_zero_and_changes_nothing(
+    tmp_path, monkeypatch
+):
+    """The CLI's own usage string documents ``--workers N`` (goal.md's J-04 step 3); era-fast_wall
+    J-05 gives it real effect, but the committed ``datasets_j03`` fixture (symbol PG, not a
+    config-owned panel symbol) always resolves ZERO eligible pairs under the real ``CONFIG`` --
+    ``--workers 2`` must still exit 0 and produce the SAME honest empty report, since
+    ``_parallel_prewarm_sub_cache`` never spins up a process pool with nothing to submit (see
+    ``test_edge_report.py``'s own
+    ``test_parallel_prewarm_with_zero_eligible_datasets_never_spins_up_a_process_pool`` for that
+    guarantee proven directly). The GENUINE multi-process, non-degenerate proof (real worker pids,
+    byte-identical parallel-vs-sequential reports) lives in ``test_edge_report.py``'s
+    ``test_parallel_prewarm_uses_at_least_two_distinct_worker_processes_and_reassembles_byte_
+    identically`` -- this CLI-level test is deliberately the FAST, degenerate-fixture sanity leg."""
     _set_cli_env(monkeypatch, tmp_path)
     monkeypatch.setattr(sys, "argv", ["edge_report_compute", "--workers", "2"])
     assert edge_report_compute.main() == 0
+
+
+def test_cli_workers_default_reads_the_env_override(tmp_path, monkeypatch):
+    """``--workers``'s default is read from ``TAPEOLOGY_EDGE_SWEEP_WORKERS`` if set, else the
+    ``_DEFAULT_WORKERS = 4`` constant -- proven via a kwarg-capturing spy on ``run_strategy_
+    comparison_report`` rather than any observable side effect (the degenerate fixture makes every
+    ``workers`` value behaviorally silent)."""
+    _set_cli_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("TAPEOLOGY_EDGE_SWEEP_WORKERS", "6")
+    seen = {}
+    real = edge_report_compute.run_strategy_comparison_report
+
+    def _spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report_compute, "run_strategy_comparison_report", _spy)
+    monkeypatch.setattr(sys, "argv", ["edge_report_compute"])  # no --workers flag at all
+
+    assert edge_report_compute.main() == 0
+    assert seen["workers"] == 6
+
+
+def test_cli_workers_and_sub_cache_are_wired_into_run_strategy_comparison_report(tmp_path, monkeypatch):
+    """era-fast_wall J-05: the CLI's ``main()`` wires BOTH a real ``EdgeReportBacktestCache`` and
+    the resolved ``--workers`` int into ``run_strategy_comparison_report`` -- a kwarg-capturing
+    spy (the ``test_force_flag_is_threaded_through...`` precedent, applied to the two NEW hooks),
+    proving neither is silently dropped or left at its old J-04 placeholder."""
+    from app.research.edge_report_backtest_cache import EdgeReportBacktestCache
+
+    _set_cli_env(monkeypatch, tmp_path)
+    seen = {}
+    real = edge_report_compute.run_strategy_comparison_report
+
+    def _spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report_compute, "run_strategy_comparison_report", _spy)
+    monkeypatch.setattr(sys, "argv", ["edge_report_compute", "--workers", "2"])
+
+    assert edge_report_compute.main() == 0
+
+    assert seen["workers"] == 2
+    assert isinstance(seen["sub_cache"], EdgeReportBacktestCache)
+
+
+def test_cli_published_sub_cache_rows_are_reused_by_a_subsequent_bare_call_with_zero_fresh_backtests(
+    tmp_path, monkeypatch,
+):
+    """TC-10 (non-vacuous): runs the CLI warmer against a genuinely NON-degenerate scan fixture
+    (``edge_report_compute.CONFIG`` monkeypatched to the SAME panel-scoped synthetic config
+    ``test_edge_report.py``'s own synthetic-scan-join tests use — the exact mechanism this file's
+    own manager tests already use, e.g. ``fake_run`` swaps — applied here to the module's imported
+    ``CONFIG`` name instead of a whole function), then proves a SUBSEQUENT bare
+    ``run_strategy_comparison_report(..., sub_cache=<the same cache>)`` call serves 100% cache
+    hits — zero fresh ``_run_backtest`` calls."""
+    from app.research.bars import BarStore
+    from app.research.datasets import DatasetStore, SPLIT_TRAIN
+    from app.research.edge_report_backtest_cache import EdgeReportBacktestCache
+    from app.research import edge_report as edge_report_module
+    from test_edge_report import _record_v1_arming_dataset
+    from test_setups import _seed_full, _syn_config
+
+    test_config = _syn_config()
+    monkeypatch.setattr(edge_report_compute, "CONFIG", test_config)
+
+    bar_dir = tmp_path / "bars"
+    dataset_dir = tmp_path / "datasets"
+    bar_store = BarStore(bar_dir)
+    _seed_full(bar_store)
+    dataset_store = DatasetStore(dataset_dir)
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+
+    monkeypatch.setenv("TAPEOLOGY_JOURNAL_DB", str(tmp_path / "journal.db"))
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(dataset_dir))
+    monkeypatch.setenv("TAPEOLOGY_BAR_DIR", str(bar_dir))
+    monkeypatch.setenv("TAPEOLOGY_EDGE_REPORT_CACHE_DB", str(tmp_path / "cache.db"))
+    sub_cache_db = str(tmp_path / "sub-cache.db")
+    monkeypatch.setenv("TAPEOLOGY_EDGE_SWEEP_CACHE_DB", sub_cache_db)
+    monkeypatch.setattr(sys, "argv", ["edge_report_compute", "--workers", "1"])
+
+    assert edge_report_compute.main() == 0
+
+    sub_cache = EdgeReportBacktestCache(sub_cache_db)
+    calls = []
+    real_run_backtest = edge_report_module._run_backtest
+
+    def _counting_run_backtest(*args, **kwargs):
+        calls.append(1)
+        return real_run_backtest(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report_module, "_run_backtest", _counting_run_backtest)
+
+    served_store = JournalStore(str(tmp_path / "served-journal.db"), test_config)
+    try:
+        served = edge_report_module.run_strategy_comparison_report(
+            served_store, dataset_store, bar_store, test_config, sub_cache=sub_cache,
+        )
+    finally:
+        served_store.close()
+
+    assert calls == []  # zero fresh backtests -- entirely served from the CLI-published cache
+    assert len(served["train"]["cells"]) == 3  # non-degenerate: the real 3-cell shape
 
 
 def test_cli_missing_dataset_dir_env_falls_back_to_default_seams_without_crashing(tmp_path, monkeypatch):

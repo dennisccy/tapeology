@@ -77,3 +77,21 @@ evidence.
 screenshot first — dead-backend render = infra false-negative); any browser-verifiable `/structure` iter
 when Chrome MCP won't start (score `partial`/`unknown`, retry browser-qa next healthy session, do not
 rubber-stamp from backend/unit evidence).
+
+## iter-5 — 2026-07-17T19:17:06Z
+
+**Verdict:** CONTINUE
+**Lesson:** Browser-QA of the operator-run compute/sweep flow against the mandated keyless
+fixtures can NEVER visually show a live nonzero progress tick or the "(N from cache)" resume
+annotation — both committed fixtures (`datasets_j03`, `tests/fixtures/datasets`; PG is not a
+config-owned panel symbol) resolve 0 eligible pairs, so the compute resolves instantly to the
+honest "No edge-report cells yet." empty state before the next DOM poll. Those two legs are
+structurally un-showable on keyless fixtures and rest on non-vacuous pytest proof (TC-6
+`backtests_from_cache==1` spy, TC-8 distinct-PID); a spurious "compute stuck at 0/33" in a
+second QA browser session was a DIFFERENT heavier real-data instance plus a `.next` build-cache
+collision from two `next dev` on one dir — always trust the merged browser-qa lane run against
+the SCOPED cold fixture, and open the screenshot before believing a "stuck"/"regression" prose claim.
+**Applies to:** any future iter whose browser-QA needs to render a live progress tick or the
+"(N from cache)" annotation for the edge-report compute (J-06, or once a fixture/corpus with
+genuinely eligible dataset×strategy pairs exists) — and any iter reconciling two disagreeing
+browser lanes.

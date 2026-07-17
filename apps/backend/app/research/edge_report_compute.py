@@ -1,7 +1,17 @@
-"""era-fast_wall J-04 — the operator-run compute: a single-flight, cancellable, progress-reporting
-background job around ``edge_report.run_strategy_comparison_report``'s five additive keyword-only
-hooks (``force``/``progress``/``should_abort``/``sub_cache``/``workers`` — see that function's own
-docstring), plus a CLI warmer that drives the SAME hooks synchronously, in-process.
+"""era-fast_wall J-04/J-05 — the operator-run compute: a single-flight, cancellable, progress-
+reporting background job around ``edge_report.run_strategy_comparison_report``'s five additive
+keyword-only hooks (``force``/``progress``/``should_abort``/``sub_cache``/``workers`` — see that
+function's own docstring), plus a CLI warmer that drives the SAME hooks synchronously, in-process.
+
+era-fast_wall J-05 gives ``sub_cache``/``workers`` their real effect (J-04 forward-declared them,
+accepted-but-INERT). ``EdgeReportComputeManager.trigger()`` now threads a real, durable
+``EdgeReportBacktestCache`` into its own compute call (``sub_cache=``) — a browser-triggered
+compute is resumable too — but NEVER passes ``workers`` above ``1``/``None`` (a logged, tested
+assumption: process-pool parallelism stays CLI-only this iteration, never inside the always-on
+FastAPI/uvicorn process). The CLI warmer's ``main()`` passes BOTH ``sub_cache=`` and
+``workers=args.workers`` (the CLI's own arg, default read from ``TAPEOLOGY_EDGE_SWEEP_WORKERS``
+else 4) — a value above 1 genuinely parallelizes via ``edge_report.py``'s own
+``_parallel_prewarm_sub_cache``/``ProcessPoolExecutor`` provider.
 
 THIS MODULE computes NOTHING itself — ``run_strategy_comparison_report`` (and, through it,
 ``EdgeReportCache.get_or_compute``/``compute_and_publish``, both already shipped at J-01) stay the
@@ -40,6 +50,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import threading
 import uuid
@@ -51,14 +62,17 @@ from ..config import CONFIG, Config
 from .bars import BarStore
 from .datasets import DatasetStore
 from .edge_report import EdgeReportComputeCancelled, EdgeReportError, run_strategy_comparison_report
+from .edge_report_backtest_cache import EdgeReportBacktestCache, resolve_backtest_cache_db_path
 from .edge_report_cache import EdgeReportCache, resolve_cache_db_path
 from .store import JournalStore
 
 __all__ = ["EdgeReportComputeManager"]
 
-# Mirrors goal.md's own CLI usage string (``--workers N``, default 4) — accepted this iteration,
-# currently INERT (see ``run_strategy_comparison_report``'s own docstring; J-05 gives it effect).
+# Mirrors goal.md's own CLI usage string (``--workers N``, default 4) — the CLI's OWN fallback
+# default when neither ``--workers`` nor ``TAPEOLOGY_EDGE_SWEEP_WORKERS`` is set (era-fast_wall
+# J-05 gives ``workers`` real effect via ``run_strategy_comparison_report``'s own dispatch).
 _DEFAULT_WORKERS = 4
+_WORKERS_ENV = "TAPEOLOGY_EDGE_SWEEP_WORKERS"
 
 
 def _iso_utc_now() -> str:
@@ -122,6 +136,7 @@ class EdgeReportComputeManager:
         cache: EdgeReportCache,
         *,
         force: bool = False,
+        sub_cache: "EdgeReportBacktestCache | None" = None,
     ) -> dict:
         """Start a NEW compute job, or — if one is already ``state == "running"`` — return it
         UNCHANGED (``started: False``, the SAME job's own ``force``, never the just-requested one).
@@ -129,7 +144,15 @@ class EdgeReportComputeManager:
         call always starts a genuinely new job (a fresh id), discarding the prior snapshot. Never
         blocks on the compute itself — the actual sweep runs on a dedicated worker thread, OFF the
         caller's thread (the ``BacktestJobManager.start`` precedent), so an HTTP route calling this
-        returns immediately."""
+        returns immediately.
+
+        era-fast_wall J-05: ``sub_cache`` (optional, default ``None`` — preserves every existing
+        caller's exact behavior byte-for-byte) is threaded straight into the compute call's own
+        ``sub_cache=`` hook (making a browser-triggered compute resumable too — a killed-and-
+        retriggered job skips already-published pairs). NEVER passes ``workers`` to
+        ``run_strategy_comparison_report`` — process-pool parallelism stays CLI-only this iteration
+        (a logged, tested assumption; see ``test_trigger_never_passes_a_workers_value_greater_
+        than_one`` in ``tests/test_edge_report_compute.py``)."""
         with self._lock:
             current = self._snapshot
             if current is not None and current["state"] == "running":
@@ -165,7 +188,7 @@ class EdgeReportComputeManager:
                 run_strategy_comparison_report(
                     store, dataset_store, bar_store, config,
                     cache=cache, force=force, progress=_publish_progress,
-                    should_abort=cancel_event.is_set,
+                    should_abort=cancel_event.is_set, sub_cache=sub_cache,
                 )
             except EdgeReportComputeCancelled:
                 self._resolve(job_id, "cancelled", error=None)
@@ -248,16 +271,24 @@ def main() -> int:
     ``GET /research/edge-report`` serves (``resolve_cache_db_path`` — the identical resolver the
     route's own dependency uses). An ``EdgeReportError`` (a corrupt dataset) prints an explicit
     message to stderr and exits 1 with nothing published — the existing ``get_or_compute``/
-    ``compute_and_publish`` discipline (nothing is ever cached on an exception)."""
+    ``compute_and_publish`` discipline (nothing is ever cached on an exception).
+
+    era-fast_wall J-05: also constructs a real ``EdgeReportBacktestCache`` (via the shared
+    ``resolve_backtest_cache_db_path`` resolver — the ``resolve_cache_db_path`` pattern, a
+    DIFFERENT env var/sibling filename) and passes it as ``sub_cache=`` alongside the already-
+    passed ``workers=args.workers`` — giving both hooks their real, resumable/parallel effect (see
+    ``run_strategy_comparison_report``'s own docstring)."""
     parser = argparse.ArgumentParser(
-        description="era-fast_wall J-04 CLI warmer -- run the 3-way v1/structure_tape/"
+        description="era-fast_wall J-04/J-05 CLI warmer -- run the 3-way v1/structure_tape/"
         "structure_tape_map edge-report sweep to completion, publishing to the SAME durable "
-        "cache GET /research/edge-report serves."
+        "caches GET /research/edge-report serves (resumable, and genuinely parallel above 1)."
     )
     parser.add_argument(
-        "--workers", type=int, default=_DEFAULT_WORKERS,
-        help="accepted for the future parallel sweep (J-05); INERT this iteration -- every "
-        "compute runs strictly sequentially regardless of this value.",
+        "--workers", type=int,
+        default=int(os.environ.get(_WORKERS_ENV, str(_DEFAULT_WORKERS))),
+        help="number of worker PROCESSES for the parallel sweep (documented ceiling ~6). Values "
+        "above 1 genuinely parallelize via a ProcessPoolExecutor -- CLI-only, never the button/"
+        f"manager path. Defaults to ${_WORKERS_ENV} if set, else {_DEFAULT_WORKERS}.",
     )
     parser.add_argument(
         "--force", action="store_true",
@@ -272,12 +303,13 @@ def main() -> int:
         dataset_store = DatasetStore(config.dataset_dir_resolved())
         bar_store = BarStore(config.bar_dir_resolved())
         cache = EdgeReportCache(resolve_cache_db_path(config.dataset_dir_resolved()))
+        sub_cache = EdgeReportBacktestCache(resolve_backtest_cache_db_path(config.dataset_dir_resolved()))
 
         try:
             report = run_strategy_comparison_report(
                 store, dataset_store, bar_store, config,
                 cache=cache, force=args.force, progress=_cli_progress_printer(),
-                workers=args.workers,
+                workers=args.workers, sub_cache=sub_cache,
             )
         except EdgeReportError as exc:
             print(f"error: {exc}", file=sys.stderr)
