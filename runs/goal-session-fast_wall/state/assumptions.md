@@ -140,3 +140,29 @@ rather than downgrading either to `unknown` for the missing screenshot. The J-01
 visual-regression legs (TC-17/TC-18) are carried forward as an explicit open browser-qa item.
 **Reversible:** yes — the next healthy-Chrome pass re-runs TC-17/TC-18; if either visual leg regresses
 there, the affected journey flips to `regressed` and this carry is revisited.
+
+## iter-5 — goal-decomposer
+
+**Ambiguity:** goal.md's J-05 step 3 and the interlude-wide constraint say parallelism "runs ONLY
+in the CLI/background job — never inside a request thread," and Success Criteria #4 frames
+"resumable... and parallel" as a property of the sweep triggered by "UI button OR CLI warmer"
+equally — but the text never states whether `EdgeReportComputeManager`'s own background thread
+(the button's async trigger, already off the HTTP request thread since J-04) counts as an allowed
+"background job" home for `ProcessPoolExecutor` parallelism, or whether "the CLI/background job" is
+one compound term meaning the CLI warmer specifically.
+
+**We chose:** This iteration wires `sub_cache=` (resumability — pure SQLite caching, no new
+concurrency primitive) into BOTH the CLI warmer and `EdgeReportComputeManager.trigger()`, so a
+browser-triggered compute is genuinely resumable and the already-displayed
+`progress.backtests_from_cache` field becomes meaningful for button-triggered runs too. Genuine
+`workers > 1` process-pool parallelism, however, is wired into the CLI warmer ONLY —
+`trigger()` never passes `workers` above `1`/`None` into `run_strategy_comparison_report`, keeping
+`ProcessPoolExecutor`/multiprocessing entirely out of the always-on FastAPI/uvicorn backend
+process. The CLI is a clean, isolated, one-shot, nohup-able process explicitly designed for this
+(J-04's own docstring calls it "restart-proof"); the manager's background thread is more
+conservatively treated as still request-adjacent for this CRITICAL anti-goal ("no compute on page
+load" sits right beside it in the same section of goal.md).
+
+**Reversible:** yes — a follow-up iteration can add a `workers=` passthrough to `trigger()`/the
+route with no signature-breaking change, exactly mirroring how J-04 itself forward-declared
+`sub_cache=`/`workers=` as accepted-but-inert for this iteration to later resolve.

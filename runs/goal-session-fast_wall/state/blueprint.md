@@ -13,6 +13,10 @@ WHEN/HOW OFTEN the frozen era-1–5B computations run — never WHAT they comput
 iter-4 update: refined the "Compute-job snapshot" row (below) to its full field/type shape now that
 J-04 actually builds `EdgeReportComputeManager` — additive detail only, same single owner/endpoint
 pre-registered at baseline; no new row, no nav change.
+
+iter-5 update: refined the "edge_report_backtests.db" rebuildable-accelerator bullet (below) to its
+exact key composition now that J-05 actually builds `EdgeReportBacktestCache` — additive detail
+only, same non-canonical accelerator status pre-registered at baseline; no new row, no nav change.
 -->
 
 ## Information Architecture
@@ -60,7 +64,7 @@ truth); UI/MCP/reports may only re-format what the canonical endpoint returns.
 | Value / entity | Computed by (single module) | Served by (single endpoint) | Notes |
 |---|---|---|---|
 | Not-computed edge-report payload (`status: "not_computed"`, `detail`, `dataset_count`, `register`, embedded `compute` snapshot or `null`) | `app/research/edge_report.py` (`peek_strategy_comparison_report`) | `GET /research/edge-report` (existing route, rewired — same `Depends`/`cache=cache` wiring) | `status` key is the discriminator; a real report never carries one; a warm key still serves the report **verbatim** (unchanged shape); an empty registry still computes inline (O(1), zero backtests); MCP `edge_report` proxy mirrors byte-identically |
-| Compute-job snapshot — `id: str` (job uuid), `state: "running"\|"done"\|"cancelled"\|"failed"`, `force: bool`, `started_utc: str (ISO-8601)\|null`, `finished_utc: str (ISO-8601)\|null`, `error: str\|null`, `progress: {phase: str, backtests_total: int, backtests_done: int, backtests_from_cache: int, current: {dataset_id: str, strategy_id: str}\|null}` | `app/research/edge_report_compute.py` (`EdgeReportComputeManager`) | `GET /research/edge-report/compute` (poll; returns the snapshot or `null` if no job has ever run in this process); started via `POST /research/edge-report/compute` (body `{force: bool=false}`); cancelled via `POST /research/edge-report/compute/cancel` (409 when idle) | Process-scoped bookkeeping, honestly lost on restart (existing job-manager precedent) — never a research value; single-flight (exactly ONE job slot, never per-id like `StudyJobManager`/`BacktestJobManager`); REST-only, **no MCP tool**. The SAME snapshot is embedded verbatim as the `compute` field of the not-computed edge-report payload above — never a second derivation, never a second endpoint. |
+| Compute-job snapshot — `id: str` (job uuid), `state: "running"\|"done"\|"cancelled"\|"failed"`, `force: bool`, `started_utc: str (ISO-8601)\|null`, `finished_utc: str (ISO-8601)\|null`, `error: str\|null`, `progress: {phase: str, backtests_total: int, backtests_done: int, backtests_from_cache: int, current: {dataset_id: str, strategy_id: str}\|null}` | `app/research/edge_report_compute.py` (`EdgeReportComputeManager`) | `GET /research/edge-report/compute` (poll; returns the snapshot or `null` if no job has ever run in this process); started via `POST /research/edge-report/compute` (body `{force: bool=false}`); cancelled via `POST /research/edge-report/compute/cancel` (409 when idle) | Process-scoped bookkeeping, honestly lost on restart (existing job-manager precedent) — never a research value; single-flight (exactly ONE job slot, never per-id like `StudyJobManager`/`BacktestJobManager`); REST-only, **no MCP tool**. The SAME snapshot is embedded verbatim as the `compute` field of the not-computed edge-report payload above — never a second derivation, never a second endpoint. `progress.backtests_from_cache` (iter-5, J-05) genuinely increments once a per-pair sub-cache exists — same field, same owner, same endpoint; only its runtime value changed from always-0 to meaningful. |
 
 **Rebuildable accelerators (explicitly NOT canonical values — deleting any loses nothing; the next
 read/compute re-verifies or recomputes byte-identically through the one canonical owner below):**
@@ -68,7 +72,7 @@ read/compute re-verifies or recomputes byte-identically through the one canonica
 - the two in-process verified-content stat-keyed caches added to `bars.py` / `datasets.py` (metadata only for `datasets.py`; `load_events`/`replay` always re-verify)
 - `dataset_index.db` (`app/research/dataset_index.py`) — durable sibling of the metadata cache
 - `setups_scan_cache.db` (`app/research/setups_scan_cache.py`)
-- `edge_report_backtests.db` (`EdgeReportBacktestCache` — per dataset×strategy pair sub-results)
+- `edge_report_backtests.db` (`EdgeReportBacktestCache` — one durable row per dataset×strategy pair sub-result; key = sha256 of the canonical JSON of `{dataset_id, dataset_checksum, strategy_id, profile, config_fingerprint, config_content_hash, strategy_registry, bar_store_signature}` — `bar_store_signature` reuses `setups._store_signature(bar_store)` verbatim, never re-derived; value = the runner's own per-pair `result` block stored WITHOUT `sort_keys`; path env `TAPEOLOGY_EDGE_SWEEP_CACHE_DB` else a `.data/edge_report_backtests.db` sibling of the dataset dir — iter-5, J-05)
 - the existing `edge_report_cache.db` (`EdgeReportCache`)
 - the per-run `_StructureArmMemo` (in-memory, one instance per backtest run — never persisted)
 
@@ -106,3 +110,19 @@ precedent this iteration's EdgeReportComputeManager follows, adapted to single-f
 payload's `compute` key is unconditionally `None` (peek_strategy_comparison_report:519-524); the MCP
 tool list (app/mcp/__init__.py) has exactly 18 registered names, pinned by
 test_advertised_tool_set_is_exactly_capability_6. -->
+
+<!-- Codebase probe at iter-5 (before J-05 build): confirmed EdgeReportBacktestCache/
+edge_report_backtests.db does not exist anywhere yet; `_split_cells` (edge_report.py:405-481) calls
+`_run_backtest` directly inline with no `run_pair` seam; `_ProgressReporter.pair_done()`
+(edge_report.py:397-402) already emits a `backtests_from_cache` field in its patch but NEVER
+increments it (dead, always 0 since J-04); `run_strategy_comparison_report`'s `sub_cache=`/`workers=`
+keyword params (edge_report.py:544-545) exist since J-04 but are accepted-only —
+`EdgeReportComputeManager.trigger()` (edge_report_compute.py:116-181) does not pass either into its own
+`run_strategy_comparison_report` call, and the CLI's `main()` (edge_report_compute.py:244-299) passes
+`workers=args.workers` but never `sub_cache=`. No `ProcessPoolExecutor`/`multiprocessing` usage exists
+anywhere in `apps/backend/app` yet (only an unrelated `ThreadPoolExecutor` in
+`providers/adapters/alpaca.py`). `setups._store_signature` (setups.py:372-383) is the confirmed
+existing bar-store-signature precedent this iteration reuses, never re-derives. J-04 itself remains
+`partial` (backend/API/CLI fully proven; the required browser click-through has no screenshot — Chrome
+MCP failed to start in the prior session, reproduced by 4 agents) — this iteration re-attempts that
+screenshot with zero new code before building J-05. -->
