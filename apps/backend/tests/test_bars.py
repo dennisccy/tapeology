@@ -11,6 +11,7 @@ recency-delay clamp and the rate-limit throttle) as small, independently testabl
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -213,6 +214,159 @@ def test_committed_fixture_loads_through_the_real_store_path_keyless():
         # Byte-identical reload through the real store path.
         again = store.get(meta["id"])
         assert again == meta
+
+
+# --- era-fast_wall J-02: the stat-keyed verified-record cache -------------------------------------
+
+
+def _age(path: Path, seconds: float = 5.0) -> None:
+    """Backdates a file's mtime past the ~2s racy-write guard window, so a test can
+    deterministically exercise the WARM-cache path without a real sleep."""
+    past = time.time() - seconds
+    os.utime(path, (past, past))
+
+
+def _spy_on_load(monkeypatch):
+    """Installs a counting spy around ``BarStore._load`` (the ONE full verifier) and returns the
+    call-count list — the ``test_setups.py`` ``_counting_scan`` precedent (a monkeypatched
+    counting wrapper around the real function), applied to this module's own verifier. A "read" in
+    every TC below means exactly one call recorded here."""
+    import app.research.bars as bars_module
+
+    calls: list[int] = []
+    real_load = bars_module.BarStore._load
+
+    def _counting_load(self, path):
+        calls.append(1)
+        return real_load(self, path)
+
+    monkeypatch.setattr(bars_module.BarStore, "_load", _counting_load)
+    return calls
+
+
+def test_get_serves_zero_reads_on_a_warm_cache_hit(tmp_path, monkeypatch):
+    """TC-1."""
+    store = BarStore(tmp_path / "bars")
+    meta = _record_small_series(store)
+    _age(tmp_path / "bars" / f"{meta['id']}.json")
+    calls = _spy_on_load(monkeypatch)
+
+    first = store.get(meta["id"])
+    assert len(calls) == 1, "the first read must be a real verify"
+
+    second = store.get(meta["id"])
+    assert len(calls) == 1, "a warm-cache hit must add ZERO additional reads"
+    assert second == first
+
+
+def test_list_serves_zero_reads_across_all_files_on_a_warm_cache_hit(tmp_path, monkeypatch):
+    """TC-2."""
+    store = BarStore(tmp_path / "bars")
+    a = _record_small_series(store, symbol="PG")
+    b = _record_small_series(store, symbol="F")
+    for meta in (a, b):
+        _age(tmp_path / "bars" / f"{meta['id']}.json")
+    calls = _spy_on_load(monkeypatch)
+
+    first_records, first_errors = store.list()
+    assert len(calls) == 2, "the first list() must verify every healthy file exactly once"
+    assert first_errors == []
+
+    second_records, second_errors = store.list()
+    assert len(calls) == 2, "a warm list() must add ZERO additional reads across ALL files"
+    assert second_records == first_records
+    assert second_errors == []
+
+
+def test_get_reverifies_and_raises_after_a_warm_read_is_tampered(tmp_path):
+    """TC-3."""
+    store = BarStore(tmp_path / "bars")
+    meta = _record_small_series(store)
+    path = tmp_path / "bars" / f"{meta['id']}.json"
+    _age(path)
+
+    warm = store.get(meta["id"])  # populate the cache
+    assert warm["symbol"] == "PG"
+
+    _tamper(path, lambda data: data["record"]["bars"][0].__setitem__("close", 999.0))
+    with pytest.raises(BarSeriesIntegrityError):
+        store.get(meta["id"])  # the tamper's stat change must force a fresh (failing) re-verify —
+        # never the stale-good cached value, never a silently-served tampered value.
+
+
+def test_racy_write_guard_refuses_to_cache_a_freshly_written_bar_series(tmp_path, monkeypatch):
+    """TC-5 (bars leg)."""
+    store = BarStore(tmp_path / "bars")
+    calls = _spy_on_load(monkeypatch)
+
+    meta = _record_small_series(store)  # freshly written -- inside the ~2s racy window
+    store.get(meta["id"])
+    assert len(calls) == 1
+
+    store.get(meta["id"])  # still inside the window -- must be a real read again, never cached
+    assert len(calls) == 2, "the racy-write guard must refuse to cache a just-written file"
+
+
+def test_get_and_list_return_row_copies_a_caller_mutation_never_poisons_the_cache(tmp_path):
+    """TC-6."""
+    store = BarStore(tmp_path / "bars")
+    meta = _record_small_series(store)
+    _age(tmp_path / "bars" / f"{meta['id']}.json")
+
+    fetched = store.get(meta["id"])
+    original_close = fetched["bars"][0]["close"]
+    fetched["bars"][0]["close"] = -1.0  # caller mutation, in place
+    fetched["bars"].append(
+        {"ts": 0.0, "open": 0.0, "high": 0.0, "low": 0.0, "close": 0.0, "volume": 0}
+    )
+
+    again = store.get(meta["id"])  # a warm-cache hit
+    assert again["bars"][0]["close"] == original_close
+    assert len(again["bars"]) == 3
+
+    records, _errors = store.list()
+    listed = next(r for r in records if r["id"] == meta["id"])
+    assert listed["bars"][0]["close"] == original_close
+    assert len(listed["bars"]) == 3
+
+
+def test_bar_store_root_is_a_public_read_only_property(tmp_path):
+    """TC-11."""
+    root = tmp_path / "bars"
+    store = BarStore(root)
+    assert store.root == root
+    with pytest.raises(AttributeError):
+        store.root = tmp_path / "elsewhere"
+
+
+def test_reset_helper_clears_the_cache_and_prevents_cross_root_leakage(tmp_path_factory, monkeypatch):
+    """TC-12 — the autouse conftest fixture's own reset action, exercised directly: after a
+    reset, BOTH module-level caches are empty, and a genuinely fresh root's first read is a real
+    cache miss — no state survives from an earlier root's warm cache."""
+    import app.research.bars as bars_module
+    import app.research.datasets as datasets_module
+
+    calls = _spy_on_load(monkeypatch)
+
+    root_a = tmp_path_factory.mktemp("bars_a")
+    store_a = BarStore(root_a)
+    meta_a = _record_small_series(store_a, symbol="PG")
+    _age(root_a / f"{meta_a['id']}.json")
+    store_a.get(meta_a["id"])
+    assert len(calls) == 1
+    assert bars_module._VERIFIED_CACHE, "sanity: the cache must have genuinely warmed"
+
+    bars_module._reset_verified_cache_for_tests()
+    datasets_module._reset_verified_cache_for_tests()
+    assert bars_module._VERIFIED_CACHE == {}
+    assert datasets_module._VERIFIED_META_CACHE == {}
+
+    root_b = tmp_path_factory.mktemp("bars_b")
+    store_b = BarStore(root_b)
+    meta_b = _record_small_series(store_b, symbol="F")
+    _age(root_b / f"{meta_b['id']}.json")
+    store_b.get(meta_b["id"])
+    assert len(calls) == 2, "a genuinely fresh root's first read must be a real cache miss"
 
 
 # --- config: bar_dir + validation/throttle params are operational, never fingerprint inputs -------

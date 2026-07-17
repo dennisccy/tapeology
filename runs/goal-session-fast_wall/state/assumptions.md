@@ -42,3 +42,17 @@ authoritative over the downstream iter-spec prose's stronger "dataset_count also
 unrendered `dataset_count` is a spec-completeness gap, not a J-01 acceptance miss.
 **Reversible:** yes — a later iteration can render `dataset_count` in the same panel with no contract
 change; if the human deems its visibility binding, J-01 can be reopened for that one addition.
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** The methodology's stable-journey re-verification model assumes the golden-replay lane
+runs for the Required-still-passing set (J-01, J-07), but this backend-only iteration
+(`Frontend Present: no`) SKIPPED the whole browser-qa step, so neither UI journey got a fresh
+screenshot or replay this iteration.
+**We chose:** Score J-01 and J-07 `passing` (and bump `last_verified_iter` to iter-2) on a
+mechanical non-regression argument — a UI end-state can change only if frontend code or the served
+response bytes change, and both are proven unchanged (zero-frontend git diff + TC-8/TC-14
+byte-identity + green suite 1427/0-fail + `config.py`-untouched-so-fingerprint-frozen) — rather than
+downgrading either to `unknown` for lack of a fresh browser pass.
+**Reversible:** yes — the next frontend-touching iteration re-runs their golden replay; if either
+ever fails there, it flips to `regressed` and this reading is revisited.

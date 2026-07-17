@@ -15,6 +15,7 @@ explicit research action — the no-ambient-recording anti-goal).
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -290,6 +291,41 @@ def test_corrupted_dataset_file_surfaces_explicitly_on_detail_and_list(ctx):
     assert [row["id"] for row in listed["datasets"]] == [healthy["id"]]
     assert len(listed["integrity_errors"]) == 1
     assert f"{corrupt['id']}.json" in listed["integrity_errors"][0]["file"]
+
+
+# --- era-fast_wall J-02: warm-cache byte-identity (TC-8, REST leg) --------------------------------
+
+
+def test_warm_cache_response_is_byte_identical_to_a_forced_fresh_verify(ctx):
+    """TC-8 (REST leg): a warm-cache response byte-equals a response served after BOTH the
+    in-process stat cache AND the durable sibling ``dataset_index.db`` are forced cold (the
+    test-only reset helper, plus deleting the durable index DB) — a genuinely fresh full-verify
+    pass. The cache changes only WHETHER the file is re-read, never a single byte of what is
+    served."""
+    client, dataset_dir = ctx
+    client.post("/research/datasets", json=_reference_body("train"))
+    client.post("/research/datasets", json=_reference_body("holdout", HOLDOUT_START, HOLDOUT_END))
+
+    for f in dataset_dir.glob("*.json"):
+        past = time.time() - 5.0
+        os.utime(f, (past, past))
+
+    warm = client.get("/research/datasets")
+    assert warm.status_code == 200
+    assert warm.json()["integrity_errors"] == []
+    assert len(warm.json()["datasets"]) == 2
+
+    import app.research.datasets as datasets_module
+
+    datasets_module._reset_verified_cache_for_tests()
+    index_db = Path(dataset_dir).parent / "dataset_index.db"
+    if index_db.exists():
+        index_db.unlink()
+
+    fresh = client.get("/research/datasets")
+    assert fresh.status_code == 200
+
+    assert warm.content == fresh.content, "a warm response must be byte-identical to a fresh one"
 
 
 # --- no ambient recording ---------------------------------------------------------------------------

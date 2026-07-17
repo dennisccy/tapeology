@@ -248,10 +248,21 @@ async def test_static_live_tools_json_byte_identical_to_rest(mcp_env):
 
 
 @pytest.mark.anyio
-async def test_datasets_tool_byte_identical_on_a_non_empty_live_list(mcp_env):
+async def test_datasets_tool_byte_identical_on_a_non_empty_live_list(mcp_env, backend_paths):
     """J-02 flips ``datasets`` from honest 404 to live data with ZERO MCP code changes: after
     recording a dataset (the committed reference window, keyless), the tool's JSON is
-    byte-identical to its curl equivalent on a NON-EMPTY 200 list."""
+    byte-identical to its curl equivalent on a NON-EMPTY 200 list.
+
+    era-fast_wall J-02 (TC-8, MCP leg): every recorded dataset file's mtime is pushed past the
+    ~2s racy-write guard via a direct disk ``os.utime`` call BEFORE the byte-identity calls below
+    (the SAME filesystem the subprocess backend itself reads — there is no in-process reset
+    possible against a separate OS process, unlike the same-process proof in
+    ``test_datasets_api.py``). Without this, a freshly-recorded file's own racy-write guard would
+    force every read cold for this short-lived test, silently never exercising the WARM-cache
+    path the datasets.py metadata cache adds — the extension the iter-1-applied lesson calls for
+    (this exact test previously depended on module-scoped shared-backend state; the fix here must
+    hold both standalone and inside the full module, so it deliberately ages EVERY file in the
+    dataset dir rather than just the one this call may or may not have just recorded)."""
     recorded = httpx.post(
         f"{mcp_env}/research/datasets",
         json={
@@ -263,6 +274,15 @@ async def test_datasets_tool_byte_identical_on_a_non_empty_live_list(mcp_env):
         timeout=15.0,
     )
     assert recorded.status_code in (200, 409)  # 409 = already recorded by an earlier run/test
+
+    dataset_dir = Path(backend_paths["TAPEOLOGY_DATASET_DIR"])
+    past = time.time() - 5.0
+    for f in dataset_dir.glob("*.json"):
+        os.utime(f, (past, past))
+
+    warm_up = httpx.get(f"{mcp_env}/research/datasets", timeout=5.0)  # populate the warm cache
+    assert warm_up.status_code == 200
+
     result = await call_tool("datasets", {})
     rest = httpx.get(f"{mcp_env}/research/datasets", timeout=5.0)
     assert rest.status_code == 200

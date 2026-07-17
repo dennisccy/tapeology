@@ -14,11 +14,19 @@ Disciplines (each an anti-goal or a J-02 acceptance clause):
     (the same source resolution studies use: the committed keyless reference window, or an
     arbitrary window through the EXISTING adapter fetch seam). Nothing in the watch/stream path
     imports this module — the live cockpit's tape is never persisted (no ambient recording).
-  * **Checksummed + verified on EVERY load.** ``meta.checksum`` is a sha256 over the tape
+  * **Checksummed + re-verified on every content change (stat-keyed) for ``get``/``list`` — every
+    load, forever, for ``load_events``/``replay``.** ``meta.checksum`` is a sha256 over the tape
     CONTENT (symbol + feed + anchor + events) computed at registration; a second whole-record
-    checksum covers every metadata byte INCLUDING the split tag. Both are recomputed on every
-    load — a corrupted or tampered file (even a hand-edited split) raises the explicit
-    ``DatasetIntegrityError``, never silence, never a fabricated dataset.
+    checksum covers every metadata byte INCLUDING the split tag. era-fast_wall J-02:
+    ``get``/``list`` are the ONLY readers routed through a module-level, stat-keyed (``path``,
+    ``st_size``, ``st_mtime_ns``) METADATA-ONLY cache — a stat match serves already-verified
+    metadata with zero I/O, and ANY stat mismatch re-runs the full verifier (both checksums,
+    exactly as before caching existed). ``load_events`` and ``replay`` — the paths that feed
+    research values — are DELIBERATELY untouched by this cache and keep calling the full verifier
+    unconditionally on EVERY call, forever (the verification trust boundary this interlude's
+    critical anti-goal protects). A corrupted or tampered file (even a hand-edited split) raises
+    the explicit ``DatasetIntegrityError`` on re-verify — never silence, never a fabricated
+    dataset, and never cached (only a successful verify's metadata is ever published).
   * **The split tag is frozen at registration — structurally.** No update/re-tag/delete function
     exists anywhere in this module (immutability is structural, not policed). The only mutation
     is ``record``, and it REFUSES content that is already registered: re-recording the same tape
@@ -37,6 +45,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -49,6 +58,7 @@ from ..engine.tape_engine import TapeEngine
 from ..providers.adapters.base import HistoricalWindow
 from ..providers.base import Event, QuoteEvent, Side, TradeEvent
 from ..providers.historical import HistoricalProvider
+from .dataset_index import DatasetIndex
 from .feed_basis import data_feed_for_scenario
 
 # The dataset source vocabulary REUSES the studies module's source-resolution names (one owner
@@ -179,15 +189,53 @@ class _LoadedDataset:
     rows: list[dict]
 
 
+# --- era-fast_wall J-02: the module-level stat-keyed METADATA-ONLY verified cache ----------------
+# Mirrors ``bars.py``'s identical ``_VERIFIED_CACHE`` discipline (see that module's block comment
+# for the full torn-read/atomic-publish rationale) — a module global, not an instance attribute,
+# since ``DatasetStore`` is constructed fresh per FastAPI dependency call. The ONLY difference from
+# ``bars.py``: this cache holds METADATA ONLY, never a dataset's (potentially huge) event rows —
+# ``load_events``/``replay`` never consult it and keep calling the full verifier on every call
+# (the verification trust boundary this interlude's critical anti-goal protects; see the module
+# docstring). Key: the absolute file path. Value: ``(st_size, st_mtime_ns, meta_dict)``.
+_VERIFIED_META_CACHE: dict[str, tuple[int, int, dict]] = {}
+
+# Identical guard to ``bars.py``'s — a file whose mtime is within this many seconds of "now" (at
+# read time) is never published (see that module's constant docstring for the rationale).
+_RACY_WRITE_GUARD_SECONDS = 2.0
+
+
+def _reset_verified_cache_for_tests() -> None:
+    """Test-only: clears the module-level metadata cache. Never called from any production code
+    path — exists solely so tests (and the autouse ``conftest.py`` fixture) can guarantee no
+    cross-test cache leakage (TC-12)."""
+    _VERIFIED_META_CACHE.clear()
+
+
 class DatasetStore:
     """File-based store rooted at the config-owned dataset directory — the ONE reader/writer.
 
-    Construction is cheap (no I/O); the directory is created on the first ``record``. Every read
-    path (``get`` / ``list`` / ``load_events`` / ``replay``) goes through the same verified
-    ``_load`` — the checksum is recomputed on EVERY load, with no bypass."""
+    Construction is cheap (no I/O); the directory is created on the first ``record``.
+    era-fast_wall J-02: ``get``/``list`` are served from a stat-keyed, metadata-only verified
+    cache (see the module docstring's re-verification contract); ``load_events``/``replay`` go
+    through the same verified ``_load`` as always — the checksum is recomputed on EVERY call for
+    those two, with no bypass, ever."""
 
-    def __init__(self, root: str | Path) -> None:
+    def __init__(self, root: str | Path, *, index_db_path: str | None = None) -> None:
         self._root = Path(root)
+        # era-fast_wall J-02: the OPTIONAL durable sibling index (``dataset_index.py``). ``None``
+        # (the default) preserves today's exact in-process-only behavior for every existing
+        # caller — none pass this today. Lazily constructed on first actual use (never in
+        # ``__init__``) so construction itself stays I/O-free, the same convention this class
+        # already documents ("Construction is cheap (no I/O)").
+        self._index_db_path = index_db_path
+        self._index: DatasetIndex | None = None
+
+    def _durable_index(self) -> DatasetIndex | None:
+        if self._index_db_path is None:
+            return None
+        if self._index is None:
+            self._index = DatasetIndex(self._index_db_path)
+        return self._index
 
     # --- verified load (the one loader; no unverified path exists) ------------------------------
 
@@ -232,28 +280,81 @@ class DatasetStore:
         return _LoadedDataset(meta=meta, rows=rows)
 
     def _load_by_id(self, dataset_id: str) -> _LoadedDataset:
+        """The UNCACHED full-verify load path — used ONLY by ``load_events``/``replay`` (never by
+        ``get``/``list``, which route through ``_cached_meta`` below). era-fast_wall J-02: this
+        method is DELIBERATELY untouched by the new cache — the verification trust boundary the
+        interlude's critical anti-goal protects."""
         path = self._path(dataset_id)
         if not path.exists():
             raise DatasetNotFound(f"no dataset with id '{dataset_id}'")
         return self._load(path)
 
+    def _cached_meta(self, path: Path) -> dict:
+        """era-fast_wall J-02 — the metadata-ONLY stat-keyed cache-or-verify wrapper, consulted
+        EXCLUSIVELY by ``get``/``list``. Three layers, checked in order: (1) the in-process stat
+        cache — a stat match serves already-verified metadata with zero I/O; (2) the OPTIONAL
+        durable sibling index (``dataset_index.py``), consulted only on an in-process miss — a
+        ``(path, size, mtime_ns)`` hit there is ALSO zero-I/O (no ``_load`` call), since a durable
+        row is only ever written from a value ``_load`` itself already verified; (3) the full
+        ``_load`` verifier — always ``rows`` included (checksum verification needs them), but only
+        ``meta`` is ever cached at either layer, so dataset CONTENT never lives in either cache
+        (the 882MB-of-rows-never-cached discipline). An integrity error is never cached at any
+        layer. A file whose mtime is within ``_RACY_WRITE_GUARD_SECONDS`` of "now" is never
+        published to either layer — the identical ``bars.py`` racy-write guard."""
+        try:
+            st = path.stat()
+        except OSError:
+            # Let the real loader raise its own explicit, typed error for a vanished/unreadable
+            # file — the identical failure this call would have hit uncached.
+            return self._load(path).meta
+
+        key = str(path)
+        cached = _VERIFIED_META_CACHE.get(key)  # read-local-reference-before-inspect
+        if cached is not None and cached[0] == st.st_size and cached[1] == st.st_mtime_ns:
+            return cached[2]
+
+        index = self._durable_index()
+        if index is not None:
+            indexed = index.lookup(key, st.st_size, st.st_mtime_ns)
+            if indexed is not None:
+                if (time.time_ns() - st.st_mtime_ns) >= _RACY_WRITE_GUARD_SECONDS * 1_000_000_000:
+                    _VERIFIED_META_CACHE[key] = (st.st_size, st.st_mtime_ns, indexed)
+                return indexed
+
+        meta = self._load(path).meta  # the full verifier — unchanged, both checksums recomputed
+
+        if (time.time_ns() - st.st_mtime_ns) >= _RACY_WRITE_GUARD_SECONDS * 1_000_000_000:
+            _VERIFIED_META_CACHE[key] = (st.st_size, st.st_mtime_ns, meta)  # single atomic rebind
+            if index is not None:
+                index.insert(key, st.st_size, st.st_mtime_ns, meta)
+        return meta
+
     # --- reads -----------------------------------------------------------------------------------
 
     def get(self, dataset_id: str) -> dict:
-        """One dataset's metadata (verified load). ``DatasetNotFound`` for an unknown id."""
-        return dict(self._load_by_id(dataset_id).meta)
+        """One dataset's metadata (verified load, cached — see ``_cached_meta``).
+        ``DatasetNotFound`` for an unknown id. era-fast_wall J-02: ``event_counts`` (the one
+        nested mutable field in ``meta``) is copied fresh on every call so a caller mutating the
+        returned dict in place can never poison a later cached read — the ``bars.py`` per-row-copy
+        discipline (TC-6), applied to this store's one nested field."""
+        path = self._path(dataset_id)
+        if not path.exists():
+            raise DatasetNotFound(f"no dataset with id '{dataset_id}'")
+        meta = self._cached_meta(path)
+        return {**meta, "event_counts": dict(meta["event_counts"])}
 
     def list(self) -> tuple[list[dict], list[dict]]:
-        """All datasets' metadata (each file verified), oldest first, plus an EXPLICIT error row
-        per file that failed verification — a corrupt file is surfaced, never silently hidden and
-        never served as data."""
+        """All datasets' metadata (each file verified, cached — see ``_cached_meta``), oldest
+        first, plus an EXPLICIT error row per file that failed verification — a corrupt file is
+        surfaced, never silently hidden and never served as data."""
         if not self._root.exists():
             return [], []
         records: list[dict] = []
         errors: list[dict] = []
         for path in sorted(self._root.glob("*.json")):
             try:
-                records.append(dict(self._load(path).meta))
+                meta = self._cached_meta(path)
+                records.append({**meta, "event_counts": dict(meta["event_counts"])})
             except DatasetIntegrityError as exc:
                 errors.append({"file": path.name, "error": str(exc)})
         records.sort(key=lambda meta: (meta.get("created_utc", ""), meta.get("id", "")))

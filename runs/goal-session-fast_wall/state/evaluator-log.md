@@ -56,3 +56,44 @@ the goal's dependency order — the piece that makes J-01's still-~29s cold GET 
 **full**: J-02 touches two frozen-foundation store files under the critical "verification trust
 boundary never weakens" anti-goal and adds a new durable derived value (`dataset_index.db`) needing
 the audit + coherence lanes as the backstop; keyless/automated (no browser leg).
+
+## Iteration 2 — goal-fast_wall-iter-2
+
+**Date:** 2026-07-17T08:14:57Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-02 (verified-content store caches + durable `dataset_index.db`)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (scan CLEAN; coherence COHERENCE-PASS; the critical
+  trust-boundary + no-divergent-output anti-goals mechanically upheld — TC-7 + audit git-diff proof
+  that `load_events`/`replay` bodies are byte-unchanged, TC-8/TC-9 byte-identity re-run by audit)
+
+**Reasoning:** J-02 verified passing on strong, triangulated evidence — QA (all 15 TCs PASS),
+review PASS, and a hard skeptical audit PASS that *independently re-ran* the trust-boundary,
+byte-identity, tamper, racy-write, and durable-index tests (78 targeted + 28 MCP + full suite exit
+0) and confirmed via `git diff` that `load_events`/`replay` executable bodies are byte-identical to
+HEAD (only docstrings moved). Suite 1427 passed / 7 skipped / 0 failed; `config_fingerprint`
+`4d665603569b9dbf` frozen *structurally* (I confirmed `config.py` byte-unchanged by git, so the
+fingerprint cannot move — stronger than re-running it). Independently confirmed scope by git:
+11 product files, zero frontend, every frozen research file untouched (`edge_report.py`,
+`edge_report_cache.py`, `levels.py`, `tradability.py`, `setups.py`, `backtests.py`, `config.py`,
+`bar_index.py`). Dev's real-corpus TC-15 (non-blocking): cold 29.37s → warm 0.00s, restart 0.00s
+byte-identical — the durable index survives a genuine backend restart. J-01 and J-07 carry forward
+passing on a mechanical non-regression basis (this is `Frontend Present: no` → browser-qa/golden
+replay SKIPPED; a UI screenshot can change only if frontend code or served bytes change, and both
+are proven unchanged — TC-8/TC-14 byte-identity + zero-frontend diff + green suite + frozen
+fingerprint; logged in assumptions.md). Not GOAL_ACHIEVED (J-03–J-06 failing by design); not
+REGRESSION (no prior pass lost, no anti-goal violation); not STALLED (J-03 tractable); not ESCALATE
+(review PASS, no fail-open, no cross-cutting ambiguity).
+
+**Next-step recommendation:** Build J-03 (the arm memo — `level_change_points` in `levels.py`,
+`basis_day_key` in `tradability.py`, per-run `_StructureArmMemo` in `backtests.py`), next per the
+dependency order, now unblocked by J-02. Depth **full**: J-03 modifies three frozen-foundation
+research-computation files under the critical "frozen foundations" / "no divergent accelerator
+output" anti-goals (a memo serving a stale level state would silently corrupt backtest results — a
+veto-class defect), is guarded by the enumerated source-introspection tests
+(`test_backtests.py:1500-1508` / `:932-943`), and needs byte-identity determinism tests incl. both
+memo-bust legs — audit + coherence lanes are the backstop. Keyless/automated; no browser leg
+expected.

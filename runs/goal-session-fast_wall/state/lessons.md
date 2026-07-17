@@ -36,3 +36,19 @@ is a superseded *attempt*, not the absence of browser evidence — trust the mer
 passes in the canonical module run) — flagged loud, not a false-green, but a known future-cleanup.
 **Applies to:** any iter reconciling a QA SKIP against merged browser results; any J-02+ iter that
 next touches `test_mcp_server.py` (self-seed TC-6's own dataset).
+
+## iter-2 — 2026-07-17T08:14:57Z
+
+**Verdict:** CONTINUE
+**Lesson:** iter-2 was the first `Frontend Present: no` iteration whose Required-still-passing set
+(J-01, J-07) is entirely UI journeys — so the browser-qa step, and with it the golden-replay lane
+that normally re-verifies that set, was SKIPPED (`ui-test-results.md` = SKIPPED,
+`status.json` `browser_checks_run: false`). Those journeys' non-regression then rested ENTIRELY on
+the byte-identity tests (TC-8 datasets REST+MCP, TC-14 edge-report integrity-500) plus the
+zero-frontend git diff — i.e. the byte-identity test literally stands in for the skipped UI replay.
+Takeaway: on any backend-only iter that touches an endpoint a passing UI journey reads, treat a
+mechanically-proven byte-identity assertion as a *required* gate, not a nicety — it is the only
+guardrail left for those UI journeys when replay does not run.
+**Applies to:** any future `Frontend Present: no` iter that touches an endpoint or shared value a
+`passing` browser journey depends on (J-03, J-05, J-06 all qualify — each accelerates a value the
+`/structure` surfaces read).

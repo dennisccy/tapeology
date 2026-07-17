@@ -9,6 +9,8 @@ computation's exact cell values and gate logic in isolation).
 from __future__ import annotations
 
 import json
+import os
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -106,6 +108,41 @@ def test_edge_report_integrity_failure_is_an_explicit_500_never_a_partial_report
     path = tmp_path / "datasets" / f"{dataset_id}.json"
     data = json.loads(path.read_text())
     data["record"]["meta"]["checksum"] = "0" * 64  # tamper
+    path.write_text(json.dumps(data))
+
+    response = client.get("/research/edge-report")
+    assert response.status_code == 500
+    assert "integrity" in response.json()["detail"].lower()
+
+
+def test_integrity_failure_after_a_warm_datasets_list_read_is_still_a_500(ctx):
+    """TC-14 — era-fast_wall J-02: proves the new ``datasets.py`` metadata cache never masks an
+    integrity error inside ``peek_strategy_comparison_report``'s ``_verified_records`` call, even
+    when ``GET /research/datasets`` ALREADY warm-cached this exact dataset's metadata before it
+    was tampered. The tamper changes the file's stat, so the cache's next lookup is an honest
+    miss that forces a full re-verify — never a stale-good served value."""
+    client, _store, tmp_path = ctx
+    recorded = client.post(
+        "/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:00:30Z",
+        },
+    )
+    assert recorded.status_code == 200, recorded.text
+    dataset_id = recorded.json()["dataset"]["id"]
+    path = tmp_path / "datasets" / f"{dataset_id}.json"
+    past = time.time() - 5.0
+    os.utime(path, (past, past))  # past the ~2s racy-write guard, so the warm read below actually caches
+
+    warm = client.get("/research/datasets")
+    assert warm.status_code == 200
+    assert warm.json()["integrity_errors"] == [], "sanity: genuinely warm-cached as healthy"
+
+    data = json.loads(path.read_text())
+    data["record"]["meta"]["checksum"] = "0" * 64  # tamper AFTER the warm read
     path.write_text(json.dumps(data))
 
     response = client.get("/research/edge-report")

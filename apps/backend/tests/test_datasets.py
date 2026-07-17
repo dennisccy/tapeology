@@ -28,6 +28,8 @@ Locked disciplines (each an anti-goal or a J-02 acceptance clause):
 from __future__ import annotations
 
 import json
+import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -326,6 +328,112 @@ def test_committed_fixture_pair_windows_are_disjoint():
         or holdout["window_end_utc"] <= train["window_start_utc"]
     )
     assert train["checksum"] != holdout["checksum"]
+
+
+# --- era-fast_wall J-02: the metadata-only stat-keyed verified cache ------------------------------
+
+
+def _age(path: Path, seconds: float = 5.0) -> None:
+    """Backdates a file's mtime past the ~2s racy-write guard window, so a test can
+    deterministically exercise the WARM-cache path without a real sleep (the ``test_bars.py``
+    identical helper)."""
+    past = time.time() - seconds
+    os.utime(path, (past, past))
+
+
+def _spy_on_load(monkeypatch):
+    """Installs a counting spy around ``DatasetStore._load`` (the ONE full verifier) and returns
+    the call-count list — the ``test_bars.py``/``test_setups.py`` identical technique."""
+    import app.research.datasets as datasets_module
+
+    calls: list[int] = []
+    real_load = datasets_module.DatasetStore._load
+
+    def _counting_load(self, path):
+        calls.append(1)
+        return real_load(self, path)
+
+    monkeypatch.setattr(datasets_module.DatasetStore, "_load", _counting_load)
+    return calls
+
+
+def test_list_surfaces_a_tampered_file_as_an_error_after_a_warm_read(tmp_path):
+    """TC-4."""
+    store = DatasetStore(tmp_path / "datasets")
+    meta = _record_reference(store, TRAIN_START, TRAIN_END, SPLIT_TRAIN)
+    path = tmp_path / "datasets" / f"{meta['id']}.json"
+    _age(path)
+
+    warm_records, warm_errors = store.list()
+    assert warm_errors == []
+    assert warm_records[0]["id"] == meta["id"]
+
+    def _corrupt(data):
+        for row in data["record"]["events"]:
+            if row["type"] == "trade":
+                row["price"] += 1.0
+                return
+
+    _tamper(path, _corrupt)
+
+    records, errors = store.list()
+    assert records == [], "the tampered dataset must never be served as healthy metadata"
+    assert len(errors) == 1 and f"{meta['id']}.json" in errors[0]["file"]
+
+
+def test_racy_write_guard_refuses_to_cache_a_freshly_recorded_dataset(tmp_path, monkeypatch):
+    """TC-5 (datasets leg)."""
+    store = DatasetStore(tmp_path / "datasets")
+    calls = _spy_on_load(monkeypatch)
+
+    meta = _record_reference(store, TRAIN_START, TRAIN_END, SPLIT_TRAIN)  # freshly written
+    store.get(meta["id"])
+    assert len(calls) == 1
+
+    store.get(meta["id"])  # still inside the ~2s racy window
+    assert len(calls) == 2, "the racy-write guard must refuse to cache a just-written file"
+
+
+def test_load_events_and_replay_fully_reverify_even_when_the_metadata_cache_is_warm(tmp_path, monkeypatch):
+    """TC-7 — the mechanical proof of the critical "verification trust boundary never weakens"
+    anti-goal: ``load_events``/``replay`` must fully re-verify on every call, even once
+    ``get``/``list`` have warm-cached this exact dataset's metadata."""
+    store = DatasetStore(tmp_path / "datasets")
+    meta = _record_reference(store, TRAIN_START, TRAIN_END, SPLIT_TRAIN)
+    path = tmp_path / "datasets" / f"{meta['id']}.json"
+    _age(path)
+
+    store.get(meta["id"])  # warm the metadata cache
+    store.list()
+
+    calls = _spy_on_load(monkeypatch)  # installed AFTER warming -- isolates what happens next
+
+    events = store.load_events(meta["id"])
+    assert len(events) == meta["event_counts"]["total"] > 0
+    assert len(calls) == 1, "load_events must fully re-verify even with a warm metadata cache"
+
+    list(store.replay(meta["id"], CONFIG))
+    assert len(calls) == 2, "replay must fully re-verify even with a warm metadata cache"
+
+
+def test_get_and_list_return_event_counts_copies_a_caller_mutation_never_poisons_the_cache(tmp_path):
+    """Extends ``test_bars.py``'s TC-6 per-row-copy discipline to this store's one nested
+    mutable metadata field (``event_counts``) — not itself a numbered TC, but the identical
+    caller-mutation hazard the new cache introduces for this store too."""
+    store = DatasetStore(tmp_path / "datasets")
+    meta = _record_reference(store, TRAIN_START, TRAIN_END, SPLIT_TRAIN)
+    _age(tmp_path / "datasets" / f"{meta['id']}.json")
+
+    fetched = store.get(meta["id"])
+    original_total = fetched["event_counts"]["total"]
+    fetched["event_counts"]["total"] = -999  # caller mutation, in place
+
+    again = store.get(meta["id"])  # a warm-cache hit
+    assert again["event_counts"]["total"] == original_total
+
+    records, _errors = store.list()
+    listed = next(r for r in records if r["id"] == meta["id"])
+    assert listed["event_counts"]["total"] == original_total
 
 
 # --- config: the dataset dir is operational, never a fingerprint input ----------------------------

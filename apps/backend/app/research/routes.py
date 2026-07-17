@@ -1410,8 +1410,20 @@ def cancel_study(
 def get_dataset_store() -> DatasetStore:
     """The dataset store rooted at the config-owned directory (``TAPEOLOGY_DATASET_DIR``
     override, package-anchored default). A FastAPI dependency so tests can point it at a temp
-    dir via the env var or override it outright (the adapter-seam pattern)."""
-    return DatasetStore(CONFIG.dataset_dir_resolved())
+    dir via the env var or override it outright (the adapter-seam pattern).
+
+    era-fast_wall J-02: also wires the durable metadata index (``dataset_index.py``) — a
+    config-DERIVED, env-overridable path so ``config.py`` stays byte-identical
+    (``config_fingerprint`` unaffected, the identical ``get_bar_index`` rationale): the
+    ``TAPEOLOGY_DATASET_INDEX_DB`` env var if set, else a file co-located as a SIBLING of the
+    resolved dataset directory (``.data/datasets`` -> ``.data/dataset_index.db`` — the SAME
+    ``get_bar_index`` env-else-sibling shape, mirrored exactly). Every existing test keeps this
+    hermetically for free, since the derived default lives right beside whatever
+    ``TAPEOLOGY_DATASET_DIR`` a test points at."""
+    dataset_dir = CONFIG.dataset_dir_resolved()
+    override = os.environ.get("TAPEOLOGY_DATASET_INDEX_DB")
+    index_db_path = override if override else os.path.join(os.path.dirname(dataset_dir), "dataset_index.db")
+    return DatasetStore(dataset_dir, index_db_path=index_db_path)
 
 
 @router.post("/datasets")
