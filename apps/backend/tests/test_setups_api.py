@@ -126,6 +126,30 @@ def test_no_bar_series_at_all_is_an_honest_empty_registry(ctx):
     assert r.json() == {"events": []}
 
 
+# --- era-fast_wall J-06 (TC-8's HTTP leg): a corrupted durable scan-cache DB never blocks the
+# route -- the publish-failure-swallowed discipline observed through the REAL request path, not
+# just the direct `compute_setups` call `test_setups.py`'s own TC-8 already proves. The route
+# (`list_setups`) wires through to `compute_setups` with zero extra error handling (routes.py's own
+# source), so this is a genuine end-to-end confirmation, not a restatement. ------------------------
+
+
+def test_corrupted_durable_scan_cache_db_never_blocks_the_route_still_200s_with_the_fresh_scan(ctx):
+    from app.research.setups_scan_cache import resolve_scan_cache_db_path
+
+    client, bar_dir = ctx
+    _seed_aapl(bar_dir)
+
+    db_path = Path(resolve_scan_cache_db_path(str(BarStore(bar_dir).root)))
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path.write_bytes(b"not a real sqlite database, just garbage bytes " * 20)
+
+    r = client.get("/research/setups")
+
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body["events"], list) and len(body["events"]) >= 1
+
+
 # --- The committed real AAPL fixture: J-02's pinned acceptance through the REAL route -----------
 
 

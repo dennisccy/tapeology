@@ -95,3 +95,9 @@ the SCOPED cold fixture, and open the screenshot before believing a "stuck"/"reg
 "(N from cache)" annotation for the edge-report compute (J-06, or once a fixture/corpus with
 genuinely eligible dataset×strategy pairs exists) — and any iter reconciling two disagreeing
 browser lanes.
+
+## iter-6 — 2026-07-17T22:39:11Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The critical "No compute on page load — operator-run only" anti-goal is scoped SPECIFICALLY to the edge-report backtest SWEEP (J-04/J-05), NOT to any-compute-on-a-GET: `compute_setups`'s full-panel touch-event scan legitimately runs on `GET /research/setups` (it always has, since era-5B iter-5's B3 memo) and J-06 only ACCELERATES it with a durable cache — goal.md's own J-06 acceptance and Capability 6 frame the scan as running on `/structure` load. A future evaluator/auditor reading `setups.py`'s scan-on-GET could mis-flag it as a rail breach; audit B1 is the standing rebuttal.
+**Applies to:** any future iter touching `setups.py`/`_run_full_panel_scan`/`GET /research/setups`, or any accelerator whose read path fires on a GET — distinguish the (forbidden) sweep from (allowed, just-cached) scan/level/tradability reads before invoking the "no compute on page load" anti-goal.

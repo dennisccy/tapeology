@@ -23,10 +23,22 @@ def _reset_store_verified_caches():
     test session (harmless for correctness — the cache key is the absolute file path, and
     distinct ``tmp_path`` roots never collide — but unbounded growth over a long suite run is
     still worth avoiding), and any test that intentionally wants a genuinely cold cache can now
-    rely on that being the default starting state rather than re-deriving it itself."""
+    rely on that being the default starting state rather than re-deriving it itself.
+
+    era-fast_wall J-06 additionally resets ``setups.py``'s own in-process hot slot
+    (``_SCAN_CACHE``) via its identical ``_reset_scan_cache_for_tests`` helper. Unlike the two
+    caches above (keyed by absolute file path, so distinct ``tmp_path`` roots never collide), J-06
+    rekeyed that slot on config CONTENT rather than ``id(config)`` — so two unrelated tests using
+    genuinely equal config content against a genuinely equal (e.g. both-empty) store signature could
+    otherwise observe each other's leftover hot-slot entry. Resetting it here, alongside its two
+    siblings, makes every test start from a guaranteed-cold hot slot regardless of ordering (the
+    durable ``SetupsScanCache`` tier needs no such reset — its DB path is derived from each test's
+    own ``tmp_path``-scoped bar store root, so it is already naturally test-isolated)."""
     import app.research.bars as bars_module
     import app.research.datasets as datasets_module
+    import app.research.setups as setups_module
 
     bars_module._reset_verified_cache_for_tests()
     datasets_module._reset_verified_cache_for_tests()
+    setups_module._reset_scan_cache_for_tests()
     yield

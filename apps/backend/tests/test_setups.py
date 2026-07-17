@@ -22,6 +22,7 @@ module's central risk)."""
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 import json
 from datetime import datetime, timezone
@@ -1072,3 +1073,221 @@ def test_concurrent_cold_cache_reads_never_observe_a_torn_key_result_pair(tmp_pa
         "mean some reader saw a torn/partial key-result pairing"
     )
     assert len(results[0]["events"]) >= 1, "the proof must exercise at least one real event"
+
+
+# --- era-fast_wall J-06: the durable setups scan cache (three-tier lookup: hot slot -> durable ->
+# real scan). ``setups_scan_cache.py``'s own module docstring/test file
+# (``test_setups_scan_cache.py``) cover the cache's own mechanics (key composition, byte-identity,
+# corrupted-DB tolerance) in isolation; this section proves ``compute_setups``'s OWN wiring of that
+# cache into its three-tier lookup -- restart simulation, content-hash equality, cache-busting, and
+# the non-vacuous mutation probe (iter-3's lesson, named for exactly this journey in
+# `docs/goal.md`'s BACKGROUND section). --------------------------------------------------------------
+
+
+def test_tc1_hot_slot_cleared_simulating_a_restart_serves_the_durable_cache_with_zero_rescans(
+    tmp_path, monkeypatch,
+):
+    """TC-1: a call-counting spy proves the durable cache -- not a fresh rescan -- answers once the
+    in-process hot slot is cleared (simulating a process restart), and the served result is
+    byte-identical to the original scan."""
+    import app.research.setups as setups_module
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+    original = compute_setups(store, config)  # populates BOTH the hot slot and the durable cache
+
+    setups_module._reset_scan_cache_for_tests()  # simulate a process restart -- hot slot cleared
+
+    calls: list[int] = []
+    real_scan = setups_module._run_full_panel_scan
+
+    def _counting_scan(*args, **kwargs):
+        calls.append(1)
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(setups_module, "_run_full_panel_scan", _counting_scan)
+
+    restarted = compute_setups(store, config)
+
+    assert calls == [], "a durable-cache hit must cost ZERO calls to the real scan"
+    assert json.dumps(restarted, sort_keys=True) == json.dumps(original, sort_keys=True)
+
+
+def test_tc2_equal_content_but_distinct_config_object_is_a_cache_hit_identity_fragility_gone(
+    tmp_path, monkeypatch,
+):
+    """TC-2: the ``id(config)`` fragility is gone -- a SECOND, freshly-constructed ``Config`` with
+    IDENTICAL field values (a different ``id()``) is a genuine cache hit, served WITHOUT even
+    needing to clear the (still-warm) hot slot -- proving the key itself is content-derived."""
+    import app.research.setups as setups_module
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+    original = compute_setups(store, config)
+
+    second_config = dataclasses.replace(config)
+    assert second_config is not config, "the proof requires a genuinely distinct object"
+
+    calls: list[int] = []
+    real_scan = setups_module._run_full_panel_scan
+
+    def _counting_scan(*args, **kwargs):
+        calls.append(1)
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(setups_module, "_run_full_panel_scan", _counting_scan)
+
+    second = compute_setups(store, second_config)
+
+    assert calls == [], "a content-equal Config object must be a genuine cache HIT, never id()-keyed"
+    assert json.dumps(second, sort_keys=True) == json.dumps(original, sort_keys=True)
+
+
+def test_tc3_a_setups_family_field_change_busts_the_cache_content_hash_not_fingerprint_alone(
+    tmp_path, monkeypatch,
+):
+    """TC-3: ``config_fingerprint()`` EXCLUDES the ``setups_*``/``tradability_*``/``sr_*`` families
+    (see ``test_setups_config_fields_are_excluded_from_config_fingerprint`` above), so a cache keyed
+    on the fingerprint alone would silently under-invalidate here. The full CONTENT hash must not."""
+    import app.research.setups as setups_module
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+    compute_setups(store, config)
+
+    changed = _syn_config(setups_reaction_threshold_bps=config.setups_reaction_threshold_bps + 5.0)
+    assert changed.config_fingerprint() == config.config_fingerprint(), (
+        "sanity: setups_reaction_threshold_bps is excluded from config_fingerprint"
+    )
+
+    calls: list[int] = []
+    real_scan = setups_module._run_full_panel_scan
+
+    def _counting_scan(*args, **kwargs):
+        calls.append(1)
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(setups_module, "_run_full_panel_scan", _counting_scan)
+
+    compute_setups(store, changed)
+
+    assert len(calls) == 1, "the CONTENT hash (not config_fingerprint alone) must drive the key"
+
+
+def test_tc4_recording_a_new_5m_series_into_the_store_busts_the_durable_cache_key(tmp_path, monkeypatch):
+    """TC-4: a store-content change (a newly recorded '5m' series) must bust the key even though
+    ``config`` itself is unchanged."""
+    import app.research.setups as setups_module
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+    compute_setups(store, config)
+
+    calls: list[int] = []
+    real_scan = setups_module._run_full_panel_scan
+
+    def _counting_scan(*args, **kwargs):
+        calls.append(1)
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(setups_module, "_run_full_panel_scan", _counting_scan)
+
+    store.record(
+        symbol="SYN-SETUPS-NEW", timeframe="5m", window_start_utc="2026-03-01T00:00:00Z",
+        window_end_utc="2026-03-01T00:05:00Z", feed="sip",
+        bars=[_bar5m("SYN-SETUPS-NEW", 60, 0, 100, 105, 95, 100, 1_000)],
+    )
+    compute_setups(store, config)
+
+    assert len(calls) == 1, "a newly recorded series must bust the cache and re-run the scan"
+
+
+def test_tc5_deleting_the_durable_db_file_is_harmless_recomputes_once_byte_identical(tmp_path, monkeypatch):
+    """TC-5: deleting the durable cache DB (plus its WAL/SHM sidecars) and clearing the hot slot
+    costs exactly one recompute, byte-identical to the pre-deletion result -- proving the durable
+    layer is a rebuildable accelerator, never a source of truth."""
+    import app.research.setups as setups_module
+    from app.research.setups_scan_cache import resolve_scan_cache_db_path
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+    original = compute_setups(store, config)
+
+    db_path = Path(resolve_scan_cache_db_path(str(store.root)))
+    assert db_path.exists(), "the durable cache DB must exist after a real publish"
+    for suffix in ("", "-wal", "-shm"):
+        sidecar = db_path.parent / (db_path.name + suffix)
+        if sidecar.exists():
+            sidecar.unlink()
+    assert not db_path.exists()
+
+    setups_module._reset_scan_cache_for_tests()  # simulate a restart too -- hot slot cleared
+
+    calls: list[int] = []
+    real_scan = setups_module._run_full_panel_scan
+
+    def _counting_scan(*args, **kwargs):
+        calls.append(1)
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(setups_module, "_run_full_panel_scan", _counting_scan)
+
+    recomputed = compute_setups(store, config)
+
+    assert len(calls) == 1, "deleting the durable DB must cost exactly one recompute, never a crash"
+    assert json.dumps(recomputed, sort_keys=True) == json.dumps(original, sort_keys=True)
+
+
+def test_tc6_mutation_probe_a_durable_hit_is_returned_verbatim_never_silently_rescanned(tmp_path):
+    """TC-6 (non-vacuous -- iter-3's lesson, named explicitly for J-06 in `docs/goal.md`'s
+    BACKGROUND section): a durable row pre-seeded under the EXACT current key with a DELIBERATELY
+    WRONG payload must be returned VERBATIM -- proving the durable-hit branch is genuinely read, not
+    dead code a naive byte-identity assertion could pass vacuously (a bug that silently fell through
+    to a fresh, CORRECT rescan would otherwise look identical to success)."""
+    import app.research.setups as setups_module
+    from app.research.edge_report_cache import _config_content_hash
+    from app.research.setups import _store_signature
+    from app.research.setups_scan_cache import SetupsScanCache, resolve_scan_cache_db_path, scan_cache_key
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+
+    key = scan_cache_key(
+        config_content_hash=_config_content_hash(config), store_signature=_store_signature(store),
+    )
+    wrong_payload = {"events": [{"id": "deliberately-wrong-fabricated-event", "fabricated": True}]}
+    cache = SetupsScanCache(resolve_scan_cache_db_path(str(store.root)))
+    cache.publish(key, wrong_payload)
+
+    setups_module._reset_scan_cache_for_tests()  # force the durable tier to be the one that answers
+
+    result = compute_setups(store, config)
+
+    assert result == wrong_payload, (
+        "a durable HIT must be served verbatim, never silently replaced by a fresh (correct) rescan"
+    )
+
+
+def test_tc8_durable_publish_failure_never_blocks_compute_setups_from_serving_the_fresh_scan(tmp_path):
+    """TC-8: a corrupted/unusable durable cache DB file never raises out of ``compute_setups`` -- the
+    publish failure is swallowed (``setups_scan_cache.py``'s own discipline) and the freshly-scanned
+    (correct) result is still returned."""
+    from app.research.setups_scan_cache import resolve_scan_cache_db_path
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+
+    db_path = Path(resolve_scan_cache_db_path(str(store.root)))
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    db_path.write_bytes(b"not a real sqlite database, just garbage bytes " * 20)
+
+    result = compute_setups(store, config)  # must not raise
+
+    assert len(result["events"]) >= 1, "the freshly-scanned (correct) result must still be served"

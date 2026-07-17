@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-fast_wall-iter-6",
+  "base_url": "http://localhost:3301",
+  "iteration": 6,
+  "default_timeout_ms": 20000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Cockpit",
+      "narration": "This is Tapeology's Cockpit — the home screen where a trader watches a simulated market tape play out live. There's nothing to sign into; it's ready right away.",
+      "point_out": "A ticker box invites you to try SIM-BUYER, one of the built-in demo scenarios.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Try: SIM-BUYER" }
+    },
+    {
+      "n": 2,
+      "title": "Type in a simulated ticker",
+      "narration": "Enter SIM-BUYER — a scripted scenario built to show what buyer-controlled tape looks like.",
+      "point_out": "The ticker field now shows SIM-BUYER.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "Watch the tape settle into Buyer Control",
+      "narration": "Click Watch, and the simulator replays the scripted tape. Within a few seconds it settles into Buyer Control.",
+      "point_out": "The Tape State panel reads buyer_control, confirming the scenario played out as scripted.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "buyer_control" }
+    },
+    {
+      "n": 4,
+      "title": "Stop and try the opposite scenario",
+      "narration": "Stop the tape, ready to try its mirror-image scenario.",
+      "point_out": "The Watch button becomes available again for a new ticker.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Stop" } }
+    },
+    {
+      "n": 5,
+      "title": "Type in the seller scenario",
+      "narration": "This time, enter SIM-SELLER — the scripted scenario for seller-controlled tape.",
+      "point_out": "The ticker field now shows SIM-SELLER.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-SELLER" }
+    },
+    {
+      "n": 6,
+      "title": "Watch it settle the other way — Seller Control",
+      "narration": "Click Watch again, and this time the tape settles into Seller Control — the simulator reliably reproduces either side on demand.",
+      "point_out": "The Tape State panel now reads seller_control.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "seller_control" }
+    },
+    {
+      "n": 7,
+      "title": "Review the trading journal",
+      "narration": "Every simulated session gets logged as a thesis in the journal, so a trader can look back later at what was watched and why.",
+      "point_out": "The journal list shows the SIM-BUYER entry that was just recorded.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/journal" },
+      "expect": { "text": "SIM-BUYER" }
+    },
+    {
+      "n": 8,
+      "title": "Browse replay studies",
+      "narration": "The Studies page holds journaled measurements from tape replays — always labeled as measurements, never as a trading signal.",
+      "point_out": "The \"Replay studies\" heading and its source options are visible.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/studies" },
+      "expect": { "text": "Replay studies" }
+    },
+    {
+      "n": 9,
+      "title": "Check the performance ledger",
+      "narration": "The Performance page shows the simulated profit ledger for the founding baseline strategy.",
+      "point_out": "A banner makes clear every figure is simulated — assumed fees and slippage — never a claim about live results.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/performance" },
+      "expect": { "text": "simulated — assumed fees/slippage — not indicative of live results" }
+    },
+    {
+      "n": 10,
+      "title": "Open Structure — the price-research page",
+      "narration": "Now to Structure, the page with Tapeology's price-level research tools: tradable price bands, case studies of past price reactions, and a deeper price-comparison report. This page just wrapped up several rounds of work making sure it always loads quickly, even right after the server restarts.",
+      "point_out": "The Tradable Map panel loads right away, inviting you to choose a symbol and a time to see its level map. Case Studies and the Edge Report sit further down the page, both loading in promptly too.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Choose a symbol and an as-of time, then Load, to see its tradable level map." }
+    },
+    {
+      "n": 11,
+      "title": "An honest answer, with a button ready when someone wants it",
+      "narration": "Scroll down to the Edge Report panel — the page's deepest calculation. It never runs itself in the background; it waits for a person to ask for it.",
+      "point_out": "A calm amber message reads \"Edge report not computed yet.\", with a \"Compute edge report\" button underneath it — a person can click it anytime to run the calculation on demand; we won't trigger it in this quick tour, since a real run can take a while over the full trading-data history.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "heading", "name": "Edge Report" } },
+      "expect": { "text": "Edge report not computed yet." }
+    }
+  ]
+}
