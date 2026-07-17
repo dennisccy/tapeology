@@ -1,0 +1,22 @@
+J-02 baseline support probe — GET /research/datasets (real corpus, cold/uncached)
+Iteration: goal-fast_wall-iter-0
+Date: 2026-07-17
+Command: curl -s -m 60 -o datasets-response.json -w "HTTP:%{http_code} TIME:%{time_total}s SIZE:%{size_download} bytes\n" http://localhost:8301/research/datasets
+
+Result:
+HTTP:200 TIME:30.129467s SIZE:8588 bytes
+
+Parsed response body:
+dataset_count: 18
+integrity_errors: []
+
+Comparison to docs/goal.md's documented baseline ("GET /research/datasets takes 31.4s to return
+8.6KB of metadata, because DatasetStore.list() re-reads, re-parses, and double-sha256s all 882MB
+on every call"): 30.13s / 8,588 bytes vs. the documented 31.4s / 8.6KB — reproduces the defect
+almost exactly, freshly measured this session (not merely cited from prior notes).
+
+This probe is explicitly sanctioned by docs/phases/goal-fast_wall-iter-0.md's verification-action
+list ("Probe GET /research/datasets and GET /research/setups latency against the local real
+corpus... read-only probes only, never a mutating recompute") and is unrelated to the dangerous
+GET /research/edge-report path (see the safety note in the main UI test results report) — this
+call is bounded (~30s, deterministic, always completes) rather than open-ended.

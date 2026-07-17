@@ -1,0 +1,16 @@
+{
+  "phase": "goal-fast_wall-iter-0",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-17T00:07:28.477819Z",
+  "started_at": "2026-07-17T00:07:28.477819Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [],
+  "tests_run": true,
+  "tests_passed": true,
+  "browser_checks_run": false,
+  "fix_mode": false,
+  "notes": "Verify-only baseline per spec BACKGROUND (developer step is an explicit no-op): zero apps/ change (git status --short -- apps/ and git diff --stat -- apps/ both empty, confirmed). Ran full backend suite: 1392 passed, 7 skipped, 1399 collected, 0 failed, 0 errors, 435.16s, exit 0 -- cross-validated via manual dot-tally and an independent --collect-only per-file sum (both = 1399), plus an isolated re-run of the 3 skip-gated files (7 skipped, 1 warning in 0.22s, exact match). Equivalence suites (test_observer_equivalence.py + test_profile_equivalence.py) 22/22 passed in an isolated run. config_fingerprint live-recomputed == 4d665603569b9dbf, matches pinned value. J-01 defect confirmed LIVE via direct code read (routes.py:2093-2117 -> edge_report.py:427-456 -> edge_report_cache.py:228-266's get_or_compute, the ONLY cache method, calls compute_fn() synchronously inside the GET on a miss) -- deliberately did NOT trigger this live against the real corpus (SAFETY NOTE in the dev handoff: would pin CPU for hours per goal.md; .data/edge_report_cache.db confirmed byte-unchanged, 12288 bytes, before/after all probes). J-02/J-03/J-04/J-05/J-06 all confirmed absent via grep/find (no stat-keyed caches, no dataset_index.py, no level_change_points/basis_day_key/_StructureArmMemo, no edge_report_compute.py or its routes -- both GET+POST /research/edge-report/compute return 404, no EdgeReportBacktestCache/run_pair, no setups_scan_cache.py -- setups.py has only the in-process _SCAN_CACHE). Live latency probes against the real 882MB corpus: GET /research/datasets = 29.18s/8588 bytes/18 datasets (close to goal.md's 31.4s citation); GET /research/setups = 269.82s (4m30s)/4.5MB/801 events (matches goal.md's 'multi-minute' citation). J-07 foundation confirmed intact: champion v1/default unchanged, strategies=[v1,structure_tape,structure_tape_map] unchanged, /meta/ui-routes exactly 6 frozen entries, all 5 frontend pages 200, /structure SSR HTML has all era-5B markers present and zero J-01/J-04 markers. Dev stack (scripts/dev.sh, ports 8301/3301) started/health-checked/stopped/restarted/stopped cleanly -- confirmed the known uvicorn --reload / next dev child-process gotcha (must kill by port via fuser, not just parent PID). Full journey-by-journey evidence (J-01 through J-07) recorded in the dev handoff for the goal-evaluator. Browser-qa-agent's step per TESTING REQUIREMENTS still needed for full click-through (J-01, J-04, J-06, J-07 sim-cockpit spot-checks) -- not run by this developer step; dev handoff includes an explicit SAFETY NOTE about the CPU-pinning risk if /structure's Edge Report section is loaded live against the real corpus.",
+  "next_action": "none"
+}

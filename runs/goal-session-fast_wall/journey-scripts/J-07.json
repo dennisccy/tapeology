@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "journey": "J-07",
+  "name": "The foundation is unchanged (regression sentinel)",
+  "default_timeout_ms": 15000,
+  "steps": [
+    {"n": 1, "journey": "J-07", "action": {"type": "goto", "url": "/"}, "expect": {"text": "Try: SIM-BUYER"}},
+    {"n": 2, "journey": "J-07", "action": {"type": "fill", "target": {"placeholder": "Ticker e.g. SIM-BUYER"}, "text": "SIM-BUYER"}},
+    {"n": 3, "journey": "J-07", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "buyer_control"}, "timeout_ms": 15000},
+    {"n": 4, "journey": "J-07", "action": {"type": "click", "target": {"role": "button", "name": "Stop"}}},
+    {"n": 5, "journey": "J-07", "action": {"type": "fill", "target": {"placeholder": "Ticker e.g. SIM-BUYER"}, "text": "SIM-SELLER"}},
+    {"n": 6, "journey": "J-07", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "seller_control"}, "timeout_ms": 15000},
+    {"n": 7, "journey": "J-07", "action": {"type": "goto", "url": "/journal"}, "expect": {"text": "SIM-BUYER"}},
+    {"n": 8, "journey": "J-07", "action": {"type": "goto", "url": "/studies"}, "expect": {"text": "Replay studies"}},
+    {"n": 9, "journey": "J-07", "action": {"type": "goto", "url": "/performance"}, "expect": {"text": "simulated — assumed fees/slippage — not indicative of live results"}}
+  ]
+}
