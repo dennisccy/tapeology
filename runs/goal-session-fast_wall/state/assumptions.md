@@ -76,3 +76,36 @@ acceptance's real substance.
 **Ambiguity:** This is the first iteration to MODIFY the canonical owners behind a `passing` browser journey's UI (`levels.py`/`tradability.py` back J-07's `/structure` Tradable Map + Case Studies) while running `Frontend Present: no` — so J-07's continued pass has no fresh screenshot and the replay lane did not run.
 **We chose:** Score J-07 (and J-01/J-02) `passing` on a mechanical byte-identity non-regression argument — the served bytes of the modified owners are proven unchanged (TC-15 pinned-value tests + my own targeted `test_levels.py`/`test_tradability.py` run + frozen `config_fingerprint` 4d665603569b9dbf), and a UI end-state can move only if the served bytes move — rather than downgrading J-07 to `unknown` for lack of a browser pass. This extends iter-2's mechanical-carry precedent to the harder case where the journey's OWN backing computation changed (not just an unrelated file).
 **Reversible:** yes — the next frontend-touching iteration (J-04) re-runs J-01's and J-07's browser/golden-replay leg; if either fails there it flips to `regressed` and this reading is revisited.
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** goal.md's J-04 step 1 names all five additive keyword-only hooks
+(`force=, progress=, should_abort=, sub_cache=, workers=`) as this journey's OWN signature addition to
+`run_strategy_comparison_report`, and J-04 step 3's CLI usage string already shows `--workers N`, but
+the work that gives `sub_cache=`/`workers=` any actual parallel-execution effect (`_split_cells`'s new
+`run_pair` provider seam + the `ProcessPoolExecutor` pool) is explicitly named as J-05's own step 2/3.
+**We chose:** J-04 adds all five keyword-only parameters to `run_strategy_comparison_report`'s
+signature (and the CLI's `--workers N` flag, default 4) so the shape goal.md names is complete and
+forward-compatible from day one — mirroring iter-1's own `compute: null` forward-shape precedent — but
+`sub_cache=`/`workers=` are accepted-and-currently-INERT this iteration: every compute this iteration
+triggers (button or CLI, at any `--workers` value) runs strictly sequentially, byte-identical to
+today's `_split_cells` loop. J-05 is what makes `workers > 1` genuinely parallel.
+**Reversible:** yes — J-05 only needs to give the already-accepted parameters real behavior; no
+signature or CLI-flag change required, no re-plumbing of any caller.
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** goal.md's J-04 acceptance requires the browser-verified compute cycle ("button →
+progress → cells or the honest empty state") and the CLI's warm-key repeat-invocation speedup, but
+names no concrete wall-clock ceiling for either (the same open-ended pattern iter-3's TC-11 budget
+already resolved once for a single backtest).
+**We chose:** Pin two concrete, generous ceilings on the tiny committed fixture dataset dir (1–2
+datasets, per `tests/fixtures/datasets_j03` / `tests/fixtures/datasets`): the browser click-to-terminal-
+render cycle (TC-15) gets a 90-second ceiling; a warm-key repeat CLI invocation without `--force`
+(TC-12) gets a 5-second ceiling. Both are chosen to be clearly satisfiable (the fixture is small enough
+that even a full sequential 3-strategy sweep should complete in low single-digit seconds) and clearly
+diagnostic of a regression to per-request recomputation, without being flaky on a loaded CI box or a
+slow browser-automation round-trip. The real proof is the call-counting spy (TC-6/TC-12) and the
+single-flight/cancel/force mechanics (TC-1 through TC-5), not the wall-clock numbers themselves.
+**Reversible:** yes — a later iteration can tighten or loosen either number without touching the
+underlying contract (single-flight + cache-hit call-count + browser terminal-state proof).

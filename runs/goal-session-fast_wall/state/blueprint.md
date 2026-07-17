@@ -9,6 +9,10 @@ existing `/structure` → Edge Report section, or is a backend-only accelerator 
 panel. Single source of truth is anti-goal #6 (critical): each value below is computed once by ONE
 module and served by ONE endpoint; REST/MCP/reports read it verbatim. This interlude changes only
 WHEN/HOW OFTEN the frozen era-1–5B computations run — never WHAT they compute.
+
+iter-4 update: refined the "Compute-job snapshot" row (below) to its full field/type shape now that
+J-04 actually builds `EdgeReportComputeManager` — additive detail only, same single owner/endpoint
+pre-registered at baseline; no new row, no nav change.
 -->
 
 ## Information Architecture
@@ -56,7 +60,7 @@ truth); UI/MCP/reports may only re-format what the canonical endpoint returns.
 | Value / entity | Computed by (single module) | Served by (single endpoint) | Notes |
 |---|---|---|---|
 | Not-computed edge-report payload (`status: "not_computed"`, `detail`, `dataset_count`, `register`, embedded `compute` snapshot or `null`) | `app/research/edge_report.py` (`peek_strategy_comparison_report`) | `GET /research/edge-report` (existing route, rewired — same `Depends`/`cache=cache` wiring) | `status` key is the discriminator; a real report never carries one; a warm key still serves the report **verbatim** (unchanged shape); an empty registry still computes inline (O(1), zero backtests); MCP `edge_report` proxy mirrors byte-identically |
-| Compute-job snapshot (`state`, `progress: {phase, backtests_total, backtests_done, backtests_from_cache, current}`, `error`) | `app/research/edge_report_compute.py` (`EdgeReportComputeManager`) | `GET /research/edge-report/compute` (poll); started via `POST /research/edge-report/compute`; cancelled via `POST /research/edge-report/compute/cancel` | Process-scoped bookkeeping, honestly lost on restart (existing job-manager precedent) — never a research value; single-flight; REST-only, **no MCP tool** |
+| Compute-job snapshot — `id: str` (job uuid), `state: "running"\|"done"\|"cancelled"\|"failed"`, `force: bool`, `started_utc: str (ISO-8601)\|null`, `finished_utc: str (ISO-8601)\|null`, `error: str\|null`, `progress: {phase: str, backtests_total: int, backtests_done: int, backtests_from_cache: int, current: {dataset_id: str, strategy_id: str}\|null}` | `app/research/edge_report_compute.py` (`EdgeReportComputeManager`) | `GET /research/edge-report/compute` (poll; returns the snapshot or `null` if no job has ever run in this process); started via `POST /research/edge-report/compute` (body `{force: bool=false}`); cancelled via `POST /research/edge-report/compute/cancel` (409 when idle) | Process-scoped bookkeeping, honestly lost on restart (existing job-manager precedent) — never a research value; single-flight (exactly ONE job slot, never per-id like `StudyJobManager`/`BacktestJobManager`); REST-only, **no MCP tool**. The SAME snapshot is embedded verbatim as the `compute` field of the not-computed edge-report payload above — never a second derivation, never a second endpoint. |
 
 **Rebuildable accelerators (explicitly NOT canonical values — deleting any loses nothing; the next
 read/compute re-verifies or recomputes byte-identically through the one canonical owner below):**
@@ -92,3 +96,13 @@ ONLY existing cache method EdgeReportCache.get_or_compute (no lookup/compute_and
 a cold cache genuinely computes inline inside the GET. None of edge_report_compute.py, dataset_index.py,
 setups_scan_cache.py, EdgeReportBacktestCache, level_change_points, basis_day_key, _StructureArmMemo, or
 the bars.py/datasets.py stat-keyed caches exist yet. -->
+
+<!-- Codebase probe at iter-4 (before J-04 build): confirmed edge_report_compute.py still does not
+exist; EdgeReportCache already has lookup/compute_and_publish (J-01) beside the untouched get_or_compute;
+run_strategy_comparison_report(store, dataset_store, bar_store, config, *, cache=None) has no force/
+progress/should_abort/sub_cache/workers hooks yet; routes.py has no /research/edge-report/compute*
+routes; ResearchRegistry wires only study_jobs + backtest_jobs (the StudyJobManager/BacktestJobManager
+precedent this iteration's EdgeReportComputeManager follows, adapted to single-flight); the not-computed
+payload's `compute` key is unconditionally `None` (peek_strategy_comparison_report:519-524); the MCP
+tool list (app/mcp/__init__.py) has exactly 18 registered names, pinned by
+test_advertised_tool_set_is_exactly_capability_6. -->

@@ -1,6 +1,6 @@
 # Iteration Summary — goal-fast_wall-iter-3
 
-**Verdict:** PASS
+**Verdict:** CONTINUE
 **Iteration type:** goal-full
 **Date:** 2026-07-17
 **Iteration:** 3
@@ -20,16 +20,16 @@ The two structure-aware simulated strategies stop redoing the same work over and
 ## Direction
 
 **Signal:** improving
-**Why:** This iteration built and independently verified J-03 in full — a per-run structure arm memo that collapses per-tick `compute_levels`/`compute_tradability` calls to once per real change-point interval, with all 15 acceptance tests passing, clean review and QA verdicts, and a hard audit that mutation-tested the byte-identity guards and confirmed they genuinely catch a stale-memo bug. Closure verdict is CLOSURE-PASS with zero blocking issues, and the required-still-passing journeys (J-01, J-02, J-07) are covered by the mechanical byte-identity gate this backend-only iteration requires. The goal-evaluator had not yet produced iter-3's own `eval.md` at summary time, so J-03's formal journey-history flip is pending, but the unanimous build+review+QA+audit+closure evidence directly follows through on iter-1's and iter-2's own recommendation to build J-03 next.
+**Why:** J-03 (the arm memo) is newly passing this iteration on strong, independently-verified evidence — the per-run `_StructureArmMemo` collapses per-tick `compute_levels`/`compute_tradability` recomputation to once per real change-point interval / UTC session date, byte-identical to the unmemoized path, confirmed by review PASS, QA 15/15, and a hard audit whose mutation probe proved the byte-identity guards genuinely catch a stale-memo bug. J-01, J-02, and J-07 carry forward passing on the mechanical byte-identity gate this backend-only iteration requires (`Frontend Present: no`), with zero regressions and zero anti-goal violations. Each of the four iterations so far (0 through 3) has moved exactly one journey to passing with no stalls or reversals, so direction reads improving.
 
 **Trend (last 4 iters):**
-- Newly passing this iter: J-03 (per this iteration's dev/review/QA/audit/closure evidence — the goal-evaluator had not yet produced iter-3's own log entry at summary time)
+- Newly passing this iter: J-03
 - Newly passing in last 4 iters total: J-07 (iter-0), J-01 (iter-1), J-02 (iter-2), J-03 (iter-3)
 - Regressions in last 4 iters: none
 - Anti-goal violations in last 4 iters: none
 - Iters with no journey state change: 0 of last 4
 
-**Latest evaluator reasoning:** (most recent available — iter-2's `eval.md`; iter-3's own evaluation had not yet run at summary time) "J-02 verified passing on strong, triangulated evidence — QA (all 15 TCs PASS), review PASS, and a hard skeptical audit PASS that independently re-ran the trust-boundary, byte-identity, tamper, racy-write, and durable-index tests... and confirmed via git diff that load_events/replay executable bodies are byte-identical to HEAD. Not GOAL_ACHIEVED (J-03–J-06 failing by design); not REGRESSION (no prior pass lost, no anti-goal violation); not STALLED (J-03 tractable); not ESCALATE (review PASS, no fail-open, no cross-cutting ambiguity)."
+**Latest evaluator reasoning:** "J-03 ('the arm memo') is newly passing on strong, personally-verified evidence: the per-run `_StructureArmMemo` in `backtests.py` ... collapses the per-tick `compute_levels`/`compute_tradability` recompute into one call per real change-point interval / UTC session date, byte-identically to the `memo=None` direct-call path. All four lanes agree (review PASS, QA 15/15, a hard audit PASS with a mutation probe, coherence COHERENCE-PASS); I independently re-ran the targeted suite (114/114), the two guard tests, the two counting-spy tests, and the frozen fingerprint. No journey regressed and no anti-goal was violated, but J-04–J-06 remain unbuilt by design — so this is CONTINUE, not GOAL_ACHIEVED."
 
 ## What was done
 
@@ -38,25 +38,30 @@ The two structure-aware simulated strategies stop redoing the same work over and
 - Collapsed `compute_levels`/`compute_tradability` calls from once per confirming tick to once per real change-point interval / UTC session date — mechanically proven by call-counting spy tests (TC-9, TC-10), not just asserted.
 - Proved byte-identical output memoized vs. unmemoized for both structure strategies, including both goal-named edge cases (a daily period closing mid-tick-stream; a run crossing a UTC date boundary) — TC-5 through TC-8.
 - Full backend suite: 1440 passed / 7 skipped / 0 failed (13 new tests added, 0 newly skipped or deleted); `config_fingerprint()` unchanged at `4d665603569b9dbf`; zero diff to every out-of-scope file (edge_report.py, bars.py, datasets.py, routes.py, config.py, all frontend files).
-- Review, QA (15/15 test cases), and a hard audit — which independently mutation-tested the byte-identity guards and confirmed they genuinely catch a stale-memo bug — all returned clean PASS; closure verdict CLOSURE-PASS with zero blocking issues.
-- Browser QA skipped (backend-only iteration, `Frontend Present: no`); required-still-passing journeys J-01/J-02/J-07 covered instead by the mechanical byte-identity gate (TC-14/TC-15) the applied lesson from iter-2 requires.
+- Review PASS, QA PASS (15/15 test cases), and a hard audit PASS that independently mutation-tested the byte-identity guards and confirmed they genuinely catch a stale-memo bug; goal-evaluator confirmed CONTINUE with J-03 newly passing in journey-history.json.
+- Browser QA skipped (backend-only iteration, `Frontend Present: no`); required-still-passing journeys J-01/J-02/J-07 re-verified passing via the mechanical byte-identity gate (TC-14/TC-15) rather than a fresh browser pass.
 
 ## What's left
 
-- J-03 built and independently verified this iteration (15/15 acceptance tests, clean review/QA/audit, CLOSURE-PASS) — pending the goal-evaluator's formal run to flip its status in journey-history.json, which had not yet happened at summary time.
-- Journey J-04 (The operator-run compute — button, background job, CLI warmer) failing — not yet built; next per the dependency order.
+- Journey J-04 (The operator-run compute — button, background job, CLI warmer) failing — not yet built; now unblocked by J-03's memo, next per the dependency order.
 - Journey J-05 (The sweep becomes resumable and parallel — durable pair results + process pool) failing — depends on J-04's manager plumbing.
-- Journey J-06 (Restarts stop hurting — the durable setups scan cache) failing — technically unblocked by J-02's `BarStore.root`, but deliberately deferred so as not to bundle two risky frozen-foundation-file changes in one diff.
-- The memo's throughput win is not yet observable from `/structure` — no operator-run trigger exists until J-04 ships, so there is no user-facing artifact to screenshot yet.
+- Journey J-06 (Restarts stop hurting — the durable setups scan cache) failing — technically unblocked by J-02's `BarStore.root`, but deliberately deferred to avoid bundling two risky frozen-foundation-file changes in one diff.
+- The memo's throughput win is not yet observable from `/structure` — no operator-run trigger exists until J-04 ships, so there's no user-facing artifact to screenshot yet.
 - `.claude/project-template.md` still resolves to the framework's generic, unfilled template rather than this project's real stack/commands — a pre-existing gap flagged again this iteration, not introduced by it.
 
 ## Next step
 
-Build J-04 next ("The operator-run compute — button, background job, CLI warmer") per goal.md's dependency order (J-01 → J-02 → J-03 → J-04 → J-05) — this is what the dev handoff's "Suggested Next Phase" and the audit's "Recommended Next Step" both independently recommend, consistent with iter-1's and iter-2's own eval.md recommendations of the same order (iter-3's own eval.md had not yet been produced at summary time). J-03's memo now collapses the per-tick recompute the goal's Vision measured as a ≥400× slowdown culprit, so a J-04 compute trigger built on top of it should let a real edge-report sweep progress at a sane rate instead of a fast-looking button that never finishes. J-04 touches new files only (`edge_report_compute.py`, three new routes, a CLI warmer, the `/structure` button/poll wiring) and does not further modify `levels.py`, `tradability.py`, or `backtests.py`, carrying a lower frozen-foundation risk profile than this iteration.
+Build J-04 ("The operator-run compute — button, background job, CLI warmer") next, per goal.md's dependency order (J-01 → J-02 → J-03 → J-04 → J-05), now unblocked by J-03's memo. J-04 is `Frontend Present: yes`: a browser-verifiable "Compute edge report" button on `/structure` with progress polling, plus a new `edge_report_compute.py` module, three new REST routes (`POST/GET /research/edge-report/compute`, `POST .../cancel`), and a CLI warmer. Depth **full** — J-04 carries the critical "No compute on page load — operator-run only" anti-goal (the trigger must be POST-only; GET stays 405; no ambient/scheduled compute), the "No MCP write surface" anti-goal (no new MCP tool; the compute trigger is REST-only), the frozen warm-cache render must survive, and it has a real browser leg (button → progress counts → cells or the honest empty state). The audit + ux-regression + closure + browser-qa lanes are the warranted backstop for a new operator-facing compute surface over frozen foundations.
 
 ## Assumptions made
 
-none recorded
+- iter-3 · goal-evaluator — Ambiguity: This iteration modified the canonical owners (`levels.py`/`tradability.py`) behind J-07's `/structure` UI while running `Frontend Present: no`, so J-07's pass has no fresh screenshot or replay this iteration. We chose: Score J-07 (and J-01/J-02) `passing` on a mechanical byte-identity argument — the served bytes of the modified owners are proven unchanged (TC-15 + an independently re-run pinned-value suite + frozen fingerprint `4d665603569b9dbf`) — rather than downgrading to `unknown`, extending iter-2's mechanical-carry precedent to the harder case where the journey's own backing computation changed. Reversible: yes
+- iter-3 · goal-decomposer — Ambiguity: J-03's acceptance requires the tick-fixture structure backtests to complete "within an interactive test budget" but names no concrete number. We chose: Pin TC-11 at a generous 10-second wall-clock ceiling on a fixture crossing at least 5 distinct `level_change_points` intervals — satisfiable once the memo works, diagnostic of a regression to per-tick recomputation, and not flaky on a loaded CI box; the real proof of the throughput fix is the counting-spy call-count collapse (TC-9/TC-10), not this wall-clock number. Reversible: yes
+- iter-2 · goal-evaluator — Ambiguity: The stable-journey re-verification model assumes the golden-replay lane runs for J-01/J-07, but this backend-only iteration (`Frontend Present: no`) skipped browser-qa entirely, so neither got a fresh screenshot. We chose: Score J-01 and J-07 `passing` on a mechanical non-regression argument — a UI end-state can change only if frontend code or served bytes change, and both are proven unchanged (zero-frontend diff + TC-8/TC-14 byte-identity + green suite + frozen fingerprint) — rather than downgrading to `unknown`. Reversible: yes
+- iter-1 · goal-evaluator — Ambiguity: The iteration spec's prose says both `detail` AND `dataset_count` "become newly visible" in the not-computed panel, but the shipped panel renders only the headline + `detail` (`dataset_count` reaches typed state but is never painted). We chose: Score J-01 `passing` by treating the goal.md acceptance + TC-11 (headline + verbatim `detail` only) as authoritative over the stronger iteration-spec prose claim; the unrendered `dataset_count` is a spec-completeness gap, not an acceptance miss. Reversible: yes
+- iter-1 · goal-decomposer — Ambiguity: J-07's deferred acceptance says its live `/structure` spot-check should re-run "the first iteration that makes the cold GET safe (J-01)", but a full page load still separately waits on `GET /research/setups`'s cold-scan cost (268.95s at iter-0) until J-06 ships. We chose: Scope J-07's closure to the specific Edge-Report leg J-01 actually fixes, not the full page load, which still separately waits on the untouched setups cost — a full live spot-check is bonus evidence, not required. Reversible: yes
+- iter-1 · goal-decomposer — Ambiguity: J-01 step 2 says the not-computed payload embeds "the current compute snapshot (or `null`)", but the compute manager (`edge_report_compute.py`) is J-04's deliverable and doesn't exist yet. We chose: `peek_strategy_comparison_report`'s not-computed payload always emits `compute: null` this iteration — the key exists now for forward shape-compatibility with J-04's polling logic; J-04 wires the real snapshot into the same key without a shape change. Reversible: yes
+- iter-0 · goal-evaluator — Ambiguity: J-07's acceptance names a live `/structure` interactive spot-check, but loading `/structure` against the default real-corpus backend triggers the never-completing edge-report sweep (hours of CPU pin), so the live leg was withheld. We chose: Score J-07 `passing` on the strength of the green suite, pinned fingerprint, equivalence 22/22, and four verified screenshots, treating the spec-sanctioned code-citation/SSR substitution as sufficient rather than downgrading to `partial`/`unknown`. Reversible: yes
 
 ## Artifacts
 
@@ -74,4 +79,5 @@ none recorded
 | QA | PASS | reports/qa/goal-fast_wall-iter-3-qa.md |
 | Audit | PASS | docs/handoffs/goal-fast_wall-iter-3-audit.md |
 | Closure | CLOSURE-PASS | reports/phase-goal-fast_wall-iter-3-closure-verdict.md |
+| Goal evaluation | CONTINUE | runs/goal-session-fast_wall/iter-3/eval.md |
 | Journey history | — | runs/goal-session-fast_wall/state/journey-history.json |
