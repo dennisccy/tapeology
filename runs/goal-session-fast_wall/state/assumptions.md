@@ -56,3 +56,17 @@ byte-identity + green suite 1427/0-fail + `config.py`-untouched-so-fingerprint-f
 downgrading either to `unknown` for lack of a fresh browser pass.
 **Reversible:** yes — the next frontend-touching iteration re-runs their golden replay; if either
 ever fails there, it flips to `regressed` and this reading is revisited.
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** J-03's acceptance says "the committed tick-fixture structure backtests complete
+within an interactive test budget" but names no concrete number.
+**We chose:** This iteration's TC-11 pins that budget at a concrete, generous 10-second
+wall-clock ceiling on a newly-added fixture whose tick stream crosses at least 5 distinct
+`level_change_points` intervals — chosen to be clearly satisfiable once the memo works and
+clearly diagnostic of a regression back to per-tick recomputation, without being flaky on a
+loaded CI box. The real proof of the throughput fix is the counting-spy call-count collapse
+(TC-9/TC-10), not the wall-clock number itself.
+**Reversible:** yes — a later iteration can tighten or loosen this specific number without
+touching the underlying contract (byte-identity + call-count collapse), which is the
+acceptance's real substance.
