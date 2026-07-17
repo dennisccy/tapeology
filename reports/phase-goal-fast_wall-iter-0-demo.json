@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-fast_wall-iter-0",
+  "base_url": "http://localhost:3301",
+  "iteration": 0,
+  "default_timeout_ms": 15000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the home page",
+      "narration": "This is the home page, where a simulated market tape plays out live so you can see the underlying engine at work.",
+      "point_out": "A ticker box invites you to try SIM-BUYER, one of the built-in demo scenarios.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Try: SIM-BUYER" }
+    },
+    {
+      "n": 2,
+      "title": "Type in a simulated ticker",
+      "narration": "Enter SIM-BUYER — a scripted scenario built to show what buyer-controlled tape looks like.",
+      "point_out": "The ticker field now shows SIM-BUYER.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "Watch the tape settle into Buyer Control",
+      "narration": "Click Watch and the simulator replays the scripted tape. Within a few seconds it settles into Buyer Control, complete with a confidence score.",
+      "point_out": "The Tape State panel reads Buyer Control, and the event log confirms the tape state changed to buyer_control.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "buyer_control" }
+    },
+    {
+      "n": 4,
+      "title": "Stop the run",
+      "narration": "Stop the simulation so we can try a second scenario.",
+      "point_out": "The controls reset, ready for a new ticker.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Stop" } }
+    },
+    {
+      "n": 5,
+      "title": "Try a second scenario",
+      "narration": "This time, enter SIM-SELLER to see the opposite side of the tape.",
+      "point_out": "The ticker field now shows SIM-SELLER.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-SELLER" }
+    },
+    {
+      "n": 6,
+      "title": "Watch the tape settle into Seller Control",
+      "narration": "Click Watch again, and this scenario settles into Seller Control instead — proof the simulator can reproduce both sides of the tape.",
+      "point_out": "The Tape State panel now reads Seller Control, with its own confidence score and a matching log entry.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "seller_control" }
+    },
+    {
+      "n": 7,
+      "title": "Review the trading journal",
+      "narration": "Every simulated session is logged as a thesis in the journal, so you can look back later at what was watched and why.",
+      "point_out": "The journal list shows the SIM-BUYER and SIM-SELLER entries that were just recorded.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/journal" },
+      "expect": { "text": "SIM-BUYER" }
+    },
+    {
+      "n": 8,
+      "title": "Browse replay studies",
+      "narration": "The Studies page holds journaled measurements from tape replays — always labeled as measurements, never as a trading signal.",
+      "point_out": "The \"Replay studies\" heading and the reference-window and seeded-sim source options are visible.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/studies" },
+      "expect": { "text": "Replay studies" }
+    },
+    {
+      "n": 9,
+      "title": "Check the performance ledger",
+      "narration": "Finally, the Performance page shows the simulated profit ledger for the founding baseline strategy.",
+      "point_out": "A banner makes clear every figure is simulated — assumed fees and slippage — not indicative of live results.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/performance" },
+      "expect": { "text": "simulated — assumed fees/slippage — not indicative of live results" }
+    }
+  ]
+}
