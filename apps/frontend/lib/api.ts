@@ -10,6 +10,7 @@ import type {
   CreateStudyResult,
   DatasetsListResult,
   DeclareResult,
+  EdgeReportComputeSnapshot,
   EdgeReportPayload,
   Hint,
   JournalDetail,
@@ -1161,5 +1162,81 @@ export async function fetchEdgeReport(): Promise<{
     return { ok: false, data: null, error };
   } catch {
     return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// --- era-fast_wall J-04: the operator-run edge-report compute -- POST the single-flight trigger,
+// GET the poll-while-active snapshot, POST the cooperative cancel. All three mirror
+// `createBacktest`/`fetchBacktest`/`cancelStudy`'s exact `{ok, data/…, error}` shape and
+// 422/unreachable folding byte-for-byte (both immediately above and below in this file).
+
+// POST /research/edge-report/compute — start (or, while one is already running, observe) the
+// single-flight compute job. Mirrors `createBacktest`'s exact shape: `data` carries the full
+// `{started, compute}` body on success; the backend's own 422/unreachable `detail` is surfaced
+// VERBATIM on failure — never a client-fabricated message in its place.
+export async function triggerEdgeReportCompute(
+  force?: boolean,
+): Promise<{
+  ok: boolean;
+  data?: { started: boolean; compute: EdgeReportComputeSnapshot };
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/edge-report/compute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ force: force ?? false }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data };
+    }
+    let error = "The edge-report compute could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/edge-report/compute — the compute job's current/last snapshot, served VERBATIM,
+// or `null` if none has ever run. Mirrors `fetchBacktest`'s pattern: `ok:false, data:null` on any
+// failure so a poll tick's caller keeps the last known view — never fabricates a snapshot.
+export async function fetchEdgeReportCompute(): Promise<{
+  ok: boolean;
+  data: EdgeReportComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/edge-report/compute`);
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as EdgeReportComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+// POST /research/edge-report/compute/cancel — cancel the in-flight compute job. Mirrors
+// `cancelStudy`'s exact `{ok, error?}` shape; the backend's 409 (idle) `detail` is surfaced
+// VERBATIM.
+export async function cancelEdgeReportCompute(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/edge-report/compute/cancel`, { method: "POST" });
+    if (res.ok) return { ok: true };
+    let error = "The edge-report compute could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
   }
 }

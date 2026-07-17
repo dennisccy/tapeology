@@ -1360,18 +1360,43 @@ export interface EdgeReportResponse {
   status?: undefined;
 }
 
+// era-fast_wall J-04 -- the operator-run compute-job snapshot, owned by
+// app/research/edge_report_compute.py's `EdgeReportComputeManager`. Served VERBATIM by
+// GET /research/edge-report/compute (poll), started by POST /research/edge-report/compute,
+// cancelled by POST /research/edge-report/compute/cancel -- and embedded VERBATIM as the
+// not-computed edge-report payload's own `compute` field below (one owner, one read, two
+// callers -- never a second derivation).
+export interface EdgeReportComputeProgress {
+  phase: string;
+  backtests_total: number;
+  backtests_done: number;
+  backtests_from_cache: number;
+  current: { dataset_id: string; strategy_id: string } | null;
+}
+
+export interface EdgeReportComputeSnapshot {
+  id: string;
+  state: "running" | "done" | "cancelled" | "failed";
+  force: boolean;
+  started_utc: string | null;
+  finished_utc: string | null;
+  error: string | null;
+  progress: EdgeReportComputeProgress;
+}
+
 // GET /research/edge-report — the honest not-computed payload (era-fast_wall J-01): a cold cache
 // key with a non-empty dataset registry. `status` is the sole discriminator against
 // `EdgeReportResponse` above (absent -- `undefined` -- on a real report). `detail` is the
 // backend's OWN trigger explanation, rendered verbatim, never a frontend-authored string.
-// `compute` is always `null` this iteration (no compute manager exists until J-04 -- see
-// `peek_strategy_comparison_report`'s own docstring).
+// `compute` (era-fast_wall J-04: widened from its former `null`-only literal type) is the
+// compute manager's current/last snapshot, or `null` if no compute has ever been triggered --
+// read VERBATIM, never re-derived client-side.
 export interface EdgeReportNotComputed {
   status: "not_computed";
   detail: string;
   dataset_count: number;
   register: string;
-  compute: null;
+  compute: EdgeReportComputeSnapshot | null;
 }
 
 // The discriminated union `fetchEdgeReport()` actually returns -- a real report or the

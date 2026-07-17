@@ -4,8 +4,8 @@
       "id": "J-01",
       "name": "Stop the bleeding — GET /research/edge-report never computes",
       "status": "passing",
-      "last_verified_iter": "goal-fast_wall-iter-4",
-      "last_passing_iter": "goal-fast_wall-iter-4",
+      "last_verified_iter": "goal-fast_wall-iter-3",
+      "last_passing_iter": "goal-fast_wall-iter-3",
       "first_seen_iter": "goal-fast_wall-iter-0",
       "last_evidence_path": "reports/qa/goal-fast_wall-iter-1-evidence/UT-02-not-computed-panel.png",
       "spec_hash": "060674d1184555732bf6f2e9a9ea12dc9899b82473ba9f7ebc16564ea84b4c64"
@@ -14,30 +14,30 @@
       "id": "J-02",
       "name": "The stores stop re-reading — verified-content caches + durable dataset index",
       "status": "passing",
-      "last_verified_iter": "goal-fast_wall-iter-4",
-      "last_passing_iter": "goal-fast_wall-iter-4",
+      "last_verified_iter": "goal-fast_wall-iter-3",
+      "last_passing_iter": "goal-fast_wall-iter-3",
       "first_seen_iter": "goal-fast_wall-iter-0",
-      "last_evidence_path": "reports/phase-goal-fast_wall-iter-4-ui-test-results.md",
+      "last_evidence_path": "reports/qa/goal-fast_wall-iter-2-qa.md",
       "spec_hash": "3b03e56cee27415aee9dd196b5f4ff9525923ff118f576b5b584bd01f0b9ef5f"
     },
     "J-03": {
       "id": "J-03",
       "name": "The arm memo — per-tick levels recompute becomes ~100 memo hits per session",
       "status": "passing",
-      "last_verified_iter": "goal-fast_wall-iter-4",
-      "last_passing_iter": "goal-fast_wall-iter-4",
+      "last_verified_iter": "goal-fast_wall-iter-3",
+      "last_passing_iter": "goal-fast_wall-iter-3",
       "first_seen_iter": "goal-fast_wall-iter-0",
-      "last_evidence_path": "reports/phase-goal-fast_wall-iter-4-ui-test-results.md",
+      "last_evidence_path": "reports/qa/goal-fast_wall-iter-3-qa.md",
       "spec_hash": "e6304a327951f8146fba8f417bfdce6f409affbab7f375bab9dd1361934ee522"
     },
     "J-04": {
       "id": "J-04",
       "name": "The operator-run compute — button, background job, CLI warmer",
-      "status": "partial",
-      "last_verified_iter": "goal-fast_wall-iter-4",
+      "status": "failing",
+      "last_verified_iter": "goal-fast_wall-iter-0",
       "last_passing_iter": null,
       "first_seen_iter": "goal-fast_wall-iter-0",
-      "last_evidence_path": "reports/phase-goal-fast_wall-iter-4-ui-test-results.md",
+      "last_evidence_path": "reports/phase-goal-fast_wall-iter-0-ui-test-results.md",
       "spec_hash": "70898930ae843662e3bd1858e76c36a1cee71ad712e11e06c3a2f40593765e7a"
     },
     "J-05": {
@@ -64,13 +64,13 @@
       "id": "J-07",
       "name": "The foundation is unchanged (regression sentinel)",
       "status": "passing",
-      "last_verified_iter": "goal-fast_wall-iter-4",
-      "last_passing_iter": "goal-fast_wall-iter-4",
+      "last_verified_iter": "goal-fast_wall-iter-3",
+      "last_passing_iter": "goal-fast_wall-iter-3",
       "first_seen_iter": "goal-fast_wall-iter-0",
       "last_evidence_path": "reports/qa/goal-fast_wall-iter-1-evidence/J-07-verify.png",
       "spec_hash": "0823cf952dd9b9221134681952dcb0d5aa1d97a600055a120d07bc0494f087d2"
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-07-17T15:10:30Z"
+  "updated_at": "2026-07-17T11:15:22Z"
 }

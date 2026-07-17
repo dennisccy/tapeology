@@ -78,6 +78,7 @@ from .store import JournalStore
 
 __all__ = [
     "EdgeReportError",
+    "EdgeReportComputeCancelled",
     "run_edge_report",
     "run_strategy_comparison_report",
     "peek_strategy_comparison_report",
@@ -105,6 +106,18 @@ EDGE_REPORT_NOT_COMPUTED_DETAIL = (
 class EdgeReportError(Exception):
     """The report could not complete honestly — a dataset failed integrity verification or a
     backtest ended non-``done``. Explicit; nothing is written to ``--out``."""
+
+
+class EdgeReportComputeCancelled(Exception):
+    """era-fast_wall J-04 — raised by ``_split_cells`` when an actively-supplied ``should_abort()``
+    hook returns ``True`` between dataset x strategy pairs (the cooperative-cancel seam
+    ``run_strategy_comparison_report`` threads down from an operator/CLI trigger). Propagates
+    UNCHANGED through ``EdgeReportCache.get_or_compute``/``compute_and_publish`` — both publish
+    ONLY after their ``compute_fn`` returns normally (see those methods' own docstrings), so a
+    cancelled run publishes NOTHING to the report cache, by construction, with no change needed to
+    either method's body. Caught by ``edge_report_compute.EdgeReportComputeManager``'s worker
+    thread at its outer boundary to resolve the job's snapshot to ``state: "cancelled"`` rather
+    than ``"failed"`` (the NOTES' suggested mechanism)."""
 
 
 # --- reused computation: ONE backtest per dataset, via the EXISTING runner ----------------------
@@ -335,6 +348,60 @@ def _cell_key(cell: dict) -> tuple:
     return (cell["strategy_id"], cell["band_class"], cell["band_side"], cell["reaction"], cell["feed"])
 
 
+# --- era-fast_wall J-04: the operator-run compute's progress/cancel seam --------------------------
+# ``_count_eligible_pairs`` and ``_ProgressReporter`` exist ONLY to report progress; neither
+# changes what ``_split_cells`` computes. ``_count_eligible_pairs`` reuses ``_dataset_event`` (the
+# SAME join ``_split_cells``'s own loop below re-checks per dataset — a one-line filter repeated,
+# never a second join) purely to pre-size the progress snapshot's ``backtests_total`` BEFORE the
+# loop starts (both splits' eligible-pair counts are known only once ``compute_setups`` has run).
+
+
+def _count_eligible_pairs(datasets: list[dict], events: list[dict]) -> int:
+    """The number of (dataset, strategy) backtest pairs ``_split_cells`` will actually run for
+    ``datasets`` — every dataset resolving an owning, classified event, times the three registered
+    strategies (``_ALL_STRATEGY_IDS``)."""
+    eligible = 0
+    for dataset_meta in datasets:
+        event = _dataset_event(dataset_meta, events)
+        if event is not None and event["band"]["class"] is not None:
+            eligible += len(_ALL_STRATEGY_IDS)
+    return eligible
+
+
+class _ProgressReporter:
+    """Wraps a caller-supplied ``progress`` dict-patch sink with running totals SHARED across both
+    the train and hold-out ``_split_cells`` calls (one instance is built once per
+    ``_compute_strategy_comparison_report`` call and threaded into both), so the whole run's
+    ``backtests_done``/``backtests_from_cache`` counts up monotonically across splits rather than
+    resetting when the SECOND ``_split_cells`` call starts. Each sink call carries an ``"event"``
+    key (``"total"``/``"pair_started"``/``"pair_done"``) so a consumer (the CLI printer, the compute
+    manager) can distinguish a start-of-run announcement from a per-pair update; the manager strips
+    the key before merging (the served snapshot's ``progress`` sub-dict never carries it — see
+    ``edge_report_compute.py``)."""
+
+    def __init__(self, sink, total: int) -> None:
+        self._sink = sink
+        self._done = 0
+        self._from_cache = 0
+        self._sink({
+            "event": "total", "phase": "backtests", "backtests_total": total,
+            "backtests_done": 0, "backtests_from_cache": 0, "current": None,
+        })
+
+    def start_pair(self, dataset_id: str, strategy_id: str) -> None:
+        self._sink({
+            "event": "pair_started",
+            "current": {"dataset_id": dataset_id, "strategy_id": strategy_id},
+        })
+
+    def pair_done(self) -> None:
+        self._done += 1
+        self._sink({
+            "event": "pair_done", "backtests_done": self._done,
+            "backtests_from_cache": self._from_cache, "current": None,
+        })
+
+
 def _split_cells(
     jobs: BacktestJobManager,
     store: JournalStore,
@@ -343,6 +410,9 @@ def _split_cells(
     datasets: list[dict],
     events: list[dict],
     config: Config,
+    *,
+    reporter: "_ProgressReporter | None" = None,
+    should_abort=None,
 ) -> list[dict]:
     """One split's (train or hold-out) cells: for every dataset that resolves an owning event with
     a genuinely inherited class (an unclassified ``class: null`` band is honestly excluded — there
@@ -354,7 +424,15 @@ def _split_cells(
     already use) before the ONE shared ``_aggregate`` call, so a pooled cell's ``win_rate``/
     ``max_drawdown_r`` reflect a genuine chronological trade sequence — never scan-order/dataset-id
     happenstance (max_drawdown_r is peak-to-trough IN TRADE ORDER; summing already-aggregated
-    numbers cannot recover that without the raw, correctly-ordered trade list)."""
+    numbers cannot recover that without the raw, correctly-ordered trade list).
+
+    era-fast_wall J-04: ``reporter``/``should_abort`` (both optional, default ``None`` — the exact
+    pre-J-04 loop when omitted) are the ONLY additions to this loop's body — the pooling/ordering/
+    aggregation code below is byte-for-byte untouched. ``should_abort`` (a zero-arg callable) is
+    checked ONCE per pair, strictly BEFORE that pair's ``_run_backtest`` call — cooperative
+    cancellation observed BETWEEN dataset x strategy pairs, never mid-backtest — and raises
+    ``EdgeReportComputeCancelled`` the instant it returns ``True``, so an already-completed pair's
+    trades are never discarded and a not-yet-started pair never begins."""
     pools: dict[tuple, dict] = {}
     for dataset_meta in datasets:
         event = _dataset_event(dataset_meta, events)
@@ -362,10 +440,16 @@ def _split_cells(
             continue
         feed = dataset_meta["data_feed"]
         for strategy_id in _ALL_STRATEGY_IDS:
+            if should_abort is not None and should_abort():
+                raise EdgeReportComputeCancelled()
+            if reporter is not None:
+                reporter.start_pair(dataset_meta["id"], strategy_id)
             result = _run_backtest(
                 jobs, store, dataset_store, dataset_meta["id"],
                 strategy_id=strategy_id, profile=PROFILE_DEFAULT, bar_store=bar_store,
             )
+            if reporter is not None:
+                reporter.pair_done()
             key = (strategy_id, event["band"]["class"], event["band"]["side"], event["reaction"], feed)
             pool = pools.setdefault(key, {"trades": [], "null_trades": [], "dataset_ids": []})
             anchor = dataset_meta.get("epoch_anchor") or 0.0
@@ -454,6 +538,11 @@ def run_strategy_comparison_report(
     config: Config,
     *,
     cache: EdgeReportCache | None = None,
+    force: bool = False,
+    progress=None,
+    should_abort=None,
+    sub_cache=None,
+    workers=None,
 ) -> dict:
     """The always-recompute-or-serve-through-a-cache entry point for the 3-way strategy-comparison
     report (era-5B J-04). See ``_compute_strategy_comparison_report`` below for the full algorithm
@@ -474,13 +563,39 @@ def run_strategy_comparison_report(
     supplied, this function serves ``_compute_strategy_comparison_report``'s output VERBATIM
     through it: the cache never re-derives a cell, a measurement, or a null baseline — a miss
     recomputes byte-identically through the SAME one function below (single source of truth; no
-    second computation path, anywhere)."""
+    second computation path, anywhere).
+
+    era-fast_wall J-04: five ADDITIVE keyword-only params for the operator-run compute
+    (``edge_report_compute.EdgeReportComputeManager`` and its CLI warmer are the first genuine
+    callers) — every default reproduces this function's EXACT pre-J-04 behaviour:
+
+      * ``force`` (default ``False``) — ``False`` keeps dispatching through ``cache.
+        get_or_compute`` exactly as today; ``True`` dispatches through the ALREADY-SHIPPED
+        ``cache.compute_and_publish`` (J-01) instead, always recomputing and republishing even
+        over a warm key. Irrelevant when ``cache is None`` (there is nothing to force through).
+      * ``progress``/``should_abort`` thread straight down to ``_split_cells``'s existing
+        per-dataset x strategy loop (see that function's own docstring) as an optional
+        reporting/cooperative-cancellation seam — the loop's own ordering/pooling/aggregation
+        code is untouched. A ``should_abort`` that fires raises ``EdgeReportComputeCancelled``,
+        which propagates UNCHANGED through ``cache.get_or_compute``/``compute_and_publish``
+        (both publish ONLY after ``compute_fn`` returns normally) — a cancelled run publishes
+        NOTHING, by construction, with zero change to either cache method's body.
+      * ``sub_cache``/``workers`` are ACCEPTED this iteration but currently INERT (a logged
+        assumption — see the dev handoff): every compute this iteration triggers runs strictly
+        sequentially regardless of their value. J-05's resumable/parallel sweep (the
+        ``EdgeReportBacktestCache`` per-pair sub-cache + the ``ProcessPoolExecutor`` provider)
+        gives them real effect; their signature exists NOW so J-05 adds no further parameter
+        churn to this function."""
 
     def compute() -> dict:
-        return _compute_strategy_comparison_report(store, dataset_store, bar_store, config)
+        return _compute_strategy_comparison_report(
+            store, dataset_store, bar_store, config, progress=progress, should_abort=should_abort,
+        )
 
     if cache is None:
         return compute()
+    if force:
+        return cache.compute_and_publish(dataset_store, config, compute)
     return cache.get_or_compute(dataset_store, config, compute)
 
 
@@ -491,6 +606,7 @@ def peek_strategy_comparison_report(
     config: Config,
     *,
     cache: EdgeReportCache,
+    compute=None,
 ) -> dict:
     """The GET-path's EXCLUSIVE entry point (era-fast_wall J-01) — ``routes.get_edge_report`` calls
     ONLY this, never ``run_strategy_comparison_report``, so opening ``/structure`` (or any GET, or
@@ -508,8 +624,14 @@ def peek_strategy_comparison_report(
         never_calls_a_compute_triggering_cache_method``): a warm key returns the cached report
         VERBATIM; a cold key returns the honest not-computed payload (``status: "not_computed"``,
         the canonical ``EDGE_REPORT_NOT_COMPUTED_DETAIL``, ``dataset_count``, ``register`` read
-        from ``backtests.REGISTER`` — never a restated literal — and ``compute: null``, since no
-        compute manager exists until J-04)."""
+        from ``backtests.REGISTER`` — never a restated literal — and ``compute``).
+
+    era-fast_wall J-04: ``compute`` (optional, default ``None`` — the EXACT J-01 placeholder every
+    existing caller still gets) is embedded VERBATIM as the payload's own ``compute`` field — this
+    function never re-derives or inspects it. The caller (``routes.get_edge_report``) passes
+    ``registry.edge_report_compute.snapshot()`` — the SAME snapshot ``GET /research/edge-report/
+    compute`` itself serves, so the two are byte-identical in shape by construction (one owner, one
+    read, two callers)."""
     records = _verified_records(dataset_store)
     if not records:
         return _compute_strategy_comparison_report(store, dataset_store, bar_store, config)
@@ -521,12 +643,18 @@ def peek_strategy_comparison_report(
         "detail": EDGE_REPORT_NOT_COMPUTED_DETAIL,
         "dataset_count": len(records),
         "register": REGISTER,
-        "compute": None,
+        "compute": compute,
     }
 
 
 def _compute_strategy_comparison_report(
-    store: JournalStore, dataset_store: DatasetStore, bar_store: BarStore, config: Config
+    store: JournalStore,
+    dataset_store: DatasetStore,
+    bar_store: BarStore,
+    config: Config,
+    *,
+    progress=None,
+    should_abort=None,
 ) -> dict:
     """The ONE computer of the 3-way strategy-comparison report (era-5B J-04; renamed from
     ``run_strategy_comparison_report`` at era-5B J-08 — see that function's own docstring for why:
@@ -536,7 +664,14 @@ def _compute_strategy_comparison_report(
     into per strategy x class x side x reaction x feed cells. Raises ``EdgeReportError`` for a
     dishonest state (the identical ``_split_datasets`` integrity discipline ``run_edge_report``
     uses) — nothing is written by the CALLER in that case. Strictly read-only: promotes nothing,
-    appends no ledger row, moves no champion pointer (see the module docstring)."""
+    appends no ledger row, moves no champion pointer (see the module docstring).
+
+    era-fast_wall J-04: ``progress``/``should_abort`` (both optional, default ``None`` — the exact
+    pre-J-04 body when omitted) thread into BOTH ``_split_cells`` calls below through ONE shared
+    ``_ProgressReporter`` (never a separate reporter per split — its running totals must span both
+    splits). ``backtests_total`` is sized ONCE, right after ``events`` resolves (the earliest point
+    both splits' eligible-pair counts are knowable), via ``_count_eligible_pairs`` — never inside
+    ``_split_cells`` itself, so that function's own loop stays untouched."""
     jobs = BacktestJobManager(store, config)
     train_datasets = _split_datasets(dataset_store, SPLIT_TRAIN)
     holdout_datasets = _split_datasets(dataset_store, SPLIT_HOLDOUT)
@@ -549,8 +684,19 @@ def _compute_strategy_comparison_report(
     if train_datasets or holdout_datasets:
         events = compute_setups(bar_store, config)["events"]
 
-    train_cells = _split_cells(jobs, store, dataset_store, bar_store, train_datasets, events, config)
-    holdout_cells = _split_cells(jobs, store, dataset_store, bar_store, holdout_datasets, events, config)
+    reporter = None
+    if progress is not None:
+        total = _count_eligible_pairs(train_datasets, events) + _count_eligible_pairs(holdout_datasets, events)
+        reporter = _ProgressReporter(progress, total)
+
+    train_cells = _split_cells(
+        jobs, store, dataset_store, bar_store, train_datasets, events, config,
+        reporter=reporter, should_abort=should_abort,
+    )
+    holdout_cells = _split_cells(
+        jobs, store, dataset_store, bar_store, holdout_datasets, events, config,
+        reporter=reporter, should_abort=should_abort,
+    )
 
     return {
         "register": REGISTER,

@@ -58,3 +58,22 @@ guardrail left for those UI journeys when replay does not run.
 **Verdict:** CONTINUE
 **Lesson:** For a byte-identical accelerator, "the equivalence test passes" is NOT by itself sufficient evidence of the critical "No divergent accelerator output" anti-goal — the auditor closed the gap by *mutation-probing* the memo (poisoning it to serve a stale level/tradability state), which flips the run from 1 trade to 0, proving TC-5..TC-8 genuinely bite rather than being vacuously satisfiable. An accelerator whose "byte-identity" test would still pass against a deliberately-broken accelerator is a false guardrail.
 **Applies to:** any future accelerator iter under "No divergent accelerator output" — specifically J-05 (resumable/parallel sweep: cross-process/resumed byte-identity is the veto-class risk) and J-06 (durable setups scan cache); demand the determinism/equivalence test be shown non-vacuous (a deliberately-broken accelerator must fail it), not merely present-and-green.
+
+## iter-4 — 2026-07-17T15:10:30Z
+
+**Verdict:** CONTINUE
+**Lesson:** A golden-replay "possible regression" FAIL on the J-07 sentinel ("step 03 expected
+buyer_control did not appear") was a pure infrastructure false-negative — its own evidence screenshot
+`reports/qa/goal-fast_wall-iter-4-evidence/J-07-verify.png` visibly renders "Backend unreachable — is
+the API running?" (the replay hit a dead backend on port 8301, so NOTHING loaded). Always OPEN the
+replay's screenshot before trusting a sentinel FAIL: a nav/body showing "backend unreachable" ⇒ infra,
+not a product regression — confirm with owned-files-zero-diff + equivalence + frozen fingerprint, then
+the merged results' overturn to SKIP is correct and the journey carries forward `passing`. Separately:
+Chrome MCP "did not become ready on port 9222 within 15000ms" this whole session, reproduced first-hand
+by 4 independent agents (dev/QA/audit/browser-qa) — a real browser click-through screenshot was
+impossible, so J-04 (browser-required) is `partial`, never `passing`, no matter how strong the backend
+evidence.
+**Applies to:** any iter whose sentinel/regression journey shows a golden-replay FAIL (open the
+screenshot first — dead-backend render = infra false-negative); any browser-verifiable `/structure` iter
+when Chrome MCP won't start (score `partial`/`unknown`, retry browser-qa next healthy session, do not
+rubber-stamp from backend/unit evidence).

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 
 import pytest
@@ -19,7 +20,7 @@ from app.config import CONFIG
 from app.main import app, manager
 from app.research.bars import BarStore
 from app.research.datasets import DatasetStore
-from app.research.edge_report import REGISTER, run_strategy_comparison_report
+from app.research.edge_report import EdgeReportComputeCancelled, REGISTER, run_strategy_comparison_report
 from app.research.edge_report_cache import EdgeReportCache
 from app.research.routes import ResearchRegistry, get_bar_store, set_registry
 from app.research.store import JournalStore
@@ -34,6 +35,7 @@ def ctx(tmp_path, monkeypatch):
     set_registry(registry)
     with TestClient(app) as c:
         yield c, store, tmp_path
+    registry.edge_report_compute.join_all(timeout=10.0)
     registry.backtest_jobs.join_all(timeout=10.0)
     for ticker in list(manager._engines.keys()):
         manager.stop(ticker)
@@ -321,3 +323,289 @@ def test_edge_report_route_cache_db_lives_hermetically_beside_the_test_dataset_d
     response = client.get("/research/edge-report")
     assert response.status_code == 200
     assert (tmp_path / "edge_report_cache.db").exists()
+
+
+# ==================================================================================================
+# era-fast_wall J-04 — the operator-run compute: POST /research/edge-report/compute,
+# GET /research/edge-report/compute, POST /research/edge-report/compute/cancel. The manager's OWN
+# single-flight/cancel/progress/failed-state mechanics are unit-tested in isolation (a FAKE compute
+# function, threading-free determinism) in test_edge_report_compute.py; this section proves the
+# HTTP wiring — dependency injection, status codes, and the not-computed payload's ``compute``
+# field mirroring GET .../compute byte-for-byte (TC-8).
+# ==================================================================================================
+
+
+def _record_reference_dataset(client):
+    recorded = client.post(
+        "/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:00:30Z",
+        },
+    )
+    assert recorded.status_code == 200, recorded.text
+    return recorded.json()["dataset"]
+
+
+def _poll_compute_until_terminal(client, attempts=400):
+    for _ in range(attempts):
+        payload = client.get("/research/edge-report/compute").json()
+        if payload is not None and payload["state"] != "running":
+            return payload
+        time.sleep(0.05)
+    raise AssertionError("edge-report compute never reached a terminal state")
+
+
+def test_get_compute_is_null_before_anything_has_ever_triggered(ctx):
+    client, _store, _tmp_path = ctx
+    assert client.get("/research/edge-report/compute").json() is None
+
+
+def test_cancel_while_idle_is_409(ctx):
+    """TC-4."""
+    client, _store, _tmp_path = ctx
+    response = client.post("/research/edge-report/compute/cancel")
+    assert response.status_code == 409
+
+
+def test_trigger_on_an_empty_registry_reaches_done_fast_and_get_compute_agrees(ctx):
+    """TC-1 — the O(1) empty-registry leg (zero backtests, deterministic and fast)."""
+    client, _store, _tmp_path = ctx
+    response = client.post("/research/edge-report/compute", json={})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["started"] is True
+    assert body["compute"]["state"] == "running"
+    assert body["compute"]["force"] is False
+
+    terminal = _poll_compute_until_terminal(client)
+    assert terminal["state"] == "done"
+    assert terminal["error"] is None
+    assert terminal["finished_utc"] is not None
+
+    report = client.get("/research/edge-report").json()
+    assert "status" not in report  # now a genuine warm report, never the not-computed shape
+    assert report["train"]["cells"] == []
+
+
+def test_trigger_missing_body_field_defaults_force_to_false(ctx):
+    client, _store, _tmp_path = ctx
+    response = client.post("/research/edge-report/compute", json={})
+    assert response.status_code == 200
+    assert response.json()["compute"]["force"] is False
+    _poll_compute_until_terminal(client)
+
+
+def test_second_trigger_while_running_returns_the_same_job(ctx, monkeypatch):
+    """TC-2, at the route level."""
+    client, _store, _tmp_path = ctx
+    started = threading.Event()
+    release = threading.Event()
+
+    def fake_run(*args, **kwargs):
+        started.set()
+        release.wait(timeout=5)
+        return {"train": {"cells": []}, "holdout": {"cells": []}, "surviving_train_cells": []}
+
+    from app.research import edge_report_compute as edge_report_compute_module
+
+    monkeypatch.setattr(edge_report_compute_module, "run_strategy_comparison_report", fake_run)
+
+    first = client.post("/research/edge-report/compute", json={}).json()
+    assert started.wait(timeout=5)
+
+    second = client.post("/research/edge-report/compute", json={}).json()
+    assert second["started"] is False
+    assert second["compute"]["id"] == first["compute"]["id"]
+
+    release.set()
+    _poll_compute_until_terminal(client)
+
+
+def test_cancel_mid_run_resolves_cancelled_and_the_cache_holds_no_partial_report(ctx, monkeypatch):
+    """TC-3."""
+    client, _store, tmp_path = ctx
+    _record_reference_dataset(client)
+
+    before = client.get("/research/edge-report").json()
+    assert before["status"] == "not_computed"
+
+    started = threading.Event()
+
+    def fake_run(*args, **kwargs):
+        should_abort = kwargs["should_abort"]
+        started.set()
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            if should_abort():
+                raise EdgeReportComputeCancelled()
+            time.sleep(0.005)
+        raise AssertionError("should_abort never fired")
+
+    from app.research import edge_report_compute as edge_report_compute_module
+
+    monkeypatch.setattr(edge_report_compute_module, "run_strategy_comparison_report", fake_run)
+
+    client.post("/research/edge-report/compute", json={})
+    assert started.wait(timeout=5)
+
+    cancel_response = client.post("/research/edge-report/compute/cancel")
+    assert cancel_response.status_code == 200
+
+    terminal = _poll_compute_until_terminal(client)
+    assert terminal["state"] == "cancelled"
+    assert terminal["error"] is None
+
+    after = client.get("/research/edge-report").json()
+    assert after["status"] == "not_computed"
+    assert after["dataset_count"] == before["dataset_count"]
+
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    records, errors = dataset_store.list()
+    assert errors == []
+    cache = EdgeReportCache(str(tmp_path / "edge_report_cache.db"))
+    assert cache.lookup(records, CONFIG) is None  # mechanical proof: no row was ever published
+
+
+def test_a_failed_compute_surfaces_error_verbatim_and_publishes_no_partial_report(ctx, monkeypatch):
+    """TC-13, at the route level."""
+    client, _store, tmp_path = ctx
+    _record_reference_dataset(client)
+
+    def fake_run(*args, **kwargs):
+        raise RuntimeError("synthetic mid-sweep failure")
+
+    from app.research import edge_report_compute as edge_report_compute_module
+
+    monkeypatch.setattr(edge_report_compute_module, "run_strategy_comparison_report", fake_run)
+
+    client.post("/research/edge-report/compute", json={})
+    terminal = _poll_compute_until_terminal(client)
+
+    assert terminal["state"] == "failed"
+    assert terminal["error"] == "synthetic mid-sweep failure"
+
+    after = client.get("/research/edge-report").json()
+    assert after["status"] == "not_computed"
+
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    records, errors = dataset_store.list()
+    assert errors == []
+    cache = EdgeReportCache(str(tmp_path / "edge_report_cache.db"))
+    assert cache.lookup(records, CONFIG) is None
+
+
+def test_force_true_recomputes_over_a_warm_key(ctx, monkeypatch):
+    """TC-5."""
+    client, _store, _tmp_path = ctx
+    _record_reference_dataset(client)
+
+    client.post("/research/edge-report/compute", json={})
+    _poll_compute_until_terminal(client)
+
+    from app.research import edge_report as edge_report_module
+
+    calls = []
+    real_compute = edge_report_module._compute_strategy_comparison_report
+
+    def _counting_compute(*args, **kwargs):
+        calls.append(1)
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report_module, "_compute_strategy_comparison_report", _counting_compute)
+
+    response = client.post("/research/edge-report/compute", json={"force": True})
+    assert response.json()["compute"]["force"] is True
+    terminal = _poll_compute_until_terminal(client)
+
+    assert terminal["state"] == "done"
+    assert len(calls) == 1  # a fresh call, even though the key was already warm
+
+
+def test_non_force_trigger_over_the_same_warm_key_does_not_recompute(ctx, monkeypatch):
+    """TC-6."""
+    client, _store, _tmp_path = ctx
+    _record_reference_dataset(client)
+
+    client.post("/research/edge-report/compute", json={})
+    _poll_compute_until_terminal(client)
+
+    from app.research import edge_report as edge_report_module
+
+    calls = []
+    real_compute = edge_report_module._compute_strategy_comparison_report
+
+    def _counting_compute(*args, **kwargs):
+        calls.append(1)
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report_module, "_compute_strategy_comparison_report", _counting_compute)
+
+    response = client.post("/research/edge-report/compute", json={})
+    assert response.json()["compute"]["force"] is False
+    terminal = _poll_compute_until_terminal(client)
+
+    assert terminal["state"] == "done"
+    assert calls == []  # zero recompute — served entirely from the warm cache
+
+
+def test_compute_field_on_the_edge_report_payload_mirrors_get_compute_byte_for_byte(ctx, monkeypatch):
+    """TC-8."""
+    client, _store, _tmp_path = ctx
+    _record_reference_dataset(client)
+
+    cold = client.get("/research/edge-report").json()
+    assert cold["status"] == "not_computed"
+    assert cold["compute"] is None  # unchanged J-01 behavior — nothing has ever triggered
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def fake_run(*args, **kwargs):
+        started.set()
+        release.wait(timeout=5)
+        return {"train": {"cells": []}, "holdout": {"cells": []}, "surviving_train_cells": []}
+
+    from app.research import edge_report_compute as edge_report_compute_module
+
+    monkeypatch.setattr(edge_report_compute_module, "run_strategy_comparison_report", fake_run)
+
+    client.post("/research/edge-report/compute", json={})
+    assert started.wait(timeout=5)
+
+    while_running = client.get("/research/edge-report").json()
+    compute_endpoint_while_running = client.get("/research/edge-report/compute").json()
+    assert while_running["status"] == "not_computed"  # the fake never touches the real cache
+    assert while_running["compute"] == compute_endpoint_while_running
+    assert while_running["compute"]["state"] == "running"
+
+    release.set()
+    _poll_compute_until_terminal(client)
+
+
+def test_trigger_route_wired_through_the_registry_edge_report_compute_property():
+    """A coherence guard (never a second manager construction): the trigger route reads the SAME
+    ``registry.edge_report_compute`` property ``GET``/``cancel`` read."""
+    import inspect
+
+    from app.research import routes
+
+    for fn in (routes.trigger_edge_report_compute, routes.get_edge_report_compute, routes.cancel_edge_report_compute):
+        src = inspect.getsource(fn)
+        assert "registry.edge_report_compute" in src
+
+
+def test_edge_report_route_still_passes_the_pinned_depends_and_cache_kwarg_after_this_iteration():
+    """Re-runs the TWO pre-existing pinned guard tests' own assertions inline (never edited) to
+    confirm this iteration's ADDITIVE ``compute=`` kwarg on the SAME call did not disturb them."""
+    import inspect
+
+    from app.research import routes
+
+    src = inspect.getsource(routes.get_edge_report)
+    assert "Depends(get_bar_store)" in src
+    assert "Depends(get_dataset_store)" in src
+    assert "Depends(get_edge_report_cache)" in src
+    assert "cache=cache" in src

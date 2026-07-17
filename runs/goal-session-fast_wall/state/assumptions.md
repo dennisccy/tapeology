@@ -109,3 +109,34 @@ slow browser-automation round-trip. The real proof is the call-counting spy (TC-
 single-flight/cancel/force mechanics (TC-1 through TC-5), not the wall-clock numbers themselves.
 **Reversible:** yes — a later iteration can tighten or loosen either number without touching the
 underlying contract (single-flight + cache-hit call-count + browser terminal-state proof).
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** J-04 is this iteration's target and its acceptance explicitly requires a browser-verified
+click-through ("button → progress → cells or the honest empty state"), but Chrome MCP would not start
+(reproduced by 4 agents) so no screenshot exists — while every keyless clause (single-flight, cancel,
+force, failed-state, 405, MCP-count, CLI warm-repeat, hook byte-identity) is fully proven by 121 targeted
+tests + audit-run CLI + curl. The status enum forces a single label for a journey that is genuinely
+verified on its backend half and genuinely unverified on its required browser half.
+**We chose:** Score J-04 `partial` (not `passing` — a required browser clause has no screenshot, the
+project's "no screenshot ⇒ never passing" rule; and not `unknown` — the journey WAS extensively tested
+this iteration and its backend/API/CLI assertions genuinely passed). `last_passing_iter` stays `null`.
+This does not affect the verdict (CONTINUE regardless, since J-05/J-06 remain failing).
+**Reversible:** yes — the next healthy-Chrome browser-qa pass of TC-15/TC-16 flips J-04 `partial →
+passing` with zero code change; if that render ever contradicts the backend evidence, J-04 reopens.
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** J-01 and J-07 are Required-still-passing and share this iteration's touched page
+(`/structure`), so under `Frontend Present: yes` the browser lane was EXPECTED to re-verify their visual
+legs — but it could not run (Chrome MCP down), and this iteration DID modify `structure/page.tsx` (unlike
+iter-2/iter-3's zero-frontend-diff mechanical carries).
+**We chose:** Keep J-01 and J-07 `passing` on an extended mechanical + traced-additive-diff argument:
+(a) all their backend/engine owned files are git-confirmed byte-unchanged vs the working tree, full suite
+1489/1489 green, equivalence 15/15, fingerprint `4d665603569b9dbf` frozen; (b) the `structure/page.tsx`
+change is strictly additive — the frozen J-01 headline/detail/register nodes are byte-unchanged and the
+new button/progress/error nodes are appended below them (audit T1, coherence), `tsc --noEmit` clean —
+rather than downgrading either to `unknown` for the missing screenshot. The J-01/J-07 `/structure`
+visual-regression legs (TC-17/TC-18) are carried forward as an explicit open browser-qa item.
+**Reversible:** yes — the next healthy-Chrome pass re-runs TC-17/TC-18; if either visual leg regresses
+there, the affected journey flips to `regressed` and this carry is revisited.

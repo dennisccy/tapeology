@@ -1086,3 +1086,243 @@ def test_peek_source_never_calls_a_compute_triggering_cache_method():
     assert "cache.lookup(" in src
     for forbidden in ("cache.get_or_compute(", "cache.compute_and_publish("):
         assert forbidden not in src
+
+
+# ==================================================================================================
+# era-fast_wall J-04 — the operator-run compute's five additive keyword-only hooks on
+# ``run_strategy_comparison_report`` (``force``/``progress``/``should_abort``/``sub_cache``/
+# ``workers``). Every test ABOVE this marker calls the function with every new kwarg left at its
+# default and stays green UNMODIFIED — proof by construction that the unused-default path is
+# byte-for-byte untouched (TC-14a's "default path" leg). This section proves the hooks are
+# genuinely wired, not decorative (TC-14), and ``peek_strategy_comparison_report``'s new
+# ``compute=`` passthrough.
+# ==================================================================================================
+
+from app.research.edge_report import EdgeReportComputeCancelled  # noqa: E402
+
+
+def test_progress_and_should_abort_supplied_but_unused_is_byte_identical_to_the_default_path(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    """TC-14a: the hooked path (every new kwarg actively supplied but never triggered to abort)
+    produces a report byte-identical to the pre-existing default path — on the REAL, non-degenerate
+    3-cell synthetic-scan-join shape (the iter-4 lesson: never merely the vacuous empty case)."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache_a = EdgeReportCache(str(tmp_path / "cache-a.db"))
+    cache_b = EdgeReportCache(str(tmp_path / "cache-b.db"))
+
+    progress_events: list[dict] = []
+
+    def _progress(patch: dict) -> None:
+        progress_events.append(patch)
+
+    default_path = run_strategy_comparison_report(
+        store, dataset_store, scan_bar_store, scan_config, cache=cache_a,
+    )
+    hooked_path = run_strategy_comparison_report(
+        store, dataset_store, scan_bar_store, scan_config, cache=cache_b,
+        progress=_progress, should_abort=lambda: False, sub_cache=object(), workers=7,
+    )
+
+    assert json.dumps(default_path, sort_keys=True) == json.dumps(hooked_path, sort_keys=True)
+    assert len(default_path["train"]["cells"]) == 3  # non-degenerate: the real 3-cell shape
+    assert progress_events  # the hook was genuinely CALLED, not merely accepted and ignored
+
+
+def test_should_abort_that_fires_mid_run_is_observably_different_and_publishes_nothing(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    """TC-14b — the non-vacuous proof (the iter-3 lesson): a ``should_abort`` that DOES fire
+    between pairs changes the observable outcome (raises, publishes nothing) versus one that never
+    fires (a normal report, proven above) — never a decorative no-op that would also pass if
+    silently ignored."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+
+    calls = {"n": 0}
+
+    def _should_abort() -> bool:
+        calls["n"] += 1
+        return calls["n"] > 1  # fires at the top of the 2nd pair — never before the 1st
+
+    with pytest.raises(EdgeReportComputeCancelled):
+        run_strategy_comparison_report(
+            store, dataset_store, scan_bar_store, scan_config, cache=cache, should_abort=_should_abort,
+        )
+
+    records, errors = dataset_store.list()
+    assert errors == []
+    assert cache.lookup(records, scan_config) is None  # nothing was EVER published (TC-3's premise)
+
+    # Cooperative — checked strictly BETWEEN pairs, never mid-backtest: the FIRST pair (v1, the
+    # registration order's first strategy) genuinely completed and was persisted as a real backtest
+    # record before the second should_abort() check stopped the loop before structure_tape.
+    backtests = store.list_backtests(limit=10)
+    assert len(backtests) == 1
+    assert backtests[0].payload["strategy_id"] == STRATEGY_V1_ID
+    assert backtests[0].payload["status"] == STATUS_DONE
+
+
+def test_force_true_dispatches_through_compute_and_publish(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+
+    calls = []
+    real = cache.compute_and_publish
+
+    def _spy(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(cache, "compute_and_publish", _spy)
+
+    run_strategy_comparison_report(
+        store, dataset_store, scan_bar_store, scan_config, cache=cache, force=True,
+    )
+
+    assert len(calls) == 1
+
+
+def test_force_false_default_still_dispatches_through_get_or_compute(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+
+    calls = []
+    real = cache.get_or_compute
+
+    def _spy(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(cache, "get_or_compute", _spy)
+
+    run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+
+    assert len(calls) == 1
+
+
+def test_force_true_recomputes_over_an_already_warm_key(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    """TC-5, at the module level: a call-counting spy on the underlying compute path records a
+    FRESH call even though the key is already warm."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+    run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+
+    calls = []
+    real_compute = edge_report._compute_strategy_comparison_report
+
+    def _counting_compute(*args, **kwargs):
+        calls.append(1)
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report, "_compute_strategy_comparison_report", _counting_compute)
+
+    run_strategy_comparison_report(
+        store, dataset_store, scan_bar_store, scan_config, cache=cache, force=True,
+    )
+
+    assert len(calls) == 1
+
+
+def test_force_default_over_the_same_warm_key_never_recomputes(
+    tmp_path, store, scan_bar_store, scan_config, monkeypatch
+):
+    """TC-6, at the module level: the mirror of the test immediately above — zero additional calls
+    without ``force``."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+    run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+
+    calls = []
+    real_compute = edge_report._compute_strategy_comparison_report
+
+    def _counting_compute(*args, **kwargs):
+        calls.append(1)
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(edge_report, "_compute_strategy_comparison_report", _counting_compute)
+
+    run_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+
+    assert calls == []
+
+
+def test_a_dataset_integrity_error_still_raises_with_should_abort_and_progress_supplied(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    """No new integrity-bypass path: supplying the new hooks changes nothing about the existing
+    store-integrity discipline — a corrupt dataset still aborts the WHOLE report explicitly."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    path = tmp_path / "datasets" / f"{meta['id']}.json"
+    data = json.loads(path.read_text())
+    data["record"]["meta"]["checksum"] = "0" * 64  # tamper
+    path.write_text(json.dumps(data))
+
+    with pytest.raises(EdgeReportError, match="integrity"):
+        run_strategy_comparison_report(
+            store, dataset_store, scan_bar_store, scan_config,
+            progress=lambda patch: None, should_abort=lambda: False,
+        )
+
+
+# --- ``peek_strategy_comparison_report``'s new ``compute=`` passthrough (era-fast_wall J-04) ------
+
+
+def test_peek_compute_field_defaults_to_none_exactly_as_before(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    """No caller passes ``compute=`` yet reads a ``null`` — the unchanged J-01 behavior, still true
+    with the new keyword-only parameter merely ADDED (default-preserving)."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+
+    result = peek_strategy_comparison_report(store, dataset_store, scan_bar_store, scan_config, cache=cache)
+
+    assert result["compute"] is None
+
+
+def test_peek_compute_field_embeds_whatever_is_passed_verbatim(
+    tmp_path, store, scan_bar_store, scan_config
+):
+    """TC-8's shape: ``peek_strategy_comparison_report`` never re-derives the snapshot — it embeds
+    EXACTLY what its caller (the route, reading ``registry.edge_report_compute.snapshot()``) hands
+    it, byte-for-byte."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _record_v1_arming_dataset(dataset_store, max_logical=150.0, split=SPLIT_TRAIN, feed="sim", label="a")
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+    snapshot = {
+        "id": "abc123", "state": "running", "force": False,
+        "started_utc": "2026-01-01T00:00:00.000000Z", "finished_utc": None, "error": None,
+        "progress": {"phase": "backtests", "backtests_total": 3, "backtests_done": 1,
+                     "backtests_from_cache": 0, "current": None},
+    }
+
+    result = peek_strategy_comparison_report(
+        store, dataset_store, scan_bar_store, scan_config, cache=cache, compute=snapshot,
+    )
+
+    assert result["compute"] == snapshot
+
+
+def test_run_strategy_comparison_report_source_documents_the_five_new_hooks():
+    """A coherence guard: the five new keyword-only params exist textually on the function's OWN
+    signature (never silently absorbed into ``**kwargs`` or dropped)."""
+    import inspect
+
+    src = inspect.getsource(edge_report.run_strategy_comparison_report)
+    for hook in ("force: bool = False", "progress=None", "should_abort=None", "sub_cache=None", "workers=None"):
+        assert hook in src

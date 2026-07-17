@@ -51,6 +51,7 @@ from .bars import (
 )
 from .edge_report import EdgeReportError, peek_strategy_comparison_report
 from .edge_report_cache import EdgeReportCache, resolve_cache_db_path
+from .edge_report_compute import EdgeReportComputeManager
 from .levels import compute_levels
 from .setups import BROKE, CHOPPED, REJECTED, compute_setups, enrich_with_tape_timeline
 from .tradability import compute_tradability
@@ -214,6 +215,16 @@ class BarRecordRequest(BaseModel):
     end: str
 
 
+class EdgeReportComputeRequest(BaseModel):
+    """Body for ``POST /research/edge-report/compute`` (era-fast_wall J-04) — the operator/CLI
+    "run this now" trigger. ``force`` (default ``False``) recomputes even over an already-warm
+    cache key and republishes (``EdgeReportCache.compute_and_publish`` — J-01's already-shipped
+    write half); the default dispatches through the existing ``get_or_compute`` (a warm key serves
+    instantly with zero recompute; a cold key computes once)."""
+
+    force: bool = False
+
+
 class ReviewRequest(BaseModel):
     """Body for ``POST /research/thesis/{id}/review`` (J-57). ``mistake_tags`` is the user-CONFIRMED
     tag list (distinct from the machine-SUGGESTED tags); ``note`` is the optional free text (REQUIRED
@@ -248,6 +259,13 @@ class ResearchRegistry:
         # pattern verbatim: cancellable worker threads OFF the event loop, persistence through the
         # SAME single writer queue, in-flight jobs honestly lost on restart (never silently done).
         self._backtest_jobs = BacktestJobManager(store, config)
+        # The edge-report compute manager (era-fast_wall J-04) — a single-flight, cancellable,
+        # progress-reporting background job around ``run_strategy_comparison_report``. Unlike
+        # ``_study_jobs``/``_backtest_jobs`` it needs no ``store``/``config`` at construction time
+        # (every ``trigger()`` call takes its store/dataset_store/bar_store/config/cache
+        # explicitly) — process-scoped, in-memory-only bookkeeping, honestly lost on restart, never
+        # a research value.
+        self._edge_report_compute = EdgeReportComputeManager()
 
     @property
     def store(self) -> JournalStore:
@@ -260,6 +278,10 @@ class ResearchRegistry:
     @property
     def backtest_jobs(self) -> BacktestJobManager:
         return self._backtest_jobs
+
+    @property
+    def edge_report_compute(self) -> EdgeReportComputeManager:
+        return self._edge_report_compute
 
     @property
     def config(self) -> Config:
@@ -2124,10 +2146,70 @@ def get_edge_report(
     keeps the pre-J-01 O(1), zero-backtest full-report shape. A dataset failing integrity
     verification aborts the whole report with an explicit 500 (the ``create_backtest``/
     ``EdgeReportError`` precedent) — partial results are never served, and never cached. An
-    all-empty or all-``insufficient_sample`` WARM report is a valid 200, never an error."""
+    all-empty or all-``insufficient_sample`` WARM report is a valid 200, never an error.
+
+    era-fast_wall J-04: the not-computed payload's ``compute`` field is now the registry's compute
+    manager's OWN current/last snapshot (``registry.edge_report_compute.snapshot()`` — replacing
+    J-01's always-``None`` placeholder) — the SAME snapshot ``GET /research/edge-report/compute``
+    itself serves (TC-8), read here through the SAME already-injected ``registry``, no second
+    store/manager construction path."""
     try:
         return peek_strategy_comparison_report(
-            registry.store, dataset_store, bar_store, registry.config, cache=cache
+            registry.store, dataset_store, bar_store, registry.config, cache=cache,
+            compute=registry.edge_report_compute.snapshot(),
         )
     except EdgeReportError as exc:
         raise HTTPException(status_code=500, detail=f"edge report could not complete: {exc}")
+
+
+# --- The operator-run compute (era-fast_wall J-04) — three subpaths of the section above ---------
+# ``POST /research/edge-report/compute`` (single-flight trigger), ``GET /research/edge-report/
+# compute`` (poll the snapshot), ``POST /research/edge-report/compute/cancel`` (409 when idle).
+# Resolved through the SAME FOUR existing dependency seams ``get_edge_report`` above already uses
+# (``get_registry``/``get_dataset_store``/``get_bar_store``/``get_edge_report_cache``) — no second
+# store/cache construction path anywhere. These are SUBPATHS of ``/edge-report``, so non-GET verbs
+# on ``/research/edge-report`` itself remain structurally unaffected (FastAPI's default 405 stands
+# — no handler exists for them, exactly as before this iteration). No MCP tool is added for this
+# surface (the critical "No MCP write surface" anti-goal) — ``app/mcp/__init__.py`` is untouched.
+
+
+@router.post("/edge-report/compute")
+def trigger_edge_report_compute(
+    body: EdgeReportComputeRequest,
+    registry: ResearchRegistry = Depends(get_registry),
+    dataset_store: DatasetStore = Depends(get_dataset_store),
+    bar_store: BarStore = Depends(get_bar_store),
+    cache: EdgeReportCache = Depends(get_edge_report_cache),
+) -> dict:
+    """Start the single-flight edge-report compute job, or — if one is already running — return it
+    UNCHANGED (``started: False``, never a second concurrent job). Returns
+    ``{"started": bool, "compute": <snapshot>}``; the actual sweep runs on a background worker
+    thread, off this request (``EdgeReportComputeManager.trigger`` — the ``create_backtest``/
+    ``jobs.start`` precedent), so this route returns immediately regardless of how long the sweep
+    takes."""
+    return registry.edge_report_compute.trigger(
+        registry.store, dataset_store, bar_store, registry.config, cache, force=body.force,
+    )
+
+
+@router.get("/edge-report/compute")
+def get_edge_report_compute(registry: ResearchRegistry = Depends(get_registry)) -> dict | None:
+    """The compute job's current/last snapshot, served VERBATIM — or ``null`` if no compute has
+    ever run this process. The SAME snapshot embedded as the not-computed edge-report payload's
+    ``compute`` field (TC-8) — one owner (``EdgeReportComputeManager``), one read
+    (``registry.edge_report_compute.snapshot()``), two callers."""
+    return registry.edge_report_compute.snapshot()
+
+
+@router.post("/edge-report/compute/cancel")
+def cancel_edge_report_compute(registry: ResearchRegistry = Depends(get_registry)) -> dict:
+    """Cancel the in-flight edge-report compute (cooperative — observed between dataset x strategy
+    pairs; a cancelled run publishes NOTHING to the edge-report cache, by construction — see
+    ``EdgeReportComputeCancelled``'s own docstring). ``409`` when idle (no job has ever run, or the
+    last job already reached a terminal state) — mirrors ``cancel_backtest``'s own 409-when-
+    terminal shape."""
+    snapshot = registry.edge_report_compute.snapshot()
+    if snapshot is None or snapshot["state"] != "running":
+        raise HTTPException(status_code=409, detail="no edge-report compute is currently running")
+    registry.edge_report_compute.cancel()
+    return {"cancelling": True}

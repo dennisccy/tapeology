@@ -7,6 +7,7 @@ import {
   fetchBarSeriesList,
   fetchDatasets,
   fetchEdgeReport,
+  fetchEdgeReportCompute,
   fetchLevels,
   fetchPnlLedger,
   fetchProfiles,
@@ -15,6 +16,7 @@ import {
   fetchStrategies,
   fetchTradability,
   recordBarSeries,
+  triggerEdgeReportCompute,
 } from "@/lib/api";
 import type {
   Backtest,
@@ -27,6 +29,7 @@ import type {
   Dataset,
   DatasetsListResult,
   EdgeReportCell,
+  EdgeReportComputeSnapshot,
   EdgeReportPayload,
   EdgeReportResponse,
   EdgeReportSurvivingCell,
@@ -284,7 +287,31 @@ function LoadingPanel({ testid }: { testid: string }) {
 // computed, empty result). Reuses `UnavailablePanel`'s amber degraded-state treatment (no new
 // visual language) with its own testid + its own headline/detail copy; `detail` is the backend's
 // OWN trigger explanation, rendered verbatim — never a frontend-authored string.
-function NotComputedPanel({ detail }: { detail: string }) {
+//
+// era-fast_wall J-04: gains the "Compute edge report" button + live progress line + failed-state
+// render. `compute` (the live/last snapshot, kept fresh by the poll effect in `StructurePage`)
+// drives four states: idle (button enabled, no progress line), running (button shows "Computing…"
+// and is disabled, progress counts render), done (this panel is no longer rendered — the parent
+// swaps to `EdgeReportBody` once the re-fetched report loses its `not_computed` status), and
+// failed (the snapshot's `error` renders verbatim, button re-enabled reading "Retry compute").
+// `triggerError` is a SEPARATE, POST-specific failure (e.g. backend unreachable at click time) —
+// distinct from a `failed` compute job, which is a server-side outcome of a job that DID start.
+function NotComputedPanel({
+  detail,
+  compute,
+  onTriggerCompute,
+  triggering,
+  triggerError,
+}: {
+  detail: string;
+  compute: EdgeReportComputeSnapshot | null;
+  onTriggerCompute: () => void;
+  triggering: boolean;
+  triggerError: string | null;
+}) {
+  const isRunning = compute?.state === "running";
+  const isFailed = compute?.state === "failed";
+  const buttonLabel = isRunning ? "Computing…" : isFailed ? "Retry compute" : "Compute edge report";
   return (
     <div
       data-testid="edge-report-not-computed"
@@ -292,6 +319,33 @@ function NotComputedPanel({ detail }: { detail: string }) {
     >
       <p className="text-sm font-medium text-amber-300">Edge report not computed yet.</p>
       <p className="mt-1 text-xs text-amber-200/70">{detail}</p>
+      {isFailed && compute?.error && (
+        <p data-testid="edge-report-compute-error" className="mt-2 text-xs text-red-300">
+          {compute.error}
+        </p>
+      )}
+      {triggerError && (
+        <p data-testid="edge-report-compute-trigger-error" className="mt-2 text-xs text-red-300">
+          {triggerError}
+        </p>
+      )}
+      <button
+        type="button"
+        data-testid="edge-report-compute-button"
+        onClick={onTriggerCompute}
+        disabled={triggering || isRunning}
+        className="mt-3 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-600 disabled:hover:bg-slate-800"
+      >
+        {buttonLabel}
+      </button>
+      {isRunning && (
+        <p data-testid="edge-report-compute-progress" className="mt-2 text-xs text-amber-200/70">
+          {compute.progress.backtests_done} / {compute.progress.backtests_total} backtests
+          {compute.progress.backtests_from_cache > 0
+            ? ` (${compute.progress.backtests_from_cache} from cache)`
+            : ""}
+        </p>
+      )}
     </div>
   );
 }
@@ -1198,6 +1252,15 @@ export default function StructurePage() {
     error?: string;
   } | null>(null);
 
+  // era-fast_wall J-04 — the operator-run edge-report compute. `computeSnapshot` is seeded from
+  // the not-computed payload's own `compute` field on mount (see the mount effect below), so a
+  // page load mid-job or post-terminal resumes the correct view without a spurious extra click;
+  // the poll effect then keeps it fresh while `state === "running"`. `computeTriggerError` is the
+  // POST's own failure (e.g. backend unreachable at click time) — distinct from a `failed` job.
+  const [computeSnapshot, setComputeSnapshot] = useState<EdgeReportComputeSnapshot | null>(null);
+  const [computeTriggering, setComputeTriggering] = useState(false);
+  const [computeTriggerError, setComputeTriggerError] = useState<string | null>(null);
+
   // J-05 fetch-control state — the page's ONE new explicit write action. Independent of
   // `symbolInput`/`asOfInput` above (the pre-existing read-only Load form) until a successful
   // fetch seeds them (see `handleFetchYahoo` below). `fetchError` carries the backend's own
@@ -1265,14 +1328,56 @@ export default function StructurePage() {
     fetchSetups().then((result) => {
       if (alive) setSetupsResult({ ok: result.ok, events: result.data?.events ?? [], error: result.error });
     });
-    // era-5B J-04: the 3-way edge report.
+    // era-5B J-04: the 3-way edge report. era-fast_wall J-04: the not-computed payload's own
+    // `compute` field seeds `computeSnapshot` on mount, so a page load mid-job or post-terminal
+    // resumes the correct view without a spurious extra click (the poll effect below then keeps
+    // it fresh while running).
     fetchEdgeReport().then((result) => {
-      if (alive) setEdgeReportResult(result);
+      if (!alive) return;
+      setEdgeReportResult(result);
+      if (result.ok && result.data && result.data.status === "not_computed") {
+        setComputeSnapshot(result.data.compute);
+      }
     });
     return () => {
       alive = false;
     };
   }, []);
+
+  // era-fast_wall J-04: poll the compute job's snapshot while it is running (mirrors the EXISTING
+  // `needsPolling`/`setInterval(..., 700)` backtest-poll pattern above — reusing the PATTERN, not
+  // the endpoint). Stops the moment `computeSnapshot.state` is no longer `"running"` (the effect
+  // re-runs on every `computeSnapshot` change and simply declines to schedule a new interval).
+  // The instant a tick observes `state === "done"`, the edge report is re-fetched exactly once so
+  // the panel falls through to the pre-existing `EdgeReportBody` render — zero new report-
+  // rendering code, the SAME "zero client recomputation" discipline every other section follows.
+  useEffect(() => {
+    if (computeSnapshot?.state !== "running") return;
+    const handle = setInterval(async () => {
+      const next = await fetchEdgeReportCompute();
+      if (!next.ok) return; // an honest "couldn't reach the backend this tick" — keep polling
+      setComputeSnapshot(next.data);
+      if (next.data && next.data.state === "done") {
+        const report = await fetchEdgeReport();
+        setEdgeReportResult(report);
+      }
+    }, 700);
+    return () => clearInterval(handle);
+  }, [computeSnapshot]);
+
+  // era-fast_wall J-04: POST the trigger, then seed the freshly-started (or already-running)
+  // snapshot from the response so the poll effect above picks it up immediately.
+  async function handleTriggerEdgeReportCompute() {
+    setComputeTriggering(true);
+    setComputeTriggerError(null);
+    const result = await triggerEdgeReportCompute();
+    setComputeTriggering(false);
+    if (result.ok && result.data) {
+      setComputeSnapshot(result.data.compute);
+    } else {
+      setComputeTriggerError(result.error ?? "The edge-report compute could not be started.");
+    }
+  }
 
   // era-5B J-02/J-03: fetch the drill-in whenever a Case Studies row is selected. Clears to
   // `{phase: "idle"}` when nothing is selected (e.g. never rendered — the drill-in Panel only
@@ -1878,7 +1983,13 @@ export default function StructurePage() {
                 message={edgeReportResult.error ?? "The edge report could not be loaded."}
               />
             ) : edgeReport.status === "not_computed" ? (
-              <NotComputedPanel detail={edgeReport.detail} />
+              <NotComputedPanel
+                detail={edgeReport.detail}
+                compute={computeSnapshot}
+                onTriggerCompute={handleTriggerEdgeReportCompute}
+                triggering={computeTriggering}
+                triggerError={computeTriggerError}
+              />
             ) : (
               <EdgeReportBody report={edgeReport} />
             )}
