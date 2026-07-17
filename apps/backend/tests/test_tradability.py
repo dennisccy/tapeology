@@ -27,7 +27,7 @@ import pytest
 from app.config import CONFIG, Config
 from app.providers.adapters.base import RawBar
 from app.research.bars import BarStore
-from app.research.tradability import RESISTANCE, SUPPORT, compute_tradability
+from app.research.tradability import RESISTANCE, SUPPORT, basis_day_key, compute_tradability
 
 FIXTURE_YAHOO_DIR = Path(__file__).parent / "fixtures" / "yahoo"
 
@@ -345,6 +345,46 @@ def test_tradability_config_fields_are_excluded_from_config_fingerprint():
     )
     # ...while a real classifier threshold still moves it (the counter-test).
     assert Config(min_trade_speed=0.51).config_fingerprint() != CONFIG.config_fingerprint()
+
+
+# --- basis_day_key: the arm memo's day-key contract (goal-fast_wall J-03) ----------------------
+
+
+def test_basis_day_key_same_utc_date_is_stable():
+    """TC-3: two ``as_of_epoch`` values on the SAME UTC calendar date resolve to the identical key
+    -- reusing ``_session_date`` (never a second date derivation), mirroring
+    ``test_no_lookahead_shifting_as_of_within_the_same_session_is_unchanged``'s own premise."""
+    early = _SYN_AS_OF  # 2026-01-08T00:00:00Z
+    late = _SYN_AS_OF + 23 * 3600  # same UTC date, 23:00
+    assert basis_day_key(early) == basis_day_key(late)
+
+
+def test_basis_day_key_differs_across_a_utc_midnight_boundary():
+    """TC-4: an ``as_of_epoch`` strictly before, and one strictly after, a UTC midnight boundary
+    resolve to DIFFERENT keys -- the property ``backtests.py``'s ``_StructureArmMemo`` relies on
+    to memoize ``tradability_at`` once per real UTC session date instead of per confirming tick."""
+    just_before_midnight = _SYN_AS_OF - 1.0  # 2026-01-07T23:59:59Z
+    just_after_midnight = _SYN_AS_OF + 1.0  # 2026-01-08T00:00:01Z
+    assert basis_day_key(just_before_midnight) != basis_day_key(just_after_midnight)
+
+
+def test_basis_day_key_matches_the_date_boundary_compute_tradability_itself_shifts_basis_across(tmp_path):
+    """Direct-computation cross-check (never hand-waved): the SAME midnight boundary where
+    ``basis_day_key`` changes is really where ``compute_tradability`` itself resolves a DIFFERENT
+    ``basis_as_of`` (the existing ``test_no_lookahead_a_later_session_shifts_the_basis_forward``
+    fixture, reused) -- proving the memo's cache key genuinely tracks the value it stands in for."""
+    store = BarStore(tmp_path / "bars")
+    _seed_synthetic(store, num_days=8)
+    boundary = _SYN_AS_OF + _DAY  # 2026-01-09T00:00:00Z -- the day8/day9 boundary this fixture uses
+
+    before_key = basis_day_key(boundary - 1.0)
+    after_key = basis_day_key(boundary + 1.0)
+    assert before_key != after_key
+
+    before_map = compute_tradability(store, _SYN_SYMBOL, boundary - 1.0, CONFIG)
+    after_map = compute_tradability(store, _SYN_SYMBOL, boundary + 1.0, CONFIG)
+    assert before_map["basis_as_of"] != after_map["basis_as_of"]
+
 
 
 # --- "Lens, not a second engine": tradability.py never re-detects structure ------------------

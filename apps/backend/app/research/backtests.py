@@ -89,6 +89,7 @@ The disciplines, clause by clause:
 
 from __future__ import annotations
 
+import bisect
 import random
 import threading
 import time
@@ -97,10 +98,10 @@ import uuid
 from ..config import Config, PROFILE_DEFAULT, STRATEGY_TAPE_ID, STRATEGY_TAPE_MAP_ID
 from .bars import BarStore
 from .datasets import DatasetIntegrityError, DatasetNotFound, DatasetStore
-from .levels import compute_levels, CLASS_A, CLASS_B, CLASS_C
+from .levels import compute_levels, level_change_points, CLASS_A, CLASS_B, CLASS_C
 from .marks import r_basis
 from .store import BacktestRecord, JournalStore
-from .tradability import RESISTANCE, SUPPORT, compute_tradability
+from .tradability import RESISTANCE, SUPPORT, basis_day_key, compute_tradability
 
 # The status vocabulary and the state-native helpers are REUSED from the studies module (one
 # owner per literal / per mapping — never a second copy): the premise-state arming map, the
@@ -392,6 +393,55 @@ def _aggregate_by_class(trades: list[dict], config: Config) -> dict:
     return breakdown
 
 
+class _StructureArmMemo:
+    """goal-fast_wall J-03 ("the arm memo", ``docs/goal.md`` Key Capability 3): a small per-run
+    accelerator serving ``structure_tape``/``structure_tape_map``'s arming checks from the
+    handful of real level/tradability states a session actually has, instead of re-running the
+    FULL ``compute_levels``/``compute_tradability`` pipeline on every confirming tick.
+
+    In-memory, ONE instance built fresh inside ``_structure_tape_trades`` /
+    ``_structure_tape_map_trades`` -- once per ``BacktestRunner.run()`` call, never shared across
+    runs, never persisted to disk or any store: a rebuildable, non-canonical accelerator (the
+    interlude's "never a source of truth" discipline -- deleting/skipping it loses nothing, since
+    every miss falls through to the SAME canonical owner call a ``memo=None`` caller would make).
+
+    ``levels_at(as_of_epoch)`` buckets ``as_of_epoch`` via ``bisect.bisect_right`` into the
+    ``levels.level_change_points`` tuple resolved ONCE at construction -- the contract that
+    function documents (``compute_levels`` is constant between two consecutive change points)
+    means every ``as_of_epoch`` landing in the SAME bucket shares a byte-identical result, so the
+    real owner is called at most once per bucket actually visited. ``tradability_at(as_of_epoch)``
+    buckets by ``tradability.basis_day_key(as_of_epoch)`` (constant per UTC session date) the
+    identical way. Both are a PURE memoization of an EXISTING owner call -- never a second
+    computation path (the two source-introspection guard tests pin this: the literal
+    ``compute_levels(``/``compute_tradability(`` owner calls stay present in
+    ``_structure_tape_arm``'s/``_structure_tape_map_arm``'s own fallback branch, and no
+    level-internal helper name is ever referenced here)."""
+
+    def __init__(self, bar_store: BarStore, symbol: str, config: Config) -> None:
+        self._bar_store = bar_store
+        self._symbol = symbol
+        self._config = config
+        self._change_points = level_change_points(bar_store, symbol)
+        self._levels_cache: dict[int, dict] = {}
+        self._tradability_cache: dict[str, dict] = {}
+
+    def levels_at(self, as_of_epoch: float) -> dict:
+        bucket = bisect.bisect_right(self._change_points, as_of_epoch)
+        cached = self._levels_cache.get(bucket)
+        if cached is None:
+            cached = compute_levels(self._bar_store, self._symbol, as_of_epoch, self._config)
+            self._levels_cache[bucket] = cached
+        return cached
+
+    def tradability_at(self, as_of_epoch: float) -> dict:
+        key = basis_day_key(as_of_epoch)
+        cached = self._tradability_cache.get(key)
+        if cached is None:
+            cached = compute_tradability(self._bar_store, self._symbol, as_of_epoch, self._config)
+            self._tradability_cache[key] = cached
+        return cached
+
+
 class BacktestRunner:
     """Runs one backtest end-to-end and persists its report ONCE (row 31's single computer).
 
@@ -632,9 +682,15 @@ class BacktestRunner:
         symbol with no recorded bar series, and a corrupt SOLE bar series (``compute_levels``
         aliases that to ``no_bar_series_for_symbol`` — the iter-2 seam, unchanged here) each yield
         zero classified levels to test against, so ``structure_tape`` arms nothing rather than
-        fabricating a partial computation."""
+        fabricating a partial computation.
+
+        goal-fast_wall J-03: builds exactly ONE ``_StructureArmMemo`` here (per run, in-memory,
+        never shared/persisted) and threads it into every ``_structure_tape_arm`` call below —
+        collapsing the per-tick ``compute_levels`` calls this loop used to make into one per real
+        level-change-point interval, byte-identically (see ``_StructureArmMemo``'s own docstring)."""
         if bar_store is None or not symbol or epoch_anchor is None:
             return []
+        memo = _StructureArmMemo(bar_store, symbol, self._config)
         entries = strategy["entries"]
         horizon = strategy["exits"]["horizon_seconds"]
         cooldown = entries["arm_cooldown_seconds"]
@@ -654,7 +710,8 @@ class BacktestRunner:
                 and point.timestamp >= cooldown_until
             ):
                 arm = self._structure_tape_arm(
-                    point, bar_store, symbol, epoch_anchor + point.timestamp, entries, config
+                    point, bar_store, symbol, epoch_anchor + point.timestamp, entries, config,
+                    memo=memo,
                 )
                 if arm is not None:
                     direction, setup_type, level, opposing_price = arm
@@ -674,6 +731,8 @@ class BacktestRunner:
         as_of_epoch: float,
         entries: dict,
         config: Config,
+        *,
+        memo: "_StructureArmMemo | None" = None,
     ) -> tuple[str, str, dict, float | None] | None:
         """One flat-event arming check: resolve which reading (if any) the CURRENT tape state
         confirms, and — only then — read the row-39 levels as of THIS event's own absolute
@@ -687,12 +746,21 @@ class BacktestRunner:
         ``next_opposing_zone_price`` (era-4 J-05) is resolved from this SAME ``compute_levels``
         result (never a second/future levels read — the no-lookahead discipline) via
         ``_next_opposing_zone_price``, feeding the class-scaled reward-target exit; ``None`` when
-        no zone qualifies on the side ``direction`` implies."""
+        no zone qualifies on the side ``direction`` implies.
+
+        ``memo`` (goal-fast_wall J-03, keyword-only, defaulting to ``None``): when provided,
+        levels are served through its ``levels_at`` (a memoized read, byte-identical to a fresh
+        ``compute_levels`` call — see ``_StructureArmMemo``'s own docstring for the contract);
+        ``None`` (every caller that does not opt in, e.g. a direct test call) preserves today's
+        EXACT direct-call behaviour, unchanged."""
         reading = _structure_tape_reading(point.tape_state, entries)
         if reading is None:
             return None
         direction, setup_type = reading
-        result = compute_levels(bar_store, symbol, as_of_epoch, config)
+        if memo is not None:
+            result = memo.levels_at(as_of_epoch)
+        else:
+            result = compute_levels(bar_store, symbol, as_of_epoch, config)
         band_bps = entries["proximity_band_bps"]
         zones = result["confluence_zones"]
         for zone in zones:
@@ -725,9 +793,16 @@ class BacktestRunner:
         ONLY difference is the arming SOURCE: ``_structure_tape_map_arm`` (tradable-map bands)
         instead of ``_structure_tape_arm`` (raw classified levels/zones). See
         ``_structure_tape_map_arm``'s own docstring for the arming rule and its honest-emptiness
-        floors (missing bar_store/symbol/epoch_anchor, no bar series, no classified band)."""
+        floors (missing bar_store/symbol/epoch_anchor, no bar series, no classified band).
+
+        goal-fast_wall J-03: builds exactly ONE ``_StructureArmMemo`` here (per run, in-memory,
+        never shared/persisted — a SEPARATE instance from ``_structure_tape_trades``'s own, since
+        each is scoped to its own run) and threads it into every ``_structure_tape_map_arm`` call
+        below — collapsing the per-tick ``compute_tradability`` calls this loop used to make into
+        one per real UTC session date, byte-identically (see ``_StructureArmMemo``'s docstring)."""
         if bar_store is None or not symbol or epoch_anchor is None:
             return []
+        memo = _StructureArmMemo(bar_store, symbol, self._config)
         entries = strategy["entries"]
         horizon = strategy["exits"]["horizon_seconds"]
         cooldown = entries["arm_cooldown_seconds"]
@@ -747,7 +822,8 @@ class BacktestRunner:
                 and point.timestamp >= cooldown_until
             ):
                 arm = self._structure_tape_map_arm(
-                    point, bar_store, symbol, epoch_anchor + point.timestamp, entries, config
+                    point, bar_store, symbol, epoch_anchor + point.timestamp, entries, config,
+                    memo=memo,
                 )
                 if arm is not None:
                     direction, setup_type, level, opposing_price = arm
@@ -767,6 +843,8 @@ class BacktestRunner:
         as_of_epoch: float,
         entries: dict,
         config: Config,
+        *,
+        memo: "_StructureArmMemo | None" = None,
     ) -> tuple[str, str, dict, float | None] | None:
         """One flat-event arming check — the IDENTICAL shape ``_structure_tape_arm`` performs
         (resolve which reading the CURRENT tape state confirms FIRST, so a non-confirming tick
@@ -799,12 +877,21 @@ class BacktestRunner:
         ``next_opposing_price`` is resolved from this SAME ``compute_tradability`` result (never a
         second/future map read) via ``_next_opposing_band_price``, feeding the identical
         class-scaled reward-target exit ``structure_tape`` uses; ``None`` when no band qualifies on
-        the side ``direction`` implies."""
+        the side ``direction`` implies.
+
+        ``memo`` (goal-fast_wall J-03, keyword-only, defaulting to ``None``): when provided,
+        tradability is served through its ``tradability_at`` (a memoized read, byte-identical to a
+        fresh ``compute_tradability`` call — see ``_StructureArmMemo``'s own docstring for the
+        contract); ``None`` (every caller that does not opt in, e.g. a direct test call) preserves
+        today's EXACT direct-call behaviour, unchanged."""
         reading = _structure_tape_reading(point.tape_state, entries)
         if reading is None:
             return None
         direction, setup_type = reading
-        result = compute_tradability(bar_store, symbol, as_of_epoch, config)
+        if memo is not None:
+            result = memo.tradability_at(as_of_epoch)
+        else:
+            result = compute_tradability(bar_store, symbol, as_of_epoch, config)
         band_bps = entries["proximity_band_bps"]
         bands = result["bands"]
         wanted_side = _structure_tape_map_side_for_reading(direction, setup_type)

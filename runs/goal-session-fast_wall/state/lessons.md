@@ -52,3 +52,9 @@ guardrail left for those UI journeys when replay does not run.
 **Applies to:** any future `Frontend Present: no` iter that touches an endpoint or shared value a
 `passing` browser journey depends on (J-03, J-05, J-06 all qualify — each accelerates a value the
 `/structure` surfaces read).
+
+## iter-3 — 2026-07-17T11:15:22Z
+
+**Verdict:** CONTINUE
+**Lesson:** For a byte-identical accelerator, "the equivalence test passes" is NOT by itself sufficient evidence of the critical "No divergent accelerator output" anti-goal — the auditor closed the gap by *mutation-probing* the memo (poisoning it to serve a stale level/tradability state), which flips the run from 1 trade to 0, proving TC-5..TC-8 genuinely bite rather than being vacuously satisfiable. An accelerator whose "byte-identity" test would still pass against a deliberately-broken accelerator is a false guardrail.
+**Applies to:** any future accelerator iter under "No divergent accelerator output" — specifically J-05 (resumable/parallel sweep: cross-process/resumed byte-identity is the veto-class risk) and J-06 (durable setups scan cache); demand the determinism/equivalence test be shown non-vacuous (a deliberately-broken accelerator must fail it), not merely present-and-green.

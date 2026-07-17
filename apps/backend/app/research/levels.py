@@ -322,3 +322,43 @@ def compute_levels(store: BarStore, symbol: str, as_of_epoch: float, config: Con
         "no_bar_series_for_symbol": False,
         "confluence_zones": compute_confluence_zones(levels, config),
     }
+
+
+def level_change_points(store: BarStore, symbol: str) -> tuple[float, ...]:
+    """goal-fast_wall J-03 ("the arm memo"): a SAFE SUPERSET of every instant at which
+    ``compute_levels(store, symbol, as_of, config)`` could possibly change for ``symbol`` --
+    between any two CONSECUTIVE entries of the returned tuple, ``compute_levels`` is a constant
+    function of ``as_of``. A superset of the true change points is always safe (it costs at most
+    one harmless extra memo split); a MISSING true change point is never safe, since it would
+    silently serve a stale result across a genuine regime change. ``research/backtests.py``'s
+    ``_StructureArmMemo`` is the ONE reader of this contract, using it to collapse thousands of
+    per-tick ``compute_levels`` recomputes into the handful of real level states a session
+    actually has -- this function itself computes NOTHING about levels; it only enumerates WHEN
+    the already-frozen ``compute_levels``/``compute_confluence_zones`` bodies above could move.
+
+    Mirrors ``compute_levels``'s OWN healthy-series enumeration exactly (the SAME ``store.list()``
+    healthy-``records`` half, the SAME ``_select_one_series_per_timeframe`` tie-break, the SAME
+    ``PRIOR_PERIOD_TIMEFRAMES``/``_PERIOD_SECONDS``) so this function can never omit a series
+    ``compute_levels`` itself would read: the union of every SELECTED series' own bar epochs (a
+    newly-visible bar can create or newly confirm a swing pivot near either end of the as-of-
+    truncated prefix -- see ``_swing_pivots``) plus, for each series whose timeframe is in
+    ``PRIOR_PERIOD_TIMEFRAMES``, each of ITS bars' own period-closing instant
+    (``epoch + period_seconds`` -- the exact instant ``_prior_period_extremes`` newly treats that
+    bar as "completed"). Unlike ``compute_levels``, this reads bars WITHOUT any ``_bars_as_of``
+    truncation of its own -- a single per-run tuple must cover every ``as_of`` the run will ever
+    ask about, resolved ONCE, so a change point later than any ``as_of`` a particular caller
+    happens to query is still a safe, if unused, entry.
+
+    Returns an empty tuple for a symbol with no healthy recorded series at all -- the
+    ``no_bar_series_for_symbol`` precedent's honest absence, never a fabricated instant."""
+    records, _integrity_errors = store.list()
+    matching = [r for r in records if r["symbol"] == symbol]
+    if not matching:
+        return ()
+    points: set[float] = set()
+    for timeframe, record in _select_one_series_per_timeframe(matching).items():
+        for bar in store.load_bars(record["id"]):
+            points.add(bar.epoch)
+            if timeframe in PRIOR_PERIOD_TIMEFRAMES:
+                points.add(bar.epoch + _PERIOD_SECONDS[timeframe])
+    return tuple(sorted(points))

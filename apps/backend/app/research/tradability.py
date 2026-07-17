@@ -380,3 +380,18 @@ def compute_tradability(store: BarStore, symbol: str, as_of_epoch: float, config
         "no_bar_series_for_symbol": False,
         "basis_as_of": basis_as_of,
     }
+
+
+def basis_day_key(as_of_epoch: float) -> str:
+    """goal-fast_wall J-03 ("the arm memo"): the UTC session-date key ``_resolve_basis``'s chosen
+    prior session is CONSTANT for -- reuses the EXISTING ``_session_date`` date-resolution helper
+    verbatim (never a second date derivation). ``_resolve_basis`` filters candidate daily bars by
+    ``_session_date(b.epoch) < _session_date(as_of_epoch)`` (the requested session's own UTC
+    calendar date) and picks the latest survivor -- a decision that depends on ``as_of_epoch``
+    ONLY through its own UTC calendar date, so every ``as_of_epoch`` sharing one UTC date resolves
+    the IDENTICAL prior session/basis. ``research/backtests.py``'s ``_StructureArmMemo`` is the
+    ONE reader of this contract, using it to collapse per-tick ``compute_tradability`` recomputes
+    into one real basis per UTC session date actually visited -- this function computes nothing
+    about tradability itself; it only names the key ``_resolve_basis``'s own (frozen, unchanged)
+    behaviour is already constant across."""
+    return _session_date(as_of_epoch).isoformat()

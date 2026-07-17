@@ -58,9 +58,11 @@ from app.research.backtests import (
 )
 from app.research.bars import BarStore
 from app.research.datasets import DatasetStore
+from app.research.levels import compute_levels, level_change_points
 from app.research.marks import r_basis
 from app.research.store import JournalStore
 from app.research.studies import _PathPoint
+from app.research.tradability import compute_tradability
 
 # The synthetic three-timeframe confluence fixture (class A/B/C zones at exact, known prices) --
 # REUSED verbatim from test_levels.py (the plan's own directive: the committed real PG bar fixture
@@ -1506,3 +1508,377 @@ def test_structure_tape_reads_levels_from_the_one_canonical_compute_levels_owner
     assert "compute_levels(" in src
     for forbidden in ("_swing_pivots", "_prior_period_extremes", "_cluster_levels", "_grade_zone"):
         assert forbidden not in src, f"backtests.py must not recompute levels itself: {forbidden}"
+
+
+# === The arm memo (goal-fast_wall J-03): per-run levels/tradability memoization =====================
+# structure_tape / structure_tape_map now build one in-memory ``_StructureArmMemo`` per run and
+# thread it into every arming check — collapsing the per-tick ``compute_levels``/
+# ``compute_tradability`` calls into one per real change-point interval / UTC session date. Every
+# test below proves the SAME thing the goal.md acceptance names: byte-identity vs the direct-call
+# path (TC-5/TC-6), two genuine memo-bust legs (TC-7/TC-8), two counting spies (TC-9/TC-10), and an
+# interactive-budget multi-interval smoke test (TC-11).
+
+
+class _NoCacheArmMemo:
+    """A drop-in stand-in for ``backtests._StructureArmMemo`` that performs ZERO caching — every
+    ``levels_at``/``tradability_at`` call goes straight to the real owner function. Swapped in via
+    monkeypatch for "today's direct-call path" (the ``memo=None`` behaviour) comparison runs below,
+    so the SURROUNDING control flow (the interleaved arm/exit loop in ``_structure_tape_trades`` /
+    ``_structure_tape_map_trades``) is the EXACT production code path — only the caching behaviour
+    differs, isolating precisely the property TC-5..TC-8 must prove without duplicating that loop
+    by hand in this test module."""
+
+    def __init__(self, bar_store, symbol, config):
+        self._bar_store = bar_store
+        self._symbol = symbol
+        self._config = config
+
+    def levels_at(self, as_of_epoch):
+        return compute_levels(self._bar_store, self._symbol, as_of_epoch, self._config)
+
+    def tradability_at(self, as_of_epoch):
+        return compute_tradability(self._bar_store, self._symbol, as_of_epoch, self._config)
+
+
+def _run_unmemoized(jobs, store, dataset_store, dataset_id, bar_store, monkeypatch, *, strategy_id):
+    """Runs the SAME backtest with the arm memo's caching disabled (every level/tradability read
+    forced through a fresh owner-function computation) — "today's direct-call path" for the
+    TC-5..TC-8 byte-identity comparisons below."""
+    import app.research.backtests as backtests_module
+
+    monkeypatch.setattr(backtests_module, "_StructureArmMemo", _NoCacheArmMemo)
+    return _run(jobs, store, dataset_store, dataset_id, strategy_id=strategy_id, bar_store=bar_store)
+
+
+def test_structure_tape_memoized_run_is_byte_identical_to_the_direct_call_path(
+    tmp_path, store, jobs, confluence_bar_store, monkeypatch
+):
+    """TC-5: a memoized ``structure_tape`` run and the SAME run with the memo's caching disabled
+    (today's direct-call path) produce a byte-identical ``result``."""
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-BUYER", max_logical=100.0)
+    memoized = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store
+    )
+    direct = _run_unmemoized(
+        jobs, store, dstore, meta["id"], confluence_bar_store, monkeypatch, strategy_id=STRATEGY_TAPE_ID
+    )
+    assert json.dumps(memoized["result"], sort_keys=True) == json.dumps(direct["result"], sort_keys=True)
+    assert len(memoized["result"]["trades"]) >= 1, "the proof must exercise at least one real trade"
+
+
+def test_structure_tape_map_memoized_run_is_byte_identical_to_the_direct_call_path(
+    tmp_path, store, jobs, confluence_bar_store, monkeypatch
+):
+    """TC-6: a memoized ``structure_tape_map`` run and the SAME run with the memo's caching
+    disabled (today's direct-call path) produce a byte-identical ``result``."""
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-SELLER")
+    memoized = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_MAP_ID, bar_store=confluence_bar_store
+    )
+    direct = _run_unmemoized(
+        jobs, store, dstore, meta["id"], confluence_bar_store, monkeypatch,
+        strategy_id=STRATEGY_TAPE_MAP_ID,
+    )
+    assert json.dumps(memoized["result"], sort_keys=True) == json.dumps(direct["result"], sort_keys=True)
+    assert len(memoized["result"]["trades"]) >= 1, "the proof must exercise at least one real trade"
+
+
+# --- TC-7 (memo-bust leg 1): a daily period's close instant strictly between two intraday bars -----
+
+_MEMO_BUST_LEVEL_SYMBOL = "SYN-MEMO-BUST-LEVEL"
+_MEMO_BUST_1H_BASE = _CONFLUENCE_BASE
+_MEMO_BUST_DAILY_EPOCH = _MEMO_BUST_1H_BASE + 10_000.0
+# The 1d bar's OWN period-close instant — a level_change_points entry with NO bar recorded exactly
+# at it (TC-7's own premise, mechanically confirmed inside the test below).
+_MEMO_BUST_CHANGE_POINT = _MEMO_BUST_DAILY_EPOCH + _DAY
+
+
+def _memo_bust_level_bar_fixture(store: BarStore) -> None:
+    """A 3-bar ``1h`` sandwich (the ``class_b_bar_fixture`` pattern) producing ONE swing-high
+    pivot at 100.00, confirmed once the third bar is visible (well before
+    ``_MEMO_BUST_CHANGE_POINT``); a 4th ``1h`` bar recorded strictly AFTER that change point (a
+    far-away noise price, inert for pivot detection — its only role is bracketing the change point
+    between two recorded intraday epochs, TC-7's own premise); and ONE ``1d`` bar whose own
+    period-close instant IS ``_MEMO_BUST_CHANGE_POINT`` and whose close (100.02) joins the 1h
+    pivot's confluence band ONLY once that period has closed — so NO zone (and therefore no arm)
+    exists before the change point, and a genuine 2-member zone exists after it."""
+    hourly_specs = [(50, 40, 45), (100.00, 41, 98), (55, 42, 50)]
+    hourly_bars = [
+        RawBar(_MEMO_BUST_LEVEL_SYMBOL, "1h", _MEMO_BUST_1H_BASE + i * 3600.0, close, high, low, close, 1_000)
+        for i, (high, low, close) in enumerate(hourly_specs)
+    ]
+    hourly_bars.append(
+        RawBar(_MEMO_BUST_LEVEL_SYMBOL, "1h", _MEMO_BUST_CHANGE_POINT + 3600.0, 695.0, 700.0, 690.0, 695.0, 1_000)
+    )
+    daily_bars = [
+        RawBar(_MEMO_BUST_LEVEL_SYMBOL, "1d", _MEMO_BUST_DAILY_EPOCH, 100.02, 900.0, 10.0, 100.02, 1_000),
+    ]
+    store.record(
+        symbol=_MEMO_BUST_LEVEL_SYMBOL, timeframe="1h",
+        window_start_utc="2026-01-01T00:00:00Z", window_end_utc="2026-01-03T00:00:00Z",
+        feed="sip", bars=hourly_bars,
+    )
+    store.record(
+        symbol=_MEMO_BUST_LEVEL_SYMBOL, timeframe="1d",
+        window_start_utc="2026-01-01T00:00:00Z", window_end_utc="2026-01-03T00:00:00Z",
+        feed="sip", bars=daily_bars,
+    )
+
+
+def test_structure_tape_memo_bust_daily_period_close_between_intraday_bars(
+    tmp_path, store, jobs, monkeypatch
+):
+    """TC-7 (memo-bust leg 1)."""
+    bar_store = BarStore(tmp_path / "memo-bust-level-bars")
+    _memo_bust_level_bar_fixture(bar_store)
+
+    # The change point genuinely sits strictly between two recorded intraday ("1h") bar epochs,
+    # with no bar recorded exactly at it — the fixture's own premise, mechanically confirmed.
+    change_points = level_change_points(bar_store, _MEMO_BUST_LEVEL_SYMBOL)
+    hourly_epochs = {
+        _MEMO_BUST_1H_BASE, _MEMO_BUST_1H_BASE + 3600.0, _MEMO_BUST_1H_BASE + 7200.0,
+        _MEMO_BUST_CHANGE_POINT + 3600.0,
+    }
+    assert _MEMO_BUST_CHANGE_POINT not in hourly_epochs
+    assert any(e < _MEMO_BUST_CHANGE_POINT for e in hourly_epochs)
+    assert any(e > _MEMO_BUST_CHANGE_POINT for e in hourly_epochs)
+    assert _MEMO_BUST_CHANGE_POINT in change_points
+
+    # Non-vacuous, independent of any recorded dataset's own tick alignment: the SAME reading/price
+    # arms strictly AFTER the change point but not strictly before it.
+    entries = CONFIG.strategy_definition(STRATEGY_TAPE_ID)["entries"]
+    breakthrough_long_state = CONFIG.structure_tape_breakthrough_state_by_direction["long"]
+    probe = _PathPoint(timestamp=0.0, last=150.0, spread=0.02, tape_state=breakthrough_long_state)
+    before = BacktestRunner._structure_tape_arm(
+        probe, bar_store, _MEMO_BUST_LEVEL_SYMBOL, _MEMO_BUST_CHANGE_POINT - 1.0, entries, CONFIG
+    )
+    assert before is None, "no confluence zone exists before the 1d period closes"
+    after = BacktestRunner._structure_tape_arm(
+        probe, bar_store, _MEMO_BUST_LEVEL_SYMBOL, _MEMO_BUST_CHANGE_POINT + 1.0, entries, CONFIG
+    )
+    assert after is not None, "the 2-member zone must exist once the 1d period closes"
+
+    # Byte-identity across the SAME boundary, via a real recorded run: memoized vs the direct-call
+    # path, AND the arming decision genuinely differs (0 arms before the boundary, 1 after it).
+    anchor = _MEMO_BUST_CHANGE_POINT - 50.0
+    dstore, meta = _record_structure_tape_dataset(
+        tmp_path, "SIM-BUYER", anchor=anchor, max_logical=70.0, symbol=_MEMO_BUST_LEVEL_SYMBOL
+    )
+    memoized = _run(jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=bar_store)
+    direct = _run_unmemoized(
+        jobs, store, dstore, meta["id"], bar_store, monkeypatch, strategy_id=STRATEGY_TAPE_ID
+    )
+    assert json.dumps(memoized["result"], sort_keys=True) == json.dumps(direct["result"], sort_keys=True)
+    trades = memoized["result"]["trades"]
+    assert len(trades) == 1, "arms exactly once, only once the boundary closes the 1d period"
+    assert trades[0]["entry"]["logical_ts"] >= 50.0, "must not have armed strictly before the boundary"
+
+
+# --- TC-8 (memo-bust leg 2): a recorded run spanning a UTC calendar-date boundary -------------------
+
+
+def test_structure_tape_map_memo_bust_utc_date_boundary(
+    tmp_path, store, jobs, confluence_bar_store, monkeypatch
+):
+    """TC-8 (memo-bust leg 2)."""
+    boundary = _CONFLUENCE_BASE + 2 * _DAY  # a clean UTC midnight; confluence_bar_store's own 1d
+    # series (day 0, day 1) resolves a DIFFERENT prior session on either side of it.
+    before_map = compute_tradability(confluence_bar_store, _CONFLUENCE_SYMBOL, boundary - 1.0, CONFIG)
+    after_map = compute_tradability(confluence_bar_store, _CONFLUENCE_SYMBOL, boundary + 1.0, CONFIG)
+    assert before_map["basis_as_of"] is not None and after_map["basis_as_of"] is not None
+    assert before_map["basis_as_of"] != after_map["basis_as_of"], (
+        "the fixture's own premise: the tradability basis must genuinely differ across the boundary"
+    )
+
+    anchor = boundary - 50.0
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-SELLER", anchor=anchor, max_logical=70.0)
+    memoized = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_MAP_ID, bar_store=confluence_bar_store
+    )
+    direct = _run_unmemoized(
+        jobs, store, dstore, meta["id"], confluence_bar_store, monkeypatch,
+        strategy_id=STRATEGY_TAPE_MAP_ID,
+    )
+    assert json.dumps(memoized["result"], sort_keys=True) == json.dumps(direct["result"], sort_keys=True)
+
+
+# --- TC-9: a counting spy proves compute_levels runs once per change-point interval, not per tick ---
+
+_MANY_INTERVAL_SYMBOL = "SYN-MEMO-BUST-MANY"
+_MANY_INTERVAL_BASE = _CONFLUENCE_BASE + 1000 * _DAY
+_MANY_INTERVAL_STEP = 300.0
+_MANY_INTERVAL_COUNT = 7
+
+
+def _many_interval_bar_fixture(store: BarStore) -> None:
+    """7 STRICTLY monotonically-increasing ``1h`` bars (both high and low increase with every bar)
+    — no bar is EVER a strict extreme over both its neighbours, so no swing pivot ever forms and
+    ``confluence_zones`` stays honestly empty for every ``as_of`` — the cleanest possible substrate
+    for a call-counting spy, free of any arming noise. Gives exactly 7 real
+    ``level_change_points`` (one per bar epoch; "1h" is not a prior-period timeframe)."""
+    bars = [
+        RawBar(
+            _MANY_INTERVAL_SYMBOL, "1h", _MANY_INTERVAL_BASE + i * _MANY_INTERVAL_STEP,
+            10.0 + i, 20.0 + i, 5.0 + i, 10.0 + i, 1_000,
+        )
+        for i in range(_MANY_INTERVAL_COUNT)
+    ]
+    store.record(
+        symbol=_MANY_INTERVAL_SYMBOL, timeframe="1h",
+        window_start_utc="2026-01-01T00:00:00Z", window_end_utc="2026-01-01T02:00:00Z",
+        feed="sip", bars=bars,
+    )
+
+
+def test_structure_tape_memo_calls_compute_levels_once_per_change_point_interval_not_per_tick(
+    tmp_path, store, jobs, monkeypatch
+):
+    """TC-9."""
+    bar_store = BarStore(tmp_path / "many-interval-bars")
+    _many_interval_bar_fixture(bar_store)
+    change_points = level_change_points(bar_store, _MANY_INTERVAL_SYMBOL)
+    assert len(change_points) == 7, "the fixture's own premise: 7 monotonic bars, one change point each"
+
+    anchor = _MANY_INTERVAL_BASE - 19.5  # ts=19.5 (buyer_control confirms) lands exactly on cp[0]
+    dstore, meta = _record_structure_tape_dataset(
+        tmp_path, "SIM-BUYER", anchor=anchor, max_logical=2000.0, symbol=_MANY_INTERVAL_SYMBOL
+    )
+
+    import app.research.backtests as backtests_module
+
+    calls: list[int] = []
+    real_compute_levels = backtests_module.compute_levels
+
+    def _counting_compute_levels(*args, **kwargs):
+        calls.append(1)
+        return real_compute_levels(*args, **kwargs)
+
+    monkeypatch.setattr(backtests_module, "compute_levels", _counting_compute_levels)
+
+    payload = _run(jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=bar_store)
+    assert payload["status"] == STATUS_DONE
+    assert payload["result"]["trades"] == [], (
+        "the fixture's own premise: a strictly monotonic series never forms a qualifying zone, so "
+        "this run stays flat throughout — every confirming tick reaches the arming check"
+    )
+    assert len(calls) == len(change_points) == 7, (
+        "one real compute_levels call per distinct change-point interval actually visited — never "
+        "once per confirming tick (many hundreds of eligible ticks visit each interval here)"
+    )
+    events, _provider = _sim_events("SIM-BUYER", 2000.0)
+    confirming_tick_count = len({e.timestamp for e in events if e.timestamp >= 19.5})
+    assert len(calls) < confirming_tick_count, (
+        f"{len(calls)} real compute_levels calls must be far fewer than the "
+        f"{confirming_tick_count} confirming ticks this run actually visited"
+    )
+
+
+# --- TC-10: a counting spy proves compute_tradability runs once per UTC day, not per tick -----------
+
+
+def test_structure_tape_map_memo_calls_compute_tradability_once_per_day_key_not_per_tick(
+    tmp_path, store, jobs, monkeypatch
+):
+    """TC-10. ``basis_day_key`` is a pure function of ``as_of_epoch`` alone (it never touches the
+    store), so even an EMPTY bar store still exercises the memo meaningfully — every confirming
+    tick reaches ``tradability_at``, which always resolves the honest ``no_bar_series_for_symbol``
+    state, memoized once per distinct UTC day actually visited."""
+    empty_bar_store = BarStore(tmp_path / "empty-bars-for-day-key-spy")
+    midnight = _CONFLUENCE_BASE + 2 * _DAY  # a clean UTC midnight
+    anchor = midnight - 50.0
+    dstore, meta = _record_structure_tape_dataset(tmp_path, "SIM-SELLER", anchor=anchor, max_logical=70.0)
+
+    import app.research.backtests as backtests_module
+
+    calls: list[int] = []
+    real_compute_tradability = backtests_module.compute_tradability
+
+    def _counting_compute_tradability(*args, **kwargs):
+        calls.append(1)
+        return real_compute_tradability(*args, **kwargs)
+
+    monkeypatch.setattr(backtests_module, "compute_tradability", _counting_compute_tradability)
+
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_MAP_ID, bar_store=empty_bar_store
+    )
+    assert payload["status"] == STATUS_DONE
+    assert payload["result"]["trades"] == [], "an empty bar store's own honest never-arms state"
+    assert len(calls) == 2, "one real compute_tradability call per distinct UTC day actually visited"
+    events, _provider = _sim_events("SIM-SELLER", 70.0)
+    confirming_tick_count = len({e.timestamp for e in events if e.timestamp >= 19.5})
+    assert len(calls) < confirming_tick_count, (
+        f"{len(calls)} real compute_tradability calls must be far fewer than the "
+        f"{confirming_tick_count} confirming ticks this run actually visited"
+    )
+
+
+# --- TC-11: a multi-interval structure_tape backtest completes within an interactive test budget ----
+
+_MULTI_INTERVAL_SYMBOL = "SYN-MEMO-BUST-TRADE"
+_MULTI_INTERVAL_BASE = _CONFLUENCE_BASE + 2000 * _DAY
+_MULTI_INTERVAL_STEP = 200.0
+
+
+def _multi_interval_trade_bar_fixture(store: BarStore) -> None:
+    """The ``class_b_bar_fixture`` pivot-at-100.00 pattern, PLUS three extra monotonically
+    increasing filler ``1h`` bars (the ``_many_interval_bar_fixture`` proof: never new pivots) so
+    the series alone carries >= 5 distinct ``level_change_points`` — while still arming exactly
+    once the pivot confirms (a real, non-empty ``trades`` list)."""
+    specs = [(50, 40, 45), (100.00, 41, 98), (55, 42, 50), (60, 43, 55), (65, 44, 58), (70, 45, 60)]
+    hourly_bars = [
+        RawBar(
+            _MULTI_INTERVAL_SYMBOL, "1h", _MULTI_INTERVAL_BASE + i * _MULTI_INTERVAL_STEP,
+            close, high, low, close, 1_000,
+        )
+        for i, (high, low, close) in enumerate(specs)
+    ]
+    # A "1d" bar whose close (100.02) joins the 1h pivot's confluence band, its OWN period ALREADY
+    # closed long before this series even starts — decoupling zone availability from this
+    # fixture's own change-point count (unlike TC-7, which deliberately gates on it).
+    daily_bars = [
+        RawBar(_MULTI_INTERVAL_SYMBOL, "1d", _MULTI_INTERVAL_BASE - 1_000_000.0, 100.02, 900.0, 10.0, 100.02, 1_000),
+    ]
+    store.record(
+        symbol=_MULTI_INTERVAL_SYMBOL, timeframe="1h",
+        window_start_utc="2026-01-01T00:00:00Z", window_end_utc="2026-01-01T01:00:00Z",
+        feed="sip", bars=hourly_bars,
+    )
+    store.record(
+        symbol=_MULTI_INTERVAL_SYMBOL, timeframe="1d",
+        window_start_utc="2025-01-01T00:00:00Z", window_end_utc="2025-01-02T00:00:00Z",
+        feed="sip", bars=daily_bars,
+    )
+
+
+def test_structure_tape_multi_interval_backtest_completes_fast_with_a_real_trade(tmp_path, store, jobs):
+    """TC-11."""
+    import bisect
+    import time
+
+    bar_store = BarStore(tmp_path / "multi-interval-trade-bars")
+    _multi_interval_trade_bar_fixture(bar_store)
+    change_points = level_change_points(bar_store, _MULTI_INTERVAL_SYMBOL)
+    assert len(change_points) >= 5, "the fixture's own premise"
+
+    anchor = _MULTI_INTERVAL_BASE - 300.0
+    max_logical = 2000.0
+    events, _provider = _sim_events("SIM-BUYER", max_logical)
+    first_bucket = bisect.bisect_right(change_points, anchor + min(e.timestamp for e in events))
+    last_bucket = bisect.bisect_right(change_points, anchor + max(e.timestamp for e in events))
+    assert last_bucket - first_bucket >= 5, (
+        "the fixture's own premise: the recorded tick stream must cross >= 5 distinct intervals"
+    )
+
+    dstore, meta = _record_structure_tape_dataset(
+        tmp_path, "SIM-BUYER", anchor=anchor, max_logical=max_logical, symbol=_MULTI_INTERVAL_SYMBOL
+    )
+    start = time.time()
+    payload = _run(
+        jobs, store, dstore, meta["id"], strategy_id=STRATEGY_TAPE_ID, bar_store=bar_store
+    )
+    elapsed = time.time() - start
+
+    assert payload["status"] == STATUS_DONE
+    assert elapsed < 10.0, f"multi-interval structure_tape backtest took {elapsed:.2f}s"
+    assert len(payload["result"]["trades"]) >= 1, "the proof must exercise at least one real trade"

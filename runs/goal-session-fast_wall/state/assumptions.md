@@ -70,3 +70,9 @@ loaded CI box. The real proof of the throughput fix is the counting-spy call-cou
 **Reversible:** yes — a later iteration can tighten or loosen this specific number without
 touching the underlying contract (byte-identity + call-count collapse), which is the
 acceptance's real substance.
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** This is the first iteration to MODIFY the canonical owners behind a `passing` browser journey's UI (`levels.py`/`tradability.py` back J-07's `/structure` Tradable Map + Case Studies) while running `Frontend Present: no` — so J-07's continued pass has no fresh screenshot and the replay lane did not run.
+**We chose:** Score J-07 (and J-01/J-02) `passing` on a mechanical byte-identity non-regression argument — the served bytes of the modified owners are proven unchanged (TC-15 pinned-value tests + my own targeted `test_levels.py`/`test_tradability.py` run + frozen `config_fingerprint` 4d665603569b9dbf), and a UI end-state can move only if the served bytes move — rather than downgrading J-07 to `unknown` for lack of a browser pass. This extends iter-2's mechanical-carry precedent to the harder case where the journey's OWN backing computation changed (not just an unrelated file).
+**Reversible:** yes — the next frontend-touching iteration (J-04) re-runs J-01's and J-07's browser/golden-replay leg; if either fails there it flips to `regressed` and this reading is revisited.

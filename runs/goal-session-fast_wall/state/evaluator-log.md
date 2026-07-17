@@ -97,3 +97,18 @@ veto-class defect), is guarded by the enumerated source-introspection tests
 (`test_backtests.py:1500-1508` / `:932-943`), and needs byte-identity determinism tests incl. both
 memo-bust legs — audit + coherence lanes are the backstop. Keyless/automated; no browser leg
 expected.
+
+## Iteration 3 — goal-fast_wall-iter-3
+
+**Date:** 2026-07-17T11:15:22Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-03 (the per-run `_StructureArmMemo` — memoized `structure_tape`/`structure_tape_map` arming, byte-identical to the per-tick direct-call path)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none (scan CLEAN; coherence COHERENCE-PASS; the critical "Frozen foundations", "No divergent accelerator output", and "No source-guard weakening" anti-goals mechanically upheld and personally re-verified)
+
+**Reasoning:** J-03 verified passing on strong, triangulated, personally-opened evidence. Review PASS, QA PASS (15/15 TCs), and a hard skeptical audit PASS that ran a mutation probe proving the byte-identity tests genuinely bite (a stale-serving memo yields 0 trades where the correct memo yields 1 — TC-7/TC-8 non-vacuous). I independently confirmed the crux: the targeted suite (`test_levels` + `test_tradability` + `test_backtests`) is 114/114 green; both source-introspection guard tests (TC-13) and both counting-spy tests (TC-9/TC-10, the real speedup proof) pass when run explicitly; `config.config_fingerprint()` is still `4d665603569b9dbf`. I confirmed scope by git: exactly 6 files changed vs snapshot b059adef (`levels.py`/`tradability.py`/`backtests.py` + their 3 test files; 643 insertions / 11 deletions), every out-of-scope file (`edge_report.py`, `edge_report_cache.py`, `bars.py`, `datasets.py`, `dataset_index.py`, `routes.py`, `config.py`, all frontend) zero-diff; `compute_levels`/`compute_tradability`/`_resolve_basis` bodies byte-unchanged (pure appends, zero removed lines in `levels.py`/`tradability.py`); the only removed test line is the `tradability` import-widening (additions-only test bodies — TC-12/TC-15); the two `compute_levels(`/`compute_tradability(` owner calls preserved in the `memo=None` `else` branches. J-01/J-02/J-07 carry forward passing on the mechanical non-regression basis (`Frontend Present: no` → browser-qa/golden-replay SKIPPED): J-07's backing `levels.py`/`tradability.py` WAS modified this iteration, but its served bytes are proven byte-identical (TC-15 pinned-value tests + my own targeted run + frozen fingerprint), and J-01/J-02's owned files have zero diff. Not GOAL_ACHIEVED (J-04–J-06 failing by design); not REGRESSION (no prior pass lost, no anti-goal violation); not STALLED (J-04 tractable, keyless-on-fixtures); not ESCALATE (full mode already, review PASS, no fail-open, no cross-cutting ambiguity).
+
+**Next-step recommendation:** Build J-04 ("The operator-run compute — button, background job, CLI warmer") next per goal.md's dependency order (J-01 → J-02 → J-03 → J-04 → J-05), now unblocked by J-03's memo. Depth **full**: J-04 is `Frontend Present: yes` (a browser-verifiable "Compute edge report" button on `/structure` with progress polling), adds a new module (`edge_report_compute.py`) + three new REST routes + a CLI warmer, and carries the critical "No compute on page load — operator-run only" and "No MCP write surface" anti-goals (the compute trigger must be POST-only, GET stays 405, no new MCP tool) plus the frozen warm-cache render — the audit + ux-regression + closure + browser-qa lanes are the warranted backstop.

@@ -35,6 +35,7 @@ from app.research.levels import (
     SWING_PIVOT,
     compute_confluence_zones,
     compute_levels,
+    level_change_points,
 )
 
 FIXTURE_BAR_DIR = Path(__file__).parent / "fixtures" / "bars"
@@ -659,3 +660,76 @@ def test_sr_config_fields_are_excluded_from_config_fingerprint():
     )
     # ...while a real classifier threshold still moves it (the counter-test).
     assert Config(min_trade_speed=0.51).config_fingerprint() != CONFIG.config_fingerprint()
+
+
+# --- level_change_points: the arm memo's change-point contract (goal-fast_wall J-03) ---------------
+# Reuses the synthetic three-timeframe ``_confluence_fixture`` directly above (already has a
+# non-prior-period series ("1h") AND two prior-period series ("1d", "1w") -- exactly TC-1's own
+# premise) rather than a second, near-duplicate fixture.
+
+
+def test_level_change_points_returns_sorted_deduped_superset_of_bar_epochs_and_period_closes(tmp_path):
+    """TC-1: the union of every healthy series' own bar epochs, plus each PRIOR_PERIOD_TIMEFRAMES
+    bar's own epoch + period_seconds close instant -- sorted, deduplicated -- verified by direct
+    computation against the confluence fixture's own known epochs (never hand-waved)."""
+    store = BarStore(tmp_path / "bars")
+    _confluence_fixture(store)
+    points = level_change_points(store, _CONFLUENCE_SYMBOL)
+
+    assert points == tuple(sorted(points)), "must be sorted ascending"
+    assert len(points) == len(set(points)), "must be deduplicated"
+
+    # Every 1h bar's own epoch (11 hourly bars; "1h" is NOT a prior-period timeframe -- only its
+    # own epochs are change points, never an epoch+period_seconds entry).
+    hourly_epochs = {_BASE + i * 3600.0 for i in range(11)}
+    assert hourly_epochs <= set(points)
+
+    # The 1d series (a PRIOR_PERIOD_TIMEFRAMES member, two bars at day 0 and day 1): both bars'
+    # own epochs (also shared with the 1h/1w series' own day-0 epoch) AND bar 1's own
+    # epoch + period_seconds (86400s) close instant.
+    assert {_BASE, _BASE + _DAY} <= set(points)
+    assert _BASE + 2 * _DAY in points
+
+    # The 1w series (also a PRIOR_PERIOD_TIMEFRAMES member, one bar at day 0): its own epoch
+    # (already covered above) AND its own epoch + period_seconds (604800s) close instant.
+    assert _BASE + 7 * _DAY in points
+
+    # Exact count: 11 distinct hourly epochs (i=0..10, spanning BASE..BASE+36000) plus the 1d/1w
+    # period-close instants NOT already covered by an hourly epoch (BASE+DAY=86400 and
+    # BASE+2*DAY=172800 from the 1d series, BASE+7*DAY=604800 from the 1w series -- none of which
+    # coincide with any hourly epoch, all <= 36000) -- verified by direct computation.
+    assert len(points) == 14
+
+
+def test_compute_levels_is_constant_between_two_consecutive_change_points(tmp_path):
+    """TC-2: the change-point contract, mechanically proven -- two ``as_of`` instants strictly
+    between the SAME two consecutive ``level_change_points`` entries produce byte-identical
+    ``compute_levels`` output (the property ``backtests.py``'s ``_StructureArmMemo`` relies on to
+    memoize arming checks by change-point interval instead of per confirming tick)."""
+    store = BarStore(tmp_path / "bars")
+    _confluence_fixture(store)
+    points = level_change_points(store, _CONFLUENCE_SYMBOL)
+
+    # BASE+2*DAY and BASE+7*DAY are two CONSECUTIVE entries -- nothing else falls between them on
+    # this fixture (verified by direct computation against the fixture's own known epochs, per the
+    # exact-count proof above).
+    lower, upper = _BASE + 2 * _DAY, _BASE + 7 * _DAY
+    idx = points.index(lower)
+    assert points[idx + 1] == upper, "the fixture's own premise: these must be consecutive entries"
+
+    as_of_1 = lower + 1.0  # strictly between
+    as_of_2 = upper - 1.0  # strictly between, far from as_of_1
+    assert lower < as_of_1 < as_of_2 < upper
+
+    result_1 = compute_levels(store, _CONFLUENCE_SYMBOL, as_of_1, CONFIG)
+    result_2 = compute_levels(store, _CONFLUENCE_SYMBOL, as_of_2, CONFIG)
+    assert json.dumps(result_1, sort_keys=True) == json.dumps(result_2, sort_keys=True)
+    assert len(result_1["levels"]) >= 1, "the proof must exercise at least one real level"
+
+
+def test_level_change_points_empty_for_symbol_with_no_healthy_bar_series(tmp_path):
+    """The honest empty-tuple absence -- mirrors ``no_bar_series_for_symbol``'s own precedent
+    (never a fabricated instant for a symbol with nothing recorded)."""
+    store = BarStore(tmp_path / "bars")
+    _swing_fixture(store)  # records ONLY `_SWING_SYMBOL` -- never the queried symbol below
+    assert level_change_points(store, "NEVER-RECORDED") == ()
