@@ -24,6 +24,7 @@ unaffected and still covered directly in ``tests/test_bars.py``).
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -312,10 +313,67 @@ def test_malformed_iso_window_is_422(ctx):
     assert r.status_code == 422
 
 
-def test_end_not_after_start_is_422(ctx):
+def test_end_before_start_is_422(ctx):
     client, _bar_dir = ctx
     r = client.post("/research/bars", json=_body(start=END, end=START))
     assert r.status_code == 422
+
+
+# --- era-5C: the UTC ``end`` is INCLUSIVE by calendar date -----------------------------------------
+# The adapter/yfinance ``end`` stays half-open ``[start, end)``; the ROUTE compensates once by
+# extending the vendor window through the end of ``end``'s UTC day. The store/index still key on the
+# VERBATIM request strings, so the store-first key is unchanged. FakeAdapter records every
+# ``fetch_bars`` call as ``(symbol, start, end, timeframe)`` — we assert the datetimes it received.
+
+
+def test_start_equal_to_end_is_a_valid_single_day_window(ctx):
+    """``start == end`` is no longer a 422 (era-5C inclusive end): it is a one-full-UTC-day window.
+    The stored window echoes the request verbatim; the adapter receives a vendor window that runs
+    from that day's start through the NEXT day (``[Jun 1, Jun 2)``)."""
+    client, _bar_dir = ctx
+    adapter = _inject_adapter(bars=_bars())
+    r = client.post("/research/bars", json=_body(start=START, end=START))
+    assert r.status_code == 200
+    meta = r.json()["bar_series"]
+    assert meta["window_start_utc"] == START
+    assert meta["window_end_utc"] == START  # echoed verbatim, never the extended vendor bound
+    _sym, sent_start, sent_end, _tf = adapter.fetch_bars_calls[0]
+    assert sent_start == datetime(2026, 6, 1, tzinfo=timezone.utc)
+    assert sent_end == datetime(2026, 6, 2, tzinfo=timezone.utc)  # +1 day, inclusive of Jun 1
+
+
+def test_vendor_window_extends_one_day_past_the_inclusive_end(ctx):
+    """The vendor window handed to the adapter ends one UTC day past the requested ``end`` so every
+    bar ON ``end``'s date is included; the stored window is still the verbatim request; and the
+    store-first key is unaffected by the extension (an identical repeat is served without a 2nd
+    fetch)."""
+    client, _bar_dir = ctx
+    adapter = _inject_adapter(bars=_bars())
+    r = client.post("/research/bars", json=_body())  # END = 2026-06-04T00:00:00Z
+    assert r.status_code == 200
+    meta = r.json()["bar_series"]
+    assert meta["window_end_utc"] == END  # verbatim, not the extended vendor bound
+    _sym, sent_start, sent_end, _tf = adapter.fetch_bars_calls[0]
+    assert sent_start == datetime(2026, 6, 1, tzinfo=timezone.utc)
+    assert sent_end == datetime(2026, 6, 5, tzinfo=timezone.utc)  # Jun 4 inclusive -> vendor end Jun 5
+
+    # The +1-day vendor extension does NOT change the store-first key (verbatim request strings):
+    # an identical repeat POST is still served store-first, with no second fetch.
+    again = client.post("/research/bars", json=_body())
+    assert again.status_code == 200
+    assert len(adapter.fetch_bars_calls) == 1
+
+
+def test_end_with_a_time_component_includes_that_whole_utc_day(ctx):
+    """A time-of-day on ``end`` does not truncate the day: the vendor window floors ``end`` to its
+    UTC date and adds one day, so an ``end`` of ``2026-06-04T14:30:00Z`` still fetches through the
+    end of Jun 4 (vendor end Jun 5), never stopping at 14:30."""
+    client, _bar_dir = ctx
+    adapter = _inject_adapter(bars=_bars())
+    r = client.post("/research/bars", json=_body(end="2026-06-04T14:30:00Z"))
+    assert r.status_code == 200
+    _sym, _sent_start, sent_end, _tf = adapter.fetch_bars_calls[0]
+    assert sent_end == datetime(2026, 6, 5, tzinfo=timezone.utc)
 
 
 def test_empty_fetch_result_is_422_and_writes_nothing(ctx):
@@ -453,6 +511,29 @@ def test_yahoo_is_the_default_bar_fetch_vendor_with_no_override(ctx, monkeypatch
     detail = client.get(f"/research/bars/{meta['id']}")
     assert detail.status_code == 200
     assert detail.json()["bar_series"] == meta
+
+
+def test_yahoo_default_path_receives_the_inclusive_plus_one_day_end(ctx, monkeypatch):
+    """End-to-end proof the era-5C inclusive-end extension flows route -> YahooAdapter -> yfinance:
+    the mocked ``yfinance.Ticker.history`` is called with ``end`` one UTC day past the fixture's
+    requested ``end`` (Jun 4 -> Jun 5) while ``start`` is untouched — the adapter keeps its pure
+    half-open contract; the route did the single compensation."""
+    client, _bar_dir = ctx
+    fixture = _load_yahoo_fixture()  # start=2026-06-01T00:00:00Z, end=2026-06-04T00:00:00Z
+    calls = _install_fake_yahoo_ticker(monkeypatch, _yahoo_fixture_dataframe(fixture))
+
+    r = client.post(
+        "/research/bars",
+        json={
+            "symbol": fixture["symbol"],
+            "timeframe": fixture["timeframe"],
+            "start": fixture["start"],
+            "end": fixture["end"],
+        },
+    )
+    assert r.status_code == 200
+    assert calls[0]["start"] == datetime(2026, 6, 1, tzinfo=timezone.utc)
+    assert calls[0]["end"] == datetime(2026, 6, 5, tzinfo=timezone.utc)
 
 
 def test_bar_fetch_adapter_resolver_defaults_to_yahoo_with_no_override(ctx):

@@ -938,7 +938,9 @@ export async function fetchBarSeriesList(): Promise<{
 }
 
 // POST /research/bars (era-5 J-05) — the ONE new explicit write action in the app: the
-// `/structure` "Fetch from Yahoo Finance" control. The store-first coordinator either serves an
+// `/structure` "Fetch from Yahoo Finance" control. The `end` of the window is INCLUSIVE by UTC
+// calendar date server-side (era-5C: the route extends the vendor fetch through the end of that
+// day). The store-first coordinator either serves an
 // already-stored window from storage (zero adapter/network calls) or fetches it fresh — both
 // resolve `200` (a repeat window is NEVER a `409` — the iter-3 lesson; a `409` here means a
 // DIFFERENT window whose fetched content happens to duplicate content already on file). The

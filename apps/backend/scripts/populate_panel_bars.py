@@ -53,7 +53,11 @@ def _iso(dt: datetime) -> str:
 def _windows(now: datetime) -> dict[str, tuple[datetime, datetime]]:
     """One fetch window per timeframe, each comfortably inside that timeframe's real Yahoo
     retention (the ``test_yahoo_live_integration.py`` precedent) and long enough to cover the
-    era-5B J-02 pinned AAPL 2026-06-22 case plus its forward-return horizons."""
+    era-5B J-02 pinned AAPL 2026-06-22 case plus its forward-return horizons. NOTE (era-5C): the
+    ``POST /research/bars`` route now treats ``end`` as INCLUSIVE by UTC calendar date, extending
+    each vendor fetch through the end of ``end``'s day. These windows end at ``now`` (a fresh
+    full timestamp every run), so each run is a distinct store-first key and behavior is materially
+    unchanged — the change only extends each window through the end of today's UTC day."""
     return {
         "1d": (now - timedelta(days=560), now),
         "1h": (now - timedelta(days=45), now),

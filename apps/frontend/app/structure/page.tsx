@@ -228,15 +228,52 @@ function pickRepresentativeSeries(seriesForSymbol: BarSeriesRecord[]): BarSeries
   return ranked[0];
 }
 
-// The era-5 J-05 fetch-control's OWN timeframe set — the SIX Yahoo-supported neutral timeframes
-// (goal.md's enumeration), in display order. Deliberately a SUBSET of the backend's full
-// `CONFIG.bar_timeframes` (nine entries, mirrored in `TIMEFRAME_ORDER` above): `15m`/`8h`/`1mo` are
-// valid `bar_timeframes` entries the Yahoo adapter itself does not map (`UnsupportedTimeframe`) —
-// offering them here would let a click reach a statically-known vendor-unsupported 422 the control
-// can instead simply never offer. This is a DISPLAY CHOICE (which already-known-good options to
-// list), not a second validation authority — the backend's own `bar_timeframes` + Yahoo-adapter
-// checks remain the sole enforcement (an out-of-set value still 422s server-side either way).
+// The era-5 J-05 fetch-control's timeframe set — the SIX Yahoo-supported neutral timeframes
+// (goal.md's enumeration), in the order ONE "Fetch from Yahoo Finance" click fetches them (era-5C:
+// the control no longer asks the user to pick — a single click records all six). Deliberately a
+// SUBSET of the backend's full `CONFIG.bar_timeframes` (nine entries, mirrored in `TIMEFRAME_ORDER`
+// above): `15m`/`8h`/`1mo` are valid `bar_timeframes` entries the Yahoo adapter itself does not map
+// (`UnsupportedTimeframe`) — fetching them would only reach a statically-known vendor-unsupported
+// 422, so the loop simply never attempts them. This is a DISPLAY CHOICE (which already-known-good
+// timeframes to fetch), not a second validation authority — the backend's own `bar_timeframes` +
+// Yahoo-adapter checks remain the sole enforcement (an out-of-set value still 422s server-side).
 const YAHOO_TIMEFRAMES = ["1w", "1d", "4h", "1h", "5m", "1m"];
+
+// era-5C: the per-timeframe outcome of ONE fetch click — each of the six timeframes reports its own
+// honest result (fetched/served, already-stored 409, or the backend's own refusal detail) instead
+// of one aggregate line, so a timeframe Yahoo cannot serve for this window (e.g. 1m beyond its
+// retention) never masks the others that did succeed.
+type FetchTimeframeOutcome = {
+  timeframe: string;
+  state: "pending" | "ok" | "stored" | "error";
+  message: string;
+};
+
+// Per-state color for a fetch-result row — literal class strings (never interpolated) so Tailwind's
+// JIT scanner emits them. Matches the page's existing slate/emerald/amber/rose palette.
+const FETCH_RESULT_COLOR: Record<FetchTimeframeOutcome["state"], string> = {
+  pending: "text-slate-500",
+  ok: "text-emerald-700",
+  stored: "text-amber-700",
+  error: "text-rose-700",
+};
+
+// era-5C: the as-of instant to seed the Load form with after an inclusive-end fetch. The backend's
+// levels `_bars_as_of` and this page's own chart filter are BOTH `<= as_of`, and a bar ON the end
+// date is stamped AFTER that date's UTC midnight (a 1d bar ~04:00Z, intraday later) — so seeding the
+// verbatim `window_end_utc` (midnight) would hide every newly-included end-date bar. Seeding the
+// LAST second of the end's UTC day admits every end-date bar (the last 1m bucket starts 23:59:00)
+// and never a next-day bar. Bare `YYYY-MM-DD` gets the suffix; a naive timestamp is treated as UTC
+// (matching the backend's own `parse_utc_epoch`); an unparseable value is returned unchanged (the
+// fetch itself would already have 422'd).
+function endOfDayUtc(rawEnd: string): string {
+  const trimmed = rawEnd.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return `${trimmed}T23:59:59Z`;
+  const hasTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed);
+  const ms = Date.parse(hasTz ? trimmed : `${trimmed}Z`);
+  if (Number.isNaN(ms)) return trimmed;
+  return `${new Date(ms).toISOString().slice(0, 10)}T23:59:59Z`;
+}
 
 // era-5B J-05 (THIS iteration): the Case Studies reaction filter's <select> options — mirrors
 // `research/setups.py`'s own config-owned, pre-registered `REJECTED`/`BROKE`/`CHOPPED` constants
@@ -245,6 +282,12 @@ const YAHOO_TIMEFRAMES = ["1w", "1d", "4h", "1h", "5m", "1m"];
 // — an out-of-set value would still 422 server-side (this page never sends one; the filter is
 // applied client-side over the already-served, unfiltered event list — see `handleSetupsFilter*`).
 const SETUP_REACTIONS = ["rejected", "broke", "chopped"];
+
+// The Case Studies section (era-5B J-02/J-03 touch-event registry + drill-in) is suppressed from
+// the Structure page — flip to `true` to bring it back. Typed as `boolean` (not the `false` literal)
+// so the render-time gate below is a normal conditional, not narrowed to dead code. All Case Studies
+// state/handlers are kept intact; only its rendered section is withheld.
+const SHOW_CASE_STUDIES: boolean = false;
 
 type LoadState<T> =
   | { phase: "idle" }
@@ -1263,14 +1306,14 @@ export default function StructurePage() {
 
   // J-05 fetch-control state — the page's ONE new explicit write action. Independent of
   // `symbolInput`/`asOfInput` above (the pre-existing read-only Load form) until a successful
-  // fetch seeds them (see `handleFetchYahoo` below). `fetchError` carries the backend's own
-  // 422/503/504/409 `detail` VERBATIM — folded into the shared `UnavailablePanel` treatment, never
-  // a single generic message.
+  // fetch seeds them (see `handleFetchYahoo` below). era-5C: one click fetches all six timeframes,
+  // so there is no timeframe input — `fetchResults` holds the per-timeframe outcome list (each
+  // row's backend `detail` VERBATIM), and `fetchError` now fires ONLY when all six fail.
   const [fetchSymbolInput, setFetchSymbolInput] = useState("");
-  const [fetchTimeframeInput, setFetchTimeframeInput] = useState("");
   const [fetchStartInput, setFetchStartInput] = useState("");
   const [fetchEndInput, setFetchEndInput] = useState("");
   const [fetchSubmitting, setFetchSubmitting] = useState(false);
+  const [fetchResults, setFetchResults] = useState<FetchTimeframeOutcome[] | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   // J-02 Registry section state — fetched once on mount, independent of the Levels & Zones Load
@@ -1473,30 +1516,74 @@ export default function StructurePage() {
     handleLoad(symbolInput, asOfInput);
   }
 
-  // J-05: the fetch control's submit — POST /research/bars (store-first: serves-or-fetches, both
-  // `200`), then load the fetched symbol/window-end through the EXISTING read path (`handleLoad`)
-  // so the Levels & Zones section below renders the real candles + levels + zones with ZERO new
-  // rendering code. `symbolInput`/`asOfInput` are updated too, so the pre-existing read-only Load
-  // form reflects what is now shown (a manual re-submit of THAT form repeats the same read, never a
-  // second write). A failure surfaces the backend's own distinct 422/503/504/409 detail verbatim —
-  // nothing is loaded, nothing fabricated.
+  // J-05 (era-5C): the fetch control's submit — ONE click fetches ALL six Yahoo timeframes. The
+  // backend endpoint stays single-timeframe, so this loops `YAHOO_TIMEFRAMES` sequentially issuing
+  // one POST /research/bars per timeframe (store-first makes an already-recorded window free;
+  // sequential is gentle on the vendor and lets each row's outcome land as it completes). Each
+  // timeframe reports its OWN honest outcome (fetched/served `200`, content-duplicate `409`, or the
+  // backend's distinct 422/503/504 detail VERBATIM) — a timeframe Yahoo cannot serve for this window
+  // (e.g. 1m beyond retention) never masks the ones that did. After the loop, IF anything landed
+  // (a fresh record OR an already-stored 409, both mean the data is on file), seed the read-only
+  // Load form and run the EXISTING read path (`handleLoad`) once so Levels & Zones + the Tradable
+  // Map render with ZERO new rendering code. Only if ALL six fail is `fetchError` set and load
+  // skipped — nothing loaded, nothing fabricated.
   async function handleFetchYahoo() {
     const symbol = fetchSymbolInput.trim();
-    const timeframe = fetchTimeframeInput;
     const start = fetchStartInput.trim();
     const end = fetchEndInput.trim();
-    if (!symbol || !timeframe || !start || !end) return; // the button is already disabled otherwise
+    if (!symbol || !start || !end) return; // the button is already disabled otherwise
     setFetchSubmitting(true);
     setFetchError(null);
-    const result = await recordBarSeries({ symbol, timeframe, start, end });
+    const results: FetchTimeframeOutcome[] = YAHOO_TIMEFRAMES.map((timeframe) => ({
+      timeframe,
+      state: "pending",
+      message: "queued…",
+    }));
+    setFetchResults([...results]);
+    let firstRecorded: BarSeriesRecord | null = null;
+    let anyStored = false;
+    for (let i = 0; i < YAHOO_TIMEFRAMES.length; i++) {
+      const timeframe = YAHOO_TIMEFRAMES[i];
+      results[i] = { timeframe, state: "pending", message: "fetching…" };
+      setFetchResults([...results]);
+      const result = await recordBarSeries({ symbol, timeframe, start, end });
+      if (result.ok && result.bar_series) {
+        if (!firstRecorded) firstRecorded = result.bar_series;
+        results[i] = {
+          timeframe,
+          state: "ok",
+          message: `${result.bar_series.bar_count} bars (fetched or served from storage)`,
+        };
+      } else if (result.status === 409) {
+        // Content-identical to a series already on file (a DIFFERENT window key) — the data exists;
+        // same benign "already stored" treatment as populate_panel_bars.py's SKIP.
+        anyStored = true;
+        results[i] = {
+          timeframe,
+          state: "stored",
+          message: result.error ?? "identical content already stored",
+        };
+      } else {
+        results[i] = {
+          timeframe,
+          state: "error",
+          message: result.error ?? "The bar series could not be fetched.",
+        };
+      }
+      setFetchResults([...results]);
+    }
     setFetchSubmitting(false);
-    if (!result.ok || !result.bar_series) {
-      setFetchError(result.error ?? "The bar series could not be fetched.");
+    if (!firstRecorded && !anyStored) {
+      setFetchError(
+        "All six timeframes failed — each one's own reason is listed above. Nothing was loaded, and nothing cached or fabricated is shown in its place.",
+      );
       return;
     }
-    setSymbolInput(result.bar_series.symbol);
-    setAsOfInput(result.bar_series.window_end_utc);
-    await handleLoad(result.bar_series.symbol, result.bar_series.window_end_utc);
+    const seedSymbol = firstRecorded ? firstRecorded.symbol : symbol.toUpperCase();
+    const seedAsOf = endOfDayUtc(firstRecorded ? firstRecorded.window_end_utc : end);
+    setSymbolInput(seedSymbol);
+    setAsOfInput(seedAsOf);
+    await handleLoad(seedSymbol, seedAsOf);
   }
 
   function handleFetchSubmit(e: React.FormEvent) {
@@ -1551,7 +1638,6 @@ export default function StructurePage() {
   const canSubmit = symbolInput.trim() !== "" && asOfInput.trim() !== "";
   const canFetch =
     fetchSymbolInput.trim() !== "" &&
-    fetchTimeframeInput !== "" &&
     fetchStartInput.trim() !== "" &&
     fetchEndInput.trim() !== "";
   const levels = levelsState.phase === "ready" ? levelsState.data : null;
@@ -1653,15 +1739,14 @@ export default function StructurePage() {
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
             Load a symbol and an as-of time to see its tradable level map — at most a handful of
-            quality-scored bands, not the full raw level set — browse every historical band-touch
-            case with its reaction and tape timeline, and read the 3-way strategy edge report.
+            quality-scored bands, not the full raw level set — and read the 3-way strategy edge
+            report.
           </p>
           <p data-testid="structure-framing" className="mt-2 max-w-3xl text-xs text-slate-600">
             Tradable Map is the default view, read verbatim from GET /research/tradability; toggle
             &quot;Show raw levels&quot; for the underlying S/R levels and confluence zones (off by
-            default). Case Studies lists every band-touch event with its reaction, forward returns,
-            and — once recorded — its tape timeline; Edge Report compares v1, structure_tape, and
-            structure_tape_map over recorded windows, register included. Fetching bars from Yahoo
+            default). Edge Report compares v1, structure_tape, and structure_tape_map over recorded
+            windows, register included. Fetching bars from Yahoo
             Finance below is this page's one explicit write action — everything else, including the
             strategy registry/champion and the structure_tape-vs-v1 comparison, is read-only. Every
             value on this page is read verbatim from its canonical endpoint — nothing here is
@@ -1870,6 +1955,7 @@ export default function StructurePage() {
         {/* era-5B J-02/J-03 (THIS iteration) — the case-study registry: every historical
             band-touch event, filterable by symbol/reaction, with a row drill-in showing the tape
             timeline once a dataset was recorded around that event. */}
+        {SHOW_CASE_STUDIES && (
         <section aria-label="Case studies" className="mt-6">
           <Panel title="Case Studies">
             <p className="mb-3 -mt-1 max-w-3xl text-xs text-slate-600">
@@ -1965,6 +2051,7 @@ export default function StructurePage() {
             {selectedSetupId !== null && <SetupDrillIn state={setupDetailState} />}
           </Panel>
         </section>
+        )}
 
         {/* era-5B J-04 (THIS iteration) — the 3-way strategy-comparison edge report. */}
         <section aria-label="Edge report" className="mt-6">
@@ -2001,10 +2088,13 @@ export default function StructurePage() {
         <section aria-label="Fetch from Yahoo Finance" className="mt-6">
           <Panel title="Fetch from Yahoo Finance">
             <p className="mb-3 -mt-1 max-w-3xl text-xs text-slate-600">
-              Fetch a real historical bar series from Yahoo Finance for a symbol, timeframe, and
-              UTC date range — keyless, on this explicit click. An already-fetched window is
-              served from storage with no repeat network call. On success, the Tradable Map and
-              Levels &amp; Zones sections above load the fetched symbol and window automatically.
+              Fetch real historical bars from Yahoo Finance for a symbol and UTC date range —
+              keyless, on this explicit click. One click fetches all six supported timeframes
+              (1w, 1d, 4h, 1h, 5m, 1m; 4h is derived from real 1h bars). The end date is included
+              in full. Each timeframe reports its own result below — an already-fetched window is
+              served from storage, and a timeframe Yahoo cannot serve for this window (e.g. 1m
+              beyond its retention) shows its exact reason instead. On success, the Tradable Map and
+              Levels &amp; Zones sections above load the fetched symbol automatically.
             </p>
             <form onSubmit={handleFetchSubmit} className="flex flex-wrap items-end gap-3">
               <label className="block">
@@ -2022,43 +2112,25 @@ export default function StructurePage() {
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Timeframe
-                </span>
-                <select
-                  data-testid="fetch-timeframe-select"
-                  value={fetchTimeframeInput}
-                  onChange={(e) => setFetchTimeframeInput(e.target.value)}
-                  className={INPUT_CLASS}
-                >
-                  <option value="">Choose…</option>
-                  {YAHOO_TIMEFRAMES.map((tf) => (
-                    <option key={tf} value={tf}>
-                      {tf}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Start (UTC, ISO-8601)
+                  Start date (UTC)
                 </span>
                 <input
                   data-testid="fetch-start-input"
                   value={fetchStartInput}
                   onChange={(e) => setFetchStartInput(e.target.value)}
-                  placeholder="2026-06-01T00:00:00Z"
+                  placeholder="2026-06-01"
                   className={INPUT_CLASS}
                 />
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
-                  End (UTC, ISO-8601)
+                  End date (UTC, inclusive)
                 </span>
                 <input
                   data-testid="fetch-end-input"
                   value={fetchEndInput}
                   onChange={(e) => setFetchEndInput(e.target.value)}
-                  placeholder="2026-06-04T00:00:00Z"
+                  placeholder="2026-06-04"
                   className={INPUT_CLASS}
                 />
               </label>
@@ -2071,6 +2143,20 @@ export default function StructurePage() {
                 {fetchSubmitting ? "Fetching…" : "Fetch from Yahoo Finance"}
               </button>
             </form>
+            {fetchResults && (
+              <ul data-testid="fetch-results" className="mt-3 flex flex-col gap-1">
+                {fetchResults.map((row) => (
+                  <li
+                    key={row.timeframe}
+                    data-testid={`fetch-result-${row.timeframe}`}
+                    className={`flex items-baseline gap-2 text-xs ${FETCH_RESULT_COLOR[row.state]}`}
+                  >
+                    <span className="w-8 shrink-0 font-mono font-medium">{row.timeframe}</span>
+                    <span>{row.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             {fetchError && (
               <div className="mt-3">
                 <UnavailablePanel testid="fetch-yahoo-error" message={fetchError} />

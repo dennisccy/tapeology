@@ -205,9 +205,13 @@ class BarRecordRequest(BaseModel):
     """Body for ``POST /research/bars`` (era-4 capability 1, J-01; era-5 J-01 makes Yahoo the
     default vendor) — the explicit record + register research action. All four fields are
     required: ``symbol``, ``timeframe`` (validated against the config-owned ``bar_timeframes`` set
-    in the ROUTE — out-of-set is a 422, never silently coerced), and the UTC ``[start, end)``
+    in the ROUTE — out-of-set is a 422, never silently coerced), and the UTC ``start``/``end``
     window fetched through the adapter seam (``fetch_bars`` — Yahoo by default, keyless; Alpaca
-    stays selectable). Unlike a dataset there is only one source per request, so there is no
+    stays selectable). ``end`` is INCLUSIVE by UTC calendar date: fetching with ``end`` on a given
+    day includes that whole day's bars (the ROUTE extends the vendor window through the end of
+    ``end``'s UTC day — the underlying yfinance ``end`` is exclusive, compensated once, in one
+    place). ``start == end`` is thus a valid single-day window; only ``end`` strictly before
+    ``start`` is a 422. Unlike a dataset there is only one source per request, so there is no
     ``source_kind`` here."""
 
     symbol: str
@@ -1650,12 +1654,23 @@ def record_bar_series(
     """Record + register ONE multi-timeframe OHLC bar series (era-4 J-01, era-5 J-01/J-02 — the
     explicit research action; recording is never ambient). Full validation (422, never silent
     coercion): an out-of-set ``timeframe`` (the config-owned ``bar_timeframes`` set), a missing
-    symbol, a malformed ISO ``start``/``end``, or ``end`` not after ``start``. The bar-fetch vendor
-    defaults to the KEYLESS Yahoo adapter (``get_bar_fetch_adapter`` — era-5 J-01); Alpaca stays
-    selectable via the existing ``get_market_adapter`` override, where missing credentials still
-    surface the EXISTING explicit unavailable (503) state — never fabricated bars. Content already
-    registered (a DIFFERENT window whose fetched content happens to match content already on
+    symbol, a malformed ISO ``start``/``end``, or ``end`` strictly before ``start``. The bar-fetch
+    vendor defaults to the KEYLESS Yahoo adapter (``get_bar_fetch_adapter`` — era-5 J-01); Alpaca
+    stays selectable via the existing ``get_market_adapter`` override, where missing credentials
+    still surface the EXISTING explicit unavailable (503) state — never fabricated bars. Content
+    already registered (a DIFFERENT window whose fetched content happens to match content already on
     file) is still the 409-style refusal from the frozen ``store.record``.
+
+    Era-5C: the UTC window's ``end`` is INCLUSIVE by calendar date. The vendor fetch below runs
+    through the END of ``end``'s UTC day (the adapter/yfinance ``end`` stays half-open; the route
+    compensates once — see ``vendor_end_dt`` below), so bars ON ``end``'s date are included and
+    ``start == end`` is a valid single-day window. The stored ``window_start_utc``/``window_end_utc``
+    remain the VERBATIM request strings (never the extended vendor bound), so the store-first index
+    key is unchanged. CAVEAT: a byte-identical ``(symbol, timeframe, start, end)`` window RECORDED
+    before this inclusive-end contract keeps serving its original (exclusive-era) content store-first
+    — no honest automatic invalidation exists (an inclusive fetch ending on a weekend legitimately
+    has no end-date bars, indistinguishable from stale content); re-record under any different window
+    string to fetch fresh.
 
     Era-5 J-02: the Yahoo path's honest-error taxonomy is now THREE observably distinct 4xx/5xx
     states (each nothing-written, nothing-fabricated) — a config-valid timeframe Yahoo does not
@@ -1690,8 +1705,10 @@ def record_bar_series(
         end_epoch = parse_utc_epoch(body.end)
     except ValueError:
         raise HTTPException(status_code=422, detail="start and end must be ISO date-times")
-    if end_epoch <= start_epoch:
-        raise HTTPException(status_code=422, detail="end must be after start")
+    if end_epoch < start_epoch:
+        # ``end`` is INCLUSIVE by UTC calendar date (see the route docstring), so ``start == end``
+        # is a valid single-day window — only a strictly-earlier ``end`` is a 422.
+        raise HTTPException(status_code=422, detail="end must be on or after start")
 
     # Normalized HERE (era-5 J-03 moves this earlier than the pre-J-03 code) so the store-first
     # lookup key below matches EXACTLY what a successful fetch later stores — an unnormalized
@@ -1720,12 +1737,21 @@ def record_bar_series(
             detail="real-data provider unavailable — a historical bar recording needs credentials",
         )
 
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
 
     start_dt = datetime.fromtimestamp(start_epoch, tz=timezone.utc)
     end_dt = datetime.fromtimestamp(end_epoch, tz=timezone.utc)
+    # Era-5C: ``end`` is INCLUSIVE by UTC calendar date. The adapter (and yfinance beneath it) keeps
+    # its pure half-open ``[start, end)`` vendor contract, so we compensate HERE — floor ``end`` to
+    # its UTC day and add one day, giving a vendor window that includes every bar ON ``end``'s date
+    # and none after it, regardless of any time component the caller passed. The store/index below
+    # still key on the VERBATIM ``body.start``/``body.end`` strings, so the store-first key is
+    # unchanged (a repeat of the same request still hits store-first).
+    vendor_end_dt = (
+        datetime(end_dt.year, end_dt.month, end_dt.day, tzinfo=timezone.utc) + timedelta(days=1)
+    )
     try:
-        raw_bars = adapter.fetch_bars(symbol, start_dt, end_dt, body.timeframe)
+        raw_bars = adapter.fetch_bars(symbol, start_dt, vendor_end_dt, body.timeframe)
     except VendorTimeout as exc:
         raise HTTPException(status_code=504, detail=exc.detail)
     except UnsupportedTimeframe as exc:
