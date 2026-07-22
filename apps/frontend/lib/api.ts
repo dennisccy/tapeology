@@ -3,6 +3,7 @@ import type {
   Analytics,
   AnalyticsResult,
   Backtest,
+  BarCandlesPage,
   BarSeriesListResult,
   BarSeriesRecord,
   CreateBacktestParams,
@@ -18,6 +19,7 @@ import type {
   JournalRow,
   LevelsResponse,
   MarketClock,
+  MergedCandlesPage,
   PnlLedger,
   ProfilesPayload,
   RecordBarSeriesResult,
@@ -921,17 +923,87 @@ export async function fetchLevels(
 // filtering discipline NavBar already applies to `nav: true` (filtering already-served rows is not
 // a recomputation of any value). `data: null` on any failure so the caller shows an explicit
 // unavailable state rather than a fabricated/empty chart.
-export async function fetchBarSeriesList(): Promise<{
+// Optional narrowing params (all ADDITIVE, all served by the same route): `symbol`/`timeframe`
+// filter server-side through the bar index, and `includeBars: false` asks for the metadata-only
+// projection (each record without its `bars` key). A no-arg call still hits the bare URL, so every
+// pre-existing caller — and the MCP `bars` proxy — is unaffected. The Structure page uses
+// `{symbol, includeBars: false}` so a Load transfers a few KB of series metadata instead of every
+// candle of every recorded series; the candles themselves arrive one viewport at a time through
+// `fetchBarCandles` below.
+export async function fetchBarSeriesList(params?: {
+  symbol?: string;
+  timeframe?: string;
+  includeBars?: boolean;
+}): Promise<{
   ok: boolean;
   data: BarSeriesListResult | null;
   error?: string;
 }> {
+  const query = new URLSearchParams();
+  if (params?.symbol) query.set("symbol", params.symbol);
+  if (params?.timeframe) query.set("timeframe", params.timeframe);
+  if (params?.includeBars === false) query.set("include_bars", "false");
+  const suffix = query.toString() ? `?${query}` : "";
   try {
-    const res = await fetch(`${API_BASE}/research/bars`);
+    const res = await fetch(`${API_BASE}/research/bars${suffix}`);
     if (res.ok) {
       return { ok: true, data: (await res.json()) as BarSeriesListResult };
     }
     return { ok: false, data: null, error: "The bar series list could not be loaded." };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/bars/{id}/candles — ONE bounded window of a series' stored candles. Pass at most
+// one cursor: `beforeTs` (inclusive) for the last `limit` rows at or before that epoch-seconds
+// instant, `afterTs` (inclusive) for the first `limit` rows at or after it, neither for the newest
+// `limit` rows. Both cursors are inclusive, so a cursor taken from an already-loaded row re-serves
+// that row — the caller de-duplicates by `ts` when merging (never an off-by-one hole mid-chart).
+// `data: null` on any failure so the caller shows an explicit state rather than a silently short
+// candle window.
+// GET /research/candles — the MERGED window: the same bounded slice as `fetchBarCandles`, but over
+// every recorded series for one symbol+timeframe (identical cursor semantics). This is what the
+// /structure charts page through: a chart bound to a single recording can only ever show that
+// recording's window, so zooming out runs out of bars while longer recordings of the same
+// symbol+timeframe sit in the store. The merge (dedupe by timestamp, newest recording wins a
+// revision) happens server-side in `research/bars.py` — the browser folds nothing.
+export async function fetchMergedCandles(
+  symbol: string,
+  timeframe: string,
+  params: { beforeTs?: number; afterTs?: number; limit: number },
+): Promise<{ ok: boolean; data: MergedCandlesPage | null; error?: string }> {
+  const query = new URLSearchParams({
+    symbol,
+    timeframe,
+    limit: String(params.limit),
+  });
+  if (params.beforeTs !== undefined) query.set("before_ts", String(params.beforeTs));
+  if (params.afterTs !== undefined) query.set("after_ts", String(params.afterTs));
+  try {
+    const res = await fetch(`${API_BASE}/research/candles?${query}`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as MergedCandlesPage };
+    }
+    return { ok: false, data: null, error: "The candle window could not be loaded." };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+export async function fetchBarCandles(
+  seriesId: string,
+  params: { beforeTs?: number; afterTs?: number; limit: number },
+): Promise<{ ok: boolean; data: BarCandlesPage | null; error?: string }> {
+  const query = new URLSearchParams({ limit: String(params.limit) });
+  if (params.beforeTs !== undefined) query.set("before_ts", String(params.beforeTs));
+  if (params.afterTs !== undefined) query.set("after_ts", String(params.afterTs));
+  try {
+    const res = await fetch(`${API_BASE}/research/bars/${seriesId}/candles?${query}`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as BarCandlesPage };
+    }
+    return { ok: false, data: null, error: "The candle window could not be loaded." };
   } catch {
     return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
   }
@@ -949,11 +1021,17 @@ export async function fetchBarSeriesList(): Promise<{
 // 409 (content-duplicate refusal) detail is surfaced VERBATIM — never coerced into one generic
 // message. The frontend computes nothing: on success the caller re-reads the canonical
 // bars/levels endpoints (the existing read path) rather than rendering this response directly.
+// `vendor` (optional) picks the source for THIS call: the default keyless Yahoo, or `"alpaca"` for
+// the credentialed deep-history path. Yahoo caps intraday history (1m to the last 30 days, 5m to
+// 60, 1h to 730 — its own measured limits), so a request reaching further back is recorded in two
+// pieces, one per vendor, each an honest recording of what that vendor served. The merged candle
+// read stitches them by timestamp.
 export async function recordBarSeries(params: {
   symbol: string;
   timeframe: string;
   start: string;
   end: string;
+  vendor?: "yahoo" | "alpaca";
 }): Promise<RecordBarSeriesResult> {
   try {
     const res = await fetch(`${API_BASE}/research/bars`, {

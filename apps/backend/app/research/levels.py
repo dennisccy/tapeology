@@ -64,6 +64,8 @@ Zones are sorted by an explicit total order (``_zone_sort_key``) for byte-identi
 
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
+
 from ..config import Config
 from ..providers.adapters.base import RawBar
 from .bars import BarStore
@@ -100,13 +102,63 @@ def _touch_count(bars: list[RawBar], price: float, tol_bps: float, defining_inde
     """How many bars' high OR low comes within ``tol_bps`` basis points of ``price``. The level's
     ORIGINATING bar (``defining_index``) always counts, whichever OHLC field it came from -- a
     freshly-derived level is never dishonestly reported as untouched (e.g. a prior-period CLOSE
-    that falls strictly between that same bar's own high and low)."""
+    that falls strictly between that same bar's own high and low).
+
+    THE reference definition of a touch. ``_TouchIndex`` below answers the identical question in
+    log time by pre-filtering candidates and then applying THIS predicate to each one, so the two
+    always agree bar-for-bar (``test_levels.py`` pins that equivalence)."""
     tol = price * (tol_bps / 10_000.0)
     count = 0
     for i, b in enumerate(bars):
         if i == defining_index or abs(b.high - price) <= tol or abs(b.low - price) <= tol:
             count += 1
     return count
+
+
+class _TouchIndex:
+    """A sorted view of one bar list's highs and lows, so counting touches costs a binary search
+    instead of a full scan.
+
+    Why: ``_touch_count`` is called once per detected level, and each call walked every bar --
+    O(levels x bars). That was invisible while a recorded series held ~2,000 bars, and became a
+    3.5-minute page load the moment deeper history arrived (AMD 1m: 34k bars, 16.6k levels, ~560M
+    comparisons and a BILLION ``abs()`` calls, measured). This makes the same computation
+    logarithmic in the bar count.
+
+    Exactness over cleverness: the binary search only NARROWS the candidate set (deliberately
+    widened by a relative epsilon so a float rounding of ``price - tol`` can never exclude a true
+    match), and the ORIGINAL ``abs(value - price) <= tol`` predicate then decides each candidate.
+    So this is not an approximation of the touch rule with new boundary behaviour -- it is the same
+    rule, asked of fewer bars. Levels, strengths, zones, bands and every backtest that reads them
+    are unchanged."""
+
+    # Relative slack on the candidate window: large enough to absorb the ~1-ulp error of computing
+    # ``price - tol`` / ``price + tol`` in floating point, small enough that the candidate set stays
+    # tiny. Only ever ADMITS extra candidates for the exact predicate to reject -- it can never
+    # exclude a real match, which is the only direction that could change an answer.
+    _EPSILON_RATIO = 1e-9
+
+    def __init__(self, bars: list[RawBar]) -> None:
+        self._bars = bars
+        self._highs = sorted((b.high, i) for i, b in enumerate(bars))
+        self._lows = sorted((b.low, i) for i, b in enumerate(bars))
+        self._high_values = [value for value, _ in self._highs]
+        self._low_values = [value for value, _ in self._lows]
+
+    def count(self, price: float, tol_bps: float, defining_index: int) -> int:
+        tol = price * (tol_bps / 10_000.0)
+        slack = abs(price) * self._EPSILON_RATIO + abs(tol) * self._EPSILON_RATIO
+        low_bound = price - tol - slack
+        high_bound = price + tol + slack
+        touched = {defining_index}
+        for values, pairs in ((self._high_values, self._highs), (self._low_values, self._lows)):
+            left = bisect_left(values, low_bound)
+            right = bisect_right(values, high_bound)
+            for k in range(left, right):
+                value, index = pairs[k]
+                if abs(value - price) <= tol:  # the ORIGINAL predicate, verbatim
+                    touched.add(index)
+        return len(touched)
 
 
 def _level(price: float, timeframe: str, level_type: str, touch_count: int, weight: float) -> dict:
@@ -119,7 +171,14 @@ def _level(price: float, timeframe: str, level_type: str, touch_count: int, weig
     }
 
 
-def _swing_pivots(bars: list[RawBar], timeframe: str, lookback: int, tol_bps: float, weight: float) -> list[dict]:
+def _swing_pivots(
+    bars: list[RawBar],
+    timeframe: str,
+    lookback: int,
+    tol_bps: float,
+    weight: float,
+    touch_index: "_TouchIndex | None" = None,
+) -> list[dict]:
     """Every STRICT +/-``lookback``-neighbour extreme in ``bars`` (already as-of-filtered).
 
     A bar's high is a swing-high pivot iff it is STRICTLY greater than every one of its
@@ -131,20 +190,26 @@ def _swing_pivots(bars: list[RawBar], timeframe: str, lookback: int, tol_bps: fl
     (``ts <= as_of``)."""
     levels: list[dict] = []
     n = len(bars)
+    touches_in = touch_index or _TouchIndex(bars)
     for i in range(lookback, n - lookback):
         centre = bars[i]
         neighbours = bars[i - lookback : i] + bars[i + 1 : i + lookback + 1]
         if all(centre.high > w.high for w in neighbours):
-            touches = _touch_count(bars, centre.high, tol_bps, i)
+            touches = touches_in.count(centre.high, tol_bps, i)
             levels.append(_level(centre.high, timeframe, SWING_PIVOT, touches, weight))
         if all(centre.low < w.low for w in neighbours):
-            touches = _touch_count(bars, centre.low, tol_bps, i)
+            touches = touches_in.count(centre.low, tol_bps, i)
             levels.append(_level(centre.low, timeframe, SWING_PIVOT, touches, weight))
     return levels
 
 
 def _prior_period_extremes(
-    bars: list[RawBar], timeframe: str, tol_bps: float, weight: float, as_of_epoch: float
+    bars: list[RawBar],
+    timeframe: str,
+    tol_bps: float,
+    weight: float,
+    as_of_epoch: float,
+    touch_index: "_TouchIndex | None" = None,
 ) -> list[dict]:
     """High/low/close of every COMPLETED period in ``bars`` (already as-of-filtered).
 
@@ -153,11 +218,12 @@ def _prior_period_extremes(
     referenceable starting exactly at the FOLLOWING day's as-of, never earlier."""
     period_seconds = _PERIOD_SECONDS[timeframe]
     levels: list[dict] = []
+    touches_in = touch_index or _TouchIndex(bars)
     for i, b in enumerate(bars):
         if b.epoch + period_seconds > as_of_epoch:
             continue  # this period has not closed as of `as_of` -- never a lookahead peek
         for price in (b.high, b.low, b.close):
-            touches = _touch_count(bars, price, tol_bps, i)
+            touches = touches_in.count(price, tol_bps, i)
             levels.append(_level(price, timeframe, PRIOR_PERIOD_EXTREME, touches, weight))
     return levels
 
@@ -311,10 +377,24 @@ def compute_levels(store: BarStore, symbol: str, as_of_epoch: float, config: Con
     for timeframe, record in _select_one_series_per_timeframe(matching).items():
         weight = config.sr_timeframe_weights[timeframe]
         bars = _bars_as_of(store.load_bars(record["id"]), as_of_epoch)
-        levels.extend(_swing_pivots(bars, timeframe, config.sr_pivot_lookback, config.sr_touch_tolerance_bps, weight))
+        # ONE sorted view per series, shared by both detectors: they ask the same touch question of
+        # the same bars, so building it twice would double the only setup cost this adds.
+        touch_index = _TouchIndex(bars)
+        levels.extend(
+            _swing_pivots(
+                bars,
+                timeframe,
+                config.sr_pivot_lookback,
+                config.sr_touch_tolerance_bps,
+                weight,
+                touch_index,
+            )
+        )
         if timeframe in PRIOR_PERIOD_TIMEFRAMES:
             levels.extend(
-                _prior_period_extremes(bars, timeframe, config.sr_touch_tolerance_bps, weight, as_of_epoch)
+                _prior_period_extremes(
+                    bars, timeframe, config.sr_touch_tolerance_bps, weight, as_of_epoch, touch_index
+                )
             )
     levels.sort(key=_sort_key)
     return {

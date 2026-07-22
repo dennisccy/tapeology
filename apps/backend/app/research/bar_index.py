@@ -16,10 +16,15 @@ event-processing/WS hot path for high-frequency verdict writes. This index is a 
 metadata cache (one write per explicit bar-series record), so a direct synchronous connection is
 the right-sized implementation.
 
-The lookup key is the exact tuple ``(symbol, timeframe, window_start_utc, window_end_utc)`` —
+The lookup key is the exact tuple ``(symbol, timeframe, window_start_utc, window_end_utc, feed)`` —
 matched on the RAW ISO window strings exactly as ``BarStore.record`` stores them (verbatim
 ``body.start`` / ``body.end``, never parsed epochs), so two epoch-equal-but-textually-different
-window strings never collide.
+window strings never collide. ``feed`` joined the key when the recording path gained a second
+vendor: the SAME window recorded from Yahoo and from Alpaca is two legitimately different
+recordings (different session coverage, different tape), and a feed-less key would have let one
+silently answer a store-first lookup for the other. A DB file written under the old key is dropped
+and rebuilt on next construction (``_drop_legacy_table_if_present``) — this index is derived, so
+that costs at most a store-first miss.
 """
 
 from __future__ import annotations
@@ -42,12 +47,19 @@ CREATE TABLE IF NOT EXISTS bar_index (
     timeframe           TEXT NOT NULL,
     window_start_utc    TEXT NOT NULL,
     window_end_utc      TEXT NOT NULL,
+    feed                TEXT NOT NULL DEFAULT '',
     series_id           TEXT NOT NULL,
     checksum            TEXT NOT NULL,
     bar_count           INTEGER NOT NULL,
-    PRIMARY KEY (symbol, timeframe, window_start_utc, window_end_utc)
+    PRIMARY KEY (symbol, timeframe, window_start_utc, window_end_utc, feed)
 )
 """
+
+# A DB written before ``feed`` joined the key carries the old 4-column primary key. Rather than
+# migrate rows in place (a derived cache owes nobody its history), the pre-``feed`` table is simply
+# dropped and rebuilt on next use — every entry it held is reproducible from the canonical store via
+# ``reindex``, and a missing entry only costs one store-first miss (a re-fetch), never a wrong hit.
+_LEGACY_TABLE_CHECK = "SELECT 1 FROM pragma_table_info('bar_index') WHERE name='feed'"
 
 
 @dataclass(frozen=True)
@@ -74,12 +86,22 @@ class BarIndex:
         self._apply_pragmas()
         with self._conn:
             self._conn.execute(_SCHEMA)
+            self._drop_legacy_table_if_present()
 
     @property
     def db_path(self) -> str:
         """The resolved DB file path this index was constructed with (introspection/tests only —
         never used to bypass the lookup/insert/list/reindex API)."""
         return self._db_path
+
+    def _drop_legacy_table_if_present(self) -> None:
+        """Replace a pre-``feed`` table (see ``_LEGACY_TABLE_CHECK``) with the current schema. Runs
+        inside the constructor's transaction; a fresh DB created by ``_SCHEMA`` above already has
+        the column, so this is a no-op for every new index."""
+        if self._conn.execute(_LEGACY_TABLE_CHECK).fetchone() is not None:
+            return
+        self._conn.execute("DROP TABLE bar_index")
+        self._conn.execute(_SCHEMA)
 
     def _apply_pragmas(self) -> None:
         # ``:memory:`` does not support WAL (mirrors ``JournalStore``'s identical guard).
@@ -90,15 +112,22 @@ class BarIndex:
     # --- lookup / insert (the store-first coordinator's two calls) ------------------------------
 
     def lookup(
-        self, symbol: str, timeframe: str, window_start_utc: str, window_end_utc: str
+        self,
+        symbol: str,
+        timeframe: str,
+        window_start_utc: str,
+        window_end_utc: str,
+        feed: str,
     ) -> BarIndexHit | None:
         """The exact-key lookup the store-first coordinator consults BEFORE touching the adapter.
         Matches the RAW ISO window strings verbatim — no epoch parsing here, so the caller must
-        normalize ``symbol`` the SAME way it will be stored (the route does this)."""
+        normalize ``symbol`` the SAME way it will be stored (the route does this). ``feed`` is part
+        of the key: the same window recorded from two vendors is two recordings, and one must never
+        answer a lookup for the other."""
         row = self._conn.execute(
             "SELECT series_id, checksum, bar_count FROM bar_index "
-            "WHERE symbol=? AND timeframe=? AND window_start_utc=? AND window_end_utc=?",
-            (symbol, timeframe, window_start_utc, window_end_utc),
+            "WHERE symbol=? AND timeframe=? AND window_start_utc=? AND window_end_utc=? AND feed=?",
+            (symbol, timeframe, window_start_utc, window_end_utc, feed),
         ).fetchone()
         if row is None:
             return None
@@ -113,8 +142,8 @@ class BarIndex:
         with self._conn:
             self._conn.execute(
                 "INSERT OR REPLACE INTO bar_index "
-                "(symbol, timeframe, window_start_utc, window_end_utc, series_id, checksum, bar_count) "
-                "VALUES (?,?,?,?,?,?,?)",
+                "(symbol, timeframe, window_start_utc, window_end_utc, feed, series_id, checksum, bar_count) "
+                "VALUES (?,?,?,?,?,?,?,?)",
                 self._params_from_meta(meta),
             )
 
@@ -152,9 +181,9 @@ class BarIndex:
             self._conn.execute("DELETE FROM bar_index")
             for meta in records:
                 self._conn.execute(
-                    "INSERT INTO bar_index "
-                    "(symbol, timeframe, window_start_utc, window_end_utc, series_id, checksum, bar_count) "
-                    "VALUES (?,?,?,?,?,?,?)",
+                    "INSERT OR REPLACE INTO bar_index "
+                    "(symbol, timeframe, window_start_utc, window_end_utc, feed, series_id, checksum, bar_count) "
+                    "VALUES (?,?,?,?,?,?,?,?)",
                     self._params_from_meta(meta),
                 )
 
@@ -165,6 +194,7 @@ class BarIndex:
             meta["timeframe"],
             meta["window_start_utc"],
             meta["window_end_utc"],
+            meta.get("feed", ""),
             meta["id"],
             meta["checksum"],
             meta["bar_count"],

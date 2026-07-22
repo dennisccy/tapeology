@@ -617,7 +617,9 @@ def _run_dataset_pairs_in_worker(
         try:
             dataset_store = DatasetStore(dataset_dir)
             bar_store = BarStore(bar_dir)
-            jobs = BacktestJobManager(store, config)
+            # era-fast_wall follow-up: this worker's task is ONE dataset x all three strategies —
+            # the one-slot replay reuse replays it once (see BacktestRunner's contract).
+            jobs = BacktestJobManager(store, config, reuse_replay_path=True)
             sub_cache = EdgeReportBacktestCache(sub_cache_db_path)
             dataset_meta = dataset_store.get(dataset_id)
             for strategy_id in _ALL_STRATEGY_IDS:
@@ -918,8 +920,14 @@ def _compute_strategy_comparison_report(
     caching ``run_pair`` provider (``_build_caching_run_pair``) is built HERE — after ``reporter``
     resolves, so a cache hit can notify it — and threaded into BOTH the train and hold-out
     ``_split_cells`` calls below: the SAME provider/cache instance serves both splits (goal.md's
-    own wording), never a second cache/provider per split."""
-    jobs = BacktestJobManager(store, config)
+    own wording), never a second cache/provider per split.
+
+    ``reuse_replay_path=True`` (era-fast_wall follow-up): this report's OWN short-lived manager
+    replays each dataset ONCE and reuses the deterministic path across its three per-strategy
+    backtests (``_split_cells`` iterates dataset-outer/strategy-inner — see
+    ``BacktestRunner``'s one-slot contract; byte-identical persisted reports, two of three
+    full-engine replays removed)."""
+    jobs = BacktestJobManager(store, config, reuse_replay_path=True)
     train_datasets = _split_datasets(dataset_store, SPLIT_TRAIN)
     holdout_datasets = _split_datasets(dataset_store, SPLIT_HOLDOUT)
 

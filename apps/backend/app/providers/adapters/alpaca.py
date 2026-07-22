@@ -518,7 +518,14 @@ class AlpacaAdapter:
 
         feed = self._data_feed(self.historical_feed)  # SIP for historical (J-36), override-aware
         amount, unit_name = _TIMEFRAME_PARTS[timeframe]
-        vendor_timeframe = TimeFrame(amount, TimeFrameUnit(unit_name))
+        # Resolved by enum MEMBER NAME (``TimeFrameUnit["Minute"]``), which is what
+        # ``_TIMEFRAME_PARTS`` documents itself as holding — NOT by value. The two differ: in
+        # alpaca-py 0.43.4 the member ``Minute`` carries the value ``"Min"``, so the by-value
+        # ``TimeFrameUnit(unit_name)`` this line used to be raised
+        # ``ValueError: 'Minute' is not a valid TimeFrameUnit`` for every minute timeframe — every
+        # Alpaca bar fetch was dead on arrival. Member names are the SDK's stable surface; values
+        # are not (``test_alpaca_bar_timeframes.py`` pins this against the installed SDK).
+        vendor_timeframe = TimeFrame(amount, TimeFrameUnit[unit_name])
 
         _throttle_bar_fetch()
         client = self._with_http_timeout(

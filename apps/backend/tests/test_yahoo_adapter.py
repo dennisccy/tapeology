@@ -11,7 +11,7 @@ fetched live and frozen) so the mocked response is genuinely Yahoo-shaped, not a
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -216,9 +216,15 @@ def _one_row_frame() -> pd.DataFrame:
     [("1w", "1wk"), ("1h", "1h"), ("5m", "5m"), ("1m", "1m")],
 )
 def test_fetch_bars_maps_each_newly_added_direct_timeframe(monkeypatch, timeframe, vendor_interval):
+    # A RECENT three-day window, because Yahoo's intraday caps are measured against the wall clock:
+    # the fixed June-2026 window used elsewhere in this module is now older than 1m's 30-day
+    # retention, and the adapter (correctly) refuses it before any vendor call. This test is about
+    # the interval STRING reaching the vendor, so it asks for a window every timeframe can serve.
+    end = datetime.now(tz=timezone.utc)
+    start = end - timedelta(days=3)
     calls = _install_fake_ticker(monkeypatch, _one_row_frame())
-    bars = YahooAdapter().fetch_bars("AAPL", START, END, timeframe)
-    assert calls == [{"symbol": "AAPL", "start": START, "end": END, "interval": vendor_interval}]
+    bars = YahooAdapter().fetch_bars("AAPL", start, end, timeframe)
+    assert calls == [{"symbol": "AAPL", "start": start, "end": end, "interval": vendor_interval}]
     assert len(bars) == 1
     assert bars[0].timeframe == timeframe
     assert bars[0].volume == 1000

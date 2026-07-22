@@ -157,7 +157,6 @@ def test_incremental_equals_oracle_over_seeded_sim_scenario():
     provider = SimulatedProvider(ticker, scenario)
     engine = TapeEngine(ticker, scenario, CONFIG)
     checks = 0
-    post_eviction = 0
     import itertools
 
     for event in itertools.islice(provider.stream(), 1200):
@@ -171,8 +170,6 @@ def test_incremental_equals_oracle_over_seeded_sim_scenario():
             checks += 1
             assert inc_bid == ob, f"{length}s bid {inc_bid!r} != oracle {ob!r}"
             assert inc_ask == oa, f"{length}s ask {inc_ask!r} != oracle {oa!r}"
-            if w._refresh_rebuilds > 0:
-                post_eviction += 1
     assert checks > 1000, "the sim equivalence check must cover a substantial replay"
 
 
@@ -265,24 +262,28 @@ def test_warmup_to_engine_path_transition_with_eviction_matches_oracle():
     """The subtle transition: trades arrive BEFORE the first quote (no in-effect quote, NOT folded),
     then a quote + eff-bearing trade flips the window onto the engine path (the earlier unfolded
     trades are folded as non-contributors), then eviction ages the early trades out. The incremental
-    scores must equal the oracle throughout, with the fold cursor / FIFO staying in lockstep."""
+    scores must equal the oracle throughout, with the fold cursor / contributor deque staying in
+    lockstep (the contributor deque holds EXACTLY the trackers' counted prints — non-contributors
+    carry no entry at all)."""
     w = _Window(3, CONFIG)
     # Two trades with NO quote yet — no in-effect quote, contribute nothing, not yet folded.
     w.add_trade(0.0, 100.0, 100, Side.SELL, None, None)
     w.add_trade(0.5, 100.0, 100, Side.BUY, None, None)
     _assert_equiv(w, 0.5)
-    assert w._refresh_folded == 0 and len(w._refresh_fifo) == 0
+    assert w._refresh_folded == 0 and len(w._refresh_contrib) == 0
     # A quote then an eff-bearing trade flips ``_refresh_has_eff`` True; the prior trades get folded.
     w.add_quote(1.0, 99.99, 100.03, 0.04)
     w.add_trade(1.0, 99.99, 100, Side.SELL, 99.99, 100.03)
     _assert_equiv(w, 1.0)
-    assert w._refresh_folded == len(w._trades) == len(w._refresh_fifo)
+    assert w._refresh_folded == len(w._trades)
+    assert len(w._refresh_contrib) == w._refresh_bid.total + w._refresh_ask.total
     # Now drive evictions (including aging out the early no-quote trades) and stay == oracle.
     for now in (1.5, 2.0, 3.5, 4.0, 4.5, 5.0):
         w.add_quote(now, 100.0 + 0.01 * now, 100.05 + 0.01 * now, 0.05)
         w.add_trade(now, 100.0 + 0.01 * now, 100, Side.BUY, 100.0 + 0.01 * now, 100.05 + 0.01 * now)
         _assert_equiv(w, now)
-        assert w._refresh_folded == len(w._trades) == len(w._refresh_fifo)
+        assert w._refresh_folded == len(w._trades)
+        assert len(w._refresh_contrib) == w._refresh_bid.total + w._refresh_ask.total
 
 
 def test_standalone_feature_engine_api_uses_oracle_path_and_is_unchanged():
@@ -300,3 +301,47 @@ def test_standalone_feature_engine_api_uses_oracle_path_and_is_unchanged():
     w = fe._windows[60]
     assert w._refresh_has_eff is False
     assert w._refresh_oracle_calls >= 1  # served via the authoritative merge
+
+
+# --- Dead-source-prefix drops (the era-fast_wall O(1) replacement for the former rebuild) ---------
+
+def test_dead_source_prefix_drops_match_oracle_at_every_compute():
+    """A stream engineered so front contributors' SOURCE quotes evict while the trades themselves
+    survive — the exact case the former ``_refresh_rebuild`` re-walked the window for, now an O(1)
+    dead-prefix drop. Each cycle: a quote, a contributing trade shortly after, then a quote gap so
+    the NEXT compute evicts the source quote but not the trade. Byte-equality with the merge oracle
+    is asserted at EVERY compute, and the contributor deque must stay in lockstep with the trackers'
+    own counted totals throughout (a dropped contributor leaves both, atomically)."""
+    w = _Window(5, CONFIG)
+    now = 0.0
+    for cycle in range(60):
+        bid = round(99.0 + (cycle % 7) * 0.01, 2)
+        ask = round(bid + 0.04, 2)
+        w.add_quote(now, bid, ask, 0.04)
+        # Alternate aggressor sides so BOTH trackers carry dead-prefix contributors.
+        side = Side.SELL if cycle % 2 == 0 else Side.BUY
+        w.add_trade(now + 4.6, bid if side is Side.SELL else ask, 100, side,
+                    bid, ask)  # in-effect quote = the cycle's own quote (4.6s older)
+        _assert_equiv(w, now + 4.6)
+        # Advance so the SOURCE quote (age 5.2 > window 5) evicts while the trade (age 0.6) lives.
+        _assert_equiv(w, now + 5.2)
+        assert len(w._refresh_contrib) == w._refresh_bid.total + w._refresh_ask.total
+        now += 5.2
+    # The scenario must actually have exercised the branch: quotes evicted, trades survived.
+    assert w._quotes_evicted > 0 and w._trades_evicted > 0
+
+
+def test_engine_path_has_no_window_rewalk_structurally():
+    """Source-introspection guard (the project's established idiom): the engine path's reconcile
+    step must contain NO full-window re-walk — the former ``_refresh_rebuild`` (O(window) per quote
+    remap, measurably quadratic on real market-open density) is deleted, and the only iteration
+    constructs left in ``_refresh_engine_path`` are the two amortised-O(1) ``while`` loops (the
+    dead-prefix drop, bounded by lifetime pops, and the tail fold, bounded by lifetime appends)."""
+    import inspect
+
+    assert not hasattr(_Window, "_refresh_rebuild")
+    src = inspect.getsource(_Window._refresh_engine_path)
+    body = src.split('"""')[2]  # strip the docstring — pin the CODE, not the prose
+    assert "_refresh_rebuild" not in body
+    assert "for " not in body, "no for-loop may iterate window contents on the engine path"
+    assert body.count("while ") == 2, "exactly the dead-prefix drop + the tail fold"

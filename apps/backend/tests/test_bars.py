@@ -432,3 +432,22 @@ def test_bar_timeframe_vendor_mapping_covers_every_configured_timeframe():
     from app.providers.adapters.alpaca import _TIMEFRAME_PARTS
 
     assert set(_TIMEFRAME_PARTS) == set(CONFIG.bar_timeframes)
+
+
+def test_every_mapped_timeframe_actually_constructs_against_the_installed_sdk():
+    """Covering every configured timeframe is not enough — each entry must also BUILD a real
+    ``TimeFrame`` with the SDK that is installed. It did not: ``fetch_bars`` resolved the unit by
+    enum VALUE (``TimeFrameUnit("Minute")``) while alpaca-py 0.43.4 gives the member ``Minute`` the
+    value ``"Min"``, so every Alpaca bar fetch raised ``ValueError: 'Minute' is not a valid
+    TimeFrameUnit`` — a whole vendor path dead with no test noticing. This constructs each mapping
+    exactly the way ``fetch_bars`` does, so an SDK rename cannot silently kill it again."""
+    from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+
+    from app.providers.adapters.alpaca import _TIMEFRAME_PARTS
+
+    for timeframe, (amount, unit_name) in _TIMEFRAME_PARTS.items():
+        assert unit_name in TimeFrameUnit.__members__, (
+            f"'{unit_name}' ({timeframe}) is not a TimeFrameUnit member in the installed SDK"
+        )
+        built = TimeFrame(amount, TimeFrameUnit[unit_name])
+        assert built.amount_value == amount

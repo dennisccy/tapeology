@@ -163,13 +163,15 @@ class _Window:
       NOW: the refresh scores are maintained incrementally ACROSS evictions:
         * a tail append folds the new print onto the ``_RefreshSide`` trackers in amortised O(1);
         * a FRONT trade eviction pops the matching tracker fronts in amortised O(1);
-        * the only correctness-critical branch is QUOTE re-mapping — when a quote eviction removes the
-          in-effect quote an already-folded FRONT trade depended on, that trade's in-effect quote
-          re-maps (to the next surviving quote ≤ its ts, or to NONE — the oracle's "in-window quotes
-          only" quirk), so the trackers are rebuilt once from the surviving window. This is the only
-          path that re-walks the window, it fires ONLY on such a remap (never per event on dense
-          data), and is pinned by the structural no-rescan test (``_refresh_oracle_calls == 0`` on the
-          engine path; ``_refresh_rebuilds`` bounded).
+        * the only correctness-critical branch is QUOTE re-mapping — when a quote eviction removes
+          the in-effect quote an already-folded FRONT contributor depended on, that trade can ONLY
+          become a non-contributor (no surviving quote precedes it — proof in
+          ``_refresh_engine_path``), and dead-source contributors always form a FRONT PREFIX of
+          ``_refresh_contrib`` (the fold cursor only moves forward), so they are dropped via the
+          trackers' own amortised-O(1) ``evict_front``. NOTHING on the engine path ever re-walks
+          the window — pinned by the structural no-rescan test (``_refresh_oracle_calls == 0`` on
+          the engine path) plus a source-introspection guard that ``_refresh_engine_path`` contains
+          no window re-walk.
       ``_refresh_fractions()`` is RETAINED as (a) the authoritative path for the standalone
       ``FeatureEngine`` API (which threads no in-effect quotes — behaviour unchanged) and (b) the
       test ORACLE the incremental path is pinned byte-identical against.
@@ -227,20 +229,26 @@ class _Window:
         # How many quotes have been popped from the FRONT over the window's whole life, so an
         # absolute quote index survives front eviction of the quote deque.
         self._quotes_evicted = 0
-        # Per folded trade, in arrival order: ``(which, src_qabs)`` where ``which`` is 0 (contributed
-        # to NEITHER tracker — no in-effect quote / non-directional), 1 (bid tracker), or 2 (ask
-        # tracker); ``src_qabs`` is the ABSOLUTE index of its in-effect quote (-1 if none). Lets a
-        # front trade eviction pop the right tracker, and a quote eviction detect a remap.
-        self._refresh_fifo: deque[tuple[int, int]] = deque()
+        # How many trades have been popped from the FRONT over the window's whole life, so an
+        # absolute trade index survives front eviction of the trade deque (the trade at deque
+        # index ``i`` has absolute index ``_trades_evicted + i``).
+        self._trades_evicted = 0
+        # Per CONTRIBUTING folded trade, in arrival order: ``(which, src_qabs, trade_abs)`` where
+        # ``which`` is 1 (bid tracker) or 2 (ask tracker), ``src_qabs`` is the ABSOLUTE index of the
+        # trade's in-effect quote, and ``trade_abs`` is the trade's own ABSOLUTE index. A folded
+        # NON-contributor (no in-effect quote / non-directional print) carries NO entry at all.
+        # Lets a front trade eviction pop the right tracker (matched by ``trade_abs``), and a quote
+        # eviction drop the dead-source prefix in amortised O(1) (see ``_refresh_engine_path``):
+        # the fold cursor only moves forward, so ``src_qabs`` is NON-DECREASING along this deque —
+        # dead-source contributors are always exactly a FRONT PREFIX.
+        self._refresh_contrib: deque[tuple[int, int, int]] = deque()
 
         # --- Instrumentation for the structural no-rescan test ------------------------------------
         # ``_refresh_oracle_calls`` counts ``_refresh_fractions`` invocations (the merge fallback) —
-        # the structural test asserts this is ZERO on the engine path after evictions begin.
-        # ``_refresh_rebuilds`` counts the bounded quote-remap rebuilds (the only window re-walk on
-        # the engine path) — the structural test asserts there is NO per-event full rescan (this is
-        # bounded by remap events, not by event count).
+        # the structural test asserts this is ZERO on the engine path after evictions begin. There
+        # is no other counter: the engine path has NO window re-walk at all (the former bounded
+        # ``_refresh_rebuild`` quote-remap rescan is replaced by the O(1) dead-prefix drop).
         self._refresh_oracle_calls = 0
-        self._refresh_rebuilds = 0
 
     def add_trade(
         self,
@@ -307,34 +315,21 @@ class _Window:
     def _refresh_fold_one(self, trade_ts: float, side: Side) -> None:
         """Fold one trade into the bid/ask trackers using the cursor's current in-effect quote —
         byte-identical to one iteration of ``_refresh_fractions`` (a SELL with no in-effect bid, or a
-        BUY with no in-effect ask, contributes NOTHING — the oracle's skip-when-no-quote quirk)."""
+        BUY with no in-effect ask, contributes NOTHING — the oracle's skip-when-no-quote quirk; a
+        non-contributor carries no ``_refresh_contrib`` entry at all). Called only from the tail-fold
+        loop in ``_refresh_engine_path``, with ``_refresh_folded`` equal to the deque index of the
+        trade being folded — so ``_trades_evicted + _refresh_folded`` is its absolute index."""
         self._refresh_in_effect(trade_ts)
         if side is Side.SELL and self._refresh_cur_bid is not None:
             self._refresh_bid.append(self._refresh_cur_bid)
-            self._refresh_fifo.append((1, self._refresh_cur_qabs))
+            self._refresh_contrib.append(
+                (1, self._refresh_cur_qabs, self._trades_evicted + self._refresh_folded)
+            )
         elif side is Side.BUY and self._refresh_cur_ask is not None:
             self._refresh_ask.append(self._refresh_cur_ask)
-            self._refresh_fifo.append((2, self._refresh_cur_qabs))
-        else:
-            self._refresh_fifo.append((0, -1))
-
-    def _refresh_rebuild(self) -> None:
-        """Full rebuild of the trackers from the current in-window contents — used ONLY when a quote
-        eviction re-mapped an already-folded FRONT trade's in-effect quote (the case the cheap
-        incremental path cannot reconcile). Identical in result to ``_refresh_fractions`` over the
-        surviving window, but folded into the trackers so subsequent appends stay O(1). The
-        structural no-rescan test pins that this does NOT run per event on the dense fixture."""
-        self._refresh_rebuilds += 1
-        self._refresh_bid.reset()
-        self._refresh_ask.reset()
-        self._refresh_fifo.clear()
-        self._refresh_qi = 0
-        self._refresh_cur_bid = None
-        self._refresh_cur_ask = None
-        self._refresh_cur_qabs = -1
-        for tts, _price, _size, tside, _delta, _eb, _ea in self._trades:
-            self._refresh_fold_one(tts, tside)
-        self._refresh_folded = len(self._trades)
+            self._refresh_contrib.append(
+                (2, self._refresh_cur_qabs, self._trades_evicted + self._refresh_folded)
+            )
 
     def _evict(self, now_ts: float) -> int:
         """Evict trades/quotes older than the window, updating every running aggregate AND the front
@@ -364,14 +359,19 @@ class _Window:
                     self._buy_impact -= d
                 elif new_oldest[3] is Side.SELL:
                     self._sell_impact -= d
-            # Pop the matching refresh-tracker front for this evicted trade (only if it was folded).
-            if self._refresh_folded > 0 and self._refresh_fifo:
-                which, _src = self._refresh_fifo.popleft()
-                if which == 1:
-                    self._refresh_bid.evict_front()
-                elif which == 2:
-                    self._refresh_ask.evict_front()
+            # Pop the matching refresh-tracker front for this evicted trade (only if it was folded;
+            # a folded NON-contributor has no ``_refresh_contrib`` entry — nothing to pop, matched
+            # by the evicting trade's absolute index).
+            if self._refresh_folded > 0:
+                contrib = self._refresh_contrib
+                if contrib and contrib[0][2] == self._trades_evicted:
+                    which, _src, _tabs = contrib.popleft()
+                    if which == 1:
+                        self._refresh_bid.evict_front()
+                    else:
+                        self._refresh_ask.evict_front()
                 self._refresh_folded -= 1
+            self._trades_evicted += 1
         quotes_evicted = 0
         while self._quotes and self._quotes[0][0] < lo:
             _ts, bid, ask, spread = self._quotes.popleft()
@@ -441,24 +441,31 @@ class _Window:
         """Reconcile the incremental trackers for this compute, then return the two fractions.
 
         ``_evict`` has already popped tracker fronts for the trades that left. Two cases remain:
-          * A quote eviction this compute MAY have re-mapped an already-folded FRONT trade's in-effect
-            quote (its source quote evicted). Because the source-quote indices are non-decreasing
-            along the FIFO, only the FRONT contributor can be affected — if its source quote evicted
-            (src < quotes_evicted) we rebuild ONCE (the surviving window re-walk). On dense data the
-            front contributor's source quote is almost always still in window, so this rarely fires;
-            it NEVER fires per-event-unconditionally (pinned by the structural no-rescan test).
-          * Otherwise fold the tail trades appended since the last compute (amortised O(1)).
+          * A quote eviction this compute MAY have removed the in-effect quote an already-folded
+            FRONT contributor depended on. Such a trade can ONLY become a NON-contributor — it can
+            never re-map to a different quote: its source was the LAST quote ``<= trade_ts``, so no
+            quote exists in ``(source_ts, trade_ts]``, and every surviving quote is NEWER than the
+            evicted source — hence none is ``<= trade_ts`` (the oracle's "in-window quotes only"
+            skip quirk). Because the fold cursor only moves forward, ``src_qabs`` is NON-DECREASING
+            along ``_refresh_contrib``, so dead-source contributors are always exactly a FRONT
+            PREFIX — dropped here via the trackers' own amortised-O(1) ``evict_front``,
+            byte-identical to the full surviving-window re-walk the former ``_refresh_rebuild``
+            performed (O(window) per remap — measurably quadratic on real market-open density: the
+            era-fast_wall edge-report sweep collapsed from ~15K to ~130 ev/s under it). Each
+            contributor is dropped at most once over its lifetime, so total drop work is linear in
+            the stream.
+          * Fold the tail trades appended since the last compute (amortised O(1)); a tail trade
+            whose in-effect quote has ALREADY evicted correctly folds as a non-contributor
+            (``_refresh_in_effect`` self-heals a dead cursor before every fold).
         """
         if quotes_evicted:
-            # Find the FRONT contributing trade's source quote (skip the non-contributing 0-entries).
-            # If its source quote has evicted, that trade re-maps → rebuild once.
-            for which, src in self._refresh_fifo:
-                if which == 0:
-                    continue
-                if src < self._quotes_evicted:
-                    self._refresh_rebuild()
-                    return self._refresh_bid.fraction(), self._refresh_ask.fraction()
-                break  # the front contributor's source survives ⇒ no contributor re-maps
+            contrib = self._refresh_contrib
+            while contrib and contrib[0][1] < self._quotes_evicted:
+                which, _src, _tabs = contrib.popleft()
+                if which == 1:
+                    self._refresh_bid.evict_front()
+                else:
+                    self._refresh_ask.evict_front()
         # Fold the tail appended since the last compute.
         n = len(self._trades)
         while self._refresh_folded < n:

@@ -212,12 +212,20 @@ class BarRecordRequest(BaseModel):
     ``end``'s UTC day — the underlying yfinance ``end`` is exclusive, compensated once, in one
     place). ``start == end`` is thus a valid single-day window; only ``end`` strictly before
     ``start`` is a 422. Unlike a dataset there is only one source per request, so there is no
-    ``source_kind`` here."""
+    ``source_kind`` here.
+
+    ``vendor`` (optional, default ``"yahoo"``) picks which adapter serves THIS request. It exists
+    because Yahoo caps intraday history (1m to the last 30 days, 5m to 60, 1h to 730 — the adapter's
+    own ``_INTERVAL_LIMITS`` carries the measured evidence), while Alpaca serves the same bars years
+    back: a caller that wants the deeper range asks for it explicitly, per request. One request still
+    records exactly ONE series from exactly ONE vendor, so the stored ``feed`` stays honest — a
+    recording is never a silent blend of two sources."""
 
     symbol: str
     timeframe: str
     start: str
     end: str
+    vendor: str | None = None
 
 
 class EdgeReportComputeRequest(BaseModel):
@@ -1627,8 +1635,15 @@ def get_edge_report_backtest_cache() -> EdgeReportBacktestCache:
     return EdgeReportBacktestCache(resolve_backtest_cache_db_path(CONFIG.dataset_dir_resolved()))
 
 
-def get_bar_fetch_adapter():
+def get_bar_fetch_adapter(vendor: str | None = None):
     """The market adapter for the BAR-FETCH path ONLY (``POST /research/bars`` — era-5 J-01).
+
+    ``vendor="alpaca"`` explicitly selects the credentialed Alpaca adapter for THIS request — the
+    deep-history path for windows Yahoo caps (1m beyond 30 days, 5m beyond 60). Any other value (or
+    none) keeps the pre-existing behaviour below verbatim, so every existing caller and test is
+    unaffected. The test override still wins for BOTH branches: a suite that injects a FakeAdapter
+    on ``get_market_adapter`` keeps getting it whichever vendor a request names, so this never opens
+    a hidden real-network path in tests.
 
     Defaults to the keyless ``YahooAdapter`` (era-5's headline capability) while STILL honoring any
     existing test override on ``get_market_adapter`` — the SAME dependency key every
@@ -1641,7 +1656,31 @@ def get_bar_fetch_adapter():
     cycle (mirrors ``get_study_market_adapter``)."""
     from ..main import app, get_market_adapter
 
+    if vendor == "alpaca" and get_market_adapter not in app.dependency_overrides:
+        from ..providers.adapters.alpaca import AlpacaAdapter
+
+        return AlpacaAdapter()
     return app.dependency_overrides.get(get_market_adapter, YahooAdapter)()
+
+
+def _clamped_window_may_have_grown(stored: dict) -> bool:
+    """Whether a store-first hit should be RE-FETCHED rather than served.
+
+    True only for a recording that a vendor cap actually shortened (``vendor_limit`` set) AND that
+    was created on an earlier UTC day than today. Those caps are rolling windows measured in days
+    (Yahoo keeps 1m for the last 30 days, 5m for 60), so a recording made yesterday is missing days
+    that exist now, while one made earlier today is not — re-fetching within the same UTC day would
+    burn a vendor call to receive the identical bars. A recording served in full is never re-fetched
+    (immutable content, immutable answer), so the fast path is unchanged for every complete window.
+    """
+    if not stored.get("vendor_limit"):
+        return False
+    created = str(stored.get("created_utc", ""))[:10]
+    if not created:
+        return False
+    from datetime import datetime, timezone
+
+    return created < datetime.now(timezone.utc).date().isoformat()
 
 
 @router.post("/bars")
@@ -1715,10 +1754,33 @@ def record_bar_series(
     # lookup key would silently never hit.
     symbol = body.symbol.strip().upper()
 
-    hit = index.lookup(symbol, body.timeframe, body.start, body.end)
+    # The adapter is resolved BEFORE the store-first lookup because the lookup key now includes the
+    # feed this request would record under: a Yahoo recording of a window must not answer a lookup
+    # for the same window from Alpaca (different session coverage, different tape). Construction is
+    # cheap and does no I/O, and the availability check stays BELOW the lookup so an already-stored
+    # window is still served without credentials.
+    adapter = get_bar_fetch_adapter(body.vendor)
+    # feed provenance (era-5 J-01): sourced from the ADAPTER — its single owner — only when Yahoo
+    # served this fetch; otherwise the EXISTING config-owned historical feed, byte-identical to
+    # every pre-iteration stamp. NOT ``adapter.name`` applied uniformly: ``AlpacaAdapter.name ==
+    # "alpaca"``, not ``"sip"`` — doing so would silently rename Alpaca's stamp and break the
+    # frozen ``test_post_records_and_registers_a_bar_series`` assertion.
+    feed = adapter.name if isinstance(adapter, YahooAdapter) else registry.config.historical_feed
+
+    stale_clamped: dict | None = None
+    hit = index.lookup(symbol, body.timeframe, body.start, body.end, feed)
     if hit is not None:
         try:
-            return {"bar_series": store.get(hit.series_id)}
+            stored = store.get(hit.series_id)
+            if not _clamped_window_may_have_grown(stored):
+                return {"bar_series": stored}
+            stale_clamped = stored
+            # A CLAMPED recording (the vendor served less than was asked for, because the window
+            # reached past its rolling retention) is NOT served store-first: that retention window
+            # has since moved, so days that did not exist when it was recorded may exist now.
+            # Falling through re-fetches and records them as a new immutable series; the merged
+            # candle read stitches the two by timestamp. A fully-covered recording still returns
+            # instantly, exactly as before.
         except (BarSeriesNotFound, BarSeriesIntegrityError):
             # The index pointed at a series the canonical JSON store can no longer verify
             # (deleted or corrupted since indexing) -- never fabricate or serve partial data.
@@ -1726,7 +1788,6 @@ def record_bar_series(
             # additively overwrites this stale entry once it succeeds.
             pass
 
-    adapter = get_bar_fetch_adapter()
     if not adapter.is_available():
         # No credentials -> the EXISTING explicit unavailable (503) state (never a fabricated bar
         # series) — the DoD-mandated status for this gap, distinct from the historical-dataset
@@ -1766,12 +1827,12 @@ def record_bar_series(
         # written (mirrors the analogous ``record_dataset`` mapping above for the same exception).
         raise HTTPException(status_code=422, detail=str(exc))
 
-    # feed provenance (era-5 J-01): sourced from the ADAPTER — its single owner — only when Yahoo
-    # served this fetch; otherwise the EXISTING config-owned historical feed, byte-identical to
-    # every pre-iteration stamp. NOT ``adapter.name`` applied uniformly: ``AlpacaAdapter.name ==
-    # "alpaca"``, not ``"sip"`` — doing so would silently rename Alpaca's stamp and break the
-    # frozen ``test_post_records_and_registers_a_bar_series`` assertion.
-    feed = adapter.name if isinstance(adapter, YahooAdapter) else registry.config.historical_feed
+    # The vendor's OWN account of any cap that shortened this fetch (Yahoo's per-interval retention
+    # — see its `_INTERVAL_LIMITS`). Optional adapter capability: an adapter that declares no caps
+    # simply has no method, and the recording carries `vendor_limit: null` — meaning "served in
+    # full", never "unknown". Asked BEFORE recording so the reason is stored WITH the short series.
+    limit_probe = getattr(adapter, "bar_fetch_limit", None)
+    vendor_limit = limit_probe(body.timeframe, start_dt, vendor_end_dt) if limit_probe else None
 
     try:
         meta = store.record(
@@ -1781,8 +1842,19 @@ def record_bar_series(
             window_end_utc=body.end,
             feed=feed,
             bars=list(raw_bars),
+            vendor_limit=vendor_limit,
         )
     except BarSeriesAlreadyRegistered as exc:
+        if stale_clamped is not None:
+            # This fetch only ran because a CLAMPED recording of the same window might have grown
+            # (see the store-first branch above) — and it turns out it has not: the vendor served
+            # content already on file. Serving that recording is the honest answer to "give me this
+            # window" (the data exists, unchanged); a 409 here would report a conflict where the
+            # caller only asked for data it already has.
+            try:
+                return {"bar_series": store.get(exc.existing_id)}
+            except (BarSeriesNotFound, BarSeriesIntegrityError):
+                pass
         raise HTTPException(status_code=409, detail=str(exc))
     except EmptyBarWindowError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -1797,6 +1869,7 @@ def record_bar_series(
 def list_bar_series(
     symbol: str | None = None,
     timeframe: str | None = None,
+    include_bars: bool = True,
     store: BarStore = Depends(get_bar_store),
     index: BarIndex = Depends(get_bar_index),
 ) -> dict:
@@ -1820,18 +1893,25 @@ def list_bar_series(
     ``store.list()`` path as a true no-param call. Previously the short-circuit tested the raw
     (un-normalized) params, so a blank ``?symbol=`` fell through to ``index.list(None, None)``
     instead — silently missing any series the index never learned of (e.g. a legacy un-indexed
-    record). The real-filter path's behavior below is unchanged."""
+    record). The real-filter path's behavior below is unchanged.
+
+    Optional ``?include_bars=false`` (ADDITIVE, default ``true``) serves the SAME verified records
+    with the per-series ``bars`` key OMITTED — the metadata-only projection a viewport-sized chart
+    reads before paging candles in through ``GET /research/bars/{id}/candles``. It changes only the
+    projection, never which series are served nor which code path selects them (the no-param and
+    indexed-filter branches below are structurally untouched), so ``include_bars=true`` — and any
+    call that omits the param — stays byte-identical to before."""
     normalized_symbol = symbol.strip().upper() if symbol else None
     normalized_timeframe = timeframe.strip() if timeframe else None
     if normalized_symbol is None and normalized_timeframe is None:
-        records, errors = store.list()
+        records, errors = store.list(include_bars=include_bars)
         return {"bar_series": records, "integrity_errors": errors}
 
     records: list[dict] = []
     errors: list[dict] = []
     for hit in index.list(symbol=normalized_symbol, timeframe=normalized_timeframe):
         try:
-            records.append(store.get(hit.series_id))
+            records.append(store.get(hit.series_id, include_bars=include_bars))
         except BarSeriesNotFound:
             errors.append(
                 {
@@ -1857,6 +1937,126 @@ def get_bar_series(bar_series_id: str, store: BarStore = Depends(get_bar_store))
     except BarSeriesIntegrityError as exc:
         raise HTTPException(status_code=500, detail=f"bar series integrity check failed: {exc}")
     return {"bar_series": meta}
+
+
+# The bounded candle-slice read: the paging seam the `/structure` charts scroll through instead of
+# pulling a whole series into the browser. It serves the SAME verified store rows the detail route
+# above serves — just a window of them — so there is no second candle source and nothing here is
+# recomputed, re-binned, or gap-filled. Cursor semantics (both INCLUSIVE, at most one at a time) and
+# the two "more exist" flags are owned by `BarStore.candles`; this route only parses/validates the
+# query params and serves that method's output verbatim.
+_MAX_CANDLE_LIMIT = 5000
+
+
+@router.get("/bars/{bar_series_id}/candles")
+def get_bar_series_candles(
+    bar_series_id: str,
+    limit: int = 500,
+    before_ts: float | None = None,
+    after_ts: float | None = None,
+    store: BarStore = Depends(get_bar_store),
+) -> dict:
+    """A bounded window of one bar series' stored candles, verbatim (checksum-verified on load).
+
+    ``before_ts`` serves the LAST ``limit`` rows at or before that epoch-seconds instant;
+    ``after_ts`` the FIRST ``limit`` rows at or after it; neither serves the newest ``limit`` rows.
+    Both cursors at once is a 422 (they anchor opposite ends — silently picking one would be a lie
+    about what was asked). ``limit`` outside ``1..5000`` is a 422 rather than a silent clamp.
+    ``has_more_before`` / ``has_more_after`` say honestly whether stored rows exist outside the
+    served window on that side, so a caller knows when to stop paging. Unknown id -> 404; a
+    corrupted/tampered file -> an explicit 500 (never a fabricated or partial series) — the SAME
+    taxonomy the detail route above uses."""
+    if limit < 1 or limit > _MAX_CANDLE_LIMIT:
+        raise HTTPException(
+            status_code=422, detail=f"limit must be between 1 and {_MAX_CANDLE_LIMIT}"
+        )
+    if before_ts is not None and after_ts is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="pass at most one of before_ts / after_ts — they anchor opposite ends",
+        )
+    try:
+        meta = store.get(bar_series_id, include_bars=False)
+        rows, has_more_before, has_more_after = store.candles(
+            bar_series_id, before_ts=before_ts, after_ts=after_ts, limit=limit
+        )
+    except BarSeriesNotFound:
+        raise HTTPException(status_code=404, detail=f"no bar series with id '{bar_series_id}'")
+    except BarSeriesIntegrityError as exc:
+        raise HTTPException(status_code=500, detail=f"bar series integrity check failed: {exc}")
+    return {
+        "bar_series_id": bar_series_id,
+        "symbol": meta.get("symbol"),
+        "timeframe": meta.get("timeframe"),
+        "bar_count": meta.get("bar_count"),
+        "bars": rows,
+        "has_more_before": has_more_before,
+        "has_more_after": has_more_after,
+    }
+
+
+# The MERGED candle read — the same bounded window, but over every recorded series for one
+# (symbol, timeframe) instead of one series id. A symbol accumulates many overlapping immutable
+# recordings, so a chart paging a single series runs out of history while a longer recording of the
+# same symbol/timeframe sits on disk; this is the view that lets a zoomed-out chart keep filling.
+# The fold (dedupe by timestamp, most-recently-created series wins a disagreement, disagreements
+# counted) is owned by `BarStore.merged_candles` — this route parses/validates query params and
+# serves that method's output verbatim, exactly as the per-series route above does.
+#
+# Deliberately a TOP-LEVEL `/research/candles` path rather than `/research/bars/candles`: the latter
+# would sit in the same segment position as `/bars/{bar_series_id}` and be resolved by declaration
+# order — a silent, order-dependent trap for anyone who later reorders these routes.
+
+
+@router.get("/candles")
+def get_merged_candles(
+    symbol: str,
+    timeframe: str,
+    limit: int = 500,
+    before_ts: float | None = None,
+    after_ts: float | None = None,
+    store: BarStore = Depends(get_bar_store),
+) -> dict:
+    """A bounded window of one symbol+timeframe's recorded candles, merged across every registered
+    series for that pair (each file checksum-verified on load), served verbatim.
+
+    Cursor/limit semantics and the ``has_more_before`` / ``has_more_after`` flags are IDENTICAL to
+    ``GET /research/bars/{id}/candles`` (see that route) — only the row source differs. ``symbol`` is
+    normalized the same way the record path stores it (stripped + uppercased); ``timeframe`` is
+    stripped. ``series_count`` / ``series_ids`` name every recording that contributed;
+    ``revised_timestamps`` counts the timestamps where two recordings disagreed on values (a
+    vendor revision between fetches — resolved in favour of the most recently created series and
+    reported here, never silently hidden); ``bar_count`` is the merged total available behind this
+    window. A symbol+timeframe with nothing recorded is an honest empty payload (``bars: []``,
+    ``series_count: 0``), never a 404 — the absence of a recording is a fact, not an error. A
+    corrupted file is surfaced in ``integrity_errors`` and excluded from the merge, exactly as
+    ``GET /research/bars`` surfaces it."""
+    if limit < 1 or limit > _MAX_CANDLE_LIMIT:
+        raise HTTPException(
+            status_code=422, detail=f"limit must be between 1 and {_MAX_CANDLE_LIMIT}"
+        )
+    if before_ts is not None and after_ts is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="pass at most one of before_ts / after_ts — they anchor opposite ends",
+        )
+    if not symbol.strip() or not timeframe.strip():
+        raise HTTPException(status_code=422, detail="symbol and timeframe must both be non-empty")
+    rows, has_more_before, has_more_after, meta = store.merged_candles(
+        symbol, timeframe, before_ts=before_ts, after_ts=after_ts, limit=limit
+    )
+    return {
+        "symbol": symbol.strip().upper(),
+        "timeframe": timeframe.strip(),
+        "bars": rows,
+        "bar_count": meta["bar_count"],
+        "series_count": len(meta["series_ids"]),
+        "series_ids": meta["series_ids"],
+        "revised_timestamps": meta["revised_timestamps"],
+        "has_more_before": has_more_before,
+        "has_more_after": has_more_after,
+        "integrity_errors": meta["integrity_errors"],
+    }
 
 
 # --- Deterministic support/resistance levels + confluence zones (era-4 capabilities 2 + 3, J-02 +

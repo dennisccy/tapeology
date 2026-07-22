@@ -1882,3 +1882,77 @@ def test_structure_tape_multi_interval_backtest_completes_fast_with_a_real_trade
     assert payload["status"] == STATUS_DONE
     assert elapsed < 10.0, f"multi-interval structure_tape backtest took {elapsed:.2f}s"
     assert len(payload["result"]["trades"]) >= 1, "the proof must exercise at least one real trade"
+
+
+# --- era-fast_wall follow-up: opt-in one-slot replay reuse (``BacktestRunner``) --------------------
+# The edge report runs THREE strategies over each dataset; the reuse-enabled manager replays the
+# dataset ONCE and serves the deterministic path to all three runs. Byte-identity of the persisted
+# reports is the contract; the slot holds at most ONE dataset's path (peak memory unchanged).
+
+
+def test_reuse_replay_path_persists_byte_identical_reports(tmp_path, store):
+    """Per strategy, a reuse-enabled manager's persisted ``result`` must equal a plain manager's
+    byte-for-byte — the reuse hit skips ONLY the replay loop (the path is a pure deterministic
+    function of (dataset, profile, checksum); every sim consumes it read-only)."""
+    dstore, meta = _record_sim(tmp_path, "SIM-BUYER")
+    plain = BacktestJobManager(store, CONFIG)
+    reuse = BacktestJobManager(store, CONFIG, reuse_replay_path=True)
+    for strategy_id in (STRATEGY_V1_ID, STRATEGY_TAPE_ID, STRATEGY_TAPE_MAP_ID):
+        a = _run(plain, store, dstore, meta["id"], strategy_id=strategy_id)
+        b = _run(reuse, store, dstore, meta["id"], strategy_id=strategy_id)
+        assert a["status"] == STATUS_DONE and b["status"] == STATUS_DONE
+        assert b["result"] == a["result"], f"{strategy_id}: reuse-hit report diverged"
+    # The second and third runs were genuine slot hits (same dataset+profile+checksum).
+    assert reuse._runner._path_cache_key == (meta["id"], PROFILE_DEFAULT, meta["checksum"])
+
+
+def test_reuse_replay_path_one_slot_evicts_on_dataset_change(tmp_path, store):
+    """The slot is ONE deep: a run over a DIFFERENT dataset replaces it (never accumulates), so
+    the enabled managers' peak memory stays what a single run already needs."""
+    dstore, meta_a = _record_sim(tmp_path, "SIM-BUYER")
+    _same_root, meta_b = _record_sim(tmp_path, "SIM-BUYER", max_logical=20.0)
+    assert meta_a["id"] != meta_b["id"]
+    mgr = BacktestJobManager(store, CONFIG, reuse_replay_path=True)
+    _run(mgr, store, dstore, meta_a["id"])
+    runner = mgr._runner
+    path_a = runner._path_cache
+    assert runner._path_cache_key == (meta_a["id"], PROFILE_DEFAULT, meta_a["checksum"])
+    _run(mgr, store, dstore, meta_a["id"], strategy_id=STRATEGY_TAPE_ID)
+    assert runner._path_cache is path_a  # a hit reuses the SAME path object, no re-replay
+    _run(mgr, store, dstore, meta_b["id"])
+    assert runner._path_cache_key == (meta_b["id"], PROFILE_DEFAULT, meta_b["checksum"])
+    assert runner._path_cache is not path_a  # replaced, not accumulated
+
+
+def test_reuse_replay_path_defaults_off_and_plain_manager_never_caches(tmp_path, store):
+    """Default-off pin: an unadorned manager (the API registry's construction) carries no reuse
+    behaviour and never fills the slot — byte-identical to the pre-change runner."""
+    dstore, meta = _record_sim(tmp_path, "SIM-BUYER")
+    mgr = BacktestJobManager(store, CONFIG)
+    assert mgr._runner._reuse_replay_path is False
+    _run(mgr, store, dstore, meta["id"])
+    assert mgr._runner._path_cache is None and mgr._runner._path_cache_key is None
+
+
+def test_edge_report_compute_paths_enable_replay_reuse():
+    """Source-introspection pin (the project idiom): BOTH edge-report compute paths — the in-process
+    report computer and the parallel pre-warm worker — construct their short-lived managers with
+    ``reuse_replay_path=True``; nothing else in the app tree does."""
+    import inspect
+
+    from app.research import edge_report
+
+    assert "reuse_replay_path=True" in inspect.getsource(
+        edge_report._compute_strategy_comparison_report
+    )
+    assert "reuse_replay_path=True" in inspect.getsource(edge_report._run_dataset_pairs_in_worker)
+    from pathlib import Path as _P
+
+    app_root = _P(edge_report.__file__).resolve().parents[1]
+    enabled_elsewhere = [
+        p
+        for p in app_root.rglob("*.py")
+        if "reuse_replay_path=True" in p.read_text(encoding="utf-8")
+        and p.name not in ("edge_report.py",)
+    ]
+    assert enabled_elsewhere == [], f"reuse enabled outside the edge-report paths: {enabled_elsewhere}"

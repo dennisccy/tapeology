@@ -733,3 +733,77 @@ def test_level_change_points_empty_for_symbol_with_no_healthy_bar_series(tmp_pat
     store = BarStore(tmp_path / "bars")
     _swing_fixture(store)  # records ONLY `_SWING_SYMBOL` -- never the queried symbol below
     assert level_change_points(store, "NEVER-RECORDED") == ()
+
+
+# --- The touch-count index: the same answer, in log time -----------------------------------------
+# `_touch_count` walked every bar per detected level -- O(levels x bars), invisible at ~2,000 bars
+# per series and a 3.5-minute page load once deeper history arrived (AMD 1m: 34k bars, 16.6k levels,
+# ~560M comparisons measured). `_TouchIndex` narrows the candidates with a binary search and then
+# applies the ORIGINAL predicate to each, so the answers must agree exactly -- not "closely".
+
+
+def _touch_probe_bars() -> list[RawBar]:
+    """Bars whose highs/lows land ON, just inside, and just outside the tolerance boundary of the
+    probe prices below — the only region where a windowed pre-filter could disagree with the
+    original scan."""
+    prices = [
+        100.0, 100.0, 100.05, 99.95, 100.0500001, 99.9499999, 100.1, 99.9,
+        250.0, 250.125, 249.875, 250.1250001, 0.5, 0.500025, 0.4999,
+    ]
+    return [
+        RawBar("PROBE", "1m", 1_780_000_000.0 + i * 60, p, p + 0.01, p - 0.01, p, 1_000)
+        for i, p in enumerate(prices)
+    ]
+
+
+def test_touch_index_agrees_with_the_reference_scan_bar_for_bar():
+    from app.research.levels import _touch_count, _TouchIndex
+
+    bars = _touch_probe_bars()
+    index = _TouchIndex(bars)
+    probes = [b.high for b in bars] + [b.low for b in bars] + [100.0, 250.0, 0.5, 1e-9]
+    for tol_bps in (0.0, 1.0, 5.0, CONFIG.sr_touch_tolerance_bps, 100.0):
+        for price in probes:
+            for defining_index in (0, len(bars) - 1):
+                assert index.count(price, tol_bps, defining_index) == _touch_count(
+                    bars, price, tol_bps, defining_index
+                ), f"disagreement at price={price!r} tol_bps={tol_bps} idx={defining_index}"
+
+
+def test_touch_index_counts_a_bar_once_even_when_both_its_high_and_low_qualify():
+    """A wide tolerance puts BOTH a bar's high and its low inside the window; the bar is still one
+    touch. (A naive "count the high matches plus the low matches" index would double it.)"""
+    from app.research.levels import _touch_count, _TouchIndex
+
+    bars = _touch_probe_bars()
+    wide = 500.0  # basis points — far wider than any bar's own high-to-low span
+    for price in (100.0, 250.0):
+        assert _TouchIndex(bars).count(price, wide, 0) == _touch_count(bars, price, wide, 0)
+        assert _TouchIndex(bars).count(price, wide, 0) <= len(bars)
+
+
+def test_levels_are_unchanged_by_the_index_on_the_committed_fixture():
+    """End to end over the committed real-data fixture: every served level (price, touch_count,
+    strength, zones) is byte-identical to computing each touch with the reference scan."""
+    from app.research import levels as levels_module
+
+    class _ReferenceIndex:
+        def __init__(self, bars: list[RawBar]) -> None:
+            self._bars = bars
+
+        def count(self, price: float, tol_bps: float, defining_index: int) -> int:
+            return levels_module._touch_count(self._bars, price, tol_bps, defining_index)
+
+    store = BarStore(FIXTURE_BAR_DIR)
+    as_of = _epoch("2026-06-09T21:00:00Z")
+    indexed = compute_levels(store, "PG", as_of, CONFIG)
+
+    original_index = levels_module._TouchIndex
+    levels_module._TouchIndex = _ReferenceIndex  # every detector now uses the full scan
+    try:
+        reference = compute_levels(store, "PG", as_of, CONFIG)
+    finally:
+        levels_module._TouchIndex = original_index
+
+    assert json.dumps(indexed, sort_keys=True) == json.dumps(reference, sort_keys=True)
+    assert indexed["levels"], "the proof must exercise real levels"

@@ -50,7 +50,7 @@ though in practice ``yfinance`` reuses this project's already-installed ``pandas
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import AsyncIterator
 
 from .base import (
@@ -77,6 +77,27 @@ _INTERVAL_MAP: dict[str, str] = {
     "1m": "1m",
 }
 
+# Yahoo's per-interval history limits, MEASURED against the live vendor (never assumed from docs) —
+# ``interval -> (max lookback days, max days per request)``; an absent entry means "no limit".
+# The vendor enforces these by returning an EMPTY frame plus a printed error, never an exception:
+#
+#   1m  "Only 8 days worth of 1m granularity data are allowed to be fetched per request"
+#       (and nothing older than ~30 days: a 7-day window 33 days back is empty, 25 days back is fine)
+#   5m  "5m data not available for startTime=... The requested range must be within the last 60 days"
+#       (a 58-day window returns 3,042 rows; a 14-day window 75 days back is empty)
+#   1h  ~730 days (a 60-day window 700 days back returns 294 rows; 800 days back is empty)
+#   1d/1wk  unlimited (a 200-day window 8 years back returns 139 rows)
+#
+# Before these were honoured, ONE over-long request turned a partially-servable window into nothing at
+# all: asking for 1m over 2026-01-01..07-21 recorded no series, rather than the 30 days Yahoo does
+# serve. ``1m``'s per-request cap is set to 7 (not the vendor's stated 8) to keep a margin under a
+# boundary the vendor evaluates against its own clock.
+_INTERVAL_LIMITS: dict[str, tuple[int, int]] = {
+    "1m": (30, 7),
+    "5m": (60, 60),
+    "1h": (730, 730),
+}
+
 # The 4h resampler's two tunables (era-5 J-02) — deliberately local constants, not ``config.py``
 # fields: they shape ONLY the confined-to-this-module derived-4h computation, never a persisted
 # tape/backtest/study value, so they carry none of ``config.py``'s fingerprint-stability
@@ -87,6 +108,51 @@ _INTERVAL_MAP: dict[str, str] = {
 # this data-driven detector needs no hardcoded exchange hours or timezone conversion.
 _FOUR_HOUR_BUCKET_SIZE = 4
 _SESSION_GAP_SECONDS = 2 * 3600.0
+
+
+def _clamp_to_retention(
+    start: datetime, end: datetime, interval: str, limits: tuple[int, int] | None
+) -> tuple[datetime | None, str | None]:
+    """Trim ``start`` forward to the oldest instant this ``interval`` can still serve.
+
+    Returns ``(fetch_start, limit_note)``. ``fetch_start is None`` means the ENTIRE requested window
+    predates what the vendor keeps, so there is nothing worth asking for; ``limit_note`` is a plain
+    sentence naming the limit (``None`` when no limit applied) that the route stores alongside the
+    recording and the UI shows, so a short result is never mistaken for "that is all the data there
+    is". Clamping rather than refusing is deliberate: an operator asking for six months of 1m gets
+    the 30 days Yahoo actually serves instead of nothing at all."""
+    if limits is None:
+        return start, None
+    retention_days, _ = limits
+    horizon = datetime.now(tz=start.tzinfo) - timedelta(days=retention_days)
+    if end <= horizon:
+        return None, (
+            f"Yahoo Finance serves {interval} bars only for the last {retention_days} days, and the "
+            f"requested window ends before that"
+        )
+    if start >= horizon:
+        return start, None
+    return horizon, (
+        f"Yahoo Finance serves {interval} bars only for the last {retention_days} days, so the "
+        f"requested start was moved forward to {horizon.date().isoformat()}"
+    )
+
+
+def _chunks(start: datetime, end: datetime, limits: tuple[int, int] | None) -> list[tuple[datetime, datetime]]:
+    """Split ``[start, end)`` into consecutive half-open windows no longer than the interval's
+    per-request cap (Yahoo refuses an over-long 1m request outright — "Only 8 days worth of 1m
+    granularity data are allowed to be fetched per request" — and answers with an empty frame).
+    Without a cap this is the single window it always was."""
+    if limits is None:
+        return [(start, end)]
+    span = timedelta(days=limits[1])
+    windows: list[tuple[datetime, datetime]] = []
+    cursor = start
+    while cursor < end:
+        stop = min(cursor + span, end)
+        windows.append((cursor, stop))
+        cursor = stop
+    return windows or [(start, end)]
 
 
 def _resample_4h(hourly: tuple[RawBar, ...]) -> tuple[RawBar, ...]:
@@ -149,6 +215,21 @@ class YahooAdapter:
 
     # --- Bars (the ONE capability this adapter actually serves) --------------------------------
 
+    def bar_fetch_limit(self, timeframe: str, start: datetime, end: datetime) -> str | None:
+        """The vendor cap that WILL shorten (or refuse) this exact fetch, as a plain sentence —
+        ``None`` when the window is served in full.
+
+        An OPTIONAL adapter capability: the recording route asks for it with ``getattr`` and stores
+        whatever it gets, so an adapter without it (Alpaca, the fakes) is simply an adapter with no
+        caps to declare. It exists so a shortened recording carries the REASON it is short instead
+        of leaving a reader to infer one from a gap — the same clamp logic ``fetch_bars`` itself
+        applies, asked ahead of time rather than re-derived."""
+        interval = "1h" if timeframe == "4h" else _INTERVAL_MAP.get(timeframe)
+        if interval is None:
+            return None
+        _fetch_start, note = _clamp_to_retention(start, end, interval, _INTERVAL_LIMITS.get(interval))
+        return note
+
     def fetch_bars(
         self, symbol: str, start: datetime, end: datetime, timeframe: str
     ) -> tuple[RawBar, ...]:
@@ -175,32 +256,55 @@ class YahooAdapter:
         import yfinance as yf  # lazy: the no-op/honest-raise paths below never pay this cost
 
         sym = symbol.strip().upper()
-        history = yf.Ticker(sym).history(start=start, end=end, interval=interval)
-        if history.empty:
-            # Unknown/delisted symbol OR a genuinely empty/out-of-retention window — yfinance
-            # answers BOTH with an empty frame (verified against the live vendor), never an
-            # exception. No separate unknown-symbol distinction exists here (the base protocol
-            # explicitly allows this for fetch_bars); a single honest NoDataForWindow covers both.
+        limits = _INTERVAL_LIMITS.get(interval)
+        fetch_start, limit_note = _clamp_to_retention(start, end, interval, limits)
+        if fetch_start is None:
+            # The ENTIRE requested window sits outside what this interval can serve — nothing to
+            # ask the vendor for. Honest and specific (it names the limit), never a silent empty
+            # result and never a guess about the symbol.
             raise NoDataForWindow(
                 f"no data for {sym} {timeframe} in the requested window "
-                f"{start.isoformat()}..{end.isoformat()} — Yahoo Finance returned nothing for "
-                f"that window (out of retention or the symbol is unknown)"
+                f"{start.isoformat()}..{end.isoformat()} — {limit_note}"
             )
 
-        bars = [
-            RawBar(
-                sym,
-                timeframe,
-                ts.timestamp(),
-                float(row["Open"]),
-                float(row["High"]),
-                float(row["Low"]),
-                float(row["Close"]),
-                int(row["Volume"]),
+        ticker = yf.Ticker(sym)
+        rows_by_epoch: dict[float, RawBar] = {}
+        for chunk_start, chunk_end in _chunks(fetch_start, end, limits):
+            history = ticker.history(start=chunk_start, end=chunk_end, interval=interval)
+            if history.empty:
+                # One empty chunk is NOT fatal: a holiday week inside a longer window legitimately
+                # has no bars, and failing the whole fetch over it would discard every real bar the
+                # other chunks returned. An all-empty result still raises below.
+                continue
+            for ts, row in history.iterrows():
+                bar = RawBar(
+                    sym,
+                    timeframe,
+                    ts.timestamp(),
+                    float(row["Open"]),
+                    float(row["High"]),
+                    float(row["Low"]),
+                    float(row["Close"]),
+                    int(row["Volume"]),
+                )
+                # Chunk bounds are half-open and non-overlapping, so a duplicate epoch means the
+                # vendor served the same bar twice; keep ONE (the later read wins, as within a
+                # single frame) rather than emitting a duplicated candle.
+                rows_by_epoch[bar.epoch] = bar
+
+        if not rows_by_epoch:
+            # Unknown/delisted symbol OR a genuinely empty window — yfinance answers BOTH with an
+            # empty frame (verified against the live vendor), never an exception. No separate
+            # unknown-symbol distinction exists here (the base protocol explicitly allows this for
+            # fetch_bars); a single honest NoDataForWindow covers both, now naming the limit that
+            # applied when one did.
+            detail = limit_note or "Yahoo Finance returned nothing for that window (the symbol may be unknown)"
+            raise NoDataForWindow(
+                f"no data for {sym} {timeframe} in the requested window "
+                f"{start.isoformat()}..{end.isoformat()} — {detail}"
             )
-            for ts, row in history.iterrows()
-        ]
-        bars.sort(key=lambda b: b.epoch)  # defensive determinism (yfinance already returns ascending)
+
+        bars = sorted(rows_by_epoch.values(), key=lambda b: b.epoch)
         return tuple(bars)
 
     # --- Everything else: honestly bars-only (never fabricated) --------------------------------

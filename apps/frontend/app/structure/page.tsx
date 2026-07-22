@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  cancelEdgeReportCompute,
   createBacktest,
   fetchBacktest,
   fetchBarSeriesList,
@@ -42,6 +43,7 @@ import type {
   TradabilityBand,
   TradabilityResponse,
 } from "@/lib/types";
+import { MAX_LOADED_BARS, useBarWindow } from "@/lib/useBarWindow";
 import { SymbolSearch } from "@/components/SymbolSearch";
 import { StructureChart } from "@/components/StructureChart";
 import { Panel } from "@/components/Panel";
@@ -83,11 +85,20 @@ import { FeedBasisBadge } from "@/components/FeedBasisBadge";
 //   * GET /research/levels?symbol=&as_of=  (Data Contract row 39) — levels + confluence zones +
 //     the `no_bar_series_for_symbol` honesty flag. The A/B/C badge is `zone.class`, the score is
 //     `zone.score` — neither is ever recomputed from breadth or member strength.
-//   * GET /research/bars  (Data Contract row 38) — every registered bar series. This is a LIST
-//     endpoint with no symbol query param, so this page filters the returned array CLIENT-SIDE by
-//     the already-served `symbol` field to find candles for the chart — the SAME filtering
-//     discipline NavBar already applies to `nav: true` (filtering already-served rows is not a
+//   * GET /research/bars?symbol=&include_bars=false  (Data Contract row 38) — the registered bar
+//     series for the loaded symbol, METADATA ONLY (identity/timeframe/feed/bar_count; no candles).
+//     Drives the timeframe selector and the representative-series pick. The page still filters the
+//     returned array CLIENT-SIDE by the already-served `symbol` field — the SAME filtering
+//     discipline NavBar applies to `nav: true` (filtering already-served rows is not a
 //     recomputation of any value).
+//   * GET /research/candles?symbol=&timeframe=&before_ts|after_ts=&limit=  (Data Contract row 38)
+//     — ONE viewport-sized window of the symbol+timeframe's recorded candles, MERGED across every
+//     recording for that pair server-side and extended as the operator zooms or scrolls (see
+//     `lib/useBarWindow.ts`). Rows are the store's own rows, verbatim; the page chooses only WHICH
+//     already-recorded rows are currently in memory (a display/paging choice, exactly like which
+//     timeframe to chart) — it never merges, re-bins, gap-fills, or synthesizes a candle. The
+//     served `series_count` / `bar_count` / `revised_timestamps` are printed in the chart caption
+//     verbatim, so the operator can see how the drawn history was assembled.
 //   * POST /research/bars  (Data Contract row 38, era-5 J-05) — the fetch control's one write
 //     action: fetch-or-store-first-serve a real Yahoo bar series for {symbol, timeframe, start,
 //     end}. The response's own `feed`/`symbol`/`window_end_utc` seed the existing read path above;
@@ -205,10 +216,11 @@ function needsPolling(backtest: Backtest | null): boolean {
 }
 
 // The canonical bar-store timeframe order (mirrors apps/backend/app/config.py's `bar_timeframes`
-// tuple) used ONLY to pick which ONE registered series' candles the chart draws when a symbol has
-// more than one (a single candlestick chart cannot honestly overlay two timeframes' OHLC at once —
-// see the dev handoff). This is a DISPLAY CHOICE over already-served records — it selects among
-// existing rows, computing no new price/level/zone value. The shortest available timeframe wins.
+// tuple), shortest → longest. Used to (a) order the viewing-timeframe <select>'s options and (b)
+// pick the fallback series when the user's chosen timeframe isn't recorded (shortest wins). A single
+// candlestick chart cannot honestly overlay two timeframes' OHLC at once, so exactly one series is
+// drawn. This is a DISPLAY CHOICE over already-served records — it selects among existing rows,
+// computing no new price/level/zone value.
 const TIMEFRAME_ORDER = ["1m", "5m", "15m", "1h", "4h", "8h", "1d", "1w", "1mo"];
 
 function pickRepresentativeSeries(seriesForSymbol: BarSeriesRecord[]): BarSeriesRecord | null {
@@ -226,6 +238,30 @@ function pickRepresentativeSeries(seriesForSymbol: BarSeriesRecord[]): BarSeries
     return b.created_utc.localeCompare(a.created_utc);
   });
   return ranked[0];
+}
+
+// The distinct timeframes actually recorded for a symbol, ordered shortest-first by TIMEFRAME_ORDER
+// (any unrecognized timeframe appended alphabetically). Drives the viewing-timeframe <select>'s
+// options; index 0 is the shortest recorded timeframe (the fallback default when "1d" isn't
+// recorded). A pure read over already-served rows — never a recomputation.
+function timeframesInOrder(series: BarSeriesRecord[]): string[] {
+  const present = new Set(series.map((s) => s.timeframe));
+  const known = TIMEFRAME_ORDER.filter((tf) => present.has(tf));
+  const unknown = [...present].filter((tf) => !TIMEFRAME_ORDER.includes(tf)).sort();
+  return [...known, ...unknown];
+}
+
+// The ts (epoch seconds) of the last bar the as-of computation could see — max ts among bars with
+// `ts * 1000 <= asOfEpochMs`. This is the candle the "as-of" chart marker anchors to (always a real
+// drawn bar, never a between-bars instant). Returns undefined when as-of predates every bar, the
+// epoch is NaN, or there are no bars. Order-independent (correct on a non-ascending array).
+function boundaryTs(bars: { ts: number }[] | undefined, asOfEpochMs: number): number | undefined {
+  if (!bars || Number.isNaN(asOfEpochMs)) return undefined;
+  let best: number | undefined;
+  for (const b of bars) {
+    if (b.ts * 1000 <= asOfEpochMs && (best === undefined || b.ts > best)) best = b.ts;
+  }
+  return best;
 }
 
 // The era-5 J-05 fetch-control's timeframe set — the SIX Yahoo-supported neutral timeframes
@@ -274,6 +310,62 @@ function endOfDayUtc(rawEnd: string): string {
   if (Number.isNaN(ms)) return trimmed;
   return `${new Date(ms).toISOString().slice(0, 10)}T23:59:59Z`;
 }
+
+// The one caption both charts print under their canvas: what is actually loaded, out of what the
+// merged recordings hold, and how that merge was built. Every number is served
+// (`GET /research/candles`) or a count of already-served rows — nothing here is estimated.
+// `revised` names the timestamps more than one recording covered with differing values (Yahoo
+// re-derives adjusted prices per fetch; a mid-session bar is superseded by its completed self) —
+// the server serves the most recently fetched recording for those and reports how many there were.
+function chartCaption(args: {
+  timeframe: string;
+  loaded: number;
+  available: number;
+  seriesCount: number;
+  revised: number;
+  capped: boolean;
+  maxLoaded: number;
+}): string {
+  const { timeframe, loaded, available, seriesCount, revised, capped, maxLoaded } = args;
+  const recordings = `${seriesCount} recording${seriesCount === 1 ? "" : "s"} merged`;
+  const revisions =
+    revised > 0
+      ? `; ${revised.toLocaleString()} timestamp${revised === 1 ? "" : "s"} had more than one recording — the newest fetch is drawn`
+      : "";
+  const cap = capped
+    ? ` At most ${maxLoaded.toLocaleString()} bars are held at once, so the window slides as you scroll.`
+    : "";
+  return (
+    `Candles: ${timeframe} — ${loaded.toLocaleString()} of ${available.toLocaleString()} bars loaded ` +
+    `around the query time (${recordings}${revisions}). Zoom or scroll to load more.${cap}`
+  );
+}
+
+// One recorded series, described the way the fetch rows report it: how many bars, which vendor, and
+// the range those bars actually COVER (the server's own `covered_*` fields, not the requested
+// window — the two differ whenever a vendor cap shortened the fetch, which is exactly the case
+// worth seeing). A recording made before coverage existed simply omits the range.
+function describeRecording(record: BarSeriesRecord, vendorLabel: string): string {
+  const covered =
+    record.covered_start_utc && record.covered_end_utc
+      ? ` ${record.covered_start_utc.slice(0, 10)} → ${record.covered_end_utc.slice(0, 10)}`
+      : "";
+  return `${vendorLabel} ${record.bar_count.toLocaleString()} bars${covered}`;
+}
+
+// Today's UTC calendar date (`YYYY-MM-DD`) — the value both "Today" shortcut buttons fill their
+// date fields with. UTC (never the browser's local date) because every date field on this page is
+// UTC-labelled and the backend parses them as UTC; using a local date would silently shift the
+// window by a day for operators west of Greenwich late in the day.
+function todayUtcDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// The secondary (quieter) button styling used by the two "Today" shortcuts — the same shape as the
+// page's primary Load/Fetch buttons, one step down in contrast so a shortcut never competes with
+// the action it fills in for.
+const SECONDARY_BUTTON_CLASS =
+  "rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm font-medium text-slate-400 transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-slate-950";
 
 // era-5B J-05 (THIS iteration): the Case Studies reaction filter's <select> options — mirrors
 // `research/setups.py`'s own config-owned, pre-registered `REJECTED`/`BROKE`/`CHOPPED` constants
@@ -333,28 +425,58 @@ function LoadingPanel({ testid }: { testid: string }) {
 //
 // era-fast_wall J-04: gains the "Compute edge report" button + live progress line + failed-state
 // render. `compute` (the live/last snapshot, kept fresh by the poll effect in `StructurePage`)
-// drives four states: idle (button enabled, no progress line), running (button shows "Computing…"
-// and is disabled, progress counts render), done (this panel is no longer rendered — the parent
-// swaps to `EdgeReportBody` once the re-fetched report loses its `not_computed` status), and
-// failed (the snapshot's `error` renders verbatim, button re-enabled reading "Retry compute").
+// drives five states: idle (button enabled, no progress line), running (button shows "Computing…"
+// and is disabled; a pulsing dot, the done/total counts, the CURRENT dataset x strategy pair, a
+// live elapsed clock, and a Cancel button all render — the user can always see the job is alive),
+// done (this panel is no longer rendered — the parent swaps to `EdgeReportBody` once the
+// re-fetched report loses its `not_computed` status), cancelled (explicit copy — completed
+// backtests stay banked in the durable per-pair cache, so a re-run resumes), and failed (the
+// snapshot's `error` renders verbatim, button re-enabled reading "Retry compute").
 // `triggerError` is a SEPARATE, POST-specific failure (e.g. backend unreachable at click time) —
 // distinct from a `failed` compute job, which is a server-side outcome of a job that DID start.
+// The current pair's dataset id resolves to its symbol via the ALREADY-FETCHED registry rows (a
+// pure lookup of served values — nothing recomputed); the elapsed clock derives from the
+// snapshot's own `started_utc` at render time (the 700ms poll re-renders it — display only,
+// never a research value).
+function formatComputeElapsed(startedUtc: string | null): string | null {
+  if (!startedUtc) return null;
+  const ms = Date.now() - Date.parse(startedUtc);
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  return m > 0 ? `${m}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`;
+}
+
 function NotComputedPanel({
   detail,
   compute,
+  datasets,
   onTriggerCompute,
   triggering,
   triggerError,
+  onCancelCompute,
+  cancelRequested,
+  cancelError,
 }: {
   detail: string;
   compute: EdgeReportComputeSnapshot | null;
+  datasets: Dataset[];
   onTriggerCompute: () => void;
   triggering: boolean;
   triggerError: string | null;
+  onCancelCompute: () => void;
+  cancelRequested: boolean;
+  cancelError: string | null;
 }) {
   const isRunning = compute?.state === "running";
   const isFailed = compute?.state === "failed";
+  const isCancelled = compute?.state === "cancelled";
   const buttonLabel = isRunning ? "Computing…" : isFailed ? "Retry compute" : "Compute edge report";
+  const current = isRunning ? compute.progress.current : null;
+  const currentSymbol = current
+    ? datasets.find((d) => d.id === current.dataset_id)?.symbol ?? current.dataset_id.slice(0, 8)
+    : null;
+  const elapsed = isRunning ? formatComputeElapsed(compute.started_utc) : null;
   return (
     <div
       data-testid="edge-report-not-computed"
@@ -372,6 +494,12 @@ function NotComputedPanel({
           {triggerError}
         </p>
       )}
+      {isCancelled && (
+        <p data-testid="edge-report-compute-cancelled" className="mt-2 text-xs text-amber-200/70">
+          Compute cancelled — nothing was published this run; already-completed backtests are
+          banked in the durable cache, so the next run resumes from them.
+        </p>
+      )}
       <button
         type="button"
         data-testid="edge-report-compute-button"
@@ -382,12 +510,40 @@ function NotComputedPanel({
         {buttonLabel}
       </button>
       {isRunning && (
-        <p data-testid="edge-report-compute-progress" className="mt-2 text-xs text-amber-200/70">
-          {compute.progress.backtests_done} / {compute.progress.backtests_total} backtests
-          {compute.progress.backtests_from_cache > 0
-            ? ` (${compute.progress.backtests_from_cache} from cache)`
-            : ""}
-        </p>
+        <div data-testid="edge-report-compute-running" className="mt-2 flex flex-col items-center gap-1">
+          <p data-testid="edge-report-compute-progress" className="text-xs text-amber-200/70">
+            <span
+              aria-hidden="true"
+              className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle"
+            />
+            {compute.progress.backtests_done} / {compute.progress.backtests_total} backtests
+            {compute.progress.backtests_from_cache > 0
+              ? ` (${compute.progress.backtests_from_cache} from cache)`
+              : ""}
+            {elapsed && (
+              <span data-testid="edge-report-compute-elapsed"> · running {elapsed}</span>
+            )}
+          </p>
+          {current && (
+            <p data-testid="edge-report-compute-current" className="text-xs text-amber-200/70">
+              current: {currentSymbol} × {current.strategy_id}
+            </p>
+          )}
+          <button
+            type="button"
+            data-testid="edge-report-compute-cancel"
+            onClick={onCancelCompute}
+            disabled={cancelRequested}
+            className="mt-1 rounded-md border border-slate-700 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {cancelRequested ? "Cancelling — finishing the current backtest…" : "Cancel compute"}
+          </button>
+          {cancelError && (
+            <p data-testid="edge-report-compute-cancel-error" className="text-xs text-red-300">
+              {cancelError}
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
@@ -1269,6 +1425,11 @@ export default function StructurePage() {
   // The raw-levels toggle (era-5B J-05) — OFF by default (the DoD's own requirement); toggling it
   // on renders the pre-existing Levels & Zones section byte-identically to before this iteration.
   const [showRawLevels, setShowRawLevels] = useState(false);
+  // The viewing-timeframe selector (default "1d"). This is the user's PREFERENCE — the timeframe
+  // actually drawn is `effectiveTimeframe` below, which falls back when the loaded symbol has no
+  // series at this timeframe. It only chooses WHICH recorded series' candles both charts draw; it
+  // never changes the as-of levels/bands (multi-timeframe backend aggregates).
+  const [chartTimeframe, setChartTimeframe] = useState("1d");
 
   // era-5B J-02/J-03 Case Studies state — the FULL, unfiltered registry is fetched ONCE on mount
   // (the `strategiesResult`/`datasetsResult` null-then-resolved pattern below); the symbol/reaction
@@ -1303,6 +1464,12 @@ export default function StructurePage() {
   const [computeSnapshot, setComputeSnapshot] = useState<EdgeReportComputeSnapshot | null>(null);
   const [computeTriggering, setComputeTriggering] = useState(false);
   const [computeTriggerError, setComputeTriggerError] = useState<string | null>(null);
+  // The cooperative cancel is observed BETWEEN backtests server-side, so after a successful POST
+  // the job may stay `running` until the current pair finishes — `computeCancelRequested` keeps
+  // the Cancel button honest ("Cancelling — finishing the current backtest…") until the poll
+  // observes the terminal snapshot. Reset on every new trigger.
+  const [computeCancelRequested, setComputeCancelRequested] = useState(false);
+  const [computeCancelError, setComputeCancelError] = useState<string | null>(null);
 
   // J-05 fetch-control state — the page's ONE new explicit write action. Independent of
   // `symbolInput`/`asOfInput` above (the pre-existing read-only Load form) until a successful
@@ -1413,12 +1580,29 @@ export default function StructurePage() {
   async function handleTriggerEdgeReportCompute() {
     setComputeTriggering(true);
     setComputeTriggerError(null);
+    setComputeCancelRequested(false);
+    setComputeCancelError(null);
     const result = await triggerEdgeReportCompute();
     setComputeTriggering(false);
     if (result.ok && result.data) {
       setComputeSnapshot(result.data.compute);
     } else {
       setComputeTriggerError(result.error ?? "The edge-report compute could not be started.");
+    }
+  }
+
+  // era-fast_wall follow-up: the Cancel action beside the running progress line. On a successful
+  // POST the button flips to its "Cancelling…" copy and stays disabled — the poll effect above is
+  // the ONE observer that resolves the terminal `cancelled` snapshot (no client-side state
+  // fabrication). A failed POST (409 idle / unreachable) re-enables the button and surfaces the
+  // backend's own detail verbatim.
+  async function handleCancelEdgeReportCompute() {
+    setComputeCancelRequested(true);
+    setComputeCancelError(null);
+    const result = await cancelEdgeReportCompute();
+    if (!result.ok) {
+      setComputeCancelRequested(false);
+      setComputeCancelError(result.error ?? "The compute could not be cancelled.");
     }
   }
 
@@ -1483,9 +1667,14 @@ export default function StructurePage() {
     // era-5B J-01 (THIS iteration): the SAME Load form now also drives the Tradable Map — fetched
     // alongside levels/bars via the SAME Promise.all, never a second trigger.
     setTradabilityState({ phase: "loading" });
+    // The bar-series read is METADATA ONLY for THIS symbol (`include_bars=false`): the page needs
+    // only each recorded series' identity/timeframe/bar_count to offer the timeframe selector and
+    // pick a representative series. The candles themselves arrive one viewport at a time through
+    // `useBarWindow` (GET /research/bars/{id}/candles) — previously this single call pulled every
+    // candle of every registered series (megabytes) to draw one screenful of one of them.
     const [levelsResult, barsResult, tradabilityResult] = await Promise.all([
       fetchLevels(trimmedSymbol, trimmedAsOf),
-      fetchBarSeriesList(),
+      fetchBarSeriesList({ symbol: trimmedSymbol, includeBars: false }),
       fetchTradability(trimmedSymbol, trimmedAsOf),
     ]);
     setLevelsState(
@@ -1549,10 +1738,17 @@ export default function StructurePage() {
       const result = await recordBarSeries({ symbol, timeframe, start, end });
       if (result.ok && result.bar_series) {
         if (!firstRecorded) firstRecorded = result.bar_series;
+        // Yahoo caps intraday history (1m to the last 30 days, 5m to 60, 1h to 730), and says so in
+        // `vendor_limit`. When a cap left the older part of the requested range unfetched, the
+        // remainder is asked of Alpaca — a second, separately-recorded series, so each recording
+        // still names exactly one vendor. Nothing is inferred client-side: the gap boundary is the
+        // server's own `covered_start_utc`.
+        const deep = await fetchDeepHistoryGap(symbol, timeframe, start, result.bar_series);
+        if (deep?.recorded) anyStored = true;
         results[i] = {
           timeframe,
           state: "ok",
-          message: `${result.bar_series.bar_count} bars (fetched or served from storage)`,
+          message: `${describeRecording(result.bar_series, "Yahoo")}${deep ? ` · ${deep.message}` : ""}`,
         };
       } else if (result.status === 409) {
         // Content-identical to a series already on file (a DIFFERENT window key) — the data exists;
@@ -1564,11 +1760,25 @@ export default function StructurePage() {
           message: result.error ?? "identical content already stored",
         };
       } else {
-        results[i] = {
-          timeframe,
-          state: "error",
-          message: result.error ?? "The bar series could not be fetched.",
-        };
+        // Yahoo served nothing at all (e.g. a 1m window entirely older than its 30-day retention —
+        // its own 422 detail names the limit). The whole requested range is then asked of Alpaca,
+        // which keeps intraday history for years.
+        const deep = await fetchDeepHistoryGap(symbol, timeframe, start, null, end);
+        if (deep?.recorded) {
+          anyStored = true;
+          if (!firstRecorded && deep.record) firstRecorded = deep.record;
+        }
+        results[i] = deep?.recorded
+          ? {
+              timeframe,
+              state: "ok",
+              message: `${deep.message} · Yahoo: ${result.error ?? "no data for this window"}`,
+            }
+          : {
+              timeframe,
+              state: "error",
+              message: `${result.error ?? "The bar series could not be fetched."}${deep ? ` · ${deep.message}` : ""}`,
+            };
       }
       setFetchResults([...results]);
     }
@@ -1584,6 +1794,49 @@ export default function StructurePage() {
     setSymbolInput(seedSymbol);
     setAsOfInput(seedAsOf);
     await handleLoad(seedSymbol, seedAsOf);
+  }
+
+  // The deep-history leg of one timeframe's fetch. `yahooRecord` is what Yahoo just recorded (or
+  // `null` when it served nothing at all, in which case `fallbackEnd` bounds the whole requested
+  // range). Returns `null` when there is no gap to fill — the requested range was served in full,
+  // so no second vendor is asked and no extra call is made.
+  async function fetchDeepHistoryGap(
+    symbol: string,
+    timeframe: string,
+    requestedStart: string,
+    yahooRecord: BarSeriesRecord | null,
+    fallbackEnd?: string,
+  ): Promise<{ message: string; recorded: boolean; record?: BarSeriesRecord } | null> {
+    // The gap ENDS where Yahoo's coverage begins — the server's own `covered_start_utc`, never a
+    // client-side guess at what the vendor's cap must have been. The end date is inclusive, so
+    // using that same UTC date overlaps Yahoo's first day by one day rather than risking a hole;
+    // the merged candle read de-duplicates by timestamp.
+    const gapEnd = yahooRecord?.covered_start_utc
+      ? yahooRecord.covered_start_utc.slice(0, 10)
+      : fallbackEnd;
+    if (!gapEnd || gapEnd <= requestedStart) return null;
+
+    const deep = await recordBarSeries({
+      symbol,
+      timeframe,
+      start: requestedStart,
+      end: gapEnd,
+      vendor: "alpaca",
+    });
+    if (deep.ok && deep.bar_series) {
+      return {
+        message: describeRecording(deep.bar_series, `Alpaca ${deep.bar_series.feed}`),
+        recorded: true,
+        record: deep.bar_series,
+      };
+    }
+    if (deep.status === 409) {
+      return { message: "Alpaca: identical content already stored", recorded: true };
+    }
+    return {
+      message: `Alpaca (${requestedStart} → ${gapEnd}): ${deep.error ?? "not fetched"}`,
+      recorded: false,
+    };
   }
 
   function handleFetchSubmit(e: React.FormEvent) {
@@ -1641,43 +1894,84 @@ export default function StructurePage() {
     fetchStartInput.trim() !== "" &&
     fetchEndInput.trim() !== "";
   const levels = levelsState.phase === "ready" ? levelsState.data : null;
+  const tradability = tradabilityState.phase === "ready" ? tradabilityState.data : null;
+
+  // --- Shared viewing-timeframe derivation (ONE <select> governs BOTH charts below) --------------
+  // Available timeframes = the loaded symbol's recorded series. The EFFECTIVE (drawn) timeframe is
+  // the user's `chartTimeframe` if recorded, else "1d" if recorded, else the shortest recorded — so
+  // the <select> never offers a dead option and the chart is never unexpectedly empty for a symbol
+  // that HAS bars. "" only when the symbol has no series at all (each chart branch already gates
+  // that behind its own no-bar-series empty state).
+  const loadedSymbol = tradability?.symbol ?? levels?.symbol ?? null;
+  const recordedSeriesForSymbol =
+    barsState.phase === "ready" && loadedSymbol
+      ? barsState.data.bar_series.filter((s) => s.symbol === loadedSymbol)
+      : [];
+  const availableTimeframes = timeframesInOrder(recordedSeriesForSymbol);
+  const effectiveTimeframe = availableTimeframes.includes(chartTimeframe)
+    ? chartTimeframe
+    : availableTimeframes.includes("1d")
+      ? "1d"
+      : (availableTimeframes[0] ?? "");
+
+  // --- Raw-levels chart pipeline -----------------------------------------------------------------
+  // Candles now EXTEND to the latest recorded bar (no as-of truncation) so later price action shows
+  // against the historically-marked lines. `levels.levels` stays lookahead-free (backend
+  // research/levels.py `_bars_as_of`); extending is a pure display choice over already-served rows.
+  // `asOfEpochMs` is retained ONLY to locate the as-of MARKER bar (via `boundaryTs`), never to drop
+  // candles. `representative` is now the recorded series matching the chosen viewing timeframe (its
+  // created_utc tie-break picks among multiple windows of that timeframe — the same series
+  // levels.py itself read for it).
   const seriesForSymbol =
     barsState.phase === "ready" && levels
       ? barsState.data.bar_series.filter((s) => s.symbol === levels.symbol)
       : [];
-  const representative = pickRepresentativeSeries(seriesForSymbol);
-  // Scope the drawn candles to the SAME as-of instant the levels query used, so the chart never
-  // shows a bar the level computation could not have seen (the backend's OWN lookahead-free
-  // truncation — research/levels.py's `_bars_as_of` — is unaffected either way; this is a display
-  // filter of already-served rows, not a second computation). `levels.as_of` is guaranteed
-  // backend-parseable here (reaching this branch means GET /research/levels already accepted it),
-  // so a `Date.parse` failure is not expected — the fallback (show every recorded bar) is still
-  // real, verbatim data, never a fabricated or blank chart.
+  const representative = pickRepresentativeSeries(
+    seriesForSymbol.filter((s) => s.timeframe === effectiveTimeframe),
+  );
   const asOfEpochMs = levels ? Date.parse(levels.as_of) : NaN;
-  const chartBars =
-    representative && !Number.isNaN(asOfEpochMs)
-      ? representative.bars.filter((b) => b.ts * 1000 <= asOfEpochMs)
-      : (representative?.bars ?? []);
+  // The candles are paged in one viewport at a time (see `lib/useBarWindow.ts`) rather than read
+  // off the series record — the metadata-only list carries no `bars`. The window is anchored around
+  // the as-of instant and extends on zoom/scroll; `boundaryTs` runs over the LOADED window, so the
+  // as-of marker is drawn exactly when its bar is on the chart (unchanged semantics: the last bar
+  // at or before the as-of instant).
+  //
+  // Keyed on SYMBOL + TIMEFRAME, not on one series id: the hook reads GET /research/candles, which
+  // merges every recording for that pair server-side. `representative` still names the ONE series
+  // whose stored metadata the provenance badge reads — it no longer bounds what the chart can draw.
+  // Gated on `showRawLevels`: the raw-levels chart is OFF by default, and a hidden chart must not
+  // spend requests paging candles nobody is looking at (a `null` symbol keeps the hook itself
+  // unconditional while fetching nothing). Toggling the section on loads its window then.
+  const levelsWindow = useBarWindow(
+    showRawLevels ? (levels?.symbol ?? null) : null,
+    effectiveTimeframe || null,
+    asOfEpochMs,
+  );
+  const chartBars = levelsWindow.bars;
+  const asOfBoundaryTs = boundaryTs(chartBars, asOfEpochMs);
 
-  // era-5B J-01 (THIS iteration): the Tradable Map's OWN candle selection, mirroring
-  // `seriesForSymbol`/`representative`/`asOfEpochMs`/`chartBars` above line-for-line but keyed off
-  // `tradability` instead of `levels` — kept as a SEPARATE block (never a shared helper) so the
-  // raw-levels section above stays byte-identical, untouched code, and so the Tradable Map's own
-  // chart renders correctly even in the rare case `GET /research/tradability` and
-  // `GET /research/levels` resolve to DIFFERENT honest states for the identical symbol/as-of (e.g.
-  // a symbol with levels on a non-daily timeframe but no "1d" series to resolve a tradability
-  // basis from — see `tradability.py`'s own docstring).
-  const tradability = tradabilityState.phase === "ready" ? tradabilityState.data : null;
+  // --- Tradable Map chart pipeline ---------------------------------------------------------------
+  // Mirrors the raw-levels block (same extend + boundary-marker logic) but keyed off `tradability`.
+  // Kept as a SEPARATE block (never a shared selection helper) so each chart renders correctly even
+  // in the rare case GET /research/tradability and GET /research/levels resolve to DIFFERENT honest
+  // states for the identical symbol/as-of (e.g. levels on a non-daily timeframe but no basis series
+  // for tradability — see tradability.py's docstring). Bands stay lookahead-free and never change
+  // with the chosen timeframe.
   const tradabilitySeriesForSymbol =
     barsState.phase === "ready" && tradability
       ? barsState.data.bar_series.filter((s) => s.symbol === tradability.symbol)
       : [];
-  const tradabilityRepresentative = pickRepresentativeSeries(tradabilitySeriesForSymbol);
+  const tradabilityRepresentative = pickRepresentativeSeries(
+    tradabilitySeriesForSymbol.filter((s) => s.timeframe === effectiveTimeframe),
+  );
   const tradabilityAsOfEpochMs = tradability ? Date.parse(tradability.as_of) : NaN;
-  const tradabilityChartBars =
-    tradabilityRepresentative && !Number.isNaN(tradabilityAsOfEpochMs)
-      ? tradabilityRepresentative.bars.filter((b) => b.ts * 1000 <= tradabilityAsOfEpochMs)
-      : (tradabilityRepresentative?.bars ?? []);
+  const tradabilityWindow = useBarWindow(
+    tradability?.symbol ?? null,
+    effectiveTimeframe || null,
+    tradabilityAsOfEpochMs,
+  );
+  const tradabilityChartBars = tradabilityWindow.bars;
+  const tradabilityAsOfBoundaryTs = boundaryTs(tradabilityChartBars, tradabilityAsOfEpochMs);
 
   // era-5B J-02/J-03 (THIS iteration) Case Studies derived values. `filteredSetupsEvents` is a
   // CLIENT-SIDE display filter of the already-served, unfiltered registry (never a recomputation
@@ -1746,8 +2040,8 @@ export default function StructurePage() {
             Tradable Map is the default view, read verbatim from GET /research/tradability; toggle
             &quot;Show raw levels&quot; for the underlying S/R levels and confluence zones (off by
             default). Edge Report compares v1, structure_tape, and structure_tape_map over recorded
-            windows, register included. Fetching bars from Yahoo
-            Finance below is this page's one explicit write action — everything else, including the
+            windows, register included. Fetching bars below (Yahoo Finance, with Alpaca for history
+            beyond Yahoo&apos;s limits) is this page&apos;s one explicit write action — everything else, including the
             strategy registry/champion and the structure_tape-vs-v1 comparison, is read-only. Every
             value on this page is read verbatim from its canonical endpoint — nothing here is
             recomputed in the browser.
@@ -1783,6 +2077,18 @@ export default function StructurePage() {
               className={INPUT_CLASS}
             />
           </label>
+          {/* The as-of shortcut: fills the field with the LAST second of today's UTC day — the
+              SAME `endOfDayUtc` instant this page already seeds As-of with after a fetch, so a
+              "today" load admits every bar recorded so far today and never a next-day bar. It
+              fills the field only; loading stays the operator's explicit click. */}
+          <button
+            type="button"
+            data-testid="structure-as-of-today-button"
+            onClick={() => setAsOfInput(endOfDayUtc(todayUtcDate()))}
+            className={SECONDARY_BUTTON_CLASS}
+          >
+            Today
+          </button>
           <button
             type="submit"
             data-testid="structure-load-button"
@@ -1792,6 +2098,31 @@ export default function StructurePage() {
             Load
           </button>
         </form>
+
+        {/* The viewing-timeframe selector — a page-level control governing BOTH charts below (they
+            share one recorded-bars source). Shown once the loaded symbol has any recorded series;
+            `value` is the EFFECTIVE (drawn) timeframe so it always reflects what's on screen. */}
+        {availableTimeframes.length > 0 && (
+          <div className="mt-4 max-w-xs">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Chart timeframe
+              </span>
+              <select
+                data-testid="structure-timeframe-select"
+                value={effectiveTimeframe}
+                onChange={(e) => setChartTimeframe(e.target.value)}
+                className={INPUT_CLASS}
+              >
+                {availableTimeframes.map((tf) => (
+                  <option key={tf} value={tf}>
+                    {tf}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
 
         {/* era-5B J-01 (THIS iteration) — the NEW default view: at most a handful of
             quality-scored bands, read verbatim from GET /research/tradability. Driven by the SAME
@@ -1842,12 +2173,42 @@ export default function StructurePage() {
                       message={barsState.message}
                     />
                   ) : (
-                    <StructureChart
-                      key={`tradability|${tradability.symbol}|${tradability.as_of}`}
-                      bars={tradabilityChartBars}
-                      levels={[]}
-                      bands={tradability.bands}
-                    />
+                    <>
+                      <StructureChart
+                        key={`tradability|${tradability.symbol}|${tradability.as_of}`}
+                        bars={tradabilityChartBars}
+                        levels={[]}
+                        bands={tradability.bands}
+                        asOfTs={tradabilityAsOfBoundaryTs}
+                        onNeedOlder={tradabilityWindow.loadOlder}
+                        onNeedNewer={tradabilityWindow.loadNewer}
+                        loadingMore={tradabilityWindow.loading}
+                      />
+                      <p
+                        data-testid="tradable-map-chart-caption"
+                        className="mt-2 text-[11px] text-slate-600"
+                      >
+                        {tradabilityWindow.seriesCount > 0
+                          ? `${chartCaption({
+                              timeframe: effectiveTimeframe,
+                              loaded: tradabilityChartBars.length,
+                              available: tradabilityWindow.availableBars,
+                              seriesCount: tradabilityWindow.seriesCount,
+                              revised: tradabilityWindow.revisedTimestamps,
+                              capped: tradabilityWindow.capped,
+                              maxLoaded: MAX_LOADED_BARS,
+                            })} The "as-of" marker is the last bar known at the query time; bars to its right are later price action (context only). Band lines are multi-timeframe aggregates computed strictly as of the query time (lookahead-free) and do not change with the chart timeframe.`
+                          : "No recorded candle series available to draw for this symbol."}
+                      </p>
+                      {tradabilityWindow.error && (
+                        <p
+                          data-testid="tradable-map-chart-window-error"
+                          className="mt-1 text-[11px] text-rose-700"
+                        >
+                          {tradabilityWindow.error}
+                        </p>
+                      )}
+                    </>
                   )}
                   <BandsTable bands={tradability.bands} />
                 </div>
@@ -1921,12 +2282,35 @@ export default function StructurePage() {
                             key={`${levels.symbol}|${levels.as_of}`}
                             bars={chartBars}
                             levels={levels.levels}
+                            asOfTs={asOfBoundaryTs}
+                            onNeedOlder={levelsWindow.loadOlder}
+                            onNeedNewer={levelsWindow.loadNewer}
+                            loadingMore={levelsWindow.loading}
                           />
-                          <p className="mt-2 text-[11px] text-slate-600">
-                            {representative
-                              ? `Candles: ${representative.timeframe} series (${chartBars.length} of ${representative.bar_count} recorded bars, as of the query time). Level lines span every recorded timeframe.`
+                          <p
+                            data-testid="structure-chart-caption"
+                            className="mt-2 text-[11px] text-slate-600"
+                          >
+                            {levelsWindow.seriesCount > 0
+                              ? `${chartCaption({
+                                  timeframe: effectiveTimeframe,
+                                  loaded: chartBars.length,
+                                  available: levelsWindow.availableBars,
+                                  seriesCount: levelsWindow.seriesCount,
+                                  revised: levelsWindow.revisedTimestamps,
+                                  capped: levelsWindow.capped,
+                                  maxLoaded: MAX_LOADED_BARS,
+                                })} The "as-of" marker is the last bar the level computation could see; bars to its right are later price action (context only). S/R level lines are computed strictly as of the query time (lookahead-free) and span every recorded timeframe.`
                               : "No recorded candle series available to draw for this symbol."}
                           </p>
+                          {levelsWindow.error && (
+                            <p
+                              data-testid="structure-chart-window-error"
+                              className="mt-1 text-[11px] text-rose-700"
+                            >
+                              {levelsWindow.error}
+                            </p>
+                          )}
                         </>
                       )}
                     </Panel>
@@ -2073,9 +2457,13 @@ export default function StructurePage() {
               <NotComputedPanel
                 detail={edgeReport.detail}
                 compute={computeSnapshot}
+                datasets={datasetsResult?.data?.datasets ?? []}
                 onTriggerCompute={handleTriggerEdgeReportCompute}
                 triggering={computeTriggering}
                 triggerError={computeTriggerError}
+                onCancelCompute={handleCancelEdgeReportCompute}
+                cancelRequested={computeCancelRequested}
+                cancelError={computeCancelError}
               />
             ) : (
               <EdgeReportBody report={edgeReport} />
@@ -2085,15 +2473,19 @@ export default function StructurePage() {
 
         {/* era-5 J-05 — the Fetch-from-Yahoo control, repositioned below the three new sections
             above (Foundation invariant: unchanged behavior, only moved). */}
-        <section aria-label="Fetch from Yahoo Finance" className="mt-6">
-          <Panel title="Fetch from Yahoo Finance">
+        <section aria-label="Fetch bars" className="mt-6">
+          <Panel title="Fetch bars">
             <p className="mb-3 -mt-1 max-w-3xl text-xs text-slate-600">
-              Fetch real historical bars from Yahoo Finance for a symbol and UTC date range —
-              keyless, on this explicit click. One click fetches all six supported timeframes
-              (1w, 1d, 4h, 1h, 5m, 1m; 4h is derived from real 1h bars). The end date is included
-              in full. Each timeframe reports its own result below — an already-fetched window is
-              served from storage, and a timeframe Yahoo cannot serve for this window (e.g. 1m
-              beyond its retention) shows its exact reason instead. On success, the Tradable Map and
+              Fetch real historical bars for a symbol and UTC date range, on this explicit click.
+              One click fetches all six supported timeframes (1w, 1d, 4h, 1h, 5m, 1m; 4h is derived
+              from real 1h bars). The end date is included in full. Yahoo Finance is the keyless
+              source, and it keeps intraday history for a limited time — 1m for the last 30 days,
+              5m for 60, 1h for 730; 1d and 1w are unlimited. When the requested range reaches
+              further back than that, the remainder is fetched from Alpaca (credentialed), recorded
+              separately, and stitched into the charts by timestamp. Alpaca&apos;s SIP feed includes
+              pre- and post-market bars, so the older part of a range can cover a wider session than
+              the Yahoo part. Each timeframe reports below exactly which vendor covered which dates;
+              an already-fetched window is served from storage. On success, the Tradable Map and
               Levels &amp; Zones sections above load the fetched symbol automatically.
             </p>
             <form onSubmit={handleFetchSubmit} className="flex flex-wrap items-end gap-3">
@@ -2134,13 +2526,29 @@ export default function StructurePage() {
                   className={INPUT_CLASS}
                 />
               </label>
+              {/* The current-day shortcut: sets BOTH dates to today's UTC calendar date (the end
+                  date is inclusive server-side, so start = end = today is exactly today's session).
+                  It fills the fields only — fetching stays the operator's explicit click, since it
+                  is this page's one write action. */}
+              <button
+                type="button"
+                data-testid="fetch-today-button"
+                onClick={() => {
+                  const today = todayUtcDate();
+                  setFetchStartInput(today);
+                  setFetchEndInput(today);
+                }}
+                className={SECONDARY_BUTTON_CLASS}
+              >
+                Today
+              </button>
               <button
                 type="submit"
                 data-testid="fetch-yahoo-button"
                 disabled={!canFetch || fetchSubmitting}
                 className="rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-600 disabled:hover:bg-slate-800"
               >
-                {fetchSubmitting ? "Fetching…" : "Fetch from Yahoo Finance"}
+                {fetchSubmitting ? "Fetching…" : "Fetch bars"}
               </button>
             </form>
             {fetchResults && (

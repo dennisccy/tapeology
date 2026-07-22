@@ -57,14 +57,14 @@ def test_insert_then_lookup_is_a_hit(tmp_path):
     meta = _record(store)
 
     index.insert(meta)
-    hit = index.lookup("PG", "1d", WINDOW_START, WINDOW_END)
+    hit = index.lookup("PG", "1d", WINDOW_START, WINDOW_END, "yahoo")
 
     assert hit == BarIndexHit(series_id=meta["id"], checksum=meta["checksum"], bar_count=3)
 
 
 def test_lookup_before_any_insert_is_a_miss(tmp_path):
     index = BarIndex(str(tmp_path / "index.db"))
-    assert index.lookup("PG", "1d", WINDOW_START, WINDOW_END) is None
+    assert index.lookup("PG", "1d", WINDOW_START, WINDOW_END, "yahoo") is None
 
 
 def test_lookup_on_a_different_symbol_timeframe_or_window_is_a_miss(tmp_path):
@@ -73,10 +73,10 @@ def test_lookup_on_a_different_symbol_timeframe_or_window_is_a_miss(tmp_path):
     meta = _record(store)
     index.insert(meta)
 
-    assert index.lookup("F", "1d", WINDOW_START, WINDOW_END) is None
-    assert index.lookup("PG", "1h", WINDOW_START, WINDOW_END) is None
-    assert index.lookup("PG", "1d", "2026-06-02T00:00:00Z", WINDOW_END) is None
-    assert index.lookup("PG", "1d", WINDOW_START, "2026-06-05T00:00:00Z") is None
+    assert index.lookup("F", "1d", WINDOW_START, WINDOW_END, "yahoo") is None
+    assert index.lookup("PG", "1h", WINDOW_START, WINDOW_END, "yahoo") is None
+    assert index.lookup("PG", "1d", "2026-06-02T00:00:00Z", WINDOW_END, "yahoo") is None
+    assert index.lookup("PG", "1d", WINDOW_START, "2026-06-05T00:00:00Z", "yahoo") is None
 
 
 def test_lookup_matches_the_raw_iso_string_not_the_parsed_epoch(tmp_path):
@@ -88,9 +88,9 @@ def test_lookup_matches_the_raw_iso_string_not_the_parsed_epoch(tmp_path):
     meta = _record(store, start="2026-06-01T00:00:00Z", end="2026-06-04T00:00:00Z")
     index.insert(meta)
 
-    assert index.lookup("PG", "1d", "2026-06-01T00:00:00Z", "2026-06-04T00:00:00Z") is not None
-    assert index.lookup("PG", "1d", "2026-06-01T00:00:00.000000Z", "2026-06-04T00:00:00Z") is None
-    assert index.lookup("PG", "1d", "2026-06-01T00:00:00+00:00", "2026-06-04T00:00:00Z") is None
+    assert index.lookup("PG", "1d", "2026-06-01T00:00:00Z", "2026-06-04T00:00:00Z", "yahoo") is not None
+    assert index.lookup("PG", "1d", "2026-06-01T00:00:00.000000Z", "2026-06-04T00:00:00Z", "yahoo") is None
+    assert index.lookup("PG", "1d", "2026-06-01T00:00:00+00:00", "2026-06-04T00:00:00Z", "yahoo") is None
 
 
 def test_insert_is_idempotent_and_overwrites_the_same_key(tmp_path):
@@ -108,7 +108,7 @@ def test_insert_is_idempotent_and_overwrites_the_same_key(tmp_path):
     )
     index.insert(second)
 
-    hit = index.lookup("PG", "1d", WINDOW_START, WINDOW_END)
+    hit = index.lookup("PG", "1d", WINDOW_START, WINDOW_END, "yahoo")
     assert hit.series_id == second["id"] != first["id"]
     assert hit.bar_count == 4
     assert len(index.list()) == 1  # overwritten, not duplicated
@@ -150,8 +150,8 @@ def test_reindex_populates_from_bar_store_list(tmp_path):
 
     index.reindex(store)
 
-    assert index.lookup("PG", "1d", WINDOW_START, WINDOW_END) == BarIndexHit(pg["id"], pg["checksum"], 3)
-    assert index.lookup("F", "1h", "2026-06-05T00:00:00Z", "2026-06-06T00:00:00Z") == BarIndexHit(
+    assert index.lookup("PG", "1d", WINDOW_START, WINDOW_END, "yahoo") == BarIndexHit(pg["id"], pg["checksum"], 3)
+    assert index.lookup("F", "1h", "2026-06-05T00:00:00Z", "2026-06-06T00:00:00Z", "yahoo") == BarIndexHit(
         f["id"], f["checksum"], 3
     )
 
@@ -176,8 +176,8 @@ def test_reindex_skips_corrupt_files_reported_in_bar_store_errors(tmp_path):
 
     index.reindex(store)
 
-    assert index.lookup("PG", "1d", WINDOW_START, WINDOW_END) is not None
-    assert index.lookup("F", "1h", "2026-06-05T00:00:00Z", "2026-06-06T00:00:00Z") is None
+    assert index.lookup("PG", "1d", WINDOW_START, WINDOW_END, "yahoo") is not None
+    assert index.lookup("F", "1h", "2026-06-05T00:00:00Z", "2026-06-06T00:00:00Z", "yahoo") is None
     assert len(index.list()) == 1
 
 
@@ -189,14 +189,15 @@ def test_reindex_drops_stale_entries_not_reproduced_by_the_current_store(tmp_pat
     index.insert(
         {
             "symbol": "GHOST", "timeframe": "1d", "window_start_utc": WINDOW_START,
-            "window_end_utc": WINDOW_END, "id": "ghost-id", "checksum": "deadbeef", "bar_count": 1,
+            "window_end_utc": WINDOW_END, "feed": "yahoo", "id": "ghost-id",
+            "checksum": "deadbeef", "bar_count": 1,
         }
     )
-    assert index.lookup("GHOST", "1d", WINDOW_START, WINDOW_END) is not None
+    assert index.lookup("GHOST", "1d", WINDOW_START, WINDOW_END, "yahoo") is not None
 
     index.reindex(store)  # the store is empty -- reindex must drop the ghost entry too
 
-    assert index.lookup("GHOST", "1d", WINDOW_START, WINDOW_END) is None
+    assert index.lookup("GHOST", "1d", WINDOW_START, WINDOW_END, "yahoo") is None
     assert index.list() == []
 
 
@@ -214,8 +215,8 @@ def test_reindex_after_deleting_the_db_file_reproduces_identical_lookups(tmp_pat
     index.reindex(store)
 
     keys = [
-        ("PG", "1d", WINDOW_START, WINDOW_END),
-        ("F", "1h", "2026-06-05T00:00:00Z", "2026-06-06T00:00:00Z"),
+        ("PG", "1d", WINDOW_START, WINDOW_END, "yahoo"),
+        ("F", "1h", "2026-06-05T00:00:00Z", "2026-06-06T00:00:00Z", "yahoo"),
     ]
     before = {key: index.lookup(*key) for key in keys}
     assert all(v is not None for v in before.values())

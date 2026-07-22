@@ -972,7 +972,11 @@ export interface BarRow {
 }
 
 // One registered bar series' metadata + embedded candles, served verbatim by GET /research/bars
-// (list) and GET /research/bars/{id} (detail).
+// (list) and GET /research/bars/{id} (detail). `bars` is OPTIONAL because the list endpoint's
+// `?include_bars=false` projection omits the key entirely (the honest "not asked for" — never an
+// empty array, which would be indistinguishable from a series holding no candles). `bar_count`
+// always reports the series' true stored length, so a metadata-only record still states honestly
+// how many candles exist behind it.
 export interface BarSeriesRecord {
   id: string;
   symbol: string;
@@ -983,7 +987,49 @@ export interface BarSeriesRecord {
   bar_count: number;
   checksum: string;
   created_utc: string;
+  bars?: BarRow[];
+  // Coverage (server-owned, present on anything recorded since the vendor-cap work): the first and
+  // last bar's own timestamps, and the vendor cap that shortened the fetch — `null` when the
+  // requested window was served in full. Without these, a recording whose window says
+  // `2026-01-01..2026-07-21` but which holds only the last 30 days (Yahoo caps 1m there) is
+  // indistinguishable from a complete one. Optional: recordings made before this existed lack them.
+  covered_start_utc?: string;
+  covered_end_utc?: string;
+  vendor_limit?: string | null;
+}
+
+// GET /research/bars/{id}/candles — one bounded, cursor-anchored window of a series' stored
+// candles, served verbatim. The paging seam the /structure charts scroll through instead of
+// pulling a whole series into the browser: `has_more_before`/`has_more_after` say honestly whether
+// stored rows exist outside this window on that side, so the caller knows when to stop asking.
+export interface BarCandlesPage {
+  bar_series_id: string;
+  symbol: string;
+  timeframe: string;
+  bar_count: number;
   bars: BarRow[];
+  has_more_before: boolean;
+  has_more_after: boolean;
+}
+
+// GET /research/candles — the same bounded window, but over EVERY recorded series for one
+// symbol+timeframe folded into one ascending series (a symbol accumulates many overlapping
+// immutable recordings; paging just one of them runs out of history while a longer recording of the
+// same pair sits on disk). `series_count`/`series_ids` name the contributing recordings;
+// `revised_timestamps` counts the timestamps more than one recording held with differing values
+// (resolved in favour of the most recently fetched recording, server-side — reported, not hidden);
+// `bar_count` is the merged total available behind this window.
+export interface MergedCandlesPage {
+  symbol: string;
+  timeframe: string;
+  bars: BarRow[];
+  bar_count: number;
+  series_count: number;
+  series_ids: string[];
+  revised_timestamps: number;
+  has_more_before: boolean;
+  has_more_after: boolean;
+  integrity_errors: { file: string; error: string }[];
 }
 
 // GET /research/bars — the full list payload (no symbol query param; callers filter the returned

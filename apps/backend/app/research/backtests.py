@@ -449,11 +449,30 @@ class BacktestRunner:
     ``DatasetStore.replay`` (a fresh engine per run, checksum-verified load — the ONLY dataset
     access path), the recorded snapshot path is held in memory for the one pass, and both the
     strategy trades and the seeded null baseline are simulated against it. All persistence goes
-    through the injected ``JournalStore``'s single writer queue."""
+    through the injected ``JournalStore``'s single writer queue.
 
-    def __init__(self, store: JournalStore, config: Config) -> None:
+    ``reuse_replay_path`` (era-fast_wall edge-report interlude, keyword-only, default ``False`` —
+    every existing caller byte-identical): opt-in ONE-SLOT reuse of the recorded snapshot path
+    across consecutive runs over the SAME ``(dataset_id, profile, dataset checksum)``. The path is
+    a pure deterministic function of exactly that key (``DatasetStore.replay`` through a fresh
+    engine — pinned by the replay-determinism tests), and every sim below consumes it READ-ONLY,
+    so a reuse-hit run produces a byte-identical persisted report while skipping the whole
+    per-event engine replay (the edge report runs THREE strategies over each dataset — this
+    removes two of the three replays). One slot only: the cache holds at most ONE dataset's path
+    and is REPLACED on any key change, so peak memory stays what a single run already needs.
+    Enabled ONLY by the edge-report compute paths (dataset-outer/strategy-inner loops); the API
+    registry's long-lived manager never sets it, so no path lingers in the server process. A
+    reuse-hit run emits no per-event ``events_processed`` heartbeats (there is no replay loop);
+    status transitions stay honest."""
+
+    def __init__(
+        self, store: JournalStore, config: Config, *, reuse_replay_path: bool = False
+    ) -> None:
         self._store = store
         self._config = config
+        self._reuse_replay_path = reuse_replay_path
+        self._path_cache_key: tuple | None = None
+        self._path_cache: list[_PathPoint] | None = None
 
     def run(
         self,
@@ -491,9 +510,19 @@ class BacktestRunner:
             # The verified metadata load (id -> 404-style DatasetNotFound; corrupt/tampered ->
             # DatasetIntegrityError) — embedded VERBATIM in the report's provenance.
             dataset_meta = dataset_store.get(params["dataset_id"])
-            path, cancelled = self._replay(
-                dataset_store, params["dataset_id"], backtest_id, payload, is_cancelled, run_config
-            )
+            # era-fast_wall: the opt-in one-slot replay reuse (see the class docstring). The key
+            # includes the verified checksum, so a hit is provably the SAME immutable content the
+            # prior run replayed; the path is consumed READ-ONLY by every sim below.
+            path_key = (params["dataset_id"], params["profile"], dataset_meta["checksum"])
+            if self._reuse_replay_path and self._path_cache_key == path_key:
+                path, cancelled = self._path_cache, False
+            else:
+                path, cancelled = self._replay(
+                    dataset_store, params["dataset_id"], backtest_id, payload, is_cancelled, run_config
+                )
+                if self._reuse_replay_path and not cancelled:
+                    self._path_cache_key = path_key
+                    self._path_cache = path
             if cancelled or is_cancelled():
                 self._persist_terminal(backtest_id, payload, STATUS_CANCELLED)
                 return
@@ -1128,12 +1157,19 @@ class BacktestJobManager:
     is process-scoped (one per ``ResearchRegistry``); a backend restart loses in-flight jobs — a
     record left ``running`` from a prior process is surfaced honestly, never silently completed.
     The dataset store is injected per start (the route's dependency-resolved store), so tests
-    point it anywhere via the existing env/override seams."""
+    point it anywhere via the existing env/override seams.
 
-    def __init__(self, store: JournalStore, config: Config) -> None:
+    ``reuse_replay_path`` (keyword-only, default ``False`` — every existing caller byte-identical)
+    threads straight to this manager's ``BacktestRunner`` (see ITS docstring for the one-slot
+    replay-reuse contract). Set ONLY by the edge-report compute paths, which construct their OWN
+    short-lived manager per report run/worker task — never by the API registry's manager."""
+
+    def __init__(
+        self, store: JournalStore, config: Config, *, reuse_replay_path: bool = False
+    ) -> None:
         self._store = store
         self._config = config
-        self._runner = BacktestRunner(store, config)
+        self._runner = BacktestRunner(store, config, reuse_replay_path=reuse_replay_path)
         self._cancels: dict[str, threading.Event] = {}
         self._threads: dict[str, threading.Thread] = {}
         self._lock = threading.Lock()

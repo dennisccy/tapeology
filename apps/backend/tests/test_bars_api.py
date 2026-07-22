@@ -24,7 +24,7 @@ unaffected and still covered directly in ``tests/test_bars.py``).
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -272,6 +272,329 @@ def test_blank_symbol_param_is_byte_identical_to_no_param_even_with_an_unindexed
 
     both_blank = client.get("/research/bars", params={"symbol": "", "timeframe": ""})
     assert both_blank.json() == no_param.json()
+
+
+# --- the viewport-paging reads: metadata-only listing + bounded candle slices ---------------------
+# Both exist so a chart can fill its visible area (and lazily page more in) without pulling every
+# candle of every series into the browser. Both are ADDITIVE projections of the SAME verified store
+# records -- never a second, unverified candle source.
+
+
+def test_include_bars_false_omits_candles_and_keeps_every_other_field_identical(ctx):
+    """``?include_bars=false`` serves the SAME records with ONLY the ``bars`` key omitted (absent,
+    never an empty list -- an empty list would be indistinguishable from a series holding no
+    candles). Holds on BOTH selection paths: the no-param ``store.list()`` branch and the indexed
+    ``?symbol=`` filter branch."""
+    client, _bar_dir = ctx
+    _inject_adapter(bars=_bars())
+    client.post("/research/bars", json=_body())
+    _inject_adapter(bars=_bars(symbol="F", timeframe="1h"))
+    client.post("/research/bars", json=_body(symbol="F", timeframe="1h"))
+
+    for params in ({}, {"symbol": "PG"}, {"timeframe": "1h"}):
+        full = client.get("/research/bars", params=params).json()
+        lean = client.get("/research/bars", params={**params, "include_bars": "false"}).json()
+        assert lean["integrity_errors"] == full["integrity_errors"]
+        assert len(lean["bar_series"]) == len(full["bar_series"])
+        for lean_row, full_row in zip(lean["bar_series"], full["bar_series"], strict=True):
+            assert "bars" not in lean_row
+            assert lean_row == {k: v for k, v in full_row.items() if k != "bars"}
+            assert full_row["bars"]  # the full projection still carries the candles
+
+
+def test_explicit_include_bars_true_is_byte_identical_to_omitting_the_param(ctx):
+    client, _bar_dir = ctx
+    _inject_adapter(bars=_bars())
+    client.post("/research/bars", json=_body())
+    assert (
+        client.get("/research/bars", params={"include_bars": "true"}).json()
+        == client.get("/research/bars").json()
+    )
+
+
+def _record_ten_bars(client) -> tuple[str, list[dict]]:
+    """One 10-candle series (ts = base, base+day, ...), returning its id + the stored rows."""
+    bars = tuple(
+        RawBar(SYMBOL, TIMEFRAME, _BASE_EPOCH + i * _DAY, 100.0 + i, 101.0 + i, 99.0 + i, 100.5 + i, 1_000 + i)
+        for i in range(10)
+    )
+    _inject_adapter(bars=bars)
+    meta = client.post("/research/bars", json=_body()).json()["bar_series"]
+    return meta["id"], meta["bars"]
+
+
+def test_candles_with_no_cursor_serves_the_newest_limit_rows_verbatim(ctx):
+    client, _bar_dir = ctx
+    series_id, rows = _record_ten_bars(client)
+
+    r = client.get(f"/research/bars/{series_id}/candles", params={"limit": 3})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["bar_series_id"] == series_id
+    assert body["symbol"] == SYMBOL
+    assert body["timeframe"] == TIMEFRAME
+    assert body["bar_count"] == 10
+    assert body["bars"] == rows[-3:]  # verbatim stored rows, in stored order
+    assert body["has_more_before"] is True
+    assert body["has_more_after"] is False
+
+
+def test_candles_before_ts_is_inclusive_and_serves_the_last_matching_rows(ctx):
+    client, _bar_dir = ctx
+    series_id, rows = _record_ten_bars(client)
+
+    body = client.get(
+        f"/research/bars/{series_id}/candles",
+        params={"limit": 3, "before_ts": rows[5]["ts"]},
+    ).json()
+    assert body["bars"] == rows[3:6]  # rows 3,4,5 -- the cursor row INCLUDED
+    assert body["has_more_before"] is True
+    assert body["has_more_after"] is True
+
+
+def test_candles_after_ts_is_inclusive_and_serves_the_first_matching_rows(ctx):
+    client, _bar_dir = ctx
+    series_id, rows = _record_ten_bars(client)
+
+    body = client.get(
+        f"/research/bars/{series_id}/candles",
+        params={"limit": 3, "after_ts": rows[5]["ts"]},
+    ).json()
+    assert body["bars"] == rows[5:8]  # rows 5,6,7 -- the cursor row INCLUDED
+    assert body["has_more_before"] is True
+    assert body["has_more_after"] is True
+
+
+def test_candles_flags_report_the_true_series_edges(ctx):
+    client, _bar_dir = ctx
+    series_id, rows = _record_ten_bars(client)
+
+    oldest = client.get(
+        f"/research/bars/{series_id}/candles", params={"limit": 2, "after_ts": rows[0]["ts"]}
+    ).json()
+    assert oldest["bars"] == rows[:2]
+    assert oldest["has_more_before"] is False
+    assert oldest["has_more_after"] is True
+
+    whole = client.get(f"/research/bars/{series_id}/candles", params={"limit": 500}).json()
+    assert whole["bars"] == rows
+    assert whole["has_more_before"] is False
+    assert whole["has_more_after"] is False
+
+    beyond = client.get(
+        f"/research/bars/{series_id}/candles",
+        params={"limit": 5, "before_ts": rows[0]["ts"] - 1},
+    ).json()
+    assert beyond["bars"] == []  # honestly empty -- never the nearest rows instead
+    assert beyond["has_more_before"] is False
+    assert beyond["has_more_after"] is False
+
+
+def test_candles_validation_is_explicit_never_a_silent_clamp(ctx):
+    client, _bar_dir = ctx
+    series_id, rows = _record_ten_bars(client)
+
+    assert client.get(f"/research/bars/{series_id}/candles", params={"limit": 0}).status_code == 422
+    assert (
+        client.get(f"/research/bars/{series_id}/candles", params={"limit": 5001}).status_code == 422
+    )
+    both = client.get(
+        f"/research/bars/{series_id}/candles",
+        params={"limit": 5, "before_ts": rows[0]["ts"], "after_ts": rows[1]["ts"]},
+    )
+    assert both.status_code == 422
+    assert "before_ts" in both.json()["detail"]
+    assert client.get("/research/bars/no-such-id/candles", params={"limit": 5}).status_code == 404
+
+
+def test_candles_on_a_corrupted_series_is_an_explicit_500_never_partial_rows(ctx):
+    client, bar_dir = ctx
+    series_id, _rows = _record_ten_bars(client)
+    path = bar_dir / f"{series_id}.json"
+    payload = json.loads(path.read_text())
+    payload["record"]["bars"][0]["close"] = 999.0  # tamper -- both checksums now disagree
+    path.write_text(json.dumps(payload))
+
+    r = client.get(f"/research/bars/{series_id}/candles", params={"limit": 5})
+    assert r.status_code == 500
+    assert "integrity check failed" in r.json()["detail"]
+
+
+# --- the MERGED candle read (GET /research/candles) ----------------------------------------------
+# A symbol accumulates many overlapping immutable recordings; a chart paging ONE of them runs out of
+# history while a longer recording of the same symbol/timeframe sits on disk. The merged read folds
+# every recording for a (symbol, timeframe) into one ascending series -- deduped by timestamp, the
+# most recently created recording winning where two hold the same timestamp with different values.
+
+
+def _iso_day(index: int) -> str:
+    return (
+        datetime.fromtimestamp(_BASE_EPOCH + index * _DAY, tz=timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+
+def _record_window(client, *, symbol=SYMBOL, timeframe=TIMEFRAME, first_index: int, count: int, close_offset: float = 0.0):
+    """Record ONE series covering bars [first_index, first_index+count) of a shared daily grid.
+    Each call posts its OWN distinct UTC window (otherwise the store-first coordinator would serve
+    the earlier recording back instead of recording a second one). ``close_offset`` shifts the
+    closes so a later recording of the same timestamps is a genuinely REVISED row rather than
+    duplicate content (which ``record`` refuses outright)."""
+    bars = tuple(
+        RawBar(
+            symbol,
+            timeframe,
+            _BASE_EPOCH + i * _DAY,
+            100.0 + i,
+            101.0 + i,
+            99.0 + i,
+            100.5 + i + close_offset,
+            1_000 + i,
+        )
+        for i in range(first_index, first_index + count)
+    )
+    _inject_adapter(bars=bars)
+    body = _body(
+        symbol=symbol,
+        timeframe=timeframe,
+        start=_iso_day(first_index),
+        end=_iso_day(first_index + count),
+    )
+    response = client.post("/research/bars", json=body)
+    assert response.status_code == 200, response.json()
+    return response.json()["bar_series"]
+
+
+def test_merged_read_folds_every_recording_for_the_symbol_and_timeframe(ctx):
+    client, _bar_dir = ctx
+    _record_window(client, first_index=0, count=5)  # days 0-4
+    _record_window(client, first_index=8, count=4)  # days 8-11, disjoint
+    # A DIFFERENT symbol and a different timeframe must never leak into the fold.
+    _record_window(client, symbol="F", first_index=0, count=3)
+    _record_window(client, timeframe="1h", first_index=0, count=3)
+
+    body = client.get(
+        "/research/candles", params={"symbol": "pg", "timeframe": " 1d ", "limit": 500}
+    ).json()
+    assert body["symbol"] == SYMBOL and body["timeframe"] == TIMEFRAME  # normalized like the store
+    assert body["series_count"] == 2
+    assert body["bar_count"] == 9
+    assert [row["ts"] for row in body["bars"]] == [
+        _BASE_EPOCH + i * _DAY for i in [0, 1, 2, 3, 4, 8, 9, 10, 11]
+    ]
+    assert body["revised_timestamps"] == 0
+    assert body["integrity_errors"] == []
+    assert body["has_more_before"] is False and body["has_more_after"] is False
+
+
+def test_merged_read_beats_what_any_single_series_can_serve(ctx):
+    """The whole point: the per-series read is bounded by ONE recording's window; the merged read
+    spans them all."""
+    client, _bar_dir = ctx
+    _record_window(client, first_index=0, count=5)
+    newest = _record_window(client, first_index=8, count=4)
+
+    single = client.get(
+        f"/research/bars/{newest['id']}/candles", params={"limit": 500}
+    ).json()
+    merged = client.get(
+        "/research/candles", params={"symbol": SYMBOL, "timeframe": TIMEFRAME, "limit": 500}
+    ).json()
+    assert single["bar_count"] == 4
+    assert merged["bar_count"] == 9 > single["bar_count"]
+
+
+def test_a_timestamp_recorded_twice_resolves_to_the_most_recent_recording_and_is_counted(ctx):
+    client, _bar_dir = ctx
+    older = _record_window(client, first_index=0, count=5)
+    newer = _record_window(client, first_index=3, count=5, close_offset=0.25)  # days 3-7, revised
+    assert older["created_utc"] <= newer["created_utc"]
+
+    body = client.get(
+        "/research/candles", params={"symbol": SYMBOL, "timeframe": TIMEFRAME, "limit": 500}
+    ).json()
+    assert body["bar_count"] == 8  # days 0-7, each exactly once
+    assert body["revised_timestamps"] == 2  # days 3 and 4 were recorded twice, with different values
+    by_ts = {row["ts"]: row for row in body["bars"]}
+    for day in (3, 4):
+        assert by_ts[_BASE_EPOCH + day * _DAY]["close"] == 100.5 + day + 0.25  # the NEWER recording
+    assert by_ts[_BASE_EPOCH + 0 * _DAY]["close"] == 100.5  # untouched where only one recording exists
+
+
+def test_merged_cursors_and_flags_match_the_per_series_contract(ctx):
+    client, _bar_dir = ctx
+    _record_window(client, first_index=0, count=5)
+    _record_window(client, first_index=5, count=5)
+    ts = [_BASE_EPOCH + i * _DAY for i in range(10)]
+    params = {"symbol": SYMBOL, "timeframe": TIMEFRAME}
+
+    newest = client.get("/research/candles", params={**params, "limit": 3}).json()
+    assert [r["ts"] for r in newest["bars"]] == ts[7:]
+    assert newest["has_more_before"] is True and newest["has_more_after"] is False
+
+    before = client.get(
+        "/research/candles", params={**params, "limit": 3, "before_ts": ts[5]}
+    ).json()
+    assert [r["ts"] for r in before["bars"]] == ts[3:6]  # cursor row INCLUDED
+    assert before["has_more_before"] is True and before["has_more_after"] is True
+
+    after = client.get("/research/candles", params={**params, "limit": 3, "after_ts": ts[0]}).json()
+    assert [r["ts"] for r in after["bars"]] == ts[:3]
+    assert after["has_more_before"] is False and after["has_more_after"] is True
+
+
+def test_merged_read_for_an_unrecorded_symbol_is_an_honest_empty_payload(ctx):
+    client, _bar_dir = ctx
+    _record_window(client, first_index=0, count=3)
+    body = client.get(
+        "/research/candles", params={"symbol": "ZZZZ", "timeframe": TIMEFRAME, "limit": 10}
+    ).json()
+    assert body["bars"] == [] and body["bar_count"] == 0 and body["series_count"] == 0
+    assert body["has_more_before"] is False and body["has_more_after"] is False
+
+
+def test_merged_read_surfaces_a_corrupted_file_instead_of_merging_it(ctx):
+    client, bar_dir = ctx
+    healthy = _record_window(client, first_index=0, count=5)
+    corrupt = _record_window(client, first_index=5, count=5)
+    path = bar_dir / f"{corrupt['id']}.json"
+    payload = json.loads(path.read_text())
+    payload["record"]["bars"][0]["close"] = 999.0
+    path.write_text(json.dumps(payload))
+
+    body = client.get(
+        "/research/candles", params={"symbol": SYMBOL, "timeframe": TIMEFRAME, "limit": 500}
+    ).json()
+    assert body["series_ids"] == [healthy["id"]]  # the corrupt recording contributes NOTHING
+    assert body["bar_count"] == 5
+    assert len(body["integrity_errors"]) == 1
+    assert f"{corrupt['id']}.json" == body["integrity_errors"][0]["file"]
+
+
+def test_merged_read_reflects_a_newly_recorded_series_immediately(ctx):
+    """The fold is memoized; the memo key names every contributing series AND its checksum, so a
+    fresh recording can never be served a stale merge."""
+    client, _bar_dir = ctx
+    _record_window(client, first_index=0, count=3)
+    params = {"symbol": SYMBOL, "timeframe": TIMEFRAME, "limit": 500}
+    assert client.get("/research/candles", params=params).json()["bar_count"] == 3
+    _record_window(client, first_index=3, count=4)
+    assert client.get("/research/candles", params=params).json()["bar_count"] == 7
+
+
+def test_merged_read_validation_is_explicit(ctx):
+    client, _bar_dir = ctx
+    _record_window(client, first_index=0, count=3)
+    params = {"symbol": SYMBOL, "timeframe": TIMEFRAME}
+    assert client.get("/research/candles", params={**params, "limit": 0}).status_code == 422
+    assert client.get("/research/candles", params={**params, "limit": 5001}).status_code == 422
+    both = client.get(
+        "/research/candles", params={**params, "limit": 5, "before_ts": 1.0, "after_ts": 2.0}
+    )
+    assert both.status_code == 422
+    assert client.get("/research/candles", params={"symbol": " ", "timeframe": TIMEFRAME}).status_code == 422
+    assert client.get("/research/candles", params={"symbol": SYMBOL}).status_code == 422  # timeframe required
 
 
 def test_get_bar_index_resolves_to_a_sibling_of_the_bar_dir_by_default(ctx, monkeypatch):
@@ -608,3 +931,259 @@ def test_multiple_yahoo_unsupported_timeframes_all_raise_the_same_taxonomy(ctx, 
         r = client.post("/research/bars", json=_body(timeframe=timeframe))
         assert r.status_code == 422
         assert timeframe in r.json()["detail"]
+
+
+# --- Yahoo's per-interval history caps: clamp + chunk instead of returning nothing ----------------
+# Yahoo keeps 1m for the last ~30 days and refuses more than 8 days per request; 5m is capped at 60
+# days, 1h at 730 (all measured against the live vendor — see `yahoo.py::_INTERVAL_LIMITS`). It
+# enforces them by answering with an EMPTY frame, so ONE over-long request used to turn a
+# partially-servable window into no recording at all: asking for 1m over six months recorded
+# nothing, rather than the 30 days Yahoo does serve.
+
+
+def _days_ago(days: float) -> str:
+    return (
+        datetime.now(tz=timezone.utc) - timedelta(days=days)
+    ).date().isoformat()
+
+
+def _intraday_frame(count: int, base_epoch: float, step_seconds: float = 60.0) -> pd.DataFrame:
+    index = pd.to_datetime([base_epoch + i * step_seconds for i in range(count)], unit="s", utc=True)
+    return pd.DataFrame(
+        {
+            "Open": [100.0 + i for i in range(count)],
+            "High": [101.0 + i for i in range(count)],
+            "Low": [99.0 + i for i in range(count)],
+            "Close": [100.5 + i for i in range(count)],
+            "Volume": [1_000 + i for i in range(count)],
+        },
+        index=index,
+    )
+
+
+def _install_per_call_yahoo_ticker(monkeypatch, frame_for) -> list[dict]:
+    """Like ``_install_fake_yahoo_ticker`` but the frame is chosen PER CALL (so a chunked fetch can
+    return distinct — or empty — data per chunk)."""
+    calls: list[dict] = []
+
+    class _FakeTicker:
+        def __init__(self, symbol: str) -> None:
+            self.symbol = symbol
+
+        def history(self, *, start, end, interval):
+            calls.append({"symbol": self.symbol, "start": start, "end": end, "interval": interval})
+            return frame_for(len(calls) - 1, start, end)
+
+    monkeypatch.setattr(yfinance, "Ticker", _FakeTicker)
+    return calls
+
+
+def test_a_long_1m_request_is_clamped_to_retention_and_chunked(ctx, monkeypatch):
+    """The reported bug: 1m over six months recorded nothing. It must now record the 30 days Yahoo
+    serves, fetched in chunks no longer than the vendor's per-request cap."""
+    client, _bar_dir = ctx
+    calls = _install_per_call_yahoo_ticker(
+        monkeypatch,
+        lambda i, start, end: _intraday_frame(3, start.timestamp()),
+    )
+
+    r = client.post(
+        "/research/bars",
+        json={"symbol": SYMBOL, "timeframe": "1m", "start": _days_ago(200), "end": _days_ago(0)},
+    )
+    assert r.status_code == 200
+    meta = r.json()["bar_series"]
+
+    assert len(calls) > 1, "a 30-day 1m window must be split into several vendor requests"
+    horizon = datetime.now(tz=timezone.utc) - timedelta(days=31)
+    for call in calls:
+        assert call["interval"] == "1m"
+        assert call["start"] >= horizon, "no chunk may ask for data older than Yahoo keeps"
+        assert (call["end"] - call["start"]) <= timedelta(days=7, seconds=1), (
+            "no chunk may exceed the vendor's per-request cap"
+        )
+    # The chunks are consecutive and non-overlapping — never the same days fetched twice.
+    for earlier, later in zip(calls, calls[1:], strict=False):
+        assert later["start"] == earlier["end"]
+
+    # The recording says plainly that it is short, and why.
+    assert "30 days" in meta["vendor_limit"]
+    assert meta["window_start_utc"] == _days_ago(200)  # the REQUEST is recorded verbatim...
+    assert meta["covered_start_utc"] > meta["window_start_utc"]  # ...and the coverage is honest
+    assert meta["bar_count"] == 3 * len(calls)
+
+
+def test_a_window_entirely_outside_retention_is_422_naming_the_limit_with_no_vendor_call(ctx, monkeypatch):
+    client, bar_dir = ctx
+    calls = _install_per_call_yahoo_ticker(monkeypatch, lambda i, start, end: _intraday_frame(3, 0))
+
+    r = client.post(
+        "/research/bars",
+        json={"symbol": SYMBOL, "timeframe": "1m", "start": _days_ago(400), "end": _days_ago(380)},
+    )
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert "30 days" in detail and "1m" in detail
+    assert calls == [], "nothing servable — the vendor must not be called at all"
+    assert not bar_dir.exists() or list(bar_dir.glob("*.json")) == []
+
+
+def test_one_empty_chunk_does_not_discard_the_bars_the_other_chunks_returned(ctx, monkeypatch):
+    """A holiday week inside a longer window legitimately has no bars; failing the whole fetch over
+    it would throw away every real bar the other chunks returned."""
+    client, _bar_dir = ctx
+    calls = _install_per_call_yahoo_ticker(
+        monkeypatch,
+        lambda i, start, end: pd.DataFrame() if i == 1 else _intraday_frame(4, start.timestamp()),
+    )
+
+    r = client.post(
+        "/research/bars",
+        json={"symbol": SYMBOL, "timeframe": "1m", "start": _days_ago(200), "end": _days_ago(0)},
+    )
+    assert r.status_code == 200
+    assert r.json()["bar_series"]["bar_count"] == 4 * (len(calls) - 1)
+
+
+def test_every_chunk_empty_is_still_an_honest_422(ctx, monkeypatch):
+    client, bar_dir = ctx
+    _install_per_call_yahoo_ticker(monkeypatch, lambda i, start, end: pd.DataFrame())
+
+    r = client.post(
+        "/research/bars",
+        json={"symbol": SYMBOL, "timeframe": "1m", "start": _days_ago(20), "end": _days_ago(0)},
+    )
+    assert r.status_code == 422
+    assert "no data" in r.json()["detail"]
+    assert not bar_dir.exists() or list(bar_dir.glob("*.json")) == []
+
+
+def test_5m_and_1h_are_clamped_to_their_own_limits(ctx, monkeypatch):
+    client, _bar_dir = ctx
+    for timeframe, retention, phrase in (("5m", 60, "60 days"), ("1h", 730, "730 days")):
+        calls = _install_per_call_yahoo_ticker(
+            monkeypatch, lambda i, start, end: _intraday_frame(2, start.timestamp())
+        )
+        r = client.post(
+            "/research/bars",
+            json={
+                "symbol": SYMBOL,
+                "timeframe": timeframe,
+                "start": _days_ago(retention + 300),
+                "end": _days_ago(0),
+            },
+        )
+        assert r.status_code == 200, r.json()
+        assert phrase in r.json()["bar_series"]["vendor_limit"]
+        horizon = datetime.now(tz=timezone.utc) - timedelta(days=retention + 1)
+        assert all(call["start"] >= horizon for call in calls)
+
+
+def test_a_fully_served_window_records_no_vendor_limit_and_honest_coverage(ctx, monkeypatch):
+    """The other side of the contract: an unclamped recording says so (``vendor_limit: None``), and
+    its coverage is the first/last bar's own timestamps — never inferred by a reader."""
+    client, _bar_dir = ctx
+    fixture = _load_yahoo_fixture()
+    _install_fake_yahoo_ticker(monkeypatch, _yahoo_fixture_dataframe(fixture))
+
+    r = client.post(
+        "/research/bars",
+        json={
+            "symbol": fixture["symbol"],
+            "timeframe": fixture["timeframe"],
+            "start": fixture["start"],
+            "end": fixture["end"],
+        },
+    )
+    meta = r.json()["bar_series"]
+    assert meta["vendor_limit"] is None
+    assert meta["covered_start_utc"][:10] == "2026-06-01"
+    assert meta["covered_end_utc"][:10] == "2026-06-03"
+
+
+def test_a_clamped_window_is_served_store_first_within_the_same_day(ctx, monkeypatch):
+    """Re-fetching a clamped window only pays off once the vendor's rolling window has moved a day;
+    within the same UTC day the stored recording IS the answer, and no vendor call is made."""
+    client, _bar_dir = ctx
+    calls = _install_per_call_yahoo_ticker(
+        monkeypatch, lambda i, start, end: _intraday_frame(3, start.timestamp())
+    )
+    body = {"symbol": SYMBOL, "timeframe": "1m", "start": _days_ago(200), "end": _days_ago(0)}
+    first = client.post("/research/bars", json=body).json()["bar_series"]
+    assert first["vendor_limit"]
+    calls_after_first = len(calls)
+
+    repeat = client.post("/research/bars", json=body)
+    assert repeat.status_code == 200
+    assert repeat.json()["bar_series"]["id"] == first["id"]
+    assert len(calls) == calls_after_first, "a same-day repeat must not re-hit the vendor"
+
+
+def test_a_clamped_recording_from_an_earlier_day_is_eligible_for_a_refetch():
+    """The rule itself, in isolation: only a recording that a cap actually shortened AND that was
+    made on an earlier UTC day may be re-fetched. Unclamped recordings are immutable answers."""
+    from app.research.routes import _clamped_window_may_have_grown
+
+    today = datetime.now(tz=timezone.utc).date().isoformat()
+    yesterday = (datetime.now(tz=timezone.utc) - timedelta(days=1)).date().isoformat()
+
+    assert _clamped_window_may_have_grown(
+        {"vendor_limit": "Yahoo serves 1m ...", "created_utc": f"{yesterday}T10:00:00Z"}
+    )
+    assert not _clamped_window_may_have_grown(
+        {"vendor_limit": "Yahoo serves 1m ...", "created_utc": f"{today}T10:00:00Z"}
+    )
+    assert not _clamped_window_may_have_grown(
+        {"vendor_limit": None, "created_utc": f"{yesterday}T10:00:00Z"}
+    )
+    assert not _clamped_window_may_have_grown({})  # a pre-coverage legacy record: never re-fetched
+
+
+# --- the second vendor: Alpaca serves the history Yahoo caps -------------------------------------
+
+
+def test_vendor_alpaca_selects_the_alpaca_adapter_and_never_calls_yahoo(ctx, monkeypatch):
+    """``vendor: "alpaca"`` is the deep-history path (Alpaca serves 1m years back, where Yahoo keeps
+    30 days). With no credentials it is the EXISTING explicit 503 — never a silent fall-back to
+    Yahoo, which would answer a request for deep history with a shallow window."""
+    client, bar_dir = ctx
+    monkeypatch.delenv("ALPACA_API_KEY", raising=False)
+    monkeypatch.delenv("ALPACA_API_SECRET", raising=False)
+    calls = _install_per_call_yahoo_ticker(
+        monkeypatch, lambda i, start, end: _intraday_frame(3, start.timestamp())
+    )
+
+    r = client.post(
+        "/research/bars",
+        json={
+            "symbol": SYMBOL,
+            "timeframe": "1m",
+            "start": _days_ago(200),
+            "end": _days_ago(190),
+            "vendor": "alpaca",
+        },
+    )
+    assert r.status_code == 503
+    assert calls == []
+    assert not bar_dir.exists() or list(bar_dir.glob("*.json")) == []
+
+
+def test_the_same_window_from_two_vendors_is_two_distinct_store_first_entries(ctx):
+    """The store-first key includes the feed: a Yahoo recording of a window must never answer a
+    lookup for the same window from Alpaca (different session coverage, different tape)."""
+    from app.research.bar_index import BarIndex
+
+    index = BarIndex(":memory:")
+    common = {
+        "symbol": SYMBOL,
+        "timeframe": "1m",
+        "window_start_utc": START,
+        "window_end_utc": END,
+        "bar_count": 3,
+    }
+    index.insert({**common, "feed": "yahoo", "id": "yahoo-series", "checksum": "a" * 64})
+    index.insert({**common, "feed": "sip", "id": "alpaca-series", "checksum": "b" * 64})
+
+    assert index.lookup(SYMBOL, "1m", START, END, "yahoo").series_id == "yahoo-series"
+    assert index.lookup(SYMBOL, "1m", START, END, "sip").series_id == "alpaca-series"
+    assert index.lookup(SYMBOL, "1m", START, END, "iex") is None

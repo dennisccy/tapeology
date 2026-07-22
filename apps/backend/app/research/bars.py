@@ -31,7 +31,12 @@ Disciplines (each an anti-goal or a J-01 acceptance clause):
   * **Candles served embedded.** Unlike tick-level datasets (whose events are large and served only
     through a separate loader), a bar series is small by construction, so ``get``/``list`` embed the
     ordered OHLC candles directly on the served dict (the phase spec's explicit requirement) while
-    the on-disk shape still separates ``meta`` from ``bars`` for the same checksum discipline.
+    the on-disk shape still separates ``meta`` from ``bars`` for the same checksum discipline. Three
+    ADDITIVE projections exist for readers that do not want a whole series' candles at once:
+    ``include_bars=False`` (metadata only, ``bars`` key omitted), ``candles(...)`` (a bounded,
+    cursor-anchored slice of ONE series) and ``merged_candles(...)`` (the same slice over every
+    recorded series for one symbol+timeframe, folded by timestamp). All go through the SAME verified
+    load — projections of verified content, never a second, unverified read path.
   * **Honest failure states.** Unknown id -> ``BarSeriesNotFound``; an empty fetched window ->
     ``EmptyBarWindowError`` (nothing written, nothing fabricated).
 """
@@ -155,11 +160,51 @@ _VERIFIED_CACHE: dict[str, tuple[int, int, _LoadedBarSeries]] = {}
 _RACY_WRITE_GUARD_SECONDS = 2.0
 
 
+# The merged-view memo behind ``BarStore.merged_candles``: key = (symbol, timeframe, the exact set of
+# contributing (series_id, content-checksum) pairs); value = (ascending merged rows, meta). Same
+# atomic single-key-assignment publish discipline as ``_VERIFIED_CACHE`` above. Because the key
+# names every contributing series AND its content checksum, ANY change to the recorded set (a new
+# fetch, a deleted file, a changed file) yields a different key -- a stale merge cannot be served.
+_MERGED_CACHE: dict[tuple, tuple[list[dict], dict]] = {}
+
+
+def _slice_rows(
+    rows: list[dict],
+    *,
+    before_ts: float | None,
+    after_ts: float | None,
+    limit: int,
+) -> tuple[list[dict], bool, bool]:
+    """The ONE implementation of the cursor/slice semantics both candle reads serve (per-series
+    ``BarStore.candles`` and merged ``BarStore.merged_candles``) -- see ``candles``'s docstring for
+    the cursor contract. ``rows`` is consumed in its given order and never reordered; returned rows
+    are fresh per-row copies (a caller mutating them can never poison a cached record)."""
+    if before_ts is not None and after_ts is not None:
+        raise ValueError("pass at most one of before_ts / after_ts — they anchor opposite ends")
+    if limit < 1:
+        raise ValueError("limit must be >= 1")
+
+    if before_ts is not None:
+        matching = [i for i, row in enumerate(rows) if row["ts"] <= before_ts]
+        window = matching[-limit:]
+    elif after_ts is not None:
+        matching = [i for i, row in enumerate(rows) if row["ts"] >= after_ts]
+        window = matching[:limit]
+    else:
+        window = list(range(len(rows)))[-limit:]
+
+    if not window:
+        return [], False, False
+    first, last = window[0], window[-1]
+    return [dict(rows[i]) for i in window], first > 0, last < len(rows) - 1
+
+
 def _reset_verified_cache_for_tests() -> None:
     """Test-only: clears the module-level verified-record cache. Never called from any production
     code path — exists solely so tests (and the autouse ``conftest.py`` fixture) can guarantee no
     cross-test cache leakage (TC-12)."""
     _VERIFIED_CACHE.clear()
+    _MERGED_CACHE.clear()
 
 
 class BarStore:
@@ -261,21 +306,34 @@ class BarStore:
 
     # --- reads -----------------------------------------------------------------------------------
 
-    def get(self, bar_series_id: str) -> dict:
+    def get(self, bar_series_id: str, *, include_bars: bool = True) -> dict:
         """One bar series' metadata WITH its ordered OHLC candles embedded (verified load) — bar
         series are small by construction, so (unlike tick datasets) the candles are served
         directly rather than through a separate accessor. ``BarSeriesNotFound`` for an unknown id.
         era-fast_wall J-02: ``bars`` is a fresh list of fresh per-row dict COPIES on every call
         (never the cached list/dicts themselves), so a caller mutating the returned structure can
-        never poison a later cached read (TC-6)."""
+        never poison a later cached read (TC-6).
+
+        ``include_bars=False`` serves the SAME verified metadata with the ``bars`` key OMITTED
+        (never an empty list — an absent key is the honest "not asked for", distinguishable from a
+        series that genuinely holds no candles) and skips the per-row copying entirely. The
+        verification path is identical; only the projection differs. The default is unchanged, so
+        every pre-existing caller sees byte-identical output."""
         loaded = self._load_by_id(bar_series_id)
+        if not include_bars:
+            return {**loaded.meta}
         return {**loaded.meta, "bars": [dict(row) for row in loaded.rows]}
 
-    def list(self) -> tuple[list[dict], list[dict]]:
+    def list(self, *, include_bars: bool = True) -> tuple[list[dict], list[dict]]:
         """Every bar series' metadata + candles (each file verified), oldest first, plus an
         EXPLICIT error row per file that failed verification — a corrupt file is surfaced, never
         silently hidden and never served as data. era-fast_wall J-02: routed through the same
-        stat-keyed cache as ``get`` (per-row copies here too — see ``get``'s docstring)."""
+        stat-keyed cache as ``get`` (per-row copies here too — see ``get``'s docstring).
+
+        ``include_bars=False`` omits the ``bars`` key from every record (see ``get``'s docstring for
+        the omit-vs-empty-list rationale) — the same verified records, minus the candle payload and
+        minus the per-row copying. Every file is still verified; nothing is skipped or approximated.
+        The default is unchanged, so a no-param call is byte-identical to before."""
         if not self._root.exists():
             return [], []
         records: list[dict] = []
@@ -283,11 +341,141 @@ class BarStore:
         for path in sorted(self._root.glob("*.json")):
             try:
                 loaded = self._cached_load(path)
-                records.append({**loaded.meta, "bars": [dict(row) for row in loaded.rows]})
+                if include_bars:
+                    records.append({**loaded.meta, "bars": [dict(row) for row in loaded.rows]})
+                else:
+                    records.append({**loaded.meta})
             except BarSeriesIntegrityError as exc:
                 errors.append({"file": path.name, "error": str(exc)})
         records.sort(key=lambda meta: (meta.get("created_utc", ""), meta.get("id", "")))
         return records, errors
+
+    def candles(
+        self,
+        bar_series_id: str,
+        *,
+        before_ts: float | None = None,
+        after_ts: float | None = None,
+        limit: int,
+    ) -> tuple[list[dict], bool, bool]:
+        """A bounded SLICE of one series' stored candles (verified load), plus the two
+        "more exist outside this slice" flags — the accessor a viewport-sized chart pages through
+        instead of pulling a whole series.
+
+        Cursor semantics (both INCLUSIVE, so a cursor taken from a returned row re-returns that row
+        and the caller de-duplicates by ``ts`` — never an off-by-one hole in the middle of a chart):
+
+          * ``before_ts`` -> the LAST ``limit`` rows with ``ts <= before_ts``.
+          * ``after_ts``  -> the FIRST ``limit`` rows with ``ts >= after_ts``.
+          * neither       -> the LAST ``limit`` rows (the newest window).
+
+        Passing BOTH is a caller error (``ValueError``) — the two anchor opposite ends and combining
+        them would silently pick one. Rows are returned in STORED ORDER, verbatim (fresh per-row
+        copies, exactly as ``get``); this method sorts, re-bins, gap-fills and rounds nothing.
+        ``has_more_before`` / ``has_more_after`` report whether a stored row exists strictly outside
+        the returned slice on that side — the honest "you can keep scrolling" signal (both ``False``
+        for an empty series, since there is nothing more in either direction)."""
+        return _slice_rows(
+            self._load_by_id(bar_series_id).rows,
+            before_ts=before_ts,
+            after_ts=after_ts,
+            limit=limit,
+        )
+
+    def merged_candles(
+        self,
+        symbol: str,
+        timeframe: str,
+        *,
+        before_ts: float | None = None,
+        after_ts: float | None = None,
+        limit: int,
+    ) -> tuple[list[dict], bool, bool, dict]:
+        """The SAME bounded slice as ``candles``, but over EVERY recorded series for one
+        (symbol, timeframe) folded into a single ascending candle series.
+
+        Why this exists: a symbol accumulates many overlapping recorded windows (fetching AAPL twice
+        over different date ranges writes two immutable series — the store never mutates one). A
+        chart paging ONE of them can only ever show that window's history, so zooming out honestly
+        runs out of bars while a longer recording of the very same symbol/timeframe sits on disk.
+        This read is the display view over all of them; it never merges ACROSS symbols or
+        timeframes, and it never invents a candle that no recorded series holds.
+
+        The fold is a ts-keyed map, so a timestamp recorded by several series appears exactly ONCE.
+        Where recordings of the same timestamp differ, the row from the MOST RECENTLY CREATED series
+        wins — the SAME ``(created_utc, id)`` tie-break ``research/levels.py``'s
+        ``_select_one_series_per_timeframe`` already applies for the identical "two series, one
+        (symbol, timeframe)" case, so the two never disagree about which recording is authoritative.
+        Differences are common and mostly benign (Yahoo re-derives split/dividend-adjusted prices per
+        fetch, so an older recording differs in the 7th significant digit; a bar fetched mid-session
+        is later superseded by its completed self) — serving the newest recording is the only rule
+        that keeps a completed bar from being overwritten by a stale partial one. The COUNT of such
+        timestamps is reported in the returned meta (``revised_timestamps``) rather than resolved
+        out of sight: the merge is a choice, and the caller is told how often it was made.
+
+        Returns ``(rows, has_more_before, has_more_after, meta)`` where ``meta`` carries
+        ``series_ids`` (every contributing series, oldest-created first), ``bar_count`` (the merged
+        total available, not the slice length), ``revised_timestamps``, and ``integrity_errors``
+        (a corrupt file is surfaced exactly as ``list`` surfaces it — never served as data, never
+        silently dropped from the merge)."""
+        normalized_symbol = symbol.strip().upper()
+        normalized_timeframe = timeframe.strip()
+        merged, meta = self._merged_rows(normalized_symbol, normalized_timeframe)
+        rows, has_more_before, has_more_after = _slice_rows(
+            merged, before_ts=before_ts, after_ts=after_ts, limit=limit
+        )
+        return rows, has_more_before, has_more_after, meta
+
+    def _merged_rows(self, symbol: str, timeframe: str) -> tuple[list[dict], dict]:
+        """The memoized fold behind ``merged_candles``. Returns the ascending merged rows (the
+        cached list itself — every caller slices + copies before serving) plus the meta describing
+        how it was built.
+
+        Memo key: the exact set of contributing series AND their content checksums, so recording a
+        new series, deleting one, or any content change produces a different key — a stale merge is
+        not representable. Published with the SAME single-assignment discipline as
+        ``_VERIFIED_CACHE`` above (see that block comment for the torn-read rationale). Nothing is
+        cached when a file fails verification, since the error set is part of the answer."""
+        if not self._root.exists():
+            return [], {"series_ids": [], "bar_count": 0, "revised_timestamps": 0, "integrity_errors": []}
+
+        contributing: list[_LoadedBarSeries] = []
+        errors: list[dict] = []
+        for path in sorted(self._root.glob("*.json")):
+            try:
+                loaded = self._cached_load(path)
+            except BarSeriesIntegrityError as exc:
+                errors.append({"file": path.name, "error": str(exc)})
+                continue
+            if loaded.meta.get("symbol") == symbol and loaded.meta.get("timeframe") == timeframe:
+                contributing.append(loaded)
+
+        # Oldest-created first, so the LAST writer into the ts map is the most recently created
+        # series -- the documented winner for a timestamp several recordings hold.
+        contributing.sort(key=lambda s: (s.meta.get("created_utc", ""), s.meta.get("id", "")))
+        key = (symbol, timeframe, tuple((s.meta.get("id"), s.meta.get("checksum")) for s in contributing))
+        cached = _MERGED_CACHE.get(key)  # read-local-reference-before-inspect
+        if cached is not None and not errors:
+            return cached[0], {**cached[1], "integrity_errors": []}
+
+        by_ts: dict[float, dict] = {}
+        revised: set[float] = set()
+        for loaded in contributing:
+            for row in loaded.rows:
+                ts = row["ts"]
+                previous = by_ts.get(ts)
+                if previous is not None and previous != row:
+                    revised.add(ts)
+                by_ts[ts] = row
+        merged = [by_ts[ts] for ts in sorted(by_ts)]
+        meta = {
+            "series_ids": [s.meta.get("id") for s in contributing],
+            "bar_count": len(merged),
+            "revised_timestamps": len(revised),
+        }
+        if not errors:
+            _MERGED_CACHE[key] = (merged, meta)  # single atomic rebind
+        return merged, {**meta, "integrity_errors": errors}
 
     def load_bars(self, bar_series_id: str) -> list[RawBar]:
         """The stored candle series as typed ``RawBar`` records (verified load, exact stored
@@ -308,10 +496,20 @@ class BarStore:
         window_end_utc: str,
         feed: str,
         bars: list[RawBar],
+        vendor_limit: str | None = None,
     ) -> dict:
         """Persist ONE new bar series (record + register in a single explicit action). Content
         already registered raises the 409-style ``BarSeriesAlreadyRegistered`` (there is no
-        update/re-record path at all — immutability is structural)."""
+        update/re-record path at all — immutability is structural).
+
+        COVERAGE (never inferred by a reader): ``covered_start_utc``/``covered_end_utc`` are the
+        first and last bar's own timestamps, and ``vendor_limit`` is the caller-supplied sentence
+        naming any vendor cap that shortened the fetch (``None`` when the request was served in
+        full). Without these a recording whose window says ``2026-01-01..2026-07-21`` but which
+        holds only the last 30 days is indistinguishable from a complete one — precisely the
+        confusion that made a clamped intraday fetch look like a broken one. They live in ``meta``
+        (never in the checksummed CONTENT identity, which stays symbol+timeframe+feed+rows), so a
+        pre-existing file simply lacks them and every reader treats them as optional."""
         if not bars:
             raise EmptyBarWindowError("no bars in the requested window — nothing was recorded")
         rows = [_bar_to_row(bar) for bar in bars]
@@ -332,6 +530,11 @@ class BarStore:
             "bar_count": len(rows),
             "checksum": checksum,
             "created_utc": _iso_utc(datetime.now(timezone.utc).timestamp()),
+            # min/max rather than rows[0]/rows[-1]: coverage is a fact about the CONTENT, and must
+            # not silently depend on an adapter having sorted its rows.
+            "covered_start_utc": _iso_utc(min(row["ts"] for row in rows)),
+            "covered_end_utc": _iso_utc(max(row["ts"] for row in rows)),
+            "vendor_limit": vendor_limit,
         }
         record = {"meta": meta, "bars": rows}
         payload = {"file_checksum": _sha256(_canonical(record)), "record": record}
