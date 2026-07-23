@@ -1,492 +1,655 @@
-# Tapeology — Project Goal (Interlude: The Fast Wall — /structure at interactive speed & the operator-run edge report)
+# Tapeology — Project Goal (Interlude: The Clean Slate — demolishing the journal-era surfaces)
 
-> Eras 1–5B are the **foundation** of this goal and MUST NOT regress. Eras 1–2 (tape reading + the research
-> evolution, J-01 – J-68, GOAL_ACHIEVED) are archived at
-> [`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md); the structure-UI interlude at
-> [`docs/goal-archive/goal-2026-07-07.md`](goal-archive/goal-2026-07-07.md); **Era 5 "The Library"** at
-> [`docs/goal-archive/goal-2026-07-14.md`](goal-archive/goal-2026-07-14.md). Era 3 (the profit-research
-> measurement machine), Era 4 (the structure-and-tape evolution), and **Era 5B "The Tradable Wall"
-> (GOAL_ACHIEVED 2026-07-16, session `tradable_wall`, J-01 – J-08)** are frozen foundation; their records live
-> in git history and in `reports/goal-session-tape_to_profit-delivered.md`,
-> `reports/goal-session-tape_to_profit_support_resistence-delivered.md`, and
-> `reports/goal-session-tradable_wall-delivered.md`.
+> Eras 1–5C are the **foundation** of this goal. Eras 1–2 (tape reading + the research evolution, J-01 – J-68,
+> GOAL_ACHIEVED) are archived at [`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md);
+> the structure-UI interlude at [`docs/goal-archive/goal-2026-07-07.md`](goal-archive/goal-2026-07-07.md);
+> **Era 5 "The Library"** at [`docs/goal-archive/goal-2026-07-14.md`](goal-archive/goal-2026-07-14.md);
+> **the "Fast Wall" performance interlude (GOAL_ACHIEVED 2026-07-17, session `fast_wall`, J-01 – J-07)** at
+> [`docs/goal-archive/goal-2026-07-17.md`](goal-archive/goal-2026-07-17.md). Era 3 (the profit-research
+> measurement machine), Era 4 (the structure-and-tape evolution), and Era 5B "The Tradable Wall" are frozen
+> foundation; their records live in git history and in `reports/goal-session-*-delivered.md`
+> (`tape_to_profit`, `tape_to_profit_support_resistence`, `tradable_wall`, `yahoo_fetch`, `fast_wall`).
 >
-> **This chapter is an operator-directed performance interlude, not one of the numbered research eras** (the
-> [`docs/goal-archive/goal-2026-07-07.md`](goal-archive/goal-2026-07-07.md) UI interlude is the precedent). It
-> adds **no research finding and changes no research value** — every number the product serves stays
-> byte-identical. It is *enabling work* for the router
-> ([`docs/research-directions.md`](research-directions.md) Part 5.1): era 6 "Referee" needs the three-way edge
-> report as its input, and that report has **never once completed** on the real corpus — the compute cost
-> era 5B honestly documented is, measured, ~99% redundant recomputation. This interlude removes the waste,
-> makes the sweep an explicit resumable operator act, and makes `/structure` load at interactive speed.
+> **This chapter is an operator-directed DEMOLITION interlude, not one of the numbered research eras** (the
+> 2026-07-07 UI interlude and the 2026-07-17 performance interlude are the precedents). On 2026-07-23 the
+> operator judged the era-1/2 journal-era product surfaces — the manual thesis journal, the replay studies,
+> and the performance/analytics page, with their hints/stance/verdict/grades machinery — **not useful for
+> digging the edge**, and directed their FULL REMOVAL (not hiding) ahead of the next chapters (an automated
+> screening/decision "Desk" era and an AI pattern-annotation era, designed separately). This interlude adds
+> **no research finding and no new capability**: it deletes product surfaces wholesale, keeps every retained
+> research value byte-identical, and carries exactly ONE sanctioned side effect — the `config_fingerprint`
+> **Path B epoch bump** ([`docs/research-directions.md`](research-directions.md) §0.4) that deleting the
+> journal-era `Config` fields forces.
+>
+> **This goal.md is deliberately over-specified.** It was authored with the strongest available model
+> against the repo at `main @ fa76460` (2026-07-23), with every deletion-boundary claim verified by grep
+> before being written down. The **Demolition inventory** (I-1 … I-9) and **Weak-model traps** (T-1 … T-14)
+> sections below are the executable ground truth for every iteration. When ANY in-era finding contradicts
+> an inventory row, STOP and surface it in the iteration report — never improvise a bigger deletion.
 
 ## Vision
 
-Era 5B filled `.data/` with real ticks (18 registered datasets, 882MB) and shipped the three-way edge report —
-and exposed the next honest problem: **the product cannot serve its own evidence**. Measured on the real
-corpus (2026-07-16, 16-core operator machine):
+The product today carries five pages; the operator uses two. `/journal` (271 lines), `/studies` (171), and
+`/performance` (334) — plus their backend: 15 journal-era routes (`/research/journal*`, `/research/thesis*`,
+`/research/hints*`, `/research/studies*`, `/research/analytics`), eleven research modules (`journal_rows`,
+`monitor`, `hints`, `stance`, `verdict`, `grades`, `marks`, `excursions`, `execution_checks`, `analytics`,
+`studies`), three MCP tools (`journal`, `analytics`, `studies`) plus the thesis/study half of a fourth
+(`taxonomy` — SLIMMED, not deleted: its feed-basis labels feed the KEPT provenance badge), two WebSocket
+frame keys (`thesis`, `hint`), and the cockpit's thesis strip / hint dock / sound cue — all exist to serve
+a manual journaling workflow the operator has concluded does not help find the edge. Dead weight is not
+neutral: every era pays to keep these surfaces green (sentinels, goldens, regression passes), every new
+agent reads them, and the coming Desk era would have to route around them.
 
-- Opening `/structure` fires `GET /research/edge-report`; with the result cache empty (0 rows — the real
-  compute has never finished) the route **synchronously starts the full backtest sweep inside the page's own
-  request**, with no single-flight guard — every page load piles on another sweep. Observed: the backend
-  worker pinned at 98% CPU for hours after a single page visit, degrading every other endpoint through the
-  GIL, while the Edge Report section spins forever.
-- `GET /research/datasets` takes **31.4s to return 8.6KB of metadata**, because `DatasetStore.list()`
-  re-reads, re-parses, and double-sha256s all 882MB on every call (~30MB/s measured).
-- `GET /research/setups` takes **minutes** when cold: ~456 `compute_tradability` calls, each re-reading and
-  re-hashing all 47 bar files — **~17GB of cumulative re-read observed** for one request — plus O(n²) pivot
-  math; its only cache is one in-process slot wiped by every dev-server reload.
-- The sweep's documented "~10+h" is not real work. Raw engine replay runs at **12,829 events/s** (the whole
-  ~9.1M-event corpus ≈ 12 min per strategy); a `v1` backtest of a 14,241-event dataset takes **1.37s** — but
-  `structure_tape` on the SAME dataset could not finish in 9.3 minutes (**≥400×**), because the arming check
-  re-runs the FULL levels pipeline (including a whole-bar-store re-read + re-hash) **per confirming tick**.
-  Yet levels are a pure function of the as-of bar prefix, which changes only when a bar closes (~100 distinct
-  states per session), and the tradable map's basis is constant per UTC session date.
+This interlude removes them **completely and honestly**:
 
-This interlude makes the wall fast without moving a single brick:
+1. **Deletion, not hiding.** Pages, routes, modules, components, WS keys, MCP tools, nav rows, types, and
+   their tests are gone from the codebase — grep-provably, with no orphaned imports or dead links.
+2. **The kept product is untouched in value.** Cockpit (`/`) and Structure (`/structure`) — the live/sim/
+   historical tape, **both charts** (`StructureChart` + the cockpit `PriceChart` container — kept in full
+   by explicit operator directive), the bar library, levels/zones, the tradable map, case studies, the
+   edge report, the strategy registry, the champion pointer, and the PnL promotion ledger — keep serving
+   **byte-identical numbers on identical inputs**. (`pnl_ledger.py` is the promotion honesty ledger, NOT
+   the performance page — it stays, MCP tool and all.)
+3. **Shared code moves before its home is demolished.** `marks.r_basis` (the R-multiple basis the backtest
+   runner reads) and `studies.py`'s dataset-source constants + reference-window loader (which `datasets.py`,
+   `backtests.py`, and `pnl_baseline.py` import) are relocated byte-identically into kept modules FIRST.
+4. **The fingerprint moves once, lawfully.** Deleting the journal-era `Config` fields (verdict classifier
+   thresholds among them — fingerprint-included by design) moves `config_fingerprint` off the founding
+   `4d665603569b9dbf`. That bump is executed as its own journey, exactly per §0.4 Path B: documented here,
+   pinned literal updated at all **13 verified pin sites** (I-9), founding baseline re-seeded under the new
+   epoch, ledger row appended, sentinel asserting the new pin. Cross-epoch pooling is forbidden forever.
 
-1. **`/structure` never computes** — `GET /research/edge-report` answers instantly from the durable cache or
-   with an honest "not computed" state; the sweep runs only as an explicit operator act.
-2. **The stores stop re-reading** — verified-content caches (stat-keyed, tamper-safe, rebuildable) end the
-   882MB-per-call and 17GB-per-scan festivals; restarts stop re-paying minutes.
-3. **The sweep stops wasting** — a per-run memo serves the arming checks from the ~100 real level states per
-   session instead of recomputing per tick, byte-identically.
-4. **The compute becomes an operator act** — a single-flight, cancellable, progress-reporting background job
-   (UI button + CLI warmer), **resumable** (durable per-dataset×strategy sub-results) and **parallel**
-   (process pool), so the first-ever completed real edge report costs minutes, not "never" — and a future
-   dataset costs only its own three backtests.
-
-Every accelerator is a **rebuildable derived value, never a source of truth**: deleting any of them loses
-nothing and fabricates nothing, and equivalence tests prove the accelerated outputs byte-identical to fresh
-computes. The measured baselines above are this interlude's ground truth; the deliverable is the same product,
-served at the speed its own honesty deserves.
+The deliverable is a leaner instrument — **Cockpit + Structure, nothing else** — with the honesty machinery
+(stores, gates, registry, ledger, read-only MCP) fully intact, ready for the Desk chapter to build on
+cleared ground.
 
 ## Target Users
 
-- The project owner (a discretionary intraday trader) whose `/structure` page currently hangs for minutes and
-  whose machine burns hours of CPU per page visit — and who has never yet been able to SEE the real-corpus
-  edge report era 5B built.
-- AI dev-chain agents (the goal-mode chain) building and browser-verifying the fast path, the honest
-  not-computed state, and the operator-run compute.
+- The project owner (a discretionary intraday trader) who wants the product reduced to the surfaces that
+  actually serve edge-digging, ahead of an automated screening/decision Desk operated through Claude + MCP.
+- AI dev-chain agents (the goal-mode chain) executing and browser-verifying a large, precise deletion
+  without touching a single research value.
 
-## Foundation invariants (still law — eras 1–5B)
+## Foundation invariants (still law — eras 1–5C, minus the demolished surfaces)
 
-The era-1–2 constitution ([`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md)), the
-era-3 measurement machine, the era-4 structure stack, the era-5 keyless bar library, and the era-5B tradable
-wall remain binding verbatim on ALL new code: price-impact-over-aggression; honest uncertainty; **no
-fabricated data**; single source of truth; no magic numbers; provider-agnostic engine; deterministic &
-reproducible; no secrets in source; research read-only over the engine; journal/record integrity;
-source/feed/`config_fingerprint` honesty; the existing surfaces (`/`, `/journal`, `/journal/[id]`, `/studies`,
-`/performance`, `/structure`) stay intact.
+The era-1–2 constitution ([`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md)) remains
+binding on all KEPT code — price-impact-over-aggression; honest uncertainty; **no fabricated data**; single
+source of truth; no magic numbers; provider-agnostic engine; deterministic & reproducible; no secrets in
+source; research read-only over the engine; record integrity; source/feed/`config_fingerprint` honesty —
+**except its surface inventory**: this interlude, by explicit operator direction, removes `/journal`,
+`/journal/[id]`, `/studies`, and `/performance` from that inventory. The KEPT surfaces (`/`, `/structure`)
+stay intact.
 
 In addition, these stay **frozen foundation**:
 
-1. The **tape engine** emits its five states byte-identically under `default`; `config_fingerprint` stays
-   `4d665603569b9dbf` (equivalence-tested). **This interlude adds ZERO `Config` fields** — every new
-   operational knob is an env var + derived sibling path (the `bar_index` / `TAPEOLOGY_BAR_INDEX_DB`
-   precedent), so the fingerprint cannot move.
-2. The **research computations** — `levels.py` (raw levels + A/B/C zones and its parameters),
-   `tradability.py` (the ≤10-band map), `setups.py` (the scan + reactions + forward returns),
-   `edge_report.py` (the three-way cells, gates, null baseline, register), the strategy registry
-   (`v1` + `structure_tape` + `structure_tape_map`), the class-scaled math, and the backtest runner's
-   simulated trades — stay **behaviorally byte-identical: identical inputs keep producing identical
-   outputs.** This interlude changes only *when and how often* they are computed, never *what* they compute.
-3. The **stores** — the JSON `BarStore` and `DatasetStore` file formats, checksums, append-only immutability,
-   and split freezing — are untouched on disk; the verification discipline (a corrupt or tampered file is an
-   explicit error, never silently served) is preserved at every read that loads content.
-4. **`v1`, `default`, `structure_tape`, `structure_tape_map`, and the champion pointer are frozen.** The
-   champion moves only through the existing sweep gate on hold-out data; nothing here promotes.
-5. The **era-5B UI surfaces** — `/structure`'s Tradable Map / Case Studies / Edge Report sections, the raw
-   toggle, the era-5 fetch control + provenance badge, and the cockpit band overlay + confluence chip — keep
-   working exactly as shipped, including the frozen warm-cache texts ("No edge-report cells yet.", the
-   "simulated — assumed fees/slippage — not indicative of live results" register).
-6. The **existing rebuildable accelerators** — the derived `bar_index`, the J-08 `EdgeReportCache`, and the
-   setups `_SCAN_CACHE` discipline — keep their contracts (rebuildable, never a source of truth, loss loses
-   nothing); this interlude extends the same discipline, it never weakens it.
+1. The **tape engine** (`app/engine/` — five states, thresholds, features, history, observations) emits
+   byte-identical output under `default` on identical inputs. `config_fingerprint` stays `4d665603569b9dbf`
+   through J-01 – J-03 and moves EXACTLY ONCE, in J-04, via the §0.4 Path B protocol — never any other way.
+2. The **research computations** — `levels.py`, `tradability.py` (+cache), `setups.py` (+scan cache),
+   `edge_report*.py` (report, caches, compute manager, CLI), `backtests.py`, the strategy registry
+   (`v1` + `structure_tape` + `structure_tape_map`), `profiles.py` (`default`), and the champion pointer —
+   stay behaviorally byte-identical: identical inputs keep producing identical outputs (only the
+   `config_fingerprint` STAMP inside newly-computed payloads changes after J-04).
+3. The **stores** — the JSON `BarStore` + `DatasetStore` formats, checksums, append-only immutability, split
+   freezing, the durable accelerator DBs (`bar_index`, `dataset_index`, edge-report caches, setups scan
+   cache, tradability cache) — are untouched in format and discipline. Registered datasets and bar series
+   are never deleted, re-tagged, or content-perturbed.
+4. The **PnL promotion ledger** (`pnl_ledger.py`, `reports/pnl/pnl-history.md`, the MCP `pnl_ledger` tool)
+   stays append-only and intact — existing rows keep their original fingerprint stamps forever.
+5. The **era-5B/5C `/structure` surfaces** — Tradable Map / Case Studies / Edge Report sections, the raw
+   toggle, the fetch control + provenance badge, the Compute button + progress poll, the frozen warm-cache
+   texts — and **both charts** — `StructureChart.tsx` (the ONE shared renderer for `/structure` and the
+   cockpit) and `PriceChart.tsx` (the cockpit chart container: historical candles, timeframe switching,
+   viewport paging, S/R band overlay, live tape moving bars) — keep working exactly as shipped. **The
+   charts are kept in full (explicit operator directive, 2026-07-23); a chart regression is veto-class.**
+6. The **read-only MCP server** (`app/mcp/`) keeps its byte-identical GET-proxy contract; this interlude
+   removes three tools and slims one payload (`taxonomy`), never adds writes.
 
 ## Success Criteria
 
-In priority order — honesty and non-regression outrank speed:
+In priority order — kept-value integrity outranks deletion completeness outranks speed of execution:
 
-1. **Nothing existing regresses.** Full backend suite green (no test deleted or weakened), engine equivalence
-   proves byte-identical `default` outputs, `config_fingerprint` stays `4d665603569b9dbf`, every era-1–5B
-   surface behaves exactly as shipped, and the warm-cache Edge Report render (cells or the honest
-   "No edge-report cells yet." empty state, register visible) is byte-equal to before.
-2. **`/structure` never triggers compute.** `GET /research/edge-report` answers within an interactive budget
-   in every state — a warm cache serves the report verbatim; a cold cache returns an honest, explicit
-   "not computed" payload and **starts nothing**. Opening the page never costs the machine hours (or even
-   seconds) of sweep CPU.
-3. **The heavy reads answer at interactive speed when content is unchanged.** With stores unchanged since the
-   last verified read, `GET /research/datasets` and `GET /research/setups` serve from verified-content caches
-   without re-reading the corpus (proven by zero-re-read spy tests keyless; observed sub-second on the real
-   corpus by the operator), and a backend restart no longer re-pays the 31.4s / minutes cold costs (durable
-   accelerators).
-4. **The first full real edge report completes — as one resumable operator act.** The sweep runs only via the
-   explicit trigger (UI button or CLI warmer): single-flight, cancellable, progress-visible, **resumable**
-   (a killed run re-computes only missing dataset×strategy pairs) and **parallel** (process pool; expected
-   ~10–20 min on the operator's 16-core machine vs never-completing today). Once computed it serves instantly
-   from the durable cache, and the completed three-way comparison is appended to
-   `reports/pnl/pnl-history.md` — closing era-5B J-08's still-outstanding step 3.
-5. **Every accelerator is rebuildable and proven byte-identical.** Deleting any cache/index DB loses nothing
-   (the next read re-verifies/recomputes); determinism and equivalence tests prove cached/memoized/parallel
-   outputs byte-identical to fresh sequential computes; a tampered store file is still detected on every
-   content change.
+1. **Nothing kept regresses.** Full backend suite green; engine equivalence proves byte-identical `default`
+   outputs; every kept `/` and `/structure` behavior works exactly as shipped (browser-verified, both
+   charts included); kept research values (levels, bands, touch events, edge cells, ledger rows)
+   byte-identical on identical inputs; `test_no_execution_path.py` and every kept guard test pass
+   unmodified.
+2. **The demolition is total.** `/journal`, `/journal/[id]`, `/studies`, `/performance` render the app's
+   404; the 15 journal-era routes return 404; nav shows exactly **Cockpit · Structure**; the WS frame
+   carries no `thesis`/`hint` keys; the MCP tool list is exactly the **15 kept tools** (I-6); a repo-wide
+   grep finds no live import of, reference to, or dead test for any deleted module/component (historical
+   `reports/**`, `runs/**`, and `docs/goal-archive/**` excepted — they are read-only history).
+3. **The epoch bump is lawful and complete.** Executed only in J-04, exactly per §0.4 Path B: the new pin
+   literal asserted at all 13 verified pin sites (I-9); the founding baseline re-seeded (`python -m
+   app.research.pnl_baseline`) appending the new-epoch founding row beside the old rows; the epoch change
+   documented on the ledger; no cross-epoch numbers pooled anywhere; no OTHER commit ever touches a pin.
+4. **Relocations are proven moves.** `r_basis` and the dataset-source constants/loader behave byte-
+   identically from their new homes; every kept caller's outputs are unchanged (existing kept tests pass
+   unmodified).
+5. **History stays readable.** journal.db's existing rows and tables remain (dormant — writers/readers
+   deleted, migrations untouched), the PnL ledger keeps all rows, and archived-era artifacts are not
+   edited.
 
 ## Key Capabilities
 
-Layered strictly on top of the era-1–5B capabilities, which remain unchanged.
+This interlude REMOVES capabilities; the "capabilities" below are the demolition's own work packages. The
+exact per-file ground truth for every package lives in the **Demolition inventory** (I-1 … I-9).
 
-1. **Cache-or-honest-absence GET** — `EdgeReportCache` gains `lookup(records, config)` (serve the current
-   key's row, hot-slot then durable, never computing) and `compute_and_publish(...)` (the always-recompute
-   operator path); `edge_report.py` gains `peek_strategy_comparison_report(...)`: store-integrity errors keep
-   raising `EdgeReportError` (the route's explicit 500); a warm key serves the report **verbatim**; an
-   **empty dataset registry still computes inline** (O(1) — zero backtests — preserving the existing
-   empty-registry response shape and MCP byte-identity); a cold key returns the honest not-computed payload.
-   The route swaps one call; the payload's `register` field is read from `backtests.REGISTER`, never a
-   restated literal. Path policy for the cache DB is extracted to one shared resolver
-   (`TAPEOLOGY_EDGE_REPORT_CACHE_DB` env else sibling of the dataset dir — exactly today's rule).
-2. **Verified-content store caches** — `bars.py` and `datasets.py` gain module-level stat-keyed caches of
-   VERIFIED loads: key `(absolute path, st_size, st_mtime_ns)`; a stat match serves the already-verified
-   record with zero I/O; ANY mismatch re-runs the full existing verifier (both checksums); integrity errors
-   are never cached; a ~2s "racy write" guard refuses to cache freshly-written files (same-granularity
-   rewrites can never be served stale); atomic single-slot publish (the `_SCAN_CACHE` read-local-ref
-   discipline). `BarStore` caches meta + rows (6.5MB total; `get`/`list` serve per-row copies so a caller
-   mutation can never poison the cache; `load_bars` builds fresh `RawBar`s). `DatasetStore` caches
-   **metadata ONLY** (882MB of rows never live in RAM) and only for `get()`/`list()` — **`load_events()` and
-   `replay()` keep full verification on every load** (the trust boundary, pinned by tests). A durable sibling
-   **dataset metadata index** (`dataset_index.db`; env `TAPEOLOGY_DATASET_INDEX_DB`; `bar_index.py`'s
-   "derived, rebuildable, owns nothing" shape; meta JSON stored WITHOUT `sort_keys`) makes restarts stop
-   re-paying the 882MB parse.
-3. **The arm memo** — `levels.py` gains `level_change_points(store, symbol)` (the sorted union of every
-   healthy series' bar epochs for the symbol plus each prior-period bar's `epoch + period_seconds` close
-   instant — a conservative superset; between two consecutive change points `compute_levels` is a constant
-   function of `as_of`); `tradability.py` gains `basis_day_key(as_of_epoch)` (its basis resolution is
-   constant per UTC session date). `backtests.py` gains a small per-run `_StructureArmMemo` with
-   `levels_at(as_of)` / `tradability_at(as_of)` (keyed by change-point interval / day key; a miss calls the
-   one canonical owner), built once per `structure_tape` / `structure_tape_map` run and threaded into the
-   arming checks as an optional keyword — collapsing thousands of per-tick recomputes into the ~100 real
-   level states per session, byte-identically.
-4. **The operator-run compute** — new `edge_report_compute.py`: `EdgeReportComputeManager` (registry-scoped
-   like the existing job managers; single-flight; cooperative cancel; an atomic progress snapshot:
-   `{id, state, force, started_utc, finished_utc, error, progress: {phase, backtests_total, backtests_done,
-   backtests_from_cache, current}}`), driving the ONE computer `run_strategy_comparison_report` with new
-   additive keyword-only hooks (`progress=`, `should_abort=`, `sub_cache=`, `workers=`, `force=` — all
-   defaulting to today's exact behavior). Routes: `POST /research/edge-report/compute` (idempotent
-   single-flight: a second POST returns the running snapshot with `started: false`),
-   `GET /research/edge-report/compute` (snapshot or `null`), `POST /research/edge-report/compute/cancel`
-   (409 when idle; a cancelled sweep caches no report). A CLI warmer — `python -m
-   app.research.edge_report_compute --workers N [--force] [--out report.json]` — resolves the same seams the
-   backend reads, prints per-backtest progress, is nohup-able, and survives backend restarts because it
-   writes the same durable SQLite caches the GET serves. **No new MCP tool** (MCP stays a read-only proxy
-   surface; the new GET status route is additive REST only).
-5. **The resumable + parallel sweep** — `EdgeReportBacktestCache`: one durable row per (dataset × strategy)
-   result block, keyed by `{dataset_id, dataset_checksum, strategy_id, profile, config_fingerprint,
-   config_content_hash, strategy_registry, bar_store_signature}` — the bar-store term (the sorted
-   `(symbol, timeframe, id, checksum)` tuples `setups._store_signature` already computes) is load-bearing:
-   the structure strategies read bar content per event, and the EXISTING persisted backtest journal rows are
-   NOT a safe resume source precisely because their `config_fingerprint` excludes the
-   `sr_*`/`tradability_*`/`setups_*` families and records no bar content. Values are the runner's `result`
-   blocks verbatim (stored WITHOUT `sort_keys`; the null-baseline seed is the config-owned constant, so a
-   cached block is byte-identical to a re-run by the runner's own documented contract). `_split_cells` gains
-   a `run_pair(dataset_meta, strategy_id)` provider seam (default = today's inline call; pooling and ordering
-   code untouched, so reassembly from cached blocks is byte-identical **by construction**). Each pair
-   publishes durably the moment it completes → a killed sweep resumes with only the missing pairs; a newly
-   recorded dataset costs exactly its own three backtests + reassembly. Parallel mode (CLI `--workers` / env
-   `TAPEOLOGY_EDGE_SWEEP_WORKERS`, default 4, ceiling documented ~6): `ProcessPoolExecutor` with the `spawn`
-   context; **task = one dataset (all three strategies)** so peak memory is bounded to ~one parsed dataset
-   per worker; largest-first (LPT) scheduling by event count; each worker uses a throwaway temp journal DB
-   for job bookkeeping (the report never references backtest ids) and hands results back through the durable
-   sub-cache. Parallelism runs ONLY in the CLI/background job — never inside a request thread.
-6. **The setups durable scan cache** — new `setups_scan_cache.py` (same SQLite shape, env
-   `TAPEOLOGY_SETUPS_CACHE_DB` else a sibling of the bar dir); `compute_setups`' cache key becomes
-   `(config content hash, store signature)` — the content hash reused from `edge_report_cache.py`, replacing
-   the fragile `id(config)` — checked hot-slot → durable → real scan; publish failures never block serving.
-   With capability 2, the remaining cold cost is the O(n²) scan math, paid once per (store, config) content
-   ever instead of on every backend restart.
-7. **The honest not-computed UI state** — `/structure`'s Edge Report section renders the not-computed payload
-   as a distinct panel ("**Edge report not computed yet.**" — deliberately NOT the frozen
-   "No edge-report cells yet." empty-report text, which remains the warm all-empty-cache render) with a
-   **"Compute edge report" button**: POST the trigger, poll the status route with the existing
-   poll-while-active pattern, render `backtests_done / backtests_total` (+ `backtests_from_cache`) verbatim,
-   and on `done` re-fetch the report into the existing `EdgeReportBody`; a `failed` snapshot surfaces its
-   `error` verbatim. Zero client recomputation anywhere.
+1. **Byte-identical relocations (before any deletion — I-2 RELOCATE table).** Move `r_basis` from
+   `marks.py` into `backtests.py` (its sole surviving consumer; `excursions.py`, the other importer, is
+   being deleted). Move `SOURCE_REFERENCE` / `SOURCE_HISTORICAL` / `REFERENCE_SOURCE_ID` /
+   `_load_reference_window` from `studies.py` (lines 101–217) into `datasets.py`, updating the importers
+   (`datasets.py:69-70`, `backtests.py:110`, `pnl_baseline.py:41-43`) and the `edge_report.py:72` comment.
+   Pure moves — no behavior change, no renamed semantics.
+2. **Backend surface deletion (I-1, I-2, I-3).** Delete the 15 journal-era routes; delete modules
+   `journal_rows.py`, `monitor.py`, `hints.py`, `stance.py`, `verdict.py`, `grades.py`, `marks.py`,
+   `excursions.py`, `execution_checks.py`, `analytics.py`, `studies.py`; **SLIM `taxonomy.py`** (the route,
+   module, and MCP tool stay — the KEPT `FeedBasisBadge` reads its `feed_basis` block — but every
+   thesis/verdict/stance/study label family and copy block is deleted); strip `ResearchRegistry` to its
+   kept duties (store access + the backtest/edge-compute job managers) — `study_jobs`,
+   `hint_projection_for`, `on_engine_created`, and `startup_sweep` go; remove the WS `thesis`/`hint` merge
+   and the lifespan monitor wiring from `app/main.py` (I-5); delete `JournalStore`'s journal-era methods
+   and record dataclasses (I-3; tables stay dormant; the append-only migration history is NOT edited;
+   schema version stays v8).
+3. **Frontend + WS deletion (I-7).** Delete pages `apps/frontend/app/{journal,studies,performance}/`; the
+   eleven journal-era components; the 14 journal-era `lib/api.ts` functions (**`fetchTaxonomy` is NOT one
+   of them** — the badge keeps it); the thesis/hint types and WS-frame fields; the cockpit page's thesis
+   stop-flow and thesis/hint/sound rendering; the four nav rows from `app/meta.py` ROUTES. **Both chart
+   components are kept** (I-7 chart clause): `StructureChart.tsx` untouched; `PriceChart.tsx` keeps every
+   behavior except building thesis-geometry overlays from the now-deleted thesis data.
+4. **MCP contract v2 — 15 tools (I-6).** Remove tools `journal`, `analytics`, `studies` from
+   `app/mcp/__init__.py`; `taxonomy` STAYS (its payload slims because the route's payload slims — the
+   byte-identical proxy discipline is unchanged). Update `tests/test_mcp_server.py` to the 15-tool
+   contract; `get_endpoint` allowlist unchanged (deleted paths now surface the backend's honest 404 — the
+   existing unshipped-path contract).
+5. **The §0.4 Path B epoch bump (its own journey — I-4, I-9).** Delete the journal-era `Config` fields
+   (confirmed list in I-4, closure rule by grep), prune the fingerprint EXCLUSION set of deleted names in
+   the same commit, then execute Path B verbatim: update the pinned literal at all 13 verified pin sites;
+   re-seed the founding baseline; document the epoch change on the ledger; the J-05 sentinel asserts the
+   new pin. Registered dataset/bar fixtures are untouched (rail 9).
+6. **Test-suite demolition + sentinel re-baseline (I-8).** Delete the ~24 journal-era test files; UPDATE
+   the six mixed/contract files per I-8's explicit keep/drop notes (`test_copy_discipline` is a KEEPER —
+   the rail-2 language lint); keep every kept-side test unmodified (the fast_wall source-introspection
+   guards included); browser-verify the kept product end to end (both charts included).
 
 ## Non-Goals
 
-- **No research-value change of any kind** — no level/band/reaction/cell/PnL number moves; no parameter
-  re-tuning; no gate, minimum-n, split, or register change. This interlude is pure serving-cost work.
-- **No auto-compute on page load** — visiting `/structure` (or any GET) never starts the sweep; compute is
-  operator-run only (button or CLI). No scheduled/ambient compute either.
-- **No engine hot-loop rewrites** — the TapeEngine replay path and its throughput are untouched; the win
-  comes from removing redundant recomputation, not from micro-optimizing frozen code.
-- **No new Config fields** (the fingerprint is frozen) and **no new runtime dependencies** — stdlib only
-  (`sqlite3`, `concurrent.futures`, `multiprocessing`).
-- **No new nav entries or pages** — the interlude lives inside the existing `/structure` Edge Report section.
-- **No MCP write surface** — MCP tools stay byte-identical read-only GET proxies; the compute trigger is
-  REST-only.
-- **No recording, no new data, no credential work** — the corpus is what era 5B recorded; W1 top-ups remain a
-  separate workstream.
-- **No editing of archived eras' artifacts** — `docs/goal-archive/`, the era-5B journey scripts under
-  `runs/goal-session-tradable_wall/`, and `reports/goal-session-*-delivered.md` are read-only history.
+- **No new features, pages, endpoints, strategies, or Config fields.** The Desk (universe screener,
+  decision ledger, briefing) and the AI annotation corpus are the NEXT chapters — designed separately,
+  built only after this interlude closes. Nothing of them lands here.
+- **No research-value change beyond the documented epoch bump.** No level/band/reaction/cell/PnL number
+  moves; no parameter re-tuning; no gate, minimum-n, split, or register change.
+- **No engine work.** `app/engine/` is untouched; its five states, thresholds, and outputs are frozen.
+- **No chart work.** `StructureChart.tsx` and `PriceChart.tsx` are kept as shipped (minus the sourceless
+  thesis-overlay inputs) — no rewrites, no "cleanups", no renderer consolidation.
+- **No MCP write surface.** MCP stays read-only GET proxies; this interlude only removes/slims tools.
+- **No recording, no new data, no credential work, no Yahoo/universe fetching.**
+- **No editing of archived history** — `docs/goal-archive/`, `runs/goal-session-*`,
+  `reports/goal-session-*-delivered.md`, `reports/phase-goal-*` artifacts, `reports/pnl/pnl-history.md`'s
+  existing rows, and journal.db's existing rows are read-only records. (Deleting CODE is this era's
+  mandate; deleting RECORDS is forbidden.)
+- **No schema surgery.** No v9 migration, no table drops, no rewriting migration history — dormant tables
+  are the honest, cheap choice.
 
 ## Constraints
 
 - **Stack (carried over):** Frontend Next.js 15 + TypeScript + Tailwind v3 (npm), `lightweight-charts`,
   dark-only. Backend Python 3.12 + FastAPI. Backend `http://localhost:8000`, frontend
   `http://localhost:3000`. No new runtime dependency.
-- **Fingerprint discipline:** `config_fingerprint` stays `4d665603569b9dbf`; all new knobs/paths are env vars
-  with derived sibling defaults (`TAPEOLOGY_DATASET_INDEX_DB`, `TAPEOLOGY_SETUPS_CACHE_DB`,
-  `TAPEOLOGY_EDGE_SWEEP_CACHE_DB`, `TAPEOLOGY_EDGE_SWEEP_WORKERS`) — the `get_bar_index` /
-  `get_edge_report_cache` resolution pattern, dependency-injectable and hermetic in tests.
-- **Byte-identity discipline:** every persisted cache value (edge report, sub-results, dataset metadata, scan
-  results) is stored `json.dumps` **WITHOUT `sort_keys`** so a durable-cache-served response is byte-identical
-  to a fresh compute's response (the existing `EdgeReportCache._insert` rule; REST↔MCP raw-byte proxy tests
-  enforce it). Determinism/equivalence tests accompany every accelerator.
-- **Verification trust boundary:** stat-keyed caches serve only content that WAS fully verified, keyed by
-  `(path, size, mtime_ns)`, with the ~2s racy-write guard and integrity-errors-never-cached; any stat change
-  re-verifies fully; `DatasetStore.load_events()`/`replay()` (the paths that feed research values) verify
-  fully on EVERY load, cache or no cache. Store docstrings are updated to state exactly this ("re-verified on
-  every content change"), and tests pin both sides of the boundary.
-- **Source-introspection guard tests (existing; the dev agent MUST respect them, never edit them):**
-  `tests/test_backtests.py:1500-1508` forbids the level-internal substrings (`_swing_pivots`,
-  `_prior_period_extremes`, `_cluster_levels`, `_grade_zone`) anywhere in `backtests.py` — hence the
-  change-point helper lives in `levels.py` and the memo methods are named `levels_at`/`tradability_at`;
-  `tests/test_backtests.py:932-943` requires `compute_tradability(` present and `compute_levels(` absent in
-  the map-arm source; `tests/test_setups.py:995-1017` requires exactly ONE `_SCAN_CACHE = (key, result)`
-  rebind; `tests/test_setups.py:758-771` forbids the substring "dataset" inside the scan functions;
-  `tests/test_edge_report_api.py:114-141` pins the route's `Depends` set and the literal `cache=cache` kwarg.
-- **Concurrency discipline:** in-process caches publish complete immutable tuples atomically
-  (read-local-reference-before-inspect — the iter-6 `_SCAN_CACHE` hardening); durable writes are single
-  atomic transactions over short-lived connections (WAL + busy_timeout — the `JournalStore._read_conn`
-  precedent); the compute manager is single-flight; a concurrent miss only ever costs a redundant,
-  harmless, byte-identical recompute.
-- **Test discipline:** the default suite stays hermetic and keyless — committed fixtures only; no test
-  deleted or weakened; counting-spy tests prove zero re-reads; tamper tests prove detection survives the
-  caches; the real-corpus timings and the full real compute are operator-run verifications, never CI gates.
-- **UI read discipline:** `/structure` renders endpoint values verbatim — the not-computed `detail`, the
-  progress counts, the report cells, and the register string are all server-owned; zero client recomputation.
+- **The deletion boundary is exactly the Demolition inventory (I-1 … I-9).** Anything discovered in-era
+  outside those lists is surfaced in the iteration report BEFORE being touched (trap T-14).
+- **Ordering discipline:** relocations land and prove green BEFORE their source modules are deleted
+  (J-01); the fingerprint pins are untouched until J-04; J-04 touches the pins and NOTHING else touches
+  them.
+- **Guard tests (kept, never edited):** `tests/test_no_execution_path.py`;
+  `tests/test_no_credential_in_artifacts.py`; the fast_wall source-introspection guards
+  (`tests/test_backtests.py:1500-1508` forbidden level-internal substrings,
+  `tests/test_backtests.py:932-943` map-arm source pins, `tests/test_setups.py:995-1017` single
+  `_SCAN_CACHE` rebind, `tests/test_setups.py:758-771` forbidden substring, the edge-report route
+  `Depends` pin). The ONLY sanctioned pin edit is J-04's Path B literal update at the 13 sites (I-9) —
+  the fingerprint ASSERTION LINES inside otherwise-kept test files are updated, the tests around them are
+  not weakened.
+- **WS contract change is explicit and typed:** the frame loses exactly the `thesis` and `hint` keys;
+  `lib/types.ts` + `lib/useTapeStream.ts` are updated in the same journey (J-02); no `undefined`-field
+  ghosts remain in the frontend types.
+- **Honest wording:** deleted surfaces 404 — no redirects, no "coming soon" placeholders, no tombstone
+  pages. The 404 is the app's existing not-found rendering.
+- **Test discipline:** the suite stays hermetic and keyless on committed fixtures; no kept test deleted or
+  weakened; the real-corpus behaviors (edge-report warm render, tradable map on real bars) are operator-run
+  verifications, never CI gates.
+- **Framework hygiene:** if any goal-mode framework asset (demo scripts, proposer guidance, eval fixtures)
+  references deleted surfaces, the reference is updated in the neutral source per
+  `.claude/maintenance-protocol.md` — never by editing generated mirrors.
 
 ## Design Direction
 
-Unchanged from eras 4–5B: dark-only, dense, professional, terminal-grade; honest empty/degraded states are
-first-class UI. The not-computed panel and compute progress reuse the existing panel/empty-state/poll
-patterns — no new visual language.
+Unchanged: dark-only, dense, professional, terminal-grade; honest empty/degraded states are first-class.
+The demolition leaves no dead links, no empty nav slots, no unstyled 404s — the kept two-page product looks
+deliberate, not amputated.
 
 ## Product Shape
 
-Nav (top bar) is unchanged: **Cockpit `/` · Journal `/journal` (+ `/journal/[id]`) · Studies `/studies` ·
-Performance `/performance` · Structure `/structure`**. Inside `/structure`, the existing **Tradable Map ·
-Case Studies · Edge Report** sections are unchanged except the Edge Report section, which gains the honest
-not-computed state, the "Compute edge report" button, and the progress line.
+Nav (top bar) after this interlude: **Cockpit `/` · Structure `/structure`** — nothing else. `/journal`,
+`/journal/[id]`, `/studies`, `/performance` are gone (404). The nav is data-driven from `app/meta.py`
+ROUTES (the single owner); `GET /meta/ui-routes` and the MCP `ui_route_map` tool reflect it verbatim.
 
-**Data Contract (canonical values):** additions, each with exactly one owner:
+**Data Contract:** every KEPT canonical value keeps its existing single owner unchanged (bands →
+`tradability.py`; touch events → `setups.py`; edge cells + not-computed payload → `edge_report.py`; compute
+snapshot → `edge_report_compute.py`; ledger rows → `pnl_ledger.py`; bars/candles → `bars.py`; levels/zones →
+`levels.py`; registry + champion → `strategies.py`/store; routes → `meta.py`). The **taxonomy labels** row
+SLIMS: `taxonomy.py` remains the single owner of research labels, but serves ONLY the families kept
+surfaces read (the `feed_basis` block the provenance badge renders, plus source labels); the
+thesis/verdict/stance/study families are removed with their owners. These rows are REMOVED entirely with
+their owners: active thesis, thesis journal + detail, verdict timeline, management stance, entry checks,
+grades, excursions, hints (active + log), study jobs/results, analytics aggregates. The WS frame = the
+engine projection ONLY (no additive research keys).
 
-- **The not-computed edge-report payload** (`status: "not_computed"`, `detail`, `dataset_count`, `register`
-  read from the backtests register constant, embedded `compute` snapshot or `null`) — owned by
-  `research/edge_report.py` (`peek_strategy_comparison_report`); read via the EXISTING
-  `GET /research/edge-report` (the `status` key is the discriminator; a real report never carries one). The
-  MCP `edge_report` proxy mirrors whichever payload the route serves, byte-identically, unchanged.
-- **The compute-job snapshot** (state, progress counts, error) — owned by `research/edge_report_compute.py`;
-  read via `GET /research/edge-report/compute`; started/cancelled via the two POST routes. Job state is
-  process-scoped bookkeeping (honestly lost on restart, like the existing job managers) — never a research
-  value.
-- **Rebuildable accelerators (explicitly NOT canonical values; deleting any loses nothing):** the two
-  in-process verified-content store caches; `dataset_index.db`; `setups_scan_cache.db`;
-  `edge_report_backtests.db` (the per-pair sub-results); and the existing `edge_report_cache.db`. Owners
-  remain the stores/computers they accelerate; every one recomputes byte-identically on loss.
-- Everything else — bands, events, cells, ledger, registries, datasets, bars, levels — unchanged existing
-  owners.
+## Demolition inventory — verified ground truth (2026-07-23, `main @ fa76460`)
+
+Every row below was verified by grep/read against `fa76460` before being written. **Line numbers are dated
+to that commit — always re-locate by symbol/route/decorator NAME (grep), never by line arithmetic**, since
+earlier journeys shift lines. Notation: **DELETE** = remove entirely; **SLIM** = file stays, listed parts
+removed; **RELOCATE** = move byte-identically, then delete the source; **KEEP-DANGER** = looks deletable,
+is not.
+
+### I-1 · Backend routes (`app/research/routes.py`)
+
+DELETE these 15 route handlers (decorator anchors at `fa76460`):
+
+| Route | Anchor |
+|---|---|
+| `GET /research/analytics` | `routes.py:457` |
+| `GET /research/thesis/active` | `routes.py:469` |
+| `GET /research/hints/active` | `routes.py:480` |
+| `GET /research/hints` | `routes.py:493` |
+| `GET /research/journal` | `routes.py:531` (+ helper `build_journal_detail` at 598) |
+| `GET /research/journal/{thesis_id}` | `routes.py:710` |
+| `POST /research/thesis` | `routes.py:728` |
+| `POST /research/thesis/{thesis_id}/resolve` | `routes.py:901` |
+| `POST /research/thesis/{thesis_id}/action` | `routes.py:1061` |
+| `POST /research/thesis/{thesis_id}/review` | `routes.py:1186` |
+| `POST /research/studies` | `routes.py:1300` (+ `get_study_market_adapter` at 1274) |
+| `GET /research/studies` | `routes.py:1405` |
+| `GET /research/studies/{study_id}` | `routes.py:1413` |
+| `POST /research/studies/{study_id}/cancel` | `routes.py:1424` |
+
+`GET /research/taxonomy` (`routes.py:446`) is **SLIM**: the route STAYS; its served payload shrinks to the
+kept label families (I-2 taxonomy row). Every OTHER route in the file is **KEEP**, explicitly: datasets
+(1470/1565/1574), bars (1692/1874/1934/1957), candles (2017), levels (2078), tradability (2108), setups
+(2168/2209), backtests (2240/2290/2299/2310), pnl ledger (2339), profiles (2355), strategies (2373),
+edge-report GET + compute POST/GET/cancel (2396/2441/2466/2475).
+
+### I-2 · Backend module dispositions (with reverse-import proof)
+
+**DELETE** (verified importers, all delete-side or import-lines being removed in the same journey):
+
+| Module | Verified importers at `fa76460` |
+|---|---|
+| `journal_rows.py` | `routes.py:91` |
+| `monitor.py` | `routes.py:81-87` block, `main.py` lifespan wiring (I-5) |
+| `hints.py` | `monitor.py` |
+| `stance.py` | `monitor.py`, `routes.py` |
+| `verdict.py` | `monitor.py` |
+| `grades.py` | `monitor.py`, `routes.py:79` |
+| `marks.py` (after RELOCATE) | `backtests.py:102` (moves), `excursions.py:44` (dies), `routes.py:80` |
+| `excursions.py` | `monitor.py`, `routes.py:77` |
+| `execution_checks.py` | `excursions.py`, `grades.py`, `monitor.py`, `routes.py:78`, `config.py`, `store.py` — ALL delete-side (**correction: an earlier draft wrongly listed this module as KEEP**) |
+| `analytics.py` | `routes.py:38` |
+| `studies.py` (after RELOCATE) | `datasets.py:69-70` (moves), `backtests.py:110` (moves), `pnl_baseline.py:41-43` (moves), `routes.py:93-101` |
+
+**RELOCATE** (land + prove green BEFORE deleting the source — J-01 step 1):
+
+| Symbol(s) | From | To | Importers to update |
+|---|---|---|---|
+| `r_basis` | `marks.py` | `backtests.py` (private helper, same math) | `backtests.py:102`; `excursions.py:44` dies with its module |
+| `SOURCE_REFERENCE`, `SOURCE_HISTORICAL`, `REFERENCE_SOURCE_ID`, `_load_reference_window` | `studies.py:101-217` | `datasets.py` | `datasets.py:69-70`, `backtests.py:110`, `pnl_baseline.py:41-43`; comment at `edge_report.py:72` |
+
+**SLIM**:
+
+- `taxonomy.py` — KEEP: the module, `GET /research/taxonomy`, the MCP `taxonomy` tool, and the label
+  families KEPT surfaces read — the `feed_basis` block (`FeedBasisBadge.tsx:46-60` reads
+  `taxonomy.feed_basis.feeds[].{id,name}` + the disclosure line) and the source labels
+  (`sim`/`iex`/`sip`/`yahoo`, taxonomy.py:42-45). DELETE: the verdict labels (56-61), thesis status labels
+  (71-75), `NOT_EVALUATED_NOTICE`/`not_evaluated_notice`/`mismatched_source_notice` (94-110), stance
+  labels + map + evidence copy (130-170+), `STUDY_COPY` incl. the "Replay studies" title (~646), the
+  setup-grammar/study families, and every other thesis/hint/study block. In-era rule: a label family
+  stays ONLY if a kept surface provably reads it (grep the frontend + kept routes).
+- `routes.py` — strip the delete-side imports: `from .analytics import compute_analytics` (38),
+  `excursions` (77), `execution_checks` (78), `grades` (79), `marks` (80), the `monitor` block (81-87),
+  `journal_rows` (91), the record types from `store` (92 — `ThesisRecord`/`ActionRecord`/
+  `VerdictEventRecord`; the `JournalStore` import itself STAYS), the `studies` block (93-101), the
+  taxonomy thesis-copy imports (101-103). KEEP imports right beside them: `datasets` block (65),
+  `pnl_ledger:87`, `profiles:88`, `strategies:89`, `feed_basis:90`. `ResearchRegistry` (267+) KEEPS store
+  access + the backtest/edge-compute job managers; LOSES `study_jobs` (294), `hint_projection_for` (375),
+  `on_engine_created`, `startup_sweep`.
+- `store.py`, `config.py`, `main.py` — per I-3, I-4, I-5.
+
+**KEEP-DANGER** (name-similarity traps — see T-1):
+
+- `pnl_ledger.py`, `pnl_history.py`, `pnl_scan.py`, `pnl_baseline.py` — the PROMOTION machinery, not the
+  performance page. All four stay; `pnl_baseline` is J-04's re-seeding tool.
+- `JournalStore` (class), `journal.db` / `tapeology_journal.db`, `Config.journal_db_path`,
+  `journal_busy_timeout_ms`, the schema-version constant — the store IS the kept research store
+  (datasets/backtests/champion/pnl live in it). The NAME is legacy; renaming is out of scope.
+- `feed_basis.py`, `profiles.py`, `algorithm_version.py` — kept research modules.
+- `history_marker_states` (config) — ENGINE history markers, not journal marks.
+- `watch_manager.py` — the research-agnostic engine-created hook seam (94-119) STAYS (unwired after
+  J-01); the file is untouched.
+- `serializers.py` — verified ZERO thesis/hint content; untouched.
+
+### I-3 · `JournalStore` method dispositions (`app/research/store.py`)
+
+**DELETE** these methods (anchors at `fa76460`): `insert_thesis` (738), `insert_thesis_with_event` (778),
+`append_verdict_event` (849), `_prune_timeline` (884), `resolve_thesis` (907), `set_execution_checks`
+(922), `set_statement_final_statuses` (942), `set_grades` (962), `set_excursions` (980), `save_review`
+(1000), `resolve_thesis_with_event` (1019), `insert_action` (1061), `insert_study` (1087),
+`update_study_payload` (1103), `set_study_result` (1118), `get_study` (1148), `list_studies` (1165),
+`latest_done_study_for` (1185), `study_occurrence_rows` (1222), `insert_hint` (1423), `get_hint` (1440),
+`list_hints` (1459), `mark_hint_declared_from` (1487), `expire_stale_actives` (1510), `get_thesis` (1562),
+`get_active_thesis` (1572), `list_theses` (1584), `list_row_context` (1651), `get_actions` (1709),
+`has_entry_mark` (1737), `verdict_events` (1749), `_row_to_thesis` (1791), `_encode_risk_flags` (710),
+`_encode_execution_checks` (719) — plus the journal-era record dataclasses (`ThesisRecord`,
+`VerdictEventRecord`, `ActionRecord`, `StudyRecord`, `HintRecord`) and their imports elsewhere.
+
+**KEEP** (do not touch): `__init__` (364), `_apply_pragmas` (383), `_create_schema` (391),
+`_ensure_champion_pointer_seeded` (410), `_column_exists` (431), `_migrate` (436) — **the whole migration
+history stays byte-identical (dormant tables; schema stays v8; no v9; no drops)** — `_read_conn` (667),
+`_writer_loop` (674), `_do_write` (692), `_encode_json_or_none` (729 — keep if any kept method uses it,
+else it may go with the pack), `insert_backtest` (1237), `update_backtest_payload` (1251),
+`set_backtest_result` (1264), `get_backtest` (1278), `list_backtests` (1295), `append_pnl_ledger_row`
+(1317), `get_pnl_ledger_row` (1342), `list_pnl_ledger` (1359), `get_champion_pointer` (1387),
+`set_champion_pointer` (1407), `schema_version` (1774), `journal_mode` (1782), `close` (1851).
+
+### I-4 · `Config` field dispositions (`app/config.py`)
+
+**Confirmed DELETE list** (anchors at `fa76460`): `verdict_dwell_seconds` (508), the invalidation-ε
+spread-multiple field (~516 — locate by the "INVALIDATION ε" comment), `verdict_timeline_cap` (534),
+`management_stance_dwell_seconds` (557), `checklist_stance_dwell_seconds` (580), the entry-checklist
+delivery-lag threshold field (~584+ — locate by the J-63 comment), `excursion_horizons_seconds` (728),
+`excursion_target_r` (734), `study_null_arm_count` (780), `study_arm_sustain_seconds` (789),
+`study_arm_cooldown_seconds` (795), `study_occurrence_r_spread_multiple` (808),
+`study_occurrence_r_floor` (816), `study_null_baseline_seed` (822), `study_list_max` (830),
+`hint_sustain_dwell_seconds` (843), `hint_cooldown_seconds` (851), `hint_log_max` (861).
+
+**Closure rule** (J-04 step 1): beyond the confirmed list, a field is deleted ONLY when a grep proves its
+only readers are deleted modules/tests. **In the same commit, prune the fingerprint EXCLUSION set** inside
+`config_fingerprint()` of now-deleted names (several dwells above are exclusion-listed today).
+
+**KEEP-DANGER fields** (deleting any of these is a defect): `journal_db_path` (410),
+`journal_busy_timeout_ms` (414), the journal schema-version constant, `history_marker_states` (241),
+`recent_trades_limit` (228), `event_log_limit` (229), `market_closed_status_code` (308),
+`vendor_call_timeout_seconds`, every engine/feature/classifier threshold (the graded-region families in
+the 100-300 range), and every `sr_*` / `tradability_*` / `setups_*` / edge-report field.
+
+### I-5 · `app/main.py` + WebSocket anchors
+
+- **Lifespan block (~152-161)**: `store = JournalStore(...)`, `registry = ResearchRegistry(store,
+  CONFIG)`, `set_registry(registry)` all STAY; DELETE `manager.set_on_engine_created(
+  registry.on_engine_created)` (157) and the `registry.startup_sweep()` try/except (159-162); DELETE the
+  shutdown `manager.set_on_engine_created(None)` (~191). The startup-sweep comment block (147-151) goes
+  with it.
+- **WS merge (586-635)**: DELETE `frame["thesis"] = _thesis_projection(ticker)` (602),
+  `frame["hint"] = _hint_projection(ticker)` (607), and both helper functions `_thesis_projection` (614)
+  and `_hint_projection` (626). The frame becomes the engine projection ONLY.
+- **Imports (42-57)**: `ResearchRegistry`, `get_registry_or_none`, `research_router`, `set_registry`, and
+  `JournalStore` imports all STAY (the slimmed registry still serves kept routes).
+
+### I-6 · MCP anchors (`app/mcp/__init__.py`)
+
+DELETE `_TOOL_PATHS` rows `"journal"` (86), `"analytics"` (87), `"studies"` (88) — **`"taxonomy"` (94)
+STAYS** — and the `types.Tool` blocks `journal` (176), `analytics` (181), `studies` (186) — **`taxonomy`
+(303) STAYS**. `get_endpoint`'s allowlist (`/tape/`, `/research/`, `/meta/`) is unchanged.
+
+**The resulting 15-tool contract** (this exact list appears in `tests/test_mcp_server.py` after J-03):
+`tape_state`, `tape_features`, `tape_history`, `datasets`, `bars`, `levels`, `tradability`, `setups`,
+`backtests`, `strategies`, `pnl_ledger`, `taxonomy`, `edge_report`, `ui_route_map`, `get_endpoint`.
+
+### I-7 · Frontend inventory
+
+- **Pages DELETE**: `apps/frontend/app/journal/` (271-line page + `[id]/` detail), `app/studies/` (171),
+  `app/performance/` (334).
+- **Components DELETE** (consumer proof — each is imported ONLY by deleted pages/components or the cockpit
+  blocks being stripped): `JournalTable`, `JournalDetailView`, `JournalFilterBar`, `ThesisStrip`,
+  `HintDock`, `HintLog`, `SoundCue`, `StudyList`, `StudyCreateForm`, `StudyResultsView`, `AnalyticsView`.
+- **`lib/api.ts` DELETE exactly these 14 functions** (anchors at `fa76460`): `declareThesis` (427),
+  `resolveThesis` (481), `recordAction` (516), `saveReview` (551), `fetchActiveThesis` (589),
+  `fetchActiveHint` (617), `fetchHints` (633), `fetchJournal` (669), `fetchJournalDetail` (712),
+  `fetchAnalytics` (743), `createStudy` (770), `fetchStudies` (809), `fetchStudy` (824), `cancelStudy`
+  (838). **`fetchTaxonomy` (414) is KEEP** — `FeedBasisBadge.tsx:46` calls it.
+- **KEEP-DANGER api functions** (verified kept consumers): `fetchPnlLedger` / `fetchProfiles` /
+  `fetchStrategies` (`app/structure/page.tsx:1495-1504`), `fetchBacktest` (1615-1617), `createBacktest`
+  (1855-1860), `fetchStrategies` again at `components/PriceChart.tsx:318`. Their backend routes
+  (`/research/backtests*`, `/research/pnl/ledger`, `/research/profiles`, `/research/strategies`) are KEEP.
+- **`lib/types.ts`**: DELETE the thesis/hint families — `ThesisVerdict` (26), `ThesisStatement` (36),
+  `ThesisMarks` (60), `ThesisGeometry` (92), the stance/cue types (110-139), `ThesisProjection` (173),
+  the `Hint` types, journal/analytics/study result types; SLIM `ResearchTaxonomy` to the kept shape
+  (feed_basis + source labels). `lib/useTapeStream.ts`: the frame type drops `thesis`/`hint`.
+- **Cockpit `app/page.tsx`**: DELETE the thesis/hint integration — imports (`fetchActiveThesis`:11,
+  `Hint`/`ThesisProjection` types:16-17, `ThesisStrip`+`ThesisPrefill`:23-24), `survivingThesis` state +
+  its post-Stop `GET /research/thesis/active` read (56-63), `hintPrefill`/`handleHintDeclare` (64-74+),
+  and every `<ThesisStrip>`/`<HintDock>`/`<SoundCue>`/hint-log render below. `Cockpit.tsx` drops its
+  `HintDock` import/render (6, 43-50); `RecentTradesPanel`/`ObservationsPanel`/`EventLogPanel`/
+  `QuotePanel`/`FeaturesPanel`/`TapeStatePanel` are engine-fed and STAY.
+- **THE CHARTS ARE KEPT — explicit operator directive (2026-07-23):** `StructureChart.tsx` (the one
+  shared renderer for `/structure` AND the cockpit) is **untouched** — its `extraMarkers` /
+  `extraPriceLines` props are a generic display seam that tape-state markers keep using.
+  `PriceChart.tsx` (the cockpit chart container: historical candles, timeframe switching, viewport
+  paging, S/R band overlay, live tape moving bars, the strategies chip at 318) is **kept fully
+  functional** — its ONLY edit is dropping the thesis-geometry overlay construction (the lines/markers it
+  built from the WS `thesis.geometry` key, whose data source no longer exists); tape-state markers keep
+  flowing through the same props. J-02 and J-05 browser acceptance explicitly re-verify both charts.
+- **`app/meta.py`**: DELETE ROUTES rows 26-29 (`/journal`, `/journal/[id]`, `/studies`, `/performance`);
+  nav and `ui_route_map` follow automatically (data-driven — never hand-edit a nav component).
+
+### I-8 · Test dispositions (`apps/backend/tests/`)
+
+**DELETE** (~24 files): `test_analytics.py`, `test_analytics_api.py`, `test_excursions.py`,
+`test_execution_checks.py`, `test_grades.py`, `test_journal_list.py`, `test_journal_migration.py` (it
+exercises deleted store methods; the migrations themselves stay, untested dormant history),
+`test_research_action.py`, `test_research_checklist.py`, `test_research_excursions_integration.py`,
+`test_research_execution_checks_api.py`, `test_research_freshness_integration.py`,
+`test_research_geometry.py`, `test_research_hints.py`, `test_research_hints_api.py`,
+`test_research_lifecycle.py`, `test_research_marks.py`, `test_research_monitor.py`,
+`test_research_resolve.py`, `test_research_review.py`, `test_research_risk_flags.py`,
+`test_research_stance.py`, `test_studies.py`, `test_studies_api.py`, `test_verdict_engine.py`.
+
+**UPDATE** (mixed/contract files — keep the file, change ONLY the listed part):
+
+| File | What changes |
+|---|---|
+| `test_mcp_server.py` | contract → the exact 15-tool list (I-6); byte-identity + honest-error clauses stay for every kept tool |
+| `test_meta_routes.py` | route inventory → the 2 kept nav rows (+ non-nav rows that remain) |
+| `test_copy_discipline.py` | **KEEPER** — the rail-2 language lint; its walked-surface list shrinks to kept surfaces; the lint rules themselves are untouched |
+| `test_research_api.py` | KEEP the feed-basis surface checks; DROP the thesis/stance/checklist seeded checks |
+| `test_research_store.py` | KEEP backtest/pnl/champion coverage; DROP thesis/hint/study method coverage |
+| `test_studies_reference.py` | re-point at the RELOCATED loader/constants in `datasets.py`; the coverage itself stays (it guards the founding-baseline data path) |
+| `conftest.py` | verified: no journal-era fixtures; expect at most import-line cleanups |
+
+**KEEP unmodified** (guards + kept-surface suites): `test_no_execution_path.py`,
+`test_no_credential_in_artifacts.py`, all engine tests (`test_aggressor/classifier*/features/history*/
+scenario/observer_equivalence/epoch_anchor/refresh_increment/dense_replay_gate/copy_discipline-rules`),
+all kept-research tests (`test_bars*/bar_index/datasets*/dataset_index/levels*/tradability*/setups*/
+edge_report*/backtests*/pnl_*/profiles_api/strategies_api/feed_basis/record_event_windows/
+event_recording_integration`), all provider/watch tests (`test_live*/historical_provider/market_clock/
+pause*/speed_api/stream_lifecycle/symbols_search/vendor_*/watch_manager/window_resolution/yahoo*/
+real_data_*/chunked_fetch/progressive_fetch/timeframe_history*`), UI-adjacent suites
+(`test_cockpit_chart_upgrade.py`, `test_structure_chart_viewport.py`,
+`test_structure_compute_status_ui.py`, `test_price_chart_confluence.py` — the chart guards; they must
+pass unmodified, reinforcing the charts-are-kept directive) — **except** the 13 fingerprint assertion
+LINES below, which J-04 updates in place without touching anything else in those files.
+
+### I-9 · Fingerprint-literal map + byte-comparison protocol
+
+The founding literal `4d665603569b9dbf` appears in exactly **13 test assertions** at `fa76460` — J-04
+updates ALL of them to the new pin, and NOTHING else ever does:
+`test_timeframe_history_api.py:194`, `test_levels.py:718`, `test_tradability.py:370`,
+`test_backtests.py:416`, `test_backtests.py:1485`, `test_profile_equivalence.py:114`,
+`test_pnl_scan.py:193`, `test_pnl_scan.py:266`, `test_pnl_scan.py:569`, `test_pnl_scan.py:646`,
+`test_edge_report.py:213`, `test_setups.py:409`, `test_setups.py:779`.
+The literal ALSO lives throughout `reports/**`, `runs/**`, and `docs/goal-archive/**` — **read-only
+history: never edited, never counted as a live reference** (T-11). No committed fixture JSON embeds the
+stamp (verified); registered dataset/bar fixtures are untouched regardless (rail 9).
+
+**Byte-comparison protocol** (the demolition's own equivalence harness):
+
+1. **Before J-01's deletions** (iteration baseline): with the backend on committed fixtures, capture
+   `sha256(curl -s localhost:8000<route>)` for every KEPT `/research` + `/tape` + `/meta` GET into the
+   session run dir (`kept-route-baseline.txt`).
+2. **At J-01/J-02/J-03 end**: re-capture — every kept route must be **byte-identical** (the fingerprint
+   has not moved yet; `/research/taxonomy` is the ONE sanctioned diff, its payload having slimmed in
+   J-01).
+3. **After J-04**: STORED artifacts (persisted backtests, pnl rows, datasets, bars) serve byte-identical —
+   old rows keep old stamps forever. FRESH computes differ ONLY in embedded `config_fingerprint` stamps.
+   Content-hash-keyed caches (tradability / setups / edge-report) recompute once with **identical
+   VALUES** — a value diff (any number beyond the stamp) is a veto-class defect.
+
+## Weak-model traps (read before EVERY iteration)
+
+- **T-1 · Name-similarity.** `pnl_ledger`/`pnl_history`/`pnl_scan`/`pnl_baseline` ≠ the performance page —
+  they are the promotion machinery and STAY. `JournalStore`, `journal.db`, `journal_db_path`,
+  `journal_busy_timeout_ms` ≠ the journal page — the store holds KEPT data and STAYS. `history_marker_
+  states` is ENGINE, not journal marks. `test_journal_migration` is about the store, not the page (it is
+  deleted only because it drives deleted METHODS).
+- **T-2 · Never stub.** Never re-create, stub, or empty-shell a deleted module to silence an import — fix
+  the importer (delete the import line or the importing code per the inventory). A new file with a deleted
+  module's name is a defect.
+- **T-3 · Pin discipline.** Exactly ONE commit (J-04's) touches the 13 fingerprint pins (I-9). A red
+  fingerprint test in any other journey means YOUR change is wrong — revert it; never "fix" the literal.
+- **T-4 · Migrations are history.** Never edit `_migrate`/`_create_schema`, never add a v9, never drop a
+  table. Dormant tables are correct.
+- **T-5 · Taxonomy is SLIM, not DELETE.** The kept `FeedBasisBadge` reads `taxonomy.feed_basis.feeds`
+  (`FeedBasisBadge.tsx:46-60`). Deleting the route/tool/module breaks a KEPT surface. Slim the payload per
+  I-2; keep route + MCP tool.
+- **T-6 · `/structure` owns five api.ts functions.** `fetchPnlLedger`, `fetchProfiles`, `fetchStrategies`,
+  `fetchBacktest`, `createBacktest` have KEPT consumers (I-7). Deleting them (or their backend routes)
+  breaks the on-page A/B comparison and the registry/champion display.
+- **T-7 · `test_copy_discipline.py` is a keeper.** It enforces rail 2 (no advice language) across kept
+  surfaces. Shrink its walked-surface list; never delete or weaken the lint.
+- **T-8 · The charts are kept — user directive.** Never delete or rewrite `StructureChart.tsx` /
+  `PriceChart.tsx`. The only chart-adjacent edit is removing PriceChart's thesis-geometry overlay build
+  (its data source is gone). The chart guard tests (`test_cockpit_chart_upgrade`,
+  `test_structure_chart_viewport`, `test_price_chart_confluence`) must pass unmodified. A chart
+  regression is veto-class.
+- **T-9 · Clean rebuild before browser evidence.** `rm -rf apps/frontend/.next` then rebuild/start before
+  any browser verification — a stale build bakes the wrong API base and ghost pages, producing false
+  results in both directions.
+- **T-10 · Mixed files are UPDATE, not DELETE.** `test_research_api.py`, `test_research_store.py`,
+  `test_studies_reference.py`, `taxonomy.py`, `store.py`, `routes.py`, `config.py`, `conftest.py`,
+  `lib/api.ts`, `lib/types.ts`, `app/page.tsx`, `PriceChart.tsx` all contain KEEP parts. Follow the I-row
+  for each; wholesale deletion of any of them is a defect.
+- **T-11 · History is not a live reference.** Grep hits inside `reports/**`, `runs/**`,
+  `docs/goal-archive/**` are read-only history — never edited, never a reason to keep code, never a
+  "dangling reference" to clean up.
+- **T-12 · Grep before delete.** Before deleting module M: `grep -rn "from .M import\|from app.research.M
+  import\|import M" apps/` — every hit must be on I-2's delete-side list. Any OTHER hit → STOP, surface
+  it, do not delete.
+- **T-13 · Evidence honesty.** No screenshot ⇒ a browser-verified journey is `unknown`, never `passing`
+  (the project's established discipline). Backend-only proof never satisfies a browser acceptance line.
+- **T-14 · Inventory contradictions stop the line.** If in-era reality contradicts ANY I-row (an
+  unexpected importer, a missed consumer, a fixture with a stamp), STOP and report it in the iteration
+  summary. The fix is a documented inventory correction, never a silent improvisation.
 
 ## Must-have user journeys
 
-Journeys **J-01 – J-07** open the interlude. **Frontend is present** (J-01, J-04, J-06 are
-browser-verifiable). The default suite and CI stay keyless on committed fixtures; the real-corpus timings and
-the first full real compute are operator-run verifications tagged *(operator-verified on the real corpus)* —
-honestly reported blocked/absent when the corpus isn't present, never simulated. Natural dependency order:
-J-01 → J-02 → J-03 → J-04 → J-05, with J-06 riding on J-02's durable index and **J-07 guarding
-continuously.** The foundation (eras 1–5B) MUST NOT regress.
+Journeys **J-01 – J-05** form the interlude. **Frontend is present** (J-02 and J-05 are
+browser-verifiable). The default suite stays keyless on committed fixtures. Natural dependency order:
+J-01 → J-02 → J-03 → J-04 → J-05, with J-05 guarding continuously. The KEPT foundation MUST NOT regress.
 
-- **J-01: Stop the bleeding — `GET /research/edge-report` never computes**
+- **J-01: Backend demolition with byte-identical relocations**
   - Steps:
-    1. Add `EdgeReportCache.lookup(records, config)` (derive the existing key; check the hot slot then the
-       durable row; NEVER compute) and `EdgeReportCache.compute_and_publish(dataset_store, config,
-       compute_fn)` (always recompute + republish — the operator/`force` path) beside the untouched
-       `get_or_compute`; extract the DB-path policy (`TAPEOLOGY_EDGE_REPORT_CACHE_DB` env else
-       dataset-dir sibling) into one shared resolver used by the route and (later) the CLI.
-    2. Add `edge_report.peek_strategy_comparison_report(store, dataset_store, bar_store, config, *, cache)`:
-       store-integrity errors raise `EdgeReportError` exactly as today (the route keeps its explicit 500);
-       a warm key returns the cached report **verbatim**; an **empty dataset registry computes inline**
-       (O(1), zero backtests — the existing empty-registry response shape and its MCP byte-identity stay
-       untouched); a cold key returns the honest not-computed payload — `status: "not_computed"`, a
-       `detail` naming the trigger, `dataset_count`, the register string read from the backtests register
-       constant, and the current compute snapshot (or `null`). Rewire `GET /research/edge-report` to call it
-       (same dependency seams, the literal `cache=cache` kwarg preserved).
-    3. On `/structure`, render the not-computed payload as a distinct panel — headline
-       "**Edge report not computed yet.**", the server `detail` verbatim — leaving the frozen warm-cache
-       texts ("No edge-report cells yet.", the register line) byte-identical and reachable.
-  - Acceptance: on a cold cache with a non-empty registry, `GET /research/edge-report` returns the
-    not-computed payload within an interactive budget and a compute-spy proves **zero** sweep/backtest
-    invocations from the GET path; on a warm cache the response is **byte-identical** to a fresh
-    cache-cleared compute of the same store (determinism test); on an empty registry the response keeps
-    today's full report shape; REST and the MCP `edge_report` proxy agree byte-for-byte in every state; the
-    warm scoped-fixture cache still renders "No edge-report cells yet." verbatim in the browser; no journey
-    or test is served by computing inside a GET. *(Keyless; browser-verifiable.)*
+    1. Capture the byte-comparison baseline per I-9 step 1 (`kept-route-baseline.txt` in the session run
+       dir).
+    2. Relocate first, prove green (I-2 RELOCATE table): move `r_basis` into `backtests.py`; move the four
+       dataset-source symbols into `datasets.py`; update the listed importers and the `edge_report.py:72`
+       comment; run the full suite — every kept test passes unmodified BEFORE any deletion.
+    3. Delete the 15 journal-era routes (I-1) and strip `routes.py`'s delete-side imports +
+       `ResearchRegistry` extras (I-2 SLIM); SLIM `taxonomy.py` to the kept label families (I-2); remove
+       the lifespan monitor wiring + startup sweep from `main.py` (I-5, lifespan half).
+    4. Delete the eleven modules (I-2 DELETE), running T-12's grep-before-delete on each; delete
+       `JournalStore`'s journal-era methods + record dataclasses (I-3).
+    5. Delete the journal-era test files and apply the UPDATE-file changes that belong to the backend
+       (I-8), leaving the 13 fingerprint pins untouched (T-3).
+  - Acceptance: every I-1 route returns 404 from the running backend; `GET /research/taxonomy` serves the
+    slimmed payload with the `feed_basis` block intact; every OTHER kept route is **byte-identical** to
+    the J-01 baseline capture (I-9 step 2); the full remaining backend suite is green with zero kept
+    tests modified beyond I-8's UPDATE rows; `python -c "from app.config import Config;
+    print(Config().config_fingerprint())"` still prints `4d665603569b9dbf`; T-12 greps for all eleven
+    modules return zero live hits. *(Keyless; automated.)*
 
-- **J-02: The stores stop re-reading — verified-content caches + the durable dataset index**
+- **J-02: Frontend + WS demolition — the two-page product**
   - Steps:
-    1. `bars.py`: add the module-level stat-keyed verified-record cache (key `(path, st_size, st_mtime_ns)`;
-       hit = zero I/O; miss = the full existing `_load` verifier; integrity errors never cached; the ~2s
-       racy-write guard; atomic tuple publish) and route `get`/`list`/`load_bars` through it — `get`/`list`
-       serving per-row copies, `load_bars` building fresh `RawBar`s from cached rows. Add a public
-       `BarStore.root` property and a test-only cache-reset helper (+ autouse conftest reset).
-    2. `datasets.py`: the same cache for **metadata only**, used ONLY by `get()`/`list()`;
-       `load_events()`/`replay()` keep full verification on every load. Update both stores' docstrings to
-       the honest new contract: "re-verified on every content change (stat-keyed)".
-    3. Add `dataset_index.py` — a durable sibling SQLite metadata index (`dataset_index(path PRIMARY KEY,
-       size, mtime_ns, meta_json, created_utc)`, meta JSON stored without `sort_keys`, `bar_index.py`'s
-       rebuildable-derived-value shape); `DatasetStore` gains keyword-only `index_db_path=None` (default =
-       today's behavior); the route dependency injects `TAPEOLOGY_DATASET_INDEX_DB` else the
-       `.data/dataset_index.db` sibling.
-  - Acceptance: counting-spy tests prove a second `list()` performs **zero file reads** on both stores while
-    content is unchanged, and that a tampered file is still detected (explicit integrity error) after a warm
-    read once its stat changes; a freshly-written file inside the racy window is never served from cache;
-    served bar rows are copies (a caller mutation never leaks back); cache-hit responses are byte-identical
-    to cleared-cache responses (REST and MCP); `load_events`/`replay` fully verify even when the metadata
-    cache is warm (spy test pins the trust boundary); a fresh `DatasetStore` (simulated restart) serves
-    `list()` metadata from the durable index with zero content re-reads, and deleting the index DB merely
-    costs one re-verify pass; `GET /research/datasets` on the real corpus drops from the measured 31.4s to
-    sub-second warm *(operator-verified on the real corpus)*. *(Keyless; automated.)*
+    1. Remove the WS `thesis`/`hint` merges + both projection helpers from `app/main.py` (I-5, WS half)
+       and the four journal-era rows from `app/meta.py` ROUTES (I-7).
+    2. Delete the three pages and eleven components; delete the 14 api.ts functions (I-7 —
+       `fetchTaxonomy` STAYS); strip the cockpit page's thesis/hint/sound integration and `Cockpit.tsx`'s
+       `HintDock` (I-7); update `lib/types.ts` + `lib/useTapeStream.ts` (frame drops `thesis`/`hint`;
+       `ResearchTaxonomy` slims); strip `PriceChart.tsx`'s thesis-geometry overlay build ONLY — both
+       charts otherwise untouched (T-8).
+    3. `rm -rf apps/frontend/.next` (T-9), rebuild, restart both processes.
+  - Acceptance: in a real browser — the nav shows exactly **Cockpit** and **Structure**; `/journal`,
+    `/studies`, `/performance` each render the app's 404 (screenshots); the sim cockpit flow works end to
+    end (`SIM-BUYER` settles `buyer_control`) with no thesis strip, hint dock, or sound toggle anywhere;
+    **the cockpit chart still renders candles, switches timeframes, overlays S/R bands, and moves live
+    tape bars, and `/structure`'s chart + Load flow work exactly as shipped (screenshots — T-8)**; the
+    provenance badge still renders its feed label from the slimmed taxonomy on a live/sim watch; a
+    captured WS frame (e.g. `websocat`/browser devtools dump) contains no `thesis` or `hint` key;
+    `GET /meta/ui-routes` lists only the kept routes. *(Keyless; browser-verifiable.)*
 
-- **J-03: The arm memo — per-tick levels recompute becomes ~100 memo hits per session**
+- **J-03: MCP contract v2 — 15 read-only tools**
   - Steps:
-    1. `levels.py`: add `level_change_points(store, symbol) -> tuple[float, ...]` — the sorted, deduped
-       union of every healthy series' bar epochs for the symbol plus, for each prior-period-timeframe bar,
-       its `epoch + period_seconds` close instant; document the contract: between two consecutive change
-       points, `compute_levels` is a constant function of `as_of` (a SUPERSET of change points is always
-       safe; a subset never is).
-    2. `tradability.py`: add `basis_day_key(as_of_epoch) -> str` — the UTC session date key, citing the
-       basis resolution's per-date constancy.
-    3. `backtests.py`: add the small per-run `_StructureArmMemo` (`levels_at(as_of)` keyed by
-       `bisect_right(change_points, as_of)`; `tradability_at(as_of)` keyed by the day key; a miss calls the
-       one canonical owner function); build one memo per `structure_tape` / `structure_tape_map` run and
-       thread it into the arming checks as an optional keyword (`memo=None` preserves today's direct-call
-       behavior for existing tests), keeping the literal `compute_tradability(` / `compute_levels(` owner
-       calls in the fallback branch and introducing NO forbidden level-internal names (the guard tests pin
-       both).
-  - Acceptance: memoized `structure_tape` and `structure_tape_map` backtests are **byte-identical** to
-    fresh unmemoized runs on the committed fixtures (sorted-dump equality — the J-08 determinism-test
-    discipline), including a fixture where a daily period closes between bar epochs and one spanning a UTC
-    date boundary (both memo-bust legs proven); a counting spy proves `compute_levels` is called once per
-    change interval instead of per confirming tick; the committed tick-fixture structure backtests complete
-    within an interactive test budget; every existing pinned-value backtest test passes unmodified; the
-    source-introspection guard tests pass unmodified. *(Keyless; automated.)*
+    1. Delete the `journal`/`analytics`/`studies` `_TOOL_PATHS` rows + `types.Tool` blocks (I-6);
+       `taxonomy` stays; `get_endpoint` allowlist untouched.
+    2. Update `tests/test_mcp_server.py` to the exact 15-tool contract (I-6), keeping the byte-identity
+       and honest-error clauses for every kept tool.
+    3. If the neutral asset source changed, re-render per the maintenance protocol
+       (`sync-cli-assets` + MCP self-test) — never hand-edit generated mirrors.
+  - Acceptance: the MCP server advertises exactly the 15 tools of I-6; each kept tool's output is proven
+    byte-identical to its curl equivalent on the running backend (including the slimmed `taxonomy`); a
+    `get_endpoint` call for a deleted path (e.g. `/research/journal`) surfaces the backend's honest 404
+    per the existing error contract; the MCP test suite is green. *(Keyless; automated.)*
 
-- **J-04: The operator-run compute — button, background job, CLI warmer**
+- **J-04: The fingerprint epoch bump — §0.4 Path B, executed verbatim**
   - Steps:
-    1. Add `edge_report_compute.py`: `EdgeReportComputeManager` — registry-scoped (the existing job-manager
-       home), **single-flight** (a trigger while one is in flight returns the running snapshot,
-       `started: false`), cooperative cancel between backtests, and an atomically-republished progress
-       snapshot (`state`, `backtests_total/done/from_cache`, `current`, `error`). Thread additive
-       keyword-only hooks through the ONE computer (`run_strategy_comparison_report(..., force=, progress=,
-       should_abort=, sub_cache=, workers=)` — every default reproduces today's byte-identical behavior); a
-       cancelled or failed sweep caches nothing (publish only after the compute function returns).
-    2. Add the routes: `POST /research/edge-report/compute` (body `{"force": bool=false}`),
-       `GET /research/edge-report/compute`, `POST /research/edge-report/compute/cancel` (409 when idle) —
-       a subpath, so non-GET verbs on `/research/edge-report` itself stay 405 and **no MCP tool is added**.
-    3. Add the CLI warmer — `python -m app.research.edge_report_compute --workers N [--force] [--out
-       report.json]` — resolving the same env/config seams the backend reads (journal, dataset dir, bar dir,
-       both cache DBs), printing per-backtest progress lines, exiting 0 with a summary; nohup-able and
-       restart-proof (it writes the same durable caches the GET serves). The existing era-3 J-09
-       `edge_report.main()` CLI stays untouched.
-    4. On `/structure`, wire the not-computed panel's **"Compute edge report"** button: POST the trigger,
-       poll the status route with the existing poll-while-active pattern, render the progress counts
-       verbatim, re-fetch the report on `done` (falling into the existing `EdgeReportBody`), surface a
-       `failed` snapshot's `error` verbatim.
-    5. *(Operator-run, real corpus present:)* run the warmer to completion once and append the completed
-       three-way comparison to `reports/pnl/pnl-history.md` via the existing `pnl_history.py` discipline —
-       per split, train/hold-out never pooled, feeds never pooled, every cell carrying n / R / $ /
-       assumptions / basis / null baseline and the register (an all-`insufficient_sample` outcome is valid
-       and still recorded) — closing era-5B J-08 step 3.
-  - Acceptance: a second POST during a run returns the SAME job (`started: false`, single-flight proven);
-    cancel resolves `cancelled` and the caches hold no partial report; `force` recomputes over a warm key
-    and republishes; after `done`, `GET /research/edge-report` serves the report and `/structure` renders it
-    in the existing section (browser-verified: button → progress → cells or the honest empty state);
-    non-GET verbs on `/research/edge-report` stay 405 and the MCP tool list is unchanged; the CLI completes
-    on fixtures, prints progress, and a repeat invocation without `--force` exits fast on the warm key; the
-    pnl-history append happens only from a genuinely completed real compute *(operator-verified on the real
-    corpus)*. *(Keyless via fixtures; browser-verifiable.)*
+    1. Delete the confirmed I-4 field list; apply the closure rule (grep-proven journal-only readers);
+       prune the fingerprint EXCLUSION set of deleted names in the same commit; touch NO field on the
+       I-4 KEEP-DANGER list.
+    2. Print the new pin (`python -c "from app.config import Config;
+       print(Config().config_fingerprint())"`) and update ALL 13 assertion sites from I-9 to it — those
+       lines only, nothing else in those files.
+    3. Re-seed the founding baseline under the new epoch: `python -m app.research.pnl_baseline` (keyless,
+       deterministic) appends the new-epoch founding `v1`/`default` row beside the untouched old rows;
+       regenerate `reports/pnl/pnl-history.md` through the existing renderer; the new row beside the old
+       fingerprint's rows IS the ledger documentation of the epoch change.
+    4. Add a test asserting the OLD literal appears nowhere in `apps/` code/tests anymore (history dirs
+       exempt per T-11), and that content-hash-keyed caches recompute under the new config with identical
+       VALUES (I-9 step 3's stored-vs-fresh nuance pinned).
+  - Acceptance: `Config().config_fingerprint()` returns the new pin and all 13 updated assertions pass;
+    the engine-equivalence test still proves byte-identical `default` outputs on identical inputs (the
+    VALUES never moved — only the stamp); the PnL ledger shows the old founding rows (old fingerprint,
+    untouched) AND the new-epoch founding row (new fingerprint) with train/hold-out never pooled and the
+    register intact; `reports/pnl/pnl-history.md` renders both epochs honestly; the full suite is green;
+    no commit outside this journey touched a pin (T-3). *(Keyless; automated.)*
 
-- **J-05: The sweep becomes resumable and parallel — durable pair results + process pool**
+- **J-05: The kept product stands — regression sentinel**
   - Steps:
-    1. Add `EdgeReportBacktestCache` (beside `EdgeReportCache`, same durable discipline): one row per
-       (dataset × strategy) `result` block, key = the canonical hash of `{dataset_id, dataset_checksum,
-       strategy_id, profile, config_fingerprint, config_content_hash, strategy_registry,
-       bar_store_signature}` — the bar-store signature (the sorted per-series `(symbol, timeframe, id,
-       checksum)` tuples the setups signature already computes) is REQUIRED because the structure strategies
-       read bar content per event; the existing persisted backtest journal rows are NOT a safe resume source
-       (their fingerprint excludes the `sr_*`/`tradability_*`/`setups_*` families and records no bar
-       content) and are never consulted. Values stored verbatim without `sort_keys`. Path: env
-       `TAPEOLOGY_EDGE_SWEEP_CACHE_DB` else the `.data/edge_report_backtests.db` sibling.
-    2. Give `_split_cells` a `run_pair(dataset_meta, strategy_id)` provider seam (default = today's inline
-       call, byte-identical); the caching provider serves a hit verbatim and publishes each miss **the
-       moment it completes**; the pooling/ordering/aggregation code is untouched so reassembly from cached
-       blocks is byte-identical by construction. Progress counts `backtests_from_cache` distinctly from
-       `backtests_done`.
-    3. Add the parallel provider (CLI `--workers` / env, default 4, documented ceiling ~6; used ONLY by the
-       CLI/background job, never a request thread): `ProcessPoolExecutor` with the `spawn` context; **task =
-       one dataset, all three strategies** (bounds peak memory to ~one parsed dataset per worker);
-       largest-first (LPT) scheduling by event count; each worker builds its own stores from explicit paths,
-       uses a throwaway temp journal DB for job bookkeeping (the report never references backtest ids), and
-       hands results back through the durable sub-cache; cancellation stops submitting and lets in-flight
-       tasks persist their pairs.
-  - Acceptance: a key-busting matrix test proves each component (dataset checksum, strategy, profile, config
-    content, strategy registry, **bar-store signature**) independently busts a pair; killing a sweep
-    mid-run and re-triggering computes ONLY the missing pairs (run-count spy; the snapshot shows
-    `backtests_from_cache > 0`); recording one additional dataset re-runs exactly three backtests plus
-    reassembly; a `workers=2` parallel report over the committed fixtures is **byte-identical** to the
-    sequential report; deleting the sub-cache DB loses nothing (full recompute, identical bytes); the full
-    real-corpus compute completes as one resumable operator act in minutes, not hours *(operator-verified on
-    the real corpus)*. *(Keyless on fixtures; automated.)*
-
-- **J-06: Restarts stop hurting — the durable setups scan cache**
-  - Steps:
-    1. Add `setups_scan_cache.py` — `lookup(key)`/`publish(key, result)` over a sibling SQLite (env
-       `TAPEOLOGY_SETUPS_CACHE_DB` else beside the bar dir via the new `BarStore.root`), result JSON stored
-       without `sort_keys`, publish failures swallowed (an accelerator never blocks serving).
-    2. In `setups.compute_setups`, replace the `id(config)` key leg with the config CONTENT hash (reused
-       from `edge_report_cache.py` — never a second derivation) alongside the existing store signature;
-       check hot slot → durable → real scan; keep exactly ONE `_SCAN_CACHE = (key, result)` rebind and keep
-       the scan functions' source free of the forbidden substring (both structural guard tests pass
-       unmodified); refresh the stale block-comment wording.
-  - Acceptance: with the hot slot cleared (simulated restart), `compute_setups` serves the scan from the
-    durable cache with **zero** rescans (spy) and the served result is byte-identical to a fresh scan; an
-    equal-content but distinct `Config` object is now a cache HIT (identity-key fragility gone); recording a
-    new bar series busts the key (fresh scan); deleting the scan-cache DB merely costs one rescan; on the
-    real corpus, a backend restart followed by `/structure` no longer re-pays the multi-minute scan — every
-    section reaches its ready state (no loading panel remains anywhere on the page) within 10 seconds of
-    navigation *(operator-verified on the real corpus)*. *(Keyless; browser-verifiable.)*
-
-- **J-07: The foundation is unchanged (regression sentinel)**
-  - Steps:
-    1. Run the full backend suite and the engine equivalence test; browser-check the sim cockpit flows
-       (`SIM-BUYER` settles `buyer_control`, `SIM-SELLER` settles `seller_control`) and spot-check
-       `/journal`, `/studies`, `/performance`, and `/structure`'s era-5/5B behaviors (fetch control +
-       provenance badge, tradable map default + raw toggle, case studies drill-in, warm-cache Edge Report
-       render with its frozen texts).
-    2. Confirm `config_fingerprint` is still `4d665603569b9dbf`; confirm `levels.py`, `tradability.py`,
-       `setups.py`, `edge_report.py` computations, `v1`, `structure_tape`, `structure_tape_map`, `default`,
-       the champion pointer, both store file formats, the `bar_index` flow, and the recorder produce
-       byte-identical results on identical inputs; confirm the additive surfaces are exactly those this
-       interlude names.
-  - Acceptance: the full backend suite passes (no test deleted or weakened — the source-introspection guards
-    included); the equivalence test proves byte-identical `default` outputs and the pinned fingerprint;
-    era-1–5B surfaces behave exactly as shipped; the additive changes are exactly: the two store caches +
-    `BarStore.root`, `dataset_index.py`, the levels/tradability change-point + day-key helpers, the
-    per-run arm memo, `EdgeReportCache.lookup`/`compute_and_publish` + the shared path resolver,
-    `peek_strategy_comparison_report` + the not-computed payload, `edge_report_compute.py` (manager + CLI) +
-    its three routes, `EdgeReportBacktestCache` + the `run_pair` seam + the parallel provider,
-    `setups_scan_cache.py` + the content-hash key, the frontend not-computed panel + Compute button +
-    progress poll, and the new env-var knobs — nothing else. *(Automated + browser-verifiable.)*
+    1. Run the full backend suite + engine equivalence; verify the guard tests
+       (`test_no_execution_path.py`, `test_no_credential_in_artifacts.py`, the source-introspection
+       guards, the three chart guard suites) pass byte-unmodified.
+    2. In a real browser (after T-9's clean rebuild), walk the kept product: sim cockpit (`SIM-BUYER` →
+       `buyer_control` settles) **with the cockpit chart proving candles + timeframe switch + band
+       overlay + live tape bars**, `/structure` Load for the pinned AAPL as-of 2026-06-22 (the 300–302.4
+       wall band renders on the structure chart), Case Studies drill-in, the Edge Report section in its
+       honest current state (warm cells or "Edge report not computed yet." + Compute button) — screenshots
+       for each.
+    3. Cross-check the era's cumulative diff against the Demolition inventory: every I-row executed,
+       NOTHING outside the I-rows + I-8 test dispositions + the J-04 pin/baseline updates touched;
+       confirm the final surface inventory (nav = Cockpit · Structure; MCP = 15 tools; I-1 routes 404;
+       T-12 greps clean).
+  - Acceptance: full suite green under the new pin; every browser step above evidenced by screenshot
+    (T-13); the diff-vs-inventory cross-check reports zero out-of-inventory changes (anything extra or
+    missing is a FAIL); eras 1–5C kept behaviors — live/sim/historical watch, bar fetch + provenance,
+    levels/zones, tradable map, case studies, operator-run edge-report compute, champion pointer, PnL
+    history, **both charts** — all function exactly as shipped. *(Keyless core; browser-verifiable.)*
 
 <!-- AUTO:journeys -->
 
@@ -494,7 +657,7 @@ continuously.** The foundation (eras 1–5B) MUST NOT regress.
 
 ## Anti-goals
 
-**Immutable rails — the identity of the project (copied verbatim from
+**Immutable rails — the identity of the project (from
 [`docs/research-directions.md`](research-directions.md) §0.3; enforced by existing tests and audits; only
 ever grow more specific, never weaker):**
 
@@ -505,8 +668,11 @@ ever grow more specific, never weaker):**
    fee/slippage assumptions, and its train/hold-out/forward basis. No prediction language, no imperative
    trading cues. *(critical)*
 3. **Frozen foundations** — the `v1` strategy, the `default` profile, the tape engine's five states and
-   thresholds, the frozen structure computations, the JSON `BarStore`, and archived-era behaviour stay
-   byte-identical. New work is additive and versioned beside them, never a mutation of them. *(critical)*
+   thresholds, the frozen structure computations, the JSON `BarStore`, and every KEPT surface's behaviour
+   stay byte-identical. New work is additive and versioned beside them, never a mutation of them. *(This
+   era's one sanctioned exception, operator-approved 2026-07-23: the journal/studies/performance product
+   surfaces are REMOVED outright — never mutated-in-place — and their historical records stay readable;
+   nothing else moves.)* *(critical)*
 4. **Hold-out-only promotion** — the champion pointer moves only on a genuine hold-out survival through the
    sweep gate (plus the era-6 statistical gates once they exist). Train-only wins are labeled overfit. Never
    lower a minimum sample size, widen a gate, or pool across feeds/fingerprints to manufacture a survivor.
@@ -525,27 +691,28 @@ ever grow more specific, never weaker):**
 
 **Interlude-specific anti-goals (added, not weakening any rail above):**
 
-- **Accelerators are never sources of truth.** Every cache/index/memo this interlude adds is a rebuildable
-  derived value: deleting it loses nothing and fabricates nothing; a miss recomputes byte-identically through
-  the one canonical owner; no research value is ever read FROM a cache that could not be re-derived
-  identically without it. *(critical)*
-- **No compute on page load — operator-run only.** No GET (page, REST, or MCP proxy) ever starts, resumes, or
-  extends the backtest sweep; the only compute entry points are the explicit POST trigger and the CLI warmer.
-  No scheduled, ambient, or retry-driven compute either. *(critical)*
-- **The verification trust boundary never weakens.** Stat-keyed serving applies only to content already fully
-  verified in this process's lifetime, keyed by `(path, size, mtime_ns)` with the racy-write guard; ANY stat
-  change re-verifies fully; integrity failures are never cached; `DatasetStore.load_events()`/`replay()` —
-  the paths that feed research values — verify fully on every load, forever. *(critical)*
-- **No divergent accelerator output.** An accelerated read (cached, memoized, resumed, or parallel) whose
-  bytes differ from the fresh sequential compute of the same inputs is a veto-class defect, never a tolerable
-  approximation; no accelerator ships without a passing determinism/equivalence test proving that
-  byte-identity. *(critical)*
-- **No gate, register, or vocabulary drift.** The PnL register, `insufficient_sample` labeling,
-  train/hold-out separation, feed separation, and the "simulated — not indicative of live results" language
-  are untouched; the not-computed state introduces no prediction/advice/imperative phrasing. *(critical)*
-- **No source-guard weakening.** The existing source-introspection tests (forbidden substrings, single
-  rebind, pinned dependency wiring) are respected as written — never edited, renamed, or loosened to make a
-  change fit. *(critical)*
+- **No research-value change beyond the documented epoch bump.** Every number a KEPT surface serves
+  (levels, bands, touch events, edge cells, pnl rows) stays byte-identical on identical inputs; the ONLY
+  sanctioned change is the `config_fingerprint` value itself, moved once via the J-04 Path B journey;
+  cross-epoch pooling is forbidden forever. *(critical)*
+- **Deletion is complete, never cosmetic.** No orphaned imports, dead components, unreachable routes,
+  dangling MCP tools, or skipped tests survive; a deleted surface is gone from code, routes, nav, MCP,
+  types, and tests alike — grep-provably. *(critical)*
+- **No new features.** This era ships zero new product capabilities, pages, endpoints, strategies, or
+  Config fields; anything new belongs to the next eras. *(critical)*
+- **Relocations are moves, not rewrites.** `r_basis` and the dataset-source constants keep byte-identical
+  behaviour at their new homes; every kept caller's output is proven unchanged. *(critical)*
+- **Never modify the charts beyond the one named edit.** No commit in this era may edit
+  `StructureChart.tsx` at all, or edit `PriceChart.tsx` beyond removing its thesis-geometry overlay
+  build (I-7 chart clause); the three chart guard suites must pass byte-unmodified; any other chart
+  diff — visual or behavioral — is a veto-class defect. *(critical)*
+- **Never touch a historical record.** No commit in this era may delete, rewrite, truncate, or re-stamp
+  journal.db's existing rows or tables, any PnL-ledger row, anything under `docs/goal-archive/` or
+  `runs/goal-session-*`, or any `reports/goal-session-*-delivered.md` — a diff touching any of these is a
+  veto-class defect (deleting CODE is the mandate; deleting RECORDS is forbidden). *(critical)*
+- **No guard weakening.** `test_no_execution_path.py`, the source-introspection guards, and every kept test
+  stay as written; the fingerprint pins change ONLY inside J-04 per Path B, never to make a red test green.
+  *(critical)*
 - **The enhancement loop stays inside its box.** The goal-proposer may append journeys ONLY inside the
   `AUTO:journeys` marker block above — it MUST NOT edit human-authored journeys, this Anti-goals section, or
   any other part of this file; proposed journeys MUST carry a single-source-of-truth (or PnL-ledger)
