@@ -31,6 +31,7 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
 PRICE_CHART = FRONTEND_DIR / "components" / "PriceChart.tsx"
+STRUCTURE_CHART = FRONTEND_DIR / "components" / "StructureChart.tsx"
 PAGE_TSX = FRONTEND_DIR / "app" / "page.tsx"
 
 # The four tape-state names the confirmation MAPPING may name. Legitimate ONLY inside the
@@ -193,10 +194,11 @@ def test_strategies_fetched_once_on_mount_not_per_ticker():
 
 
 def test_band_overlay_reads_only_served_band_fields():
-    """The band overlay must draw ONLY served `TradabilityBand` fields (verbatim, reusing
-    StructureChart.tsx's L97-120 pattern) — no local scoring/clustering. Checks for the exact
-    property-access substrings the served shape provides."""
-    source = _source()
+    """The band overlay must draw ONLY served `TradabilityBand` fields (verbatim) — no local
+    scoring/clustering. The cockpit now delegates the DRAWING to StructureChart.tsx (the shared
+    renderer) via the `bands` prop, so the band-field reads live there; PriceChart.tsx only passes
+    the served `bands` through. Checks the exact property-access substrings on the renderer."""
+    source = STRUCTURE_CHART.read_text()
     for field in (
         "band.side",
         "band.price_low",
@@ -207,6 +209,8 @@ def test_band_overlay_reads_only_served_band_fields():
     ):
         assert field in source, f"expected the band overlay to read {field} verbatim"
     assert "createPriceLine" in source
+    # And the cockpit container hands the served bands straight to the renderer (no local reshaping).
+    assert "bands={tradabilityState.data?.bands ?? []}" in _source()
 
 
 def test_no_tradable_map_empty_state_present():
@@ -220,15 +224,16 @@ def test_no_tradable_map_empty_state_present():
     )
 
 
-def test_page_threads_tape_state_prop_and_preserves_live_mode_gate():
-    """`page.tsx` must pass the WS-snapshot's own `tape_state` field into `PriceChart` as the new
-    `tapeState` prop, WITHOUT touching the pre-existing sim/historical-only render gate (the gate
-    alone is what keeps live mode byte-identical — the iter-7 plan's explicit "do not touch"
-    instruction)."""
+def test_page_threads_tape_state_prop_and_renders_chart_in_live_mode_too():
+    """`page.tsx` must pass the WS-snapshot's own `tape_state` field into `PriceChart` as the
+    `tapeState` prop. The cockpit-chart upgrade REMOVES the old sim/historical-only render gate: the
+    chart now renders in every data mode (live included), where it draws live moving bars built from
+    the tape (the engine learns its true-clock anchor at the first live event). The `waiting`/
+    `connecting`/`failed` gates still keep it hidden until there is something real to chart."""
     source = PAGE_TSX.read_text()
     assert "tapeState={snapshot?.tape_state ?? null}" in source, (
         "expected page.tsx to pass tapeState={snapshot?.tape_state ?? null} into PriceChart"
     )
-    assert '(mode === "sim" || mode === "historical")' in source, (
-        "the live-mode gate must be present and unchanged"
+    assert '(mode === "sim" || mode === "historical")' not in source, (
+        "the sim/historical-only chart gate must be GONE — the chart renders in live mode too"
     )

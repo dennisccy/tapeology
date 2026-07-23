@@ -43,7 +43,8 @@ class TapeEngine:
         self._config = config
         # Canonical display/epoch anchor (Data Contract row 13, J-31): the real UTC epoch that
         # logical-time 0 maps to, preserved ONCE here from the provider (historical = first real
-        # record epoch; simulated = config synthetic session-start; live = None). It is additive
+        # record epoch; simulated = config synthetic session-start; live = None at construction,
+        # stamped once by the feeder at the first record via ``set_epoch_anchor``). It is additive
         # DISPLAY metadata — it never enters market state / features / classification, so the
         # engine stays deterministic. Defaulted None so every pre-J-31 construction is unchanged.
         self._epoch_anchor = epoch_anchor
@@ -54,8 +55,9 @@ class TapeEngine:
         self._emitter = ObservationEmitter()
         # Price-history buffer (OHLC candles + tape-state markers). Accrued ONLY from
         # process_event (per real events), never from a status flip or construction — so a
-        # set_stream_status call cannot mutate the chart series. Computed once, read-only.
-        self._history = HistoryBuffer(config)
+        # set_stream_status call cannot mutate the chart series. Computed once, read-only. The
+        # anchor is threaded in so its wall-clock timeframe candles align on the real-epoch grid.
+        self._history = HistoryBuffer(config, epoch_anchor=epoch_anchor)
 
         self._trade_count = 0
         self._last_ts = 0.0
@@ -224,6 +226,23 @@ class TapeEngine:
         self._delivery_lag_seconds = seconds
         self._snapshot = self._build_snapshot()
 
+    def set_epoch_anchor(self, anchor: float) -> None:
+        """Stamp the canonical display/epoch anchor (Data Contract row 13, J-31) ONCE, feeder-owned.
+
+        Called by the WatchManager for a LIVE watch, whose real epoch is only known once the first
+        record arrives (sim/historical/progressive learn it at construction). Set-once — a second
+        call is a no-op, so the anchor never changes mid-watch. Threads through to the history
+        buffer so its wall-clock timeframe candles start binning on the real-epoch grid from the
+        first trade onward. Additive DISPLAY metadata only — it never enters ``classify(...)`` or
+        any feature/score, so the same ordered event stream still yields identical features/state/
+        confidence (determinism + observer-equivalence anti-goals). Rebuilds the snapshot so the
+        newly-known anchor is reflected immediately (the feeder stamps it before the first event)."""
+        if self._epoch_anchor is not None:
+            return
+        self._epoch_anchor = anchor
+        self._history.set_epoch_anchor(anchor)
+        self._snapshot = self._build_snapshot()
+
     @property
     def paused(self) -> bool:
         return self._paused
@@ -311,8 +330,10 @@ class TapeEngine:
                 TradeRow(event.timestamp, event.price, event.size, side.value)
             )
             # Bin this trade's price into the OHLC candles (same price the snapshot exposes as
-            # `last`; quotes do not create candles). Logical-ts bucketing — no wall-clock.
-            self._history.add_trade(event.timestamp, event.price)
+            # `last`; quotes do not create candles). Logical-ts bucketing for the per-bar-size
+            # series; the size feeds the additive wall-clock timeframe candles' volume (both
+            # display-only — neither enters classification).
+            self._history.add_trade(event.timestamp, event.price, event.size)
 
         self._last_ts = event.timestamp
         # First-event promotion to the post-connect `live` rung. The status climbs

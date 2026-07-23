@@ -31,6 +31,7 @@ import type {
   SymbolMatch,
   TapeHistory,
   TapeSnapshot,
+  TapeTimeframeHistory,
   ThesisProjection,
   TradabilityResponse,
   WatchParams,
@@ -217,6 +218,36 @@ export async function fetchHistory(
       // true clock time. `null` when the backend has no anchor (empty/anchorless window).
       epoch_anchor: typeof data.epoch_anchor === "number" ? data.epoch_anchor : null,
       bars: Array.isArray(data.bars) ? data.bars : [],
+      markers: Array.isArray(data.markers) ? data.markers : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+// GET /tape/{ticker}/history?timeframe= — the cockpit chart's wall-clock "history" mode: real-epoch
+// OHLC+volume candles built live from the tape, plus the no-lookahead boundary and per-marker
+// bucket. Read VERBATIM (the chart recomputes nothing). `null` on any failure so the caller keeps
+// whatever it had rather than a fabricated series. Additive sibling of `fetchHistory` above (which
+// is untouched); the backend's own 422 is the timeframe-validation authority.
+export async function fetchTimeframeHistory(
+  ticker: string,
+  timeframe: string,
+): Promise<TapeTimeframeHistory | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/tape/${encodeURIComponent(ticker)}/history?timeframe=${encodeURIComponent(timeframe)}`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      timeframe: typeof data.timeframe === "string" ? data.timeframe : timeframe,
+      timeframe_seconds:
+        typeof data.timeframe_seconds === "number" ? data.timeframe_seconds : 0,
+      epoch_anchor: typeof data.epoch_anchor === "number" ? data.epoch_anchor : null,
+      anchor_bucket_start:
+        typeof data.anchor_bucket_start === "number" ? data.anchor_bucket_start : null,
+      timeframe_bars: Array.isArray(data.timeframe_bars) ? data.timeframe_bars : [],
       markers: Array.isArray(data.markers) ? data.markers : [],
     };
   } catch {

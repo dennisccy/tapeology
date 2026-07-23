@@ -42,9 +42,11 @@ class LiveProvider:
         self.scenario = scenario
         self._raw_stream = raw_stream
         # Canonical display/epoch anchor (row 13, J-31): a live feed's first real epoch is only
-        # known once the first record arrives, and the prediction chart is shown for SIMULATED and
-        # HISTORICAL only (not live), so this stays None for the live path. Declared for interface
-        # consistency; a live watch needs no chart anchor.
+        # known once the first record arrives, so this starts None and is stamped ONCE in
+        # ``stream`` from the first record's epoch (the SAME t0 the logical timeline subtracts, so
+        # true_clock = anchor + logical_ts). The feeder reads it off the provider and stamps the
+        # engine before the first event, so the cockpit chart renders live moving bars on the real
+        # clock — the earlier "the chart is sim/historical-only" rationale no longer holds.
         self.epoch_anchor: float | None = None
 
     async def stream(self) -> AsyncIterator[Event]:
@@ -55,6 +57,10 @@ class LiveProvider:
             async for record in raw:
                 if t0 is None:
                     t0 = record.epoch
+                    # Stamp the display anchor from the first record's real epoch, BEFORE yielding
+                    # it, so the feeder (draining this generator) sees the anchor by the time it
+                    # dequeues the first event. Set-once (t0 is set-once per stream()).
+                    self.epoch_anchor = t0
                 ts = record.epoch - t0
                 if ts < last_ts:
                     ts = last_ts  # monotonic non-decreasing (engine determinism)

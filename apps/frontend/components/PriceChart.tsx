@@ -1,41 +1,58 @@
 "use client";
 
-// Tape-state prediction chart (J-17 / J-18): a candlestick chart of the watched price with
-// markers at meaningful tape-state transitions, plus a 10 / 30 / 60 s bar-size selector.
+// The cockpit price chart (J-17 / J-18): the watched instrument as candlesticks, with markers at
+// meaningful tape-state transitions and the live thesis geometry. This component is the cockpit's
+// smart CONTAINER — it polls the served data and composes it — while the drawing itself is delegated
+// to the shared `StructureChart` (the /structure Tradable Map's own renderer), so both surfaces
+// share one chart implementation.
+//
+// Two view modes, chosen with the selector:
+//   * "Tape" (10 / 30 / 60 s) — the tape engine's own logical-second candles for the replay window
+//     (GET /tape/{ticker}/history?bar=), the original cockpit chart.
+//   * "History" (real timeframes) — recorded store candles up to the replay start (context) PLUS the
+//     wall-clock bars built LIVE from the tape from the start onward (GET …/history?timeframe= for
+//     the live bars, GET /research/candles for the recorded context). The store window is clamped
+//     strictly BEFORE the replay start (no lookahead); the live tape owns everything from it on.
 //
 // Single source of truth (one focused chart, computed once): every candle and marker is read
-// VERBATIM from GET /tape/{ticker}/history — this component re-bins NO candles and re-derives NO
-// marker state/side/price. It polls `…/history` on the stream cadence (it does NOT open a second
-// WebSocket). An empty / not-yet-warmed window shows an empty treatment — never invented candles.
+// VERBATIM from the served payloads — this component re-bins NO candles and re-derives NO marker
+// state/side/price. It polls on the stream cadence (it does NOT open a second WebSocket). An empty /
+// not-yet-warmed window shows an empty treatment — never invented candles.
 //
-// The chart library (lightweight-charts) is client-only: it is imported dynamically INSIDE an
-// effect so it never runs during server render (no SSR), and adds no backend dependency. It is
-// candlestick + markers only — no indicators, studies, drawing tools, or any order/execution
-// affordance (Stay-in-scope / No-execution anti-goals).
+// era-5B J-06 (additive): the tradable-band overlay + a descriptive confluence chip beside the
+// candles/markers. Bands come from GET /research/tradability (era-5B J-01); the chip's
+// rejection/breakthrough state mapping comes from GET /research/strategies's `structure_tape_map`
+// entry (era-5B J-04). Both are read VERBATIM — this component computes no score, cluster, class, or
+// mapping of its own; it only draws served fields and evaluates a display conjunction (is the last
+// price inside a served band AND does the served tape state match the served mapping for that side).
 
-import { useEffect, useRef, useState } from "react";
-import { fetchHistory, fetchStrategies, fetchTradability } from "@/lib/api";
-import { formatDateTimeDMY } from "@/lib/datetime";
+import { useEffect, useMemo, useState } from "react";
+import {
+  fetchBarSeriesList,
+  fetchHistory,
+  fetchStrategies,
+  fetchTimeframeHistory,
+  fetchTradability,
+} from "@/lib/api";
+import { boundaryTs, timeframesInOrder } from "@/lib/timeframes";
+import { useBarWindow } from "@/lib/useBarWindow";
 import {
   HISTORY_BAR_SIZES,
+  TIMEFRAMES_WITH_LIVE_BARS,
+  type BarRow,
+  type BarSeriesRecord,
+  type CockpitHistory,
   type HistoryBarSize,
   type StrategiesPayload,
-  type TapeHistory,
-  type ThesisGeometry,
   type ThesisProjection,
   type TradabilityResponse,
 } from "@/lib/types";
+import {
+  StructureChart,
+  type ChartMarkerSpec,
+  type ChartPriceLineSpec,
+} from "./StructureChart";
 import { Panel, EmptyHint } from "./Panel";
-
-// era-5B J-06 (additive): the cockpit gains a tradable-band overlay + a descriptive confluence
-// chip beside the existing candles/tape-state markers/thesis geometry above — sim/historical modes
-// only (the parent's existing mode gate in app/page.tsx already fully unmounts this component in
-// live mode; untouched by this addition). Bands come from GET /research/tradability (era-5B J-01);
-// the chip's rejection/breakthrough state mapping comes from GET /research/strategies's
-// `structure_tape_map` entry (era-5B J-04). Both are read VERBATIM — this component computes no
-// score, cluster, class, or mapping of its own; it only draws served fields and evaluates a display
-// conjunction (is the last price inside a served band AND does the served tape state match the
-// served mapping for that band's side).
 
 // How often we re-pull `…/history` while a ticker is watched — matches the cockpit's WS push
 // cadence so the chart accrues new candles in step with the rest of the cockpit (no 2nd socket).
@@ -87,6 +104,20 @@ const MARK_COLOR = "#e2e8f0"; // slate-200
 // `rejection_states`/`breakthrough_states` fields below — never restated as a literal here.
 const STRATEGY_TAPE_MAP_ID = "structure_tape_map";
 
+// The active chart view: one logical-second tape bar size, or one wall-clock timeframe.
+type ChartView =
+  | { kind: "tape"; bar: HistoryBarSize }
+  | { kind: "history"; timeframe: string };
+
+function segmentClass(selected: boolean): string {
+  return (
+    "rounded border px-2.5 py-1 font-mono text-xs transition-colors " +
+    (selected
+      ? "border-slate-600 bg-slate-700 text-slate-100"
+      : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200 focus:border-slate-600 focus:text-slate-200 active:bg-slate-800")
+  );
+}
+
 export function PriceChart({
   ticker,
   thesis,
@@ -103,15 +134,14 @@ export function PriceChart({
   // scanning markers for "the latest state" can go stale/wrong.
   tapeState: string | null;
 }) {
-  const [barSize, setBarSize] = useState<HistoryBarSize>(HISTORY_BAR_SIZES[0]);
-  const [history, setHistory] = useState<TapeHistory | null>(null);
-  // `loaded` distinguishes "haven't fetched yet" (connecting) from "fetched, genuinely empty"
-  // (an empty window) so the empty treatment reads honestly in both cases.
-  const [loaded, setLoaded] = useState(false);
+  const [view, setView] = useState<ChartView>({ kind: "tape", bar: HISTORY_BAR_SIZES[0] });
+  const [history, setHistory] = useState<CockpitHistory | null>(null);
+  // The symbol's recorded bar-series metadata (candles omitted) — drives the "History" group's
+  // timeframe options. A SIM-*/unrecorded symbol resolves to [] (the honest empty History group).
+  const [recordedSeries, setRecordedSeries] = useState<BarSeriesRecord[]>([]);
   // The watched symbol's tradable bands (era-5B J-06) — `phase` distinguishes "not fetched yet"
-  // from "fetched, genuinely empty" (SIM-*/no-bar-series), mirroring `loaded` above so the empty
-  // treatment is honest in both cases. Additive/non-blocking: `idle`/`loading`/`error` render
-  // nothing extra — the chart + tape markers never wait on this fetch.
+  // from "fetched, genuinely empty" (SIM-*/no-bar-series). Additive/non-blocking: `idle`/`loading`/
+  // `error` render nothing extra — the chart + tape markers never wait on this fetch.
   const [tradabilityState, setTradabilityState] = useState<{
     phase: "idle" | "loading" | "ready" | "error";
     data: TradabilityResponse | null;
@@ -120,52 +150,136 @@ export function PriceChart({
   // Supplies the confluence chip's rejection/breakthrough state mapping.
   const [strategies, setStrategies] = useState<StrategiesPayload | null>(null);
 
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  // Library object handles kept across renders; typed loosely because the module is loaded
-  // dynamically (client-only) and we never import its types at module scope.
-  const chartRef = useRef<any>(null);
-  const seriesRef = useRef<any>(null);
-  const markersRef = useRef<any>(null);
-  const createMarkersRef = useRef<any>(null);
-  // The thesis price-line handles currently attached to the series (J-48). Tracked so each geometry
-  // update REMOVES the prior lines before adding the new ones (no stale/duplicate lines) and so a
-  // cleared/resolved thesis removes them entirely.
-  const priceLinesRef = useRef<any[]>([]);
-  // The tradable-band price-line handles (era-5B J-06) — tracked SEPARATELY from `priceLinesRef`
-  // (the thesis geometry's own dashed lines) so redrawing one family never clobbers the other.
-  const bandPriceLinesRef = useRef<any[]>([]);
-  // The latest tape-state markers (engine-owned) and thesis markers (research-owned). They share the
-  // ONE series-marker primitive, so both effects funnel through `setCombinedMarkers` which sets the
-  // union in a single call (lightweight-charts' setMarkers replaces the whole set).
-  const stateMarkersRef = useRef<any[]>([]);
-  const thesisMarkersRef = useRef<any[]>([]);
+  const viewKey = view.kind === "tape" ? `tape:${view.bar}` : `history:${view.timeframe}`;
 
-  // Set the union of engine tape-state markers + thesis-geometry markers in one call (they share the
-  // single series-marker mechanism; markers must be sorted ascending by time for the library).
-  function setCombinedMarkers() {
-    if (!markersRef.current) return;
-    const all = [...stateMarkersRef.current, ...thesisMarkersRef.current].sort(
-      (a, b) => a.time - b.time,
-    );
-    markersRef.current.setMarkers(all);
-  }
+  // The no-lookahead recorded-store window (History mode only): the bars strictly BEFORE the replay
+  // start (the anchor's timeframe bucket), paged backward on scroll. `beforeOnly` refuses to page
+  // forward, and the cursor `anchor_bucket_start - 1` (inclusive) keeps every fetched store bar's ts
+  // < the anchor bucket, so the store never reveals a bar at/after the replay start (the live tape
+  // owns that side). Called unconditionally (hooks rule); `symbol: null` until the boundary resolves.
+  const anchorBucketStart =
+    history?.kind === "timeframe" ? history.anchor_bucket_start : null;
+  const barWindow = useBarWindow(
+    view.kind === "history" && anchorBucketStart != null ? ticker : null,
+    view.kind === "history" ? view.timeframe : null,
+    anchorBucketStart != null ? (anchorBucketStart - 1) * 1000 : NaN,
+    { beforeOnly: true },
+  );
 
-  // --- Poll …/history verbatim while a ticker is watched (reset on ticker/bar change) -------
+  // The live tape bars (the moving bars), mapped to the shared real-epoch `BarRow` shape the chart
+  // draws. Tape mode: the logical-second candles at true clock time (`epoch_anchor + logical_ts`,
+  // volume unknown -> 0). History mode: the wall-clock timeframe candles VERBATIM (already real-epoch
+  // rows with volume). Read-only projections — no re-binning.
+  const liveBars = useMemo<BarRow[]>(() => {
+    if (!history) return [];
+    if (history.kind === "tape") {
+      const anchor = history.epoch_anchor ?? 0;
+      return history.bars.map((b) => ({
+        ts: Math.round(anchor + b.time),
+        open: b.open,
+        high: b.high,
+        low: b.low,
+        close: b.close,
+        volume: 0,
+      }));
+    }
+    return history.timeframe_bars;
+  }, [history]);
+
+  // The tape-state + thesis markers, as ready-to-draw specs the chart renders verbatim. Tape-state
+  // markers sit ABOVE the bar (down-arrow, colored by state); thesis markers sit BELOW (circle for a
+  // verdict / first confirmation, up-arrow for an entry/exit mark) — the SAME two-layer language the
+  // retired inline chart used. In History mode a tape-state marker is placed on its served containing
+  // bucket (`bucket_ts`); a thesis marker is floored to that timeframe's bucket, both pure display
+  // placement using served values.
+  const extraMarkers = useMemo<ChartMarkerSpec[]>(() => {
+    if (!history) return [];
+    const anchor = history.epoch_anchor ?? 0;
+    const toClock = (logical: number) => Math.round(anchor + logical);
+    const stateSpecs: ChartMarkerSpec[] =
+      history.kind === "tape"
+        ? history.markers.map((m) => ({
+            time: toClock(m.time),
+            position: "aboveBar",
+            color: MARKER_COLORS[m.state] ?? "#fbbf24",
+            shape: "arrowDown",
+            text: STATE_LABELS[m.state] ?? m.state,
+          }))
+        : history.markers.map((m) => ({
+            time: m.bucket_ts ?? toClock(m.time),
+            position: "aboveBar",
+            color: MARKER_COLORS[m.state] ?? "#fbbf24",
+            shape: "arrowDown",
+            text: STATE_LABELS[m.state] ?? m.state,
+          }));
+    const secs = history.kind === "timeframe" ? history.timeframe_seconds : 0;
+    const placeThesis = (logical: number) =>
+      secs > 0 ? Math.floor((anchor + logical) / secs) * secs : toClock(logical);
+    const geometry = thesis?.geometry;
+    const thesisSpecs: ChartMarkerSpec[] = geometry
+      ? geometry.markers.map((m) => {
+          if (m.kind === "entry" || m.kind === "exit") {
+            // The user's own action mark — its own slate treatment with the verbatim mono price.
+            const priceText = m.price != null ? ` ${m.price.toFixed(2)}` : "";
+            return {
+              time: placeThesis(m.logical_ts),
+              position: "belowBar",
+              color: MARK_COLOR,
+              shape: "arrowUp",
+              text: `${m.label}${priceText}`,
+            };
+          }
+          // A verdict-transition marker or the first-confirmation marker — verdict palette, circle.
+          const color =
+            m.kind === "first_confirmation"
+              ? VERDICT_COLORS.confirming
+              : VERDICT_COLORS[m.verdict ?? "pending"] ?? "#94a3b8";
+          return {
+            time: placeThesis(m.logical_ts),
+            position: "belowBar",
+            color,
+            shape: "circle",
+            text: m.label,
+          };
+        })
+      : [];
+    return [...stateSpecs, ...thesisSpecs];
+  }, [history, thesis]);
+
+  // The thesis-geometry price lines (invalidation always; level when set), as dashed reference lines
+  // the chart draws verbatim. `null`/no geometry => none (the exact no-thesis render).
+  const extraPriceLines = useMemo<ChartPriceLineSpec[]>(() => {
+    const geometry = thesis?.geometry;
+    if (!geometry) return [];
+    return geometry.price_lines.map((pl) => ({
+      price: pl.price,
+      color: PRICE_LINE_COLORS[pl.kind] ?? "#94a3b8",
+      lineWidth: 1,
+      lineStyle: 2, // LineStyle.Dashed
+      axisLabelVisible: true,
+      title: pl.label,
+    }));
+  }, [thesis]);
+
+  // --- Poll …/history verbatim while a ticker is watched (reset on ticker/view change) --------
   useEffect(() => {
     if (!ticker) {
       setHistory(null);
-      setLoaded(false);
       return;
     }
     let cancelled = false;
     setHistory(null);
-    setLoaded(false);
 
     async function pull() {
-      const data = await fetchHistory(ticker as string, barSize);
-      if (cancelled) return;
-      setHistory(data);
-      setLoaded(true);
+      if (view.kind === "tape") {
+        const data = await fetchHistory(ticker as string, view.bar);
+        if (cancelled) return;
+        setHistory(data ? { ...data, kind: "tape" } : null);
+      } else {
+        const data = await fetchTimeframeHistory(ticker as string, view.timeframe);
+        if (cancelled) return;
+        setHistory(data ? { ...data, kind: "timeframe" } : null);
+      }
     }
     pull();
     const id = setInterval(pull, POLL_INTERVAL_MS);
@@ -173,10 +287,27 @@ export function PriceChart({
       cancelled = true;
       clearInterval(id);
     };
-  }, [ticker, barSize]);
+  }, [ticker, viewKey]);
+
+  // --- Fetch the symbol's recorded bar-series metadata (the History group's options) ----------
+  // Candles omitted (`includeBars: false`) — the /structure paging precedent; this is metadata only.
+  useEffect(() => {
+    if (!ticker) {
+      setRecordedSeries([]);
+      return;
+    }
+    let cancelled = false;
+    fetchBarSeriesList({ symbol: ticker, includeBars: false }).then((res) => {
+      if (cancelled) return;
+      setRecordedSeries(res.ok && res.data ? res.data.bar_series : []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ticker]);
 
   // --- Fetch the watched symbol's tradable bands (era-5B J-06) -------------------------------
-  // Keyed on `[ticker, history?.epoch_anchor]` (not `barSize`, not polled every second): the
+  // Keyed on `[ticker, history?.epoch_anchor]` (not the view, not polled every second): the
   // morning-markup basis is date-bounded and does not move intraday, unlike the 1s `…/history`
   // poll above — `epoch_anchor` itself is a STABLE per-watch value (the engine sets it once at
   // watch-start; it never changes while the SAME ticker stays watched), so this still fetches at
@@ -241,244 +372,18 @@ export function PriceChart({
     };
   }, []);
 
-  // --- Create the chart once (client-only dynamic import, never at SSR) ---------------------
-  useEffect(() => {
-    if (!ticker) return;
-    let disposed = false;
-
-    (async () => {
-      const lc = await import("lightweight-charts");
-      if (disposed || !containerRef.current) return;
-
-      const chart = lc.createChart(containerRef.current, {
-        autoSize: true,
-        layout: {
-          // Match the dark instrument-panel surface so it does not read as a bright widget.
-          background: { type: lc.ColorType.Solid, color: "#020617" }, // slate-950
-          textColor: "#94a3b8", // slate-400
-          fontFamily:
-            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-        },
-        grid: {
-          vertLines: { color: "#1e293b" }, // slate-800
-          horzLines: { color: "#1e293b" },
-        },
-        rightPriceScale: { borderColor: "#1e293b" },
-        timeScale: {
-          borderColor: "#1e293b",
-          timeVisible: true,
-          secondsVisible: true,
-          // TRUE clock time on the axis (J-31): each candle's `time` is a real UTC epoch
-          // (anchor + logical_ts, see the data effect), and this formatter renders the axis ticks
-          // as `dd-MM-yyyy HH:mm:ss` in the operator's LOCAL zone via the ONE shared formatter
-          // (J-35) — never an elapsed 0…600 s counter. lightweight-charts passes UTCTimestamp
-          // SECONDS, so multiply to ms for the Date-based formatter.
-          tickMarkFormatter: (time: number) => formatDateTimeDMY(time * 1000),
-        },
-        // The crosshair tooltip time, also TRUE clock time via the shared `dd-MM-yyyy HH:mm:ss`
-        // formatter (J-31 / J-35) — consistent with the axis ticks.
-        localization: {
-          timeFormatter: (time: number) => formatDateTimeDMY(time * 1000),
-        },
-        crosshair: { mode: lc.CrosshairMode.Normal },
-      });
-      const series = chart.addSeries(lc.CandlestickSeries, {
-        upColor: "#34d399", // emerald-400
-        downColor: "#fb7185", // rose-400
-        wickUpColor: "#34d399",
-        wickDownColor: "#fb7185",
-        borderVisible: false,
-      });
-
-      chartRef.current = chart;
-      seriesRef.current = series;
-      createMarkersRef.current = lc.createSeriesMarkers;
-      markersRef.current = lc.createSeriesMarkers(series, []);
-    })();
-
-    return () => {
-      disposed = true;
-      if (chartRef.current) {
-        chartRef.current.remove();
-        chartRef.current = null;
-        seriesRef.current = null;
-        markersRef.current = null;
-      }
-    };
-  }, [ticker]);
-
-  // --- Feed the verbatim candles + markers into the chart whenever data changes -------------
-  useEffect(() => {
-    const series = seriesRef.current;
-    if (!series || !history) return;
-
-    // TRUE clock time (J-31): map each LOGICAL bin/marker time to a real UTC-epoch SECONDS value
-    // as `epoch_anchor + logical_ts` — a pure ADDITIVE display offset (the chart recomputes NO
-    // price/side/state; the engine's logical timeline + classification are unchanged). The anchor
-    // is real market epoch for historical and the synthetic session-start for simulated. When the
-    // backend has no anchor (an empty/anchorless window) we fall back to the logical seconds — the
-    // chart is empty in that case anyway, so no fabricated timestamp is shown.
-    const anchor = history.epoch_anchor ?? 0;
-    const toClock = (logical: number) => Math.round(anchor + logical);
-
-    // Candles VERBATIM from the engine buffer (no re-binning). Logical-second bin starts are
-    // whole multiples of the bar size; map to the true-clock epoch and keep ascending order
-    // (the backend already returns them sorted + unique per bar).
-    const candles = history.bars.map((b) => ({
-      time: toClock(b.time) as any,
-      open: b.open,
-      high: b.high,
-      low: b.low,
-      close: b.close,
-    }));
-    series.setData(candles);
-
-    // Markers VERBATIM from the engine buffer (the marker's own state/confidence — no
-    // re-derivation). One marker per meaningful transition, colored by state, stamped at true
-    // clock time so it aligns with the candle under it. Tape-state markers sit ABOVE the bar with a
-    // down-arrow — kept visually distinct from the thesis markers (which sit BELOW the bar), so the
-    // two registered marker owners never read as one layer (J-48).
-    if (markersRef.current && createMarkersRef.current) {
-      stateMarkersRef.current = history.markers.map((m) => ({
-        time: toClock(m.time) as any,
-        position: "aboveBar" as const,
-        color: MARKER_COLORS[m.state] ?? "#fbbf24",
-        shape: "arrowDown" as const,
-        text: STATE_LABELS[m.state] ?? m.state,
-      }));
-      setCombinedMarkers();
-    }
-
-    if (chartRef.current && candles.length > 0) {
-      chartRef.current.timeScale().fitContent();
-    }
-  }, [history]);
-
-  // --- Draw the thesis geometry VERBATIM (J-48): price-lines + thesis markers ---------------------
-  // Reads the served `geometry` (declared prices + the append-only timeline + the marks, computed
-  // once server-side) and draws it on the SAME epoch anchor the candles use (`anchor + logical_ts`).
-  // The chart derives NO price/side/state/time of its own. With `thesis: null` (or no geometry) it
-  // removes every line and clears the thesis-marker layer — exactly the no-thesis render (J-68/J-17).
-  useEffect(() => {
-    const series = seriesRef.current;
-    if (!series) return;
-    const geometry: ThesisGeometry | undefined = thesis?.geometry;
-
-    // Always clear prior price-lines first so an update never leaves a stale/duplicate line and a
-    // cleared/resolved thesis removes them entirely.
-    for (const line of priceLinesRef.current) {
-      try {
-        series.removePriceLine(line);
-      } catch {
-        // The series may have been disposed between renders — ignore (it is being torn down).
-      }
-    }
-    priceLinesRef.current = [];
-
-    if (!geometry) {
-      // No thesis => no overlay. Clear the thesis-marker layer and re-set the combined markers so
-      // only the engine tape-state markers remain (the exact no-thesis render).
-      thesisMarkersRef.current = [];
-      setCombinedMarkers();
-      return;
-    }
-
-    // Price-lines (time-independent) — invalidation always; level only when served. Each labeled
-    // with the backend-owned copy, rendered verbatim. Dashed so they read as declared reference
-    // lines, not data.
-    for (const pl of geometry.price_lines) {
-      const handle = series.createPriceLine({
-        price: pl.price,
-        color: PRICE_LINE_COLORS[pl.kind] ?? "#94a3b8",
-        lineWidth: 1,
-        lineStyle: 2, // LineStyle.Dashed
-        axisLabelVisible: true,
-        title: pl.label,
-      });
-      priceLinesRef.current.push(handle);
-    }
-
-    // Thesis markers — visually DISTINCT from tape-state markers: they sit BELOW the bar (vs above)
-    // and use a circle (verdict / first-confirmation) or arrow-up (entry/exit) shape (vs the
-    // tape-state down-arrow). x-placement uses the SAME epoch anchor as the candles.
-    const anchor = history?.epoch_anchor ?? 0;
-    const toClock = (logical: number) => Math.round(anchor + logical);
-    thesisMarkersRef.current = geometry.markers.map((m) => {
-      if (m.kind === "entry" || m.kind === "exit") {
-        // The user's own action mark — its own slate treatment with the verbatim mono price.
-        const priceText = m.price != null ? ` ${m.price.toFixed(2)}` : "";
-        return {
-          time: toClock(m.logical_ts) as any,
-          position: "belowBar" as const,
-          color: MARK_COLOR,
-          shape: "arrowUp" as const,
-          text: `${m.label}${priceText}`,
-        };
-      }
-      // A verdict-transition marker or the first-confirmation marker — verdict palette, circle shape.
-      const color =
-        m.kind === "first_confirmation"
-          ? VERDICT_COLORS.confirming
-          : VERDICT_COLORS[m.verdict ?? "pending"] ?? "#94a3b8";
-      return {
-        time: toClock(m.logical_ts) as any,
-        position: "belowBar" as const,
-        color,
-        shape: "circle" as const,
-        text: m.label,
-      };
-    });
-    setCombinedMarkers();
-  }, [thesis, history]);
-
-  // --- Draw the tradable-band overlay VERBATIM (era-5B J-06) ---------------------------------
-  // One SOLID price line per band edge, colored by side — reuses StructureChart.tsx's L97-120
-  // pattern byte-for-byte. Bands are read off the served prop only; this component performs no
-  // scoring or clustering of its own. Keyed on `[tradabilityState, history]` rather than just
-  // `tradabilityState`: `history` polls every second (see POLL_INTERVAL_MS above), so if the chart
-  // series is not yet created the very first time bands resolve, the next poll tick re-runs this
-  // effect and draws them — the SAME self-healing dependency the thesis-geometry effect just above
-  // already relies on for the identical series-not-ready race.
-  useEffect(() => {
-    const series = seriesRef.current;
-    if (!series) return;
-
-    // Always clear prior band lines first (mirrors the thesis-geometry effect's own clear-then-
-    // redraw pattern) so a re-fetch or ticker change never leaves a stale/duplicate line.
-    for (const line of bandPriceLinesRef.current) {
-      try {
-        series.removePriceLine(line);
-      } catch {
-        // The series may have been disposed between renders — ignore (it is being torn down).
-      }
-    }
-    bandPriceLinesRef.current = [];
-
-    const bands = tradabilityState.data?.bands ?? [];
-    for (const band of bands) {
-      const color = band.side === "resistance" ? "#fb7185" : "#34d399"; // rose-400 / emerald-400
-      const sideLabel = band.side === "resistance" ? "R" : "S";
-      const classLabel = band.class ? ` class ${band.class}` : "";
-      const title = `${sideLabel}${classLabel} · score ${band.quality_score}${band.round_number ? " · round" : ""}`;
-      const edges =
-        band.price_low === band.price_high ? [band.price_low] : [band.price_low, band.price_high];
-      for (const price of edges) {
-        const handle = series.createPriceLine({
-          price,
-          color,
-          lineWidth: 2,
-          lineStyle: 0, // LineStyle.Solid — distinct from this component's own DASHED thesis lines
-          axisLabelVisible: true,
-          title,
-        });
-        bandPriceLinesRef.current.push(handle);
-      }
-    }
-  }, [tradabilityState, history]);
-
   if (!ticker) return null;
 
-  const hasBars = !!history && history.bars.length > 0;
+  // The recorded timeframes offering live bars (recorded ∩ the fixed-duration supported set),
+  // shortest-first. Empty for a SIM-*/unrecorded symbol — the honest empty History group.
+  const historyTimeframes = timeframesInOrder(recordedSeries).filter((tf) =>
+    (TIMEFRAMES_WITH_LIVE_BARS as readonly string[]).includes(tf),
+  );
+
+  // The recorded store context (History mode only): bars strictly LEFT of the replay start, with the
+  // "start" boundary marker on the last of them. Tape mode has no recorded context.
+  const storeBars = view.kind === "history" ? barWindow.bars : [];
+  const boundaryEpochMs = anchorBucketStart != null ? anchorBucketStart * 1000 : NaN;
 
   // --- Confluence chip (era-5B J-06) ----------------------------------------------------------
   // A pure DISPLAY CONJUNCTION over already-fetched/served values — price-in-band × served tape
@@ -486,9 +391,8 @@ export function PriceChart({
   // mapping literal: `rejectionState`/`breakthroughState` are read off the FETCHED
   // structure_tape_map entry, never restated (the only place this file hardcodes the four tape-
   // state names is the pre-existing MARKER_COLORS/STATE_LABELS cosmetic dicts above, unrelated to
-  // this decision).
-  const lastPrice =
-    history && history.bars.length > 0 ? history.bars[history.bars.length - 1].close : null;
+  // this decision). The last price is the last live bar's close (the current tape price).
+  const lastPrice = liveBars.length > 0 ? liveBars[liveBars.length - 1].close : null;
   const bands = tradabilityState.data?.bands ?? [];
   const matchedBand =
     lastPrice != null
@@ -519,44 +423,77 @@ export function PriceChart({
     (tradabilityState.data.no_bar_series_for_symbol || tradabilityState.data.bands.length === 0);
 
   return (
-    <Panel title="Price Chart — Tape-State Markers" className="mb-4">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="text-xs text-slate-500">Bar size</span>
-        <div className="flex gap-1" role="group" aria-label="Bar size">
-          {HISTORY_BAR_SIZES.map((size) => {
-            const selected = size === barSize;
-            return (
-              <button
-                key={size}
-                type="button"
-                onClick={() => setBarSize(size)}
-                aria-pressed={selected}
-                className={
-                  "rounded border px-2.5 py-1 font-mono text-xs transition-colors " +
-                  (selected
-                    ? "border-slate-600 bg-slate-700 text-slate-100"
-                    : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200 focus:border-slate-600 focus:text-slate-200 active:bg-slate-800")
-                }
-              >
-                {size}s
-              </button>
-            );
-          })}
+    <Panel title="Price Chart — Recorded History + Live Tape" className="mb-4">
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">Tape</span>
+          <div className="flex gap-1" role="group" aria-label="Tape bar size">
+            {HISTORY_BAR_SIZES.map((size) => {
+              const selected = view.kind === "tape" && view.bar === size;
+              return (
+                <button
+                  key={`tape-${size}`}
+                  type="button"
+                  onClick={() => setView({ kind: "tape", bar: size })}
+                  aria-pressed={selected}
+                  className={segmentClass(selected)}
+                >
+                  {size}s
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">History</span>
+          {historyTimeframes.length > 0 ? (
+            <div className="flex flex-wrap gap-1" role="group" aria-label="History timeframe">
+              {historyTimeframes.map((tf) => {
+                const selected = view.kind === "history" && view.timeframe === tf;
+                return (
+                  <button
+                    key={`hist-${tf}`}
+                    type="button"
+                    onClick={() => setView({ kind: "history", timeframe: tf })}
+                    aria-pressed={selected}
+                    className={segmentClass(selected)}
+                  >
+                    {tf}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyHint>No recorded bars for {ticker}.</EmptyHint>
+          )}
         </div>
       </div>
 
-      {/* The chart canvas. The container is always mounted so the library can attach; the empty
-          treatment overlays it before any candle exists (never placeholder candles). */}
-      <div className="relative">
-        <div ref={containerRef} className="h-64 w-full" />
-        {!hasBars && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <EmptyHint>
-              {loaded ? "No price history for this window yet" : "Loading price history…"}
-            </EmptyHint>
-          </div>
-        )}
-      </div>
+      {/* The shared chart renderer. In History mode the recorded store bars sit left of the "start"
+          marker and the live tape bars grow to its right; in Tape mode only the live tape bars show.
+          The band overlay + tape-state/thesis markers are drawn from the served values passed here —
+          this container computes none of them. */}
+      <StructureChart
+        key={`${ticker}|${viewKey}`}
+        bars={storeBars}
+        liveBars={liveBars}
+        levels={[]}
+        bands={tradabilityState.data?.bands ?? []}
+        asOfTs={boundaryTs(storeBars, boundaryEpochMs)}
+        asOfLabel="start"
+        onNeedOlder={barWindow.loadOlder}
+        loadingMore={barWindow.loading}
+        secondsVisible={view.kind === "tape"}
+        clockFormatter
+        extraMarkers={extraMarkers}
+        extraPriceLines={extraPriceLines}
+      />
+
+      <p className="mt-2 text-xs text-slate-500" data-testid="cockpit-chart-caption">
+        {view.kind === "history"
+          ? `Recorded ${view.timeframe} bars sit left of the start marker; bars to its right are built live from the tape.`
+          : `Logical ${view.bar}s bars built live from the tape.`}
+      </p>
 
       {/* era-5B J-06: the tradable-band overlay's companion strip. Additive/non-blocking — while
           the bands fetch is idle/loading/failed this renders nothing, so the chart + tape markers

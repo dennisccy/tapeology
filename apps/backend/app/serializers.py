@@ -16,7 +16,13 @@ guesses a status), so a connected-but-empty tape reads ``waiting`` and a feeder 
 from __future__ import annotations
 
 from .config import CONFIG
-from .engine.history import HistoryBuffer, OhlcBar, TapeMarker
+from .engine.history import (
+    TIMEFRAME_SECONDS,
+    HistoryBuffer,
+    OhlcBar,
+    TapeMarker,
+    TimeframeBar,
+)
 from .engine.snapshot import EngineSnapshot, TradeRow
 from .research.feed_basis import data_feed_for_scenario
 
@@ -149,6 +155,62 @@ def serialize_history(
         "epoch_anchor": epoch_anchor,
         "bars": [_ohlc_bar(b) for b in history.bars(bar)],
         "markers": [_tape_marker(m) for m in history.markers()],
+    }
+
+
+def _timeframe_bar(bar: TimeframeBar) -> dict:
+    return {
+        "ts": bar.ts,
+        "open": bar.open,
+        "high": bar.high,
+        "low": bar.low,
+        "close": bar.close,
+        "volume": bar.volume,
+    }
+
+
+def serialize_timeframe_history(
+    history: HistoryBuffer, timeframe: str, epoch_anchor: float | None = None
+) -> dict:
+    """Wall-clock timeframe history for the cockpit chart's "history" mode
+    (`GET /tape/{ticker}/history?timeframe=`): real-epoch OHLC+volume candles + tape-state markers.
+
+    A pure projection of the engine's history buffer for the requested (already-validated)
+    timeframe — it reads candles/markers the engine computed once and recomputes nothing (single
+    source of truth). Additive alongside ``serialize_history`` (the logical-second ``?bar=`` mode),
+    which is unchanged. An anchorless engine yields empty ``timeframe_bars`` and a null
+    ``anchor_bucket_start`` (HTTP 200) — never invented candles.
+
+    Fields:
+      * ``timeframe`` / ``timeframe_seconds`` — the requested timeframe and its bucket width.
+      * ``epoch_anchor`` (row 13) — carried through verbatim; the ``ts`` are already real epochs.
+      * ``anchor_bucket_start`` — the real-epoch left edge of the anchor's bucket (``None`` when
+        anchorless). The NO-LOOKAHEAD boundary: the chart draws recorded store bars strictly before
+        it and the live tape's own moving bars from it onward.
+      * ``timeframe_bars`` — the real-epoch OHLC+volume candles built live from the tape.
+      * ``markers`` — the SAME meaningful tape-state-transition markers as the ``?bar=`` mode, each
+        additionally carrying ``bucket_ts`` (the real-epoch left edge of the timeframe bucket that
+        contains the marker, ``None`` when anchorless) so the chart places a marker on its
+        containing candle at a coarse timeframe without recomputing the bucketing itself.
+    """
+    secs = TIMEFRAME_SECONDS[timeframe]
+    anchor_bucket = history.anchor_bucket_start(timeframe)
+
+    def _bucket_ts(logical: float) -> float | None:
+        if epoch_anchor is None:
+            return None
+        return ((epoch_anchor + logical) // secs) * secs
+
+    return {
+        "timeframe": timeframe,
+        "timeframe_seconds": secs,
+        "epoch_anchor": epoch_anchor,
+        "anchor_bucket_start": anchor_bucket,
+        "timeframe_bars": [_timeframe_bar(b) for b in history.timeframe_bars(timeframe)],
+        "markers": [
+            {**_tape_marker(m), "bucket_ts": _bucket_ts(m.timestamp)}
+            for m in history.markers()
+        ],
     }
 
 

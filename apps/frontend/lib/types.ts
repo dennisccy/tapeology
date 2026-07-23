@@ -865,6 +865,56 @@ export interface TapeHistory {
 export const HISTORY_BAR_SIZES = [10, 30, 60] as const;
 export type HistoryBarSize = (typeof HISTORY_BAR_SIZES)[number];
 
+// The wall-clock timeframes the cockpit chart's "History" group offers — the fixed-duration subset
+// the tape can honestly bin live moving bars into (mirrors the backend's `TIMEFRAME_SECONDS` in
+// app/engine/history.py). `1w`/`1mo` are deliberately absent (calendar-irregular). The chart offers
+// only the intersection of these with the timeframes actually RECORDED for the symbol; the backend's
+// own 422 stays the validation authority (this list is a display grouping, the HISTORY_BAR_SIZES
+// precedent).
+export const TIMEFRAMES_WITH_LIVE_BARS = [
+  "1m",
+  "5m",
+  "15m",
+  "1h",
+  "4h",
+  "8h",
+  "1d",
+] as const;
+
+// One wall-clock tape-state marker: the same state/confidence as the logical-second `TapeMarker`,
+// plus `bucket_ts` — the real-epoch left edge of the timeframe bucket that CONTAINS the marker
+// (`null` when the engine has no anchor yet). The chart places the marker on its containing candle
+// at a coarse timeframe from this served value; it re-buckets nothing.
+export interface TapeTimeframeMarker {
+  time: number;
+  state: string;
+  confidence: number;
+  bucket_ts: number | null;
+}
+
+// GET /tape/{ticker}/history?timeframe= response — the wall-clock, real-epoch OHLC+volume candles
+// built LIVE from the tape (the cockpit chart's "history" mode), plus the no-lookahead boundary.
+// `timeframe_bars` share the recorded store's `BarRow` shape (real UTC-epoch `ts` + volume), so the
+// chart draws them beside store candles on one grid. `anchor_bucket_start` is the real-epoch left
+// edge of the anchor's bucket (`null` when anchorless) — the chart clamps its recorded-store window
+// strictly before it (no lookahead) and grows the live tape's own bars from it onward.
+export interface TapeTimeframeHistory {
+  timeframe: string;
+  timeframe_seconds: number;
+  epoch_anchor: number | null;
+  anchor_bucket_start: number | null;
+  timeframe_bars: BarRow[];
+  markers: TapeTimeframeMarker[];
+}
+
+// The cockpit chart's one polled-history state, discriminated by the active view: the logical-second
+// tape bars (`?bar=`) or the wall-clock timeframe bars (`?timeframe=`). Both variants carry
+// `epoch_anchor` at the top level, so the tradable-band fetch keys on `history?.epoch_anchor`
+// uniformly regardless of which mode is showing.
+export type CockpitHistory =
+  | (TapeHistory & { kind: "tape" })
+  | (TapeTimeframeHistory & { kind: "timeframe" });
+
 // Distinct honest real-data failure reasons surfaced by POST /watch (data-contract row 9). The
 // UI renders a distinct non-cockpit panel per reason — never a fabricated cockpit, never a
 // silent fall-back to Simulated.

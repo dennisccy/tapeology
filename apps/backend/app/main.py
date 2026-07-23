@@ -53,6 +53,7 @@ from .serializers import (
     serialize_state,
     serialize_stream,
     serialize_summary,
+    serialize_timeframe_history,
 )
 from .watch_manager import UnknownTickerError, WatchManager
 
@@ -529,25 +530,57 @@ def get_summary(ticker: str) -> dict:
 
 
 @app.get("/tape/{ticker}/history")
-def get_history(ticker: str, bar: int = CONFIG.history_bar_sizes[0]) -> dict:
-    """Engine-computed OHLC candles + tape-state markers for the prediction chart (J-17 / J-18).
+def get_history(
+    ticker: str, bar: int | None = None, timeframe: str | None = None
+) -> dict:
+    """Engine-computed OHLC candles + tape-state markers for the cockpit chart (J-17 / J-18).
 
     A pure projection of the engine history buffer (single source of truth — the chart recomputes
-    no price/side/state). Honest contract:
+    no price/side/state). Two DISJOINT modes, selected by an optional query param:
+      * ``?bar=N`` (default; N defaults to the first configured size) — logical-second candles for
+        the tape window, byte-identical to before this capability.
+      * ``?timeframe=TF`` — wall-clock, real-epoch OHLC+volume candles built live from the tape,
+        plus each marker's containing-bucket ``bucket_ts`` and the ``anchor_bucket_start``
+        no-lookahead boundary (the additive cockpit "history" chart mode).
+
+    Honest contract:
+      * ``bar`` and ``timeframe`` together -> 422 (they select different projections).
       * Not-watched ticker -> 404 (reuse ``_engine_or_404``; never a fabricated empty 200).
       * ``bar`` not in the configured set -> 422 (rejected, not silently coerced).
-      * Watched but no trades yet / an empty historical window -> empty bars + empty markers (200);
-        no invented candles.
-    Works for simulated + historical alike — the backend does not special-case the mode; it serves
-    whatever the engine accumulated (Live is hidden in the UI, not here).
+      * ``timeframe`` not in the engine's supported set -> 422 (rejected, not silently coerced).
+      * Watched but no trades yet / no anchor yet -> empty bars + empty markers (200); no invented
+        candles.
+    Works for simulated + historical + live alike — the backend does not special-case the mode; it
+    serves whatever the engine accumulated.
     """
-    if bar not in CONFIG.history_bar_sizes:
+    if bar is not None and timeframe is not None:
+        raise HTTPException(
+            status_code=422, detail="pass at most one of bar / timeframe"
+        )
+    # `?timeframe=` mode (the wall-clock cockpit "history" chart). The supported set is the engine's
+    # own (config-derived), so validation needs the engine first — a not-watched ticker still 404s.
+    if timeframe is not None:
+        engine = _engine_or_404(ticker)
+        allowed = engine.history.timeframes
+        if timeframe not in allowed:
+            raise HTTPException(
+                status_code=422,
+                detail=f"timeframe must be one of: {', '.join(allowed)}",
+            )
+        # Pass the engine's canonical display/epoch anchor (row 13, J-31) through so the projection
+        # can compute each marker's containing-bucket + the no-lookahead boundary. Read verbatim.
+        return serialize_timeframe_history(
+            engine.history, timeframe, epoch_anchor=engine.epoch_anchor
+        )
+    # `?bar=` mode (unchanged). Validate the bar BEFORE the 404 (the pre-existing ordering).
+    effective_bar = CONFIG.history_bar_sizes[0] if bar is None else bar
+    if effective_bar not in CONFIG.history_bar_sizes:
         allowed = ", ".join(str(b) for b in CONFIG.history_bar_sizes)
         raise HTTPException(status_code=422, detail=f"bar must be one of: {allowed}")
     engine = _engine_or_404(ticker)
     # Pass the engine's canonical display/epoch anchor (row 13, J-31) through to the projection so
     # the chart renders TRUE clock time (`epoch_anchor + bar.time`). Read verbatim — no recompute.
-    return serialize_history(engine.history, bar, epoch_anchor=engine.epoch_anchor)
+    return serialize_history(engine.history, effective_bar, epoch_anchor=engine.epoch_anchor)
 
 
 @app.websocket("/tape/{ticker}/stream")

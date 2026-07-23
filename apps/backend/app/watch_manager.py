@@ -636,6 +636,16 @@ class WatchManager:
                     raise event.error
                 if engine.paused:
                     continue  # raced into pause after dequeue: drop this event (no backfill)
+                # Stamp the engine's display anchor (row 13, J-31) from the provider's first real
+                # record BEFORE processing the first event, so the history buffer's wall-clock
+                # timeframe candles bin this event onto the real-epoch grid. The generator sets the
+                # provider anchor before yielding, so it is known by the time we dequeue here.
+                # Set-once (a no-op after the first stamp); reads None defensively for a double that
+                # exposes no anchor (the engine then stays anchorless, exactly as before).
+                if engine.epoch_anchor is None:
+                    anchor = _provider_anchor(provider)
+                    if anchor is not None:
+                        engine.set_epoch_anchor(anchor)
                 engine.process_event(event)
                 if engine.snapshot().stream_status != "live":
                     engine.set_stream_status("live")  # owns the stale->live recovery flip

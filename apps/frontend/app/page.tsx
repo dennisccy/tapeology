@@ -237,18 +237,19 @@ export default function Page() {
       />
       <main className="mx-auto max-w-7xl px-4 py-6">
         {/* Tape-state prediction chart — above the cockpit, for Simulated + Historical only
-            (hidden for Live, per the blueprint IA). Hidden while the stream has failed (pre- or
-            post-connect) or is still waiting for its first event — there is nothing to chart yet,
-            and the chart must never invent candles. Reads GET …/history verbatim.
-            era-5B J-06 (additive): also passes the WS snapshot's own `tape_state` so the chart can
-            draw its tradable-band overlay + confluence chip — this render gate is UNCHANGED, so
-            live mode stays byte-identical (the chart, overlay, and chip all stay hidden there). */}
+            Shown in ALL data modes (sim / historical / LIVE): the chart now renders live moving
+            bars built from the tape, plus recorded store history in its "History" timeframes, so a
+            live watch charts too. Hidden while the stream has failed (pre- or post-connect) or is
+            still waiting for its first event — there is nothing to chart yet, and the chart must
+            never invent candles (in live mode the engine also learns its true-clock anchor at the
+            first event, so the chart has a real axis by the time this gate opens). Reads
+            GET …/history verbatim; passes the WS snapshot's own `tape_state` for the tradable-band
+            overlay + confluence chip (era-5B J-06). */}
         {ticker &&
           !streamFailed &&
           !snapshotFailed &&
           !snapshotWaiting &&
-          !snapshotConnecting &&
-          (mode === "sim" || mode === "historical") && (
+          !snapshotConnecting && (
             <PriceChart
               ticker={ticker}
               thesis={snapshot?.thesis ?? null}

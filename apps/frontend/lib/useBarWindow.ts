@@ -79,12 +79,22 @@ function mergeRows(older: BarRow[], newer: BarRow[]): BarRow[] {
  * @param symbol         the loaded symbol (`null`/empty = nothing charted yet)
  * @param timeframe      the viewing timeframe whose recordings are merged and paged
  * @param asOfEpochMs    the as-of instant the first window is anchored around (`NaN` = newest bars)
+ * @param opts.beforeOnly  the cockpit's NO-LOOKAHEAD clamp: fetch only rows AT OR BEFORE `asOf`
+ *   (the whole first window before it, never the forward-context request), and refuse to page
+ *   forward (`loadNewer` no-ops, `hasMoreAfter` stays false). The recorded store then only ever
+ *   fills the space LEFT of the replay start; the live tape's own moving bars own everything to its
+ *   right. Omitted (both /structure call sites) => the byte-identical straddle-the-anchor behavior.
  */
 export function useBarWindow(
   symbol: string | null,
   timeframe: string | null,
   asOfEpochMs: number,
+  opts?: { beforeOnly?: boolean },
 ): BarWindow {
+  // Read through a ref so the memoized extend()/effect keep stable identities (beforeOnly is
+  // constant per call site — the cockpit always true, /structure never set).
+  const beforeOnlyRef = useRef(opts?.beforeOnly ?? false);
+  beforeOnlyRef.current = opts?.beforeOnly ?? false;
   const [bars, setBars] = useState<BarRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMoreBefore, setHasMoreBefore] = useState(false);
@@ -131,18 +141,24 @@ export function useBarWindow(
     setLoading(true);
 
     (async () => {
+      const beforeOnly = beforeOnlyRef.current;
       const anchorTs = Number.isNaN(asOfEpochMs) ? undefined : asOfEpochMs / 1000;
-      const beforeLimit = Math.max(1, Math.round(INITIAL_BARS * INITIAL_BEFORE_SHARE));
+      // beforeOnly draws the whole first window BEFORE the anchor (no forward context to share the
+      // budget with); otherwise the window is split ~80/20 around it.
+      const beforeLimit = beforeOnly
+        ? INITIAL_BARS
+        : Math.max(1, Math.round(INITIAL_BARS * INITIAL_BEFORE_SHARE));
       const afterLimit = Math.max(1, INITIAL_BARS - beforeLimit);
       // Two requests around the anchor: the run-up TO the as-of bar, plus the later price action
       // shown for context. With no anchor there is nothing to straddle — the newest window is the
-      // honest default.
+      // honest default. beforeOnly (the cockpit no-lookahead clamp) skips the forward request
+      // entirely so no stored bar AT OR AFTER the replay start is ever fetched.
       const [before, after] = await Promise.all([
         fetchMergedCandles(activeSymbol, activeTimeframe, {
           beforeTs: anchorTs,
           limit: beforeLimit,
         }),
-        anchorTs === undefined
+        anchorTs === undefined || beforeOnly
           ? Promise.resolve(null)
           : fetchMergedCandles(activeSymbol, activeTimeframe, {
               afterTs: anchorTs,
@@ -158,8 +174,14 @@ export function useBarWindow(
       }
       const merged = mergeRows(before.data.bars, after?.ok ? (after.data?.bars ?? []) : []);
       // `hasMoreAfter` comes from whichever request reached furthest right (the forward window when
-      // it succeeded, otherwise the anchored one) — the endpoint's own flag, never inferred.
-      const moreAfter = after?.ok && after.data ? after.data.has_more_after : before.data.has_more_after;
+      // it succeeded, otherwise the anchored one) — the endpoint's own flag, never inferred. Under
+      // beforeOnly there is honestly no "after" to page into (the live tape owns that side), so it
+      // is pinned false regardless of what the store holds past the clamp.
+      const moreAfter = beforeOnly
+        ? false
+        : after?.ok && after.data
+          ? after.data.has_more_after
+          : before.data.has_more_after;
       barsRef.current = merged;
       moreBeforeRef.current = before.data.has_more_before;
       moreAfterRef.current = moreAfter;
@@ -180,6 +202,8 @@ export function useBarWindow(
   const extend = useCallback(
     (direction: "older" | "newer", count: number, opts?: { fill?: boolean }) => {
       if (!activeSymbol || !activeTimeframe || inFlightRef.current) return;
+      // No-lookahead clamp: never page forward past the replay start (the live tape owns that side).
+      if (direction === "newer" && beforeOnlyRef.current) return;
       const edge =
         direction === "older" ? barsRef.current[0] : barsRef.current[barsRef.current.length - 1];
       if (!edge) return;

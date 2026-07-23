@@ -18,14 +18,19 @@ These assert:
 
 from __future__ import annotations
 
+import asyncio
 import itertools
+
+import pytest
 
 from app.config import CONFIG
 from app.engine.tape_engine import TapeEngine
 from app.providers.adapters.base import HistoricalWindow, RawQuote, RawTrade
 from app.providers.historical import HistoricalProvider
+from app.providers.live import LiveProvider
 from app.providers.simulated import SimulatedProvider
 from app.serializers import serialize_history
+from app.watch_manager import WatchManager
 
 
 # --- Providers expose the right anchor ----------------------------------------------------
@@ -130,3 +135,72 @@ def test_anchor_does_not_change_features_state_or_confidence():
     # And the directional read still lands (sanity: the stream genuinely classifies, not all-unclear).
     assert with_anchor["tape_state"] == "buyer_control"
     assert with_anchor["confidence"] >= CONFIG.reasonable_confidence
+
+
+# --- Live mode learns the anchor at the first record (chart now renders live too) ---------
+
+
+async def _first_stream_event_anchor(records) -> float | None:
+    """The provider's ``epoch_anchor`` observed right after it yields its FIRST event."""
+    async def _aiter():
+        for r in records:
+            yield r
+
+    provider = LiveProvider("X", _aiter(), "live X")
+    async for _ in provider.stream():
+        return provider.epoch_anchor  # after the first yield, the anchor must already be stamped
+    return provider.epoch_anchor
+
+
+@pytest.mark.anyio
+async def test_live_provider_anchor_set_on_first_record():
+    # Unlike the old "live = None forever", the provider now stamps its anchor from the first
+    # record's real epoch (the SAME t0 its logical timeline subtracts) — the moment the first event
+    # is yielded, so the feeder can read it before processing that event.
+    records = [
+        RawTrade(epoch=1_700_000_000.0, price=12.34, size=100),
+        RawTrade(epoch=1_700_000_030.0, price=12.35, size=50),
+    ]
+    assert await _first_stream_event_anchor(records) == 1_700_000_000.0
+    # An empty stream never yields, so it never stamps an anchor (honest None — nothing to anchor to).
+    assert await _first_stream_event_anchor([]) is None
+
+
+@pytest.mark.anyio
+async def test_live_feeder_stamps_engine_anchor_before_first_trade():
+    # End-to-end: the live feeder reads the provider's first-record anchor and stamps the engine
+    # BEFORE processing the first event, so that event bins into the wall-clock timeframe candles.
+    async def _aiter():
+        for r in (
+            RawTrade(epoch=1_700_000_000.0, price=12.34, size=100),
+            RawTrade(epoch=1_700_000_030.0, price=12.35, size=50),
+        ):
+            yield r
+
+    manager = WatchManager(CONFIG)
+    provider = LiveProvider("LIVEX", _aiter(), "live LIVEX")
+    engine = manager.watch_with_async_provider("LIVEX", provider)
+    try:
+        # The engine starts anchorless (a live provider's epoch is unknown at construction) and is
+        # stamped once the feeder applies the first event.
+        await _until(lambda: engine.epoch_anchor is not None)
+        assert engine.epoch_anchor == 1_700_000_000.0
+        # And that first trade landed in a 1m wall-clock bucket (floored real epoch), with volume —
+        # proof the stamp happened before process_event, not after.
+        await _until(lambda: engine.history.timeframe_bars("1m"))
+        bars = engine.history.timeframe_bars("1m")
+        assert bars[0].ts == (1_700_000_000.0 // 60) * 60
+        assert bars[0].volume >= 100  # at least the first trade's size
+        assert engine.history.anchor_bucket_start("1m") == (1_700_000_000.0 // 60) * 60
+    finally:
+        await manager.shutdown()
+
+
+async def _until(predicate, timeout: float = 3.0, step: float = 0.01) -> None:
+    elapsed = 0.0
+    while elapsed < timeout:
+        if predicate():
+            return
+        await asyncio.sleep(step)
+        elapsed += step
+    raise AssertionError("condition not met within timeout")

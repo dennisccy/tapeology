@@ -2,19 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { BarRow, SrLevel, TradabilityBand } from "@/lib/types";
+import { formatDateTimeDMY } from "@/lib/datetime";
 import { EmptyHint } from "./Panel";
 
 // The /structure page's price chart (J-01): candles from ONE representative recorded bar series
-// (the page picks it — see `pickRepresentativeSeries` in app/structure/page.tsx) plus one dashed
-// price line per S/R level, labelled by its OWN timeframe + type. Every candle and every level's
+// (the page picks it — see `pickRepresentativeSeries` in lib/timeframes) plus one dashed price line
+// per S/R level, labelled by its OWN timeframe + type. Every candle and every level's
 // price/timeframe/type is read VERBATIM from the props (already fetched by the page) — this
 // component computes nothing; it only draws.
 //
-// Follows PriceChart.tsx's PATTERN (client-only dynamic `lightweight-charts` import, dark chart
-// options, dashed declared-reference price lines) but is a fresh, purpose-built component:
-// PriceChart.tsx polls the tape engine's `/tape/{ticker}/history` (logical-second candles + live
-// tape-state markers); this component renders ONE already-fetched query result from
-// `/research/bars` (real UTC-epoch-seconds candles, no polling, no markers).
+// It is now ALSO the cockpit chart's renderer (app/page.tsx's PriceChart delegates its drawing
+// here), via a set of OPTIONAL, defaulted props that are all absent for the /structure call sites
+// (so those render byte-identically to before):
+//   * `liveBars` — the tape's live moving bars, drawn on a SECOND candlestick series to the right of
+//     the recorded store bars; updated in place each poll so the last bar animates.
+//   * `extraMarkers` / `extraPriceLines` — pre-built display specs (tape-state markers + thesis
+//     geometry) the cockpit overlays; the component draws them verbatim, deciding nothing.
+//   * `secondsVisible` / `clockFormatter` — the cockpit's true-clock axis (the tape's own second-
+//     resolution axis), matching the retired PriceChart's own formatting.
+//   * `asOfLabel` — the boundary marker's caption ("start" on the cockpit, "as-of" on /structure).
 //
 // era-5B J-05 (additive): an optional `bands` prop overlays the tradable map's price bands
 // (GET /research/tradability, read verbatim by the page) beside the existing level lines. Default
@@ -63,22 +69,55 @@ const BAND_COLORS = {
   support: { strong: "#34d399", dim: "#3f8570" }, // emerald-400 / dimmed emerald
 };
 
+// A ready-to-draw series marker (the cockpit builds these from its served tape-state + thesis
+// values; this component draws them verbatim on the live series).
+export interface ChartMarkerSpec {
+  time: number;
+  position: "aboveBar" | "belowBar";
+  color: string;
+  shape: "arrowDown" | "arrowUp" | "circle";
+  text: string;
+}
+
+// A ready-to-draw horizontal price line (the cockpit builds these from its served thesis geometry).
+export interface ChartPriceLineSpec {
+  price: number;
+  color: string;
+  lineWidth: number;
+  lineStyle: number;
+  axisLabelVisible: boolean;
+  title: string;
+}
+
 export function StructureChart({
   bars,
   levels,
   bands = [],
   asOfTs,
+  asOfLabel = "as-of",
   onNeedOlder,
   onNeedNewer,
   loadingMore = false,
+  liveBars = [],
+  extraMarkers = [],
+  extraPriceLines = [],
+  secondsVisible = false,
+  clockFormatter = false,
 }: {
   bars: BarRow[];
   levels: SrLevel[];
   bands?: TradabilityBand[];
   asOfTs?: number;
+  asOfLabel?: string;
   onNeedOlder?: (count: number, opts?: { fill?: boolean }) => void;
   onNeedNewer?: (count: number, opts?: { fill?: boolean }) => void;
   loadingMore?: boolean;
+  // Cockpit-only additive props (absent for /structure -> byte-identical there).
+  liveBars?: BarRow[];
+  extraMarkers?: ChartMarkerSpec[];
+  extraPriceLines?: ChartPriceLineSpec[];
+  secondsVisible?: boolean;
+  clockFormatter?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // `chartReady` flips once the dynamically imported chart library has built the chart+series. It
@@ -96,6 +135,18 @@ export function StructureChart({
   const libRef = useRef<any>(null);
   const markersRef = useRef<any>(null);
   const priceLinesRef = useRef<any[]>([]);
+  // The SECOND candlestick series holding the tape's live moving bars (cockpit only). Kept distinct
+  // from the recorded-store series so the no-lookahead boundary is structural: store bars strictly
+  // left of the replay start, live bars from it onward, disjoint by `ts`.
+  const liveSeriesRef = useRef<any>(null);
+  const liveMarkersRef = useRef<any>(null);
+  const drawnLiveRef = useRef<BarRow[]>([]);
+  const extraPriceLinesRef = useRef<any[]>([]);
+  // `clockFormatter` is read ONCE at chart creation (documented as not runtime-switchable — the
+  // cockpit always passes true, /structure never passes it), through a ref so it is current when
+  // the mount-only creation effect runs.
+  const clockFormatterRef = useRef(clockFormatter);
+  clockFormatterRef.current = clockFormatter;
   // Whether anything has been drawn yet — the first data for a chart chooses its own viewport,
   // every later update preserves the operator's.
   const drawnRef = useRef(false);
@@ -140,6 +191,15 @@ export function StructureChart({
         timeScale: { borderColor: "#1e293b", timeVisible: true, secondsVisible: false },
         crosshair: { mode: lc.CrosshairMode.Normal },
       });
+      // True-clock axis (cockpit only): render each candle's real UTC-epoch `time` as
+      // `dd-MM-yyyy HH:mm:ss` in the operator's local zone via the ONE shared formatter (J-31 /
+      // J-35), matching the retired PriceChart. lightweight-charts passes UTCTimestamp SECONDS.
+      if (clockFormatterRef.current) {
+        chart.applyOptions({
+          timeScale: { tickMarkFormatter: (time: number) => formatDateTimeDMY(time * 1000) },
+          localization: { timeFormatter: (time: number) => formatDateTimeDMY(time * 1000) },
+        });
+      }
       const series = chart.addSeries(lc.CandlestickSeries, {
         upColor: "#34d399", // emerald-400
         downColor: "#fb7185", // rose-400
@@ -147,10 +207,22 @@ export function StructureChart({
         wickDownColor: "#fb7185",
         borderVisible: false,
       });
+      // The live tape-bar series — SAME palette, so recorded + live candles read as one instrument.
+      const liveSeries = chart.addSeries(lc.CandlestickSeries, {
+        upColor: "#34d399",
+        downColor: "#fb7185",
+        wickUpColor: "#34d399",
+        wickDownColor: "#fb7185",
+        borderVisible: false,
+      });
 
       chartRef.current = chart;
       seriesRef.current = series;
+      liveSeriesRef.current = liveSeries;
       libRef.current = lc;
+      // The tape-state + thesis markers ride the live series' own marker primitive (the as-of
+      // boundary marker rides the store series' — created lazily below).
+      liveMarkersRef.current = lc.createSeriesMarkers(liveSeries, []);
 
       // The lazy-load trigger: every zoom or pan re-measures what the visible span is missing.
       // The hook it calls no-ops when a request is already in flight or when the endpoint reported
@@ -170,10 +242,14 @@ export function StructureChart({
         chartRef.current.remove();
         chartRef.current = null;
         seriesRef.current = null;
+        liveSeriesRef.current = null;
         markersRef.current = null;
+        liveMarkersRef.current = null;
         priceLinesRef.current = [];
+        extraPriceLinesRef.current = [];
         drawnRef.current = false;
         drawnBarsRef.current = [];
+        drawnLiveRef.current = [];
         lastRangeRef.current = null;
       }
     };
@@ -297,6 +373,51 @@ export function StructureChart({
     requestMissingBars(chart.timeScale().getVisibleLogicalRange(), { fill: true });
   }, [bars, asOfTs, chartReady]);
 
+  // --- Feed the live tape bars into the second series (cockpit only) ----------------------------
+  // Updated in place so the last bar animates as trades arrive: when the new array is an append-only
+  // extension of the drawn one (same bar at the old last index), only the possibly-changed last bar
+  // and any appended bars are `update()`d (cheap, and it lets the library follow the right edge);
+  // otherwise (first draw, a timeframe switch, or a multi-bucket jump at high replay speed that
+  // broke the prefix) it redraws wholesale with `setData`. No `fitContent()` — the viewport is the
+  // paged one.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const liveSeries = liveSeriesRef.current;
+    if (!chart || !liveSeries) return;
+
+    const candles = liveBars.map((b) => ({
+      time: b.ts as any,
+      open: b.open,
+      high: b.high,
+      low: b.low,
+      close: b.close,
+    }));
+
+    const prev = drawnLiveRef.current;
+    const canIncrement =
+      prev.length > 0 &&
+      candles.length >= prev.length &&
+      liveBars[prev.length - 1]?.ts === prev[prev.length - 1]?.ts;
+
+    if (canIncrement) {
+      for (let i = prev.length - 1; i < candles.length; i++) {
+        liveSeries.update(candles[i]);
+      }
+    } else {
+      liveSeries.setData(candles);
+      // First live paint with NO recorded store bars owning the viewport (tape mode, or history
+      // mode for a symbol with no recordings): show the last screenful of live bars. When store
+      // candles exist, the store data effect above owns the viewport (around the as-of boundary),
+      // so this leaves it alone.
+      if (prev.length === 0 && !drawnRef.current && candles.length > 0) {
+        const viewport = initialViewportBars();
+        const to = candles.length;
+        chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, to - viewport), to });
+      }
+    }
+    drawnLiveRef.current = liveBars;
+  }, [liveBars, chartReady]);
+
   // --- Draw the level + band reference lines (clear-then-redraw, PriceChart.tsx's pattern) ------
   // Kept in its OWN effect so appending a lazily-loaded candle page never re-creates every line.
   useEffect(() => {
@@ -376,12 +497,65 @@ export function StructureChart({
     }
   }, [levels, bands, chartReady]);
 
-  // --- The as-of boundary marker ----------------------------------------------------------------
+  // --- Draw the cockpit's extra thesis-geometry price lines (clear-then-redraw) ------------------
+  // Kept SEPARATE from the level/band lines (own handle ref) so redrawing one family never clobbers
+  // the other. Attached to the live series (the tape bars own the price scale on the cockpit); the
+  // prices/colors/widths are the served thesis geometry the page pre-built — drawn verbatim.
+  useEffect(() => {
+    const liveSeries = liveSeriesRef.current;
+    if (!liveSeries) return;
+    for (const line of extraPriceLinesRef.current) {
+      try {
+        liveSeries.removePriceLine(line);
+      } catch {
+        // The series may have been disposed between renders — ignore (it is being torn down).
+      }
+    }
+    extraPriceLinesRef.current = [];
+    for (const spec of extraPriceLines) {
+      extraPriceLinesRef.current.push(
+        liveSeries.createPriceLine({
+          price: spec.price,
+          color: spec.color,
+          lineWidth: spec.lineWidth,
+          lineStyle: spec.lineStyle,
+          axisLabelVisible: spec.axisLabelVisible,
+          title: spec.title,
+        }),
+      );
+    }
+  }, [extraPriceLines, chartReady]);
+
+  // --- Draw the cockpit's tape-state + thesis markers on the live series (verbatim) --------------
+  useEffect(() => {
+    const primitive = liveMarkersRef.current;
+    if (!primitive) return;
+    const sorted = [...extraMarkers].sort((a, b) => a.time - b.time);
+    primitive.setMarkers(
+      sorted.map((m) => ({
+        time: m.time as any,
+        position: m.position,
+        color: m.color,
+        shape: m.shape,
+        text: m.text,
+      })),
+    );
+  }, [extraMarkers, chartReady]);
+
+  // --- Apply the true-clock second-resolution axis toggle (cockpit only) ------------------------
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    chart.applyOptions({ timeScale: { secondsVisible: !!secondsVisible } });
+  }, [secondsVisible, chartReady]);
+
+  // --- The as-of / start boundary marker --------------------------------------------------------
   // `asOfTs` is the ts of the LAST drawn bar the level/band computation could see (the page picks
   // it as an ACTUAL bar time, never a between-bars instant, so it always lands on a real candle).
   // Candles to its right are LATER price action shown for context; the level/band lines themselves
   // remain computed strictly as of the query time (lookahead-free). Uses the SAME v5 series-marker
-  // mechanism PriceChart.tsx uses.
+  // mechanism PriceChart.tsx uses. `asOfLabel` names it ("as-of" on /structure, "start" on the
+  // cockpit, where the bars to its right are the live tape's own moving bars).
   useEffect(() => {
     const series = seriesRef.current;
     const lc = libRef.current;
@@ -395,7 +569,7 @@ export function StructureChart({
               position: "aboveBar" as const,
               color: "#94a3b8", // slate-400 — the SAME neutral "declared reference" tone as the lines
               shape: "arrowDown" as const,
-              text: "as-of",
+              text: asOfLabel,
             },
           ];
     if (markersRef.current) {
@@ -403,9 +577,9 @@ export function StructureChart({
     } else {
       markersRef.current = lc.createSeriesMarkers(series, markers);
     }
-  }, [asOfTs, bars, chartReady]);
+  }, [asOfTs, asOfLabel, bars, chartReady]);
 
-  const hasBars = bars.length > 0;
+  const hasBars = bars.length > 0 || liveBars.length > 0;
 
   return (
     <div className="relative">
