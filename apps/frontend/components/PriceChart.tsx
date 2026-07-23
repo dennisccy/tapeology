@@ -27,25 +27,19 @@
 // price inside a served band AND does the served tape state match the served mapping for that side).
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  fetchBarSeriesList,
-  fetchHistory,
-  fetchStrategies,
-  fetchTimeframeHistory,
-  fetchTradability,
-} from "@/lib/api";
+import { fetchHistory, fetchStrategies, fetchTimeframeHistory } from "@/lib/api";
 import { boundaryTs, timeframesInOrder } from "@/lib/timeframes";
 import { useBarWindow } from "@/lib/useBarWindow";
+import { useRecordedSeries } from "@/lib/useRecordedSeries";
+import { useTradability } from "@/lib/useTradability";
 import {
   HISTORY_BAR_SIZES,
   TIMEFRAMES_WITH_LIVE_BARS,
   type BarRow,
-  type BarSeriesRecord,
   type CockpitHistory,
   type HistoryBarSize,
   type StrategiesPayload,
   type ThesisProjection,
-  type TradabilityResponse,
 } from "@/lib/types";
 import {
   StructureChart,
@@ -136,16 +130,42 @@ export function PriceChart({
 }) {
   const [view, setView] = useState<ChartView>({ kind: "tape", bar: HISTORY_BAR_SIZES[0] });
   const [history, setHistory] = useState<CockpitHistory | null>(null);
+  // The watched session's LATCHED epoch anchor (era-5B J-06, restructured onto the shared hook).
+  // `history.epoch_anchor` (Data Contract row 13) is "the real UTC epoch a watched session's
+  // logical time 0 maps to" — a STABLE per-watch value the engine sets once at watch-start. But
+  // the raw `history` object itself transiently nulls on every VIEW SWITCH (the poll effect
+  // resets it), so reading the anchor off `history` directly made the band overlay vanish and
+  // refetch on every Tape/History toggle. This latch keeps the anchor once it resolves — reset
+  // ONLY on a ticker change (a new watch is genuinely a new session) — so the tradable-map read
+  // below stays keyed on a stable value for the whole watch: at most one fetch per watch, and
+  // the bands never flash off on a view switch.
+  const [latchedAnchor, setLatchedAnchor] = useState<number | null>(null);
+  useEffect(() => {
+    setLatchedAnchor(null); // a NEW ticker is a new watched session -- its anchor must re-resolve
+  }, [ticker]);
+  useEffect(() => {
+    // Latch only a RESOLVED anchor; the transient nulls of a view-switch reset never clear it.
+    if (history?.epoch_anchor != null) setLatchedAnchor(history.epoch_anchor);
+  }, [history?.epoch_anchor]);
+  // `as_of` is the WATCHED SESSION's own current moment, verbatim: the latched anchor converted
+  // to ISO — a real market epoch for a historical replay, so during e.g. the 2026-06-22 replay
+  // this correctly resolves THAT session's own prior-close basis (2026-06-18) rather than
+  // today's. `null` until the anchor resolves: the shared hook then DEFERS the fetch entirely
+  // (no request, phase "loading", never "idle") — there is NO wall-clock fallback anywhere in
+  // this computation; `_resolve_basis` (tradability.py) alone decides the prior session
+  // server-side. The epoch-seconds -> ms conversion is the SAME pure unit conversion this file
+  // already does for candle timestamps (`toClock`), never a date computation of "which session".
+  const tradabilityAsOfIso =
+    latchedAnchor != null ? new Date(latchedAnchor * 1000).toISOString() : null;
+  // The watched symbol's tradable bands (era-5B J-06) — the SAME shared read /structure's
+  // Tradable Map uses (`lib/useTradability.ts`; one fetch path, one backend route, one durable
+  // cache). Additive/non-blocking: `idle`/`loading`/`error` render nothing extra — the chart +
+  // tape markers never wait on this fetch.
+  const tradabilityState = useTradability(ticker, tradabilityAsOfIso);
   // The symbol's recorded bar-series metadata (candles omitted) — drives the "History" group's
-  // timeframe options. A SIM-*/unrecorded symbol resolves to [] (the honest empty History group).
-  const [recordedSeries, setRecordedSeries] = useState<BarSeriesRecord[]>([]);
-  // The watched symbol's tradable bands (era-5B J-06) — `phase` distinguishes "not fetched yet"
-  // from "fetched, genuinely empty" (SIM-*/no-bar-series). Additive/non-blocking: `idle`/`loading`/
-  // `error` render nothing extra — the chart + tape markers never wait on this fetch.
-  const [tradabilityState, setTradabilityState] = useState<{
-    phase: "idle" | "loading" | "ready" | "error";
-    data: TradabilityResponse | null;
-  }>({ phase: "idle", data: null });
+  // timeframe options; the SAME shared read /structure uses (`lib/useRecordedSeries.ts`). A
+  // SIM-*/unrecorded symbol resolves to [] (the honest empty History group).
+  const { series: recordedSeries } = useRecordedSeries(ticker);
   // The strategy registry (era-5B J-06) — ticker-independent config/registry data, fetched once.
   // Supplies the confluence chip's rejection/breakthrough state mapping.
   const [strategies, setStrategies] = useState<StrategiesPayload | null>(null);
@@ -288,75 +308,6 @@ export function PriceChart({
       clearInterval(id);
     };
   }, [ticker, viewKey]);
-
-  // --- Fetch the symbol's recorded bar-series metadata (the History group's options) ----------
-  // Candles omitted (`includeBars: false`) — the /structure paging precedent; this is metadata only.
-  useEffect(() => {
-    if (!ticker) {
-      setRecordedSeries([]);
-      return;
-    }
-    let cancelled = false;
-    fetchBarSeriesList({ symbol: ticker, includeBars: false }).then((res) => {
-      if (cancelled) return;
-      setRecordedSeries(res.ok && res.data ? res.data.bar_series : []);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [ticker]);
-
-  // --- Fetch the watched symbol's tradable bands (era-5B J-06) -------------------------------
-  // Keyed on `[ticker, history?.epoch_anchor]` (not the view, not polled every second): the
-  // morning-markup basis is date-bounded and does not move intraday, unlike the 1s `…/history`
-  // poll above — `epoch_anchor` itself is a STABLE per-watch value (the engine sets it once at
-  // watch-start; it never changes while the SAME ticker stays watched), so this still fetches at
-  // most once per watch, not on every poll tick.
-  //
-  // `as_of` is the WATCHED SESSION's own current moment, verbatim: `history.epoch_anchor` (Data
-  // Contract row 13, ALREADY fetched by the poll above — no new fetch) is "the real UTC epoch a
-  // watched session's logical time 0 maps to" — a real market epoch for a historical replay, so
-  // during e.g. the 2026-06-22 replay this correctly resolves THAT session's own prior-close basis
-  // (2026-06-18) rather than today's. The fetch is DEFERRED — no request issued — until this
-  // anchor resolves: there is NO wall-clock fallback anywhere in this computation. Before the
-  // first `history` response lands (first paint), or while a ticker's window has not yet warmed,
-  // the effect below early-returns and stays in `phase: "loading"` (never `"idle"`, so the
-  // ready-only empty-state/`tradabilityEmpty` logic further down never activates prematurely, and
-  // never a fetch against the browser's wall-clock "now", which would resolve TODAY's basis
-  // instead of the replayed session's own). The next 1s `history` poll tick simply re-runs this
-  // effect once the anchor lands (a SIM ticker still resolves `no_bar_series_for_symbol` once it
-  // does fetch, same as before — deferring the fetch is a no-op for SIM since its anchor is always
-  // non-null). This is STILL zero client "which session" math (no-lookahead): `_resolve_basis`
-  // (tradability.py) alone decides the prior session server-side; converting an epoch-seconds
-  // field to an ISO string is the SAME pure unit/format conversion this file already does for
-  // candle timestamps above (`toClock`), never a date computation of "which session."
-  useEffect(() => {
-    if (!ticker) {
-      setTradabilityState({ phase: "idle", data: null });
-      return;
-    }
-    if (history?.epoch_anchor == null) {
-      // The watched session's own anchor has not resolved yet — defer the fetch entirely (issue
-      // no request) rather than falling back to wall-clock "now". Stay in "loading", not "idle",
-      // so the ready-only tradabilityEmpty/confluence logic never fires on a stale/absent read.
-      setTradabilityState({ phase: "loading", data: null });
-      return;
-    }
-    let cancelled = false;
-    setTradabilityState({ phase: "loading", data: null });
-    const asOf = new Date(history.epoch_anchor * 1000).toISOString();
-    fetchTradability(ticker, asOf).then((res) => {
-      if (cancelled) return;
-      if (res.ok && res.data) {
-        setTradabilityState({ phase: "ready", data: res.data });
-      } else {
-        setTradabilityState({ phase: "error", data: null });
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [ticker, history?.epoch_anchor]);
 
   // --- Fetch the strategy registry ONCE (era-5B J-06) -----------------------------------------
   // Ticker-independent config/registry data (the SAME GET /research/strategies read `/structure`'s

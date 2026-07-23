@@ -33,6 +33,9 @@ FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
 PRICE_CHART = FRONTEND_DIR / "components" / "PriceChart.tsx"
 STRUCTURE_CHART = FRONTEND_DIR / "components" / "StructureChart.tsx"
 PAGE_TSX = FRONTEND_DIR / "app" / "page.tsx"
+# The ONE shared tradable-map read both surfaces (this cockpit container and /structure's Tradable
+# Map) fetch through — the fetch-shape invariants below are asserted where the fetch now lives.
+TRADABILITY_HOOK = FRONTEND_DIR / "lib" / "useTradability.ts"
 
 # The four tape-state names the confirmation MAPPING may name. Legitimate ONLY inside the
 # pre-existing MARKER_COLORS / STATE_LABELS cosmetic marker color/label dicts (unrelated to the
@@ -112,19 +115,43 @@ def test_confluence_selects_structure_tape_map_strategy_entry():
 
 
 def test_tradability_bands_fetch_is_keyed_on_ticker_and_stable_session_anchor_not_polled():
-    """The bands fetch must be keyed on `[ticker, history?.epoch_anchor]` — NOT on `barSize`, and
-    NOT folded into the existing 1s `setInterval` history poll. `epoch_anchor` is a STABLE per-watch
+    """The bands read must be keyed on the LATCHED per-watch anchor — NOT on the view, and NOT
+    folded into the existing 1s `setInterval` history poll. `epoch_anchor` is a STABLE per-watch
     value (the engine sets it once at watch-start and it never changes while the same ticker stays
-    watched), so keying on it still fetches at most once or twice per watch (not every poll tick) —
-    the tradable map is date-bounded and does not move intraday, unlike the tape-history poll."""
+    watched), but the raw `history` object transiently nulls on every VIEW SWITCH (the poll effect
+    resets it) — so the container LATCHES the anchor once per watch (reset only on a ticker
+    change; a transient null never clears it) and hands the SHARED `useTradability` hook a stable
+    (ticker, asOfIso) pair: at most one fetch per watch, and the band overlay never flashes off on
+    a Tape/History toggle. The hook itself — the ONE tradable-map read both this container and
+    /structure use — is VALUE-KEYED: its single fetch effect re-runs only when
+    (symbol, asOfIso, reloadSeq) actually changes, never on a poll tick."""
     source = _source()
-    idx = source.index("fetchTradability(")
-    tail = source[idx : idx + 900]
-    m = re.search(r"\},\s*\[([^\]]*)\]\s*\)\s*;", tail)
-    assert m, "could not find the enclosing effect's dependency array after the fetchTradability( call"
+    # The container reads the map through the shared hook, fed by the latched anchor — never a
+    # direct fetch of its own.
+    assert "useTradability(ticker, tradabilityAsOfIso)" in source, (
+        "expected the container to read the map via the shared useTradability hook, keyed on the "
+        "latched anchor"
+    )
+    assert "fetchTradability(" not in source, (
+        "the container must not fetch the tradable map directly — the shared hook owns that read"
+    )
+    # The latch assigns only a RESOLVED anchor (a view-switch transient null never clears it)...
+    assert "epoch_anchor != null" in source, (
+        "expected the latch to be guarded on a non-null history?.epoch_anchor"
+    )
+    # ...and resets only when the ticker (the watched session) changes.
+    reset_idx = source.index("setLatchedAnchor(null)")
+    assert "[ticker]" in source[reset_idx : reset_idx + 250], (
+        "expected the latch reset effect to be keyed on [ticker] alone"
+    )
+    # The shared hook's ONE fetch effect is value-keyed — never polled.
+    hook = TRADABILITY_HOOK.read_text()
+    idx = hook.index("fetchTradability(")
+    m = re.search(r"\},\s*\[([^\]]*)\]\s*\)\s*;", hook[idx : idx + 900])
+    assert m, "could not find the hook effect's dependency array after the fetchTradability( call"
     deps = m.group(1).strip()
-    assert deps == "ticker, history?.epoch_anchor", (
-        f"expected the bands effect to be keyed on [ticker, history?.epoch_anchor], found deps={deps!r}"
+    assert deps == "symbol, asOfIso, reloadSeq", (
+        f"expected the hook's fetch effect to be keyed on [symbol, asOfIso, reloadSeq], found deps={deps!r}"
     )
 
 
@@ -143,31 +170,41 @@ def test_tradability_as_of_uses_the_watched_sessions_own_anchor_with_no_client_s
     decides the prior session server-side; this only supplies WHICH moment to resolve from, and only
     once that moment is known."""
     source = _source()
-    idx = source.index("fetchTradability(")
-    call_site = source[idx : idx + 60]
-    assert "asOf" in call_site, "expected fetchTradability to be called with a computed `asOf` variable"
-    # The `asOf` computation AND its enclosing early-return guard, just above the call site.
-    preceding = source[max(0, idx - 900) : idx]
-    assert "history.epoch_anchor" in preceding, (
-        "expected the as_of computation to read history's epoch_anchor field"
+    hook = TRADABILITY_HOOK.read_text()
+    # The latch reads the SERVED anchor field verbatim, and the ISO conversion multiplies the
+    # latched seconds by 1000 — the SAME pure unit conversion this file already does for candle
+    # timestamps (toClock), not a fresh unit convention and never a date computation.
+    assert "setLatchedAnchor(history.epoch_anchor)" in source, (
+        "expected the latch to read history's own epoch_anchor field verbatim"
     )
-    assert "epoch_anchor * 1000" in preceding, (
-        "expected epoch_anchor (seconds) to be converted to ms the SAME way this file already does "
-        "for candle timestamps (toClock), not a fresh unit convention"
+    assert "latchedAnchor * 1000" in source, (
+        "expected the latched epoch (seconds) to be converted to ms for the ISO as_of"
     )
-    assert "new Date().toISOString()" not in source, (
-        "found a wall-clock-'now' fallback still present — the fetch must be deferred (early-return "
-        "guard) until history.epoch_anchor resolves, never fall back to today's date"
+    # No wall-clock-'now' fallback anywhere in the container OR the shared hook: while the anchor
+    # is unresolved the hook DEFERS (issues no request), never asks about today's date. This is
+    # what makes a HISTORICAL replay of a PAST session (e.g. 2026-06-22) resolve THAT session's
+    # own prior-close basis (2026-06-18) at every moment, including the sub-second window before
+    # the first `history` response lands.
+    for text, name in ((source, "PriceChart.tsx"), (hook, "useTradability.ts")):
+        assert "new Date().toISOString()" not in text, (
+            f"found a wall-clock-'now' fallback in {name} — the read must defer until the caller's "
+            "moment resolves, never fall back to today's date"
+        )
+    # The hook's deferred branch: `asOfIso == null` issues NO request and reports phase "loading"
+    # (never "idle", so ready-only empty-state logic downstream stays quiet). Anchored on the CODE
+    # form (`if (...)`) so the docstring's own mention of the guard never matches first.
+    idx = hook.index("if (asOfIso == null)")
+    deferred = hook[idx : idx + 400]
+    deferred_body = deferred[: deferred.index("return;")]
+    assert 'phase: "loading"' in deferred_body, (
+        'expected the deferred (asOfIso == null) branch to report phase: "loading"'
     )
-    # The early-return/deferred-fetch guard itself: the effect must bail out BEFORE computing
-    # `asOf` or calling fetchTradability whenever the anchor has not resolved yet.
-    assert "epoch_anchor == null" in preceding, (
-        "expected an early-return guard checking history?.epoch_anchor == null before the asOf "
-        "computation / fetch call"
+    assert "fetchTradability(" not in deferred_body, (
+        "the deferred branch must issue NO request"
     )
-    assert preceding.count('phase: "loading"') >= 2, (
-        "expected BOTH the deferred-fetch guard and the actual pre-fetch state update to set "
-        'phase: "loading" (never "idle") while epoch_anchor is unresolved or a fetch is in flight'
+    assert hook.count('phase: "loading"') >= 2, (
+        "expected BOTH the deferred branch and the actual pre-fetch state update to set "
+        'phase: "loading" while the moment is unresolved or a fetch is in flight'
     )
     banned_session_math = [
         "getPreviousTradingDay",
@@ -177,8 +214,11 @@ def test_tradability_as_of_uses_the_watched_sessions_own_anchor_with_no_client_s
         "setDate(",
         "getDay()",
     ]
-    offenders = [b for b in banned_session_math if b in source]
-    assert not offenders, f"found apparent client-side prior-session date arithmetic: {offenders}"
+    for text, name in ((source, "PriceChart.tsx"), (hook, "useTradability.ts")):
+        offenders = [b for b in banned_session_math if b in text]
+        assert not offenders, (
+            f"found apparent client-side prior-session date arithmetic in {name}: {offenders}"
+        )
 
 
 def test_strategies_fetched_once_on_mount_not_per_ticker():

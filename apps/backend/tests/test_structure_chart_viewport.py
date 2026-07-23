@@ -32,6 +32,8 @@ STRUCTURE_CHART = FRONTEND_DIR / "components" / "StructureChart.tsx"
 STRUCTURE_PAGE = FRONTEND_DIR / "app" / "structure" / "page.tsx"
 BAR_WINDOW = FRONTEND_DIR / "lib" / "useBarWindow.ts"
 API_TS = FRONTEND_DIR / "lib" / "api.ts"
+# The ONE shared recorded-series metadata read (both /structure and the cockpit container use it).
+RECORDED_SERIES_HOOK = FRONTEND_DIR / "lib" / "useRecordedSeries.ts"
 
 
 def _read(path: Path) -> str:
@@ -49,12 +51,21 @@ def _code(path: Path) -> str:
 
 
 def test_structure_page_requests_bar_series_metadata_only():
+    """The metadata-only invariant, asserted where the read now LIVES: the page (and the cockpit
+    container) reads series metadata through the shared `useRecordedSeries` hook, and THAT hook
+    requests the metadata-only projection."""
     source = _read(STRUCTURE_PAGE)
-    assert "includeBars: false" in source, (
-        "the Structure page must request the metadata-only bar-series projection — a full "
+    hook = _read(RECORDED_SERIES_HOOK)
+    assert "useRecordedSeries(" in source, (
+        "the Structure page must read series metadata through the shared useRecordedSeries hook "
+        "(the same read the cockpit container uses)"
+    )
+    assert "includeBars: false" in hook, (
+        "the shared hook must request the metadata-only bar-series projection — a full "
         "fetchBarSeriesList() pulls every candle of every registered series into the browser"
     )
-    assert "fetchBarSeriesList()" not in source, "found a no-param (full-candle) bar-series read"
+    for text in (source, hook):
+        assert "fetchBarSeriesList()" not in text, "found a no-param (full-candle) bar-series read"
     assert "useBarWindow(" in source, "the charts must draw a paged window, not a whole series"
 
 

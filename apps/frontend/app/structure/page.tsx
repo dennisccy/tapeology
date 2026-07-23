@@ -5,7 +5,6 @@ import {
   cancelEdgeReportCompute,
   createBacktest,
   fetchBacktest,
-  fetchBarSeriesList,
   fetchDatasets,
   fetchEdgeReport,
   fetchEdgeReportCompute,
@@ -15,7 +14,6 @@ import {
   fetchSetupDetail,
   fetchSetups,
   fetchStrategies,
-  fetchTradability,
   recordBarSeries,
   triggerEdgeReportCompute,
 } from "@/lib/api";
@@ -24,7 +22,6 @@ import type {
   BacktestAggregate,
   BacktestClassAggregate,
   BacktestResult,
-  BarSeriesListResult,
   BarSeriesRecord,
   ConfluenceZone,
   Dataset,
@@ -41,9 +38,10 @@ import type {
   Strategy,
   StrategiesPayload,
   TradabilityBand,
-  TradabilityResponse,
 } from "@/lib/types";
 import { MAX_LOADED_BARS, useBarWindow } from "@/lib/useBarWindow";
+import { useRecordedSeries } from "@/lib/useRecordedSeries";
+import { useTradability } from "@/lib/useTradability";
 import { boundaryTs, pickRepresentativeSeries, timeframesInOrder } from "@/lib/timeframes";
 import { SymbolSearch } from "@/components/SymbolSearch";
 import { StructureChart } from "@/components/StructureChart";
@@ -1370,24 +1368,35 @@ export default function StructurePage() {
   const [symbolInput, setSymbolInput] = useState("");
   const [asOfInput, setAsOfInput] = useState("");
   const [levelsState, setLevelsState] = useState<LoadState<LevelsResponse>>({ phase: "idle" });
-  const [barsState, setBarsState] = useState<LoadState<BarSeriesListResult>>({ phase: "idle" });
-
-  // era-5B J-01 Tradable Map state (THIS iteration's new default view) — driven by the SAME Load
-  // form/button as `levelsState`/`barsState` above (see `handleLoad`), never a second trigger.
-  const [tradabilityState, setTradabilityState] = useState<LoadState<TradabilityResponse>>({
-    phase: "idle",
-  });
   // The raw-levels toggle (era-5B J-05) — OFF by default (the DoD's own requirement); toggling it
   // on renders the pre-existing Levels & Zones section byte-identically to before this iteration.
   const [showRawLevels, setShowRawLevels] = useState(false);
-  // The symbol/as-of the last Load resolved to — the query the DEFERRED raw-levels read below is
-  // for. `null` until a Load completes (or while one is in flight), so the read never fires
-  // against a half-resolved form.
-  const [loadedQuery, setLoadedQuery] = useState<{ symbol: string; asOf: string } | null>(null);
-  // The query the raw-levels read has already been ISSUED for (`symbol|as_of`). A ref, not state:
-  // it exists only to keep the effect below from re-issuing the same read — including after a
-  // failure, where re-running on `levelsState` would loop — and must never itself trigger a render.
+  // The query the Load button last submitted — the ONE driver of this page's per-symbol reads.
+  // `null` until the first Load; `seq` increments per click so a re-Load of the SAME
+  // (symbol, asOf) still refetches (the store may have changed underneath — e.g. right after a
+  // "Fetch from Yahoo Finance" recorded new bars; the hooks key on it as their reloadSeq).
+  const [loadedQuery, setLoadedQuery] = useState<{
+    symbol: string;
+    asOf: string;
+    seq: number;
+  } | null>(null);
+  // The query the DEFERRED raw-levels read has already been ISSUED for (`symbol|as_of|seq`). A
+  // ref, not state: it exists only to keep the effect below from re-issuing the same read —
+  // including after a failure, where re-running on `levelsState` would loop — and must never
+  // itself trigger a render.
   const levelsRequestedForRef = useRef<string | null>(null);
+
+  // era-5B J-01 Tradable Map (the default view) + the recorded-series metadata behind the
+  // timeframe selector — both now read through the SHARED hooks the cockpit's PriceChart uses
+  // (`lib/useTradability.ts` / `lib/useRecordedSeries.ts`): one fetch path per read, one backend
+  // route, one durable cache — an enhancement to either lands on both surfaces at once. Driven by
+  // the SAME Load form/button (`handleLoad` publishes `loadedQuery`), never a second trigger.
+  const tradabilityState = useTradability(
+    loadedQuery?.symbol ?? null,
+    loadedQuery?.asOf ?? null,
+    loadedQuery?.seq ?? 0,
+  );
+  const barSeriesState = useRecordedSeries(loadedQuery?.symbol ?? null, loadedQuery?.seq ?? 0);
   // The viewing-timeframe selector (default "1d"). This is the user's PREFERENCE — the timeframe
   // actually drawn is `effectiveTimeframe` below, which falls back when the loaded symbol has no
   // series at this timeframe. It only chooses WHICH recorded series' candles both charts draw; it
@@ -1621,50 +1630,23 @@ export default function StructurePage() {
     return () => clearInterval(handle);
   }, [v1Backtest, structureTapeBacktest]);
 
-  async function handleLoad(symbol: string, asOf: string) {
+  function handleLoad(symbol: string, asOf: string) {
     const trimmedSymbol = symbol.trim();
     const trimmedAsOf = asOf.trim();
     if (!trimmedSymbol || !trimmedAsOf) return; // the Load button is already disabled in this case
-    // The raw-levels read is DEFERRED (see the effect below), so a Load never waits on — and the
-    // backend never spends a full level computation on — a section that is hidden by default.
-    // `levelsState` still goes to `loading` here so the section, if it IS open, shows its loading
-    // panel from the click rather than a stale ready-state for the previous date.
+    // Publishing `loadedQuery` is the WHOLE load action now: the shared `useTradability` /
+    // `useRecordedSeries` hooks above key on it and issue the reads (the `seq` bump makes a
+    // re-Load of the same query a genuine refetch — the store may have changed underneath). The
+    // raw-levels read stays DEFERRED (see the effect below), so a Load never spends a full level
+    // computation on a section that is hidden by default. `levelsState` still goes to `loading`
+    // here so the section, if it IS open, shows its loading panel from the click rather than a
+    // stale ready-state for the previous date.
     setLevelsState({ phase: "loading" });
-    setLoadedQuery(null);
-    levelsRequestedForRef.current = null;
-    setBarsState({ phase: "loading" });
-    // era-5B J-01 (THIS iteration): the SAME Load form now also drives the Tradable Map — fetched
-    // alongside bars via the SAME Promise.all, never a second trigger.
-    setTradabilityState({ phase: "loading" });
-    // The bar-series read is METADATA ONLY for THIS symbol (`include_bars=false`): the page needs
-    // only each recorded series' identity/timeframe/bar_count to offer the timeframe selector and
-    // pick a representative series. The candles themselves arrive one viewport at a time through
-    // `useBarWindow` (GET /research/bars/{id}/candles) — previously this single call pulled every
-    // candle of every registered series (megabytes) to draw one screenful of one of them.
-    const [barsResult, tradabilityResult] = await Promise.all([
-      fetchBarSeriesList({ symbol: trimmedSymbol, includeBars: false }),
-      fetchTradability(trimmedSymbol, trimmedAsOf),
-    ]);
-    setBarsState(
-      barsResult.ok && barsResult.data
-        ? { phase: "ready", data: barsResult.data }
-        : {
-            phase: "error",
-            message: barsResult.error ?? "The bar series list could not be loaded.",
-          },
-    );
-    setTradabilityState(
-      tradabilityResult.ok && tradabilityResult.data
-        ? { phase: "ready", data: tradabilityResult.data }
-        : {
-            phase: "error",
-            message: tradabilityResult.error ?? "The tradable map could not be loaded.",
-          },
-    );
-    // Publish the query LAST, so the deferred raw-levels read below starts only once the default
-    // view is on screen. Both reads run a full backtest-grade level computation server-side, and
-    // issuing them together makes each wait on the other rather than showing the map sooner.
-    setLoadedQuery({ symbol: trimmedSymbol, asOf: trimmedAsOf });
+    setLoadedQuery((previous) => ({
+      symbol: trimmedSymbol,
+      asOf: trimmedAsOf,
+      seq: (previous?.seq ?? 0) + 1,
+    }));
   }
 
   // The DEFERRED raw-levels read (GET /research/levels). The Levels & Zones section is OFF by
@@ -1672,11 +1654,16 @@ export default function StructurePage() {
   // `showRawLevels`, so fetching it on a Load spent a second full level computation on a section
   // nobody was looking at. It now runs when there IS a loaded query AND the section is open, which
   // is the SAME "a hidden surface must not spend requests" rule `levelsWindow` below already
-  // applies to that section's candle paging. Issued at most once per (query, open) pair — the ref
-  // guard covers a failed read too, so an error is shown once rather than retried in a loop.
+  // applies to that section's candle paging — and only once the Tradable Map read has SETTLED
+  // (ready or error): the map is the default view, and both reads run a backtest-grade level
+  // computation server-side, so issuing them together would make each wait on the other rather
+  // than showing the map sooner (the sequencing `handleLoad` itself used to enforce by publishing
+  // the query last). Issued at most once per (query, open) pair — the seq-qualified ref guard
+  // covers a failed read too, so an error is shown once rather than retried in a loop.
   useEffect(() => {
     if (!showRawLevels || !loadedQuery) return;
-    const key = `${loadedQuery.symbol}|${loadedQuery.asOf}`;
+    if (tradabilityState.phase !== "ready" && tradabilityState.phase !== "error") return;
+    const key = `${loadedQuery.symbol}|${loadedQuery.asOf}|${loadedQuery.seq}`;
     if (levelsRequestedForRef.current === key) return;
     levelsRequestedForRef.current = key;
     let alive = true;
@@ -1692,7 +1679,7 @@ export default function StructurePage() {
     return () => {
       alive = false;
     };
-  }, [showRawLevels, loadedQuery]);
+  }, [showRawLevels, loadedQuery, tradabilityState.phase]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1787,7 +1774,10 @@ export default function StructurePage() {
     const seedAsOf = endOfDayUtc(firstRecorded ? firstRecorded.window_end_utc : end);
     setSymbolInput(seedSymbol);
     setAsOfInput(seedAsOf);
-    await handleLoad(seedSymbol, seedAsOf);
+    // Publishing the query IS the load now (the shared hooks fetch off it); the seq bump inside
+    // guarantees a genuine refetch even when the seeded query equals the previous one — required
+    // here, since the store just gained the recordings this very flow wrote.
+    handleLoad(seedSymbol, seedAsOf);
   }
 
   // The deep-history leg of one timeframe's fetch. `yahooRecord` is what Yahoo just recorded (or
@@ -1908,10 +1898,9 @@ export default function StructurePage() {
   // that HAS bars. "" only when the symbol has no series at all (each chart branch already gates
   // that behind its own no-bar-series empty state).
   const loadedSymbol = tradability?.symbol ?? levels?.symbol ?? null;
-  const recordedSeriesForSymbol =
-    barsState.phase === "ready" && loadedSymbol
-      ? barsState.data.bar_series.filter((s) => s.symbol === loadedSymbol)
-      : [];
+  const recordedSeriesForSymbol = loadedSymbol
+    ? barSeriesState.series.filter((s) => s.symbol === loadedSymbol)
+    : [];
   const availableTimeframes = timeframesInOrder(recordedSeriesForSymbol);
   const effectiveTimeframe = availableTimeframes.includes(chartTimeframe)
     ? chartTimeframe
@@ -1927,10 +1916,9 @@ export default function StructurePage() {
   // candles. `representative` is now the recorded series matching the chosen viewing timeframe (its
   // created_utc tie-break picks among multiple windows of that timeframe — the same series
   // levels.py itself read for it).
-  const seriesForSymbol =
-    barsState.phase === "ready" && levels
-      ? barsState.data.bar_series.filter((s) => s.symbol === levels.symbol)
-      : [];
+  const seriesForSymbol = levels
+    ? barSeriesState.series.filter((s) => s.symbol === levels.symbol)
+    : [];
   const representative = pickRepresentativeSeries(
     seriesForSymbol.filter((s) => s.timeframe === effectiveTimeframe),
   );
@@ -1962,10 +1950,9 @@ export default function StructurePage() {
   // states for the identical symbol/as-of (e.g. levels on a non-daily timeframe but no basis series
   // for tradability — see tradability.py's docstring). Bands stay lookahead-free and never change
   // with the chosen timeframe.
-  const tradabilitySeriesForSymbol =
-    barsState.phase === "ready" && tradability
-      ? barsState.data.bar_series.filter((s) => s.symbol === tradability.symbol)
-      : [];
+  const tradabilitySeriesForSymbol = tradability
+    ? barSeriesState.series.filter((s) => s.symbol === tradability.symbol)
+    : [];
   const tradabilityRepresentative = pickRepresentativeSeries(
     tradabilitySeriesForSymbol.filter((s) => s.timeframe === effectiveTimeframe),
   );
@@ -2148,7 +2135,10 @@ export default function StructurePage() {
             )}
             {tradabilityState.phase === "loading" && <LoadingPanel testid="tradable-map-loading" />}
             {tradabilityState.phase === "error" && (
-              <UnavailablePanel testid="tradable-map-unavailable" message={tradabilityState.message} />
+              <UnavailablePanel
+                testid="tradable-map-unavailable"
+                message={tradabilityState.error ?? "The tradable map could not be loaded."}
+              />
             )}
             {tradabilityState.phase === "ready" &&
               tradability &&
@@ -2170,12 +2160,12 @@ export default function StructurePage() {
                     Map basis (prior completed session close):{" "}
                     <span className="font-mono text-slate-300">{tradability.basis_as_of}</span>
                   </p>
-                  {barsState.phase === "loading" ? (
+                  {barSeriesState.phase === "loading" ? (
                     <LoadingPanel testid="tradable-map-chart-loading" />
-                  ) : barsState.phase === "error" ? (
+                  ) : barSeriesState.phase === "error" ? (
                     <UnavailablePanel
                       testid="tradable-map-chart-unavailable"
-                      message={barsState.message}
+                      message={barSeriesState.error ?? "The bar series list could not be loaded."}
                     />
                   ) : (
                     <>
@@ -2265,12 +2255,12 @@ export default function StructurePage() {
                 ) : (
                   <div className="space-y-4">
                     <Panel title="Price chart — S/R levels">
-                      {barsState.phase === "loading" ? (
+                      {barSeriesState.phase === "loading" ? (
                         <LoadingPanel testid="structure-chart-loading" />
-                      ) : barsState.phase === "error" ? (
+                      ) : barSeriesState.phase === "error" ? (
                         <UnavailablePanel
                           testid="structure-chart-unavailable"
-                          message={barsState.message}
+                          message={barSeriesState.error ?? "The bar series list could not be loaded."}
                         />
                       ) : (
                         <>
