@@ -571,14 +571,16 @@ def test_empty_bar_store_is_no_bar_series_for_symbol(tmp_path):
     assert result == {"levels": [], "no_bar_series_for_symbol": True, "confluence_zones": []}
 
 
-# --- Multiple series for the same (symbol, timeframe): most-recently-created wins ------------------
+# --- Multiple series for the same (symbol, timeframe): every recording is read, timestamp
+# collisions resolve to the most-recently-created recording ----------------------------------------
 
 
-def test_multiple_series_for_same_symbol_and_timeframe_the_most_recently_created_wins(tmp_path):
+def test_contested_timestamps_resolve_to_the_most_recently_created_recording(tmp_path):
     store = BarStore(tmp_path / "bars")
     # Two DISTINCT (different content, so both are legally recordable) 3-bar series for the SAME
-    # (symbol, timeframe) -- each yields its OWN uniquely-priced swing-low pivot, so whichever
-    # price appears in the result proves which series' content was selected.
+    # (symbol, timeframe), occupying the SAME three bar timestamps -- so the merged view has to
+    # resolve every one of them. Each yields its OWN uniquely-priced swing-low pivot, so whichever
+    # price appears in the result proves which recording won the contest.
     older = [
         _bar("DUP", "4h", 0, 210.0, 200.0, 205.0),
         _bar("DUP", "4h", 1, 195.0, 190.0, 192.0),  # swing-low @190 (older series' signature)
@@ -600,15 +602,85 @@ def test_multiple_series_for_same_symbol_and_timeframe_the_most_recently_created
     records, _errors = store.list()
     dup_records = [r for r in records if r["symbol"] == "DUP"]
     assert len(dup_records) == 2, "both distinct series must have registered"
-    # The store's own `created_utc` ordering decides which series wins -- confirm the SECOND
-    # recorded row really does carry the later timestamp before trusting the selection result.
+    # The store's own `created_utc` ordering decides which recording wins a contested timestamp --
+    # confirm the SECOND recorded row really does carry the later timestamp before trusting it.
     dup_records.sort(key=lambda r: r["created_utc"])
     assert dup_records[-1]["bars"][1]["low"] == 290.0, "the later-created record must be `newer`"
 
     result = compute_levels(store, "DUP", _BASE + 2 * _DAY, CONFIG)
     prices = {lvl["price"] for lvl in result["levels"]}
-    assert 290.0 in prices, "the most-recently-created series must be the one selected"
-    assert 190.0 not in prices, "the older series' content must not also leak into the result"
+    assert 290.0 in prices, "the most-recently-created recording must win every contested timestamp"
+    assert 190.0 not in prices, "the superseded recording's prices must not also appear"
+
+
+def test_disjoint_recordings_of_one_symbol_and_timeframe_all_contribute_levels(tmp_path):
+    """The bug this contract exists to prevent: a symbol accumulates several recorded windows
+    (a wider re-fetch, or a deep-history leg from a second vendor), and a SHORT one recorded LAST
+    used to be the only series read -- freezing every level, and every as-of basis derived from
+    them, to that sliver's own handful of bars however much real history sat beside it on disk."""
+    store = BarStore(tmp_path / "bars")
+    # A long EARLIER window (days 0-4) and a short LATER-CREATED one (days 10-12) -- DISJOINT
+    # timestamps, so neither can mask the other by winning a contested bar. Each carries its own
+    # uniquely-priced swing-low pivot.
+    long_window = [
+        _bar("SPLIT", "4h", 0, 210.0, 200.0, 205.0),
+        _bar("SPLIT", "4h", 1, 195.0, 190.0, 192.0),  # swing-low @190 (long window's signature)
+        _bar("SPLIT", "4h", 2, 205.0, 195.0, 198.0),
+        _bar("SPLIT", "4h", 3, 215.0, 205.0, 210.0),
+        _bar("SPLIT", "4h", 4, 225.0, 215.0, 220.0),
+    ]
+    short_window = [
+        _bar("SPLIT", "4h", 10, 310.0, 300.0, 305.0),
+        _bar("SPLIT", "4h", 11, 295.0, 290.0, 292.0),  # swing-low @290 (short window's signature)
+        _bar("SPLIT", "4h", 12, 305.0, 295.0, 298.0),
+    ]
+    store.record(
+        symbol="SPLIT", timeframe="4h", window_start_utc="2026-01-01T00:00:00Z",
+        window_end_utc="2026-01-05T00:00:00Z", feed="sip", bars=long_window,
+    )
+    store.record(
+        symbol="SPLIT", timeframe="4h", window_start_utc="2026-01-11T00:00:00Z",
+        window_end_utc="2026-01-13T00:00:00Z", feed="yahoo", bars=short_window,
+    )
+
+    result = compute_levels(store, "SPLIT", _BASE + 12 * _DAY, CONFIG)
+    prices = {lvl["price"] for lvl in result["levels"]}
+    assert 190.0 in prices, "the earlier recording's history must still produce its levels"
+    assert 290.0 in prices, "the later-created recording must contribute too"
+
+
+def test_levels_move_with_as_of_when_the_newest_recording_is_a_one_bar_sliver(tmp_path):
+    """The reported symptom, at its source: with a 1-bar recording created LAST, ``compute_levels``
+    used to return the identical result for every ``as_of`` -- the /structure page's S/R lines and
+    tradable bands never changed when a new date was loaded."""
+    store = BarStore(tmp_path / "bars")
+    history = [
+        _bar("SLIVER", "1d", 0, 210.0, 200.0, 205.0),
+        _bar("SLIVER", "1d", 1, 195.0, 190.0, 192.0),  # swing-low @190, confirmed on day 2
+        _bar("SLIVER", "1d", 2, 205.0, 195.0, 198.0),
+        _bar("SLIVER", "1d", 3, 265.0, 255.0, 260.0),  # swing-high @265, confirmed on day 4
+        _bar("SLIVER", "1d", 4, 245.0, 235.0, 240.0),
+    ]
+    store.record(
+        symbol="SLIVER", timeframe="1d", window_start_utc="2026-01-01T00:00:00Z",
+        window_end_utc="2026-01-05T00:00:00Z", feed="yahoo", bars=history,
+    )
+    # The sliver: ONE bar on a timestamp the long recording never covered, recorded LAST.
+    store.record(
+        symbol="SLIVER", timeframe="1d", window_start_utc="2025-12-30T00:00:00Z",
+        window_end_utc="2025-12-30T00:00:00Z", feed="sip",
+        bars=[_bar("SLIVER", "1d", -2, 150.0, 140.0, 145.0)],
+    )
+
+    early = compute_levels(store, "SLIVER", _BASE + 2.5 * _DAY, CONFIG)
+    late = compute_levels(store, "SLIVER", _BASE + 4.5 * _DAY, CONFIG)
+    early_prices = {lvl["price"] for lvl in early["levels"]}
+    late_prices = {lvl["price"] for lvl in late["levels"]}
+
+    assert early["levels"] != late["levels"], "levels must move as the as-of instant advances"
+    assert 190.0 in early_prices, "the day-1 swing low is confirmed by day 2 and visible at day 2.5"
+    assert 265.0 not in early_prices, "the day-3 swing high cannot be visible at day 2.5 (lookahead)"
+    assert 265.0 in late_prices, "the day-3 swing high is confirmed by day 4 and visible at day 4.5"
 
 
 # --- No magic numbers: every S/R parameter is config-sourced ----------------------------------------
@@ -733,6 +805,30 @@ def test_level_change_points_empty_for_symbol_with_no_healthy_bar_series(tmp_pat
     store = BarStore(tmp_path / "bars")
     _swing_fixture(store)  # records ONLY `_SWING_SYMBOL` -- never the queried symbol below
     assert level_change_points(store, "NEVER-RECORDED") == ()
+
+
+def test_level_change_points_covers_every_recording_of_one_symbol_and_timeframe(tmp_path):
+    """The safe-superset contract under MULTIPLE recordings of one (symbol, timeframe): this
+    function must read the same MERGED bars ``compute_levels`` reads, or the arm memo would hold a
+    stale level state straight across a change point contributed by a recording it never saw."""
+    store = BarStore(tmp_path / "bars")
+    store.record(
+        symbol="MULTI", timeframe="1d", window_start_utc="2026-01-01T00:00:00Z",
+        window_end_utc="2026-01-03T00:00:00Z", feed="yahoo",
+        bars=[_bar("MULTI", "1d", i, 210.0 + i, 200.0 + i, 205.0 + i) for i in range(3)],
+    )
+    store.record(
+        symbol="MULTI", timeframe="1d", window_start_utc="2026-01-11T00:00:00Z",
+        window_end_utc="2026-01-12T00:00:00Z", feed="sip",
+        bars=[_bar("MULTI", "1d", i, 310.0 + i, 300.0 + i, 305.0 + i) for i in (10, 11)],
+    )
+    points = set(level_change_points(store, "MULTI"))
+
+    # Both recordings' own bar epochs, and (a prior-period timeframe) both recordings' own
+    # period-close instants -- computed directly from the fixture's known epochs.
+    for i in (0, 1, 2, 10, 11):
+        assert _BASE + i * _DAY in points, f"day {i}'s own epoch must be a change point"
+        assert _BASE + (i + 1) * _DAY in points, f"day {i}'s period close must be a change point"
 
 
 # --- The touch-count index: the same answer, in log time -----------------------------------------

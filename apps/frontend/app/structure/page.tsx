@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   cancelEdgeReportCompute,
   createBacktest,
@@ -1425,6 +1425,14 @@ export default function StructurePage() {
   // The raw-levels toggle (era-5B J-05) — OFF by default (the DoD's own requirement); toggling it
   // on renders the pre-existing Levels & Zones section byte-identically to before this iteration.
   const [showRawLevels, setShowRawLevels] = useState(false);
+  // The symbol/as-of the last Load resolved to — the query the DEFERRED raw-levels read below is
+  // for. `null` until a Load completes (or while one is in flight), so the read never fires
+  // against a half-resolved form.
+  const [loadedQuery, setLoadedQuery] = useState<{ symbol: string; asOf: string } | null>(null);
+  // The query the raw-levels read has already been ISSUED for (`symbol|as_of`). A ref, not state:
+  // it exists only to keep the effect below from re-issuing the same read — including after a
+  // failure, where re-running on `levelsState` would loop — and must never itself trigger a render.
+  const levelsRequestedForRef = useRef<string | null>(null);
   // The viewing-timeframe selector (default "1d"). This is the user's PREFERENCE — the timeframe
   // actually drawn is `effectiveTimeframe` below, which falls back when the loaded symbol has no
   // series at this timeframe. It only chooses WHICH recorded series' candles both charts draw; it
@@ -1662,26 +1670,26 @@ export default function StructurePage() {
     const trimmedSymbol = symbol.trim();
     const trimmedAsOf = asOf.trim();
     if (!trimmedSymbol || !trimmedAsOf) return; // the Load button is already disabled in this case
+    // The raw-levels read is DEFERRED (see the effect below), so a Load never waits on — and the
+    // backend never spends a full level computation on — a section that is hidden by default.
+    // `levelsState` still goes to `loading` here so the section, if it IS open, shows its loading
+    // panel from the click rather than a stale ready-state for the previous date.
     setLevelsState({ phase: "loading" });
+    setLoadedQuery(null);
+    levelsRequestedForRef.current = null;
     setBarsState({ phase: "loading" });
     // era-5B J-01 (THIS iteration): the SAME Load form now also drives the Tradable Map — fetched
-    // alongside levels/bars via the SAME Promise.all, never a second trigger.
+    // alongside bars via the SAME Promise.all, never a second trigger.
     setTradabilityState({ phase: "loading" });
     // The bar-series read is METADATA ONLY for THIS symbol (`include_bars=false`): the page needs
     // only each recorded series' identity/timeframe/bar_count to offer the timeframe selector and
     // pick a representative series. The candles themselves arrive one viewport at a time through
     // `useBarWindow` (GET /research/bars/{id}/candles) — previously this single call pulled every
     // candle of every registered series (megabytes) to draw one screenful of one of them.
-    const [levelsResult, barsResult, tradabilityResult] = await Promise.all([
-      fetchLevels(trimmedSymbol, trimmedAsOf),
+    const [barsResult, tradabilityResult] = await Promise.all([
       fetchBarSeriesList({ symbol: trimmedSymbol, includeBars: false }),
       fetchTradability(trimmedSymbol, trimmedAsOf),
     ]);
-    setLevelsState(
-      levelsResult.ok && levelsResult.data
-        ? { phase: "ready", data: levelsResult.data }
-        : { phase: "error", message: levelsResult.error ?? "The levels could not be loaded." },
-    );
     setBarsState(
       barsResult.ok && barsResult.data
         ? { phase: "ready", data: barsResult.data }
@@ -1698,7 +1706,38 @@ export default function StructurePage() {
             message: tradabilityResult.error ?? "The tradable map could not be loaded.",
           },
     );
+    // Publish the query LAST, so the deferred raw-levels read below starts only once the default
+    // view is on screen. Both reads run a full backtest-grade level computation server-side, and
+    // issuing them together makes each wait on the other rather than showing the map sooner.
+    setLoadedQuery({ symbol: trimmedSymbol, asOf: trimmedAsOf });
   }
+
+  // The DEFERRED raw-levels read (GET /research/levels). The Levels & Zones section is OFF by
+  // default and its every state — idle, loading, error, ready — renders only behind
+  // `showRawLevels`, so fetching it on a Load spent a second full level computation on a section
+  // nobody was looking at. It now runs when there IS a loaded query AND the section is open, which
+  // is the SAME "a hidden surface must not spend requests" rule `levelsWindow` below already
+  // applies to that section's candle paging. Issued at most once per (query, open) pair — the ref
+  // guard covers a failed read too, so an error is shown once rather than retried in a loop.
+  useEffect(() => {
+    if (!showRawLevels || !loadedQuery) return;
+    const key = `${loadedQuery.symbol}|${loadedQuery.asOf}`;
+    if (levelsRequestedForRef.current === key) return;
+    levelsRequestedForRef.current = key;
+    let alive = true;
+    setLevelsState({ phase: "loading" });
+    fetchLevels(loadedQuery.symbol, loadedQuery.asOf).then((result) => {
+      if (!alive) return;
+      setLevelsState(
+        result.ok && result.data
+          ? { phase: "ready", data: result.data }
+          : { phase: "error", message: result.error ?? "The levels could not be loaded." },
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, [showRawLevels, loadedQuery]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1739,10 +1778,10 @@ export default function StructurePage() {
       if (result.ok && result.bar_series) {
         if (!firstRecorded) firstRecorded = result.bar_series;
         // Yahoo caps intraday history (1m to the last 30 days, 5m to 60, 1h to 730), and says so in
-        // `vendor_limit`. When a cap left the older part of the requested range unfetched, the
-        // remainder is asked of Alpaca — a second, separately-recorded series, so each recording
-        // still names exactly one vendor. Nothing is inferred client-side: the gap boundary is the
-        // server's own `covered_start_utc`.
+        // `vendor_limit`. ONLY when a cap actually left the older part of the requested range
+        // unfetched is the remainder asked of Alpaca — a second, separately-recorded series, so
+        // each recording still names exactly one vendor. Nothing is inferred client-side: both the
+        // trigger (`vendor_limit`) and the gap boundary (`covered_start_utc`) are the server's own.
         const deep = await fetchDeepHistoryGap(symbol, timeframe, start, result.bar_series);
         if (deep?.recorded) anyStored = true;
         results[i] = {
@@ -1807,12 +1846,23 @@ export default function StructurePage() {
     yahooRecord: BarSeriesRecord | null,
     fallbackEnd?: string,
   ): Promise<{ message: string; recorded: boolean; record?: BarSeriesRecord } | null> {
+    // A gap exists only when the vendor's own retention cap ACTUALLY shortened the window — the
+    // server says so in `vendor_limit`, and that is the only honest signal for it. Yahoo's first
+    // bar simply falling later than the requested start is NOT a gap: a start date on a weekend or
+    // a market holiday always does that, and treating it as one recorded a junk 1–2 day Alpaca
+    // series (and burned a credentialed vendor call) on every fetch that began on a non-trading
+    // day. `yahooRecord === null` — Yahoo served nothing at all for this timeframe — is a
+    // different case entirely: the WHOLE requested range is then asked of Alpaca, bounded by
+    // `fallbackEnd`.
+    //
     // The gap ENDS where Yahoo's coverage begins — the server's own `covered_start_utc`, never a
     // client-side guess at what the vendor's cap must have been. The end date is inclusive, so
     // using that same UTC date overlaps Yahoo's first day by one day rather than risking a hole;
-    // the merged candle read de-duplicates by timestamp.
-    const gapEnd = yahooRecord?.covered_start_utc
-      ? yahooRecord.covered_start_utc.slice(0, 10)
+    // the merged bar read de-duplicates by timestamp.
+    const gapEnd = yahooRecord
+      ? yahooRecord.vendor_limit && yahooRecord.covered_start_utc
+        ? yahooRecord.covered_start_utc.slice(0, 10)
+        : undefined
       : fallbackEnd;
     if (!gapEnd || gapEnd <= requestedStart) return null;
 

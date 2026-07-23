@@ -403,12 +403,13 @@ class BarStore:
 
         The fold is a ts-keyed map, so a timestamp recorded by several series appears exactly ONCE.
         Where recordings of the same timestamp differ, the row from the MOST RECENTLY CREATED series
-        wins — the SAME ``(created_utc, id)`` tie-break ``research/levels.py``'s
-        ``_select_one_series_per_timeframe`` already applies for the identical "two series, one
-        (symbol, timeframe)" case, so the two never disagree about which recording is authoritative.
-        Differences are common and mostly benign (Yahoo re-derives split/dividend-adjusted prices per
-        fetch, so an older recording differs in the 7th significant digit; a bar fetched mid-session
-        is later superseded by its completed self) — serving the newest recording is the only rule
+        wins — the ``(created_utc, id)`` tie-break. This is the ONE authority rule for "two series,
+        one (symbol, timeframe)": ``merged_bars`` below serves the analytic readers from this exact
+        fold, so a chart and the lines drawn over it can never disagree about which recording is
+        authoritative. Differences are common and mostly benign (Yahoo re-derives split/dividend-
+        adjusted prices per fetch, so an older recording differs in the 7th significant digit; a
+        bar fetched mid-session is later superseded by its completed self) — serving the newest
+        recording is the only rule
         that keeps a completed bar from being overwritten by a stale partial one. The COUNT of such
         timestamps is reported in the returned meta (``revised_timestamps``) rather than resolved
         out of sight: the merge is a choice, and the caller is told how often it was made.
@@ -479,11 +480,43 @@ class BarStore:
 
     def load_bars(self, bar_series_id: str) -> list[RawBar]:
         """The stored candle series as typed ``RawBar`` records (verified load, exact stored
-        order) — the accessor a later level-detection consumer reads."""
+        order) — the accessor a per-series reader (e.g. ``GET /research/bars/{id}``) uses."""
         loaded = self._load_by_id(bar_series_id)
         symbol = loaded.meta["symbol"]
         timeframe = loaded.meta["timeframe"]
         return [_row_to_bar(symbol, timeframe, row) for row in loaded.rows]
+
+    def merged_bars(self, symbol: str, timeframe: str) -> list[RawBar]:
+        """EVERY recorded series for one (symbol, timeframe) folded into a single ascending
+        ``RawBar`` list — the typed twin of ``merged_candles``, and the accessor every ANALYTIC
+        consumer reads (``research/levels.py``, ``research/tradability.py``,
+        ``research/setups.py``).
+
+        Why this exists: a symbol accumulates many overlapping recorded windows (a second fetch
+        over a wider range, or the deep-history leg that asks a second vendor for the part a
+        vendor cap left unfetched — each recording is immutable, so both stay on file). Reading
+        only ONE of them makes an analysis a function of which window happened to be recorded
+        last rather than of the symbol's actual history: a 1-bar recording created after a
+        250-bar one would freeze every level and every as-of basis to that single bar, while the
+        CHART — which has always read the merged view — drew the full history underneath. This
+        accessor is what keeps the two answering from the same bars.
+
+        The fold, its timestamp de-duplication, and the "most recently created recording wins a
+        contested timestamp" rule are ``_merged_rows``' (see ``merged_candles``' docstring) —
+        this is a typed projection of that already-memoized result, never a second fold. Because
+        recordings of one pair can come from DIFFERENT feeds (Yahoo re-derives split/dividend-
+        adjusted prices per fetch; Alpaca SIP is a different tape), a merged series can carry
+        rows whose prices differ in the last significant digits from a neighbouring recording's;
+        that is the same trade-off the merged chart read has always made, and the newest-wins
+        rule is what keeps a completed bar from being overwritten by a stale partial one.
+
+        Returns ``[]`` for a (symbol, timeframe) with no healthy recorded series — an honest
+        absence, exactly as ``list()`` reports one (a corrupt file is skipped by the shared
+        verified load, never served as data)."""
+        normalized_symbol = symbol.strip().upper()
+        normalized_timeframe = timeframe.strip()
+        rows, _meta = self._merged_rows(normalized_symbol, normalized_timeframe)
+        return [_row_to_bar(normalized_symbol, normalized_timeframe, row) for row in rows]
 
     # --- the one mutation: record/register --------------------------------------------------------
 

@@ -128,14 +128,19 @@ def _session_date(epoch: float):
 
 
 class _PriorSessionBarView:
-    """A read-only, duck-typed view over a real ``BarStore`` (implements only the two methods
-    ``compute_levels`` calls: ``list()`` and ``load_bars()``) that filters every loaded bar series,
-    on EVERY timeframe, to ``epoch <= cutoff_epoch`` -- see the module docstring's "morning-markup
-    as-of resolution" section for why this second truncation surface is necessary alongside the
-    as-of epoch. ``list()`` is delegated unchanged (series SELECTION -- which series wins per
-    timeframe -- must stay identical to an unfiltered read; only bar CONTENT is bounded). Never
-    writes anything -- ``record`` is not implemented, so a coding error that tried to persist
-    through this view would fail loudly, never silently."""
+    """A read-only, duck-typed view over a real ``BarStore`` (implements the methods
+    ``compute_levels`` calls: ``list()``, ``merged_bars()`` -- and ``load_bars()`` for any
+    per-series reader) that filters every loaded bar, on EVERY timeframe, to
+    ``epoch <= cutoff_epoch`` -- see the module docstring's "morning-markup as-of resolution"
+    section for why this second truncation surface is necessary alongside the as-of epoch.
+    ``list()`` is delegated unchanged (which TIMEFRAMES a symbol has recordings for must stay
+    identical to an unfiltered read; only bar CONTENT is bounded). Never writes anything --
+    ``record`` is not implemented, so a coding error that tried to persist through this view
+    would fail loudly, never silently.
+
+    ``merged_bars`` MUST be bounded here, not just ``load_bars``: it is the accessor
+    ``compute_levels`` actually reads bars through, so leaving it delegated would hand the level
+    computation the unbounded history this view exists to withhold."""
 
     def __init__(self, store: BarStore, cutoff_epoch: float) -> None:
         self._store = store
@@ -147,29 +152,30 @@ class _PriorSessionBarView:
     def load_bars(self, bar_series_id: str) -> list[RawBar]:
         return [b for b in self._store.load_bars(bar_series_id) if b.epoch <= self._cutoff_epoch]
 
+    def merged_bars(self, symbol: str, timeframe: str) -> list[RawBar]:
+        return [
+            b for b in self._store.merged_bars(symbol, timeframe) if b.epoch <= self._cutoff_epoch
+        ]
+
 
 def _select_daily_series(store: BarStore, symbol: str) -> tuple[list[RawBar] | None, bool]:
-    """Returns ``(sorted_daily_bars_or_None, has_any_series_for_symbol)``. Selects the winning
-    ``"1d"`` series with the EXACT SAME scan + tie-break ``levels.py``'s own
-    ``_select_one_series_per_timeframe`` uses (first-seen-with-the-max-``created_utc`` wins, scanned
-    in ``store.list()``'s own oldest-first order) -- so when more than one ``"1d"`` series is ever
-    registered for ``symbol``, this module and ``compute_levels`` always agree on which one, and the
-    ``prior_bar`` this resolves is guaranteed to be a member of the SAME series ``compute_levels``
-    itself reads (never a second, independently-selected series)."""
+    """Returns ``(merged_daily_bars_or_None, has_any_series_for_symbol)``. Reads the ``"1d"``
+    bars through the EXACT SAME accessor ``compute_levels`` itself reads them through
+    (``BarStore.merged_bars`` -- every recording for the pair folded into one ascending series,
+    de-duplicated by timestamp), so this module and ``compute_levels`` always see the identical
+    daily history and the ``prior_bar`` this resolves is guaranteed to be a bar ``compute_levels``
+    itself reads (never an independently-selected recording).
+
+    ``None`` -- with ``has_any_series_for_symbol`` still ``True`` -- when ``symbol`` has
+    recordings but none on the daily timeframe: no basis is derivable, an honest state distinct
+    from "no series at all" (see ``compute_tradability``)."""
     records, _integrity_errors = store.list()
     matching_any = [r for r in records if r["symbol"] == symbol]
     if not matching_any:
         return None, False
-    chosen: dict | None = None
-    for record in matching_any:
-        if record["timeframe"] != "1d":
-            continue
-        if chosen is None or record["created_utc"] > chosen["created_utc"]:
-            chosen = record
-    if chosen is None:
+    if not any(r["timeframe"] == _DAILY_TIMEFRAME for r in matching_any):
         return None, True
-    bars = sorted(store.load_bars(chosen["id"]), key=lambda b: b.epoch)
-    return bars, True
+    return store.merged_bars(symbol, _DAILY_TIMEFRAME), True
 
 
 def _resolve_basis(daily_bars: list[RawBar], as_of_epoch: float) -> tuple[float, RawBar] | None:
@@ -351,10 +357,11 @@ def compute_tradability(store: BarStore, symbol: str, as_of_epoch: float, config
     #
     # `raw_levels` is guaranteed non-empty here: `_resolve_basis` only returns non-None once
     # `prior_bar`'s own daily period is closed as of `resolved_as_of_epoch` (by construction, one
-    # calendar day after its own epoch), and `prior_bar` is a member of the EXACT SAME "1d" series
-    # `compute_levels` itself selects (`_select_daily_series` mirrors its tie-break verbatim, and
-    # the view's `list()` is unfiltered) -- so `compute_levels`'s own `_prior_period_extremes`
-    # always emits at least that bar's high/low/close. No empty-`raw_levels` branch is reachable,
+    # calendar day after its own epoch), and `prior_bar` is a bar of the EXACT SAME merged "1d"
+    # view `compute_levels` itself reads (`_select_daily_series` calls the identical `merged_bars`
+    # accessor, and the view's `list()` is unfiltered) -- so `compute_levels`'s own
+    # `_prior_period_extremes` always emits at least that bar's high/low/close. No empty-
+    # `raw_levels` branch is reachable,
     # so none is written (an untested dead branch is worse than no branch); the loop below already
     # returns an honest `bands: []` for a side with no levels.
     bounded_store = _PriorSessionBarView(store, prior_bar.epoch)

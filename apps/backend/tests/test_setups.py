@@ -1177,6 +1177,40 @@ def test_tc3_a_setups_family_field_change_busts_the_cache_content_hash_not_finge
     assert len(calls) == 1, "the CONTENT hash (not config_fingerprint alone) must drive the key"
 
 
+def test_an_algorithm_version_bump_busts_the_cache_with_config_and_store_unchanged(
+    tmp_path, monkeypatch,
+):
+    """The third way a cached value can go stale, beside a config change (TC-3) and a store change
+    (TC-4): the COMPUTATION itself changes while both key inputs stay byte-identical. Without
+    ``LEVELS_ALGORITHM_VERSION`` in the key, a cache written before such a change keeps serving
+    results the current code would never produce -- exactly what happened when levels moved to the
+    merged per-timeframe bar view (the store's checksums and every ``Config`` field were
+    untouched)."""
+    import app.research.edge_report_cache as cache_module
+    import app.research.setups as setups_module
+
+    store = BarStore(tmp_path / "bars")
+    _seed_full(store)
+    config = _syn_config()
+    compute_setups(store, config)
+
+    calls: list[int] = []
+    real_scan = setups_module._run_full_panel_scan
+
+    def _counting_scan(*args, **kwargs):
+        calls.append(1)
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(setups_module, "_run_full_panel_scan", _counting_scan)
+    # Nothing about the inputs moves -- only the declared version of the computation.
+    monkeypatch.setattr(cache_module, "LEVELS_ALGORITHM_VERSION", 999)
+    setups_module._reset_scan_cache_for_tests()
+
+    compute_setups(store, config)
+
+    assert len(calls) == 1, "an algorithm-version bump must bust the durable cache key"
+
+
 def test_tc4_recording_a_new_5m_series_into_the_store_busts_the_durable_cache_key(tmp_path, monkeypatch):
     """TC-4: a store-content change (a newly recorded '5m' series) must bust the key even though
     ``config`` itself is unchanged."""

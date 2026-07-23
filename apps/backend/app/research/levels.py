@@ -9,7 +9,20 @@ stored ``RawBar`` rows, never a vendor SDK or vendor-specific field). ``GET /res
 the read-only MCP ``levels`` tool both serve this module's output VERBATIM (single source of truth
 -- no second computation path).
 
-Two DETERMINISTIC, config-owned detection methods, applied per stored bar series:
+**One merged bar view per timeframe.** A (symbol, timeframe) pair commonly has SEVERAL recorded
+series -- a later fetch over a wider window, or the deep-history leg that asks a second vendor for
+the part a vendor cap left unfetched; recordings are immutable, so every one of them stays on file.
+This module reads them through ``BarStore.merged_bars`` (``research/bars.py``), which folds them all
+into one ascending series de-duplicated by timestamp (most recently created recording wins a
+contested timestamp). It does NOT select one recording per timeframe: doing so made every level a
+function of which window happened to be recorded LAST rather than of the symbol's actual history --
+a 1-bar recording created after a 250-bar one froze every level and every as-of basis to that single
+bar, while the chart (which has always read the same merged view) drew the full history underneath.
+Recordings of one pair can come from different feeds, so a merged series can carry rows whose prices
+differ in the last significant digits from a neighbouring recording's -- the same trade-off the
+merged chart read has always made, and the one ``merged_bars`` owns and documents.
+
+Two DETERMINISTIC, config-owned detection methods, applied per merged (symbol, timeframe) series:
 
   * **Swing pivots** -- a bar's high (or low) that is the STRICT extreme over its +/-N neighbours
     (N = ``Config.sr_pivot_lookback``), applied to EVERY stored series regardless of timeframe.
@@ -76,6 +89,13 @@ from .bars import BarStore
 # structural property computed here.
 SWING_PIVOT = "swing-pivot"
 PRIOR_PERIOD_EXTREME = "prior-period-extreme"
+
+# NOTE for anyone editing the detection below: the durable derived caches
+# (``setups_scan_cache``, ``edge_report_cache``, ``edge_report_backtest_cache``) key on their
+# INPUTS -- store checksums + a whole-``Config`` hash -- so a change that moves this module's
+# answer without moving those inputs MUST bump ``LEVELS_ALGORITHM_VERSION``
+# (``algorithm_version.py``), or those caches keep serving results this code can no longer
+# produce.
 
 # The "prior period" timeframe set (goal.md's long-term bucket): ONLY a series at one of these
 # granularities yields prior-period-extreme candidates. Swing pivots, by contrast, apply to EVERY
@@ -234,18 +254,12 @@ def _sort_key(level: dict) -> tuple:
     return (level["timeframe"], level["price"], level["type"])
 
 
-def _select_one_series_per_timeframe(records: list[dict]) -> dict[str, dict]:
-    """``BarStore`` has no "get by symbol+timeframe" accessor (only ``list``/``get``/``load_bars``
-    by id), so when more than one stored, HEALTHY series shares a (symbol, timeframe) pair, the
-    most RECENTLY CREATED one wins -- a documented default judgment call (the committed fixture
-    never exercises this; exactly one series per pair)."""
-    by_timeframe: dict[str, dict] = {}
-    for record in records:
-        timeframe = record["timeframe"]
-        current = by_timeframe.get(timeframe)
-        if current is None or record["created_utc"] > current["created_utc"]:
-            by_timeframe[timeframe] = record
-    return by_timeframe
+def _timeframes_for(records: list[dict]) -> list[str]:
+    """The distinct timeframes ``records`` (one symbol's HEALTHY series) covers, in a stable
+    sorted order. Every recording of a timeframe contributes -- the bars themselves are then read
+    as ONE merged series per timeframe (``BarStore.merged_bars``), never one selected recording;
+    see the module docstring."""
+    return sorted({record["timeframe"] for record in records})
 
 
 # --- Confluence zones + A/B/C conviction classes (era-4 capability 3, J-03) ------------------------
@@ -348,6 +362,10 @@ def compute_levels(store: BarStore, symbol: str, as_of_epoch: float, config: Con
     ``as_of_epoch`` (a UTC epoch-seconds instant; the ROUTE parses the ISO string once, never
     here, so this function itself carries no lookahead-leaking default).
 
+    One MERGED series is read per timeframe the symbol has any healthy recording for
+    (``BarStore.merged_bars``), so every recorded window contributes and no level depends on
+    which recording happened to be written last -- see the module docstring.
+
     Returns ``{"levels": [...], "no_bar_series_for_symbol": bool, "confluence_zones": [...]}`` --
     ``no_bar_series_for_symbol`` is an explicit, ADDITIVE honesty flag (the ``insufficient_sample``
     precedent) rather than an ambiguous bare empty ``levels`` list: the flag is ``True`` only when
@@ -374,9 +392,9 @@ def compute_levels(store: BarStore, symbol: str, as_of_epoch: float, config: Con
         return {"levels": [], "no_bar_series_for_symbol": True, "confluence_zones": []}
 
     levels: list[dict] = []
-    for timeframe, record in _select_one_series_per_timeframe(matching).items():
+    for timeframe in _timeframes_for(matching):
         weight = config.sr_timeframe_weights[timeframe]
-        bars = _bars_as_of(store.load_bars(record["id"]), as_of_epoch)
+        bars = _bars_as_of(store.merged_bars(symbol, timeframe), as_of_epoch)
         # ONE sorted view per series, shared by both detectors: they ask the same touch question of
         # the same bars, so building it twice would double the only setup cost this adds.
         touch_index = _TouchIndex(bars)
@@ -417,9 +435,9 @@ def level_change_points(store: BarStore, symbol: str) -> tuple[float, ...]:
     the already-frozen ``compute_levels``/``compute_confluence_zones`` bodies above could move.
 
     Mirrors ``compute_levels``'s OWN healthy-series enumeration exactly (the SAME ``store.list()``
-    healthy-``records`` half, the SAME ``_select_one_series_per_timeframe`` tie-break, the SAME
-    ``PRIOR_PERIOD_TIMEFRAMES``/``_PERIOD_SECONDS``) so this function can never omit a series
-    ``compute_levels`` itself would read: the union of every SELECTED series' own bar epochs (a
+    healthy-``records`` half, the SAME ``_timeframes_for`` + ``merged_bars`` read, the SAME
+    ``PRIOR_PERIOD_TIMEFRAMES``/``_PERIOD_SECONDS``) so this function can never omit a bar
+    ``compute_levels`` itself would read: the union of every MERGED series' own bar epochs (a
     newly-visible bar can create or newly confirm a swing pivot near either end of the as-of-
     truncated prefix -- see ``_swing_pivots``) plus, for each series whose timeframe is in
     ``PRIOR_PERIOD_TIMEFRAMES``, each of ITS bars' own period-closing instant
@@ -436,8 +454,8 @@ def level_change_points(store: BarStore, symbol: str) -> tuple[float, ...]:
     if not matching:
         return ()
     points: set[float] = set()
-    for timeframe, record in _select_one_series_per_timeframe(matching).items():
-        for bar in store.load_bars(record["id"]):
+    for timeframe in _timeframes_for(matching):
+        for bar in store.merged_bars(symbol, timeframe):
             points.add(bar.epoch)
             if timeframe in PRIOR_PERIOD_TIMEFRAMES:
                 points.add(bar.epoch + _PERIOD_SECONDS[timeframe])

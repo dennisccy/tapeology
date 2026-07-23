@@ -78,8 +78,8 @@ _SYN_BAR_SEQUENCE: tuple[RawBar, ...] = (
 def _seed_synthetic(store: BarStore, num_days: int = 7) -> None:
     """Records the first ``num_days`` bars of ``_SYN_BAR_SEQUENCE`` as ONE ``"1d"`` series (a
     single ``record()`` call, the ``test_levels.py`` lookahead-proof precedent -- never several
-    calls, which would register several INDEPENDENT series and silently change which one
-    ``_select_daily_series``'s most-recently-created tie-break picks)."""
+    calls, so "truncated to N days" stays an exact PREFIX rather than a merge of several
+    independently-registered windows)."""
     bars = list(_SYN_BAR_SEQUENCE[:num_days])
     window_end = datetime.fromtimestamp(_BASE + num_days * _DAY, tz=timezone.utc).isoformat().replace("+00:00", "Z")
     store.record(
@@ -299,6 +299,44 @@ def test_as_of_on_the_first_recorded_session_has_no_prior_session_yet(tmp_path):
     _seed_synthetic(store)
     result = compute_tradability(store, _SYN_SYMBOL, _BASE, CONFIG)
     assert result == {"bands": [], "no_bar_series_for_symbol": False, "basis_as_of": None}
+
+
+def test_a_one_bar_recording_created_last_does_not_pin_the_basis(tmp_path):
+    """The reported /structure symptom at its source: a 1-bar daily recording written AFTER a full
+    history used to be the ONLY daily series read, so ``basis_as_of`` froze on that single bar's
+    session and the tradable map was identical for every ``as_of`` the operator loaded. Every
+    recording now contributes to one merged daily view, so the basis tracks the as-of date again."""
+    store = BarStore(tmp_path / "bars")
+    _seed_synthetic(store)
+    # The sliver: one bar on a session BEFORE the synthetic history, recorded LAST.
+    store.record(
+        symbol=_SYN_SYMBOL, timeframe="1d",
+        window_start_utc="2025-12-30T00:00:00Z", window_end_utc="2025-12-30T00:00:00Z",
+        feed="sip",
+        bars=[RawBar(_SYN_SYMBOL, "1d", _BASE - 2 * _DAY, 145.0, 150.0, 140.0, 145.0, 1_000)],
+    )
+
+    # Three as-of instants, three different prior sessions -- the property that was broken.
+    bases = [
+        compute_tradability(store, _SYN_SYMBOL, _BASE + n * _DAY, CONFIG)["basis_as_of"]
+        for n in (4, 6, 7)
+    ]
+    assert bases == [
+        "2026-01-04T00:00:00.000000Z",
+        "2026-01-06T00:00:00.000000Z",
+        "2026-01-07T00:00:00.000000Z",
+    ], "the basis must advance with the requested as-of date, not pin to the newest recording"
+
+    # And the map itself moves with it -- not just the marker.
+    early = compute_tradability(store, _SYN_SYMBOL, _BASE + 4 * _DAY, CONFIG)
+    late = compute_tradability(store, _SYN_SYMBOL, _SYN_AS_OF, CONFIG)
+    assert early["bands"] != late["bands"]
+
+    # The sliver's own session is still reachable as a basis -- it was merged in, not discarded.
+    assert (
+        compute_tradability(store, _SYN_SYMBOL, _BASE - _DAY, CONFIG)["basis_as_of"]
+        == "2025-12-30T00:00:00.000000Z"
+    )
 
 
 # --- No magic numbers: every tradability parameter is config-sourced -------------------------

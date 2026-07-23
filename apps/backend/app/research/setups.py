@@ -164,21 +164,18 @@ def _session_date(epoch: float) -> date:
 
 
 def _select_5m_series(store: BarStore, symbol: str) -> list[RawBar] | None:
-    """The winning ``"5m"`` series for ``symbol``, sorted ascending by epoch -- the EXACT SAME
-    most-recently-created tie-break ``tradability.py``'s own ``_select_daily_series`` uses (applied
-    here to ``"5m"`` instead of ``"1d"``), so a symbol with more than one registered ``"5m"`` series
-    resolves to one unambiguous choice. ``None`` when no ``"5m"`` series exists for ``symbol`` at
-    all (no series, or series but none is ``"5m"``) -- an honest "nothing to scan", never a crash."""
+    """``symbol``'s ``"5m"`` bars as ONE ascending series -- the EXACT SAME merged read
+    ``tradability.py``'s own ``_select_daily_series`` uses (applied here to ``"5m"`` instead of
+    ``"1d"``): every recorded ``"5m"`` window for the symbol contributes, de-duplicated by
+    timestamp, so the scan can never be narrowed to whichever window happened to be recorded last
+    (see ``BarStore.merged_bars``). ``None`` when no ``"5m"`` series exists for ``symbol`` at all
+    (no series, or series but none is ``"5m"``) -- an honest "nothing to scan", never a crash."""
     records, _integrity_errors = store.list()
-    chosen: dict | None = None
-    for record in records:
-        if record["symbol"] != symbol or record["timeframe"] != _SCAN_TIMEFRAME:
-            continue
-        if chosen is None or record["created_utc"] > chosen["created_utc"]:
-            chosen = record
-    if chosen is None:
+    if not any(
+        r["symbol"] == symbol and r["timeframe"] == _SCAN_TIMEFRAME for r in records
+    ):
         return None
-    return sorted(store.load_bars(chosen["id"]), key=lambda b: b.epoch)
+    return store.merged_bars(symbol, _SCAN_TIMEFRAME)
 
 
 def _group_sessions(bars: list[RawBar]) -> list[tuple[date, int, list[RawBar]]]:

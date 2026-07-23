@@ -108,6 +108,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..config import Config
+from .algorithm_version import LEVELS_ALGORITHM_VERSION
 from .datasets import DatasetStore
 
 __all__ = ["EdgeReportCache", "resolve_cache_db_path"]
@@ -152,8 +153,20 @@ def _config_content_hash(config: Config) -> str:
     docstring's "why four parts" section for exactly why ``config_fingerprint()`` alone is not
     enough for this specific cache. Reuses ``config_fingerprint()``'s own
     ``asdict`` + canonical-JSON + sha256 mechanism (never re-derived differently), just without
-    its hand-picked exclusion set."""
-    return hashlib.sha256(_canonical(dataclasses.asdict(config)).encode("utf-8")).hexdigest()
+    its hand-picked exclusion set.
+
+    ``LEVELS_ALGORITHM_VERSION`` (``algorithm_version.py`` — a dependency-free constants module,
+    so this module still imports no computation path) is hashed in ALONGSIDE the config values: a
+    change to the level/tradability computation moves every derived value here while leaving both
+    the config and the store's own checksums byte-identical, so without it a cache written before
+    such a change would keep serving results the current code can no longer produce. Every cache
+    in this package keys through this ONE function, so the version lands in all of them at once
+    (see that constant's own comment)."""
+    payload = {
+        "config": dataclasses.asdict(config),
+        "levels_algorithm_version": LEVELS_ALGORITHM_VERSION,
+    }
+    return hashlib.sha256(_canonical(payload).encode("utf-8")).hexdigest()
 
 
 def _cache_key(records: list[dict], config: Config) -> str:
