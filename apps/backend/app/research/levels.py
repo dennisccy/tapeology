@@ -79,6 +79,9 @@ from __future__ import annotations
 
 from bisect import bisect_left, bisect_right
 
+import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
+
 from ..config import Config
 from ..providers.adapters.base import RawBar
 from .bars import BarStore
@@ -150,7 +153,12 @@ class _TouchIndex:
     match), and the ORIGINAL ``abs(value - price) <= tol`` predicate then decides each candidate.
     So this is not an approximation of the touch rule with new boundary behaviour -- it is the same
     rule, asked of fewer bars. Levels, strengths, zones, bands and every backtest that reads them
-    are unchanged."""
+    are unchanged.
+
+    Today this per-query index serves the PRIOR-PERIOD detector (only ever the small 1d/1w/1mo
+    series) and the test suite's equivalence chain; the swing-pivot path -- where a dense 1m
+    series asks ~118k touch questions per request -- goes through ``_BatchTouchCounter`` below,
+    which answers the identical predicate for every query at once."""
 
     # Relative slack on the candidate window: large enough to absorb the ~1-ulp error of computing
     # ``price - tol`` / ``price + tol`` in floating point, small enough that the candidate set stays
@@ -181,6 +189,129 @@ class _TouchIndex:
         return len(touched)
 
 
+# Queries per flattened-gather chunk in ``_BatchTouchCounter`` -- a MEMORY bound, not a research
+# parameter (the ``_RACY_WRITE_GUARD_SECONDS`` class of constant): each chunk materializes
+# ``sum(window sizes)`` candidate rows (~1,500 bars per query on a dense 1m series), so 4,096
+# queries tops out around ~30MB of transient arrays. Any value here produces byte-identical
+# counts; it only trades peak memory against numpy call overhead.
+_BATCH_QUERY_CHUNK = 4096
+
+
+class _BatchTouchCounter:
+    """``_touch_count``'s answer for MANY (price, defining_index) queries at once -- the numpy
+    batch twin of ``_TouchIndex``, built for the swing-pivot path where a dense 1m series asks
+    ~118k touch questions per request.
+
+    Why: ``_TouchIndex`` made each query logarithmic to FIND its candidates, but still walked and
+    set-inserted every candidate in Python -- ~1,500 candidates per query on a dense series at 5
+    bps, ~177M interpreter operations per 1m request (measured 13.8s, ~100% of the request).
+    This class asks the identical questions in vectorized numpy (~1s for the same request).
+
+    Exactness over cleverness -- the ``_TouchIndex`` discipline, restated for batches:
+
+      * Candidates come from ``searchsorted`` windows widened by the SAME ``_EPSILON_RATIO``
+        slack formula ``_TouchIndex.count`` uses, and the ORIGINAL predicate
+        ``abs(value - price) <= tol`` then decides every candidate (vectorized, verbatim).
+        Slack only ever ADMITS extra candidates for the exact predicate to reject.
+      * ``_touch_count`` counts BARS (a bar whose high AND low both lie in the band counts
+        once). Instead of a per-query Python set, the union is counted by inclusion-exclusion:
+        ``highs passing + lows passing - bars passing on both endpoints``. The overlap term
+        re-tests each passing high-candidate's own low against the exact predicate -- complete
+        by construction, because a passing endpoint always lies inside its own slack window.
+      * ``_touch_count`` counts the DEFINING bar unconditionally (``i == defining_index or …``).
+        The union above already contains it whenever its own high or low passes the predicate,
+        so the correction is ``+1`` exactly when both fail -- applied per LEVEL, after the
+        per-unique-price union (many levels share one price; the union is a pure function of
+        price, the correction is not).
+
+    ``tests/test_levels.py`` pins this class ≡ ``_touch_count`` bar-for-bar (the same equivalence
+    contract ``_TouchIndex`` carries), including band-edge, duplicate-price and zero-range-bar
+    cases, and the committed-fixture end-to-end reference swap."""
+
+    # ``_TouchIndex``'s own slack ratio, bound HERE at class-definition time -- the two counters
+    # must widen identically, and a late module-global lookup would break under the test suite's
+    # reference-swap monkeypatch of ``_TouchIndex`` itself.
+    _EPSILON_RATIO = _TouchIndex._EPSILON_RATIO
+
+    def __init__(self, highs: np.ndarray, lows: np.ndarray) -> None:
+        self._highs = highs
+        self._lows = lows
+        self._high_order = np.argsort(highs, kind="stable")
+        self._low_order = np.argsort(lows, kind="stable")
+        self._high_sorted = highs[self._high_order]
+        self._low_sorted = lows[self._low_order]
+
+    def counts(self, prices: np.ndarray, defining: np.ndarray, tol_bps: float) -> np.ndarray:
+        """``_touch_count(bars, prices[k], tol_bps, defining[k])`` for every ``k``, as int64."""
+        if len(prices) == 0:
+            return np.zeros(0, dtype=np.int64)
+        unique_prices, inverse = np.unique(prices, return_inverse=True)
+        union = self._union_counts(unique_prices, tol_bps)
+        tol = prices * (tol_bps / 10_000.0)
+        defining_touches = (np.abs(self._highs[defining] - prices) <= tol) | (
+            np.abs(self._lows[defining] - prices) <= tol
+        )
+        return union[inverse] + (~defining_touches)
+
+    def _union_counts(self, unique_prices: np.ndarray, tol_bps: float) -> np.ndarray:
+        """``|{bars whose high OR low passes the predicate}|`` per unique price -- see the class
+        docstring for the inclusion-exclusion argument."""
+        tol = unique_prices * (tol_bps / 10_000.0)
+        # The SAME slack formula `_TouchIndex.count` applies per query, vectorized.
+        slack = np.abs(unique_prices) * self._EPSILON_RATIO + np.abs(tol) * self._EPSILON_RATIO
+        low_bound = unique_prices - tol - slack
+        high_bound = unique_prices + tol + slack
+        window_left = {
+            "high": np.searchsorted(self._high_sorted, low_bound, "left"),
+            "low": np.searchsorted(self._low_sorted, low_bound, "left"),
+        }
+        window_right = {
+            "high": np.searchsorted(self._high_sorted, high_bound, "right"),
+            "low": np.searchsorted(self._low_sorted, high_bound, "right"),
+        }
+        total_queries = len(unique_prices)
+        high_hits = np.zeros(total_queries, dtype=np.int64)
+        low_hits = np.zeros(total_queries, dtype=np.int64)
+        both_hits = np.zeros(total_queries, dtype=np.int64)
+        sides = (
+            # (window key, sorted values, order map, hit accumulator, overlap accumulator).
+            # The overlap term is accumulated on ONE side only: a bar passing on BOTH endpoints
+            # is, by definition, among the highs-side passers, so testing each passing high's own
+            # low enumerates every double-counted bar exactly once.
+            ("high", self._high_sorted, self._high_order, high_hits, both_hits),
+            ("low", self._low_sorted, self._low_order, low_hits, None),
+        )
+        for start in range(0, total_queries, _BATCH_QUERY_CHUNK):
+            end = min(start + _BATCH_QUERY_CHUNK, total_queries)
+            for key, sorted_values, order, hits, overlap in sides:
+                left = window_left[key][start:end]
+                sizes = window_right[key][start:end] - left
+                total = int(sizes.sum())
+                if total == 0:
+                    continue
+                # Flattened candidate windows: for query q, the run left[q]..right[q] of the
+                # sorted array, all concatenated -- the classic repeat/arange construction.
+                window_starts = np.cumsum(np.concatenate(([0], sizes[:-1])))
+                flat = np.repeat(left, sizes) + (np.arange(total) - np.repeat(window_starts, sizes))
+                query = np.repeat(np.arange(end - start), sizes)
+                price = unique_prices[start:end][query]
+                tolerance = tol[start:end][query]
+                passes = np.abs(sorted_values[flat] - price) <= tolerance  # the ORIGINAL predicate
+                # np.bincount, not add.reduceat: reduceat mishandles empty windows (it returns the
+                # element AT a repeated offset instead of 0). Float weights are exact here -- every
+                # per-query sum is far below 2**53.
+                hits[start:end] += np.bincount(query, weights=passes, minlength=end - start).astype(
+                    np.int64
+                )
+                if overlap is not None:
+                    other = self._lows[order[flat]]
+                    both = passes & (np.abs(other - price) <= tolerance)
+                    overlap[start:end] += np.bincount(
+                        query, weights=both, minlength=end - start
+                    ).astype(np.int64)
+        return high_hits + low_hits - both_hits
+
+
 def _level(price: float, timeframe: str, level_type: str, touch_count: int, weight: float) -> dict:
     return {
         "price": price,
@@ -197,7 +328,6 @@ def _swing_pivots(
     lookback: int,
     tol_bps: float,
     weight: float,
-    touch_index: "_TouchIndex | None" = None,
 ) -> list[dict]:
     """Every STRICT +/-``lookback``-neighbour extreme in ``bars`` (already as-of-filtered).
 
@@ -207,20 +337,54 @@ def _swing_pivots(
     needs ``lookback`` visible bars on EACH side to be checked at all, so a pivot near either end
     of the as-of-truncated prefix simply does not register yet -- exactly the lookahead-free
     property: it only confirms once the ``lookback`` bars AFTER it are themselves visible
-    (``ts <= as_of``)."""
-    levels: list[dict] = []
+    (``ts <= as_of``).
+
+    Vectorized (the ``_TouchIndex`` -> ``_BatchTouchCounter`` progression, applied to detection):
+    ``centre > max(side window)`` is the SAME truth value as "strictly greater than every
+    neighbour on that side", evaluated per side over ``sliding_window_view`` maxima/minima --
+    never a changed rule, only a changed iterator (a dense 1m series checks ~277k centres and
+    counts ~118k pivots' touches; the Python loop + per-query index was ~14s of a request, this
+    is ~1s). Touch counts come from ``_BatchTouchCounter`` (see its exactness contract).
+
+    Emission order is every high pivot (ascending bar index) then every low pivot (ascending),
+    where the loop this replaced interleaved high-then-low PER BAR. Unobservable in any served
+    output: ``compute_levels`` stable-sorts by ``(timeframe, price, type)``, and two swing-pivot
+    levels equal on that key are IDENTICAL dicts -- a pivot's touch count is a pure function of
+    its price (the defining bar's own endpoint is the price itself, distance zero, so the
+    defining-index correction never fires) -- so any relative order of such ties serializes to
+    the same bytes. Pinned by the committed-fixture byte-identity tests."""
     n = len(bars)
-    touches_in = touch_index or _TouchIndex(bars)
-    for i in range(lookback, n - lookback):
-        centre = bars[i]
-        neighbours = bars[i - lookback : i] + bars[i + 1 : i + lookback + 1]
-        if all(centre.high > w.high for w in neighbours):
-            touches = touches_in.count(centre.high, tol_bps, i)
-            levels.append(_level(centre.high, timeframe, SWING_PIVOT, touches, weight))
-        if all(centre.low < w.low for w in neighbours):
-            touches = touches_in.count(centre.low, tol_bps, i)
-            levels.append(_level(centre.low, timeframe, SWING_PIVOT, touches, weight))
-    return levels
+    if n < 2 * lookback + 1:
+        return []  # no centre has `lookback` bars on both sides -- the loop's own empty range
+    highs = np.array([b.high for b in bars], dtype=np.float64)
+    lows = np.array([b.low for b in bars], dtype=np.float64)
+    centre_highs = highs[lookback : n - lookback]
+    centre_lows = lows[lookback : n - lookback]
+    # Row j of a width-`lookback` window view is values[j : j+lookback]: a centre at index i has
+    # its LEFT window at row i-lookback (values[i-lookback : i]) and its RIGHT window at row i+1
+    # (values[i+1 : i+1+lookback]) -- so rows [0, n-2*lookback) and [lookback+1, ...] align the
+    # two sides against the centres slice above.
+    high_windows = sliding_window_view(highs, lookback)
+    low_windows = sliding_window_view(lows, lookback)
+    is_high_pivot = (centre_highs > high_windows[: n - 2 * lookback].max(axis=1)) & (
+        centre_highs > high_windows[lookback + 1 :].max(axis=1)
+    )
+    is_low_pivot = (centre_lows < low_windows[: n - 2 * lookback].min(axis=1)) & (
+        centre_lows < low_windows[lookback + 1 :].min(axis=1)
+    )
+    high_pivots = np.flatnonzero(is_high_pivot) + lookback
+    low_pivots = np.flatnonzero(is_low_pivot) + lookback
+    if len(high_pivots) == 0 and len(low_pivots) == 0:
+        return []
+    prices = np.concatenate((highs[high_pivots], lows[low_pivots]))
+    defining = np.concatenate((high_pivots, low_pivots))
+    counts = _BatchTouchCounter(highs, lows).counts(prices, defining, tol_bps)
+    # .tolist() materializes native Python floats/ints (bit-exact), never numpy scalars -- a
+    # np.float64 leaking into a served dict would break json serialization downstream.
+    return [
+        _level(price, timeframe, SWING_PIVOT, touches, weight)
+        for price, touches in zip(prices.tolist(), counts.tolist())
+    ]
 
 
 def _prior_period_extremes(
@@ -395,9 +559,10 @@ def compute_levels(store: BarStore, symbol: str, as_of_epoch: float, config: Con
     for timeframe in _timeframes_for(matching):
         weight = config.sr_timeframe_weights[timeframe]
         bars = _bars_as_of(store.merged_bars(symbol, timeframe), as_of_epoch)
-        # ONE sorted view per series, shared by both detectors: they ask the same touch question of
-        # the same bars, so building it twice would double the only setup cost this adds.
-        touch_index = _TouchIndex(bars)
+        # The two detectors no longer share a `_TouchIndex`: the swing-pivot path counts touches
+        # through its own vectorized `_BatchTouchCounter`, and the prior-period path (only ever
+        # the small 1d/1w/1mo series) lazily builds its own per-query index -- so a dense
+        # intraday timeframe never pays for an index only the other detector would read.
         levels.extend(
             _swing_pivots(
                 bars,
@@ -405,13 +570,12 @@ def compute_levels(store: BarStore, symbol: str, as_of_epoch: float, config: Con
                 config.sr_pivot_lookback,
                 config.sr_touch_tolerance_bps,
                 weight,
-                touch_index,
             )
         )
         if timeframe in PRIOR_PERIOD_TIMEFRAMES:
             levels.extend(
                 _prior_period_extremes(
-                    bars, timeframe, config.sr_touch_tolerance_bps, weight, as_of_epoch, touch_index
+                    bars, timeframe, config.sr_touch_tolerance_bps, weight, as_of_epoch
                 )
             )
     levels.sort(key=_sort_key)

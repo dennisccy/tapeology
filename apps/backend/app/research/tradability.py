@@ -90,7 +90,9 @@ bands is not a state this module can reach -- no branch exists to fabricate one.
 
 from __future__ import annotations
 
+from bisect import bisect_left
 from datetime import datetime, timezone
+from operator import itemgetter
 
 from ..config import Config
 from ..providers.adapters.base import RawBar
@@ -200,7 +202,7 @@ def _cluster_side(levels: list[dict], band_width_bps: float) -> list[list[dict]]
     ``_cluster_levels`` (which drops singleton levels -- confluence requires >= 2 members), EVERY
     level here joins exactly one band, including size-1 bands: this lens exists to distill via
     scoring + the top-K cap below, never by silently discarding input before scoring."""
-    ordered = sorted(levels, key=lambda lvl: (lvl["price"], lvl["timeframe"], lvl["type"]))
+    ordered = sorted(levels, key=itemgetter("price", "timeframe", "type"))
     bands: list[list[dict]] = []
     current: list[dict] = []
     anchor = 0.0
@@ -252,7 +254,11 @@ def _best_zone_class(zones: list[dict], price_low: float, price_high: float) -> 
     """The band's inherited class: the highest-graded (tie-broken by score) confluence zone with
     at least one member level priced inside ``[price_low, price_high]`` -- ``None`` when no zone
     overlaps (an honest absence; ``levels.py`` itself never graded anything here, so this module
-    never invents a grade)."""
+    never invents a grade).
+
+    THE reference definition of class inheritance. ``_ZoneClassIndex`` below answers the identical
+    question with a per-zone binary search instead of this full member walk, so the two always
+    agree band-for-band (``tests/test_tradability.py`` pins that equivalence)."""
     best_class: str | None = None
     best_key: tuple[int, float] | None = None
     for zone in zones:
@@ -263,6 +269,48 @@ def _best_zone_class(zones: list[dict], price_low: float, price_high: float) -> 
             best_key = key
             best_class = zone["class"]
     return best_class
+
+
+class _ZoneClassIndex:
+    """``_best_zone_class``'s answer via one sorted member-price array per zone, built ONCE per
+    ``compute_tradability`` call.
+
+    Why: the reference walks every zone's every member per band (``any(...)``), and a real
+    intraday corpus makes that walk enormous -- 313 zones over ~149k member levels asked by ~92
+    candidate bands was ~3.9s of a ~19s request (measured), nearly all of it inside that ``any``.
+    Sorting each zone's member prices once makes every (band, zone) overlap question one
+    ``bisect`` probe: the member with the smallest price at or above the band's low edge exists
+    inside the band iff it is also at or below the high edge -- the EXACT same
+    ``price_low <= member_price <= price_high`` comparisons, asked of one member instead of all
+    of them (plus a min/max prefilter that only ever skips zones the reference would also have
+    rejected). Selection is the reference's own loop verbatim (same zone order, same strict
+    ``key > best_key`` update), and equal keys imply equal rank and therefore the SAME class, so
+    tie behaviour is unobservable either way. Byte-identical served bands -- pinned by the fuzz
+    equivalence test and the committed-fixture byte-identity test."""
+
+    def __init__(self, zones: list[dict]) -> None:
+        self._zones: list[tuple[float, float, list[float], tuple[int, float], str]] = []
+        for zone in zones:
+            prices = sorted(member["price"] for member in zone["levels"])
+            if not prices:
+                continue  # a memberless zone can never overlap -- the reference's `any` says no too
+            self._zones.append(
+                (prices[0], prices[-1], prices, (_CLASS_RANK[zone["class"]], zone["score"]), zone["class"])
+            )
+
+    def best_class(self, price_low: float, price_high: float) -> str | None:
+        best_class: str | None = None
+        best_key: tuple[int, float] | None = None
+        for zone_min, zone_max, prices, key, zone_class in self._zones:
+            if zone_max < price_low or zone_min > price_high:
+                continue  # every member is outside the band -- the reference would skip it too
+            index = bisect_left(prices, price_low)
+            if index >= len(prices) or prices[index] > price_high:
+                continue  # the nearest member at/above the low edge already overshoots the high edge
+            if best_key is None or key > best_key:
+                best_key = key
+                best_class = zone_class
+        return best_class
 
 
 def _quality_score(
@@ -292,7 +340,9 @@ def _quality_score(
     )
 
 
-def _band(members: list[dict], side: str, daily_bars: list[RawBar], zones: list[dict], config: Config) -> dict:
+def _band(
+    members: list[dict], side: str, daily_bars: list[RawBar], zone_index: _ZoneClassIndex, config: Config
+) -> dict:
     price_low = min(member["price"] for member in members)
     price_high = max(member["price"] for member in members)
     round_number = _round_number_flag(
@@ -303,11 +353,15 @@ def _band(members: list[dict], side: str, daily_bars: list[RawBar], zones: list[
         "side": side,
         "price_low": price_low,
         "price_high": price_high,
-        "class": _best_zone_class(zones, price_low, price_high),
+        # `zone_index` is `_best_zone_class` pre-indexed once per compute (see _ZoneClassIndex) --
+        # the same inherited class, no per-band full member walk.
+        "class": zone_index.best_class(price_low, price_high),
         "quality_score": _quality_score(members, daily_bars, price_low, price_high, round_number, config),
         "round_number": round_number,
         "member_count": len(members),
-        "members": sorted(members, key=lambda m: (m["price"], m["timeframe"], m["type"])),
+        # itemgetter builds the identical (price, timeframe, type) sort key as the lambda it
+        # replaced, without a Python frame per member -- ~149k members cross this sort per request.
+        "members": sorted(members, key=itemgetter("price", "timeframe", "type")),
     }
 
 
@@ -374,10 +428,13 @@ def compute_tradability(store: BarStore, symbol: str, as_of_epoch: float, config
     resistance_levels = [lvl for lvl in raw_levels if lvl["price"] > current_price]
     support_levels = [lvl for lvl in raw_levels if lvl["price"] <= current_price]
 
+    # Class inheritance pre-indexed ONCE for every band of both sides (see _ZoneClassIndex --
+    # the same `_best_zone_class` rule, per-zone binary search instead of a per-band member walk).
+    zone_index = _ZoneClassIndex(zones)
     bands: list[dict] = []
     for side, side_levels in ((RESISTANCE, resistance_levels), (SUPPORT, support_levels)):
         clusters = _cluster_side(side_levels, config.tradability_band_width_bps)
-        side_bands = [_band(members, side, truncated_daily_bars, zones, config) for members in clusters]
+        side_bands = [_band(members, side, truncated_daily_bars, zone_index, config) for members in clusters]
         side_bands.sort(key=_rank_sort_key)
         bands.extend(side_bands[: config.tradability_band_cap_per_side])
 

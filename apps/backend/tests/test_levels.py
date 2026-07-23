@@ -878,9 +878,129 @@ def test_touch_index_counts_a_bar_once_even_when_both_its_high_and_low_qualify()
         assert _TouchIndex(bars).count(price, wide, 0) <= len(bars)
 
 
+def test_batch_touch_counter_agrees_with_the_reference_scan_on_the_probe_bars():
+    """``_BatchTouchCounter`` ≡ ``_touch_count`` on the SAME adversarial probe set the per-query
+    index is pinned against (band-edge floats, near-identical prices, tiny prices) — every
+    (price, tolerance, defining_index) combination in one batched call per tolerance."""
+    import numpy as np
+
+    from app.research.levels import _BatchTouchCounter, _touch_count
+
+    bars = _touch_probe_bars()
+    highs = np.array([b.high for b in bars], dtype=np.float64)
+    lows = np.array([b.low for b in bars], dtype=np.float64)
+    counter = _BatchTouchCounter(highs, lows)
+    probes = [b.high for b in bars] + [b.low for b in bars] + [100.0, 250.0, 0.5, 1e-9]
+    for tol_bps in (0.0, 1.0, 5.0, CONFIG.sr_touch_tolerance_bps, 100.0, 500.0):
+        prices = np.array([price for price in probes for _ in (0, 1)], dtype=np.float64)
+        defining = np.array([index for _ in probes for index in (0, len(bars) - 1)], dtype=np.int64)
+        got = counter.counts(prices, defining, tol_bps)
+        for k in range(len(prices)):
+            assert int(got[k]) == _touch_count(bars, float(prices[k]), tol_bps, int(defining[k])), (
+                f"disagreement at price={prices[k]!r} tol_bps={tol_bps} idx={defining[k]}"
+            )
+
+
+def test_batch_touch_counter_fuzz_against_the_reference_scan():
+    """Seeded fuzz of ``_BatchTouchCounter`` ≡ ``_touch_count``: cent-quantized prices (mass ties
+    exactly AT band edges), zero-range bars (high == low), duplicated endpoint values, and
+    defining bars that do NOT touch their query price — the one case where the counter's ``+1``
+    defining-index correction fires (the swing-pivot production path never exercises it, so only
+    this test proves that branch)."""
+    import random
+
+    import numpy as np
+
+    from app.research.levels import _BatchTouchCounter, _touch_count
+
+    rng = random.Random(20260723)
+    correction_fired = 0
+    for _ in range(25):
+        n = rng.randrange(1, 120)
+        bars = []
+        for i in range(n):
+            low = round(rng.uniform(99.0, 101.0), 2)
+            spread = rng.choice([0.0, 0.0, 0.01, 0.03, round(rng.uniform(0.0, 0.4), 2)])
+            bars.append(RawBar("FZ", "1m", float(i), low, round(low + spread, 2), low, low, 1))
+        highs = np.array([b.high for b in bars], dtype=np.float64)
+        lows = np.array([b.low for b in bars], dtype=np.float64)
+        counter = _BatchTouchCounter(highs, lows)
+        tol_bps = rng.choice([0.0, 5.0, 20.0, 500.0])
+        prices, defining = [], []
+        for _ in range(60):
+            d = rng.randrange(n)
+            price = rng.choice([bars[d].high, bars[d].low, round(rng.uniform(95.0, 105.0), 2)])
+            if rng.random() < 0.3:
+                # sit EXACTLY on another bar's endpoint, or that endpoint's own exact band edge
+                edge = rng.choice([bars[rng.randrange(n)].high, bars[rng.randrange(n)].low])
+                price = rng.choice([edge, edge + edge * (tol_bps / 10_000.0), edge - edge * (tol_bps / 10_000.0)])
+            prices.append(price)
+            defining.append(d)
+        got = counter.counts(np.array(prices, dtype=np.float64), np.array(defining, dtype=np.int64), tol_bps)
+        for k in range(len(prices)):
+            want = _touch_count(bars, prices[k], tol_bps, defining[k])
+            assert int(got[k]) == want, (
+                f"disagreement at price={prices[k]!r} tol_bps={tol_bps} idx={defining[k]}"
+            )
+            tol = prices[k] * (tol_bps / 10_000.0)
+            if not (abs(bars[defining[k]].high - prices[k]) <= tol or abs(bars[defining[k]].low - prices[k]) <= tol):
+                correction_fired += 1
+    assert correction_fired > 0, "the fuzz must actually exercise the defining-index +1 correction"
+
+
+def test_swing_pivots_match_the_loop_reference_for_general_lookback():
+    """The vectorized detector ≡ the original per-centre Python loop for lookback ∈ {1, 2, 3} on
+    coarsely-quantized random bars (so equal-neighbour TIES — which the strict rule must reject —
+    actually occur). Compared as level MULTISETS: emission order differs by design and is
+    unobservable post-sort (see ``_swing_pivots``' docstring)."""
+    import random
+
+    from app.research.levels import SWING_PIVOT, _level, _swing_pivots, _TouchIndex
+
+    def reference(bars, timeframe, lookback, tol_bps, weight):
+        # The pre-vectorization loop, verbatim (kept HERE as the executable spec of the rule).
+        levels = []
+        touches_in = _TouchIndex(bars)
+        for i in range(lookback, len(bars) - lookback):
+            centre = bars[i]
+            neighbours = bars[i - lookback : i] + bars[i + 1 : i + lookback + 1]
+            if all(centre.high > w.high for w in neighbours):
+                touches = touches_in.count(centre.high, tol_bps, i)
+                levels.append(_level(centre.high, timeframe, SWING_PIVOT, touches, weight))
+            if all(centre.low < w.low for w in neighbours):
+                touches = touches_in.count(centre.low, tol_bps, i)
+                levels.append(_level(centre.low, timeframe, SWING_PIVOT, touches, weight))
+        return levels
+
+    rng = random.Random(97)
+    exercised_nonempty = 0
+    for lookback in (1, 2, 3):
+        for _ in range(10):
+            n = rng.randrange(0, 40)
+            bars = []
+            for i in range(n):
+                # One-decimal quantization on a narrow range => frequent EQUAL neighbours.
+                low = round(rng.uniform(99.5, 100.5), 1)
+                high = round(low + rng.choice([0.0, 0.1, 0.2]), 1)
+                bars.append(RawBar("PVT", "1h", float(i) * 3600.0, low, high, low, low, 1))
+            got = _swing_pivots(bars, "1h", lookback, 5.0, 2.0)
+            want = reference(bars, "1h", lookback, 5.0, 2.0)
+            assert sorted(json.dumps(lvl, sort_keys=True) for lvl in got) == sorted(
+                json.dumps(lvl, sort_keys=True) for lvl in want
+            ), f"disagreement at lookback={lookback} n={n}"
+            if want:
+                exercised_nonempty += 1
+    assert exercised_nonempty > 0, "the fuzz must exercise real pivots, not only empty windows"
+
+
 def test_levels_are_unchanged_by_the_index_on_the_committed_fixture():
     """End to end over the committed real-data fixture: every served level (price, touch_count,
-    strength, zones) is byte-identical to computing each touch with the reference scan."""
+    strength, zones) is byte-identical to computing each touch with the reference scan. BOTH
+    counting seams are swapped -- the prior-period path's per-query ``_TouchIndex`` AND the
+    swing-pivot path's ``_BatchTouchCounter`` -- so every detector runs on the naive
+    ``_touch_count`` reference."""
+    import numpy as np
+
     from app.research import levels as levels_module
 
     class _ReferenceIndex:
@@ -890,16 +1010,42 @@ def test_levels_are_unchanged_by_the_index_on_the_committed_fixture():
         def count(self, price: float, tol_bps: float, defining_index: int) -> int:
             return levels_module._touch_count(self._bars, price, tol_bps, defining_index)
 
+    class _ReferenceBatchCounter:
+        """`_BatchTouchCounter`'s interface answered by the naive full scan -- `_touch_count`
+        applied per query over minimal high/low bar stand-ins (the reference reads nothing else)."""
+
+        class _Bar:
+            __slots__ = ("high", "low")
+
+            def __init__(self, high: float, low: float) -> None:
+                self.high = high
+                self.low = low
+
+        def __init__(self, highs, lows) -> None:
+            self._bars = [self._Bar(float(h), float(l)) for h, l in zip(highs, lows)]
+
+        def counts(self, prices, defining, tol_bps: float):
+            return np.array(
+                [
+                    levels_module._touch_count(self._bars, float(price), tol_bps, int(index))
+                    for price, index in zip(prices, defining)
+                ],
+                dtype=np.int64,
+            )
+
     store = BarStore(FIXTURE_BAR_DIR)
     as_of = _epoch("2026-06-09T21:00:00Z")
     indexed = compute_levels(store, "PG", as_of, CONFIG)
 
     original_index = levels_module._TouchIndex
-    levels_module._TouchIndex = _ReferenceIndex  # every detector now uses the full scan
+    original_batch = levels_module._BatchTouchCounter
+    levels_module._TouchIndex = _ReferenceIndex  # the prior-period detector's counter
+    levels_module._BatchTouchCounter = _ReferenceBatchCounter  # the swing-pivot detector's counter
     try:
         reference = compute_levels(store, "PG", as_of, CONFIG)
     finally:
         levels_module._TouchIndex = original_index
+        levels_module._BatchTouchCounter = original_batch
 
     assert json.dumps(indexed, sort_keys=True) == json.dumps(reference, sort_keys=True)
     assert indexed["levels"], "the proof must exercise real levels"

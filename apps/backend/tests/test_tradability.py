@@ -678,3 +678,67 @@ def test_aapl_pinned_band_ranks_top2_under_realistic_multitimeframe_density(tmp_
     # No band is fabricated: every price is a REAL member level.
     for band in bands:
         assert band["member_count"] == len(band["members"]) >= 1
+
+
+# --- _ZoneClassIndex: the binary-search class-inheritance path ≡ the reference walk ---------------
+
+
+def test_zone_class_index_gap_case_a_band_between_two_members_of_an_overlapping_zone():
+    """A band whose RANGE overlaps a zone's [min, max] span while containing NO member is NOT an
+    overlap: class inheritance requires an actual member level inside the band (the reference's
+    per-member walk), never mere interval intersection -- the exact case a min/max-only index
+    would silently get wrong."""
+    from app.research.tradability import _best_zone_class, _ZoneClassIndex
+
+    zones = [{"levels": [{"price": 100.0}, {"price": 100.2}], "class": "A", "score": 10.0}]
+    index = _ZoneClassIndex(zones)
+    # Falls strictly in the gap between the two members: no inheritance.
+    assert _best_zone_class(zones, 100.05, 100.15) is None
+    assert index.best_class(100.05, 100.15) is None
+    # Contains a member (edge-inclusive both ways): inherits.
+    assert _best_zone_class(zones, 100.05, 100.2) == "A"
+    assert index.best_class(100.05, 100.2) == "A"
+    assert _best_zone_class(zones, 100.0, 100.15) == "A"
+    assert index.best_class(100.0, 100.15) == "A"
+
+
+def test_zone_class_index_fuzz_against_the_reference_walk():
+    """Seeded fuzz: `_ZoneClassIndex.best_class` ≡ `_best_zone_class` over random zones (mixed
+    classes/scores, cent-quantized member prices so band edges land EXACTLY on members) and random
+    bands (including empty ranges, gap-straddling ranges, and whole-corpus-spanning ranges)."""
+    import random
+
+    from app.research.tradability import _best_zone_class, _ZoneClassIndex
+
+    rng = random.Random(5723)
+    checked_inherited = 0
+    for _ in range(60):
+        zones = []
+        for _z in range(rng.randrange(0, 12)):
+            members = [
+                {"price": round(rng.uniform(90.0, 110.0), 2)}
+                for _ in range(rng.randrange(2, 8))
+            ]
+            zones.append(
+                {
+                    "levels": members,
+                    "class": rng.choice(["A", "B", "C"]),
+                    "score": round(rng.uniform(1.0, 50.0), 4),
+                }
+            )
+        index = _ZoneClassIndex(zones)
+        for _q in range(40):
+            if rng.random() < 0.4 and zones:
+                # Anchor the band's edges ON real member prices (exact-boundary cases).
+                zone = rng.choice(zones)
+                member_price = rng.choice(zone["levels"])["price"]
+                low = member_price - rng.choice([0.0, 0.01, 0.5])
+                high = member_price + rng.choice([0.0, 0.01, 0.5])
+            else:
+                low = round(rng.uniform(88.0, 112.0), 2)
+                high = round(low + rng.uniform(0.0, 4.0), 2)
+            want = _best_zone_class(zones, low, high)
+            assert index.best_class(low, high) == want, f"disagreement at [{low}, {high}]"
+            if want is not None:
+                checked_inherited += 1
+    assert checked_inherited > 0, "the fuzz must exercise real inheritance, not only misses"

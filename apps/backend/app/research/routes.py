@@ -51,11 +51,17 @@ from .bars import (
 )
 from .edge_report import EdgeReportError, peek_strategy_comparison_report
 from .edge_report_backtest_cache import EdgeReportBacktestCache, resolve_backtest_cache_db_path
-from .edge_report_cache import EdgeReportCache, resolve_cache_db_path
+from .edge_report_cache import EdgeReportCache, _config_content_hash, resolve_cache_db_path
 from .edge_report_compute import EdgeReportComputeManager
 from .levels import compute_levels
 from .setups import BROKE, CHOPPED, REJECTED, compute_setups, enrich_with_tape_timeline
-from .tradability import compute_tradability
+from .tradability import basis_day_key, compute_tradability
+from .tradability_cache import (
+    TradabilityCache,
+    resolve_tradability_cache_db_path,
+    symbol_store_signature,
+    tradability_cache_key,
+)
 from .datasets import (
     VALID_SOURCE_KINDS as DATASET_SOURCE_KINDS,
     VALID_SPLITS,
@@ -2110,7 +2116,18 @@ def get_tradability(symbol: str, as_of: str, store: BarStore = Depends(get_bar_s
     series at all, and a symbol with series but nothing derivable (no daily series to resolve a
     basis from, or no prior session yet), are honest distinct states -- see
     ``compute_tradability``'s ``no_bar_series_for_symbol`` flag and ``basis_as_of`` (``null`` when
-    no basis could be resolved) -- never one ambiguous bare empty ``bands`` array."""
+    no basis could be resolved) -- never one ambiguous bare empty ``bands`` array.
+
+    Served through the durable ``TradabilityCache`` (this route is its ONLY caller): the key is
+    (symbol, ``basis_day_key(as_of)``, this symbol's own store signature, whole-config content
+    hash), so a repeat of an already-computed session is a ~10ms read that survives restarts,
+    while ANY new/changed recording of the symbol, any config-content change, or an algorithm
+    version bump recomputes through the unchanged ``compute_tradability`` path — byte-identical
+    either way (the cache stores the module result verbatim; the ``as_of`` echo below is applied
+    per-request, so same-UTC-day requests share one row yet each echoes its own instant). The
+    cache DB lives beside the INJECTED store's own root (``resolve_tradability_cache_db_path``),
+    so a test store under ``tmp_path`` gets a hermetic cache for free — the ``SetupsScanCache``
+    property ``conftest.py`` documents."""
     if not symbol:
         raise HTTPException(status_code=422, detail="a tradability query requires a symbol")
     try:
@@ -2118,7 +2135,18 @@ def get_tradability(symbol: str, as_of: str, store: BarStore = Depends(get_bar_s
     except ValueError:
         raise HTTPException(status_code=422, detail="as_of must be an ISO date-time")
     normalized_symbol = symbol.strip().upper()
-    result = compute_tradability(store, normalized_symbol, as_of_epoch, CONFIG)
+    records, _integrity_errors = store.list()
+    cache = TradabilityCache(resolve_tradability_cache_db_path(str(store.root)))
+    cache_key = tradability_cache_key(
+        symbol=normalized_symbol,
+        basis_day=basis_day_key(as_of_epoch),
+        store_signature=symbol_store_signature(records, normalized_symbol),
+        config_content_hash=_config_content_hash(CONFIG),
+    )
+    result = cache.lookup(cache_key)
+    if result is None:
+        result = compute_tradability(store, normalized_symbol, as_of_epoch, CONFIG)
+        cache.publish(cache_key, result)
     return {"symbol": normalized_symbol, "as_of": as_of, **result}
 
 
