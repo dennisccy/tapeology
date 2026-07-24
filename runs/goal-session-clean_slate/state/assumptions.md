@@ -88,3 +88,56 @@ is about sequence.
 **Reversible:** yes — a one-line reorder of 3 `types.Tool` blocks (and the matching `EXPECTED_TOOLS`
 tuple) if a future review insists on literal prose-order matching; no other code or test depends on
 the internal sequence.
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** goal.md's I-4 "Confirmed DELETE list" names 18 Config fields as safe to delete and
+separately states a closure rule for fields "beyond the confirmed list." This planning pass grepped
+every one of the 18 named fields (plus every neighboring field in the same journal-era block,
+`app/config.py` lines ~508-885) against all of `apps/` for live readers outside `config.py` itself, and
+found the confirmed list is both over- and under-inclusive. Over-inclusive: 4 of its 18 names
+(`study_arm_sustain_seconds`, `study_arm_cooldown_seconds`, `study_occurrence_r_spread_multiple`,
+`study_occurrence_r_floor`) are read live by `Config.strategy_definition()` (`app/config.py`, building
+the KEPT `v1`/`structure_tape`/`structure_tape_map` strategy grammar served via
+`GET /research/strategies`) and directly by `backtests.py:225`'s R-stop formula — deleting them would
+crash every backtest/edge-report compute, a severe kept-value regression, not a cosmetic gap.
+Relatedly, `analytics_min_sample_size` (not on the confirmed list, but plausible by name/history) is
+still read by `pnl_ledger.py` and must also stay. Under-inclusive: 9 fields NOT on the confirmed list
+(`invalidation_k_consecutive`, `journal_list_default_limit`, `journal_list_max_limit`,
+`chase_return_threshold`, `invalidation_too_tight_spread_multiple`, `process_outcome_grade_map`,
+`process_violated_min_failed_checks`, `process_flagged_min_risk_flags`, `sound_cue_cooldown_seconds`)
+qualify for deletion under I-4's own closure rule — verified zero readers outside `config.py`, meaning
+their sole historical reader was a module I-2 already deleted in J-01/J-02.
+**We chose:** Corrected the delete list to 23 fields (14 of the confirmed 18, minus the 4
+wrongly-listed ones, plus the 9 verified closure-rule finds), and explicitly excluded the 4 study_*
+fields and `analytics_min_sample_size` from deletion — per T-14 ("inventory contradictions stop the
+line... the fix is a documented inventory correction, never a silent improvisation"). The full
+evidentiary grep trail (file:line citations) is in `docs/phases/goal-clean_slate-iter-4.md`'s NOTES.
+**Reversible:** yes — if any individual classification is wrong, the fix is a further grep-verified
+correction to the field list before/during execution; no code has been written yet (this is a
+planning-time correction), so nothing downstream is foreclosed.
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** goal.md's J-04 Step 3 says re-running `python -m app.research.pnl_baseline` under the
+new epoch "appends the new-epoch founding row beside the untouched old rows," but names no Config
+value to change to make that happen. This planning pass traced the actual mechanism:
+`seed_founding_row` (`app/research/pnl_baseline.py:105`) looks up the ledger by
+`config.pnl_founding_enhancement_id` — a fixed literal (`"founding-baseline-strategy-v1-default"`) —
+and the `pnl_ledger` table's `enhancement_id` column is the store's SQL PRIMARY KEY
+(`store.py:append_pnl_ledger_row`), so a second run under an unchanged id is refused as an idempotent
+no-op ("already present") before the new fingerprint ever enters the picture. Literally following
+goal.md's instruction as written, unmodified, would therefore silently fail to produce the required
+new-epoch row (the CLI would just print "already present" and exit 0).
+**We chose:** Scoped the fix narrowly: bump `Config.pnl_founding_enhancement_id` /
+`pnl_founding_enhancement_title`'s literal DEFAULT VALUES — both already-existing era-3 J-04 fields,
+not new fields, so the "no new Config fields" non-goal holds — to a new, distinct, self-documenting
+string, landed in the SAME commit as the field deletions, before computing the one new pin (both
+fields are fingerprint-INCLUDED by the module's own docstring, so they legitimately participate in
+that one hash). `pnl_ledger.py`'s writer and `store.py`'s primary-key/`DuplicateEnhancementError`
+discipline are NOT touched — that "one honest row per enhancement" guarantee is correct and
+load-bearing; the fix works by giving the new epoch's row a different key, exactly as an operator
+manually choosing a new enhancement id for a genuinely new enhancement would.
+**Reversible:** yes — the exact literal chosen is cosmetic (any distinct, honest string satisfies the
+mechanism); a different naming convention later only affects the NEW row's id/title, never the old row
+or any pin.
