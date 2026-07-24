@@ -1,7 +1,7 @@
 {
   "session_id": "clean_slate",
   "started_at": "2026-07-23T21:52:40.471485Z",
-  "current_iter": 3,
+  "current_iter": 4,
   "cli": "claude",
   "agent_backend": "interactive",
   "halt_config": {
@@ -11,11 +11,11 @@
   },
   "status": "in_progress",
   "last_verdict": "CONTINUE",
-  "next_depth": "lean",
+  "next_depth": "full",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/clean_slate_build",
-  "updated_at": "2026-07-24T06:05:55.151277Z",
+  "updated_at": "2026-07-24T07:29:25.990245Z",
   "finished_at": "2026-07-24T00:36:33.249492Z",
   "total_iterations": 1,
   "wall_time_seconds": 9832,

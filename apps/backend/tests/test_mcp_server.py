@@ -50,9 +50,6 @@ EXPECTED_TOOLS = (
     "tape_state",
     "tape_features",
     "tape_history",
-    "journal",
-    "analytics",
-    "studies",
     "datasets",
     "bars",
     "levels",
@@ -77,11 +74,14 @@ YAHOO_FIXTURE_DIR = Path(__file__).parent / "fixtures" / "yahoo"
 # covered on a PERMANENTLY-unknown ``/research/*`` path, which no journey will ever ship.
 UNKNOWN_RESEARCH_PATH = "/research/nonexistent-path-canary"
 
+# clean_slate J-03: a path that WAS a real, shipped route (the journal-era `journal` MCP tool
+# proxied it) until clean_slate J-01 deleted its route handler — distinct from
+# UNKNOWN_RESEARCH_PATH above, which was NEVER real. Proves the honest-404 contract holds for an
+# actually-deleted surface, not only a synthetic canary.
+DELETED_RESEARCH_ROUTE = "/research/journal"
+
 # Live 2xx no-argument tools and their canonical endpoints.
 LIVE_STATIC = {
-    "journal": "/research/journal",
-    "analytics": "/research/analytics",
-    "studies": "/research/studies",
     "taxonomy": "/research/taxonomy",
     "ui_route_map": "/meta/ui-routes",
 }
@@ -698,6 +698,21 @@ async def test_get_endpoint_proxies_allowlisted_but_unknown_path_404_verbatim(mc
     assert result.isError is True
     assert result.content[0].text.encode("utf-8") == rest.content
     assert result.content[1].text == f"HTTP 404 from GET {UNKNOWN_RESEARCH_PATH}"
+
+
+@pytest.mark.anyio
+async def test_get_endpoint_proxies_a_deleted_route_404_verbatim(mcp_env):
+    """clean_slate J-03: unlike ``UNKNOWN_RESEARCH_PATH`` (a path that was NEVER real),
+    ``/research/journal`` WAS a real, shipped route — proxied by the now-removed ``journal`` MCP
+    tool — until clean_slate J-01 deleted its route handler. The honest-404 contract must hold
+    identically for an ACTUALLY-deleted route: the backend's real 404 payload verbatim, plus the
+    explicit status message, never a synthesized or cached response."""
+    result = await call_tool("get_endpoint", {"path": DELETED_RESEARCH_ROUTE})
+    rest = httpx.get(f"{mcp_env}{DELETED_RESEARCH_ROUTE}", timeout=5.0)
+    assert rest.status_code == 404
+    assert result.isError is True
+    assert result.content[0].text.encode("utf-8") == rest.content
+    assert result.content[1].text == f"HTTP 404 from GET {DELETED_RESEARCH_ROUTE}"
 
 
 @pytest.mark.anyio

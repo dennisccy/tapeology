@@ -88,3 +88,38 @@ J-03 has zero full-depth rubric triggers (backend-only, keyless/automated, small
 contract test); escalate to full ONLY if it requires re-rendering neutral-source framework assets
 that reference the deleted MCP tools. Carry forward: `SHOW_CASE_STUDIES=false` still unresolved for
 whoever plans J-05.
+
+## Iteration 3 — goal-clean_slate-iter-3
+
+**Date:** 2026-07-24T07:25:50Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-03
+- Newly failing: none
+- Regressed: none (J-01 held `passing`; J-02 held `passing`; J-05 stays `partial`, never was `passing`)
+- Anti-goal violations: none (scan CLEAN; diff = 2 MCP-only files; read-only MCP preserved; fingerprint
+  frozen `4d665603569b9dbf`; zero chart/historical-record/pin touch)
+
+**Reasoning:** Lean backend-only keyless demolition of the 3 dead MCP proxies. I did not trust the
+handoff: independently ran `grep -c 'types.Tool('` (=15) and listed the names (exactly the I-6 set —
+no journal/analytics/studies), grepped both touched files for the 3 identifiers (0 hits), re-ran
+`pytest tests/test_mcp_server.py` fresh (29 passed / 0 failed, exit 0 — the pre-authorized red test
+carried since iter-1 is now green), re-checked `config_fingerprint()` (=`4d665603569b9dbf`, T-3 intact),
+re-verified TC-12 (`app/mcp/` has zero importers outside its package → J-02's frontend/WS surface is
+code-isolated from this diff), and confirmed the I-9 kept-route capture shows 0 of 28 kept routes
+differing vs iter-2 (routes.py/store/engine untouched). Opened J-02-verify.png (nav = Cockpit·Structure,
+no thesis/hint/sound) and J-05-verify.png (AAPL 300.10/302.20 round wall bands render) as the two stable
+spot-checks — both corroborate their recorded status. Review PASS, coherence COHERENCE-PASS. J-04 still
+`failing` (fingerprint confirmed unmoved = its unmet state), J-05 still `partial` (scoped MCP=15 clause
+now holds; full close pending J-04 + Case Studies) → not GOAL_ACHIEVED; progress made → CONTINUE. For the
+first time since iter-1, "full suite 0 failed" is a literal claim (retires iter-1's assumptions.md
+"modulo the J-03 MCP test" reading).
+
+**Next-step recommendation:** Iteration 4 targets **J-04 (§0.4 Path B fingerprint epoch bump)** at
+**full** depth — the era's single most delicate operation (18 Config-field deletes + exclusion-set prune
++ the ONE sanctioned 13-pin-site literal update + founding-baseline re-seed appended to the append-only
+ledger + byte-identical-VALUES-only proof across recomputed caches). That dense stack of critical
+anti-goal adjacencies (pin discipline T-3, historical-record integrity, guard-weakening, no-value-change)
+and wide multi-file blast radius warrants the audit/coherence/closure lanes. Carry forward:
+`SHOW_CASE_STUDIES=false` (`apps/frontend/app/structure/page.tsx:335`) still unresolved before J-05 closes.

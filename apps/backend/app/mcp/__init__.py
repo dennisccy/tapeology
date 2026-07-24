@@ -83,9 +83,6 @@ def api_base() -> str:
 # substitute the (URL-quoted) ticker; ``get_endpoint`` proxies any allowlisted GET path verbatim.
 
 _STATIC_PATHS: dict[str, str] = {
-    "journal": "/research/journal",
-    "analytics": "/research/analytics",
-    "studies": "/research/studies",
     "datasets": "/research/datasets",
     "bars": "/research/bars",
     "backtests": "/research/backtests",
@@ -171,21 +168,6 @@ TOOLS: tuple[types.Tool, ...] = (
             },
             ("ticker",),
         ),
-    ),
-    types.Tool(
-        name="journal",
-        description="Read-only proxy of GET /research/journal — the research journal rows JSON, verbatim.",
-        inputSchema=_object_schema({}),
-    ),
-    types.Tool(
-        name="analytics",
-        description="Read-only proxy of GET /research/analytics — the journal analytics JSON, verbatim.",
-        inputSchema=_object_schema({}),
-    ),
-    types.Tool(
-        name="studies",
-        description="Read-only proxy of GET /research/studies — the replay-study list JSON, verbatim.",
-        inputSchema=_object_schema({}),
     ),
     types.Tool(
         name="datasets",
