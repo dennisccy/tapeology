@@ -223,18 +223,17 @@ class ResearchRegistry:
     ``ResearchMonitor`` to every freshly-built watch engine (the WatchManager's
     ``on_engine_created`` hook) and ran a startup expiry sweep over stale theses — both were removed
     along with the journal-era thesis-declaration surfaces, so ``main.py`` no longer wires either
-    one up. ``_monitors`` and the methods below that read it are kept as inert, permanently-empty
-    plumbing this iteration ONLY because ``app/main.py``'s WS ``thesis``/``hint`` frame merge still
-    calls ``projection_for``/``hint_projection_for`` (that merge is explicitly J-02's job to remove,
-    not this iteration's) — both degrade to their own documented ``None`` normal-state answer now
-    that nothing ever populates ``_monitors``.
+    one up. J-01 kept ``_monitors``/``monitor_for``/``projection_for``/``_surviving_projection``/
+    ``hint_projection_for`` alive as inert, ``None``-returning stubs because ``app/main.py``'s WS
+    ``thesis``/``hint`` frame merge still called them. era-5D J-02 removed that WS merge — its last
+    caller — so this registry now owns exactly what its name says: the store and the two background
+    job managers, nothing else.
     """
 
     def __init__(self, store: JournalStore, config: Config) -> None:
         self._store = store
         self._config = config
         self._fingerprint = config.config_fingerprint()
-        self._monitors: dict[str, object] = {}
         # The backtest background-job manager (era-3 capability 4, J-03): cancellable worker threads
         # OFF the event loop, persistence through the SAME single writer queue, in-flight jobs
         # honestly lost on restart (never silently done).
@@ -262,46 +261,6 @@ class ResearchRegistry:
     @property
     def config(self) -> Config:
         return self._config
-
-    def monitor_for(self, ticker: str) -> object | None:
-        return self._monitors.get(ticker)
-
-    def projection_for(self, ticker: str) -> dict | None:
-        """The canonical thesis projection for ``ticker`` — always ``None`` this iteration.
-
-        era-5D J-01: ``_monitors`` is never populated anymore (see the class docstring), so this
-        always falls through to :meth:`_surviving_projection`, itself a permanent ``None`` — kept
-        callable only because ``app/main.py``'s WS ``thesis`` merge (untouched this iteration) still
-        calls it; ``None`` is that key's own documented normal state."""
-        monitor = self._monitors.get(ticker)
-        if monitor is not None:
-            projection = monitor.projection()
-            if projection is not None:
-                return projection
-        return self._surviving_projection(ticker)
-
-    def _surviving_projection(self, ticker: str) -> dict | None:
-        """Always ``None`` this iteration.
-
-        era-5D J-01: this used to serve a surviving entry-marked active thesis (unwatched) via the
-        journal-era ``JournalStore.get_active_thesis``/``has_entry_mark``/``get_actions``/
-        ``verdict_events`` methods and ``monitor.build_projection`` — all deleted whole this
-        iteration (I-2/I-3). Its only remaining caller, :meth:`projection_for`, is itself only
-        reached from ``app/main.py``'s WS ``thesis`` merge (not touched this iteration, J-02's job);
-        ``None`` is that key's own documented normal state, so this never fabricates a value."""
-        return None
-
-    def hint_projection_for(self, ticker: str) -> dict | None:
-        """The canonical active-hint projection for ``ticker`` — always ``None`` this iteration.
-
-        era-5D J-01: ``_monitors`` is never populated anymore (see the class docstring), so this
-        always takes its own early-return branch below — kept callable only because
-        ``app/main.py``'s WS ``hint`` merge (untouched this iteration) still calls it; ``None`` is
-        that key's own documented normal state."""
-        monitor = self._monitors.get(ticker)
-        if monitor is None:
-            return None
-        return monitor.hint_projection()
 
 
 # The app sets this in lifespan (or a test injects one via dependency_overrides). A module-level

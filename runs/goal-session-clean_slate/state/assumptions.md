@@ -53,3 +53,20 @@ text, and is codified as TC-14 in `docs/phases/goal-clean_slate-iter-2.md`.
 **Reversible:** yes — if this reading is wrong, the fix is purely evidentiary (re-label the ui-routes diff
 in the eval), not a code change; the underlying `app/meta.py` edit is required by J-02's own acceptance
 regardless of how the I-9 diff is narrated.
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** J-01's Required-still-passing check (TC-14 / I-9 protocol step 2) says every kept
+`/research`+`/tape`+`/meta` route must re-capture byte-identical except the sanctioned diffs, but the
+re-capture showed THREE diffs: the sanctioned `meta.ui-routes` shrink PLUS `research.backtests.list`
+and `research.pnl_ledger`. Read literally, two unexplained kept-route diffs are a J-01 regression signal.
+**We chose:** Scored J-01 `passing` — accepting the dev's root-cause that the 2 extra diffs are a
+launch-cwd DATA artifact (this iteration's dev-server ran with cwd `apps/backend/` and read the real
+full-history `tapeology_journal.db`; iter-1's capture read a near-empty repo-root db — different INPUT
+data, not different code). I did NOT re-run the dev's full byte-for-byte db-swap sha proof, but
+independently confirmed the decisive fact: `backtests.py`, `pnl_ledger.py`, and `store.py` (the entire
+read/serialize path for those two routes) are 0-diff vs the pre-iteration snapshot. Since the code is
+byte-identical, a differing output can only come from a differing db file, so it is not a code regression.
+**Reversible:** yes — if the operator wants strict literal I-9 byte-identity, the fix is evidentiary
+(re-capture both iter-1 and iter-2 against the SAME pinned db path), not a code change; nothing downstream
+is foreclosed.

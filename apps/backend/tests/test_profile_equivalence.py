@@ -20,7 +20,14 @@ Locked disciplines (each a J-06 acceptance clause or a coherence watchpoint):
     (``profile_candidate_warmup_min_events``) is excluded so its mere existence never moves
     ``default``'s fingerprint (pinned against the founding PnL-ledger row's committed value).
   * No engine/cockpit path outside the backtest run param may ever resolve a profile (a
-    source-scan guard), and the ``/performance`` panel offers no selection control.
+    source-scan guard).
+
+era-5D J-02 ("The Clean Slate" demolition interlude): this file's own
+``test_performance_page_offers_no_profile_selection_control`` guarded the now-deleted
+``/performance`` panel's "no selection control" constraint by reading that page's source file
+directly; the page is deleted whole (not merely stripped of its selector), so there is nothing
+left to read and the test is removed with it. Nothing else in this file concerns that page — the
+registry/config-fingerprint/backtest-overlay coverage below is untouched and stays byte-identical.
 """
 
 from __future__ import annotations
@@ -315,13 +322,3 @@ def test_resolved_for_profile_is_called_only_by_the_backtest_runner():
         if "resolved_for_profile" in path.read_text():
             callers.append(path.relative_to(app_dir).as_posix())
     assert callers == ["research/backtests.py"], callers
-
-
-def test_performance_page_offers_no_profile_selection_control():
-    # The read-only registry panel renders the profiles array verbatim (no selection affordance,
-    # the J-06 frontend constraint) — no <select>, and no hardcoded reference to the candidate id
-    # (it must render generically, from the API payload, never a client-side copy).
-    frontend_page = BACKEND_DIR.parent / "frontend" / "app" / "performance" / "page.tsx"
-    source = frontend_page.read_text()
-    assert "<select" not in source
-    assert PROFILE_CANDIDATE_FASTER_WARMUP not in source

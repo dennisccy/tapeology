@@ -1,22 +1,13 @@
 import { API_BASE, WATCH_REQUEST_TIMEOUT_MS } from "./config";
 import type {
-  Analytics,
-  AnalyticsResult,
   Backtest,
   BarCandlesPage,
   BarSeriesListResult,
   BarSeriesRecord,
   CreateBacktestParams,
-  CreateStudyParams,
-  CreateStudyResult,
   DatasetsListResult,
-  DeclareResult,
   EdgeReportComputeSnapshot,
   EdgeReportPayload,
-  Hint,
-  JournalDetail,
-  JournalFilters,
-  JournalRow,
   LevelsResponse,
   MarketClock,
   MergedCandlesPage,
@@ -27,12 +18,10 @@ import type {
   SetupDetailResult,
   SetupsListResult,
   StrategiesPayload,
-  Study,
   SymbolMatch,
   TapeHistory,
   TapeSnapshot,
   TapeTimeframeHistory,
-  ThesisProjection,
   TradabilityResponse,
   WatchParams,
 } from "./types";
@@ -406,11 +395,11 @@ export async function fetchInitialSnapshot(
   };
 }
 
-// --- Research: taxonomy, declare, active read (capability 23/24) --------------------------------
+// --- Research: taxonomy (capability 23/24) -------------------------------------------------------
 
-// GET /research/taxonomy — the single backend owner of every research label. The declare form is
-// built from this (setups, directions, per-setup level requirement). Returns null on any failure so
-// the strip can show an explicit "couldn't load the catalog" state rather than a fabricated form.
+// GET /research/taxonomy — the single backend owner of every research label (era-5D J-02: now just
+// the KEPT feed_basis + source labels, per the J-01-slimmed payload). Returns null on any failure so
+// the badge can show an explicit degraded state rather than a fabricated label.
 export async function fetchTaxonomy(): Promise<ResearchTaxonomy | null> {
   try {
     const res = await fetch(`${API_BASE}/research/taxonomy`);
@@ -418,440 +407,6 @@ export async function fetchTaxonomy(): Promise<ResearchTaxonomy | null> {
     return (await res.json()) as ResearchTaxonomy;
   } catch {
     return null;
-  }
-}
-
-// POST /research/thesis — declare a thesis with HONEST validation. The backend's 422/409/404 detail
-// is surfaced VERBATIM for an inline message (never a client-side coercion); nothing is created on
-// rejection. On success the full projection is returned. `level_price` is sent only when provided.
-export async function declareThesis(params: {
-  ticker: string;
-  setup_type: string;
-  direction: string;
-  invalidation_price: number;
-  level_price?: number | null;
-  // The optional declared-from-hint linkage (capability 33, J-65): passed when the user declares from
-  // a hint's prefill affordance. Additive — a normal declaration omits it. An unknown id is a 422.
-  declared_from_hint_id?: string | null;
-}): Promise<DeclareResult> {
-  try {
-    const body: Record<string, unknown> = {
-      ticker: params.ticker,
-      setup_type: params.setup_type,
-      direction: params.direction,
-      invalidation_price: params.invalidation_price,
-    };
-    if (params.level_price !== undefined && params.level_price !== null) {
-      body.level_price = params.level_price;
-    }
-    if (params.declared_from_hint_id) {
-      body.declared_from_hint_id = params.declared_from_hint_id;
-    }
-    const res = await fetch(`${API_BASE}/research/thesis`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return { ok: true, thesis: data.thesis, status: res.status };
-    }
-    // Surface the backend detail verbatim for the inline message (422 wrong-side / missing-or-
-    // forbidden level / unknown enum; 409 active-thesis-exists; 404 not-watched).
-    let error = "The thesis could not be declared.";
-    try {
-      const data = await res.json();
-      if (typeof data?.detail === "string") error = data.detail;
-    } catch {
-      /* keep default */
-    }
-    return { ok: false, status: res.status, error };
-  } catch {
-    return { ok: false, error: "Backend unreachable — is the API running?" };
-  }
-}
-
-// POST /research/thesis/{id}/resolve — honestly close out a USER-declared thesis (J-50). The user
-// may set ONLY `played_out` or `abandoned`; `invalidated`/`expired` are system-owned (the backend
-// returns 422). On success the backend flips the terminal status, appends the final timeline event,
-// and detaches the monitor — the next WS frame then carries `thesis: null`, so the strip returns to
-// the declare affordance on its own (the frontend derives nothing). A 409 (already resolved /
-// entry-marked-refuses-abandon) or 422 detail is surfaced VERBATIM for an inline message — never a
-// swallowed failure or a dead click.
-export async function resolveThesis(
-  thesisId: string,
-  resolution: "played_out" | "abandoned",
-): Promise<StopResult> {
-  try {
-    const res = await fetch(
-      `${API_BASE}/research/thesis/${encodeURIComponent(thesisId)}/resolve`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resolution }),
-      },
-    );
-    if (res.ok) return { ok: true };
-    let error = "The thesis could not be resolved.";
-    try {
-      const data = await res.json();
-      if (typeof data?.detail === "string") error = data.detail;
-    } catch {
-      /* keep default */
-    }
-    return { ok: false, error };
-  } catch {
-    return { ok: false, error: "Backend unreachable — is the API running?" };
-  }
-}
-
-// POST /research/thesis/{id}/action — journal the user's ACTUAL entry / exit on the active thesis
-// (J-52). This is a JOURNALING record of the user's OWN already-taken action — never a fill, never a
-// simulated execution, never an order. `price` is sent VERBATIM (the backend records it exactly as
-// submitted); the backend stamps the logical/wall time and the moment spread-at-mark itself. The
-// backend's 422 (unknown kind / non-positive or malformed price) and 409 (already resolved /
-// duplicate entry / duplicate exit / exit-before-entry) detail is surfaced VERBATIM for an inline
-// message — never a swallowed failure or a dead click. On success the next WS frame carries the
-// recorded marks on the `thesis` key, so the strip updates on its own (the frontend derives nothing).
-export async function recordAction(
-  thesisId: string,
-  kind: "entry" | "exit",
-  price: number,
-): Promise<StopResult> {
-  try {
-    const res = await fetch(
-      `${API_BASE}/research/thesis/${encodeURIComponent(thesisId)}/action`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, price }),
-      },
-    );
-    if (res.ok) return { ok: true };
-    let error = `The ${kind} mark could not be recorded.`;
-    try {
-      const data = await res.json();
-      if (typeof data?.detail === "string") error = data.detail;
-    } catch {
-      /* keep default */
-    }
-    return { ok: false, error };
-  } catch {
-    return { ok: false, error: "Backend unreachable — is the API running?" };
-  }
-}
-
-// POST /research/thesis/{id}/review — save the user's CONFIRMED review (J-57): mistake tags + an
-// optional note. The user CONFIRMS the tags (the machine only SUGGESTS them); on success the backend
-// persists the tags + note verbatim and flips the thesis to `reviewed`. The backend's validation
-// (422 unknown tag / 422 `other` without a note / 409 unresolved / 409 already-reviewed / 404 unknown
-// id) detail is surfaced VERBATIM for an inline message — never a swallowed failure or a dead click.
-// The client also blocks Save when `other` is selected without a note as a courtesy, but the backend
-// is the authority. On success the page re-reads the detail to render the persisted review.
-export async function saveReview(
-  thesisId: string,
-  mistakeTags: string[],
-  note: string | null,
-): Promise<StopResult> {
-  try {
-    const body: Record<string, unknown> = { mistake_tags: mistakeTags };
-    if (note !== null && note.trim() !== "") body.note = note;
-    const res = await fetch(
-      `${API_BASE}/research/thesis/${encodeURIComponent(thesisId)}/review`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      },
-    );
-    if (res.ok) return { ok: true };
-    let error = "The review could not be saved.";
-    try {
-      const data = await res.json();
-      if (typeof data?.detail === "string") error = data.detail;
-    } catch {
-      /* keep default */
-    }
-    return { ok: false, error };
-  } catch {
-    return { ok: false, error: "Backend unreachable — is the API running?" };
-  }
-}
-
-// The canonical thesis projection (`GET /research/thesis/active?ticker=`) is the REST counterpart
-// of the WS `thesis` key (verbatim-equal by construction — data-contract row 15). While a watch is
-// LIVE the strip reads the WS `thesis` key only (one read path per contract value). This REST fetch
-// is used ONLY when there is NO live stream — after a Stop — to discover a SURVIVING entry-marked
-// thesis (J-47): an entry-marked thesis is not orphaned by a stop, so the cockpit surface keeps
-// showing it as not-currently-evaluated (read from the SAME endpoint, never recomputed client-side).
-// Returns the projection, `null` when nothing survives (a normal state), or `null` on any error
-// (the caller simply shows the idle cockpit — no fabricated thesis).
-export async function fetchActiveThesis(
-  ticker: string,
-): Promise<ThesisProjection | null> {
-  try {
-    const res = await fetchWithTimeout(
-      `${API_BASE}/research/thesis/active?ticker=${encodeURIComponent(ticker)}`,
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return (data?.thesis as ThesisProjection | null) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-// The result of a hint-log LIST fetch (J-65). `ok` with the rows, or an explicit error so the
-// /journal hint-log view can show a styled error state rather than a blank/fabricated table.
-export interface HintsListResult {
-  ok: boolean;
-  rows: Hint[];
-  error?: string;
-}
-
-// GET /research/hints/active?ticker= — the active setup-forming hint projection (J-65). The REST
-// counterpart of the WS `hint` key (verbatim-equal by construction — data-contract row 22). While a
-// watch is LIVE the dock reads the WS `hint` key only (one read path per contract value); this REST
-// fetch exists for completeness/discoverability and isolated tests. Returns the hint, `null` when none
-// (a NORMAL state), or `null` on any error (the dock simply renders nothing — no fabricated hint).
-export async function fetchActiveHint(ticker: string): Promise<Hint | null> {
-  try {
-    const res = await fetch(
-      `${API_BASE}/research/hints/active?ticker=${encodeURIComponent(ticker)}`,
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return (data?.hint as Hint | null) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-// GET /research/hints — the ONLY serving path for the persisted hint log (J-65). Reads rows VERBATIM
-// (newest-first); the frontend recomputes nothing. Optionally filtered by ticker. An unreachable
-// backend resolves to an explicit error (never a silent empty table).
-export async function fetchHints(ticker?: string): Promise<HintsListResult> {
-  const params = new URLSearchParams();
-  if (ticker) params.set("ticker", ticker);
-  const qs = params.toString();
-  try {
-    const res = await fetch(`${API_BASE}/research/hints${qs ? `?${qs}` : ""}`);
-    if (res.ok) {
-      const data = await res.json();
-      return { ok: true, rows: (data?.rows as Hint[]) ?? [] };
-    }
-    let error = "The hint log could not be loaded.";
-    try {
-      const data = await res.json();
-      if (typeof data?.detail === "string") error = data.detail;
-    } catch {
-      /* keep default */
-    }
-    return { ok: false, rows: [], error };
-  } catch {
-    return { ok: false, rows: [], error: "Backend unreachable — is the API running?" };
-  }
-}
-
-// The result of a journal LIST fetch (J-51). `ok` with the rows, or an explicit error so the
-// /journal page can show a styled error state rather than a blank/fabricated table. A backend 422
-// (unknown enum filter) detail is surfaced verbatim — never coerced.
-export interface JournalListResult {
-  ok: boolean;
-  rows: JournalRow[];
-  error?: string;
-}
-
-// GET /research/journal — the ONLY serving path for journal rows (J-51). Filters drive a SERVER-side
-// re-fetch (the frontend does no client-side filtering). Reads rows VERBATIM; the frontend recomputes
-// nothing. An unknown enum filter is a backend 422 surfaced as an explicit error; an unreachable
-// backend resolves to an explicit error too (never a silent empty table).
-export async function fetchJournal(
-  filters: JournalFilters = {},
-): Promise<JournalListResult> {
-  const params = new URLSearchParams();
-  if (filters.ticker) params.set("ticker", filters.ticker);
-  if (filters.setup_type) params.set("setup_type", filters.setup_type);
-  if (filters.direction) params.set("direction", filters.direction);
-  if (filters.resolution) params.set("resolution", filters.resolution);
-  if (filters.status) params.set("status", filters.status);
-  const qs = params.toString();
-  try {
-    const res = await fetch(`${API_BASE}/research/journal${qs ? `?${qs}` : ""}`);
-    if (res.ok) {
-      const data = await res.json();
-      return { ok: true, rows: (data?.rows as JournalRow[]) ?? [] };
-    }
-    let error = "The journal could not be loaded.";
-    try {
-      const data = await res.json();
-      if (typeof data?.detail === "string") error = data.detail;
-    } catch {
-      /* keep default */
-    }
-    return { ok: false, rows: [], error };
-  } catch {
-    return { ok: false, rows: [], error: "Backend unreachable — is the API running?" };
-  }
-}
-
-// The result of a journal-detail fetch (J-55). `ok` with the detail, `notFound` for an unknown id
-// (the page shows an explicit honest error state, never a blank page), or a generic error.
-export interface JournalDetailResult {
-  ok: boolean;
-  detail?: JournalDetail;
-  notFound?: boolean;
-  error?: string;
-}
-
-// GET /research/journal/{id} — the ONLY serving path for the per-thesis review detail (J-55). Reads
-// the thesis + frozen statements + frozen risk flags + action marks + the append-only verdict
-// timeline + the machine-derived execution checks (computed once at resolution) VERBATIM; the page
-// recomputes nothing. A 404 (unknown id) resolves to `notFound` so the page renders an explicit
-// honest error state; an unreachable backend resolves to an explicit error too (never a blank page).
-export async function fetchJournalDetail(
-  thesisId: string,
-): Promise<JournalDetailResult> {
-  try {
-    const res = await fetch(
-      `${API_BASE}/research/journal/${encodeURIComponent(thesisId)}`,
-    );
-    if (res.ok) {
-      const data = (await res.json()) as JournalDetail;
-      return { ok: true, detail: data };
-    }
-    if (res.status === 404) {
-      return { ok: false, notFound: true, error: "No thesis with that id was found." };
-    }
-    let error = "The thesis could not be loaded.";
-    try {
-      const data = await res.json();
-      if (typeof data?.detail === "string") error = data.detail;
-    } catch {
-      /* keep default */
-    }
-    return { ok: false, error };
-  } catch {
-    return { ok: false, error: "Backend unreachable — is the API running?" };
-  }
-}
-
-// GET /research/analytics — the ONLY serving path for the segregated journal analytics (J-59). The
-// backend computes the full partitioned projection (read-only over persisted rows, never pooled); the
-// view renders it VERBATIM (display rounding only). An empty journal returns an honest empty payload
-// (partitions: []), NOT an error; an unreachable backend resolves to an explicit error (never a blank).
-export async function fetchAnalytics(): Promise<AnalyticsResult> {
-  try {
-    const res = await fetch(`${API_BASE}/research/analytics`);
-    if (res.ok) {
-      const data = (await res.json()) as Analytics;
-      return { ok: true, analytics: data };
-    }
-    let error = "The analytics could not be loaded.";
-    try {
-      const data = await res.json();
-      if (typeof data?.detail === "string") error = data.detail;
-    } catch {
-      /* keep default */
-    }
-    return { ok: false, error };
-  } catch {
-    return { ok: false, error: "Backend unreachable — is the API running?" };
-  }
-}
-
-// --- Replay studies (capability 32, J-60/J-61/J-62) ---------------------------------------------
-
-// POST /research/studies — create + START a replay study (J-60). The backend persists it ``queued``,
-// starts it as a background job, and returns the full queued projection. The backend's 422 (unknown
-// setup/direction/source, missing/forbidden level, missing window, unavailable credentials) detail is
-// surfaced VERBATIM — never coerced. `level_price` / `start` / `end` / `null_baseline_seed` are sent
-// only when provided. The frontend computes nothing — it renders the returned projection.
-export async function createStudy(params: CreateStudyParams): Promise<CreateStudyResult> {
-  try {
-    const body: Record<string, unknown> = {
-      source_kind: params.source_kind,
-      source_id: params.source_id,
-      setup_type: params.setup_type,
-      direction: params.direction,
-    };
-    if (params.level_price !== undefined && params.level_price !== null) {
-      body.level_price = params.level_price;
-    }
-    if (params.start) body.start = params.start;
-    if (params.end) body.end = params.end;
-    if (params.null_baseline_seed !== undefined) body.null_baseline_seed = params.null_baseline_seed;
-    const res = await fetch(`${API_BASE}/research/studies`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return { ok: true, study: data.study as Study, status: res.status };
-    }
-    let error = "The study could not be created.";
-    try {
-      const data = await res.json();
-      if (typeof data?.detail === "string") error = data.detail;
-    } catch {
-      /* keep default */
-    }
-    return { ok: false, status: res.status, error };
-  } catch {
-    return { ok: false, error: "Backend unreachable — is the API running?" };
-  }
-}
-
-// GET /research/studies — list studies most-recent-first. Read VERBATIM (each row is the runner's
-// persisted payload; the page recomputes nothing). Any failure resolves to an empty list with an
-// explicit error so the page shows a styled error rather than a blank/fabricated list.
-export async function fetchStudies(): Promise<{ ok: boolean; studies: Study[]; error?: string }> {
-  try {
-    const res = await fetch(`${API_BASE}/research/studies`);
-    if (res.ok) {
-      const data = await res.json();
-      return { ok: true, studies: (data?.studies as Study[]) ?? [] };
-    }
-    return { ok: false, studies: [], error: "The studies could not be loaded." };
-  } catch {
-    return { ok: false, studies: [], error: "Backend unreachable — is the API running?" };
-  }
-}
-
-// GET /research/studies/{id} — one study's status/progress + stored results, served VERBATIM. Returns
-// null on a 404 / any error (the caller keeps the prior view; never fabricates a study).
-export async function fetchStudy(studyId: string): Promise<Study | null> {
-  try {
-    const res = await fetch(`${API_BASE}/research/studies/${encodeURIComponent(studyId)}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return (data?.study as Study) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-// POST /research/studies/{id}/cancel — cancel a running/queued study (J-61). The backend's 404
-// (unknown id) / 409 (already terminal) detail is surfaced VERBATIM. On success the job resolves to
-// explicit `cancelled` with partial-marked results (the next poll shows it).
-export async function cancelStudy(studyId: string): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const res = await fetch(
-      `${API_BASE}/research/studies/${encodeURIComponent(studyId)}/cancel`,
-      { method: "POST" },
-    );
-    if (res.ok) return { ok: true };
-    let error = "The study could not be cancelled.";
-    try {
-      const data = await res.json();
-      if (typeof data?.detail === "string") error = data.detail;
-    } catch {
-      /* keep default */
-    }
-    return { ok: false, error };
-  } catch {
-    return { ok: false, error: "Backend unreachable — is the API running?" };
   }
 }
 
@@ -1143,7 +698,7 @@ export async function createBacktest(
 
 // GET /research/backtests/{id} (era-3 capability 4, J-03) — one backtest's status + stored
 // report, served VERBATIM. Returns `null` on a 404 / any error (the caller keeps the prior view;
-// never fabricates a backtest) — mirrors `fetchStudy()`'s pattern byte-for-byte.
+// never fabricates a backtest).
 export async function fetchBacktest(backtestId: string): Promise<Backtest | null> {
   try {
     const res = await fetch(`${API_BASE}/research/backtests/${encodeURIComponent(backtestId)}`);
@@ -1191,8 +746,9 @@ export async function fetchTradability(
 
 // GET /research/setups (optionally filtered by symbol/reaction/band_class — server-side,
 // AND-combined; an unknown enum `reaction`/`band_class` is a backend 422) — the touch-event
-// case-study registry, served VERBATIM. `filters` mirrors `fetchJournal`'s optional-filter-params
-// pattern; an omitted filter is left off the query string entirely (never sent as an empty param).
+// case-study registry, served VERBATIM. `filters` follows the optional-filter-params pattern used
+// elsewhere in this file; an omitted filter is left off the query string entirely (never sent as an
+// empty param).
 export async function fetchSetups(filters?: {
   symbol?: string;
   reaction?: string;
@@ -1278,8 +834,8 @@ export async function fetchEdgeReport(): Promise<{
 
 // --- era-fast_wall J-04: the operator-run edge-report compute -- POST the single-flight trigger,
 // GET the poll-while-active snapshot, POST the cooperative cancel. All three mirror
-// `createBacktest`/`fetchBacktest`/`cancelStudy`'s exact `{ok, data/…, error}` shape and
-// 422/unreachable folding byte-for-byte (both immediately above and below in this file).
+// `createBacktest`/`fetchBacktest`'s exact `{ok, data/…, error}` shape and 422/unreachable folding
+// byte-for-byte (both immediately above and below in this file).
 
 // POST /research/edge-report/compute — start (or, while one is already running, observe) the
 // single-flight compute job. Mirrors `createBacktest`'s exact shape: `data` carries the full
@@ -1332,9 +888,9 @@ export async function fetchEdgeReportCompute(): Promise<{
   }
 }
 
-// POST /research/edge-report/compute/cancel — cancel the in-flight compute job. Mirrors
-// `cancelStudy`'s exact `{ok, error?}` shape; the backend's 409 (idle) `detail` is surfaced
-// VERBATIM.
+// POST /research/edge-report/compute/cancel — cancel the in-flight compute job. Mirrors this
+// file's own `{ok, error?}` shape (the `StopResult`-family pattern); the backend's 409 (idle)
+// `detail` is surfaced VERBATIM.
 export async function cancelEdgeReportCompute(): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetch(`${API_BASE}/research/edge-report/compute/cancel`, { method: "POST" });

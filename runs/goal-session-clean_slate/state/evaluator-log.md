@@ -56,3 +56,35 @@ in the SAME commit that removes main.py's WS thesis/hint merge (they are only ke
 J-02-owned caller); (2) do NOT touch `test_mcp_server.py` (the red test is J-03's); (3) resolve
 `SHOW_CASE_STUDIES=false` (restore vs. rescope) before J-05 can close. Charts are veto-class — J-02
 browser QA must screenshot both charts working after a `rm -rf .next` clean rebuild (T-8/T-9).
+
+## Iteration 2 — goal-clean_slate-iter-2
+
+**Date:** 2026-07-24T06:03:17Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-02
+- Newly failing: none
+- Regressed: none (J-01 held passing; J-05 was `partial`, never `passing`)
+- Anti-goal violations: none (scan CLEAN; chart rails 0-diff; fingerprint frozen `4d665603569b9dbf`; no historical record touched)
+
+**Reasoning:** Full-pipeline demolition of the frontend + WS thesis/hint surfaces; four independent
+verdicts (review PASS_WITH_NOTES, QA PASS 18/18, browser-QA PASS 18/18, audit PASS_WITH_GAPS) +
+coherence COHERENCE-PASS. I did not trust the handoff: personally opened UT-08 (nav=Cockpit+Structure,
+Buyer Control settled, no thesis/hint/sound), UT-10-t2 (60s live candles + moving bars), UT-12
+(300.11–302.2 Class A wall band + overlay), UT-13 (3595 frames, 0 thesis + 0 hint keys); and
+independently verified the veto-class rails — `StructureChart.tsx` + 3 chart guard suites +
+`config.py` all 0-diff vs snapshot AND HEAD, `config_fingerprint()`=`4d665603569b9dbf`, exactly 13
+pin literals present (the `test_profile_equivalence.py` edit touches NO pin line), and the 2
+"differing" kept routes in J-01's I-9 re-capture are a launch-cwd DATA artifact (read-path
+`backtests.py`/`pnl_ledger.py`/`store.py` all 0-diff — the difference is which journal.db the server
+read, not code). J-02's every acceptance clause met → `passing`. J-03/J-04 out-of-scope `failing`
+(mcp + config files 0-diff confirm not started), J-05 scoped subset re-verified but stays `partial`
+pending J-04 → not GOAL_ACHIEVED; progress made → CONTINUE.
+
+**Next-step recommendation:** Iteration 3 targets **J-03 (MCP contract v2 — 15 tools)** at **lean**
+depth — next in the J-01→J-05 order and the journey that closes the one pre-authorized red test.
+J-03 has zero full-depth rubric triggers (backend-only, keyless/automated, small: 3 tool rows + one
+contract test); escalate to full ONLY if it requires re-rendering neutral-source framework assets
+that reference the deleted MCP tools. Carry forward: `SHOW_CASE_STUDIES=false` still unresolved for
+whoever plans J-05.

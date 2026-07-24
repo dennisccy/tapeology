@@ -1,0 +1,4125 @@
+# Review packet — bounded diff vs HEAD
+Pre-built by build_review_packet (lib/common.sh): the dispatch prompt's git diff
+commands, already run for you. Truncations and exclusions are NAMED below — run
+the git commands ONLY for files marked truncated or excluded, if they matter.
+
+# Iteration diff (bounded)
+
+Files changed: 25. Shown in full: 20.
+
+**Truncated** (over the line caps; tail omitted, noted inline or fully skipped):
+- `apps/frontend/components/AnalyticsView.tsx` (47 lines not shown)
+- `apps/frontend/components/JournalDetailView.tsx` (663 lines not shown)
+- `apps/frontend/components/ThesisStrip.tsx` (1243 lines not shown)
+- `apps/frontend/lib/api.ts` (542 lines not shown)
+- `apps/frontend/lib/types.ts` (806 lines not shown)
+
+```diff
+diff --git a/apps/backend/app/main.py b/apps/backend/app/main.py
+index 7042660..c95d1e5 100644
+--- a/apps/backend/app/main.py
++++ b/apps/backend/app/main.py
+@@ -585,44 +585,13 @@ async def stream(websocket: WebSocket, ticker: str) -> None:
+     await websocket.accept()
+     try:
+         while True:
+-            # The WS frame is the engine projection PLUS one ADDITIVE ``thesis`` key (capability 23,
+-            # data-contract row 15). The key is merged HERE at the send site — NOT inside
+-            # ``serialize_stream`` — so the engine serializers stay byte-identical (the equivalence
+-            # anti-goal / J-68). The projection is the SAME ``monitor.projection()`` that
+-            # ``GET /research/thesis/active`` returns, so REST and WS are verbatim-equal; ``null``
+-            # when no thesis is active (a normal state, never an error).
++            # era-5D J-02 ("The Clean Slate" demolition interlude): the WS frame used to carry two
++            # ADDITIVE research keys (``thesis``, ``hint``), merged here at the send site so the
++            # engine serializers stayed byte-identical. Both keys and their merge are deleted along
++            # with the journal-era thesis/hint surfaces — the frame is now the engine projection
++            # ONLY (``serialize_stream`` verbatim, single source of truth, no recompute here).
+             frame = serialize_stream(engine.snapshot())
+-            frame["thesis"] = _thesis_projection(ticker)
+-            # One additive ``hint`` key (capability 33, J-65, data-contract row 22) — the SAME
+-            # ``monitor.hint_projection()`` that ``GET /research/hints/active`` returns, so REST and WS are
+-            # verbatim-equal; ``null`` when no hint is active (a normal state, never an error). Merged HERE
+-            # at the send site so the engine serializers stay byte-identical (the equivalence anti-goal).
+-            frame["hint"] = _hint_projection(ticker)
+             await websocket.send_json(frame)
+             await asyncio.sleep(WS_PUSH_INTERVAL)
+     except WebSocketDisconnect:
+         return
+-
+-
+-def _thesis_projection(ticker: str) -> dict | None:
+-    """The active-thesis projection for ``ticker`` from the research registry, or ``None``.
+-
+-    Read-only and defensive: if the registry is not wired (e.g. an isolated unit-test app), the WS
+-    simply carries ``thesis: null`` — never an error. This is the ONE place the WS reads the thesis,
+-    so the WS key and the REST read share the single ``monitor.projection()`` source."""
+-    registry = get_registry_or_none()
+-    if registry is None:
+-        return None
+-    return registry.projection_for(ticker)
+-
+-
+-def _hint_projection(ticker: str) -> dict | None:
+-    """The active setup-forming hint projection for ``ticker`` from the research registry, or ``None``.
+-
+-    Read-only and defensive: if the registry is not wired (e.g. an isolated unit-test app), the WS simply
+-    carries ``hint: null`` — never an error. This is the ONE place the WS reads the hint, so the WS key
+-    and the REST read share the single ``monitor.hint_projection()`` source (data-contract row 22)."""
+-    registry = get_registry_or_none()
+-    if registry is None:
+-        return None
+-    return registry.hint_projection_for(ticker)
+diff --git a/apps/backend/app/meta.py b/apps/backend/app/meta.py
+index 6b54838..5199ea0 100644
+--- a/apps/backend/app/meta.py
++++ b/apps/backend/app/meta.py
+@@ -6,10 +6,13 @@ The rendered top-bar navigation (``apps/frontend/components/NavBar.tsx``) and th
+ retired; no duplicate route list (including a frontend "fallback") may exist anywhere.
+ 
+ The map lists exactly the LIVE routes at all times: a route is added here in the same
+-iteration its page ships (J-05 added ``/performance`` together with that page), so the nav can
+-never carry a dead link. ``nav`` says whether an entry is a top-bar destination —
+-``/journal/[id]`` is a real user-facing page but is reached from the journal list, not the
+-bar, so it is present with ``nav: false`` (the honest child-route representation).
++iteration its page ships, so the nav can never carry a dead link. ``nav`` says whether an
++entry is a top-bar destination.
++
++era-5D J-02 ("The Clean Slate" demolition interlude): the four journal-era rows (``/journal``,
++``/journal/[id]``, ``/studies``, ``/performance``) are removed here in the SAME iteration their
++pages are deleted (the no-dead-link rule, applied in reverse) — the map now lists exactly the
++two KEPT routes.
+ """
+ 
+ from __future__ import annotations
+@@ -23,10 +26,6 @@ router = APIRouter(prefix="/meta", tags=["meta"])
+ # the endpoint below is this module's only serving path.
+ UI_ROUTES: tuple[dict[str, object], ...] = (
+     {"path": "/", "label": "Cockpit", "nav": True},
+-    {"path": "/journal", "label": "Journal", "nav": True},
+-    {"path": "/journal/[id]", "label": "Journal detail", "nav": False},
+-    {"path": "/studies", "label": "Studies", "nav": True},
+-    {"path": "/performance", "label": "Performance", "nav": True},
+     {"path": "/structure", "label": "Structure", "nav": True},
+ )
+ 
+diff --git a/apps/backend/app/research/routes.py b/apps/backend/app/research/routes.py
+index 305e808..250fe4a 100644
+--- a/apps/backend/app/research/routes.py
++++ b/apps/backend/app/research/routes.py
+@@ -223,18 +223,17 @@ class ResearchRegistry:
+     ``ResearchMonitor`` to every freshly-built watch engine (the WatchManager's
+     ``on_engine_created`` hook) and ran a startup expiry sweep over stale theses — both were removed
+     along with the journal-era thesis-declaration surfaces, so ``main.py`` no longer wires either
+-    one up. ``_monitors`` and the methods below that read it are kept as inert, permanently-empty
+-    plumbing this iteration ONLY because ``app/main.py``'s WS ``thesis``/``hint`` frame merge still
+-    calls ``projection_for``/``hint_projection_for`` (that merge is explicitly J-02's job to remove,
+-    not this iteration's) — both degrade to their own documented ``None`` normal-state answer now
+-    that nothing ever populates ``_monitors``.
++    one up. J-01 kept ``_monitors``/``monitor_for``/``projection_for``/``_surviving_projection``/
++    ``hint_projection_for`` alive as inert, ``None``-returning stubs because ``app/main.py``'s WS
++    ``thesis``/``hint`` frame merge still called them. era-5D J-02 removed that WS merge — its last
++    caller — so this registry now owns exactly what its name says: the store and the two background
++    job managers, nothing else.
+     """
+ 
+     def __init__(self, store: JournalStore, config: Config) -> None:
+         self._store = store
+         self._config = config
+         self._fingerprint = config.config_fingerprint()
+-        self._monitors: dict[str, object] = {}
+         # The backtest background-job manager (era-3 capability 4, J-03): cancellable worker threads
+         # OFF the event loop, persistence through the SAME single writer queue, in-flight jobs
+         # honestly lost on restart (never silently done).
+@@ -263,46 +262,6 @@ class ResearchRegistry:
+     def config(self) -> Config:
+         return self._config
+ 
+-    def monitor_for(self, ticker: str) -> object | None:
+-        return self._monitors.get(ticker)
+-
+-    def projection_for(self, ticker: str) -> dict | None:
+-        """The canonical thesis projection for ``ticker`` — always ``None`` this iteration.
+-
+-        era-5D J-01: ``_monitors`` is never populated anymore (see the class docstring), so this
+-        always falls through to :meth:`_surviving_projection`, itself a permanent ``None`` — kept
+-        callable only because ``app/main.py``'s WS ``thesis`` merge (untouched this iteration) still
+-        calls it; ``None`` is that key's own documented normal state."""
+-        monitor = self._monitors.get(ticker)
+-        if monitor is not None:
+-            projection = monitor.projection()
+-            if projection is not None:
+-                return projection
+-        return self._surviving_projection(ticker)
+-
+-    def _surviving_projection(self, ticker: str) -> dict | None:
+-        """Always ``None`` this iteration.
+-
+-        era-5D J-01: this used to serve a surviving entry-marked active thesis (unwatched) via the
+-        journal-era ``JournalStore.get_active_thesis``/``has_entry_mark``/``get_actions``/
+-        ``verdict_events`` methods and ``monitor.build_projection`` — all deleted whole this
+-        iteration (I-2/I-3). Its only remaining caller, :meth:`projection_for`, is itself only
+-        reached from ``app/main.py``'s WS ``thesis`` merge (not touched this iteration, J-02's job);
+-        ``None`` is that key's own documented normal state, so this never fabricates a value."""
+-        return None
+-
+-    def hint_projection_for(self, ticker: str) -> dict | None:
+-        """The canonical active-hint projection for ``ticker`` — always ``None`` this iteration.
+-
+-        era-5D J-01: ``_monitors`` is never populated anymore (see the class docstring), so this
+-        always takes its own early-return branch below — kept callable only because
+-        ``app/main.py``'s WS ``hint`` merge (untouched this iteration) still calls it; ``None`` is
+-        that key's own documented normal state."""
+-        monitor = self._monitors.get(ticker)
+-        if monitor is None:
+-            return None
+-        return monitor.hint_projection()
+-
+ 
+ # The app sets this in lifespan (or a test injects one via dependency_overrides). A module-level
+ # holder keeps the dependency simple while still overridable.
+diff --git a/apps/backend/tests/test_meta_routes.py b/apps/backend/tests/test_meta_routes.py
+index 4ad9666..319c45a 100644
+--- a/apps/backend/tests/test_meta_routes.py
++++ b/apps/backend/tests/test_meta_routes.py
+@@ -3,8 +3,13 @@
+ The route-map module is the SINGLE owner of the list of user-facing routes: the rendered
+ top-bar navigation and the MCP ``ui_route_map`` tool both read this endpoint verbatim — no
+ hand-maintained duplicate list may exist anywhere else. The map lists exactly the LIVE routes
+-at all times (a route ships here in the same iteration its page ships): ``/performance``
+-entered the map at J-05 together with its page — the nav never renders a dead link.
++at all times (a route ships here in the same iteration its page ships).
++
++era-5D J-02 ("The Clean Slate" demolition interlude): the four journal-era rows (``/journal``,
++``/journal/[id]``, ``/studies``, ``/performance``) are deleted along with their pages — the map
++now lists exactly the two KEPT routes, Cockpit and Structure. The dropped
++``test_ui_routes_includes_performance_now_its_page_ships`` and
++``test_ui_routes_represents_journal_detail_honestly`` asserted routes that no longer exist.
+ 
+ Uses a lifespan-less ``TestClient`` (the existing ``test_api.py`` precedent): the meta router
+ has no registry/engine dependencies, so no store injection is needed.
+@@ -18,16 +23,12 @@ client = TestClient(app)
+ 
+ 
+ def test_ui_routes_lists_exactly_the_live_routes():
+-    """The payload is byte-stable and lists exactly the six live routes, in nav order."""
++    """The payload is byte-stable and lists exactly the two live routes, in nav order."""
+     response = client.get("/meta/ui-routes")
+     assert response.status_code == 200
+     assert response.json() == {
+         "routes": [
+             {"path": "/", "label": "Cockpit", "nav": True},
+-            {"path": "/journal", "label": "Journal", "nav": True},
+-            {"path": "/journal/[id]", "label": "Journal detail", "nav": False},
+-            {"path": "/studies", "label": "Studies", "nav": True},
+-            {"path": "/performance", "label": "Performance", "nav": True},
+             {"path": "/structure", "label": "Structure", "nav": True},
+         ]
+     }
+@@ -43,15 +44,6 @@ def test_ui_routes_every_entry_carries_path_and_label():
+         assert isinstance(entry["nav"], bool)
+ 
+ 
+-def test_ui_routes_includes_performance_now_its_page_ships():
+-    """J-05 ships /performance WITH its nav entry (page and entry land in the SAME iteration —
+-    the no-dead-link rule): exactly one ``/performance`` entry, labeled Performance, nav-true."""
+-    routes = client.get("/meta/ui-routes").json()["routes"]
+-    performance = [r for r in routes if r["path"] == "/performance"]
+-    assert len(performance) == 1
+-    assert performance[0] == {"path": "/performance", "label": "Performance", "nav": True}
+-
+-
+ def test_ui_routes_includes_structure_now_its_page_ships():
+     """J-01 (this interlude) ships /structure WITH its nav entry (page and entry land in the SAME
+     iteration — the no-dead-link rule): exactly one ``/structure`` entry, labeled Structure,
+@@ -63,24 +55,12 @@ def test_ui_routes_includes_structure_now_its_page_ships():
+ 
+ 
+ def test_ui_routes_top_bar_entries_match_the_rendered_nav_set():
+-    """The nav filters ``nav: true`` — exactly Cockpit / Journal / Studies / Performance /
+-    Structure (six entries in the map, five of them top-bar destinations)."""
++    """The nav filters ``nav: true`` — exactly Cockpit / Structure (two entries in the map, both
++    top-bar destinations, per era-5D J-02's demolition of the journal/studies/performance rows)."""
+     routes = client.get("/meta/ui-routes").json()["routes"]
+     top_bar = [(r["path"], r["label"]) for r in routes if r["nav"]]
+-    assert len(routes) == 6
++    assert len(routes) == 2
+     assert top_bar == [
+         ("/", "Cockpit"),
+-        ("/journal", "Journal"),
+-        ("/studies", "Studies"),
+-        ("/performance", "Performance"),
+         ("/structure", "Structure"),
+     ]
+-
+-
+-def test_ui_routes_represents_journal_detail_honestly():
+-    """``/journal/[id]`` exists as a real page but is not a top-bar destination: present in the
+-    map (the map lists ALL live user-facing routes), excluded from the nav via ``nav: false``."""
+-    routes = client.get("/meta/ui-routes").json()["routes"]
+-    detail = [r for r in routes if r["path"] == "/journal/[id]"]
+-    assert len(detail) == 1
+-    assert detail[0]["nav"] is False
+diff --git a/apps/backend/tests/test_profile_equivalence.py b/apps/backend/tests/test_profile_equivalence.py
+index 0b11013..36725d0 100644
+--- a/apps/backend/tests/test_profile_equivalence.py
++++ b/apps/backend/tests/test_profile_equivalence.py
+@@ -20,7 +20,14 @@ Locked disciplines (each a J-06 acceptance clause or a coherence watchpoint):
+     (``profile_candidate_warmup_min_events``) is excluded so its mere existence never moves
+     ``default``'s fingerprint (pinned against the founding PnL-ledger row's committed value).
+   * No engine/cockpit path outside the backtest run param may ever resolve a profile (a
+-    source-scan guard), and the ``/performance`` panel offers no selection control.
++    source-scan guard).
++
++era-5D J-02 ("The Clean Slate" demolition interlude): this file's own
++``test_performance_page_offers_no_profile_selection_control`` guarded the now-deleted
++``/performance`` panel's "no selection control" constraint by reading that page's source file
++directly; the page is deleted whole (not merely stripped of its selector), so there is nothing
++left to read and the test is removed with it. Nothing else in this file concerns that page — the
++registry/config-fingerprint/backtest-overlay coverage below is untouched and stays byte-identical.
+ """
+ 
+ from __future__ import annotations
+@@ -315,13 +322,3 @@ def test_resolved_for_profile_is_called_only_by_the_backtest_runner():
+         if "resolved_for_profile" in path.read_text():
+             callers.append(path.relative_to(app_dir).as_posix())
+     assert callers == ["research/backtests.py"], callers
+-
+-
+-def test_performance_page_offers_no_profile_selection_control():
+-    # The read-only registry panel renders the profiles array verbatim (no selection affordance,
+-    # the J-06 frontend constraint) — no <select>, and no hardcoded reference to the candidate id
+-    # (it must render generically, from the API payload, never a client-side copy).
+-    frontend_page = BACKEND_DIR.parent / "frontend" / "app" / "performance" / "page.tsx"
+-    source = frontend_page.read_text()
+-    assert "<select" not in source
+-    assert PROFILE_CANDIDATE_FASTER_WARMUP not in source
+diff --git a/apps/frontend/app/journal/[id]/page.tsx b/apps/frontend/app/journal/[id]/page.tsx
+deleted file mode 100644
+index 6feadaa..0000000
+--- a/apps/frontend/app/journal/[id]/page.tsx
++++ /dev/null
+@@ -1,124 +0,0 @@
+-"use client";
+-
+-import { use, useCallback, useEffect, useState } from "react";
+-import Link from "next/link";
+-import { fetchJournalDetail, fetchTaxonomy } from "@/lib/api";
+-import type { JournalDetail, ResearchTaxonomy } from "@/lib/types";
+-import { JournalDetailView } from "@/components/JournalDetailView";
+-
+-// The /journal/[id] review-detail page (J-54 / J-55): the per-thesis honest review surface under the
+-// Journal home. Rendered ENTIRELY from the single GET /research/journal/{id} response + taxonomy
+-// labels — the frontend recomputes NOTHING (every value is a verbatim read of the persisted record).
+-//
+-// What it shows (all from the one response): the frozen expected-behaviour statements with their
+-// final statuses, the append-only verdict timeline at TRUE clock time (each transition carrying its
+-// evidence verbatim, gap events explicit), the frozen entry risk-flag chips (absent => honest "not
+-// assessed"), the action marks (price + time + spread-at-mark, realized R only when both marks
+-// exist), the machine-derived execution checks with evidence, and the suggested mistake tags
+-// pre-selected + toggleable in a (not-yet-savable) picker. An unknown id renders an explicit honest
+-// error state (never a blank page).
+-//
+-// Copy register (J-66): descriptive, thesis-attributed; "Descriptive only — not trading advice"
+-// extends here verbatim. No imperative or predictive wording. Dark instrument-panel style.
+-
+-export default function JournalDetailPage({
+-  params,
+-}: {
+-  params: Promise<{ id: string }>;
+-}) {
+-  // Next 15 passes route params as a Promise to client pages — unwrap with `use`.
+-  const { id } = use(params);
+-
+-  const [taxonomy, setTaxonomy] = useState<ResearchTaxonomy | null>(null);
+-  const [detail, setDetail] = useState<JournalDetail | null>(null);
+-  const [loading, setLoading] = useState(true);
+-  const [error, setError] = useState<string | null>(null);
+-  const [notFound, setNotFound] = useState(false);
+-
+-  useEffect(() => {
+-    let alive = true;
+-    fetchTaxonomy().then((t) => {
+-      if (alive) setTaxonomy(t);
+-    });
+-    return () => {
+-      alive = false;
+-    };
+-  }, []);
+-
+-  const load = useCallback(async () => {
+-    setLoading(true);
+-    setError(null);
+-    setNotFound(false);
+-    const result = await fetchJournalDetail(id);
+-    if (result.ok && result.detail) {
+-      setDetail(result.detail);
+-    } else {
+-      setDetail(null);
+-      setNotFound(!!result.notFound);
+-      setError(result.error ?? "The thesis could not be loaded.");
+-    }
+-    setLoading(false);
+-  }, [id]);
+-
+-  useEffect(() => {
+-    load();
+-  }, [load]);
+-
+-  return (
+-    <div className="min-h-screen">
+-      <main className="mx-auto max-w-5xl px-4 py-6">
+-        <header className="mb-4">
+-          <Link
+-            href="/journal"
+-            data-testid="back-to-journal"
+-            className="inline-flex items-center gap-1 rounded px-1 text-sm text-slate-400 transition-colors hover:text-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+-          >
+-            <span aria-hidden="true">←</span> Back to journal
+-          </Link>
+-          <h1 className="mt-2 text-lg font-semibold text-slate-200">Review</h1>
+-          <p className="mt-1 text-sm text-slate-500">
+-            What you expected, what the tape did, what you did, and what the execution checks found.
+-            Descriptive only — not trading advice.
+-          </p>
+-        </header>
+-
+-        {/* Loading skeleton. */}
+-        {loading && (
+-          <div
+-            data-testid="detail-loading"
+-            className="flex min-h-[30vh] items-center justify-center rounded-lg border border-slate-800 bg-slate-900/40"
+-          >
+-            <div className="h-3 w-3 animate-pulse rounded-full bg-slate-600" />
+-            <span className="ml-2 text-sm text-slate-500">Loading the review…</span>
+-          </div>
+-        )}
+-
+-        {/* Unknown id / error — an explicit honest error state, never a blank page. */}
+-        {!loading && (notFound || (error && !detail)) && (
+-          <div
+-            data-testid="detail-error"
+-            role="alert"
+-            className="rounded-lg border border-rose-700/70 bg-rose-900/30 px-4 py-6 text-center"
+-          >
+-            <p className="text-sm font-medium text-rose-200">
+-              {notFound ? "This thesis was not found." : error}
+-            </p>
+-            <p className="mt-1 text-xs text-rose-300/80">
+-              It may have been removed, or the id is wrong.
+-            </p>
+-            <Link
+-              href="/journal"
+-              className="mt-3 inline-block rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+-            >
+-              Return to the journal
+-            </Link>
+-          </div>
+-        )}
+-
+-        {!loading && detail && (
+-          <JournalDetailView detail={detail} taxonomy={taxonomy} onSaved={load} />
+-        )}
+-      </main>
+-    </div>
+-  );
+-}
+diff --git a/apps/frontend/app/journal/page.tsx b/apps/frontend/app/journal/page.tsx
+deleted file mode 100644
+index 1985e44..0000000
+--- a/apps/frontend/app/journal/page.tsx
++++ /dev/null
+@@ -1,271 +0,0 @@
+-"use client";
+-
+-import { useCallback, useEffect, useState } from "react";
+-import { fetchAnalytics, fetchHints, fetchJournal, fetchTaxonomy } from "@/lib/api";
+-import type {
+-  Analytics,
+-  Hint,
+-  JournalFilters,
+-  JournalRow,
+-  ResearchTaxonomy,
+-} from "@/lib/types";
+-import { JournalTable } from "@/components/JournalTable";
+-import { JournalFilterBar } from "@/components/JournalFilterBar";
+-import { AnalyticsView } from "@/components/AnalyticsView";
+-import { HintLog } from "@/components/HintLog";
+-
+-// The /journal page (J-51 + J-59): the research record. Two VIEWS within the one page (no new route,
+-// no new nav entry — the blueprint-registered home for J-59):
+-//   * "Theses" (the DEFAULT) — the filterable table of every thesis ever declared (J-51), read
+-//     VERBATIM from GET /research/journal. The default is unchanged so existing J-50/J-51 captures
+-//     are unaffected.
+-//   * "Analytics" (J-59) — the segregated aggregates from GET /research/analytics, rendered VERBATIM:
+-//     per (data_feed, config_fingerprint) partition, per setup × direction group, never pooled.
+-//
+-// The frontend does NO business logic: filters drive a SERVER-side re-fetch; the analytics payload is
+-// computed server-side and rendered verbatim (display rounding only). Loading / error / empty states
+-// are all handled. Dark instrument-panel style, consistent with the cockpit.
+-
+-type JournalViewMode = "theses" | "analytics" | "hints";
+-
+-export default function JournalPage() {
+-  const [taxonomy, setTaxonomy] = useState<ResearchTaxonomy | null>(null);
+-  const [view, setView] = useState<JournalViewMode>("theses");
+-
+-  // --- theses view state (J-51) ---
+-  const [rows, setRows] = useState<JournalRow[]>([]);
+-  const [filters, setFilters] = useState<JournalFilters>({});
+-  const [loading, setLoading] = useState(true);
+-  const [error, setError] = useState<string | null>(null);
+-
+-  // --- analytics view state (J-59) ---
+-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+-  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+-
+-  // --- hints view state (J-65) ---
+-  const [hints, setHints] = useState<Hint[]>([]);
+-  const [hintsLoading, setHintsLoading] = useState(false);
+-  const [hintsError, setHintsError] = useState<string | null>(null);
+-  const [hintsLoaded, setHintsLoaded] = useState(false);
+-
+-  // Load the taxonomy once (display labels — the frontend hardcodes none).
+-  useEffect(() => {
+-    let alive = true;
+-    fetchTaxonomy().then((t) => {
+-      if (alive) setTaxonomy(t);
+-    });
+-    return () => {
+-      alive = false;
+-    };
+-  }, []);
+-
+-  const load = useCallback(async (active: JournalFilters) => {
+-    setLoading(true);
+-    setError(null);
+-    const result = await fetchJournal(active);
+-    setRows(result.rows);
+-    if (!result.ok) setError(result.error ?? "The journal could not be loaded.");
+-    setLoading(false);
+-  }, []);
+-
+-  // Re-fetch the theses list whenever a filter changes (server-side). A small debounce on the ticker
+-  // text avoids a request per keystroke while keeping every filter purely server-driven.
+-  useEffect(() => {
+-    const handle = setTimeout(() => {
+-      load(filters);
+-    }, 200);
+-    return () => clearTimeout(handle);
+-  }, [filters, load]);
+-
+-  // Load the analytics payload when the analytics view is opened (and refresh on each re-open so a
+-  // newly-resolved thesis shows up). Read-only server-side aggregation — the page renders it verbatim.
+-  const loadAnalytics = useCallback(async () => {
+-    setAnalyticsLoading(true);
+-    setAnalyticsError(null);
+-    const result = await fetchAnalytics();
+-    if (result.ok && result.analytics) {
+-      setAnalytics(result.analytics);
+-    } else {
+-      setAnalyticsError(result.error ?? "The analytics could not be loaded.");
+-    }
+-    setAnalyticsLoading(false);
+-  }, []);
+-
+-  useEffect(() => {
+-    if (view === "analytics") loadAnalytics();
+-  }, [view, loadAnalytics]);
+-
+-  // Load the persisted hint log when the hints view is opened (and refresh on each re-open so a newly
+-  // logged hint shows up). Read-only — the page renders each record verbatim. The hint log is its OWN
+-  // view; analytics is untouched (the spec's "no analytics change beyond none").
+-  const loadHints = useCallback(async () => {
+-    setHintsLoading(true);
+-    setHintsError(null);
+-    const result = await fetchHints();
+-    if (result.ok) {
+-      setHints(result.rows);
+-      setHintsLoaded(true);
+-    } else {
+-      setHintsError(result.error ?? "The hint log could not be loaded.");
+-    }
+-    setHintsLoading(false);
+-  }, []);
+-
+-  useEffect(() => {
+-    if (view === "hints") loadHints();
+-  }, [view, loadHints]);
+-
+-  return (
+-    <div className="min-h-screen">
+-      <main className="mx-auto max-w-7xl px-4 py-6">
+-        <header className="mb-4">
+-          <h1 className="text-lg font-semibold text-slate-200">Journal</h1>
+-          <p className="mt-1 text-sm text-slate-500">
+-            Every thesis you declared — resolved, expired, abandoned, or active — recorded and
+-            restart-proof. Descriptive only — not trading advice.
+-          </p>
+-        </header>
+-
+-        {/* The view toggle (J-59) — one control, the thesis table is the default. */}
+-        <div
+-          data-testid="journal-view-toggle"
+-          role="tablist"
+-          aria-label="Journal view"
+-          className="mb-4 inline-flex rounded-lg border border-slate-800 bg-slate-900/40 p-0.5"
+-        >
+-          <ViewTab
+-            label="Theses"
+-            active={view === "theses"}
+-            onClick={() => setView("theses")}
+-            testid="journal-view-theses"
+-          />
+-          <ViewTab
+-            label="Analytics"
+-            active={view === "analytics"}
+-            onClick={() => setView("analytics")}
+-            testid="journal-view-analytics"
+-          />
+-          <ViewTab
+-            label={taxonomy?.hints?.copy.log_title ?? "Hints"}
+-            active={view === "hints"}
+-            onClick={() => setView("hints")}
+-            testid="journal-view-hints"
+-          />
+-        </div>
+-
+-        {view === "hints" ? (
+-          <>
+-            {/* Hint-log error — a styled alert (never a blank/fabricated view). */}
+-            {hintsError && (
+-              <div
+-                data-testid="hint-log-error"
+-                role="alert"
+-                className="mb-4 rounded-lg border border-rose-700/70 bg-rose-900/30 px-4 py-3 text-sm text-rose-200"
+-              >
+-                {hintsError}
+-              </div>
+-            )}
+-
+-            {hintsLoading && !hintsLoaded && !hintsError ? (
+-              <div
+-                data-testid="hint-log-loading"
+-                className="flex min-h-[30vh] items-center justify-center rounded-lg border border-slate-800 bg-slate-900/40"
+-              >
+-                <div className="h-3 w-3 animate-pulse rounded-full bg-slate-600" />
+-                <span className="ml-2 text-sm text-slate-500">Loading the hint log…</span>
+-              </div>
+-            ) : hintsLoaded ? (
+-              <HintLog rows={hints} taxonomy={taxonomy} />
+-            ) : null}
+-          </>
+-        ) : view === "theses" ? (
+-          <>
+-            <JournalFilterBar filters={filters} taxonomy={taxonomy} onChange={setFilters} />
+-
+-            {/* Error — a styled alert (never a blank/fabricated table). */}
+-            {error && (
+-              <div
+-                data-testid="journal-error"
+-                role="alert"
+-                className="mb-4 rounded-lg border border-rose-700/70 bg-rose-900/30 px-4 py-3 text-sm text-rose-200"
+-              >
+-                {error}
+-              </div>
+-            )}
+-
+-            {/* Loading skeleton — shown only on the first load (a filter re-fetch keeps the prior
+-                rows visible to avoid a flash). */}
+-            {loading && rows.length === 0 && !error ? (
+-              <div
+-                data-testid="journal-loading"
+-                className="flex min-h-[30vh] items-center justify-center rounded-lg border border-slate-800 bg-slate-900/40"
+-              >
+-                <div className="h-3 w-3 animate-pulse rounded-full bg-slate-600" />
+-                <span className="ml-2 text-sm text-slate-500">Loading the journal…</span>
+-              </div>
+-            ) : (
+-              <JournalTable rows={rows} taxonomy={taxonomy} />
+-            )}
+-          </>
+-        ) : (
+-          <>
+-            {/* Analytics error — a styled alert (never a blank/fabricated view). */}
+-            {analyticsError && (
+-              <div
+-                data-testid="analytics-error"
+-                role="alert"
+-                className="mb-4 rounded-lg border border-rose-700/70 bg-rose-900/30 px-4 py-3 text-sm text-rose-200"
+-              >
+-                {analyticsError}
+-              </div>
+-            )}
+-
+-            {analyticsLoading && analytics === null && !analyticsError ? (
+-              <div
+-                data-testid="analytics-loading"
+-                className="flex min-h-[30vh] items-center justify-center rounded-lg border border-slate-800 bg-slate-900/40"
+-              >
+-                <div className="h-3 w-3 animate-pulse rounded-full bg-slate-600" />
+-                <span className="ml-2 text-sm text-slate-500">Loading the analytics…</span>
+-              </div>
+-            ) : analytics ? (
+-              <AnalyticsView analytics={analytics} taxonomy={taxonomy} />
+-            ) : null}
+-          </>
+-        )}
+-      </main>
+-    </div>
+-  );
+-}
+-
+-// One view-toggle tab — hover / focus / active states per the design discipline.
+-function ViewTab({
+-  label,
+-  active,
+-  onClick,
+-  testid,
+-}: {
+-  label: string;
+-  active: boolean;
+-  onClick: () => void;
+-  testid: string;
+-}) {
+-  return (
+-    <button
+-      type="button"
+-      role="tab"
+-      aria-selected={active}
+-      data-testid={testid}
+-      data-active={active}
+-      onClick={onClick}
+-      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 ${
+-        active
+-          ? "bg-slate-800 text-slate-100"
+-          : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 active:bg-slate-800"
+-      }`}
+-    >
+-      {label}
+-    </button>
+-  );
+-}
+diff --git a/apps/frontend/app/page.tsx b/apps/frontend/app/page.tsx
+index 801de5b..76230fa 100644
+--- a/apps/frontend/app/page.tsx
++++ b/apps/frontend/app/page.tsx
+@@ -8,20 +8,11 @@ import {
+   pauseTicker,
+   resumeTicker,
+   setReplaySpeed,
+-  fetchActiveThesis,
+ } from "@/lib/api";
+-import type {
+-  DataSourceMode,
+-  FailureReason,
+-  Hint,
+-  ThesisProjection,
+-  WatchParams,
+-} from "@/lib/types";
++import type { DataSourceMode, FailureReason, WatchParams } from "@/lib/types";
+ import { TopBar } from "@/components/TopBar";
+ import { Cockpit } from "@/components/Cockpit";
+ import { PriceChart } from "@/components/PriceChart";
+-import { ThesisStrip } from "@/components/ThesisStrip";
+-import type { ThesisPrefill } from "@/components/ThesisStrip";
+ import {
+   IdleState,
+   ConnectingState,
+@@ -53,30 +44,6 @@ export default function Page() {
+   // "Connecting to <SYMBOL>…". Cleared/replaced when the watch resolves (cockpit / honest panel /
+   // error). It carries the symbol so the acknowledgement is distinct per click, in every mode.
+   const [pending, setPending] = useState<string | null>(null);
+-  // J-47: a SURVIVING entry-marked thesis on a stopped watch. A real position is never orphaned —
+-  // after Stop we read GET /research/thesis/active for the stopped ticker and, if an entry-marked
+-  // thesis survives (monitor_status: not_evaluated), keep showing it in the cockpit surface as
+-  // not-currently-evaluated instead of dropping to the idle screen. Cleared the moment a new watch
+-  // starts (the live WS `thesis` key becomes the source of truth again).
+-  const [survivingThesis, setSurvivingThesis] = useState<ThesisProjection | null>(
+-    null,
+-  );
+-  // J-65: a hint-dock declare request. Set when the user clicks a hint's declare affordance — it seeds
+-  // the thesis strip's declare form (setup + direction) and carries the hint id for the declared-from
+-  // linkage. The `nonce` increments per click so the same hint can re-prefill. Invalidation is NEVER
+-  // seeded — the user types it (one click never creates a thesis).
+-  const [hintPrefill, setHintPrefill] = useState<ThesisPrefill | null>(null);
+-
+-  // Prefill the declare form from an active hint (J-65). Bumps the nonce so the strip re-applies even
+-  // if the same hint is clicked again. The strip leaves invalidation empty + required.
+-  function handleHintDeclare(hint: Hint) {
+-    setHintPrefill((prev) => ({
+-      setup_type: hint.setup_type,
+-      direction: hint.direction,
+-      hintId: hint.id,
+-      nonce: (prev?.nonce ?? 0) + 1,
+-    }));
+-  }
+   // When a real-mode Watch is honestly refused, show the distinct non-cockpit panel for that
+   // reason in place of the cockpit — never a fabricated cockpit, never a fall-back to Simulated.
+   const [failure, setFailure] = useState<{
+@@ -108,9 +75,6 @@ export default function Page() {
+     }
+     setError(null);
+     setFailure(null);
+-    // A new watch is starting — the live WS `thesis` key becomes the source of truth again, so drop
+-    // any surviving not-evaluated thesis we were showing from the prior stop (J-47).
+-    setSurvivingThesis(null);
+     // J-21: acknowledge the click NOW — synchronously, before the awaited teardown/watch round-
+     // trip — so the idle screen never lingers after a valid Watch click in any mode.
+     setPending(candidate);
+@@ -139,7 +103,6 @@ export default function Page() {
+     setError(null);
+     setFailure(null);
+     setPending(null);
+-    setSurvivingThesis(null);
+     setMode(next);
+   }
+ 
+@@ -153,15 +116,6 @@ export default function Page() {
+     setTicker(null);
+     setPending(null);
+     setError(null);
+-    // J-47: a real position is never orphaned. After stopping, read the canonical active-thesis
+-    // endpoint for the stopped ticker; if an ENTRY-MARKED thesis SURVIVES (monitor_status:
+-    // not_evaluated), keep showing it in the cockpit surface as not-currently-evaluated rather than
+-    // dropping to the idle screen. An unmarked thesis auto-expired backend-side, so this returns
+-    // null and the idle screen shows as before. Read VERBATIM — no client-side lifecycle inference.
+-    const surviving = await fetchActiveThesis(stopped);
+-    setSurvivingThesis(
+-      surviving && surviving.monitor_status === "not_evaluated" ? surviving : null,
+-    );
+   }
+ 
+   // Pause (J-19): freeze the watch WITHOUT teardown — the deliberate opposite of Stop. It MUST NOT
+@@ -252,7 +206,6 @@ export default function Page() {
+           !snapshotConnecting && (
+             <PriceChart
+               ticker={ticker}
+-              thesis={snapshot?.thesis ?? null}
+               tapeState={snapshot?.tape_state ?? null}
+             />
+           )}
+@@ -276,39 +229,13 @@ export default function Page() {
+           // acknowledgement, never the full grid over an empty tape.
+           <ConnectingState symbol={ticker ?? undefined} />
+         ) : ticker ? (
+-          <>
+-            {/* Thesis strip (J-38) — between the price chart and the panel grid. Shown only once
+-                the cockpit grid itself is shown (a live/settled snapshot), so it never appears over
+-                a waiting/connecting/failed tape. Idle = one declare line (nothing else moves);
+-                active = the WS `thesis` projection rendered verbatim. */}
+-            {snapshot &&
+-              snapshot.stream_status !== "waiting" &&
+-              snapshot.stream_status !== "connecting" &&
+-              snapshot.stream_status !== "failed" && (
+-                <ThesisStrip
+-                  ticker={ticker}
+-                  thesis={snapshot.thesis}
+-                  last={snapshot.market?.last ?? null}
+-                  prefill={hintPrefill}
+-                />
+-              )}
+-            <Cockpit snapshot={snapshot} onHintDeclare={handleHintDeclare} />
+-          </>
++          <Cockpit snapshot={snapshot} />
+         ) : failure ? (
+           <ProviderUnavailable
+             reason={failure.reason}
+             mode={failure.mode}
+             nextOpen={failure.nextOpen}
+           />
+-        ) : survivingThesis ? (
+-          // J-47: the watch was stopped but an ENTRY-MARKED thesis survives — keep it on the cockpit
+-          // surface as not-currently-evaluated (read verbatim from the projection) instead of the
+-          // idle screen, so a real position is never silently dropped. Re-watching its source
+-          // resumes live evaluation. The idle declare line stays available below.
+-          <>
+-            <ThesisStrip ticker={survivingThesis.ticker} thesis={survivingThesis} />
+-            <IdleState />
+-          </>
+         ) : (
+           <IdleState />
+         )}
+diff --git a/apps/frontend/app/performance/page.tsx b/apps/frontend/app/performance/page.tsx
+deleted file mode 100644
+index be02b71..0000000
+--- a/apps/frontend/app/performance/page.tsx
++++ /dev/null
+@@ -1,334 +0,0 @@
+-"use client";
+-
+-import { useEffect, useState } from "react";
+-import { fetchPnlLedger, fetchProfiles } from "@/lib/api";
+-import type {
+-  PnlLedger,
+-  PnlLedgerRow,
+-  PnlSplitMeasurement,
+-  ProfilesPayload,
+-} from "@/lib/types";
+-import { formatDateDMY } from "@/lib/datetime";
+-
+-// The /performance page (J-05) — the era's scorekeeping surface, reached from the fourth top-bar
+-// link (the nav renders GET /meta/ui-routes; this page ships together with its route-map entry).
+-//
+-// TWO canonical endpoints, rendered VERBATIM and nothing else:
+-//   * GET /research/pnl/ledger  (Data Contract row 32) — one append-only row per enhancement.
+-//   * GET /research/profiles    (Data Contract row 33) — the profile registry + champion pointer
+-//     (the ONLY source of the champion — never inferred from ledger provenance, never hardcoded).
+-//
+-// The page computes NOTHING: no arithmetic, no rounding, no re-formatting, no derived figures.
+-// Every numeric renders as String(value) — the same shortest round-trip decimal the API's JSON
+-// carries — so a value shown on the page equals the API value exactly (the committed
+-// reports/pnl/pnl-history.md full-precision render is the precedent). Train and hold-out are
+-// SEPARATE column groups (never pooled; no combined figure exists anywhere); each $ sits beside
+-// its R and its n; the API's `insufficient_sample` labels render as served; a founding row's
+-// null baseline renders an explicit absence marker — NEVER fabricated zeros. The visible
+-// simulated register is the API payload's `register` string — no frontend copy of it exists.
+-//
+-// States are honest and distinct: loading; backend unreachable → explicit per-panel unavailable
+-// state (the NavBar degraded-state pattern — never cached or fabricated rows); empty ledger →
+-// explicit empty state. Dark instrument-panel style consistent with /journal and /studies:
+-// slate surfaces, restrained borders, font-mono numerics, amber for degraded/insufficient.
+-
+-const NUMERIC_CELL = "px-2 py-1.5 text-right font-mono text-xs text-slate-200 whitespace-nowrap";
+-const HEADER_CELL = "px-2 py-1 text-right text-[11px] font-medium text-slate-500";
+-const LABEL_CELL = "px-2 py-1.5 text-left text-xs text-slate-400 whitespace-nowrap";
+-
+-// One measured split as one table row — the EXACT committed pnl-history.md table shape
+-// (side | split | net R | net $ | n | sample): train and hold-out stay separate rows, never
+-// pooled; values as served; the sample label driven solely by the API's `insufficient_sample`
+-// boolean and served minimum.
+-function MeasurementRow({
+-  side,
+-  split,
+-  m,
+-  minN,
+-}: {
+-  side: string;
+-  split: string;
+-  m: PnlSplitMeasurement;
+-  minN: number;
+-}) {
+-  return (
+-    <tr className="border-b border-slate-800/60 last:border-b-0">
+-      <td className={LABEL_CELL}>{side}</td>
+-      <td className={LABEL_CELL}>{split}</td>
+-      <td className={NUMERIC_CELL}>{String(m.net_r)}</td>
+-      <td className={NUMERIC_CELL}>{String(m.net_usd)}</td>
+-      <td className={NUMERIC_CELL}>{String(m.n)}</td>
+-      <td className="px-2 py-1.5 text-left">
+-        {m.insufficient_sample ? (
+-          <span className="inline-block whitespace-nowrap rounded border border-amber-800/60 bg-amber-900/20 px-1.5 py-0.5 text-[11px] text-amber-300">
+-            {`insufficient sample (n < ${minN})`}
+-          </span>
+-        ) : (
+-          <span className="text-[11px] text-slate-500">ok</span>
+-        )}
+-      </td>
+-    </tr>
+-  );
+-}
+-
+-// One ledger row: title + id + date + the split table (baseline rows, candidate rows) + provenance.
+-function LedgerRowPanel({ row, minN }: { row: PnlLedgerRow; minN: number }) {
+-  const provenance = row.provenance;
+-  return (
+-    <article
+-      data-testid="ledger-row"
+-      data-enhancement-id={row.enhancement_id}
+-      className="rounded-lg border border-slate-800 bg-slate-900/60 p-4"
+-    >
+-      <header className="mb-3">
+-        <h3 className="text-sm font-semibold text-slate-200">{row.title}</h3>
+-        <p className="mt-0.5 font-mono text-[11px] text-slate-500">{row.enhancement_id}</p>
+-        <p className="mt-0.5 text-[11px] text-slate-500">
+-          Appended <span className="font-mono text-slate-400">{formatDateDMY(row.created_utc)}</span>
+-        </p>
+-      </header>
+-
+-      <div className="overflow-x-auto">
+-        <table className="w-full border-collapse">
+-          <thead>
+-            <tr className="border-b border-slate-800">
+-              <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">side</th>
+-              <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">split</th>
+-              <th className={HEADER_CELL}>net R</th>
+-              <th className={HEADER_CELL}>net $</th>
+-              <th className={HEADER_CELL}>n</th>
+-              <th className="px-2 py-1 text-left text-[11px] font-medium text-slate-500">sample</th>
+-            </tr>
+-          </thead>
+-          <tbody>
+-            {row.baseline === null ? (
+-              <tr className="border-b border-slate-800/60">
+-                <td className={LABEL_CELL}>baseline</td>
+-                <td
+-                  colSpan={5}
+-                  data-testid="ledger-founding-marker"
+-                  className="px-2 py-1.5 text-left text-xs text-slate-500"
+-                >
+-                  no prior incumbent — founding row (the baseline side is explicitly absent, never
+-                  zeros)
+-                </td>
+-              </tr>
+-            ) : (
+-              <>
+-                <MeasurementRow side="baseline" split="train" m={row.baseline.train} minN={minN} />
+-                <MeasurementRow
+-                  side="baseline"
+-                  split="hold-out"
+-                  m={row.baseline.holdout}
+-                  minN={minN}
+-                />
+-              </>
+-            )}
+-            <MeasurementRow side="candidate" split="train" m={row.candidate.train} minN={minN} />
+-            <MeasurementRow
+-              side="candidate"
+-              split="hold-out"
+-              m={row.candidate.holdout}
+-              minN={minN}
+-            />
+-          </tbody>
+-        </table>
+-      </div>
+-
+-      <footer className="mt-3 space-y-0.5 font-mono text-[11px] text-slate-500">
+-        <p>
+-          strategy {provenance.strategy_id} · profile {provenance.profile} · fingerprint{" "}
+-          <span className="break-all">{provenance.config_fingerprint}</span>
+-        </p>
+-        <p className="break-all">
+-          train: backtest {provenance.train.backtest_id} · dataset {provenance.train.dataset_id} ·
+-          checksum {provenance.train.dataset_checksum}
+-        </p>
+-        <p className="break-all">
+-          hold-out: backtest {provenance.holdout.backtest_id} · dataset{" "}
+-          {provenance.holdout.dataset_id} · checksum {provenance.holdout.dataset_checksum}
+-        </p>
+-      </footer>
+-    </article>
+-  );
+-}
+-
+-// The explicit per-panel unavailable state (the NavBar degraded-state pattern): honestly no
+-// data — never cached or fabricated rows.
+-function UnavailablePanel({ testid, message }: { testid: string; message: string }) {
+-  return (
+-    <div
+-      data-testid={testid}
+-      className="rounded-lg border border-amber-800/60 bg-amber-900/20 px-4 py-6 text-center"
+-    >
+-      <p className="text-sm font-medium text-amber-300">{message}</p>
+-      <p className="mt-1 text-xs text-amber-200/70">
+-        Nothing cached and nothing fabricated is shown in its place.
+-      </p>
+-    </div>
+-  );
+-}
+-
+-// A quiet loading placeholder (no fabricated values — just a pulse block).
+-function LoadingPanel({ testid }: { testid: string }) {
+-  return (
+-    <div
+-      data-testid={testid}
+-      className="animate-pulse rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-6"
+-    >
+-      <div className="h-3 w-1/3 rounded bg-slate-800" />
+-      <div className="mt-3 h-3 w-2/3 rounded bg-slate-800" />
+-      <div className="mt-3 h-3 w-1/2 rounded bg-slate-800" />
+-    </div>
+-  );
+-}
+-
+-export default function PerformancePage() {
+-  // null = fetch in flight; { ok: false } resolves to the explicit unavailable state.
+-  const [ledgerResult, setLedgerResult] = useState<{
+-    ok: boolean;
+-    ledger: PnlLedger | null;
+-    error?: string;
+-  } | null>(null);
+-  const [profilesResult, setProfilesResult] = useState<{
+-    ok: boolean;
+-    profiles: ProfilesPayload | null;
+-    error?: string;
+-  } | null>(null);
+-
+-  useEffect(() => {
+-    let alive = true;
+-    fetchPnlLedger().then((result) => {
+-      if (alive) setLedgerResult(result);
+-    });
+-    fetchProfiles().then((result) => {
+-      if (alive) setProfilesResult(result);
+-    });
+-    return () => {
+-      alive = false;
+-    };
+-  }, []);
+-
+-  const ledger = ledgerResult?.ok ? ledgerResult.ledger : null;
+-  const profiles = profilesResult?.ok ? profilesResult.profiles : null;
+-
+-  return (
+-    <div className="min-h-screen">
+-      <main className="mx-auto max-w-7xl px-4 py-6">
+-        <header className="mb-4">
+-          <h1 data-testid="performance-title" className="text-lg font-semibold text-slate-200">
+-            Performance
+-          </h1>
+-          <p className="mt-1 max-w-3xl text-sm text-slate-500">
+-            The era&apos;s scorekeeping: one append-only PnL-ledger row per enhancement — net R
+-            and net $ per frozen split, each with its n — beside the current champion.
+-          </p>
+-          <p data-testid="performance-framing" className="mt-2 max-w-3xl text-xs text-slate-600">
+-            Simulated measurements of recorded historical tape under the disclosed fee/slippage
+-            assumptions — not live results, not a forecast, and not a profitability claim. Train
+-            and hold-out figures are separate and never pooled.
+-          </p>
+-        </header>
+-
+-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
+-          {/* The PnL ledger (row 32), rendered verbatim. */}
+-          <section aria-label="PnL ledger">
+-            <h2 className="mb-2 text-sm font-semibold text-slate-300">PnL ledger</h2>
+-            {ledgerResult === null ? (
+-              <LoadingPanel testid="ledger-loading" />
+-            ) : !ledgerResult.ok || ledger === null ? (
+-              <UnavailablePanel
+-                testid="ledger-unavailable"
+-                message={ledgerResult.error ?? "The PnL ledger could not be loaded."}
+-              />
+-            ) : (
+-              <div className="space-y-4">
+-                {/* The visible simulated register — the API payload's own string, verbatim. */}
+-                <p
+-                  data-testid="pnl-register"
+-                  className="rounded border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-xs text-amber-200"
+-                >
+-                  {ledger.register}
+-                </p>
+-                {ledger.rows.length === 0 ? (
+-                  <div
+-                    data-testid="ledger-empty"
+-                    className="flex min-h-[30vh] flex-col items-center justify-center rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-10 text-center"
+-                  >
+-                    <span className="text-2xl text-slate-700">∅</span>
+-                    <p className="mt-2 text-sm text-slate-500">
+-                      The PnL ledger is empty — no enhancement has been validated yet.
+-                    </p>
+-                  </div>
+-                ) : (
+-                  ledger.rows.map((row) => (
+-                    <LedgerRowPanel
+-                      key={row.enhancement_id}
+-                      row={row}
+-                      minN={ledger.min_sample_size}
+-                    />
+-                  ))
+-                )}
+-              </div>
+-            )}
+-          </section>
+-
+-          {/* The champion + profile registry (row 33), rendered verbatim. */}
+-          <aside aria-label="Champion">
+-            <h2 className="mb-2 text-sm font-semibold text-slate-300">Champion</h2>
+-            {profilesResult === null ? (
+-              <LoadingPanel testid="champion-loading" />
+-            ) : !profilesResult.ok || profiles === null ? (
+-              <UnavailablePanel
+-                testid="champion-unavailable"
+-                message={profilesResult.error ?? "The profile registry could not be loaded."}
+-              />
+-            ) : (
+-              <div
+-                data-testid="champion-summary"
+-                className="rounded-lg border border-slate-800 bg-slate-900/60 p-4"
+-              >
+-                <dl className="space-y-2">
+-                  <div className="flex items-baseline justify-between gap-2">
+-                    <dt className="text-xs text-slate-500">strategy</dt>
+-                    <dd data-testid="champion-strategy" className="font-mono text-sm text-slate-200">
+-                      {profiles.champion.strategy_id}
+-                    </dd>
+-                  </div>
+-                  <div className="flex items-baseline justify-between gap-2">
+-                    <dt className="text-xs text-slate-500">profile</dt>
+-                    <dd data-testid="champion-profile" className="font-mono text-sm text-slate-200">
+-                      {profiles.champion.profile}
+-                    </dd>
+-                  </div>
+-                </dl>
+-                <p className="mt-2 text-[11px] text-slate-600">
+-                  The current champion pointer, read verbatim from the profile registry endpoint.
+-                </p>
+-
+-                <h3 className="mt-4 text-xs font-semibold text-slate-400">Profile registry</h3>
+-                <ul className="mt-1 space-y-1">
+-                  {profiles.profiles.map((profile) => (
+-                    <li
+-                      key={profile.id}
+-                      data-testid="profile-row"
+-                      className="flex flex-wrap items-center gap-1.5 text-xs"
+-                    >
+-                      <span className="font-mono text-slate-200">{profile.id}</span>
+-                      <span className="rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] text-slate-400">
+-                        {profile.frozen ? "frozen" : "not frozen"}
+-                      </span>
+-                      <span className="rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[10px] text-slate-400">
+-                        {profile.is_default ? "default" : "candidate"}
+-                      </span>
+-                    </li>
+-                  ))}
+-                </ul>
+-              </div>
+-            )}
+-          </aside>
+-        </div>
+-      </main>
+-    </div>
+-  );
+-}
+diff --git a/apps/frontend/app/studies/page.tsx b/apps/frontend/app/studies/page.tsx
+deleted file mode 100644
+index 0b883e5..0000000
+--- a/apps/frontend/app/studies/page.tsx
++++ /dev/null
+@@ -1,171 +0,0 @@
+-"use client";
+-
+-import { useCallback, useEffect, useState } from "react";
+-import {
+-  cancelStudy,
+-  createStudy,
+-  fetchStudies,
+-  fetchStudy,
+-  fetchTaxonomy,
+-} from "@/lib/api";
+-import type { CreateStudyParams, ResearchTaxonomy, Study } from "@/lib/types";
+-import { StudyCreateForm } from "@/components/StudyCreateForm";
+-import { StudyList } from "@/components/StudyList";
+-import { StudyResultsView } from "@/components/StudyResultsView";
+-
+-// The /studies page (J-60/J-61/J-62): create, monitor, cancel, re-run, and read deterministic replay
+-// studies of the setup grammar over a chosen window — occurrence outcomes side-by-side with a seeded
+-// random-arm-time null baseline. The page does NO business logic: it POSTs the create form, polls the
+-// running job's status, and renders the runner's persisted results VERBATIM (display rounding only).
+-//
+-// All copy/labels come from the taxonomy (the frontend hardcodes none); a pre-J-60 taxonomy falls back
+-// to a minimal local register so the page never blocks render. Dark instrument-panel style, consistent
+-// with /journal: slate surfaces, restrained borders, mono numerics. Loading / empty / error states are
+-// all handled. Status colors stay within the existing semantics — slate (queued/cancelled), amber
+-// (running/partial/truncated), rose (failed) — NEVER a green "success" that reads as an edge.
+-
+-export default function StudiesPage() {
+-  const [taxonomy, setTaxonomy] = useState<ResearchTaxonomy | null>(null);
+-  const [studies, setStudies] = useState<Study[]>([]);
+-  const [loading, setLoading] = useState(true);
+-  const [listError, setListError] = useState<string | null>(null);
+-  const [createError, setCreateError] = useState<string | null>(null);
+-  const [creating, setCreating] = useState(false);
+-  const [selectedId, setSelectedId] = useState<string | null>(null);
+-
+-  // Load the taxonomy once (display labels — the frontend hardcodes none).
+-  useEffect(() => {
+-    let alive = true;
+-    fetchTaxonomy().then((t) => {
+-      if (alive) setTaxonomy(t);
+-    });
+-    return () => {
+-      alive = false;
+-    };
+-  }, []);
+-
+-  const loadStudies = useCallback(async () => {
+-    const result = await fetchStudies();
+-    setStudies(result.studies);
+-    setListError(result.ok ? null : result.error ?? "The studies could not be loaded.");
+-    setLoading(false);
+-  }, []);
+-
+-  // Initial load.
+-  useEffect(() => {
+-    loadStudies();
+-  }, [loadStudies]);
+-
+-  // Poll while any study is running/queued (status/progress flips queued → running → done). Stops
+-  // polling once everything is terminal so the page is quiet when idle.
+-  useEffect(() => {
+-    const anyActive = studies.some((s) => s.status === "queued" || s.status === "running");
+-    if (!anyActive) return;
+-    const handle = setInterval(loadStudies, 700);
+-    return () => clearInterval(handle);
+-  }, [studies, loadStudies]);
+-
+-  const onCreate = useCallback(
+-    async (params: CreateStudyParams) => {
+-      setCreating(true);
+-      setCreateError(null);
+-      const result = await createStudy(params);
+-      setCreating(false);
+-      if (result.ok && result.study) {
+-        setSelectedId(result.study.id);
+-        await loadStudies();
+-      } else {
+-        setCreateError(result.error ?? "The study could not be created.");
+-      }
+-    },
+-    [loadStudies],
+-  );
+-
+-  const onCancel = useCallback(
+-    async (studyId: string) => {
+-      await cancelStudy(studyId);
+-      await loadStudies();
+-    },
+-    [loadStudies],
+-  );
+-
+-  // The selected study for the results view (re-read fresh so the latest persisted result shows).
+-  const [selected, setSelected] = useState<Study | null>(null);
+-  useEffect(() => {
+-    if (!selectedId) {
+-      setSelected(null);
+-      return;
+-    }
+-    // Prefer the freshest copy from the list (it polls); fall back to a direct fetch.
+-    const fromList = studies.find((s) => s.id === selectedId);
+-    if (fromList) {
+-      setSelected(fromList);
+-    } else {
+-      fetchStudy(selectedId).then((s) => setSelected(s));
+-    }
+-  }, [selectedId, studies]);
+-
+-  const copy = taxonomy?.studies?.copy ?? {};
+-
+-  return (
+-    <div className="min-h-screen">
+-      <main className="mx-auto max-w-7xl px-4 py-6">
+-        <header className="mb-4">
+-          <h1 data-testid="studies-title" className="text-lg font-semibold text-slate-200">
+-            {copy.title ?? "Replay studies"}
+-          </h1>
+-          <p className="mt-1 max-w-3xl text-sm text-slate-500">
+-            {copy.intro ??
+-              "Run your setup grammar over a chosen past window and read the occurrence outcomes side-by-side with a seeded random-arm-time baseline."}
+-          </p>
+-          <p data-testid="studies-framing" className="mt-2 max-w-3xl text-xs text-slate-600">
+-            {copy.measurement_framing ??
+-              "These are journaled measurements of a replay over recorded data — not a profitability claim, an edge, a win rate, or a forecast. Descriptive only — not trading advice."}
+-          </p>
+-        </header>
+-
+-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
+-          {/* Create form + job list (left column on wide). */}
+-          <div className="space-y-6">
+-            <StudyCreateForm
+-              taxonomy={taxonomy}
+-              onCreate={onCreate}
+-              creating={creating}
+-              error={createError}
+-            />
+-            <StudyList
+-              studies={studies}
+-              loading={loading}
+-              error={listError}
+-              taxonomy={taxonomy}
+-              selectedId={selectedId}
+-              onSelect={setSelectedId}
+-              onCancel={onCancel}
+-            />
+-          </div>
+-
+-          {/* Results view (right column on wide). */}
+-          <div>
+-            {selected ? (
+-              <StudyResultsView
+-                study={selected}
+-                taxonomy={taxonomy}
+-                onRerun={onCreate}
+-              />
+-            ) : (
+-              <div
+-                data-testid="studies-no-selection"
+-                className="flex min-h-[40vh] flex-col items-center justify-center rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-10 text-center"
+-              >
+-                <span className="text-2xl text-slate-700">∅</span>
+-                <p className="mt-2 text-sm text-slate-500">
+-                  Create a study, or select one from the list, to read its results.
+-                </p>
+-              </div>
+-            )}
+-          </div>
+-        </div>
+-      </main>
+-    </div>
+-  );
+-}
+diff --git a/apps/frontend/components/AnalyticsView.tsx b/apps/frontend/components/AnalyticsView.tsx
+deleted file mode 100644
+index d78cc21..0000000
+--- a/apps/frontend/components/AnalyticsView.tsx
++++ /dev/null
+@@ -1,441 +0,0 @@
+-"use client";
+-
+-import type {
+-  Analytics,
+-  AnalyticsGroup,
+-  AnalyticsHorizonRow,
+-  AnalyticsPartition,
+-  AnalyticsTaxonomy,
+-  ResearchTaxonomy,
+-} from "@/lib/types";
+-
+-// The segregated journal analytics view (capability 31, J-59). Renders the GET /research/analytics
+-// payload VERBATIM — the frontend recomputes NOTHING (display rounding only, no client-side
+-// arithmetic, no percentages). Partition blocks are keyed by (data_feed, config_fingerprint) and are
+-// NEVER pooled (two fingerprints => two separate blocks); within each, groups are per setup × direction.
+-//
+-// Honesty discipline baked into the render (the anti-goals this rides):
+-//   * the abandonment bucket is ALWAYS shown (even 0) and counted in n (no survivorship pruning);
+-//   * a group below the min sample shows the explicit insufficient-sample marker WITH its n;
+-//   * truncated horizon counts are a SEPARATE chip, never folded into the resolved ternary buckets;
+-//   * the acted-trade block is VISUALLY SEPARATE from the confirmation-anchored block;
+-//   * median spread/R sits beside every +1R figure (the no-cost caveat as a number);
+-//   * R units only — no currency symbol, no equity curve, no win-rate-as-edge presentation anywhere.
+-// All labels/captions/framing come from the taxonomy (the frontend hardcodes none); a pre-J-59
+-// taxonomy falls back to a minimal local copy register so the view never blocks render.
+-
+-// A small helper: read an analytics copy key from the taxonomy, falling back to a provided default.
+-function copyOf(
+-  copy: AnalyticsTaxonomy | undefined,
+-  key: string,
+-  fallback: string,
+-): string {
+-  const v = copy?.[key];
+-  return typeof v === "string" && v.length > 0 ? v : fallback;
+-}
+-
+-// The taxonomy-owned display label for a setup / direction id (the frontend hardcodes none of them).
+-function labelFrom(
+-  list: { id: string; name: string }[] | undefined,
+-  id: string,
+-): string {
+-  return list?.find((e) => e.id === id)?.name ?? id.replace(/_/g, " ");
+-}
+-
+-// Display rounding ONLY (no arithmetic): an R figure to 2 dp, a spread/R to 4 dp (it is a tiny ratio),
+-// seconds to 1 dp. `null` reads as an explicit em-dash (honest absence, never a fabricated 0).
+-function fmtR(value: number | null): string {
+-  return value === null ? "—" : value.toFixed(2);
+-}
+-function fmtSpreadR(value: number | null): string {
+-  return value === null ? "—" : value.toFixed(4);
+-}
+-function fmtSeconds(value: number | null): string {
+-  return value === null ? "—" : value.toFixed(1);
+-}
+-
+-export function AnalyticsView({
+-  analytics,
+-  taxonomy,
+-}: {
+-  analytics: Analytics;
+-  taxonomy: ResearchTaxonomy | null;
+-}) {
+-  const copy = taxonomy?.analytics;
+-  const framing = copyOf(
+-    copy,
+-    "measurement_framing",
+-    "Journaled measurements of your own theses — not a profitability claim, an edge, or a forecast. Never pooled across feeds or config fingerprints.",
+-  );
+-
+-  return (
+-    <section data-testid="analytics-view" className="space-y-6">
+-      {/* The honesty framing line — always one line away from every figure (anti-goal). */}
+-      <p data-testid="analytics-framing" className="text-xs text-slate-500">
+-        {framing}
+-      </p>
+-
+-      {analytics.partitions.length === 0 ? (
+-        <div
+-          data-testid="analytics-empty"
+-          className="flex min-h-[20vh] flex-col items-center justify-center rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-10 text-center"
+-        >
+-          <span className="text-2xl text-slate-700">∅</span>
+-          <p className="mt-2 text-sm text-slate-500">
+-            {copyOf(
+-              copy,
+-              "empty",
+-              "No theses recorded yet — declare and resolve a thesis to populate the analytics.",
+-            )}
+-          </p>
+-        </div>
+-      ) : (
+-        analytics.partitions.map((partition) => (
+-          <PartitionBlock
+-            key={`${partition.data_feed}:${partition.config_fingerprint}`}
+-            partition={partition}
+-            copy={copy}
+-            minSample={analytics.min_sample_size}
+-            taxonomy={taxonomy}
+-          />
+-        ))
+-      )}
+-    </section>
+-  );
+-}
+-
+-// One (data_feed, config_fingerprint) partition — its own block. Two fingerprints render as two
+-// separate blocks (the never-pool guarantee, made visible). The FULL fingerprint is shown (mono) so
+-// records are never silently compared across fingerprints; the feed label sits beside it.
+-function PartitionBlock({
+-  partition,
+-  copy,
+-  minSample,
+-  taxonomy,
+-}: {
+-  partition: AnalyticsPartition;
+-  copy: AnalyticsTaxonomy | undefined;
+-  minSample: number;
+-  taxonomy: ResearchTaxonomy | null;
+-}) {
+-  return (
+-    <div
+-      data-testid="analytics-partition"
+-      data-feed={partition.data_feed}
+-      data-fingerprint={partition.config_fingerprint}
+-      className="rounded-lg border border-slate-800 bg-slate-900/40"
+-    >
+-      {/* Partition header — feed + the full config fingerprint (mono). The never-pool stamps. */}
+-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-800 px-4 py-3">
+-        <span className="inline-flex items-center gap-1.5 text-sm">
+-          <span className="text-xs uppercase tracking-wider text-slate-500">
+-            {copyOf(copy, "data_feed_label", "Feed")}
+-          </span>
+-          <span
+-            data-testid="partition-feed"
+-            className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs uppercase text-slate-200"
+-          >
+-            {partition.data_feed}
+-          </span>
+-        </span>
+-        <span className="inline-flex items-center gap-1.5 text-sm">
+-          <span className="text-xs uppercase tracking-wider text-slate-500">
+-            {copyOf(copy, "fingerprint_label", "Config fingerprint")}
+-          </span>
+-          <span
+-            data-testid="partition-fingerprint"
+-            title={partition.config_fingerprint}
+-            className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs text-slate-400"
+-          >
+-            {partition.config_fingerprint}
+-          </span>
+-        </span>
+-      </div>
+-
+-      {/* The per setup × direction groups. */}
+-      <div className="divide-y divide-slate-800/70">
+-        {partition.groups.map((group) => (
+-          <GroupBlock
+-            key={`${group.setup_type}:${group.direction}`}
+-            group={group}
+-            copy={copy}
+-            minSample={minSample}
+-            taxonomy={taxonomy}
+-          />
+-        ))}
+-      </div>
+-    </div>
+-  );
+-}
+-
+-// One setup × direction group within a partition.
+-function GroupBlock({
+-  group,
+-  copy,
+-  minSample,
+-  taxonomy,
+-}: {
+-  group: AnalyticsGroup;
+-  copy: AnalyticsTaxonomy | undefined;
+-  minSample: number;
+-  taxonomy: ResearchTaxonomy | null;
+-}) {
+-  const directionClass =
+-    group.direction === "long"
+-      ? "border-emerald-700/60 bg-emerald-900/20 text-emerald-300"
+-      : "border-rose-700/60 bg-rose-900/20 text-rose-300";
+-
+-  return (
+-    <div
+-      data-testid="analytics-group"
+-      data-setup={group.setup_type}
+-      data-direction={group.direction}
+-      className="px-4 py-4"
+-    >
+-      {/* Group header — setup × direction + the always-visible n and abandonment bucket. */}
+-      <div className="flex flex-wrap items-center justify-between gap-2">
+-        <div className="flex items-center gap-2">
+-          <span className="text-sm font-medium text-slate-200">
+-            {labelFrom(taxonomy?.setups, group.setup_type)}
+-          </span>
+-          <span
+-            className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${directionClass}`}
+-          >
+-            {labelFrom(taxonomy?.directions, group.direction)}
+-          </span>
+-        </div>
+-        <div className="flex items-center gap-3 text-xs">
+-          {/* n — always present (abandoned theses stay in it). */}
+-          <span data-testid="group-n" className="text-slate-400">
+-            {copyOf(copy, "n_label", "n")}{" "}
+-            <span className="font-mono text-slate-200">{group.n}</span>
+-          </span>
+-          {/* Abandonment bucket — ALWAYS shown (even 0); kept in n (no survivorship pruning). */}
+-          <span
+-            data-testid="group-abandonment"
+-            className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-slate-400"
+-          >
+-            {copyOf(copy, "abandonment_label", "Abandoned (kept in n)")}:{" "}
+-            <span className="font-mono text-slate-200">{group.abandonment}</span>
+-          </span>
+-        </div>
+-      </div>
+-
+-      {group.insufficient_sample ? (
+-        // The explicit insufficient-sample marker WITH its n — never a bare percentage on a thin pool.
+-        <div
+-          data-testid="group-insufficient-sample"
+-          className="mt-3 rounded-md border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-xs text-amber-200"
+-        >
+-          <span className="font-semibold uppercase tracking-wider">
+-            {copyOf(copy, "insufficient_sample_label", "Insufficient sample")}
+-          </span>{" "}
+-          <span className="font-mono">
+-            (n = {group.n} &lt; {minSample})
+-          </span>
+-          <p className="mt-1 text-amber-200/80">
+-            {copyOf(
+-              copy,
+-              "insufficient_sample_caption",
+-              "Below the minimum sample size — n is shown, but distributions are withheld rather than read as a measurement from too few theses.",
+-            )}
+-          </p>
+-        </div>
+-      ) : (
+-        <div className="mt-4 space-y-4">
+-          {/* --- confirmation-anchored excursion distribution (per horizon) ------------------- */}
+-          <div data-testid="group-confirmation-excursions">
+-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+-              {copyOf(
+-                copy,
+-                "confirmation_excursions_title",
+-                "From first confirmation — per-horizon outcomes (R)",
+-              )}
+-            </p>
+-            <div className="space-y-1.5">
+-              {group.confirmation_excursions.horizons.map((row) => (
+-                <HorizonRow key={row.horizon} row={row} copy={copy} />
+-              ))}
+-            </div>
+-            <p className="mt-1.5 text-[11px] text-slate-600">
+-              {copyOf(
+-                copy,
+-                "truncated_caption",
+-                "Truncated horizons are counted separately, never folded into the resolved outcomes, never extrapolated.",
+-              )}
+-            </p>
+-          </div>
+-
+-          {/* --- median time-to-confirm (honest omission when no confirmation) ---------------- */}
+-          <div
+-            data-testid="group-time-to-confirm"
+-            className="flex items-baseline gap-2 text-xs"
+-          >
+-            <span className="text-slate-400">
+-              {copyOf(copy, "time_to_confirm_label", "Median time to confirm")}:
+-            </span>
+-            {group.median_time_to_confirm === null ? (
+-              <span className="text-slate-500">
+-                {copyOf(
+-                  copy,
+-                  "time_to_confirm_absent",
+-                  "No confirmation recorded in this group.",
+-                )}
+-              </span>
+-            ) : (
+-              <span className="font-mono text-slate-200">
+-                {fmtSeconds(group.median_time_to_confirm)}{" "}
+-                {copyOf(copy, "time_to_confirm_unit", "s (logical)")}
+-              </span>
+-            )}
+-          </div>
+-
+-          {/* --- mistake-tag frequencies (USER-confirmed reviews only) ------------------------ */}
+-          <div data-testid="group-tag-frequencies">
+-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+-              {copyOf(copy, "tag_frequencies_title", "Mistake tags (your confirmed reviews)")}
+-            </p>
+-            {group.tag_frequencies.length === 0 ? (
+-              <p className="text-xs text-slate-500">
+-                {copyOf(
+-                  copy,
+-                  "tag_frequencies_absent",
+-                  "No confirmed review tags in this group yet.",
+-                )}
+-              </p>
+-            ) : (
+-              <div className="flex flex-wrap gap-1.5">
+-                {group.tag_frequencies.map((t) => (
+-                  <span
+-                    key={t.tag}
+-                    data-testid="tag-frequency"
+-                    data-tag={t.tag}
+-                    className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] text-slate-300"
+-                  >
+-                    {labelFrom(taxonomy?.mistake_tags, t.tag)}
+-                    <span className="font-mono text-slate-400">×{t.count}</span>
+-                  </span>
+-                ))}
+-              </div>
+-            )}
+-          </div>
+-
+-          {/* --- acted-trade block — VISUALLY SEPARATE from the confirmation-anchored block ---- */}
+-          <ActedTradeBlock group={group} copy={copy} />
+-        </div>
+-      )}
+-    </div>
+-  );
+-}
+-
+-// One per-horizon ternary distribution row. The three resolved-outcome chips + a SEPARATE truncated
+-// chip (never folded in), with the median spread/R beside the row (the no-cost caveat as a number).
+-function HorizonRow({
+-  row,
+-  copy,
+-}: {
+-  row: AnalyticsHorizonRow;
+-  copy: AnalyticsTaxonomy | undefined;
+-}) {
+-  return (
+-    <div
+-      data-testid="horizon-row"
+-      data-horizon={row.horizon}
+-      className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-slate-800 bg-slate-900/50 px-3 py-1.5 text-xs"
+-    >
+-      <span className="w-12 font-mono text-slate-400">{row.horizon}s</span>
+-      <span
+-        data-testid="horizon-plus"
+-        className="inline-flex items-center gap-1 rounded border border-emerald-800/60 bg-emerald-900/20 px-1.5 py-0.5 text-emerald-300"
+-      >
+-        +1R <span className="font-mono">{row["+1R_first"]}</span>
+-      </span>
+-      <span
+-        data-testid="horizon-minus"
+-        className="inline-flex items-center gap-1 rounded border border-rose-800/60 bg-rose-900/20 px-1.5 py-0.5 text-rose-300"
+-      >
+-        −1R <span className="font-mono">{row["-1R_first"]}</span>
+-      </span>
+-      <span
+-        data-testid="horizon-neither"
+-        className="inline-flex items-center gap-1 rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-slate-400"
+-      >
+-        neither <span className="font-mono">{row.neither_within_horizon}</span>
+-      </span>
+-      <span
+-        data-testid="horizon-truncated"
+-        className="inline-flex items-center gap-1 rounded border border-amber-800/60 bg-amber-900/20 px-1.5 py-0.5 text-amber-300"
+-      >
+-        {copyOf(copy, "truncated_label", "Truncated")}{" "}
+-        <span className="font-mono">{row.truncated}</span>
+-      </span>
+-      {/* median spread / R — beside the +1R figure (the no-cost caveat as a number). */}
+-      <span
+-        data-testid="horizon-spread-per-r"
+-        className="ml-auto text-slate-500"
+-      >
+-        {copyOf(copy, "spread_per_r_caption", "median spread / R")}:{" "}
+-        <span className="font-mono text-slate-300">
+-          {fmtSpreadR(row.median_spread_per_r)}
+-        </span>
+-      </span>
+-    </div>
+-  );
+-}
+-
+-// The acted-trade (entry+exit-marked) block — kept STRUCTURALLY apart from the confirmation-anchored
+-// figures (its own bordered card, its own n). Realized move in R only — never currency, never P&L.
+-function ActedTradeBlock({
+-  group,
+-  copy,
+-}: {
+-  group: AnalyticsGroup;
+-  copy: AnalyticsTaxonomy | undefined;
+-}) {
+... [diff_bound] apps/frontend/components/AnalyticsView.tsx: 47 more diff lines omitted — Read the file for full detail
+diff --git a/apps/frontend/components/Cockpit.tsx b/apps/frontend/components/Cockpit.tsx
+index 7e1af93..c733337 100644
+--- a/apps/frontend/components/Cockpit.tsx
++++ b/apps/frontend/components/Cockpit.tsx
+@@ -1,21 +1,16 @@
+-import type { Hint, TapeSnapshot } from "@/lib/types";
++import type { TapeSnapshot } from "@/lib/types";
+ import { QuotePanel } from "./QuotePanel";
+ import { RecentTradesPanel } from "./RecentTradesPanel";
+ import { FeaturesPanel } from "./FeaturesPanel";
+ import { TapeStatePanel } from "./TapeStatePanel";
+-import { HintDock } from "./HintDock";
+ import { ObservationsPanel } from "./ObservationsPanel";
+ import { EventLogPanel } from "./EventLogPanel";
+ import { ConnectingState, WaitingState } from "./IdleState";
+ 
+ export function Cockpit({
+   snapshot,
+-  onHintDeclare,
+ }: {
+   snapshot: TapeSnapshot | null;
+-  // Prefill the thesis declare form from an active hint's declare affordance (J-65). Lifted to the
+-  // page so the dock (under the tape-state panel) can drive the thesis strip (above the grid).
+-  onHintDeclare?: (hint: Hint) => void;
+ }) {
+   if (!snapshot) return <ConnectingState />;
+ 
+@@ -30,22 +25,11 @@ export function Cockpit({
+ 
+   return (
+     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+-      {/* The tape-state panel and — directly UNDER it (its pre-registered blueprint home, J-65) — the
+-          setup-forming hint dock. The dock is ABSENT unless a hint is active, so this cell is just the
+-          tape-state panel on an idle/unclear tape (no empty-state chrome). Reads the snapshot's `hint`
+-          key verbatim. */}
+-      <div className="flex flex-col gap-4">
+-        <TapeStatePanel
+-          state={snapshot.tape_state}
+-          confidence={snapshot.confidence}
+-          warm={snapshot.warm}
+-        />
+-        <HintDock
+-          hint={snapshot.hint}
+-          thesisActive={!!snapshot.thesis}
+-          onDeclare={(h) => onHintDeclare?.(h)}
+-        />
+-      </div>
++      <TapeStatePanel
++        state={snapshot.tape_state}
++        confidence={snapshot.confidence}
++        warm={snapshot.warm}
++      />
+       <QuotePanel market={snapshot.market} />
+       <FeaturesPanel features={snapshot.features} primaryWindow={snapshot.primary_window} />
+       <RecentTradesPanel trades={snapshot.recent_trades} />
+diff --git a/apps/frontend/components/HintDock.tsx b/apps/frontend/components/HintDock.tsx
+deleted file mode 100644
+index 965d7ca..0000000
+--- a/apps/frontend/components/HintDock.tsx
++++ /dev/null
+@@ -1,103 +0,0 @@
+-"use client";
+-
+-import { useEffect, useState } from "react";
+-import { fetchTaxonomy } from "@/lib/api";
+-import type { Hint, ResearchTaxonomy } from "@/lib/types";
+-
+-// The setup-forming hint dock (capability 33, J-65): sits UNDER the tape-state panel on `/` (its
+-// pre-registered blueprint home). It renders the served active hint VERBATIM — pattern + evidence,
+-// setup-type context, baseline citation, and a declare affordance — and is visible ONLY when a hint is
+-// active (no empty-state chrome; the dock is simply absent otherwise). The backend computes the
+-// evidence + baseline citation once; the dock renders them, never derives anything.
+-//
+-// Copy discipline (J-66): the dock carries the backend-owned "Descriptive only — not trading advice"
+-// register line and never adds an imperative/predictive word of its own. The declare affordance only
+-// PREFILLS the thesis declare form (setup + direction); the user still types the invalidation price —
+-// one click never creates a thesis. It is hidden while a thesis is already active on the ticker (the
+-// no-dead-control pattern — no affordance that would only produce a 409).
+-
+-export function HintDock({
+-  hint,
+-  thesisActive,
+-  onDeclare,
+-}: {
+-  // The active hint off the live snapshot's `hint` key (or null/undefined when none).
+-  hint: Hint | null | undefined;
+-  // Whether a thesis is already active on the ticker — when true the declare affordance is hidden
+-  // (a thesis-active ticker would 409 a second declare; no dead control).
+-  thesisActive: boolean;
+-  // Prefill the thesis declare form from this hint (setup + direction + the hint id for the
+-  // declared-from linkage). Invalidation is left for the user to type.
+-  onDeclare: (hint: Hint) => void;
+-}) {
+-  const [taxonomy, setTaxonomy] = useState<ResearchTaxonomy | null>(null);
+-
+-  // Load the taxonomy ONLY when a hint is actually active (the dock is absent otherwise, so the idle
+-  // cockpit costs no request). The dock reads the per-hint evidence/citation off the hint object; the
+-  // taxonomy supplies the dock title + register line + declare-affordance copy (the dock hardcodes none).
+-  useEffect(() => {
+-    if (!hint || taxonomy) return;
+-    let cancelled = false;
+-    fetchTaxonomy().then((t) => {
+-      if (!cancelled && t) setTaxonomy(t);
+-    });
+-    return () => {
+-      cancelled = true;
+-    };
+-  }, [hint, taxonomy]);
+-
+-  // Absent unless a hint is active (no empty-state chrome — the blueprint's "visible only when active").
+-  if (!hint) return null;
+-
+-  const copy = taxonomy?.hints?.copy;
+-  const dockTitle = copy?.dock_title ?? "Setup forming";
+-  const register = copy?.dock_register ?? "Descriptive only — not trading advice.";
+-  const declareLabel = copy?.declare_label ?? "Prefill a thesis from this hint";
+-  const declareCaption = copy?.declare_caption ?? "You still type the invalidation price yourself.";
+-
+-  return (
+-    <section
+-      data-testid="hint-dock"
+-      // Amber/neutral styling per the design system (absorption/unclear semantics), matching the
+-      // risk-flag chip register: a left accent rule + a subtle amber surface.
+-      className="rounded-lg border-l-2 border-amber-500 border-y border-r border-y-amber-700/60 border-r-amber-700/60 bg-amber-900/20 p-4"
+-    >
+-      <div className="flex items-baseline justify-between gap-2">
+-        <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-400">
+-          {dockTitle}
+-        </h3>
+-        <span className="text-[10px] uppercase tracking-wide text-amber-500/70">
+-          {hint.pattern_label}
+-        </span>
+-      </div>
+-
+-      {/* Plain-language evidence with its measured value — rendered verbatim (no naked output). */}
+-      <p data-testid="hint-evidence" className="mt-2 text-sm text-amber-200/90">
+-        {hint.evidence}
+-      </p>
+-
+-      {/* The baseline citation — the user's studied baseline, or the honest unvalidated string. */}
+-      <p data-testid="hint-baseline" className="mt-2 font-mono text-xs text-amber-300/80">
+-        {hint.baseline_citation}
+-      </p>
+-
+-      {/* The declare affordance — PREFILLS the declare form (one click never creates a thesis). Hidden
+-          while a thesis is already active on the ticker (no dead control that would only 409). */}
+-      {!thesisActive && (
+-        <div className="mt-3">
+-          <button
+-            type="button"
+-            data-testid="hint-declare"
+-            onClick={() => onDeclare(hint)}
+-            className="rounded-md border border-amber-600 bg-amber-800/40 px-3 py-1.5 text-sm font-medium text-amber-100 transition-colors hover:border-amber-500 hover:bg-amber-700/40 focus:outline-none focus:ring-1 focus:ring-amber-500 active:bg-amber-700/60"
+-          >
+-            {declareLabel}
+-          </button>
+-          <p className="mt-1.5 text-xs text-amber-500/70">{declareCaption}</p>
+-        </div>
+-      )}
+-
+-      <p className="mt-3 text-xs text-amber-600/70">{register}</p>
+-    </section>
+-  );
+-}
+diff --git a/apps/frontend/components/HintLog.tsx b/apps/frontend/components/HintLog.tsx
+deleted file mode 100644
+index d9c4e79..0000000
+--- a/apps/frontend/components/HintLog.tsx
++++ /dev/null
+@@ -1,118 +0,0 @@
+-"use client";
+-
+-import type { Hint, ResearchTaxonomy } from "@/lib/types";
+-import { formatDateDMY } from "@/lib/datetime";
+-
+-// The hint log (J-65): the /journal "Hints" in-page view. Renders GET /research/hints rows VERBATIM —
+-// the frontend recomputes NOTHING (every hint's evidence + baseline citation are computed once on the
+-// backend; here they are read off the record). The only presentation transforms are the shared
+-// dd-MM-yyyy date formatter and taxonomy-owned column labels + empty-state copy.
+-//
+-// Columns: time (dd-MM-yyyy), ticker, pattern, evidence, baseline citation, declared-from. The
+-// declared-from cell shows the taxonomy-owned label once the user completed a declaration from the hint.
+-
+-export function HintLog({
+-  rows,
+-  taxonomy,
+-}: {
+-  rows: Hint[];
+-  taxonomy: ResearchTaxonomy | null;
+-}) {
+-  const columns = taxonomy?.hints?.log_columns;
+-  const copy = taxonomy?.hints?.copy;
+-  const declaredFromLabel = copy?.declared_from_label ?? "Declared from this hint";
+-
+-  // The stored `data_feed` stamp's display label (J-67) — taxonomy-owned per-feed copy. Falls back to
+-  // the raw stored stamp (an honest value, never fabricated) if the taxonomy lacks the feed_basis block.
+-  const feedLabel = (feed: string): string =>
+-    taxonomy?.feed_basis?.feeds.find((f) => f.id === feed)?.name ?? feed;
+-
+-  if (rows.length === 0) {
+-    // Honest empty state — never a fabricated row. Copy is taxonomy-owned.
+-    return (
+-      <div
+-        data-testid="hint-log-empty"
+-        className="flex min-h-[30vh] flex-col items-center justify-center rounded-lg border border-slate-800 bg-slate-900/40 text-center"
+-      >
+-        <div aria-hidden="true" className="mb-3 flex flex-col gap-1.5">
+-          <span className="block h-1 w-10 rounded-full bg-amber-800/70" />
+-          <span className="block h-1 w-7 rounded-full bg-slate-800" />
+-          <span className="block h-1 w-9 rounded-full bg-amber-800/70" />
+-        </div>
+-        <p className="text-sm font-medium text-slate-300">{copy?.log_title ?? "Hints"}</p>
+-        <p className="mt-1 max-w-sm text-xs text-slate-500">
+-          {copy?.log_empty ??
+-            "No hints logged yet — a setup-forming hint is recorded here each time a sustained pattern is described on a watched ticker."}
+-        </p>
+-      </div>
+-    );
+-  }
+-
+-  return (
+-    <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-900/40">
+-      <table data-testid="hint-log-table" className="w-full border-collapse text-sm">
+-        <thead>
+-          <tr className="border-b border-slate-800 text-left text-xs uppercase tracking-wider text-slate-500">
+-            <th className="px-3 py-2.5 font-semibold">{columns?.time ?? "Time"}</th>
+-            <th className="px-3 py-2.5 font-semibold">{columns?.ticker ?? "Ticker"}</th>
+-            <th className="px-3 py-2.5 font-semibold">{columns?.pattern ?? "Pattern"}</th>
+-            <th className="px-3 py-2.5 font-semibold">{columns?.feed ?? "Feed"}</th>
+-            <th className="px-3 py-2.5 font-semibold">{columns?.evidence ?? "Evidence"}</th>
+-            <th className="px-3 py-2.5 font-semibold">{columns?.baseline ?? "Studied baseline"}</th>
+-            <th className="px-3 py-2.5 font-semibold">
+-              {columns?.declared_from ?? "Declared from"}
+-            </th>
+-          </tr>
+-        </thead>
+-        <tbody>
+-          {rows.map((row) => (
+-            <tr
+-              key={row.id}
+-              data-testid="hint-log-row"
+-              className="border-b border-slate-800/60 text-slate-300 last:border-0"
+-            >
+-              {/* wall_ts is unix SECONDS — the shared formatter takes ms. */}
+-              <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-slate-400">
+-                {formatDateDMY(row.wall_ts * 1000)}
+-              </td>
+-              <td className="whitespace-nowrap px-3 py-2.5 font-mono text-slate-200">
+-                {row.ticker}
+-              </td>
+-              <td className="whitespace-nowrap px-3 py-2.5">
+-                <span className="rounded-md border border-amber-700/60 bg-amber-900/20 px-2 py-0.5 text-xs text-amber-300">
+-                  {row.pattern_label}
+-                </span>
+-              </td>
+-              {/* The stored data_feed stamp (J-67) — the persisted value displayed VERBATIM with the
+-                  taxonomy-owned label; neutral slate chip (a factual stamp, not a side/impact signal). */}
+-              <td className="whitespace-nowrap px-3 py-2.5">
+-                <span
+-                  data-testid="hint-log-feed"
+-                  className="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs text-slate-300"
+-                >
+-                  {feedLabel(row.data_feed)}
+-                </span>
+-              </td>
+-              <td className="px-3 py-2.5 text-xs text-slate-300">{row.evidence}</td>
+-              <td className="px-3 py-2.5 font-mono text-xs text-amber-300/80">
+-                {row.baseline_citation}
+-              </td>
+-              <td className="whitespace-nowrap px-3 py-2.5 text-xs">
+-                {row.declared_from ? (
+-                  <span
+-                    data-testid="hint-log-declared-from"
+-                    className="rounded-md border border-emerald-700/60 bg-emerald-900/20 px-2 py-0.5 text-emerald-300"
+-                  >
+-                    {declaredFromLabel}
+-                  </span>
+-                ) : (
+-                  <span className="text-slate-600">—</span>
+-                )}
+-              </td>
+-            </tr>
+-          ))}
+-        </tbody>
+-      </table>
+-    </div>
+-  );
+-}
+diff --git a/apps/frontend/components/JournalDetailView.tsx b/apps/frontend/components/JournalDetailView.tsx
+deleted file mode 100644
+index debfce1..0000000
+--- a/apps/frontend/components/JournalDetailView.tsx
++++ /dev/null
+@@ -1,1057 +0,0 @@
+-"use client";
+-
+-import { useEffect, useMemo, useState } from "react";
+-import type {
+-  ExecutionCheck,
+-  ExcursionHorizon,
+-  ExcursionPopulation,
+-  JournalDetail,
+-  JournalTimelineRow,
+-  ResearchTaxonomy,
+-  StatementFinalStatus,
+-} from "@/lib/types";
+-import { formatDateTimeDMY, localOffsetLabel } from "@/lib/datetime";
+-import { saveReview } from "@/lib/api";
+-
+-// The per-thesis review-detail body (J-55). Renders the single GET /research/journal/{id} response
+-// + taxonomy labels VERBATIM — it recomputes NOTHING. Sections, top to bottom: the thesis header,
+-// the frozen expected-behaviour statements (with their final status), the entry risk flags (or an
+-// honest "not assessed"), the action marks (price + true clock time + spread-at-mark, realized R
+-// only when both marks exist), the machine-derived execution checks with evidence + the suggested
+-// mistake-tag picker (pre-selected, toggleable, disabled Save), and the append-only verdict timeline
+-// at TRUE clock time. Dark instrument-panel style, consistent with the cockpit + journal list.
+-
+-// --- shared display helpers ----------------------------------------------------------------------
+-
+-// The taxonomy-owned label for a setup/direction/status/tag id (the frontend hardcodes none of them).
+-function labelFrom(
+-  list: { id: string; name: string }[] | undefined,
+-  id: string,
+-): string {
+-  const found = list?.find((e) => e.id === id);
+-  return found ? found.name : id.replace(/_/g, " ");
+-}
+-
+-// The terminal (resolved) thesis statuses. An `active` thesis is NOT resolved; the four terminal
+-// statuses below are. This drives the honest-absence copy SPLIT (iter-16 carry-along): a grade /
+-// excursion / execution-check record is absent for TWO distinct reasons —
+-//   1. the thesis has NOT YET resolved (these are computed once it runs its course) — "not yet"; or
+-//   2. the thesis IS resolved but predates the feature (a pre-v5/v6/v7 resolution) — "predates".
+-// A still-ACTIVE post-feature thesis must read the "not yet" copy, NEVER "predates" — the iter-15
+-// lesson (an absent key with two causes must get two copies).
+-const RESOLVED_STATUSES = new Set([
+-  "played_out",
+-  "abandoned",
+-  "invalidated",
+-  "expired",
+-]);
+-function isResolved(status: string): boolean {
+-  return RESOLVED_STATUSES.has(status);
+-}
+-
+-// Pick the right honest-absence copy for an absent post-resolution record. `feature` names the thing
+-// (e.g. "graded", "measured", "assessed") and `noun` the computed artifact (e.g. "outcome and process
+-// grades"). Resolved-but-absent => "predates the feature"; unresolved => "not yet" (computed once the
+-// thesis resolves / runs its course).
+-function absentCopy(
+-  status: string,
+-  opts: { unresolved: string; predates: string },
+-): string {
+-  return isResolved(status) ? opts.predates : opts.unresolved;
+-}
+-
+-// Verdict VISUAL semantics (the design direction): confirming emerald, weakening amber,
+-// rejecting/invalidated rose (invalidated terminal), pending slate, expired/lifecycle slate. The
+-// LABEL text comes from the taxonomy; the COLOR is a frontend visual concern keyed off the id.
+-function verdictClass(verdict: string): string {
+-  switch (verdict) {
+-    case "confirming":
+-      return "border-emerald-700 bg-emerald-900/40 text-emerald-300";
+-    case "weakening":
+-      return "border-amber-700 bg-amber-900/40 text-amber-300";
+-    case "rejecting":
+-      return "border-rose-700 bg-rose-900/40 text-rose-300";
+-    case "invalidated":
+-      return "border-rose-500 bg-rose-950 text-rose-200 ring-1 ring-rose-500/50";
+-    case "played_out":
+-    case "abandoned":
+-      return "border-slate-600 bg-slate-800 text-slate-300";
+-    case "expired":
+-    case "watch_restarted":
+-    case "paused":
+-      return "border-slate-700 bg-slate-900/60 text-slate-400";
+-    default:
+-      // pending + any other
+-      return "border-slate-600 bg-slate-800 text-slate-300";
+-  }
+-}
+-
+-// Execution-check status VISUAL semantics: failed rose (a flagged execution finding), passed
+-// emerald, not_applicable slate. These are LABELS, never numeric scores.
+-const CHECK_STATUS_STYLE: Record<
+-  ExecutionCheck["status"],
+-  { chip: string; label: string }
+-> = {
+-  failed: {
+-    chip: "border-rose-700 bg-rose-900/40 text-rose-300",
+-    label: "Flagged",
+-  },
+-  passed: {
+-    chip: "border-emerald-700 bg-emerald-900/30 text-emerald-300",
+-    label: "Clean",
+-  },
+-  not_applicable: {
+-    chip: "border-slate-700 bg-slate-800 text-slate-400",
+-    label: "Not applicable",
+-  },
+-};
+-
+-// A timeline row whose verdict is a GAP/segment delimiter (not a published verdict transition) —
+-// rendered with a muted, distinct treatment so a gap reads explicitly as an interruption.
+-const GAP_VERDICTS = new Set(["watch_restarted", "paused", "expired"]);
+-
+-// Statement FINAL-status VISUAL semantics (J-55): met emerald (the premise resolved true), violated
+-// rose (the read contradicted it), not_yet/not_evaluated slate (no contradicting read / no read at
+-// the terminal moment). These are LABELS read verbatim — the page never re-derives them.
+-const STATEMENT_STATUS_STYLE: Record<
+-  StatementFinalStatus["status"],
+-  { chip: string; label: string }
+-> = {
+-  met: { chip: "border-emerald-700 bg-emerald-900/30 text-emerald-300", label: "Met" },
+-  violated: { chip: "border-rose-700 bg-rose-900/40 text-rose-300", label: "Violated" },
+-  not_yet: { chip: "border-slate-700 bg-slate-800 text-slate-400", label: "Not met" },
+-  not_evaluated: {
+-    chip: "border-slate-700 bg-slate-800 text-slate-400",
+-    label: "Not evaluated",
+-  },
+-};
+-
+-// Outcome-grade VISUAL semantics (J-56): held emerald, failed rose, no_read slate. Process-grade
+-// VISUAL semantics: clean emerald, flagged amber, violated rose. The LABEL text comes from the
+-// taxonomy; the COLOR is a frontend visual concern keyed off the id.
+-function outcomeGradeClass(grade: string): string {
+-  switch (grade) {
+-    case "thesis_held":
+-      return "border-emerald-700 bg-emerald-900/40 text-emerald-300";
+-    case "thesis_failed":
+-      return "border-rose-700 bg-rose-900/40 text-rose-300";
+-    default:
+-      return "border-slate-600 bg-slate-800 text-slate-300";
+-  }
+-}
+-function processGradeClass(grade: string): string {
+-  switch (grade) {
+-    case "clean":
+-      return "border-emerald-700 bg-emerald-900/40 text-emerald-300";
+-    case "flagged":
+-      return "border-amber-700 bg-amber-900/40 text-amber-300";
+-    case "violated":
+-      return "border-rose-700 bg-rose-900/40 text-rose-300";
+-    default:
+-      return "border-slate-600 bg-slate-800 text-slate-300";
+-  }
+-}
+-
+-// Ternary excursion-outcome chip COLOR (J-58): +1R_first emerald (the tape reached +1R first),
+-// -1R_first rose (adverse first), neither slate (no R target touched within the horizon). The LABEL
+-// text comes from the taxonomy; the COLOR is a frontend visual concern keyed off the id. These are
+-// descriptive outcome LABELS in R units — never a prediction, never currency, never a numeric score.
+-function excursionOutcomeClass(outcome: string | null): string {
+-  switch (outcome) {
+-    case "+1R_first":
+-      return "border-emerald-700 bg-emerald-900/40 text-emerald-300";
+-    case "-1R_first":
+-      return "border-rose-700 bg-rose-900/40 text-rose-300";
+-    default:
+-      // neither_within_horizon + null (open/undetermined)
+-      return "border-slate-600 bg-slate-800 text-slate-400";
+-  }
+-}
+-
+-// One signed R figure, formatted to 2 dp with an explicit sign and the R unit (never currency).
+-function formatR(value: number): string {
+-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}R`;
+-}
+-
+-interface Props {
+-  detail: JournalDetail;
+-  taxonomy: ResearchTaxonomy | null;
+-  // Called after a review is saved successfully so the page re-reads the detail (the saved tags +
+-  // note + reviewed status then render from the persisted record — never client-derived).
+-  onSaved?: () => void;
+-}
+-
+-export function JournalDetailView({ detail, taxonomy, onSaved }: Props) {
+-  const { thesis, marks, timeline } = detail;
+-  const directionColor =
+-    thesis.direction === "long" ? "text-emerald-400" : "text-rose-400";
+-  const tz = localOffsetLabel();
+-
+-  return (
+-    <div data-testid="journal-detail" data-thesis-id={thesis.id} className="space-y-5">
+-      {/* --- Thesis header ------------------------------------------------------------------- */}
+-      <section className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+-            <span className="font-mono text-base font-semibold text-slate-100">
+-              {thesis.ticker}
+-            </span>
+-            <span className="text-sm text-slate-300">
+-              {labelFrom(taxonomy?.setups, thesis.setup_type)}
+-            </span>
+-            <span className={`text-xs font-semibold uppercase ${directionColor}`}>
+-              {labelFrom(taxonomy?.directions, thesis.direction)}
+-            </span>
+-          </div>
+-          <span
+-            data-testid="detail-status-chip"
+-            data-status={thesis.status}
+-            className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${verdictClass(
+-              thesis.status,
+-            )}`}
+-          >
+-            {labelFrom(taxonomy?.statuses, thesis.status)}
+-          </span>
+-        </div>
+-        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs sm:grid-cols-3">
+-          <div>
+-            <dt className="text-slate-500">Invalidation</dt>
+-            <dd className="font-mono text-slate-200">
+-              {thesis.invalidation_price.toFixed(2)}
+-            </dd>
+-          </div>
+-          {thesis.level_price !== null && (
+-            <div>
+-              <dt className="text-slate-500">Level</dt>
+-              <dd className="font-mono text-slate-200">
+-                {thesis.level_price.toFixed(2)}
+-              </dd>
+-            </div>
+-          )}
+-          <div>
+-            <dt className="text-slate-500">Declared</dt>
+-            <dd className="font-mono text-slate-300">
+-              {formatDateTimeDMY(thesis.created_wall_ts * 1000, false)} {tz}
+-            </dd>
+-          </div>
+-          <div>
+-            <dt className="text-slate-500">Bound source</dt>
+-            <dd className="font-mono text-slate-400">{thesis.bound_source}</dd>
+-          </div>
+-          <div>
+-            <dt className="text-slate-500">Feed</dt>
+-            <dd className="font-mono uppercase text-slate-400">{thesis.data_feed}</dd>
+-          </div>
+-          <div>
+-            <dt className="text-slate-500">Config fingerprint</dt>
+-            <dd className="font-mono text-slate-500">{thesis.config_fingerprint}</dd>
+-          </div>
+-        </dl>
+-      </section>
+-
+-      {/* --- Expected behaviour (frozen statements + their persisted FINAL status, J-55) ------ */}
+-      <Section title="What you expected" testid="detail-statements">
+-        {thesis.statements.length === 0 ? (
+-          <p className="text-sm text-slate-500">No expected-behaviour statements were frozen.</p>
+-        ) : (
+-          <ul className="space-y-2">
+-            {thesis.statements.map((s, i) => {
+-              // The persisted FINAL status, positionally keyed to the frozen statement (J-55). The
+-              // page renders this verbatim — it NEVER re-derives a status from the timeline. Absent
+-              // (a pre-v6 resolution) => no badge (honest omission).
+-              const finalStatus = detail.statement_final_statuses?.[i]?.status;
+-              const style = finalStatus ? STATEMENT_STATUS_STYLE[finalStatus] : null;
+-              return (
+-                <li
+-                  key={i}
+-                  data-testid="detail-statement"
+-                  data-final-status={finalStatus ?? "absent"}
+-                  className="flex items-start justify-between gap-3 text-sm text-slate-300"
+-                >
+-                  <span className="flex items-start gap-2">
+-                    <span aria-hidden="true" className="mt-1 text-slate-600">
+-                      •
+-                    </span>
+-                    <span>{s.text}</span>
+-                  </span>
+-                  {style && (
+-                    <span
+-                      data-testid="detail-statement-final-status"
+-                      data-status={finalStatus}
+-                      className={`mt-0.5 inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${style.chip}`}
+-                    >
+-                      {style.label}
+-                    </span>
+-                  )}
+-                </li>
+-              );
+-            })}
+-          </ul>
+-        )}
+-        {detail.statement_final_statuses === undefined && (
+-          <p
+-            data-testid="statement-final-statuses-not-recorded"
+-            className="mt-2 text-xs text-slate-500"
+-          >
+-            Final statuses were not recorded for this thesis — it predates per-statement status
+-            tracking.
+-          </p>
+-        )}
+-      </Section>
+-
+-      {/* --- Outcome × process grades (the review quadrant, J-56) --------------------------- */}
+-      <GradesQuadrant detail={detail} taxonomy={taxonomy} />
+-
+-      {/* --- Entry risk flags (frozen) ------------------------------------------------------ */}
+-      <Section title="Entry risk flags" testid="detail-risk-flags">
+-        {thesis.risk_flags === undefined ? (
+-          <p data-testid="risk-flags-not-assessed" className="text-sm text-slate-500">
+-            Not assessed — this thesis predates entry-risk assessment.
+-          </p>
+-        ) : thesis.risk_flags.length === 0 ? (
+-          <p className="text-sm text-slate-500">
+-            Assessed at declaration — no entry risk flags fired.
+-          </p>
+-        ) : (
+-          <ul className="space-y-2">
+-            {thesis.risk_flags.map((f) => (
+-              <li
+-                key={f.flag}
+-                data-testid="detail-risk-flag-chip"
+-                data-flag={f.flag}
+-                className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md border-l-2 border-amber-500 border-y border-r border-y-amber-700/60 border-r-amber-700/60 bg-amber-900/30 px-2.5 py-1.5"
+-              >
+-                <span className="text-xs font-semibold uppercase tracking-wide text-amber-300">
+-                  {f.label}
+-                </span>
+-                <span className="font-mono text-xs text-amber-200/90">{f.evidence}</span>
+-              </li>
+-            ))}
+-          </ul>
+-        )}
+-      </Section>
+-
+-      {/* --- Action marks ------------------------------------------------------------------- */}
+-      <Section title="What you did" testid="detail-marks">
+-        {!marks.entry && !marks.exit ? (
+-          <p className="text-sm text-slate-500">
+-            No entry or exit was journaled for this thesis.
+-          </p>
+-        ) : (
+-          <div className="space-y-2 text-sm">
+-            {marks.entry && (
+-              <div data-testid="detail-entry-mark" className="flex flex-wrap items-baseline gap-x-3">
+-                <span className="text-xs uppercase tracking-wide text-slate-500">Entry</span>
+-                <span className="font-mono text-slate-200">{marks.entry.price.toFixed(2)}</span>
+-                <span className="font-mono text-xs text-slate-500">
+-                  {formatDateTimeDMY(marks.entry.wall_ts * 1000, true)} {tz}
+-                </span>
+-                {marks.entry.spread_at_mark !== null && (
+-                  <span className="font-mono text-xs text-slate-500">
+-                    spread {marks.entry.spread_at_mark.toFixed(2)}
+-                  </span>
+-                )}
+-              </div>
+-            )}
+-            {marks.exit && (
+-              <div data-testid="detail-exit-mark" className="flex flex-wrap items-baseline gap-x-3">
+-                <span className="text-xs uppercase tracking-wide text-slate-500">Exit</span>
+-                <span className="font-mono text-slate-200">{marks.exit.price.toFixed(2)}</span>
+-                <span className="font-mono text-xs text-slate-500">
+-                  {formatDateTimeDMY(marks.exit.wall_ts * 1000, true)} {tz}
+-                </span>
+-                {marks.exit.spread_at_mark !== null && (
+-                  <span className="font-mono text-xs text-slate-500">
+-                    spread {marks.exit.spread_at_mark.toFixed(2)}
+-                  </span>
+-                )}
+-              </div>
+-            )}
+-            {/* Realized move in R — present ONLY when both marks exist (no marks, no realized
+-                metric; never a dishonest zero). A journaled MEASUREMENT in R units — never P&L. */}
+-            {marks.realized_r !== null && (
+-              <p data-testid="detail-realized-r" className="pt-1 text-sm text-slate-300">
+-                Realized move:{" "}
+-                <span
+-                  className={`font-mono font-semibold ${
+-                    marks.realized_r >= 0 ? "text-emerald-400" : "text-rose-400"
+-                  }`}
+-                >
+-                  {marks.realized_r >= 0 ? "+" : ""}
+-                  {marks.realized_r.toFixed(2)}R
+-                </span>
+-                {marks.r_basis !== null && (
+-                  <span className="ml-2 font-mono text-xs text-slate-500">
+-                    (R = {marks.r_basis.toFixed(2)})
+-                  </span>
+-                )}
+-              </p>
+-            )}
+-          </div>
+-        )}
+-      </Section>
+-
+-      {/* --- Execution checks + the review save flow ---------------------------------------- */}
+... [diff_bound] apps/frontend/components/JournalDetailView.tsx: 663 more diff lines omitted — Read the file for full detail
+diff --git a/apps/frontend/components/JournalFilterBar.tsx b/apps/frontend/components/JournalFilterBar.tsx
+deleted file mode 100644
+index fd2a647..0000000
+--- a/apps/frontend/components/JournalFilterBar.tsx
++++ /dev/null
+@@ -1,125 +0,0 @@
+-"use client";
+-
+-import type { JournalFilters, ResearchTaxonomy } from "@/lib/types";
+-
+-// The journal filter bar (J-51): ticker / setup / direction / resolution-status controls that drive
+-// a SERVER-side re-fetch (the frontend does NO client-side filtering/derivation — the server is the
+-// only filter authority). All option labels come from GET /research/taxonomy (the frontend hardcodes
+-// none of them). A blank/All option clears the filter.
+-//
+-// The single "Status / resolution" select merges the lifecycle statuses (active + the four terminal
+-// resolutions) so the user picks any lifecycle bucket from one control; "active" maps to the
+-// `status` param, the four terminal values map to the `resolution` param (both are server-side
+-// filters over the same persisted status column).
+-
+-const SELECT_CLASS =
+-  "rounded border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-xs text-slate-200 transition-colors focus:border-emerald-500 focus:outline-none";
+-
+-const INPUT_CLASS =
+-  "rounded border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-xs text-slate-200 placeholder-slate-600 transition-colors focus:border-emerald-500 focus:outline-none";
+-
+-interface Props {
+-  filters: JournalFilters;
+-  taxonomy: ResearchTaxonomy | null;
+-  onChange: (next: JournalFilters) => void;
+-}
+-
+-export function JournalFilterBar({ filters, taxonomy, onChange }: Props) {
+-  // The merged lifecycle value the single status/resolution select shows: the resolution if set,
+-  // else the status (active). Empty = All.
+-  const lifecycleValue = filters.resolution ?? filters.status ?? "";
+-
+-  function setLifecycle(value: string) {
+-    if (value === "") {
+-      onChange({ ...filters, status: undefined, resolution: undefined });
+-    } else if (value === "active") {
+-      onChange({ ...filters, status: "active", resolution: undefined });
+-    } else {
+-      // A terminal value is a resolution filter (clears any status filter to avoid an AND that
+-      // matches nothing — a resolution already pins the terminal status).
+-      onChange({ ...filters, status: undefined, resolution: value });
+-    }
+-  }
+-
+-  return (
+-    <div
+-      data-testid="journal-filters"
+-      className="mb-4 flex flex-wrap items-center gap-2"
+-    >
+-      <input
+-        data-testid="filter-ticker"
+-        type="text"
+-        placeholder="ticker"
+-        value={filters.ticker ?? ""}
+-        onChange={(e) =>
+-          onChange({ ...filters, ticker: e.target.value.toUpperCase() || undefined })
+-        }
+-        className={`${INPUT_CLASS} w-28`}
+-        aria-label="Filter by ticker"
+-      />
+-
+-      <select
+-        data-testid="filter-setup"
+-        value={filters.setup_type ?? ""}
+-        onChange={(e) => onChange({ ...filters, setup_type: e.target.value || undefined })}
+-        className={SELECT_CLASS}
+-        aria-label="Filter by setup"
+-      >
+-        <option value="">All setups</option>
+-        {taxonomy?.setups.map((s) => (
+-          <option key={s.id} value={s.id}>
+-            {s.name}
+-          </option>
+-        ))}
+-      </select>
+-
+-      <select
+-        data-testid="filter-direction"
+-        value={filters.direction ?? ""}
+-        onChange={(e) => onChange({ ...filters, direction: e.target.value || undefined })}
+-        className={SELECT_CLASS}
+-        aria-label="Filter by direction"
+-      >
+-        <option value="">Long & short</option>
+-        {taxonomy?.directions.map((d) => (
+-          <option key={d.id} value={d.id}>
+-            {d.name}
+-          </option>
+-        ))}
+-      </select>
+-
+-      <select
+-        data-testid="filter-status"
+-        value={lifecycleValue}
+-        onChange={(e) => setLifecycle(e.target.value)}
+-        className={SELECT_CLASS}
+-        aria-label="Filter by status or resolution"
+-      >
+-        <option value="">Any status</option>
+-        {/* Active + the four resolutions, all taxonomy-labelled (the frontend hardcodes no label). */}
+-        {(taxonomy?.statuses ?? []).map((s) => (
+-          <option key={s.id} value={s.id}>
+-            {s.name}
+-          </option>
+-        ))}
+-      </select>
+-
+-      {/* Clear all — only shown when at least one filter is active, so the empty default has no
+-          dangling control. */}
+-      {(filters.ticker ||
+-        filters.setup_type ||
+-        filters.direction ||
+-        filters.status ||
+-        filters.resolution) && (
+-        <button
+-          type="button"
+-          data-testid="filter-clear"
+-          onClick={() => onChange({})}
+-          className="rounded border border-slate-700 px-2.5 py-1.5 text-xs text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+-        >
+-          Clear
+-        </button>
+-      )}
+-    </div>
+-  );
+-}
+diff --git a/apps/frontend/components/JournalTable.tsx b/apps/frontend/components/JournalTable.tsx
+deleted file mode 100644
+index 23c09d0..0000000
+--- a/apps/frontend/components/JournalTable.tsx
++++ /dev/null
+@@ -1,260 +0,0 @@
+-"use client";
+-
+-import { useRouter } from "next/navigation";
+-import Link from "next/link";
+-import type { JournalRow, ResearchTaxonomy } from "@/lib/types";
+-import { formatDateDMY } from "@/lib/datetime";
+-
+-// The journal table (J-51): renders GET /research/journal rows VERBATIM. The frontend recomputes
+-// NOTHING — every value (status, resolution, reason, stamps) is a read of the backend row; the only
+-// presentation transforms are the shared dd-MM-yyyy date formatter and taxonomy-owned display labels.
+-//
+-// Columns (goal.md Journal IA): declared date (dd-MM-yyyy), ticker, bound source, data feed, setup,
+-// direction, status/resolution (expired rows show the verbatim interruption reason; terminal
+-// resolutions get the established terminal treatment).
+-//
+-// Rows are LINKS to /journal/[id] (the review detail, J-55) now that the target exists — the
+-// iter-12 "deliberately not links" placeholder resolves here. The ticker cell carries a real anchor
+-// (keyboard/SEO accessible); the whole row also navigates on click as a convenience.
+-
+-// Map a status/resolution id to its design-direction COLOR class (a visual concern owned by the
+-// frontend; the LABEL text always comes from the taxonomy). Per the design direction:
+-// invalidated/expired = terminal red; played_out/abandoned = resolved slate; active = live emerald.
+-function statusClass(status: string): string {
+-  switch (status) {
+-    case "active":
+-      return "border-emerald-700/60 bg-emerald-900/20 text-emerald-300";
+-    case "invalidated":
+-    case "expired":
+-      // Terminal treatment — a ringed rose chip so a terminal resolution reads as final.
+-      return "border-rose-700/70 bg-rose-900/30 text-rose-300 ring-1 ring-rose-800/50";
+-    case "played_out":
+-    case "abandoned":
+-    default:
+-      return "border-slate-600 bg-slate-800 text-slate-300";
+-  }
+-}
+-
+-// The taxonomy-owned display label for a status / setup / direction id (the frontend hardcodes none
+-// of them). Falls back to a humanised id if the taxonomy is not loaded yet (it never blocks render).
+-function labelFrom(
+-  list: { id: string; name: string }[] | undefined,
+-  id: string,
+-): string {
+-  const found = list?.find((e) => e.id === id);
+-  if (found) return found.name;
+-  return id.replace(/_/g, " ");
+-}
+-
+-// Outcome × process grade COLOR (a visual concern owned by the frontend; the LABEL text comes from
+-// the taxonomy). Outcome: held emerald, failed rose, no_read slate. Process: clean emerald, flagged
+-// amber, violated rose. The emerald shade is UNIFIED with JournalDetailView's grade chips
+-// (`bg-emerald-900/40`, `border-emerald-700`) so the SAME grade id reads identically on both surfaces
+-// (the iter-15 coherence cleanup — one shade for one grade across the journal list + detail).
+-function gradeClass(id: string): string {
+-  switch (id) {
+-    case "thesis_held":
+-    case "clean":
+-      return "border-emerald-700 bg-emerald-900/40 text-emerald-300";
+-    case "thesis_failed":
+-    case "violated":
+-      return "border-rose-700/70 bg-rose-900/30 text-rose-300";
+-    case "flagged":
+-      return "border-amber-700/70 bg-amber-900/30 text-amber-300";
+-    default:
+-      // no_read + any other
+-      return "border-slate-600 bg-slate-800 text-slate-400";
+-  }
+-}
+-
+-interface Props {
+-  rows: JournalRow[];
+-  taxonomy: ResearchTaxonomy | null;
+-}
+-
+-export function JournalTable({ rows, taxonomy }: Props) {
+-  const router = useRouter();
+-  if (rows.length === 0) {
+-    // Honest empty state — never a fabricated row.
+-    return (
+-      <div
+-        data-testid="journal-empty"
+-        className="flex min-h-[30vh] flex-col items-center justify-center rounded-lg border border-slate-800 bg-slate-900/40 text-center"
+-      >
+-        {/* Class-based placeholder mark — a pair of muted rules evoking an empty ledger, replacing
+-            the prior ▤ (U+25A4) glyph. No icon library, no Unicode glyph: design-system tokens only
+-            (the coherence fold-in). */}
+-        <div
+-          data-testid="journal-empty-mark"
+-          aria-hidden="true"
+-          className="mb-3 flex flex-col gap-1.5"
+-        >
+-          <span className="block h-1 w-10 rounded-full bg-slate-700" />
+-          <span className="block h-1 w-7 rounded-full bg-slate-800" />
+-          <span className="block h-1 w-9 rounded-full bg-slate-700" />
+-        </div>
+-        <p className="text-sm font-medium text-slate-300">No theses journaled yet</p>
+-        <p className="mt-1 max-w-sm text-xs text-slate-500">
+-          Declare a thesis on a watched ticker in the cockpit — every thesis you declare, resolve,
+-          abandon, or that expires is recorded here and survives a restart.
+-        </p>
+-      </div>
+-    );
+-  }
+-
+-  return (
+-    <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-900/40">
+-      <table data-testid="journal-table" className="w-full border-collapse text-sm">
+-        <thead>
+-          <tr className="border-b border-slate-800 text-left text-xs uppercase tracking-wider text-slate-500">
+-            <th className="px-3 py-2.5 font-semibold">Declared</th>
+-            <th className="px-3 py-2.5 font-semibold">Ticker</th>
+-            <th className="px-3 py-2.5 font-semibold">Bound source</th>
+-            <th className="px-3 py-2.5 font-semibold">Feed</th>
+-            <th className="px-3 py-2.5 font-semibold">Setup</th>
+-            <th className="px-3 py-2.5 font-semibold">Direction</th>
+-            <th className="px-3 py-2.5 font-semibold">Status</th>
+-            <th className="px-3 py-2.5 font-semibold">Grade</th>
+-            <th className="px-3 py-2.5 font-semibold">Reviewed</th>
+-          </tr>
+-        </thead>
+-        <tbody>
+-          {rows.map((row) => {
+-            const directionColor =
+-              row.direction === "long" ? "text-emerald-400" : "text-rose-400";
+-            // The displayed lifecycle id: the resolution once terminal, else the status (active).
+-            const lifecycleId = row.resolution ?? row.status;
+-            const href = `/journal/${encodeURIComponent(row.id)}`;
+-            return (
+-              <tr
+-                key={row.id}
+-                data-testid="journal-row"
+-                data-thesis-id={row.id}
+-                data-status={lifecycleId}
+-                data-href={href}
+-                onClick={() => router.push(href)}
+-                className="cursor-pointer border-b border-slate-800/60 last:border-b-0 hover:bg-slate-900/60"
+-              >
+-                {/* Declared date — dd-MM-yyyy via the ONE shared formatter. created_wall_ts is unix
+-                    seconds, so convert to ms for the Date. */}
+-                <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-slate-300">
+-                  {formatDateDMY(row.created_wall_ts * 1000)}
+-                </td>
+-                {/* The ticker carries the real anchor so the row is keyboard/SEO accessible (the
+-                    whole-row onClick is a convenience). Clicking it stops propagation so the row's
+-                    push does not double-fire. */}
+-                <td className="whitespace-nowrap px-3 py-2.5 font-mono text-slate-200">
+-                  <Link
+-                    href={href}
+-                    data-testid="journal-row-link"
+-                    onClick={(e) => e.stopPropagation()}
+-                    className="rounded text-slate-200 underline-offset-2 hover:text-emerald-300 hover:underline focus:outline-none focus:ring-1 focus:ring-emerald-500"
+-                  >
+-                    {row.ticker}
+-                  </Link>
+-                </td>
+-                <td className="px-3 py-2.5 font-mono text-xs text-slate-400">
+-                  {row.bound_source}
+-                </td>
+-                {/* The data-feed stamp (honesty stamp) — uppercased id, read verbatim. */}
+-                <td className="whitespace-nowrap px-3 py-2.5">
+-                  <span
+-                    data-testid="journal-feed"
+-                    className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] uppercase text-slate-400"
+-                  >
+-                    {row.data_feed}
+-                  </span>
+-                </td>
+-                <td className="whitespace-nowrap px-3 py-2.5 text-slate-300">
+-                  {labelFrom(taxonomy?.setups, row.setup_type)}
+-                </td>
+-                <td
+-                  className={`whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase ${directionColor}`}
+-                >
+-                  {labelFrom(taxonomy?.directions, row.direction)}
+-                </td>
+-                <td className="px-3 py-2.5">
+-                  <div className="flex flex-col gap-1">
+-                    <span
+-                      data-testid="journal-status-chip"
+-                      data-lifecycle={lifecycleId}
+-                      className={`inline-flex w-fit rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${statusClass(
+-                        lifecycleId,
+-                      )}`}
+-                    >
+-                      {labelFrom(taxonomy?.statuses, lifecycleId)}
+-                    </span>
+-                    {/* The verbatim persisted expired/interruption/resolution reason (never
+-                        recomputed). Shown for any terminal row that carries one — most visibly the
+-                        expired rows' explicit interruption reason. */}
+-                    {row.resolution_reason && (
+-                      <span
+-                        data-testid="journal-resolution-reason"
+-                        className="max-w-md text-xs text-slate-500"
+-                      >
+-                        {row.resolution_reason}
+-                      </span>
+-                    )}
+-                    {/* Entry-mark presence — a real position is shown honestly (the journal never
+-                        infers a fill; this is the persisted mark fact). */}
+-                    {row.has_entry && (
+-                      <span
+-                        data-testid="journal-entry-mark"
+-                        className="w-fit rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-slate-400"
+-                      >
+-                        entry marked
+-                      </span>
+-                    )}
+-                  </div>
+-                </td>
+-                {/* Grade (J-56) — outcome × process enum chips, labels from the taxonomy. Honest
+-                    omission: a pre-grade row (active / pre-v6) shows an em dash, never a fabricated
+-                    grade. */}
+-                <td className="px-3 py-2.5" data-testid="journal-grade-cell">
+-                  {row.grades ? (
+-                    <div className="flex flex-col gap-1">
+-                      <span
+-                        data-testid="journal-outcome-grade"
+-                        data-grade={row.grades.outcome}
+-                        className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${gradeClass(
+-                          row.grades.outcome,
+-                        )}`}
+-                      >
+-                        {labelFrom(taxonomy?.outcome_grades, row.grades.outcome)}
+-                      </span>
+-                      <span
+-                        data-testid="journal-process-grade"
+-                        data-grade={row.grades.process}
+-                        className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${gradeClass(
+-                          row.grades.process,
+-                        )}`}
+-                      >
+-                        {labelFrom(taxonomy?.process_grades, row.grades.process)}
+-                      </span>
+-                    </div>
+-                  ) : (
+-                    <span className="font-mono text-slate-600">—</span>
+-                  )}
+-                </td>
+-                {/* Reviewed (J-57) — the persisted boolean fact. A reviewed row shows a chip; an
+-                    unreviewed row shows an em dash (never a fabricated value). */}
+-                <td className="px-3 py-2.5" data-testid="journal-reviewed-cell">
+-                  {row.reviewed ? (
+-                    <span
+-                      data-testid="journal-reviewed-chip"
+-                      className="inline-flex w-fit rounded-full border border-emerald-700/60 bg-emerald-900/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-300"
+-                    >
+-                      Reviewed
+-                    </span>
+-                  ) : (
+-                    <span className="font-mono text-slate-600">—</span>
+-                  )}
+-                </td>
+-              </tr>
+-            );
+-          })}
+-        </tbody>
+-      </table>
+-    </div>
+-  );
+-}
+diff --git a/apps/frontend/components/PriceChart.tsx b/apps/frontend/components/PriceChart.tsx
+index 7bcf964..14acd9d 100644
+--- a/apps/frontend/components/PriceChart.tsx
++++ b/apps/frontend/components/PriceChart.tsx
+@@ -1,7 +1,7 @@
+ "use client";
+ 
+ // The cockpit price chart (J-17 / J-18): the watched instrument as candlesticks, with markers at
+-// meaningful tape-state transitions and the live thesis geometry. This component is the cockpit's
++// meaningful tape-state transitions. This component is the cockpit's
+ // smart CONTAINER — it polls the served data and composes it — while the drawing itself is delegated
+ // to the shared `StructureChart` (the /structure Tradable Map's own renderer), so both surfaces
+ // share one chart implementation.
+@@ -39,7 +39,6 @@ import {
+   type CockpitHistory,
+   type HistoryBarSize,
+   type StrategiesPayload,
+-  type ThesisProjection,
+ } from "@/lib/types";
+ import {
+   StructureChart,
+@@ -52,6 +51,13 @@ import { Panel, EmptyHint } from "./Panel";
+ // cadence so the chart accrues new candles in step with the rest of the cockpit (no 2nd socket).
+ const POLL_INTERVAL_MS = 1000;
+ 
++// era-5D J-02 ("The Clean Slate" demolition interlude): `extraPriceLines` used to carry the
++// thesis-geometry price lines (invalidation/level), built from the now-deleted WS `thesis` key.
++// That construction is removed; the `extraMarkers`/`extraPriceLines` SEAM into StructureChart
++// stays wired (I-7 chart clause) with a stable, referentially-constant empty array — never a
++// fresh `[]` per render, which would needlessly re-run StructureChart's own price-line effect.
++const NO_PRICE_LINES: ChartPriceLineSpec[] = [];
++
+ // Marker color by tape state — the SAME load-bearing semantics as the rest of the cockpit
+ // (emerald = buyer_control, rose = seller_control, amber = absorption). `unclear` is never marked
+ // by the backend, so it has no entry here. Hex values mirror the DESIGN SYSTEM Tailwind tokens
+@@ -70,27 +76,6 @@ const STATE_LABELS: Record<string, string> = {
+   ask_absorption: "Ask Absorption",
+ };
+ 
+-// Thesis-geometry colors (J-48), reusing the established verdict/side semantics so the chart, the
+-// thesis strip, and the timeline all speak the same color language. Verdict markers: confirming
+-// emerald, weakening amber, rejecting/invalidated rose, pending slate (the design-direction verdict
+-// palette). The invalidation price-line is rose (the idea is dead beyond it); the level line is
+-// slate (a neutral reference). Hex values mirror the DESIGN SYSTEM Tailwind tokens because the
+-// charting canvas takes raw colors, not classes.
+-const VERDICT_COLORS: Record<string, string> = {
+-  confirming: "#34d399", // emerald-400
+-  weakening: "#fbbf24", // amber-400
+-  rejecting: "#fb7185", // rose-400
+-  invalidated: "#fb7185", // rose-400
+-  pending: "#94a3b8", // slate-400
+-  expired: "#94a3b8", // slate-400
+-};
+-const PRICE_LINE_COLORS: Record<string, string> = {
+-  invalidation: "#fb7185", // rose-400 — the idea is invalidated beyond this price
+-  level: "#94a3b8", // slate-400 — a neutral declared reference
+-};
+-// Entry/exit marks render in their own slate-200 treatment, distinct from the verdict palette.
+-const MARK_COLOR = "#e2e8f0"; // slate-200
+-
+ // The registered structure_tape_map strategy id (era-5B J-04) — mirrors app/structure/page.tsx's
+ // OWN `STRATEGY_TAPE_ID = "structure_tape"` constant precedent byte-for-byte: this is a
+ // REGISTRY-LOOKUP key (which entry to read off the fetched strategies list), never tape-state
+@@ -114,13 +99,9 @@ function segmentClass(selected: boolean): string {
+ 
+ export function PriceChart({
+   ticker,
+-  thesis,
+   tapeState,
+ }: {
+   ticker: string | null;
+-  // The live thesis projection (WS `thesis` key) or null. Read VERBATIM for its `geometry`; the
+-  // chart derives nothing. `null` (no/cleared/resolved-non-invalidated thesis) => no overlay.
+-  thesis?: ThesisProjection | null;
+   // The engine-owned CURRENT tape state (era-5B J-06), read VERBATIM off the WS snapshot's own
+   // `tape_state` field — page.tsx passes `snapshot?.tape_state ?? null`, the SAME value
+   // Cockpit.tsx already renders. Drives the confluence chip's matching decision below; NEVER
+@@ -206,12 +187,15 @@ export function PriceChart({
+     return history.timeframe_bars;
+   }, [history]);
+ 
+-  // The tape-state + thesis markers, as ready-to-draw specs the chart renders verbatim. Tape-state
+-  // markers sit ABOVE the bar (down-arrow, colored by state); thesis markers sit BELOW (circle for a
+-  // verdict / first confirmation, up-arrow for an entry/exit mark) — the SAME two-layer language the
+-  // retired inline chart used. In History mode a tape-state marker is placed on its served containing
+-  // bucket (`bucket_ts`); a thesis marker is floored to that timeframe's bucket, both pure display
+-  // placement using served values.
++  // The tape-state markers, as ready-to-draw specs the chart renders verbatim: they sit ABOVE the
++  // bar (down-arrow, colored by state). In History mode a marker is placed on its served containing
++  // bucket (`bucket_ts`); in Tape mode it is placed at its logical-time clock position.
++  //
++  // era-5D J-02 ("The Clean Slate" demolition interlude): this useMemo used to ALSO build a second,
++  // BELOW-the-bar layer of thesis-geometry markers (circle for a verdict/first-confirmation,
++  // up-arrow for an entry/exit mark) from the WS `thesis` key's `geometry` — that data source is
++  // deleted along with the journal-era thesis surfaces, so tape-state markers are now the only
++  // marker source this container builds.
+   const extraMarkers = useMemo<ChartMarkerSpec[]>(() => {
+     if (!history) return [];
+     const anchor = history.epoch_anchor ?? 0;
+@@ -232,54 +216,13 @@ export function PriceChart({
+             shape: "arrowDown",
+             text: STATE_LABELS[m.state] ?? m.state,
+           }));
+-    const secs = history.kind === "timeframe" ? history.timeframe_seconds : 0;
+-    const placeThesis = (logical: number) =>
+-      secs > 0 ? Math.floor((anchor + logical) / secs) * secs : toClock(logical);
+-    const geometry = thesis?.geometry;
+-    const thesisSpecs: ChartMarkerSpec[] = geometry
+-      ? geometry.markers.map((m) => {
+-          if (m.kind === "entry" || m.kind === "exit") {
+-            // The user's own action mark — its own slate treatment with the verbatim mono price.
+-            const priceText = m.price != null ? ` ${m.price.toFixed(2)}` : "";
+-            return {
+-              time: placeThesis(m.logical_ts),
+-              position: "belowBar",
+-              color: MARK_COLOR,
+-              shape: "arrowUp",
+-              text: `${m.label}${priceText}`,
+-            };
+-          }
+-          // A verdict-transition marker or the first-confirmation marker — verdict palette, circle.
+-          const color =
+-            m.kind === "first_confirmation"
+-              ? VERDICT_COLORS.confirming
+-              : VERDICT_COLORS[m.verdict ?? "pending"] ?? "#94a3b8";
+-          return {
+-            time: placeThesis(m.logical_ts),
+-            position: "belowBar",
+-            color,
+-            shape: "circle",
+-            text: m.label,
+-          };
+-        })
+-      : [];
+-    return [...stateSpecs, ...thesisSpecs];
+-  }, [history, thesis]);
++    return stateSpecs;
++  }, [history]);
+ 
+-  // The thesis-geometry price lines (invalidation always; level when set), as dashed reference lines
+-  // the chart draws verbatim. `null`/no geometry => none (the exact no-thesis render).
+-  const extraPriceLines = useMemo<ChartPriceLineSpec[]>(() => {
+-    const geometry = thesis?.geometry;
+-    if (!geometry) return [];
+-    return geometry.price_lines.map((pl) => ({
+-      price: pl.price,
+-      color: PRICE_LINE_COLORS[pl.kind] ?? "#94a3b8",
+-      lineWidth: 1,
+-      lineStyle: 2, // LineStyle.Dashed
+-      axisLabelVisible: true,
+-      title: pl.label,
+-    }));
+-  }, [thesis]);
++  // The thesis-geometry price lines are gone with their data source (see the comment on
++  // `extraMarkers` above) — this container currently has no other price-line source, so the
++  // `extraPriceLines` seam stays wired to the stable empty constant (never a fresh array).
++  const extraPriceLines = NO_PRICE_LINES;
+ 
+   // --- Poll …/history verbatim while a ticker is watched (reset on ticker/view change) --------
+   useEffect(() => {
+@@ -422,8 +365,8 @@ export function PriceChart({
+ 
+       {/* The shared chart renderer. In History mode the recorded store bars sit left of the "start"
+           marker and the live tape bars grow to its right; in Tape mode only the live tape bars show.
+-          The band overlay + tape-state/thesis markers are drawn from the served values passed here —
+-          this container computes none of them. */}
++          The band overlay + tape-state markers are drawn from the served values passed here — this
++          container computes none of them. */}
+       <StructureChart
+         key={`${ticker}|${viewKey}`}
+         bars={storeBars}
+diff --git a/apps/frontend/components/SoundCue.tsx b/apps/frontend/components/SoundCue.tsx
+deleted file mode 100644
+index 8802c6d..0000000
+--- a/apps/frontend/components/SoundCue.tsx
++++ /dev/null
+@@ -1,167 +0,0 @@
+-"use client";
+-
+-import { useEffect, useRef, useState } from "react";
+-import type { SoundCueTaxonomy } from "@/lib/types";
+-
+-// The OPTIONAL sound cue (capability 33 final item, J-66) — the cockpit cue area's last cue-layer
+-// control. It is an EXPLICIT toggle that is DEFAULT OFF on every fresh load; when enabled it plays a
+-// brief sound ONLY on a stance/verdict TRANSITION — read VERBATIM from the served row-15/row-25 values
+-// (the UI derives no stance/verdict of its own) — and respects the served `sound_cue_cooldown_seconds`
+-// debounce between fires. A small visible fired-indicator (a brief pulse) makes the transition-only +
+-// cooldown behaviour browser-verifiable WITHOUT audio hardware.
+-//
+-// Discipline (the cue-layer anti-goals):
+-//   * DEFAULT OFF: `enabled` starts false on every mount and is NEVER persisted (no localStorage) —
+-//     a fresh load is always silent (the OFF-default leg). The toggle state is a CLIENT-LOCAL UI
+-//     preference; it is never sent to the backend and never stored.
+-//   * TRANSITION-ONLY: the cue fires only when the served `cueKey` (the verdict + active stance values
+-//     concatenated) CHANGES to a different value — never on the first value seen, never on a re-render
+-//     with an unchanged value. The UI reads the served values verbatim; it computes no stance/verdict.
+-//   * COOLDOWN: after a fire, no second fire until the served cooldown (seconds) has elapsed.
+-//   * COPY from taxonomy: the toggle label, description, fired-indicator label, and register line are
+-//     all backend-owned (the frontend hardcodes none) — strictly descriptive (J-66).
+-//
+-// The sound itself is a short Web Audio beep generated on the fly (no asset, no new dependency). If the
+-// browser blocks audio (no user gesture / unsupported), the VISIBLE fired-indicator still fires — the
+-// transition-only + cooldown behaviour stays verifiable. Color: neutral slate (a UI affordance, not a
+-// side/impact signal — it must not borrow the green/red/amber palette).
+-
+-export function SoundCue({
+-  // The served transition key — the verdict + active-stance values concatenated, read VERBATIM off the
+-  // projection by the caller (the UI derives nothing). `null`/empty when there is no live verdict yet.
+-  cueKey,
+-  // The taxonomy-owned sound-cue block (label / description / register / cooldown). Absent on a
+-  // pre-J-66 backend ⇒ the toggle renders nothing rather than fabricate copy.
+-  taxonomy,
+-}: {
+-  cueKey: string | null | undefined;
+-  taxonomy: SoundCueTaxonomy | null | undefined;
+-}) {
+-  // DEFAULT OFF on every fresh load — never persisted.
+-  const [enabled, setEnabled] = useState(false);
+-  // The visible fired-indicator pulse (a brief on/off so the fire is browser-observable). A monotonic
+-  // counter drives a key so each fire restarts the CSS pulse even on back-to-back fires.
+-  const [firedPulse, setFiredPulse] = useState(0);
+-  // The previously-seen served cueKey (to detect a real transition) and the last-fire wall ms (cooldown).
+-  const prevCueKey = useRef<string | null | undefined>(undefined);
+-  const lastFiredMs = useRef<number>(0);
+-
+-  const cooldownSeconds = taxonomy?.cooldown_seconds ?? 0;
+-
+-  // Fire on a TRANSITION of the served cueKey while enabled + past the cooldown. Reading the served
+-  // value verbatim — no client-side stance/verdict derivation.
+-  useEffect(() => {
+-    const prev = prevCueKey.current;
+-    // Always track the latest seen value so a later change is measured against it. The FIRST value seen
+-    // (prev === undefined) is never a transition — it seeds the baseline.
+-    prevCueKey.current = cueKey;
+-    if (!enabled) return; // OFF ⇒ never fires (the absence leg) — but baseline still tracked above.
+-    if (prev === undefined || cueKey == null || cueKey === "") return; // no baseline / no live value
+-    if (cueKey === prev) return; // unchanged ⇒ not a transition
+-    // A real transition. Respect the served cooldown (no second fire within it).
+-    const now = Date.now();
+-    if (now - lastFiredMs.current < cooldownSeconds * 1000) return;
+-    lastFiredMs.current = now;
+-    setFiredPulse((n) => n + 1);
+-    playBeep();
+-  }, [cueKey, enabled, cooldownSeconds]);
+-
+-  // When the toggle is turned OFF, reset the fire bookkeeping so a later re-enable starts clean (the
+-  // next transition after re-enabling is measured from the value present at re-enable — never a stale
+-  // fire). Turning OFF never fires.
+-  useEffect(() => {
+-    if (!enabled) {
+-      lastFiredMs.current = 0;
+-    }
+-  }, [enabled]);
+-
+-  if (!taxonomy) return null; // pre-J-66 backend ⇒ no fabricated copy
+-  const copy = taxonomy.copy;
+-
+-  return (
+-    <div
+-      data-testid="sound-cue"
+-      data-enabled={enabled}
+-      className="mt-3 flex flex-col gap-1.5 border-t border-slate-800 pt-3"
+-    >
+-      <div className="flex flex-wrap items-center justify-between gap-2">
+-        {/* The explicit toggle — a labelled switch, default OFF. Hover/focus/active states included. */}
+-        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-400">
+-          <button
+-            type="button"
+-            role="switch"
+-            aria-checked={enabled}
+-            data-testid="sound-cue-toggle"
+-            onClick={() => setEnabled((v) => !v)}
+-            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors focus:outline-none focus:ring-1 focus:ring-slate-500 ${
+-              enabled
+-                ? "border-slate-500 bg-slate-600 hover:bg-slate-500 active:bg-slate-400"
+-                : "border-slate-700 bg-slate-800 hover:bg-slate-700 active:bg-slate-600"
+-            }`}
+-          >
+-            <span
+-              aria-hidden
+-              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-slate-200 transition-transform ${
+-                enabled ? "translate-x-4" : "translate-x-0.5"
+-              }`}
+-            />
+-          </button>
+-          <span className="font-medium text-slate-300">{copy.toggle_label}</span>
+-        </label>
+-
+-        {/* The fired-indicator — a brief slate pulse shown each time the cue fires, so transition-only
+-            + cooldown behaviour is verifiable without audio hardware. The `key` restarts the animation
+-            on each fire. Absent until the first fire. */}
+-        {firedPulse > 0 && (
+-          <span
+-            key={firedPulse}
+-            data-testid="sound-cue-fired"
+-            data-fire-count={firedPulse}
+-            className="sound-cue-pulse rounded-full bg-slate-700 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-slate-200"
+-          >
+-            {copy.fired_indicator_label}
+-          </span>
+-        )}
+-      </div>
+-
+-      {/* The off-by-default / transition-only description + the reused register line, both backend-owned
+-          and rendered VERBATIM (the frontend hardcodes neither). */}
+-      <p className="text-[11px] leading-tight text-slate-500">{copy.description}</p>
+-      <p className="text-[11px] text-slate-600">{copy.register}</p>
+-    </div>
+-  );
+-}
+-
+-// A short Web Audio beep — generated on the fly so there is no audio asset and no new dependency. Wrapped
+-// in try/catch so a blocked/unsupported AudioContext never throws into render (the VISIBLE fired-
+-// indicator still fires, keeping the behaviour browser-verifiable without audio hardware).
+-function playBeep() {
+-  try {
+-    const AudioCtx =
+-      typeof window !== "undefined"
+-        ? window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+-        : undefined;
+-    if (!AudioCtx) return;
+-    const ctx = new AudioCtx();
+-    const osc = ctx.createOscillator();
+-    const gain = ctx.createGain();
+-    osc.type = "sine";
+-    osc.frequency.value = 660;
+-    gain.gain.value = 0.05; // quiet — a brief cue, never an alarm
+-    osc.connect(gain);
+-    gain.connect(ctx.destination);
+-    osc.start();
+-    // A short envelope so it is a brief blip, then close the context.
+-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+-    osc.stop(ctx.currentTime + 0.16);
+-    osc.onended = () => {
+-      try {
+-        ctx.close();
+-      } catch {
+-        /* already closed */
+-      }
+-    };
+-  } catch {
+-    /* audio blocked/unsupported — the visible fired-indicator still fired */
+-  }
+-}
+diff --git a/apps/frontend/components/StudyCreateForm.tsx b/apps/frontend/components/StudyCreateForm.tsx
+deleted file mode 100644
+index 08f9568..0000000
+--- a/apps/frontend/components/StudyCreateForm.tsx
++++ /dev/null
+@@ -1,364 +0,0 @@
+-"use client";
+-
+-import { useMemo, useState } from "react";
+-import type { CreateStudyParams, ResearchTaxonomy } from "@/lib/types";
+-import { SymbolSearch } from "@/components/SymbolSearch";
+-import {
+-  ET_SESSION_CLOSE,
+-  ET_SESSION_OPEN,
+-  isValidDMY,
+-  localZoneLabel,
+-  parseDMYToIsoDate,
+-  resolveLocalWindowInstant,
+-  resolveSessionPreset,
+-} from "@/lib/datetime";
+-
+-// The study create form (J-60). Source pick (reference quick-pick / seeded sim / arbitrary symbol +
+-// past window), setup × direction, and a level input shown ONLY for the two level setups (with the
+-// hindsight warning). For the arbitrary-window source it reuses the SAME symbol search + dd-MM-yyyy
+-// custom date input + the row-12 local-window resolver the cockpit uses (no second timezone path).
+-//
+-// The form does NO business logic — it builds the POST body and surfaces the backend's verbatim 422
+-// inline. All labels come from the taxonomy. Dark instrument-panel style; every control has hover /
+-// focus / active states. The Run button is disabled until the required fields are present (a courtesy;
+-// the backend remains the validation authority).
+-
+-const REFERENCE_SOURCE_ID = "PG_SIP_REFERENCE";
+-
+-// Sim scenarios that drive the two state-native setups (the reserved regime sims). Surfaced as a
+-// small select; the backend validates the id (an unknown sim is a 422).
+-const SIM_SCENARIOS = ["SIM-REVERSAL", "SIM-BUYER", "SIM-SHIFT", "SIM-SELLER"];
+-
+-type SourceKind = "reference" | "sim" | "historical";
+-
+-export function StudyCreateForm({
+-  taxonomy,
+-  onCreate,
+-  creating,
+-  error,
+-}: {
+-  taxonomy: ResearchTaxonomy | null;
+-  onCreate: (params: CreateStudyParams) => void;
+-  creating: boolean;
+-  error: string | null;
+-}) {
+-  const copy = taxonomy?.studies?.copy ?? {};
+-  const setups = taxonomy?.setups ?? [];
+-  const directions = taxonomy?.directions ?? [];
+-  const levelSetups = useMemo(
+-    () => new Set(taxonomy?.studies?.level_setups ?? ["level_break", "failed_move_fade"]),
+-    [taxonomy],
+-  );
+-
+-  const [sourceKind, setSourceKind] = useState<SourceKind>("reference");
+-  const [simId, setSimId] = useState(SIM_SCENARIOS[0]);
+-  const [symbol, setSymbol] = useState("");
+-  const [dateStr, setDateStr] = useState("");
+-  const [startTime, setStartTime] = useState("");
+-  const [endTime, setEndTime] = useState("");
+-  const [setupType, setSetupType] = useState("absorption_reversal");
+-  const [direction, setDirection] = useState("long");
+-  const [levelPrice, setLevelPrice] = useState("");
+-
+-  const requiresLevel = levelSetups.has(setupType);
+-
+-  // The Run button is enabled when the required fields for the chosen source are present (courtesy;
+-  // the backend is the authority). A historical study needs a symbol + a valid date + both times.
+-  //
+-  // A MISSING LEVEL on a level setup is deliberately NOT disabled here: J-61 requires the user to see
+-  // the backend's honest 422 ("requires a level_price — a level is never guessed") inline, never a
+-  // silent no-op. So we let the submit fire and surface the backend message rather than guess or hide.
+-  const canSubmit = useMemo(() => {
+-    if (sourceKind === "historical") {
+-      if (!symbol.trim() || !isValidDMY(dateStr) || !startTime || !endTime) return false;
+-    }
+-    return !creating;
+-  }, [sourceKind, symbol, dateStr, startTime, endTime, creating]);
+-
+-  const applyPreset = (which: "open" | "close" | "rth") => {
+-    const iso = parseDMYToIsoDate(dateStr);
+-    if (!iso) return;
+-    const start = ET_SESSION_OPEN;
+-    const end = which === "open" ? { hour: 9, minute: 35 } : ET_SESSION_CLOSE;
+-    const close = which === "close" ? { hour: 15, minute: 55 } : ET_SESSION_CLOSE;
+-    const preset = resolveSessionPreset(
+-      iso,
+-      which === "close" ? close : start,
+-      which === "open" ? end : ET_SESSION_CLOSE,
+-    );
+-    if (!preset) return;
+-    setStartTime(preset.startTimeInput);
+-    setEndTime(preset.endTimeInput);
+-  };
+-
+-  const handleSubmit = () => {
+-    const base: CreateStudyParams = {
+-      source_kind: sourceKind,
+-      source_id:
+-        sourceKind === "reference"
+-          ? REFERENCE_SOURCE_ID
+-          : sourceKind === "sim"
+-            ? simId
+-            : symbol.trim().toUpperCase(),
+-      setup_type: setupType,
+-      direction,
+-    };
+-    if (requiresLevel && levelPrice.trim() !== "") {
+-      base.level_price = Number(levelPrice);
+-    }
+-    if (sourceKind === "historical") {
+-      const iso = parseDMYToIsoDate(dateStr);
+-      if (iso) {
+-        base.start = resolveLocalWindowInstant(iso, startTime);
+-        base.end = resolveLocalWindowInstant(iso, endTime);
+-      }
+-    }
+-    onCreate(base);
+-  };
+-
+-  return (
+-    <section
+-      data-testid="study-create-form"
+-      className="rounded-lg border border-slate-800 bg-slate-900/40 p-4"
+-    >
+-      <h2 className="mb-3 text-sm font-semibold text-slate-200">
+-        {copy.create_title ?? "New study"}
+-      </h2>
+-
+-      <div className="space-y-3">
+-        {/* Source picker. */}
+-        <Field label={copy.source_label ?? "Source"}>
+-          <div role="radiogroup" aria-label="Source" className="flex flex-col gap-1.5">
+-            <SourceRadio
+-              checked={sourceKind === "reference"}
+-              onChange={() => setSourceKind("reference")}
+-              label={copy.reference_source_label ?? "Reference window (committed PG SIP fixture — no credentials)"}
+-              testid="source-reference"
+-            />
+-            <SourceRadio
+-              checked={sourceKind === "sim"}
+-              onChange={() => setSourceKind("sim")}
+-              label={copy.sim_source_label ?? "Seeded sim scenario"}
+-              testid="source-sim"
+-            />
+-            <SourceRadio
+-              checked={sourceKind === "historical"}
+-              onChange={() => setSourceKind("historical")}
+-              label={copy.historical_source_label ?? "Symbol + past window"}
+-              testid="source-historical"
+-            />
+-          </div>
+-        </Field>
+-
+-        {/* Source-specific controls. */}
+-        {sourceKind === "sim" && (
+-          <Field label="Sim scenario">
+-            <select
+-              data-testid="study-sim-select"
+-              value={simId}
+-              onChange={(e) => setSimId(e.target.value)}
+-              className={selectClass}
+-            >
+-              {SIM_SCENARIOS.map((s) => (
+-                <option key={s} value={s}>
+-                  {s}
+-                </option>
+-              ))}
+-            </select>
+-          </Field>
+-        )}
+-
+-        {sourceKind === "historical" && (
+-          <>
+-            <Field label="Symbol">
+-              <SymbolSearch
+-                value={symbol}
+-                onChange={setSymbol}
+-                onPick={setSymbol}
+-                placeholder="e.g. AAPL"
+-                ariaLabel="Study symbol"
+-                inputClassName={inputClass}
+-              />
+-            </Field>
+-            <Field label={`Date (dd-MM-yyyy, ${localZoneLabel()})`}>
+-              <input
+-                data-testid="study-date"
+-                value={dateStr}
+-                onChange={(e) => setDateStr(e.target.value)}
+-                placeholder="dd-MM-yyyy"
+-                className={inputClass}
+-              />
+-            </Field>
+-            <div className="flex gap-2">
+-              <Field label="Start (HH:mm)">
+-                <input
+-                  data-testid="study-start-time"
+-                  type="time"
+-                  value={startTime}
+-                  onChange={(e) => setStartTime(e.target.value)}
+-                  className={inputClass}
+-                />
+-              </Field>
+-              <Field label="End (HH:mm)">
+-                <input
+-                  data-testid="study-end-time"
+-                  type="time"
+-                  value={endTime}
+-                  onChange={(e) => setEndTime(e.target.value)}
+-                  className={inputClass}
+-                />
+-              </Field>
+-            </div>
+-            <div className="flex flex-wrap gap-1.5">
+-              <PresetButton onClick={() => applyPreset("open")} label="Open 9:30 ET" disabled={!isValidDMY(dateStr)} />
+-              <PresetButton onClick={() => applyPreset("close")} label="Close 16:00 ET" disabled={!isValidDMY(dateStr)} />
+-              <PresetButton onClick={() => applyPreset("rth")} label="Full RTH" disabled={!isValidDMY(dateStr)} />
+-            </div>
+-          </>
+-        )}
+-
+-        {/* Setup × direction. */}
+-        <div className="flex gap-2">
+-          <Field label={copy.setup_label ?? "Setup"}>
+-            <select
+-              data-testid="study-setup"
+-              value={setupType}
+-              onChange={(e) => setSetupType(e.target.value)}
+-              className={selectClass}
+-            >
+-              {setups.map((s) => (
+-                <option key={s.id} value={s.id}>
+-                  {s.name}
+-                </option>
+-              ))}
+-            </select>
+-          </Field>
+-          <Field label={copy.direction_label ?? "Direction"}>
+-            <select
+-              data-testid="study-direction"
+-              value={direction}
+-              onChange={(e) => setDirection(e.target.value)}
+-              className={selectClass}
+-            >
+-              {directions.map((d) => (
+-                <option key={d.id} value={d.id}>
+-                  {d.name}
+-                </option>
+-              ))}
+-            </select>
+-          </Field>
+-        </div>
+-
+-        {/* Level input — ONLY for the two level setups, with the hindsight warning. */}
+-        {requiresLevel && (
+-          <Field label={copy.level_label ?? "Level price (required for level setups)"}>
+-            <input
+-              data-testid="study-level"
+-              type="number"
+-              step="0.01"
+-              value={levelPrice}
+-              onChange={(e) => setLevelPrice(e.target.value)}
+-              placeholder="e.g. 100.50"
+-              className={`${inputClass} font-mono`}
+-            />
+-            <p
+-              data-testid="study-hindsight-warning"
+-              className="mt-1 rounded border border-amber-800/60 bg-amber-900/20 px-2 py-1 text-[11px] text-amber-200"
+-            >
+-              {copy.hindsight_level_caption ??
+-                "This level setup uses a level you supply with hindsight — illustrative only and excluded from any cross-study comparison."}
+-            </p>
+-          </Field>
+-        )}
+-
+-        {/* The backend's verbatim 422 inline. */}
+-        {error && (
+-          <div
+-            data-testid="study-create-error"
+-            role="alert"
+-            className="rounded-md border border-rose-700/70 bg-rose-900/30 px-3 py-2 text-xs text-rose-200"
+-          >
+-            {error}
+-          </div>
+-        )}
+-
+-        <button
+-          type="button"
+-          data-testid="study-create-button"
+-          disabled={!canSubmit}
+-          onClick={handleSubmit}
+-          className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 active:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+-        >
+-          {creating ? "Running…" : copy.create_button ?? "Run study"}
+-        </button>
+-      </div>
+-    </section>
+-  );
+-}
+-
+-const inputClass =
+-  "w-full rounded-md border border-slate-700 bg-slate-950/60 px-2.5 py-1.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-600";
+-const selectClass = inputClass + " cursor-pointer";
+-
+-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+-  return (
+-    <label className="block flex-1">
+-      <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+-        {label}
+-      </span>
+-      {children}
+-    </label>
+-  );
+-}
+-
+-function SourceRadio({
+-  checked,
+-  onChange,
+-  label,
+-  testid,
+-}: {
+-  checked: boolean;
+-  onChange: () => void;
+-  label: string;
+-  testid: string;
+-}) {
+-  return (
+-    <label
+-      data-testid={testid}
+-      className={`flex cursor-pointer items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+-        checked
+-          ? "border-slate-600 bg-slate-800 text-slate-100"
+-          : "border-slate-800 bg-slate-950/40 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+-      }`}
+-    >
+-      <input
+-        type="radio"
+-        checked={checked}
+-        onChange={onChange}
+-        className="mt-0.5 accent-slate-400"
+-      />
+-      <span>{label}</span>
+-    </label>
+-  );
+-}
+-
+-function PresetButton({
+-  onClick,
+-  label,
+-  disabled,
+-}: {
+-  onClick: () => void;
+-  label: string;
+-  disabled: boolean;
+-}) {
+-  return (
+-    <button
+-      type="button"
+-      onClick={onClick}
+-      disabled={disabled}
+-      className="rounded border border-slate-700 bg-slate-800/60 px-2 py-1 text-[11px] text-slate-300 transition-colors hover:bg-slate-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-slate-500 active:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+-    >
+-      {label}
+-    </button>
+-  );
+-}
+diff --git a/apps/frontend/components/StudyList.tsx b/apps/frontend/components/StudyList.tsx
+deleted file mode 100644
+index 1be3228..0000000
+--- a/apps/frontend/components/StudyList.tsx
++++ /dev/null
+@@ -1,160 +0,0 @@
+-"use client";
+-
+-import type { ResearchTaxonomy, Study } from "@/lib/types";
+-
+-// The study job list (J-60/J-61): every created study, most-recent-first, with its status / progress
+-// and a Cancel control while it is queued/running. Each row is read VERBATIM from the persisted
+-// payload. Selecting a row opens its results. Status COLORS stay within the existing semantics — slate
+-// for queued/cancelled, amber for running (and partial), rose for failed, a NEUTRAL slate for done so
+-// it never reads as an "edge win". All labels come from the taxonomy.
+-
+-const STATUS_LABEL_FALLBACK: Record<string, string> = {
+-  queued: "Queued",
+-  running: "Running",
+-  done: "Done",
+-  cancelled: "Cancelled",
+-  failed: "Failed",
+-};
+-
+-function statusClasses(status: string): string {
+-  switch (status) {
+-    case "running":
+-      return "border-amber-700/60 bg-amber-900/20 text-amber-300";
+-    case "failed":
+-      return "border-rose-700/60 bg-rose-900/20 text-rose-300";
+-    case "done":
+-      // Deliberately NEUTRAL slate — never green (a green "success" would read as an edge claim).
+-      return "border-slate-600 bg-slate-800 text-slate-200";
+-    case "cancelled":
+-    case "queued":
+-    default:
+-      return "border-slate-700 bg-slate-800/60 text-slate-400";
+-  }
+-}
+-
+-export function StudyList({
+-  studies,
+-  loading,
+-  error,
+-  taxonomy,
+-  selectedId,
+-  onSelect,
+-  onCancel,
+-}: {
+-  studies: Study[];
+-  loading: boolean;
+-  error: string | null;
+-  taxonomy: ResearchTaxonomy | null;
+-  selectedId: string | null;
+-  onSelect: (id: string) => void;
+-  onCancel: (id: string) => void;
+-}) {
+-  const copy = taxonomy?.studies?.copy ?? {};
+-  const statusLabel = (id: string) =>
+-    taxonomy?.studies?.statuses?.find((s) => s.id === id)?.name ??
+-    STATUS_LABEL_FALLBACK[id] ??
+-    id;
+-  const setupLabel = (id: string) =>
+-    taxonomy?.setups?.find((s) => s.id === id)?.name ?? id.replace(/_/g, " ");
+-
+-  return (
+-    <section
+-      data-testid="study-list"
+-      className="rounded-lg border border-slate-800 bg-slate-900/40"
+-    >
+-      <h2 className="border-b border-slate-800 px-4 py-3 text-sm font-semibold text-slate-200">
+-        {copy.jobs_title ?? "Studies"}
+-      </h2>
+-
+-      {error && (
+-        <div
+-          data-testid="study-list-error"
+-          role="alert"
+-          className="m-3 rounded-md border border-rose-700/70 bg-rose-900/30 px-3 py-2 text-xs text-rose-200"
+-        >
+-          {error}
+-        </div>
+-      )}
+-
+-      {loading && studies.length === 0 && !error ? (
+-        <div
+-          data-testid="study-list-loading"
+-          className="flex min-h-[12vh] items-center justify-center"
+-        >
+-          <div className="h-3 w-3 animate-pulse rounded-full bg-slate-600" />
+-          <span className="ml-2 text-sm text-slate-500">Loading studies…</span>
+-        </div>
+-      ) : studies.length === 0 ? (
+-        <p data-testid="study-list-empty" className="px-4 py-6 text-sm text-slate-500">
+-          {copy.jobs_empty ??
+-            "No studies yet — create one above to run your setup grammar over a chosen window."}
+-        </p>
+-      ) : (
+-        <ul className="divide-y divide-slate-800/70">
+-          {studies.map((study) => {
+-            const active = study.status === "queued" || study.status === "running";
+-            return (
+-              <li key={study.id}>
+-                <div
+-                  data-testid="study-row"
+-                  data-status={study.status}
+-                  data-study-id={study.id}
+-                  className={`flex items-center gap-3 px-4 py-3 ${
+-                    selectedId === study.id ? "bg-slate-800/40" : ""
+-                  }`}
+-                >
+-                  <button
+-                    type="button"
+-                    onClick={() => onSelect(study.id)}
+-                    className="flex flex-1 flex-col items-start gap-1 text-left focus:outline-none"
+-                  >
+-                    <span className="flex items-center gap-2">
+-                      <span
+-                        data-testid="study-status"
+-                        className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusClasses(
+-                          study.status,
+-                        )}`}
+-                      >
+-                        {statusLabel(study.status)}
+-                      </span>
+-                      <span className="text-sm text-slate-200">
+-                        {setupLabel(study.setup_type)} · {study.direction}
+-                      </span>
+-                    </span>
+-                    <span className="flex items-center gap-2 text-[11px] text-slate-500">
+-                      <span className="font-mono">{study.source}</span>
+-                      <span className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 font-mono uppercase text-slate-400">
+-                        {study.data_feed}
+-                      </span>
+-                      {study.hindsight_level && (
+-                        <span className="rounded border border-amber-800/60 bg-amber-900/20 px-1.5 py-0.5 text-amber-300">
+-                          {copy.hindsight_level_label ?? "Hindsight level"}
+-                        </span>
+-                      )}
+-                      {study.status === "running" && study.events_processed != null && (
+-                        <span className="font-mono text-amber-300">
+-                          {study.events_processed} {copy.progress_label ?? "events processed"}
+-                        </span>
+-                      )}
+-                    </span>
+-                  </button>
+-
+-                  {active && (
+-                    <button
+-                      type="button"
+-                      data-testid="study-cancel-button"
+-                      onClick={() => onCancel(study.id)}
+-                      className="rounded-md border border-slate-700 bg-slate-800/60 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:border-rose-700/60 hover:bg-rose-900/20 hover:text-rose-200 focus:outline-none focus-visible:ring-1 focus-visible:ring-rose-500 active:bg-slate-800"
+-                    >
+-                      {copy.cancel_button ?? "Cancel"}
+-                    </button>
+-                  )}
+-                </div>
+-              </li>
+-            );
+-          })}
+-        </ul>
+-      )}
+-    </section>
+-  );
+-}
+diff --git a/apps/frontend/components/StudyResultsView.tsx b/apps/frontend/components/StudyResultsView.tsx
+deleted file mode 100644
+index 9d51020..0000000
+--- a/apps/frontend/components/StudyResultsView.tsx
++++ /dev/null
+@@ -1,382 +0,0 @@
+-"use client";
+-
+-import type {
+-  CreateStudyParams,
+-  ResearchTaxonomy,
+-  Study,
+-  StudyHorizonRow,
+-  StudyOccurrence,
+-  StudyPopulationAggregate,
+-} from "@/lib/types";
+-
+-// The study results view (J-60/J-61/J-62). Renders the runner's persisted result VERBATIM (the page
+-// computes nothing): the setup occurrence distribution SIDE-BY-SIDE with the seeded random-arm-time
+-// null baseline, per-horizon ternary outcomes (truncated counted SEPARATELY), the occurrence rows,
+-// the honesty stamps (feed + config fingerprint + recorded seed), the hindsight label where it
+-// applies, n + caveats, and the "Descriptive only — not trading advice" register.
+-//
+-// Honesty discipline baked into the render: a non-terminal study shows its OWN explicit per-status
+-// absence sentence (iter-15 lesson — never a shared fallback); a cancelled study is marked PARTIAL; a
+-// failed study shows its explicit error (never an empty success). NEVER a green "success" framing.
+-// All copy comes from the taxonomy.
+-
+-function copyOf(copy: Record<string, string> | undefined, key: string, fallback: string): string {
+-  const v = copy?.[key];
+-  return typeof v === "string" && v.length > 0 ? v : fallback;
+-}
+-
+-export function StudyResultsView({
+-  study,
+-  taxonomy,
+-  onRerun,
+-}: {
+-  study: Study;
+-  taxonomy: ResearchTaxonomy | null;
+-  onRerun: (params: CreateStudyParams) => void;
+-}) {
+-  const copy = taxonomy?.studies?.copy;
+-  const absence = taxonomy?.studies?.status_absence ?? {};
+-  const setupLabel =
+-    taxonomy?.setups?.find((s) => s.id === study.setup_type)?.name ??
+-    study.setup_type.replace(/_/g, " ");
+-
+-  const terminalWithResults = study.status === "done" || study.status === "cancelled";
+-
+-  const rerun = () =>
+-    onRerun({
+-      source_kind: study.source_kind as CreateStudyParams["source_kind"],
+-      source_id: study.source_id,
+-      setup_type: study.setup_type,
+-      direction: study.direction,
+-      level_price: study.level_price ?? undefined,
+-      null_baseline_seed: study.null_baseline_seed,
+-    });
+-
+-  return (
+-    <section
+-      data-testid="study-results"
+-      data-status={study.status}
+-      data-study-id={study.id}
+-      className="rounded-lg border border-slate-800 bg-slate-900/40"
+-    >
+-      {/* Header — setup × direction + the honesty stamps (feed + the FULL config fingerprint + seed). */}
+-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+-        <div className="flex items-center gap-2">
+-          <h2 className="text-sm font-semibold text-slate-200">
+-            {setupLabel} · {study.direction}
+-          </h2>
+-          {study.hindsight_level && (
+-            <span
+-              data-testid="results-hindsight-label"
+-              className="rounded border border-amber-800/60 bg-amber-900/20 px-2 py-0.5 text-[11px] text-amber-300"
+-            >
+-              {copyOf(copy, "hindsight_level_label", "Level chosen with hindsight")}
+-            </span>
+-          )}
+-        </div>
+-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+-          <Stamp label={copyOf(copy, "feed_label", "Feed")} value={study.data_feed} testid="results-feed" />
+-          <Stamp
+-            label={copyOf(copy, "fingerprint_label", "Config fingerprint")}
+-            value={study.config_fingerprint}
+-            testid="results-fingerprint"
+-            title={study.config_fingerprint}
+-          />
+-          <Stamp
+-            label={copyOf(copy, "seed_label", "Baseline seed")}
+-            value={String(study.null_baseline_seed)}
+-            testid="results-seed"
+-          />
+-        </div>
+-      </div>
+-
+-      <div className="space-y-5 px-4 py-4">
+-        {/* The framing line — always one line away from every figure (anti-goal). */}
+-        <p data-testid="results-framing" className="text-[11px] text-slate-600">
+-          {copyOf(
+-            copy,
+-            "measurement_framing",
+-            "Journaled measurements of a replay over recorded data — not a profitability claim, an edge, a win rate, or a forecast. Descriptive only — not trading advice.",
+-          )}
+-        </p>
+-
+-        {/* Hindsight caption (when applicable). */}
+-        {study.hindsight_level && (
+-          <p
+-            data-testid="results-hindsight-caption"
+-            className="rounded-md border border-amber-800/60 bg-amber-900/20 px-3 py-2 text-xs text-amber-200"
+-          >
+-            {copyOf(
+-              copy,
+-              "hindsight_level_caption",
+-              "This level setup used a level supplied with hindsight — illustrative only and excluded from any cross-study comparison.",
+-            )}
+-          </p>
+-        )}
+-
+-        {/* Failed — explicit error, never an empty success. */}
+-        {study.status === "failed" && (
+-          <div
+-            data-testid="results-failed"
+-            role="alert"
+-            className="rounded-md border border-rose-700/70 bg-rose-900/30 px-3 py-2 text-sm text-rose-200"
+-          >
+-            {absence.failed ??
+-              "This study could not produce a result. The explicit reason is shown — never an empty success."}
+-            {study.error && <p className="mt-1 font-mono text-xs text-rose-300/90">{study.error}</p>}
+-          </div>
+-        )}
+-
+-        {/* Queued / running — each status its OWN explicit absence sentence (iter-15 lesson). */}
+-        {(study.status === "queued" || study.status === "running") && (
+-          <div
+-            data-testid="results-status-absence"
+-            className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-3 text-sm text-slate-400"
+-          >
+-            {absence[study.status] ??
+-              "This study has not produced results yet — they appear once the replay finishes."}
+-            {study.status === "running" && study.events_processed != null && (
+-              <span className="ml-2 font-mono text-amber-300">
+-                {study.events_processed} {copyOf(copy, "progress_label", "events processed")}
+-              </span>
+-            )}
+-          </div>
+-        )}
+-
+-        {/* Cancelled — explicit partial marker over any partial results. */}
+-        {study.status === "cancelled" && (
+-          <div
+-            data-testid="results-cancelled"
+-            className="rounded-md border border-slate-700 bg-slate-800/40 px-3 py-2 text-xs text-slate-300"
+-          >
+-            {absence.cancelled ??
+-              "This study was cancelled before it finished. Any occurrences shown are PARTIAL — not a complete measurement."}
+-          </div>
+-        )}
+-
+-        {/* The side-by-side distributions (done / cancelled-partial). */}
+-        {terminalWithResults && study.aggregates && (
+-          <>
+-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+-              {copyOf(copy, "results_title", "Results")}
+-            </h3>
+-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+-              <DistributionBlock
+-                title={copyOf(copy, "setup_distribution_label", "Your setup")}
+-                aggregate={study.aggregates.setup}
+-                copy={copy}
+-                minSample={study.min_sample_size}
+-                testid="setup-distribution"
+-                accent="setup"
+-              />
+-              <DistributionBlock
+-                title={copyOf(copy, "null_baseline_label", "Random-time baseline")}
+-                caption={copyOf(
+-                  copy,
+-                  "null_baseline_caption",
+-                  "The same window, direction, R definition, and horizons — but arm times drawn at random from a recorded seed.",
+-                )}
+-                aggregate={study.aggregates.null_baseline}
+-                copy={copy}
+-                minSample={study.min_sample_size}
+-                testid="null-baseline-distribution"
+-                accent="null"
+-              />
+-            </div>
+-
+-            {/* The occurrence rows (setup population). */}
+-            <OccurrencesTable occurrences={study.occurrences ?? []} copy={copy} />
+-
+-            {/* The occurrence-R definition note (the named design decision, surfaced honestly). */}
+-            <p data-testid="results-r-caption" className="text-[11px] text-slate-600">
+-              {copyOf(
+-                copy,
+-                "occurrence_r_caption",
+-                "An auto-armed occurrence has no typed invalidation, so its R is a config-owned synthetic distance from the arm price (a spread multiple on the adverse side) — the same definition for your setup and the random-time baseline.",
+-              )}
+-            </p>
+-
+-            {/* Re-run identical (the J-60 reproducibility affordance). */}
+-            <button
+-              type="button"
+-              data-testid="study-rerun-button"
+-              onClick={rerun}
+-              className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 active:bg-slate-800"
+-            >
+-              {copyOf(copy, "rerun_button", "Re-run identical")}
+-            </button>
+-          </>
+-        )}
+-
+-        <p className="text-[11px] text-slate-600">{taxonomy?.disclaimer ?? "Descriptive only — not trading advice."}</p>
+-      </div>
+-    </section>
+-  );
+-}
+-
+-function Stamp({
+-  label,
+-  value,
+-  testid,
+-  title,
+-}: {
+-  label: string;
+-  value: string;
+-  testid: string;
+-  title?: string;
+-}) {
+-  return (
+-    <span className="inline-flex items-center gap-1">
+-      <span className="uppercase tracking-wider text-slate-500">{label}</span>
+-      <span
+-        data-testid={testid}
+-        title={title}
+-        className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 font-mono text-slate-300"
+-      >
+-        {value}
+-      </span>
+-    </span>
+-  );
+-}
+-
+-function DistributionBlock({
+-  title,
+-  caption,
+-  aggregate,
+-  copy,
+-  minSample,
+-  testid,
+-  accent,
+-}: {
+-  title: string;
+-  caption?: string;
+-  aggregate: StudyPopulationAggregate;
+-  copy: Record<string, string> | undefined;
+-  minSample?: number;
+-  testid: string;
+-  accent: "setup" | "null";
+-}) {
+-  const insufficient = minSample != null && aggregate.n < minSample;
+-  return (
+-    <div
+-      data-testid={testid}
+-      data-n={aggregate.n}
+-      className={`rounded-md border p-3 ${
+-        accent === "setup" ? "border-slate-700 bg-slate-800/30" : "border-slate-800 bg-slate-950/40"
+-      }`}
+-    >
+-      <div className="flex items-baseline justify-between">
+-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">{title}</p>
+-        <span className="text-xs text-slate-400">
+-          {copyOf(copy, "n_label", "n")} <span className="font-mono text-slate-200">{aggregate.n}</span>
+-        </span>
+-      </div>
+-      {caption && <p className="mt-1 text-[11px] text-slate-600">{caption}</p>}
+-      {insufficient && (
+-        <div
+-          data-testid={`${testid}-insufficient`}
+-          className="mt-2 rounded border border-amber-800/60 bg-amber-900/20 px-2 py-1 text-[11px] text-amber-200"
+-        >
+-          {copyOf(copy, "insufficient_sample_label", "Insufficient sample")}{" "}
+-          <span className="font-mono">(n = {aggregate.n} &lt; {minSample})</span>
+-        </div>
+-      )}
+-      <div className="mt-2 space-y-1.5">
+-        {aggregate.horizons.map((row) => (
+-          <HorizonRow key={row.horizon} row={row} copy={copy} />
+-        ))}
+-      </div>
+-      <p className="mt-1.5 text-[11px] text-slate-600">
+-        {copyOf(
+-          copy,
+-          "truncated_caption",
+-          "Truncated horizons are counted separately, never folded into the resolved outcomes, never extrapolated.",
+-        )}
+-      </p>
+-    </div>
+-  );
+-}
+-
+-function HorizonRow({ row, copy }: { row: StudyHorizonRow; copy: Record<string, string> | undefined }) {
+-  return (
+-    <div
+-      data-testid="study-horizon-row"
+-      data-horizon={row.horizon}
+-      className="flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded border border-slate-800 bg-slate-900/50 px-2.5 py-1.5 text-xs"
+-    >
+-      <span className="w-10 font-mono text-slate-400">{row.horizon}s</span>
+-      <span
+-        data-testid="study-horizon-plus"
+-        className="inline-flex items-center gap-1 rounded border border-emerald-800/60 bg-emerald-900/20 px-1.5 py-0.5 text-emerald-300"
+-      >
+-        +1R <span className="font-mono">{row["+1R_first"]}</span>
+-      </span>
+-      <span
+-        data-testid="study-horizon-minus"
+-        className="inline-flex items-center gap-1 rounded border border-rose-800/60 bg-rose-900/20 px-1.5 py-0.5 text-rose-300"
+-      >
+-        −1R <span className="font-mono">{row["-1R_first"]}</span>
+-      </span>
+-      <span className="inline-flex items-center gap-1 rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-slate-400">
+-        neither <span className="font-mono">{row.neither_within_horizon}</span>
+-      </span>
+-      <span
+-        data-testid="study-horizon-truncated"
+-        className="inline-flex items-center gap-1 rounded border border-amber-800/60 bg-amber-900/20 px-1.5 py-0.5 text-amber-300"
+-      >
+-        {copyOf(copy, "truncated_label", "Truncated")} <span className="font-mono">{row.truncated}</span>
+-      </span>
+-    </div>
+-  );
+-}
+-
+-function OccurrencesTable({
+-  occurrences,
+-  copy,
+-}: {
+-  occurrences: StudyOccurrence[];
+-  copy: Record<string, string> | undefined;
+-}) {
+-  if (occurrences.length === 0) {
+-    return (
+-      <p data-testid="study-occurrences-empty" className="text-xs text-slate-500">
+-        No setup occurrences armed in this window.
+-      </p>
+-    );
+-  }
+-  return (
+-    <div data-testid="study-occurrences">
+-      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+-        {copyOf(copy, "occurrences_title", "Occurrences")}
+-      </p>
+-      <div className="overflow-x-auto rounded-md border border-slate-800">
+-        <table className="min-w-full text-xs">
+-          <thead className="bg-slate-900/60 text-slate-500">
+-            <tr>
+-              <th className="px-2.5 py-1.5 text-left font-medium uppercase tracking-wider">
+-                {copyOf(copy, "occurrence_arm_label", "Arm time (logical s)")}
+-              </th>
+-              <th className="px-2.5 py-1.5 text-left font-medium uppercase tracking-wider">
+-                {copyOf(copy, "occurrence_verdict_label", "Verdict reached")}
+-              </th>
+-              <th className="px-2.5 py-1.5 text-left font-medium uppercase tracking-wider">
+-                {copyOf(copy, "occurrence_r_label", "R basis")}
+-              </th>
+-            </tr>
+-          </thead>
+-          <tbody className="divide-y divide-slate-800/70">
+-            {occurrences.map((occ, i) => (
+-              <tr key={i} data-testid="study-occurrence-row">
+-                <td className="px-2.5 py-1.5 font-mono text-slate-300">
+-                  {occ.arm_logical_ts.toFixed(1)}
+-                </td>
+-                <td className="px-2.5 py-1.5 text-slate-300">{occ.verdict_summary ?? "—"}</td>
+-                <td className="px-2.5 py-1.5 font-mono text-slate-300">{occ.r_basis.toFixed(2)}</td>
+-              </tr>
+-            ))}
+-          </tbody>
+-        </table>
+-      </div>
+-    </div>
+-  );
+-}
+```
+
+## Excluded-path stat (dependency/lockfile visibility)
+
+ runs/goal-session-clean_slate/telemetry.jsonl   | 6 ++++++
+ runs/goal-session-clean_slate/trace/trace.jsonl | 3 +++
+ 2 files changed, 9 insertions(+)
+
+(if a dependency lockfile appears above, review the matching package.json/pyproject
+edit in the main diff — never lockfile hunks; runs/ reports/ docs/handoffs/ churn is
+harness bookkeeping, outside review scope)

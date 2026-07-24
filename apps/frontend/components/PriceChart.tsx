@@ -1,7 +1,7 @@
 "use client";
 
 // The cockpit price chart (J-17 / J-18): the watched instrument as candlesticks, with markers at
-// meaningful tape-state transitions and the live thesis geometry. This component is the cockpit's
+// meaningful tape-state transitions. This component is the cockpit's
 // smart CONTAINER — it polls the served data and composes it — while the drawing itself is delegated
 // to the shared `StructureChart` (the /structure Tradable Map's own renderer), so both surfaces
 // share one chart implementation.
@@ -39,7 +39,6 @@ import {
   type CockpitHistory,
   type HistoryBarSize,
   type StrategiesPayload,
-  type ThesisProjection,
 } from "@/lib/types";
 import {
   StructureChart,
@@ -51,6 +50,13 @@ import { Panel, EmptyHint } from "./Panel";
 // How often we re-pull `…/history` while a ticker is watched — matches the cockpit's WS push
 // cadence so the chart accrues new candles in step with the rest of the cockpit (no 2nd socket).
 const POLL_INTERVAL_MS = 1000;
+
+// era-5D J-02 ("The Clean Slate" demolition interlude): `extraPriceLines` used to carry the
+// thesis-geometry price lines (invalidation/level), built from the now-deleted WS `thesis` key.
+// That construction is removed; the `extraMarkers`/`extraPriceLines` SEAM into StructureChart
+// stays wired (I-7 chart clause) with a stable, referentially-constant empty array — never a
+// fresh `[]` per render, which would needlessly re-run StructureChart's own price-line effect.
+const NO_PRICE_LINES: ChartPriceLineSpec[] = [];
 
 // Marker color by tape state — the SAME load-bearing semantics as the rest of the cockpit
 // (emerald = buyer_control, rose = seller_control, amber = absorption). `unclear` is never marked
@@ -69,27 +75,6 @@ const STATE_LABELS: Record<string, string> = {
   bid_absorption: "Bid Absorption",
   ask_absorption: "Ask Absorption",
 };
-
-// Thesis-geometry colors (J-48), reusing the established verdict/side semantics so the chart, the
-// thesis strip, and the timeline all speak the same color language. Verdict markers: confirming
-// emerald, weakening amber, rejecting/invalidated rose, pending slate (the design-direction verdict
-// palette). The invalidation price-line is rose (the idea is dead beyond it); the level line is
-// slate (a neutral reference). Hex values mirror the DESIGN SYSTEM Tailwind tokens because the
-// charting canvas takes raw colors, not classes.
-const VERDICT_COLORS: Record<string, string> = {
-  confirming: "#34d399", // emerald-400
-  weakening: "#fbbf24", // amber-400
-  rejecting: "#fb7185", // rose-400
-  invalidated: "#fb7185", // rose-400
-  pending: "#94a3b8", // slate-400
-  expired: "#94a3b8", // slate-400
-};
-const PRICE_LINE_COLORS: Record<string, string> = {
-  invalidation: "#fb7185", // rose-400 — the idea is invalidated beyond this price
-  level: "#94a3b8", // slate-400 — a neutral declared reference
-};
-// Entry/exit marks render in their own slate-200 treatment, distinct from the verdict palette.
-const MARK_COLOR = "#e2e8f0"; // slate-200
 
 // The registered structure_tape_map strategy id (era-5B J-04) — mirrors app/structure/page.tsx's
 // OWN `STRATEGY_TAPE_ID = "structure_tape"` constant precedent byte-for-byte: this is a
@@ -114,13 +99,9 @@ function segmentClass(selected: boolean): string {
 
 export function PriceChart({
   ticker,
-  thesis,
   tapeState,
 }: {
   ticker: string | null;
-  // The live thesis projection (WS `thesis` key) or null. Read VERBATIM for its `geometry`; the
-  // chart derives nothing. `null` (no/cleared/resolved-non-invalidated thesis) => no overlay.
-  thesis?: ThesisProjection | null;
   // The engine-owned CURRENT tape state (era-5B J-06), read VERBATIM off the WS snapshot's own
   // `tape_state` field — page.tsx passes `snapshot?.tape_state ?? null`, the SAME value
   // Cockpit.tsx already renders. Drives the confluence chip's matching decision below; NEVER
@@ -206,12 +187,15 @@ export function PriceChart({
     return history.timeframe_bars;
   }, [history]);
 
-  // The tape-state + thesis markers, as ready-to-draw specs the chart renders verbatim. Tape-state
-  // markers sit ABOVE the bar (down-arrow, colored by state); thesis markers sit BELOW (circle for a
-  // verdict / first confirmation, up-arrow for an entry/exit mark) — the SAME two-layer language the
-  // retired inline chart used. In History mode a tape-state marker is placed on its served containing
-  // bucket (`bucket_ts`); a thesis marker is floored to that timeframe's bucket, both pure display
-  // placement using served values.
+  // The tape-state markers, as ready-to-draw specs the chart renders verbatim: they sit ABOVE the
+  // bar (down-arrow, colored by state). In History mode a marker is placed on its served containing
+  // bucket (`bucket_ts`); in Tape mode it is placed at its logical-time clock position.
+  //
+  // era-5D J-02 ("The Clean Slate" demolition interlude): this useMemo used to ALSO build a second,
+  // BELOW-the-bar layer of thesis-geometry markers (circle for a verdict/first-confirmation,
+  // up-arrow for an entry/exit mark) from the WS `thesis` key's `geometry` — that data source is
+  // deleted along with the journal-era thesis surfaces, so tape-state markers are now the only
+  // marker source this container builds.
   const extraMarkers = useMemo<ChartMarkerSpec[]>(() => {
     if (!history) return [];
     const anchor = history.epoch_anchor ?? 0;
@@ -232,54 +216,13 @@ export function PriceChart({
             shape: "arrowDown",
             text: STATE_LABELS[m.state] ?? m.state,
           }));
-    const secs = history.kind === "timeframe" ? history.timeframe_seconds : 0;
-    const placeThesis = (logical: number) =>
-      secs > 0 ? Math.floor((anchor + logical) / secs) * secs : toClock(logical);
-    const geometry = thesis?.geometry;
-    const thesisSpecs: ChartMarkerSpec[] = geometry
-      ? geometry.markers.map((m) => {
-          if (m.kind === "entry" || m.kind === "exit") {
-            // The user's own action mark — its own slate treatment with the verbatim mono price.
-            const priceText = m.price != null ? ` ${m.price.toFixed(2)}` : "";
-            return {
-              time: placeThesis(m.logical_ts),
-              position: "belowBar",
-              color: MARK_COLOR,
-              shape: "arrowUp",
-              text: `${m.label}${priceText}`,
-            };
-          }
-          // A verdict-transition marker or the first-confirmation marker — verdict palette, circle.
-          const color =
-            m.kind === "first_confirmation"
-              ? VERDICT_COLORS.confirming
-              : VERDICT_COLORS[m.verdict ?? "pending"] ?? "#94a3b8";
-          return {
-            time: placeThesis(m.logical_ts),
-            position: "belowBar",
-            color,
-            shape: "circle",
-            text: m.label,
-          };
-        })
-      : [];
-    return [...stateSpecs, ...thesisSpecs];
-  }, [history, thesis]);
+    return stateSpecs;
+  }, [history]);
 
-  // The thesis-geometry price lines (invalidation always; level when set), as dashed reference lines
-  // the chart draws verbatim. `null`/no geometry => none (the exact no-thesis render).
-  const extraPriceLines = useMemo<ChartPriceLineSpec[]>(() => {
-    const geometry = thesis?.geometry;
-    if (!geometry) return [];
-    return geometry.price_lines.map((pl) => ({
-      price: pl.price,
-      color: PRICE_LINE_COLORS[pl.kind] ?? "#94a3b8",
-      lineWidth: 1,
-      lineStyle: 2, // LineStyle.Dashed
-      axisLabelVisible: true,
-      title: pl.label,
-    }));
-  }, [thesis]);
+  // The thesis-geometry price lines are gone with their data source (see the comment on
+  // `extraMarkers` above) — this container currently has no other price-line source, so the
+  // `extraPriceLines` seam stays wired to the stable empty constant (never a fresh array).
+  const extraPriceLines = NO_PRICE_LINES;
 
   // --- Poll …/history verbatim while a ticker is watched (reset on ticker/view change) --------
   useEffect(() => {
@@ -422,8 +365,8 @@ export function PriceChart({
 
       {/* The shared chart renderer. In History mode the recorded store bars sit left of the "start"
           marker and the live tape bars grow to its right; in Tape mode only the live tape bars show.
-          The band overlay + tape-state/thesis markers are drawn from the served values passed here —
-          this container computes none of them. */}
+          The band overlay + tape-state markers are drawn from the served values passed here — this
+          container computes none of them. */}
       <StructureChart
         key={`${ticker}|${viewKey}`}
         bars={storeBars}

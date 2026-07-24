@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "journey": "J-02",
+  "name": "Frontend + WS demolition — the two-page product",
+  "default_timeout_ms": 20000,
+  "steps": [
+    {"n": 1, "journey": "J-02", "action": {"type": "goto", "url": "/"}, "expect": {"text": "No ticker watched"}},
+    {"n": 2, "journey": "J-02", "action": {"type": "goto", "url": "/journal"}, "expect": {"text": "This page could not be found."}},
+    {"n": 3, "journey": "J-02", "action": {"type": "goto", "url": "/studies"}, "expect": {"text": "This page could not be found."}},
+    {"n": 4, "journey": "J-02", "action": {"type": "goto", "url": "/performance"}, "expect": {"text": "This page could not be found."}},
+    {"n": 5, "journey": "J-02", "action": {"type": "goto", "url": "/"}, "expect": {"text": "No ticker watched"}},
+    {"n": 6, "journey": "J-02", "action": {"type": "fill", "target": {"placeholder": "Ticker e.g. SIM-BUYER"}, "text": "SIM-BUYER"}},
+    {"n": 7, "journey": "J-02", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Buyer Control"}},
+    {"n": 8, "journey": "J-02", "action": {"type": "click", "target": {"role": "button", "name": "Stop"}}, "expect": {"text": "No ticker watched"}}
+  ]
+}

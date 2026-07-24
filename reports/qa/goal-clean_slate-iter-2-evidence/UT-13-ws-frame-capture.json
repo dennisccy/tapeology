@@ -1,0 +1,53 @@
+{
+  "captured_via": "window.WebSocket monkey-patch injected into the live app page (independent browser-qa capture, not the dev's own capture)",
+  "ws_urls_connected": [
+    "ws://localhost:8301/tape/SIM-BUYER/stream",
+    "ws://localhost:8301/tape/SIM-BUYER/stream"
+  ],
+  "total_frames_captured_across_session": 3595,
+  "frames_with_thesis_key": 0,
+  "frames_with_hint_key": 0,
+  "sample_last_frame": {
+    "ticker": "SIM-BUYER",
+    "scenario": "buyer_control",
+    "stream_status": "live",
+    "paused": false,
+    "data_feed": "sim",
+    "delivery_lag_seconds": 1.4155999469740692,
+    "warm": true,
+    "timestamp": 513,
+    "market": {
+      "bid": 104.74,
+      "ask": 104.76,
+      "spread": 0.020000000000010232,
+      "last": 104.76
+    },
+    "tape_state": "buyer_control",
+    "confidence": 0.9499128542555272,
+    "primary_window": "30s",
+    "features": "(omitted for brevity in this evidence note - full 10s/30s/60s/180s/300s feature windows present)",
+    "headline_features": {
+      "trade_speed": 2.033333333333333,
+      "aggressive_buy_ratio": 0.9453551912568307,
+      "aggressive_sell_ratio": 0.0546448087431694,
+      "net_aggressive_volume": 16300,
+      "buy_price_impact": 0.4000000000000341,
+      "sell_price_impact": -0.10000000000002274
+    },
+    "observations": [
+      "Buyer aggression increasing",
+      "Price lifting on buy prints",
+      "Spread stable and narrow"
+    ],
+    "event_log": [
+      "Tape state changed to buyer_control"
+    ],
+    "recent_trades": "(30 most recent trade prints present, all with timestamp/price/size/side - none omitted in the live capture)"
+  },
+  "all_top_level_keys_observed_in_last_frame": [
+    "ticker", "scenario", "stream_status", "paused", "data_feed", "delivery_lag_seconds",
+    "warm", "timestamp", "market", "tape_state", "confidence", "primary_window",
+    "features", "headline_features", "observations", "event_log", "recent_trades"
+  ],
+  "verdict": "PASS - no thesis key, no hint key, in any of 3595 captured frames across two independent Watch cycles; every other pre-existing key (ticker, stream_status, tape_state, features, recent_trades, market, confidence, event_log, data_feed) present."
+}

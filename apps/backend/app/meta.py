@@ -6,10 +6,13 @@ The rendered top-bar navigation (``apps/frontend/components/NavBar.tsx``) and th
 retired; no duplicate route list (including a frontend "fallback") may exist anywhere.
 
 The map lists exactly the LIVE routes at all times: a route is added here in the same
-iteration its page ships (J-05 added ``/performance`` together with that page), so the nav can
-never carry a dead link. ``nav`` says whether an entry is a top-bar destination —
-``/journal/[id]`` is a real user-facing page but is reached from the journal list, not the
-bar, so it is present with ``nav: false`` (the honest child-route representation).
+iteration its page ships, so the nav can never carry a dead link. ``nav`` says whether an
+entry is a top-bar destination.
+
+era-5D J-02 ("The Clean Slate" demolition interlude): the four journal-era rows (``/journal``,
+``/journal/[id]``, ``/studies``, ``/performance``) are removed here in the SAME iteration their
+pages are deleted (the no-dead-link rule, applied in reverse) — the map now lists exactly the
+two KEPT routes.
 """
 
 from __future__ import annotations
@@ -23,10 +26,6 @@ router = APIRouter(prefix="/meta", tags=["meta"])
 # the endpoint below is this module's only serving path.
 UI_ROUTES: tuple[dict[str, object], ...] = (
     {"path": "/", "label": "Cockpit", "nav": True},
-    {"path": "/journal", "label": "Journal", "nav": True},
-    {"path": "/journal/[id]", "label": "Journal detail", "nav": False},
-    {"path": "/studies", "label": "Studies", "nav": True},
-    {"path": "/performance", "label": "Performance", "nav": True},
     {"path": "/structure", "label": "Structure", "nav": True},
 )
 

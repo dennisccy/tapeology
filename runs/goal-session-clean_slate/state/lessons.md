@@ -39,3 +39,17 @@ imports, or a latent NameError hides until a real backtest arms.
 **Applies to:** J-03 (close the MCP contract test — do not touch it before then) and any future
 demolition iter whose deletions transitively break an out-of-scope caller's test or a relocated
 symbol family (grep the full import list of the surviving consumer, not just the named symbol).
+
+## iter-2 — 2026-07-24T06:03:17Z
+
+**Verdict:** CONTINUE
+**Lesson:** A source-introspection guard test can silently break a demolition even when it isn't in
+the deletion inventory: `test_profile_equivalence.py::test_performance_page_offers_no_profile_selection_control`
+did `Path(".../frontend/app/performance/page.tsx").read_text()`, so deleting the `/performance` page
+turned it into a *second, unauthorized* pytest failure (the DoD allows only the one pre-authorized MCP
+failure). The dev caught it by re-running the full suite after the deletes and removed the one now-subjectless
+test (fingerprint pin + real guard coverage in the file untouched) — a legitimate T-14 correction, not guard
+weakening.
+**Applies to:** any future demolition iter that deletes a file/page/module (J-03 MCP tools, J-04 Config
+fields, J-05 close) — grep `apps/backend/tests` for `read_text()`/`open(` referencing the deletion target
+BEFORE deleting, so uncatalogued source-introspection guards are found up front, not as a surprise red test.

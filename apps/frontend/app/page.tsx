@@ -8,20 +8,11 @@ import {
   pauseTicker,
   resumeTicker,
   setReplaySpeed,
-  fetchActiveThesis,
 } from "@/lib/api";
-import type {
-  DataSourceMode,
-  FailureReason,
-  Hint,
-  ThesisProjection,
-  WatchParams,
-} from "@/lib/types";
+import type { DataSourceMode, FailureReason, WatchParams } from "@/lib/types";
 import { TopBar } from "@/components/TopBar";
 import { Cockpit } from "@/components/Cockpit";
 import { PriceChart } from "@/components/PriceChart";
-import { ThesisStrip } from "@/components/ThesisStrip";
-import type { ThesisPrefill } from "@/components/ThesisStrip";
 import {
   IdleState,
   ConnectingState,
@@ -53,30 +44,6 @@ export default function Page() {
   // "Connecting to <SYMBOL>…". Cleared/replaced when the watch resolves (cockpit / honest panel /
   // error). It carries the symbol so the acknowledgement is distinct per click, in every mode.
   const [pending, setPending] = useState<string | null>(null);
-  // J-47: a SURVIVING entry-marked thesis on a stopped watch. A real position is never orphaned —
-  // after Stop we read GET /research/thesis/active for the stopped ticker and, if an entry-marked
-  // thesis survives (monitor_status: not_evaluated), keep showing it in the cockpit surface as
-  // not-currently-evaluated instead of dropping to the idle screen. Cleared the moment a new watch
-  // starts (the live WS `thesis` key becomes the source of truth again).
-  const [survivingThesis, setSurvivingThesis] = useState<ThesisProjection | null>(
-    null,
-  );
-  // J-65: a hint-dock declare request. Set when the user clicks a hint's declare affordance — it seeds
-  // the thesis strip's declare form (setup + direction) and carries the hint id for the declared-from
-  // linkage. The `nonce` increments per click so the same hint can re-prefill. Invalidation is NEVER
-  // seeded — the user types it (one click never creates a thesis).
-  const [hintPrefill, setHintPrefill] = useState<ThesisPrefill | null>(null);
-
-  // Prefill the declare form from an active hint (J-65). Bumps the nonce so the strip re-applies even
-  // if the same hint is clicked again. The strip leaves invalidation empty + required.
-  function handleHintDeclare(hint: Hint) {
-    setHintPrefill((prev) => ({
-      setup_type: hint.setup_type,
-      direction: hint.direction,
-      hintId: hint.id,
-      nonce: (prev?.nonce ?? 0) + 1,
-    }));
-  }
   // When a real-mode Watch is honestly refused, show the distinct non-cockpit panel for that
   // reason in place of the cockpit — never a fabricated cockpit, never a fall-back to Simulated.
   const [failure, setFailure] = useState<{
@@ -108,9 +75,6 @@ export default function Page() {
     }
     setError(null);
     setFailure(null);
-    // A new watch is starting — the live WS `thesis` key becomes the source of truth again, so drop
-    // any surviving not-evaluated thesis we were showing from the prior stop (J-47).
-    setSurvivingThesis(null);
     // J-21: acknowledge the click NOW — synchronously, before the awaited teardown/watch round-
     // trip — so the idle screen never lingers after a valid Watch click in any mode.
     setPending(candidate);
@@ -139,7 +103,6 @@ export default function Page() {
     setError(null);
     setFailure(null);
     setPending(null);
-    setSurvivingThesis(null);
     setMode(next);
   }
 
@@ -153,15 +116,6 @@ export default function Page() {
     setTicker(null);
     setPending(null);
     setError(null);
-    // J-47: a real position is never orphaned. After stopping, read the canonical active-thesis
-    // endpoint for the stopped ticker; if an ENTRY-MARKED thesis SURVIVES (monitor_status:
-    // not_evaluated), keep showing it in the cockpit surface as not-currently-evaluated rather than
-    // dropping to the idle screen. An unmarked thesis auto-expired backend-side, so this returns
-    // null and the idle screen shows as before. Read VERBATIM — no client-side lifecycle inference.
-    const surviving = await fetchActiveThesis(stopped);
-    setSurvivingThesis(
-      surviving && surviving.monitor_status === "not_evaluated" ? surviving : null,
-    );
   }
 
   // Pause (J-19): freeze the watch WITHOUT teardown — the deliberate opposite of Stop. It MUST NOT
@@ -252,7 +206,6 @@ export default function Page() {
           !snapshotConnecting && (
             <PriceChart
               ticker={ticker}
-              thesis={snapshot?.thesis ?? null}
               tapeState={snapshot?.tape_state ?? null}
             />
           )}
@@ -276,39 +229,13 @@ export default function Page() {
           // acknowledgement, never the full grid over an empty tape.
           <ConnectingState symbol={ticker ?? undefined} />
         ) : ticker ? (
-          <>
-            {/* Thesis strip (J-38) — between the price chart and the panel grid. Shown only once
-                the cockpit grid itself is shown (a live/settled snapshot), so it never appears over
-                a waiting/connecting/failed tape. Idle = one declare line (nothing else moves);
-                active = the WS `thesis` projection rendered verbatim. */}
-            {snapshot &&
-              snapshot.stream_status !== "waiting" &&
-              snapshot.stream_status !== "connecting" &&
-              snapshot.stream_status !== "failed" && (
-                <ThesisStrip
-                  ticker={ticker}
-                  thesis={snapshot.thesis}
-                  last={snapshot.market?.last ?? null}
-                  prefill={hintPrefill}
-                />
-              )}
-            <Cockpit snapshot={snapshot} onHintDeclare={handleHintDeclare} />
-          </>
+          <Cockpit snapshot={snapshot} />
         ) : failure ? (
           <ProviderUnavailable
             reason={failure.reason}
             mode={failure.mode}
             nextOpen={failure.nextOpen}
           />
-        ) : survivingThesis ? (
-          // J-47: the watch was stopped but an ENTRY-MARKED thesis survives — keep it on the cockpit
-          // surface as not-currently-evaluated (read verbatim from the projection) instead of the
-          // idle screen, so a real position is never silently dropped. Re-watching its source
-          // resumes live evaluation. The idle declare line stays available below.
-          <>
-            <ThesisStrip ticker={survivingThesis.ticker} thesis={survivingThesis} />
-            <IdleState />
-          </>
         ) : (
           <IdleState />
         )}

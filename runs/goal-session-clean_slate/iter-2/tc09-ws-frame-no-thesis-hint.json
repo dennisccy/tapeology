@@ -1,0 +1,294 @@
+{
+  "confidence": 0.9255770263774893,
+  "data_feed": "sim",
+  "delivery_lag_seconds": 0.10769995689391543,
+  "event_log": [
+    "Tape state changed to buyer_control"
+  ],
+  "features": {
+    "10s": {
+      "absorption_score": 0.0,
+      "aggressive_buy_ratio": 0.8305084745762712,
+      "aggressive_sell_ratio": 0.1694915254237288,
+      "ask_refresh_score": 0.13333333333333333,
+      "average_spread": 0.020000000000003466,
+      "bid_refresh_score": 1.0,
+      "buy_price_impact": 0.21000000000003638,
+      "large_print_count": 5.0,
+      "net_aggressive_volume": 3900.0,
+      "reference_price": 100.37952380952376,
+      "sell_price_impact": -0.10000000000002274,
+      "trade_speed": 2.1,
+      "volume_speed": 590.0
+    },
+    "180s": {
+      "absorption_score": 0.0,
+      "aggressive_buy_ratio": 0.8934426229508197,
+      "aggressive_sell_ratio": 0.10655737704918032,
+      "ask_refresh_score": 0.013513513513513514,
+      "average_spread": 0.0200000000000006,
+      "bid_refresh_score": 1.0,
+      "buy_price_impact": 0.7200000000000415,
+      "large_print_count": 18.0,
+      "net_aggressive_volume": 19200.0,
+      "reference_price": 100.2153333333333,
+      "sell_price_impact": -0.3200000000000358,
+      "trade_speed": 0.5,
+      "volume_speed": 135.55555555555554
+    },
+    "300s": {
+      "absorption_score": 0.0,
+      "aggressive_buy_ratio": 0.8934426229508197,
+      "aggressive_sell_ratio": 0.10655737704918032,
+      "ask_refresh_score": 0.013513513513513514,
+      "average_spread": 0.0200000000000006,
+      "bid_refresh_score": 1.0,
+      "buy_price_impact": 0.7200000000000415,
+      "large_print_count": 18.0,
+      "net_aggressive_volume": 19200.0,
+      "reference_price": 100.2153333333333,
+      "sell_price_impact": -0.3200000000000358,
+      "trade_speed": 0.3,
+      "volume_speed": 81.33333333333333
+    },
+    "30s": {
+      "absorption_score": 0.0,
+      "aggressive_buy_ratio": 0.9075144508670521,
+      "aggressive_sell_ratio": 0.09248554913294797,
+      "ask_refresh_score": 0.019230769230769232,
+      "average_spread": 0.020000000000001614,
+      "bid_refresh_score": 1.0,
+      "buy_price_impact": 0.4600000000000506,
+      "large_print_count": 13.0,
+      "net_aggressive_volume": 14100.0,
+      "reference_price": 100.28377049180322,
+      "sell_price_impact": -0.16000000000003922,
+      "trade_speed": 2.033333333333333,
+      "volume_speed": 576.6666666666666
+    },
+    "60s": {
+      "absorption_score": 0.0,
+      "aggressive_buy_ratio": 0.8934426229508197,
+      "aggressive_sell_ratio": 0.10655737704918032,
+      "ask_refresh_score": 0.013513513513513514,
+      "average_spread": 0.0200000000000006,
+      "bid_refresh_score": 1.0,
+      "buy_price_impact": 0.7200000000000415,
+      "large_print_count": 18.0,
+      "net_aggressive_volume": 19200.0,
+      "reference_price": 100.2153333333333,
+      "sell_price_impact": -0.3200000000000358,
+      "trade_speed": 1.5,
+      "volume_speed": 406.6666666666667
+    }
+  },
+  "headline_features": {
+    "aggressive_buy_ratio": 0.9075144508670521,
+    "aggressive_sell_ratio": 0.09248554913294797,
+    "buy_price_impact": 0.4600000000000506,
+    "net_aggressive_volume": 14100.0,
+    "sell_price_impact": -0.16000000000003922,
+    "trade_speed": 2.033333333333333
+  },
+  "market": {
+    "ask": 100.43,
+    "bid": 100.41,
+    "last": 100.43,
+    "spread": 0.020000000000010232
+  },
+  "observations": [
+    "Buyer aggression increasing",
+    "Price lifting on buy prints",
+    "Spread stable and narrow"
+  ],
+  "paused": false,
+  "primary_window": "30s",
+  "recent_trades": [
+    {
+      "price": 100.43,
+      "side": "buy",
+      "size": 200,
+      "timestamp": 44.5
+    },
+    {
+      "price": 100.43,
+      "side": "buy",
+      "size": 600,
+      "timestamp": 44.0
+    },
+    {
+      "price": 100.41,
+      "side": "sell",
+      "size": 200,
+      "timestamp": 43.5
+    },
+    {
+      "price": 100.43,
+      "side": "buy",
+      "size": 200,
+      "timestamp": 43.0
+    },
+    {
+      "price": 100.42,
+      "side": "buy",
+      "size": 300,
+      "timestamp": 42.5
+    },
+    {
+      "price": 100.39,
+      "side": "sell",
+      "size": 100,
+      "timestamp": 42.0
+    },
+    {
+      "price": 100.41,
+      "side": "buy",
+      "size": 200,
+      "timestamp": 41.5
+    },
+    {
+      "price": 100.4,
+      "side": "buy",
+      "size": 600,
+      "timestamp": 41.0
+    },
+    {
+      "price": 100.38,
+      "side": "sell",
+      "size": 100,
+      "timestamp": 40.5
+    },
+    {
+      "price": 100.4,
+      "side": "buy",
+      "size": 200,
+      "timestamp": 40.0
+    },
+    {
+      "price": 100.39,
+      "side": "buy",
+      "size": 600,
+      "timestamp": 39.5
+    },
+    {
+      "price": 100.36,
+      "side": "sell",
+      "size": 200,
+      "timestamp": 39.0
+    },
+    {
+      "price": 100.38,
+      "side": "buy",
+      "size": 200,
+      "timestamp": 38.5
+    },
+    {
+      "price": 100.37,
+      "side": "buy",
+      "size": 100,
+      "timestamp": 38.0
+    },
+    {
+      "price": 100.35,
+      "side": "sell",
+      "size": 200,
+      "timestamp": 37.5
+    },
+    {
+      "price": 100.37,
+      "side": "buy",
+      "size": 300,
+      "timestamp": 37.0
+    },
+    {
+      "price": 100.36,
+      "side": "buy",
+      "size": 600,
+      "timestamp": 36.5
+    },
+    {
+      "price": 100.36,
+      "side": "buy",
+      "size": 600,
+      "timestamp": 36.0
+    },
+    {
+      "price": 100.35,
+      "side": "buy",
+      "size": 100,
+      "timestamp": 35.5
+    },
+    {
+      "price": 100.35,
+      "side": "buy",
+      "size": 100,
+      "timestamp": 35.0
+    },
+    {
+      "price": 100.32,
+      "side": "sell",
+      "size": 200,
+      "timestamp": 34.5
+    },
+    {
+      "price": 100.34,
+      "side": "buy",
+      "size": 200,
+      "timestamp": 34.0
+    },
+    {
+      "price": 100.33,
+      "side": "buy",
+      "size": 300,
+      "timestamp": 33.5
+    },
+    {
+      "price": 100.33,
+      "side": "buy",
+      "size": 300,
+      "timestamp": 33.0
+    },
+    {
+      "price": 100.33,
+      "side": "buy",
+      "size": 600,
+      "timestamp": 32.5
+    },
+    {
+      "price": 100.33,
+      "side": "buy",
+      "size": 100,
+      "timestamp": 32.0
+    },
+    {
+      "price": 100.32,
+      "side": "buy",
+      "size": 200,
+      "timestamp": 31.5
+    },
+    {
+      "price": 100.32,
+      "side": "buy",
+      "size": 200,
+      "timestamp": 31.0
+    },
+    {
+      "price": 100.32,
+      "side": "buy",
+      "size": 300,
+      "timestamp": 30.5
+    },
+    {
+      "price": 100.32,
+      "side": "buy",
+      "size": 200,
+      "timestamp": 30.0
+    }
+  ],
+  "scenario": "buyer_control",
+  "stream_status": "live",
+  "tape_state": "buyer_control",
+  "ticker": "SIM-BUYER",
+  "timestamp": 44.5,
+  "warm": true
+}

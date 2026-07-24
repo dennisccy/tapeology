@@ -4,20 +4,20 @@
       "id": "J-01",
       "name": "Backend demolition with byte-identical relocations",
       "status": "passing",
-      "last_verified_iter": "goal-clean_slate-iter-1",
-      "last_passing_iter": "goal-clean_slate-iter-1",
+      "last_verified_iter": "goal-clean_slate-iter-2",
+      "last_passing_iter": "goal-clean_slate-iter-2",
       "first_seen_iter": "goal-clean_slate-iter-0",
-      "last_evidence_path": "reports/qa/goal-clean_slate-iter-1-qa.md",
+      "last_evidence_path": "reports/phase-goal-clean_slate-iter-2-ui-test-results.md#UT-J-01",
       "spec_hash": "5d3cc99593cf16c9d24bd4b4f469f94ff00ba1dbea8caad51fd1740e6d7a0d7b"
     },
     "J-02": {
       "id": "J-02",
       "name": "Frontend + WS demolition — the two-page product",
-      "status": "failing",
-      "last_verified_iter": "goal-clean_slate-iter-0",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-clean_slate-iter-2",
+      "last_passing_iter": "goal-clean_slate-iter-2",
       "first_seen_iter": "goal-clean_slate-iter-0",
-      "last_evidence_path": "reports/qa/goal-clean_slate-iter-0-evidence/J-02-journal-still-exists.png",
+      "last_evidence_path": "reports/qa/goal-clean_slate-iter-2-evidence/UT-08-sim-buyer-buyer-control.png",
       "spec_hash": "7e2ba6f2ace5bf0010aabaddc2e44a63c16ba91140d7a85b168028532fdf749f"
     },
     "J-03": {
@@ -44,13 +44,13 @@
       "id": "J-05",
       "name": "The kept product stands — regression sentinel",
       "status": "partial",
-      "last_verified_iter": "goal-clean_slate-iter-0",
+      "last_verified_iter": "goal-clean_slate-iter-2",
       "last_passing_iter": null,
       "first_seen_iter": "goal-clean_slate-iter-0",
-      "last_evidence_path": "reports/qa/goal-clean_slate-iter-0-evidence/J-05-structure-aapl-load.png",
+      "last_evidence_path": "reports/qa/goal-clean_slate-iter-2-evidence/UT-12-structure-aapl-wall-band.png",
       "spec_hash": "44e9446ed40967866b0b6e9df1867ef66ccd5ac6869a57021b1b865feba954d7"
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-07-24T01:47:01Z"
+  "updated_at": "2026-07-24T06:03:17Z"
 }
