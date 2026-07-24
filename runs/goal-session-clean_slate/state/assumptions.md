@@ -70,3 +70,21 @@ byte-identical, a differing output can only come from a differing db file, so it
 **Reversible:** yes — if the operator wants strict literal I-9 byte-identity, the fix is evidentiary
 (re-capture both iter-1 and iter-2 against the SAME pinned db path), not a code change; nothing downstream
 is foreclosed.
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** goal.md's I-6 lists the resulting 15-tool contract in a specific prose order
+(`..., strategies, pnl_ledger, taxonomy, edge_report, ui_route_map, get_endpoint`), but the current
+code's natural residual order after deleting exactly the `journal`/`analytics`/`studies` rows in
+place is `..., strategies, edge_report, pnl_ledger, taxonomy, ui_route_map, get_endpoint` — the
+identical 15-item set, with `edge_report`/`pnl_ledger`/`taxonomy` sequenced differently than the
+prose enumeration. Since `list_tools()`'s return order feeds an exact tuple-equality test
+(`EXPECTED_TOOLS`), some ordering has to be chosen when the 3 dead rows are removed.
+**We chose:** Read "this exact list" as specifying tool MEMBERSHIP (which 15 names), not a mandated
+ORDER, and kept the code's natural residual order (surgically deleting the 3 dead rows in place, per
+core.md's Surgical Changes principle) rather than reordering 3 additional lines for zero functional
+benefit — no MCP client depends on `list_tools()`'s ordinal position, and no other I-row in goal.md
+is about sequence.
+**Reversible:** yes — a one-line reorder of 3 `types.Tool` blocks (and the matching `EXPECTED_TOOLS`
+tuple) if a future review insists on literal prose-order matching; no other code or test depends on
+the internal sequence.
