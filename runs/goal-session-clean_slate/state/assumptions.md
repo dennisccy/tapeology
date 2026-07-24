@@ -34,3 +34,22 @@ all treat J-01 as complete; calling it `partial` would falsely imply J-01 has re
 own when the residual red test is J-03's by explicit design.
 **Reversible:** yes (if the operator prefers strict literal "0 failed" journey-closure, J-01 can be
 re-scored `partial` until J-03 lands and the MCP test goes green; nothing downstream is foreclosed).
+
+## iter-2 — goal-decomposer
+
+**Ambiguity:** goal.md's I-9 byte-comparison protocol step 2 says "At J-01/J-02/J-03 end: re-capture —
+every kept route must be byte-identical (the fingerprint has not moved yet; `/research/taxonomy` is the
+ONE sanctioned diff, its payload having slimmed in J-01)." Read literally in isolation, this could mean
+taxonomy is the ONLY route payload EVER allowed to differ across all three journeys — which would
+contradict J-02's own explicit acceptance clause ("`GET /meta/ui-routes` lists only the kept routes"),
+since trimming `app/meta.py`'s `UI_ROUTES` tuple necessarily changes `GET /meta/ui-routes`'s response body.
+**We chose:** Read the I-9 protocol as a per-journey CUMULATIVE sanctioned-diff list, not a single fixed
+exception: J-01's own re-capture (iter-1) showed taxonomy as its one sanctioned diff; this iteration's
+(J-02's) re-capture is scoped against iter-1's own post-J-01 capture
+(`runs/goal-session-clean_slate/iter-1/kept-route-after.txt`) and is expected to show exactly ONE new
+sanctioned diff (`meta.ui-routes`, 6→2 rows) on top of the already-accepted taxonomy diff, with every
+other kept route staying byte-identical. This is the only reading consistent with J-02's own acceptance
+text, and is codified as TC-14 in `docs/phases/goal-clean_slate-iter-2.md`.
+**Reversible:** yes — if this reading is wrong, the fix is purely evidentiary (re-label the ui-routes diff
+in the eval), not a code change; the underlying `app/meta.py` edit is required by J-02's own acceptance
+regardless of how the I-9 diff is narrated.
