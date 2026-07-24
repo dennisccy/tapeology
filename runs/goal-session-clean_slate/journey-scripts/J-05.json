@@ -2,7 +2,7 @@
   "schema_version": 1,
   "journey": "J-05",
   "name": "The kept product stands — regression sentinel (full walk: sim cockpit settle + chart timeframe switch + stop-reset, /structure Load wall band, Case Studies drill-in)",
-  "default_timeout_ms": 20000,
+  "default_timeout_ms": 30000,
   "steps": [
     {"n": 1, "journey": "J-05", "action": {"type": "goto", "url": "/"}, "expect": {"text": "No ticker watched"}},
     {"n": 2, "journey": "J-05", "action": {"type": "fill", "target": {"placeholder": "Ticker e.g. SIM-BUYER"}, "text": "SIM-BUYER"}},

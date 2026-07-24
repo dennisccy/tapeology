@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-clean_slate-iter-6",
+  "base_url": "http://localhost:3301",
+  "iteration": 6,
+  "default_timeout_ms": 10000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Cockpit",
+      "narration": "Tapeology opens on the Cockpit — a live, simulated, or historical trading-tape viewer, with no sign-in needed.",
+      "point_out": "The page loads idle, inviting you to try a ticker like SIM-BUYER, with a top navigation bar showing just two links.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 2,
+      "title": "Type a ticker to watch",
+      "narration": "Typing a simulated ticker into the ticker field is the first step to watching a live tape settle.",
+      "point_out": "\"SIM-BUYER\" now sits in the ticker field, ready to watch.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "Ticker e.g. SIM-BUYER" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 3,
+      "title": "Watch it settle to a market read",
+      "narration": "Clicking Watch starts the simulated tape; within a few seconds it reads which side is in control of the price action.",
+      "point_out": "The Tape State panel now reads \"Buyer Control\", with a live candlestick price chart above it.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Buyer Control" }
+    },
+    {
+      "n": 4,
+      "title": "Switch the chart's bar size",
+      "narration": "The live price chart can be re-grouped into wider logical bars on the fly, without losing the live feed.",
+      "point_out": "The caption updates and the chart redraws with fewer, wider candles built live from the tape.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[aria-label=\"Tape bar size\"] button:nth-of-type(2)" } },
+      "expect": { "text": "Logical 30s bars built live from the tape." }
+    },
+    {
+      "n": 5,
+      "title": "Stop watching",
+      "narration": "Stopping instantly clears the tape back to its idle state — the watch-and-stop loop still works end to end.",
+      "point_out": "The page returns to \"No ticker watched\".",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Stop watching" } },
+      "expect": { "text": "No ticker watched" }
+    },
+    {
+      "n": 6,
+      "title": "Move to the Structure page",
+      "narration": "One click on Structure in the top navigation opens the support/resistance analysis view, its panels ready as soon as the page loads.",
+      "point_out": "The Symbol/As-of/Load flow, the Case Studies table, and an Edge Report panel are all visible right away — and the Edge Report panel already reports its own honest status rather than a blank space.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "link", "name": "Structure" } },
+      "expect": { "text": "Edge report not computed yet." }
+    },
+    {
+      "n": 7,
+      "title": "Confirm the Load form won't invent a result",
+      "narration": "Clicking Load before choosing a symbol or a date proves the page never makes up an answer — it simply stays put.",
+      "point_out": "The Tradable Map stays on its plain \"Choose a symbol and an as-of time\" placeholder — no price level appears from an empty form.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "Choose a symbol and an as-of time" }
+    },
+    {
+      "n": 8,
+      "title": "Enter a symbol to study",
+      "narration": "Loading Structure starts with a symbol and a point in time.",
+      "point_out": "\"AAPL\" now sits in the Symbol field.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "e.g. PG" }, "text": "AAPL" }
+    },
+    {
+      "n": 9,
+      "title": "Enter the as-of date",
+      "narration": "The as-of field pins the exact moment the levels and chart are computed for.",
+      "point_out": "The as-of field now reads the chosen date and time.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "placeholder": "2026-06-09T21:00:00Z" }, "text": "2026-06-22T21:00:00Z" }
+    },
+    {
+      "n": 10,
+      "title": "Load AAPL's tradable map",
+      "narration": "Loading a symbol and a date renders its candlestick chart together with a shaded support/resistance wall band.",
+      "point_out": "The chart shows AAPL's candles with a tradable wall band around 300.11 to 302.2, and a table below it lists that band's details.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "300.11" }
+    },
+    {
+      "n": 11,
+      "title": "Open a case-study drill-in",
+      "narration": "Clicking any row in the Case Studies table opens a detailed drill-in for that specific event.",
+      "point_out": "The drill-in repeats the row's band and reaction, then shows either a recorded tape timeline or the honest note that no tape was recorded for that event.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "case-studies-row" } },
+      "expect": { "target": { "testid": "case-drillin" } }
+    },
+    {
+      "n": 12,
+      "title": "Back to the Cockpit, navigation still intact",
+      "narration": "Clicking back through the same two-item navigation confirms both pages still connect correctly, with nothing extra ever added.",
+      "point_out": "The nav bar shows only \"Cockpit\" and \"Structure\" — exactly the same two links as at the very start of this tour.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "link", "name": "Cockpit" } },
+      "expect": { "text": "No ticker watched" }
+    }
+  ]
+}

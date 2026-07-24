@@ -74,3 +74,20 @@ and always run the full suite after flipping the base pins to catch the derived 
 **Verdict:** CONTINUE
 **Lesson:** A "complete-deletion" audit that greps only for deleted-MODULE imports, route 404s, MCP tool count, and nav rows MISSES orphaned request/response Pydantic models (and helper functions) of deleted route handlers. `routes.py` kept 5 dead body classes (`ThesisRequest`/`ResolveRequest`/`ActionRequest`/`StudyRequest`/`ReviewRequest`) inert since iter-1 — four iterations of review/audit AND the iter-5 diff-vs-inventory cross-check all reported "zero residue" while they sat there in plain sight. Route-handler deletion silently leaves the handler's schema classes behind, and "the route 404s" is not the same as "the surface is gone from code, grep-provably."
 **Applies to:** any iteration/close-out claiming grep-provable complete deletion of routes/endpoints — grep for orphaned `BaseModel` request/response models & helper symbols of the deleted routes, not just deleted-module imports; consider a source-introspection guard asserting every `BaseModel` defined in `routes.py` is referenced by a live route.
+
+## iter-6 — 2026-07-24T16:27:03Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A "complete-deletion" claim needs a DURABLE structural guard, not just a one-time sweep: the
+5 orphaned request-body classes survived four passes because every audit greped only deleted-module
+imports / route-404s / MCP-count / nav-rows, never "which `BaseModel` classes in routes.py have zero live
+route-parameter references." The fix that actually closes the defect class is the AST guard
+(`test_routes_no_orphaned_request_models.py`) that enumerates every `class X(BaseModel):` and asserts a
+live parameter reference — built structurally (never naming a target string) so it stays meaningful after
+future deletions. Separately: not every path under `runs/goal-session-*` is a frozen "historical record"
+— the active session's `journey-scripts/*.json` (and telemetry/trace) are live working assets a demolition
+era may legitimately tune; the spec's own TC-17 correctly scoped the freeze to prior iter dirs + archives +
+ledger rows, not the live replay harness.
+**Applies to:** any future "delete a surface completely" era (add/keep the orphaned-BaseModel guard and
+generalize it to response-models/helpers); any evaluator weighing a `runs/goal-session-*` diff — distinguish
+frozen records (archives, prior iter dirs, ledger rows) from live harness assets before calling veto-class.

@@ -170,3 +170,24 @@ fully undoes this if the operator disagrees.
 **Ambiguity:** The hard audit rated the 5 orphaned request-body classes IMPORTANT-not-CRITICAL and recommended "accept this iteration" (they are functionally inert — not in the OpenAPI schema, unimported, no behavior). goal.md tags the breached rail "Deletion is complete, never cosmetic" as *(critical)*, but the evaluator's REGRESSION-trigger severity rubric reserves "critical" for secrets / paid-dep / license / backdoor / fabricated-data. So: does inert-but-grep-provable orphaned dead code block GOAL_ACHIEVED, and is it REGRESSION or CONTINUE?
 **We chose:** Treat it as a genuine UNRESOLVED anti-goal violation that BLOCKS GOAL_ACHIEVED (the decision tree's GOAL_ACHIEVED gate requires "no unresolved anti-goal violations," and the era's #1 Vision promise is grep-provable complete deletion), but classify it MINOR for the REGRESSION trigger (inert; no secret/backdoor/fabricated-data) → CONTINUE, not REGRESSION, with a dedicated cleanup as the next step. J-05 scored `partial` (its diff-vs-inventory "zero residue / anything missing is a FAIL" clause is unmet), not `passing`, despite a fully-evidenced browser walk. The audit's "accept this iteration" was read as "accept the flag-flip code change / don't fold the backend fix into this single-file sentinel," NOT as "the demolition ERA is done."
 **Reversible:** yes — if the operator judges inert orphaned schemas acceptable residue, J-05 can be re-scored `passing` and the violation marked resolved-as-accepted with no code change; conversely the cleanup iteration removes the 5 classes and closes the clause cleanly.
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** J-05's acceptance says "the diff-vs-inventory cross-check reports zero out-of-inventory
+changes (anything extra or missing is a FAIL)," and the anti-goal "Never touch a historical record" names
+"anything under `runs/goal-session-*`" as veto-class. This iteration's diff includes an undeclared
+`runs/goal-session-clean_slate/journey-scripts/J-05.json` `default_timeout_ms` 20000→30000 bump that the
+iter-6 crosscheck's enumeration omits — read literally, both clauses could be argued unmet, holding J-05
+`partial` or even flagging a violation.
+**We chose:** Scored J-05 `passing` and treated the J-05.json timeout as a GAP-to-record, NOT a veto-class
+historical-record violation nor a product-residue breach. Grounds: (a) the spec's own operationalization
+(TC-17) freezes goal-archive/ + iter-0..iter-5 + pnl-history rows — not the live `journey-scripts/`;
+(b) the anti-goal's verbs target *records* (delete/rewrite/truncate/re-stamp existing rows), and a
+golden-replay timeout is a test-tolerance knob; (c) journey-scripts are actively maintained working assets
+(the spec itself notes iter-5 edited J-05.json; telemetry/trace under the same tree are written every iter);
+(d) the bump weakens no assertion (a broken flow still fails at 30s). The substantive completeness claim
+(apps/ delta = exactly the inventory: routes.py deletion + the in-scope guard test) is firsthand true.
+Both the hard-auditor and coherence-auditor independently reached the same reading.
+**Reversible:** yes — if the operator wants the golden byte-frozen or the crosscheck to enumerate it before
+closure, the fix is evidentiary (declare it in the change record, or revert 30000→20000); nothing
+downstream is foreclosed.

@@ -175,3 +175,38 @@ actually 14 (candidate-resolved), TC-3 "48→40" is actually 49→41.
 **Reasoning:** Full-pipeline era-closing sentinel; four independent verdicts (review PASS, QA PASS 17/17, browser-QA PASS 20/20, audit PASS_WITH_GAPS) + coherence COHERENCE-PASS + scan CLEAN. J-05's browser walk is genuinely evidenced — I opened UT-01 (nav = 2 items, Case Studies visible+populated, reinstated framing sentence), UT-02 (AAPL 300.11–302.2 Class A wall band on rendered candles), UT-09 (sim Buyer Control 0.929 + live 10s bars), and the full-page shot showing the RESTORED Case Studies drill-in with honest "No recorded tape for this event." fallback + Edge Report "not computed yet." + Champion v1/default; full suite 1167/0-failed @ `08e471b10130e1e2` (3 lanes), guards+chart-guards 47/0 byte-unmodified, diff = exactly README.md + structure/page.tsx (flag flip + one sentence), J-01–J-04 spot-checked (11 modules gone/zero imports; 15 MCP tools; live fingerprint). NOT GOAL_ACHIEVED: the hard audit found — and I independently `git grep`-verified (only class-def lines, zero refs; contrast kept BacktestRequest@1136; live `body:` params existed at baseline e7865b4) — 5 orphaned request-body classes surviving in routes.py, a grep-provable breach of the critical-TAGGED "Deletion is complete, never cosmetic" rail that also falsifies J-05's diff-vs-inventory "zero residue" clause ("anything ... missing is a FAIL"), so J-05 stays `partial`. NOT REGRESSION: the classes are inert (not in OpenAPI, unimported, no behavior; audit-rated IMPORTANT-not-CRITICAL), no journey lost a prior pass, and the fix is a trivial autonomous edit → minor by the REGRESSION-trigger rubric even though it blocks era closure → CONTINUE.
 
 **Next-step recommendation:** One dedicated demolition-cleanup iteration at **full** depth (re-verifies J-05): delete the 5 orphaned classes (`ThesisRequest`/`ResolveRequest`/`ActionRequest`/`StudyRequest`/`ReviewRequest`) from `apps/backend/app/research/routes.py`; ALSO run the audit's carried-forward EXPANDED sweep for any other orphaned request/response models & helper symbols of the deleted routes (and orphaned frontend types), so the completeness claim is finally true; re-run the full suite (expect still green — inert) and regenerate the diff-vs-inventory cross-check WITH the added orphaned-model grep; optionally add a source-introspection guard asserting every `BaseModel` in `routes.py` is referenced by a live route. Then J-05's completeness clause closes grep-provably and GOAL_ACHIEVED becomes evaluable. Carry forward the coherence advisory: README's three "withheld... pending an operator decision" Case-Studies sentences are now stale (flag is on) — drop them in the next readme pass.
+
+## Iteration 6 — goal-clean_slate-iter-6
+
+**Date:** 2026-07-24T16:27:03Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-05 (partial → passing)
+- Newly failing: none
+- Regressed: none (J-01/J-02/J-03/J-04 all re-verified `passing` — golden replay UT-J-02 + LLM-fallback UT-J-01/03/04 + my J-02-verify spot-check)
+- Anti-goal violations: none new; the iter-5 MINOR "Deletion is complete, never cosmetic" is now RESOLVED (5 orphaned classes deleted, grep=0, durable guard added)
+
+**Reasoning:** Full-pipeline demolition close-out; four independent verdicts (review PASS, QA PASS 17/18
+with TC-9 deferred, browser-QA PASS 12/12, hard-audit PASS_WITH_GAPS) + coherence COHERENCE-PASS + scan
+CLEAN. I did not trust the handoffs: firsthand `grep -c` on `routes.py` shows the 5 orphaned classes at
+`0` and the 4 kept request classes at exactly 2 each; live `Config().config_fingerprint()`=`08e471b10130e1e2`
+(unchanged); `git diff HEAD --stat` on config.py/StructureChart/PriceChart/engine/meta/main/mcp/store/
+taxonomy all EMPTY — the entire apps/ delta is `routes.py` (67 deletions) + the new AST-structural guard
+test. I opened the J-05 browser evidence: UT-03-watch (`Buyer Control` 0.937 + live 10s bars), UT-03-stop
+(`No ticker watched` reset), UT-04-load (AAPL `300.11–302.2 · Class A` wall band on candles),
+UT-04-drillin-dom-text (`case-drillin` open, honest "No recorded tape"), UT-06-dom-text (Edge Report
+honest "not computed yet." + Compute). The one audit GAP — an undeclared `J-05.json`
+`default_timeout_ms` 20000→30000 bump — I concur (with both the hard-auditor and coherence-auditor) is a
+live-replay-harness knob, not a veto-class "historical record" violation (TC-17 scopes the freeze to
+goal-archive/iter-0..5/pnl-history; the anti-goal targets *records*; journey-scripts are actively
+maintained like telemetry/trace; the bump weakens no assertion) and not a product-residue breach of
+J-05's completeness clause (apps/ delta is firsthand exactly the inventory). All five Must-have journeys
+`passing`; blocker resolved; coherence PASS; no `journeys-changed.md` → GOAL_ACHIEVED.
+
+**Next-step recommendation:** Halt — goal achieved. "The Clean Slate" demolition interlude is complete:
+Cockpit + Structure two-page product stands, both charts and all guards byte-unmodified, fingerprint
+frozen at `08e471b10130e1e2`, demolition grep-provably total and durably guarded. Hand ONE housekeeping
+item to the commit step: declare (or revert) the `J-05.json` timeout bump so the crosscheck's
+"zero out-of-inventory changes" enumeration is honest. Outer loop's deterministic gates + second
+fresh-context confirm are the second key.

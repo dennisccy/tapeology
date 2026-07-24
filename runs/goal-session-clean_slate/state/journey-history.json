@@ -4,50 +4,50 @@
       "id": "J-01",
       "name": "Backend demolition with byte-identical relocations",
       "status": "passing",
-      "last_verified_iter": "goal-clean_slate-iter-5",
-      "last_passing_iter": "goal-clean_slate-iter-5",
+      "last_verified_iter": "goal-clean_slate-iter-6",
+      "last_passing_iter": "goal-clean_slate-iter-6",
       "first_seen_iter": "goal-clean_slate-iter-0",
-      "last_evidence_path": "reports/phase-goal-clean_slate-iter-5-ui-test-results.md#UT-J-01",
+      "last_evidence_path": "reports/phase-goal-clean_slate-iter-6-ui-test-results.md#UT-J-01",
       "spec_hash": "5d3cc99593cf16c9d24bd4b4f469f94ff00ba1dbea8caad51fd1740e6d7a0d7b"
     },
     "J-02": {
       "id": "J-02",
       "name": "Frontend + WS demolition — the two-page product",
       "status": "passing",
-      "last_verified_iter": "goal-clean_slate-iter-5",
-      "last_passing_iter": "goal-clean_slate-iter-5",
+      "last_verified_iter": "goal-clean_slate-iter-6",
+      "last_passing_iter": "goal-clean_slate-iter-6",
       "first_seen_iter": "goal-clean_slate-iter-0",
-      "last_evidence_path": "reports/qa/goal-clean_slate-iter-5-evidence/J-02-verify.png",
+      "last_evidence_path": "reports/qa/goal-clean_slate-iter-6-evidence/J-02-verify.png",
       "spec_hash": "7e2ba6f2ace5bf0010aabaddc2e44a63c16ba91140d7a85b168028532fdf749f"
     },
     "J-03": {
       "id": "J-03",
       "name": "MCP contract v2 — 15 read-only tools",
       "status": "passing",
-      "last_verified_iter": "goal-clean_slate-iter-5",
-      "last_passing_iter": "goal-clean_slate-iter-5",
+      "last_verified_iter": "goal-clean_slate-iter-6",
+      "last_passing_iter": "goal-clean_slate-iter-6",
       "first_seen_iter": "goal-clean_slate-iter-0",
-      "last_evidence_path": "reports/phase-goal-clean_slate-iter-5-ui-test-results.md#UT-J-03",
+      "last_evidence_path": "reports/phase-goal-clean_slate-iter-6-ui-test-results.md#UT-J-03",
       "spec_hash": "0190d4c0792c356139ce8492195d4abc58fd9ee8af44b8708157632ac6ac3ebf"
     },
     "J-04": {
       "id": "J-04",
       "name": "The fingerprint epoch bump — §0.4 Path B",
       "status": "passing",
-      "last_verified_iter": "goal-clean_slate-iter-5",
-      "last_passing_iter": "goal-clean_slate-iter-5",
+      "last_verified_iter": "goal-clean_slate-iter-6",
+      "last_passing_iter": "goal-clean_slate-iter-6",
       "first_seen_iter": "goal-clean_slate-iter-0",
-      "last_evidence_path": "reports/phase-goal-clean_slate-iter-5-ui-test-results.md#UT-J-04",
+      "last_evidence_path": "reports/phase-goal-clean_slate-iter-6-ui-test-results.md#UT-J-04",
       "spec_hash": "b79c7381ee2abb0dc47771b8bb45e73268a2ed3bd0d13b50b494cc72e1b65e25"
     },
     "J-05": {
       "id": "J-05",
       "name": "The kept product stands — regression sentinel",
-      "status": "partial",
-      "last_verified_iter": "goal-clean_slate-iter-5",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-clean_slate-iter-6",
+      "last_passing_iter": "goal-clean_slate-iter-6",
       "first_seen_iter": "goal-clean_slate-iter-0",
-      "last_evidence_path": "reports/qa/goal-clean_slate-iter-5-evidence/UT-06-UT-04-UT-08-fullpage.png",
+      "last_evidence_path": "reports/qa/goal-clean_slate-iter-6-evidence/UT-04-load-result.png",
       "spec_hash": "44e9446ed40967866b0b6e9df1867ef66ccd5ac6869a57021b1b865feba954d7"
     }
   },
@@ -56,9 +56,11 @@
       "iter": "goal-clean_slate-iter-5",
       "anti_goal": "Deletion is complete, never cosmetic. No orphaned imports, dead components, unreachable routes, dangling MCP tools, or skipped tests survive; a deleted surface is gone from code, routes, nav, MCP, types, and tests alike — grep-provably.",
       "severity": "minor",
-      "evidence": "apps/backend/app/research/routes.py:85,103,112,122,208 — five orphaned Pydantic request-body classes (ThesisRequest / ResolveRequest / ActionRequest / StudyRequest / ReviewRequest) left behind by iter-1's deletion of the POST /research/thesis* and POST /research/studies handlers. Independently verified: `git grep` across apps/ returns only their class-definition lines (zero references; contrast the kept BacktestRequest, referenced as a live route body at routes.py:1136); at baseline e7865b4 all five had live `body:` route params (lines 730/904/1064/1189/1302). Functionally inert (not in the OpenAPI schema, unimported, no behavior) — audit rated IMPORTANT-not-CRITICAL — so NOT a REGRESSION-class critical violation, but a grep-provable breach of a goal-critical-tagged rail that blocks GOAL_ACHIEVED and falsifies J-05's diff-vs-inventory 'zero residue' completeness clause ('anything ... missing is a FAIL'). Source: docs/handoffs/goal-clean_slate-iter-5-audit.md finding B1, verified by the evaluator.",
-      "resolved": false
+      "evidence": "apps/backend/app/research/routes.py:85,103,112,122,208 — five orphaned Pydantic request-body classes (ThesisRequest / ResolveRequest / ActionRequest / StudyRequest / ReviewRequest) left behind by iter-1's deletion of the POST /research/thesis* and POST /research/studies handlers. Functionally inert (not in the OpenAPI schema, unimported) but a grep-provable breach of a critical-tagged rail that blocked GOAL_ACHIEVED. Source: iter-5 audit finding B1, verified by the evaluator.",
+      "resolved": true,
+      "resolved_iter": "goal-clean_slate-iter-6",
+      "resolution": "iter-6 deleted all 5 orphaned classes (routes.py 67 deletions, 0 insertions) — evaluator firsthand grep-count now 0; the 4 kept request classes still show exactly 2 occurrences each (def + live body: param). A new durable AST-structural guard test (apps/backend/tests/test_routes_no_orphaned_request_models.py) proves RED against the pre-cleanup file (named exactly the 5) and GREEN after, so the defect class cannot silently recur. Expanded orphan sweep (TC-3) found only docstring/comment hits (T-11-clean). Confirmed by review PASS, QA PASS, hard-audit PASS_WITH_GAPS, coherence COHERENCE-PASS."
     }
   ],
-  "updated_at": "2026-07-24T13:44:48Z"
+  "updated_at": "2026-07-24T16:27:03Z"
 }

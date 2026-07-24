@@ -1,0 +1,14 @@
+[data-testid="case-drillin"].innerText (captured via eval after await_element found it):
+
+symbol / session
+AAPL · 2025-01-02
+band
+resistance · 251.6720440162376–251.6720440162376 · Unclassified
+reaction
+rejected
+forward returns
+78b: -0.023484065803067618 · 234b: -0.036517523643010405
+
+TAPE TIMELINE
+
+No recorded tape for this event.
