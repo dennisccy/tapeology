@@ -141,3 +141,26 @@ manually choosing a new enhancement id for a genuinely new enhancement would.
 **Reversible:** yes — the exact literal chosen is cosmetic (any distinct, honest string satisfies the
 mechanism); a different naming convention later only affects the NEW row's id/title, never the old row
 or any pin.
+
+## iter-5 — goal-decomposer
+
+**Ambiguity:** goal.md repeatedly (Vision point 2, Foundation invariant #5, J-05 step 2, J-05's
+acceptance list) asserts "Case Studies" is a currently-live KEPT surface whose drill-in must be
+browser-verified this iteration. The shipped code has `SHOW_CASE_STUDIES = false`
+(`apps/frontend/app/structure/page.tsx:335`, set by commit `e60f6a7`, 2026-07-20 — three days before
+this goal.md was authored against `fa76460`, which already contains that commit). This has been
+carried forward unresolved since iter-0's lesson ("restore the flag" vs "operator rescopes J-05").
+**We chose:** Restore — flip `SHOW_CASE_STUDIES` to `true` and reinstate the one sentence `e60f6a7`
+dropped from the `structure-framing` paragraph — as this iteration's one code change. Grounds: (1) the
+flag's own code comment calls the suppression "reversible" and states "All Case Studies state/handlers
+are kept intact; only its rendered section is withheld" — restoring visibility is a pure UI-gate flip,
+not new backend work and not a new feature (the section, its data-fetch, and its drill-in handlers were
+built and tested in eras 5B/5C, well before this interlude); (2) goal.md is the most recent, most
+specific statement of operator intent for this session and names Case Studies as KEPT in four separate
+places; (3) no backend test references the flag (grep-confirmed) and the underlying `/research/setups`
+data path is unaffected by the render gate, so the restoration carries negligible regression risk.
+Rescoping J-05 to drop the literal acceptance clause was rejected because nothing about the hidden
+state reflects a demolition decision or a defect — it was an incidental side-effect of an unrelated
+Yahoo-fetch-UI commit bundled three days before this goal.md existed.
+**Reversible:** yes — a one-line flag flip back to `false` (and dropping the one reinstated sentence)
+fully undoes this if the operator disagrees.
