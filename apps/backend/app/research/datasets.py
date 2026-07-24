@@ -11,9 +11,9 @@ directory (``TAPEOLOGY_DATASET_DIR`` override, ``config.dataset_dir`` default �
 Disciplines (each an anti-goal or a J-02 acceptance clause):
 
   * **Explicit recording only.** Recording is a research ACTION through ``record_from_source``
-    (the same source resolution studies use: the committed keyless reference window, or an
-    arbitrary window through the EXISTING adapter fetch seam). Nothing in the watch/stream path
-    imports this module — the live cockpit's tape is never persisted (no ambient recording).
+    (the committed keyless reference window, or an arbitrary window through the EXISTING adapter
+    fetch seam). Nothing in the watch/stream path imports this module — the live cockpit's tape is
+    never persisted (no ambient recording).
   * **Checksummed + re-verified on every content change (stat-keyed) for ``get``/``list`` — every
     load, forever, for ``load_events``/``replay``.** ``meta.checksum`` is a sha256 over the tape
     CONTENT (symbol + feed + anchor + events) computed at registration; a second whole-record
@@ -33,9 +33,9 @@ Disciplines (each an anti-goal or a J-02 acceptance clause):
     under a different split (the re-tag attempt) — or the same split — raises the 409-style
     ``DatasetAlreadyRegistered`` naming the existing dataset and its frozen tag.
   * **Byte-identical replay.** ``DatasetStore.replay`` replays a stored dataset UNPACED through
-    a FRESH ``TapeEngine`` (the studies-runner pattern), yielding snapshots byte-identical to
-    replaying the original source stream, deterministic across re-runs. Consumed by tests now
-    and by J-03's backtester next — there is no REST replay endpoint (Product Shape lists none).
+    a FRESH ``TapeEngine``, yielding snapshots byte-identical to replaying the original source
+    stream, deterministic across re-runs. Consumed by tests and by the backtester — there is no
+    REST replay endpoint (Product Shape lists none).
   * **Honest failure states.** Unknown id -> ``DatasetNotFound``; an empty requested window ->
     ``EmptyWindowError`` (nothing written); an unavailable reference fixture ->
     ``DatasetRecordError``. Every error is distinct and explicit.
@@ -61,18 +61,25 @@ from ..providers.historical import HistoricalProvider
 from .dataset_index import DatasetIndex
 from .feed_basis import data_feed_for_scenario
 
-# The dataset source vocabulary REUSES the studies module's source-resolution names (one owner
-# per literal — never a second copy), and the reference loader below reuses its one committed
-# fixture loader. Datasets are HISTORICAL tape: the committed keyless reference window, or an
-# arbitrary real window through the EXISTING adapter fetch seam. A seeded sim stream reproduces
-# on demand, so ``sim`` is deliberately NOT a dataset source kind.
-from .studies import SOURCE_HISTORICAL, SOURCE_REFERENCE
-from .studies import _load_reference_window as _load_reference
-
 # The frozen split vocabulary (assigned at registration, immutable forever after).
 SPLIT_TRAIN = "train"
 SPLIT_HOLDOUT = "holdout"
 VALID_SPLITS = frozenset({SPLIT_TRAIN, SPLIT_HOLDOUT})
+
+# === Relocated from the (demolished) journal-era ``studies.py`` module ==============================
+# era-5D J-01 ("The Clean Slate" demolition interlude, I-2 RELOCATE table): this module is now the
+# SOLE owner of the dataset source-kind vocabulary and the committed reference-window loader — a
+# pure move (same values, same behaviour), landed before ``studies.py`` is deleted whole later in
+# this same iteration. Datasets are HISTORICAL tape: the committed keyless reference window, or an
+# arbitrary real window through the EXISTING adapter fetch seam. A seeded sim stream reproduces on
+# demand, so ``sim`` is deliberately NOT a dataset source kind (kept in the former studies.py only,
+# for its own sim-replay path).
+SOURCE_REFERENCE = "reference"
+SOURCE_HISTORICAL = "historical"
+
+# The committed reference window — the PG SIP fixture. Loadable without credentials. The id the
+# (now-removed) study create form's quick-pick used to send; datasets.py's own callers still use it.
+REFERENCE_SOURCE_ID = "PG_SIP_REFERENCE"
 
 VALID_SOURCE_KINDS = frozenset({SOURCE_REFERENCE, SOURCE_HISTORICAL})
 
@@ -367,8 +374,8 @@ class DatasetStore:
         return [_row_to_event(symbol, row) for row in loaded.rows]
 
     def replay(self, dataset_id: str, config: Config) -> Iterator[EngineSnapshot]:
-        """Replay the stored dataset UNPACED through a FRESH ``TapeEngine`` (the studies-runner
-        pattern), yielding every per-event snapshot. Deterministic: the stored stream, the stored
+        """Replay the stored dataset UNPACED through a FRESH ``TapeEngine``, yielding every
+        per-event snapshot. Deterministic: the stored stream, the stored
         source descriptor, and the stored epoch anchor fully determine the output — re-runs are
         byte-identical, and both match replaying the original source stream."""
         loaded = self._load_by_id(dataset_id)
@@ -440,6 +447,34 @@ class DatasetStore:
 # --- source resolution + record (the explicit research action) ------------------------------------
 
 
+def _load_reference_window():
+    """Load the committed PG SIP reference fixture without credentials. Relocated verbatim from
+    the (demolished) journal-era ``studies.py`` module (era-5D J-01, I-2 RELOCATE table) — same
+    fixture path, same behaviour. Returns the ``HistoricalWindow`` or ``None`` if absent (the
+    caller raises its own explicit error — never a synthetic stand-in)."""
+    import json
+    from pathlib import Path
+
+    from ..providers.adapters.base import HistoricalWindow, RawQuote, RawTrade
+
+    fixture = (
+        Path(__file__).resolve().parents[2]
+        / "tests"
+        / "fixtures"
+        / "alpaca"
+        / "PG_20260609_170000_171000_sip.json"
+    )
+    if not fixture.exists():
+        return None
+    data = json.loads(fixture.read_text())
+    trades = tuple(RawTrade(t["epoch"], t["price"], t["size"]) for t in data["trades"])
+    quotes = tuple(
+        RawQuote(q["epoch"], q["bid"], q["ask"], q["bid_size"], q["ask_size"])
+        for q in data["quotes"]
+    )
+    return HistoricalWindow(data["symbol"], trades, quotes)
+
+
 def _slice_window(window: HistoricalWindow, start_epoch: float | None, end_epoch: float | None) -> HistoricalWindow:
     """The half-open ``[start, end)`` epoch slice of a source window — pure selection of REAL
     records (nothing fabricated, dropped beyond the bounds, or reordered)."""
@@ -473,14 +508,14 @@ def record_from_source(
 ) -> dict:
     """Record + register ONE dataset from a historical source (the explicit research action).
 
-    Source resolution mirrors the studies runner: ``reference`` loads the committed keyless PG
-    SIP fixture (optionally sliced to ``[start, end)``); ``historical`` calls the injected
-    ``historical_fetch`` built on the EXISTING neutral adapter seam (credentials / no-data /
-    timeouts surface that seam's explicit errors — never fabricated, never fixture-substituted).
-    The stream is materialised through the SAME ``HistoricalProvider`` the watch and studies
-    paths replay, so the stored events ARE the source stream, byte for byte."""
+    ``reference`` loads the committed keyless PG SIP fixture (optionally sliced to
+    ``[start, end)``); ``historical`` calls the injected ``historical_fetch`` built on the
+    EXISTING neutral adapter seam (credentials / no-data / timeouts surface that seam's explicit
+    errors — never fabricated, never fixture-substituted). The stream is materialised through the
+    SAME ``HistoricalProvider`` the watch path replays, so the stored events ARE the source
+    stream, byte for byte."""
     if source_kind == SOURCE_REFERENCE:
-        window = _load_reference()
+        window = _load_reference_window()
         if window is None or (not window.trades and not window.quotes):
             raise DatasetRecordError("the committed reference window is unavailable")
     elif source_kind == SOURCE_HISTORICAL:
@@ -517,9 +552,8 @@ def record_from_source(
 
 
 def parse_utc_epoch(value: str) -> float:
-    """ISO-8601 (``Z`` accepted) -> UTC epoch seconds; a naive value is taken as UTC (the studies
-    window-parse convention). Raises ``ValueError`` for a malformed value (the route maps it to
-    an explicit 422)."""
+    """ISO-8601 (``Z`` accepted) -> UTC epoch seconds; a naive value is taken as UTC. Raises
+    ``ValueError`` for a malformed value (the route maps it to an explicit 422)."""
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)

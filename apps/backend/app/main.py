@@ -144,22 +144,18 @@ async def _warm_symbol_universe_bg(adapter: MarketDataAdapter) -> None:
 async def lifespan(app: FastAPI):
     # Research store + registry (capabilities 23 / 28). The journal-scoped SQLite store is opened at
     # the operator's resolved DB path (``TAPEOLOGY_JOURNAL_DB`` or the config default); the registry
-    # owns the per-ticker monitors and is wired to the WatchManager's engine-created hook so every
-    # watch gets a monitor attached at the engine's observer seam. A startup SWEEP resolves any
-    # thesis left ``active`` in the DB by a prior process to ``expired`` (lifecycle honesty — no
-    # orphaned active theses). A test injects its own registry via ``set_registry`` BEFORE the app
-    # starts, in which case we leave it in place (skip building the default file store).
+    # owns the backtest/edge-compute job managers. era-5D J-01 ("The Clean Slate" demolition
+    # interlude) removed the WatchManager engine-created wiring and the startup expiry sweep that
+    # used to run here (both were journal-era thesis-lifecycle machinery, deleted along with
+    # ``ResearchRegistry.on_engine_created``/``.startup_sweep``). A test injects its own registry via
+    # ``set_registry`` BEFORE the app starts, in which case we leave it in place (skip building the
+    # default file store).
     own_registry = False
     if get_registry_or_none() is None:
         store = JournalStore(CONFIG.journal_db_path_resolved(), CONFIG)
         registry = ResearchRegistry(store, CONFIG)
         set_registry(registry)
-        manager.set_on_engine_created(registry.on_engine_created)
         own_registry = True
-        try:
-            registry.startup_sweep()
-        except Exception:
-            logger.exception("research startup sweep failed")
 
     # Fire-and-forget the symbol-universe warm at startup through the NEUTRAL adapter seam (J-30)
     # — main.py never names the SDK or the universe cache. Non-blocking: startup does not wait on
@@ -179,16 +175,13 @@ async def lifespan(app: FastAPI):
         if own_registry:
             reg = get_registry_or_none()
             if reg is not None:
-                # Drain any in-flight replay-study jobs (capability 32) and backtest jobs
-                # (era-3 capability 4, J-03) before closing the store so a daemon worker never
-                # writes to a closed store on shutdown.
-                with contextlib.suppress(Exception):
-                    reg.study_jobs.join_all(timeout=5.0)
+                # Drain any in-flight backtest jobs (era-3 capability 4, J-03) before closing the
+                # store so a daemon worker never writes to a closed store on shutdown. era-5D J-01:
+                # the replay-study job manager this used to also drain was deleted whole.
                 with contextlib.suppress(Exception):
                     reg.backtest_jobs.join_all(timeout=5.0)
                 reg.store.close()
             set_registry(None)
-            manager.set_on_engine_created(None)
 
 
 app = FastAPI(title="Tapeology", version="0.1.0", lifespan=lifespan)

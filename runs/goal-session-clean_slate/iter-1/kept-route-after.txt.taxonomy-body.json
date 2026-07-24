@@ -1,0 +1,1 @@
+{"feed_basis":{"feeds":[{"id":"sim","name":"Simulated"},{"id":"iex","name":"IEX (live)"},{"id":"sip","name":"SIP (consolidated)"},{"id":"yahoo","name":"Yahoo Finance"}],"live_disclosure":"live verdicts read the single-venue IEX feed; historical replay and studies use SIP — spreads and prints differ"}}

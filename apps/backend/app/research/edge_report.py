@@ -69,11 +69,11 @@ from ..config import (
     STRATEGY_V1_ID,
 )
 from .bars import BarStore
-# ``_aggregate`` is imported PRIVATE (the ``datasets.py`` -> ``from .studies import
-# _load_reference_window as _load_reference`` precedent): the ONE trade-population aggregator
-# every other report in this codebase already computes with (n/gross/net R and $/win_rate/
-# max_drawdown_r) -- reused VERBATIM for a strategy-comparison cell's pooled trade list, never a
-# second R/$/edge formula.
+# ``_aggregate`` is imported PRIVATE (the ``backtests.py``-owned-private-helper precedent —
+# ``r_basis``/the state-native arming family relocated there whole, era-5D J-01): the ONE
+# trade-population aggregator every other report in this codebase already computes with
+# (n/gross/net R and $/win_rate/max_drawdown_r) -- reused VERBATIM for a strategy-comparison
+# cell's pooled trade list, never a second R/$/edge formula.
 from .backtests import BacktestJobManager, REGISTER, STATUS_DONE, _aggregate
 from .datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN, parse_utc_epoch
 # era-fast_wall J-05: ``pair_cache_key``/``EdgeReportBacktestCache`` for the per-pair sub-cache;

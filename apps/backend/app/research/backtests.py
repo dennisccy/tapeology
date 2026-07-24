@@ -23,29 +23,33 @@ report payload, and sent nowhere (the no-live-execution anti-goal; enforced repo
 
 The disciplines, clause by clause:
 
-  * **Entries reuse the studies' state-native arming — no new indicator, no new threshold.** Each
-    strategy setup x direction combo arms when its premise tape state (via the studies' ONE
-    ``_premise_state`` mapping) has held CONTINUOUSLY for ``study_arm_sustain_seconds``, gated by
+  * **Entries reuse the former studies module's state-native arming — no new indicator, no new
+    threshold.** Each strategy setup x direction combo arms when its premise tape state (via the
+    ONE ``_premise_state`` mapping, this module's own private helper since era-5D J-01 relocated
+    it here) has held CONTINUOUSLY for ``study_arm_sustain_seconds``, gated by
     ``study_arm_cooldown_seconds`` per combo — the exact sustained-premise + cooldown rules and
-    constants the study runner proved. ONE OPEN TRADE AT A TIME: while a simulated position is
-    open no new entry arms; eligibility is re-checked every recorded event, exits are processed
-    BEFORE arming at each event, and concurrent eligibility resolves in the strategy's declared
-    setup order — all deterministic, all documented in the config-owned definition.
+    constants the (now-demolished) study runner proved. ONE OPEN TRADE AT A TIME: while a
+    simulated position is open no new entry arms; eligibility is re-checked every recorded event,
+    exits are processed BEFORE arming at each event, and concurrent eligibility resolves in the
+    strategy's declared setup order — all deterministic, all documented in the config-owned
+    definition.
 
   * **Exits: R-stop / reward-target / horizon / state-flip / dataset_end.** The R-stop is the
-    studies' arm-instant synthetic invalidation (the REUSED ``_synthetic_invalidation`` helper —
-    ``study_occurrence_r_spread_multiple`` x arm spread, floored at ``study_occurrence_r_floor``,
-    adverse side), with R via the shared ``marks.r_basis`` (row 27 — never a second formula); it
-    triggers on a recorded print at/through the invalidation. ``structure_tape`` AND
-    ``structure_tape_map`` trades (era-4 J-05 / era-5B J-04, gated on the arming ``level``/class
-    being present, never on the strategy id) instead use a class-scaled, LEVEL-relative
-    invalidation (``_class_scaled_invalidation``) and additionally carry a reward-target exit
+    arm-instant synthetic invalidation (the ``_synthetic_invalidation`` helper, relocated here
+    alongside the rest of the state-native arming family — ``study_occurrence_r_spread_multiple``
+    x arm spread, floored at ``study_occurrence_r_floor``, adverse side), with R via the shared
+    ``r_basis`` helper (row 27 — never a second formula; also relocated here, era-5D J-01, this
+    module's own private helper since the journal-era ``marks.py`` was demolished); it triggers on
+    a recorded print at/through the invalidation. ``structure_tape`` AND ``structure_tape_map``
+    trades (era-4 J-05 / era-5B J-04, gated on the arming ``level``/class being present, never on
+    the strategy id) instead use a class-scaled, LEVEL-relative invalidation
+    (``_class_scaled_invalidation``) and additionally carry a reward-target exit
     (``_class_scaled_target`` — a class R-multiple bounded by the next opposing level/band resolved
     at arm time); v1/null trades never carry a ``target_price`` and so can never reach that exit.
-    The state-flip exit fires when the tape reads the OPPOSING control state (the
-    studies' ``_control_state`` vocabulary). The time horizon exits at the first recorded event
-    at/after ``strategy_exit_horizon_seconds`` past entry. A trade still open when the stream ends
-    is handled EXPLICITLY and deterministically: forced exit at the LAST recorded price, labeled
+    The state-flip exit fires when the tape reads the OPPOSING control state (the ``_control_state``
+    vocabulary, also relocated here). The time horizon exits at the first recorded event at/after
+    ``strategy_exit_horizon_seconds`` past entry. A trade still open when the stream ends is
+    handled EXPLICITLY and deterministically: forced exit at the LAST recorded price, labeled
     ``dataset_end`` — documented, never silent. Exit precedence within one event is fixed and
     documented: r_stop, then reward_target, then state_flip, then horizon. Exit evaluation begins
     strictly AFTER the entry event.
@@ -94,32 +98,14 @@ import random
 import threading
 import time
 import uuid
+from dataclasses import dataclass
 
 from ..config import Config, PROFILE_DEFAULT, STRATEGY_TAPE_ID, STRATEGY_TAPE_MAP_ID
 from .bars import BarStore
 from .datasets import DatasetIntegrityError, DatasetNotFound, DatasetStore
 from .levels import compute_levels, level_change_points, CLASS_A, CLASS_B, CLASS_C
-from .marks import r_basis
 from .store import BacktestRecord, JournalStore
 from .tradability import RESISTANCE, SUPPORT, basis_day_key, compute_tradability
-
-# The status vocabulary and the state-native helpers are REUSED from the studies module (one
-# owner per literal / per mapping — never a second copy): the premise-state arming map, the
-# control-state vocabulary the state-flip exit reads, the arm-instant synthetic invalidation,
-# the recorded-path point shape, and the throttled progress cadence.
-from .studies import (
-    STATUS_CANCELLED,
-    STATUS_DONE,
-    STATUS_FAILED,
-    STATUS_QUEUED,
-    STATUS_RUNNING,
-    TERMINAL_STATUSES,
-    _control_state,
-    _premise_state,
-    _synthetic_invalidation,
-    _PathPoint,
-    _PROGRESS_EVERY,
-)
 
 __all__ = [
     "BacktestJobManager",
@@ -138,6 +124,7 @@ __all__ = [
     "STATUS_QUEUED",
     "STATUS_RUNNING",
     "TERMINAL_STATUSES",
+    "r_basis",
 ]
 
 # The visible honesty register carried by EVERY report payload (the PnL-honesty constraint):
@@ -158,10 +145,91 @@ EXIT_STATE_FLIP = "state_flip"
 EXIT_DATASET_END = "dataset_end"
 
 
+# === Relocated from the (demolished) journal-era ``marks.py`` / ``studies.py`` modules ==============
+# era-5D J-01 ("The Clean Slate" demolition interlude): this module was the only surviving runtime
+# consumer of the symbols below outside the two source modules' own internals — see
+# ``docs/goal.md``'s I-2 RELOCATE table (``r_basis``) and this iteration's dev handoff (the
+# additional STATUS_*/state-native-arming family the plan's own inventory review surfaced). Every
+# definition is copied VERBATIM (same math, same behaviour, no renamed semantics) — a pure move, not
+# a rewrite. ``marks.py`` and ``studies.py`` are deleted whole later in this same iteration.
+
+def r_basis(reference_price: float, invalidation_price: float) -> float:
+    """The ONE shared R basis: ``R = |reference - invalidation|`` (the goal-doc glossary's R unit).
+
+    The SINGLE owner of the R definition — this runner's realized/gross-R math is the sole
+    remaining consumer since the journal-era marks/excursions machinery was demolished (era-5D
+    J-01). A degenerate ``R == 0`` (reference exactly at the invalidation) is returned as-is so
+    the caller decides the honest no-metric behaviour (no divide-by-zero, no fabricated
+    infinity)."""
+    return abs(reference_price - invalidation_price)
+
+
+# The study-job status vocabulary (queued -> running -> done | cancelled | failed) — this runner's
+# OWN job lifecycle mirrors it byte-identically (one owner per literal, never a second copy); the
+# former studies.py replay engine that originated this vocabulary is gone, this is now its sole
+# owner.
+STATUS_QUEUED = "queued"
+STATUS_RUNNING = "running"
+STATUS_DONE = "done"
+STATUS_CANCELLED = "cancelled"
+STATUS_FAILED = "failed"
+TERMINAL_STATUSES = frozenset({STATUS_DONE, STATUS_CANCELLED, STATUS_FAILED})
+
+# How often (in processed events) a running backtest refreshes its persisted progress — throttled
+# so the progress write is never a hot path (a replay processes thousands of events; a write every
+# event would hammer the writer queue). A whole-number internal cadence, not a tuned research value.
+_PROGRESS_EVERY = 250
+
+
+@dataclass
+class _PathPoint:
+    """One recorded snapshot-path point (logical ts + last + spread + the canonical tape state).
+    Tape data lives ONLY here in memory during the run — never persisted (the persistence-scope
+    anti-goal)."""
+
+    timestamp: float
+    last: float | None
+    spread: float | None
+    tape_state: str
+
+
+def _control_state(direction: str) -> str:
+    return "buyer_control" if direction == "long" else "seller_control"
+
+
+def _absorption_state(direction: str) -> str:
+    # absorption_reversal premise: long expects sellers absorbed at the bid (bid_absorption);
+    # short expects buyers absorbed at the ask (ask_absorption).
+    return "bid_absorption" if direction == "long" else "ask_absorption"
+
+
+def _premise_state(setup_type: str, direction: str) -> str:
+    """The EXISTING engine tape state whose SUSTAINED presence arms a state-native entry.
+
+    absorption_reversal arms on sustained matching ABSORPTION (the premise). trend_continuation
+    arms on sustained matching CONTROL. Composed ONLY of existing states (no new indicator)."""
+    if setup_type == "absorption_reversal":
+        return _absorption_state(direction)
+    return _control_state(direction)  # trend_continuation
+
+
+def _synthetic_invalidation(arm_price: float, spread: float | None, direction: str, config: Config) -> float:
+    """The deterministic arm-instant synthetic invalidation (the named design decision).
+
+    A synthetic invalidation placed ``study_occurrence_r_spread_multiple × spread`` (floored at
+    ``study_occurrence_r_floor``) on the ADVERSE side of the arm price (below for a long, above for
+    a short). Derived ONLY from existing engine values at the arm instant (arm price + arm-instant
+    spread); NEVER fitted. R is then ``|arm_price − this|`` via the shared ``r_basis`` helper
+    above."""
+    s = spread if spread is not None and spread > 0 else 0.0
+    band = max(s * config.study_occurrence_r_spread_multiple, config.study_occurrence_r_floor)
+    return arm_price - band if direction == "long" else arm_price + band
+
+
 def _opposing_control_state(direction: str) -> str:
     """The OPPOSING control state whose read is the state-flip exit (existing vocabulary only):
-    a long is broken by ``seller_control``, a short by ``buyer_control`` — via the studies' one
-    ``_control_state`` mapping, never a second copy of the state names."""
+    a long is broken by ``seller_control``, a short by ``buyer_control`` — via the ``_control_state``
+    mapping above, never a second copy of the state names."""
     return _control_state("short" if direction == "long" else "long")
 
 

@@ -67,12 +67,10 @@ def ctx(tmp_path, monkeypatch):
     store = JournalStore(str(tmp_path / "journal.db"), CONFIG)
     registry = ResearchRegistry(store, CONFIG)
     set_registry(registry)
-    manager.set_on_engine_created(registry.on_engine_created)
     with TestClient(app) as client:
         yield client, bar_dir
     for ticker in list(manager._engines.keys()):
         manager.stop(ticker)
-    manager.set_on_engine_created(None)
     set_registry(None)
     app.dependency_overrides.pop(get_market_adapter, None)
     store.close()

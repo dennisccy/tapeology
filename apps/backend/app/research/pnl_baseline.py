@@ -34,13 +34,14 @@ from .datasets import (
     DatasetRecordError,
     DatasetStore,
     EmptyWindowError,
+    REFERENCE_SOURCE_ID,
+    SOURCE_REFERENCE,
     SPLIT_HOLDOUT,
     SPLIT_TRAIN,
     record_from_source,
 )
 from .pnl_ledger import LedgerCompositionError, append_validation_row
 from .store import DuplicateEnhancementError, JournalStore
-from .studies import REFERENCE_SOURCE_ID, SOURCE_REFERENCE
 
 
 class FoundingSeedError(Exception):

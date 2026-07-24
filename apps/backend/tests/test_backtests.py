@@ -15,7 +15,7 @@ Locked disciplines (each an anti-goal or a J-03 acceptance clause):
     fee model applied per fill, and the gross-vs-net R/$ arithmetic asserted EXACTLY;
   * every exit reason is exercised (``r_stop`` / ``horizon`` / ``state_flip``) plus the explicit
     deterministic ``dataset_end`` handling for a trade open at stream end;
-  * R comes ONLY from the shared ``marks.r_basis`` helper (row 27 — never a second formula) and
+  * R comes ONLY from the shared ``r_basis`` helper (row 27 — never a second formula) and
     datasets are read ONLY through ``DatasetStore``'s public API (row 30);
   * identical request re-runs are byte-identical on the deterministic ``result`` payload; the
     null baseline is seeded, its seed recorded in the report, reproducible exactly;
@@ -55,13 +55,13 @@ from app.research.backtests import (
     STATUS_DONE,
     STATUS_FAILED,
     STATUS_QUEUED,
+    _PathPoint,
+    r_basis,
 )
 from app.research.bars import BarStore
 from app.research.datasets import DatasetStore
 from app.research.levels import compute_levels, level_change_points
-from app.research.marks import r_basis
 from app.research.store import JournalStore
-from app.research.studies import _PathPoint
 from app.research.tradability import compute_tradability
 
 # The synthetic three-timeframe confluence fixture (class A/B/C zones at exact, known prices) --
@@ -1070,7 +1070,7 @@ def _assert_trade_arithmetic(t: dict, config=CONFIG) -> None:
     sign = 1.0 if t["direction"] == "long" else -1.0
     entry_spread = t["entry"]["spread"] if (t["entry"]["spread"] or 0) > 0 else 0.0
     exit_spread = t["exit"]["spread"] if (t["exit"]["spread"] or 0) > 0 else 0.0
-    # Synthetic invalidation on the ADVERSE side; R via the ONE shared marks.r_basis helper.
+    # Synthetic invalidation on the ADVERSE side; R via the ONE shared r_basis helper.
     band = max(entry_spread * config.study_occurrence_r_spread_multiple, config.study_occurrence_r_floor)
     assert t["invalidation_price"] == t["entry"]["price"] - sign * band
     assert t["r_basis"] == r_basis(t["entry"]["price"], t["invalidation_price"])
@@ -1490,8 +1490,11 @@ def test_default_fingerprint_still_pinned_with_the_new_structure_tape_fields_pre
 
 def test_runner_consumes_the_shared_r_helper_and_the_public_dataset_api():
     src = (BACKEND_DIR / "app" / "research" / "backtests.py").read_text()
-    # R comes ONLY from the shared marks.r_basis helper (row 27 — never a second formula).
-    assert "from .marks import r_basis" in src
+    # R comes ONLY from the shared r_basis helper (row 27 — never a second formula). era-5D J-01:
+    # r_basis is now defined here directly (this module's own private helper, relocated from the
+    # demolished journal-era marks.py) rather than imported — the ONE-owner guarantee still holds,
+    # just from a different anchor string.
+    assert "def r_basis(" in src
     # Datasets are read ONLY through DatasetStore's public API (row 30 — never a second file
     # reader): the runner replays via the store and never opens/parses dataset files itself.
     assert ".replay(" in src

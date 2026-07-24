@@ -1,7 +1,7 @@
 {
   "session_id": "clean_slate",
   "started_at": "2026-07-23T21:52:40.471485Z",
-  "current_iter": 1,
+  "current_iter": 2,
   "cli": "claude",
   "agent_backend": "interactive",
   "halt_config": {
@@ -15,5 +15,9 @@
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/clean_slate_build",
-  "updated_at": "2026-07-23T22:54:38.248655Z"
+  "updated_at": "2026-07-24T01:49:57.387344Z",
+  "finished_at": "2026-07-24T00:36:33.249492Z",
+  "total_iterations": 1,
+  "wall_time_seconds": 9832,
+  "quota_pause_count": 0
 }

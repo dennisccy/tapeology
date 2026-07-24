@@ -12,7 +12,8 @@ read-only MCP ``setups`` tool all serve this module's output VERBATIM (single so
 no second computation path, mirroring ``tradability.py``'s own MCP/REST discipline).
 
 Two DIFFERENT "setup" vocabularies exist in this codebase -- READ THIS before touching either
-module. ``research/studies.py`` owns an UNRELATED, pre-existing concept: a live TAPE-ARMING
+module. ``research/backtests.py`` owns an UNRELATED, pre-existing concept (era-5D J-01 relocated it
+there, byte-identically, from the demolished journal-era ``studies.py``): a live TAPE-ARMING
 OCCURRENCE (``level_break`` / ``failed_move_fade`` / ``absorption_reversal`` / ``trend_continuation``)
 checked against the frozen ``TapeEngine``'s live STATE. THIS module's "event" is a completely
 different thing: a STORED 2026-dated 5m bar's OHLC range intersecting a tradable-map BAND, checked

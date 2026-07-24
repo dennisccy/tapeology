@@ -26,3 +26,33 @@ BEFORE deleting; 14-route + 11-module + JournalStore-method demolition; leave th
 J-04). SURFACE EARLY: Case Studies is code-suppressed (`SHOW_CASE_STUDIES = false`, page.tsx:335, commit
 e60f6a7 2026-07-20 — pre-dates this goal.md) so J-05's literal "Case Study drill-in" acceptance is
 unsatisfiable as written — decide restore-the-flag vs operator-rescope-J-05 before the J-05 sentinel work.
+
+## Iteration 1 — goal-clean_slate-iter-1
+
+**Date:** 2026-07-24T01:47:01Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-01
+- Newly failing: none
+- Regressed: none (J-05 was `partial`, never `passing` — no prior pass to lose)
+- Anti-goal violations: none (scan CLEAN; frontend diff empty → charts safe; historical records 0-diff; 13 pins + config.py 0-diff; fingerprint still 4d665603569b9dbf)
+
+**Reasoning:** Full-pipeline demolition iteration; three independent verdicts (review PASS, QA PASS
+11/11 TC, audit PASS_WITH_GAPS with byte-level relocation traces) + coherence PASS. I did not trust
+the handoff: independently re-ran `config_fingerprint()` (=4d665603569b9dbf), diffed all 13 pin
+sites + config.py (0 changes), confirmed all 11 modules deleted with T-12 grep clean, inspected the
+304-byte slimmed taxonomy body (feed_basis + sim/iex/sip/yahoo intact, no label families), verified
+`apps/frontend/` diff empty (charts veto-class — safe) and every historical-record path 0-diff, and
+ran `test_mcp_server.py` in isolation to confirm the ONE suite failure is exactly the pre-authorized
+`journal`-proxy→404 (test line 244) that J-03 owns — proof the demolition worked, not a regression.
+J-01's every substantive acceptance clause is met; the single red test is the J-01→J-03 dependency
+order's expected transient, so J-01 is `passing` (interpretation logged in assumptions.md). J-02/03/04
+still `failing`, J-05 still `partial` → not GOAL_ACHIEVED; progress made → CONTINUE.
+
+**Next-step recommendation:** Iteration 2 targets J-02 (Frontend + WS demolition) at **full** depth
+(browser-verifiable + large/structural). Carry forward: (1) delete the 4 `ResearchRegistry` stubs
+in the SAME commit that removes main.py's WS thesis/hint merge (they are only kept alive by that
+J-02-owned caller); (2) do NOT touch `test_mcp_server.py` (the red test is J-03's); (3) resolve
+`SHOW_CASE_STUDIES=false` (restore vs. rescope) before J-05 can close. Charts are veto-class — J-02
+browser QA must screenshot both charts working after a `rm -rf .next` clean rebuild (T-8/T-9).

@@ -3,18 +3,24 @@
 The product's defining anti-goal: EVERY research surface speaks in present-tense, descriptive,
 thesis-attributed language — NEVER an imperative trade command (buy / sell / enter / exit as a
 command, "you should …", price targets, take-profit / stop-loss advice), NEVER a prediction
-("price will rise", "about to break"), NEVER a certainty / edge / profitability claim. The three
-seeded per-surface checks in ``test_research_api.py`` (stance / checklist / feed-basis) proved one
-surface each; THIS module generalises them into a comprehensive lint that walks:
+("price will rise", "about to break"), NEVER a certainty / edge / profitability claim. The
+feed-basis seeded check in ``test_research_api.py`` proved one surface; THIS module generalises it
+into a comprehensive lint that walks:
 
-  (a) the ENTIRE ``GET /research/taxonomy`` payload — every label, evidence template, caption,
-      register line, and honest-absence string (the single backend owner of research copy); and
-  (b) representative SERVED copy — a live verdict + its evidence, the checklist stance evidence +
-      nearest-counterevidence, a hint card's evidence + baseline citation, the analytics + studies
-      captions, and the studies/analytics measurement framing; and
-  (c) the FRONTEND source literals (``apps/frontend/components`` + ``apps/frontend/app``) — UI
+  (a) the ENTIRE ``GET /research/taxonomy`` payload — every label, register line, and disclosure
+      string (the single backend owner of research copy); and
+  (b) the FRONTEND source literals (``apps/frontend/components`` + ``apps/frontend/app``) — UI
       strings that never travel through the taxonomy are still covered (goal.md J-66: "backed by a
       copy-lint test over UI strings").
+
+era-5D J-01 ("The Clean Slate" demolition interlude, I-8 UPDATE row): a THIRD leg used to walk a
+representative sample of served dynamic copy built from taxonomy functions that only the deleted
+verdict/stance/checklist/hint/risk-flag/analytics/studies surfaces ever called. Every one of those
+functions/constants is gone (I-2 taxonomy SLIM row); there is no surviving "representative served
+copy" distinct from the (a) taxonomy-payload walk to sample it from (the feed-basis strings — the
+one dynamic-ish copy left — are already fully covered by (a)), so that leg is DROPPED rather than
+repointed at unrelated kept modules (no new lint surface was asked for this iteration). The rail-2
+lint RULES themselves (the curated lexicon, the negation-clearing logic) are untouched.
 
 LEXICON CURATION IS THE HARD PART (the reviewer should diff this against goal.md J-66's own list and
 check BOTH failure directions). "buy" / "sell" as factual SIDE descriptors ("aggressive buy ratio",
@@ -46,8 +52,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import CONFIG
-from app.main import app, manager
-from app.research import taxonomy as tax
+from app.main import app
 from app.research.routes import ResearchRegistry, set_registry
 from app.research.store import JournalStore
 
@@ -150,12 +155,8 @@ def client(tmp_path):
     store = JournalStore(str(tmp_path / "journal.db"), CONFIG)
     registry = ResearchRegistry(store, CONFIG)
     set_registry(registry)
-    manager.set_on_engine_created(registry.on_engine_created)
     with TestClient(app) as c:
         yield c
-    for ticker in list(manager._engines.keys()):
-        manager.stop(ticker)
-    manager.set_on_engine_created(None)
     set_registry(None)
     store.close()
 
@@ -175,68 +176,7 @@ def test_lint_full_taxonomy_payload_is_clean(client):
     )
 
 
-# --- (b) representative SERVED copy (verdict + evidence, stance/checklist, hint, captions) --------
-
-def _representative_served_copy() -> dict:
-    """Build a representative sample of every SERVED dynamic copy string from the same backend owners
-    the runtime uses (the projection helpers), so the lint covers copy the static taxonomy walk does
-    not — a live verdict + evidence projection, the checklist stance evidence + counterevidence, a
-    hint card's evidence + baseline citation, and the analytics/studies captions."""
-    sample: dict = {}
-    # A live verdict + evidence projection for EACH setup × direction (the confirming / weakening /
-    # rejecting / invalidated evidence the strip renders verbatim — built from the same templates).
-    sample["verdict_weakening"] = tax.VERDICTS  # the verdict labels themselves
-    # The checklist aggregate-stance evidence for all four stances + the nearest-counterevidence line.
-    sample["checklist_stance_evidence"] = {
-        s: tax.checklist_stance_evidence(s, 6, 8)
-        for s in ("conditions_met", "conditions_not_met", "tape_against", "no_fresh_tape")
-    }
-    sample["checklist_counterevidence"] = {
-        "met": tax.checklist_nearest_counterevidence("Spread within stability", "12.0 bps", met=True),
-        "unmet": tax.checklist_nearest_counterevidence("Trade speed at floor", "0.40 t/s", met=False),
-    }
-    # The management-stance pending evidence + the absence copies (the J-54 honest case).
-    sample["stance_pending_evidence"] = tax.STANCE_PENDING_EVIDENCE
-    # A hint card record — evidence for each pattern + a baseline citation + the unvalidated string.
-    sample["hint_evidence"] = {
-        pid: tax.hint_evidence(pid, 45.0) for pid in tax.HINT_PATTERNS
-    }
-    sample["hint_baseline_citation"] = tax.hint_baseline_citation(40, 18, 12, 10, 30)
-    sample["hint_baseline_unvalidated"] = tax.HINT_BASELINE_UNVALIDATED
-    # The risk-flag measured-evidence sentences (the strip's amber advisory chips).
-    sample["risk_flag_evidence"] = {
-        "chasing": tax.chasing_entry_evidence(0.0044, 0.0040, "buy"),
-        "too_tight": tax.invalidation_too_tight_evidence(0.04, 0.02, 2.0),
-        "wide_spread": tax.wide_spread_illiquid_evidence(45.0, 30.0, "bps"),
-        "low_speed": tax.low_trade_speed_evidence(0.20, 0.50),
-        "against_tape": tax.against_expected_tape_evidence("seller_control", ["bid_absorption"]),
-        "before_warmup": tax.before_warmup_evidence(12, 40),
-    }
-    # The analytics + studies measurement-framing + captions (the most edge-claim-prone surfaces).
-    sample["analytics_copy"] = tax.ANALYTICS_COPY
-    sample["study_copy"] = tax.STUDY_COPY
-    sample["study_status_absence"] = tax.STUDY_STATUS_ABSENCE_COPY
-    sample["excursion_not_applicable"] = tax.EXCURSION_NOT_APPLICABLE_COPY
-    sample["excursion_not_tracked"] = tax.EXCURSION_NOT_TRACKED_COPY
-    sample["sound_cue_copy"] = tax.SOUND_CUE_COPY
-    return sample
-
-
-def test_lint_representative_served_copy_is_clean():
-    sample = _representative_served_copy()
-    offenders: list[str] = []
-    for json_path, value in _walk_strings(sample):
-        violations = find_violations(value)
-        if violations:
-            offenders.append(f"{json_path}: {violations} :: {value!r}")
-    assert not offenders, (
-        "J-66 copy-discipline lint found imperative/predictive/claim language in representative SERVED "
-        "dynamic copy (verdict evidence, stance/checklist, hint cards, analytics/studies captions):\n"
-        + "\n".join(offenders)
-    )
-
-
-# --- (c) the FRONTEND source literals ------------------------------------------------------------
+# --- (b) the FRONTEND source literals ------------------------------------------------------------
 
 _FRONTEND_ROOT = pathlib.Path(__file__).resolve().parents[2] / "frontend"
 # JSX text content + quoted string literals. We extract candidate user-facing strings and lint them.
