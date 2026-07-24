@@ -367,7 +367,7 @@ def test_tradability_parameters_are_config_sourced_no_magic_numbers():
 
 
 def test_tradability_config_fields_are_excluded_from_config_fingerprint():
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
     assert Config(tradability_band_cap_per_side=1).config_fingerprint() == CONFIG.config_fingerprint()
     assert Config(tradability_band_width_bps=999.0).config_fingerprint() == CONFIG.config_fingerprint()
     assert (

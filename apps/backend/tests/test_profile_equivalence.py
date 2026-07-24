@@ -118,7 +118,7 @@ def test_default_fingerprint_is_pinned_and_unmoved_by_the_new_field():
     # Ground truth: the founding PnL-ledger row (reports/pnl/pnl-history.md, committed) was
     # appended under THIS exact fingerprint. If this pin ever moves, that row (and every
     # archived-era record) has silently drifted — the strongest guard against that.
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
 
 
 def test_profile_candidate_field_is_serving_only_excluded_from_fingerprint():
@@ -133,7 +133,7 @@ def test_profile_candidate_field_is_serving_only_excluded_from_fingerprint():
 def test_candidate_resolved_fingerprint_is_distinct_from_default():
     resolved = CONFIG.resolved_for_profile(PROFILE_CANDIDATE_FASTER_WARMUP)
     assert resolved.config_fingerprint() != CONFIG.config_fingerprint()
-    assert resolved.config_fingerprint() == "8c2c0fbf978228e3"
+    assert resolved.config_fingerprint() == "16d7c98e4fdca755"
 
 
 def test_a_real_classifier_threshold_still_changes_the_fingerprint():

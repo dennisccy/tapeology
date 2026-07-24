@@ -190,7 +190,7 @@ def test_fixture_sweep_is_zero_survivors_and_leaves_everything_untouched(store, 
 
     # Untouched: the founding row is still the only row; the default fingerprint is still pinned.
     assert len(store.list_pnl_ledger()) == 1
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
     assert profiles_projection(store, CONFIG)["champion"] == report["champion_before"]
 
 
@@ -263,7 +263,7 @@ def test_controlled_survivor_moves_champion_and_appends_exactly_one_ledger_row(s
     assert row["provenance"]["holdout"]["dataset_id"] == holdout_meta["id"]
 
     # The default profile and every engine default are byte-identical to before this ran.
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
 
     # Single-source: the projection reflects the SAME moved pointer, verbatim.
     assert profiles_projection(store, test_config)["champion"] == report["champion_after"]
@@ -566,7 +566,7 @@ def test_strategy_axis_fixture_sweep_matches_shape_and_is_honestly_no_survivor(s
 
     # Nothing written, nothing moved, foundation untouched.
     assert len(store.list_pnl_ledger()) == 0
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
 
 
 def test_strategy_axis_determinism_two_independent_fresh_state_runs_are_byte_identical(tmp_path, monkeypatch):
@@ -643,7 +643,7 @@ def test_strategy_axis_controlled_survivor_moves_champion_and_appends_exactly_on
     assert row["provenance"]["holdout"]["dataset_id"] == holdout_meta["id"]
 
     # Frozen foundation AFTER a STRATEGY-axis promotion too: fingerprint unmoved.
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
     # Single-source: the projection reflects the SAME moved pointer, verbatim.
     assert profiles_projection(store, test_config)["champion"] == report["champion_after"]
 

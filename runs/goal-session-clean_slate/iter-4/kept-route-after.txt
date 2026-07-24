@@ -1,0 +1,68 @@
+# I-9 byte-comparison capture: label<TAB>path<TAB>status<TAB>sha256<TAB>body_len
+# base_url=http://127.0.0.1:8301 (cd apps/backend; bash scripts/start-backend.sh -- same
+# journal_db_path_resolved() dev-mode apps/backend/tapeology_journal.db the iter-1/2/3 captures used)
+#
+# Diff vs runs/goal-session-clean_slate/iter-3/kept-route-after.txt: 2 of 28 rows differ,
+# EXACTLY the two rows this journey's OWN required actions touch -- every other row (26/28,
+# including research.taxonomy and meta.ui-routes, whose one-time J-01/J-02 diffs are already
+# baked into the iter-3 baseline) is byte-for-byte IDENTICAL, confirming zero non-stamp,
+# non-required-action VALUE moved anywhere else in the kept surface:
+#
+#   1. research.pnl_ledger (1039 -> 2000 bytes): the SOLE content change is the new-epoch
+#      founding row `python -m app.research.pnl_baseline` appended (J-04 Step 3, required).
+#      Directly verified by reading both rows' stored payloads: the OLD row is byte-identical
+#      (same id, same fingerprint 4d665603569b9dbf, same net_r/net_usd/n, same dataset
+#      ids/checksums) and the NEW row carries the new fingerprint 08e471b10130e1e2 with
+#      net_r/net_usd/n IDENTICAL to the old row's values (-0.16000000000001136 / 1 train;
+#      0.3334000000001356 / 1 holdout) -- the values never moved, only the stamp + row count.
+#   2. research.backtests.list (5077887 -> 5075481 bytes, i.e. SMALLER): `GET /research/backtests`
+#      is capped at the pre-existing, unrelated serving-only `backtest_list_max` (100),
+#      most-recent-first (routes.py:1189). The store now holds 205 backtests (203 pre-existing +
+#      the 2 new founding-row backtests `pnl_baseline` ran). The capped-100 view's 2 newest ids
+#      (`9e134e5604ad4ab1ad5291cac61e8882`, `7ac14a512289427c8cb9d73618940fe2`) are EXACTLY the
+#      new founding row's own train/holdout backtest ids (confirmed via direct store query) --
+#      so the 2 oldest reports simply rolled off the pre-existing page-size window (they still
+#      exist in the store, untouched, just outside the served "100 most recent"). This is the
+#      SAME cap every prior backtest creation has always interacted with; it is not a J-04-
+#      specific mechanism and moves no VALUE of any retained report.
+#
+# Every OTHER route -- including every route whose payload embeds config_fingerprint as a pure
+# derived computation (research.bars.*, research.candles.*, research.datasets.*,
+# research.edge_report[+compute snapshot], research.levels.aapl_pinned, research.profiles,
+# research.setups.*, research.strategies, research.taxonomy, research.tradability.aapl_pinned,
+# meta.ui-routes, the tape.*.unwatched 404s, and the research.backtests.detail.404 probe) -- is
+# BYTE-IDENTICAL to iter-3's capture (same sha256, same body_len). This is the I-9 step-3
+# "identical VALUES, stamp-only diff" guarantee holding even where NO diff at all is the
+# empirical result (a route serving a not-yet-computed/honest-absent state, or a route whose
+# served content doesn't itself embed the stamp, both trivially satisfy "no non-stamp byte
+# differs"). The existing content-hash-cache-busting unit tests
+# (test_edge_report_cache.py/test_edge_report_backtest_cache.py/test_tradability_cache.py/
+# test_setups.py) independently corroborate the general mechanism and pass unmodified.
+meta.ui-routes	/meta/ui-routes	200	0edb55662c7e0d44447b38b0ea0ad741fe47b577795151644c67a8dd85a26b06	107
+research.backtests.detail.404	/research/backtests/does-not-exist-baseline-probe	404	7b6cb909c69322073cd8e02333ac59c44d181bc9c9664b077eb7e254185c36dc	64
+research.backtests.list	/research/backtests	200	dd0752d505c215a48b0a53e998e02483abb078da04d5a54fac496293c8772547	5075481
+research.bars.candles.aapl_1d	/research/bars/02006ff91a214480a99e71c35c5c7ed3/candles?limit=50	200	9cd81edf6772d0360b0e8cb679c924f64977fb538856428657481c47f36aa530	3446
+research.bars.candles.msft_4h	/research/bars/8d1b997c037f44959396d7709a7dee04/candles?limit=50	200	b88dc1c2889e7582afae98377b8ec31982d3c154dad6ea34b4afffcb3895ccaf	2880
+research.bars.detail.aapl_1d	/research/bars/02006ff91a214480a99e71c35c5c7ed3	200	fd7f23b2be90d841fa73987a88e39f687ea34a00e75228dc8c42b58ed08db630	3622
+research.bars.list	/research/bars	200	8dc8e75c5b39a514ebaa83139006cedfba9f48f3b95f6ed0a86f9c9d6eefce24	58737553
+research.candles.merged.aapl_1d	/research/candles?symbol=AAPL&timeframe=1d&limit=50	200	debc703a5636315ae8864dfe71e36cef04d88e6d38db08e37b5ed7921cc455e1	7692
+research.candles.merged.aapl_5m	/research/candles?symbol=AAPL&timeframe=5m&limit=50	200	0a8dd674e6fb86ef664ebefff5a135f648331ba41ea892e69893ec9ef7b7980b	7221
+research.datasets.detail.historical	/research/datasets/5c7f1a44aa71412eb874cb639dde56e2	200	7175e45b7e31bfc77ca67907bf2fd1fc936939e240b9268d8f507cd6638e9586	485
+research.datasets.detail.reference	/research/datasets/dcfcf3cd58184c12bf2db98ed08a2bf7	200	a32b6d357c647a66a178dca10d3afa1ed48e8b834560778d3229c164714bcbcd	502
+research.datasets.list	/research/datasets	200	5c57b2ab0fb4c7686ee5ba379228edc23166f3a0ce5c926e6e38271a7f16d60e	8588
+research.edge_report	/research/edge-report	200	aaaff84126ec22a6542515ba54a5fc31bb95d5c1d4cc1225507086ae30fa4ea2	337
+research.edge_report_compute_snapshot	/research/edge-report/compute	200	74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b	4
+research.levels.aapl_pinned	/research/levels?symbol=AAPL&as_of=2026-06-22T15:00:00Z	200	b9703f4b299a0812ba8ef713e2fa7917714344ce34302dff22e5330deff8d811	27371610
+research.pnl_ledger	/research/pnl/ledger	200	ba27b3052702411b0c9a06ee68f7db3fc2d7a2051ee9523979b76c0a58d4ab6b	2000
+research.profiles	/research/profiles	200	8b3ea7bfbe1dc1bbeaa7eb6e770b5e247db2ed3a21d6e6e6af1470a516008832	240
+research.setups.detail.1	/research/setups/5c219e8fba086fc2	200	fc7debf3bf3c976be0d614c0f8d3bd59a79de049e7cefdd9fef50b6dfe2d71a6	754
+research.setups.detail.2	/research/setups/4fb58c09418dd927	200	b4550f70497caa94f75fc03358f3767d5e8961918d5dac1da073b731ffc1c4e0	854
+research.setups.list	/research/setups	200	76464d760d0a612e571831fdc0314b1fca30138e6e322401dbfc6691e1390fd3	121074417
+research.strategies	/research/strategies	200	3b279813ae6358c8d2944768f3194fba37d24600b0830e4b7296abe8a99edefd	2477
+research.taxonomy	/research/taxonomy	200	1a7d57c5fd69bf17a04022bab60c159029d349f09ad3d19fe6dd87277f27abfc	304
+research.tradability.aapl_pinned	/research/tradability?symbol=AAPL&as_of=2026-06-22T15:00:00Z	200	598bffa854a86b4ca64dbe154b3198a5f050839a3aa518e6d2459fd7e24dec26	2491045
+tape.events.unwatched	/tape/AAPL/events	404	9594edf0d2990d69a1c9301816fc0a1487c7feab746cdda4dbea60367dff9213	47
+tape.features.unwatched	/tape/AAPL/features	404	9594edf0d2990d69a1c9301816fc0a1487c7feab746cdda4dbea60367dff9213	47
+tape.history.unwatched	/tape/AAPL/history	404	9594edf0d2990d69a1c9301816fc0a1487c7feab746cdda4dbea60367dff9213	47
+tape.state.unwatched	/tape/AAPL/state	404	9594edf0d2990d69a1c9301816fc0a1487c7feab746cdda4dbea60367dff9213	47
+tape.summary.unwatched	/tape/AAPL/summary	404	9594edf0d2990d69a1c9301816fc0a1487c7feab746cdda4dbea60367dff9213	47

@@ -715,7 +715,7 @@ def test_sr_parameters_are_config_sourced_no_magic_numbers():
 
 
 def test_sr_config_fields_are_excluded_from_config_fingerprint():
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
     assert Config(sr_pivot_lookback=5).config_fingerprint() == CONFIG.config_fingerprint()
     assert Config(sr_touch_tolerance_bps=50.0).config_fingerprint() == CONFIG.config_fingerprint()
     assert (

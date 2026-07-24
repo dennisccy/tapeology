@@ -210,7 +210,7 @@ def test_fixture_pair_yields_no_positive_edge_dataset_with_real_measured_numbers
     assert report["positive_edge_dataset_ids"] == []
     assert report["finding"] == NO_POSITIVE_EDGE_FINDING
     # Default-frozen cross-check: untouched by this iteration (no new Config field).
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
 
 
 # --- Split separation (Key Test Scenario 2) -------------------------------------------------------

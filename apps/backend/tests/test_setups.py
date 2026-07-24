@@ -406,7 +406,7 @@ def test_setups_parameters_are_config_sourced_no_magic_numbers():
 
 
 def test_setups_config_fields_are_excluded_from_config_fingerprint():
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
     assert (
         Config(setups_panel_symbols=("AAPL",)).config_fingerprint() == CONFIG.config_fingerprint()
     )
@@ -776,7 +776,7 @@ def test_compute_setups_itself_never_touches_the_dataset_store():
 
 
 def test_recording_config_fields_are_excluded_from_config_fingerprint():
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
     assert Config(recording_pre_touch_minutes=1.0).config_fingerprint() == CONFIG.config_fingerprint()
     assert Config(recording_post_touch_minutes=1.0).config_fingerprint() == CONFIG.config_fingerprint()
     assert Config(recording_event_selection_cap=1).config_fingerprint() == CONFIG.config_fingerprint()

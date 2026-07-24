@@ -123,3 +123,40 @@ ledger + byte-identical-VALUES-only proof across recomputed caches). That dense 
 anti-goal adjacencies (pin discipline T-3, historical-record integrity, guard-weakening, no-value-change)
 and wide multi-file blast radius warrants the audit/coherence/closure lanes. Carry forward:
 `SHOW_CASE_STUDIES=false` (`apps/frontend/app/structure/page.tsx:335`) still unresolved before J-05 closes.
+
+## Iteration 4 — goal-clean_slate-iter-4
+
+**Date:** 2026-07-24T10:20:33Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-04
+- Newly failing: none
+- Regressed: none (J-01/J-02/J-03 held `passing`; J-05 stays `partial`, never was `passing`)
+- Anti-goal violations: none (scan CLEAN; zero chart/guard/engine/MCP/routes/historical-record touch; old founding PnL row byte-preserved; new pin `08e471b10130e1e2`)
+
+**Reasoning:** Full-pipeline execution of the era's most delicate operation (§0.4 Path B epoch bump);
+four independent verdicts (review PASS, QA PASS 17/17, audit PASS, coherence COHERENCE-PASS). I did
+not trust the handoffs: recomputed `Config().config_fingerprint()` live (=`08e471b10130e1e2`, ≠ old);
+confirmed via `dataclasses.fields` that exactly the 23 fields are deleted while all 5 protected
+(`study_arm_*`/`study_occurrence_*`/`analytics_min_sample_size`) and all 7 KEEP-DANGER fields remain;
+grepped `apps/` and found the old literal `4d665603569b9dbf` retired from source (self-exempting
+policing test only); confirmed the product diff is exactly config.py + 8 pin-test files + 1 new
+retirement test — with git diff proving ZERO touch of any chart/guard/engine/MCP/routes/main file or
+any historical record (goal-archive/delivered/runs-history); verified `pnl-history.md` = 15 insertions
+/ 0 deletions (old row byte-preserved, new-epoch section appended); and ran 61 focused tests
+(retirement gate, candidate-resolved pin `16d7c98e4fdca755`, `test_no_execution_path`,
+`test_no_credential_in_artifacts`, `test_price_chart_confluence`, `test_edge_report_cache`) — all
+pass under the new pin. The 2 kept-route recapture diffs (`research.pnl_ledger`,
+`research.backtests.list`) are J-04's own sanctioned actions (new epoch row; cap-100 page-window
+roll), not a kept-value change — 26/28 routes byte-identical. J-04 every acceptance clause met →
+`passing`. J-05 stays `partial` (only its backend/keyless sub-clauses advanced; browser closure is
+its own iteration) → not GOAL_ACHIEVED; progress made → CONTINUE.
+
+**Next-step recommendation:** Iteration 5 targets **J-05 (regression sentinel)** at **full** depth —
+the era-closing, browser-verifiable journey with veto-class charts (T-8/T-9 clean-rebuild browser QA
+of both charts + `/structure` AAPL 2026-06-22 wall band + Edge Report honest-state screenshots) and
+the cumulative diff-vs-inventory cross-check (browser-qa/ux-regression/closure lanes). Carry forward:
+(1) resolve `SHOW_CASE_STUDIES=false` (`apps/frontend/app/structure/page.tsx:335`) — restore vs
+rescope J-05's Case-Study drill-in clause; (2) spec-hygiene (not defects): I-9 "13 pin sites" is
+actually 14 (candidate-resolved), TC-3 "48→40" is actually 49→41.

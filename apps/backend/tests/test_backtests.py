@@ -413,7 +413,7 @@ def test_default_fingerprint_still_pinned_after_registering_structure_tape_map()
     # structure_tape_map introduces NO new Config field (it reuses the six structure_tape_* fields
     # verbatim — see strategy_definition), so no new exclusion-set entry is needed at all; the
     # fingerprint stays pinned trivially. Verified by direct computation, not assumed.
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
 
 
 def test_structure_tape_breakthrough_long_arms_at_the_class_a_resistance_level(
@@ -1482,7 +1482,7 @@ def test_default_fingerprint_still_pinned_with_the_new_structure_tape_fields_pre
     # Ground truth (the test_profile_equivalence.py precedent): the founding PnL-ledger row was
     # appended under THIS exact fingerprint. Every new structure_tape field above is present on
     # CONFIG but excluded, so adding them must not move it.
-    assert CONFIG.config_fingerprint() == "4d665603569b9dbf"
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
 
 
 # --- Single-source discipline: one R formula, one dataset reader ------------------------------------

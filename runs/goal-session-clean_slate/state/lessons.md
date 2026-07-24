@@ -53,3 +53,18 @@ weakening.
 **Applies to:** any future demolition iter that deletes a file/page/module (J-03 MCP tools, J-04 Config
 fields, J-05 close) — grep `apps/backend/tests` for `read_text()`/`open(` referencing the deletion target
 BEFORE deleting, so uncatalogued source-introspection guards are found up front, not as a surprise red test.
+
+## iter-4 — 2026-07-24T10:20:33Z
+
+**Verdict:** CONTINUE
+**Lesson:** A `config_fingerprint` epoch bump (§0.4 Path B) has MORE pin sites than a grep for the
+retiring literal can find. Grepping `4d665603569b9dbf` surfaced 13 sites — but a 14th assertion
+(`test_profile_equivalence.py::test_candidate_resolved_fingerprint_is_distinct_from_default`) pinned
+a DERIVED fingerprint (`resolved_for_profile(...).config_fingerprint()`, a distinct literal
+`8c2c0fbf978228e3`) that moves in lockstep with the base config yet shares none of its bytes, so it
+only surfaced as a live test FAILURE, never as a grep hit. The retirement-guard test
+(`test_fingerprint_epoch_retirement.py`) correctly passed anyway because the OLD base literal was
+genuinely gone; the derived pin is a separate, forward-looking literal.
+**Applies to:** any future fingerprint/epoch bump or Path B move — enumerate DERIVED-fingerprint pins
+(resolved-profile variants, any hash-of-a-hash assertion) separately from base-literal grep results,
+and always run the full suite after flipping the base pins to catch the derived ones.

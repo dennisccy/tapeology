@@ -191,4 +191,4 @@ def test_timeframe_for_anchorless_engine_is_empty_200():
 # --- Belt-and-braces: this feature adds no Config field -------------------------------------
 
 def test_fingerprint_unchanged_by_this_feature():
-    assert Config().config_fingerprint() == "4d665603569b9dbf"
+    assert Config().config_fingerprint() == "08e471b10130e1e2"
