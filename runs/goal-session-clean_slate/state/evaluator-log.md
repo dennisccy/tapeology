@@ -160,3 +160,18 @@ the cumulative diff-vs-inventory cross-check (browser-qa/ux-regression/closure l
 (1) resolve `SHOW_CASE_STUDIES=false` (`apps/frontend/app/structure/page.tsx:335`) — restore vs
 rescope J-05's Case-Study drill-in clause; (2) spec-hygiene (not defects): I-9 "13 pin sites" is
 actually 14 (candidate-resolved), TC-3 "48→40" is actually 49→41.
+
+## Iteration 5 — goal-clean_slate-iter-5
+
+**Date:** 2026-07-24T13:44:48Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: none (J-05 remains `partial` — advanced hugely, but a different clause now blocks)
+- Newly failing: none
+- Regressed: none (J-01/J-02/J-03/J-04 all re-verified `passing` this iter — golden replay + LLM fallback + my own spot-checks)
+- Anti-goal violations: 1 MINOR, UNRESOLVED — "Deletion is complete, never cosmetic" (5 orphaned Pydantic request-body classes in routes.py:85/103/112/122/208, iter-1 route-demolition residue; inert but grep-provable)
+
+**Reasoning:** Full-pipeline era-closing sentinel; four independent verdicts (review PASS, QA PASS 17/17, browser-QA PASS 20/20, audit PASS_WITH_GAPS) + coherence COHERENCE-PASS + scan CLEAN. J-05's browser walk is genuinely evidenced — I opened UT-01 (nav = 2 items, Case Studies visible+populated, reinstated framing sentence), UT-02 (AAPL 300.11–302.2 Class A wall band on rendered candles), UT-09 (sim Buyer Control 0.929 + live 10s bars), and the full-page shot showing the RESTORED Case Studies drill-in with honest "No recorded tape for this event." fallback + Edge Report "not computed yet." + Champion v1/default; full suite 1167/0-failed @ `08e471b10130e1e2` (3 lanes), guards+chart-guards 47/0 byte-unmodified, diff = exactly README.md + structure/page.tsx (flag flip + one sentence), J-01–J-04 spot-checked (11 modules gone/zero imports; 15 MCP tools; live fingerprint). NOT GOAL_ACHIEVED: the hard audit found — and I independently `git grep`-verified (only class-def lines, zero refs; contrast kept BacktestRequest@1136; live `body:` params existed at baseline e7865b4) — 5 orphaned request-body classes surviving in routes.py, a grep-provable breach of the critical-TAGGED "Deletion is complete, never cosmetic" rail that also falsifies J-05's diff-vs-inventory "zero residue" clause ("anything ... missing is a FAIL"), so J-05 stays `partial`. NOT REGRESSION: the classes are inert (not in OpenAPI, unimported, no behavior; audit-rated IMPORTANT-not-CRITICAL), no journey lost a prior pass, and the fix is a trivial autonomous edit → minor by the REGRESSION-trigger rubric even though it blocks era closure → CONTINUE.
+
+**Next-step recommendation:** One dedicated demolition-cleanup iteration at **full** depth (re-verifies J-05): delete the 5 orphaned classes (`ThesisRequest`/`ResolveRequest`/`ActionRequest`/`StudyRequest`/`ReviewRequest`) from `apps/backend/app/research/routes.py`; ALSO run the audit's carried-forward EXPANDED sweep for any other orphaned request/response models & helper symbols of the deleted routes (and orphaned frontend types), so the completeness claim is finally true; re-run the full suite (expect still green — inert) and regenerate the diff-vs-inventory cross-check WITH the added orphaned-model grep; optionally add a source-introspection guard asserting every `BaseModel` in `routes.py` is referenced by a live route. Then J-05's completeness clause closes grep-provably and GOAL_ACHIEVED becomes evaluable. Carry forward the coherence advisory: README's three "withheld... pending an operator decision" Case-Studies sentences are now stale (flag is on) — drop them in the next readme pass.

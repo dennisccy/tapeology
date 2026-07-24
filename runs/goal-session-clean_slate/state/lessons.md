@@ -68,3 +68,9 @@ genuinely gone; the derived pin is a separate, forward-looking literal.
 **Applies to:** any future fingerprint/epoch bump or Path B move — enumerate DERIVED-fingerprint pins
 (resolved-profile variants, any hash-of-a-hash assertion) separately from base-literal grep results,
 and always run the full suite after flipping the base pins to catch the derived ones.
+
+## iter-5 — 2026-07-24T13:44:48Z
+
+**Verdict:** CONTINUE
+**Lesson:** A "complete-deletion" audit that greps only for deleted-MODULE imports, route 404s, MCP tool count, and nav rows MISSES orphaned request/response Pydantic models (and helper functions) of deleted route handlers. `routes.py` kept 5 dead body classes (`ThesisRequest`/`ResolveRequest`/`ActionRequest`/`StudyRequest`/`ReviewRequest`) inert since iter-1 — four iterations of review/audit AND the iter-5 diff-vs-inventory cross-check all reported "zero residue" while they sat there in plain sight. Route-handler deletion silently leaves the handler's schema classes behind, and "the route 404s" is not the same as "the surface is gone from code, grep-provably."
+**Applies to:** any iteration/close-out claiming grep-provable complete deletion of routes/endpoints — grep for orphaned `BaseModel` request/response models & helper symbols of the deleted routes, not just deleted-module imports; consider a source-introspection guard asserting every `BaseModel` defined in `routes.py` is referenced by a live route.

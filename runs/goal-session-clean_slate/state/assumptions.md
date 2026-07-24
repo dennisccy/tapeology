@@ -164,3 +164,9 @@ state reflects a demolition decision or a defect — it was an incidental side-e
 Yahoo-fetch-UI commit bundled three days before this goal.md existed.
 **Reversible:** yes — a one-line flag flip back to `false` (and dropping the one reinstated sentence)
 fully undoes this if the operator disagrees.
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** The hard audit rated the 5 orphaned request-body classes IMPORTANT-not-CRITICAL and recommended "accept this iteration" (they are functionally inert — not in the OpenAPI schema, unimported, no behavior). goal.md tags the breached rail "Deletion is complete, never cosmetic" as *(critical)*, but the evaluator's REGRESSION-trigger severity rubric reserves "critical" for secrets / paid-dep / license / backdoor / fabricated-data. So: does inert-but-grep-provable orphaned dead code block GOAL_ACHIEVED, and is it REGRESSION or CONTINUE?
+**We chose:** Treat it as a genuine UNRESOLVED anti-goal violation that BLOCKS GOAL_ACHIEVED (the decision tree's GOAL_ACHIEVED gate requires "no unresolved anti-goal violations," and the era's #1 Vision promise is grep-provable complete deletion), but classify it MINOR for the REGRESSION trigger (inert; no secret/backdoor/fabricated-data) → CONTINUE, not REGRESSION, with a dedicated cleanup as the next step. J-05 scored `partial` (its diff-vs-inventory "zero residue / anything missing is a FAIL" clause is unmet), not `passing`, despite a fully-evidenced browser walk. The audit's "accept this iteration" was read as "accept the flag-flip code change / don't fold the backend fix into this single-file sentinel," NOT as "the demolition ERA is done."
+**Reversible:** yes — if the operator judges inert orphaned schemas acceptable residue, J-05 can be re-scored `passing` and the violation marked resolved-as-accepted with no code change; conversely the cleanup iteration removes the 5 classes and closes the clause cleanly.

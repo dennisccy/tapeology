@@ -332,7 +332,7 @@ const SETUP_REACTIONS = ["rejected", "broke", "chopped"];
 // the Structure page — flip to `true` to bring it back. Typed as `boolean` (not the `false` literal)
 // so the render-time gate below is a normal conditional, not narrowed to dead code. All Case Studies
 // state/handlers are kept intact; only its rendered section is withheld.
-const SHOW_CASE_STUDIES: boolean = false;
+const SHOW_CASE_STUDIES: boolean = true;
 
 type LoadState<T> =
   | { phase: "idle" }
@@ -2031,8 +2031,10 @@ export default function StructurePage() {
           <p data-testid="structure-framing" className="mt-2 max-w-3xl text-xs text-slate-600">
             Tradable Map is the default view, read verbatim from GET /research/tradability; toggle
             &quot;Show raw levels&quot; for the underlying S/R levels and confluence zones (off by
-            default). Edge Report compares v1, structure_tape, and structure_tape_map over recorded
-            windows, register included. Fetching bars below (Yahoo Finance, with Alpaca for history
+            default). Case Studies lists every band-touch event with its reaction, forward returns,
+            and — once recorded — its tape timeline; Edge Report compares v1, structure_tape, and
+            structure_tape_map over recorded windows, register included. Fetching bars below (Yahoo
+            Finance, with Alpaca for history
             beyond Yahoo&apos;s limits) is this page&apos;s one explicit write action — everything else, including the
             strategy registry/champion and the structure_tape-vs-v1 comparison, is read-only. Every
             value on this page is read verbatim from its canonical endpoint — nothing here is
