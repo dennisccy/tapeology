@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "journey": "J-07",
+  "name": "The kept product stands — regression sentinel",
+  "default_timeout_ms": 15000,
+  "steps": [
+    {"n": 1, "journey": "J-07", "action": {"type": "goto", "url": "/"}, "expect": {"text": "Tapeology"}},
+    {"n": 2, "journey": "J-07", "action": {"type": "click", "target": {"role": "button", "name": "Simulated"}}},
+    {"n": 3, "journey": "J-07", "action": {"type": "fill", "target": {"label": "Ticker"}, "text": "SIM-BUYER"}},
+    {"n": 4, "journey": "J-07", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Buyer Control"}},
+    {"n": 5, "journey": "J-07", "action": {"type": "goto", "url": "/structure"}, "expect": {"text": "Structure"}},
+    {"n": 6, "journey": "J-07", "action": {"type": "fill", "target": {"label": "Structure symbol"}, "text": "AAPL"}},
+    {"n": 7, "journey": "J-07", "action": {"type": "fill", "target": {"testid": "structure-as-of-input"}, "text": "2026-06-22T21:00:00Z"}},
+    {"n": 8, "journey": "J-07", "action": {"type": "click", "target": {"testid": "structure-load-button"}}, "expect": {"text": "300.11"}}
+  ]
+}

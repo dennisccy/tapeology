@@ -1,0 +1,77 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "Universe ingestion — fetched, registered, honest",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-0-ui-test-results.md (UT-J-01: GET/POST /research/desk/universe* -> HTTP 404; zero `desk` matches in app/research/ + tests/fixtures/; no desk_universe_* Config field; no .data/universe/)",
+      "spec_hash": "dcad07154573cae27aff4a75ce71ac9ceca8c2969ec5c3d665aa3cbe08278819"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Coverage + explicit bar top-up over the universe",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-0-ui-test-results.md (UT-J-02: GET /research/desk/coverage + both top-up POST sub-paths -> HTTP 404; whole-tree grep for research/desk|desk_universe|desk_screen in apps/backend/app/ -> zero matches)",
+      "spec_hash": "a5cd4f6a0c3dbe67de9a65400250cf777e281712fbf3c90e54758e91971d306c"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The screen — pinned inputs, append-only snapshot, deterministic rank",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-0-ui-test-results.md (UT-J-03: GET /research/desk/screen + POST /research/desk/screen/compute -> HTTP 404; no desk_screen.py under app/research/)",
+      "spec_hash": "74735994233da1614d5568bc57f2a42e60d7e51cf91bb0378f32add5c898bcd6"
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The /desk briefing page",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-0-evidence/J-04-desk-404.png",
+      "spec_hash": "0a3d005b39831ddc9eb0d481081ac613a2ec9e94b131c36394f9e649182faaec"
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "Ledger history + drill-in to /structure",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-0-evidence/J-05-structure-no-prefill.png",
+      "spec_hash": "cba063f7d5e92f608aa54c1b4d174e17e46e297b8dda20cd52532d9d5a1ae545"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "MCP contract v3 — 17 read-only tools",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-0-ui-test-results.md (UT-J-06: tests/test_mcp_server.py EXPECTED_TOOLS = exactly 15 entries, no desk_universe/desk_screen — re-counted independently by the evaluator)",
+      "spec_hash": "c3d5a8351c4ce5aa20449d2d1557f4599bad9cdecebbcde8f044e6d4d2908f6f"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The kept product stands — regression sentinel",
+      "status": "partial",
+      "last_verified_iter": "goal-desk-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-0-evidence/J-07-structure-aapl-wall.png",
+      "spec_hash": "56d585e3306df9a5020fc67bcaad8e120ae15806d798823f660cafca7cb1446a",
+      "notes": "KEPT-behavior half VERIFIED: suite 1169 pass / 7 skip / 0 fail; Config().config_fingerprint() == 08e471b10130e1e2 (re-confirmed live by the evaluator); cockpit SIM-BUYER settles Buyer Control with live 10s tape bars + 10s->30s switch; cockpit Historical AAPL 22-06-2026 renders real SIP 1d candles with the R A 302.20 / 300.10 band overlay; /structure Load for AAPL as-of 2026-06-22T21:00:00Z renders resistance 300.11-302.2 Class A (the pinned 300-302.4 wall); Case Study drill-in opens (AAPL 2025-01-02, forward returns, honest 'No recorded tape for this event.'); Edge Report shows the honest 'Edge report not computed yet.' panel (GET never computes). NOT YET SATISFIABLE (era-completion clauses of J-07's own acceptance text): nav = exactly three routes (today 2 — /meta/ui-routes serves / and /structure only) and MCP = exactly 17 tools (today 15). Those land with J-04 and J-06. A kept-behavior break in any later iteration is REGRESSION-class via critical rail 3 (Frozen foundations), independent of this partial baseline status."
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-07-25T03:25:01+01:00"
+}
