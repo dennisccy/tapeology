@@ -102,3 +102,59 @@ timeframe"). Consequence: "the members the era-open store holds" is recorded in 
 three symbols with UNEQUAL timeframe coverage, and J-03/J-04 are told that rows with partial
 coverage must degrade honestly rather than assume the full pinned set.
 **Reversible:** yes
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s J-03 acceptance says a screen row summarizes "best band, band
+class, distance-from-close bps, band score" per member, but `compute_tradability` returns a LIST
+of bands per symbol (up to `2 * tradability_band_cap_per_side`, split across resistance/support
+sides) with no existing method that already selects a single "best" one, and the era's own
+cross-symbol rank tuple `(band class A>B>C, then distance asc, then band score desc, then symbol
+asc)` is stated only for ordering the FINAL rows, not for choosing which band represents a symbol.
+**We chose:** Apply the SAME tuple `(class rank A>B>C>null desc, distance_bps asc, quality_score
+desc)` twice — first WITHIN a symbol's own band list to pick its "best" band (iterating
+`compute_tradability`'s already-deterministic served order so a tie resolves identically every
+run), then ACROSS symbols (plus `symbol asc` as the final tie-break) to produce the screen's row
+order. This reuses one rule for both jobs rather than inventing a second selection policy, and
+never re-grades a band (the chosen band's own `class`/`quality_score`/`price_low`/`price_high` are
+served verbatim).
+**Reversible:** yes
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** `distance-from-close bps` requires a reference close price, but
+`compute_tradability`'s returned shape (`{"bands": [...], "no_bar_series_for_symbol": bool,
+"basis_as_of": str | None}`) does not serve one — the internal `current_price = prior_bar.close`
+(`tradability.py:426`) is a local variable, never returned — and `compute_levels`'s own return
+shape has no such field either. Adding one to either frozen module's return dict would break
+existing exact-dict-equality assertions in `test_tradability.py` (e.g. `assert result ==
+{"bands": [], "no_bar_series_for_symbol": True, "basis_as_of": None}`), which the goal-era's
+"Frozen foundations" anti-goal (rail 3) forbids disturbing.
+**We chose:** `desk_screen.py` resolves the reference close ITSELF via a plain, existing
+`BarStore` read (the same `merged_bars`-style accessor `tradability.py` already calls internally)
+of the ONE daily bar dated at `basis_as_of` — a value `compute_tradability` already serves — never
+re-deriving WHICH bar is the basis (that stays `compute_tradability`'s exclusive decision) and
+never touching `tradability.py`'s or `levels.py`'s return shape. A diff on either frozen module is
+therefore a build defect, not an accepted side effect.
+**Reversible:** yes
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s Constraints say every new SEMANTIC knob takes Path A as a `Config`
+field, but separately say "operational knobs (worker counts, timeouts, store dirs) may be env vars
+per the 5C precedent" — and this codebase has BOTH patterns live: primary content stores
+(`journal_db_path`, `dataset_dir`, `bar_dir`, and J-01's own `desk_universe_dir`) are `Config`
+fields with Path-A treatment, while derived caches (`edge_report_cache.db`,
+`edge_report_backtests.db`, `bar_index.db`) resolve via a bare env-var-or-sibling-default function
+with NO `Config` field at all. A new screen-snapshot store (a primary, non-reconstructible content
+store, like the first group) could honestly go either way, and `iteration-state.md`'s carried "Do
+not redo" note explicitly prefers zero new `Config` fields ("a new field re-moves
+`_config_content_hash` and re-strands the caches").
+**We chose:** Treat the screen store's directory as a "store dir" operational knob (the
+Constraints' own explicit sanction) — a bare `TAPEOLOGY_DESK_SCREEN_DIR`-env-var-or-sibling-of-
+`desk_universe_dir_resolved()` default (the `resolve_cache_db_path` pattern), NOT a new `Config`
+field. This adds zero further `config_fingerprint`/`_config_content_hash` Path-A debt on top of
+J-01's already-unwarmed move, honors the carried lesson, and is fully reversible: a future
+iteration can still promote it to a `Config` field if the screen store genuinely needs independent
+operator relocation from the universe store.
+**Reversible:** yes
