@@ -69,3 +69,36 @@ column as the coverage-freshness source — never a DB-schema change, never touc
 resolve) and keeps coverage genuinely index-read-fast, matching the era's own latency framing and
 the `EdgeReportComputeManager`-adjacent precedent of exposing exactly what a new caller needs.
 **Reversible:** yes
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** J-02's top-up derives its bar-fetch window from wall clock
+(`_fetch_window_now()` = `[today-730d, today]`, `desk_topup_compute.py:80`/`:91-101`). Anti-goal 7
+says "no wall-clock … in any research artifact" and build trap T-6 says "Determinism means no
+wall-clock", but T-6's own sentences scope to a SCREEN's `as_of` and to snapshot ids/content —
+neither text says whether a bar-FETCH horizon (which is persisted as the recorded series'
+`window_end_utc` metadata) counts as the prohibited wall-clock use.
+**We chose:** Read it as scoping to computed/served research VALUES and to snapshot keys, so a fetch
+horizon is a sanctioned operator-request parameter — the same thing a manual `POST /research/bars`
+call with today's date already supplies. Therefore not an anti-goal violation, minor or critical.
+Consequence accepted: a re-run on a later UTC day always re-fetches, which is exactly what makes
+audit finding B1 reachable (~100 benign `1w` 409s reported as `outcome: "failed"`, CLI exit 1). Both
+are carried into the J-03/J-04 specs, and J-03's own `as_of` is stated there as a HARD "never
+`now()`" requirement so this reading cannot creep into the screen's determinism contract.
+**Reversible:** yes
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** J-02's acceptance is phrased per-MEMBER — "coverage for the fixture universe reports
+bars-present for exactly the members the era-open store holds (AAPL/AMD/MSFT) and bars-missing for
+every other member" — but the shipped payload (and the era-open reality) is per-`(symbol,
+timeframe)`: MSFT holds `1h`/`1d` rows and **no** `1w`/`4h`. Read literally, MSFT is neither wholly
+"bars-present" nor wholly "bars-missing", and goal.md never says which wins.
+**We chose:** Score the clause satisfied by a per-`(symbol, timeframe)` truth-table that reports the
+index verbatim — MSFT `{1h: true, 4h: false, 1d: true, 1w: false}` — rather than requiring
+whole-member presence. The finer granularity is strictly more honest (it cannot fabricate a `1w`
+value MSFT does not have) and matches the journey's own step 1 wording ("bars present per required
+timeframe"). Consequence: "the members the era-open store holds" is recorded in journey-history as
+three symbols with UNEQUAL timeframe coverage, and J-03/J-04 are told that rows with partial
+coverage must degrade honestly rather than assume the full pinned set.
+**Reversible:** yes

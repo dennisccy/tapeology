@@ -229,3 +229,70 @@ def test_reindex_after_deleting_the_db_file_reproduces_identical_lookups(tmp_pat
 
     after = {key: rebuilt.lookup(*key) for key in keys}
     assert after == before
+
+
+# --- coverage(): Era B "The Desk" J-02, additive ------------------------------------------------
+# Appended this iteration. Every assertion ABOVE this line is byte-unmodified from era-5 J-03 --
+# proving the extension took the "new accessor" path (goal-desk-iter-2 spec / plan), never a new
+# BarIndexHit field (which would have broken the positional/keyword BarIndexHit(...) construction
+# calls used throughout this file, e.g. line 62/153-156 above).
+
+
+def test_bar_index_hit_still_has_exactly_its_original_three_fields():
+    """A regression that added a field to ``BarIndexHit`` would break the equality assertions
+    above (``hit == BarIndexHit(series_id=..., checksum=..., bar_count=3)``,
+    ``BarIndexHit(pg["id"], pg["checksum"], 3)``) -- this pins the dataclass shape directly so
+    such a regression fails HERE, with a clear message, rather than as a confusing equality
+    mismatch elsewhere."""
+    import dataclasses
+
+    assert [f.name for f in dataclasses.fields(BarIndexHit)] == ["series_id", "checksum", "bar_count"]
+
+
+def test_coverage_on_an_empty_index_is_false_and_none(tmp_path):
+    index = BarIndex(str(tmp_path / "index.db"))
+    assert index.coverage("PG", "1d") == (False, None)
+
+
+def test_coverage_after_insert_is_true_and_the_recorded_window_end(tmp_path):
+    store = BarStore(tmp_path / "bars")
+    index = BarIndex(str(tmp_path / "index.db"))
+    meta = _record(store)
+    index.insert(meta)
+
+    assert index.coverage("PG", "1d") == (True, WINDOW_END)
+    assert index.coverage("PG", "1h") == (False, None)  # a different timeframe is unaffected
+    assert index.coverage("F", "1d") == (False, None)  # a different symbol is unaffected
+
+
+def test_coverage_reports_the_max_window_end_across_multiple_recordings(tmp_path):
+    """A symbol/timeframe recorded twice (e.g. an earlier top-up, then a later one) reports the
+    MOST RECENT ``window_end_utc`` -- never the first, never an arbitrary row."""
+    store = BarStore(tmp_path / "bars")
+    index = BarIndex(str(tmp_path / "index.db"))
+    first = _record(store, start=WINDOW_START, end=WINDOW_END)
+    index.insert(first)
+
+    later_start, later_end = "2026-06-05T00:00:00Z", "2026-06-08T00:00:00Z"
+    extra = _bar(
+        "PG", "1d", datetime(2026, 6, 5, tzinfo=timezone.utc).timestamp(), 151.0, 152.0, 150.5, 151.5, 800_000
+    )
+    second = store.record(
+        symbol="PG", timeframe="1d", window_start_utc=later_start, window_end_utc=later_end,
+        feed="yahoo", bars=_small_series("PG") + [extra],
+    )
+    index.insert(second)
+
+    assert index.coverage("PG", "1d") == (True, later_end)
+
+
+def test_coverage_reads_the_raw_iso_string_not_a_parsed_epoch(tmp_path):
+    """Mirrors ``test_lookup_matches_the_raw_iso_string_not_the_parsed_epoch`` above: ``coverage``
+    reports whatever ``window_end_utc`` string was actually stored, verbatim -- never reformatted
+    or re-derived from an epoch."""
+    store = BarStore(tmp_path / "bars")
+    index = BarIndex(str(tmp_path / "index.db"))
+    meta = _record(store, start="2026-06-01T00:00:00Z", end="2026-06-04T00:00:00.000000Z")
+    index.insert(meta)
+
+    assert index.coverage("PG", "1d") == (True, "2026-06-04T00:00:00.000000Z")

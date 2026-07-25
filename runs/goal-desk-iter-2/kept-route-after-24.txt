@@ -1,0 +1,26 @@
+# I-9-style byte-comparison capture: label<TAB>path<TAB>status<TAB>sha256<TAB>body_len
+# base_url=http://127.0.0.1:8197
+meta.ui_routes	/meta/ui-routes	200	0edb55662c7e0d44447b38b0ea0ad741fe47b577795151644c67a8dd85a26b06	107
+research.taxonomy	/research/taxonomy	200	1a7d57c5fd69bf17a04022bab60c159029d349f09ad3d19fe6dd87277f27abfc	304
+research.bars.list	/research/bars	200	03cb8df12bbbafb9001227cd3a4d13b07797e762b754b3d90c5943cb4134e404	37274
+research.bars.detail	/research/bars/6bc3bb89ea2a4c37973d90813066ff5e	200	e83750f77e4381801045656e75b9feaa16591f30f79ab193f5354b6877adc248	3117
+research.bars.candles	/research/bars/6bc3bb89ea2a4c37973d90813066ff5e/candles?limit=10	200	0b09f7b6a91065123b1af97bd5de77c93430fb7f3322b39f0c58472fdf82b8df	1045
+research.candles.merged	/research/candles?symbol=AAPL&timeframe=1d&limit=50	200	974d40eb36200c58ad5ec1ed3f06a9906db0284f2bd95a07398af60537ca46b8	2886
+research.datasets.list	/research/datasets	200	d12203e1053394819e179f28e9e1c2254fb242451b35b780374678f2421388e0	37
+research.datasets.detail.404	/research/datasets/does-not-exist-tc13-probe	404	bf4045e66a371efa60dc5abfdfc66cd440abc6861a2c648fdfd6853798b399b0	59
+research.levels	/research/levels?symbol=AAPL&as_of=2026-07-01T00:00:00Z	200	c1db9e3a7eb6ea1432b281d6205409571a284ab229f79a20944d7568881b0efe	30724
+research.tradability	/research/tradability?symbol=AAPL&as_of=2026-07-01T00:00:00Z	200	7d0b46c7d6caf04e1ead73f17167adfcf0f7c67528820a4be54522c2f9b186c7	3488
+research.setups.list	/research/setups	200	24de1c4a19c43ad41b013f13dcd858c17b0daa7f33a53f19913e5b11366d1c2e	13
+research.setups.detail.404	/research/setups/does-not-exist-tc13-probe	404	3bee6a8ee04a6f768603e20c9ebf34a3d986a2d182b1e49050055dbab45118ea	63
+research.backtests.list	/research/backtests	200	1fd5768fd5b2ec2e5c6199cd31fc0638520ad4477a668991f6118158a0d4e6d2	16
+research.backtests.detail.404	/research/backtests/does-not-exist-tc13-probe	404	08b089d425347d622cb733c634e53ac94a5fea393fdeb100a6c458e4ba7d23bf	60
+research.edge_report	/research/edge-report	200	87db0bae3e99dcd117ab38034678e4c633a61127dc34fc91a1a280781a3e573b	180
+research.edge_report_compute_snapshot	/research/edge-report/compute	200	74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b	4
+research.pnl_ledger	/research/pnl/ledger	200	6eb35b6a31f6cc2a1be12f98a133b6ec4c5b38de9c4c97572e3540769c067fd2	115
+research.profiles	/research/profiles	200	8b3ea7bfbe1dc1bbeaa7eb6e770b5e247db2ed3a21d6e6e6af1470a516008832	240
+research.strategies	/research/strategies	200	3b279813ae6358c8d2944768f3194fba37d24600b0830e4b7296abe8a99edefd	2477
+tape.state.unwatched	/tape/AAPL/state	404	9594edf0d2990d69a1c9301816fc0a1487c7feab746cdda4dbea60367dff9213	47
+tape.features.unwatched	/tape/AAPL/features	404	9594edf0d2990d69a1c9301816fc0a1487c7feab746cdda4dbea60367dff9213	47
+tape.events.unwatched	/tape/AAPL/events	404	9594edf0d2990d69a1c9301816fc0a1487c7feab746cdda4dbea60367dff9213	47
+tape.summary.unwatched	/tape/AAPL/summary	404	9594edf0d2990d69a1c9301816fc0a1487c7feab746cdda4dbea60367dff9213	47
+tape.history.unwatched	/tape/AAPL/history	404	9594edf0d2990d69a1c9301816fc0a1487c7feab746cdda4dbea60367dff9213	47

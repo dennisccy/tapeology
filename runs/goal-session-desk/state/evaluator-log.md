@@ -78,3 +78,48 @@ browser pass; (2) `.data/universe/` is pre-populated with the live snapshot
 TC-11 to all 24 kept GET templates against a populated data dir; (4) still pending from iter-0 —
 re-point `journey-scripts/J-07.json` step 8 off the async `300.11` text and warm the scoped QA
 setups cache before any browser pass.
+
+## Iteration 2 — goal-desk-iter-2
+
+**Date:** 2026-07-25T08:24:13+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-02
+- Newly failing: none
+- Regressed: none
+- Partial: J-07 (backend/keyless subset re-verified — suite 1240p/8s/0f, pin unchanged, 24/24 kept
+  GET templates byte-identical against a POPULATED data dir; its "3 nav routes"/"17 MCP tools"
+  clauses still structurally unmet at 2/15)
+- Anti-goal violations: none (all 20 rails answered individually; `scan-report.md` CLEAN; two
+  documented gaps — audit B1's benign-409-as-"failed" and B2's requested-window-end freshness field —
+  judged honest-at-the-payload carry-forwards, not violations)
+
+**Reasoning:** I re-executed all four of J-02's `docs/goal.md` acceptance clauses myself, in-process
+through the REAL routes with temp-scoped dirs and zero network: the literal truth-table over the
+COMMITTED FIXTURE universe (103 members) + a read-only copy of the era-open `bar_index` returned
+`has_bars` for exactly `AAPL{1h,4h,1d,1w}`/`AMD{1h,4h,1d,1w}`/`MSFT{1h,1d}` with every
+`latest_window_end_utc` equal to the index `MAX` verbatim and all 100 other members false+null;
+top-up run 1 = 12/12 `fetched`, run 2 = 12/12 `reused` with zero vendor calls, and the COMPOSITE
+cancel-then-resume flow (audit T3's untested composite) resumed with exactly the 8 already-recorded
+pairs `reused` and no frozen series re-fetched; coverage read 4.3 ms at 103×4 with `BarStore.list`/
+`.get` instrumented to 0 calls; my own suite run 1240 passed / 8 skipped / 0 failed and a live pin
+print `08e471b10130e1e2`. J-07's rail-3 evidence is also mine: zero `git diff` on every frozen owner
+plus a byte-identical 24-template kept-route capture I diffed myself. `COHERENCE-PASS`, so no
+structural veto; CONTINUE because four journeys remain and every one is tractable and keyless.
+
+**Next-step recommendation:** Target **J-03 alone** (screen compute + append-only ledger) at
+**`full` depth** — new persisted data kind (T-3), second compute manager, byte-identical-re-run
+determinism, five input pins, row-level cross-check against `GET /research/tradability`. Spec MUST
+carry: (1) T-6 hard rule — the screen `as_of` derives from the screen date's session close, never
+`now()`; do NOT copy the top-up's sanctioned wall-clock window (`_TOPUP_LOOKBACK_DAYS`,
+`desk_topup_compute.py:80`); (2) the "bar-store signature" pin must come from the durable index, never
+a JSON-store re-hash (T-4); (3) decide the "nothing new to record" vocabulary (audit B1 — keep
+`"reused"` == zero vendor calls; ~100 `1w` pairs mislabel on a next-day re-run) and the CLI exit code;
+(4) J-04 must label `latest_window_end_utc` as "window last requested", never "last bar" (audit B2);
+(5) coverage truth is per-`(symbol, timeframe)` — MSFT has no `1w`/`4h` at era open, so rows with
+partial timeframe coverage must degrade honestly; (6) repay the regression-net debt (3 CLI `main()`
+tests, 1 populated route-level coverage assertion, the composite cancel/resume test) when a nearby
+file is next touched; (7) still pending for J-04's browser pass — warm the `_config_content_hash`-
+stranded caches and re-point `journey-scripts/J-07.json` step 8, and expect ~100 honest
+`skipped: no bars` rows unless the operator top-up runs first.

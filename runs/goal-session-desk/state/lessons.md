@@ -46,3 +46,17 @@ false-negative trap that has burned prior browser passes.
 **Applies to:** every era-B iteration that adds ANY `Config` field (i.e. most of them), and
 unconditionally to whichever iteration next dispatches browser QA (expected J-04): warm
 `/research/setups` and `/structure` Load on the real data dir first, and budget for the cold call.
+
+## iter-2 — 2026-07-25T08:24:13+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** J-02's delivered truth-table test used synthetic `AAA…EEE` symbols, so goal.md's LITERAL
+clause ("bars-present for exactly the members the era-open store holds (AAPL/AMD/MSFT)" over the
+fixture universe) was asserted by no test — and when I ran it directly against
+`tests/fixtures/universe/universe-2026-07-25-817cc184bbb3.json` + the real `bar_index`, it passed but
+revealed the goal text's own hidden assumption is wrong: MSFT holds `1h`/`1d` rows but **no** `1w`/`4h`,
+so era-open coverage is per-`(symbol, timeframe)`, not per-member. Any consumer that treats "this
+symbol has bars" as "the whole pinned timeframe set is present" will silently mis-serve MSFT.
+**Applies to:** J-03's screen rows and J-04's coverage badges (any code consuming
+`GET /research/desk/coverage`); and generally — when a spec's acceptance names concrete real symbols,
+execute it against those symbols rather than accepting a synthetic-fixture stand-in as equivalent.

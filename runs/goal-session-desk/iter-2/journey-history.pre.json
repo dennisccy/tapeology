@@ -1,0 +1,83 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "Universe ingestion — fetched, registered, honest",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-1",
+      "last_passing_iter": "goal-desk-iter-1",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-1-qa.md (TC-01..TC-14 all PASS) + docs/handoffs/goal-desk-iter-1-audit.md (independent re-verification) + evaluator's own in-process run through the REAL routes: empty GET 200 {snapshots:[],latest:null,integrity_errors:[]}; POST fixture -> 200 checksum 817cc184bbb3 (12 chars) / 103 members / sorted+unique / BRK-B present + BRK.B absent / raw_members[BRK-B]==BRK.B / provenance source_url+90+110 embedded; POST corrupted -> 422 \"ticker 'AVG1' ... fails the charset check [A-Z.-]{1,6} — refusing the whole fetch, never a partial list\" with zero files registered; duplicate POST -> 409 naming the snapshot, file sha256 byte-unchanged; counter-test desk_universe_min_members=500 -> 422 while config_fingerprint() stays 08e471b10130e1e2",
+      "spec_hash": "dcad07154573cae27aff4a75ce71ac9ceca8c2969ec5c3d665aa3cbe08278819",
+      "notes": "Keyless/automated acceptance (no browser clause in J-01's goal.md text), so the evidence class is live REST through the real route handlers rather than a screenshot; the evaluator re-executed all four acceptance clauses itself in-process with the universe dir scoped to a temp dir and the vendor seam injected with committed fixture HTML (zero network). Full suite re-run by the evaluator: 1210 passed / 8 skipped / 0 failed. Deltas against the journey text recorded, neither acceptance-blocking: (a) goal.md J-01 step 1's \"+ derived index\" was deliberately deferred (directory-scan list(); J-01's own Acceptance names no index — audit B5); (b) the parser silently drops malformed/short table rows, guarded only by the [90,110] bounds (audit B2, reviewer NOTE at review.md:26-28)."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Coverage + explicit bar top-up over the universe",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-0-ui-test-results.md (UT-J-02: GET /research/desk/coverage + both top-up POST sub-paths -> HTTP 404; whole-tree grep for research/desk|desk_universe|desk_screen in apps/backend/app/ -> zero matches)",
+      "spec_hash": "a5cd4f6a0c3dbe67de9a65400250cf777e281712fbf3c90e54758e91971d306c",
+      "notes": "Not targeted in iter-1 (out of scope per docs/phases/goal-desk-iter-1.md). Status carried from the iter-0 baseline; iter-1's diff adds no coverage route, no top-up compute manager and no CLI (confirmed: only config.py/main.py/pyproject.toml touched plus desk_universe.py/desk_routes.py, whose only routes are the two universe ones). Now UNBLOCKED — \"the fixture universe\" it names exists and is checksum-verified at apps/backend/tests/fixtures/universe/universe-2026-07-25-817cc184bbb3.json."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The screen — pinned inputs, append-only snapshot, deterministic rank",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-0-ui-test-results.md (UT-J-03: GET /research/desk/screen + POST /research/desk/screen/compute -> HTTP 404; no desk_screen.py under app/research/)",
+      "spec_hash": "74735994233da1614d5568bc57f2a42e60d7e51cf91bb0378f32add5c898bcd6",
+      "notes": "Not targeted in iter-1. Re-confirmed absent: no desk_screen.py in the iter-1 file list (runs/goal-desk-iter-1/status.json changed_files)."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The /desk briefing page",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-0-evidence/J-04-desk-404.png",
+      "spec_hash": "0a3d005b39831ddc9eb0d481081ac613a2ec9e94b131c36394f9e649182faaec",
+      "notes": "Not targeted in iter-1; zero frontend files touched (git diff --stat -- apps/frontend/ empty) and UI_ROUTES re-read live at meta.py:27-30 = exactly 2 rows (Cockpit, /structure)."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "Ledger history + drill-in to /structure",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-0-evidence/J-05-structure-no-prefill.png",
+      "spec_hash": "cba063f7d5e92f608aa54c1b4d174e17e46e297b8dda20cd52532d9d5a1ae545",
+      "notes": "Not targeted in iter-1; no /structure prefill shipped (zero frontend diff)."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "MCP contract v3 — 17 read-only tools",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "evaluator re-count at apps/backend/tests/test_mcp_server.py:49 — EXPECTED_TOOLS = exactly 15 names (no desk_universe / desk_screen); app/mcp/__init__.py _STATIC_PATHS unchanged; ALLOWED_GET_PREFIXES = ('/tape/','/research/','/meta/')",
+      "spec_hash": "c3d5a8351c4ce5aa20449d2d1557f4599bad9cdecebbcde8f044e6d4d2908f6f",
+      "notes": "Not targeted in iter-1 (MCP intentionally untouched — the new GET path is already covered by the existing /research/ allowlist, so J-06 is a pure two-tool addition later). Re-verified failing at 15 tools this iteration."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The kept product stands — regression sentinel",
+      "status": "partial",
+      "last_verified_iter": "goal-desk-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "runs/goal-desk-iter-1/kept-route-baseline.txt vs kept-route-after.txt (evaluator's own diff: all 14 route rows byte-identical — only the label/port comment lines differ) + evaluator's own full-suite run 1210 passed/8 skipped/0 failed + live Config().config_fingerprint() == 08e471b10130e1e2; browser half still reports/qa/goal-desk-iter-0-evidence/J-07-structure-aapl-wall.png (iter-0, not re-shot — zero frontend diff)",
+      "spec_hash": "56d585e3306df9a5020fc67bcaad8e120ae15806d798823f660cafca7cb1446a",
+      "notes": "BACKEND/KEYLESS SUBSET RE-VERIFIED THIS ITERATION (the iter-1 Required-still-passing scope): suite 1210 pass / 8 skip / 0 fail (grew from 1169/7, never shrank — the 8th skip is the new TAPEOLOGY_LIVE_INTEGRATION-gated Wikipedia test, the same convention as the 3 existing integration files); pin 08e471b10130e1e2 unchanged, including under a desk_universe_min_members override (Path A holds); 14/14 kept /research + /tape + /meta GET routes byte-identical before vs after. BROWSER HALF NOT RE-SHOT (zero frontend files changed; iter-0 evidence stands). STILL NOT SATISFIABLE (J-07's own era-completion clauses): nav = exactly three routes (today 2, meta.py:27-30) and MCP = exactly 17 tools (today 15, test_mcp_server.py:49) — those land with J-04 and J-06. A kept-behavior break in any later iteration is REGRESSION-class via critical rail 3 (Frozen foundations), independent of this partial status. CARRY-FORWARD RISK (audit B1, evaluator-confirmed): the 4 new Config fields changed edge_report_cache._config_content_hash (now dc0271c15a26...), which keys setups_scan_cache / tradability_cache / edge_report_cache / edge_report_backtest_cache with NO exclusion set — every pre-diff row is unreachable, so the real-data /research/setups scan is cold (~9-11 min) and /structure Load is back to ~21.6s on first call. No served value changes (desk_universe_* is read nowhere outside config.py + the two desk modules — evaluator grep), so TC-11 byte-identity holds; only latency regressed. Warm both before the next browser-QA pass. TC-11's own coverage is 14 of 24 kept GET route templates, captured against an empty data dir (audit T2)."
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-07-25T06:05:00+01:00"
+}

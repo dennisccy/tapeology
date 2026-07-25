@@ -149,6 +149,32 @@ class BarIndex:
 
     # --- list (the GET filter) -------------------------------------------------------------------
 
+    # --- coverage (Era B "The Desk" J-02, additive) -----------------------------------------------
+
+    def coverage(self, symbol: str, timeframe: str) -> tuple[bool, str | None]:
+        """``(has_bars, latest_window_end_utc)`` for ONE ``(symbol, timeframe)`` pair — Era B J-02's
+        coverage-read accessor (``desk_coverage.py``). A SINGLE indexed aggregate query
+        (``COUNT``+``MAX`` over the already-existing ``window_end_utc`` column) — never resolved
+        through ``BarStore`` (T-4: coverage/freshness reads ``bar_index`` only). ``has_bars`` is
+        ``True`` iff at least one indexed row exists for this pair; ``latest_window_end_utc`` is the
+        lexicographically-greatest recorded ``window_end_utc`` among those rows (== chronologically
+        latest, since every ``window_end_utc`` this codebase writes is a zero-padded ISO-8601 UTC
+        string — the same string-sort convention ``bars.py``/``desk_universe.py`` already rely on),
+        or ``None`` when ``has_bars`` is ``False`` — never a fabricated placeholder.
+
+        Purely ADDITIVE: a brand-new method: ``BarIndexHit``'s fields and every existing
+        ``lookup``/``insert``/``list``/``reindex`` call site are byte-unchanged (a new dataclass
+        field on ``BarIndexHit`` would have broken ``tests/test_bar_index.py``'s existing
+        equality assertions, which construct ``BarIndexHit`` with exactly its original three
+        fields — this accessor exists instead of that)."""
+        row = self._conn.execute(
+            "SELECT COUNT(*) AS n, MAX(window_end_utc) AS latest FROM bar_index "
+            "WHERE symbol=? AND timeframe=?",
+            (symbol, timeframe),
+        ).fetchone()
+        has_bars = row["n"] > 0
+        return has_bars, (row["latest"] if has_bars else None)
+
     def list(self, symbol: str | None = None, timeframe: str | None = None) -> list[BarIndexHit]:
         """Every indexed entry matching the given (optional, independently combinable) filters.
         Row order is NOT meaningful here — the route re-sorts after resolving each hit through
