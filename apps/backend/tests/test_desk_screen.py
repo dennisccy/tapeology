@@ -1,0 +1,650 @@
+"""``desk_screen.py`` (Era B "The Desk", J-03) — the screen-snapshot store discipline, the
+``bar_store_signature`` index-only derivation (T-4/TC-15), best-band selection + ``distance_bps``,
+and the row-computation function (``compute_screen``) against the REAL committed fixture universe
+(103 members) and the real AAPL/MSFT bar fixtures — never a synthetic ``AAA...EEE`` stand-in for
+any clause naming real symbols (lessons.md iter-2). Compute-manager/route/CLI coverage lives in
+``test_desk_screen_compute.py``.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+from pathlib import Path
+
+import pytest
+
+from app.config import CONFIG
+from app.providers.adapters.base import RawBar
+from app.providers.base import Side, TradeEvent
+from app.research.bar_index import BarIndex
+from app.research.bars import BarStore
+from app.research.datasets import SPLIT_TRAIN, DatasetStore
+from app.research.desk_coverage import get_desk_coverage
+from app.research.desk_screen import (
+    ScreenAlreadyRecorded,
+    ScreenIntegrityError,
+    ScreenStore,
+    compute_bar_store_signature,
+    compute_screen,
+    resolve_desk_screen_dir,
+    screen_as_of,
+)
+from app.research.desk_screen import _distance_bps, _row_rank_key, _select_best_band
+from app.research.desk_universe import UniverseStore
+
+FIXTURE_UNIVERSE_DIR = Path(__file__).parent / "fixtures" / "universe"
+REGISTERED_SNAPSHOT_PATH = FIXTURE_UNIVERSE_DIR / "universe-2026-07-25-817cc184bbb3.json"
+FIXTURE_YAHOO_DIR = Path(__file__).parent / "fixtures" / "yahoo"
+
+AAPL_DAILY_FIXTURE = "AAPL_1d_20260101_20260626.json"
+MSFT_DAILY_FIXTURE = "MSFT_1d_20260101_20260626.json"
+MSFT_HOURLY_FIXTURE = "MSFT_1h_20260601_20260618.json"
+
+# The pinned session goal.md's J-01/J-05/J-07 acceptance text already names (test_tradability.py's
+# own golden: as_of="2026-06-22T15:00:00Z" resolves basis_as_of="2026-06-18T04:00:00.000000Z") --
+# any as_of inside this same UTC calendar day resolves the identical basis (T-6), so this is a
+# zero-new-fixture-risk screen_date.
+SCREEN_DATE = "2026-06-22"
+
+# The goal.md build-anchors' own 11 recorded dataset symbols. SPY is in this list but is NOT an
+# S&P 100 constituent (it is the index-tracking ETF, never a member of the index itself) -- so it
+# never appears in the fixture universe's `rows`/`skipped` and its tick_evidence is never asserted.
+DATASET_SYMBOLS = (
+    "AAPL", "AMD", "AMZN", "GOOGL", "META", "MSFT", "NFLX", "NVDA", "PG", "SPY", "TSLA",
+)
+
+
+def _load_yahoo_fixture(name: str) -> dict:
+    return json.loads((FIXTURE_YAHOO_DIR / name).read_text())
+
+
+def _seed_yahoo_fixture(bar_store: BarStore, bar_index: BarIndex, fixture: dict) -> None:
+    bars = [
+        RawBar(
+            fixture["symbol"], fixture["timeframe"], b["epoch"],
+            b["open"], b["high"], b["low"], b["close"], b["volume"],
+        )
+        for b in fixture["bars"]
+    ]
+    meta = bar_store.record(
+        symbol=fixture["symbol"], timeframe=fixture["timeframe"],
+        window_start_utc=fixture["start"], window_end_utc=fixture["end"],
+        feed="yahoo", bars=bars,
+    )
+    bar_index.insert(meta)
+
+
+def _register_fixture_universe(universe_dir: Path) -> UniverseStore:
+    """"The fixture universe" (J-01's own naming): the REAL committed 103-member snapshot, copied
+    into a temp universe dir exactly as ``test_desk_universe.py``'s
+    ``test_the_committed_fixture_snapshot_loads_cleanly_through_the_store`` does."""
+    universe_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(REGISTERED_SNAPSHOT_PATH, universe_dir / REGISTERED_SNAPSHOT_PATH.name)
+    return UniverseStore(universe_dir)
+
+
+def _register_dataset(dataset_store: DatasetStore, symbol: str) -> None:
+    """A minimal, single-trade synthetic dataset registration -- proves ONLY that ``symbol`` is a
+    presence in the dataset store (the tick-evidence badge's own honest contract), never a claim
+    about real tick content."""
+    dataset_store.record(
+        symbol=symbol, source=f"synthetic {symbol}", source_kind="reference", source_id=symbol,
+        split=SPLIT_TRAIN, window_start_utc="2026-01-02T14:30:00Z", window_end_utc="2026-01-02T14:30:01Z",
+        data_feed="sim", epoch_anchor=None,
+        events=[TradeEvent(symbol, 0.0, 100.0, 100, Side.UNKNOWN)],
+    )
+
+
+@pytest.fixture
+def ctx(tmp_path):
+    """A fully-scoped desk context: the real fixture universe + empty bar/dataset stores, all
+    rooted under ``tmp_path`` -- never the ambient real ``.data/`` tree."""
+    universe_store = _register_fixture_universe(tmp_path / "universe")
+    bar_store = BarStore(tmp_path / "bars")
+    bar_index = BarIndex(str(tmp_path / "index.db"))
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    return universe_store, bar_store, bar_index, dataset_store
+
+
+# ==================================================================================================
+# as_of translation (T-6)
+# ==================================================================================================
+
+
+def test_screen_as_of_is_a_pure_function_of_screen_date():
+    assert screen_as_of("2026-06-22") == "2026-06-22T23:59:59Z"
+    assert screen_as_of("2026-01-01") == "2026-01-01T23:59:59Z"
+
+
+# ==================================================================================================
+# bar_store_signature (T-4, TC-15)
+# ==================================================================================================
+
+
+def test_bar_store_signature_issues_zero_bar_store_calls(ctx, monkeypatch):
+    """T-4/TC-15: instrumented exactly like ``test_desk_coverage.py``'s
+    ``test_coverage_issues_zero_bar_store_calls`` -- derivation goes entirely through
+    ``desk_coverage.get_desk_coverage`` (index-only), never a ``BarStore`` read."""
+    universe_store, bar_store, bar_index, _dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+
+    calls: list[str] = []
+    original_list = BarStore.list
+    original_get = BarStore.get
+
+    def _tracked_list(self, *args, **kwargs):
+        calls.append("list")
+        return original_list(self, *args, **kwargs)
+
+    def _tracked_get(self, *args, **kwargs):
+        calls.append("get")
+        return original_get(self, *args, **kwargs)
+
+    monkeypatch.setattr(BarStore, "list", _tracked_list)
+    monkeypatch.setattr(BarStore, "get", _tracked_get)
+
+    signature = compute_bar_store_signature(universe_store, bar_index)
+
+    assert calls == []
+    assert isinstance(signature, str) and len(signature) == 16
+
+
+def test_bar_store_signature_changes_when_coverage_changes(ctx):
+    universe_store, bar_store, bar_index, _dataset_store = ctx
+    before = compute_bar_store_signature(universe_store, bar_index)
+
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    after = compute_bar_store_signature(universe_store, bar_index)
+
+    assert before != after
+
+
+def test_bar_store_signature_is_deterministic_across_fresh_instances(ctx):
+    universe_store, bar_store, bar_index, _dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+
+    first = compute_bar_store_signature(universe_store, bar_index)
+    second = compute_bar_store_signature(UniverseStore(universe_store.root), BarIndex(bar_index.db_path))
+    assert first == second
+
+
+# ==================================================================================================
+# best-band selection + distance_bps (assumptions.md iter-3 entry 1) -- pure-function unit tests
+# ==================================================================================================
+
+
+def _band(side: str, price_low: float, price_high: float, band_class: str | None, quality: float) -> dict:
+    return {"side": side, "price_low": price_low, "price_high": price_high, "class": band_class, "quality_score": quality}
+
+
+def test_distance_bps_resistance_uses_the_low_edge():
+    band = _band("resistance", 101.0, 102.0, "A", 10.0)
+    assert _distance_bps(band, 100.0) == pytest.approx((101.0 - 100.0) / 100.0 * 10_000.0)
+
+
+def test_distance_bps_support_uses_the_high_edge():
+    band = _band("support", 98.0, 99.0, "A", 10.0)
+    assert _distance_bps(band, 100.0) == pytest.approx((100.0 - 99.0) / 100.0 * 10_000.0)
+
+
+def test_select_best_band_prefers_higher_class_over_closer_distance():
+    close_but_low_class = _band("resistance", 100.1, 100.2, "C", 500.0)
+    far_but_high_class = _band("resistance", 110.0, 111.0, "A", 1.0)
+    best = _select_best_band([close_but_low_class, far_but_high_class], 100.0)
+    assert best is far_but_high_class
+
+
+def test_select_best_band_ties_on_class_prefer_closer_distance():
+    near = _band("resistance", 100.5, 100.6, "B", 1.0)
+    far = _band("resistance", 120.0, 121.0, "B", 999.0)
+    best = _select_best_band([far, near], 100.0)
+    assert best is near
+
+
+def test_select_best_band_ties_on_class_and_distance_prefer_higher_quality():
+    a = _band("resistance", 105.0, 105.0, "B", 5.0)
+    b = _band("resistance", 105.0, 105.0, "B", 50.0)
+    best = _select_best_band([a, b], 100.0)
+    assert best is b
+
+
+def test_select_best_band_exact_tie_keeps_the_served_order_first_item():
+    a = _band("resistance", 105.0, 105.0, "B", 5.0)
+    b = _band("resistance", 105.0, 105.0, "B", 5.0)
+    assert _select_best_band([a, b], 100.0) is a
+    assert _select_best_band([b, a], 100.0) is b
+
+
+def test_select_best_band_null_class_ranks_below_every_graded_class():
+    graded = _band("resistance", 200.0, 201.0, "C", 1.0)
+    ungraded_and_closer = _band("resistance", 100.1, 100.2, None, 999.0)
+    best = _select_best_band([graded, ungraded_and_closer], 100.0)
+    assert best is graded
+
+
+# ==================================================================================================
+# ScreenStore discipline -- mirrors test_desk_universe.py's store-level suite exactly
+# ==================================================================================================
+
+
+def _record(store: ScreenStore, **overrides) -> dict:
+    defaults = dict(
+        screen_date="2026-06-22", as_of="2026-06-22T23:59:59Z",
+        universe_snapshot_id="universe-2026-07-25-817cc184bbb3",
+        config_fingerprint=CONFIG.config_fingerprint(), bar_store_signature="deadbeef00000000",
+        rows=[{"symbol": "AAPL", "side": "resistance", "band_class": "C", "distance_bps": 1.0,
+               "band_score": 2.0, "price_low": 100.0, "price_high": 101.0,
+               "coverage": {}, "tick_evidence": True}],
+        skipped=[{"symbol": "ABBV", "skipped": True, "reason": "no_bars", "coverage": {}, "tick_evidence": False}],
+    )
+    defaults.update(overrides)
+    return store.record(**defaults)
+
+
+def test_record_stores_the_exact_5pin_key_and_content(tmp_path):
+    store = ScreenStore(tmp_path / "screen")
+    meta = _record(store)
+
+    assert meta["id"].startswith("screen-2026-06-22-")
+    checksum_suffix = meta["id"].removeprefix("screen-2026-06-22-")
+    assert len(checksum_suffix) == 12
+    int(checksum_suffix, 16)  # hex, or this raises
+    assert meta["screen_date"] == "2026-06-22"
+    assert meta["as_of"] == "2026-06-22T23:59:59Z"
+    assert meta["universe_snapshot_id"] == "universe-2026-07-25-817cc184bbb3"
+    assert meta["config_fingerprint"] == CONFIG.config_fingerprint()
+    assert meta["bar_store_signature"] == "deadbeef00000000"
+    assert meta["created_utc"].endswith("Z")
+    assert len(meta["rows"]) == 1 and len(meta["skipped"]) == 1
+    assert len(list((tmp_path / "screen").glob("*.json"))) == 1
+
+
+def test_list_serves_the_stored_record_verbatim_oldest_first(tmp_path):
+    store = ScreenStore(tmp_path / "screen")
+    recorded = _record(store)
+
+    records, errors = store.list()
+    assert errors == []
+    assert len(records) == 1
+    assert records[0] == recorded
+
+
+def test_store_survives_a_reload_from_disk(tmp_path):
+    root = tmp_path / "screen"
+    recorded = _record(ScreenStore(root))
+
+    reloaded = ScreenStore(root)
+    records, errors = reloaded.list()
+    assert errors == [] and records == [recorded]
+
+
+def test_empty_store_lists_nothing(tmp_path):
+    store = ScreenStore(tmp_path / "screen")
+    records, errors = store.list()
+    assert records == [] and errors == []
+
+
+# --- append-only refusal on an identical 5-pin key (TC-4, store level) --------------------------
+
+
+def test_rerecording_an_identical_key_is_refused(tmp_path):
+    store = ScreenStore(tmp_path / "screen")
+    first = _record(store)
+
+    with pytest.raises(ScreenAlreadyRecorded) as excinfo:
+        _record(store)
+    assert excinfo.value.existing_id == first["id"]
+    assert len(list((tmp_path / "screen").glob("*.json"))) == 1  # no second file
+
+
+def test_rerecording_an_identical_key_leaves_the_file_byte_unchanged(tmp_path):
+    screen_dir = tmp_path / "screen"
+    store = ScreenStore(screen_dir)
+    _record(store)
+    path = next(screen_dir.glob("*.json"))
+    before = path.read_bytes()
+
+    with pytest.raises(ScreenAlreadyRecorded):
+        _record(store)
+    assert path.read_bytes() == before
+
+
+def test_rerecording_the_same_key_with_different_row_content_is_still_refused(tmp_path):
+    """The dedup key is the 5 PINS, never the row content -- two calls sharing the same key but
+    carrying different (e.g. accidentally miscomputed) row content still collide, exactly as
+    intended (the row content is a deterministic function of the pins, so this can only diverge
+    on a genuine bug, and the store must refuse regardless)."""
+    store = ScreenStore(tmp_path / "screen")
+    first = _record(store)
+
+    with pytest.raises(ScreenAlreadyRecorded) as excinfo:
+        _record(store, rows=[], skipped=[])
+    assert excinfo.value.existing_id == first["id"]
+
+
+def test_a_different_key_registers_a_second_distinct_snapshot(tmp_path):
+    store = ScreenStore(tmp_path / "screen")
+    first = _record(store, screen_date="2026-06-22")
+    second = _record(store, screen_date="2026-06-23", as_of="2026-06-23T23:59:59Z")
+
+    assert first["id"] != second["id"]
+    records, errors = store.list()
+    assert errors == []
+    assert {r["id"] for r in records} == {first["id"], second["id"]}
+
+
+def test_find_by_key_returns_none_when_nothing_matches(tmp_path):
+    store = ScreenStore(tmp_path / "screen")
+    _record(store)
+    assert store.find_by_key("2099-01-01", "2099-01-01T23:59:59Z", "x", "y", "z") is None
+
+
+def test_find_by_key_returns_the_exact_match(tmp_path):
+    store = ScreenStore(tmp_path / "screen")
+    recorded = _record(store)
+    found = store.find_by_key(
+        "2026-06-22", "2026-06-22T23:59:59Z", "universe-2026-07-25-817cc184bbb3",
+        CONFIG.config_fingerprint(), "deadbeef00000000",
+    )
+    assert found == recorded
+
+
+# --- integrity: a corrupted file is explicit, never silent --------------------------------------
+
+
+def test_corrupted_snapshot_file_surfaces_explicitly_in_list_errors(tmp_path):
+    screen_dir = tmp_path / "screen"
+    store = ScreenStore(screen_dir)
+    _record(store)
+    path = next(screen_dir.glob("*.json"))
+    data = json.loads(path.read_text())
+    data["record"]["meta"]["screen_date"] = "2099-12-31"  # tamper -- file_checksum now disagrees
+    path.write_text(json.dumps(data))
+
+    records, errors = store.list()
+    assert records == []
+    assert len(errors) == 1
+    assert errors[0]["file"] == path.name
+    assert "integrity" in errors[0]["error"]
+
+
+def test_recording_over_a_corrupted_file_at_the_same_key_is_refused_never_a_silent_overwrite(tmp_path):
+    """A tampered snapshot is withheld from ``records`` (and reported in ``integrity_errors``), so
+    ``find_by_key`` cannot see it -- but the snapshot's PATH is a pure function of the 5-pin key, so
+    a re-record for that same key lands on the SAME file. ``record`` must refuse explicitly: never
+    overwrite a damaged snapshot (that is a rewrite -- "snapshots are append-only ... never
+    rewritten"), and never erase the integrity error the store was honestly surfacing."""
+    screen_dir = tmp_path / "screen"
+    store = ScreenStore(screen_dir)
+    _record(store)
+    path = next(screen_dir.glob("*.json"))
+    data = json.loads(path.read_text())
+    data["record"]["meta"]["rows"] = [{"symbol": "AAPL", "band_class": "TAMPERED"}]
+    path.write_text(json.dumps(data))
+    tampered_bytes = path.read_bytes()
+
+    with pytest.raises(ScreenIntegrityError) as excinfo:
+        _record(store)
+    assert path.name in str(excinfo.value)
+
+    assert path.read_bytes() == tampered_bytes, "the damaged file must be left exactly as found"
+    records, errors = store.list()
+    assert records == []
+    assert [e["file"] for e in errors] == [path.name], "the integrity error must still be surfaced"
+    assert len(list(screen_dir.glob("*.json"))) == 1, "and no second file may be written either"
+
+
+def test_load_raises_screen_integrity_error_for_unparseable_json(tmp_path):
+    screen_dir = tmp_path / "screen"
+    screen_dir.mkdir(parents=True)
+    (screen_dir / "screen-2026-01-01-deadbeef0000.json").write_text("{not json")
+
+    store = ScreenStore(screen_dir)
+    records, errors = store.list()
+    assert records == [] and len(errors) == 1
+
+
+def test_store_has_no_update_or_delete_method():
+    """Immutability is structural, not policed (mirrors ``test_desk_universe.py``'s own
+    docstring discipline): no method on ``ScreenStore`` besides ``record`` mutates anything."""
+    public_methods = {name for name in dir(ScreenStore) if not name.startswith("_")}
+    assert public_methods == {"root", "list", "find_by_key", "record"}
+
+
+# ==================================================================================================
+# resolve_desk_screen_dir -- zero new Config field
+# ==================================================================================================
+
+
+def test_resolve_desk_screen_dir_defaults_to_a_sibling_of_the_universe_dir(monkeypatch):
+    monkeypatch.delenv("TAPEOLOGY_DESK_SCREEN_DIR", raising=False)
+    resolved = resolve_desk_screen_dir("/some/root/.data/universe")
+    assert resolved == "/some/root/.data/screen"
+
+
+def test_resolve_desk_screen_dir_env_override(monkeypatch):
+    monkeypatch.setenv("TAPEOLOGY_DESK_SCREEN_DIR", "/tmp/custom-screen-dir")
+    assert resolve_desk_screen_dir("/some/root/.data/universe") == "/tmp/custom-screen-dir"
+
+
+def test_desk_screen_module_adds_no_config_field():
+    """TC-16: the fingerprint pin is asserted unchanged by the sentinel every iteration; this
+    module introduces zero new Config fields by construction (no import of a new field anywhere)."""
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
+
+
+# ==================================================================================================
+# compute_screen -- the row-computation function, against the REAL fixture universe + real bars
+# ==================================================================================================
+
+
+def test_no_universe_snapshot_is_an_honest_empty_screen(tmp_path):
+    universe_store = UniverseStore(tmp_path / "universe")
+    bar_store = BarStore(tmp_path / "bars")
+    bar_index = BarIndex(str(tmp_path / "index.db"))
+    dataset_store = DatasetStore(tmp_path / "datasets")
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+
+    assert screen["universe_snapshot_id"] is None
+    assert screen["rows"] == [] and screen["skipped"] == []
+    assert screen["screen_date"] == SCREEN_DATE
+    assert screen["as_of"] == "2026-06-22T23:59:59Z"
+
+
+def test_fixture_universe_with_zero_bars_skips_every_member_as_no_bars(ctx):
+    """TC-3: every one of the fixture universe's 103 members, with a completely empty bar store,
+    appears in `skipped` with reason "no_bars" and none appears in `rows`."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+
+    universe_records, _errors = universe_store.list()
+    members = universe_records[-1]["members"]
+    assert screen["rows"] == []
+    assert len(screen["skipped"]) == len(members)
+    assert {s["symbol"] for s in screen["skipped"]} == set(members)
+    assert all(s["reason"] == "no_bars" for s in screen["skipped"])
+    assert all(s["tick_evidence"] is False for s in screen["skipped"])
+
+
+def test_aapl_row_cross_checks_byte_identical_to_the_real_tradability_route(ctx, monkeypatch):
+    """TC-1/TC-19: the persisted AAPL row's band_class/distance_bps/band_score/price_low/
+    price_high are byte-identical to what GET /research/tradability returns for the band
+    desk_screen.py selected as AAPL's "best"; the reference close is the fixture bar's own
+    recorded close at basis_as_of. (``git diff`` on ``tradability.py``/``levels.py`` staying empty
+    is verified directly against the repo, not by a test in this file.)"""
+    from fastapi.testclient import TestClient
+
+    from app.main import app, get_market_adapter, manager
+    from app.research.routes import ResearchRegistry, set_registry
+    from app.research.store import JournalStore
+
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    aapl_rows = [r for r in screen["rows"] if r["symbol"] == "AAPL"]
+    assert len(aapl_rows) == 1
+    row = aapl_rows[0]
+
+    # Point the REAL route's own `get_bar_store` dependency at this exact bar directory (the
+    # `test_tradability_api.py` `ctx`-fixture convention) so `GET /research/tradability` reads
+    # the SAME recorded AAPL series through the real request path, not a direct module call.
+    monkeypatch.setenv("TAPEOLOGY_BAR_DIR", str(bar_store.root))
+    journal = JournalStore(str(bar_store.root.parent / "journal.db"), CONFIG)
+    set_registry(ResearchRegistry(journal, CONFIG))
+    try:
+        with TestClient(app) as client:
+            resp = client.get(
+                "/research/tradability", params={"symbol": "AAPL", "as_of": screen["as_of"]}
+            )
+    finally:
+        for ticker in list(manager._engines.keys()):
+            manager.stop(ticker)
+        set_registry(None)
+        app.dependency_overrides.pop(get_market_adapter, None)
+        journal.close()
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["basis_as_of"] == "2026-06-18T04:00:00.000000Z"
+
+    matching = [
+        b for b in body["bands"]
+        if b["side"] == row["side"] and b["price_low"] == row["price_low"] and b["price_high"] == row["price_high"]
+    ]
+    assert len(matching) == 1, "the selected band must be a real, uniquely-identifiable served band"
+    served = matching[0]
+    assert served["class"] == row["band_class"]
+    assert served["quality_score"] == row["band_score"]
+
+    # The reference close is the fixture bar's OWN recorded close at basis_as_of -- resolved by
+    # date (never a hardcoded epoch literal) to avoid a copy-paste timestamp mismatch.
+    from datetime import datetime, timezone
+
+    basis_date = datetime.fromisoformat(body["basis_as_of"].replace("Z", "+00:00")).date()
+    fixture = _load_yahoo_fixture(AAPL_DAILY_FIXTURE)
+    basis_bar = next(
+        b for b in fixture["bars"]
+        if datetime.fromtimestamp(b["epoch"], tz=timezone.utc).date() == basis_date
+    )
+    expected_close = basis_bar["close"]
+    expected_distance = abs(
+        (row["price_low"] if row["side"] == "resistance" else row["price_high"]) - expected_close
+    ) / expected_close * 10_000.0
+    assert row["distance_bps"] == pytest.approx(expected_distance)
+
+
+def test_msft_partial_coverage_still_resolves_a_ranked_row_with_honest_coverage(ctx):
+    """TC-2: MSFT (real symbol, 1h+1d bars only -- never 1w/4h) is never mis-skipped merely for
+    partial pinned-timeframe coverage, and its coverage field reports 1h/1d has_bars: true, 4h/1w
+    has_bars: false."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_HOURLY_FIXTURE))
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    msft_rows = [r for r in screen["rows"] if r["symbol"] == "MSFT"]
+    assert len(msft_rows) == 1, "MSFT must resolve a ranked row, never a skip, despite partial coverage"
+    row = msft_rows[0]
+
+    assert row["coverage"]["1h"]["has_bars"] is True
+    assert row["coverage"]["1d"]["has_bars"] is True
+    assert row["coverage"]["4h"]["has_bars"] is False
+    assert row["coverage"]["1w"]["has_bars"] is False
+    assert row["band_class"] in ("A", "B", "C", None)
+
+
+def test_a_daily_series_with_no_resolvable_prior_session_is_skipped_no_basis(ctx):
+    """TC-11: a real fixture-universe member with a daily series but no PRIOR session (every bar
+    dated on/after the requested screen_date) is skipped "no_basis" (distinct from "no_bars"), and
+    its coverage still honestly reflects the timeframe that DOES have bars (1d), never all-false."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    meta = bar_store.record(
+        symbol="ABBV", timeframe="1d", window_start_utc="2026-06-22T00:00:00Z",
+        window_end_utc="2026-06-23T00:00:00Z", feed="yahoo",
+        bars=[RawBar("ABBV", "1d", 1782446400.0, 100.0, 101.0, 99.0, 100.5, 1000)],  # 2026-06-25
+    )
+    bar_index.insert(meta)
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    abbv_skips = [s for s in screen["skipped"] if s["symbol"] == "ABBV"]
+    assert len(abbv_skips) == 1
+    entry = abbv_skips[0]
+    assert entry["reason"] == "no_basis"
+    assert entry["coverage"]["1d"]["has_bars"] is True
+    assert entry["coverage"]["1h"]["has_bars"] is False
+
+
+def test_repeat_computation_in_two_fresh_instances_is_byte_identical(ctx, tmp_path):
+    """TC-10: no wall-clock, no unseeded randomness -- two fresh computations produce byte-identical
+    rows/skipped."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_HOURLY_FIXTURE))
+
+    first = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    second = compute_screen(
+        UniverseStore(universe_store.root), BarStore(bar_store.root), BarIndex(bar_index.db_path),
+        DatasetStore(tmp_path / "datasets"), CONFIG, SCREEN_DATE,
+    )
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+
+
+def test_every_row_and_skip_coverage_is_byte_identical_to_get_desk_coverage(ctx):
+    """TC-12: proves reuse, not re-derivation."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_HOURLY_FIXTURE))
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    coverage = get_desk_coverage(universe_store, bar_index)
+    coverage_by_symbol = {m["symbol"]: m["per_timeframe"] for m in coverage["members"]}
+
+    for entry in (*screen["rows"], *screen["skipped"]):
+        assert entry["coverage"] == coverage_by_symbol[entry["symbol"]], entry["symbol"]
+
+
+def test_tick_evidence_true_for_exactly_the_registered_dataset_symbols(ctx):
+    """TC-13: the 11 named dataset symbols (10 of which are actual S&P 100 / fixture-universe
+    members -- SPY is not) register true; every other member registers false."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    for symbol in DATASET_SYMBOLS:
+        _register_dataset(dataset_store, symbol)
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    all_entries = {e["symbol"]: e for e in (*screen["rows"], *screen["skipped"])}
+
+    universe_records, _errors = universe_store.list()
+    members = set(universe_records[-1]["members"])
+    expected_true = set(DATASET_SYMBOLS) & members
+    assert expected_true, "the fixture universe must contain at least one of the named symbols"
+
+    for symbol in expected_true:
+        assert all_entries[symbol]["tick_evidence"] is True, symbol
+    for symbol in members - expected_true:
+        assert all_entries[symbol]["tick_evidence"] is False, symbol
+
+
+def test_rows_are_sorted_by_class_then_distance_then_score_then_symbol(ctx):
+    """TC-14: AAPL's best band is class C; MSFT's is class B (both verified directly) -- MSFT
+    must rank strictly above AAPL by class alone, independent of distance/score."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_HOURLY_FIXTURE))
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    by_symbol = {r["symbol"]: r for r in screen["rows"]}
+    assert by_symbol["AAPL"]["band_class"] == "C"
+    assert by_symbol["MSFT"]["band_class"] == "B"
+
+    positions = {r["symbol"]: i for i, r in enumerate(screen["rows"])}
+    assert positions["MSFT"] < positions["AAPL"]
+
+    # The list-wide invariant: every row's own rank key is non-decreasing.
+    keys = [_row_rank_key(r) for r in screen["rows"]]
+    assert keys == sorted(keys)

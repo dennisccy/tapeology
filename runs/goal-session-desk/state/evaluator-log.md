@@ -123,3 +123,61 @@ tests, 1 populated route-level coverage assertion, the composite cancel/resume t
 file is next touched; (7) still pending for J-04's browser pass — warm the `_config_content_hash`-
 stranded caches and re-point `journey-scripts/J-07.json` step 8, and expect ~100 honest
 `skipped: no bars` rows unless the operator top-up runs first.
+
+## Iteration 3 — goal-desk-iter-3
+
+**Date:** 2026-07-25T11:05:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-03
+- Newly failing: none
+- Regressed: none
+- Partial: J-07 (backend/keyless subset re-verified — my own suite 1299p/8s/0f, pin unchanged, zero
+  diff on all 12 frozen owners AND all of `apps/frontend`; its "3 nav routes"/"17 MCP tools" clauses
+  still structurally unmet at 2/15)
+- Anti-goal violations: none unresolved. One intercepted in-iteration and logged
+  minor/`resolved: true`: the auditor's B1 found PRE-FIX `ScreenStore.record` silently overwriting a
+  checksum-failed snapshot at the same 5-pin key (a real breach of the critical "snapshots are
+  append-only … never rewritten" rail); fixed at `desk_screen.py:467-473` + 2 regression tests, and I
+  re-verified the fix live (tamper → `integrity_errors`; re-trigger → `state: "failed"`; damaged
+  bytes untouched; no second file). All 20 rails answered individually in `eval.md`.
+
+**Reasoning:** I did not take any handoff's word for J-03: I executed all of `docs/goal.md`'s J-03
+acceptance clauses myself — 52 checks through the REAL FastAPI app with the universe/bar/index/
+dataset/screen dirs scoped to a temp dir and the REAL committed fixtures seeded (103-member snapshot
++ real Yahoo AAPL 1d / MSFT 1d / MSFT 1h bars), zero network — and all 52 passed: honest-empty 200
+GET, 422/409 error shapes, trigger → `done` 103/103 with `members_total` known synchronously, all
+five pins embedded (`as_of 2026-06-22T23:59:59Z` a pure function of the date, id ==
+`screen-<date>-sha256(5-pin key)[:12]` which I recomputed), rows=2/skipped=101 with honest `no_bars`
+and MSFT's partial `1h`+`1d` coverage not mis-skipped, the exact rank tuple, band values
+BYTE-IDENTICAL to the live `GET /research/tradability` for both symbols with `distance_bps` exactly
+(not `approx`) reproduced from the basis bar's own close, `?date=` verbatim with file bytes+mtime
+unchanged, identical-pin re-run reusing the same id with one file untouched, zero `BarStore` calls in
+the signature under my own instrumentation, single-flight + a cancelled walk recording nothing, the
+corrupt-file refusal, CLI `--date` required, and an identical content digest in two fresh
+interpreters under different `PYTHONHASHSEED`s. My own suite run is 1299 passed / 8 skipped / 0
+failed (counted off the raw progress output — this pytest install prints no `-q` summary line) with
+the pin live at `08e471b10130e1e2`. `COHERENCE-PASS`, so no structural veto; browser QA correctly
+SKIPPED (`Frontend Present: no`) and J-03's acceptance carries no browser clause, so live REST
+through the real handlers is the honest evidence class (assumptions.md iter-1). CONTINUE because
+J-04/J-05/J-06 remain and all three are now unblocked, keyless and tractable.
+
+**Next-step recommendation:** Target **J-04 alone** (the `/desk` briefing page) at **`full` depth** —
+the era's first frontend iteration (new page, first `UI_ROUTES` change 2 → 3 = a blueprint IA change
+the coherence gate must re-audit, compute wiring with progress/cancel, new desk copy under the lint,
+four screenshots). Spec MUST carry: (1) the B10 HUMAN call — `_select_best_band` ranks distance
+before score, so AAPL's headline row is `C/2.348 bps/score 57.0 (298.08–299.24)` while the same
+served list carries `C/score 123.0 (300.23–302.25)`, the era's own pinned wall (my measurement):
+either the chip says "nearest same-class band" or the human respecs the within-symbol tuple BEFORE
+J-04 renders it; (2) an honest reuse signal on the compute surface (`reused: bool` + `screen_id`,
+audit B2) so "Run Screen" can say "nothing new was written"; (3) label
+`coverage.latest_window_end_utc`/`bar_store_signature` as whole-store "window last requested", never
+"last bar" (audit B9 + iter-2 B2); (4) browser-pass prerequisites, all still open — fixture-scoped
+backend (a real screen is ~100 honest skips and `desk_screen` bypasses `TradabilityCache`), warm the
+`_config_content_hash`-stranded caches, re-point `journey-scripts/J-07.json` step 8 off the async
+`300.11` text, `rm -rf apps/frontend/.next` + rebuild (T-9); (5) three one-line hygiene items — scope
+`TAPEOLOGY_DATASET_DIR` in `route_ctx` (T3), refuse-rather-than-record an empty screen with no
+universe (B4), and port `ScreenStore.record`'s corrupt-file guard into `UniverseStore.record`
+(`desk_universe.py:418` still silently overwrites); (6) do NOT re-verify J-03's internals — its
+Required-still-passing check is suite + pin + zero-diff on `desk_screen*.py`.

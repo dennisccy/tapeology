@@ -60,3 +60,30 @@ symbol has bars" as "the whole pinned timeframe set is present" will silently mi
 **Applies to:** J-03's screen rows and J-04's coverage badges (any code consuming
 `GET /research/desk/coverage`); and generally — when a spec's acceptance names concrete real symbols,
 execute it against those symbols rather than accepting a synthetic-fixture stand-in as equivalent.
+
+## iter-3 — 2026-07-25T11:05:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** Two sibling append-only stores in this era now disagree on the SAME failure mode: the
+audit made `ScreenStore.record` refuse (`ScreenIntegrityError`) when the 5-pin key's own
+deterministic path already holds a checksum-failed file (`desk_screen.py:467-473`, verified live),
+while `UniverseStore.record` still `write_text()`s straight over it (`desk_universe.py:418`, iter-1's
+audit B3 gap). The general trap: when a store's file path is a pure function of its dedup key, the
+"look up by key → not found → write" sequence silently overwrites any file the loader withheld for
+failing verification — so every content-addressed store in this codebase needs an explicit
+`path.exists()` guard, not just a key lookup.
+**Applies to:** any iteration touching `desk_universe.py`, `desk_screen.py`, or adding a new
+checksum-verified append-only store (a `record()` whose filename derives from its dedup key)
+
+## iter-3 — 2026-07-25T11:05:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** A QA report's numbers can silently come from a DIFFERENT data basis than the acceptance
+clause names: `reports/qa/goal-desk-iter-3-qa.md` TC-01 records AAPL as `class A, distance_bps 0.335,
+band_score 97.0` "verified against the committed fixture universe", but that run was against the real
+ambient 101-member `.data/` store — the committed fixture universe + fixture bars actually yield
+`class C, 2.348 bps, score 57.0` (my run, and the auditor's independent probe). The same report also
+carried a fabricated single-flight "queue" mechanism the auditor had to correct in place. Never carry
+a QA numeric into a golden or a spec without re-deriving it against the named data basis.
+**Applies to:** any iteration whose spec quotes measured values from a QA/dev report, and any golden
+or fixture assertion authored from one

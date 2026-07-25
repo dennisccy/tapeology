@@ -1,40 +1,40 @@
 # Iteration State — desk
 
-**After iteration:** 2 · **Date:** 2026-07-25 · **Verdict:** CONTINUE
+**After iteration:** 3 · **Date:** 2026-07-25 · **Verdict:** CONTINUE
 
 ## Journeys
 
-2 passing (J-01 J-02) · 4 failing (J-03 J-04 J-05 J-06) · 1 partial (J-07) — 7 total
+3 passing (J-01 J-02 J-03) · 3 failing (J-04 J-05 J-06) · 1 partial (J-07) — 7 total
 
 ## Active blockers
 
-- None human-owned; none blocking J-03. Three dev-owned carried items: (1) `record_bar_series`'s benign "identical content already
-  on file" **409 is labelled `outcome: "failed"`** + CLI exit 1 (`desk_topup_compute.py:146-147`) — a next-UTC-day re-run hits ~100
-  `1w` pairs; decide the vocabulary, keeping `"reused"` == zero vendor calls. (2) `latest_window_end_utc` is the REQUESTED window
-  end, not the last bar (real AAPL `1w`: `2026-07-25` vs `2026-07-20`) — J-04 must not badge it "last bar". (3) Iter-1's
-  `edge_report_cache._config_content_hash` move still strands the setups/tradability/edge-report caches (real `/research/setups`
-  cold ~9-11 min, `/structure` Load ~21.6 s; iter-2 added no `Config` field, so it held still) — warm it, and re-point
-  `journey-scripts/J-07.json` step 8 off the async `300.11` text, before J-04's browser pass.
+- None human-owned; J-04 (`/desk`) is unblocked, keyless, dev-owned. **Owed BEFORE its screenshots:**
+  fixture-scoped backend (a real screen = ~100 honest `skipped: no bars`; `desk_screen` bypasses
+  `TradabilityCache`); warm iter-1's `_config_content_hash`-stranded caches (setups ~9-11 min cold,
+  `/structure` Load ~21.6 s); re-point `journey-scripts/J-07.json` step 8 off async `300.11`; T-9.
+- **HUMAN call queued** (audit B10): `_select_best_band` (`desk_screen.py:206`) ranks distance BEFORE
+  score → AAPL's row is `C / 2.348 bps / 57.0 (298.08-299.24)` while the same served list carries
+  `C / 123.0 (300.23-302.25)`, the era's pinned wall. J-04 labels the chip "nearest same-class band"
+  or the tuple is respecced (J-05's drill-in holds either way).
 
 ## Last 2 verdicts
 
-- iter 2: CONTINUE — J-02 `passing` on the evaluator's OWN in-process runs (fixture-universe truth-table vs the era-open
-  `bar_index`; run-1 fetched / run-2 all-reused at 0 vendor calls; composite cancel-then-resume; 4.3 ms coverage at 0 `BarStore`
-  calls), suite 1240p/8s/0f, pin `08e471b10130e1e2`, 24/24 kept routes byte-identical, COHERENCE-PASS.
-- iter 1: CONTINUE — J-01 `passing` on the evaluator's own run through the real routes; suite 1210p/8s/0f; pin unchanged incl.
-  under a Path-A field override; COHERENCE-PASS.
+- iter 3: CONTINUE — J-03 `passing` on the evaluator's OWN 52-check live run (bands byte-identical to
+  `GET /research/tradability`, exact `distance_bps` from the basis bar's close, identical-pin re-run
+  byte+mtime unchanged, 0 `BarStore` calls in the signature, cross-process determinism); suite
+  1299p/8s/0f, pin unchanged, zero diff on 12 frozen owners + frontend, COHERENCE-PASS.
+- iter 2: CONTINUE — J-02 `passing` (truth-table, fetch/reuse/cancel-resume top-up); suite 1240p/8s/0f.
 
 ## Do not redo
 
-- **J-01 + J-02 are DONE and independently verified.** J-02 shipped `desk_coverage.py` (`get_desk_coverage`,
-  `DESK_TOPUP_TIMEFRAMES = ("1h","4h","1d","1w")`), `desk_topup_compute.py` (`DeskTopupComputeManager` + `run_topup` + CLI
-  `main()`), an additive `BarIndex.coverage()`, and `GET /research/desk/coverage` + the `POST/GET/POST-cancel` topup trio. Reuse
-  by name; do not re-derive the timeframe set or re-probe these clauses.
-- **No `Config` field was needed in iter-2** — the pin held with zero Path-A work. Prefer that route; a new field re-moves `_config_content_hash` and re-strands the caches.
-- **Coverage truth is per-`(symbol, timeframe)`** — era-open store = AAPL (all 4 tf), AMD (all 4), MSFT (`1h`/`1d` ONLY); ~100
-  members have no bars, so a real screen is mostly honest `skipped: no bars` until the operator top-up runs.
-- **J-07 stays `partial` BY DECISION** until nav = 3 routes (J-04) and MCP = 17 tools (J-06) — see `state/assumptions.md`. Suite
-  floor is now **1240p / 8s**; the pin must not move; kept-route capture = 24 templates (audit T5: 3 more are vendor/wall-clock).
-- **Next target settled: J-03 alone, `full` depth.** HARD: the screen `as_of` derives from the screen date's session close, NEVER
-  `now()` (do not copy `_TOPUP_LOOKBACK_DAYS`'s wall-clock window); the bar-store-signature pin reads the durable index, never a
-  JSON-store re-hash. J-06 is unbuildable until `/research/desk/screen` exists. Full carry-forwards in `iter-2/eval.md`.
+- **J-01 + J-02 + J-03 DONE, clause-verified** (`state/journey-history.json`). J-03 shipped
+  `desk_screen.py` (`ScreenStore` 5-pin append-only key, `compute_screen` the SOLE walker,
+  `compute_bar_store_signature`, `resolve_desk_screen_dir`, `screen_as_of`) + `desk_screen_compute.py`
+  (manager + CLI) + 4 `/research/desk/screen*` routes. Re-check only suite + pin + zero-diff.
+- **Settled:** zero new `Config` field all era (store dirs = env-var/sibling resolvers); `as_of =
+  f"{screen_date}T23:59:59Z"`; `created_utc` = registration metadata, not a determinism input
+  (`assumptions.md` iter-3); screen list META-ONLY; global single-flight (one slot, NOT per-date).
+- **Hygiene when the file is already open:** scope `TAPEOLOGY_DATASET_DIR` in `route_ctx` (T3); refuse-
+  rather-than-record an empty screen with no universe (B4); port `ScreenStore.record`'s corrupt-file
+  guard into `UniverseStore.record` (`desk_universe.py:418` overwrites silently). J-07 stays `partial`
+  until nav = 3 routes (J-04) + MCP = 17 tools (today 15); suite floor **1299p / 8s**.

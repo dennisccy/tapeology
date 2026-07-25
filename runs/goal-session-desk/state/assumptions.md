@@ -158,3 +158,36 @@ J-01's already-unwarmed move, honors the carried lesson, and is fully reversible
 iteration can still promote it to a `Config` field if the screen store genuinely needs independent
 operator relocation from the universe store.
 **Reversible:** yes
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** J-03 step 4 asks the backend to "serve `GET /research/desk/screen` (latest, `?date=`,
+and a snapshot list) with the honest `"Desk screen not computed yet."` payload before any run" — but
+that literal string is also `docs/goal.md`'s Design-Direction *copy* example and J-04's own browser
+acceptance clause ("`/desk` with no screen shows `"Desk screen not computed yet."`"). Nothing states
+whether the JSON payload itself must carry the sentence.
+**We chose:** Score the clause satisfied by an honest-empty JSON payload — HTTP 200 with
+`{"screens": [], "latest": null, "integrity_errors": []}` (never 404, never a fabricated row), which
+is exactly what the iteration spec's TC-5 defines and what `GET /research/desk/universe` already does
+— and treat the literal sentence as UI copy owned by J-04. Consequence: J-04's acceptance now carries
+the string as a HARD requirement (the page must render that exact copy over this payload), recorded in
+the next-step recommendation; if a future reader expects the API to echo the sentence, only the
+rendering layer changes.
+**Reversible:** yes
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** Anti-goal 7 says "no wall-clock … in any research artifact" and build trap T-6 says
+"Progress timestamps live in compute-manager state, never in snapshot content" — yet the screen
+snapshot's registered shape (spec Data-contract addition #1) includes `created_utc`, which
+`desk_screen.py:481` fills from `datetime.now(timezone.utc)`. Read strictly, a wall-clock field lives
+inside snapshot content.
+**We chose:** Read `created_utc` as registration metadata rather than a research value or a progress
+timestamp: it is excluded from the 5-pin key AND from the snapshot-id checksum, no served value
+derives from it, identical pins still reproduce byte-identical `rows`/`skipped` (I proved this across
+two fresh interpreters), and it is the exact field `desk_universe.py:411` already carries — accepted
+in iter-1 when J-01 passed. So: not an anti-goal violation, minor or critical. Consequence: the
+determinism guarantee this era enforces is scoped to computed CONTENT plus the pin key, not to
+file-registration bookkeeping; `id`, `screen_date`, `as_of`, `universe_snapshot_id`,
+`config_fingerprint` and `bar_store_signature` remain the only fields any re-run comparison may use.
+**Reversible:** yes
