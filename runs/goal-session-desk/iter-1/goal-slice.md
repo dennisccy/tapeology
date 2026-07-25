@@ -1,0 +1,536 @@
+# Tapeology — Project Goal (Era B: The Desk — a daily screening desk over a fetched universe)
+
+> Eras 1–5D are the **foundation** of this goal. Eras 1–2 (tape reading + the research evolution,
+> GOAL_ACHIEVED) are archived at [`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md);
+> the structure-UI interlude at [`docs/goal-archive/goal-2026-07-07.md`](goal-archive/goal-2026-07-07.md);
+> **Era 5 "The Library"** at [`docs/goal-archive/goal-2026-07-14.md`](goal-archive/goal-2026-07-14.md);
+> the **"Fast Wall" performance interlude** at [`docs/goal-archive/goal-2026-07-17.md`](goal-archive/goal-2026-07-17.md);
+> and the **"Clean Slate" demolition interlude (GOAL_ACHIEVED 2026-07-24, session `clean_slate`)** at
+> [`docs/goal-archive/goal-2026-07-25.md`](goal-archive/goal-2026-07-25.md). Eras 3, 4, 5B "The Tradable
+> Wall", and 5C "The Fast Wall" are frozen foundation; their records live in git history and in
+> `reports/goal-session-*-delivered.md`.
+>
+> **This chapter is Era B of the operator's three-era pivot (A Demolition → B Desk → C Annotator,
+> decided 2026-07-23).** Era A demolished the journal-era surfaces: the product today is exactly
+> **Cockpit (`/`) + Structure (`/structure`)**, the fingerprint epoch is `08e471b10130e1e2`, the MCP
+> surface is 15 read-only tools, and the honesty machinery (stores, gates, registry, PnL promotion
+> ledger) is fully intact. The Desk is the first BUILDING era on that cleared ground: an automated
+> **universe screener + screen ledger + daily briefing**, operated through the UI and through
+> Claude + MCP. It is an operator-directed product era OUTSIDE the research catalog
+> ([`docs/research-directions.md`](research-directions.md) has no Desk card; per its §5.6 this file
+> wins for the running era). The statistics program (era-6 "The Referee") and the AI annotation
+> corpus (Era C) remain SEPARATE future chapters — nothing of them lands here.
+>
+> **The Desk adds ZERO new research math.** It orchestrates, persists, and surfaces the frozen
+> 5B/5C computations (tradable-map bands, level classes, bar coverage) across many symbols. Every
+> new number it serves is either read verbatim from an existing canonical owner or is a new
+> desk-owned value (rank rows, coverage rows, snapshot metadata) with exactly one new owner.
+
+## Vision
+
+The instrument can read one symbol deeply — levels, zones, tradable bands, case studies, edge
+report — but the operator starts every day with the OPPOSITE problem: *which of the ~100 liquid
+names deserves the instrument today?* Era B builds that answer as a product:
+
+1. **A fetched, registered universe.** S&P 100 constituent membership is fetched from a documented
+   public source on explicit operator command and registered as a dated, checksummed, append-only
+   **universe snapshot** — never silently refetched, never edited, never a signal input. The suite
+   and the UI run keyless on a committed fixture snapshot; live fetch is an operator act.
+2. **An honest bar library over that universe.** A coverage view says, per member, which
+   timeframes have bars and how fresh they are — read from the durable `bar_index`, never by
+   re-hashing stores. An explicit, resumable **top-up** run fetches missing/stale series through
+   the existing keyless Yahoo seam, store-first (a symbol×timeframe already frozen in the store is
+   reused, never re-fetched).
+3. **An operator-run screen with an append-only ledger.** One button (and one CLI, and one POST)
+   walks the pinned universe snapshot as-of a screen date and summarizes, per symbol, what the
+   FROZEN tradable-map computation says: best band, band class, distance from the last daily close
+   in bps, band score, coverage and tick-evidence badges. The ranked result persists as an
+   append-only **screen snapshot** keyed by its inputs (screen date, as-of, universe snapshot,
+   `config_fingerprint`, bar-store state) — identical inputs reproduce byte-identical rows, and
+   a member with no bars appears as an honest `skipped: no bars` row, never a guess. Because every
+   row is as-of-stamped and lookahead-free, a FUTURE era can measure whether the desk's top-ranked
+   walls produced reactions — the ledger is tomorrow's evidence, not today's advice.
+4. **A briefing the operator (and Claude) actually opens.** A third page — **`/desk`** — renders
+   the latest screen as a dense, descriptive briefing with full provenance, an honest
+   "Desk screen not computed yet." empty state, a Run Screen button with live progress, browsable
+   screen history, and per-row drill-in that preloads `/structure` for that symbol and as-of.
+   Two new read-only MCP tools expose the same payloads byte-identically, so the desk can be
+   operated from a Claude conversation end to end.
+
+The deliverable: the two-page instrument becomes a three-page **desk** — universe in, briefing
+out, every number owned once, every run explicit, every record append-only and evaluable later.
+
+## Target Users
+
+- The project owner (a discretionary intraday trader) who starts the day on `/desk`: run the
+  screen, read the briefing, drill into `/structure` for the names whose walls are close.
+- The same owner operating through **Claude + MCP**: `desk_universe` / `desk_screen` (plus the
+  existing 15 tools) make the whole desk readable from a conversation.
+- AI dev-chain agents (the goal-mode chain) building and browser-verifying the era.
+
+## Foundation invariants (still law — eras 1–5D)
+
+The era-1–2 constitution ([`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md))
+remains binding on all KEPT code — price-impact-over-aggression; honest uncertainty; **no
+fabricated data**; single source of truth; no magic numbers; provider-agnostic engine;
+deterministic & reproducible; no secrets in source; research read-only over the engine; record
+integrity; source/feed/`config_fingerprint` honesty. Its surface inventory is the POST-demolition
+one: `/` and `/structure` (this era adds `/desk`).
+
+1. The **tape engine** (`app/engine/`) emits byte-identical output under `default` on identical
+   inputs. `config_fingerprint` stays **`08e471b10130e1e2`** for this WHOLE era — every new
+   `desk_*` Config field takes §0.4 **Path A** (exclusion + stability test + counter-test); a pin
+   movement is a defect, full stop.
+2. The **research computations** — `levels.py`, `tradability.py` (+cache), `setups.py` (+scan
+   cache), `edge_report*.py`, `backtests.py`, the strategy registry (`v1` + `structure_tape` +
+   `structure_tape_map`), `profiles.py` (`default`), the champion pointer — stay behaviorally
+   byte-identical. The desk READS them; it never re-implements, re-tunes, or re-grades.
+3. The **stores** — the JSON `BarStore` + `DatasetStore` formats, checksums, append-only
+   immutability, split freezing, the durable accelerator DBs (`bar_index`, `dataset_index`,
+   edge-report caches, setups scan cache, tradability cache) — are untouched in format and
+   discipline. Registered datasets and bar series are never deleted, re-tagged, or
+   content-perturbed. The era ADDS a universe store and a screen store under the same discipline.
+4. The **PnL promotion ledger** (`pnl_ledger.py`, `reports/pnl/pnl-history.md`, MCP `pnl_ledger`)
+   stays append-only and intact; the champion pointer does not move this era.
+5. The **kept surfaces as shipped**: the cockpit (live/sim/historical tape, `PriceChart.tsx`
+   container behaviors, panels) and `/structure` (Load flow, Tradable Map, Case Studies, Edge
+   Report + Compute button, fetch control + provenance badge) — including **both charts**
+   (`StructureChart.tsx`, `PriceChart.tsx`) — keep working exactly as shipped. The ONLY sanctioned
+   `/structure` edit is J-05's additive query-param prefill of the existing Load form.
+6. The **read-only MCP server** (`app/mcp/`) keeps its byte-identical GET-proxy contract; this era
+   adds two GET-proxy tools (15 → 17) and never adds writes.
+
+## Success Criteria
+
+In priority order — kept-value integrity outranks new-surface completeness outranks convenience:
+
+1. **Nothing kept regresses.** Full backend suite green (1169 pass / 7 skip at era open — grows,
+   never shrinks); engine equivalence proves byte-identical `default` outputs;
+   `Config().config_fingerprint()` prints `08e471b10130e1e2` in every iteration; every kept `/`
+   and `/structure` behavior browser-verified as shipped; every guard test passes unmodified.
+2. **The universe is honest.** Membership comes only from registered, dated, checksummed,
+   append-only snapshots; the parser validates (charset, count bounds, normalization) or fails
+   with an honest error — it NEVER emits a guessed or partial list; the committed fixture keeps
+   every test and default UI state keyless; live fetch happens only on explicit operator command.
+3. **The screen is deterministic and evaluable.** A screen run pins (universe snapshot id, screen
+   date, as-of, `config_fingerprint`, bar-store signature); identical pins reproduce byte-identical
+   rows; members without bars are honest `skipped` rows; snapshots are append-only and never
+   backfilled or recomputed in place; every row's structure numbers match the canonical owners
+   byte-for-byte for the same inputs.
+4. **The briefing is a real product surface.** `/desk` is the third nav row (data-driven from
+   `app/meta.py`); it renders ranked rows with descriptive chips + provenance, honest empty/
+   partial states, a Run Screen button with progress + cancel, browsable history, and drill-in
+   that lands on `/structure` preloaded — all browser-verified with screenshots.
+5. **The desk is Claude-operable.** `desk_universe` and `desk_screen` are byte-identical GET
+   proxies; `ui_route_map` lists the three routes; the MCP suite proves the 17-tool contract.
+
+## Key Capabilities
+
+1. **Universe subsystem (new data kind, honest by construction).** A universe vendor seam (the
+   bars-vendor pattern) fetching S&P 100 membership from ONE documented public source; a parser
+   contract (ticker charset `[A-Z.-]{1,6}`, count sanity 90–110, **Yahoo normalization
+   `BRK.B → BRK-B`**, dedupe, sorted output); registration as
+   `apps/backend/.data/universe/universe-<YYYY-MM-DD>-<checksum12>.json` (frozen JSON = source of
+   truth; any index over it is derived/rebuildable); a committed fixture snapshot under
+   `apps/backend/tests/fixtures/` for hermetic tests + default keyless UI;
+   `GET /research/desk/universe` serving snapshot list + latest membership with honest emptiness.
+2. **Coverage + top-up.** `GET /research/desk/coverage` (or a `universe` payload block): per-member
+   × per-timeframe bar presence + freshness read from `bar_index` (NEVER re-hashing the store);
+   an explicit operator-run top-up (POST + CLI) that walks members store-first through the
+   existing `POST /research/bars` fetch path, resumable, worker-capped, logging per-symbol
+   outcomes; the timeframe set = exactly what `compute_levels`/`compute_tradability` read for a
+   daily-close screen (verify at build time; era-5 contract: `4h` is resampled from `1h`, never
+   fetched; intraday microscope tfs stay per-symbol on `/structure`).
+3. **Screen compute + append-only ledger.** An operator-run screen (POST + CLI + `/desk` button)
+   over the pinned latest universe snapshot: per member, call the CANONICAL owners
+   (`compute_tradability` / levels / `bar_index`) as-of the screen date's session close and
+   summarize best band, class, distance-from-close (bps), band score, coverage + tick-evidence
+   badges; deterministic rank order = (band class A>B>C, then distance asc, then band score desc,
+   then symbol asc); single-flight + progress + cancel via the 5C compute-manager pattern;
+   persistence as append-only screen snapshots (frozen JSON + derived index) with full input pins;
+   `GET /research/desk/screen` (latest / `?date=`) + honest `"Desk screen not computed yet."`.
+4. **The `/desk` briefing page.** Third nav row; latest-screen briefing table (rank, symbol,
+   band class chip, distance chip, score, coverage/evidence badges, skipped rows grouped
+   honestly); provenance line (universe snapshot id + date, as-of, fingerprint, bar-store
+   signature); Run Screen + top-up buttons with live progress + cancel; screen history list;
+   dark/dense/terminal-grade per house style.
+5. **Drill-in + `/structure` prefill.** Clicking a briefing row navigates to
+   `/structure?symbol=<sym>&asof=<iso>`; `/structure` gains query-param PREFILL of its existing
+   Load form (prefill + auto-Load; `apps/frontend/app/structure/page.tsx` inputs at ~:2057/:2070)
+   — no other `/structure` behavior changes; the desk never recomputes structure values.
+6. **MCP contract v3 — 17 read-only tools.** Add `desk_universe` → `/research/desk/universe` and
+   `desk_screen` → `/research/desk/screen` to `_STATIC_PATHS` (`app/mcp/__init__.py:85`);
+   `get_endpoint` allowlist (`/tape/`, `/research/`, `/meta/`) already covers the new paths
+   unchanged; `tests/test_mcp_server.py` proves the 17-tool contract with byte-identity and
+   honest-error clauses.
+
+## Non-Goals
+
+- **No statistics program.** No new gates, CIs, nulls, multiple-testing control, or promotion
+  logic — that is era-6 "The Referee" (future). The screen RANKS by existing descriptive
+  structure metrics; it never claims edge, probability, or expectancy.
+- **No annotation layer.** Human/AI pattern annotation, dispositions, notes, or any manual input
+  path on desk records is Era C "The Annotator" (designed separately). This era's ledger records
+  MACHINE output only.
+- **No strategy/champion work.** No new strategies/profiles, no backtest changes, no champion
+  movement, no PnL-ledger rows beyond what existing machinery already writes.
+- **No scheduling.** No cron, daemon, auto-refresh, or market-hours trigger — every fetch,
+  top-up, and screen run is an explicit operator act (UI button / CLI / POST).
+- **No tick-data expansion.** No new dataset recording, no credential work; tick evidence badges
+  reflect the 11 recorded dataset symbols as they stand.
+- **No engine, chart, or kept-surface work.** `app/engine/` untouched; `StructureChart.tsx`
+  untouched; `PriceChart.tsx` untouched; `/structure` untouched beyond the J-05 prefill.
+- **No fingerprint epoch bump.** Path A only; the pin `08e471b10130e1e2` does not move.
+- **No second market, no options/sentiment/news data, no paid services.** The one new external
+  read is the documented constituents source; membership is universe METADATA, never a signal
+  input (the roadmap's earnings-calendar exclusion-only precedent).
+
+## Constraints
+
+- **Stack (carried over):** Frontend Next.js 15 + TypeScript + Tailwind v3 (npm),
+  `lightweight-charts`, dark-only. Backend Python 3.12 + FastAPI. Backend `http://localhost:8000`,
+  frontend `http://localhost:3000` (browser-QA rig on `:8301`/`:3301`). No new runtime dependency
+  (the universe fetch uses the stdlib/HTTP client patterns the Yahoo adapter already uses).
+- **Config discipline (§0.4 Path A, every time):** every new SEMANTIC knob is a `Config` field
+  (`desk_universe_source_url`, `desk_universe_min_members`, `desk_universe_max_members`, plus any
+  the build genuinely needs) added to the `config_fingerprint()` exclusion set
+  (`app/config.py:1312`) **in the same commit**, with (i) a stability test proving the pin is
+  unchanged and (ii) a counter-test proving the field alters the NEW path's output, and its value
+  embedded in the desk payloads it shapes (provenance duty — the `structure_tape_*` worked
+  example). Operational knobs (worker counts, timeouts, store dirs) may be env vars per the 5C
+  precedent (`TAPEOLOGY_DATASET_DIR` pattern); a field that changes SERVED VALUES is never an env
+  var.
+- **Snapshot discipline:** universe + screen snapshots are frozen JSON files (source of truth,
+  content-checksummed, append-only) with derived, rebuildable indexes — the `BarStore`/
+  `dataset_index` pattern. No snapshot is ever edited, re-keyed, or silently regenerated;
+  re-running a screen for the same pins either reproduces byte-identical content or refuses with
+  an honest already-recorded response. `journal.db` gets NO new tables (schema stays v8).
+- **No-lookahead as-of rule:** a screen for date D uses only bars fully completed at D's session
+  close (the store's no-lookahead clamp); the recorded `as_of` is part of the snapshot key; there
+  is no "refresh today's screen in place" — a new run is a new snapshot.
+- **Single source of truth:** the desk owns ONLY its new values (universe membership/metadata,
+  coverage rows, screen rank rows). Band geometry, classes, scores come from
+  `compute_tradability` (`app/research/tradability.py:381`) / `levels.py` verbatim; coverage
+  comes from `bar_index`; the desk NEVER recomputes, re-grades, or caches a divergent copy.
+  The coherence-auditor hard-fails violations.
+- **Copy discipline:** all desk copy is descriptive measurement (distances, classes, counts,
+  dates) — no advice, imperative, or prediction language; `tests/test_copy_discipline.py`'s
+  frontend-literal lint (:220) covers the new page automatically and must stay green unmodified.
+- **Guard tests (kept, never edited):** `tests/test_no_execution_path.py`,
+  `tests/test_no_credential_in_artifacts.py`, the fast_wall source-introspection guards
+  (`test_backtests.py`, `test_setups.py` pins), the chart guard suites, and the 13 fingerprint
+  pin assertions (e.g. `test_profile_equivalence.py:114`) all pass byte-unmodified all era.
+- **Hermetic tests:** the suite stays keyless on committed fixtures — the universe fixture
+  snapshot ships in-repo; NO test performs a network fetch; live constituents fetch + 100-symbol
+  top-up + real screens are operator-run verifications, never CI gates.
+- **Browser evidence:** `rm -rf apps/frontend/.next` + rebuild before any browser verification
+  (the stale-build trap); every browser acceptance needs a screenshot — no screenshot ⇒ the
+  journey is `unknown`, never `passing`; route captures in evidence scripts use per-route
+  `curl --max-time`.
+- **Compute-manager reuse:** top-up and screen runs follow `EdgeReportComputeManager`
+  (`app/research/edge_report_compute.py:108`; routes `POST/GET/POST-cancel` at
+  `app/research/routes.py:1268/1293/1302`) — single-flight, snapshot-pollable progress,
+  cancellable, CLI-runnable. Page-load GETs NEVER trigger computes (the 5C lesson).
+
+## Design Direction
+
+Unchanged house style: dark-only, dense, professional, terminal-grade; honest empty/degraded
+states are first-class copy (`"Desk screen not computed yet."`, `"skipped: no bars"`); the
+briefing reads like a trading-floor sheet, not a dashboard toy; no marketing chrome.
+
+## Product Shape
+
+Nav (top bar) after this era: **Cockpit `/` · Structure `/structure` · Desk `/desk`** — data-driven
+from `app/meta.py` `UI_ROUTES` (:27, the single owner); `GET /meta/ui-routes` and MCP
+`ui_route_map` reflect it verbatim.
+
+**Data Contract — new rows (each value computed once, one owner):**
+
+| Value | Owner (module) | Serving endpoint |
+|---|---|---|
+| Universe snapshots + membership | new `app/research/desk_universe.py` (name at build discretion) | `GET /research/desk/universe` |
+| Per-member bar coverage/freshness | same desk module (reads `bar_index` only) | `GET /research/desk/coverage` (or a block of the universe payload — ONE home, decided at build) |
+| Screen snapshots, rank rows, skip rows | new `app/research/desk_screen.py` | `GET /research/desk/screen` |
+| Top-up / screen compute progress | desk compute manager (5C pattern) | `GET /research/desk/*/compute` poll endpoints |
+| Route list (now 3 rows) | `app/meta.py` | `GET /meta/ui-routes` |
+
+**Unchanged owners (the desk reads them verbatim):** bands/scores → `tradability.py`; levels/
+zones/classes → `levels.py`; bars/candles → `bars.py` + `bar_index`; datasets → `datasets.py`;
+edge cells → `edge_report.py`; ledger rows → `pnl_ledger.py`; registry/champion →
+`strategies.py`/store; taxonomy labels → `taxonomy.py`.
+
+## Build anchors & weak-model traps (era B)
+
+Anchors verified against `main @ 05b50ef` (2026-07-25) — **re-locate by symbol name (grep), never
+by line arithmetic**:
+
+- Yahoo fetch seam: `app/providers/adapters/yahoo.py:207` (`YahooAdapter`, `fetch_bars` :233);
+  explicit bar fetch/register: `POST /research/bars` (`app/research/routes.py:519`), store-first.
+- Tradable map: `compute_tradability(store, symbol, as_of_epoch, config)`
+  (`app/research/tradability.py:381`) + durable `tradability_cache.db`.
+- Compute-manager pattern: `EdgeReportComputeManager` (`app/research/edge_report_compute.py:108`),
+  routes at `routes.py:1268/1293/1302`, `/structure` Compute button + progress poll as UI model.
+- Stores: `BarStore` (`app/research/bars.py:210`); `bar_index.db` (coverage truth — 3 symbols have
+  bars at era open: AAPL/AMD/MSFT); `.data/datasets` + `dataset_index.db` (tick evidence — exactly
+  these 11 recorded symbols: AAPL, AMD, AMZN, GOOGL, META, MSFT, NFLX, NVDA, PG, SPY, TSLA).
+- MCP: `_STATIC_PATHS` (`app/mcp/__init__.py:85`), parameterized paths (:107), `get_endpoint`
+  allowlist (:55–65); contract suite `apps/backend/tests/test_mcp_server.py`.
+- Config: `config_fingerprint()` + exclusion set (`app/config.py:1312`); pin literal
+  `08e471b10130e1e2` asserted at 13 sites (e.g. `tests/test_profile_equivalence.py:114`).
+- Frontend: nav auto-follows `meta.py`; `/structure` Load inputs (`app/structure/page.tsx`
+  ~:2057/:2070) are the J-05 prefill target; copy lint `tests/test_copy_discipline.py:220`.
+
+Traps (all learned the hard way in prior eras — read before EVERY iteration):
+
+- **T-1 · Parser honesty.** The constituents source is a live web page: on ANY validation failure
+  (charset, bounds 90–110, table shape) the fetch fails with an honest error — never a guessed,
+  partial, or hard-coded fallback list. The committed fixture is for TESTS and default UI, never
+  a silent runtime fallback for a failed live fetch.
+- **T-2 · Symbol normalization.** Yahoo uses dashes: `BRK.B → BRK-B`, `BF.B → BF-B`. Normalize at
+  ingestion, store the normalized form, keep the raw form in snapshot metadata. Watch dual-class
+  dupes after normalization.
+- **T-3 · Universe store ≠ dataset store.** Both are append-only JSON+index, but they are
+  DIFFERENT owners with different keys — never write universe data through `datasets.py` or
+  register screens as datasets.
+- **T-4 · Coverage reads the index.** Per-member coverage comes from `bar_index` lookups; walking
+  or re-hashing the JSON `BarStore` per page load is the 5C 31.4s mistake. GETs are cache-reads;
+  computes are explicit.
+- **T-5 · Path A or nothing.** Every new Config field: exclusion set + stability test +
+  counter-test + payload provenance, same commit. No field that shapes a SERVED value hides in an
+  env var; the pin never moves (T8 of the roadmap — no third fingerprint move exists).
+- **T-6 · Determinism means no wall-clock.** Screen `as_of` derives from the requested screen
+  date (session close), never `now()`; snapshot ids derive from content checksums; re-runs with
+  identical pins are byte-identical. Progress timestamps live in compute-manager state, never in
+  snapshot content.
+- **T-7 · Tick-evidence honesty.** A "tick evidence" badge means the symbol is among the 11
+  recorded dataset symbols — it never implies bars exist, and vice versa; the two badges are
+  independent reads (datasets vs `bar_index`).
+- **T-8 · `/structure` prefill is additive.** J-05 touches the Load form's initial values +
+  auto-Load from query params ONLY — no chart edits, no Load-flow rewrites, no default changes
+  when params are absent.
+- **T-9 · Clean rebuild before browser evidence.** `rm -rf apps/frontend/.next`, rebuild, restart
+  both processes before any browser pass — a stale build bakes the wrong API base and ghost
+  pages, producing false results in both directions.
+- **T-10 · Evidence honesty.** No screenshot ⇒ `unknown`, never `passing`; backend-only proof
+  never satisfies a browser acceptance line; the real 100-symbol top-up and real screens are
+  operator-run acts reported as such, never simulated by fixtures pretending to be live.
+
+## Must-have user journeys
+
+Journeys **J-01 – J-07** form the era. **Frontend is present** (J-04, J-05, and J-07 are
+browser-verifiable). The default suite stays keyless on committed fixtures. Natural dependency
+order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding continuously.
+
+- **J-01: Universe ingestion — fetched, registered, honest**
+  - Steps:
+    1. Build the universe vendor seam + parser (contract per Key Capability 1: one documented
+       source URL as a Path-A Config field, charset check, 90–110 bounds, `BRK.B → BRK-B`
+       normalization, dedupe, sorted members) and the universe store
+       (`.data/universe/universe-<date>-<checksum12>.json`, frozen JSON + derived index).
+    2. Commit the fixture snapshot under `apps/backend/tests/fixtures/` and wire the hermetic
+       test path (env-scoped universe dir, the `TAPEOLOGY_DATASET_DIR` pattern).
+    3. Expose `POST /research/desk/universe/fetch` (explicit operator act; honest failure body on
+       validation errors) and `GET /research/desk/universe` (snapshot list + latest membership;
+       honest empty state before any registration).
+    4. Unit-test the parser contract (fixture HTML → exact member list; each validation failure →
+       honest error, no partial list) and snapshot immutability (re-registration of identical
+       content is a no-op/refusal, never a rewrite).
+  - Acceptance: with no snapshot, `GET /research/desk/universe` serves the honest empty payload;
+    after registering the FIXTURE snapshot the GET lists it with checksum + member count in
+    90–110 and normalized symbols; a deliberately corrupted fixture fails with the honest error
+    and registers nothing; the full suite is green, keyless, with
+    `Config().config_fingerprint()` still `08e471b10130e1e2` and the new field counter-tested.
+    *(Keyless; automated. The LIVE Wikipedia fetch is an operator-run verification, reported
+    honestly as run-or-not-run.)*
+
+- **J-02: Coverage + explicit bar top-up over the universe**
+  - Steps:
+    1. Serve per-member coverage (bars present per required timeframe + freshness, read from
+       `bar_index` only) for the latest universe snapshot — ONE owner per the Product Shape row.
+    2. Pin the top-up timeframe set = exactly what `compute_levels`/`compute_tradability` read
+       for a daily-close screen (verify against `levels.py` at build time; `4h` resampled from
+       `1h` per the era-5 contract; no 5m/1m in the desk top-up).
+    3. Build the operator-run top-up (POST + CLI, compute-manager pattern: single-flight,
+       progress with per-symbol outcomes, cancel, resumable) walking members store-first through
+       the existing `POST /research/bars` path.
+    4. Test with fixtures: coverage truth-table (bars-present vs missing members), top-up
+       resumability (a cancelled run resumes without re-fetching frozen series), and the
+       GET-never-computes rule.
+  - Acceptance: coverage for the fixture universe reports bars-present for exactly the members
+    the era-open store holds (AAPL/AMD/MSFT) and bars-missing for every other member (asserted
+    per-member in a truth-table test); a fixture-scoped top-up run completes with honest
+    per-symbol outcomes and a second run reports all-reused (store-first proven); coverage GET
+    latency is index-read fast (no store re-hash); suite green + pin unchanged. *(Keyless core;
+    the real ~100-symbol Yahoo top-up is an operator-run act with its outcome — including
+    partial coverage — reported honestly.)*
+
+- **J-03: The screen — pinned inputs, append-only snapshot, deterministic rank**
+  - Steps:
+    1. Build the screen compute (POST + CLI + compute-manager): walk the pinned latest universe
+       snapshot as-of the requested screen date's session close; per member call the canonical
+       owners (`compute_tradability` :381 / levels / `bar_index`) and summarize best band, class,
+       distance-from-close bps, band score, coverage + tick-evidence badges; members without
+       bars → `skipped: no bars` rows.
+    2. Rank deterministically: band class (A>B>C), then distance asc, then band score desc, then
+       symbol asc — the order is data, recorded in the snapshot.
+    3. Persist as an append-only screen snapshot (frozen JSON + derived index) keyed
+       (screen_date, as_of, universe snapshot id, `config_fingerprint`, bar-store signature);
+       identical pins → byte-identical content (tested); same-pins re-run → honest
+       already-recorded response, never a rewrite.
+    4. Serve `GET /research/desk/screen` (latest, `?date=`, and a snapshot list) with the honest
+       `"Desk screen not computed yet."` payload before any run.
+  - Acceptance: on the fixture universe + fixture bars, a screen run produces the expected ranked
+    rows + skipped rows (golden-tested); a re-run with identical pins is byte-identical; the
+    snapshot embeds every pin + the Path-A field values (provenance duty); rows' band values match
+    `GET /research/tradability` byte-for-byte for the same symbol/as-of; suite green + pin
+    unchanged. *(Keyless; automated. A real screen over real bars is an operator-run act.)*
+
+- **J-04: The `/desk` briefing page**
+  - Steps:
+    1. Add the `/desk` row to `UI_ROUTES` (`app/meta.py:27`) — nav + `ui_route_map` follow
+       automatically; never hand-edit a nav component.
+    2. Build the page: latest-screen briefing table (rank, symbol, class chip, distance chip,
+       score, coverage/evidence badges; skipped rows grouped under an honest heading), the
+       provenance line (universe snapshot id + date, as_of, fingerprint, bar-store signature),
+       screen-history list, and the honest empty state when no screen exists.
+    3. Wire Run Screen + Top-up buttons to the compute endpoints with live progress + cancel
+       (the `/structure` Compute-button UX pattern); page-load GETs never trigger computes.
+    4. Keep all copy descriptive (distances, classes, counts, dates); the copy-discipline lint
+       stays green unmodified.
+  - Acceptance: in a real browser (after the T-9 clean rebuild) — nav shows **Cockpit ·
+    Structure · Desk**; `/desk` with no screen shows `"Desk screen not computed yet."` + enabled
+    Run Screen (screenshot); after a fixture-scoped screen run the briefing renders ranked rows
+    with chips + provenance and groups skipped members honestly (screenshot); Run Screen shows
+    live progress and an in-flight second trigger is refused (single-flight, screenshot);
+    `GET /meta/ui-routes` lists exactly the three routes. *(Browser-verifiable; keyless via the
+    fixture-scoped backend.)*
+
+- **J-05: Ledger history + drill-in to `/structure`**
+  - Steps:
+    1. Render the screen-history list on `/desk` (date, member/skip counts, provenance summary);
+       selecting a past screen renders THAT snapshot's rows verbatim (no recompute).
+    2. Add query-param prefill to `/structure` (`?symbol=&asof=`): prefill the existing Load
+       form inputs (~:2057/:2070) and auto-Load — additive only (T-8), no behavior change when
+       params are absent.
+    3. Make each briefing row a drill-in link to `/structure?symbol=<sym>&asof=<as_of>`.
+    4. Guard-test that the desk pages contain no structure recomputation (rows read snapshot
+       JSON; `/structure` values come from its existing endpoints).
+  - Acceptance: in a real browser — opening a PAST screen renders its recorded rows (byte-equal
+    to the snapshot payload, spot-checked); clicking a row (e.g. AAPL) lands on `/structure`
+    with symbol + as-of prefilled and the wall/bands loaded for that date (screenshot proving
+    the pinned AAPL 2026-06-22 flow still renders 300–302.4-region bands when drilled from a
+    screen containing it); `/structure` with no params behaves exactly as shipped (screenshot).
+    *(Browser-verifiable; keyless.)*
+
+- **J-06: MCP contract v3 — 17 read-only tools**
+  - Steps:
+    1. Add `desk_universe` → `/research/desk/universe` and `desk_screen` →
+       `/research/desk/screen` to `_STATIC_PATHS` (`app/mcp/__init__.py:85`); `get_endpoint`
+       allowlist unchanged (the new paths are under `/research/`).
+    2. Update `tests/test_mcp_server.py` to the 17-tool contract, keeping byte-identity and
+       honest-error clauses for every tool (including the two new ones against the honest
+       empty states).
+    3. If the neutral asset source changed, re-render per the maintenance protocol — never
+       hand-edit generated mirrors.
+  - Acceptance: the MCP server advertises exactly 17 tools; `desk_universe`/`desk_screen` outputs
+    are proven byte-identical to their curl equivalents (empty AND populated fixture states);
+    `get_endpoint` on `/research/desk/screen` proxies verbatim; the MCP suite is green.
+    *(Keyless; automated.)*
+
+- **J-07: The kept product stands — regression sentinel**
+  - Steps:
+    1. Run the full backend suite + engine equivalence; verify every guard test
+       (`test_no_execution_path.py`, `test_no_credential_in_artifacts.py`, source-introspection
+       guards, chart guard suites, the 13 pin assertions) passes byte-unmodified;
+       `Config().config_fingerprint()` prints `08e471b10130e1e2`.
+    2. In a real browser (after T-9): walk the kept product — sim cockpit (`SIM-BUYER` settles
+       `buyer_control`, chart candles + timeframe switch + band overlay + live tape bars),
+       `/structure` Load for pinned AAPL as-of 2026-06-22 (the 300–302.4 wall band renders),
+       Case Studies drill-in, Edge Report honest state — screenshots for each.
+    3. Verify the desk additions did not perturb kept values: kept-route responses byte-identical
+       on identical inputs vs an era-open baseline capture (per-route `curl --max-time`);
+       `/research/taxonomy` unchanged; WS frame = engine projection only.
+    4. Confirm the era's cumulative diff stays inside this goal.md's inventory (new desk modules/
+       routes/page/tools + the named `meta.py`/MCP/test touches + the J-05 prefill) — anything
+       else is surfaced BEFORE it lands.
+  - Acceptance: full suite green under the unchanged pin; every browser step evidenced by
+    screenshot (T-10); kept-route byte-identity holds; nav = exactly three routes; MCP = exactly
+    17 tools; zero out-of-inventory changes in the cumulative diff. *(Keyless core;
+    browser-verifiable.)*
+
+<!-- AUTO:journeys -->
+
+<!-- /AUTO:journeys -->
+
+## Anti-goals
+
+**Immutable rails — the identity of the project (from
+[`docs/research-directions.md`](research-directions.md) §0.3; enforced by existing tests and
+audits; only ever grow more specific, never weaker):**
+
+1. **No execution path, ever** — no brokerage/trading API, no order tickets, no live OR paper
+   trading, no "just to test" exceptions. (`apps/backend/tests/test_no_execution_path.py` is the
+   tier-1 guard; new research code adds matching guard tests, never weakens them.) *(critical)*
+2. **No profit claims and no advice** — every $ figure is a simulated measurement carrying R, n,
+   fee/slippage assumptions, and its train/hold-out/forward basis. No prediction language, no
+   imperative trading cues. *(critical)*
+3. **Frozen foundations** — the `v1` strategy, the `default` profile, the tape engine's five
+   states and thresholds, the frozen structure computations, the JSON `BarStore`, and every KEPT
+   surface's behaviour stay byte-identical. New work is additive and versioned beside them, never
+   a mutation of them. (The 5D demolition's removals are final history; this era builds `/desk`
+   BESIDE the kept two pages — the one sanctioned kept-surface edit is J-05's additive
+   `/structure` prefill.) *(critical)*
+4. **Hold-out-only promotion** — the champion pointer moves only on a genuine hold-out survival
+   through the sweep gate (plus the era-6 statistical gates once they exist). Train-only wins are
+   labeled overfit. Never lower a minimum sample size, widen a gate, or pool across
+   feeds/fingerprints to manufacture a survivor. *(critical)*
+5. **No lookahead** — every value computed as-of T uses only events/bars fully completed at T.
+   *(critical)*
+6. **Single source of truth** — each shared value is computed once, owned by one canonical
+   endpoint, and read verbatim by REST/WS/UI/MCP/reports. The coherence-auditor hard-fails
+   violations. *(critical)*
+7. **Deterministic and seeded** — every random draw uses a config-owned recorded seed; identical
+   requests reproduce byte-identical results; no wall-clock, no unseeded randomness in any
+   research artifact.
+8. **Read-only MCP** — MCP tools remain byte-identical proxies of GET endpoints; nothing on the
+   MCP surface can change state. *(critical)*
+9. **Immutable data** — registered datasets and bar series are append-only, checksummed, never
+   re-tagged, never deleted, never content-perturbed. Splits are frozen at registration.
+   *(critical)*
+10. **Persistence stays scoped** — no ambient recording of live streams; recording/fetching is an
+    explicit, logged act. *(critical)*
+
+**Desk-era anti-goals (added, not weakening any rail above):**
+
+- **Membership is never a signal.** Universe membership (and any constituents metadata) selects
+  WHAT to screen; it never enters a computation, rank formula beyond selection, feature, or
+  report as an input value. *(critical)*
+- **Snapshots are append-only and pinned.** Universe and screen snapshots are dated, checksummed,
+  append-only; every screen pins (universe snapshot id, screen date, as_of, fingerprint,
+  bar-store signature); nothing is silently refetched, backfilled, recomputed in place, or
+  rewritten — a new run is a new snapshot. *(critical)*
+- **Every run is an explicit operator act.** No scheduler, cron, daemon, auto-refresh, or
+  market-hours trigger anywhere; page-load GETs never trigger fetches or computes. *(critical)*
+- **The briefing describes, never advises.** Desk copy is descriptive measurement only — no
+  advice, imperative, prediction, or ranking language implying action ("buy", "watch this",
+  "opportunity"); the copy-discipline lint stays green unmodified. *(critical)*
+- **No new statistics, gates, or strategies.** No probability/expectancy/edge claims on any desk
+  surface; champion, `v1`, `default`, gates, and minimum-n floors untouched (the Referee is a
+  future era). *(critical)*
+- **The demolition stays demolished.** No journal-era machinery returns; the desk ledger records
+  machine output only — zero manual-input write paths on desk records this era (dispositions/
+  annotations are Era C's design space). *(critical)*
+- **The ledger never holds orders.** No sizes, tickets, entries/exits, or account concepts in any
+  desk record — rail 1 in desk terms. *(critical)*
+- **The suite stays keyless and hermetic.** Committed fixtures cover every test path; no test
+  fetches the network; live fetch/top-up/screen runs are operator-run verifications reported
+  honestly (run-or-not-run), never CI gates. *(critical)*
+- **The fingerprint pin does not move.** All new Config fields take Path A (exclusion + stability
+  test + counter-test + payload provenance, same commit); `08e471b10130e1e2` is asserted unchanged
+  by the sentinel every iteration. *(critical)*
+- **The enhancement loop stays inside its box.** The goal-proposer may append journeys ONLY inside
+  the `AUTO:journeys` marker block above — it MUST NOT edit human-authored journeys, this
+  Anti-goals section, or any other part of this file; proposed journeys MUST carry a
+  single-source-of-truth (or PnL-ledger) acceptance criterion, keep the `default` profile and
+  `v1` byte-identical, and include a `[NEW]`-flagged walkthrough. Manufacturing a low-value
+  journey just to keep the loop alive is a failure. *(critical)*

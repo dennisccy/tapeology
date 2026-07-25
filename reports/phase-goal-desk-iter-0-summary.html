@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>goal-desk-iter-0 — Iteration Summary</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0; padding: 0; color: #1f2328; background: #f6f8fa; line-height: 1.5;
+}
+.container { max-width: 880px; margin: 0 auto; padding: 24px 16px 80px; }
+.hero {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 28px; margin-bottom: 16px; text-align: center;
+}
+.hero.pass { border-top: 6px solid #1a7f37; }
+.hero.fail { border-top: 6px solid #cf222e; }
+.hero.inprogress { border-top: 6px solid #d4a72c; }
+.hero h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+.hero h2 { margin: 0 0 14px 0; font-size: 1rem; color: #57606a; font-weight: 500; }
+.badge-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.95rem;
+}
+.badge.pass { background: #dafbe1; color: #1a7f37; }
+.badge.fail { background: #ffebe9; color: #cf222e; }
+.badge.inprogress { background: #fff8c5; color: #9a6700; }
+.signal-badge { padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; }
+.signal-badge.improving { background: #dafbe1; color: #1a7f37; }
+.signal-badge.holding { background: #ddf4ff; color: #0969da; }
+.signal-badge.stalling { background: #fff8c5; color: #9a6700; }
+.signal-badge.regressing { background: #ffebe9; color: #cf222e; }
+.signal-badge.na { background: #f6f8fa; color: #57606a; }
+.meta { color: #57606a; font-size: 0.875rem; margin: 10px 0 16px; }
+.journey-row {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 4px;
+}
+.journey-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 0.85rem;
+  background: #f6f8fa; border: 1px solid #d0d7de;
+}
+.journey-pill.passing, .journey-pill.already_passing { background: #dafbe1; color: #1a7f37; border-color: #b4e2c0; }
+.journey-pill.failing, .journey-pill.regressed { background: #ffebe9; color: #cf222e; border-color: #f1aeb0; }
+.journey-pill.partial { background: #fff8c5; color: #9a6700; border-color: #eed888; }
+.journey-pill.unknown { background: #f6f8fa; color: #57606a; }
+.hero-image { margin-top: 18px; }
+.hero-image img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+details {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  margin-bottom: 12px;
+}
+details > summary {
+  cursor: pointer; padding: 14px 18px; font-weight: 600; font-size: 1.05rem;
+  list-style: none; user-select: none; display: flex; align-items: center; gap: 8px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: '▶'; transition: transform 0.15s; font-size: 0.75rem; color: #57606a;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+.accordion-body { padding: 0 18px 18px; }
+.accordion-body h3 { font-size: 0.95rem; color: #57606a; margin: 16px 0 6px; }
+.why-text { background: #f6f8fa; padding: 10px 12px; border-radius: 6px; margin: 4px 0 12px; }
+ul.bullets { margin: 6px 0 14px; padding-left: 22px; }
+ul.bullets li { margin-bottom: 4px; }
+ol.steps { padding-left: 0; list-style: none; counter-reset: step; }
+ol.steps > li {
+  counter-increment: step; padding: 12px 0 12px 44px;
+  border-top: 1px solid #eaeef2; position: relative;
+}
+ol.steps > li:first-child { border-top: none; }
+ol.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 14px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #0969da; color: white; display: flex;
+  align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600;
+}
+.step-shot { margin-top: 10px; }
+.step-shot img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+.next-step-box {
+  background: #ddf4ff; padding: 12px 16px; border-radius: 6px;
+  border-left: 4px solid #0969da; margin: 12px 0;
+}
+.drill-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.drill-table th, .drill-table td {
+  text-align: left; padding: 8px 6px; border-bottom: 1px solid #eaeef2;
+}
+.drill-table th { background: #f6f8fa; }
+.verdict-cell.PASS, .verdict-cell.CLOSURE-PASS, .verdict-cell.GOAL_ACHIEVED { color: #1a7f37; font-weight: 600; }
+.verdict-cell.FAIL, .verdict-cell.CLOSURE-FAIL, .verdict-cell.REGRESSION { color: #cf222e; font-weight: 600; }
+.verdict-cell.CONTINUE, .verdict-cell.ESCALATE, .verdict-cell.STALLED { color: #9a6700; font-weight: 600; }
+.verdict-cell.SKIPPED, .verdict-cell.UNKNOWN, .verdict-cell.IN-PROGRESS { color: #57606a; }
+.footer-note { text-align: center; color: #6e7781; font-size: 0.8rem; margin-top: 24px; }
+.iter-card {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 16px 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 14px;
+}
+.iter-card .left { flex-shrink: 0; }
+.iter-card .body { flex: 1 1 auto; }
+.iter-card .body .title { font-weight: 600; }
+.iter-card .body .sub { color: #57606a; font-size: 0.88rem; margin-top: 2px; }
+.iter-card a.open { color: #0969da; text-decoration: none; font-weight: 500; }
+.iter-card a.open:hover { text-decoration: underline; }
+.matrix { width: 100%; border-collapse: collapse; margin: 12px 0 22px; font-size: 0.88rem; }
+.matrix th, .matrix td { padding: 6px 8px; border: 1px solid #d0d7de; text-align: center; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix .cell-passing, .matrix .cell-already_passing { background: #dafbe1; color: #1a7f37; }
+.matrix .cell-failing, .matrix .cell-regressed { background: #ffebe9; color: #cf222e; }
+.matrix .cell-partial { background: #fff8c5; color: #9a6700; }
+.matrix .cell-unknown { background: #f6f8fa; color: #57606a; }
+.no-summary {
+  background: #fff8c5; border: 1px solid #eed888; padding: 14px 18px;
+  border-radius: 8px; color: #9a6700; margin-bottom: 14px;
+}
+/* Plain-language layer — the primary, non-technical view. */
+.plain-words {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 24px; margin: 18px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.plain-words .pw-heading {
+  margin: 0 0 14px; font-size: 1.15rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.pw-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.pw-card {
+  background: white; border-radius: 8px; padding: 14px 16px;
+  border: 1px solid #e3eaf3;
+}
+.pw-card .pw-label {
+  font-size: 0.78rem; font-weight: 600; color: #57606a;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.pw-card .pw-text {
+  margin: 0; font-size: 1rem; color: #1f2328; line-height: 1.45;
+}
+.pw-empty { color: #8c959f; font-style: italic; font-size: 0.95rem; }
+.tech-divider {
+  margin: 18px 0 8px; text-align: center;
+  color: #6e7781; font-size: 0.82rem; font-style: italic;
+  border-top: 1px dashed #d0d7de; padding-top: 12px;
+}
+/* Watch-it-work — narrated screenshot gallery from demo-narrator. */
+.watch-it-work {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 18px 22px; margin: 10px 0 6px;
+}
+.wiw-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.wiw-heading {
+  margin: 0; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.demo-badge {
+  font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 12px;
+  border: 1px solid transparent; letter-spacing: 0.04em;
+}
+.demo-badge.demo-recorded { background: #dafbe1; color: #1a7f37; border-color: #aceebb; }
+.demo-badge.demo-notes    { background: #fff8c5; color: #9a6700; border-color: #e8d97e; }
+.demo-badge.demo-skipped  { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+.demo-badge.demo-pending  { background: #ddf4ff; color: #0969da; border-color: #b6e3ff; }
+.demo-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.demo-step {
+  margin: 0; padding: 12px; background: #f6f8fa;
+  border: 1px solid #d0d7de; border-radius: 8px;
+}
+.demo-step-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.demo-step-num {
+  font-weight: 600; color: #57606a; font-variant-numeric: tabular-nums;
+}
+.demo-step-title { color: #1f2328; font-weight: 500; }
+.demo-new {
+  background: #ddf4ff; color: #0969da; font-size: 0.7rem; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px; letter-spacing: 0.06em;
+}
+.demo-shot { margin-bottom: 8px; }
+.demo-shot img {
+  width: 100%; height: auto; border-radius: 4px; border: 1px solid #d0d7de;
+  display: block;
+}
+.demo-narration {
+  margin: 0; color: #1f2328; font-size: 0.92rem; line-height: 1.4;
+}
+.demo-empty {
+  margin: 8px 0 0; color: #57606a; font-style: italic;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.demo-notes-wrap { margin-top: 14px; }
+.demo-notes-wrap summary {
+  cursor: pointer; color: #9a6700; font-weight: 500; font-size: 0.9rem;
+}
+.demo-notes-wrap[open] summary { margin-bottom: 6px; }
+/* Story so far + latest demo (session index plain-language top). */
+.story-so-far {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 14px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.story-heading {
+  margin: 0 0 12px; font-size: 1.1rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.story-body { font-size: 1rem; color: #1f2328; line-height: 1.55; }
+.story-body .story-h { margin: 14px 0 6px; color: #1f2328; }
+.story-body p { margin: 0 0 10px; }
+.session-demo {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 0; margin: 8px 0 6px; overflow: hidden;
+}
+.session-demo-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 22px;
+  background: #f6f8fa; border-bottom: 1px solid #d6e4f0;
+  font-weight: 600; color: #1f2328; font-size: 0.95rem;
+}
+.session-demo-head a.open { color: #0969da; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+.session-demo-head a.open:hover { text-decoration: underline; }
+.session-demo .watch-it-work {
+  border: none; border-radius: 0; box-shadow: none; margin: 0;
+}
+/* Delivered link banner — sits on the session index when GOAL_ACHIEVED. */
+.delivered-link {
+  margin: 14px 0; padding: 14px 22px;
+  background: #dafbe1; border: 1px solid #aceebb; border-radius: 10px;
+  color: #1a7f37; font-size: 1rem;
+}
+.delivered-link a {
+  color: #1a7f37; font-weight: 600; text-decoration: none; margin-left: 8px;
+}
+.delivered-link a:hover { text-decoration: underline; }
+.delivered-back {
+  margin: 8px 0 14px; padding: 0; font-size: 0.9rem;
+}
+.delivered-back a { color: #0969da; text-decoration: none; }
+.delivered-back a:hover { text-decoration: underline; }
+.delivered-body {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 28px; margin: 12px 0;
+}
+.delivered-body h2.story-h { margin-top: 0; }
+/* Feature manual (session index, top of page). */
+.cover-vision {
+  margin: 8px 0 14px; color: #57606a; font-size: 1.02rem;
+  font-style: italic; max-width: 60ch;
+}
+.feature-toc {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 20px 26px; margin: 14px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.feature-toc-heading {
+  margin: 0 0 14px; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.feature-toc-list {
+  margin: 0; padding-left: 22px; font-size: 1rem; line-height: 1.7;
+}
+.feature-toc-list li { padding: 2px 0; }
+.feature-toc-list a {
+  color: #1f2328; text-decoration: none; font-weight: 500;
+}
+.feature-toc-list a:hover { color: #0969da; text-decoration: underline; }
+.toc-extra-header {
+  list-style: none; margin: 10px 0 4px -22px;
+  font-size: 0.82rem; color: #57606a; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.feature-manual { margin: 14px 0; }
+.feature-section {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 16px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+  scroll-margin-top: 12px;
+}
+.feature-heading {
+  margin: 0 0 10px; font-size: 1.2rem; color: #1f2328;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.feature-description {
+  margin: 0 0 16px; color: #1f2328; font-size: 1rem; line-height: 1.55;
+}
+.feature-description-label {
+  font-weight: 600; color: #57606a; margin-right: 4px;
+}
+.feature-note {
+  margin: 8px 0 12px; padding: 8px 12px;
+  background: #fff8c5; border: 1px solid #eed888; border-radius: 6px;
+  color: #9a6700; font-size: 0.88rem;
+}
+.feature-source {
+  margin: 12px 0 0; font-size: 0.88rem; color: #57606a;
+}
+.feature-source a { color: #0969da; text-decoration: none; }
+.feature-source a:hover { text-decoration: underline; }
+.feature-empty {
+  margin: 10px 0; padding: 12px 16px;
+  background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+  color: #57606a; font-style: italic;
+}
+.status-pill {
+  font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+  letter-spacing: 0.04em; white-space: nowrap; display: inline-block;
+}
+.status-pill-passing { background: #dafbe1; color: #1a7f37; border: 1px solid #aceebb; }
+.status-pill-failing { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-regressed { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-partial { background: #fff8c5; color: #9a6700; border: 1px solid #e8d97e; }
+.status-pill-unknown { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.status-pill-coming-soon { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.developer-view {
+  margin: 28px 0 6px;
+  border: 1px dashed #d0d7de; border-radius: 8px;
+}
+.developer-view > summary {
+  cursor: pointer; padding: 12px 16px;
+  color: #57606a; font-size: 0.92rem; font-weight: 500;
+  background: #f6f8fa; border-radius: 8px;
+}
+.developer-view[open] > summary {
+  border-bottom: 1px dashed #d0d7de;
+  border-radius: 8px 8px 0 0;
+}
+.developer-view-body { padding: 12px 18px; }
+</style>
+</head><body><div class='container'>
+<section class='hero inprogress'><div class='badge-row'><div class='badge inprogress'><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+<circle cx="12" cy="12" r="11" fill="#d4a72c"/>
+<path d="M12 6v6l4 2.5" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg><span>CONTINUE</span></div><span class='signal-badge holding'>Direction: holding</span></div><h1>Iteration 0  ·  session desk</h1><h2>Baseline confirmed: Desk era not yet started (J-01–J-06 failing), kept product intact, zero code changes</h2><div class='meta'>2026-07-25 · goal-lean</div><div class='meta'>Journeys: 0/7 passing</div><div class='journey-row'><span class='journey-pill failing' title='Universe ingestion — fetched, registered, honest'>J-01 · failing</span><span class='journey-pill failing' title='Coverage + explicit bar top-up over the universe'>J-02 · failing</span><span class='journey-pill failing' title='The screen — pinned inputs, append-only snapshot, deterministic rank'>J-03 · failing</span><span class='journey-pill failing' title='The /desk briefing page'>J-04 · failing</span><span class='journey-pill failing' title='Ledger history + drill-in to /structure'>J-05 · failing</span><span class='journey-pill failing' title='MCP contract v3 — 17 read-only tools'>J-06 · failing</span><span class='journey-pill partial' title='The kept product stands — regression sentinel'>J-07 · partial</span></div><div class='hero-image'><img src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAvkAAAHdCAIAAAAIC/GSAAAQAElEQVR4nOzdC1zN9//A8W+n0glRuayUS5P9hMydYoTZhM19EjMytrlsZrb9/nP7jWEX2s3lN8RcZ7MxY9gPucwtQwj5DeUS5dJllE5S/T/nfM0vRSpl8/Z6PvbIOd/zPd/TOU3n5fP5nHNsDLblNQAAAKEMGgAAgFy0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACAZrQMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABI9pC1Tq8+vT/5bJoGAACQPw9Z67Ro+VT9hg01aFqXgD6+rdvmc+fqNb2mfDGrXpOmGgAAjxgbrYDmLJhX98knc2w0mUytmjXX8AA1bua7Z9fO/O9fslRpKytz2qruKevotH93Aa5bVEqUKtnU56lD4Xv/iI/X7lvRHg0AIFWBW2fDLxuOHD6sTrRu27ZChQrfLVumTt+4cUNDQTTyad62fcfyFSqmp1+POnF8b9jOA3vCtGJz8ljkGwNf1E/7P981MzOzuFunXpNm7fw7Vqjook7HxZ7bsG5NxL697u5Vega+eOZ0VJHUSdEeDQAgVYFb57ul3+gnanp5OTo6fvZJ8K2Lln7/bXVPz5SUlAP798+e9dWxo5FqY/NWT702dIjarnpIbdm2bdui+Qu0rCz9Kt179ej43POVq1SOOHhwzldzIg8f0bf7tmzRu09g7dq1z58/v2XLlnlfhWRm3CGnqnh4DH5tcMOGDVNNpr179syYPvOP+AT9ohZ+Lbv37FG37pPXr6dFRUWt+WnNutVrNmzbHHP27IA+/dQOBlvbbTt+3bVr59tvjNQerE49Xnimw/NnTkUf3L/36tWrDg4O1arXKNbWecCsS9j1fiko/fr1zRvXJ1y65OX9ZPkKj2kAAPwVCtw6edi3d++esDAnZ2c/v9afflmrY/uOmenpXrVq1XjiifVr1167dq1Bw4bDXh9ubbD+em6I2j+gb583R43877Fjv27d2vypp2bN+ap3z16xMeeqPv74tM8+TUxIDN0U6lnDc9DgwQYrw+wZs3LcnMHa5rPpn6uxpS2hm+1L2nfu2tXN3X3ooFfVRfWbNJr6aXB8fPzWLZuvXLkSEBh49coV1ToRhw41adJUzX1cT7nWsFED2xK24fv2aw9Wlcerq9DZsTX02wXzclykEuG57j3reD9Z2sHhv8eOrv5h+eW4WP2iWvXq+z39rEf1GnZ2dmtWfv+f1T/eulZFN7d3x07c8euWFUsWVveq1SOgbyX3yjdupJ+OOrl/757tmzaofR5zcx898cN/fzbt6KFwdbZmrTpfzFusTvz0w7cbf16tFTUPT097+5JL5s89tHePOhu2fVv2S9/6v/Hqa+q1lHeHveLxxBNP+3eqUtVDTavt+233glnTP53z9c8//qB/V63bd+zUpftbrwap0zZ2xue7v1Czdh0X10pX/kj6YMw/cx+tY/eeLVs/rU7oF035Yta2TRvWrVqR+1ZU6Xbs0r1+w8Y2trYH9u1d9f23GdfTNACAREXZOtM+/EQ/0bf/S8NHvF67Tu2I8AP6lu+WfXvk0GFjqZIrf/qxe8/ueuv06h1w9MiRAX1fUsM8dRvUmzMvpKVfq28XLw0I7GUwGP75zruH9odbGay/X/VD565dcrdOm3Zt3Nzc5syePXfmV+rs+1M+aO/vX+3xx09FRfXq9UJWVtbL/YNUOVluqLd+lbDdYc1btGjV8qkN635p0rSJ2rL91x3ag9XYt4WaQvppxfLcF/XuN6CxT/Ndv26NizvfvuPzVd58e8L/vZ2VmVHetdLgYSPOx5z9funCMmUdo04ev3UVQ4kSA18dfvLE7z8uW6rOuleu4la5ysI5swzW1i3bPP1Cn5eup6XtuT01FDWktPbHFepEbOw5rRhcuhCnmYuq9qF9v90aw7vlh2WLL8VdSM9IV6erVHvc+8kG61avTLh8OTMjI49j9gl6uV6Dxls3/WfDzz9VdHU1pSTnPtrd5L6VFwcOrvEPLzWzlpGR0b5T5/IVK8zm9X0AIFSRtU4Je/vR40bXq1ev4mOPpaamqi1ly5bJsY8p5dqO7Tue6/z8Y26VLl28VMmtkvovLHzvrR0ee8w80/GPml6XL19WoaNOq2f63bt293ihp1vVyudOn81+tDreddTXjes36Ge3bd6qWqdRk8aqddwrV7548aIeOtlt3hg6ctRbfq1bq9apU8c7Ljb2THS09mCVK18hKTEh9erVHNtt7e0bNGm2QY0+ff+dOnsmOmrEu2O8GzRUQyOt2ra7lpIybfLEHGMPBmvDq2oCzkqb/eVn2ef49u7aYfm6841/jlajQblb59q1FH2Ap5j8ER+/esXyp9t3qOX9ZMzZ0+tXr4qJjrp16anok6ePH8++/7qVP+R9wBL2JdUYzNpVK/6zelWOi3If7W5u3Urpso71GzX9dvHXu7aEqrPW1tZdX+itRnrUMKQGABCnyFonaFCQSo1vlizZ+9veBg0a9On34h13y7L8K9/Gxlo/eyTi8LyQkFuXnrHUjLW1ISvXYICNtW2OLeopynzAHBstR069lurqWklNcuVY5XMxLk5NY6keUk9sNWt5bdqwUXvgct81XdVqHjY2Ngf27dPPRv33WPLVK9Wf+IdqnSpVqsbEnMk9ydKiVWv1IIx/d+SNNFPuA6r7fvjggU5de6g7qz1wG9as2vTL2kZNmrVs227kP8d+PWeWPp9VONWqVzcYrI//N1IrCq7u7mrgsHe/IPXfrY1qeivx0kUNACBOkbVO9ccfT09P15cqOziUueM+6km37pN1r1y5cu5MjHrOPxUdXcndLWz3nnTTbU/VUSejanp51W1QX5/DaubTTF3l7FlzBmVmZNra3Hzm/v2/v6uv7dq30+ewWrZupb4esaxuPnTwYN16Tw57Y9jixUvr1KltZWV16+BLFy2Z8slHrw19tWTJkr+sX689cAnxl+vUraevGcq+3aCn2+0lpJ7gNUvPZdy4w/xOzOlT7lWr9Rv4yoxpH99x7XZWZmb2+/7n1jvHVpFTwyR7dvyq/hs55l99Brys5rOy8nHTaoJPr9js9Ctev34j98Yc19UfsfxYtXxZ7Ln/jfz9kZSoAQAkKrLWOXvmbEs/289nTd/4nw2t27TOcenrb46IPHq0foMG1Tw85s+bpz/dLlq4cOz48fMXzt/722/qbJUqVUYOH6FOfDXr3y1btZr80ZRN/9lQvYanmpD65MOP9fmF+Ph4o71xwpRJ4/5v9JpVa7r37PFS//7lnJ3t7IxqVEnd9OEDB9VuISHzmz/1lBpbyj28FLpxk5q6CuzbNy4u7rddf8FLn/bv2d2qTbtn/Dvpc1W3nI+JUU/VNb1qnTtlnu5xqVy5tEOZc2fNU2znzp6p17Bx7kmWqJMn16/56dU33nquR69V3y7JfVseNWpcuhCX41rX06+XKllKe4CiTp6o9rintW2JtDTz0JT6YeWxs5qtc3WvnGPj2VOnVNnUrHXzwdHlPlry1WQ7o9Gp4mOJFy/kcRP60UqXKXt03RoNACBdkbXOvJD5VapVbebj07BhowsX4tT4ihqMuXWprW2J9h06ODk5rV3z87+/nKlvXLPypzJlyr48eFBAjRoXLlyIPX9e3x537vybb4yYNGVSQJ9ANVY0Z/bs75d9q1/03TfL6njXadi4kWZZyvP6kOHTPgvu1qOHOrsldPP4seP13a5duRLYM6Bhk4Z2dnbp19M/m/7F/94BKCtr9U+rB70yWO2v/RWif//vnp3bn+nwfOWq1Y4cOnj5wkXPmjXLlnVcNGfW5g2/PPtc56tXr1y7dq1j526no0/u3mZearPxl3VNfJ967/3Ju37dmq5GeG7c2BF6c/Yt8tCB5UsX9gzsd+Z0VPjuXfrGLgF9fj96tIZXrTp16y9bND/HN3A6Ksr/+a4du/e8euVK/OVLR8KL/pVoterWb9Wu3W87d6iuqulVp2mLp6JO/K7m4OJiYkypqZ27v7DZoYyLe+Wff7jDAu3IwxGNfZr7+LX5IyFRTV3pG00pyTu3bXmuW0839yqRhw9Vqlx1y8b1uY92KHxvt16BffoPDF2/roTRrkQJuzt+e+pou7dva/NMezW2F3kkwtXNLfZcjKTX/AMAsit867waNCj72eQ//hj1+pt323naxx8fOXQ49/alCxap/3JvV7NXzz3bIff2Y0cjX+jS/dbZK0lJg/oHaXei5nT0YZv6TRoZDIaLF/63FCMj0zwftH7tOu0vsjjkq4SEyy1bt/OqXVedvXzxgooYdWLVd0uNRmOfAYPUxNOZU1H//uJTfQBMjVLM/jL4xYGvdO4ZoM6q5+nsLx7bvmmDGvXp3S8oIvzmcuOqHh5+Tz+rDrLxl7X68tvstm3e+GSDRs927Bx/6aKqruJonWupKWqqse/AwWpGKTMz4+jhiMXz5miWH8qaH7/v3KNX4IBB52PObinzS+7rfrdkoRp0ebbj86VKO6hHJvJoxM3ti74uYVeiUVPfRs18U6+lhO3c9kd8fI6jqS3zv5rR9pn2Lw99XSXj+XNq5vPMHb/DZQvm2djYNGvR0uepVmpW8dfNf8HKLQDAg2FlsC2vFaeXX3tFDaIE9Xvpjq1TTBr7NA3s2+f0qVPqGbftM+3UeNLQV17bG7ZnzPvjU1JSOnftsn/vXn2+TJhWz7TvHtD39aC+GgAAsCjK99f5W/GqVcu3ufkjukyppuCp01TouLhV6tCpo7W19YHw8A8nf6QBAIBHQLGP6+BBYlwHAIAcaB0AACCZQQMAAJCL1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWzcPZ/QAAAAhLLSAAAA5GIOCwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAg9KtbgAAEABJREFUAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROsBDplOnThoAIN9oHQAAIBmtAwAAJKN1AACAZLQOAACQjNYBAACS0ToAAEAyWgcAAEhG6wAAAMloHQAAIBmtAwAAJKN1AACAZLQOAACQjNYBAACS0ToAAEAyWgcAAEhG6wAWBmf/KTtTs5TU0He8Dbkv9h04Y11k7FXzDrERO1d8OrBp6Xsc0a3HjEjLERNXDnTjrxoA/EX4BQwoBu+hi+f908d4l0vdAubs2Dp3SPuaLua+MbrU8ek6Yu6WDdP8Ktz1iHa+7y2fP6SmUXt42DV9bdq0Qbk6z8Zz6PLI8PmBcnKtdNNRi1aMaWWX6wKD54BpM4Y3tdOKh41n4JQZo3wLc3hDVf9JKyNjzekcu2JAMf0oivnuA38dWgcwd8lXE/xd7nKpwWvAnC+DatpoWtKBlVPfHvb62JnrT6ntxmYj50/u6nzH61TwnzxjtM89Bn7+Zgzlq7fs0KZWOdsc228kREXuPxpx8nKmJoSts0cdL48KpXJfUKOJegSctfticGsbGNjK+Q6/Wx1qNG/fxqtSKa3AnDuPCQ5yCR3Tqpy1bbWXF50rnh9Fkdx94O+I1sEjz8lv8uejfRy1uO3rjplyX2zXMmiYf3lNMx0I7tGs29tTZ3z5wdCOLfosi1OXVQsYHtQg93yXW9fJM0fWM2onN28+rf3dOAesSMzK5WroqCfvNgaVsG5cnz7BYWka8sHg2n7Y2GFta9hqRcfOrVFNY/i8T+fvSci8kZZwQwNQILQOHnHO/hNmjWxk1A7PHDLm5+jcrVPa57n29dSfSdvnztr659N95rkf5i49dsN8aYena9/+t8jg9sLHwS9X05J3TR46ITTWpP3NJCzr5mRlZmw/89jJlS9XszafcWgz9eDf7lvFTSXLOZY2JSYmiBlZAx4wWgePNOcuE4NfrWkesxkxdlXMHZ7sDR6NfKqpP02Rv+6Nyvbv6bRD23eeU38a6/s0cc3218hQPeDjDwOraUmbJ745YUu89pBxrDdss8my/Dp83YyBTSwrNwxugd9Ehn/qZ2deNdJ12rrIxFQ1DhS7c85AT5tsV7XxHDg/PDbdsro7LjJ0/hj/qvrjYuf3Sbi+RDtyw5/HtGxvOjwkNMK8BCU1LnrnN5O66vsbnP3U9mOJqYlq462DZL8hN//3lqgdLIfcOcmy7MauwcBpK8Njr2alxoSv/XSgt2X20FApcElE+LS2N2/RuUdI5G/T/HJOLNp5D5i29rfY1PSsxBObx7Zz0Wxy3Jxn1wlLdh4z75B1Sd2vUX4Vbn5LBqemQ2etjYxLNX+ryyd1rf7nt2rr4jN2t8ny/a140e32o7m0eXdN9KVU8yO8JtujUdp74KeWQ8WEr5gS6JlzyYy95lAzcHm8+ZDp4ZN87dQPxf8dy6OUmhi5OWTUs/oKHkPTcTuj1wz11L8RG+8xm6PXvmY+5+w7dMa6cPPtZqVG/7Zi2ovedvm8+4AItA4eYU5+o8cPqWlj2vXJm+9tSrjjLo7VvVzNz45Jcb/H3Pav6sQT0ZYxG0fPWu63pisMbgFjJgVW1ZLWT3rj87C0DO1hYzr147BmztbGml2mn/L94PNxt5eBXcth47qVXhvUxGjt4Nb6vcXZ409zqNGgnuOuITWsrazd2o0MrTBw3uL3LMtc07ZNbuuotjo0fm+X15jPJ/s5aZZlsPOWTWiTtHJIE2frUu2mJjXu0MLT1rxIfMTiWf20H15p7NYoICS5+8zFE2//Hgzery+aN8Qj8qP27kZr68c7TduRpjn5By+YHugYOqZTXf+xocbe07+b4p/PVSd2bScv/LibaXmQd1X3liNWRKdqOWfyHGo8/Zxv3LSnStlal3v2vV3Vhs6a3Nl8cPWznrlsqr+2YoRfkx5TI6sNmbd44s1lvelxuyY2M5qHy5y6LTp329HUXTy1dkgbT/cGQUtSO0wNCfZ3smTinO9GuYeObOfp2e2T6BaTln+Wax3Y1WPzepYzH9K2/uid6d5D5yz9P9/YhUFNmgeGxPmOXjDnNe88fpkbnBt27FA+dMATpawdvAcsTO0w8fPhlv3vffcBEWgdPLLsmr45eUg9zbQ7+M2Pt9xtMYq9g5Oj+U9TYnLqbRdkpiYmWcaB7B2dS97c5tzhvbF9q2mXN495JzjioVzeYkqKOXIgMTPtdNj8mUsiK/g08rj9V4T6R3/c0T1H0jK1zLRLabmmVPR5lsyEiHWT/29qeOU+/dqZn7IzExPMV0g+sWrBD+qYLWrYaXaNBwxuE/vlgN7jVkYkZmrxiYn6o1u6Zf+eHvu/GDdr64mEk2HzP5wb6dq6Xd1soxx2jQN6ekR+8crw+WHn0jLVkRNuaG7P9u1gu+Kt/m+HbI3YMv/tF99eYfTv275qfn65Obfp0cFx+wfvTF134vy5iDVfLt4eZ7rDapg/79f+VTOXhhvrtahbWjP8o0tfH9O8YX1HLwuL2DRjUNCYXa7d+vndK7FS40K/nbku4ty5yHXB/xy92b5Nj7bOhrpd+tSPnj4u2Lx9z9LgGTuNLTo1dbr7Qewad37BK/LL/kGTV0bsXze1f/+Zx7369Gx8j9dPJSfGX81UP4Ut8+esveTh20gNR+bz7gMPPVoHjyiD18vjX/MxaqeWTpsZlnzXvewdHS3/0jWZ0lNuvyjVpA/b2BiN+rC/XdMh75pfrnVs8YS5EQ//yor487E3nFwrZl9im7Zr3vRQ9zFrfg6ZNMjPLc/JjszIbTujjfUb1DCo2ZZxK8JPmSe+4nd80Poxe3t7zeBSx6tCXPiOXTmC0FCuupdnzcCFMRmWBdMZJ6b7V3d1dP7fC5csVzRFHvw92+NrV6NhLe3Ezj1n9W2ZsTtDI7VaDT3zsTjYxq12TWP0rj1R+f1xZaaeiU0yujiV0Rz/0cDDtH/j/oTs99erYQFeDZ55eo/5KrVquFTx8vqH//Sj+p3OivkmsGYFJ6cydz2SehAauCbt2nrg5qOXdmDD7iTXBnUq5/O2TTFRlzWXyu4Fv/vAw4rWwaPJrmXQy/7lNdOWkM9Wn8tjv9RkffTGaLTN8VJhe6O15c8bJv2fws7PDR7YwqhdWDl1+jYBL1nK1FK1dM14e9CkRYQMbF6zX0ic1+srD/86yc8pryPoq5/Kth4ZPMRj56jGpaysyrUbs/mCZavlsHceQkg5NvM5y2TNTR5D1+SYXjTlc+zBfBfUT87mXq/xLsgKlZQb5rtlf5ffnEabkloB2Jtv2nLrSSdX9tEXietcui09nZnHN3ynmaY/t1nf6/e6OnDGbUcDxKN18CgyVO/7+ov1NDWoM2NmnpNNaqYqUW8dp9L2tx/C3kkf8UlNSrhmXgcaNDSwmqYdWPTF4pOi/5mcmRbx/egezw5d69TtxVZ3n7Jx8vQqb4o8erbcE17G6LULV58wPyhXVKaY+yPzwsnoREevJ3KORGTGHQ6/5Fi/SY27TceoHSIvufg0r5dth/SY36O1mr5Nbh7M4Orbxssm+uipdO1KYtINR9cqznf8NWf+4d04d/KUycPb27XgvwiTzkTGlm7wtPfNR8Dg1dLXQ93f4+a7eUMzD17di6Gid/3KWvTxmPiTkbFGr+bejlr+qEcvMtHFp9WfD4JdvXbNXJIij6iBrfhLSVr5x93zuejmPu4+8HDh/3E8ggyPd+jj/5g6US1If23LzRmTuf7mpxtj648OZWSlhg43v4Al5Xx0nGUJsssT7rf9bXHy9HA1P6UknY6KT9fsGgT0aWY+W2+U5XVMuvRDEy0bHbvMVbMysd887G89bHBr1dXfW6WDwdW7tkfpXAMz9i5tegX5VTAYnJoO/Hhcm8srZq8/n3A22lS59fMtbg+O5F3frYyuP37hlwOaOpd2a9m3h6/+To5pvy2bF+4x+N8zh/t7VnD29PX39739MUv7bf68Xa7Dv/5mXGDT6m7erfy8nbQT33y0NLbN2DEBnjbm18FNGNkmdqGlOJMPbdxtaj3kzc7mtTsGZycno42lAtJTTZqjR11VVAlbF69Iaj1pzig/8/dnKH+zX/Mh88C8T1aauv1rtH8lg2bn/dq4UV6H1RhhgppDOxwe69J+UF9fT89WXbs2yVFaRicny005NR05Y1KHq2sXrzmXduSbuRuMgVPmjuri7VbBs+mz/n7V8/wfJXnbrC9CXftNedvXWTPYNX1rSmCF0E/+rUYTM6O2h0ZXDnxnsGWRtEM5p3u8m+Vd776d79CQ5TMGevMWyhCC1sGjyD7fb/SWdnyf/tpyL59Gj2f762JXt4Wv+dXEplP795oXitg8CnMBjjVaDZq5Jz4jKyPm+8CkeSMnr719dind6Nh46MqLGRkJu6fX2z96yNiwZC1h/afvLTcFrVHXyso4NberY1LiVbVrWtiHL/YOjvQavT7+aszK1+ubI9NcTpkRX/UNmh3bIXjt8Yvxx3+Z+fZzdW8f7sg8EfLygC+jfcYu2X0iZlvI5FfbuhqSw8b2HxJaZ8bxdBWsIQ12v9Vvgr7YPGHVuNcmHfAKPpCRlZ7y67sekVt2mN9YIPnQ6tWRHsOXzevhnLBpbKeXZsS2m3UkRX1/MUtaJ+0/FJOenwcjM2HdqH5jTnRYcS4jy3RoTPkVQ71ORLoAAAs2SURBVAbrC9Izw+Z8stTUbe6O48fXBL/Ywu1//69dPb7/QJLPzOPqoUiJ/LpDUkhgl+HrEs1v17R0eMCkY14TVx6KuXh8S8jYnvXzHmrJPLEoKGBm0sCt8VkZpt2DTSGvDF9qGU3MjAgePGKp9uKPSVlZqb/P75C8M/RoXu/Kc7e7X6pigzZ+bWpV1AAZrDQAFobqA9fsVUM7ps3vNnn64z9XFxucuy7Yt6JvNfN78HRq9tYmy3OowS1wyd4lAS5qfOLtVi2m7r/Ls4mN95hf96ihnaQfX67TPaSo3ti/U6dOa9as0f5unPxnhAYbJzUf+H1CQa+qHvnvf+yz/6WnP9jPKlkARY9xHSBPmQlrZy09oAYDjPVGhnwzppOnc6WmgdOWzwgwT7qcWvbJPJ6eC8VgZ3dzfU2Fpq99MMonedf233kkARQLWge4h7SdE14dvdL88VdVu05cfTz+3O4lI3zUxIpp9+QB76ws8CAGzAy1h648py+Turh+mMPatwZP2JKsAUBx4OWGwD2lhQX3qL17wMSxo7q1qOlS2hR3OHzXxpCPJoSEJWq4KXHd0Prr8r13ZkRwB9dgDQAeANbrAA+Zv+l6HQD4u2IOCwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJLROgAAQDJaBwAASEbrAAAAyWgdAAAgGa0DAAAko3UAAIBktA4AAJCM1gEAAJJZaQAAAHIxrgMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACAZrQMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACAZrQMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACAZrQMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACAZrQMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACAZrQMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACAZrQMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACAZrQMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACAZrQMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACAZrQMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACAZrQMAACSjdQAAgGS0DgAAkIzWAQAAktE6AABAMloHAABIRusAAADJaB0AACCZjVbMbP9kY2NjMBisra3VxoyMjMzMzBs3bqT/SQMAACgGVlrxsLKysrdQiZOVlaUSR23Rc0ddqoeO2q6iR21Xp1Mt1BYNAACg6BRL65QsWdLR0VHvGNU3KRYqaFTi3NpHRY+6qJSF3j2qh5KSkq5du6YBAAAUkSJuHTVX5eDgUKJECX20JjExUX2957VU9Dg5OekjQNevX7969SqzWgAAoEhYa0XHaDRWrFhRH6G5dOlScnJy9oGcPKjd1HCOyWQqXbq0Olu2bFlVPPmJJAAAgLwVWevY29s7OzureSuVKSp08lk52amrqBEdNSakprfULNgNCw0AAOA+FE3rqBEdFTp6rFy5ckW7D2p0R40MqeJRuaNmssgdAABwP4qgdWxtbdXUlRrRUaGTkpKi3TeVOHruqCmt1NTUQgwRAQAA6IqgdRwdHfU1xfc5opOdyh2VUJolpFTuaAAAAIVyv++brGaa1ACMjY1NYmKiVqTUAdVh9cksDQAAoFDuq3WsrKzUoI76evHiRa0YqMPeugkNAACg4O6rdezt7TMyMorvBVP6kdVNqBvSAAAACu5+W0eNuBT57FV26uD6x01oAAAABVf4tcm2tralSpVSX5OSkvLY7f3332/dunVWVtbp06dzXNSpU6fevXufPHkyj0XNmZmZag5Lnbh+/TovyAIAAAVV+HUwJUuWLF26dHp6et7jOrc+zrNy5coxMTHZL5oyZUqvXr0CAgL27NmTxxGcnJxUUSUnJ/NRWQAAoKAKP4el+sNgMOT/DXW2b9/u7u6efUt8fLwa7ElLS8v7iuom1A3pL0EHAAAokMK3jo2NjUqQ/KxK3rp164QJE6pWrTpo0KDs2y9fvqxa555vn6NuQv9QdA0AAKCACt86en/kcw3N+PHjVdaMGzfu/fffv7VRjeucOnXqnq2jbkLvKg0AAKCACh8Q1tbWBeqPFi1a6LlzayYrn+M6mqWraB0AAFAIDy4gYmJiFixYoGVbuKNaJz/jOgAAAIVW+EUwGRkZBX0RuJrJUl/V0I7KHTXMc/HixevXr5tMpnteMdNCAwAAKKDCj+uo+NBXDRfoWvrCHX2d8h9//KFOq2bK+yr6CmhaBwAAFELhW0fvj0K8POrWwp2xY8fmZ399BXQxfQwFAACQrfCtk56erhKkVKlSWgHFxMT861//ioiI6Nmzp5OT0z33VzehbkjdnAYAAFBAhf+MCM3y1slGozGPT3hQPDw8Dh48uGXLluwbDxw4oKauVOhUqVIlLCws72ms8uXLq9ZJSUlhGgsAABRU4dcmq4EWNa9kZWWl5pjymGDq37//HbfPnj1bs7xw3c3NLSoq6m5X1w+uMK4DAAAK4b7GdVTolChRQg3tFO6Tqvbt22dra6sGbPL4RK1y5cqpW1H70DoAAKAQCv/Zn7pKlSplZWVdunSpONYOq0GdChUqqNY5f/68BgAAUHD3+16CSUlJqnUqVqyoFQN1WHVwdRMaAABAodzXHJZmWbWjprHUCfU1P+8KmH9OTk5qREcdP++1zwAAAHm439bRLG+0U7ZsWYPBoMZgimpVTalSpUqWLGlra5uQkMDLrwAAQKEVQeuoFrl+/bpKEzW0UyS5o0LHwcFBxVN8fLw6sgYAAFBYRdA6mmVoR9FzRw3G3M9klpq6UsdRoZOYmFi0k2IAAOARVDSto1lyR43BqPEYdVpNaaWmphZ07snGxsbFxcXKykrV0uXLlwkdAABw/+73Nec5qF4pU6aMGt1RyaLqR43N5Oe16OpaajhHfVVTYCqYrly5wqdfAQCAIlHEraNTk1COjo4ZGRn6uyqnWOT4rHI1S6UuKmWhLlKVY21tnZSUVLi3JQQAALijYmkdnSoee3t7fbTGYKFOq6+aZTmznj6KPgKk5ryoHAAAUOSKsXV0qm/0Bct66NxqHT130tPT1aQVM1YAAKCYFHvrAAAA/IXu9zMiAAAA/s5oHQAAIBmtAwAAJKN1AACAZLQOAACQjNYBAACS0ToAAEAyWgcAAEhG6wAAAMloHQAAIBmtAwAAJKN1AACAZLQOAACQjNYBAACS0ToAAEAyWgcAAEhG6wAAAMloHQAAIBmtAwAAJKN1AACAZLQOAACQjNYBAACS0ToAAEAyWgcAAEhG6wAAAMloHQAAIBmtAwAAJKN1AACAZLQOAACQjNYBAACS0ToAAEAyWgcAAEhG6wAAAMloHQAAIBmtAwAAJKN1AACAZLQOAACQjNYBAACS0ToAAEAyWgcAAEhG6wAAAMloHQAAIBmtAwAAJKN1AACAZLQOAACQjNYBAACS0ToAAEAyWgcAAEhG6wAAAMloHQAAIBmtAwAAJKN1AACAZLQOAACQjNYBAACS0ToAAEAyWgcAAEhG6wAAAMloHQAAIBmtAwAAJKN1AACAZLQOAACQjNYBAACS0ToAAECy/wcAAP//cnP5GQAAAAZJREFUAwBdEiK+G8wTpAAAAABJRU5ErkJggg==' alt='Hero screenshot'></div></section>
+<section class='plain-words'><h2 class='pw-heading'>In plain words</h2><div class='pw-grid'><div class='pw-card'><div class='pw-label'>What you can do now</div><p class='pw-text'>Users can run a simulated tape-reading session on the home page and watch it settle into a read like &quot;Buyer Control,&quot; complete with live moving price bars; switch to a real stock&#x27;s historical chart and see support/resistance bands drawn over the candles; open the Structure page, pick a symbol and date, and see its key price levels mapped out; open a case study for a past price touch and see how it played out; and check the Edge Report section, which honestly says when a deeper study hasn&#x27;t been run yet.</p></div><div class='pw-card'><div class='pw-label'>What changed this time</div><p class='pw-text'>Behind-the-scenes work — nothing visibly new this round. This round was spent double-checking that everything above still works correctly and mapping out the plan for a new &quot;Desk&quot; feature (a daily screening page that will help pick which stocks deserve a closer look), but the new screening feature itself was not built yet.</p></div><div class='pw-card'><div class='pw-label'>What&#x27;s next</div><p class='pw-text'>Next we&#x27;ll start building the first building block of the new Desk feature — safely fetching and storing the list of roughly 100 stocks it will screen each day.</p></div></div></section>
+<section class='watch-it-work'><div class='wiw-head'><h2 class='wiw-heading'>Watch it work</h2><span class='demo-badge demo-skipped'>SKIPPED</span></div><p class='demo-empty'>Backend-only iteration (Frontend Present: no). No browser walkthrough was performed.</p></section>
+<div class='tech-divider'><span>Technical detail below — open if you want the developer view.</span></div>
+<details><summary>What was done</summary><div class='accordion-body'><ul class='bullets'><li>Ran a verify-only baseline for the newly-opened Era B &quot;The Desk&quot; goal session: zero source files changed (`git diff --stat` against `apps/` empty throughout, confirmed independently by dev, review, browser QA, and the evaluator).</li><li>Confirmed J-01–J-06 (universe fetch, coverage/top-up, screen compute, `/desk` page, `/structure` prefill, 17-tool MCP) are genuinely not-yet-built via live 404 route probes, source-tree greps, and two browser screenshots (`/desk`&#x27;s honest not-found page; `/structure`&#x27;s empty, unprefilled Load form).</li><li>Verified the kept product (J-07) end to end in a real browser: sim cockpit settles &quot;Buyer Control&quot; with live moving tape bars and a working timeframe switch; historical AAPL candles render with the 300.10–302.20 support/resistance band overlay; `/structure` loads the pinned AAPL 2026-06-22 wall (300.11–302.2 Class A); a Case Study drill-in opens with honest per-touch detail; the Edge Report shows its honest &quot;not computed yet&quot; panel.</li><li>Re-ran the full backend suite (1169 passed / 7 skipped / 0 failed) and reconfirmed `config_fingerprint` = `08e471b10130e1e2`, matching the era-open pin with zero drift.</li><li>Ran the full anti-goal check across all 10 immutable rails plus the 11 desk-era anti-goals — zero violations found.</li><li>Verified `blueprint.md` (already drafted by the decomposer) satisfies its DoD item: a 3-route target nav skeleton (Desk marked not-yet-built) plus five new desk-owned Data Contract rows, each with one owner + endpoint.</li><li>Verified 1 of 7 target journeys (J-07, kept-product sentinel) passes browser QA on its kept-behavior evidence; J-01–J-06 recorded failing as the honest, expected baseline for a not-yet-started era.</li></ul></div></details>
+<details><summary>What's left + Next step</summary><div class='accordion-body'><h3>Still open</h3><ul class='bullets'><li>Journey J-01 (Universe ingestion — fetched, registered, honest) failing — not yet built.</li><li>Journey J-02 (Coverage + explicit bar top-up over the universe) failing — not yet built.</li><li>Journey J-03 (The screen — pinned inputs, append-only snapshot, deterministic rank) failing — not yet built.</li><li>Journey J-04 (The /desk briefing page) failing — not yet built.</li><li>Journey J-05 (Ledger history + drill-in to /structure) failing — not yet built.</li><li>Journey J-06 (MCP contract v3 — 17 read-only tools) failing — not yet built.</li><li>Journey J-07 (The kept product stands — regression sentinel) at partial — its own &quot;3-route nav&quot; and &quot;17-tool MCP&quot; acceptance clauses stay unmet until J-04/J-06 ship.</li></ul><h3>Next step</h3><div class='next-step-box'>Target J-01 alone next (universe vendor seam + parser contract + universe store + committed fixture + `POST /research/desk/universe/fetch` and `GET /research/desk/universe`) — it is first in the goal&#x27;s stated dependency order and the hard unblocker for every other desk journey, and nothing about it is human-blocked (the live Wikipedia fetch is a separately-reported operator-run act, not a gate). Run iteration 1 at `full` depth: J-01 is a data-model iteration on three axes at once — a new append-only frozen-JSON-plus-index store format, the era&#x27;s first Path-A Config fields (needing exclusion set + stability test + counter-test + payload provenance in the same commit), and a parser-honesty contract that must fail loudly rather than ever emit a partial list — too much unverifiable-by-assertion surface for a lean pass. Also: fix the J-07 golden replay script&#x27;s async-text assertion before the replay lane runs it, and warm the scoped QA backend&#x27;s setups cache before browser QA.</div></div></details>
+<details><summary>Assumptions made</summary><div class='accordion-body'><ul class='bullets'><li>iter-0 · goal-evaluator — Ambiguity: docs/goal.md&#x27;s J-07 mixes kept-product behaviors (checkable every iteration) with two era-completion clauses (&quot;nav = exactly three routes&quot;, &quot;MCP = exactly 17 tools&quot;) that only become true once J-04/J-06 ship; the iteration spec delegated the scoring call to the evaluator. We chose: score J-07 `partial` at baseline — kept half evidenced, era-completion half recorded as unmet — rather than `already_passing` on the kept half alone; a later kept-behavior break reaches REGRESSION via the &quot;Frozen foundations&quot; anti-goal rail rather than the passing→failing rule. Reversible: yes</li></ul></div></details>
+<details><summary>Direction signal</summary><div class='accordion-body'><div class='why-text'><strong>Why:</strong> Iteration 0 is a verify-only baseline for the newly-opened Era B &quot;The Desk&quot; session — zero code was touched, so no journey could newly pass yet. J-01–J-06 are recorded failing exactly as predicted for a not-yet-started era, J-07 confirms the kept product (Cockpit + Structure) is fully intact, and the anti-goal check found zero violations. This reads as holding rather than stalling because nothing is blocked — J-01 is a clear, unblocked next target with the whole pipeline ready to execute it.</div><h3>Trend</h3><ul class='bullets'><li>Newly passing this iter: none</li><li>Newly passing in last 1 iter total: none</li><li>Regressions in last 1 iter: none</li><li>Anti-goal violations in last 1 iter: none</li><li>Iters with no journey state change: 0 of last 1</li></ul><h3>Latest evaluator reasoning</h3><div class='why-text'>Verify-only baseline with genuinely zero source diff — I re-ran every absence claim myself (desk route greps, `UI_ROUTES` = 2, `EXPECTED_TOOLS` = 15, no `desk_universe_*` Config field, no `.data/universe/`, no `useSearchParams` in `structure/page.tsx`) rather than trusting the handoff, and opened all five load-bearing screenshots. J-07&#x27;s kept-product evidence is strong (suite 1169p/7s matching the era-open baseline, sim cockpit settling Buyer Control with live tape bars + timeframe switch, real SIP AAPL 1d candles with the 302.20/300.10 band overlay, `/structure` resistance 300.11–302.2 Class A, Case Study drill-in, honest Edge Report panel) — but two clauses of its literal acceptance are structurally unmet today, so `partial` is the honest score, not `already_passing`. CONTINUE because failing journeys remain and every one is tractable and un-blocked. Coherence audit is absent (no coherence step ran this lean baseline) — noted, not a veto driver here since GOAL_ACHIEVED was structurally impossible.</div></div></details>
+<details><summary>Artifacts</summary><div class='accordion-body'><table class='drill-table'><thead><tr><th>Report</th><th>Verdict</th><th>Path</th></tr></thead><tbody><tr><td>Iter spec</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/phases/goal-desk-iter-0.md'>docs/phases/goal-desk-iter-0.md</a></td></tr><tr><td>Dev handoff</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/handoffs/goal-desk-iter-0-dev.md'>docs/handoffs/goal-desk-iter-0-dev.md</a></td></tr><tr><td>Review</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='reviews/goal-desk-iter-0-review.md'>reports/reviews/goal-desk-iter-0-review.md</a></td></tr><tr><td>Browser QA</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='phase-goal-desk-iter-0-ui-test-results.md'>reports/phase-goal-desk-iter-0-ui-test-results.md</a></td></tr><tr><td>Goal evaluation</td><td><span class='verdict-cell CONTINUE'>CONTINUE</span></td><td><a href='../runs/goal-session-desk/iter-0/eval.md'>runs/goal-session-desk/iter-0/eval.md</a></td></tr><tr><td>Journey history</td><td><span class='verdict-cell —'>—</span></td><td><a href='../runs/goal-session-desk/state/journey-history.json'>runs/goal-session-desk/state/journey-history.json</a></td></tr></tbody></table></div></details>
+<details><summary>Timing — where this iteration's wall time went</summary><div class='accordion-body'><pre>== Wall-time report: session desk
+  goal-desk-iter-0  depth=?  verdict=?  wall=?  (incomplete/interrupted attempt)
+      goal-decomposer              0.3m  calls=1  failures=1
+      pump-wait                  0.2m
+  goal-desk-iter-0  depth=lean  verdict=CONTINUE  wall=83.5m
+      browser-qa-agent            47.4m  calls=1
+      developer                   12.4m  calls=1
+      goal-decomposer             11.7m  calls=1
+      goal-evaluator               8.6m  calls=1
+      reviewer                     3.2m  calls=1
+      pump-wait                  1.1m
+      unattributed (glue)        0.2m</pre></div></details>
+<div class='footer-note'>Generated 2026-07-25 03:48 by <code>render_iteration_summary.py</code> · source: <a href='phase-goal-desk-iter-0-iteration-summary.md'>phase-goal-desk-iter-0-iteration-summary.md</a></div>
+</div></body></html>
