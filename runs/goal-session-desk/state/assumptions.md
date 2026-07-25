@@ -51,3 +51,21 @@ identity the filename asserts. Consequence: `anti_goal_violations` stays empty, 
 future GOAL_ACHIEVED; instead it is carried as a hardening item (make the replacement loud) in the
 iter-2 recommendation. A stricter reading would make it a minor violation with the same practical fix.
 **Reversible:** yes
+
+## iter-2 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s T-4 says desk coverage/freshness must be "read from `bar_index` only
+(NEVER re-hashing the store)", and the era's "Frozen foundations" rail lists the JSON `BarStore` (not
+`bar_index.py`, a derived era-fast_wall cache) as byte-identical-forever. Neither states whether
+`bar_index.py`'s own PUBLIC READ API may be additively extended — exposing its already-existing
+`window_end_utc` SQLite column, which today's `BarIndexHit` dataclass does not surface — to serve
+coverage's freshness field, or whether J-02 must instead resolve every hit through `BarStore.get()`
+(heavier, and arguably closer to the "re-hashing" T-4 warns against).
+**We chose:** Permit a minimal, additive extension to `bar_index.py`'s public read surface (a new
+field on `BarIndexHit`, or an equivalent new accessor) that exposes the existing `window_end_utc`
+column as the coverage-freshness source — never a DB-schema change, never touching `.lookup()`/
+`.insert()`'s existing contract or any current caller's behavior. This reads T-4's "read from
+`bar_index` only" literally (freshness comes FROM the index itself, not from a per-row store
+resolve) and keeps coverage genuinely index-read-fast, matching the era's own latency framing and
+the `EdgeReportComputeManager`-adjacent precedent of exposing exactly what a new caller needs.
+**Reversible:** yes
