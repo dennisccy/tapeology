@@ -12,7 +12,7 @@ Model names rot. The table below was true when written; **at session start, if y
 to dispatch by explicit model id, verify availability first**:
 
 ```bash
-claude -p --model claude-opus-4-8 'reply OK'     # each id you plan to use
+claude -p --model claude-opus-5 'reply OK'     # each id you plan to use
 ```
 
 If a listed model errors, STOP using this table's ids and re-derive from
@@ -21,7 +21,7 @@ from it). Update this table in the same commit that changes the tier map.
 
 | Tier | Claude model | Used for | Why |
 |------|--------------|----------|-----|
-| strong | `claude-opus-4-8` | goal-evaluator, auditor, goal-proposer, two-key confirms, escalated retries | Judgment: verdicts, scoping, skeptical audit. Mistakes here mis-certify or mis-direct whole sessions |
+| strong | `claude-opus-5` | goal-evaluator, auditor, goal-proposer, two-key confirms, escalated retries | Judgment: verdicts, scoping, skeptical audit. Mistakes here mis-certify or mis-direct whole sessions |
 | standard | `claude-sonnet-5` | goal-decomposer (TOKEN-2 experiment 2026-07-15; effort stays max, D4 guard still covers it), developer, orchestrator, product-manager, reviewer, browser-qa, coherence-auditor, all showcase agents | Building and structured review. High volume — this tier dominates token spend |
 | light | `claude-haiku-4-5` | qa (procedural mode), release-manager | Fully proceduralized tasks with exact steps and output formats |
 
@@ -136,6 +136,7 @@ An agent's claim about its own work is a hypothesis, not evidence.
 | `CHAIN_ASYNC_SHOWCASE` | default `true`; demo/summary/README/renders run in the background overlapping the next decomposer (CONTINUE/ESCALATE only; joined + committed before the next executor dispatch) | `run-goal.sh` |
 | `CHAIN_SESSION_RETRO` | default `true`; terminal halts (GOAL_ACHIEVED/STALLED/REGRESSION_HALT/BUDGET_EXHAUSTED) freeze a deterministic evidence snapshot to `state/retro-input.md` AND then dispatch the retro-analyst (light tier) to draft `reports/goal-session-<sid>-retro.md` improvement proposals from it (EVO-2); the drafting dispatch is skipped when the digest is missing; resumable pauses never fire either step; non-blocking — set `false` to disable both | `run-goal.sh`, `lib/retro_collect.sh` |
 | `CHAIN_AGENT_EFFORT` | opt-in experiment, e.g. `developer=high`; **judges are refused by a hardcoded guard**; auto-reverted by the telemetry tripwire on quality movement | `lib/agent_permissions.py` |
+| `CHAIN_DOCTOR` | default `true`; run-goal.sh prints the REL-2 preflight doctor table (PASS/WARN/FAIL environment truth) at engine start, WARN-ONLY BY CONSTRUCTION — crash/nonzero/hang all degrade to a log line and the session proceeds; gating exists only as the doctor CLI's own `--strict-doctor` flag (exit 1 on ≥1 FAIL; the engine never passes it) | `run-goal.sh`, `doctor.sh` |
 
 If you disable a gate/routing knob for an experiment, **re-enable it in the same session**
 and say so in your report — a silently disabled gate is the #1 way this system degrades
