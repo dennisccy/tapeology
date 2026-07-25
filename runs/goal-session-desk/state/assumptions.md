@@ -191,3 +191,39 @@ determinism guarantee this era enforces is scoped to computed CONTENT plus the p
 file-registration bookkeeping; `id`, `screen_date`, `as_of`, `universe_snapshot_id`,
 `config_fingerprint` and `bar_store_signature` remain the only fields any re-run comparison may use.
 **Reversible:** yes
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** Audit finding B10 (iter-3 handoff) shows `_select_best_band` (`desk_screen.py:206`)
+ranks distance-to-close ahead of quality score, so a symbol's headline screen row can be its
+NEAREST same-class band rather than its highest-scoring one — on the committed fixtures, AAPL's
+row is `resistance C, 2.348 bps, score 57.0 (298.08–299.24)` while the same served band list also
+carries `resistance C, score 123.0 (300.23–302.25)`, the era's own pinned 300–302.4 wall. iter-3's
+eval.md flagged this explicitly as a human call for J-04 to resolve BEFORE rendering the chip:
+"either the chip copy says 'nearest same-class band' or the human respecs the within-symbol tuple."
+`docs/goal.md` itself is silent on which band a "best band" chip should mean.
+**We chose:** Keep `_select_best_band`'s ranking tuple byte-unchanged (zero diff on
+`desk_screen.py`'s computation — it is spec-conformant per `assumptions.md` iter-3 entry 1, not a
+bug) and make `/desk`'s headline-band chip copy read "nearest same-class band" rather than implying
+it is the symbol's strongest band. This keeps the chip's claim honest about what the ranking
+actually selects without touching J-03-owned, already-shipped computation this iteration.
+**Reversible:** yes
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md` step 3 for J-04 says "Wire Run Screen ... to the compute endpoints
+with live progress + cancel" but never states how the button supplies the REQUIRED `screen_date`
+body field (`POST /research/desk/screen/compute` 422s without it, per J-03/iter-3's TC-9). Anti-goal
+"every run is an explicit operator act" and build trap T-6 ("no wall-clock ... determinism means no
+wall-clock") both concern SERVED/computed values and snapshot keys (per `assumptions.md` iter-2's
+own reading of the parallel top-up fetch-horizon question), but neither states whether a UI control
+may CLIENT-SIDE default a request parameter to "today" without that becoming a disallowed
+wall-clock dependency.
+**We chose:** Run Screen always submits the client's own `today` (the SAME `todayUtcDate()`-style
+helper `/structure`'s existing "Today" shortcut button already uses) as `screen_date` — no
+date-picker or alternate-date control ships on `/desk` this iteration. The operator's click remains
+the explicit, logged act (matching the CLI's own `--date`-required design and iter-2's accepted
+fetch-horizon precedent); the backend computation itself still never reads wall-clock time — only
+the CLIENT parameter defaults to "now," submitted explicitly. The CLI's `--date` flag remains the
+path for an arbitrary historical re-screen; no UI regression if a future iteration adds a picker.
+**Reversible:** yes
