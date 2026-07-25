@@ -1,0 +1,16 @@
+# I-9-style byte-comparison capture (after): label<TAB>path<TAB>status<TAB>sha256<TAB>body_len
+# base_url=http://127.0.0.1:8098
+meta.ui_routes	/meta/ui-routes	200	0edb55662c7e0d44447b38b0ea0ad741fe47b577795151644c67a8dd85a26b06	107
+research.taxonomy	/research/taxonomy	200	1a7d57c5fd69bf17a04022bab60c159029d349f09ad3d19fe6dd87277f27abfc	304
+research.bars.list	/research/bars	200	555035849ee6ac0762eefe3d70aa20a990fcc3fb8379221a60fbbb745c8ca8c6	39
+research.datasets.list	/research/datasets	200	d12203e1053394819e179f28e9e1c2254fb242451b35b780374678f2421388e0	37
+research.strategies	/research/strategies	200	3b279813ae6358c8d2944768f3194fba37d24600b0830e4b7296abe8a99edefd	2477
+research.profiles	/research/profiles	200	8b3ea7bfbe1dc1bbeaa7eb6e770b5e247db2ed3a21d6e6e6af1470a516008832	240
+research.pnl_ledger	/research/pnl/ledger	200	6eb35b6a31f6cc2a1be12f98a133b6ec4c5b38de9c4c97572e3540769c067fd2	115
+research.setups.list	/research/setups	200	24de1c4a19c43ad41b013f13dcd858c17b0daa7f33a53f19913e5b11366d1c2e	13
+research.backtests.list	/research/backtests	200	1fd5768fd5b2ec2e5c6199cd31fc0638520ad4477a668991f6118158a0d4e6d2	16
+research.backtests.detail.404	/research/backtests/does-not-exist-baseline-probe	404	7b6cb909c69322073cd8e02333ac59c44d181bc9c9664b077eb7e254185c36dc	64
+research.edge_report	/research/edge-report	200	87db0bae3e99dcd117ab38034678e4c633a61127dc34fc91a1a280781a3e573b	180
+research.edge_report_compute_snapshot	/research/edge-report/compute	200	74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b	4
+research.candles.merged.unrecorded	/research/candles?symbol=AAPL&timeframe=1d&limit=50	200	0c3fcecb68906675a851b85835a255d676b4cff32013c89f5c414e7d84d5b565	183
+tape.state.unwatched	/tape/AAPL/state	404	9594edf0d2990d69a1c9301816fc0a1487c7feab746cdda4dbea60367dff9213	47

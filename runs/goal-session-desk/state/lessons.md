@@ -30,3 +30,19 @@ Study needs the cache warmed first or a wait budget far past the usual per-comma
 **Applies to:** every browser-QA dispatch against `.data/scoped_browser_qa`; and read it as live
 precedent when building J-02's "coverage GET is index-read fast, never re-hashes the store"
 requirement (T-4).
+
+## iter-1 — 2026-07-25T06:05:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The era's Path-A protocol only protects `config_fingerprint()` — there is a SECOND,
+unnamed whole-config hash, `edge_report_cache._config_content_hash` (`apps/backend/app/research/edge_report_cache.py:165-169`),
+which hashes `dataclasses.asdict(config)` with NO exclusion set and keys four durable caches
+(`setups_scan_cache`, `tradability_cache`, `edge_report_cache`, `edge_report_backtest_cache`). Adding
+the four `desk_universe_*` fields moved it to `dc0271c15a26…` (I confirmed the change myself), so
+every pre-diff cache row is unreachable: the real-data `GET /research/setups` is cold again (~9–11 min
+first call) and `/structure` Load is back to ~21.6 s. Served values are unaffected (no desk field is
+read outside `config.py` + the two desk modules), so this is pure latency — but it re-arms exactly the
+false-negative trap that has burned prior browser passes.
+**Applies to:** every era-B iteration that adds ANY `Config` field (i.e. most of them), and
+unconditionally to whichever iteration next dispatches browser QA (expected J-04): warm
+`/research/setups` and `/structure` Load on the real data dir first, and budget for the cold call.

@@ -8,5 +8,5 @@ requires-python = ">=3.12"
 testpaths = ["tests"]
 addopts = "-q"
 markers = [
-    "integration: hits the REAL Alpaca live socket (operator/gated; needs credentials + market hours + TAPEOLOGY_LIVE_INTEGRATION=1). Skipped by default.",
+    "integration: hits a REAL external system -- Alpaca live socket/recording, Yahoo Finance, or Wikipedia (operator/gated; TAPEOLOGY_LIVE_INTEGRATION=1, some also need credentials + market hours). Skipped by default.",
 ]

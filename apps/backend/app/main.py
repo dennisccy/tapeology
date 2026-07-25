@@ -39,6 +39,7 @@ from .providers.adapters.base import (
 )
 from .providers.historical import HistoricalProvider
 from .providers.live import LiveProvider
+from .research.desk_routes import router as desk_router
 from .research.routes import (
     ResearchRegistry,
     get_registry_or_none,
@@ -195,6 +196,10 @@ app.add_middleware(
 # The research namespace (capability 23/24): declare + read a thesis, taxonomy. Mounted as its own
 # router; the engine snapshot endpoints above are untouched.
 app.include_router(research_router)
+
+# Era B "The Desk" (J-01): the universe-ingestion namespace, under the SAME /research prefix but
+# its own module (routes.py is already large) — mounted separately, alongside research_router.
+app.include_router(desk_router)
 
 # The meta namespace (Data Contract row 35, J-01): the canonical UI route map. The rendered nav
 # and the MCP ``ui_route_map`` tool read it — never a hand-maintained duplicate list.
