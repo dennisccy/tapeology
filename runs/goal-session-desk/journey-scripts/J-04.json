@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "journey": "J-04",
+  "name": "The /desk briefing page",
+  "default_timeout_ms": 15000,
+  "steps": [
+    {"n": 1, "journey": "J-04", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
+    {"n": 2, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "app-nav"}}, "expect": {"text": "Desk"}, "timeout_ms": 8000},
+    {"n": 3, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "desk-title"}}, "expect": {"text": "Desk"}, "timeout_ms": 8000},
+    {"n": 4, "journey": "J-04", "action": {"type": "expect", "target": {"css": "main"}}, "expect": {"text": "The latest screen over the registered universe"}, "timeout_ms": 8000},
+    {"n": 5, "journey": "J-04", "action": {"type": "click", "target": {"testid": "desk-run-screen-button"}}},
+    {"n": 6, "journey": "J-04", "action": {"type": "wait_for", "ms": 2000}},
+    {"n": 7, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "desk-provenance"}}, "expect": {"text": "Universe snapshot"}, "timeout_ms": 10000},
+    {"n": 8, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "app-nav"}}, "expect": {"text": "Cockpit"}, "timeout_ms": 8000},
+    {"n": 9, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "desk-title"}}, "expect": {"text": "Desk"}, "timeout_ms": 8000}
+  ]
+}

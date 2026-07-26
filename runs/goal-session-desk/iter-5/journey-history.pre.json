@@ -1,0 +1,132 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "Universe ingestion — fetched, registered, honest",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-4",
+      "last_passing_iter": "goal-desk-iter-4",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "evaluator's own live spot-check this iteration (methodology A.4), through the REAL handlers with the universe/screen dirs scoped to a temp dir seeded from the committed fixture: GET /research/desk/universe -> 200, 1 snapshot, latest id universe-2026-07-25-817cc184bbb3, 103 members, raw_members['BRK-B'] == 'BRK.B' (T-2 normalization intact), source_url provenance embedded, integrity_errors []. Full clause-by-clause evidence: this file's iter-1/iter-2 revisions + reports/qa/goal-desk-iter-2-qa.md.",
+      "spec_hash": "dcad07154573cae27aff4a75ce71ac9ceca8c2969ec5c3d665aa3cbe08278819",
+      "notes": "Required-still-passing this iteration; spot-checked live by the evaluator, not read from a report. desk_universe.py DID change this iteration (+16 lines, sanctioned by the iter-4 spec): UniverseStore.record finally got ScreenStore.record's corrupt-file guard, closing the iter-1 audit B3 / iter-3 sibling-divergence gap this file carried for three iterations — its regression test (TC-10) passed in the evaluator's own suite run (1328 passed / 8 skipped / 0 failed). Evidence class remains live REST through the real handlers (J-01's acceptance carries no browser clause — assumptions.md iter-1). ONE gap still open: the parser silently drops malformed/short table rows (bounds-only guard, no skipped_rows count).",
+      "gaps": [
+        "parser silently drops malformed/short constituent-table rows — no skipped_rows count is surfaced"
+      ]
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Coverage + explicit bar top-up over the universe",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-4",
+      "last_passing_iter": "goal-desk-iter-4",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "evaluator's own verification this iteration at the scope the iter-4 spec defines for a required-still-passing journey: `git diff --stat <snapshot>..HEAD` shows desk_coverage.py, desk_topup_compute.py and bar_index.py with ZERO changed lines, and every one of their tests passed in the evaluator's own full-suite run (1336 tests, 0 failures, 0 errors, 8 skipped -> 1328 passed, junit-xml parsed). Full clause-by-clause evidence (per-(symbol,timeframe) truth table over the era-open index, fetched/reused/cancel-resume runs, 4.3 ms index-only read with BarStore instrumented to 0 calls): this file's iter-2 revision.",
+      "spec_hash": "a5cd4f6a0c3dbe67de9a65400250cf777e281712fbf3c90e54758e91971d306c",
+      "notes": "The top-up compute manager got its FIRST-EVER UI surface this iteration (the /desk Top-up button) and the evaluator opened both of its live states: AUDIT-desk-topup-running.png (live '0 / 412 pairs', control disabled 'Topping up…', Cancel offered) and AUDIT-desk-topup-cancelled.png ('Top-up cancelled — pairs already recorded before the cancel stay stored.', Top-up re-enabled) — two genuinely distinct images, unlike the broken TC-12 pair (both blank, byte-identical; the evaluator opened one and confirms it is a blank dark rectangle). CONSEQUENCE TO CARRY: that first UI run was NOT fixture-scoped (the spec's own NOTES required it), so it fetched real Yahoo bars into the operator's ambient .data/bars — including 60 series over 58 symbols holding one NaN-priced row each (see the iter-4 anti-goal entries). Carry-forwards unchanged: (B1) a benign 'identical content already on file' 409 is still labelled outcome 'failed' + CLI exit 1; (B2) latest_window_end_utc is the REQUESTED window end, not the last actual bar — /desk now carries that wording only on the coverage-badge tooltip, which is correct.",
+      "gaps": [
+        "benign duplicate-content 409 still reported as outcome 'failed' (CLI exit 1)",
+        "the first UI-triggered top-up ran against the ambient store, not a fixture-scoped one"
+      ]
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The screen — pinned inputs, append-only snapshot, deterministic rank",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-4",
+      "last_passing_iter": "goal-desk-iter-4",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "evaluator's own live spot-check this iteration (temp-scoped stores, zero network): GET /research/desk/screen -> 200 with the honest-empty payload {\"screens\": [], \"latest\": null, \"integrity_errors\": []}; desk_screen.py shows ZERO changed lines in the evaluator's own `git diff --stat`, and its tests all passed in the evaluator's own suite run (1328 passed / 8 skipped / 0 failed). Rendered-snapshot evidence read off the /desk briefing this iteration: reports/qa/goal-desk-iter-4-evidence/FIX-desk-populated-relabeled.png (10 ranked rows in strictly non-decreasing distance order inside class A — 0.00, 0.00, 0.30, 0.31, 0.73, 1.62, 78.37, 95.54, 144.94, 148.08 bps — with all five pins on the provenance line). Full 52-check clause-by-clause evidence: this file's iter-3 revision.",
+      "spec_hash": "74735994233da1614d5568bc57f2a42e60d7e51cf91bb0378f32add5c898bcd6",
+      "notes": "Computation zero-diff this iteration (_select_best_band's tuple byte-unchanged per TC-14/TC-17, evaluator-verified). Only the PROCESS-SCOPED compute-manager snapshot changed: desk_screen_compute.py gained honest `reused: bool` + `screen_id`, with tests asserting reuse on both calls plus 'no second file' (audit B2 closed). OPEN GAP (audit B1): the no-universe refusal guards the ROUTE only — run_screen_and_record still persists an honest-empty snapshot, so the CLI on a machine with no registered universe still writes a permanent useless append-only record. Both tests coexist in test_desk_screen_compute.py (:148 vs :540). A one-line structural guard is recommended for whichever iteration next touches that file.",
+      "gaps": [
+        "audit B1: the no-universe refusal sits on the POST route, not on run_screen_and_record — the CLI path can still persist an empty snapshot"
+      ]
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The /desk briefing page",
+      "status": "partial",
+      "last_verified_iter": "goal-desk-iter-4",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-4-evidence/AUDIT-desk-empty-state.png (empty state: exact text \"Desk screen not computed yet.\" + enabled Run Screen + 3-route nav) and reports/qa/goal-desk-iter-4-evidence/FIX-desk-populated-relabeled.png (populated briefing: 10 ranked rows with class chips, the 'nearest same-class band' caption, 2-decimal distance/score, per-timeframe coverage badges, tick-evidence badges, 'SKIPPED — NO BARS (91)' grouping, the amended provenance line labelled 'Bar-store signature', read-only screen history). Both opened by the evaluator. GET /meta/ui-routes verified by the evaluator in-process: exactly [{'/','Cockpit'},{'/structure','Structure'},{'/desk','Desk'}].",
+      "spec_hash": "0a3d005b39831ddc9eb0d481081ac613a2ec9e94b131c36394f9e649182faaec",
+      "notes": "PARTIAL, not passing — 4 of goal.md's 5 acceptance clauses are evidenced (nav = Cockpit·Structure·Desk; honest empty state + enabled Run Screen; populated briefing with chips + provenance + honest skipped grouping; /meta/ui-routes = exactly 3 routes) but the FIFTH has no screenshot at all: 'Run Screen shows live progress and an in-flight second trigger is refused (single-flight, screenshot)'. What exists instead is TOP-UP progress/cancel evidence (a different control) plus an API-level single-flight check by the auditor (started: false, same job id) and an automated test (test_second_trigger_while_running_returns_the_same_job_started_false, green in the evaluator's own suite run) — goal.md's T-10 is explicit that backend-only proof never satisfies a browser acceptance line. Compounding: the browser-qa-agent lane NEVER RAN this iteration (evaluator confirmed from trace.jsonl), reports/phase-goal-desk-iter-4-ui-test-results.md does not exist, reports/phase-goal-desk-iter-4-closure-verdict.md is CLOSURE-FAIL on exactly those two facts, and the QA report on disk is discredited by audit T1 (TC-02 claims started=true where code/spec/TC-11 require false; TC-04 cites the retired 'Window last requested' label; TC-20 quotes 1305 under a 1328 header; TC-01-empty-state.png shows a POPULATED page; TC-12-topup-progress.png and TC-12-topup-cancelled.png are the same blank 6,490-byte image — the evaluator opened both files and confirms it). The PRODUCT looks sound; the EVIDENCE LANE is what is owed. Also owed: /desk has no golden replay script (journey-scripts/ holds only J-07.json), so nothing deterministic can catch a /desk regression once J-05 starts editing the page. Live-verified by the auditor and not disputed: mount issues 3 GETs and 0 POSTs; a cancelled walk records nothing.",
+      "gaps": [
+        "no screenshot of Run Screen live progress + the in-flight second-trigger refusal (goal.md's third named J-04 screenshot)",
+        "browser-qa-agent never dispatched; reports/phase-goal-desk-iter-4-ui-test-results.md missing; closure gate is CLOSURE-FAIL",
+        "reports/qa/goal-desk-iter-4-qa.md is discredited (audit T1) and must be regenerated against the fixed tree",
+        "no J-04 golden replay script exists yet"
+      ]
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "Ledger history + drill-in to /structure",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-4",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "evaluator re-confirmed absent this iteration, mechanically: apps/frontend/app/structure/page.tsx has ZERO changed lines in `git diff --stat <snapshot>..HEAD` and zero occurrences of useSearchParams/searchParams (no query-param prefill); apps/frontend/app/desk/page.tsx contains zero href/Link drill-in and its only onClick handlers are the two compute triggers + two cancels (:454/:477/:539/:562) — the screen-history list is read-only, exactly as the iter-4 spec deferred it.",
+      "spec_hash": "cba063f7d5e92f608aa54c1b4d174e17e46e297b8dda20cd52532d9d5a1ae545",
+      "notes": "Explicitly OUT OF SCOPE for iter-4; the read-only history list it will make clickable already renders (the evaluator saw both rows in FIX-desk-populated-relabeled.png: 2026-06-22 and 2026-07-25, each 10 rows / 91 skipped with a provenance summary). Its own drill-in acceptance still holds by construction — the evaluator re-measured compute_tradability('AAPL', 2026-06-22T21:00Z) live and it returns basis 2026-06-18T04:00:00.000000Z with 10 bands, top band resistance 300.11–302.2 class A score 171.0, i.e. the era's pinned 300–302.4 wall is what /structure will draw when a row is drilled. The /structure prefill remains the era's ONLY sanctioned kept-surface edit in docs/goal.md — J-05 must stay additive (T-8).",
+      "gaps": [
+        "not started: no /structure query-param prefill, no per-row drill-in link, no history click-through"
+      ]
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "MCP contract v3 — 17 read-only tools",
+      "status": "failing",
+      "last_verified_iter": "goal-desk-iter-4",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "evaluator's own live re-count this iteration: app.mcp._STATIC_PATHS holds 9 static entries with ZERO 'desk' keys, and tests/test_mcp_server.py's EXPECTED_TOOLS is exactly 15 names (tape_state, tape_features, tape_history, datasets, bars, levels, tradability, setups, backtests, strategies, edge_report, pnl_ledger, taxonomy, ui_route_map, get_endpoint). app/mcp/__init__.py has zero changed lines in the evaluator's own diff.",
+      "spec_hash": "c3d5a8351c4ce5aa20449d2d1557f4599bad9cdecebbcde8f044e6d4d2908f6f",
+      "notes": "Intentionally untouched again (iter-4 spec OUT OF SCOPE); the read-only rail is intact at 15 tools. Fully unblocked: both new endpoints now exist with both states available — GET /research/desk/universe (populated fixture: 1 snapshot / 103 members) and GET /research/desk/screen (honest-empty AND populated), both re-checked live by the evaluator this iteration. Note for the spec: the screen list is deliberately META-ONLY, so the desk_screen tool's byte-identity proof must compare against the same meta-only payload, not a full-row one.",
+      "gaps": [
+        "not started: _STATIC_PATHS still 15 tools, no desk_universe / desk_screen proxies"
+      ]
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The kept product stands — regression sentinel",
+      "status": "partial",
+      "last_verified_iter": "goal-desk-iter-4",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "evaluator's OWN suite run from apps/backend (.venv/bin/python -m pytest tests/ -p no:randomly, junit-xml parsed, not a report's summary line): 1336 tests, 0 failures, 0 errors, 8 skipped -> 1328 passed in 133.7 s (floor 1299/8 exceeded, skips non-decreasing); live Config().config_fingerprint() == 08e471b10130e1e2; deterministic replay lane PASS 1/1 for J-07 with the hardened 11-step golden (reports/phase-goal-desk-iter-4-regression-replay-results.md) and its fresh screenshot reports/qa/goal-desk-iter-4-evidence/J-07-verify.png, which the evaluator opened: /structure alive for AAPL as-of 2026-06-22T21:00:00Z with candles drawn and the wall labelled 'R A · 171 · round' at 302.20 and 'R A · 97 · round' at 300.10, 3-route nav visible.",
+      "spec_hash": "56d585e3306df9a5020fc67bcaad8e120ae15806d798823f660cafca7cb1446a",
+      "notes": "STILL partial, but for ONE reason fewer than before: its 'nav = exactly three routes' clause is now MET (evaluator verified /meta/ui-routes in-process: /, /structure, /desk in nav order); only 'MCP = exactly 17 tools' remains structurally unmet at 15 until J-06 ships. TWO new caveats this iteration, both evaluator-verified from the diff rather than from a report: (1) the era's frozen-foundations rail was deviated from under an iteration-spec amendment — apps/backend/app/research/bars.py (the JSON BarStore) and apps/frontend/components/StructureChart.tsx (a kept-surface chart docs/goal.md's Non-Goals name as 'untouched') both carry real diffs; the evaluator re-measured that the era's pinned answer is unchanged (AAPL as-of 2026-06-22 -> basis 2026-06-18T04:00:00.000000Z, 10 bands, top resistance 300.11–302.2 class A 171.0) and that the merged AAPL 1d read now serves 500 rows with 0 non-finite prices plus exactly one honest integrity_errors entry naming 55bb757e6df84b1d82d1c7ab719dfb51.json with the file untouched — see the iter-4 anti-goal entry, which needs HUMAN ratification. (2) one guard test was loosened to accept a rename (tests/test_structure_chart_viewport.py:194 moved from a literal to a regex that would also accept liveBars.findIndex) — the timestamp-anchoring invariant it protects is intact, but the guard is weaker. Everything else stayed zero-diff and the evaluator confirmed it: config.py, tradability.py, levels.py, bar_index.py, desk_screen.py, desk_coverage.py, desk_topup_compute.py, app/structure/, app/page.tsx, PriceChart.tsx, NavBar.tsx, app/mcp/. The kept-product BROWSER walk was only partly re-done this iteration (the /structure half via the replay golden; sim cockpit / Case Studies / Edge Report were not re-captured post-fix — UT-02-cockpit.png predates the fix pass).",
+      "gaps": [
+        "'MCP = exactly 17 tools' unmet at 15 until J-06 ships",
+        "post-fix browser walk incomplete: sim cockpit, Case Studies drill-in and the Edge Report honest state were not re-captured after the bars.py / StructureChart.tsx change",
+        "tests/test_structure_chart_viewport.py:194 guard assertion loosened from a literal to a regex (audit T4)"
+      ]
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-desk-iter-3",
+      "anti_goal": "Snapshots are append-only and pinned. Universe and screen snapshots are dated, checksummed, append-only; every screen pins (universe snapshot id, screen date, as_of, fingerprint, bar-store signature); nothing is silently refetched, backfilled, recomputed in place, or rewritten — a new run is a new snapshot.",
+      "severity": "minor",
+      "evidence": "INTERCEPTED IN-ITERATION, NEVER LANDED. Pre-fix ScreenStore.record silently overwrote a snapshot file whose checksum had failed (iter-3 audit B1). Fixed at apps/backend/app/research/desk_screen.py:467-473 plus two regression tests; iter-3's evaluator re-verified the fix live. The sibling gap it named — UniverseStore.record write_text()ing over exactly such a file (desk_universe.py:418) — is CLOSED as of iter-4 (the guard was ported; its TC-10 regression test is green in the iter-4 evaluator's own suite run).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-desk-iter-4",
+      "anti_goal": "Frozen foundations — the v1 strategy, the default profile, the tape engine's five states and thresholds, the frozen structure computations, the JSON BarStore, and every KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside them, never a mutation of them. (… the one sanctioned kept-surface edit is J-05's additive /structure prefill.) [with Non-Goals: 'StructureChart.tsx untouched']",
+      "severity": "minor",
+      "evidence": "REAL DEVIATION, DISCLOSED, NEEDS HUMAN RATIFICATION. Two artifacts docs/goal.md names as frozen were modified: apps/backend/app/research/bars.py (the JSON BarStore — a write-path refusal NonFiniteBarPriceError plus a read-side exclusion of already-recorded non-finite-priced ROWS from BarStore._merged_rows, reported through the existing integrity_errors channel) and apps/frontend/components/StructureChart.tsx (a finite-value filter before setData plus a new visible 'N row(s) … carry no price and are not drawn' message). The ONLY authorization is an iteration-spec amendment the developer wrote during the fix pass (docs/phases/goal-desk-iter-4.md OUT OF SCOPE: \"bars.py's zero-diff constraint is LIFTED for the priceless-bar rail only\" plus the same lift for StructureChart.tsx); docs/goal.md itself was never amended and still lists both as untouched. Scored MINOR rather than critical on evidence the evaluator produced itself: (a) output is identical for all-finite data — compute_tradability('AAPL', 2026-06-22T21:00Z) returns basis 2026-06-18T04:00:00.000000Z, 10 bands, top band resistance 300.11–302.2 class A quality_score 171.0, matching the era's pinned value; (b) merged AAPL 1d now serves 500 rows, 0 non-finite, with one honest integrity_errors entry naming the file, whose bytes are untouched; (c) the pin is unchanged (08e471b10130e1e2, zero new Config fields, config.py zero-diff); (d) the full suite is green (1328 passed / 8 skipped / 0 failed, evaluator's own run) including the chart guard suites; (e) the change REPAIRS a kept surface rather than altering it — without it /structure's chart threw 'Candlestick series item data value of open must be a number, got=object, value=null' and unmounted the page for 58 symbols including the pinned AAPL. The trigger was this iteration's own non-fixture-scoped Top-up run; prevention is now structural (YahooAdapter drops priceless vendor rows at the seam, BarStore.record refuses them before any checksum work). One guard test was loosened to accept a rename (tests/test_structure_chart_viewport.py:194). Unresolved ONLY in the sense that no human owner has ratified a goal.md-level exception.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-desk-iter-4",
+      "anti_goal": "Immutable data — registered datasets and bar series are append-only, checksummed, never re-tagged, never deleted, never content-perturbed. / no fabricated data (foundation invariant).",
+      "severity": "minor",
+      "evidence": "INTERCEPTED IN-ITERATION. The first-ever UI-triggered Top-up ran against the AMBIENT store instead of the fixture-scoped backend the iter-4 spec's NOTES required, and recorded 60 bar series over 58 symbols (including the pinned AAPL 1d) each holding ONE row whose OHLC are the JSON NaN token — a vendor row for a session that had not traded, which JSON round-trips to every reader as a null price. Strictly read, serving a priceless row as a candle is a fabricated-value breach, and it took /structure's chart down. The rail itself was NOT breached: nothing was deleted, re-tagged or content-perturbed — the files are still on disk byte-unchanged, the exclusion lives on the read, and it is reported (evaluator verified live: AAPL 1d serves 500 rows, 0 non-finite, one integrity_errors entry naming 55bb757e6df84b1d82d1c7ab719dfb51.json). The developer's decision record (assumptions.md, iter-4 fix pass) measures and rejects the three alternatives (file quarantine moves AAPL's whole support side; a superseding re-fetch is impossible because the vendor still serves no price for that timestamp; tolerate-on-read silently emptied the tradable map). Resolved as a defect; the residue is 60 permanently-affected series in the operator's real store — honestly reported, and an operator's decision — plus a hard requirement that every future browser/QA pass be fixture-scoped.",
+      "resolved": true
+    }
+  ],
+  "updated_at": "2026-07-26T14:20:00+01:00"
+}

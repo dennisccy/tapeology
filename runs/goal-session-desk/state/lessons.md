@@ -117,3 +117,27 @@ assertions (steps 9-11).
 **Applies to:** any iteration whose browser/QA pass can trigger a WRITE path (fetch, top-up,
 record) — scope the stores to a temp dir first; and any golden script — assert the page is still
 alive AFTER the first matching string, never only at the match.
+
+## iter-5 — 2026-07-26T15:38:33+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** A recorded golden replay script can be a WRITE path. `runs/goal-session-desk/journey-scripts/J-04.json`
+step 5 clicks "Run Screen", so every future replay against the ambient backend records a real screen
+snapshot into `apps/backend/.data/screen` (once per new day, since same-pin re-runs reuse) — the same
+class of ambient-store pollution as iter-4's unscoped Top-up, just arriving through the regression
+lane instead of a QA click. Scope the replay lane's data dirs or assert only read-only content.
+**Applies to:** any iteration that records or edits a `journey-scripts/*.json` golden whose steps
+click a compute/fetch/Run button, and any iteration that runs the deterministic replay lane.
+
+## iter-5 — 2026-07-26T15:38:33+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** A sub-second UI state on a long page is capturable, but only with help, and the help must
+be disclosed. The Desk controls sit at the BOTTOM of a ~4500px page while the full-page capture tops
+out at 4320px, and the "Computing…" window lasts one 700ms poll tick — so the QA lane held one poll
+reply open AND visually pinned the two controls to the top-left with an outline. That produced a real
+state in an unnatural layout; the report disclosed the held reply but not the pinning, which cost an
+evaluator a pixel-diff and a code read to distinguish "capture aid" from "fabricated element" (the
+8×8 `animate-pulse` dot differing between the two shots is what proved they were real).
+**Applies to:** any browser-QA pass photographing an in-flight compute state, and any page whose
+controls render below a full-page capture's height limit.

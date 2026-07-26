@@ -239,3 +239,52 @@ write path the same way the web route is guarded, apply the price-less-row rule 
 read too, and re-tighten the chart guard test that was loosened to accept a rename. One sentence for
 the owner: the new Desk page is real and works, but nobody took the one screenshot the plan
 requires, so the next run must photograph it properly before we move on.
+
+## Iteration 5 — goal-desk-iter-5
+
+**Date:** 2026-07-26T15:38:33+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-04 "The /desk briefing page" (partial -> passing — the one picture that had never
+  existed anywhere now exists, taken on a throw-away copy of the data)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02, J-03 all re-verified passing with fresh browser-rendered payloads; J-05 and
+  J-06 still failing (both deliberately out of scope this iteration); J-07 "The kept product stands"
+  still partial for exactly one reason — "17 machine-readable tools" is unmet at 15 until J-06 ships
+- Anti-goal violations: none new. One carried, minor, still unresolved: the owner has still not said
+  in writing whether the two files iter-4 changed (the bar store and the Structure chart) may stay
+  changed. Two older entries stay resolved.
+
+**Reasoning:** I did not take any report's word for this. I opened all four Desk pictures myself: the
+empty page shows the exact honest sentence with both buttons enabled and the three-route menu; the
+finished briefing shows the provenance block with all five labels, the ranked row with its class chip
+and the "nearest same-class band" caption, and the honest "SKIPPED — NO BARS (102)" grouping; and the
+two run-in-progress pictures show a disabled "Computing…" button with a live "0 / 103 members"
+counter and a Cancel control. I checked those last two are genuinely two separate captures, not one
+file copied twice: they differ only in an 8-by-8 pixel patch, which is exactly the blinking dot next
+to the counter. I also found and accepted two capture aids the report only partly disclosed — the
+pictures were taken during a real second run (that is why the briefing behind them is already
+filled), and the two controls were visually pinned to the top-left corner with a green outline so
+they fell inside the picture. The state shown is real; the presentation was helped. I then re-ran the
+work myself where it mattered: the full back-end suite (1328 pass, 8 skipped, 0 fail, exit 0), the
+settings fingerprint (`08e471b10130e1e2`), the page list (exactly three), the tool count (still 15),
+and a listing of the owner's real data folder (391 entries, no data file added or changed — only two
+harmless SQLite side-files from the read-only replay). Coherence is COHERENCE-PASS. CONTINUE because
+two journeys are still unbuilt and both are tractable; not GOAL_ACHIEVED because J-05 and J-06 have
+no evidence at all; not REGRESSION because nothing that worked stopped working.
+
+**Next-step recommendation:** Run iteration 6 at **full** depth on **J-05 "Ledger history and
+drill-in to Structure"** alone — full depth because J-05 makes the one and only change to the
+Structure page this era permits, so it needs the extra review and closure checks. Before anything
+else, fix the newly saved replay script `runs/goal-session-desk/journey-scripts/J-04.json`: its
+step 5 clicks "Run Screen", so replaying it against the owner's real backend will write a real
+screen record into his data folder — point the replay at a throw-away folder or drop the click.
+Also: next iteration's picture report must state up front any display trick used to photograph a
+short-lived state; ask the owner to settle the two frozen-file exceptions in writing in
+`docs/goal.md`; schedule J-06 (17 tools) straight after J-05, since it is small and is the last
+thing keeping J-07 from passing; and keep the three one-line hardening items for whenever those
+files are next touched. One sentence for the owner: the Desk page is now properly photographed and
+proven, so the next run should build clicking a past screen and jumping from a row into the
+Structure chart.

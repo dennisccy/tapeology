@@ -1,0 +1,17 @@
+{
+  "phase": "goal-desk-iter-5",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-26T13:46:07.000000Z",
+  "started_at": "2026-07-26T13:46:07.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/scripts/qa_desk_iter5_fixture_scoped_backend.sh",
+    "docs/handoffs/goal-desk-iter-5-dev.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "notes": "Evidence-only iteration per iter spec: zero product code changes (verified git diff --stat empty on all named desk_* modules, bars.py, meta.py, and apps/frontend/). Suite 1328 passed / 8 skipped / 0 failed, config_fingerprint 08e471b10130e1e2 unchanged. Added one new fixture-scoped backend setup script (apps/backend/scripts/qa_desk_iter5_fixture_scoped_backend.sh), verified live twice with before/after apps/backend/.data/ listings byte-identical both times (zero ambient writes). Actual browser pass (TC-1..TC-6: screenshots, reports/phase-goal-desk-iter-5-ui-test-results.md, runs/goal-session-desk/journey-scripts/J-04.json) intentionally left to browser-qa-agent per the spec's own 'Dispatch browser-qa-agent' instruction -- see dev handoff for the exact recipe, a critical timing note on the 700ms poll window for TC-2/TC-3, and the re-derived fixture-scoped screen result (PG only, 1 ranked row + 102 skipped) as the honest data basis.",
+  "next_action": "reviewer"
+}

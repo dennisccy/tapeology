@@ -300,3 +300,38 @@ otherwise crash. The alternative reading (an iteration spec cannot self-grant a 
 REGRESSION and halt) stays available to the owner: the code is small, additive and revertible, and
 the 60 affected data files were never modified.
 **Reversible:** yes
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-04 acceptance demands a screenshot of "Run Screen shows live
+progress and an in-flight second trigger is refused", and the era's rule is "no screenshot ⇒ the
+journey is `unknown`, never `passing`" — but nothing says whether a screenshot whose LAYOUT was
+altered by the QA lane (two controls repositioned to the top-left and outlined via injected CSS, plus
+one poll reply held open for a few seconds so the sub-second state persisted) still counts as the
+required screenshot. The controls genuinely live at the bottom of a ~4500px page, past the 4320px
+full-page capture limit, so an unaided capture of that state is not possible without scrolling.
+**We chose:** Count it. The rendered elements are the real components in their real states with real
+values (`disabled` "Computing…" button, `desk-screen-compute-running` showing "0 / 103 members" +
+Cancel), which I corroborated three ways: the 8×8 pixel difference between the two shots falls exactly
+on the `h-2 w-2 animate-pulse` dot at `page.tsx:463-466` (a static forgery would not animate), the
+populated briefing behind them is exactly what `page.tsx:671-689` produces when a screen exists and a
+new run starts, and no request or response body was faked. So the position/outline injection is a
+capture aid of the same class as scrolling, not fabricated evidence. Consequence: J-04 is `passing`,
+and the next iteration's results report is required to disclose any such aid up front.
+**Reversible:** yes
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** The iter-5 spec's TC-7 demands the ambient `apps/backend/.data/` listing be
+"byte-for-byte identical" before and after the pass. The listing came out identical, but I found two
+files under it dated inside the iteration window: `bar_index.db-wal` (0 bytes) and `bar_index.db-shm`,
+created 15:00:31 when the deterministic J-07 replay booted the REAL backend. `docs/goal.md`'s
+immutable-data rail speaks of registered datasets and bar series, not of SQLite side-files.
+**We chose:** Not a violation and not a TC-7 failure. `bar_index.db` itself is untouched (mtime still
+2026-07-25 12:49), the WAL is empty (zero pending writes), and no bar/universe/screen/dataset record
+was added or changed — these are read-mode side-files, and they predate the browser pass (they were in
+BOTH of the QA lane's listings, which is why its 391-entry count exceeds the developer's earlier 389).
+Consequence: "ambient store untouched" is scored on registered CONTENT, not on SQLite bookkeeping
+side-files; a future iteration that finds a non-empty `-wal` or a changed `bar_index.db` mtime should
+treat that differently.
+**Reversible:** yes
