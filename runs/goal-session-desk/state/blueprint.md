@@ -18,20 +18,22 @@ manager ship J-02, iter-2 — see the Data Contract rows below. `desk_screen.py`
 snapshots under a NEW `.data/screen/` dir, sibling of `.data/universe/`, resolved via a bare
 env-var-or-sibling-default — deliberately NOT a new `Config` field) + a desk-screen compute manager
 + `GET/POST /research/desk/screen*` shipped J-03, iter-3 — see the Data Contract rows below for the
-finalized shapes; the `/desk` page ITSELF is SPEC'D at iter-4 (J-04) — the briefing table +
+finalized shapes; the `/desk` page ITSELF SHIPPED at iter-4 (J-04) — the briefing table +
 provenance line + screen-history list (read-only render) + Run Screen/Top-up buttons wired to the
-J-02/J-03 compute managers, over the `UI_ROUTES` nav-skeleton row already planned below. J-05's
-click-through-to-a-past-screen + `/structure` drill-in prefill remain deferred past iter-4).
+J-02/J-03 compute managers, over the `UI_ROUTES` nav-skeleton row already planned below. Iter-4's
+own browser-QA step never dispatched, so J-04 stayed `partial`; iter-5 is a verification-only pass
+(zero product diff) that closes that evidence gap — see the Data Contract rows below for what iter-4
+actually shipped. J-05's click-through-to-a-past-screen + `/structure` drill-in prefill remain
+deferred past iter-5).
 -->
 
 ## Information Architecture
 
 **Layout shell:** persistent top nav bar + main content area, dark-only, dense, terminal-grade
 (unchanged shell). Nav is data-driven from `app/meta.py` `UI_ROUTES` (the single owner — currently
-2 rows, confirmed live) — never hand-edit a nav component; J-04 adds the third row there.
+3 rows, confirmed live since iter-4) — never hand-edit a nav component.
 
-**Navigation skeleton** (target state after this era closes — `Desk` does not exist yet at
-baseline):
+**Navigation skeleton** (current state — `Desk` shipped at iter-4):
 
 ```
 Tapeology
@@ -43,21 +45,29 @@ Tapeology
 ├── Structure    /structure    bar library + Yahoo fetch + provenance, levels/zones, tradable
 │                               map, case studies, edge report (compute + warm cells), strategy
 │                               registry + champion pointer, the StructureChart — UNCHANGED this
-│                               era except J-05's additive `?symbol=&asof=` Load-form prefill +
-│                               auto-Load (no other behavior change)
-└── Desk         /desk         [iter-4, J-04 — being built THIS iteration] universe snapshot +
-                                coverage summary, screen briefing (ranked rows + honestly-grouped
-                                skipped rows), provenance line (universe snapshot id/date, as_of,
-                                fingerprint, bar-store signature — labeled "Bar-store signature",
-                                AMENDED at iter-4 per audit F1: the snapshot-level value is a
-                                CHECKSUM over each member's window-last-requested timestamp, not a
-                                timestamp, so the "window last requested" label stays on the
-                                per-timeframe coverage badge tooltip, which really is one),
-                                Run Screen + Top-up buttons w/ live progress + cancel, a read-only
-                                browsable screen-history list (date + counts + provenance summary
-                                only — iter-4 scope). Per-row drill-in to `/structure` and
-                                click-through to a PAST screen's own rows are J-05 (deferred past
-                                iter-4).
+│                               era except (a) J-05's additive `?symbol=&asof=` Load-form prefill +
+│                               auto-Load (no other behavior change, still deferred past iter-5) and
+│                               (b) iter-4's sanctioned finite-value guard on `StructureChart.tsx`
+│                               (drops non-finite rows before `setData`; identical output for
+│                               all-finite data) — the owner's written ratification of touching this
+│                               frozen file is still PENDING (tracked in journey-history.json /
+│                               iteration-state.md as an unresolved minor anti-goal item)
+└── Desk         /desk         [shipped iter-4, J-04] universe snapshot + coverage summary, screen
+                                briefing (ranked rows + honestly-grouped skipped rows), provenance
+                                line (universe snapshot id/date, as_of, fingerprint, bar-store
+                                signature — labeled "Bar-store signature", AMENDED at iter-4 per
+                                audit F1: the snapshot-level value is a CHECKSUM over each member's
+                                window-last-requested timestamp, not a timestamp, so the "window
+                                last requested" label stays on the per-timeframe coverage badge
+                                tooltip, which really is one), Run Screen + Top-up buttons w/ live
+                                progress + cancel, a read-only browsable screen-history list (date +
+                                counts + provenance summary only — iter-4 scope). Per-row drill-in
+                                to `/structure` and click-through to a PAST screen's own rows are
+                                J-05 (deferred past iter-4; iter-5 is evidence-only, no product
+                                change). iter-5 closes the outstanding browser-evidence gap (the
+                                third required screenshot — Run Screen running with a second click
+                                refused — plus a saved `/desk` golden replay script;
+                                `journey-scripts/J-04.json`).
 ```
 
 **Feature / journey homes** (each reachable in ≤2 clicks from the nav):
@@ -85,7 +95,7 @@ verbatim, never re-implements, re-tunes, or re-grades them):**
 |---|---|---|---|
 | Bands / tradable-map scores | `tradability.py` (`compute_tradability`, :381) + durable `tradability_cache.db` | `GET /research/tradability` | the screen's per-row "best band/class/score" reads this verbatim for the same symbol/as_of — never recomputed independently; J-03 (iter-3) reads this and NOTHING here changes — zero diff on `tradability.py` is a hard requirement (no new field on its return shape, even additively); iter-4 (J-04) renders these fields on `/desk` — a straight re-format of the screen row, still zero diff on `tradability.py` |
 | Levels / zones | `levels.py` | `GET /research/levels` | unchanged; zero diff on its return shape too (see the row above's rationale — J-03 resolves a reference close price via `BarStore` directly, never by extending either frozen module) |
-| Bars / candles | `bars.py` (`BarStore`) | `GET /research/bars`, `GET /research/candles` | unchanged; coverage reads the derived `bar_index`, never re-hashes this store |
+| Bars / candles | `bars.py` (`BarStore`) | `GET /research/bars`, `GET /research/candles` | coverage reads the derived `bar_index`, never re-hashes this store; iter-4 added a sanctioned, same-owner/same-endpoint priceless-row exclusion on the merged read (`_merged_rows`, backing `GET /research/candles`) plus a write-path refusal (`BarStore.record`) — the per-series read (`GET /research/bars/{id}/candles`) does NOT yet apply the same finite-price filter (coherence.md iter-4 advisory finding B2; no UI caller today, so no displayed-value divergence exists yet — close this before any page wires that route) |
 | Bar coverage index (existing, internal) | `bar_index.py` (`BarIndex`, derived/rebuildable) | *(no REST route today — used only as a FastAPI dependency, `get_bar_index`, inside existing bars routes)* | J-02 (iter-2) is a NEW desk-owned READ over this same index, not a duplicate index — plus a minimal, additive extension to `BarIndex`'s public read API (exposing the already-existing `window_end_utc` column via `BarIndexHit`/a new accessor) for the coverage freshness field; no DB-schema change, no change to `.lookup()`/`.insert()`'s existing contract (see `assumptions.md` iter-2). J-03 (iter-3) adds NO further method here — it derives its bar-store signature entirely from `desk_coverage.get_desk_coverage`'s own reads. |
 | Datasets (tick evidence) | `datasets.py` + `dataset_index.db` | `GET /research/datasets*` | J-03's "tick evidence" badge (screen row summary) reads dataset-registration presence only — 11 recorded symbols at era open (AAPL, AMD, AMZN, GOOGL, META, MSFT, NFLX, NVDA, PG, SPY, TSLA); NOT part of J-02's coverage payload |
 | Setups / touch events | `setups.py` (+ scan cache) | `GET /research/setups` | unchanged |
@@ -95,8 +105,8 @@ verbatim, never re-implements, re-tunes, or re-grades them):**
 | Strategy registry + champion pointer | `strategies.py` / store | `GET /research/strategies` | untouched this era |
 | Profiles (`default`) | `profiles.py` | `GET /research/profiles` | untouched this era |
 | Research labels (taxonomy) | `taxonomy.py` | `GET /research/taxonomy` | unchanged |
-| Route / nav inventory | `app/meta.py` `UI_ROUTES` (single owner) | `GET /meta/ui-routes` | 2 rows today (confirmed live); J-04 (iter-4) appends the `/desk` row here — never hand-edit `NavBar.tsx`; `apps/backend/tests/test_meta_routes.py`'s route-count assertions update in the SAME commit (the file's own documented "route ships WITH its test update" precedent) |
-| `config_fingerprint` | `Config.config_fingerprint()` | embedded in research payload stamps | pinned `08e471b10130e1e2` all era (confirmed live through iter-3); §0.4 Path A only for every new desk field — no field that shapes a served value may be an env var. J-03 (iter-3) added ZERO new `Config` fields; iter-4 (J-04) adds ZERO new `Config` fields too (frontend wiring + two small backend behavior additions, see below) — the pin, and `edge_report_cache._config_content_hash`, both stay exactly as iter-1 left them. |
+| Route / nav inventory | `app/meta.py` `UI_ROUTES` (single owner) | `GET /meta/ui-routes` | 3 rows since iter-4 (confirmed live) — never hand-edit `NavBar.tsx`; `apps/backend/tests/test_meta_routes.py`'s route-count assertions update in the SAME commit (the file's own documented "route ships WITH its test update" precedent) |
+| `config_fingerprint` | `Config.config_fingerprint()` | embedded in research payload stamps | pinned `08e471b10130e1e2` all era (confirmed live through iter-4); §0.4 Path A only for every new desk field — no field that shapes a served value may be an env var. Zero new `Config` fields through iter-4 — the pin, and `edge_report_cache._config_content_hash`, both stay exactly as iter-1 left them. |
 
 **New rows this era (each a new desk-owned value, exactly one owner — per `docs/goal.md`'s Product
 Shape table):**
@@ -108,7 +118,7 @@ Shape table):**
 | Top-up compute progress | `app/research/desk_topup_compute.py` (`DeskTopupComputeManager`, shipped J-02, iter-2) | `POST /research/desk/topup/compute` (trigger), `GET /research/desk/topup/compute` (poll), `POST /research/desk/topup/compute/cancel` (cancel) | shape: `{"id": str, "state": "running"\|"done"\|"cancelled"\|"failed", "started_utc": str, "finished_utc": str \| null, "error": str \| null, "progress": {"pairs_total": int, "pairs_done": int, "outcomes": [{"symbol": str, "timeframe": str, "outcome": "reused"\|"fetched"\|"failed", "detail": str \| null}]}}`; single-flight; page-load GETs never trigger a compute; process-scoped bookkeeping, never a research value. iter-4 (J-04) is this row's FIRST UI consumer (a Top-up button on `/desk`, wired with live progress + cancel, mirroring the Edge Report Compute button pattern) — read-only wiring, zero shape change. |
 | Screen snapshots, rank rows, skip rows | `app/research/desk_screen.py` (shipped J-03, iter-3) | `GET /research/desk/screen` — no params: `{"screens": [...lightweight meta only: id/screen_date/as_of/universe_snapshot_id/config_fingerprint/bar_store_signature/created_utc/counts — NEVER full rows/skipped...], "latest": <full snapshot>\|null}`; `?date=YYYY-MM-DD`: `{"screen": <full snapshot for that date>\|null}` — honest-empty, HTTP 200 always | Frozen JSON, append-only, one file per snapshot, keyed on 5 pins (`screen_date`, `as_of`, `universe_snapshot_id`, `config_fingerprint`, `bar_store_signature`) — an identical-pin trigger refuses a duplicate write and returns the existing snapshot (the `UniverseAlreadyRegistered` precedent). Snapshot shape: `{id, screen_date, as_of, universe_snapshot_id, config_fingerprint, bar_store_signature, created_utc, rows: [...], skipped: [...]}`. Ranked row: `{symbol: str, side: "support"\|"resistance", band_class: "A"\|"B"\|"C"\|null, distance_bps: float>=0, band_score: float, price_low: float, price_high: float, coverage: {<tf>: {has_bars, latest_window_end_utc}}, tick_evidence: bool}` — `band_class`/`distance_bps`/`band_score`/`price_low`/`price_high` all read from ONE `compute_tradability` band per symbol (selected by the SAME `(class, distance, score)` order the screen itself ranks by — see `assumptions.md` iter-3), byte-for-byte; `coverage` reused verbatim from `desk_coverage.get_desk_coverage`; `tick_evidence` = symbol present in `DatasetStore.list()`. Skip row: `{symbol, skipped: true, reason: "no_bars"\|"no_basis", coverage: {...}, tick_evidence: bool}` — `"no_bars"` = `compute_tradability`'s own `no_bar_series_for_symbol`; `"no_basis"` = a daily series exists but no session resolves (`basis_as_of: null`) — two honest, distinct reasons, never conflated. Rank order over `rows`: `(band_class rank A>B>C>null desc, distance_bps asc, band_score desc, symbol asc)`. `bar_store_signature` = a deterministic hash over `desk_coverage`'s own per-member × per-timeframe read — never a `BarStore`/JSON-file re-hash (T-4). Storage dir: a bare env-var-or-sibling-of-`desk_universe_dir_resolved()` default (the `resolve_cache_db_path` pattern) — deliberately NOT a new `Config` field (see `assumptions.md` iter-3); `config_fingerprint` stays `08e471b10130e1e2`. **iter-4 addition (behavior, not shape):** triggering a screen compute with NO universe snapshot registered now REFUSES (an honest 4xx error naming the missing universe, mirroring the top-up CLI's own no-universe message) rather than persisting an honest-empty (`universe_snapshot_id: null, rows: [], skipped: []`) snapshot — closes audit B4; the persisted snapshot SHAPE above is unchanged, this only removes one previously-reachable (and useless) append-only entry. |
 | Screen compute progress | `app/research/desk_screen_compute.py` (`DeskScreenComputeManager`, shipped J-03, iter-3) | `POST /research/desk/screen/compute` (trigger, body `{"screen_date": "YYYY-MM-DD"}` REQUIRED — 422 if absent, never defaults to today), `GET /research/desk/screen/compute` (poll), `POST /research/desk/screen/compute/cancel` (cancel) — mirrors `/research/desk/topup/compute*` exactly | shape: `{"id": str, "state": "running"\|"done"\|"cancelled"\|"failed", "screen_date": str, "started_utc": str, "finished_utc": str \| null, "error": str \| null, "reused": bool, "screen_id": str \| null, "progress": {"members_total": int, "members_done": int, "current": str \| null}}`; single-flight; page-load GETs never trigger a compute; process-scoped bookkeeping, never a research value; an identical-pin trigger over an already-recorded snapshot returns it without recomputing (T-6/append-only). **`reused`/`screen_id` are an iter-4 (J-04) ADDITIVE amendment to this row's shape** (the fields did not exist before iter-4): `screen_id` is the resulting persisted snapshot's own `id` (populated once the job reaches a terminal state, `null` while running or before any trigger); `reused` is `true` when that snapshot already existed under the SAME 5-pin key before this job ran (a pure re-read, zero new file written) and `false` when this job's own walk is what created it — closes audit B2 (an otherwise-indistinguishable `"done"` for a fresh compute vs. a pure reuse). Computed by the SAME `DeskScreenComputeManager`, served by the SAME two routes — no second owner, no second endpoint. |
-| Route list (now 3 rows) | `app/meta.py` `UI_ROUTES` | `GET /meta/ui-routes` | same owner as the unchanged row above — J-04 (iter-4) appends the `/desk` entry there, in the same iteration the page ships |
+| Route list (now 3 rows) | `app/meta.py` `UI_ROUTES` | `GET /meta/ui-routes` | same owner as the unchanged row above — J-04 (iter-4) appended the `/desk` entry there in the same commit the page shipped |
 
 <!-- RESOLVED at iter-2: coverage's REST sub-path is the dedicated `GET /research/desk/coverage`
 endpoint (row above), per docs/goal.md Key Capability 2's build-time decision — registered here as
@@ -150,4 +160,14 @@ build (the iter-1/iter-2/iter-3 precedent) — the first two are logged as inter
      meta-only `screens` list) with NO click-through — selecting a past entry to render ITS OWN
      rows verbatim, and the `/structure` drill-in, are J-05's job (deferred past iter-4). This is
      journey-scope allocation matching J-04 vs. J-05's own goal.md acceptance split, not a logged
-     assumption. -->
+     assumption.
+
+NOTED at iter-5 (documentation currency only, no new build-time decision): iter-4's browser-QA step
+never dispatched, so J-04 stayed `partial` despite the product being fully built and independently
+verified via live REST + two of its three required screenshots. iter-5 is a verification-only pass
+(zero product diff) that dispatches a real, fixture-scoped browser-QA run to capture the missing
+third screenshot (Run Screen running with a second click refused) and records the era's first
+`/desk` golden replay script (`journey-scripts/J-04.json`). The Navigation-skeleton and "Bars /
+candles" row text above were also refreshed for currency per `coherence.md` iter-4's advisory notes
+(the iter-4 audit-B1 `StructureChart.tsx` exception and the iter-4 merged-vs-per-series bar-read
+divergence, respectively) — neither is a nav-skeleton structural change. -->
