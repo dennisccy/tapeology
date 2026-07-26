@@ -26,6 +26,10 @@ from app.research.bars import (
     BarSeriesNotFound,
     BarStore,
     EmptyBarWindowError,
+    NonFiniteBarPriceError,
+    _canonical,
+    _content_checksum,
+    _sha256,
 )
 
 FIXTURE_BAR_DIR = Path(__file__).parent / "fixtures" / "bars"
@@ -193,6 +197,143 @@ def test_empty_bar_list_is_an_explicit_refusal(tmp_path):
         )
     records, errors = store.list()
     assert records == [] and errors == []
+
+
+# --- the priceless-bar rail (era-desk-iter-4 audit B1) -------------------------------------------
+# A candle with no finite price is not a candle. `record` REFUSES one (nothing reaches disk); the
+# merged read EXCLUDES any already-recorded priceless ROW and reports it in `integrity_errors`,
+# never touching the append-only file. Both halves matter: the write guard stops the bleeding, the
+# read guard is what makes the 60 series poisoned before it existed harmless (58 symbols, incl. the
+# era's pinned AAPL, each holding ONE priceless row beside hundreds of real bars -- quarantining
+# whole FILES would silently move every band those real bars support).
+
+
+@pytest.mark.parametrize("field", ["open", "high", "low", "close"])
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_record_refuses_a_bar_carrying_a_non_finite_price(tmp_path, field, bad):
+    store = BarStore(tmp_path / "bars")
+    prices = {"o": 148.0, "h": 149.5, "l": 147.5, "c": 149.0}
+    prices[{"open": "o", "high": "h", "low": "l", "close": "c"}[field]] = bad
+    poisoned = _bar(
+        "PG", "1d", datetime(2026, 6, 1, tzinfo=timezone.utc).timestamp(),
+        prices["o"], prices["h"], prices["l"], prices["c"], 1_000_000,
+    )
+    with pytest.raises(NonFiniteBarPriceError) as exc_info:
+        store.record(
+            symbol="PG", timeframe="1d", window_start_utc=WINDOW_START, window_end_utc=WINDOW_END,
+            feed="yahoo", bars=[poisoned],
+        )
+    assert "PG 1d" in str(exc_info.value)
+    # Nothing reached disk: not a file, not a registry row, not an integrity error.
+    assert store.list() == ([], [])
+    assert not (tmp_path / "bars").exists() or list((tmp_path / "bars").glob("*.json")) == []
+
+
+def test_record_refuses_the_whole_series_when_only_one_bar_is_priceless(tmp_path):
+    # The real vendor shape: hundreds of good bars plus ONE not-yet-traded row. The refusal is
+    # per-SERIES (nothing partially recorded) so the caller drops the bad row and re-records.
+    store = BarStore(tmp_path / "bars")
+    bars = _small_daily_series("PG") + [
+        _bar("PG", "1d", datetime(2026, 6, 4, tzinfo=timezone.utc).timestamp(),
+             float("nan"), float("nan"), float("nan"), float("nan"), 47402209)
+    ]
+    with pytest.raises(NonFiniteBarPriceError):
+        store.record(
+            symbol="PG", timeframe="1d", window_start_utc=WINDOW_START, window_end_utc=WINDOW_END,
+            feed="yahoo", bars=bars,
+        )
+    assert store.list() == ([], [])
+
+
+def _plant_priceless_row(store: BarStore, meta: dict) -> float:
+    """Rewrite an ALREADY-recorded series' file with one APPENDED priceless row and BOTH checksums
+    recomputed — reproducing the exact on-disk state of the 60 series written before ``record``'s
+    finite guard existed (a fully VALID file, both checksums correct, holding a row whose OHLC are
+    the JSON ``NaN`` token). It cannot go through ``record`` any more, which is the point.
+    Returns the planted row's timestamp."""
+    path = store.root / f"{meta['id']}.json"
+    payload = json.loads(path.read_text())
+    record = payload["record"]
+    rows = record["bars"]
+    priceless_ts = rows[-1]["ts"] + 86400.0
+    rows.append({
+        "ts": priceless_ts, "open": float("nan"), "high": float("nan"),
+        "low": float("nan"), "close": float("nan"), "volume": 47402209,
+    })
+    record["meta"]["bar_count"] = len(rows)
+    record["meta"]["checksum"] = _content_checksum(
+        record["meta"]["symbol"], record["meta"]["timeframe"], record["meta"]["feed"], rows
+    )
+    payload["file_checksum"] = _sha256(_canonical(record))
+    path.write_text(json.dumps(payload))
+    return priceless_ts
+
+
+def test_a_planted_priceless_series_still_passes_both_checksums(tmp_path):
+    # Guard on the guard: the planted file is NOT a corrupt file (that path is already covered).
+    # It verifies cleanly and is served by every per-series read verbatim — the stored truth.
+    store = BarStore(tmp_path / "bars")
+    meta = _record_small_series(store)
+    priceless_ts = _plant_priceless_row(store, meta)
+    records, errors = store.list()
+    assert errors == [] and len(records) == 1
+    assert [row["ts"] for row in records[0]["bars"]][-1] == priceless_ts
+    assert len(store.get(meta["id"])["bars"]) == 4
+
+
+def test_merged_read_excludes_a_recorded_priceless_row_and_reports_it(tmp_path):
+    store = BarStore(tmp_path / "bars")
+    meta = _record_small_series(store)
+    clean_rows, _hb, _ha, clean_meta = store.merged_candles("PG", "1d", limit=500)
+    assert len(clean_rows) == 3 and clean_meta["integrity_errors"] == []
+
+    priceless_ts = _plant_priceless_row(store, meta)
+
+    rows, _hb, _ha, merged_meta = store.merged_candles("PG", "1d", limit=500)
+    # The priceless row contributes NOTHING, and every real bar is byte-identical to before.
+    assert rows == clean_rows
+    assert priceless_ts not in [row["ts"] for row in rows]
+    assert merged_meta["bar_count"] == 3
+    assert merged_meta["series_ids"] == [meta["id"]]
+    # ...and it is REPORTED, through the same registered channel a corrupt file uses.
+    assert len(merged_meta["integrity_errors"]) == 1
+    reported = merged_meta["integrity_errors"][0]
+    assert reported["file"] == f"{meta['id']}.json"
+    assert "1 recorded row(s) carry a non-finite price" in reported["error"]
+    assert "the file itself is unchanged" in reported["error"]
+    # The typed analytic view (levels/tradability/desk screen read THIS) agrees exactly.
+    assert [bar.epoch for bar in store.merged_bars("PG", "1d")] == [row["ts"] for row in clean_rows]
+
+
+def test_excluding_a_priceless_row_never_touches_the_append_only_file(tmp_path):
+    store = BarStore(tmp_path / "bars")
+    meta = _record_small_series(store)
+    _plant_priceless_row(store, meta)
+    path = tmp_path / "bars" / f"{meta['id']}.json"
+    before = path.read_bytes()
+
+    store.merged_candles("PG", "1d", limit=500)
+    store.merged_bars("PG", "1d")
+    store.get(meta["id"])
+    store.list()
+
+    assert path.read_bytes() == before  # append-only: never deleted, re-tagged, or perturbed
+
+
+def test_the_merged_fold_stays_memoized_for_a_pair_holding_a_priceless_row(tmp_path):
+    # The priceless report rides ALONG in the memoized value rather than through the uncacheable
+    # `errors` set, so an affected pair is not re-folded on every read — and, critically, the
+    # cache-HIT path reports the exclusion exactly as the cache-miss path did.
+    store = BarStore(tmp_path / "bars")
+    meta = _record_small_series(store)
+    _plant_priceless_row(store, meta)
+
+    first_rows, first_meta = store._merged_rows("PG", "1d")
+    second_rows, second_meta = store._merged_rows("PG", "1d")
+
+    assert second_rows is first_rows  # the memo served the identical folded list
+    assert second_meta["integrity_errors"] == first_meta["integrity_errors"]
+    assert len(second_meta["integrity_errors"]) == 1
 
 
 # --- the committed miniature multi-timeframe fixture (keyless CI proof) --------------------------

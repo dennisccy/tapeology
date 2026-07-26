@@ -43,6 +43,7 @@ from .bars import (
     BarSeriesNotFound,
     BarStore,
     EmptyBarWindowError,
+    NonFiniteBarPriceError,
 )
 from .edge_report import EdgeReportError, peek_strategy_comparison_report
 from .edge_report_backtest_cache import EdgeReportBacktestCache, resolve_backtest_cache_db_path
@@ -690,6 +691,12 @@ def record_bar_series(
                 pass
         raise HTTPException(status_code=409, detail=str(exc))
     except EmptyBarWindowError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except NonFiniteBarPriceError as exc:
+        # The store's priceless-bar rail refused the write (era-desk-iter-4 audit B1). Unreachable
+        # through a Yahoo fetch now that the adapter drops such rows at the vendor seam, so this maps
+        # the OTHER adapters' (and any future caller's) case to the same honest 422 the empty-window
+        # refusal uses — a caller-visible refusal naming the row, never an opaque 500.
         raise HTTPException(status_code=422, detail=str(exc))
     # Era-5 J-03: additively index the freshly-recorded series ONLY after store.record succeeds —
     # using the returned meta dict's fields (the values that actually got written), never

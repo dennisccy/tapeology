@@ -570,6 +570,45 @@ def test_merged_read_surfaces_a_corrupted_file_instead_of_merging_it(ctx):
     assert f"{corrupt['id']}.json" == body["integrity_errors"][0]["file"]
 
 
+def test_merged_read_never_serves_a_null_priced_candle(ctx):
+    """era-desk-iter-4 audit B1, at the exact chokepoint that took ``/structure`` down: this is the
+    endpoint the Tradable-Map candlestick chart pages, and JSON serves a stored ``NaN`` price as
+    ``null``. A priceless row already on disk must be excluded from the served window and reported
+    — never handed to the chart as a candle whose open is ``null``."""
+    client, bar_dir = ctx
+    series = _record_window(client, first_index=0, count=5)
+    path = bar_dir / f"{series['id']}.json"
+    payload = json.loads(path.read_text())
+    record = payload["record"]
+    record["bars"].append({
+        "ts": _BASE_EPOCH + 5 * _DAY, "open": float("nan"), "high": float("nan"),
+        "low": float("nan"), "close": float("nan"), "volume": 47402209,
+    })
+    record["meta"]["bar_count"] = len(record["bars"])
+    # Both checksums recomputed: this is a VALID file holding a priceless row (exactly the state of
+    # the 60 real series), not a corrupt file — that case is covered separately above.
+    from app.research.bars import _canonical, _content_checksum, _sha256
+
+    record["meta"]["checksum"] = _content_checksum(
+        record["meta"]["symbol"], record["meta"]["timeframe"], record["meta"]["feed"], record["bars"]
+    )
+    payload["file_checksum"] = _sha256(_canonical(record))
+    path.write_text(json.dumps(payload))
+
+    body = client.get(
+        "/research/candles", params={"symbol": SYMBOL, "timeframe": TIMEFRAME, "limit": 500}
+    ).json()
+
+    assert body["bar_count"] == 5
+    assert [row["ts"] for row in body["bars"]] == [_BASE_EPOCH + i * _DAY for i in range(5)]
+    for row in body["bars"]:
+        for field in ("open", "high", "low", "close"):
+            assert row[field] is not None
+    assert len(body["integrity_errors"]) == 1
+    assert body["integrity_errors"][0]["file"] == f"{series['id']}.json"
+    assert "non-finite price" in body["integrity_errors"][0]["error"]
+
+
 def test_merged_read_reflects_a_newly_recorded_series_immediately(ctx):
     """The fold is memoized; the memo key names every contributing series AND its checksum, so a
     fresh recording can never be served a stale merge."""

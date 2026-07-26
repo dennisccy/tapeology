@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { BarRow, SrLevel, TradabilityBand } from "@/lib/types";
 import { formatDateTimeDMY } from "@/lib/datetime";
 import { EmptyHint } from "./Panel";
@@ -89,6 +89,24 @@ export interface ChartPriceLineSpec {
   title: string;
 }
 
+// Is ONE served row drawable as a candle? The charting library asserts (and THROWS, unmounting the
+// whole page) on a candle whose open/high/low/close is not a number — and JSON serves a stored
+// non-finite price as `null`. The backend now excludes such rows from the merged read and reports
+// them in `integrity_errors` (research/bars.py), so this is defence in depth, not the fix: one
+// unusable row must degrade the CHART (dropped, and said so beneath it), never delete the page.
+// era-desk-iter-4 audit B1 — the reproduced failure was exactly "Assertion failed: Candlestick
+// series item data value of open must be a number, got=object, value=null", 0.1s after the wall
+// rendered, on 58 symbols including the era's pinned AAPL.
+function isDrawableCandle(bar: BarRow): boolean {
+  return (
+    Number.isFinite(bar.ts) &&
+    Number.isFinite(bar.open) &&
+    Number.isFinite(bar.high) &&
+    Number.isFinite(bar.low) &&
+    Number.isFinite(bar.close)
+  );
+}
+
 export function StructureChart({
   bars,
   levels,
@@ -120,6 +138,12 @@ export function StructureChart({
   clockFormatter?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // Only drawable rows reach the library (see isDrawableCandle). Everything downstream — the
+  // viewport anchoring, the as-of index, the "any candles at all" hint — indexes into THIS array,
+  // so a dropped row can never shift the operator's scroll position onto the wrong candle.
+  const drawableBars = useMemo(() => bars.filter(isDrawableCandle), [bars]);
+  const drawableLiveBars = useMemo(() => liveBars.filter(isDrawableCandle), [liveBars]);
+  const undrawableCount = bars.length - drawableBars.length + (liveBars.length - drawableLiveBars.length);
   // `chartReady` flips once the dynamically imported chart library has built the chart+series. It
   // is STATE (not just a ref) on purpose: the candle window resolves in a few milliseconds and can
   // easily land BEFORE the dynamic import does, and a ref would leave the draw effects with nothing
@@ -308,7 +332,7 @@ export function StructureChart({
     // Candles VERBATIM from the loaded window. `ts` is already a real UTC-epoch-seconds value
     // (the bar store's own field — see research/bars.py's `_bar_to_row`), so — unlike
     // PriceChart.tsx's logical-time-to-epoch mapping — no anchor offset is needed here.
-    const candles = bars.map((b) => ({
+    const candles = drawableBars.map((b) => ({
       time: b.ts as any,
       open: b.open,
       high: b.high,
@@ -335,7 +359,7 @@ export function StructureChart({
         : null;
 
     series.setData(candles);
-    drawnBarsRef.current = bars;
+    drawnBarsRef.current = drawableBars;
 
     if (candles.length === 0) {
       drawnRef.current = false;
@@ -348,14 +372,14 @@ export function StructureChart({
       // crush the whole window into the canvas width, which is exactly what made a long series
       // unreadable and expensive to draw.)
       const viewport = initialViewportBars();
-      const asOfIndex = asOfTs === undefined ? -1 : bars.findIndex((b) => b.ts === asOfTs);
+      const asOfIndex = asOfTs === undefined ? -1 : drawableBars.findIndex((b) => b.ts === asOfTs);
       const to =
         asOfIndex >= 0
           ? Math.min(candles.length, asOfIndex + Math.round(viewport * (1 - AS_OF_VIEWPORT_SHARE)))
           : candles.length;
       chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, to - viewport), to });
     } else if (anchor && visibleRange) {
-      const newIndex = bars.findIndex((b) => b.ts === anchor.ts);
+      const newIndex = drawableBars.findIndex((b) => b.ts === anchor.ts);
       if (newIndex >= 0) {
         const from = newIndex - anchor.offset;
         chart.timeScale().setVisibleLogicalRange({
@@ -371,7 +395,7 @@ export function StructureChart({
     // re-issued here. Marked `fill` so the hook can refuse it at its cap. This is what makes the
     // chart converge on a full viewport instead of loading exactly one page per operator gesture.
     requestMissingBars(chart.timeScale().getVisibleLogicalRange(), { fill: true });
-  }, [bars, asOfTs, chartReady]);
+  }, [drawableBars, asOfTs, chartReady]);
 
   // --- Feed the live tape bars into the second series (cockpit only) ----------------------------
   // Updated in place so the last bar animates as trades arrive: when the new array is an append-only
@@ -385,7 +409,7 @@ export function StructureChart({
     const liveSeries = liveSeriesRef.current;
     if (!chart || !liveSeries) return;
 
-    const candles = liveBars.map((b) => ({
+    const candles = drawableLiveBars.map((b) => ({
       time: b.ts as any,
       open: b.open,
       high: b.high,
@@ -397,7 +421,7 @@ export function StructureChart({
     const canIncrement =
       prev.length > 0 &&
       candles.length >= prev.length &&
-      liveBars[prev.length - 1]?.ts === prev[prev.length - 1]?.ts;
+      drawableLiveBars[prev.length - 1]?.ts === prev[prev.length - 1]?.ts;
 
     if (canIncrement) {
       for (let i = prev.length - 1; i < candles.length; i++) {
@@ -415,8 +439,8 @@ export function StructureChart({
         chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, to - viewport), to });
       }
     }
-    drawnLiveRef.current = liveBars;
-  }, [liveBars, chartReady]);
+    drawnLiveRef.current = drawableLiveBars;
+  }, [drawableLiveBars, chartReady]);
 
   // --- Draw the level + band reference lines (clear-then-redraw, PriceChart.tsx's pattern) ------
   // Kept in its OWN effect so appending a lazily-loaded candle page never re-creates every line.
@@ -579,7 +603,7 @@ export function StructureChart({
     }
   }, [asOfTs, asOfLabel, bars, chartReady]);
 
-  const hasBars = bars.length > 0 || liveBars.length > 0;
+  const hasBars = drawableBars.length > 0 || drawableLiveBars.length > 0;
 
   return (
     <div className="relative">
@@ -588,6 +612,14 @@ export function StructureChart({
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <EmptyHint>No candles to draw for this timeframe.</EmptyHint>
         </div>
+      )}
+      {undrawableCount > 0 && (
+        <p
+          data-testid="structure-chart-undrawable-rows"
+          className="mt-1 text-[11px] text-amber-300/80"
+        >
+          {undrawableCount} row(s) in this window carry no price and are not drawn.
+        </p>
       )}
       {loadingMore && (
         <div

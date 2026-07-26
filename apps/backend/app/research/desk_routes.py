@@ -295,7 +295,34 @@ def trigger_desk_screen_compute(
     """Start the single-flight desk screen compute job for ``body.screen_date``, or — if one is
     already running — return it UNCHANGED (``started: False``, never a second concurrent job).
     Returns ``{"started": bool, "compute": <snapshot>}``; the actual walk runs on a background
-    worker thread, off this request, so this route returns immediately."""
+    worker thread, off this request, so this route returns immediately.
+
+    Refuses — 422, naming the missing universe, never starting a job or persisting anything — when
+    no universe snapshot is registered yet (mirrors the top-up CLI's own no-universe message,
+    ``desk_topup_compute.py:352-356``; closes audit B4: a screen run with no universe would
+    otherwise persist a permanent, useless honest-empty snapshot every time it's re-triggered).
+
+    ``UniverseStore.list()`` also reports ``records == []`` when snapshot FILES exist but every one
+    of them failed its integrity check, so the refusal names that cause separately rather than
+    telling the operator nothing is registered when something is (era-desk-iter-4 audit B2): the
+    action a damaged snapshot needs (look at the named file) is not the action an absent one needs
+    (fetch a universe)."""
+    records, errors = universe_store.list()
+    if not records:
+        if errors:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"no READABLE universe snapshot is registered -- nothing to screen: "
+                    f"{len(errors)} snapshot file(s) failed their integrity check and are excluded "
+                    "(" + "; ".join(f"{e['file']}: {e['error']}" for e in errors) + ")"
+                ),
+            )
+        raise HTTPException(
+            status_code=422,
+            detail="no universe snapshot is registered -- nothing to screen (run "
+            "POST /research/desk/universe/fetch first)",
+        )
     return manager.trigger(
         body.screen_date, universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store,
     )

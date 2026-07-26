@@ -1,40 +1,25 @@
 # Iteration State — desk
 
-**After iteration:** 3 · **Date:** 2026-07-25 · **Verdict:** CONTINUE
+**After iteration:** 4 · **Date:** 2026-07-26 · **Verdict:** CONTINUE
 
 ## Journeys
 
-3 passing (J-01 J-02 J-03) · 3 failing (J-04 J-05 J-06) · 1 partial (J-07) — 7 total
+3 passing (J-01 J-02 J-03) · 2 failing (J-05 J-06) · 2 partial (J-04 J-07) — 7 total
 
 ## Active blockers
 
-- None human-owned; J-04 (`/desk`) is unblocked, keyless, dev-owned. **Owed BEFORE its screenshots:**
-  fixture-scoped backend (a real screen = ~100 honest `skipped: no bars`; `desk_screen` bypasses
-  `TradabilityCache`); warm iter-1's `_config_content_hash`-stranded caches (setups ~9-11 min cold,
-  `/structure` Load ~21.6 s); re-point `journey-scripts/J-07.json` step 8 off async `300.11`; T-9.
-- **HUMAN call queued** (audit B10): `_select_best_band` (`desk_screen.py:206`) ranks distance BEFORE
-  score → AAPL's row is `C / 2.348 bps / 57.0 (298.08-299.24)` while the same served list carries
-  `C / 123.0 (300.23-302.25)`, the era's pinned wall. J-04 labels the chip "nearest same-class band"
-  or the tuple is respecced (J-05's drill-in holds either way).
+- **EVIDENCE LANE, dev-owned — the only reason J-04 is not `passing`:** `browser-qa-agent` never ran in iter-4 (per `trace/trace.jsonl`), `...-iter-4-ui-test-results.md` was never written, `...-closure-verdict.md` = **CLOSURE-FAIL**. Missing state: **Run Screen in progress + a second click refused**. Run it FIXTURE-SCOPED (temp universe/bar/screen dirs, 103-member fixture + AAPL/MSFT bars).
+- `reports/qa/goal-desk-iter-4-qa.md` is discredited (audit T1: TC-02 `started=true` false; TC-04 retired label; TC-20 1305 vs 1328; `TC-01-empty-state.png` shows a POPULATED page; both `TC-12-*.png` blank + identical). Regenerate, never cite. No `/desk` golden yet (`journey-scripts/` = `J-07.json` only).
+- **HUMAN call queued:** `docs/goal.md` lists `bars.py` (BarStore) + `components/StructureChart.tsx` as untouched this era; both changed under a developer-written spec amendment. Owner ratifies in `docs/goal.md` or the two files revert (minor/unresolved in `journey-history.json`).
 
 ## Last 2 verdicts
 
-- iter 3: CONTINUE — J-03 `passing` on the evaluator's OWN 52-check live run (bands byte-identical to
-  `GET /research/tradability`, exact `distance_bps` from the basis bar's close, identical-pin re-run
-  byte+mtime unchanged, 0 `BarStore` calls in the signature, cross-process determinism); suite
-  1299p/8s/0f, pin unchanged, zero diff on 12 frozen owners + frontend, COHERENCE-PASS.
-- iter 2: CONTINUE — J-02 `passing` (truth-table, fetch/reuse/cancel-resume top-up); suite 1240p/8s/0f.
+- iter 4: CONTINUE — `/desk` ships and works (evaluator opened the empty-state + populated-briefing shots; verified `/meta/ui-routes` = 3 routes, suite 1328p/8s/0f, pin `08e471b10130e1e2`, pinned AAPL 300.11–302.2 unchanged, J-07 replay PASS 1/1) — but the browser lane never ran and one required screenshot does not exist ⇒ J-04 `partial`. COHERENCE-WARN.
+- iter 3: CONTINUE — J-03 `passing` on the evaluator's own 52-check live run; suite 1299p/8s/0f.
 
 ## Do not redo
 
-- **J-01 + J-02 + J-03 DONE, clause-verified** (`state/journey-history.json`). J-03 shipped
-  `desk_screen.py` (`ScreenStore` 5-pin append-only key, `compute_screen` the SOLE walker,
-  `compute_bar_store_signature`, `resolve_desk_screen_dir`, `screen_as_of`) + `desk_screen_compute.py`
-  (manager + CLI) + 4 `/research/desk/screen*` routes. Re-check only suite + pin + zero-diff.
-- **Settled:** zero new `Config` field all era (store dirs = env-var/sibling resolvers); `as_of =
-  f"{screen_date}T23:59:59Z"`; `created_utc` = registration metadata, not a determinism input
-  (`assumptions.md` iter-3); screen list META-ONLY; global single-flight (one slot, NOT per-date).
-- **Hygiene when the file is already open:** scope `TAPEOLOGY_DATASET_DIR` in `route_ctx` (T3); refuse-
-  rather-than-record an empty screen with no universe (B4); port `ScreenStore.record`'s corrupt-file
-  guard into `UniverseStore.record` (`desk_universe.py:418` overwrites silently). J-07 stays `partial`
-  until nav = 3 routes (J-04) + MCP = 17 tools (today 15); suite floor **1299p / 8s**.
+- **J-01 + J-02 + J-03 DONE, clause-verified** (`state/journey-history.json`); re-check only suite + pin + zero-diff on their owners.
+- **J-04's PRODUCT is built — do not rebuild the page.** `app/desk/page.tsx`, 7 `lib/api.ts` fns, 10 `lib/types.ts` types, `UI_ROUTES` 3rd row, `reused`/`screen_id`, no-universe 422, `UniverseStore` corrupt-file guard, `route_ctx` dataset scoping — shipped and verified. iter-5 owes EVIDENCE only.
+- **Settled:** zero new `Config` field all era; chip copy "nearest same-class band" (`_select_best_band` byte-unchanged); `bar_store_signature` labelled "Bar-store signature" (a digest), "window last requested" only on coverage tooltips; Run Screen submits the client's today; price-less rows are excluded-and-reported on the merged read, never deleted (60 files stay put).
+- **Hygiene when those files are open:** guard `run_screen_and_record` like the POST route (B1); apply `_has_finite_prices` to the per-series read (B2); re-tighten `test_structure_chart_viewport.py:194`. Suite floor **1328p / 8s**; J-07 `partial` until MCP = 17 tools (today 15).

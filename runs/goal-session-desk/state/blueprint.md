@@ -48,7 +48,11 @@ Tapeology
 └── Desk         /desk         [iter-4, J-04 — being built THIS iteration] universe snapshot +
                                 coverage summary, screen briefing (ranked rows + honestly-grouped
                                 skipped rows), provenance line (universe snapshot id/date, as_of,
-                                fingerprint, bar-store freshness labeled "window last requested"),
+                                fingerprint, bar-store signature — labeled "Bar-store signature",
+                                AMENDED at iter-4 per audit F1: the snapshot-level value is a
+                                CHECKSUM over each member's window-last-requested timestamp, not a
+                                timestamp, so the "window last requested" label stays on the
+                                per-timeframe coverage badge tooltip, which really is one),
                                 Run Screen + Top-up buttons w/ live progress + cancel, a read-only
                                 browsable screen-history list (date + counts + provenance summary
                                 only — iter-4 scope). Per-row drill-in to `/structure` and
@@ -133,9 +137,14 @@ build (the iter-1/iter-2/iter-3 precedent) — the first two are logged as inter
      the parameter value is the same pattern already accepted for the bar top-up's fetch horizon
      (`assumptions.md` iter-2).
   3. **Freshness labelling.** `coverage.latest_window_end_utc` (surfaced via each row's embedded
-     `coverage`) and `bar_store_signature` (surfaced on the provenance line) are labeled "window
-     last requested" throughout `/desk` — never "last bar" — per audit B9/iter-2 B2: both describe
-     whole-store freshness at screen-compute time, not what the screen's rows actually consumed.
+     `coverage`) is labeled "window last requested" throughout `/desk` — never "last bar" — per
+     audit B9/iter-2 B2: it describes whole-store freshness at screen-compute time, not what the
+     screen's rows actually consumed. **AMENDED at iter-4 (audit F1):** `bar_store_signature` is NOT
+     given that label. It is `sha256(sorted (symbol, timeframe, latest_window_end_utc) tuples)[:16]`
+     (`desk_screen.py:172-182`) — a checksum, so "Window last requested  d7bc8f8127904d0a" put a
+     false claim on a hex digest. The provenance line labels it **"Bar-store signature"** with a
+     caption stating it summarizes every member's window-last-requested timestamp and is a pin,
+     never a time. The freshness LABEL now lives only on the value that genuinely is a window end.
   4. **Screen-history interactivity split.** iter-4 renders the screen-history list read-only
      (date + rows/skipped counts + provenance summary, from `GET /research/desk/screen`'s
      meta-only `screens` list) with NO click-through — selecting a past entry to render ITS OWN

@@ -50,6 +50,7 @@ though in practice ``yfinance`` reuses this project's already-installed ``pandas
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta
 from typing import AsyncIterator
 
@@ -153,6 +154,32 @@ def _chunks(start: datetime, end: datetime, limits: tuple[int, int] | None) -> l
         windows.append((cursor, stop))
         cursor = stop
     return windows or [(start, end)]
+
+
+def _is_priced_row(row) -> bool:
+    """Does ONE vendor row carry a real, finite price for all four OHLC fields (and a finite
+    volume)?
+
+    Yahoo emits a row for a session that has NOT traded yet — the current calendar day before the
+    open, and some post-holiday days — with pandas ``NaN`` in every price column and only a volume
+    number. ``float(NaN)`` succeeds silently, so without this check that row becomes a ``RawBar``
+    whose open/high/low/close are all ``nan``, and a ``NaN`` token is persisted into the
+    append-only, checksummed ``BarStore`` (era-desk-iter-4 audit B1 — 60 series over 58 symbols
+    were poisoned exactly this way, and ``/structure``'s candlestick chart then threw on the
+    ``null`` the JSON encoder serves for it).
+
+    A row with no prices is an ABSENT bar, not a bar whose prices are unknown, so it is dropped
+    HERE — at the vendor seam that knows what the vendor meant — exactly as an empty chunk is. A
+    window in which EVERY row is priceless still raises the honest ``NoDataForWindow`` below,
+    because ``rows_by_epoch`` stays empty."""
+    try:
+        return all(
+            math.isfinite(float(row[column]))
+            for column in ("Open", "High", "Low", "Close", "Volume")
+        )
+    except (TypeError, ValueError, KeyError):
+        # A non-numeric / missing column is likewise not a usable candle — dropped, never guessed.
+        return False
 
 
 def _resample_4h(hourly: tuple[RawBar, ...]) -> tuple[RawBar, ...]:
@@ -277,6 +304,9 @@ class YahooAdapter:
                 # other chunks returned. An all-empty result still raises below.
                 continue
             for ts, row in history.iterrows():
+                if not _is_priced_row(row):
+                    # No prices at all -> an absent bar, dropped at the seam (see _is_priced_row).
+                    continue
                 bar = RawBar(
                     sym,
                     timeframe,

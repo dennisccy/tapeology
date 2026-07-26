@@ -400,6 +400,22 @@ class UniverseStore:
 
         date = datetime.now(timezone.utc).date().isoformat()
         snapshot_id = f"universe-{date}-{checksum}"
+        # A file already at this snapshot id's own path, with the duplicate-checksum scan above
+        # finding no match, means exactly one thing: that file failed its integrity check (`list`
+        # surfaces it in `integrity_errors` and withholds it from `existing`), because the path is
+        # a deterministic function of (today's date, content checksum) and the scan above already
+        # covers every OTHER already-registered snapshot's checksum. Writing here would SILENTLY
+        # overwrite a corrupted/tampered snapshot and erase the very integrity error the store had
+        # been honestly surfacing -- both a rewrite ("snapshots are append-only ... never
+        # rewritten") and a silence. Refuse loudly instead; a human decides what happens to the
+        # damaged file (mirrors ``desk_screen.ScreenStore.record``'s identical guard).
+        if self._path(snapshot_id).exists():
+            raise UniverseIntegrityError(
+                f"universe snapshot file '{self._path(snapshot_id).name}' already exists on disk "
+                f"but failed its integrity check -- refusing to overwrite it (universe snapshots "
+                f"are append-only and are never rewritten). Move or remove the damaged file "
+                f"explicitly before re-recording this key."
+            )
         meta = {
             "id": snapshot_id,
             "date": date,

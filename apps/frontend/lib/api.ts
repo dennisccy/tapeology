@@ -6,6 +6,9 @@ import type {
   BarSeriesRecord,
   CreateBacktestParams,
   DatasetsListResult,
+  DeskScreenComputeSnapshot,
+  DeskScreenListResult,
+  DeskTopupComputeSnapshot,
   EdgeReportComputeSnapshot,
   EdgeReportPayload,
   LevelsResponse,
@@ -896,6 +899,174 @@ export async function cancelEdgeReportCompute(): Promise<{ ok: boolean; error?: 
     const res = await fetch(`${API_BASE}/research/edge-report/compute/cancel`, { method: "POST" });
     if (res.ok) return { ok: true };
     let error = "The edge-report compute could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// --- era-desk-iter-4 (J-04): the /desk page's seven fetch/trigger/cancel functions. Mirror
+// `triggerEdgeReportCompute`/`fetchEdgeReportCompute`/`cancelEdgeReportCompute` immediately above
+// exact `{ok, data, error}` shape and 422/unreachable-fold behavior byte-for-byte.
+
+// GET /research/desk/screen — the screen-history list + latest full snapshot, served VERBATIM.
+// Mirrors `fetchEdgeReport`/`fetchDatasets` (a LIST-shaped endpoint, no query params — the
+// `?date=` variant is J-05 scope, deferred). An honest-empty (`{screens: [], latest: null,
+// integrity_errors: []}`) result is a valid `ok:true` outcome — the caller renders it as the
+// "Desk screen not computed yet." state, never a failure; `data: null` is reserved for a genuine
+// non-200 / unreachable backend.
+export async function fetchDeskScreen(): Promise<{
+  ok: boolean;
+  data: DeskScreenListResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/screen`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskScreenListResult };
+    }
+    let error = "The desk screen could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/screen/compute — start (or, while one is already running, observe) the
+// single-flight screen compute job. `screenDate` is the CALLER's own today (the `todayUtcDate()`
+// helper, /structure's own "Today" shortcut precedent) — this function takes it as a parameter
+// rather than resolving it itself, so the page owns the ONE date source. Mirrors
+// `triggerEdgeReportCompute`'s exact shape; the backend's own 422 (e.g. no universe registered)
+// `detail` is surfaced VERBATIM, never a client-fabricated message.
+export async function triggerDeskScreenCompute(screenDate: string): Promise<{
+  ok: boolean;
+  data?: { started: boolean; compute: DeskScreenComputeSnapshot };
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/screen/compute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ screen_date: screenDate }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data };
+    }
+    let error = "The screen compute could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/screen/compute — the screen compute job's current/last snapshot, served
+// VERBATIM, or `null` if none has ever run. Mirrors `fetchEdgeReportCompute`: `ok:false, data:null`
+// on any failure so a poll tick's caller keeps the last known view — never fabricates a snapshot.
+export async function fetchDeskScreenCompute(): Promise<{
+  ok: boolean;
+  data: DeskScreenComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/screen/compute`);
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as DeskScreenComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+// POST /research/desk/screen/compute/cancel — cancel the in-flight screen compute job. Mirrors
+// `cancelEdgeReportCompute`'s `{ok, error?}` shape; the backend's 409 (idle) `detail` is surfaced
+// VERBATIM.
+export async function cancelDeskScreenCompute(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/screen/compute/cancel`, { method: "POST" });
+    if (res.ok) return { ok: true };
+    let error = "The screen compute could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/topup/compute — start (or, while one is already running, observe) the
+// single-flight desk bar top-up job over the latest universe snapshot's members. No request body
+// (the backend resolves the latest universe snapshot itself). Mirrors
+// `triggerDeskScreenCompute`'s shape; this is the FIRST-EVER UI caller of this endpoint (shipped
+// J-02, iter-2 — CLI/POST-only until now).
+export async function triggerDeskTopupCompute(): Promise<{
+  ok: boolean;
+  data?: { started: boolean; compute: DeskTopupComputeSnapshot };
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/topup/compute`, { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data };
+    }
+    let error = "The bar top-up could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/topup/compute — the top-up job's current/last snapshot, served VERBATIM, or
+// `null` if none has ever run this process. Mirrors `fetchDeskScreenCompute`.
+export async function fetchDeskTopupCompute(): Promise<{
+  ok: boolean;
+  data: DeskTopupComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/topup/compute`);
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as DeskTopupComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+// POST /research/desk/topup/compute/cancel — cancel the in-flight top-up job. Mirrors
+// `cancelDeskScreenCompute`.
+export async function cancelDeskTopupCompute(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/topup/compute/cancel`, { method: "POST" });
+    if (res.ok) return { ok: true };
+    let error = "The bar top-up could not be cancelled.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

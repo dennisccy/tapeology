@@ -11,6 +11,7 @@ fetched live and frozen) so the mocked response is genuinely Yahoo-shaped, not a
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -180,6 +181,96 @@ def test_fetch_bars_raises_no_data_for_window_for_an_empty_vendor_response(monke
         YahooAdapter().fetch_bars("ZZZZZNOTREAL", START, END, "1d")
     assert "no data" in str(exc_info.value)
     assert "window" in str(exc_info.value)
+
+
+# --- the priceless-row rail (era-desk-iter-4 audit B1) -----------------------------------------
+# Yahoo serves a row for a session that has NOT traded yet with NaN in every price column and only
+# a volume number. `float(nan)` succeeds silently, so before this guard existed that row became a
+# RawBar with nan OHLC and was persisted into the append-only BarStore (60 series / 58 symbols),
+# which then served `"open": null` to /structure's candlestick chart and took the page down.
+
+
+def _priceless_row_dataframe(fixture: dict) -> pd.DataFrame:
+    """The committed real fixture PLUS one appended vendor row shaped exactly as Yahoo's
+    not-yet-traded row is: NaN in all four price columns, a real volume."""
+    df = _fixture_dataframe(fixture)
+    later = pd.to_datetime([fixture["bars"][-1]["epoch"] + 86400], unit="s", utc=True)
+    priceless = pd.DataFrame(
+        {
+            "Open": [float("nan")],
+            "High": [float("nan")],
+            "Low": [float("nan")],
+            "Close": [float("nan")],
+            "Volume": [47402209],
+        },
+        index=later,
+    )
+    return pd.concat([df, priceless])
+
+
+def test_fetch_bars_drops_a_vendor_row_whose_prices_are_all_nan(monkeypatch):
+    fixture = _load_fixture()
+    priceless_epoch = fixture["bars"][-1]["epoch"] + 86400
+    _install_fake_ticker(monkeypatch, _priceless_row_dataframe(fixture))
+
+    bars = YahooAdapter().fetch_bars(fixture["symbol"], START, END, "1d")
+
+    # Exactly the three REAL fixture bars survive; the priceless row is an absent bar, not a bar.
+    assert len(bars) == 3
+    assert [b.epoch for b in bars] == [b["epoch"] for b in fixture["bars"]]
+    assert priceless_epoch not in [b.epoch for b in bars]
+    # And every surviving bar carries four finite prices -- no nan reaches the caller at all.
+    for bar in bars:
+        for value in (bar.open, bar.high, bar.low, bar.close):
+            assert math.isfinite(value)
+
+
+def test_fetch_bars_drops_a_priceless_row_without_disturbing_the_real_rows(monkeypatch):
+    # The dropped row must not perturb the rows around it: same epochs, same OHLC, same volumes,
+    # byte-for-byte identical to the run where the vendor never served the priceless row at all.
+    fixture = _load_fixture()
+    _install_fake_ticker(monkeypatch, _fixture_dataframe(fixture))
+    clean = YahooAdapter().fetch_bars(fixture["symbol"], START, END, "1d")
+    _install_fake_ticker(monkeypatch, _priceless_row_dataframe(fixture))
+    with_priceless = YahooAdapter().fetch_bars(fixture["symbol"], START, END, "1d")
+    assert with_priceless == clean
+
+
+def test_fetch_bars_raises_no_data_for_window_when_every_vendor_row_is_priceless(monkeypatch):
+    # An ALL-priceless window is honestly indistinguishable from an empty one: nothing tradable
+    # happened. It must raise NoDataForWindow -- never return an empty tuple, never a nan bar.
+    fixture = _load_fixture()
+    epochs = [b["epoch"] for b in fixture["bars"]]
+    all_nan = pd.DataFrame(
+        {
+            "Open": [float("nan")] * len(epochs),
+            "High": [float("nan")] * len(epochs),
+            "Low": [float("nan")] * len(epochs),
+            "Close": [float("nan")] * len(epochs),
+            "Volume": [0] * len(epochs),
+        },
+        index=pd.to_datetime(epochs, unit="s", utc=True),
+    )
+    _install_fake_ticker(monkeypatch, all_nan)
+    with pytest.raises(NoDataForWindow):
+        YahooAdapter().fetch_bars(fixture["symbol"], START, END, "1d")
+
+
+def test_fetch_bars_drops_a_row_whose_volume_is_nan(monkeypatch):
+    # A NaN volume would make `int(row["Volume"])` raise and fail the WHOLE fetch, discarding every
+    # real bar the same response carried -- so it is covered by the same drop.
+    fixture = _load_fixture()
+    df = _fixture_dataframe(fixture)
+    later = pd.to_datetime([fixture["bars"][-1]["epoch"] + 86400], unit="s", utc=True)
+    nan_volume = pd.DataFrame(
+        {"Open": [201.0], "High": [202.0], "Low": [200.0], "Close": [201.5], "Volume": [float("nan")]},
+        index=later,
+    )
+    _install_fake_ticker(monkeypatch, pd.concat([df, nan_volume]))
+
+    bars = YahooAdapter().fetch_bars(fixture["symbol"], START, END, "1d")
+
+    assert [b.epoch for b in bars] == [b["epoch"] for b in fixture["bars"]]
 
 
 def test_interval_map_covers_the_five_directly_fetched_era5_timeframes():

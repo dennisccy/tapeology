@@ -38,13 +38,18 @@ Disciplines (each an anti-goal or a J-01 acceptance clause):
     recorded series for one symbol+timeframe, folded by timestamp). All go through the SAME verified
     load — projections of verified content, never a second, unverified read path.
   * **Honest failure states.** Unknown id -> ``BarSeriesNotFound``; an empty fetched window ->
-    ``EmptyBarWindowError`` (nothing written, nothing fabricated).
+    ``EmptyBarWindowError`` (nothing written, nothing fabricated); a candle with no finite price ->
+    ``NonFiniteBarPriceError`` (era-desk-iter-4 audit B1 — the write-path rail that makes "a
+    priceless bar can never reach disk" structural rather than a per-caller convention; the read
+    side excludes any already-recorded priceless ROW from the merged view and reports it in
+    ``integrity_errors``, never touching the append-only file).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 import uuid
 from dataclasses import dataclass
@@ -83,6 +88,21 @@ class EmptyBarWindowError(Exception):
     is fabricated."""
 
 
+class NonFiniteBarPriceError(Exception):
+    """A bar offered for recording carries a non-finite price (``NaN``/``inf``) in one of its OHLC
+    fields — an explicit refusal at the ONE write path; nothing is written.
+
+    A candle with no price is not a candle. Vendors emit such a row for a session that has not
+    traded yet (pandas ``NaN`` in every price column), and ``float(nan)`` succeeds silently — so
+    without this guard the append-only, checksummed store accepts a permanently priceless bar, and
+    JSON round-trips it through the non-standard ``NaN`` token into every reader as ``null``
+    (era-desk-iter-4 audit B1: that is how 60 series over 58 symbols were poisoned and how
+    ``/structure``'s candlestick chart was taken down). The adapter that knows what the vendor meant
+    drops the row first (``providers/adapters/yahoo.py::_is_priced_row``); THIS is the structural
+    backstop that makes "a priceless bar can never reach disk" true for every write path, present
+    and future."""
+
+
 def _canonical(obj: object) -> bytes:
     """The one canonical JSON encoding every checksum in this module hashes (stable across
     processes: sorted keys, no whitespace) — the SAME encoding ``research/datasets.py`` uses."""
@@ -112,6 +132,23 @@ def _bar_to_row(bar: RawBar) -> dict:
         "close": bar.close,
         "volume": bar.volume,
     }
+
+
+_PRICE_FIELDS = ("open", "high", "low", "close")
+
+
+def _has_finite_prices(row: dict) -> bool:
+    """Does ONE stored candle row carry a real, finite number in all four price fields?
+
+    The single predicate behind both halves of the priceless-bar rail: ``record`` REFUSES a row that
+    fails it (``NonFiniteBarPriceError`` — nothing reaches disk), and ``_merged_rows`` EXCLUDES a
+    row that fails it from the merged view while reporting it in ``integrity_errors`` (the 60 series
+    already on disk when the guard shipped — files never touched, since bar series are append-only
+    and are never deleted, re-tagged, or content-perturbed)."""
+    try:
+        return all(math.isfinite(float(row[field])) for field in _PRICE_FIELDS)
+    except (KeyError, TypeError, ValueError):
+        return False
 
 
 def _row_to_bar(symbol: str, timeframe: str, row: dict) -> RawBar:
@@ -161,11 +198,14 @@ _RACY_WRITE_GUARD_SECONDS = 2.0
 
 
 # The merged-view memo behind ``BarStore.merged_candles``: key = (symbol, timeframe, the exact set of
-# contributing (series_id, content-checksum) pairs); value = (ascending merged rows, meta). Same
-# atomic single-key-assignment publish discipline as ``_VERIFIED_CACHE`` above. Because the key
-# names every contributing series AND its content checksum, ANY change to the recorded set (a new
-# fetch, a deleted file, a changed file) yields a different key -- a stale merge cannot be served.
-_MERGED_CACHE: dict[tuple, tuple[list[dict], dict]] = {}
+# contributing (series_id, content-checksum) pairs); value = (ascending merged rows, meta, the
+# per-series priceless-row reports excluded from that fold). Same atomic single-key-assignment
+# publish discipline as ``_VERIFIED_CACHE`` above. Because the key names every contributing series
+# AND its content checksum, ANY change to the recorded set (a new fetch, a deleted file, a changed
+# file) yields a different key -- a stale merge cannot be served. The priceless-row reports ride
+# ALONG in the cached value (rather than being recomputed, or routed through the uncacheable
+# ``errors`` set) so a pair holding one is memoized exactly like any other.
+_MERGED_CACHE: dict[tuple, tuple[list[dict], dict, list[dict]]] = {}
 
 
 def _slice_rows(
@@ -418,7 +458,8 @@ class BarStore:
         ``series_ids`` (every contributing series, oldest-created first), ``bar_count`` (the merged
         total available, not the slice length), ``revised_timestamps``, and ``integrity_errors``
         (a corrupt file is surfaced exactly as ``list`` surfaces it — never served as data, never
-        silently dropped from the merge)."""
+        silently dropped from the merge; a recorded row carrying no finite price is surfaced the
+        same way and excluded from the fold — see ``_merged_rows``)."""
         normalized_symbol = symbol.strip().upper()
         normalized_timeframe = timeframe.strip()
         merged, meta = self._merged_rows(normalized_symbol, normalized_timeframe)
@@ -436,7 +477,20 @@ class BarStore:
         new series, deleting one, or any content change produces a different key — a stale merge is
         not representable. Published with the SAME single-assignment discipline as
         ``_VERIFIED_CACHE`` above (see that block comment for the torn-read rationale). Nothing is
-        cached when a file fails verification, since the error set is part of the answer."""
+        cached when a file fails verification, since the error set is part of the answer.
+
+        PRICELESS ROWS (era-desk-iter-4 audit B1). A recorded row whose OHLC are not all finite
+        numbers carries no price at all, so it is excluded from the fold and reported in
+        ``integrity_errors`` — the same treatment, through the same registered channel, that a
+        corrupt FILE already gets ("never served as data, never silently dropped"). Excluding the
+        ROW rather than the whole file is deliberate: the 60 series that were recorded before
+        ``record``'s finite guard existed each hold ONE priceless row beside hundreds of real ones,
+        and quarantining whole files would silently change every band and level those real bars
+        support (measured: AAPL's support side moves). The files themselves are never touched — bar
+        series are append-only and are never deleted, re-tagged, or content-perturbed — so the
+        exclusion lives here, on the read that every chart and every analytic consumer shares. The
+        per-series report is part of the MEMOIZED value (not of ``errors``), so the fold stays
+        memoized for the affected pairs exactly as before."""
         if not self._root.exists():
             return [], {"series_ids": [], "bar_count": 0, "revised_timestamps": 0, "integrity_errors": []}
 
@@ -457,17 +511,31 @@ class BarStore:
         key = (symbol, timeframe, tuple((s.meta.get("id"), s.meta.get("checksum")) for s in contributing))
         cached = _MERGED_CACHE.get(key)  # read-local-reference-before-inspect
         if cached is not None and not errors:
-            return cached[0], {**cached[1], "integrity_errors": []}
+            return cached[0], {**cached[1], "integrity_errors": [dict(e) for e in cached[2]]}
 
         by_ts: dict[float, dict] = {}
         revised: set[float] = set()
+        priceless: list[dict] = []
         for loaded in contributing:
+            dropped = 0
             for row in loaded.rows:
+                if not _has_finite_prices(row):
+                    dropped += 1  # a row with no price is not a candle -- see the docstring
+                    continue
                 ts = row["ts"]
                 previous = by_ts.get(ts)
                 if previous is not None and previous != row:
                     revised.add(ts)
                 by_ts[ts] = row
+            if dropped:
+                priceless.append({
+                    "file": f"{loaded.meta.get('id')}.json",
+                    "error": (
+                        f"{dropped} recorded row(s) carry a non-finite price (no OHLC value at "
+                        f"all) — excluded from the merged {symbol} {timeframe} series; the file "
+                        f"itself is unchanged (bar series are append-only)"
+                    ),
+                })
         merged = [by_ts[ts] for ts in sorted(by_ts)]
         meta = {
             "series_ids": [s.meta.get("id") for s in contributing],
@@ -475,8 +543,8 @@ class BarStore:
             "revised_timestamps": len(revised),
         }
         if not errors:
-            _MERGED_CACHE[key] = (merged, meta)  # single atomic rebind
-        return merged, {**meta, "integrity_errors": errors}
+            _MERGED_CACHE[key] = (merged, meta, priceless)  # single atomic rebind
+        return merged, {**meta, "integrity_errors": errors + [dict(e) for e in priceless]}
 
     def load_bars(self, bar_series_id: str) -> list[RawBar]:
         """The stored candle series as typed ``RawBar`` records (verified load, exact stored
@@ -546,6 +614,20 @@ class BarStore:
         if not bars:
             raise EmptyBarWindowError("no bars in the requested window — nothing was recorded")
         rows = [_bar_to_row(bar) for bar in bars]
+        # The priceless-bar rail (era-desk-iter-4 audit B1): a candle with no finite price is not a
+        # candle, and this store is append-only — so the refusal has to happen BEFORE the write,
+        # never as a later repair. Checked here rather than in each caller so it holds for every
+        # write path (the /research/bars route, the desk top-up job, the CLI warmers, and anything
+        # added later); the offending timestamp is named so the operator can see which row the
+        # vendor served empty.
+        for row in rows:
+            if not _has_finite_prices(row):
+                raise NonFiniteBarPriceError(
+                    f"{symbol} {timeframe}: the bar at ts {row['ts']} carries a non-finite price "
+                    f"(open={row['open']!r} high={row['high']!r} low={row['low']!r} "
+                    f"close={row['close']!r}) — a bar with no price is not a bar, so nothing was "
+                    f"recorded"
+                )
         checksum = _content_checksum(symbol, timeframe, feed, rows)
         # Registration-time duplicate scan over the HEALTHY registry — the exact same series
         # content is never recorded twice.

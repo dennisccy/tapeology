@@ -286,6 +286,32 @@ def test_load_raises_universe_integrity_error_for_unparseable_json(tmp_path):
     assert len(errors) == 1
 
 
+def test_recording_over_a_corrupted_file_at_the_same_key_is_refused_never_a_silent_overwrite(tmp_path):
+    """iter-4 (closes audit B3 / iter-3's lesson): mirrors
+    ``test_desk_screen.py``'s ``test_recording_over_a_corrupted_file_at_the_same_key_is_refused_never_a_silent_overwrite``
+    for ``UniverseStore``. A tampered snapshot is withheld from ``records`` (surfaced in
+    ``integrity_errors``), so the duplicate-checksum scan in ``record`` cannot see it -- but the
+    file's PATH is a deterministic function of (today's date, content checksum), so a re-record of
+    the SAME membership on the SAME day lands on the SAME file. ``record`` must refuse explicitly:
+    never silently overwrite a damaged snapshot (a rewrite -- "snapshots are append-only ... never
+    rewritten"), and never erase the integrity error the store was honestly surfacing."""
+    universe_dir = tmp_path / "universe"
+    store = UniverseStore(universe_dir)
+    _record_fixture(store)
+    path = next(universe_dir.glob("*.json"))
+    data = json.loads(path.read_text())
+    data["record"]["meta"]["member_count"] = 999  # tamper -- file_checksum now disagrees
+    path.write_text(json.dumps(data))
+    tampered_bytes = path.read_bytes()
+
+    with pytest.raises(UniverseIntegrityError) as excinfo:
+        _record_fixture(store)
+    assert path.name in str(excinfo.value)
+    assert path.read_bytes() == tampered_bytes
+    records, errors = store.list()
+    assert records == [] and len(errors) == 1  # still surfaced, not silently healed
+
+
 # --- T-3 guard: the universe store never routes through the dataset store -----------------------
 
 

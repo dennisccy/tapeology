@@ -181,3 +181,61 @@ backend (a real screen is ~100 honest skips and `desk_screen` bypasses `Tradabil
 universe (B4), and port `ScreenStore.record`'s corrupt-file guard into `UniverseStore.record`
 (`desk_universe.py:418` still silently overwrites); (6) do NOT re-verify J-03's internals — its
 Required-still-passing check is suite + pin + zero-diff on `desk_screen*.py`.
+
+## Iteration 4 — goal-desk-iter-4
+
+**Date:** 2026-07-26T14:20:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Moved failing -> partial: J-04 "The /desk briefing page" (the page ships and works; one of its
+  three required screenshots does not exist and the browser lane never ran)
+- Partial (unchanged status, one clause newly met): J-07 "The kept product stands" — its "three
+  routes in the nav" clause is now met; only "17 MCP tools" is still unmet at 15
+- Anti-goal violations: two new entries, both minor, one unresolved. (a) UNRESOLVED, needs a human
+  yes/no: the era's "frozen foundations" rail says `bars.py` (the bar store) and
+  `components/StructureChart.tsx` stay untouched, and both were changed this iteration under a
+  spec amendment the developer wrote himself. (b) RESOLVED: the first ever click of the new
+  "Top-up" button wrote 60 price-less bar records into the real data store and that broke the
+  Structure chart; it is fixed, prevented at the source, and the bad rows are now skipped and
+  reported instead of shown.
+
+**Reasoning:** I did not take any report's word for this iteration. I opened every load-bearing
+screenshot myself: the empty state ("Desk screen not computed yet." with an enabled Run Screen and
+the three-route nav) and the full populated briefing (10 ranked rows, correct rank order, chips,
+badges, "SKIPPED — NO BARS (91)", the corrected provenance line) both show what the goal asks for;
+the two top-up screenshots are real and different; the two "TC-12" images are blank rectangles and
+the file named "TC-01-empty-state" actually shows a populated page, exactly as the audit said. The
+one thing that does not exist anywhere is a picture of Run Screen running with a second click being
+refused — and the goal text asks for that picture. I also confirmed from the session trace that the
+browser-QA step never ran at all this iteration, that its results file was never written, and that
+the closure gate is therefore CLOSURE-FAIL. I re-ran the work myself where it mattered: the full
+back-end suite (1336 tests, 0 failures, 8 skipped -> 1328 passing), the fingerprint
+(`08e471b10130e1e2`), the route list (exactly three), the MCP tool count (still 15), the price-less
+row fix on the real store (Apple daily bars: 500 rows served, none price-less, one honest error
+note, file untouched), and the era's pinned wall (Apple as of 2026-06-22 still gives the same
+300.11–302.2 class-A band). Coherence is COHERENCE-WARN, so it does not block. CONTINUE because
+real progress landed and everything left is tractable; not REGRESSION because nothing that used to
+work stopped working; not ESCALATE because the iteration already ran at full depth and the pipeline
+stopped itself instead of waving the problem through.
+
+**Next-step recommendation:** Run iteration 5 at **full** depth. Do these in order, and treat item
+1 as the gate on scoring the iteration at all: (1) run the real browser-QA step against a
+fixture-scoped backend (temp data folders seeded with the committed 103-name universe and the
+committed Apple/Microsoft bar files, plus one warm-up call) and let it write
+`reports/phase-goal-desk-iter-5-ui-test-results.md`, including the missing picture of Run Screen in
+progress with a second click refused, and a picture of the empty state on the current code; (2)
+regenerate the QA report, because the one on disk states three things that are not true; (3) record
+a saved replay script for the `/desk` page so a future change cannot break it silently; (4) then
+build J-05 "Ledger history and drill-in to Structure" — click a past screen to see its own recorded
+rows, add `?symbol=&asof=` prefill to the Structure page, and make each briefing row a link; (5)
+ask the owner to confirm, in writing in `docs/goal.md`, whether the two frozen files may stay
+changed (bar store + Structure chart), because only he can grant that exception; (6) carry three
+one-line hardening items whenever those files are next touched — guard the screen command-line
+write path the same way the web route is guarded, apply the price-less-row rule to the single-series
+read too, and re-tighten the chart guard test that was loosened to accept a rename. One sentence for
+the owner: the new Desk page is real and works, but nobody took the one screenshot the plan
+requires, so the next run must photograph it properly before we move on.

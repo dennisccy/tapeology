@@ -81,19 +81,25 @@ def run_screen_and_record(
     *,
     progress: Callable[[dict], None] | None = None,
     should_abort: Callable[[], bool] | None = None,
-) -> dict:
-    """Compute ONE screen (``compute_screen`` -- the sole walker) and persist it, append-only. If
-    an identical-pin screen is already recorded, the EXISTING snapshot's meta is returned (never a
-    second file, never a rewrite) rather than raising -- ``ScreenAlreadyRecorded`` is caught here,
-    not propagated, since reusing an already-recorded snapshot is a normal, expected outcome, not a
-    failure. A cancelled (partial) walk is NEVER recorded -- returns ``None`` instead (the caller
-    distinguishes "cancelled, nothing recorded" from "recorded/reused" by this ``None`` check)."""
+) -> tuple[dict | None, bool]:
+    """Compute ONE screen (``compute_screen`` -- the sole walker) and persist it, append-only.
+    Returns ``(record, reused)``:
+
+      * a cancelled (partial) walk is NEVER recorded -- returns ``(None, False)`` (the caller
+        distinguishes "cancelled, nothing recorded" from "recorded/reused" by the ``None`` check);
+      * a freshly-persisted snapshot returns ``(record, False)``;
+      * an identical-pin screen already recorded returns the EXISTING snapshot's meta with
+        ``(record, True)`` (never a second file, never a rewrite) -- ``ScreenAlreadyRecorded`` is
+        caught here, not propagated, since reusing an already-recorded snapshot is a normal,
+        expected outcome, not a failure (era-desk-iter-4 J-04, audit B2: this ``reused`` flag is
+        what lets a caller distinguish "this job's walk is what created the snapshot" from "this
+        job's walk found an already-recorded one and changed nothing")."""
     result = compute_screen(
         universe_store, bar_store, bar_index, dataset_store, config, screen_date,
         progress=progress, should_abort=should_abort,
     )
     if should_abort is not None and should_abort():
-        return None
+        return None, False
     try:
         return screen_store.record(
             screen_date=result["screen_date"],
@@ -103,14 +109,14 @@ def run_screen_and_record(
             bar_store_signature=result["bar_store_signature"],
             rows=result["rows"],
             skipped=result["skipped"],
-        )
+        ), False
     except ScreenAlreadyRecorded as exc:
         existing = screen_store.find_by_key(
             result["screen_date"], result["as_of"], result["universe_snapshot_id"],
             result["config_fingerprint"], result["bar_store_signature"],
         )
         assert existing is not None and existing["id"] == exc.existing_id
-        return existing
+        return existing, True
 
 
 class DeskScreenComputeManager:
@@ -166,6 +172,10 @@ class DeskScreenComputeManager:
                 "started_utc": _iso_utc_now(),
                 "finished_utc": None,
                 "error": None,
+                # era-desk-iter-4 J-04 (audit B2): honest until a terminal state resolves --
+                # "initial/running: reused false, screen_id null" (nothing recorded yet).
+                "reused": False,
+                "screen_id": None,
                 "progress": {"members_total": members_total, "members_done": 0, "current": None},
             }
             self._snapshot = snapshot
@@ -186,14 +196,26 @@ class DeskScreenComputeManager:
 
         def _work() -> None:
             try:
-                run_screen_and_record(
+                record, reused = run_screen_and_record(
                     universe_store, bar_store, bar_index, dataset_store, config, screen_store,
                     screen_date, progress=_publish, should_abort=cancel_event.is_set,
                 )
             except Exception as exc:  # noqa: BLE001 -- surfaced verbatim, never swallowed
                 self._resolve(job_id, "failed", error=str(exc))
                 return
-            self._resolve(job_id, "cancelled" if cancel_event.is_set() else "done", error=None)
+            # ``record is None`` means the walk observed the cancel BEFORE persisting anything, so
+            # `screen_id`/`reused` fall out to null/False -- nothing was recorded.
+            #
+            # The converse does NOT hold, and the snapshot deliberately reports the truth rather
+            # than the tidier rule (era-desk-iter-4 audit B3): a cancel that lands in the window
+            # between `run_screen_and_record`'s own should_abort() check and this line resolves
+            # `state: "cancelled"` WITH a non-null `screen_id` (and `reused: true` if that pin was
+            # already on file). Something really was recorded in that race, and saying so is more
+            # honest than reporting null for a snapshot the operator can go and read.
+            self._resolve(
+                job_id, "cancelled" if cancel_event.is_set() else "done", error=None,
+                reused=reused, screen_id=record["id"] if record is not None else None,
+            )
 
         thread = threading.Thread(target=_work, name=f"desk-screen-compute:{job_id}", daemon=True)
         with self._lock:
@@ -201,12 +223,18 @@ class DeskScreenComputeManager:
         thread.start()
         return {"started": True, "compute": _copy_snapshot(snapshot)}
 
-    def _resolve(self, job_id: str, state: str, *, error: str | None) -> None:
+    def _resolve(
+        self, job_id: str, state: str, *, error: str | None,
+        reused: bool = False, screen_id: str | None = None,
+    ) -> None:
         with self._lock:
             current = self._snapshot
             if current is None or current["id"] != job_id:
                 return  # superseded -- never resolve a job that is no longer the current one
-            self._snapshot = {**current, "state": state, "finished_utc": _iso_utc_now(), "error": error}
+            self._snapshot = {
+                **current, "state": state, "finished_utc": _iso_utc_now(), "error": error,
+                "reused": reused, "screen_id": screen_id,
+            }
 
     def cancel(self) -> None:
         """Signal cooperative cancellation for the in-flight job -- a harmless no-op if idle (the
@@ -263,13 +291,14 @@ def main() -> int:
     dataset_store = get_dataset_store()
     screen_store = ScreenStore(resolve_desk_screen_dir(config.desk_universe_dir_resolved()))
 
-    recorded = run_screen_and_record(
+    recorded, reused = run_screen_and_record(
         universe_store, bar_store, bar_index, dataset_store, config, screen_store,
         args.date, progress=_cli_progress_printer(),
     )
     print(
         f"desk screen complete for {args.date}: {len(recorded['rows'])} ranked, "
-        f"{len(recorded['skipped'])} skipped -- snapshot {recorded['id']}."
+        f"{len(recorded['skipped'])} skipped -- snapshot {recorded['id']} "
+        f"({'reused existing' if reused else 'newly recorded'})."
     )
     return 0
 

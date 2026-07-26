@@ -360,10 +360,11 @@ def real_ctx(tmp_path):
 
 def test_first_run_screen_and_record_persists_a_new_snapshot(real_ctx):
     universe_store, bar_store, bar_index, dataset_store, screen_store = real_ctx
-    recorded = run_screen_and_record(
+    recorded, reused = run_screen_and_record(
         universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
     )
     assert recorded is not None
+    assert reused is False
     assert any(r["symbol"] == "AAPL" for r in recorded["rows"])
     records, errors = screen_store.list()
     assert errors == [] and len(records) == 1 and records[0]["id"] == recorded["id"]
@@ -371,15 +372,17 @@ def test_first_run_screen_and_record_persists_a_new_snapshot(real_ctx):
 
 def test_second_run_with_identical_pins_reuses_the_existing_snapshot_no_second_file(real_ctx, tmp_path):
     """TC-4: the manager/store returns the EXISTING snapshot (same id) rather than writing a
-    second file."""
+    second file -- and (era-desk-iter-4) the second call's own ``reused`` flag says so."""
     universe_store, bar_store, bar_index, dataset_store, screen_store = real_ctx
-    first = run_screen_and_record(
+    first, first_reused = run_screen_and_record(
         universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
     )
-    second = run_screen_and_record(
+    second, second_reused = run_screen_and_record(
         UniverseStore(universe_store.root), BarStore(bar_store.root), BarIndex(bar_index.db_path),
         DatasetStore(tmp_path / "datasets"), CONFIG, screen_store, SCREEN_DATE,
     )
+    assert first_reused is False
+    assert second_reused is True
     assert second["id"] == first["id"]
     records, errors = screen_store.list()
     assert errors == [] and len(records) == 1  # no second file
@@ -387,18 +390,94 @@ def test_second_run_with_identical_pins_reuses_the_existing_snapshot_no_second_f
 
 def test_cancel_before_the_walk_starts_returns_none_and_records_nothing(real_ctx):
     universe_store, bar_store, bar_index, dataset_store, screen_store = real_ctx
-    result = run_screen_and_record(
+    result, reused = run_screen_and_record(
         universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
         should_abort=lambda: True,
     )
     assert result is None
+    assert reused is False
     records, _errors = screen_store.list()
     assert records == []
 
 
 # ==================================================================================================
-# Routes -- honest-empty (TC-5), ?date= (TC-6), 422 on missing screen_date (TC-9), GET-never-
-# computes, single-flight/cancel through HTTP, idle-cancel 409.
+# era-desk-iter-4 (J-04, audit B2): the manager's own `reused`/`screen_id` fields, resolved through
+# a full `trigger()` -> terminal-snapshot round trip against the REAL `compute_screen` (real
+# fixture universe, real AAPL bars) -- distinct from the manager-mechanics section above, which
+# fakes `compute_screen` for timing control and never asserted these two fields.
+# ==================================================================================================
+
+
+def test_trigger_resolves_reused_false_and_its_own_screen_id_on_a_fresh_compute(real_ctx):
+    """TC-8."""
+    universe_store, bar_store, bar_index, dataset_store, screen_store = real_ctx
+    mgr = DeskScreenComputeManager()
+    mgr.trigger(SCREEN_DATE, universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store)
+    snap = _wait_for_terminal(mgr)
+    mgr.join_all(timeout=5)
+
+    assert snap["state"] == "done"
+    assert snap["reused"] is False
+    assert snap["screen_id"] is not None
+    records, _errors = screen_store.list()
+    assert records[0]["id"] == snap["screen_id"]
+
+
+def test_trigger_resolves_reused_true_and_the_existing_screen_id_on_a_repeat_compute(real_ctx):
+    """TC-7."""
+    universe_store, bar_store, bar_index, dataset_store, screen_store = real_ctx
+    first_mgr = DeskScreenComputeManager()
+    first_mgr.trigger(SCREEN_DATE, universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store)
+    first_snap = _wait_for_terminal(first_mgr)
+    first_mgr.join_all(timeout=5)
+    assert first_snap["reused"] is False
+
+    second_mgr = DeskScreenComputeManager()
+    second_mgr.trigger(SCREEN_DATE, universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store)
+    second_snap = _wait_for_terminal(second_mgr)
+    second_mgr.join_all(timeout=5)
+
+    assert second_snap["state"] == "done"
+    assert second_snap["reused"] is True
+    assert second_snap["screen_id"] == first_snap["screen_id"]
+    records, errors = screen_store.list()
+    assert errors == [] and len(records) == 1  # no second file
+
+
+def test_initial_and_running_snapshot_carry_the_honest_reused_false_screen_id_null_defaults(
+    manager_env, monkeypatch,
+):
+    """Initial/running state: ``reused: false``, ``screen_id: null`` -- nothing recorded yet."""
+    universe_store, bar_store, bar_index, dataset_store, screen_store = manager_env
+    started = threading.Event()
+    release = threading.Event()
+
+    def fake_compute_screen(*_args, **_kwargs):
+        started.set()
+        release.wait(timeout=5)
+        return {
+            "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z",
+            "universe_snapshot_id": "x", "config_fingerprint": "y", "bar_store_signature": "z",
+            "rows": [], "skipped": [],
+        }
+
+    monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
+
+    mgr = DeskScreenComputeManager()
+    result = mgr.trigger(
+        SCREEN_DATE, universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store,
+    )
+    assert result["compute"]["reused"] is False
+    assert result["compute"]["screen_id"] is None
+    assert started.wait(timeout=5)
+    release.set()
+    _wait_for_terminal(mgr)
+    mgr.join_all(timeout=5)
+
+
+# ==================================================================================================
+# Routes -- honest-empty (TC-5), ?date= (TC-6), 422 on missing screen_date, GET-never-computes,
+# single-flight/cancel through HTTP, idle-cancel 409, no-universe refusal (era-desk-iter-4 TC-9).
 # ==================================================================================================
 
 
@@ -407,6 +486,11 @@ def route_ctx(tmp_path, monkeypatch):
     monkeypatch.setenv("TAPEOLOGY_DESK_UNIVERSE_DIR", str(tmp_path / "universe"))
     monkeypatch.setenv("TAPEOLOGY_BAR_DIR", str(tmp_path / "bars"))
     monkeypatch.setenv("TAPEOLOGY_DESK_SCREEN_DIR", str(tmp_path / "screen"))
+    # era-desk-iter-4 (closes audit T3): the ONE `route_ctx` among this file's siblings that read
+    # the ambient `.data/datasets` tree instead of a temp dir -- `trigger_desk_screen_compute`
+    # reads `dataset_store` for the tick-evidence badge via `get_dataset_store()`, which resolves
+    # `TAPEOLOGY_DATASET_DIR` (unscoped here, previously) or else the real on-disk default.
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(tmp_path / "datasets"))
     store = JournalStore(str(tmp_path / "journal.db"), CONFIG)
     registry = ResearchRegistry(store, CONFIG)
     set_registry(registry)
@@ -447,10 +531,64 @@ def test_get_screen_compute_before_any_trigger_is_an_honest_null_and_starts_noth
 
 
 def test_post_trigger_missing_screen_date_is_422(route_ctx):
-    """TC-9: the endpoint never defaults to the current wall-clock date."""
+    """The endpoint never defaults to the current wall-clock date."""
     client, _mgr, _tmp_path = route_ctx
     r = client.post("/research/desk/screen/compute", json={})
     assert r.status_code == 422
+
+
+def test_post_trigger_with_no_universe_registered_refuses_and_persists_nothing(route_ctx):
+    """era-desk-iter-4 TC-9 (closes audit B4): a screen compute must refuse -- never persist a
+    permanent, useless honest-empty snapshot -- when no universe snapshot is registered."""
+    client, fresh_manager, _tmp_path = route_ctx
+    before = client.get("/research/desk/screen").json()
+    assert before == {"screens": [], "latest": None, "integrity_errors": []}
+
+    r = client.post("/research/desk/screen/compute", json={"screen_date": SCREEN_DATE})
+    assert r.status_code == 422
+    assert "universe" in r.json()["detail"]
+
+    after = client.get("/research/desk/screen").json()
+    assert after == {"screens": [], "latest": None, "integrity_errors": []}
+    # No background job was even started.
+    assert fresh_manager.snapshot() is None
+    # The absent-universe wording names the action that fixes it, and does NOT claim a file problem.
+    assert "no universe snapshot is registered" in r.json()["detail"]
+    assert "POST /research/desk/universe/fetch" in r.json()["detail"]
+
+
+def test_post_trigger_refusal_names_a_damaged_universe_snapshot_rather_than_claiming_none_exists(
+    route_ctx,
+):
+    """era-desk-iter-4 audit B2: ``UniverseStore.list()`` also reports ``records == []`` when
+    snapshot FILES exist but every one failed its integrity check. The refusal is right either way,
+    but the two causes need different operator actions, so the message must distinguish them
+    instead of saying "nothing is registered" about a universe that IS registered (and damaged)."""
+    client, fresh_manager, tmp_path = route_ctx
+    universe_dir = tmp_path / "universe"
+    snapshot = UniverseStore(universe_dir).record(
+        members=["AAA"], raw_members={"AAA": "AAA"},
+        source_url="https://example.invalid/constituents", min_members=1, max_members=999,
+    )
+    path = universe_dir / f"{snapshot['id']}.json"
+    payload = json.loads(path.read_text())
+    payload["record"]["meta"]["member_count"] = 999  # tamper -- the file checksum now disagrees
+    path.write_text(json.dumps(payload))
+    records, errors = UniverseStore(universe_dir).list()
+    assert records == [] and len(errors) == 1  # the precondition this finding is about
+
+    r = client.post("/research/desk/screen/compute", json={"screen_date": SCREEN_DATE})
+
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert "no READABLE universe snapshot is registered" in detail
+    assert "integrity check" in detail
+    assert f"{snapshot['id']}.json" in detail  # the operator is told WHICH file to look at
+    assert "POST /research/desk/universe/fetch" not in detail  # not the action this cause needs
+    assert fresh_manager.snapshot() is None
+    assert client.get("/research/desk/screen").json() == {
+        "screens": [], "latest": None, "integrity_errors": [],
+    }
 
 
 def test_post_trigger_runs_to_completion_and_get_polls_the_same_snapshot(route_ctx):

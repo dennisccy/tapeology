@@ -13,6 +13,10 @@ era-5D J-02 ("The Clean Slate" demolition interlude): the four journal-era rows 
 ``/journal/[id]``, ``/studies``, ``/performance``) are removed here in the SAME iteration their
 pages are deleted (the no-dead-link rule, applied in reverse) — the map now lists exactly the
 two KEPT routes.
+
+Era B "The Desk" J-04 (this iteration): the third row, ``/desk``, is added here in the SAME
+iteration its page ships (the no-dead-link rule, forward direction this time) — the nav and MCP
+``ui_route_map`` pick it up with no further edit.
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ router = APIRouter(prefix="/meta", tags=["meta"])
 UI_ROUTES: tuple[dict[str, object], ...] = (
     {"path": "/", "label": "Cockpit", "nav": True},
     {"path": "/structure", "label": "Structure", "nav": True},
+    {"path": "/desk", "label": "Desk", "nav": True},
 )
 
 

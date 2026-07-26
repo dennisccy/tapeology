@@ -778,3 +778,128 @@ export interface EdgeReportNotComputed {
 // not-computed payload. `payload.status === "not_computed"` is the render branch's discriminator
 // (see `structure/page.tsx`'s Edge Report section).
 export type EdgeReportPayload = EdgeReportResponse | EdgeReportNotComputed;
+
+// --- Era B "The Desk" iter-4 (J-04) -- the /desk briefing page's types. Mirrors the backend's
+// registered shapes verbatim (runs/goal-session-desk/state/blueprint.md's Data Contract "New rows
+// this era" table) -- every value here is rendered read-only; nothing is recomputed client-side.
+
+// One ranked screen row (`desk_screen.py`'s `compute_screen`), owned by `app/research/desk_screen.py`,
+// served verbatim by `GET /research/desk/screen`. `band_class`/`distance_bps`/`band_score`/
+// `price_low`/`price_high` all come from ONE `compute_tradability` band per symbol -- never
+// recomputed here. `coverage` is keyed by timeframe (e.g. "1h"/"4h"/"1d"/"1w"), each entry read
+// verbatim from `desk_coverage.get_desk_coverage` -- rendered honestly per-timeframe (a symbol may
+// hold bars for some pinned timeframes and not others; never assumed uniform).
+export interface DeskScreenRow {
+  symbol: string;
+  side: "support" | "resistance";
+  band_class: "A" | "B" | "C" | null;
+  distance_bps: number;
+  band_score: number;
+  price_low: number;
+  price_high: number;
+  coverage: Record<string, { has_bars: boolean; latest_window_end_utc: string | null }>;
+  tick_evidence: boolean;
+}
+
+// A member the screen walked but could not rank -- two honest, distinct reasons, never conflated:
+// "no_bars" (no bar series recorded at all) vs "no_basis" (a daily series exists but no prior
+// session resolves as a basis).
+export interface DeskScreenSkip {
+  symbol: string;
+  skipped: true;
+  reason: "no_bars" | "no_basis";
+  coverage: Record<string, { has_bars: boolean; latest_window_end_utc: string | null }>;
+  tick_evidence: boolean;
+}
+
+// One full, persisted screen snapshot -- frozen JSON, append-only, keyed on five pins
+// (`screen_date`, `as_of`, `universe_snapshot_id`, `config_fingerprint`, `bar_store_signature`).
+// `rows` is already in the snapshot's OWN served rank order (class desc, distance asc, score
+// desc, symbol asc) -- never re-sorted client-side.
+export interface DeskScreenSnapshot {
+  id: string;
+  screen_date: string;
+  as_of: string;
+  universe_snapshot_id: string | null;
+  config_fingerprint: string;
+  bar_store_signature: string;
+  created_utc: string;
+  rows: DeskScreenRow[];
+  skipped: DeskScreenSkip[];
+}
+
+// The lightweight, meta-only projection `GET /research/desk/screen`'s bulk `screens` list serves
+// for EVERY historical snapshot -- id/pins/counts only, NEVER the full `rows`/`skipped` arrays (a
+// screen snapshot is materially larger than a universe snapshot -- desk_screen.py module
+// docstring). The read-only screen-history list on `/desk` renders this verbatim, no click-through
+// (J-05 scope, deferred).
+export interface DeskScreenMeta {
+  id: string;
+  screen_date: string;
+  as_of: string;
+  universe_snapshot_id: string | null;
+  config_fingerprint: string;
+  bar_store_signature: string;
+  created_utc: string;
+  counts: { rows: number; skipped: number };
+}
+
+// `GET /research/desk/screen` (no `date` param) -- honest-empty-or-populated, HTTP 200 always,
+// never 404. `latest === null` iff no screen has EVER been computed -- the page's ONE discriminator
+// for the "Desk screen not computed yet." empty state (never conflated with a computed screen that
+// simply skipped every member, which renders `rows: []` with a non-empty `latest`).
+export interface DeskScreenListResult {
+  screens: DeskScreenMeta[];
+  latest: DeskScreenSnapshot | null;
+  integrity_errors: { file: string; error: string }[];
+}
+
+// era-desk-iter-4 (J-04) -- the screen compute manager's job snapshot (`DeskScreenComputeManager`,
+// `app/research/desk_screen_compute.py`), served VERBATIM by GET/POST `/research/desk/screen/compute`.
+// `reused`/`screen_id` are THIS iteration's additive amendment to the row (audit B2): `screen_id`
+// is the resulting persisted snapshot's own id once a terminal state resolves (`null` while
+// running or before any trigger); `reused` is `true` iff that snapshot already existed under the
+// SAME 5-pin key before this job ran (a pure re-read, zero new file written), `false` when this
+// job's own walk is what created it.
+export interface DeskScreenComputeProgress {
+  members_total: number;
+  members_done: number;
+  current: string | null;
+}
+
+export interface DeskScreenComputeSnapshot {
+  id: string;
+  state: "running" | "done" | "cancelled" | "failed";
+  screen_date: string;
+  started_utc: string | null;
+  finished_utc: string | null;
+  error: string | null;
+  reused: boolean;
+  screen_id: string | null;
+  progress: DeskScreenComputeProgress;
+}
+
+// The desk bar top-up compute manager's job snapshot (`DeskTopupComputeManager`, shipped J-02,
+// iter-2), served VERBATIM by GET/POST `/research/desk/topup/compute`. THIS iteration (J-04) is
+// its first-ever UI consumer (a Top-up button on `/desk`) -- read-only wiring, zero shape change.
+export interface DeskTopupOutcome {
+  symbol: string;
+  timeframe: string;
+  outcome: "reused" | "fetched" | "failed";
+  detail: string | null;
+}
+
+export interface DeskTopupComputeProgress {
+  pairs_total: number;
+  pairs_done: number;
+  outcomes: DeskTopupOutcome[];
+}
+
+export interface DeskTopupComputeSnapshot {
+  id: string;
+  state: "running" | "done" | "cancelled" | "failed";
+  started_utc: string | null;
+  finished_utc: string | null;
+  error: string | null;
+  progress: DeskTopupComputeProgress;
+}

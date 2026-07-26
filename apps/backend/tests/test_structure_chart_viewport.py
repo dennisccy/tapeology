@@ -191,7 +191,11 @@ def test_window_changes_preserve_the_visible_range():
     code = _code(STRUCTURE_CHART)
     assert "getVisibleLogicalRange()" in code
     assert re.search(r"anchor\s*=", code), "expected a remembered anchor bar"
-    assert "bars.findIndex((b) => b.ts === anchor.ts)" in code, (
+    # The array named here is whatever the component actually FED the library (era-desk-iter-4 audit
+    # B1 renamed it `drawableBars` — the finite-price-filtered view — so the anchor index and the
+    # library's own logical index stay the same number). The invariant under test is unchanged: the
+    # anchor is re-located by TIMESTAMP, never by a row count.
+    assert re.search(r"\w*[Bb]ars\.findIndex\(\(b\) => b\.ts === anchor\.ts\)", code), (
         "the anchor must be re-located by timestamp, not by a row count"
     )
     assert "anchor.offset" in code, "the anchor's offset from the range's left edge must be kept"

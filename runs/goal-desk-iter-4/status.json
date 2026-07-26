@@ -1,0 +1,63 @@
+{
+  "phase": "goal-desk-iter-4",
+  "status": "blocked",
+  "current_step": "closure_failed",
+  "updated_at": "2026-07-26T12:47:22.132206Z",
+  "started_at": "2026-07-25T10:36:04.789311Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/meta.py",
+    "apps/backend/app/providers/adapters/yahoo.py",
+    "apps/backend/app/research/bars.py",
+    "apps/backend/app/research/desk_routes.py",
+    "apps/backend/app/research/desk_screen_compute.py",
+    "apps/backend/app/research/desk_universe.py",
+    "apps/backend/app/research/routes.py",
+    "apps/backend/tests/test_bars.py",
+    "apps/backend/tests/test_bars_api.py",
+    "apps/backend/tests/test_desk_screen_compute.py",
+    "apps/backend/tests/test_desk_universe.py",
+    "apps/backend/tests/test_meta_routes.py",
+    "apps/backend/tests/test_structure_chart_viewport.py",
+    "apps/backend/tests/test_yahoo_adapter.py",
+    "apps/frontend/app/desk/page.tsx",
+    "apps/frontend/components/StructureChart.tsx",
+    "apps/frontend/lib/api.ts",
+    "apps/frontend/lib/types.ts",
+    "runs/goal-session-desk/journey-scripts/J-07.json",
+    "runs/goal-session-desk/state/assumptions.md",
+    "runs/goal-session-desk/state/blueprint.md",
+    "docs/phases/goal-desk-iter-4.md",
+    "docs/handoffs/goal-desk-iter-4-dev.md",
+    "docs/handoffs/goal-desk-iter-4-frontend.md",
+    "reports/phase-goal-desk-iter-4-implementation-summary.md",
+    "reports/qa/goal-desk-iter-4-evidence/FIX-J-07-structure-alive.png",
+    "reports/qa/goal-desk-iter-4-evidence/FIX-desk-populated-relabeled.png"
+  ],
+  "tests_run": true,
+  "browser_checks_run": true,
+  "fix_pass": {
+    "input": "docs/handoffs/goal-desk-iter-4-audit.md",
+    "verdict_addressed": "FAIL",
+    "findings_fixed": [
+      "B1",
+      "B2",
+      "B3",
+      "F1",
+      "F2",
+      "F3",
+      "F4",
+      "F5",
+      "T1"
+    ],
+    "findings_not_developer_fixable": [
+      "T2",
+      "T3"
+    ],
+    "suite": "1328 passed / 8 skipped / 0 failed (floor 1299/8; audit measured 1305/8)",
+    "config_fingerprint": "08e471b10130e1e2",
+    "j07_live_reverified": true
+  },
+  "next_action": "audit"
+}

@@ -87,3 +87,33 @@ carried a fabricated single-flight "queue" mechanism the auditor had to correct 
 a QA numeric into a golden or a spec without re-deriving it against the named data basis.
 **Applies to:** any iteration whose spec quotes measured values from a QA/dev report, and any golden
 or fixture assertion authored from one
+
+## iter-4 — 2026-07-26T14:20:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** A `full`-depth iteration reached the evaluator with its designated browser-QA step never
+dispatched at all, while the reviewer's own YAML said `definition_of_done: complete` — the only gate
+that caught it was the phase-closure-auditor's mechanical "does
+`reports/phase-<iter>-ui-test-results.md` exist?" check (the file was absent; iters 0-3 all had
+proper N/A stubs). Screenshots taken by the developer/auditor filled the gap and were partly broken
+(`TC-01-empty-state.png` shows a POPULATED page; `TC-12-topup-progress.png` and
+`TC-12-topup-cancelled.png` are the same blank 6,490-byte image), so a prose "21/21 passed" QA report
+existed for states nobody had really observed.
+**Applies to:** every iteration with `Frontend Present: yes` — check the existence of
+`ui-test-results.md` and the trace's `browser-qa-agent` entry BEFORE reading any verdict prose, and
+never let another agent's ad-hoc screenshot stand in for the named lane.
+
+## iter-4 — 2026-07-26T14:22:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The first-ever UI click of the `/desk` Top-up button ran against the AMBIENT
+`apps/backend/.data` store (the iter-4 spec's own NOTES had required a fixture-scoped one) and
+permanently recorded 60 bar series holding a NaN-priced Yahoo row for a session that had not traded;
+JSON round-trips that to `null`, which made `lightweight-charts` throw and unmount `/structure`
+~0.1 s AFTER the J-07 golden's step-8 string had already matched — i.e. the replay reported PASS on a
+page that had just crashed. Fixed three ways (adapter drops the row at the seam, `BarStore.record`
+refuses it, `_merged_rows` excludes + reports it) and the golden gained post-match liveness
+assertions (steps 9-11).
+**Applies to:** any iteration whose browser/QA pass can trigger a WRITE path (fetch, top-up,
+record) — scope the stores to a temp dir first; and any golden script — assert the page is still
+alive AFTER the first matching string, never only at the match.
