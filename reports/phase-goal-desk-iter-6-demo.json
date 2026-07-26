@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-6",
+  "base_url": "http://localhost:3301",
+  "iteration": 6,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk",
+      "narration": "This is the Desk, a daily briefing. It lists the symbols sitting closest to a real support or resistance wall, plus a history of every past briefing.",
+      "point_out": "Four panels: Provenance, Briefing, Skipped Members, and Screen History.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "2026-06-22" }
+    },
+    {
+      "n": 2,
+      "title": "Look back at a past day's briefing",
+      "narration": "Click any date in the history list and the page instantly shows exactly what was recorded that day. Nothing is recalculated — it is a plain read-back of the saved snapshot.",
+      "point_out": "A banner confirms you are now viewing 2026-06-22, not today's screen.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-history-row\"][data-screen-date=\"2026-06-22\"]" } },
+      "expect": { "text": "Viewing the recorded screen for 2026-06-22 — not the latest." }
+    },
+    {
+      "n": 3,
+      "title": "Snap back to today with one click",
+      "narration": "A \"Latest\" button shows up whenever you are looking at an older day. Click it and the page returns to today's screen right away, with no waiting.",
+      "point_out": "The banner disappears and today's briefing is back on screen.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Latest" } }
+    },
+    {
+      "n": 4,
+      "title": "Select that past day again",
+      "narration": "Selecting 2026-06-22 once more sets up the next step: jumping from one of its rows straight into a deeper chart.",
+      "point_out": "The 2026-06-22 banner is back.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-history-row\"][data-screen-date=\"2026-06-22\"]" } },
+      "expect": { "text": "Viewing the recorded screen for 2026-06-22 — not the latest." }
+    },
+    {
+      "n": 5,
+      "title": "Jump from a briefing row straight into its chart",
+      "narration": "Click any symbol in the Briefing list and it opens the deeper chart page already filled in and already loaded. There is no retyping the symbol or the date.",
+      "point_out": "The chart page opens with AAPL's real wall already drawn, at the band 298.02–300.1001.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-screen-row\"][data-symbol=\"AAPL\"]" } },
+      "expect": { "text": "298.02–300.1001" }
+    },
+    {
+      "n": 6,
+      "title": "Back to the Desk",
+      "narration": "Returning to the Desk to show the other kind of row: one that was skipped because it had no recorded price history.",
+      "point_out": "The Desk is back to its normal view.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "2026-06-22" }
+    },
+    {
+      "n": 7,
+      "title": "Select the same past day once more",
+      "narration": "Selecting 2026-06-22 again brings back the list of symbols that were skipped that day.",
+      "point_out": "The 91 skipped symbols are listed again, including ABBV.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-history-row\"][data-screen-date=\"2026-06-22\"]" } },
+      "expect": { "text": "Viewing the recorded screen for 2026-06-22 — not the latest." }
+    },
+    {
+      "n": 8,
+      "title": "A skipped symbol still opens honestly",
+      "narration": "Skipped symbols are clickable too. Clicking one still opens the deeper chart page, but it tells the truth: no price history was recorded for it, instead of showing a made-up chart.",
+      "point_out": "\"No bar series recorded for ABBV.\" appears instead of a fabricated chart.",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-skip-row\"][data-symbol=\"ABBV\"]" } },
+      "expect": { "text": "No bar series recorded for ABBV." }
+    },
+    {
+      "n": 9,
+      "title": "Opening the chart page on its own still works the old way",
+      "narration": "Opened directly, with no symbol or date already picked, the chart page looks exactly as it always has. Both fields stay empty until you choose a symbol and press Load.",
+      "point_out": "Both fields are empty and the page waits for you, unchanged from before this update.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Choose a symbol and an as-of time, then Load, to see its tradable level map." }
+    },
+    {
+      "n": 10,
+      "title": "The old manual way still works too",
+      "narration": "Typing a symbol by hand still works exactly as before. This update only added new shortcuts — it did not change the original way of using the page.",
+      "point_out": "\"AAPL\" is now typed into the Symbol field.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 11,
+      "title": "Fill in today's date with one click",
+      "narration": "A \"Today\" button fills in the as-of date for you, saving a manual date entry.",
+      "point_out": "The as-of field now shows today's date.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Today" } }
+    },
+    {
+      "n": 12,
+      "title": "Load the chart by hand",
+      "narration": "Pressing Load fills in the tradable-level table exactly as it always has, proving the original manual workflow is untouched by this update.",
+      "point_out": "The bands table appears, same as always.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "target": { "css": "[data-testid=\"tradable-map-table\"]" } }
+    }
+  ]
+}

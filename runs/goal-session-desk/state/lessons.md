@@ -141,3 +141,18 @@ evaluator a pixel-diff and a code read to distinguish "capture aid" from "fabric
 8×8 `animate-pulse` dot differing between the two shots is what proved they were real).
 **Applies to:** any browser-QA pass photographing an in-flight compute state, and any page whose
 controls render below a full-page capture's height limit.
+
+## iter-6 — 2026-07-26T19:50:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The "stretched link" row pattern (`<Link className="absolute inset-0">` inside a
+`position: relative` `<tr>`, `apps/frontend/app/desk/page.tsx:198-213` / `:288-300`) silently hid every
+per-cell `title` tooltip on both desk tables — including iter-4's own audit fix that kept the rounded
+`0.34 bps` honest by exposing the full `0.33523150389608725` on hover. No source lint, no DOM-text
+assertion, no screenshot and no golden could see it: the values are still in the DOM, they are just
+unreachable by pointer. Only `document.elementFromPoint` hit-testing at each element's centre found it.
+Making a whole row clickable therefore costs every hover affordance inside that row unless the contract
+is chosen deliberately.
+**Applies to:** any iteration that makes a table row clickable/navigable, or that relies on a `title`
+tooltip to keep a rounded display honest — pair the change with a hit-test assertion naming the
+element expected to be topmost at each interactive cell's centre.

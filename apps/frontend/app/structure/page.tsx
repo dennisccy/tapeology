@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   cancelEdgeReportCompute,
   createBacktest,
@@ -58,6 +59,13 @@ import { FeedBasisBadge } from "@/components/FeedBasisBadge";
 // GET /meta/ui-routes (data-driven NavBar — no client hardcoding; see apps/backend/app/meta.py
 // UI_ROUTES). Follows the /performance page pattern: client component, no business logic,
 // canonical endpoints read verbatim, `{ok, data, error}`-shaped fetch results.
+//
+// era-desk-iter-6 (J-05): the era's ONE sanctioned edit to this otherwise-frozen file — an
+// additive query-param prefill (`?symbol=&asof=`, reached from a `/desk` briefing row's drill-in
+// link). See the `useSearchParams` block below for the whole change: it seeds the SAME
+// `symbolInput`/`asOfInput` state and calls the SAME `handleLoad` a manual Load click already
+// uses. Nothing else on this page changed — every default, control, and rendered state when the
+// params are absent stays byte-for-byte what it was before this iteration (T-8).
 //
 // Era-5 J-05 added the page's first explicit write action: a fetch-control section (symbol +
 // timeframe + UTC date range + a "Fetch from Yahoo Finance" button). Submitting POSTs
@@ -1364,7 +1372,10 @@ function BacktestPanel({
   );
 }
 
-export default function StructurePage() {
+// The App Router requires any `useSearchParams()` reader to sit inside a `Suspense` boundary, so
+// the default export is now a thin wrapper (`StructurePage` below) — this renamed component holds
+// every pre-existing hook/handler/render byte-unchanged; only the wrapper is new.
+function StructurePageContent() {
   const [symbolInput, setSymbolInput] = useState("");
   const [asOfInput, setAsOfInput] = useState("");
   const [levelsState, setLevelsState] = useState<LoadState<LevelsResponse>>({ phase: "idle" });
@@ -1680,6 +1691,27 @@ export default function StructurePage() {
       alive = false;
     };
   }, [showRawLevels, loadedQuery, tradabilityState.phase]);
+
+  // J-05-PREFILL-START -- era-desk-iter-6: additive-only query-param prefill of the Load form
+  // above, reached from a `/desk` briefing row's drill-in link (`/structure?symbol=&asof=`). ONLY
+  // when BOTH params are present and non-empty does this seed `symbolInput`/`asOfInput` and invoke
+  // `handleLoad` -- the SAME load path a manual Load click already uses (no second fetch/compute
+  // function -- TC-6). Runs at most once per mount (`prefillRanRef`), so a later in-page Load click
+  // is never overridden. Absent or partial params leave every default/control/rendered state
+  // byte-unchanged (T-8, TC-4) -- the effect returns before touching any state.
+  const searchParams = useSearchParams();
+  const prefillRanRef = useRef(false);
+  useEffect(() => {
+    if (prefillRanRef.current) return;
+    const symbol = searchParams.get("symbol")?.trim() ?? "";
+    const asOf = searchParams.get("asof")?.trim() ?? "";
+    if (!symbol || !asOf) return;
+    prefillRanRef.current = true;
+    setSymbolInput(symbol);
+    setAsOfInput(asOf);
+    handleLoad(symbol, asOf);
+  }, [searchParams]);
+  // J-05-PREFILL-END
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -2809,5 +2841,18 @@ export default function StructurePage() {
         </section>
       </main>
     </div>
+  );
+}
+
+// The real default export -- a thin `Suspense` wrapper around `StructurePageContent` (required by
+// the App Router for any page reading `useSearchParams()`). `fallback={null}` renders nothing
+// extra: `StructurePageContent` fetches its own data client-side and already owns every loading
+// state this page needs, so a second, page-level loading skeleton here would only flash a state
+// nothing in this iteration's baseline ever showed (TC-4's pixel-for-pixel requirement).
+export default function StructurePage() {
+  return (
+    <Suspense fallback={null}>
+      <StructurePageContent />
+    </Suspense>
   );
 }

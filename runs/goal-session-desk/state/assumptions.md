@@ -350,3 +350,21 @@ empty state for that symbol at that date — exactly the same "describe, never f
 this era already applies everywhere else, so there is no dishonest or misleading render to guard
 against. Narrowing to ranked-rows-only remains available if the owner prefers that scope.
 **Reversible:** yes
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s browser-evidence rail ("every browser acceptance needs a screenshot — no
+screenshot ⇒ the journey is `unknown`, never `passing`") says nothing about a screenshot captured on the
+tree as it stood BEFORE a fix landed later in the same iteration. J-05's four acceptance screenshots
+were taken by the browser-QA lane between 17:11 and 18:03; the auditor then changed
+`apps/frontend/app/desk/page.tsx:983` (`isViewingLatest` now compares snapshot ids instead of testing
+"was anything clicked") at the end of the iteration.
+**We chose:** Count the screenshots. The fix only alters one path — selecting the NEWEST screen's own
+history row — and none of the four captures exercises it (UT-03 selects 2026-06-22, UT-04 uses the
+Latest button, UT-05/UT-06 navigate away, UT-02 has no params), so each image still shows the state the
+current code produces for the case it depicts. Corroborated two ways: the auditor re-ran TC-1/TC-2/TC-3
+live on a fixture-scoped rig AFTER the fix with printed state for both directions, and the evaluator
+compared UT-03's rendered rows field-for-field against the real recorded snapshot JSON. Consequence:
+mid-iteration fixes do not automatically void earlier evidence — but only when the changed path is
+demonstrably outside every accepted capture; a fix touching a photographed path would require re-capture.
+**Reversible:** yes

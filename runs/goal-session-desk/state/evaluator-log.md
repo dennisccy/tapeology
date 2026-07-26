@@ -288,3 +288,57 @@ thing keeping J-07 from passing; and keep the three one-line hardening items for
 files are next touched. One sentence for the owner: the Desk page is now properly photographed and
 proven, so the next run should build clicking a past screen and jumping from a row into the
 Structure chart.
+
+## Iteration 6 — goal-desk-iter-6
+
+**Date:** 2026-07-26T19:50:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-05 "Ledger history and drill-in to Structure" (failing -> passing — clicking a past
+  screen now shows that screen's own recorded rows, and clicking any row jumps into the Structure page
+  with the symbol and date already loaded)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02, J-03, J-04 all re-verified passing this iteration; J-06 "17 machine-readable
+  tools" still failing (deliberately out of scope); J-07 "The kept product stands" still partial for
+  exactly one reason — the tool count is 15, not 17, until J-06 ships
+- Anti-goal violations: none new. One carried, minor, still unresolved: the owner has still not put in
+  writing whether the two files iteration 4 changed (the bar store and the Structure chart) may stay
+  changed. Both files were untouched this iteration. The two older entries stay resolved.
+
+**Reasoning:** I did not take any report's word for this. I opened the four pictures that carry J-05's
+acceptance: clicking the 2026-06-22 row shows the "Viewing the recorded screen for 2026-06-22 — not
+the latest." banner with a Latest button and that screen's own ten ranked rows, ninety-one
+"no bars" rows and five provenance lines — and I compared every one of those numbers against the real
+recorded file on disk, so "shows what was recorded, recomputes nothing" is proven against real data,
+not against prose. The drill-in picture shows the Structure page opened at Apple with the date
+2026-06-22T23:59:59Z already filled in and the wall chart already drawn, with the era's pinned
+300.11–302.22 band at the top of the band list. A skipped name (ABBV) drills in and the page says
+honestly "No bar series recorded for ABBV." The Structure page opened with no address parameters looks
+exactly as it shipped: both boxes empty, Load switched off, the map idle. I then re-ran the work myself:
+the full back-end test suite (1341 tests, 0 failures, 8 skipped — 1333 passing, above the 1328 floor),
+the settings fingerprint (`08e471b10130e1e2`), the page list (exactly three), the tool count (still 15,
+neither desk tool present), the two new guard tests plus the copy lint (35 tests, 0 failures), and a
+listing of the owner's real data folder (unchanged: two screen files, one universe file, 355 bar files).
+Coherence is COHERENCE-PASS. CONTINUE because one journey is still unbuilt and the sentinel cannot pass
+until it is; not GOAL_ACHIEVED because the tool count is 15; not REGRESSION because nothing that used
+to work stopped working.
+
+**Next-step recommendation:** Run iteration 7 at **full** depth. It is meant to be the last one, so it
+must carry both halves of the ending: (1) build J-06 — add the two read-only desk tools so the count is
+17, and prove each one returns exactly what the web address returns, in both the empty and the filled
+state; (2) settle the one honesty problem this iteration introduced: the whole-row link now sits on top
+of every cell, so the hover text that used to show the full unrounded distance number and the "window
+last requested" dates can no longer be seen. Pick one behaviour (whole-row link, or per-cell hover
+text) and add a test that checks which element is really on top, so it cannot break silently again;
+(3) take the missing kept-product pictures J-07 asks for and has never had since iteration 4 — the
+simulated cockpit, the Case Studies drill-in and the honest Edge Report panel; (4) play the new
+`runs/goal-session-desk/journey-scripts/J-05.json` script once and make its second step pick the
+history row by its date instead of "the first row"; (5) ask the owner to write in `docs/goal.md`
+whether the two files iteration 4 changed may stay changed — only he can grant that. Carry, do not
+force: the same-date screen ambiguity (two screens recorded on one day cannot be told apart by the
+date-only lookup), keyboard access for the history rows, and the three one-line hardening items from
+earlier iterations. One sentence for the owner: the Desk can now browse its own history and jump into
+the chart, so the last run should add the two Claude-readable desk tools, restore the hover details the
+new row links hid, and photograph the older pages one final time.

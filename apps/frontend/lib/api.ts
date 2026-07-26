@@ -8,6 +8,7 @@ import type {
   DatasetsListResult,
   DeskScreenComputeSnapshot,
   DeskScreenListResult,
+  DeskScreenSnapshot,
   DeskTopupComputeSnapshot,
   EdgeReportComputeSnapshot,
   EdgeReportPayload,
@@ -932,6 +933,36 @@ export async function fetchDeskScreen(): Promise<{
       return { ok: true, data: (await res.json()) as DeskScreenListResult };
     }
     let error = "The desk screen could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/screen?date= — the exact persisted snapshot recorded for that date, verbatim,
+// or `null` when nothing matches (an honest "nothing recorded for this date", never an error).
+// era-desk-iter-6 (J-05): the FIRST UI caller of this already-shipped `?date=` branch
+// (`desk_routes.py:248-266`, shipped J-03/iter-3) — no new backend route. Mirrors `fetchDeskScreen`'s
+// exact `{ok, data, error}` shape byte-for-byte; `data` here is the single `DeskScreenSnapshot | null`
+// the `?date=` branch serves, distinct from `fetchDeskScreen`'s list-shaped `DeskScreenListResult`.
+export async function fetchDeskScreenByDate(date: string): Promise<{
+  ok: boolean;
+  data: DeskScreenSnapshot | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/screen?date=${encodeURIComponent(date)}`);
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data: (data.screen as DeskScreenSnapshot | null) ?? null };
+    }
+    let error = "The desk screen for that date could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

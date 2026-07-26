@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   cancelDeskScreenCompute,
   cancelDeskTopupCompute,
   fetchDeskScreen,
+  fetchDeskScreenByDate,
   fetchDeskScreenCompute,
   fetchDeskTopupCompute,
   triggerDeskScreenCompute,
@@ -44,6 +46,15 @@ import { fmt } from "@/lib/format";
 // Page-load GETs never trigger a compute (mount issues three GETs only; every POST is an explicit
 // button click). Nothing on this page is recomputed in the browser — every rendered value is a
 // verbatim re-format of what its owning endpoint already served.
+//
+// era-desk-iter-6 (J-05): the screen-history list is now interactive. Clicking a past entry issues
+// ONE new GET — `/research/desk/screen?date=<screen_date>` (already shipped J-03/iter-3,
+// `desk_routes.py:248-266`; this page is its first UI caller) — and renders THAT snapshot's own
+// `rows`/`skipped`/provenance in place of the currently-shown one (a read-only display swap, no
+// recompute, no route change). A "Latest" control reverts to the top-level `latest` snapshot
+// already held in `screenResult` state (no refetch). Every ranked/skip row is also a `Link` to
+// `/structure?symbol=<sym>&asof=<displayed snapshot's as_of>` — the era's one sanctioned additive
+// edit to `/structure` (its own query-param prefill, see that page's own comment).
 
 const NUMERIC_CELL = "px-2 py-1.5 text-right font-mono text-xs text-slate-200 whitespace-nowrap";
 const HEADER_CELL = "px-2 py-1 text-right text-[11px] font-medium text-slate-500";
@@ -55,6 +66,13 @@ const PRIMARY_BUTTON_CLASS =
 
 const CANCEL_BUTTON_CLASS =
   "mt-1 rounded-md border border-slate-700 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50";
+
+// The secondary (quieter) button styling for the "Latest" history control — mirrors
+// structure/page.tsx's own `SECONDARY_BUTTON_CLASS` byte-for-byte (each page owns its own copy of
+// this tiny constant per this project's established convention — see this file's own
+// LoadingPanel/UnavailablePanel comment above).
+const SECONDARY_BUTTON_CLASS =
+  "rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm font-medium text-slate-400 transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-slate-950";
 
 // Today's UTC calendar date (YYYY-MM-DD) — the value "Run Screen" submits as `screen_date`.
 // Mirrors /structure's own `todayUtcDate()` helper byte-for-byte (this project's own convention:
@@ -169,15 +187,26 @@ function hasNoCoverageAtAll(coverage: Record<string, { has_bars: boolean }>): bo
 // (assumptions.md iter-4 entry 1 — `_select_best_band` itself stays byte-unchanged; this copy
 // keeps the chip honest about what the ranking actually selects rather than implying it is the
 // symbol's single strongest band).
-function DeskRow({ row }: { row: DeskScreenRow }) {
+// `asOf` is the DISPLAYED snapshot's own `as_of` (shared by every row in one screen, never a
+// per-row field) — the drill-in target's second query param. The `Link` fills the whole row via
+// the "stretched link" pattern (`position: relative` on the `<tr>`, `absolute inset-0` on the
+// `<a>`): one real `next/link` anchor, valid nested-in-a-`<td>` markup, clickable anywhere in the
+// row — never a raw `<a>` wrapping the `<tr>` directly (invalid HTML) and never `router.push`.
+function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
   return (
     <tr
       data-testid="desk-screen-row"
       data-symbol={row.symbol}
       data-band-class={row.band_class ?? "none"}
-      className="border-b border-slate-800/60 last:border-b-0"
+      className="relative border-b border-slate-800/60 last:border-b-0 hover:bg-slate-900/40"
     >
       <td className={LABEL_CELL} data-testid="desk-row-symbol">
+        <Link
+          href={`/structure?symbol=${encodeURIComponent(row.symbol)}&asof=${encodeURIComponent(asOf)}`}
+          data-testid="desk-row-drill-in"
+          aria-label={`Open ${row.symbol} in Structure as of ${asOf}`}
+          className="absolute inset-0"
+        />
         {row.symbol}
       </td>
       <td className={LABEL_CELL} data-testid="desk-row-side">
@@ -209,7 +238,7 @@ function DeskRow({ row }: { row: DeskScreenRow }) {
   );
 }
 
-function DeskRowsTable({ rows }: { rows: DeskScreenRow[] }) {
+function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) {
   const uncoveredRanked = rows.filter((row) => hasNoCoverageAtAll(row.coverage)).length;
   return (
     <div className="overflow-x-auto">
@@ -236,7 +265,7 @@ function DeskRowsTable({ rows }: { rows: DeskScreenRow[] }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <DeskRow key={row.symbol} row={row} />
+            <DeskRow key={row.symbol} row={row} asOf={asOf} />
           ))}
         </tbody>
       </table>
@@ -247,15 +276,26 @@ function DeskRowsTable({ rows }: { rows: DeskScreenRow[] }) {
 // --- Skipped-members section — grouped under an honest heading, "no_bars" vs "no_basis" never
 // conflated (two distinct, honest absences). ---------------------------------------------------
 
-function DeskSkipRow({ skip }: { skip: DeskScreenSkip }) {
+// Per the goal's own iter-6 assumption (a skipped symbol still drills into `/structure`, which
+// honestly shows its own no-bars/empty state there — no fabrication risk): skip rows link exactly
+// like ranked rows, same `asOf`, same "stretched link" pattern (see `DeskRow`'s comment above).
+function DeskSkipRow({ skip, asOf }: { skip: DeskScreenSkip; asOf: string }) {
   return (
     <tr
       data-testid="desk-skip-row"
       data-symbol={skip.symbol}
       data-reason={skip.reason}
-      className="border-b border-slate-800/60 last:border-b-0"
+      className="relative border-b border-slate-800/60 last:border-b-0 hover:bg-slate-900/40"
     >
-      <td className={LABEL_CELL}>{skip.symbol}</td>
+      <td className={LABEL_CELL}>
+        <Link
+          href={`/structure?symbol=${encodeURIComponent(skip.symbol)}&asof=${encodeURIComponent(asOf)}`}
+          data-testid="desk-skip-row-drill-in"
+          aria-label={`Open ${skip.symbol} in Structure as of ${asOf}`}
+          className="absolute inset-0"
+        />
+        {skip.symbol}
+      </td>
       <td className={LABEL_CELL} data-testid="desk-skip-reason">
         {skip.reason === "no_bars" ? "no bars" : "no basis"}
       </td>
@@ -269,7 +309,7 @@ function DeskSkipRow({ skip }: { skip: DeskScreenSkip }) {
   );
 }
 
-function DeskSkipTable({ rows }: { rows: DeskScreenSkip[] }) {
+function DeskSkipTable({ rows, asOf }: { rows: DeskScreenSkip[]; asOf: string }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse">
@@ -283,7 +323,7 @@ function DeskSkipTable({ rows }: { rows: DeskScreenSkip[] }) {
         </thead>
         <tbody>
           {rows.map((skip) => (
-            <DeskSkipRow key={skip.symbol} skip={skip} />
+            <DeskSkipRow key={skip.symbol} skip={skip} asOf={asOf} />
           ))}
         </tbody>
       </table>
@@ -291,7 +331,7 @@ function DeskSkipTable({ rows }: { rows: DeskScreenSkip[] }) {
   );
 }
 
-function DeskSkippedSection({ skipped }: { skipped: DeskScreenSkip[] }) {
+function DeskSkippedSection({ skipped, asOf }: { skipped: DeskScreenSkip[]; asOf: string }) {
   const noBars = skipped.filter((s) => s.reason === "no_bars");
   const noBasis = skipped.filter((s) => s.reason === "no_basis");
   return (
@@ -304,7 +344,7 @@ function DeskSkippedSection({ skipped }: { skipped: DeskScreenSkip[] }) {
           >
             Skipped — no bars ({noBars.length})
           </h3>
-          <DeskSkipTable rows={noBars} />
+          <DeskSkipTable rows={noBars} asOf={asOf} />
         </div>
       )}
       {noBasis.length > 0 && (
@@ -315,21 +355,40 @@ function DeskSkippedSection({ skipped }: { skipped: DeskScreenSkip[] }) {
           >
             Skipped — no basis session ({noBasis.length})
           </h3>
-          <DeskSkipTable rows={noBasis} />
+          <DeskSkipTable rows={noBasis} asOf={asOf} />
         </div>
       )}
     </div>
   );
 }
 
-// --- Screen history — read-only (date + rows/skipped counts + provenance summary), from the
-// meta-only `screens` list. No click/select interaction and no per-entry full-row fetch this
-// iteration (J-05 scope, deferred — assumptions.md/blueprint.md iter-4 "screen-history
-// interactivity split"). --------------------------------------------------------------------------
+// --- Screen history — date + rows/skipped counts + provenance summary, from the meta-only
+// `screens` list. era-desk-iter-6 (J-05): now CLICKABLE — selecting a row fetches that exact
+// date's persisted snapshot (`GET /research/desk/screen?date=`) and swaps it into the page's
+// display in place; the click-through itself is a same-page state swap, never a navigation, so it
+// stays a plain `onClick` (not a `Link` — the `Link`/drill-in requirement below is only for
+// jumping to `/structure`). `selectedDate` highlights the currently-displayed row (`null` while
+// viewing the latest screen, since the latest need not be one of the listed historical rows). -----
 
-function DeskHistoryRow({ meta }: { meta: DeskScreenMeta }) {
+function DeskHistoryRow({
+  meta,
+  onSelect,
+  selected,
+}: {
+  meta: DeskScreenMeta;
+  onSelect: (date: string) => void;
+  selected: boolean;
+}) {
   return (
-    <tr data-testid="desk-history-row" className="border-b border-slate-800/60 last:border-b-0">
+    <tr
+      data-testid="desk-history-row"
+      data-screen-date={meta.screen_date}
+      data-selected={selected}
+      onClick={() => onSelect(meta.screen_date)}
+      className={`cursor-pointer border-b border-slate-800/60 transition-colors last:border-b-0 hover:bg-slate-900/40 ${
+        selected ? "bg-slate-800/60" : ""
+      }`}
+    >
       <td className={LABEL_CELL}>{meta.screen_date}</td>
       <td className={NUMERIC_CELL}>{meta.counts.rows}</td>
       <td className={NUMERIC_CELL}>{meta.counts.skipped}</td>
@@ -340,7 +399,15 @@ function DeskHistoryRow({ meta }: { meta: DeskScreenMeta }) {
   );
 }
 
-function DeskHistoryTable({ screens }: { screens: DeskScreenMeta[] }) {
+function DeskHistoryTable({
+  screens,
+  onSelect,
+  selectedDate,
+}: {
+  screens: DeskScreenMeta[];
+  onSelect: (date: string) => void;
+  selectedDate: string | null;
+}) {
   if (screens.length === 0) {
     return <EmptyState testid="desk-history-empty" title="No screens recorded yet." />;
   }
@@ -357,7 +424,12 @@ function DeskHistoryTable({ screens }: { screens: DeskScreenMeta[] }) {
         </thead>
         <tbody>
           {screens.map((meta) => (
-            <DeskHistoryRow key={meta.id} meta={meta} />
+            <DeskHistoryRow
+              key={meta.id}
+              meta={meta}
+              onSelect={onSelect}
+              selected={meta.screen_date === selectedDate}
+            />
           ))}
         </tbody>
       </table>
@@ -624,6 +696,103 @@ function DeskNotComputedPanel({
   );
 }
 
+// The populated view — a real snapshot exists (`latest !== null`), whether it is the latest one
+// or a history row the operator selected. `snapshot` is the ONE displayed record; the Provenance/
+// Briefing/Skipped sections read it verbatim, same as before this iteration — only the SOURCE of
+// `snapshot` (latest vs. a selected history entry) is new.
+function DeskPopulatedScreen({
+  snapshot,
+  screens,
+  isViewingLatest,
+  historyFetchError,
+  onSelectHistory,
+  onShowLatest,
+  selectedHistoryDate,
+  screenControlProps,
+  topupControlProps,
+}: {
+  snapshot: DeskScreenSnapshot;
+  screens: DeskScreenMeta[];
+  isViewingLatest: boolean;
+  historyFetchError: string | null;
+  onSelectHistory: (date: string) => void;
+  onShowLatest: () => void;
+  selectedHistoryDate: string | null;
+  screenControlProps: ScreenControlProps;
+  topupControlProps: TopupControlProps;
+}) {
+  return (
+    <div className="space-y-6">
+      {!isViewingLatest && (
+        <div
+          data-testid="desk-viewing-indicator"
+          className="flex flex-wrap items-center gap-3 rounded-md border border-slate-700 bg-slate-800/40 px-3 py-2 text-xs text-slate-400"
+        >
+          <span>Viewing the recorded screen for {snapshot.screen_date} — not the latest.</span>
+          <button
+            type="button"
+            data-testid="desk-history-latest-button"
+            onClick={onShowLatest}
+            className={SECONDARY_BUTTON_CLASS}
+          >
+            Latest
+          </button>
+        </div>
+      )}
+      {historyFetchError && (
+        <p data-testid="desk-history-fetch-error" className="text-xs text-amber-300">
+          {historyFetchError}
+        </p>
+      )}
+
+      <section aria-label="Provenance">
+        <Panel title="Provenance">
+          <DeskProvenance snapshot={snapshot} />
+        </Panel>
+      </section>
+
+      <section aria-label="Briefing">
+        <Panel title="Briefing">
+          {snapshot.rows.length === 0 ? (
+            <EmptyState testid="desk-rows-empty" title="No members ranked in this screen." />
+          ) : (
+            <DeskRowsTable rows={snapshot.rows} asOf={snapshot.as_of} />
+          )}
+        </Panel>
+      </section>
+
+      <section aria-label="Skipped members">
+        <Panel title="Skipped Members">
+          {snapshot.skipped.length === 0 ? (
+            <EmptyState testid="desk-skipped-empty" title="No members were skipped in this screen." />
+          ) : (
+            <DeskSkippedSection skipped={snapshot.skipped} asOf={snapshot.as_of} />
+          )}
+        </Panel>
+      </section>
+
+      <section aria-label="Screen history">
+        <Panel title="Screen History">
+          <DeskHistoryTable
+            screens={screens}
+            onSelect={onSelectHistory}
+            selectedDate={selectedHistoryDate}
+          />
+        </Panel>
+      </section>
+
+      <section aria-label="Run Screen and Top-up controls">
+        <Panel title="Run Screen / Top-up">
+          <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-center sm:gap-12">
+            <ScreenComputeControl {...screenControlProps} />
+            <TopupComputeControl {...topupControlProps} />
+          </div>
+        </Panel>
+      </section>
+    </div>
+  );
+}
+
 // --- The page --------------------------------------------------------------------------------------
 
 export default function DeskPage() {
@@ -644,6 +813,15 @@ export default function DeskPage() {
   const [topupTriggerError, setTopupTriggerError] = useState<string | null>(null);
   const [topupCancelRequested, setTopupCancelRequested] = useState(false);
   const [topupCancelError, setTopupCancelError] = useState<string | null>(null);
+
+  // era-desk-iter-6 (J-05): the screen-history click-through. `viewingSnapshot` is `null` while
+  // showing the top-level `latest` snapshot already held in `screenResult` (no refetch needed to
+  // return to it — TC-2); once a history row is selected, it holds THAT date's own full snapshot,
+  // fetched via the already-shipped `?date=` read (`fetchDeskScreenByDate`, zero new backend
+  // route). `historyFetchError` surfaces a failed/no-match click WITHOUT disturbing whatever is
+  // currently displayed (no crash, no blank state — the plan's own error-case requirement).
+  const [viewingSnapshot, setViewingSnapshot] = useState<DeskScreenSnapshot | null>(null);
+  const [historyFetchError, setHistoryFetchError] = useState<string | null>(null);
 
   // Mount: exactly three GETs, zero POSTs (TC-19) — the screen list/latest, and BOTH compute
   // managers' current/last snapshot (seeds a page load mid-job or post-terminal without a
@@ -747,6 +925,30 @@ export default function DeskPage() {
     }
   }
 
+  // era-desk-iter-6 (J-05): select a past history row — fetch-and-swap, no POST, no recompute
+  // (TC-1). A date with no matching recorded screen (`{"screen": null}`) or an unreachable backend
+  // both leave the currently-displayed snapshot exactly as it was — only the error note changes.
+  async function handleSelectHistoryScreen(date: string) {
+    setHistoryFetchError(null);
+    const result = await fetchDeskScreenByDate(date);
+    if (result.ok && result.data !== null) {
+      setViewingSnapshot(result.data);
+      return;
+    }
+    setHistoryFetchError(
+      result.ok
+        ? `No recorded screen matches ${date} — still showing the previously displayed screen.`
+        : result.error ?? "That recorded screen could not be loaded.",
+    );
+  }
+
+  // Revert to the top-level `latest` snapshot already held in `screenResult` state (TC-2) — no
+  // refetch, since the page already has it.
+  function handleShowLatest() {
+    setViewingSnapshot(null);
+    setHistoryFetchError(null);
+  }
+
   const screenControlProps: ScreenControlProps = {
     compute: screenCompute,
     onTrigger: handleTriggerScreen,
@@ -768,6 +970,17 @@ export default function DeskPage() {
 
   const latest = screenResult?.ok ? screenResult.data?.latest ?? null : null;
   const screens = screenResult?.ok ? screenResult.data?.screens ?? [] : [];
+  // The snapshot actually on screen: a selected history entry, or `latest` when none is selected.
+  // `latest === null` (never `displayedSnapshot === null`) stays the ONE discriminator for the
+  // honest "Desk screen not computed yet." empty state — with no screen ever recorded there is
+  // nothing in `screens` to have selected in the first place, so the two states cannot diverge.
+  const displayedSnapshot = viewingSnapshot ?? latest;
+  // Whether what is ON SCREEN is the newest recorded screen — a comparison of the displayed
+  // snapshot's own id against `latest`'s, NOT merely "no history row was clicked" (audit F1): the
+  // newest screen is itself a row in the history list, so selecting it displays exactly `latest`,
+  // and a banner claiming "not the latest" there would state something false about the very
+  // snapshot it is describing.
+  const isViewingLatest = viewingSnapshot === null || viewingSnapshot.id === latest?.id;
 
   return (
     <div className="min-h-screen">
@@ -793,48 +1006,20 @@ export default function DeskPage() {
         ) : latest === null ? (
           <DeskNotComputedPanel screen={screenControlProps} topup={topupControlProps} />
         ) : (
-          <div className="space-y-6">
-            <section aria-label="Provenance">
-              <Panel title="Provenance">
-                <DeskProvenance snapshot={latest} />
-              </Panel>
-            </section>
-
-            <section aria-label="Briefing">
-              <Panel title="Briefing">
-                {latest.rows.length === 0 ? (
-                  <EmptyState testid="desk-rows-empty" title="No members ranked in this screen." />
-                ) : (
-                  <DeskRowsTable rows={latest.rows} />
-                )}
-              </Panel>
-            </section>
-
-            <section aria-label="Skipped members">
-              <Panel title="Skipped Members">
-                {latest.skipped.length === 0 ? (
-                  <EmptyState testid="desk-skipped-empty" title="No members were skipped in this screen." />
-                ) : (
-                  <DeskSkippedSection skipped={latest.skipped} />
-                )}
-              </Panel>
-            </section>
-
-            <section aria-label="Screen history">
-              <Panel title="Screen History">
-                <DeskHistoryTable screens={screens} />
-              </Panel>
-            </section>
-
-            <section aria-label="Run Screen and Top-up controls">
-              <Panel title="Run Screen / Top-up">
-                <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-center sm:gap-12">
-                  <ScreenComputeControl {...screenControlProps} />
-                  <TopupComputeControl {...topupControlProps} />
-                </div>
-              </Panel>
-            </section>
-          </div>
+          // `latest` is narrowed non-null by this ternary's own condition, so `displayedSnapshot ??
+          // latest` re-establishes a non-null type for the prop below without an unsafe assertion —
+          // the VALUE is unchanged (`displayedSnapshot` already equals `viewingSnapshot ?? latest`).
+          <DeskPopulatedScreen
+            snapshot={displayedSnapshot ?? latest}
+            screens={screens}
+            isViewingLatest={isViewingLatest}
+            historyFetchError={historyFetchError}
+            onSelectHistory={handleSelectHistoryScreen}
+            onShowLatest={handleShowLatest}
+            selectedHistoryDate={viewingSnapshot?.screen_date ?? null}
+            screenControlProps={screenControlProps}
+            topupControlProps={topupControlProps}
+          />
         )}
       </main>
     </div>
