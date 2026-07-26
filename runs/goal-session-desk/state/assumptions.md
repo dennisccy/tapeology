@@ -335,3 +335,18 @@ Consequence: "ambient store untouched" is scored on registered CONTENT, not on S
 side-files; a future iteration that finds a non-empty `-wal` or a changed `bar_index.db` mtime should
 treat that differently.
 **Reversible:** yes
+
+## iter-6 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s J-05 step 3 says "make each briefing row a drill-in link to
+`/structure?symbol=<sym>&asof=<as_of>`" without distinguishing ranked rows from skipped-member
+rows — both are rendered on `/desk`'s briefing table (blueprint.md's Data Contract already
+registers a `DeskScreenSkip` shape with its own `symbol` field, structurally identical to a ranked
+row for this purpose), but a skipped member by definition has no band/coverage evidence backing a
+"drill in to see the wall" motivation.
+**We chose:** Link BOTH row kinds. A skipped-member drill-in still lands on `/structure` with that
+symbol and the screen's `as_of` prefilled, and `/structure` will honestly render its own no-bars/
+empty state for that symbol at that date — exactly the same "describe, never fabricate" discipline
+this era already applies everywhere else, so there is no dishonest or misleading render to guard
+against. Narrowing to ranked-rows-only remains available if the owner prefers that scope.
+**Reversible:** yes

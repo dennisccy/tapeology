@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-5",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open Tapeology",
+      "narration": "Here's the app's home screen, the live Cockpit. The navigation bar across the top now leads to all three of the product's pages.",
+      "point_out": "The top nav reads Cockpit, Structure, Desk — the third page, Desk, is what this update is about.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Tapeology" }
+    },
+    {
+      "n": 2,
+      "title": "Open Structure",
+      "narration": "Jumping over to the Structure page, where the app maps out a stock's support and resistance levels.",
+      "point_out": "The Symbol and As-of fields, ready for a lookup.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "link", "name": "Structure" } },
+      "expect": { "text": "Load a symbol and an as-of time" }
+    },
+    {
+      "n": 3,
+      "title": "Look up a stock",
+      "narration": "Typing in a symbol — AAPL — to pull up its price map.",
+      "point_out": "",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Structure symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 4,
+      "title": "Pick a point in time",
+      "narration": "And a specific moment in time to look at — this is the same pinned example the team uses to prove the chart still works correctly after every change.",
+      "point_out": "",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "testid": "structure-as-of-input" }, "text": "2026-06-22T21:00:00Z" }
+    },
+    {
+      "n": 5,
+      "title": "Load the tradable map",
+      "narration": "Clicking Load draws the chart and highlights the nearest tradable support/resistance band.",
+      "point_out": "The candlestick chart and the highlighted price band, right where the team expects it — proof this page still works exactly as before.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "structure-load-button" } },
+      "expect": { "text": "300.11" }
+    },
+    {
+      "n": 6,
+      "title": "Open the Desk",
+      "narration": "Now the page this update is all about: Desk, the operator's daily briefing. It pulls together every stock in the tracked universe into one ranked list.",
+      "point_out": "The Provenance panel, showing exactly which snapshot of the stock universe and which pricing data this briefing was built from — so anyone can tell two briefings apart or confirm they're identical.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "link", "name": "Desk" } },
+      "expect": { "text": "Universe snapshot" }
+    },
+    {
+      "n": 7,
+      "title": "See today's ranked briefing",
+      "narration": "Below the provenance panel sits the actual briefing: every stock with enough price history is ranked by how close it sits to a real support or resistance level.",
+      "point_out": "Each row shows the side (support or resistance), a letter grade for the level's strength, the distance to it, and a badge for every timeframe of price data behind it.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-screen-rows-table\"]" } },
+      "expect": { "text": "Class" }
+    },
+    {
+      "n": 8,
+      "title": "See what got skipped, honestly",
+      "narration": "Any stock without enough price history isn't hidden or silently dropped — it's listed in its own clearly labeled group, so nothing is quietly missing from the picture.",
+      "point_out": "The \"Skipped\" section, grouped by the exact reason each stock couldn't be ranked.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-skipped-section\"]" } },
+      "expect": { "text": "Skipped" }
+    }
+  ]
+}

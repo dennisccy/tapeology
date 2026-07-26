@@ -23,8 +23,9 @@ provenance line + screen-history list (read-only render) + Run Screen/Top-up but
 J-02/J-03 compute managers, over the `UI_ROUTES` nav-skeleton row already planned below. Iter-4's
 own browser-QA step never dispatched, so J-04 stayed `partial`; iter-5 is a verification-only pass
 (zero product diff) that closes that evidence gap — see the Data Contract rows below for what iter-4
-actually shipped. J-05's click-through-to-a-past-screen + `/structure` drill-in prefill remain
-deferred past iter-5).
+actually shipped. J-05's click-through-to-a-past-screen + `/structure` drill-in prefill are IN
+BUILD at iter-6 — reusing the ALREADY-REGISTERED `GET /research/desk/screen?date=` read verbatim
+(zero new backend route/value); see the Data Contract section's note below for the finalized scope.
 -->
 
 ## Information Architecture
@@ -63,11 +64,12 @@ Tapeology
                                 progress + cancel, a read-only browsable screen-history list (date +
                                 counts + provenance summary only — iter-4 scope). Per-row drill-in
                                 to `/structure` and click-through to a PAST screen's own rows are
-                                J-05 (deferred past iter-4; iter-5 is evidence-only, no product
-                                change). iter-5 closes the outstanding browser-evidence gap (the
-                                third required screenshot — Run Screen running with a second click
-                                refused — plus a saved `/desk` golden replay script;
-                                `journey-scripts/J-04.json`).
+                                J-05, IN BUILD at iter-6 (reusing `GET /research/desk/screen?date=`
+                                verbatim — zero new endpoint). iter-5 closed the iter-4
+                                browser-evidence gap (the third required screenshot — Run Screen
+                                running with a second click refused — plus a saved `/desk` golden
+                                replay script; `journey-scripts/J-04.json`, whose step 5 mutating
+                                click iter-6 removes before its own replay lane runs it).
 ```
 
 **Feature / journey homes** (each reachable in ≤2 clicks from the nav):
@@ -78,7 +80,7 @@ Tapeology
 | J-02 Coverage + explicit bar top-up | *(backend; surfaced as per-row coverage/tick-evidence badges on `/desk`, plus iter-4's Top-up button — no standalone page)* | Desk |
 | J-03 Screen compute + append-only ledger | *(backend POST/CLI compute; served to `/desk`)* | Desk |
 | J-04 `/desk` briefing page | `/desk` | Desk |
-| J-05 Screen history + `/structure` drill-in | `/desk` (history list) → `/structure?symbol=<sym>&asof=<iso>` (additive prefill) | Desk, Structure |
+| J-05 Screen history + `/structure` drill-in — IN BUILD iter-6 | `/desk` (history list) → `/structure?symbol=<sym>&asof=<iso>` (additive prefill) | Desk, Structure |
 | J-06 MCP contract v3 (17 read-only tools) | *(MCP tool surface; no page — `desk_universe`/`desk_screen` proxy the two GETs below)* | — |
 | J-07 Kept-product regression sentinel | `/`, `/structure` | Cockpit, Structure |
 
@@ -170,4 +172,13 @@ third screenshot (Run Screen running with a second click refused) and records th
 `/desk` golden replay script (`journey-scripts/J-04.json`). The Navigation-skeleton and "Bars /
 candles" row text above were also refreshed for currency per `coherence.md` iter-4's advisory notes
 (the iter-4 audit-B1 `StructureChart.tsx` exception and the iter-4 merged-vs-per-series bar-read
-divergence, respectively) — neither is a nav-skeleton structural change. -->
+divergence, respectively) — neither is a nav-skeleton structural change.
+
+RESOLVED at iter-6 (build-time scope for J-05, registered here BEFORE the build): both halves of
+J-05 reuse ALREADY-REGISTERED contract values verbatim — the history click-through calls
+`GET /research/desk/screen?date=` (shipped J-03, iter-3, no shape change) and the `/structure`
+drill-in prefill calls that page's own existing Load-form endpoints. Zero new Data-Contract row,
+zero new backend route, zero new `Config` field. Row links cover BOTH ranked and skipped members
+(goal.md's "each briefing row" does not distinguish the two; logged as an interpretation call in
+`assumptions.md` iter-6). No nav-skeleton change — both canonical homes were already registered at
+iter-4's build (Feature/journey homes table above). -->
