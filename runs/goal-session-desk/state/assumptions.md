@@ -368,3 +368,27 @@ compared UT-03's rendered rows field-for-field against the real recorded snapsho
 mid-iteration fixes do not automatically void earlier evidence — but only when the changed path is
 demonstrably outside every accepted capture; a fix touching a photographed path would require re-capture.
 **Reversible:** yes
+
+## iter-7 — goal-decomposer
+
+**Ambiguity:** iter-6's evaluator framed audit F2 (the whole-row drill-in link on `/desk` had made
+several per-cell `title` tooltips — full-precision `distance_bps`/`band_score`, per-timeframe
+"window last requested" freshness — unreachable by hover) as a choice between exactly two fixes:
+"the whole row is a link, or each cell keeps its hover detail." Neither `docs/goal.md` nor the
+blueprint states which cells, if any, may stop being part of the row's click target.
+
+**We chose:** Neither named option. Both risk breaking `runs/goal-session-desk/journey-scripts/J-05.json`
+step 4, which clicks the whole `desk-screen-row` testid (`<tr>`) and currently succeeds everywhere in
+the row because the drill-in anchor covers the full row via `absolute inset-0`; if the distance/score/
+coverage cells reclaimed pointer-event priority (either candidate's implied mechanism), a click
+landing over those cells could silently stop navigating — rebuilding/breaking J-05's own
+already-verified, binding "do not redo" click behavior. Instead, iter-7 consolidates every
+now-unreachable per-cell tooltip onto the row's own drill-in anchor (already the topmost element
+everywhere in the row): hovering anywhere in the row reveals one composite tooltip carrying the full
+`distance_bps`, full `band_score`, and each coverage entry's `latest_window_end_utc`. This makes zero
+change to the anchor's `href`, `absolute inset-0` positioning, or any click geometry, and does not
+touch audit F3's earlier, deliberate 2-decimal DISPLAY rounding (kept for scanability) — only WHERE
+the full-precision detail is reachable from.
+
+**Reversible:** yes — the composite-tooltip approach can be replaced by either originally-named
+option later if the owner prefers a different contract; no stored data or endpoint shape is affected.
