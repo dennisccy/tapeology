@@ -342,3 +342,59 @@ date-only lookup), keyboard access for the history rows, and the three one-line 
 earlier iterations. One sentence for the owner: the Desk can now browse its own history and jump into
 the chart, so the last run should add the two Claude-readable desk tools, restore the hover details the
 new row links hid, and photograph the older pages one final time.
+
+## Iteration 7 — goal-desk-iter-7
+
+**Date:** 2026-07-27T16:45:00+01:00
+**Verdict:** STALLED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-06 "MCP contract v3 — 17 read-only tools" (failing -> passing; Claude can now read
+  the whole desk through two new read-only tools)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02, J-03, J-04, J-05 all re-verified passing this iteration; J-07 "The kept
+  product stands" still partial — but for NEW reasons: its four long-missing pictures now exist, and
+  what is left are three written conditions that only the owner can settle
+- Anti-goal violations: none new. One carried, minor, still unresolved after four iterations: the
+  owner has never put in writing whether the three files iteration 4 changed (the bar store, the
+  Structure chart, one chart guard test) may stay changed. All 24 rails answered one by one in
+  eval.md; scan-report CLEAN.
+
+**Reasoning:** I did not take any report's word for this. I booted my own backend on a throw-away
+data folder and proved the two new tools hand back exactly the same text as the matching web
+addresses — first with nothing saved (honest empty answers), then after saving one real universe
+snapshot and one real screen, then through the dated lookup both when it matches and when it does not
+(`{"screen": null}`, no error) — and printed the proxy function's source to confirm it can only read,
+never write. I ran the whole test suite myself (1349 tests, 0 failures, 8 skipped), printed the
+settings fingerprint (`08e471b10130e1e2`), the page list (exactly three) and the tool count (17). I
+opened every picture that carries J-07's long-missing walk: the simulated cockpit settled on "Buyer
+Control" with all six panels alive, the Apple wall on Structure (300.11–302.2, Class A, drawn on the
+chart), the Case Studies drill-in with real reaction and forward-return numbers, and the honest
+"sweep has not been run" Edge Report panel. I read both saved screen files and the saved universe
+file straight off disk and matched their numbers against what the pages display, so "shows what was
+recorded, recomputes nothing" is proven against real data. I then checked the two conditions the
+audit flagged and confirmed both are literally false today: one chart guard test is a relaxed pattern
+check, and three files sit outside the era's allowed-change list. Coherence is COHERENCE-PASS. Not
+GOAL_ACHIEVED because J-07 is not passing; not REGRESSION because nothing that used to work stopped
+working and nothing critical was newly broken; not CONTINUE because every remaining path to a passing
+J-07 needs one written decision from the owner — the automation has run out of moves that would
+change the outcome.
+
+**Next-step recommendation:** Halt and ask the owner one question: may the three files iteration 4
+changed stay changed? Three answers each unblock the era — (1) ratify: add one line to
+`docs/goal.md` permitting the price-less-row repair in the bar store and the Structure chart plus the
+matching guard-test update; (2) revert: order the files restored, knowing the measured cost (the
+price-less rows return, Apple's level map as of 2026-07-25 goes empty, and the Structure page crashes
+on such a row), which then needs a replacement plan for the sixty affected data files, all still
+untouched; (3) narrow the wording: change J-07 to require "no undisclosed changes outside the
+inventory" and to allow a guard test updated for a rename. After `--resume`, iteration 8 at full
+depth should: make the era-open recording of the kept pages that was never made (check out `047c38e`
+into a second working copy, run it against a throw-away copy of the data folder, compare the answers
+and write down every difference with its reason); restore step 10 of
+`runs/goal-session-desk/journey-scripts/J-07.json` to its chart-caption target and prove it with one
+replay whose results file is kept; photograph the cockpit once in Historical mode on a real symbol;
+and clear two one-liners (let the new date-lookup test save its own screen so it passes alone, delete
+the now-untrue comment at `apps/frontend/app/desk/page.tsx:207`). One sentence for the owner:
+everything this era asked for is built and proven except one written permission — please answer that
+and the run can finish.

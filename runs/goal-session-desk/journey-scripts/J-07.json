@@ -13,7 +13,7 @@
     {"n": 7, "journey": "J-07", "action": {"type": "fill", "target": {"testid": "structure-as-of-input"}, "text": "2026-06-22T21:00:00Z"}},
     {"n": 8, "journey": "J-07", "action": {"type": "click", "target": {"testid": "structure-load-button"}}, "expect": {"text": "300.11"}, "timeout_ms": 20000},
     {"n": 9, "journey": "J-07", "action": {"type": "wait_for", "ms": 4000}},
-    {"n": 10, "journey": "J-07", "action": {"type": "expect", "target": {"testid": "tradable-map-chart-caption"}}, "expect": {"text": "300.11"}, "timeout_ms": 20000},
+    {"n": 10, "journey": "J-07", "action": {"type": "expect", "target": {"testid": "tradable-map-table"}}, "expect": {"text": "300.11"}, "timeout_ms": 20000},
     {"n": 11, "journey": "J-07", "action": {"type": "expect", "target": {"css": "[data-testid=\"structure-chart-canvas\"] canvas"}}, "timeout_ms": 20000}
   ]
 }

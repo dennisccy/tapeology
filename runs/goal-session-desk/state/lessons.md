@@ -156,3 +156,19 @@ is chosen deliberately.
 **Applies to:** any iteration that makes a table row clickable/navigable, or that relies on a `title`
 tooltip to keep a rounded display honest — pair the change with a hit-test assertion naming the
 element expected to be topmost at each interactive cell's centre.
+
+## iter-7 — 2026-07-27T16:45:00+01:00
+
+**Verdict:** STALLED
+**Lesson:** A sentinel journey that asserts "kept responses are byte-identical to an era-open
+baseline" is unfalsifiable unless iteration 0 actually CAPTURES that baseline — this era never did,
+so the clause sat unchecked for seven iterations and then blocked closure at the gate. Worse, the
+same era-close audit surfaced that a mid-era emergency repair to protected files (iter-4's
+price-less-bar fix in `bars.py` / `StructureChart.tsx` / a chart guard test) silently made THREE of
+that sentinel's clauses literally false; because each iteration had other productive work, the
+loop kept CONTINUE-ing past the one question only the owner could answer, four times.
+**Applies to:** any era whose goal.md contains a "byte-identical vs baseline" or "zero
+out-of-inventory diff" sentinel clause (capture the baseline artifact in iter-0 and store it under
+`runs/goal-session-<sid>/state/`), and any iteration that touches a file goal.md declares frozen —
+route the ratification to the human IMMEDIATELY (STALLED), not as a recommendation carried by later
+iterations.

@@ -18,8 +18,9 @@ Result contract (locked by ``tests/test_mcp_server.py``):
     (era-3) J-02, ``backtests`` at J-03, ``pnl_ledger`` at J-04; ``/research/profiles`` — reached
     via ``get_endpoint`` — at J-05; ``bars`` at era-4 J-01; ``levels`` at era-4 J-02; ``strategies``
     at era-4 J-04; ``tradability`` at era-5B J-01; ``setups`` at era-5B J-02; ``edge_report`` at
-    era-5B J-04); an allowlisted-but-UNKNOWN path (any unshipped
-    ``/research/*``) still surfaces the backend's honest 404 this way — never placeholder data.
+    era-5B J-04; ``desk_universe``/``desk_screen`` at era-desk J-06); an allowlisted-but-UNKNOWN
+    path (any unshipped ``/research/*``) still surfaces the backend's honest 404 this way — never
+    placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
     no offline snapshot exists anywhere in this module).
@@ -101,6 +102,14 @@ _STATIC_PATHS: dict[str, str] = {
     # strategy-comparison report takes no query params at all -- it aggregates over the WHOLE
     # registered dataset registry on its own.
     "edge_report": "/research/edge-report",
+    # `desk_universe`/`desk_screen` (Era B "The Desk" J-06) are the IDENTICAL no-required-param
+    # shape as `datasets`/`setups`/`edge_report` above: each proxies an endpoint that already
+    # serves an explicit HTTP 200 honest-empty payload before anything is ever registered/computed
+    # (never a 404 -- the `datasets`/`bars` no-data convention `desk_universe.py`/`desk_screen.py`
+    # themselves follow). Neither tool exposes the `?date=` query variant of
+    # `GET /research/desk/screen` -- that stays reachable only through `get_endpoint`.
+    "desk_universe": "/research/desk/universe",
+    "desk_screen": "/research/desk/screen",
 }
 
 _TAPE_PATHS: dict[str, str] = {
@@ -269,6 +278,29 @@ TOOLS: tuple[types.Tool, ...] = (
             "label below the configured minimum n), plus a ranked list of train cells clearing the "
             "positivity gate with their own hold-out status -- JSON verbatim. Never pools across "
             "feeds, and never pools train with hold-out."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_universe",
+        description=(
+            "Read-only proxy of GET /research/desk/universe -- Era B \"The Desk\" J-01's "
+            "registered universe-snapshot list: every dated, checksummed S&P constituents "
+            "snapshot ever registered, its normalized membership, and the most recently "
+            "registered snapshot (`latest`, `null` before any registration -- an explicit "
+            "honest-empty 200, never a 404), JSON verbatim."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_screen",
+        description=(
+            "Read-only proxy of GET /research/desk/screen -- Era B \"The Desk\" J-03's "
+            "append-only screen-snapshot ledger: a meta-only list of every recorded screen plus "
+            "the most recently recorded screen's full ranked/skipped rows and provenance "
+            "(`latest`, `null` before any screen is ever computed -- an explicit honest-empty "
+            "200, never a 404), JSON verbatim. Takes no arguments here; `get_endpoint` reaches "
+            "the `?date=` lookup variant for one specific past screen."
         ),
         inputSchema=_object_schema({}),
     ),

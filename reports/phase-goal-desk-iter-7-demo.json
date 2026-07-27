@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-7",
+  "base_url": "http://localhost:3301",
+  "iteration": 7,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "This page scans about a hundred well-known stocks and shows which ones sit closest to one of their own key price levels today. It also keeps a memory of past scans.",
+      "point_out": "The Desk page loads with its provenance details, today's ranked list, the stocks it skipped, and a history of every past scan.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Screen History" }
+    },
+    {
+      "n": 2,
+      "title": "Look at a past scan",
+      "narration": "You can click any earlier scan in the history list to see it exactly as it was recorded that day.",
+      "point_out": "A banner explains you're viewing an older scan, not today's.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"desk-history-row\"][data-screen-date=\"2026-06-22\"]" }
+      },
+      "expect": { "text": "Viewing the recorded screen for 2026-06-22 — not the latest." }
+    },
+    {
+      "n": 3,
+      "title": "Jump from a ranked stock straight into its chart",
+      "narration": "Clicking anywhere on a ranked stock's row, not just its name, takes you straight to its price chart, already loaded for that exact day. Hovering over the row also now reveals the stock's precise distance and score, a small fix from this round.",
+      "point_out": "The chart page opens already filled in with the stock and date, showing its key price band.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"desk-screen-row\"][data-symbol=\"AAPL\"] [data-testid=\"desk-row-band-class\"]" }
+      },
+      "expect": { "text": "300.11" }
+    },
+    {
+      "n": 4,
+      "title": "Back to the Desk",
+      "narration": "Heading back to the Desk page to check what happens with a stock the scan had to skip.",
+      "point_out": "The Desk page loads again with the same panels.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Screen History" }
+    },
+    {
+      "n": 5,
+      "title": "Re-open that same past scan",
+      "narration": "Selecting the same earlier scan again to look at one of its skipped stocks.",
+      "point_out": "The same \"viewing an older scan\" banner appears.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"desk-history-row\"][data-screen-date=\"2026-06-22\"]" }
+      },
+      "expect": { "text": "Viewing the recorded screen for 2026-06-22 — not the latest." }
+    },
+    {
+      "n": 6,
+      "title": "See an honest result for a skipped stock",
+      "narration": "A stock the scan couldn't rank, because there was no price history for it, can still be clicked. It opens the chart page and says so plainly, instead of faking a result.",
+      "point_out": "The chart page says plainly that no price history was recorded for this stock — no invented chart.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"desk-skip-row\"][data-symbol=\"ABBV\"] [data-testid=\"desk-skip-reason\"]" }
+      },
+      "expect": { "text": "No bar series recorded for ABBV." }
+    },
+    {
+      "n": 7,
+      "title": "Move to the live tape reader",
+      "narration": "The Desk sits alongside two older pages, Cockpit and Structure, all reachable from the same navigation bar.",
+      "point_out": "Exactly three pages are listed: Cockpit, Structure, and Desk.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": { "role": "link", "name": "Cockpit" }
+      },
+      "expect": { "text": "Tape State" }
+    },
+    {
+      "n": 8,
+      "title": "Choose the practice data source",
+      "narration": "The Cockpit page reads a stock's live price action. For this walk-through it uses a built-in practice feed instead of a real market feed.",
+      "point_out": "The Simulated option is selected.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": { "role": "button", "name": "Simulated" }
+      }
+    },
+    {
+      "n": 9,
+      "title": "Name the practice stock",
+      "narration": "Typing in a practice ticker that always settles into a predictable pattern.",
+      "point_out": "The ticker field now reads SIM-BUYER.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": { "placeholder": "Ticker e.g. SIM-BUYER" },
+        "text": "SIM-BUYER"
+      }
+    },
+    {
+      "n": 10,
+      "title": "Watch the tape settle",
+      "narration": "After watching for a moment, the reading settles into a clear call.",
+      "point_out": "The Tape State panel shows the bold read-out \"Buyer Control\", with live price, trades, and an event log all filled in.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "role": "button", "name": "Watch" }
+      },
+      "expect": { "text": "Buyer Control" }
+    },
+    {
+      "n": 11,
+      "title": "Open Structure fresh",
+      "narration": "The Structure page maps a chosen stock's key support and resistance levels over its real price history.",
+      "point_out": "Below, the Edge Report panel plainly says whether it has been computed yet — never a blank or made-up result.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Edge report not computed yet." }
+    },
+    {
+      "n": 12,
+      "title": "Choose a stock to map",
+      "narration": "Typing in a stock to load its price levels.",
+      "point_out": "The Symbol field now reads AAPL.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": { "label": "Structure symbol" },
+        "text": "AAPL"
+      }
+    },
+    {
+      "n": 13,
+      "title": "Choose the date to look at",
+      "narration": "Typing in the exact date and time to look at.",
+      "point_out": "The As-of field now reads the chosen date and time.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": { "css": "[data-testid=\"structure-as-of-input\"]" },
+        "text": "2026-06-22T21:00:00Z"
+      }
+    },
+    {
+      "n": 14,
+      "title": "Load its key price levels",
+      "narration": "Loading draws the stock's real price history with its key support and resistance levels marked on top.",
+      "point_out": "The level table and the chart both show a level around 300.11, a well-known price wall for this stock.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"structure-load-button\"]" }
+      },
+      "expect": { "text": "300.11" }
+    },
+    {
+      "n": 15,
+      "title": "Study one past price touch",
+      "narration": "Clicking a past case opens a closer look at how the price behaved when it touched that level.",
+      "point_out": "A drill-in panel opens below the table showing how the price reacted, its returns afterward, and the recorded trades around it (or an honest note if none were recorded).",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"case-studies-row\"]" }
+      },
+      "expect": { "text": "Case Studies — drill-in" }
+    }
+  ]
+}

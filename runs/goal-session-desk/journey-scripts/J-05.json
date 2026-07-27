@@ -5,7 +5,7 @@
   "default_timeout_ms": 15000,
   "steps": [
     {"n": 1, "journey": "J-05", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Screen History"}},
-    {"n": 2, "journey": "J-05", "action": {"type": "click", "target": {"testid": "desk-history-row"}}, "expect": {"text": "Viewing the recorded screen for 2026-06-22 — not the latest."}, "timeout_ms": 10000},
+    {"n": 2, "journey": "J-05", "action": {"type": "click", "target": {"css": "[data-testid=\"desk-history-row\"][data-screen-date=\"2026-06-22\"]"}}, "expect": {"text": "Viewing the recorded screen for 2026-06-22 — not the latest."}, "timeout_ms": 10000},
     {"n": 3, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "desk-history-latest-button"}}, "timeout_ms": 8000},
     {"n": 4, "journey": "J-05", "action": {"type": "click", "target": {"testid": "desk-screen-row"}}, "timeout_ms": 10000},
     {"n": 5, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "structure-title"}}, "expect": {"text": "Structure"}, "timeout_ms": 10000},

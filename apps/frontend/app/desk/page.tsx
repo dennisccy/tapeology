@@ -178,6 +178,29 @@ function hasNoCoverageAtAll(coverage: Record<string, { has_bars: boolean }>): bo
   return entries.length > 0 && entries.every((tf) => !tf.has_bars);
 }
 
+// era-desk-iter-7 audit F2 fix: the row's stretched drill-in anchor (`absolute inset-0`) paints
+// above every cell in the row, including the per-cell `title`s at desk-row-distance/desk-row-score
+// and each coverage badge's own `title` -- those became pointer-unreachable the moment the anchor
+// started covering the whole row. Rather than touch the anchor's `href`/class/`data-testid` (any
+// of which risks J-05's already-passing whole-row click), the full-precision detail those per-cell
+// titles carried is composed directly onto the ANCHOR's own `title` instead: hovering ANYWHERE in
+// the row now reveals one composite tooltip. Full precision -- never the rounded 2-decimal DISPLAY
+// audit F3 chose for scanability (this is a hover detail, not a rendered cell).
+function deskRowDrillInTitle(row: DeskScreenRow): string {
+  const coverageLines = Object.entries(row.coverage)
+    .map(([timeframe, tf]) => `${timeframe} window last requested: ${tf.latest_window_end_utc ?? "never"}`)
+    .join(" · ");
+  return `distance ${row.distance_bps} bps · score ${row.band_score}${coverageLines ? ` · ${coverageLines}` : ""}`;
+}
+
+// A skipped member has no distance_bps/band_score -- its anchor's tooltip carries ONLY the
+// coverage-freshness portion, never a fabricated value for a field that does not exist on that row.
+function deskSkipDrillInTitle(skip: DeskScreenSkip): string {
+  return Object.entries(skip.coverage)
+    .map(([timeframe, tf]) => `${timeframe} window last requested: ${tf.latest_window_end_utc ?? "never"}`)
+    .join(" · ");
+}
+
 // One ranked row: symbol, side, band-class chip, distance-bps chip, band score, per-timeframe
 // coverage badges, tick-evidence badge — the DoD's exact column list, every value read verbatim
 // from the snapshot. Distance and score are DISPLAYED to two decimals (a `0.33523150389608725 bps`
@@ -205,6 +228,7 @@ function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
           href={`/structure?symbol=${encodeURIComponent(row.symbol)}&asof=${encodeURIComponent(asOf)}`}
           data-testid="desk-row-drill-in"
           aria-label={`Open ${row.symbol} in Structure as of ${asOf}`}
+          title={deskRowDrillInTitle(row)}
           className="absolute inset-0"
         />
         {row.symbol}
@@ -292,6 +316,7 @@ function DeskSkipRow({ skip, asOf }: { skip: DeskScreenSkip; asOf: string }) {
           href={`/structure?symbol=${encodeURIComponent(skip.symbol)}&asof=${encodeURIComponent(asOf)}`}
           data-testid="desk-skip-row-drill-in"
           aria-label={`Open ${skip.symbol} in Structure as of ${asOf}`}
+          title={deskSkipDrillInTitle(skip)}
           className="absolute inset-0"
         />
         {skip.symbol}
