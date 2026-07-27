@@ -91,7 +91,7 @@ Tapeology
 | J-05 Screen history + `/structure` drill-in — shipped iter-6 | `/desk` (history list) → `/structure?symbol=<sym>&asof=<iso>` (additive prefill) | Desk, Structure |
 | J-06 MCP contract v3 (17 read-only tools) — IN BUILD at iter-7 | *(MCP tool surface; no page — `desk_universe`/`desk_screen` proxy the two GETs below)* | — |
 | J-07 Kept-product regression sentinel | `/`, `/structure` | Cockpit, Structure |
-| J-08 Basis disclosure on ranked rows (measurement age) — IN BUILD at iter-9 | `/desk` (ranked table column + row drill-in tooltip) | Desk |
+| J-08 Basis disclosure on ranked rows (measurement age) — implementation shipped iter-9; iter-10 closes the remaining literal-threshold screenshot evidence | `/desk` (ranked table column + row drill-in tooltip) | Desk |
 
 ## Data Contract
 
@@ -229,4 +229,17 @@ own iter-9 addition note above for the exact shape and the legacy-row honest-fal
 new page, no new endpoint, no new owner, no nav-skeleton change (`/desk`'s Feature/journey homes row
 above gains a J-08 entry pointing at the same `/desk` canonical home J-04 already registered). Zero
 diff to `tradability.py`/`levels.py`/`bars.py`/`StructureChart.tsx`, zero new `Config` field —
-`compute_tradability`'s own `basis_as_of` is read verbatim, never re-derived. -->
+`compute_tradability`'s own `basis_as_of` is read verbatim, never re-derived.
+
+NOTED at iter-10 (documentation currency only, no new Data-Contract row, no nav-skeleton change):
+iteration 9's own required screenshot proved the basis mechanism end to end (a real 3 d vs 14 d
+spread, byte-identical to the canonical `compute_tradability` owner) but missed `docs/goal.md`'s
+literal `<= 2 d` / `>= 10 d` thresholds by one day on the fresh side, because it was captured at
+`as_of` = the run's own wall-clock "today" rather than the date the goal's own rationale cites.
+iter-10 makes no code change and adds no Data-Contract row — it computes one additional screen for
+`screen_date=2026-07-25` inside a scoped, throwaway copy of `.data/` (never the ambient store) via
+the existing `desk_screen_compute` CLI/POST path, and captures the literal screenshot from that
+scoped copy's `/desk`. This note exists so a future reader does not mistake the new scoped-compute
+evidence, or the two documentation corrections it lands (a stale iter-9 handoff citation; a
+newly-documented `J-08.json` steps-3/6 dependency on its replay target's latest screen already
+carrying basis fields), for a new owner, endpoint, or shape. -->
