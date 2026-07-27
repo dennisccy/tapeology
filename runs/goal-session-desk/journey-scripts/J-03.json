@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "journey": "J-03",
+  "name": "The screen — pinned inputs, append-only snapshot, deterministic rank",
+  "default_timeout_ms": 15000,
+  "steps": [
+    {"n": 1, "journey": "J-03", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
+    {"n": 2, "journey": "J-03", "action": {"type": "expect", "target": {"testid": "desk-screen-rows-table"}}, "expect": {"text": "Class A"}, "timeout_ms": 15000},
+    {"n": 3, "journey": "J-03", "action": {"type": "expect", "target": {"testid": "desk-history-table"}}, "expect": {"text": "date"}, "timeout_ms": 10000},
+    {"n": 4, "journey": "J-03", "action": {"type": "expect", "target": {"testid": "desk-provenance"}}, "expect": {"text": "Config fingerprint"}, "timeout_ms": 10000}
+  ]
+}

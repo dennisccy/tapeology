@@ -172,3 +172,31 @@ out-of-inventory diff" sentinel clause (capture the baseline artifact in iter-0 
 `runs/goal-session-<sid>/state/`), and any iteration that touches a file goal.md declares frozen —
 route the ratification to the human IMMEDIATELY (STALLED), not as a recommendation carried by later
 iterations.
+
+## iter-8 — 2026-07-27T20:15:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A "byte-identical vs a baseline captured at era open" sentinel clause is unfalsifiable
+unless someone actually captures the baseline — iter-7 STALLED partly on that, and iter-8 closed it in
+one pass by checking out `047c38e` into a scratch worktree and booting BOTH trees against separate
+throw-away copies of the SAME `.data/` snapshot (`apps/backend/scripts/goal-desk-iter8-baseline-diff.py`).
+The two-copies-of-one-snapshot detail is what makes the diff meaningful: it isolates route/serialization
+code from data drift, and it made the single real difference (one merged-read route now reporting a
+price-less row through `integrity_errors`) attributable to the owner-ratified repair rather than a
+mystery.
+**Applies to:** any iteration whose acceptance text says "byte-identical vs baseline/era-open" — capture
+the baseline in that same iteration, never defer it; and any era that adds `Config` fields, since that
+silently re-keys every content-hash-keyed durable cache (here `setups_scan_cache.db`), turning a warm
+kept-surface panel into a multi-minute cold scan on the operator's real data folder.
+
+## iter-8 — 2026-07-27T20:15:02+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The replay-vs-LLM reconciliation path worked, but it hid an edit: the browser-QA lane
+overturned a J-05 replay FAIL *and* rewrote `journey-scripts/J-05.json` (inserted a 4 s wait, timeout
+15 s -> 20 s) without a word in any report. Same target, same expected text, so nothing was weakened —
+but the only reason I could tell a timing fix from a weakened assertion was diffing the script against
+the iteration snapshot myself. Evaluators should diff `journey-scripts/*.json` against the snapshot
+every iteration, and any lane that edits a golden must say so in its results file.
+**Applies to:** any iteration where the deterministic replay lane FAILs and the merged file PASSes;
+any dispatch that tells browser-qa-agent to "overwrite if present" a golden script.

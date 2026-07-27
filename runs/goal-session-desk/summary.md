@@ -1,36 +1,36 @@
 # Goal Session Summary — desk
 
-**Final verdict:** AWAITING_PUMP
-**Total iterations:** 7
-**Wall time (seconds):** 103722
+**Final verdict:** STALLED
+**Total iterations:** 8
+**Wall time (seconds):** 1746
 **Quota pauses:** 0
 **Started:** 2026-07-25T01:04:47.481604Z
-**Finished:** 2026-07-27T15:25:49.630143Z
+**Finished:** 2026-07-27T15:57:45.953290Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/desk`. Open a PR with:
 
     gh pr create --base main --head goal/desk \
-      --title "feat: desk — AWAITING_PUMP" \
+      --title "feat: desk — STALLED" \
       --body-file runs/goal-session-desk/summary.md
 
 ## Final journey state
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-desk-iter-6 |
-| J-02 | passing | goal-desk-iter-6 |
-| J-03 | passing | goal-desk-iter-6 |
-| J-04 | passing | goal-desk-iter-6 |
-| J-05 | passing | goal-desk-iter-6 |
-| J-06 | failing | - |
+| J-01 | passing | goal-desk-iter-7 |
+| J-02 | passing | goal-desk-iter-7 |
+| J-03 | passing | goal-desk-iter-7 |
+| J-04 | passing | goal-desk-iter-7 |
+| J-05 | passing | goal-desk-iter-7 |
+| J-06 | passing | goal-desk-iter-7 |
 | J-07 | partial | - |
 
 ## Anti-goal violations
 
 - [minor] Snapshots are append-only and pinned. Universe and screen snapshots are dated, checksummed, append-only; every screen pins (universe snapshot id, screen date, as_of, fingerprint, bar-store signature); nothing is silently refetched, backfilled, recomputed in place, or rewritten — a new run is a new snapshot. (iter goal-desk-iter-3)
-- [minor] Frozen foundations — the v1 strategy, the default profile, the tape engine's five states and thresholds, the frozen structure computations, the JSON BarStore, and every KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside them, never a mutation of them. (… the one sanctioned kept-surface edit is J-05's additive /structure prefill.) [with Non-Goals: 'StructureChart.tsx untouched'] (iter goal-desk-iter-4)
+- [minor] Frozen foundations — the v1 strategy, the default profile, the tape engine's five states and thresholds, the frozen structure computations, the JSON BarStore, and every KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside them, never a mutation of them. (… the one sanctioned kept-surface edit is J-05's additive /structure prefill.) [with Non-Goals: 'StructureChart.tsx untouched'; and Constraints: 'Guard tests (kept, never edited) … the chart guard suites … all pass byte-unmodified all era'] (iter goal-desk-iter-4)
 - [minor] Immutable data — registered datasets and bar series are append-only, checksummed, never re-tagged, never deleted, never content-perturbed. / no fabricated data (foundation invariant). (iter goal-desk-iter-4)
 
 ## Telemetry
@@ -117,15 +117,22 @@ See `runs/goal-session-desk/telemetry.jsonl` for the structured event log.
       coherence-auditor            3.7m  calls=1
       readme-maintainer            1.7m  calls=1
       pump-wait                  1.3m
-  session: 7 completed iteration(s), mean wall 146.6m
-      total goal-evaluator            1231.7m
+  goal-desk-iter-7  depth=full  verdict=STALLED  wall=29.0m
+      goal-evaluator              21.9m  calls=1
+      iteration-summarizer         4.7m  calls=1
+      readme-maintainer            2.5m  calls=1
+      (resume-skipped: goal-decomposer, coherence-auditor)
+      pump-wait                  0.5m
+      unattributed (glue)        0.0m
+  session: 8 completed iteration(s), mean wall 131.9m
+      total goal-evaluator            1253.5m
       total goal-decomposer            119.1m
-      total iteration-summarizer       103.2m
+      total iteration-summarizer       107.8m
       total browser-qa-agent            72.3m
       total coherence-auditor           33.6m
       total developer                   32.4m
-      total readme-maintainer           25.6m
+      total readme-maintainer           28.1m
       total reviewer                    16.3m
-      total AWAITING_PUMP paused gaps: 1.6m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP
+      total AWAITING_PUMP paused gaps: 4.4m
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED
 ```

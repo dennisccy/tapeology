@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "journey": "J-01",
+  "name": "Universe ingestion — fetched, registered, honest",
+  "default_timeout_ms": 15000,
+  "steps": [
+    {"n": 1, "journey": "J-01", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
+    {"n": 2, "journey": "J-01", "action": {"type": "expect", "target": {"testid": "desk-provenance"}}, "expect": {"text": "Universe snapshot"}, "timeout_ms": 15000},
+    {"n": 3, "journey": "J-01", "action": {"type": "expect", "target": {"testid": "desk-provenance"}}, "expect": {"text": "08e471b10130e1e2"}, "timeout_ms": 10000}
+  ]
+}

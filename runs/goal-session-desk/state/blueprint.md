@@ -204,4 +204,19 @@ RESOLVED at iter-7 (build-time scope, registered here BEFORE the build):
      `<tr>`), iter-7 consolidates the lost tooltip content onto the row's own drill-in anchor
      (already the topmost element everywhere in the row): hovering anywhere in the row reveals one
      composite tooltip carrying all of it. Zero change to click geometry; logged in `assumptions.md`
-     iter-7. -->
+     iter-7.
+
+NOTED at iter-8 (documentation currency only, no new Data-Contract row, no nav-skeleton change):
+iter-8 targets J-07 alone -- the era's regression sentinel, still `partial` after iter-7 for three
+reasons the owner's R-1 ratification (docs/goal.md, 2026-07-27) and this iteration's own work close
+out: (1) R-1 itself resolves "zero out-of-inventory changes" by naming the iter-4 frozen-file repair
+IN INVENTORY; (2) iter-8 captures, for the first time this era, an era-open (`047c38e`) kept-route
+response baseline (a scratch worktree against a throw-away data copy) and diffs it against the
+current tree, so "kept-route byte-identity" finally has real evidence instead of a skipped clause --
+the only expected differences are `/meta/ui-routes` (2->3), the MCP tool count (15->17, already
+proven in iter-7), and the bar-backed reads R-1 names; (3) iter-8 restores
+`journey-scripts/J-07.json` step 10 to its original `tradable-map-chart-caption` target (the iter-7
+edit was based on a disproven premise per the iter-7 audit's T1) and takes the still-missing Cockpit
+Historical-mode screenshot on a real symbol. No product surface, page, or served value changes --
+this note exists so a future reader does not mistake the baseline-capture script or the golden-script
+restore for a new Data-Contract owner. -->

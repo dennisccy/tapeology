@@ -326,3 +326,79 @@ cockpit capture on a REAL symbol as an open J-07 gap rather than a failure. This
 J-07's status (already `partial` for other reasons), but iteration 8 must take that picture before
 the clause is called complete.
 **Reversible:** yes
+
+## iter-8 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s J-07 step 3 asks for "kept-route responses byte-identical on
+identical inputs vs a baseline captured from the era-open commit `047c38e`" but names no exhaustive
+route list or input set, and no baseline was ever captured at era open (iter-7 audit T3) — so this
+iteration must pick, for the first time, exactly which routes and inputs constitute "the kept
+product's routes."
+
+**We chose:** the full set of pre-desk GET routes under `/research/` and `/meta/` (taxonomy,
+datasets(+id), bars(+id/candles), candles, levels, tradability, setups(+id), pnl/ledger, profiles,
+strategies, edge-report) plus `/meta/ui-routes`, exercised with the same concrete inputs prior
+iterations' own evidence already used (pinned AAPL as-of 2026-06-22/2026-07-25, the fixture universe
+member set) rather than every theoretically possible parameter combination — a bounded, reproducible
+set matching what J-07's acceptance text calls out by name (the AAPL wall, `/research/taxonomy`
+unchanged) rather than an exhaustive fuzz. The MCP tool-count delta (15→17) is cited from iter-7's
+own already-proven evidence, not re-diffed against a second checked-out MCP server, since J-06 is a
+binding "do not redo" item. Live WS tape frames are not diffed byte-for-byte (no engine change this
+era; the existing engine-equivalence suite already proves byte-identical `default` projections).
+
+**Reversible:** yes — a future iteration can widen the route/input set if a gap surfaces.
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** J-07 step 2 asks for a screenshot of the "Case Studies drill-in" on the current tree,
+and the era's rail is absolute ("no screenshot ⇒ the journey is `unknown`, never `passing`"). This
+iteration's Case Studies capture (`J-07-case-studies-drillin.png`) proves only that the panel RESOLVES
+and renders its honest empty state, on a disclosed fixture-scoped rig that contains no band-touch
+events at all — because the ambient store's `GET /research/setups` did not return inside a bounded 30 s
+probe (its scan cache is cold; see the second entry below). The one screenshot that shows a real event
+drill-in with real reaction/forward-return numbers is iter-7's
+`reports/qa/goal-desk-iter-7-evidence/UT-10-case-studies-drillin.png`.
+**We chose:** Count the iter-7 frame as satisfying that sub-clause for the current tree, because the
+code it depicts is provably unchanged — `git diff --name-only <iter-8 snapshot> HEAD -- apps/` is empty,
+`apps/backend/app/research/setups.py` has no diff at all this era, and `apps/frontend/app/structure/page.tsx`
+was last touched in iter-6 — and pair it with this iteration's fresh capture, which proves the same
+panel still resolves and still degrades honestly on today's build. The alternative (score the sub-clause
+unmet for want of a same-iteration capture) would have held the era open on a picture that only an
+operator cache-warm, not any product work, can produce.
+**Reversible:** yes — a later capture on a warmed ambient store would replace the iter-7 frame outright.
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** J-07's acceptance says "kept-route byte-identity holds on every route outside step 3's
+two named exemptions" (`/meta/ui-routes` and the MCP tool list). The captured baseline found a THIRD
+route differing: `/research/candles` for AAPL 1d, by exactly `integrity_errors` 0 -> 1 and
+`revised_timestamps` 188 -> 187. Read literally, the acceptance sentence makes any third difference a
+failure; step 3's own body, however, says a difference "is explained against R-1 or it is a defect",
+and R-1 adds "where the clauses below say untouched / byte-unmodified / out-of-inventory, they are read
+subject to R-1".
+**We chose:** Score the clause MET. I read the mechanism in code myself (`apps/backend/app/research/bars.py:518-547`
+collects price-less rows, excludes them from the merged view, and reports them through the existing
+`integrity_errors` channel) and confirmed it is precisely the behaviour the owner ratified in writing;
+`/research/levels` and `/research/tradability`, which read the SAME merged path, both MATCH, which
+bounds the effect to one route and one as-of window. Treating the owner's own ratified repair as a
+sentinel failure would mean the owner ratified something that automatically fails the sentinel.
+**Reversible:** yes — if the owner intended "exactly two differing routes, full stop", the era reopens
+with a single clarifying line in J-07's acceptance text.
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** Anti-goal "Every run is an explicit operator act … page-load GETs never trigger fetches
+or computes" *(critical)* versus what the operator will actually see: on the ambient `.data/`, loading
+`/structure` leaves the Case Studies panel on its loading skeleton for minutes, because this era added
+`desk_*` `Config` fields (explicitly sanctioned by the era's own Constraints, Path A) and that changed
+the content hash keying `setups_scan_cache.db`, so the pre-existing GET path now performs a real scan
+instead of a cache read.
+**We chose:** Not an anti-goal violation, and not a J-07 acceptance failure — recorded instead as an
+open OPERATOR item on J-07 and in the next-step recommendation. Reasons: the era added no such code
+path (`setups.py` and its route are byte-unchanged vs `047c38e`); the compute-on-miss behaviour predates
+the era; the served VALUES are byte-identical (`/research/setups` MATCHes in the baseline report); and
+the remedy is the existing operator-run scan, not product work the era is allowed to do (Non-Goals:
+"No engine, chart, or kept-surface work"). Had I scored it a minor violation, the verdict would have
+been CONTINUE on a latency item that no in-scope code change could fix.
+**Reversible:** yes — if the owner reads that rail as covering cache-key side effects, this becomes a
+minor unresolved violation and the era reopens for a warm-or-refuse fix on that panel.

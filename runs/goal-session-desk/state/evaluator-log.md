@@ -398,3 +398,58 @@ and clear two one-liners (let the new date-lookup test save its own screen so it
 the now-untrue comment at `apps/frontend/app/desk/page.tsx:207`). One sentence for the owner:
 everything this era asked for is built and proven except one written permission — please answer that
 and the run can finish.
+
+## Iteration 8 — goal-desk-iter-8
+
+**Date:** 2026-07-27T20:15:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-07 "The kept product stands" (partial -> passing — all seven of its checks now have
+  real proof, and the one written permission it was waiting for arrived from the owner)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02, J-03, J-04, J-05, J-06 all re-verified passing this iteration
+- Anti-goal violations: none new, and none left open. The item carried for four iterations — whether
+  the three files iteration 4 changed may stay changed — is now settled: the owner wrote the
+  permission into `docs/goal.md` himself (section "OWNER RATIFICATION — 2026-07-27 — R-1", line 103),
+  naming the exact eight files and the exact limits. The two older items stay resolved.
+
+**Reasoning:** I did not take any report's word for this closing iteration. I opened seven pictures
+myself. The one that had been missing since iteration 4 now exists: the front page in Historical mode
+on a real company (Apple, 22 June 2026) with real candles drawn, the timeframe buttons visible with
+"1h" selected, and the support/resistance band lines drawn across the chart, including the era's own
+pinned wall at 302.20. The simulated page settles on "Buyer Control" with all six panels alive; the
+Structure page loads Apple's pinned wall (300.11–302.2, Class A, score 171) and shows the honest
+"Edge report not computed yet." panel in the same view. I then re-ran the work myself: the whole
+back-end test suite (exactly 1341 passed, 8 skipped, 0 failed, exit 0), the settings fingerprint
+(`08e471b10130e1e2`), the page list (exactly three), the tool count (exactly 17, both new desk tools
+present), the previously order-dependent tool test run alone (passes), and every protected test file
+compared against the era-open code (all unchanged except the single one the owner's permission
+covers). I checked the "nothing else changed" promise myself instead of trusting the report: 42 files
+differ from era open, the engine and every frozen calculation file are untouched, no new dependency
+was added, and the two files the owner permitted contain exactly what he permitted. I also listed the
+owner's real data folder: the only thing written during this iteration is one rebuildable speed-up
+cache; all 369 price files, 18 recordings, 1 universe list and 2 saved screens are untouched. I
+confirmed the owner's permission was written by the owner and not by the software: the file was saved
+22 seconds before the run even took its starting snapshot, and nine minutes before the first worker
+started. Coherence is COHERENCE-PASS. Two things I judged rather than merely read, both written down
+in the assumptions ledger: the Case Studies "click into one event" picture comes from iteration 7,
+because the code behind it has not changed since and this iteration's own copy of that page has no
+events to click; and one kept route legitimately answers differently now (it reports one price-less
+row instead of hiding it), which is precisely the repair the owner ratified. GOAL_ACHIEVED because
+all seven journeys now have positive, opened evidence, nothing that used to work stopped working, and
+nothing is left waiting on a person.
+
+**Next-step recommendation:** Halt — the goal is achieved. Two follow-ups for the owner, neither a
+defect and neither blocking: (1) on your own machine, the Case Studies panel on the Structure page
+will sit on its grey loading bars for several minutes the first time, because this era added new
+settings fields and that changed the key of the saved scan results; run the existing scan once to
+refill it and it returns to being instant — the numbers it serves are unchanged. (2) A small honesty
+note for the record: the saved replay script for J-05 was quietly given a 4-second wait this
+iteration to stop it failing by timing; the check itself was not weakened, but future runs should say
+so in the report instead of leaving it silent. Also still open by choice, never forced: two screens
+saved on the same day cannot be told apart by a date-only lookup, keyboard access for the history
+rows, and three one-line hardening items from earlier iterations. One sentence for the owner:
+everything Era B promised is built, proven and photographed — please confirm the finish, then warm
+the Case Studies scan once so that panel is instant again.

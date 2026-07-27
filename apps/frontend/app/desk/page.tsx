@@ -204,8 +204,10 @@ function deskSkipDrillInTitle(skip: DeskScreenSkip): string {
 // One ranked row: symbol, side, band-class chip, distance-bps chip, band score, per-timeframe
 // coverage badges, tick-evidence badge — the DoD's exact column list, every value read verbatim
 // from the snapshot. Distance and score are DISPLAYED to two decimals (a `0.33523150389608725 bps`
-// cell defeated the scanability the briefing exists for — audit F3); each cell's `title` carries the
-// served value in full, so nothing is lost, only formatted. The band-class chip carries the
+// cell defeated the scanability the briefing exists for — audit F3); the full-precision value is
+// not lost — it is reachable via the row's own drill-in anchor's composite `title`
+// (`deskRowDrillInTitle` above, audit F2 fix), never a per-cell `title` (iter-7 audit F1: this
+// comment used to claim the opposite). The band-class chip carries the
 // "nearest same-class band" caption
 // (assumptions.md iter-4 entry 1 — `_select_best_band` itself stays byte-unchanged; this copy
 // keeps the chip honest about what the ranking actually selects rather than implying it is the

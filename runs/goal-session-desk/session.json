@@ -1,7 +1,7 @@
 {
   "session_id": "desk",
   "started_at": "2026-07-25T01:04:47.481604Z",
-  "current_iter": 8,
+  "current_iter": 9,
   "cli": "claude",
   "agent_backend": "interactive",
   "halt_config": {
@@ -10,14 +10,15 @@
     "regression_halt": true
   },
   "status": "in_progress",
-  "last_verdict": "STALLED",
-  "next_depth": "full",
+  "last_verdict": "GOAL_ACHIEVED",
+  "next_depth": "lean",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/desk",
-  "finished_at": "2026-07-27T15:25:49.630143Z",
-  "total_iterations": 7,
-  "wall_time_seconds": 103722,
+  "finished_at": "2026-07-27T15:57:45.953290Z",
+  "total_iterations": 8,
+  "wall_time_seconds": 1746,
   "quota_pause_count": 0,
-  "updated_at": "2026-07-27T15:57:45.374550Z"
+  "updated_at": "2026-07-27T19:31:14.342496Z",
+  "parked_wip_sha": "6778962"
 }

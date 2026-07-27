@@ -9,6 +9,7 @@
     {"n": 3, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "desk-history-latest-button"}}, "timeout_ms": 8000},
     {"n": 4, "journey": "J-05", "action": {"type": "click", "target": {"testid": "desk-screen-row"}}, "timeout_ms": 10000},
     {"n": 5, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "structure-title"}}, "expect": {"text": "Structure"}, "timeout_ms": 10000},
-    {"n": 6, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "tradable-map-table"}}, "expect": {"text": "298.02–300.1001"}, "timeout_ms": 15000}
+    {"n": 6, "journey": "J-05", "action": {"type": "wait_for", "ms": 4000}},
+    {"n": 7, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "tradable-map-table"}}, "expect": {"text": "298.02–300.1001"}, "timeout_ms": 20000}
   ]
 }

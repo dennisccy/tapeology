@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "journey": "J-02",
+  "name": "Coverage + explicit bar top-up over the universe",
+  "default_timeout_ms": 15000,
+  "steps": [
+    {"n": 1, "journey": "J-02", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
+    {"n": 2, "journey": "J-02", "action": {"type": "expect", "target": {"testid": "desk-screen-rows-table"}}, "expect": {"text": "coverage"}, "timeout_ms": 15000},
+    {"n": 3, "journey": "J-02", "action": {"type": "expect", "target": {"testid": "desk-screen-rows-table"}}, "expect": {"text": "tick evidence"}, "timeout_ms": 10000}
+  ]
+}

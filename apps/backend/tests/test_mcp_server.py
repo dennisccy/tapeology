@@ -263,6 +263,10 @@ async def test_static_live_tools_json_byte_identical_to_rest(mcp_env):
 
 DESK_SCREEN_DATE = "2026-06-22"
 DESK_SCREEN_NONMATCH_DATE = "2020-01-01"
+# audit B1: the ?date= proxy test below seeds its OWN screen under this THIRD, distinct date
+# rather than reusing DESK_SCREEN_DATE's record (seeded by the populated-state test above) --
+# so it now passes standalone (`pytest -k ...`), not just inside the full module.
+DESK_SCREEN_ISOLATED_DATE = "2026-06-23"
 
 
 @pytest.mark.anyio
@@ -369,12 +373,36 @@ async def test_desk_screen_tool_byte_identical_on_a_populated_state(mcp_env, bac
 
 
 @pytest.mark.anyio
-async def test_get_endpoint_desk_screen_date_query_proxies_verbatim(mcp_env):
+async def test_get_endpoint_desk_screen_date_query_proxies_verbatim(mcp_env, backend_paths):
     """TC-6/TC-7: ``get_endpoint`` reaches the ``?date=`` lookup variant ``desk_screen`` itself
-    does not expose -- byte-identical for a matching date (the screen the previous test just
-    recorded), and the honest ``{"screen": null}`` 200 (never a 404, never an error) for a
-    non-matching one."""
-    matching_path = f"/research/desk/screen?date={DESK_SCREEN_DATE}"
+    does not expose -- byte-identical for a matching date (seeded HERE, under its own distinct
+    date -- audit B1 fix, so this test passes standalone, never relying on
+    ``test_desk_screen_tool_byte_identical_on_a_populated_state``'s side effect), and the honest
+    ``{"screen": null}`` 200 (never a 404, never an error) for a non-matching one."""
+    screen_dir = Path(backend_paths["TAPEOLOGY_DESK_SCREEN_DIR"])
+    ScreenStore(screen_dir).record(
+        screen_date=DESK_SCREEN_ISOLATED_DATE,
+        as_of="2026-06-23T21:00:00Z",
+        universe_snapshot_id="universe-2026-07-25-817cc184bbb3",
+        config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store_signature="mcp-test-isolated-date-signature",
+        rows=[
+            {
+                "symbol": "AAPL",
+                "side": "resistance",
+                "band_class": "A",
+                "distance_bps": 12.5,
+                "band_score": 3.1,
+                "price_low": 300.0,
+                "price_high": 302.0,
+                "coverage": {"1d": {"has_bars": True, "latest_window_end_utc": "2026-06-23T00:00:00Z"}},
+                "tick_evidence": True,
+            }
+        ],
+        skipped=[],
+    )
+
+    matching_path = f"/research/desk/screen?date={DESK_SCREEN_ISOLATED_DATE}"
     result = await call_tool("get_endpoint", {"path": matching_path})
     rest = httpx.get(f"{mcp_env}{matching_path}", timeout=5.0)
     assert rest.status_code == 200
