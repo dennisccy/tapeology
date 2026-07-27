@@ -87,14 +87,21 @@ def test_ranked_row_drill_in_tooltip_is_built_from_distance_score_and_coverage_f
     """The ranked-row (``desk-row-drill-in``) anchor's tooltip-building function references the
     row's own full ``distance_bps``, full ``band_score``, and coverage ``latest_window_end_utc``
     -- the exact three fields audit F2 found unreachable once the anchor started painting above
-    their per-cell ``title``s."""
+    their per-cell ``title``s. goal-desk-iter-9 (J-08) adds two more required needles:
+    ``basis_as_of``/``basis_age_days`` -- the new basis column is a plain descriptive `<td>` with
+    NO per-cell ``title`` of its own (the same F2 lesson applied proactively), so its full-precision
+    detail must join this SAME consolidated tooltip or it is unreachable by pointer, exactly like
+    the three fields above."""
     source = _DESK_PAGE.read_text()
     fn_name = _anchor_title_function_name(source, "desk-row-drill-in")
     fn_source = _extract_function(source, fn_name)
-    for needle in ("row.distance_bps", "row.band_score", "latest_window_end_utc"):
+    for needle in (
+        "row.distance_bps", "row.band_score", "latest_window_end_utc",
+        "row.basis_as_of", "row.basis_age_days",
+    ):
         assert needle in fn_source, (
             f"{fn_name}() never references {needle!r} -- the ranked row's composite hover "
-            "tooltip must carry the row's own full-precision distance/score plus coverage "
+            "tooltip must carry the row's own full-precision distance/score/basis plus coverage "
             "freshness, not a static or empty string"
         )
 

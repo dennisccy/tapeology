@@ -4,204 +4,6 @@ Append-only. An entry is added whenever scoring or planning required *interpreti
 `docs/goal.md` rather than just reading evidence. The human reviews these to catch
 silent interpretation calls early.
 
-## iter-3 — goal-decomposer
-
-**Ambiguity:** `docs/goal.md`'s J-03 acceptance says a screen row summarizes "best band, band
-class, distance-from-close bps, band score" per member, but `compute_tradability` returns a LIST
-of bands per symbol (up to `2 * tradability_band_cap_per_side`, split across resistance/support
-sides) with no existing method that already selects a single "best" one, and the era's own
-cross-symbol rank tuple `(band class A>B>C, then distance asc, then band score desc, then symbol
-asc)` is stated only for ordering the FINAL rows, not for choosing which band represents a symbol.
-**We chose:** Apply the SAME tuple `(class rank A>B>C>null desc, distance_bps asc, quality_score
-desc)` twice — first WITHIN a symbol's own band list to pick its "best" band (iterating
-`compute_tradability`'s already-deterministic served order so a tie resolves identically every
-run), then ACROSS symbols (plus `symbol asc` as the final tie-break) to produce the screen's row
-order. This reuses one rule for both jobs rather than inventing a second selection policy, and
-never re-grades a band (the chosen band's own `class`/`quality_score`/`price_low`/`price_high` are
-served verbatim).
-**Reversible:** yes
-
-## iter-3 — goal-decomposer
-
-**Ambiguity:** `distance-from-close bps` requires a reference close price, but
-`compute_tradability`'s returned shape (`{"bands": [...], "no_bar_series_for_symbol": bool,
-"basis_as_of": str | None}`) does not serve one — the internal `current_price = prior_bar.close`
-(`tradability.py:426`) is a local variable, never returned — and `compute_levels`'s own return
-shape has no such field either. Adding one to either frozen module's return dict would break
-existing exact-dict-equality assertions in `test_tradability.py` (e.g. `assert result ==
-{"bands": [], "no_bar_series_for_symbol": True, "basis_as_of": None}`), which the goal-era's
-"Frozen foundations" anti-goal (rail 3) forbids disturbing.
-**We chose:** `desk_screen.py` resolves the reference close ITSELF via a plain, existing
-`BarStore` read (the same `merged_bars`-style accessor `tradability.py` already calls internally)
-of the ONE daily bar dated at `basis_as_of` — a value `compute_tradability` already serves — never
-re-deriving WHICH bar is the basis (that stays `compute_tradability`'s exclusive decision) and
-never touching `tradability.py`'s or `levels.py`'s return shape. A diff on either frozen module is
-therefore a build defect, not an accepted side effect.
-**Reversible:** yes
-
-## iter-3 — goal-decomposer
-
-**Ambiguity:** `docs/goal.md`'s Constraints say every new SEMANTIC knob takes Path A as a `Config`
-field, but separately say "operational knobs (worker counts, timeouts, store dirs) may be env vars
-per the 5C precedent" — and this codebase has BOTH patterns live: primary content stores
-(`journal_db_path`, `dataset_dir`, `bar_dir`, and J-01's own `desk_universe_dir`) are `Config`
-fields with Path-A treatment, while derived caches (`edge_report_cache.db`,
-`edge_report_backtests.db`, `bar_index.db`) resolve via a bare env-var-or-sibling-default function
-with NO `Config` field at all. A new screen-snapshot store (a primary, non-reconstructible content
-store, like the first group) could honestly go either way, and `iteration-state.md`'s carried "Do
-not redo" note explicitly prefers zero new `Config` fields ("a new field re-moves
-`_config_content_hash` and re-strands the caches").
-**We chose:** Treat the screen store's directory as a "store dir" operational knob (the
-Constraints' own explicit sanction) — a bare `TAPEOLOGY_DESK_SCREEN_DIR`-env-var-or-sibling-of-
-`desk_universe_dir_resolved()` default (the `resolve_cache_db_path` pattern), NOT a new `Config`
-field. This adds zero further `config_fingerprint`/`_config_content_hash` Path-A debt on top of
-J-01's already-unwarmed move, honors the carried lesson, and is fully reversible: a future
-iteration can still promote it to a `Config` field if the screen store genuinely needs independent
-operator relocation from the universe store.
-**Reversible:** yes
-
-## iter-3 — goal-evaluator
-
-**Ambiguity:** J-03 step 4 asks the backend to "serve `GET /research/desk/screen` (latest, `?date=`,
-and a snapshot list) with the honest `"Desk screen not computed yet."` payload before any run" — but
-that literal string is also `docs/goal.md`'s Design-Direction *copy* example and J-04's own browser
-acceptance clause ("`/desk` with no screen shows `"Desk screen not computed yet."`"). Nothing states
-whether the JSON payload itself must carry the sentence.
-**We chose:** Score the clause satisfied by an honest-empty JSON payload — HTTP 200 with
-`{"screens": [], "latest": null, "integrity_errors": []}` (never 404, never a fabricated row), which
-is exactly what the iteration spec's TC-5 defines and what `GET /research/desk/universe` already does
-— and treat the literal sentence as UI copy owned by J-04. Consequence: J-04's acceptance now carries
-the string as a HARD requirement (the page must render that exact copy over this payload), recorded in
-the next-step recommendation; if a future reader expects the API to echo the sentence, only the
-rendering layer changes.
-**Reversible:** yes
-
-## iter-3 — goal-evaluator
-
-**Ambiguity:** Anti-goal 7 says "no wall-clock … in any research artifact" and build trap T-6 says
-"Progress timestamps live in compute-manager state, never in snapshot content" — yet the screen
-snapshot's registered shape (spec Data-contract addition #1) includes `created_utc`, which
-`desk_screen.py:481` fills from `datetime.now(timezone.utc)`. Read strictly, a wall-clock field lives
-inside snapshot content.
-**We chose:** Read `created_utc` as registration metadata rather than a research value or a progress
-timestamp: it is excluded from the 5-pin key AND from the snapshot-id checksum, no served value
-derives from it, identical pins still reproduce byte-identical `rows`/`skipped` (I proved this across
-two fresh interpreters), and it is the exact field `desk_universe.py:411` already carries — accepted
-in iter-1 when J-01 passed. So: not an anti-goal violation, minor or critical. Consequence: the
-determinism guarantee this era enforces is scoped to computed CONTENT plus the pin key, not to
-file-registration bookkeeping; `id`, `screen_date`, `as_of`, `universe_snapshot_id`,
-`config_fingerprint` and `bar_store_signature` remain the only fields any re-run comparison may use.
-**Reversible:** yes
-
-## iter-4 — goal-decomposer
-
-**Ambiguity:** Audit finding B10 (iter-3 handoff) shows `_select_best_band` (`desk_screen.py:206`)
-ranks distance-to-close ahead of quality score, so a symbol's headline screen row can be its
-NEAREST same-class band rather than its highest-scoring one — on the committed fixtures, AAPL's
-row is `resistance C, 2.348 bps, score 57.0 (298.08–299.24)` while the same served band list also
-carries `resistance C, score 123.0 (300.23–302.25)`, the era's own pinned 300–302.4 wall. iter-3's
-eval.md flagged this explicitly as a human call for J-04 to resolve BEFORE rendering the chip:
-"either the chip copy says 'nearest same-class band' or the human respecs the within-symbol tuple."
-`docs/goal.md` itself is silent on which band a "best band" chip should mean.
-**We chose:** Keep `_select_best_band`'s ranking tuple byte-unchanged (zero diff on
-`desk_screen.py`'s computation — it is spec-conformant per `assumptions.md` iter-3 entry 1, not a
-bug) and make `/desk`'s headline-band chip copy read "nearest same-class band" rather than implying
-it is the symbol's strongest band. This keeps the chip's claim honest about what the ranking
-actually selects without touching J-03-owned, already-shipped computation this iteration.
-**Reversible:** yes
-
-## iter-4 — goal-decomposer
-
-**Ambiguity:** `docs/goal.md` step 3 for J-04 says "Wire Run Screen ... to the compute endpoints
-with live progress + cancel" but never states how the button supplies the REQUIRED `screen_date`
-body field (`POST /research/desk/screen/compute` 422s without it, per J-03/iter-3's TC-9). Anti-goal
-"every run is an explicit operator act" and build trap T-6 ("no wall-clock ... determinism means no
-wall-clock") both concern SERVED/computed values and snapshot keys (per `assumptions.md` iter-2's
-own reading of the parallel top-up fetch-horizon question), but neither states whether a UI control
-may CLIENT-SIDE default a request parameter to "today" without that becoming a disallowed
-wall-clock dependency.
-**We chose:** Run Screen always submits the client's own `today` (the SAME `todayUtcDate()`-style
-helper `/structure`'s existing "Today" shortcut button already uses) as `screen_date` — no
-date-picker or alternate-date control ships on `/desk` this iteration. The operator's click remains
-the explicit, logged act (matching the CLI's own `--date`-required design and iter-2's accepted
-fetch-horizon precedent); the backend computation itself still never reads wall-clock time — only
-the CLIENT parameter defaults to "now," submitted explicitly. The CLI's `--date` flag remains the
-path for an arbitrary historical re-screen; no UI regression if a future iteration adds a picker.
-**Reversible:** yes
-
-## iter-4 (fix pass) — developer
-
-**Ambiguity:** Audit B1 found 60 recorded bar series (58 symbols, incl. the era's pinned AAPL `1d`)
-each holding ONE row whose OHLC are the JSON `NaN` token — written by the new `/desk` Top-up button
-during this iteration's own QA, via a Yahoo row for a session that had not traded yet. The era's data
-anti-goal says registered bar series are "append-only, checksummed, never re-tagged, never deleted,
-never content-perturbed", and the audit explicitly left the fate of those 60 series as a decision it
-would not make unilaterally: quarantine + `integrity_errors` surfacing, a superseding revision
-series, or tolerate-on-read. `docs/goal.md` says nothing about a recorded value that is not a number.
-
-**We chose:** ROW-level exclusion on the shared merged read, reported through the ALREADY-registered
-`integrity_errors` channel — never file deletion, never a rewrite, never a re-fetch. Concretely:
-`BarStore._merged_rows` drops any row whose OHLC are not all finite and reports one entry per
-affected series ("N recorded row(s) carry a non-finite price … the file itself is unchanged"), which
-is exactly the treatment a corrupt FILE already gets ("never served as data, never silently
-dropped"). The three alternatives were rejected on evidence:
-
-  * **File-level quarantine** (the audit's first option) was MEASURED and rejected: excluding the
-    whole 501-bar AAPL `1d` series moves the tradable map's entire support side as-of 2026-06-22
-    (`support A 222.68–224.23 score 688.6` → `support A 274.60–276.51 score 471.7`), because that
-    series is the only recording covering 2024-07..2024-12. Quarantining a file to remove one bad row
-    would silently change every band 500 good bars support — a worse anti-goal breach than the bug.
-  * **A superseding revision series** cannot work: the vendor serves NO prices for that timestamp
-    (verified live on 2026-07-26 — the same `2026-07-24 open=nan volume=47402209` row is still
-    served), so a clean re-fetch simply omits it and the union keeps the old priceless row.
-  * **Tolerate on read** was rejected because it is not merely cosmetic: measured on the ambient
-    store, `compute_tradability("AAPL", as_of=2026-07-25)` returns `bands: []` with the NaN row as
-    its basis, versus 10 honest bands off 2026-07-23 once the row is excluded. The priceless rows
-    were silently deleting the tradable map, not just crashing the chart.
-
-Consequences accepted: (a) the merged `bar_count` for an affected pair drops by the number of
-priceless rows (AAPL `1d`: 501 → 500) — the honest count of candles that exist; (b) those pairs now
-report a permanent, honest `integrity_errors` entry until an operator chooses to act on the files
-(nothing in the product requires that, and nothing deletes them); (c) values computed as-of a date
-BEFORE the priceless row are byte-identical (verified: the pinned 2026-06-22 map is unchanged
-field-for-field), so no prior evidence is invalidated. Prevention is separate and structural:
-`YahooAdapter` drops a priceless vendor row at the seam, and `BarStore.record` refuses one outright,
-so this state is no longer reachable.
-**Reversible:** yes — the files are untouched, so any later policy (quarantine, supersede, an
-operator-run compaction) is still fully available.
-
-## iter-4 — goal-evaluator
-
-**Ambiguity:** `docs/goal.md`'s browser-evidence rule says "every browser acceptance needs a
-screenshot — no screenshot ⇒ the journey is `unknown`, never `passing`", but it never says WHO must
-capture it, while the iteration spec's DEFINITION OF DONE #1 names the `browser-qa-agent` lane
-specifically ("J-04 passes via browser-qa-agent"). This iteration produced real, current screenshots
-of two of J-04's three required states — captured by the auditor and the developer — and no
-browser-qa-agent dispatch at all.
-**We chose:** Count a screenshot I personally opened, which unambiguously shows the acceptance state
-on the current tree, as genuine evidence for THAT clause regardless of which agent captured it (so
-the empty state and the populated briefing are met, not `unknown`), but refuse to let it satisfy the
-DoD's lane requirement or to substitute for the missing third state. Net effect: J-04 is `partial`,
-not `passing` and not `failing`, and the browser lane is carried as owed work into iteration 5.
-**Reversible:** yes
-
-## iter-4 — goal-evaluator
-
-**Ambiguity:** Anti-goal 3 ("Frozen foundations") and the Non-Goals list in `docs/goal.md` name
-`bars.py`'s JSON `BarStore` and `components/StructureChart.tsx` as untouched for this whole era, and
-label the rail *(critical)*. This iteration changed both, authorized ONLY by an amendment the
-developer wrote into the iteration spec during his own fix pass (`docs/phases/goal-desk-iter-4.md`
-OUT OF SCOPE, "bars.py's zero-diff constraint is LIFTED for the priceless-bar rail only"). Nothing in
-`docs/goal.md` says whether an iteration spec may grant itself an exception to a critical rail.
-**We chose:** Score it a MINOR, disclosed deviation (logged `resolved: false` and escalated for the
-owner's written ratification) rather than a critical violation that halts the loop — because I
-re-measured that output is identical for all-finite data, the era's pinned Apple band is unchanged,
-the fingerprint has not moved, the suite is green, and the change repairs a kept surface that would
-otherwise crash. The alternative reading (an iteration spec cannot self-grant a goal.md exception →
-REGRESSION and halt) stays available to the owner: the code is small, additive and revertible, and
-the 60 affected data files were never modified.
-**Reversible:** yes
-
 ## iter-5 — goal-evaluator
 
 **Ambiguity:** `docs/goal.md`'s J-04 acceptance demands a screenshot of "Run Screen shows live
@@ -402,3 +204,69 @@ the remedy is the existing operator-run scan, not product work the era is allowe
 been CONTINUE on a latency item that no in-scope code change could fix.
 **Reversible:** yes — if the owner reads that rail as covering cache-key side effects, this becomes a
 minor unresolved violation and the era reopens for a warm-or-refuse fix on that panel.
+
+## iter-9 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s J-08 step 1 specifies `basis_age_days` only as "a plain arithmetic
+derivation from the row's own `basis_as_of` and the snapshot's own `as_of` (the `distance_bps`
+precedent, `desk_screen.py:197`)" — it names neither the exact formula nor whether the result is a
+whole-day integer or a fractional/float day count, and both `basis_as_of` and `as_of` are full ISO
+datetimes (not bare dates) whose time-of-day components can differ (e.g. an existing fixture pair
+resolves `as_of="2026-06-22T15:00:00Z"` against `basis_as_of="2026-06-18T04:00:00.000000Z"`).
+**We chose:** A whole calendar-date difference — `(date(as_of) - date(basis_as_of)).days`, an
+`int >= 0` — discarding the time-of-day component on both sides. This is the reading that
+reproduces the exact numbers the proposer measured live and cited in goal.md's own rationale
+(as-of 2026-07-25 minus basis 2026-07-24 = 1 d for AAPL; minus 2026-07-13 = 12 d for
+META/NFLX/NVDA) and matches every "N d" example in the acceptance text and the UI copy example
+("12 d before as-of"). A true elapsed-time formula (subtracting full timestamps, dividing by
+86400, then flooring or rounding) would give a different integer whenever the two time-of-day
+components straddle a day boundary, and does not reproduce the cited examples as cleanly.
+**Reversible:** yes — `basis_age_days`'s derivation can be swapped for a different formula in a
+later iteration without touching `basis_as_of`, the persisted 5-pin key, or any other row field;
+only already-recorded rows from this iteration forward would keep their original (never
+retroactively rewritten, per the append-only rail) values.
+
+## iter-9 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-08 acceptance requires a browser screenshot with "at least one
+fresh row (age ≤ 2 d) and one stale row (age ≥ 10 d) legible in the same screenshot". The captured
+evidence (`UT-03-fresh-vs-stale.png`) shows 3 d vs 14 d. The iteration's own test plan
+(`reports/phase-goal-desk-iter-9-ui-test-plan.md:112-115`) declares an "explicit, documented
+allowance" that a 7+ day spread satisfies the clause even when no row is ≤ 2 d, and the audit
+(T1, GAP not IMPORTANT) explicitly hands the call to the evaluator: accept the spread, or require
+the literal thresholds.
+**We chose:** Score J-08 `partial`, not `passing`, and CONTINUE. Reasons: (i) a test plan written
+downstream cannot amend `docs/goal.md`'s acceptance text — only the owner can; (ii) the allowance
+was unnecessary, which is decisive — I measured the canonical owner myself at
+`as_of 2026-07-25T23:59:59Z` on a throw-away copy of the bar store and got AAPL = 1 d and
+META/NFLX/NVDA = 12 d, so both thresholds are reachable TODAY with zero code change and zero write
+to the ambient store; (iii) this session's own iter-7 precedent ("a condition that is verifiably
+false today is unmet, however well disclosed"). The consequence is one short lean iteration whose
+only real deliverable is the correctly-parameterised screenshot. The softer reading stays available:
+if the owner narrows J-08's wording to "a legible fresh-vs-stale spread" (or restates the thresholds
+relative to the newest available bar rather than absolute days), the existing evidence closes the
+journey immediately.
+**Reversible:** yes
+
+## iter-9 — goal-evaluator
+
+**Ambiguity:** The browser-QA lane clicked "Run Screen" against the AMBIENT `apps/backend/.data/`
+rather than the throw-away copy this iteration's own spec NOTES and
+`apps/backend/scripts/goal-desk-iter9-scoped-backend.sh` directed (audit T3), writing a real
+`screen-2026-07-27-936543601e75.json` into the operator's ledger. `docs/goal.md` has no rail
+naming "the pipeline must not write to the ambient store"; the closest rails are "Every run is an
+explicit operator act", "Persistence stays scoped", "Snapshots are append-only and pinned" and
+"Immutable data".
+**We chose:** Not an anti-goal violation — a hygiene deviation, recorded in `journey-history.json`
+(`notes_iter_9`) and in the next-step recommendation instead. Each rail was checked individually:
+the run was an explicit button click (not a scheduler, daemon, auto-refresh, market-hours trigger,
+or page-load GET); it appended a NEW correctly-pinned snapshot rather than rewriting anything; both
+pre-existing snapshots are provably untouched (sha256 `530bb4f6b4a5a3fc…` / `9c2fddf6c4821a89…`,
+mtime 2026-07-25, predating the 20:21 start); no bar or dataset was written. Consequence to carry:
+prior iterations tracked "the owner's real data folder is unchanged" as a standing hygiene check,
+and that streak is now broken by a QA-produced (but genuine) screen record; and
+`journey-scripts/J-08.json` steps 3/6 now assume the replay target's latest screen carries basis
+fields.
+**Reversible:** yes — if the owner reads the scoped-rig discipline as a rail rather than a
+convention, this becomes a minor unresolved violation and the next iteration owes a remediation
+note (the file itself must stay: deleting it would breach the append-only rail).

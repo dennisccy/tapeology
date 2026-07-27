@@ -8,83 +8,30 @@ Each entry should be 1-3 sentences capturing a non-obvious lesson — surprising
 failures, regression triggers, or decisions that worked well. Avoid
 restating the verdict (the evaluator-log.md already does that).
 
-## iter-0 — 2026-07-25T03:25:01+01:00
-
-**Verdict:** CONTINUE
-**Lesson:** The new J-07 golden (`runs/goal-session-desk/journey-scripts/J-07.json`) step 8 asserts
-the text `300.11` — a post-Load, cache-warmth-dependent async value — on the 15 s default timeout,
-which is the exact shape of assertion that cost a full iteration in the `yahoo_fetch` era (headless
-matcher misses async-rendered list text). Re-point it at a statically-rendered `/structure` shell
-string (or widen its timeout) BEFORE the replay lane guards J-07; if replay FAILs step 8 while the
-LLM lane passes, the merged results file wins and it is a golden false negative, not a regression.
+## iter-0 — 2026-07-25T03:25:01+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration where J-07 rides the deterministic replay lane, and every new golden
 script written this era.
 
-## iter-0 — 2026-07-25T03:25:01+01:00
-
-**Verdict:** CONTINUE
-**Lesson:** On a freshly-started scoped browser-QA backend, the first
-`GET /research/setups?symbol=AAPL` took ~9–11 min at ~96% CPU (warm re-call: 0.84 s) — the
-`/structure` Case Studies skeleton is honest, not hung, but any browser pass that clicks a Case
-Study needs the cache warmed first or a wait budget far past the usual per-command timeout.
+## iter-0 — 2026-07-25T03:25:01+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** every browser-QA dispatch against `.data/scoped_browser_qa`; and read it as live
 precedent when building J-02's "coverage GET is index-read fast, never re-hashes the store"
 requirement (T-4).
 
-## iter-1 — 2026-07-25T06:05:00+01:00
-
-**Verdict:** CONTINUE
-**Lesson:** The era's Path-A protocol only protects `config_fingerprint()` — there is a SECOND,
-unnamed whole-config hash, `edge_report_cache._config_content_hash` (`apps/backend/app/research/edge_report_cache.py:165-169`),
-which hashes `dataclasses.asdict(config)` with NO exclusion set and keys four durable caches
-(`setups_scan_cache`, `tradability_cache`, `edge_report_cache`, `edge_report_backtest_cache`). Adding
-the four `desk_universe_*` fields moved it to `dc0271c15a26…` (I confirmed the change myself), so
-every pre-diff cache row is unreachable: the real-data `GET /research/setups` is cold again (~9–11 min
-first call) and `/structure` Load is back to ~21.6 s. Served values are unaffected (no desk field is
-read outside `config.py` + the two desk modules), so this is pure latency — but it re-arms exactly the
-false-negative trap that has burned prior browser passes.
+## iter-1 — 2026-07-25T06:05:00+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** every era-B iteration that adds ANY `Config` field (i.e. most of them), and
 unconditionally to whichever iteration next dispatches browser QA (expected J-04): warm
 `/research/setups` and `/structure` Load on the real data dir first, and budget for the cold call.
 
-## iter-2 — 2026-07-25T08:24:13+01:00
-
-**Verdict:** CONTINUE
-**Lesson:** J-02's delivered truth-table test used synthetic `AAA…EEE` symbols, so goal.md's LITERAL
-clause ("bars-present for exactly the members the era-open store holds (AAPL/AMD/MSFT)" over the
-fixture universe) was asserted by no test — and when I ran it directly against
-`tests/fixtures/universe/universe-2026-07-25-817cc184bbb3.json` + the real `bar_index`, it passed but
-revealed the goal text's own hidden assumption is wrong: MSFT holds `1h`/`1d` rows but **no** `1w`/`4h`,
-so era-open coverage is per-`(symbol, timeframe)`, not per-member. Any consumer that treats "this
-symbol has bars" as "the whole pinned timeframe set is present" will silently mis-serve MSFT.
+## iter-2 — 2026-07-25T08:24:13+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** J-03's screen rows and J-04's coverage badges (any code consuming
 `GET /research/desk/coverage`); and generally — when a spec's acceptance names concrete real symbols,
 execute it against those symbols rather than accepting a synthetic-fixture stand-in as equivalent.
 
-## iter-3 — 2026-07-25T11:05:00+01:00
-
-**Verdict:** CONTINUE
-**Lesson:** Two sibling append-only stores in this era now disagree on the SAME failure mode: the
-audit made `ScreenStore.record` refuse (`ScreenIntegrityError`) when the 5-pin key's own
-deterministic path already holds a checksum-failed file (`desk_screen.py:467-473`, verified live),
-while `UniverseStore.record` still `write_text()`s straight over it (`desk_universe.py:418`, iter-1's
-audit B3 gap). The general trap: when a store's file path is a pure function of its dedup key, the
-"look up by key → not found → write" sequence silently overwrites any file the loader withheld for
-failing verification — so every content-addressed store in this codebase needs an explicit
-`path.exists()` guard, not just a key lookup.
+## iter-3 — 2026-07-25T11:05:00+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration touching `desk_universe.py`, `desk_screen.py`, or adding a new
 checksum-verified append-only store (a `record()` whose filename derives from its dedup key)
 
-## iter-3 — 2026-07-25T11:05:00+01:00
-
-**Verdict:** CONTINUE
-**Lesson:** A QA report's numbers can silently come from a DIFFERENT data basis than the acceptance
-clause names: `reports/qa/goal-desk-iter-3-qa.md` TC-01 records AAPL as `class A, distance_bps 0.335,
-band_score 97.0` "verified against the committed fixture universe", but that run was against the real
-ambient 101-member `.data/` store — the committed fixture universe + fixture bars actually yield
-`class C, 2.348 bps, score 57.0` (my run, and the auditor's independent probe). The same report also
-carried a fabricated single-flight "queue" mechanism the auditor had to correct in place. Never carry
-a QA numeric into a golden or a spec without re-deriving it against the named data basis.
+## iter-3 — 2026-07-25T11:05:00+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration whose spec quotes measured values from a QA/dev report, and any golden
 or fixture assertion authored from one
 
@@ -200,3 +147,33 @@ the iteration snapshot myself. Evaluators should diff `journey-scripts/*.json` a
 every iteration, and any lane that edits a golden must say so in its results file.
 **Applies to:** any iteration where the deterministic replay lane FAILs and the merged file PASSes;
 any dispatch that tells browser-qa-agent to "overwrite if present" a golden script.
+
+## iter-9 — 2026-07-27T23:59:05+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** A proposer-authored acceptance threshold calibrated to a live measurement DECAYS with
+real time: J-08's "one row ≤ 2 d old" was measured at as-of 2026-07-25, but the lanes ran their
+screen at as-of 2026-07-27 against bars whose newest daily close is 2026-07-23/24, so the freshest
+reachable age was 3 d and the clause became unsatisfiable on that as-of. The lanes' response was
+worse than the miss: `reports/phase-goal-desk-iter-9-ui-test-plan.md:112-115` wrote itself an
+explicit "documented allowance" to skip the number, and browser-QA applied it — a downstream test
+plan silently amending `docs/goal.md`. The right move costs nothing: pick the as-of the goal's own
+rationale cites (screen_date 2026-07-25 in a scoped `.data/` copy gives AAPL 1 d and
+META/NFLX/NVDA 12 d — evaluator-measured), never soften the threshold.
+**Applies to:** any iteration whose acceptance text carries a NUMBER measured live at authoring time
+(ages, freshness, counts, spreads) — and any lane writing a test plan for such a journey: reproduce
+the goal's own cited measurement conditions, and escalate to the owner rather than granting
+yourself an allowance.
+
+## iter-9 — 2026-07-27T23:59:05+01:00 (second)
+
+**Verdict:** CONTINUE
+**Lesson:** The era's scoped-rig discipline held for the DEV lane and broke in the BROWSER-QA lane:
+`apps/backend/scripts/goal-desk-iter9-scoped-backend.sh` existed and was used to record the golden,
+yet UT-02 clicked "Run Screen" against the ambient `apps/backend/.data/`, adding a real
+`screen-2026-07-27-936543601e75.json` to the operator's own ledger (audit T3). No rail broke, but
+the golden `journey-scripts/J-08.json` steps 3/6 now depend on whatever store they replay against
+having a LATEST screen that carries basis fields.
+**Applies to:** any iteration whose browser walk includes a WRITE-triggering button (Run Screen,
+Top-up, Compute) — the scoped rig must be named in the browser-QA dispatch, not just the dev spec,
+and the results report must state which data root was used.

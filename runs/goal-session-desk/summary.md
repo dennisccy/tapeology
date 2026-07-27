@@ -1,31 +1,31 @@
 # Goal Session Summary — desk
 
-**Final verdict:** STALLED
-**Total iterations:** 8
-**Wall time (seconds):** 1746
+**Final verdict:** AWAITING_PUMP
+**Total iterations:** 9
+**Wall time (seconds):** 824
 **Quota pauses:** 0
 **Started:** 2026-07-25T01:04:47.481604Z
-**Finished:** 2026-07-27T15:57:45.953290Z
+**Finished:** 2026-07-27T20:21:40.220421Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/desk`. Open a PR with:
 
     gh pr create --base main --head goal/desk \
-      --title "feat: desk — STALLED" \
+      --title "feat: desk — AWAITING_PUMP" \
       --body-file runs/goal-session-desk/summary.md
 
 ## Final journey state
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-desk-iter-7 |
-| J-02 | passing | goal-desk-iter-7 |
-| J-03 | passing | goal-desk-iter-7 |
-| J-04 | passing | goal-desk-iter-7 |
-| J-05 | passing | goal-desk-iter-7 |
-| J-06 | passing | goal-desk-iter-7 |
-| J-07 | partial | - |
+| J-01 | passing | goal-desk-iter-8 |
+| J-02 | passing | goal-desk-iter-8 |
+| J-03 | passing | goal-desk-iter-8 |
+| J-04 | passing | goal-desk-iter-8 |
+| J-05 | passing | goal-desk-iter-8 |
+| J-06 | passing | goal-desk-iter-8 |
+| J-07 | passing | goal-desk-iter-8 |
 
 ## Anti-goal violations
 
@@ -124,15 +124,31 @@ See `runs/goal-session-desk/telemetry.jsonl` for the structured event log.
       (resume-skipped: goal-decomposer, coherence-auditor)
       pump-wait                  0.5m
       unattributed (glue)        0.0m
-  session: 8 completed iteration(s), mean wall 131.9m
-      total goal-evaluator            1253.5m
-      total goal-decomposer            119.1m
-      total iteration-summarizer       107.8m
-      total browser-qa-agent            72.3m
-      total coherence-auditor           33.6m
-      total developer                   32.4m
-      total readme-maintainer           28.1m
-      total reviewer                    16.3m
+  goal-desk-iter-8  depth=lean  verdict=GOAL_ACHIEVED  wall=199.3m
+      browser-qa-agent            82.0m  calls=1
+      developer                   50.1m  calls=1
+      goal-evaluator              22.7m  calls=1
+      reviewer                     9.2m  calls=1
+      goal-decomposer              8.5m  calls=1
+      iteration-summarizer         4.9m  calls=1
+      coherence-auditor            3.1m  calls=1
+      readme-maintainer            2.0m  calls=1
+      (resume-skipped: coherence-auditor)
+      pump-wait                  3.7m
+      unattributed (glue)       16.9m
+  goal-desk-iter-9  depth=?  verdict=?  wall=?  (incomplete/interrupted attempt)
+  goal-desk-iter-9  depth=full  verdict=?  wall=?  (incomplete/interrupted attempt)
+      goal-decomposer             13.6m  calls=1
+      pump-wait                 13.7m
+  session: 9 completed iteration(s), mean wall 139.4m
+      total goal-evaluator            1276.2m
+      total browser-qa-agent           154.3m
+      total goal-decomposer            141.2m
+      total iteration-summarizer       112.7m
+      total developer                   82.5m
+      total coherence-auditor           36.8m
+      total readme-maintainer           30.1m
+      total reviewer                    25.5m
       total AWAITING_PUMP paused gaps: 4.4m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP
 ```

@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-9",
+  "base_url": "http://localhost:3301",
+  "iteration": 9,
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "This page scans about a hundred well-known stocks. It ranks them by closeness to a key price level. Every ranked row now also says how many days old that price reading is. Hovering over any row shows the exact date and time behind it.",
+      "point_out": "A new \"basis\" column sits at the end of the table, showing a real date and day-count for every row. Some rows are only a few days old; others are two weeks old or more.",
+      "journey": "J-08",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "before as-of" }
+    },
+    {
+      "n": 2,
+      "title": "Look at a scan from before this update",
+      "narration": "Opening a scan recorded before this feature existed shows an honest note instead of a guess. The page says plainly that this measurement wasn't captured back then.",
+      "point_out": "Every row's \"basis\" cell reads \"basis not recorded in this snapshot.\" It is never a blank cell or a made-up date.",
+      "journey": "J-08",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"desk-history-row\"][data-screen-date=\"2026-06-22\"]" }
+      },
+      "expect": { "text": "basis not recorded in this snapshot" }
+    },
+    {
+      "n": 3,
+      "title": "Confirm a row still opens its chart",
+      "narration": "A new column was added to this row. Clicking anywhere on it — even the new \"basis\" text — still opens that stock's own chart.",
+      "point_out": "The page jumps straight to the Structure chart for AAPL. Its key price levels are already loaded.",
+      "journey": "J-08",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"desk-screen-row\"][data-symbol=\"AAPL\"] [data-testid=\"desk-row-drill-in\"]" }
+      },
+      "expect": { "text": "300.11" }
+    },
+    {
+      "n": 4,
+      "title": "Move to the live tape reader",
+      "narration": "The Desk sits alongside two earlier pages, both reachable from the same menu at the top.",
+      "point_out": "The Cockpit page opens, ready to watch a stock's price action.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": { "role": "link", "name": "Cockpit" }
+      },
+      "expect": { "text": "Tape State" }
+    },
+    {
+      "n": 5,
+      "title": "Name a practice stock",
+      "narration": "Typing in a practice ticker that always settles into a predictable pattern, so you can try the reader without needing a real market feed.",
+      "point_out": "The ticker field now reads SIM-BUYER.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": { "placeholder": "Ticker e.g. SIM-BUYER" },
+        "text": "SIM-BUYER"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Watch the tape settle",
+      "narration": "After watching for a moment, the reading settles into a clear call.",
+      "point_out": "The Tape State panel shows the bold read-out \"Buyer Control\", with live price bars, trades, and an event log all filled in.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "role": "button", "name": "Watch" }
+      },
+      "expect": { "text": "Buyer Control" }
+    },
+    {
+      "n": 7,
+      "title": "Switch to a real recorded stock",
+      "narration": "Switching to Historical mode replays a real stock's own recorded price action instead of a live practice feed.",
+      "point_out": "The Historical option is now selected.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": { "role": "button", "name": "Historical" }
+      }
+    },
+    {
+      "n": 8,
+      "title": "Name the real stock",
+      "narration": "Typing in a real stock symbol to replay its recorded price history.",
+      "point_out": "The symbol field now reads AAPL.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": { "label": "Symbol search" },
+        "text": "AAPL"
+      }
+    },
+    {
+      "n": 9,
+      "title": "Choose the day to replay",
+      "narration": "Typing in the day to replay.",
+      "point_out": "The date field now reads 22-06-2026.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": { "label": "Date" },
+        "text": "22-06-2026"
+      }
+    },
+    {
+      "n": 10,
+      "title": "Fill the trading day in one click",
+      "narration": "One click fills in the whole trading day, instead of typing exact times by hand.",
+      "point_out": "The start and end time fields fill in automatically.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": { "role": "button", "name": "Full RTH 9:30–16:00 ET" }
+      }
+    },
+    {
+      "n": 11,
+      "title": "Start the replay",
+      "narration": "Watching starts the replay of that real stock's real trading day.",
+      "point_out": "The page now shows it is watching AAPL.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": { "role": "button", "name": "Watch" }
+      },
+      "expect": { "text": "Watching" }
+    },
+    {
+      "n": 12,
+      "title": "See the real chart with its key levels drawn on",
+      "narration": "Switching the chart to hourly bars shows the stock's real recorded price history, with its key support and resistance levels drawn right on top.",
+      "point_out": "Real candles, the timeframe switch, and the price-level lines are all drawn on the same chart.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "role": "button", "name": "1h" }
+      },
+      "expect": { "text": "Recorded 1h bars sit left of the start marker; bars to its right are built live from the tape." }
+    }
+  ]
+}

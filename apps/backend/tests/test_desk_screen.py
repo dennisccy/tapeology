@@ -30,7 +30,7 @@ from app.research.desk_screen import (
     resolve_desk_screen_dir,
     screen_as_of,
 )
-from app.research.desk_screen import _distance_bps, _row_rank_key, _select_best_band
+from app.research.desk_screen import _basis_age_days, _distance_bps, _row_rank_key, _select_best_band
 from app.research.desk_universe import UniverseStore
 
 FIXTURE_UNIVERSE_DIR = Path(__file__).parent / "fixtures" / "universe"
@@ -469,11 +469,16 @@ def test_fixture_universe_with_zero_bars_skips_every_member_as_no_bars(ctx):
 
 
 def test_aapl_row_cross_checks_byte_identical_to_the_real_tradability_route(ctx, monkeypatch):
-    """TC-1/TC-19: the persisted AAPL row's band_class/distance_bps/band_score/price_low/
+    """TC-1/TC-2/TC-19: the persisted AAPL row's band_class/distance_bps/band_score/price_low/
     price_high are byte-identical to what GET /research/tradability returns for the band
     desk_screen.py selected as AAPL's "best"; the reference close is the fixture bar's own
-    recorded close at basis_as_of. (``git diff`` on ``tradability.py``/``levels.py`` staying empty
-    is verified directly against the repo, not by a test in this file.)"""
+    recorded close at basis_as_of. TC-1: the row's own `basis_as_of` is byte-identical to the SAME
+    route's own `basis_as_of`. TC-2: `basis_age_days` is the exact calendar-day count between that
+    value and the screen's own `as_of` (the fixture's real 2026-06-18 -> 2026-06-22 span = 4 days;
+    goal.md's own 12-day illustration is golden-asserted separately, as a pure-function test of the
+    same formula, in `test_basis_age_days_matches_goal_mds_own_worked_example` below). (``git diff``
+    on ``tradability.py``/``levels.py`` staying empty is verified directly against the repo, not by
+    a test in this file.)"""
     from fastapi.testclient import TestClient
 
     from app.main import app, get_market_adapter, manager
@@ -509,6 +514,14 @@ def test_aapl_row_cross_checks_byte_identical_to_the_real_tradability_route(ctx,
     assert resp.status_code == 200
     body = resp.json()
     assert body["basis_as_of"] == "2026-06-18T04:00:00.000000Z"
+
+    # TC-1: the row's own basis_as_of is byte-identical to the SAME route's own basis_as_of --
+    # never re-derived, copied verbatim from the identical compute_tradability result this row's
+    # band/distance/score were themselves selected from.
+    assert row["basis_as_of"] == body["basis_as_of"]
+    # TC-2: the exact calendar-day count between that basis and the screen's own as_of
+    # ("2026-06-22T23:59:59Z") -- 2026-06-18 -> 2026-06-22 is 4 calendar days.
+    assert row["basis_age_days"] == 4
 
     matching = [
         b for b in body["bands"]
@@ -648,3 +661,104 @@ def test_rows_are_sorted_by_class_then_distance_then_score_then_symbol(ctx):
     # The list-wide invariant: every row's own rank key is non-decreasing.
     keys = [_row_rank_key(r) for r in screen["rows"]]
     assert keys == sorted(keys)
+
+
+# ==================================================================================================
+# basis disclosure (goal-desk-iter-9, J-08) -- basis_as_of / basis_age_days
+# ==================================================================================================
+
+
+def test_basis_age_days_matches_goal_mds_own_worked_example():
+    """TC-2 (pure-function form): goal.md's own worked example -- "a basis 12 calendar days before
+    as_of yields basis_age_days == 12" -- asserted directly against the helper, independent of any
+    fixture's own real date spread (the AAPL cross-check test above golden-asserts the SAME formula
+    against a different, real 4-day gap -- 2026-06-18 to 2026-06-22)."""
+    assert _basis_age_days("2026-06-13T04:00:00.000000Z", "2026-06-25T23:59:59Z") == 12
+
+
+def test_basis_age_days_is_a_calendar_date_difference_not_a_raw_hour_delta():
+    """``basis_as_of``'s own time-of-day (e.g. ``04:00:00``, a bar's own recorded hour) must never
+    leak into the day count against ``as_of``'s fixed ``23:59:59`` -- both sides collapse to a UTC
+    calendar DATE first, so a same-calendar-day pair reads 0 even ~20 hours apart, and a
+    calendar-adjacent pair reads 1 even ~1 hour apart."""
+    assert _basis_age_days("2026-06-22T04:00:00.000000Z", "2026-06-22T23:59:59Z") == 0
+    assert _basis_age_days("2026-06-21T23:00:00.000000Z", "2026-06-22T00:00:01.000000Z") == 1
+
+
+def test_basis_fields_add_zero_extra_compute_tradability_calls(ctx, monkeypatch):
+    """TC-8: basis_as_of/basis_age_days are read/derived ENTIRELY from the per-member
+    ``compute_tradability`` result already fetched inside the walk -- instrumented exactly like
+    ``test_bar_store_signature_issues_zero_bar_store_calls`` (a call-COUNT assertion, not a
+    behavior one), this proves the call count equals exactly the member count: one call per member
+    (the existing contract), zero calls attributable to the two new fields."""
+    import app.research.desk_screen as desk_screen_module
+
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+
+    calls: list[str] = []
+    original = desk_screen_module.compute_tradability
+
+    def _tracked(store, symbol, as_of_epoch, config):
+        calls.append(symbol)
+        return original(store, symbol, as_of_epoch, config)
+
+    monkeypatch.setattr(desk_screen_module, "compute_tradability", _tracked)
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+
+    universe_records, _errors = universe_store.list()
+    members = universe_records[-1]["members"]
+    assert calls == members, "exactly one compute_tradability call per member, in walk order"
+    assert screen["rows"], "the walk must have actually produced at least one ranked row"
+
+
+def test_recording_a_freshly_computed_screen_twice_is_refused_and_basis_fields_stay_byte_identical(
+    ctx, tmp_path
+):
+    """TC-3: a REAL ``compute_screen()`` result (carrying ``basis_as_of``/``basis_age_days`` on its
+    ranked rows) recorded once, then a FRESH computation under the identical pins -- the second
+    ``record()`` call is refused (``ScreenAlreadyRecorded``, no second file written), and the
+    content already on disk -- read back via ``list()`` -- is byte-identical to the second
+    (unrecorded) computation, including both new fields on every ranked row."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    screen_store = ScreenStore(tmp_path / "screen")
+
+    first_screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    recorded = screen_store.record(**first_screen)
+    assert len(list((tmp_path / "screen").glob("*.json"))) == 1
+
+    second_screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    with pytest.raises(ScreenAlreadyRecorded) as excinfo:
+        screen_store.record(**second_screen)
+    assert excinfo.value.existing_id == recorded["id"]
+    assert len(list((tmp_path / "screen").glob("*.json"))) == 1, "no second file written"
+
+    stored_records, errors = screen_store.list()
+    assert errors == []
+    assert len(stored_records) == 1
+    assert json.dumps(stored_records[0]["rows"], sort_keys=True) == json.dumps(
+        second_screen["rows"], sort_keys=True
+    )
+    aapl_row = next(r for r in stored_records[0]["rows"] if r["symbol"] == "AAPL")
+    assert aapl_row["basis_as_of"] == "2026-06-18T04:00:00.000000Z"
+    assert aapl_row["basis_age_days"] == 4
+
+
+def test_a_legacy_row_recorded_without_basis_fields_serves_them_absent_never_backfilled(tmp_path):
+    """The exact shape every screen snapshot recorded BEFORE this iteration has: ranked rows that
+    OMIT ``basis_as_of``/``basis_age_days`` entirely (never merely present-as-``null``).
+    ``ScreenStore`` performs no row-shape validation or enrichment of any kind -- a plain
+    checksum-verified passthrough (``_record``'s own default row, reused across this whole file's
+    store-level suite, already carries no such keys) -- so this is true by construction; this test
+    pins that contract so a future change cannot silently start defaulting or backfilling legacy
+    rows on read."""
+    store = ScreenStore(tmp_path / "screen")
+    _record(store)  # `_record`'s own default row carries no basis_as_of/basis_age_days key at all
+
+    records, errors = store.list()
+    assert errors == []
+    row = records[0]["rows"][0]
+    assert "basis_as_of" not in row
+    assert "basis_age_days" not in row

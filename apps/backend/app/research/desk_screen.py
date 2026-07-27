@@ -53,6 +53,18 @@ screen's final ``rows`` list (TC-14) -- one rule serves both jobs.
 (``basis_as_of: null``, ``bands: []``). Both honest, distinct absences -- a skip row's ``coverage``
 still reflects whichever pinned timeframes genuinely have bars (never a fabricated all-false).
 
+**Basis disclosure (goal-desk-iter-9, J-08).** Every RANKED row also carries ``basis_as_of``
+(copied VERBATIM from ``result["basis_as_of"]`` -- the SAME value ``_resolve_reference_close``
+already consumes to find the reference close, so this costs zero additional
+``BarStore``/``compute_tradability`` work) and ``basis_age_days`` (a plain calendar-date
+difference between that value and the row's own ``as_of``, mirroring ``_distance_bps``'s "plain
+arithmetic derivation" style -- see ``_basis_age_days`` below). Skip rows never carry these fields
+-- a skip row's own ``reason`` already means no basis resolved at all. A snapshot recorded BEFORE
+this addition simply has ranked rows that OMIT these two keys entirely; ``ScreenStore`` performs no
+row-shape validation or enrichment (a plain checksum-verified passthrough), so
+``GET /research/desk/screen`` serves that absence VERBATIM -- never defaulted, never backfilled
+(the append-only rail applies to row CONTENT, not just to the snapshot as a whole).
+
 **No new ``Config`` field.** The screen store's directory resolves via ``resolve_desk_screen_dir``
 below -- a bare ``TAPEOLOGY_DESK_SCREEN_DIR``-env-var-or-sibling-of-``desk_universe_dir_resolved()``
 default (the ``edge_report_cache.resolve_cache_db_path`` pattern) -- never a ``desk_screen_dir``
@@ -245,6 +257,24 @@ def _resolve_reference_close(store: BarStore, symbol: str, basis_as_of: str) -> 
     )
 
 
+# --- basis disclosure (goal-desk-iter-9, J-08) -----------------------------------------------------
+
+
+def _basis_age_days(basis_as_of: str, as_of: str) -> int:
+    """``basis_age_days``: a plain calendar-date difference between ``basis_as_of`` (a ranked row's
+    own reference session -- ``compute_tradability``'s own already-resolved value, zero new read)
+    and ``as_of`` (the screen's own as-of) -- the ``_distance_bps`` precedent's "plain arithmetic
+    derivation" style, never a second bar read. Calendar DATES, not a raw hour delta:
+    ``basis_as_of`` carries the prior session's own bar-timestamp time-of-day (e.g. ``04:00:00``
+    UTC) while ``as_of`` is always ``screen_as_of``'s fixed ``23:59:59Z`` -- comparing the raw
+    instants would inflate the count by a fraction of a day for every symbol, so both sides are
+    reduced to a UTC calendar date first, the SAME ``.replace("Z", "+00:00")`` parsing style
+    ``_epoch`` above already uses."""
+    basis_date = datetime.fromisoformat(basis_as_of.replace("Z", "+00:00")).date()
+    as_of_date = datetime.fromisoformat(as_of.replace("Z", "+00:00")).date()
+    return (as_of_date - basis_date).days
+
+
 # --- the row computation (the SOLE walker; the manager and the CLI both call this) ----------------
 
 
@@ -264,7 +294,9 @@ def compute_screen(
     (``compute_tradability``, ``desk_coverage.get_desk_coverage``, ``DatasetStore.list``). Returns
     the full snapshot content MINUS the store-assigned ``id``/``created_utc`` (``ScreenStore.record``
     assigns those): ``{screen_date, as_of, universe_snapshot_id, config_fingerprint,
-    bar_store_signature, rows, skipped}``.
+    bar_store_signature, rows, skipped}``. Each RANKED row additionally carries ``basis_as_of``/
+    ``basis_age_days`` (goal-desk-iter-9, J-08 -- see the module docstring's "Basis disclosure"
+    section); skip rows never carry them.
 
     ``progress``, if given, is called after EACH member with ``{"symbol": symbol}`` (the caller
     tracks its own done/total counters -- the ``desk_topup_compute.run_topup`` precedent).
@@ -321,6 +353,8 @@ def compute_screen(
                     "price_high": best["price_high"],
                     "coverage": coverage,
                     "tick_evidence": tick_evidence,
+                    "basis_as_of": result["basis_as_of"],
+                    "basis_age_days": _basis_age_days(result["basis_as_of"], as_of),
                 }
             )
 

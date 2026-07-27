@@ -453,3 +453,59 @@ saved on the same day cannot be told apart by a date-only lookup, keyboard acces
 rows, and three one-line hardening items from earlier iterations. One sentence for the owner:
 everything Era B promised is built, proven and photographed — please confirm the finish, then warm
 the Case Studies scan once so that panel is instant again.
+
+## Iteration 9 — goal-desk-iter-9
+
+**Date:** 2026-07-27T23:59:05+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- New journey scored for the first time: J-08 "Every ranked briefing row names the bar its distance
+  was measured from" — **partial**. The goal-proposer added it to `docs/goal.md` after iteration 8
+  closed the era, so the era reopens for one journey. It is built and works; one written condition
+  in the goal file is not met by the picture that was taken.
+- Unchanged: J-01, J-02, J-03, J-04, J-05, J-06, J-07 all re-verified passing this iteration
+  (six by saved-script replay, J-06 by its machine-readable tool contract).
+- Anti-goal violations: none new, none open. All three older items stay resolved and were
+  re-confirmed by my own checks. One hygiene deviation is carried, deliberately NOT scored as a
+  violation: the picture-taking step clicked "Run Screen" against the owner's REAL data folder
+  instead of the throw-away copy its own plan named, adding one new (correct, append-only) saved
+  screen there.
+
+**Reasoning:** I did not take any report's word for this. I opened the pictures that carry the new
+work: the ranked table with the new column reading "basis 2026-07-23 · 4 d before as-of" on most
+rows, Netflix at 14 days and Apple at 3 days; and the older saved screen where all ten rows read
+"basis not recorded in this snapshot" instead of a guess. I then proved the numbers rather than
+believing them: I read the newly saved screen file straight off disk (63 of 63 ranked rows carry
+both new values) and I called the one function that owns that value myself, on a throw-away copy of
+the price store, for six companies — every single date and day-count matched the saved rows
+exactly. I also proved nothing old was rewritten: both older saved screens still have the same
+fingerprints and the same file dates from two days before this run started, and neither carries the
+new fields. I re-ran the work: the whole back-end suite (1354 tests, 1346 passed, 8 skipped, 0
+failed, exit 0), the settings fingerprint (`08e471b10130e1e2`), the page list, the tool count
+(exactly 17), and a file-by-file check that none of the frozen files changed. Coherence is
+COHERENCE-PASS. The one thing that is not right: the goal file asks for a single picture holding a
+row **2 days old or fresher** beside a row **10 days old or older**; the picture shows 3 days beside
+14 days. The plan written for this run quietly gave itself permission to miss that number — a plan
+cannot change the goal file. And it did not need to: I measured that using the date 2026-07-25
+instead of today gives Apple at 1 day and Netflix, Meta and Nvidia at 12 days, so both numbers are
+reachable right now with no change to the program. CONTINUE because that is a picture the
+automation can take by itself; not GOAL_ACHIEVED because a written condition is plainly unmet; not
+REGRESSION because nothing that used to work stopped working; not STALLED because nobody has to
+decide anything first.
+
+**Next-step recommendation:** Run iteration 10 at **lean** depth. It is a photography and tidy-up
+run with no program change: (1) copy the real data folder to a throw-away place using the script
+that already exists, run one screen there for the date **2026-07-25**, clear the page build, and
+photograph the Desk page — Apple will read 1 day and Netflix, Meta and Nvidia will read 12 days,
+which is exactly what the goal file asks for; (2) state in the picture report which data folder was
+used, because this run used the real one against its own plan; (3) stop test plans from lowering a
+number the goal file sets — ask the owner instead; (4) two one-liners: the developer's note points
+at a replay-evidence file that was later overwritten, and the new saved script assumes the newest
+screen carries the new column, which should be written down; (5) redo nothing else — the column,
+the honest "not recorded" text, the untouched old records, the tests and the walkthrough are all
+verified done. One sentence for the owner: the new "measured from" column works and is honest, and
+the next short run only needs one picture showing a one-day-old row beside a twelve-day-old row.

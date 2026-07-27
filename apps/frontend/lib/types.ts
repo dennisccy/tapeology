@@ -789,6 +789,15 @@ export type EdgeReportPayload = EdgeReportResponse | EdgeReportNotComputed;
 // recomputed here. `coverage` is keyed by timeframe (e.g. "1h"/"4h"/"1d"/"1w"), each entry read
 // verbatim from `desk_coverage.get_desk_coverage` -- rendered honestly per-timeframe (a symbol may
 // hold bars for some pinned timeframes and not others; never assumed uniform).
+// era-desk-iter-9 (J-08) -- basis disclosure: the daily bar `compute_tradability` actually
+// measured this row's distance/class from, and how many calendar days before the screen's own
+// `as_of` that bar is dated. Always present (non-null) on a NEWLY computed ranked row -- a row
+// only exists in this branch once `compute_tradability` resolved a basis (desk_screen.py's
+// row-builder `elif result["basis_as_of"] is None: skipped...` branch is the only other outcome).
+// Typed nullable because a screen snapshot recorded BEFORE this iteration has ranked rows that
+// OMIT these two keys ENTIRELY (the append-only rail: legacy snapshots are never backfilled) --
+// the runtime value there is `undefined`, not `null`, so callers must check
+// `row.basis_as_of == null` (loose equality) to catch both, never `=== null` alone.
 export interface DeskScreenRow {
   symbol: string;
   side: "support" | "resistance";
@@ -799,6 +808,8 @@ export interface DeskScreenRow {
   price_high: number;
   coverage: Record<string, { has_bars: boolean; latest_window_end_utc: string | null }>;
   tick_evidence: boolean;
+  basis_as_of: string | null;
+  basis_age_days: number | null;
 }
 
 // A member the screen walked but could not rank -- two honest, distinct reasons, never conflated:

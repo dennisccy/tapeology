@@ -27,10 +27,12 @@ import { fmt } from "@/lib/format";
 // The /desk page (Era B "The Desk" J-04) — the third top-nav page, reached from the persistent
 // NavBar (data-driven from GET /meta/ui-routes; no client hardcoding, see apps/backend/app/meta.py
 // UI_ROUTES). Renders the LATEST screen snapshot as a dense, descriptive briefing: ranked rows
-// (band class/distance/score/coverage/tick-evidence, all read verbatim), an honestly-grouped
-// skipped-members section, a provenance line, and a read-only screen-history list. "Run Screen"
-// and "Top-up" wire the J-03/J-02 compute managers with live progress + cancel — mirrors the
-// Edge Report Compute button UX pattern already shipped on /structure (NotComputedPanel/poll-loop).
+// (band class/distance/score/coverage/tick-evidence/basis-age, all read verbatim — the "basis"
+// column is era-desk-iter-9/J-08, honestly absent as "basis not recorded in this snapshot" on any
+// row from a screen recorded before that iteration), an honestly-grouped skipped-members section,
+// a provenance line, and a read-only screen-history list. "Run Screen" and "Top-up" wire the
+// J-03/J-02 compute managers with live progress + cancel — mirrors the Edge Report Compute button
+// UX pattern already shipped on /structure (NotComputedPanel/poll-loop).
 //
 // FOUR canonical endpoints (three read, one write path split across two triggers), rendered
 // VERBATIM and nothing else:
@@ -186,11 +188,23 @@ function hasNoCoverageAtAll(coverage: Record<string, { has_bars: boolean }>): bo
 // titles carried is composed directly onto the ANCHOR's own `title` instead: hovering ANYWHERE in
 // the row now reveals one composite tooltip. Full precision -- never the rounded 2-decimal DISPLAY
 // audit F3 chose for scanability (this is a hover detail, not a rendered cell).
+// era-desk-iter-9 (J-08): the composite tooltip also carries the row's full-precision basis
+// detail -- `row.basis_as_of` untruncated (the visible "basis" cell below shows only the date
+// portion for scanability, the SAME rounded-display/full-precision-on-hover split already
+// established for distance/score) plus `row.basis_age_days`. A legacy row (recorded before this
+// iteration) has BOTH keys absent, not merely `null` -- `== null` (loose equality) catches both
+// `undefined` and `null` in one check, per this project's own `fmt()` convention (lib/format.ts).
 function deskRowDrillInTitle(row: DeskScreenRow): string {
   const coverageLines = Object.entries(row.coverage)
     .map(([timeframe, tf]) => `${timeframe} window last requested: ${tf.latest_window_end_utc ?? "never"}`)
     .join(" · ");
-  return `distance ${row.distance_bps} bps · score ${row.band_score}${coverageLines ? ` · ${coverageLines}` : ""}`;
+  const basisLine =
+    row.basis_as_of == null || row.basis_age_days == null
+      ? "basis not recorded in this snapshot"
+      : `basis ${row.basis_as_of} (${row.basis_age_days} d before as-of)`;
+  return `distance ${row.distance_bps} bps · score ${row.band_score} · ${basisLine}${
+    coverageLines ? ` · ${coverageLines}` : ""
+  }`;
 }
 
 // A skipped member has no distance_bps/band_score -- its anchor's tooltip carries ONLY the
@@ -202,13 +216,14 @@ function deskSkipDrillInTitle(skip: DeskScreenSkip): string {
 }
 
 // One ranked row: symbol, side, band-class chip, distance-bps chip, band score, per-timeframe
-// coverage badges, tick-evidence badge — the DoD's exact column list, every value read verbatim
-// from the snapshot. Distance and score are DISPLAYED to two decimals (a `0.33523150389608725 bps`
-// cell defeated the scanability the briefing exists for — audit F3); the full-precision value is
-// not lost — it is reachable via the row's own drill-in anchor's composite `title`
-// (`deskRowDrillInTitle` above, audit F2 fix), never a per-cell `title` (iter-7 audit F1: this
-// comment used to claim the opposite). The band-class chip carries the
-// "nearest same-class band" caption
+// coverage badges, tick-evidence badge, basis column (era-desk-iter-9/J-08) — every value read
+// verbatim from the snapshot. Distance and score are DISPLAYED to two decimals (a
+// `0.33523150389608725 bps` cell defeated the scanability the briefing exists for — audit F3); the
+// full-precision value is not lost — it is reachable via the row's own drill-in anchor's composite
+// `title` (`deskRowDrillInTitle` above, audit F2 fix), never a per-cell `title` (iter-7 audit F1:
+// this comment used to claim the opposite). The basis column follows the SAME split: a rounded,
+// date-only display with the full-precision `basis_as_of` reachable only via that same composite
+// tooltip. The band-class chip carries the "nearest same-class band" caption
 // (assumptions.md iter-4 entry 1 — `_select_best_band` itself stays byte-unchanged; this copy
 // keeps the chip honest about what the ranking actually selects rather than implying it is the
 // symbol's single strongest band).
@@ -260,6 +275,16 @@ function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
       <td className="px-2 py-1.5 text-left">
         {row.tick_evidence && <TickEvidenceBadge testid="desk-row-tick-evidence" />}
       </td>
+      {/* era-desk-iter-9 (J-08): descriptive only, date portion of `basis_as_of` (full precision
+          lives in the row anchor's own composite `title` above -- NEVER a per-cell `title` here,
+          the iter-6/iter-7 F2 lesson applied proactively: a per-cell title under the stretched
+          `absolute inset-0` anchor is pointer-unreachable). `== null` catches a legacy row's
+          ENTIRELY ABSENT keys (`undefined`), not just an explicit `null`. */}
+      <td className={LABEL_CELL} data-testid="desk-row-basis">
+        {row.basis_as_of == null || row.basis_age_days == null
+          ? "basis not recorded in this snapshot"
+          : `basis ${row.basis_as_of.slice(0, 10)} · ${row.basis_age_days} d before as-of`}
+      </td>
     </tr>
   );
 }
@@ -287,6 +312,7 @@ function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) 
             <th className={HEADER_CELL}>score</th>
             <th className={HEADER_CELL_LEFT}>coverage</th>
             <th className={HEADER_CELL_LEFT}>tick evidence</th>
+            <th className={HEADER_CELL_LEFT}>basis</th>
           </tr>
         </thead>
         <tbody>

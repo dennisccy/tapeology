@@ -513,6 +513,57 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
 
 <!-- AUTO:journeys -->
 
+- **J-08: Every ranked briefing row names the bar its distance was measured from**
+  - Steps:
+    1. Record the basis on every NEW screen row: `basis_as_of`, copied **verbatim** from the value
+       `compute_tradability` already returns (`tradability.py:381`'s
+       `{"bands", "no_bar_series_for_symbol", "basis_as_of"}` — the same value
+       `desk_screen._resolve_reference_close` already consumes), plus `basis_age_days`, a plain
+       arithmetic derivation from the row's own `basis_as_of` and the snapshot's own `as_of` (the
+       `distance_bps` precedent, `desk_screen.py:197`). Both are desk-owned row fields with exactly
+       one owner (`desk_screen.py`) and one serving endpoint (`GET /research/desk/screen`) — zero
+       diff to `tradability.py`/`levels.py`/`bars.py` (no new field on any frozen return shape) and
+       zero new `Config` field.
+    2. Register both fields in the Data Contract's "Screen snapshots, rank rows, skip rows" row; the
+       pinned snapshot key (screen date, as_of, universe snapshot id, `config_fingerprint`,
+       bar-store signature) is unchanged — only NEW snapshots' row content grows.
+    3. Keep the append-only rail absolute: never backfill, rewrite, or recompute an
+       already-recorded snapshot; `GET /research/desk/screen` serves legacy rows exactly as
+       recorded, and `/desk` renders their absent basis as an honest
+       `"basis not recorded in this snapshot"` — never a value computed at read time.
+    4. Surface it on `/desk`: a descriptive `basis` column beside `distance` on the ranked table
+       (e.g. `basis 2026-07-13 · 12 d before as-of`), full precision in the row anchor's existing
+       consolidated honesty tooltip (the iter-7 pattern), copy = descriptive measurement only (no
+       advice, imperative, urgency, or prediction language).
+    5. Test: a fixture-scoped golden screen asserting the exact `basis_as_of` + `basis_age_days` per
+       ranked row and byte-identical row content on a re-run under identical pins; a guard test that
+       the desk never re-derives the basis (it comes from `compute_tradability`'s return — no extra
+       bar scan in the row builder, none in the frontend); the MCP `desk_screen` tool stays a
+       byte-identical GET proxy (17-tool contract unchanged).
+  - Acceptance: on the fixture-scoped rig a NEW screen run records `basis_as_of` and
+    `basis_age_days` on every ranked row, and each row's `basis_as_of` is byte-identical to
+    `GET /research/tradability?symbol=<sym>&as_of=<that snapshot's own as_of>`'s `basis_as_of`
+    (**single source of truth**: the desk reads the canonical owner verbatim, and both new values
+    are registered in the Data Contract with `desk_screen.py` as their only owner and
+    `GET /research/desk/screen` as their only serving endpoint — this SSOT criterion stands in place
+    of a PnL-ledger append, which this era's Non-Goals forbid); a re-run under identical pins
+    reproduces byte-identical rows and a same-pins re-run still returns the honest already-recorded
+    response; the previously recorded screen snapshots are proven byte-identical on disk (checksums
+    unchanged, nothing backfilled) and `/desk` renders their rows with the honest
+    `"basis not recorded in this snapshot"` state; in a real browser after the T-9 clean rebuild,
+    `/desk` shows the `basis` column with at least one fresh row (age ≤ 2 d) and one stale row
+    (age ≥ 10 d) legible in the same screenshot (T-10: no screenshot ⇒ `unknown`, never
+    `passing`); a **`[NEW]`-flagged demo-narrator walkthrough** covers the briefing's basis
+    disclosure end to end; and the full backend suite is green with
+    `Config().config_fingerprint()` still `08e471b10130e1e2`, zero new `Config` fields, the
+    `default` profile and `v1` byte-identical (engine equivalence green), zero diff to
+    `tradability.py`/`levels.py`/`bars.py`/`StructureChart.tsx`, and
+    `tests/test_copy_discipline.py` green unmodified. *(Keyless core; browser-verifiable. Why:
+    measured live on the canonical endpoint at as-of 2026-07-25 — `basis_as_of` spans 2026-07-24
+    for AAPL (1 d) to 2026-07-13 for META/NFLX/NVDA (12 d), while the recorded snapshot
+    `screen-2026-07-25-e184a7dc2f86` ranks NFLX #2 on `distance_bps 0.0` with no basis field in any
+    row, so an 11-day spread of reading ages is invisible on one rank scale.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

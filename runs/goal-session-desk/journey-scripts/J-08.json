@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "journey": "J-08",
+  "name": "Every ranked briefing row names the bar its distance was measured from",
+  "default_timeout_ms": 15000,
+  "steps": [
+    {"n": 1, "journey": "J-08", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
+    {"n": 2, "journey": "J-08", "action": {"type": "expect", "target": {"testid": "desk-screen-rows-table"}}, "expect": {"text": "basis"}, "timeout_ms": 10000},
+    {"n": 3, "journey": "J-08", "action": {"type": "expect", "target": {"testid": "desk-row-basis"}}, "expect": {"text": "d before as-of"}, "timeout_ms": 10000},
+    {"n": 4, "journey": "J-08", "action": {"type": "click", "target": {"css": "[data-testid=\"desk-history-row\"][data-screen-date=\"2026-07-25\"]"}}, "expect": {"text": "Viewing the recorded screen for 2026-07-25 — not the latest."}, "timeout_ms": 10000},
+    {"n": 5, "journey": "J-08", "action": {"type": "expect", "target": {"testid": "desk-row-basis"}}, "expect": {"text": "basis not recorded in this snapshot"}, "timeout_ms": 10000},
+    {"n": 6, "journey": "J-08", "action": {"type": "click", "target": {"testid": "desk-history-latest-button"}}, "expect": {"text": "d before as-of"}, "timeout_ms": 10000},
+    {"n": 7, "journey": "J-08", "action": {"type": "expect", "target": {"testid": "desk-title"}}, "expect": {"text": "Desk"}, "timeout_ms": 8000}
+  ]
+}
