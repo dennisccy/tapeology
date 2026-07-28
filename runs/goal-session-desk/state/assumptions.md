@@ -437,3 +437,33 @@ before scoring) rather than CONTINUE-and-hope.
 **Reversible:** yes — if the owner reads the walkthrough clause as satisfiable by the post-scoring
 showcase lane, then whatever that lane records at finalization can close J-09 without another
 iteration; the standing evidence for every other clause is already complete.
+
+## iter-13 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-09 Acceptance requires "a **`[NEW]`-flagged demo-narrator
+walkthrough** covers the top-up-run disclosure end to end." The demo-narrator lane's own live record
+pass produced only populated frames (its opening step narrated an empty starting point beside a
+screenshot of three recorded runs — the exact mismatch the phase spec's TC-4 forbids). The iteration
+auditor detected this, and FIXED it in-place by inserting a new `n:2` J-09 step whose frame is the
+dev lane's own pre-write capture from the SAME scoped rig, renumbering the rest and rewording the
+now-`n:3` step (`docs/handoffs/goal-desk-iter-13-audit.md` A1/§4). goal.md does not say whether every
+frame must be captured by the demo-narrator's own live pass, nor whether a repair by a later lane
+still counts as "a demo-narrator walkthrough".
+**We chose:** Score J-09 `passing` on the repaired artifact. Reasons: (i) the clause's subject is the
+WALKTHROUGH and what it covers, not which lane pressed the shutter — `reports/phase-goal-desk-iter-13-
+demo.json` is the demo-narrator lane's artifact, regenerated with the framework's own renderers, and
+`demo_runner.validate_script()` returns OK on my own run; (ii) the frame is genuine and provably
+same-rig, same-order — byte-identical (md5 `ba131133…`) to this iteration's `UT-J-09-empty-topup-
+section.png` written at 17:02Z, with the first record's `started_utc` 17:03:23.321789Z, and both
+frames carry the identical Screen History rows/provenance; (iii) the strict reading is unsatisfiable
+in principle: a live recorder can only ever render the store's CURRENT state, so the empty half and
+the populated half can never both be live-captured in one pass on one append-only rig — demanding it
+is the "vague acceptance criteria -> infinite loop" anti-pattern, and three iterations already
+demonstrated it; (iv) the substitution is disclosed three times (the step's own `capture` block,
+`demo-results.md` soft notes, the audit report) — no claim in the artifact is unsupported by the image
+beside it; (v) re-running the recorder would DESTROY the fix (audit A5), so no further iteration has a
+better path absent a framework change.
+**Reversible:** yes — if the owner reads the clause as "every frame live-captured by the demo-narrator
+lane in one pass", J-09 returns to `partial` and stays permanently unclosable until `demo_runner.py`
+gains a first-class static-frame step kind; adding that step kind and re-recording on a freshly seeded
+root would then close it in one short run.

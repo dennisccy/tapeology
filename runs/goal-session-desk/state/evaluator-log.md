@@ -673,3 +673,57 @@ screens saved on the same day cannot be told apart by a date-only lookup; keyboa
 history rows. One sentence for the owner: the feature is built and photographed, but the short form
 of a run can never film its own walkthrough in time to count — the next run should use the long
 form, film the empty panel before saving any runs, and the era can close.
+
+## Iteration 13 — goal-desk-iter-13
+
+**Date:** 2026-07-28T20:03:15+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-09 "Every top-up run leaves an append-only record of what it attempted"
+  (partial -> passing — the guided walkthrough the goal file demanded now exists, shows the record
+  empty and then filled, in that order, from one throwaway copy of the data)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02, J-03, J-04, J-05, J-07, J-08 all re-verified passing this run by saved-script
+  replay against the throwaway copy AND by a second, live browser pass over the same rig; J-06
+  "17 machine-readable tools" re-confirmed by my own count of the seventeen tools in the contract test
+- Anti-goal violations: none new, none open. All three older items stay resolved and were re-checked
+  by me directly. Last run's stray high-CPU program did not recur: nothing is listening on the test
+  ports and no server process is alive.
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to produce. I
+opened the film myself: four steps marked new, the empty "No top-up runs recorded yet." panel first,
+then the filled panel showing three saved runs, "404 of 404 pairs attempted", "0 reused · 403 fetched
+· 1 failed" and the failing pair's own words. I then proved the two pictures belong to the same rig
+in the right order rather than believing the note: the empty picture is byte-for-byte the same file
+this run photographed at 17:02, and the first run was written at 17:03:23 — eighty-one seconds later
+— and both pictures carry the identical Screen History rows. I read all three saved runs straight off
+disk: each pins the settings fingerprint, the universe list and the fetch window; the cancelled one
+records 3 of 404; the failed pair is exactly AAPL 1h "no data for that window"; every file's own
+checksum recomputes; the first two files were untouched when the third was written. I re-ran the work
+that can be re-run: the settings fingerprint (`08e471b10130e1e2`), the tool count (exactly 17 in the
+contract test), and a file-by-file check that the whole product is byte-for-byte identical to the
+version verified in depth two runs ago (`git diff 54e264a..HEAD -- apps/` is empty, working tree
+clean), so every clause proven then still describes today's code. I listed the owner's real data
+folder two ways — its 400-file checksum list is identical before seeding and after every lane, and no
+file under it has been modified since this run began. Coherence is COHERENCE-PASS. One thing I judged
+rather than merely read, written down in the assumptions ledger: the empty picture was placed into
+the film by the audit step, not filmed live, because on an append-only record that moment can never be
+replayed; the picture is genuine, from this same rig, and the substitution is disclosed in three
+places. GOAL_ACHIEVED because all nine journeys now have positive, opened evidence, nothing that used
+to work stopped working, and nothing is waiting on a person.
+
+**Next-step recommendation:** Halt — the goal is achieved. Four follow-ups for the owner, none a
+defect and none blocking: (1) do not re-record this run's film — the "nothing saved yet" picture
+would be replaced by a filled one and the film would quietly break again; a future run needs the
+tooling to mark a picture as "taken earlier, on purpose" before it can film this kind of state at
+all; (2) commit the small README wording change on its own, since it came from the previous run's
+documentation step; (3) the film shows the filled panel three times rather than three different
+close-ups, and a small floating badge from the development server covers the first three letters of
+"AAPL" in those frames — the separate photograph shows the whole line clearly; (4) still open by
+choice, never forced: the run list does not report a damaged file the way its two neighbours do, a
+just-finished run can stay hidden until you refresh in a narrow timing window, the run table has no
+limit, the Desk page is long, two screens saved on the same day cannot be told apart by a date-only
+lookup, and keyboard access for the history rows. One sentence for the owner: everything Era B
+promised, including the new top-up record, is built, proven and filmed — please confirm the finish.

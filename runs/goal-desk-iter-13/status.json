@@ -1,0 +1,31 @@
+{
+  "phase": "goal-desk-iter-13",
+  "status": "complete",
+  "current_step": "closure_passed",
+  "updated_at": "2026-07-28T18:50:18.138338Z",
+  "started_at": "2026-07-28T16:42:00.242732Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "docs/handoffs/goal-desk-iter-13-dev.md",
+    "reports/phase-goal-desk-iter-13-implementation-summary.md",
+    "reports/phase-goal-desk-iter-13-smoke-replay-results.md",
+    "reports/qa/goal-desk-iter-13-evidence/J-01-verify.png",
+    "reports/qa/goal-desk-iter-13-evidence/J-02-verify.png",
+    "reports/qa/goal-desk-iter-13-evidence/J-03-verify.png",
+    "reports/qa/goal-desk-iter-13-evidence/J-04-verify.png",
+    "reports/qa/goal-desk-iter-13-evidence/J-05-verify.png",
+    "reports/qa/goal-desk-iter-13-evidence/J-07-verify.png",
+    "reports/qa/goal-desk-iter-13-evidence/J-08-verify.png",
+    "reports/qa/goal-desk-iter-13-evidence/UT-J-09-empty-fullpage.png",
+    "reports/qa/goal-desk-iter-13-evidence/UT-J-09-empty-topup-section.png",
+    "reports/qa/goal-desk-iter-13-evidence/UT-J-09-populated-fullpage.png",
+    "reports/qa/goal-desk-iter-13-evidence/UT-J-09-populated-topup-section.png"
+  ],
+  "tests_run": true,
+  "tests_passed": true,
+  "browser_checks_run": false,
+  "fix_mode": false,
+  "notes": "Zero product/application code change this iteration (spec's own binding requirement) -- confirmed via git diff --stat empty on every named product file, before and after this dispatch's work. This dispatch's own job was the full ops/evidence-capture sequence, done as ONE continuous pass on ONE never-restarted rig (the fix for iterations 11 and 12's two different failure causes): seeded a fresh scoped rig (distinct from every prior iteration's) at /home/dennis-chan/.cache/iad/iad.goal-desk-iter-13.154299/desk-iter13-scoped-qa via apps/backend/scripts/goal-desk-iter9-scoped-backend.sh, AFTER checksumming the ambient apps/backend/.data/ tree (400 files) as a before-baseline; confirmed nothing was bound to :8301/:3301/:8302/:3302 before seeding (all four probed via curl/ss/pgrep, nothing found -- no leftover process from iteration 12 remained); rm -rf apps/frontend/.next then booted BOTH the scoped backend AND scoped frontend BEFORE recording a single top-up run (the load-bearing ordering fix); captured the FIRST evidence (honest 'No top-up runs recorded yet.' state) via Chrome MCP on the live, already-hydrated /desk page, re-confirming GET /research/desk/topup/runs = {runs:[],latest:null} at that exact moment; only then recorded 3 checkpoint top-up runs in-process against the real DeskTopupComputeManager.trigger() production code path (ordinary/done 404/404, cancelled 3/404, one induced failed pair AAPL 1h 'no data for that window' verbatim, 0 reused/403 fetched/1 failed) -- zero live vendor calls -- verified live against the still-running (unrestarted) scoped backend process, proving the file-based store's fresh-per-request read; captured the SECOND evidence (populated Top-up Runs section, attempted-of-total + per-outcome counts + the failed pair's detail, all legible) on the SAME still-live rig; a deep-scroll viewport-screenshot blank-capture quirk on this Chrome/CDP setup was found and worked around with a fullpage capture + Pillow crop/upscale (disclosed in the dev handoff, confirmed a capture-tooling issue, not a product defect, via DOM/eval cross-checks at the same scroll position); confirmed the checkpoint-3 bar-store side effect does not corrupt the pinned AAPL 2026-06-22 wall (300.11-302.2 class A score 171, byte-identical to docs/goal.md) since the desk top-up's 4 timeframes are disjoint from the 1m microscope timeframe that wall reads; replayed J-01-J-05/J-07/J-08 against the scoped rig via demo_runner.py --mode verify: 7/7 PASS after a disclosed, non-blocking J-07 warm-up timing flake (J-07.json's own embedded default_timeout_ms governs that step regardless of the CLI --timeout-ms flag; stopped the leftover SIM-BUYER watch proactively, retried clean); full backend suite = 1369 passed/8 skipped/0 failed; Config().config_fingerprint() re-confirmed 08e471b10130e1e2; test_mcp_server.py re-run in isolation = 35/35, 17-tool contract (exactly 17 EXPECTED_TOOLS) intact; ambient apps/backend/.data/ + tapeology_journal.db re-checksummed byte-identical before vs after (400 files, zero write proven), no topup_runs directory appeared in the ambient tree. Both scoped processes (backend PID 1419904, frontend PIDs 1421592/1421611) left running on their dedicated non-ambient ports for any downstream lane, with an explicit do-not-click-Top-up/Run-Screen warning in the dev handoff. Assembling the [NEW]-flagged demo-narrator walkthrough JSON from these two same-rig captures is explicitly the demo-narrator lane's job per the plan's own 'Downstream pipeline note', not this dev dispatch's -- disclosed as a Known Issue in the handoff, not a gap in this dispatch's own required scope.",
+  "next_action": "review"
+}

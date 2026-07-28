@@ -4,100 +4,100 @@
       "id": "J-01",
       "name": "Universe ingestion — fetched, registered, honest",
       "status": "passing",
-      "last_verified_iter": "goal-desk-iter-12",
-      "last_passing_iter": "goal-desk-iter-12",
+      "last_verified_iter": "goal-desk-iter-13",
+      "last_passing_iter": "goal-desk-iter-13",
       "first_seen_iter": "goal-desk-iter-0",
-      "last_evidence_path": "reports/qa/goal-desk-iter-12-evidence/J-01-verify.png",
+      "last_evidence_path": "reports/qa/goal-desk-iter-13-evidence/J-01-verify.png",
       "spec_hash": "dcad07154573cae27aff4a75ce71ac9ceca8c2969ec5c3d665aa3cbe08278819",
-      "notes": "ITER-12: Required-still-passing; deterministic golden replay of journey-scripts/J-01.json PASS against the scoped rig (row UT-J-01, reports/phase-goal-desk-iter-12-ui-test-results.md). Carried honestly from iter-11 and re-confirmed by the evaluator's own md5sum: J-01/J-02/J-03/J-04/J-08-verify.png are byte-identical (c558e49d7815dd8518d48939360badcd) because all five goldens end on the same idle /desk viewport while asserting DIFFERENT text — the verdict rests on each script's own step assertions, not on the frame. The evaluator opened that shared frame: three-route nav, Provenance with universe-2026-07-25-49b33fa31680 / screen date 2026-07-27 / as-of 2026-07-27T23:59:59Z / pin 08e471b10130e1e2. desk_universe.py has zero diff this iteration (git diff on apps/ is empty); the deep clause-by-clause proof stays this file's iter-1 revision."
+      "notes": "ITER-13: Required-still-passing. Deterministic golden replay of journey-scripts/J-01.json PASS against this iteration's scoped rig (reports/phase-goal-desk-iter-13-smoke-replay-results.md row UT-J-01), PLUS an independent live LLM-lane check (reports/phase-goal-desk-iter-13-ui-test-results.md row UT-J-01/UT-07: desk-provenance shows universe-2026-07-25-49b33fa31680 and pin 08e471b10130e1e2). EVALUATOR'S OWN CHECKS: git diff 54e264a..HEAD -- apps/ is EMPTY and git status -- apps/ is clean, so desk_universe.py is byte-identical to the tree iteration 11 proved clause-by-clause; the spec_hash is unchanged, so the goal text this status was earned against has not moved. EVIDENCE-PROVENANCE NOTE (not a defect): J-01/02/03/04/08-verify.png are one byte-identical frame (md5 c558e49d...) — and identical to iteration 12's — because all five goldens end on the same idle /desk viewport while asserting DIFFERENT text; the verdict rests on each script's own step assertions, not on the frame."
     },
     "J-02": {
       "id": "J-02",
       "name": "Coverage + explicit bar top-up over the universe",
       "status": "passing",
-      "last_verified_iter": "goal-desk-iter-12",
-      "last_passing_iter": "goal-desk-iter-12",
+      "last_verified_iter": "goal-desk-iter-13",
+      "last_passing_iter": "goal-desk-iter-13",
       "first_seen_iter": "goal-desk-iter-0",
-      "last_evidence_path": "reports/qa/goal-desk-iter-12-evidence/J-02-verify.png",
+      "last_evidence_path": "reports/qa/goal-desk-iter-13-evidence/J-02-verify.png",
       "spec_hash": "a5cd4f6a0c3dbe67de9a65400250cf777e281712fbf3c90e54758e91971d306c",
-      "notes": "ITER-12: Required-still-passing; golden replay of J-02.json PASS (row UT-J-02). Zero product diff this iteration — desk_coverage.py, desk_topup_compute.py and run_topup/_run_one_pair are byte-unchanged (evaluator ran git diff <snapshot>..HEAD --stat -- apps/, empty, and git status -- apps/, clean). This iteration exercised the REAL run_topup three times against a scoped throwaway root, which is additional live evidence the walk still behaves as shipped (done 404/404, cancelled 3/404, done 404/404 with one induced failure)."
+      "notes": "ITER-13: Required-still-passing. Golden replay PASS (row UT-J-02); live LLM-lane row UT-08/UT-J-02 confirms per-member coverage badges (1h/4h/1d/1w) and tick-evidence badges populated on the briefing. Zero product diff on desk_coverage.py / desk_topup_compute.py (evaluator's own git diff/status). Additional live evidence: the three checkpoint top-up walks this iteration ran through the REAL DeskTopupComputeManager.trigger() on a throwaway root and behaved as shipped (done 404/404, cancelled 3/404, done 404/404 with one induced failure) — evaluator read all three records off disk."
     },
     "J-03": {
       "id": "J-03",
       "name": "The screen — pinned inputs, append-only snapshot, deterministic rank",
       "status": "passing",
-      "last_verified_iter": "goal-desk-iter-12",
-      "last_passing_iter": "goal-desk-iter-12",
+      "last_verified_iter": "goal-desk-iter-13",
+      "last_passing_iter": "goal-desk-iter-13",
       "first_seen_iter": "goal-desk-iter-0",
-      "last_evidence_path": "reports/qa/goal-desk-iter-12-evidence/J-03-verify.png",
+      "last_evidence_path": "reports/qa/goal-desk-iter-13-evidence/J-03-verify.png",
       "spec_hash": "74735994233da1614d5568bc57f2a42e60d7e51cf91bb0378f32add5c898bcd6",
-      "notes": "ITER-12: Required-still-passing; golden replay of J-03.json PASS (row UT-J-03). desk_screen.py zero diff. EVALUATOR'S OWN append-only re-check on the operator's REAL store: apps/backend/.data holds 400 files, no topup_runs directory exists, and the newest file anywhere is bar_index.db-shm at 2026-07-28 14:19 — which PREDATES this iteration's own start (14:38). So no screen, bar, universe, dataset or run record was written to the real store during iteration 12 at all."
+      "notes": "ITER-13: Required-still-passing. Golden replay PASS (row UT-J-03); live row UT-09/UT-J-03 shows Class-A rows ranked by ascending distance (BRK-B 0.00bps < LIN 0.20 < CAT 0.22) and three distinct dated, non-mutating snapshots in Screen History (2026-06-22 / 2026-07-25 / 2026-07-27) each with its own provenance. desk_screen.py zero diff. EVALUATOR'S OWN append-only re-check on the operator's REAL store: the 400-file SHA-256 listing captured before seeding and after every lane is byte-identical (diff of iter13-evidence/ambient-before-data.sha256 vs audit-ambient-post.txt is empty), and `find apps/backend/.data -newermt '2026-07-28 17:42'` returns nothing — zero write of any kind during iteration 13."
     },
     "J-04": {
       "id": "J-04",
       "name": "The /desk briefing page",
       "status": "passing",
-      "last_verified_iter": "goal-desk-iter-12",
-      "last_passing_iter": "goal-desk-iter-12",
+      "last_verified_iter": "goal-desk-iter-13",
+      "last_passing_iter": "goal-desk-iter-13",
       "first_seen_iter": "goal-desk-iter-0",
-      "last_evidence_path": "reports/qa/goal-desk-iter-12-evidence/J-04-verify.png",
+      "last_evidence_path": "reports/qa/goal-desk-iter-13-evidence/UT-01-desk-fullpage.png",
       "spec_hash": "0a3d005b39831ddc9eb0d481081ac613a2ec9e94b131c36394f9e649182faaec",
-      "notes": "ITER-12: Required-still-passing; golden replay of J-04.json (9 expects) PASS (row UT-J-04). apps/frontend/app/desk/page.tsx has zero diff. The evaluator additionally opened the two J-09 full-section captures, which are themselves /desk renders on two independent scoped rigs: both show Provenance, Briefing, Skipped Members, Screen History, Run Screen/Top-up and the Top-up Runs panel rendering as shipped."
+      "notes": "ITER-13: Required-still-passing. Golden replay PASS (row UT-J-04, 9 expects); live row UT-06/UT-10/UT-J-04 confirms all six sections in order (Provenance, Briefing, Skipped Members, Screen History, Run Screen/Top-up, Top-up Runs), three-route nav with Desk aria-current, zero console errors. apps/frontend/app/desk/page.tsx zero diff. The evaluator opened this iteration's own /desk frames (demo step-02/step-03 and a crop of UT-13) and saw the page rendering as shipped in both the empty and populated Top-up Runs states."
     },
     "J-05": {
       "id": "J-05",
       "name": "Ledger history + drill-in to /structure",
       "status": "passing",
-      "last_verified_iter": "goal-desk-iter-12",
-      "last_passing_iter": "goal-desk-iter-12",
+      "last_verified_iter": "goal-desk-iter-13",
+      "last_passing_iter": "goal-desk-iter-13",
       "first_seen_iter": "goal-desk-iter-0",
-      "last_evidence_path": "reports/qa/goal-desk-iter-12-evidence/J-05-verify.png",
+      "last_evidence_path": "reports/qa/goal-desk-iter-13-evidence/UT-11-J05-structure-drillin.png",
       "spec_hash": "cba063f7d5e92f608aa54c1b4d174e17e46e297b8dda20cd52532d9d5a1ae545",
-      "notes": "ITER-12: Required-still-passing; golden replay of J-05.json PASS (row UT-J-05) against the scoped rig. Its own verify frame is distinct from the shared /desk frame (md5 01682731b63d8c36f17139e8e4a5a2c8), consistent with a drill-in that ends on /structure. Not re-opened this iteration (the 2 stable spot-checks went to J-06 and J-07); iter-11's opened-frame proof of the prefilled Load form stands and the drill-in code has zero diff."
+      "notes": "ITER-13: Required-still-passing. Golden replay PASS (row UT-J-05, its own distinct frame md5 01682731...); live row UT-11/UT-J-05: clicking the 2026-06-22 history row shows 'Viewing the recorded screen for 2026-06-22 — not the latest.' with a Latest button, and the AAPL drill-in client-navigates to /structure?symbol=AAPL&asof=2026-06-22T23:59:59Z with band 298.02-300.1001 Class A in the tradable-map table. Drill-in code zero diff; iteration 11's opened-frame proof of the prefilled Load form stands."
     },
     "J-06": {
       "id": "J-06",
       "name": "MCP contract v3 — 17 read-only tools",
       "status": "passing",
-      "last_verified_iter": "goal-desk-iter-12",
-      "last_passing_iter": "goal-desk-iter-12",
+      "last_verified_iter": "goal-desk-iter-13",
+      "last_passing_iter": "goal-desk-iter-13",
       "first_seen_iter": "goal-desk-iter-0",
-      "last_evidence_path": "reports/phase-goal-desk-iter-12-ui-test-results.md row UT-J-06 (MCP/API-only, no browser surface — goal.md marks J-06 '(Keyless; automated.)'; no golden script exists, so it rides the contract lane)",
+      "last_evidence_path": "reports/phase-goal-desk-iter-13-ui-test-results.md row UT-J-06 (SKIPPED for browser — MCP has no browser surface; contract evidence is tests/test_mcp_server.py, 35/35, per dev handoff §9)",
       "spec_hash": "c3d5a8351c4ce5aa20449d2d1557f4599bad9cdecebbcde8f044e6d4d2908f6f",
-      "notes": "ITER-12: STABLE-JOURNEY SPOT-CHECK #1, chosen because it sits OUTSIDE the deterministic replay set. The evaluator did not rely on the report: it parsed app/mcp/__init__.py itself and counted exactly 17 tool names — backtests, bars, datasets, desk_screen, desk_universe, edge_report, get_endpoint, levels, pnl_ledger, setups, strategies, tape_features, tape_history, tape_state, taxonomy, tradability, ui_route_map — with no desk_topup_runs 18th tool. app/mcp/__init__.py has zero diff. The browser-qa lane independently re-ran tests/test_mcp_server.py live: 35 passed / 0 failed, including test_advertised_tool_set_is_exactly_capability_6, both desk_universe/desk_screen byte-identity pairs, test_get_endpoint_desk_topup_runs_byte_identical_with_no_new_tool and test_stdio_session_end_to_end (real subprocess over stdio)."
+      "notes": "ITER-13: STABLE-JOURNEY SPOT-CHECK — chosen because it sits OUTSIDE the deterministic replay set and has no browser surface. The evaluator did not rely on any report: it parsed tests/test_mcp_server.py's EXPECTED_TOOLS itself and counted exactly 17 names (backtests, bars, datasets, desk_screen, desk_universe, edge_report, get_endpoint, levels, pnl_ledger, setups, strategies, tape_features, tape_history, tape_state, taxonomy, tradability, ui_route_map) — no 18th desk_topup_runs tool. app/mcp/__init__.py has zero diff; the suite (1369 passed / 8 skipped / 0 failed) contains the byte-identity and no-new-tool contract tests."
     },
     "J-07": {
       "id": "J-07",
       "name": "The kept product stands — regression sentinel",
       "status": "passing",
-      "last_verified_iter": "goal-desk-iter-12",
-      "last_passing_iter": "goal-desk-iter-12",
+      "last_verified_iter": "goal-desk-iter-13",
+      "last_passing_iter": "goal-desk-iter-13",
       "first_seen_iter": "goal-desk-iter-0",
-      "last_evidence_path": "reports/qa/goal-desk-iter-12-evidence/J-07-verify.png",
+      "last_evidence_path": "reports/qa/goal-desk-iter-13-evidence/UT-12-J07-structure-chart.png",
       "spec_hash": "47ab77bdd843c8f7004f69b3c433dc9f167c8fce6195c9f21f48c061c7a7b7c5",
-      "notes": "ITER-12: Required-still-passing; golden replay of J-07.json PASS (row UT-J-07). STABLE-JOURNEY SPOT-CHECK #2 — the evaluator opened J-07-verify.png: the kept /structure page, three-route nav, Load form at AAPL / 2026-06-22T21:00:00Z, and the tradable-map chart with the era's pinned wall drawn and labelled (R A · 171 · round · 302.20 and R A · 97 · round · 300.10), matching docs/goal.md's own cited 300.11-302.2 class A score 171. EVALUATOR'S OWN RE-VERIFICATION: git diff <snapshot>..HEAD --stat -- apps/ is EMPTY and git status -- apps/ is clean, so every frozen file (tradability.py, levels.py, bars.py, StructureChart.tsx, PriceChart.tsx, config.py, meta.py, app/mcp/__init__.py, app/engine/) is byte-identical; live Config().config_fingerprint() printed 08e471b10130e1e2. DISCLOSED, NOT SILENTLY RETRIED: the replay's first pass FAILED J-07 step 04 at the runner's 15000ms default (tape still 'Warming up', lag 10.5s); it passed at 30000ms and the reported verdict is a clean all-7 re-run at 30000ms. The dev report states this in full. Read as a warm-up timing flake, not a regression: this iteration changed zero product code, and the leftover scoped backend was measured by the evaluator at ~78% CPU, which plausibly starved the simulated tape."
+      "notes": "ITER-13: Required-still-passing AND stable-journey spot-check. The evaluator opened UT-12-J07-structure-chart.png: the kept /structure page with three-route nav, Load form at AAPL / 2026-06-22T21:00:00Z, candles drawn, and the era's pinned wall both in the table (resistance 300.11-302.2, Class A, score 171) and as labelled overlay lines (302.20 / 300.10) — byte-matching docs/goal.md's own cited value. Cockpit Simulated+SIM-BUYER settles on 'Buyer Control' (row UT-12). Golden replay PASS after a DISCLOSED, non-silent J-07 warm-up timing retry (smoke-replay report :61-82; J-07.json's own default_timeout_ms 15000 governs step 4 regardless of the CLI --timeout-ms, and the leftover SIM-BUYER watch was stopped before the clean all-7 re-run). EVALUATOR'S OWN RE-VERIFICATION: git diff 54e264a..HEAD -- apps/ EMPTY, git status -- apps/ clean, live Config().config_fingerprint() = 08e471b10130e1e2. CARRIED, NOT A REGRESSION: the ui-test-plan's expectation that data-testid='tradable-map-chart-caption' literally contains '300.11' is wrong (that element is methodology prose); the number lives in the band-range cell, and demo_runner checks target-existence and page-wide text independently — a looser-than-worded but genuine PASS on unmodified test infrastructure."
     },
     "J-08": {
       "id": "J-08",
       "name": "Every ranked briefing row names the bar its distance was measured from",
       "status": "passing",
-      "last_verified_iter": "goal-desk-iter-12",
-      "last_passing_iter": "goal-desk-iter-12",
+      "last_verified_iter": "goal-desk-iter-13",
+      "last_passing_iter": "goal-desk-iter-13",
       "first_seen_iter": "goal-desk-iter-9",
-      "last_evidence_path": "reports/qa/goal-desk-iter-12-evidence/J-08-verify.png",
+      "last_evidence_path": "reports/qa/goal-desk-iter-13-evidence/UT-13-J08-basis-restored.png",
       "spec_hash": "727585122a3bbcabfa1b789e25d4171cfd6f953422b134050a547ff883fb52f6",
-      "notes": "ITER-12: Required-still-passing; golden replay of J-08.json PASS (row UT-J-08). The evaluator opened the frame: the briefing table carries the basis column live — BRK-B/DHR/HD/IBM read 'basis 2026-07-23 · 4 d before as-of' and NFLX reads 'basis 2026-07-13 · 14 d before as-of' — beside the Provenance pin 08e471b10130e1e2. desk_screen.py zero diff; iter-10's clause-by-clause proof still describes today's code. Note the iter-10 caveat no longer bites: this iteration's scoped rig holds one screen per date, so the same-date history-lookup collision did not arise."
+      "notes": "ITER-13: Required-still-passing. Golden replay PASS (row UT-J-08); live row UT-13/UT-J-08 walks all three states (latest -> 2026-07-25 legacy snapshot reading 'basis not recorded in this snapshot' -> Latest restores). THE EVALUATOR OPENED A CROP OF THE FRAME ITSELF: NFLX 'basis 2026-07-13 · 14 d before as-of' beside many 'basis 2026-07-23 · 4 d before as-of' rows and AAPL 'basis 2026-07-24 · 3 d before as-of'. desk_screen.py zero diff; iteration 10's clause-by-clause proof still describes today's code. EVIDENCE-PROVENANCE NOTE: UT-13-J08-basis-restored.png, UT-01-desk-fullpage.png and the dev lane's UT-J-09-populated-fullpage.png are one byte-identical file (md5 e74d6b54...), which is consistent with a deterministic dark-page render of the same state but makes per-lane capture attribution unverifiable from bytes alone; the frame is in every case a genuine iteration-13 render of this iteration's scoped rig, and J-08's verdict also rests on its own machine-run golden replay."
     },
     "J-09": {
       "id": "J-09",
       "name": "Every top-up run leaves an append-only record of what it attempted",
-      "status": "partial",
-      "last_verified_iter": "goal-desk-iter-12",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-13",
+      "last_passing_iter": "goal-desk-iter-13",
       "first_seen_iter": "goal-desk-iter-11",
-      "last_evidence_path": "reports/qa/goal-desk-iter-12-evidence/UT-J-09-populated-topup-section.png",
+      "last_evidence_path": "reports/demo/goal-desk-iter-13/step-02.png (empty) + step-03.png (populated) — the [NEW]-flagged walkthrough; standalone frames at reports/qa/goal-desk-iter-13-evidence/UT-J-09-empty-topup-section.png and UT-02-topup-section.png",
       "spec_hash": "df68d0f0595aaa98cc55b5e6dcff6c9bb23dcdeaeda198e9a890d714b3e855cc",
-      "notes": "STILL PARTIAL — SECOND CONSECUTIVE ITERATION, and for the SAME single clause. THE UNMET CLAUSE (docs/goal.md J-09 Acceptance, verbatim): 'a [NEW]-flagged demo-narrator walkthrough covers the top-up-run disclosure end to end.' Iteration 12 was dispatched with that clause as its ONLY target, but produced NO walkthrough artifact at all: the evaluator searched the whole tree — reports/phase-goal-desk-iter-12-demo.json does not exist, reports/demo/goal-desk-iter-12/ does not exist, and the browser-qa report says so itself ('The [NEW]-flagged demo-narrator walkthrough itself ... is explicitly the demo-narrator agent's own deliverable ... not produced by this agent', reports/phase-goal-desk-iter-12-ui-test-results.llm.md:171-173). ROOT CAUSE, ESTABLISHED FROM THE SESSION TRACE, NOT GUESSED (runs/goal-session-desk/trace/trace.jsonl): at LEAN depth the demo-narrator runs AFTER the evaluator (iter-10: goal-evaluator 09:44 then demo-narrator 09:59; iter-8 the same), whereas at FULL depth it runs BEFORE (iter-11: demo-narrator 13:18 then goal-evaluator 14:17; iter-9 the same). A journey whose only outstanding clause is a demo-narrator artifact is therefore structurally unscoreable in a lean iteration. WHAT THIS ITERATION DID DELIVER, opened by the evaluator: (a) UT-J-09-empty-topup-section.png — a real /desk render on a freshly seeded, genuinely empty scoped rig showing the 'TOP-UP RUNS' panel with the circle-slash icon and 'No top-up runs recorded yet.'; (b) UT-J-09-populated-topup-section.png — one image holding the 3-row run table (topup-2026-07-28-52e271eacc44 done 404/404, topup-2026-07-28-ab37e4005b08 cancelled 3/404, topup-2026-07-28-6b40a8029a75 done 404/404, each with universe-2026-07-25-49b33fa31680) plus 'LATEST RUN — 2026-07-28 · TOPUP-2026-07-28-6B40A8029A75', 'state: done  404 of 404 pairs attempted  0 reused · 403 fetched · 1 failed' and 'Failed pairs (1): AAPL 1h — no data for that window'. Both satisfy the two browser clauses of the Acceptance. ONE DISCLOSED DEVIATION, accepted (see assumptions.md): the two frames come from TWO different scoped roots (desk-iter12-scoped-qa on :3301 populated, desk-iter12-scoped-qa-empty on :3302 empty), not one root photographed before and after, because the dev's own order (seed -> record 3 runs -> boot frontend) closed the honest-empty window before any browser existed, and the append-only rail forbids deleting the real records to recreate it. All other clauses were proven in iter-11 and are unaffected: the product tree is byte-identical between the two iterations (git diff on apps/ empty), so iter-11's byte-identity spy over the real run_topup, its cancelled-run and interrupted-run proofs, its second-run-appends checksum proof and its SSOT/Data-Contract proof still describe today's code. NON-BLOCKING, CARRIED unchanged from iter-11: the run list drops the store's integrity_errors that both sibling desk routes surface (desk_routes.py:258); a single-shot re-fetch can lose a narrow race with the disk write (apps/frontend/app/desk/page.tsx:1116-1121); no cap on the run table; the manager and CLI disagree about a no-universe top-up; the golden J-09.json stays deliberately read-only (its empty-state assertion will break honestly the first time a real operator top-up lands on the ambient store)."
+      "notes": "PARTIAL -> PASSING. The one clause outstanding for three iterations — 'a [NEW]-flagged demo-narrator walkthrough covers the top-up-run disclosure end to end' — is now met by an artifact that exists at scoring time. EVALUATOR'S OWN CHECKS, not the reports': (1) parsed reports/phase-goal-desk-iter-13-demo.json — 15 steps, four J-09 steps (n=2,3,4,5), every one new:true, empty state first then populated; demo_runner.validate_script() returns OK on my own run. (2) Opened step-02.png: live, fully-hydrated /desk with real Screen History above an honestly-empty 'TOP-UP RUNS' panel (circle-slash glyph, 'No top-up runs recorded yet.', zero rows). (3) Opened step-03.png: the SAME rig (identical Screen History rows and provenance strings) now showing three runs (done 404/404, cancelled 3/404, done 404/404), 'LATEST RUN — 2026-07-28 · TOPUP-2026-07-28-C4DE94D71E04', 'state: done  404 of 404 pairs attempted', '0 reused · 403 fetched · 1 failed', 'Failed pairs (1)'. (4) Proved same-rig, correct-order provenance: step-02.png is byte-identical (md5 ba131133...) to this iteration's own UT-J-09-empty-topup-section.png (written 17:02Z) and the first record's started_utc is 17:03:23.321789Z — the empty frame precedes the first write by ~81s. (5) Read all three run records off disk: each pins config_fingerprint 08e471b10130e1e2, universe_snapshot_id universe-2026-07-25-49b33fa31680 and requested_window; the cancelled one is 3/404; the failed pair is exactly {'symbol':'AAPL','timeframe':'1h','outcome':'failed','detail':'no data for that window'}; each file_checksum recomputes from its own record body; the first two files were untouched when the third was written. (6) The standalone browser clause is now satisfied on ONE rig (iteration 12's two-rig caveat is retired) — UT-02-topup-section.png shows the full unobstructed 'AAPL 1h — no data for that window'. DISCLOSED AND ACCEPTED (see assumptions.md iter-13): step-02.png was SPLICED into the walkthrough by the iteration-13 audit, not captured by the demo-narrator's live record pass, because an append-only store's honest-empty state is a one-way door; the frame is genuine, same-rig and disclosed in three places (the step's capture block, demo-results.md soft notes, audit §4). NON-BLOCKING, CARRIED: the three populated steps share one frame; the Next.js dev badge covers 'AAP' of the failed pair in the walkthrough frames (the standalone QA frame is unobstructed); re-running demo_runner --mode record against this script would overwrite step-02.png and silently re-open the defect; and the older hardening items (integrity_errors dropped at desk_routes.py:258, the narrow refresh race at desk/page.tsx:1116-1121, no run-table cap, page length, same-date screen ambiguity, keyboard access for history rows)."
     }
   },
   "anti_goal_violations": [
@@ -105,24 +105,24 @@
       "iter": "goal-desk-iter-3",
       "anti_goal": "Snapshots are append-only and pinned. Universe and screen snapshots are dated, checksummed, append-only; every screen pins (universe snapshot id, screen date, as_of, fingerprint, bar-store signature); nothing is silently refetched, backfilled, recomputed in place, or rewritten — a new run is a new snapshot.",
       "severity": "minor",
-      "evidence": "INTERCEPTED IN-ITERATION, NEVER LANDED. Pre-fix ScreenStore.record silently overwrote a snapshot file whose checksum had failed (iter-3 audit B1). Fixed at apps/backend/app/research/desk_screen.py:467-473 plus two regression tests; the sibling gap in UniverseStore.record was closed in iter-4. ITER-12 RE-CONFIRMED: zero diff on desk_screen.py / desk_universe.py / desk_topup_log.py, and the rail was actively honoured in practice — the browser-qa lane REFUSED to delete the three real run records to manufacture an empty-state screenshot and seeded a second scoped root instead (reports/phase-goal-desk-iter-12-ui-test-results.llm.md:32-58).",
+      "evidence": "INTERCEPTED IN-ITERATION, NEVER LANDED. Pre-fix ScreenStore.record silently overwrote a snapshot file whose checksum had failed (iter-3 audit B1); fixed at desk_screen.py:467-473 plus two regression tests, sibling gap in UniverseStore.record closed in iter-4. ITER-13 RE-CONFIRMED: zero diff on desk_screen.py / desk_universe.py / desk_topup_log.py, and the rail held in practice again — the walkthrough's missing empty half was repaired by splicing a real earlier frame rather than by deleting a recorded run (audit §4 'Why a splice and not a re-record').",
       "resolved": true
     },
     {
       "iter": "goal-desk-iter-4",
       "anti_goal": "Frozen foundations — the v1 strategy, the default profile, the tape engine's five states and thresholds, the frozen structure computations, the JSON BarStore, and every KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside them, never a mutation of them.",
       "severity": "minor",
-      "evidence": "RESOLVED at iter-8 by the owner's own written ratification in docs/goal.md ('OWNER RATIFICATION — 2026-07-27 — R-1', line 106ff), naming the exact eight files and limits. ITER-12 RE-CONFIRMED the strongest way available: git diff 476841a..HEAD --stat -- apps/ is EMPTY and git status -- apps/ is clean, so every frozen file is byte-identical and the ratified inventory gained nothing. Live Config().config_fingerprint() printed 08e471b10130e1e2 (evaluator's own run).",
+      "evidence": "RESOLVED at iter-8 by the owner's own written ratification in docs/goal.md ('OWNER RATIFICATION — 2026-07-27 — R-1', line 106ff). ITER-13 RE-CONFIRMED the strongest way available: git diff 54e264a..HEAD -- apps/ is EMPTY and git status -- apps/ is clean, so the product tree is byte-identical to the one iteration 11 verified clause-by-clause and the ratified inventory gained nothing. Live Config().config_fingerprint() printed 08e471b10130e1e2 (evaluator's own run).",
       "resolved": true
     },
     {
       "iter": "goal-desk-iter-4",
       "anti_goal": "Immutable data — registered datasets and bar series are append-only, checksummed, never re-tagged, never deleted, never content-perturbed. Splits are frozen at registration.",
       "severity": "minor",
-      "evidence": "RESOLVED. The iter-4 price-less-bar write was repaired at three layers and the 60 affected series stay on disk untouched, excluded row-by-row on read — the behaviour R-1 ratified. ITER-12 RE-CONFIRMED by the evaluator's own listing of the operator's real store: 400 files, no topup_runs directory, newest file bar_index.db-shm at 2026-07-28 14:19 which predates this iteration's 14:38 start. The 403 synthetic bar series checkpoint 3 wrote landed only in the throwaway scoped copy and were disclosed up front (docs/handoffs/goal-desk-iter-12-dev.md, side-effect disclosure).",
+      "evidence": "RESOLVED. The iter-4 price-less-bar write was repaired at three layers and the 60 affected series stay on disk untouched, excluded row-by-row on read — the behaviour R-1 ratified. ITER-13 RE-CONFIRMED by the evaluator's own diff of the ambient store's 400-file SHA-256 listing before seeding vs after every lane (identical) and by `find apps/backend/.data -newermt '2026-07-28 17:42'` returning nothing. Checkpoint 3's 403 synthetic bar series landed only in the throwaway scoped copy and were disclosed up front (dev handoff §6 side-effect disclosure).",
       "resolved": true
     }
   ],
-  "notes_iter_12": "No NEW anti-goal violation, and none left open; all three older items stay resolved and were re-checked by the evaluator directly. Every category was answered in runs/goal-session-desk/iter-12/eval.md; scan-report.md is CLEAN and the whole product diff is one file, README.md (prose catching up to the already-shipped Top-up Runs panel). Recorded for the record, none of them violations: (a) the three checkpoint top-up runs used an in-process adapter double producing synthetic bars with one induced NoDataForWindow — the sanctioned keyless technique, disclosed up front, confined to a cp -a throwaway root under the pipeline scratchpad, and explicitly sanctioned by J-09's own 'fixture-scoped rig' acceptance wording; zero live vendor calls anywhere. (b) The scoped-rig discipline was fully honoured this iteration — the ambient store took no write at all (evaluator-verified), so iteration 9's deviation did not recur. (c) HOST PROTECTION: the caps were not disabled, widened or bypassed — project-extensions/host-guard/ is untouched, and the evaluator checked the leftover scoped backend's own affinity with taskset -pc 1180202 = '4-7,12-15', exactly HOST_GUARD_CPU_LIST. But an operational hazard is left running: that backend (PID 1180202) has been burning ~78% CPU for over 40 minutes with NO frontend attached (the :3301 next process is gone; pgrep finds no node dev server), which is the same orphaned-tick-feeder leak the dev handoff root-caused for the previous instance. On a host that has hard-reset five times under load this should be killed before the next iteration starts.",
-  "updated_at": "2026-07-28T17:20:00+01:00"
+  "notes_iter_13": "No NEW anti-goal violation and none left open; all three older items stay resolved and were re-checked by the evaluator directly. Every category was answered in runs/goal-session-desk/iter-13/eval.md; scan-report.md is CLEAN and the whole product-tree diff is one file, README.md (an uncommitted iteration-12 readme-maintainer leftover clarifying that Alpaca credentials are only needed for the Cockpit's Live/Historical modes — env-var NAMES only, no values; flagged MINOR by review and audit T4, to be committed separately). Recorded for the record, none of them violations: (a) the three checkpoint top-up runs used an in-process adapter double producing synthetic bars with one induced NoDataForWindow — the technique this iteration's spec explicitly mandates ('never a live vendor call'), confined to a cp -a throwaway root under the pipeline scratchpad; checkpoint 3 ran the REAL _run_one_pair. (b) Scoped-rig discipline fully honoured: the ambient store took zero writes (evaluator-verified two ways). (c) HOST PROTECTION: host-guard.env untouched; the evaluator checked its own affinity (taskset -pc = 4-7,12-15 = HOST_GUARD_CPU_LIST), so every process this iteration launched inherited the mask; and iteration 12's orphaned ~78%-CPU backend did NOT recur — nothing is listening on :8301/:3301/:8302/:3302 and no uvicorn or next process is alive. (d) PROCESS OBSERVATION, not a violation: the browser-QA lane's own dispatch said 'Frontend available: no / mark all SKIPPED', and it instead booted the scoped rig from the dev handoff's documented recipe and ran everything live, disclosing this in its preamble; its results are corroborated by the independent replay lane and by the evaluator's own opened frames.",
+  "updated_at": "2026-07-28T20:03:15+01:00"
 }

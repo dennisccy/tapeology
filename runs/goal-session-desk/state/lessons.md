@@ -239,3 +239,31 @@ seed -> boot frontend -> capture empty -> record runs -> capture populated.
 **Applies to:** any iteration capturing before/after evidence for an append-only store (top-up run
 log, screen ledger, universe snapshots, dataset/bar stores) — sequence the frontend boot before the
 first write, and say so in the dev spec, not only in the QA spec.
+
+## iter-13 — 2026-07-28T20:03:15+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A one-way-door UI state (an append-only store's honest-empty panel) can NEVER be produced
+by `demo_runner.py --mode record`, because the recorder drives a live browser against whatever the
+store currently holds — three iterations were spent on that clause before the audit closed it by
+splicing the dev lane's own pre-write frame into `reports/phase-goal-desk-iter-13-demo.json` as a
+`capture: {mode: static}` step. That block is documentation only: `demo_runner.validate_script()`
+accepts it (unknown fields are tolerated) but the runner ignores it, so a single re-record silently
+overwrites `step-02.png` with a populated frame and re-breaks the artifact with no error. The durable
+fix is a first-class `static`/`skip_capture` step kind in the runner, not another iteration.
+**Applies to:** any iteration whose acceptance names a demo-narrator walkthrough over a state that
+only exists before the first write (top-up run log, screen ledger, universe snapshots, any
+append-only store) — and any lane tempted to re-run `--mode record` on a finished walkthrough.
+
+## iter-13 — 2026-07-28T20:03:15+01:00 (second entry)
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Evidence frames in this project deduplicate by construction — `UT-01-desk-fullpage.png`,
+`UT-13-J08-basis-restored.png` and the dev lane's `UT-J-09-populated-fullpage.png` are ONE byte-
+identical file (md5 `e74d6b54…`), captured ~50 minutes apart by two different lanes, and five golden
+replay frames share another (`c558e49d…`, also identical to iteration 12's). Deterministic dark-page
+rendering makes this expected, but it also means a screenshot's bytes can never prove WHICH lane
+captured it — attribution has to come from the report's own narrative plus a second, independent
+check (here: the machine-run golden replay and my own reading of the on-disk records).
+**Applies to:** any evaluator weighing "this lane independently re-verified X" when the cited image
+is byte-identical to an earlier lane's — treat the image as evidence of the STATE, not of the lane.
