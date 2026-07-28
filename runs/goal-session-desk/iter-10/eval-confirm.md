@@ -1,0 +1,15 @@
+**Verdict:** CONFIRM_ACHIEVED
+
+## Reasoning
+
+I tried to refute and could not. What I checked myself, not from prose:
+
+1. **The one status change (J-08 partial→passing) is real.** I opened `reports/qa/goal-desk-iter-10-evidence/UT-J-08-result.png`: BRK-B reads `basis 2026-07-23 · 2 d before as-of` (age 2 ≤ 2) and NFLX reads `basis 2026-07-13 · 12 d before as-of` (age 12 ≥ 10), legible together, above a provenance panel pinning universe `universe-2026-07-25-49b33fa31680`, as-of `2026-07-25T23:59:59Z`, fingerprint `08e471b10130e1e2`. That is verbatim the one clause iter-9 left unmet (`iter-9/eval.md:54-63`).
+2. **The other J-08 clauses were met in iter-9 and still stand.** SSOT cross-check, legacy `"basis not recorded in this snapshot"` screenshot (`UT-05-legacy-fallback.png`), same-pins re-run, `[NEW]` walkthrough (`reports/phase-goal-desk-iter-9-demo-script.md` steps 01/02/03 — I grepped them), suite/pin/zero-diff. Valid because I ran `git diff 472f0ce -- apps/` (empty) and `git status --porcelain apps/` (clean): zero product diff since the proven iter-9 tree.
+3. **The replay FAIL is environmental, not a weakened criterion.** `phase-goal-desk-iter-10-j08-replay-results.md` fails J-08 step 4 (history-click banner). The scoped copy holds two `2026-07-25` snapshots, so the by-date lookup returns the newest and no "not the latest" banner is correct. Corroborated: J-05's script does the same click for the unique date `2026-06-22` and PASSED. The real `apps/backend/.data/screen/` holds three snapshots with three distinct dates — the collision does not exist in the owner's data. No journey's acceptance requires addressing two same-date snapshots.
+4. **No drift, no quiet renegotiation.** `goal_gate.py hash-journeys` output matches all 8 recorded `spec_hash` values byte-for-byte. `docs/goal.md`'s only edit is +13/−0 appending a new *critical* host-protection rail — strictly more restrictive, zero journey text touched.
+5. **Anti-goals cleared, including the new one.** `scan-report.md` CLEAN; 3 historical violations all `resolved: true`; `coherence.md` = COHERENCE-PASS. I verified the host-guard rail independently: `HOST_GUARD_CPU_LIST="4-7,12-15"` and my own `/proc/self/status` shows `Cpus_allowed_list: 4-7,12-15` — cap respected, not widened; that env file holds only mask/quota values, no credentials.
+6. **Scoping claim verified.** Real `.data/screen/` mtimes are Jul 25 10:14 / Jul 25 12:45 / Jul 27 22:42 — all older than this Jul 28 run, so iter-10 wrote nothing there and iter-9's hygiene deviation was not repeated.
+7. **The four identical J-01..J-04 screenshots are legitimate.** I read all four scripts: each only does `goto /desk` and asserts different text (provenance/fingerprint · coverage+tick evidence · Class A+history · nav/title/columns) on the same end page.
+
+One non-blocking inaccuracy for the owner: `journey-scripts/J-08.json`'s `notes` cites the same-date limitation as sanctioned "per docs/goal.md's NOTES" — `docs/goal.md` has no NOTES section. A wrong citation in a test-script comment; the eval did not rest on it and no acceptance text was relaxed.

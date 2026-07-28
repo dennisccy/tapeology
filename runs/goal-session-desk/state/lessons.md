@@ -177,3 +177,17 @@ having a LATEST screen that carries basis fields.
 **Applies to:** any iteration whose browser walk includes a WRITE-triggering button (Run Screen,
 Top-up, Compute) — the scoped rig must be named in the browser-QA dispatch, not just the dev spec,
 and the results report must state which data root was used.
+
+## iter-10 — 2026-07-28T11:05:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** An evidence-only compute can silently break a stored golden. Recording a second
+`screen_date=2026-07-25` snapshot inside the scoped replay target made `journey-scripts/J-08.json`
+step 4 fail: `handleSelectHistoryScreen` fetches `GET /research/desk/screen?date=` by DATE ONLY and
+`desk_routes.get_screen` returns `matching[-1]` (newest by `created_utc`), so the history click
+resolved to the *latest* screen and the "not the latest" banner correctly never appeared — a
+data-shape collision, not a regression. The chain's own evidence capture is a write path against
+every golden that asserts on "the screen for date X".
+**Applies to:** any iteration that computes/records a snapshot into a store a golden script replays
+against — check the target store for an existing record under the same key first, and if a collision
+is unavoidable, disclose it in the script's `notes` and in the results report before the replay runs.

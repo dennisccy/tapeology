@@ -3,6 +3,11 @@
   "journey": "J-08",
   "name": "Every ranked briefing row names the bar its distance was measured from",
   "default_timeout_ms": 15000,
+  "notes": [
+    "Added goal-desk-iter-10 (documentation tidy-up, no behavior change; demo_runner.py's script validator ignores unknown top-level keys such as this one).",
+    "Steps 3 and 6 both assert text on the LATEST recorded screen's basis cell ('d before as-of'). Both REQUIRE the replay target's latest recorded screen snapshot to already carry basis_as_of/basis_age_days -- i.e. it must have been computed after the goal-desk-iter-9 J-08 change landed. A replay against a store whose latest screen predates that change fails steps 3 and 6 for an environmental reason (stale fixture/store state), not a product regression.",
+    "Steps 4 and 5 click a history row for a specific date (2026-07-25 in this script) and expect the honest legacy fallback. This REQUIRES that date to have EXACTLY ONE recorded screen snapshot in the replay target's store. apps/frontend/app/desk/page.tsx's handleSelectHistoryScreen fetches GET /research/desk/screen?date=<date> by DATE ONLY, never by unique snapshot id; desk_routes.py's get_screen resolves that query to the LAST matching record by created_utc (matching[-1]). If a SECOND screen is ever recorded for the same screen_date (the same-date screen ambiguity carried, not fixed, per docs/goal.md's NOTES), clicking EITHER history row for that date displays whichever snapshot is newest -- so steps 4 and 5 fail against a target where 2026-07-25 has more than one recorded snapshot, again an environmental/data-shape reason, not a product regression. Discovered empirically in goal-desk-iter-10: computing a fresh screen_date=2026-07-25 snapshot inside a scoped copy that already held the pre-existing legacy screen-2026-07-25-e184a7dc2f86 reproduced exactly this collision. See reports/phase-goal-desk-iter-10-j08-replay-results.md for the observed failure and docs/handoffs/goal-desk-iter-10-dev.md for the root-cause writeup."
+  ],
   "steps": [
     {"n": 1, "journey": "J-08", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
     {"n": 2, "journey": "J-08", "action": {"type": "expect", "target": {"testid": "desk-screen-rows-table"}}, "expect": {"text": "basis"}, "timeout_ms": 10000},

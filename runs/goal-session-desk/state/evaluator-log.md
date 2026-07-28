@@ -509,3 +509,50 @@ screen carries the new column, which should be written down; (5) redo nothing el
 the honest "not recorded" text, the untouched old records, the tests and the walkthrough are all
 verified done. One sentence for the owner: the new "measured from" column works and is honest, and
 the next short run only needs one picture showing a one-day-old row beside a twelve-day-old row.
+
+## Iteration 10 — goal-desk-iter-10
+
+**Date:** 2026-07-28T11:05:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-08 "Every ranked briefing row names the bar its distance was measured from"
+  (partial -> passing — the one picture the goal file still demanded now exists, taken on a
+  throw-away copy of the data, and it shows a 2-day-old row beside a 12-day-old row)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02, J-03, J-04, J-05, J-07 all re-verified passing this iteration by saved-script
+  replay against the throw-away copy; J-06 "17 machine-readable tools" re-confirmed by its own
+  contract test and by my own count of the seventeen tools
+- Anti-goal violations: none new, none open. All three older items stay resolved and were
+  re-confirmed by my own checks. Iteration 9's carried hygiene deviation (a screen written into the
+  owner's real data folder) is repaired: this run wrote nothing there.
+
+**Reasoning:** I did not take any report's word for this closing run. I opened the picture that
+carries the whole iteration: the Desk page shows BRK-B, DHR, HD and IBM reading "basis 2026-07-23 ·
+2 d before as-of" and Netflix reading "basis 2026-07-13 · 12 d before as-of", in one image, above a
+provenance block naming the screen date 2026-07-25 and the settings fingerprint. Then I proved the
+numbers instead of believing them: I read the newly recorded screen file straight off the throw-away
+copy — all 63 ranked rows carry both new values, and for every single row the day-count equals the
+plain calendar difference between that row's own basis date and the screen's own as-of date, with no
+exceptions. I checked that nothing old was rewritten: the three older recordings have identical
+checksums in the real folder and in the copy, and none of their rows carries the new values. I
+checked the real data folder took no write at all: its newest file is from the evening before this
+run started. I re-ran the work myself — the whole back-end suite (1346 passed, 8 skipped, 0 failed,
+exit 0), the settings fingerprint (`08e471b10130e1e2`), the page list (exactly three), the tool count
+(exactly 17) — and I proved the product code is byte-for-byte the same as the version iteration 9
+verified in depth, so every clause proven then still describes today's code. Coherence is
+COHERENCE-PASS. One saved replay script (J-08's own) fails one step against the throw-away copy
+because that copy now holds two screens recorded for the same day and the lookup by date returns the
+newer one; the behaviour shown is correct, the goal file's acceptance needs no such click, and the
+script's own notes record it. GOAL_ACHIEVED because all eight journeys now have positive, opened
+evidence, nothing that used to work stopped working, and nothing is waiting on a person.
+
+**Next-step recommendation:** Halt — the goal is achieved. Three follow-ups for the owner, none a
+defect and none blocking: (1) commit your host-protection work separately before the automatic
+per-run commit, so an unrelated change is not swept into the "iteration 10" commit; (2) expect J-08's
+saved replay script to keep failing its step 4 against the throw-away copy — two screens recorded for
+the same day cannot be told apart by a date-only lookup; against your real folder it passes, and that
+limitation stays open by choice; (3) still open by choice, never forced: keyboard access for the
+history rows and three one-line hardening items carried from earlier runs. One sentence for the
+owner: everything Era B promised is built, proven and photographed — please confirm the finish.

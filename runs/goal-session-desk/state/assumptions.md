@@ -270,3 +270,22 @@ fields.
 **Reversible:** yes — if the owner reads the scoped-rig discipline as a rail rather than a
 convention, this becomes a minor unresolved violation and the next iteration owes a remediation
 note (the file itself must stay: deleting it would breach the append-only rail).
+
+## iter-10 — goal-evaluator
+
+**Ambiguity:** J-08's acceptance bundles several clauses. This iteration produced fresh evidence for
+exactly one of them (the literal `<= 2 d` / `>= 10 d` screenshot). The clause "`/desk` renders
+[legacy snapshots'] rows with the honest `basis not recorded in this snapshot` state" could NOT be
+re-photographed here: the scoped rig now holds two `2026-07-25` recordings, so the golden's history
+click resolves to the new (basis-carrying) snapshot instead of the legacy one. `docs/goal.md` does
+not say whether every acceptance clause must be re-evidenced in the iteration that closes a journey.
+**We chose:** Score J-08 `passing` on the strength of this iteration's new evidence PLUS iteration 9's
+own clause evidence, because the product tree is byte-identical between the two runs — I verified
+`git diff 472f0ce -- apps/` is empty and `git status -- apps/` shows no untracked file, and the render
+path still exists at `apps/frontend/app/desk/page.tsx:203/285` — and because the legacy records
+themselves are byte-identical on disk (sha256 `530bb4f6…`/`9c2fddf6…`) with zero rows carrying a basis
+key. The alternative (demand a same-iteration capture of every clause) would hold the era open on a
+picture only a re-seeded scoped root could produce, for code that provably did not change.
+**Reversible:** yes — a later capture on a scoped root holding exactly one recording per date would
+replace iter-9's frame outright; if the owner reads the acceptance as "all clauses, same iteration",
+J-08 returns to `partial` and one short capture run closes it.

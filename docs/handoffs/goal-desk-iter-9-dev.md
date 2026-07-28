@@ -168,3 +168,23 @@ Other verification:
   the real files), the "basis" column + fallback + tooltip shipped, the guard test extended, the new
   golden recorded and verified, the smoke set green, zero anti-goal violations, suite green above
   floor.
+
+## Correction — added by goal-desk-iter-10 (2026-07-28)
+
+**The original sentence above ("What Was Built" → "Golden replay script + fixture-scoped rig" bullet)
+citing `reports/phase-goal-desk-iter-9-regression-replay-results.md` as the J-08 verify evidence is
+now STALE — left as-is above (historical record, not rewritten) but corrected here.** That file was
+overwritten at 22:35 the same day by the pipeline's own downstream `--journeys J-01,...,J-07`
+regression replay (both invocations share the same default `replay-lane.sh` output path), and it now
+carries no J-08 row at all. This was first identified by the iter-9 audit (`docs/handoffs/
+goal-desk-iter-9-audit.md`, finding T2), which confirmed the underlying DoD claim still stood on
+other evidence and re-ran the linter itself to verify. The real J-08 replay/verify evidence lives in:
+
+- `reports/phase-goal-desk-iter-9-ui-test-results.llm.md` — its J-08 rows (browser-QA lane, LLM
+  results), recording `1 journey(s), 0 failed (verdict: PASS)` for the `demo_runner.py --mode verify
+  --journeys J-08` run.
+- `reports/qa/goal-desk-iter-9-evidence/J-08-verify.png` — the end-state screenshot from that same
+  verify run (still on disk, unaffected by the later file overwrite above).
+
+No code, test, or golden script changed as part of this correction — it is a pointer fix only, per
+`goal-desk-iter-10`'s documentation-tidy-up scope (TC-7).

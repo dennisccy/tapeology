@@ -504,3 +504,16 @@ audits; only ever grow more specific, never weaker):**
   single-source-of-truth (or PnL-ledger) acceptance criterion, keep the `default` profile and
   `v1` byte-identical, and include a `[NEW]`-flagged walkthrough. Manufacturing a low-value
   journey just to keep the loop alive is a failure. *(critical)*
+
+**Host protection (added 2026-07-28 — a physical constraint of the host, not product scope):**
+
+- **Host-guard caps are law.** This host (GEEKOM A7 Max mini-PC) hard-reset five times between
+  2026-07-20 and 2026-07-28 under unconfined goal-mode load — instant power/VRM transient trips
+  with nothing in the journal; resets #3–#5 struck while tapeology's goal mode ran UNGUARDED
+  beside trendora's. When `project-extensions/host-guard/host-guard.env` declares ceilings
+  (CPU mask `4-7,12-15` — the complement of trendora's — plus BLAS thread caps and memory/task
+  bounds), every heavy path respects them: headless engine runs self-wrap under the mask, and
+  interactive pump sessions are launched via `scripts/automation/host-guard-exec.sh claude`
+  (the engine pauses `AWAITING_HOST_GUARD`, resumable, on an unconfined pump). Never disable,
+  widen, or bypass these caps to make a run faster or a pause go away; widening the mask follows
+  the verification ladder in `trendora/project-extensions/host-guard/README.md`. *(critical)*

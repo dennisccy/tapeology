@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-10",
+  "base_url": "http://localhost:3301",
+  "iteration": 10,
+  "default_timeout_ms": 15000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the live Cockpit",
+      "narration": "Tapeology opens on the Cockpit, where a stock's price action can update live in front of you.",
+      "point_out": "The Tapeology home screen, ready to watch a ticker.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/"},
+      "expect": {"text": "Tapeology"}
+    },
+    {
+      "n": 2,
+      "title": "Choose the simulated tape",
+      "narration": "You can watch a simulated stock first. You do not need a live market feed to see how a read works.",
+      "point_out": "The Simulated option is selected and ready for a ticker name.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Simulated"}}
+    },
+    {
+      "n": 3,
+      "title": "Name the simulated ticker",
+      "narration": "Typing a name sets up which simulated stock the tape will follow.",
+      "point_out": "The ticker field now holds the name just typed.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "fill", "target": {"label": "Ticker"}, "text": "SIM-BUYER"}
+    },
+    {
+      "n": 4,
+      "title": "Watch the tape settle into a read",
+      "narration": "Price bars move in real time. The tape settles into a plain-English read, like \"Buyer Control.\"",
+      "point_out": "The live read label above the moving price bars.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Watch"}},
+      "expect": {"text": "Buyer Control"}
+    },
+    {
+      "n": 5,
+      "title": "Open the Desk",
+      "narration": "The Desk lists about 100 stocks, ranked by how close each one sits to a key price level. Each row also says how old its price reading is.",
+      "point_out": "The ranked rows, and the panel naming exactly which price data built this screen.",
+      "journey": "J-08",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "d before as-of"}
+    },
+    {
+      "n": 6,
+      "title": "Look back at a past scan",
+      "narration": "Every past screen is saved. Look back at any of them, exactly as it was recorded.",
+      "point_out": "A note confirming this is an older, saved screen, not today's.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"css": "[data-testid=\"desk-history-row\"][data-screen-date=\"2026-06-22\"]"}},
+      "expect": {"text": "Viewing the recorded screen for 2026-06-22 — not the latest."}
+    },
+    {
+      "n": 7,
+      "title": "Jump from a row into its chart",
+      "narration": "Clicking any row opens that stock's detailed chart, already loaded for the same date.",
+      "point_out": "The Structure page opens, pre-filled from the row just clicked.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"testid": "desk-screen-row"}},
+      "expect": {"text": "Structure"}
+    }
+  ]
+}

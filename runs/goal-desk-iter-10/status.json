@@ -1,0 +1,30 @@
+{
+  "phase": "goal-desk-iter-10",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-28T08:52:03.000000Z",
+  "started_at": "2026-07-27T23:34:00.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "docs/handoffs/goal-desk-iter-9-dev.md",
+    "runs/goal-session-desk/journey-scripts/J-08.json",
+    "reports/phase-goal-desk-iter-10-smoke-replay-results.md",
+    "reports/phase-goal-desk-iter-10-j08-replay-results.md",
+    "reports/qa/goal-desk-iter-10-evidence/J-01-verify.png",
+    "reports/qa/goal-desk-iter-10-evidence/J-02-verify.png",
+    "reports/qa/goal-desk-iter-10-evidence/J-03-verify.png",
+    "reports/qa/goal-desk-iter-10-evidence/J-04-verify.png",
+    "reports/qa/goal-desk-iter-10-evidence/J-05-verify.png",
+    "reports/qa/goal-desk-iter-10-evidence/J-07-verify.png",
+    "reports/qa/goal-desk-iter-10-evidence/J-08-verify.png",
+    "reports/qa/goal-desk-iter-10-evidence/dev-sanity-check-fresh-vs-stale-NOT-official-evidence.png",
+    "docs/handoffs/goal-desk-iter-10-dev.md"
+  ],
+  "tests_run": true,
+  "tests_passed": true,
+  "browser_checks_run": false,
+  "fix_mode": false,
+  "notes": "RE-DISPATCHED developer pass (see dev handoff's 'Provenance note on this dispatch'): this dispatch found iter-10's substantive artifacts already on disk from an earlier developer dispatch within the same iteration (evidence screenshots, replay reports, both documentation tidy-ups) but the dev handoff file, the .steps/developer.done marker, and the scoped rig's live backend/frontend were all gone -- an ~8-9h session/engine gap of undetermined cause. Rather than re-seed a fresh scoped root (which risks reproducing the same-date-2026-07-25 collision for no benefit) this dispatch REUSED the existing scoped root and independently RE-VERIFIED every claim fresh: full backend suite re-run now = 1346 passed/8 skipped/0 failed (progress output byte-identical to the prior run's, cross-checked against its junit.xml too); Config().config_fingerprint() re-checked = 08e471b10130e1e2; git diff --stat re-checked empty on all 11 named product files, both before and after restarting the scoped servers; ambient apps/backend/.data/screen/ re-checked = still exactly the 3 pre-existing legacy files, no 4th file. TC-1 re-verified LIVE via a fresh GET against a freshly-restarted scoped backend (:8301, same reused .data/ copy, no re-copy): screen-2026-07-25-2ecce66af8d1, 63 ranked/38 skipped, AAPL basis_age_days=1 (<=2 met), NFLX/META/NVDA basis_age_days=12 (>=10 met), BRK-B row basis_as_of cross-checked byte-identical against GET /research/tradability. T-9 clean rebuild done fresh (rm -rf apps/frontend/.next, restarted on :3301 pointed at :8301); both endpoints curl-confirmed HTTP 200 in a final health check. Smoke replay (J-01,02,03,04,05,07) report already on disk shows 6/6 PASS; J-08's OWN golden replay report already on disk shows FAIL at step 4 for the documented, non-blocking, pre-existing same-date-screen-ambiguity reason (this scoped copy legitimately holds two 2026-07-25 recordings; date-only lookup resolves to newest) -- does not affect the actual DoD criterion (default/latest view, no history click). Both documentation tidy-ups (TC-7 note on goal-desk-iter-9-dev.md, TC-8 notes field on J-08.json) verified present and correct against their TC text, not re-touched. GAP FOUND AND CLOSED: neither pre-existing replay-results.md report stated the absolute scoped-root path in its own text (TC-3/IN-SCOPE literally require this) -- appended a short non-destructive 'Scoped data root' section to both reports/phase-goal-desk-iter-10-smoke-replay-results.md and -j08-replay-results.md stating it, without touching their machine-generated tables. Scoped backend (uvicorn PID 176035, :8301) and frontend (next-server PID 180002, :3301) deliberately left running, pointed at /home/dennis-chan/.cache/iad/iad.goal-desk-iter-10.53029/desk-iter10-scoped-qa, for the browser-qa-agent's dispatch to capture the official TC-2 DoD screenshot -- fallback restart recipe and a critical do-not-click-Run-Screen/Top-up warning are in the dev handoff. Zero product/application code changed (confirmed both at dispatch start and just before this update).",
+  "next_action": "reviewer"
+}

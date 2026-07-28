@@ -1,11 +1,11 @@
 # Goal Session Summary — desk
 
 **Final verdict:** AWAITING_PUMP
-**Total iterations:** 9
-**Wall time (seconds):** 824
+**Total iterations:** 10
+**Wall time (seconds):** 50
 **Quota pauses:** 0
 **Started:** 2026-07-25T01:04:47.481604Z
-**Finished:** 2026-07-27T20:21:40.220421Z
+**Finished:** 2026-07-28T08:38:31.715357Z
 
 ## Branch
 
@@ -19,19 +19,20 @@ This session pushed iteration commits to `goal/desk`. Open a PR with:
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-desk-iter-8 |
-| J-02 | passing | goal-desk-iter-8 |
-| J-03 | passing | goal-desk-iter-8 |
-| J-04 | passing | goal-desk-iter-8 |
-| J-05 | passing | goal-desk-iter-8 |
-| J-06 | passing | goal-desk-iter-8 |
-| J-07 | passing | goal-desk-iter-8 |
+| J-01 | passing | goal-desk-iter-9 |
+| J-02 | passing | goal-desk-iter-9 |
+| J-03 | passing | goal-desk-iter-9 |
+| J-04 | passing | goal-desk-iter-9 |
+| J-05 | passing | goal-desk-iter-9 |
+| J-06 | passing | goal-desk-iter-9 |
+| J-07 | passing | goal-desk-iter-9 |
+| J-08 | partial | - |
 
 ## Anti-goal violations
 
 - [minor] Snapshots are append-only and pinned. Universe and screen snapshots are dated, checksummed, append-only; every screen pins (universe snapshot id, screen date, as_of, fingerprint, bar-store signature); nothing is silently refetched, backfilled, recomputed in place, or rewritten — a new run is a new snapshot. (iter goal-desk-iter-3)
 - [minor] Frozen foundations — the v1 strategy, the default profile, the tape engine's five states and thresholds, the frozen structure computations, the JSON BarStore, and every KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside them, never a mutation of them. (… the one sanctioned kept-surface edit is J-05's additive /structure prefill.) [with Non-Goals: 'StructureChart.tsx untouched'; and Constraints: 'Guard tests (kept, never edited) … the chart guard suites … all pass byte-unmodified all era'] (iter goal-desk-iter-4)
-- [minor] Immutable data — registered datasets and bar series are append-only, checksummed, never re-tagged, never deleted, never content-perturbed. / no fabricated data (foundation invariant). (iter goal-desk-iter-4)
+- [minor] Immutable data — registered datasets and bar series are append-only, checksummed, never re-tagged, never deleted, never content-perturbed. Splits are frozen at registration. (iter goal-desk-iter-4)
 
 ## Telemetry
 
@@ -140,15 +141,31 @@ See `runs/goal-session-desk/telemetry.jsonl` for the structured event log.
   goal-desk-iter-9  depth=full  verdict=?  wall=?  (incomplete/interrupted attempt)
       goal-decomposer             13.6m  calls=1
       pump-wait                 13.7m
-  session: 9 completed iteration(s), mean wall 139.4m
-      total goal-evaluator            1276.2m
+  goal-desk-iter-9  depth=full  verdict=CONTINUE  wall=163.6m
+      goal-evaluator              16.5m  calls=1
+      coherence-auditor            5.2m  calls=1
+      (resume-skipped: goal-decomposer)
+      pump-wait                  0.7m
+      unattributed (glue)      141.9m
+  goal-desk-iter-10  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                   31.5m  calls=1
+      iteration-summarizer        17.0m  calls=1
+      goal-decomposer             17.0m  calls=1
+      readme-maintainer            2.9m  calls=1
+      pump-wait                  0.1m
+  goal-desk-iter-10  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                    0.7m  calls=1  failures=1
+      (resume-skipped: goal-decomposer)
+      pump-wait                  0.7m
+  session: 10 completed iteration(s), mean wall 141.8m
+      total goal-evaluator            1292.8m
+      total goal-decomposer            158.2m
       total browser-qa-agent           154.3m
-      total goal-decomposer            141.2m
-      total iteration-summarizer       112.7m
-      total developer                   82.5m
-      total coherence-auditor           36.8m
-      total readme-maintainer           30.1m
+      total iteration-summarizer       129.7m
+      total developer                  114.7m
+      total coherence-auditor           41.9m
+      total readme-maintainer           33.0m
       total reviewer                    25.5m
-      total AWAITING_PUMP paused gaps: 4.4m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP
+      total AWAITING_PUMP paused gaps: 6.0m
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, AWAITING_PUMP
 ```
