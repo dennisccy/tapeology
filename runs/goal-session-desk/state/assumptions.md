@@ -396,3 +396,44 @@ other J-09 clause was verified by the evaluator directly, including a byte-ident
 **Reversible:** yes — if the owner reads "end to end" as "the walkthrough introduces the feature"
 (which the single empty-state step does), J-09 closes immediately on the evidence already on disk;
 a one-line clarification in J-09's acceptance text settles it either way.
+
+## iter-12 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-09 Acceptance requires "in a real browser after the T-9 clean
+rebuild, `/desk` shows the honest no-run-recorded state in one screenshot and, **after a
+fixture-scoped run**, the top-up-runs section with attempted-of-total, per-outcome counts and at
+least one `failed` pair's recorded detail legible in another". Read literally, "after a run" implies
+one rig photographed before and then after. The delivered frames come from TWO different scoped
+roots: `desk-iter12-scoped-qa` (:3301, populated) and `desk-iter12-scoped-qa-empty` (:3302, empty) —
+disclosed in full at `reports/phase-goal-desk-iter-12-ui-test-results.llm.md:32-58`. The iteration
+spec's own DoD had said "both captured against the SAME scoped throwaway rig".
+**We chose:** Accept both frames as satisfying the two browser clauses. Reasons: (i) both roots are
+`cp -a` copies of the identical ambient tree taken the same day, with the same universe snapshot
+`universe-2026-07-25-49b33fa31680`/101 members — the empty rig genuinely IS what the populated rig
+looked like before its three runs; (ii) the single-rig reading was unreachable without breaching a
+critical rail — the dev's seed -> record -> boot order had already closed the honest-empty window,
+and recreating it would have meant deleting three real append-only records, so the browser lane's
+refusal to do that was correct rail-keeping, not a shortcut; (iii) the deviation was disclosed up
+front rather than silently substituted. This changes nothing about J-09's score, which stays
+`partial` on the separate, still-unevidenced walkthrough clause.
+**Reversible:** yes — one long-form iteration that boots the frontend BEFORE recording (the lessons
+entry's ordering fix) produces both frames on one root and moots this entirely.
+
+## iter-12 — goal-evaluator
+
+**Ambiguity:** Nothing in `docs/goal.md` or the methodology says whether an acceptance clause may be
+scored on an artifact a LATER lane in the same iteration is expected to produce. J-09's outstanding
+clause names a demo-narrator walkthrough, and at lean depth that lane runs after the evaluator — so
+the artifact could plausibly appear ~15 minutes after this scoring.
+**We chose:** Score strictly on artifacts that exist at evaluation time — no walkthrough on disk
+means the clause is unmet, so J-09 stays `partial` (session precedent: iter-7 "a condition that is
+verifiably false today is unmet, however well disclosed"; iter-9; iter-11). Two further facts made
+the deferring reading untenable rather than merely unattractive: the populated rig's frontend on
+:3301 is already dead (no node process, nothing listening) and the empty rig on :3302 was
+deliberately stopped after its single capture, so a demo-narrator dispatched now would have no
+browser surface for EITHER half; and the honest-empty state cannot be re-filmed on the populated rig
+at all without breaching the append-only rail. Hence ESCALATE (force full depth, where the lane runs
+before scoring) rather than CONTINUE-and-hope.
+**Reversible:** yes — if the owner reads the walkthrough clause as satisfiable by the post-scoring
+showcase lane, then whatever that lane records at finalization can close J-09 without another
+iteration; the standing evidence for every other clause is already complete.

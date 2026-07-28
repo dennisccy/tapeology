@@ -618,3 +618,58 @@ a real top-up is saved to the owner's own data folder; and the run-tracking file
 checks did not run when they did. One sentence for the owner: everything this new feature promised
 is built, proven and photographed — the next short run only needs to re-film the guided walkthrough
 so it shows a saved run, not just an empty panel.
+
+## Iteration 12 — goal-desk-iter-12
+
+**Date:** 2026-07-28T17:20:00+01:00
+**Verdict:** ESCALATE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02, J-03, J-04, J-05, J-07, J-08 all re-verified passing by saved-script
+  replay against a throw-away copy of the data folder; J-06 "17 machine-readable tools"
+  re-confirmed by my own count of the seventeen tools in the source
+- Still short of passing, second run in a row: J-09 "Every top-up run leaves an append-only record
+  of what it attempted" — **partial**, for exactly the same single reason as last time
+- Anti-goal violations: none new, none open. All three older items stay resolved and were
+  re-checked by me directly. One warning that is not a violation: a left-over background program
+  from this run is still burning about 78% of a processor with no page attached
+
+**Reasoning:** This run had one job — film a guided walkthrough showing the new top-up record both
+empty and filled — and that film does not exist. I looked for it myself across the whole project:
+there is no walkthrough file and no walkthrough pictures for iteration 12, and the browser-checking
+report says plainly that making it was not its job. I then found out WHY, from the session's own
+activity log rather than by guessing: in the SHORT form of a run the walkthrough is filmed AFTER I
+score the work (iteration 10: scoring 09:44, filming 09:59), while in the LONG form it is filmed
+BEFORE me (iteration 11: filming 13:18, scoring 14:17). So a short run can never satisfy a condition
+that asks for a film. Everything else I checked myself and it is sound: I opened the two new
+pictures and they are genuine — the empty panel reads "No top-up runs recorded yet.", and the filled
+one holds, in a single image, three saved runs, "404 of 404 pairs attempted", "0 reused · 403
+fetched · 1 failed" and the failing pair's own words "AAPL 1h — no data for that window". I proved
+no program code changed (the only changed file in the whole project is the README), printed the
+settings fingerprint myself (08e471b10130e1e2), counted the seventeen tools myself, opened the
+kept-product picture and saw the era's pinned wall drawn at 300.10 and 302.20, and listed the
+owner's real data folder: 400 files, no run-record folder, newest file written before this run even
+started. ESCALATE rather than CONTINUE because repeating this in the short form would hit the same
+dead end; not GOAL_ACHIEVED because one written condition still has no evidence at all; not
+REGRESSION because nothing that used to work stopped working; not STALLED because nobody has to
+decide anything first.
+
+**Next-step recommendation:** Run iteration 13 in the LONG form, with no program change. Do three
+things in this order: (1) bring the test rig back up — nothing is serving pages right now, and stop
+the left-over program that is still burning processor time; (2) film the empty panel FIRST, before
+any run is saved — this run copied the data folder, saved three runs, and only then started the
+page, which closed the "nothing saved yet" window forever, and the append-only rule rightly forbids
+deleting real records to bring it back; the correct order on one single copy is copy, start the
+page, photograph the empty panel, save the three runs, photograph the filled panel; (3) film the
+guided walkthrough in the same run showing those two states one after the other, and say in its
+report which data folder was used. Redo nothing else — the panel, the saved-run store, the endpoint,
+the tests and both browser pictures are all verified done. Carry, do not force: the run list does
+not report a damaged file the way its two neighbours do; a just-finished run can stay hidden until
+you refresh in a narrow timing window; the run table has no limit; the Desk page is long; two
+screens saved on the same day cannot be told apart by a date-only lookup; keyboard access for the
+history rows. One sentence for the owner: the feature is built and photographed, but the short form
+of a run can never film its own walkthrough in time to count — the next run should use the long
+form, film the empty panel before saving any runs, and the era can close.

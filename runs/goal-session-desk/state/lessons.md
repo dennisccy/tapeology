@@ -210,3 +210,32 @@ top-up at all — and that nothing had ever *executed*.
 is invisible until data accumulates — name the scoped rig (and the records it must already hold) in
 the SHOWCASE dispatch, not only the dev and browser-QA ones; and any DoD line of the form "X reaches
 Y" — send a real request through the real path rather than reading an allowlist constant.
+
+## iter-12 — 2026-07-28T17:20:00+01:00
+
+**Verdict:** ESCALATE
+**Lesson:** Lane ordering differs by depth and it is load-bearing: at LEAN depth the demo-narrator
+runs AFTER the goal-evaluator (trace.jsonl, iter-10: goal-evaluator 09:44 -> demo-narrator 09:59;
+iter-8 identical), while at FULL depth it runs BEFORE it (iter-11: demo-narrator 13:18 ->
+goal-evaluator 14:17; iter-9 identical). So a journey whose ONLY outstanding acceptance clause is a
+`[NEW]`-flagged demo-narrator walkthrough is structurally unscoreable in a lean iteration — iter-12
+was dispatched lean with exactly that single target and could not possibly have closed it. Check the
+lane that OWNS the missing artifact against the dispatched depth before choosing lean.
+**Applies to:** any decomposer/evaluator handling a journey whose remaining gap is a showcase
+artifact (demo walkthrough, iteration summary, README/rendered showcase) — those clauses require
+`full` depth; also any "capture-only" iteration whose deliverable is produced by a post-evaluation
+lane.
+
+## iter-12 — 2026-07-28T17:20:00+01:00
+
+**Verdict:** ESCALATE
+**Lesson:** An append-only store's honest-EMPTY state is a one-way door: photograph it BEFORE the
+first record is written, because the append-only rail forbids recreating it by deleting real
+records. Iter-12's dev order was seed -> record 3 checkpoint runs -> boot the frontend, which closed
+the empty window before any browser existed; the browser-qa lane correctly refused to delete the
+records and had to seed and boot a SECOND scoped root (1.9G, ports 8302/3302) just for one
+screenshot, leaving J-09's two required frames on two different rigs. Correct order on one root:
+seed -> boot frontend -> capture empty -> record runs -> capture populated.
+**Applies to:** any iteration capturing before/after evidence for an append-only store (top-up run
+log, screen ledger, universe snapshots, dataset/bar stores) — sequence the frontend boot before the
+first write, and say so in the dev spec, not only in the QA spec.

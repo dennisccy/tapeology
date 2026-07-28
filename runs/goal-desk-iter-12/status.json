@@ -1,0 +1,26 @@
+{
+  "phase": "goal-desk-iter-12",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-28T15:25:03.000000Z",
+  "started_at": "2026-07-28T14:38:08.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "reports/phase-goal-desk-iter-12-smoke-replay-results.md",
+    "reports/qa/goal-desk-iter-12-evidence/J-01-verify.png",
+    "reports/qa/goal-desk-iter-12-evidence/J-02-verify.png",
+    "reports/qa/goal-desk-iter-12-evidence/J-03-verify.png",
+    "reports/qa/goal-desk-iter-12-evidence/J-04-verify.png",
+    "reports/qa/goal-desk-iter-12-evidence/J-05-verify.png",
+    "reports/qa/goal-desk-iter-12-evidence/J-07-verify.png",
+    "reports/qa/goal-desk-iter-12-evidence/J-08-verify.png",
+    "docs/handoffs/goal-desk-iter-12-dev.md"
+  ],
+  "tests_run": true,
+  "tests_passed": true,
+  "browser_checks_run": false,
+  "fix_mode": false,
+  "notes": "Zero product/application code change this iteration (spec's own binding requirement) -- confirmed via git diff --stat empty on every named product file, both before and after this dispatch's work. This dispatch's own job was evidence capture: seeded a fresh scoped rig (distinct from prior iterations') at /home/dennis-chan/.cache/iad/iad.goal-desk-iter-12.154299/desk-iter12-scoped-qa via apps/backend/scripts/goal-desk-iter9-scoped-backend.sh; verified BEFORE state honest-empty (GET /research/desk/topup/runs -> {runs:[],latest:null}) with no collision; recorded 3 checkpoint top-up runs in-process against the real production code paths (ordinary/done 404/404, cancelled 3/404, one induced failed pair AAPL 1h 'no data for that window' verbatim, 0 reused/403 fetched/1 failed) -- zero live vendor calls; confirmed the checkpoint-3 side effect does not corrupt the pinned AAPL 2026-06-22 wall (300.11-302.2 class A, byte-identical to docs/goal.md) since the desk top-up timeframes are disjoint from the 1m microscope timeframe that wall reads; rm -rf apps/frontend/.next + booted scoped backend(:8301)+frontend(:3301), left both running for the browser-qa-agent/demo-narrator stages (do-not-click-Top-up/Run-Screen warning is in the dev handoff, since a real click would supersede checkpoint 3 as 'latest'); replayed J-01-J-05/J-07/J-08 against the scoped rig via demo_runner.py --mode verify: 7/7 PASS at --timeout-ms 30000 after a disclosed, non-blocking J-07 warm-up timing flake at the runner's 15000ms default (unrelated to any code this iteration touched); full backend suite re-run = 1369 passed/8 skipped/0 failed (an environment quirk in this pytest 9.1.1 setup suppresses the -q summary line -- used -v to get the authoritative count, noted in the handoff for future dispatches); Config().config_fingerprint() re-confirmed 08e471b10130e1e2; test_mcp_server.py re-run in isolation = 35/35, 17-tool contract intact; ambient apps/backend/.data/ + tapeology_journal.db re-checksummed byte-identical before vs after (zero write proven). Also disclosed: the first scoped backend instance accumulated runaway CPU from repeated demo_runner.py invocations each starting a SIM-BUYER simulated feed via J-07's Watch click, requiring a restart (SIGKILL) -- root-caused, confirmed non-product, confirmed the 3 checkpoint records survived the restart (file-based store). The J-09 demo-narrator walkthrough and standalone browser-qa-agent screenshots are NOT part of this dev dispatch, per this repo's established pipeline division of labor (matches iteration 11's own dev handoff).",
+  "next_action": "review"
+}
