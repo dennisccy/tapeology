@@ -94,7 +94,7 @@ Tapeology
 | J-06 MCP contract v3 (17 read-only tools) — IN BUILD at iter-7 | *(MCP tool surface; no page — `desk_universe`/`desk_screen` proxy the two GETs below)* | — |
 | J-07 Kept-product regression sentinel | `/`, `/structure` | Cockpit, Structure |
 | J-08 Basis disclosure on ranked rows (measurement age) — implementation shipped iter-9; iter-10 closes the remaining literal-threshold screenshot evidence | `/desk` (ranked table column + row drill-in tooltip) | Desk |
-| J-09 Top-up run ledger (append-only record of what a top-up attempted) — IN BUILD at iter-11 | *(backend; surfaced as a read-only "Top-up Runs" section on `/desk`, beside Screen History — no standalone page)* | Desk |
+| J-09 Top-up run ledger (append-only record of what a top-up attempted) — implementation shipped iter-11; iter-12 closes the remaining narrated-walkthrough evidence | *(backend; surfaced as a read-only "Top-up Runs" section on `/desk`, beside Screen History — no standalone page)* | Desk |
 
 ## Data Contract
 
@@ -268,4 +268,21 @@ already produces but persists them separately and durably; the two rows can neve
 they share one computation, just different lifetimes. The backlogged `bar-index-store-reconcile`
 proposal is again NOT promoted this cycle (re-measured: 369 store series vs 281 `bar_index` rows,
 88 unindexed; same 7 member×timeframe pairs still read `has_bars:false` against a store that holds
-them) — deferred a further cycle to keep this iteration's scope to the one promoted journey. -->
+them) — deferred a further cycle to keep this iteration's scope to the one promoted journey.
+
+NOTED at iter-12 (documentation currency only, no new Data-Contract row, no nav-skeleton change):
+iteration 11 built and independently re-verified every behavioral clause of J-09 (byte-identical
+per-pair outcomes via a live spy over the real `run_topup`, cancelled-run unreached-pairs honesty,
+interrupted-run-leaves-no-record, second-run append-only, MCP/copy/suite/fingerprint all green,
+COHERENCE-PASS) but its own `[NEW]`-flagged demo-narrator walkthrough
+(`reports/phase-goal-desk-iter-11-demo.json` step 2) narrated only the honest empty state — the
+ambient backend it recorded against genuinely had zero top-up runs, so it could not also show a
+populated one, leaving docs/goal.md's "covers... end to end" clause unmet (evaluator: `partial`,
+`CONTINUE`; audit finding T3, rated PASS_WITH_GAPS/non-blocking). iter-12 makes no code change and
+adds no Data-Contract row — it seeds a fresh fixture-scoped copy of `.data/` (never the ambient
+store), records three checkpoint top-up runs into it (one ordinary, one cancelled mid-walk, one with
+an induced failed pair — the same recipe iter-11's own browser-QA lane already used), and re-records
+the demo-narrator walkthrough against that populated rig so it narrates both halves — the honest empty
+state, then the populated one — in one artifact. This note exists so a future reader does not mistake
+the re-recorded walkthrough, or the scoped rig it was captured against, for a new owner, endpoint, or
+shape. -->
