@@ -94,7 +94,7 @@ Tapeology
 | J-06 MCP contract v3 (17 read-only tools) — IN BUILD at iter-7 | *(MCP tool surface; no page — `desk_universe`/`desk_screen` proxy the two GETs below)* | — |
 | J-07 Kept-product regression sentinel | `/`, `/structure` | Cockpit, Structure |
 | J-08 Basis disclosure on ranked rows (measurement age) — implementation shipped iter-9; iter-10 closes the remaining literal-threshold screenshot evidence | `/desk` (ranked table column + row drill-in tooltip) | Desk |
-| J-09 Top-up run ledger (append-only record of what a top-up attempted) — implementation shipped iter-11; iter-12 closes the remaining narrated-walkthrough evidence | *(backend; surfaced as a read-only "Top-up Runs" section on `/desk`, beside Screen History — no standalone page)* | Desk |
+| J-09 Top-up run ledger (append-only record of what a top-up attempted) — implementation shipped iter-11; iter-12 (lean) could not close the remaining narrated-walkthrough evidence — the lane that produces it runs after scoring at lean depth — and also surfaced a capture-order defect; iter-13 (full depth, corrected empty-before-record order) re-attempts it | *(backend; surfaced as a read-only "Top-up Runs" section on `/desk`, beside Screen History — no standalone page)* | Desk |
 
 ## Data Contract
 
@@ -285,4 +285,24 @@ an induced failed pair — the same recipe iter-11's own browser-QA lane already
 the demo-narrator walkthrough against that populated rig so it narrates both halves — the honest empty
 state, then the populated one — in one artifact. This note exists so a future reader does not mistake
 the re-recorded walkthrough, or the scoped rig it was captured against, for a new owner, endpoint, or
-shape. -->
+shape.
+
+NOTED at iter-13 (documentation currency only, no new Data-Contract row, no nav-skeleton change):
+iteration 12 (dispatched `lean`) still could not close J-09's outstanding demo-narrator-walkthrough
+clause — not for a product reason, but a structural one: at `lean` depth the demo-narrator lane runs
+AFTER the goal-evaluator scores the iteration (`trace.jsonl`), so a lean iteration can never film its
+own closing artifact in time to be scored (evaluator verdict: `ESCALATE`, this session's first).
+Iteration 12 also surfaced a capture-order defect: its dev lane seeded the scoped root, recorded the
+three checkpoint runs, and only THEN booted the frontend — closing the honest "no runs recorded yet"
+window before any browser existed, since the append-only rail forbids re-creating that window by
+deleting real records. The browser-QA lane worked around it by capturing the empty half on a SECOND,
+disconnected scoped root (`desk-iter12-scoped-qa-empty`, `:8302`/`:3302`), which the evaluator
+accepted for the two separate standalone screenshots (`assumptions.md` iter-12, first entry) but
+could not accept as a single coherent walkthrough. iter-13 (`full` depth — mandatory, since the prior
+verdict was `ESCALATE`) makes no code change and adds no Data-Contract row — it seeds ONE fresh
+scoped root, boots BOTH the backend and the frontend against it BEFORE recording any run, captures
+the genuinely live honest-empty state first, THEN records the same three-checkpoint recipe, captures
+the populated state second on that same still-live rig, and assembles both captures into one
+`[NEW]`-flagged demo-narrator walkthrough. This note exists so a future reader does not mistake the
+re-recorded walkthrough, or the corrected-order rig it was captured against, for a new owner,
+endpoint, or shape. -->
