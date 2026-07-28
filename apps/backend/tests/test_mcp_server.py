@@ -902,6 +902,25 @@ async def test_get_endpoint_profiles_byte_identical_on_the_live_200(mcp_env):
 
 
 @pytest.mark.anyio
+async def test_get_endpoint_desk_topup_runs_byte_identical_with_no_new_tool(mcp_env):
+    """goal-desk-iter-11 TC-9 (J-09): the NEW ``GET /research/desk/topup/runs`` route is reachable
+    through ``get_endpoint``'s existing ``/research/`` allowlist prefix with ZERO MCP code change —
+    no new tool, no ``_STATIC_PATHS`` entry — and the proxied body is byte-identical to its curl
+    equivalent (here the honest-empty ``{"runs": [], "latest": null}`` this module-scoped backend's
+    own temp desk dirs genuinely produce). The tool count assertion lives in
+    ``test_advertised_tool_set_is_exactly_capability_6``; this is the reachability half TC-9 names
+    separately."""
+    result = await call_tool("get_endpoint", {"path": "/research/desk/topup/runs"})
+    rest = httpx.get(f"{mcp_env}/research/desk/topup/runs", timeout=5.0)
+    assert rest.status_code == 200
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "topup/runs not byte-identical"
+    assert rest.json() == {"runs": [], "latest": None}
+    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 17
+
+
+@pytest.mark.anyio
 async def test_get_endpoint_refuses_non_allowlisted_paths_without_any_request(monkeypatch):
     """Refusal is decided BEFORE any request: with the backend base pointing at a dead port,
     a refused path must raise the refusal (an unreachable error would prove a request was

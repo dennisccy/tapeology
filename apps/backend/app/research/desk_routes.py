@@ -13,13 +13,20 @@ shape) and the desk bar top-up's three compute-manager routes (``POST``/``GET
 /research/desk/topup/compute``, ``POST /research/desk/topup/compute/cancel`` — mirrors
 ``routes.py``'s ``/edge-report/compute`` trio verbatim).
 
-J-03 (this iteration) adds the screen: ``GET /research/desk/screen`` (latest + ``?date=`` + a
-lightweight meta-only snapshot list — never full ``rows``/``skipped`` for every historical
+J-03 (unmodified this iteration) adds the screen: ``GET /research/desk/screen`` (latest + ``?date=``
++ a lightweight meta-only snapshot list — never full ``rows``/``skipped`` for every historical
 snapshot, see ``desk_screen.py``'s module docstring) and the screen's own three compute-manager
 routes (``POST``/``GET /research/desk/screen/compute``, ``POST
 /research/desk/screen/compute/cancel`` — mirrors the top-up trio exactly). Kept as its own module
 (mirroring the plan's stated preference) rather than folding into ``routes.py``, which is already
 large; mounted separately in ``app/main.py``.
+
+J-09 (this iteration) adds ONE new read: ``GET /research/desk/topup/runs`` (the durable, append-only
+top-up run log — ``desk_topup_log.py``'s lightweight run-meta list + the latest full record; honest-
+empty ``{"runs": [], "latest": null}`` before any run, never a 404). No new compute manager, no new
+POST — the log is written by the ALREADY-existing top-up trigger/CLI paths (``desk_topup_compute.py``
+threads the write through internally); this route is a pure read, mirroring ``GET
+/research/desk/universe``'s single-synchronous-read shape exactly.
 
 **Both compute managers are module-level singletons here, NOT ``ResearchRegistry`` properties.**
 ``DeskTopupComputeManager`` (``desk_topup_compute.py``) reuses ``routes.record_bar_series``
@@ -46,6 +53,7 @@ from .desk_coverage import get_desk_coverage
 from .desk_screen import ScreenStore, resolve_desk_screen_dir
 from .desk_screen_compute import DeskScreenComputeManager
 from .desk_topup_compute import DeskTopupComputeManager
+from .desk_topup_log import TopupRunStore, resolve_desk_topup_log_dir
 from .desk_universe import (
     UniverseAlreadyRegistered,
     UniverseFetchError,
@@ -176,6 +184,14 @@ def get_desk_topup_manager() -> DeskTopupComputeManager:
     return _desk_topup_manager
 
 
+def get_topup_run_store() -> TopupRunStore:
+    """The top-up run log store rooted at a bare env-var-or-sibling-of-the-universe-dir default
+    (zero new ``Config`` field — J-09, see ``desk_topup_log.resolve_desk_topup_log_dir``) — the
+    ``get_screen_store`` pattern. A FastAPI dependency so tests can point it at a temp dir via the
+    env var or override it outright."""
+    return TopupRunStore(resolve_desk_topup_log_dir(CONFIG.desk_universe_dir_resolved()))
+
+
 @router.post("/topup/compute")
 def trigger_desk_topup_compute(
     universe_store: UniverseStore = Depends(get_universe_store),
@@ -183,13 +199,16 @@ def trigger_desk_topup_compute(
     bar_index: BarIndex = Depends(get_bar_index),
     registry: ResearchRegistry = Depends(get_registry),
     manager: DeskTopupComputeManager = Depends(get_desk_topup_manager),
+    topup_run_store: TopupRunStore = Depends(get_topup_run_store),
 ) -> dict:
     """Start the single-flight desk top-up job over the LATEST universe snapshot's members, or —
     if one is already running — return it UNCHANGED (``started: False``, never a second concurrent
     job). Returns ``{"started": bool, "compute": <snapshot>}``; the actual walk runs on a
     background worker thread, off this request, so this route returns immediately regardless of
-    how long the top-up takes."""
-    return manager.trigger(universe_store, bar_store, bar_index, registry)
+    how long the top-up takes. J-09: the job's terminal outcome is durably recorded into
+    ``topup_run_store`` once it resolves (inside ``DeskTopupComputeManager.trigger`` itself — see
+    that method's docstring) — this route only threads the store dependency through."""
+    return manager.trigger(universe_store, bar_store, bar_index, registry, topup_run_store=topup_run_store)
 
 
 @router.get("/topup/compute")
@@ -214,6 +233,33 @@ def cancel_desk_topup_compute(
         raise HTTPException(status_code=409, detail="no desk top-up compute is currently running")
     manager.cancel()
     return {"cancelling": True}
+
+
+# --- The top-up run log (J-09) — ONE read: a lightweight run-meta list + the latest full record.
+# No POST here: the log is written internally by the trigger/CLI paths above (the single shared
+# writer, `desk_topup_log.record_topup_run`) — this route is a pure read, never a trigger. --------
+
+
+def _topup_run_meta_only(record: dict) -> dict:
+    """The lightweight projection ``GET /research/desk/topup/runs``'s bulk list serves — every
+    field EXCEPT ``outcomes`` (mirrors ``_screen_meta_only``'s identical convention: a run record
+    carrying every pair's outcome is materially larger than its own summary, so the list call never
+    returns the full array for every historical run)."""
+    return {key: value for key, value in record.items() if key != "outcomes"}
+
+
+@router.get("/topup/runs")
+def get_topup_runs(store: TopupRunStore = Depends(get_topup_run_store)) -> dict:
+    """``{"runs": [...meta-only...], "latest": <full record>|null}`` — an explicit HTTP 200
+    honest-empty payload (``{"runs": [], "latest": null}``) before any top-up run has ever reached
+    its terminal state, never a 404 (the ``GET /research/desk/universe`` convention). ``latest`` is
+    the most recently STARTED run, verbatim from disk — never recomputed on the GET (the
+    ``GET /research/desk/screen`` convention: a plain read, triggers nothing)."""
+    records, _errors = store.list()
+    return {
+        "runs": [_topup_run_meta_only(r) for r in records],
+        "latest": records[-1] if records else None,
+    }
 
 
 # --- The screen (J-03) — GET (latest / ?date= / meta-only list) plus the screen compute's three

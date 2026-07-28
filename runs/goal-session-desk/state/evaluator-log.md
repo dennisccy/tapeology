@@ -556,3 +556,65 @@ the same day cannot be told apart by a date-only lookup; against your real folde
 limitation stays open by choice; (3) still open by choice, never forced: keyboard access for the
 history rows and three one-line hardening items carried from earlier runs. One sentence for the
 owner: everything Era B promised is built, proven and photographed — please confirm the finish.
+
+## Iteration 11 — goal-desk-iter-11
+
+**Date:** 2026-07-28T15:40:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- New journey scored for the first time: J-09 "Every top-up run leaves an append-only record of
+  what it attempted" — **partial**. The goal-proposer added it to `docs/goal.md` after iteration 10
+  closed the era, so the era reopens for one journey. It is built, correct and photographed; one
+  written condition in the goal file is not met by the guided walkthrough that was recorded.
+- Unchanged: J-01, J-02, J-03, J-04, J-05, J-06, J-07, J-08 all re-verified passing this iteration
+  (seven by saved-script replay, J-06 by its machine-readable tool contract), plus a dedicated
+  "every existing Desk section still works" walk (UT-08).
+- Anti-goal violations: none new, none open. All three older items stay resolved and were
+  re-confirmed by my own checks. Iteration 9's carried hygiene deviation did NOT recur: this run
+  wrote nothing at all into the owner's real data folder.
+
+**Reasoning:** I did not take any report's word for this. I opened the pictures that carry the new
+work: the Desk page with the honest "No top-up runs recorded yet." panel; the same panel after three
+test runs, listing each run and then, for the newest one, "404 of 404 pairs attempted", "0 reused ·
+403 fetched · 1 failed" and the failed pair's own words "AAPL 4h — no data for that window", all
+legible in one image; and the stopped-early run showing "3 of 404 pairs attempted" beside "401 pairs
+not reached", so "tried and failed" and "never reached" are plainly different things. Then I proved
+the machinery myself instead of believing the tests: on throw-away folders I called the endpoint
+(honest empty, and the storage folder is not even created before the first run), ran a real walk
+while spying on the one function that produces the outcomes and confirmed the saved list is
+byte-for-byte what that function returned, forced one pair to fail and saw its exact words stored
+while the rest of the walk continued, ran a second walk and confirmed the first saved file's
+checksum did not change, and confirmed the store has no way to update or delete anything. I also
+re-ran the work: the whole back-end suite (1369 passed, 8 skipped, 0 failed, exit 0), the settings
+fingerprint (`08e471b10130e1e2`), the live tool count (exactly 17), and a file-by-file check that
+every frozen file, the engine and every dependency list are untouched. I listed the owner's real
+data folder: no price file, no recorded screen, no universe file and no run record was written
+there — only two rebuildable caches. Coherence is COHERENCE-PASS. The one thing that is not right:
+`docs/goal.md` asks for a `[NEW]`-flagged guided walkthrough that covers the new record "end to
+end"; the recorded walkthrough has exactly one step for this journey and it shows only the empty
+panel — never a single saved run. I read the walkthrough file and its picture myself to confirm
+that. The independent audit read it the same way and left the call to me. CONTINUE because that is
+a picture the automation can take by itself with no program change; not GOAL_ACHIEVED because a
+written condition is plainly unmet; not REGRESSION because nothing that used to work stopped
+working; not STALLED because nobody has to decide anything first.
+
+**Next-step recommendation:** Run iteration 12 at **lean** depth. It is a filming run with no
+program change: (1) rebuild the throw-away rig exactly as this run already did — copy the real data
+folder to a temporary place, point the backend at the copy, and record three top-up runs there (one
+ordinary, one stopped early, one where a single pair is made to fail); (2) re-record the guided
+walkthrough against that rig so it shows both halves — first "No top-up runs recorded yet.", then a
+saved run with its attempted-of-total count, its reused/fetched/failed counts and the failed pair's
+own words; (3) say in the walkthrough report which data folder was used, as this run properly did;
+(4) redo nothing else — the panel, the saved-run store, the endpoint, the tests, the browser
+pictures and the replay script are all verified done. Carry, do not force: the run list does not yet
+report a damaged file the way the two neighbouring lists do; a just-finished run can stay hidden
+until you refresh in a very narrow timing window; the run table has no limit; the Desk page is now
+six stacked sections and long; the saved replay script will need its wording updated the first time
+a real top-up is saved to the owner's own data folder; and the run-tracking file still says browser
+checks did not run when they did. One sentence for the owner: everything this new feature promised
+is built, proven and photographed — the next short run only needs to re-film the guided walkthrough
+so it shows a saved run, not just an empty panel.

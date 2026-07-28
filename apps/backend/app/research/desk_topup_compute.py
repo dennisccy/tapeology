@@ -37,7 +37,24 @@ immediately BEFORE the call: a store-first hit's ``created_utc`` necessarily pre
 timestamp (the series already existed), while a freshly-written series' ``created_utc`` is stamped
 at or after it. This reads only the ALREADY-RETURNED ``created_utc`` field — it duplicates none of
 ``record_bar_series``'s own adapter-selection/feed-derivation decisions, so it cannot drift out of
-sync with that logic."""
+sync with that logic.
+
+**J-09 — the append-only run log.** Every run's OWN already-computed outcomes are persisted, once,
+at terminal state, by the single shared writer ``desk_topup_log.record_topup_run`` — called from
+BOTH ``_work``'s two exit paths below (the ``except`` branch for a whole-job ``"failed"``, and the
+normal ``"cancelled"``/``"done"`` path) and once more from the CLI's ``main()`` after ``run_topup``
+returns successfully. ``universe_snapshot_id`` and the run's ``requested_window`` (one
+``_fetch_window_now()`` call, captured ONCE per run in the caller — never re-derived inside the
+writer, never a second call inside ``_run_one_pair``, which keeps its own existing per-pair call
+byte-unchanged) are threaded through as plain local/closure values — never added as a new key on
+``self._snapshot`` (that dict stays exactly the J-02 shape; the run LOG is a separate, durable
+concern). A run-level ``state: "failed"`` (something escaped ``run_topup`` itself) is NOT the same
+thing as a per-pair ``outcome: "failed"`` (already caught inside ``_run_one_pair`` and folded into
+``outcomes`` — the job still resolves ``"done"``): the ``except`` branch below writes a record with
+whatever outcomes were published before the crash (a local ``collected`` list, independent of the
+shared ``self._snapshot`` to avoid any race with a superseding job); the CLI path has no cancel
+signal and normally only ever terminates ``"done"``, so an uncaught crash BEFORE its own writer
+call is the correct interrupted-run case — zero record, never a bug to guard against."""
 
 from __future__ import annotations
 
@@ -54,6 +71,7 @@ from ..config import CONFIG
 from .bar_index import BarIndex
 from .bars import BarStore
 from .desk_coverage import DESK_TOPUP_TIMEFRAMES
+from .desk_topup_log import TopupRunStore, record_topup_run, resolve_desk_topup_log_dir
 from .desk_universe import UniverseStore
 from .routes import (
     BarRecordRequest,
@@ -214,6 +232,7 @@ class DeskTopupComputeManager:
         bar_store: BarStore,
         bar_index: BarIndex,
         registry: ResearchRegistry,
+        topup_run_store: TopupRunStore,
     ) -> dict:
         """Start a NEW top-up job over the LATEST universe snapshot's members, or — if one is
         already ``state == "running"`` — return it UNCHANGED (``started: False``, single-flight).
@@ -221,30 +240,50 @@ class DeskTopupComputeManager:
         call always starts a genuinely new job (a fresh id), discarding the prior snapshot. Never
         blocks — the walk runs on a dedicated worker thread, off the caller's thread, so an HTTP
         route calling this returns immediately. No universe snapshot registered yet -> an honest
-        zero-pair job (``pairs_total: 0``) that resolves ``"done"`` immediately, never an error."""
+        zero-pair job (``pairs_total: 0``) that resolves ``"done"`` immediately, never an error.
+
+        J-09: ``topup_run_store`` is where this job's terminal outcome is durably recorded (once,
+        via ``desk_topup_log.record_topup_run`` — see the module docstring's J-09 section) — a
+        required per-call dependency (the ``bar_store``/``bar_index``/``registry`` precedent), never
+        a constructor-owned default, so a test points it at any hermetic store with zero plumbing."""
         with self._lock:
             current = self._snapshot
             if current is not None and current["state"] == "running":
                 return {"started": False, "compute": _copy_snapshot(current)}
 
             records, _errors = universe_store.list()
+            universe_snapshot_id = records[-1]["id"] if records else None
             members: list[str] = list(records[-1]["members"]) if records else []
             pairs_total = len(members) * len(DESK_TOPUP_TIMEFRAMES)
 
             job_id = uuid.uuid4().hex
+            started_utc = _iso_utc_now()
             cancel_event = threading.Event()
             self._cancel_event = cancel_event
             snapshot = {
                 "id": job_id,
                 "state": "running",
-                "started_utc": _iso_utc_now(),
+                "started_utc": started_utc,
                 "finished_utc": None,
                 "error": None,
                 "progress": {"pairs_total": pairs_total, "pairs_done": 0, "outcomes": []},
             }
             self._snapshot = snapshot
 
+        # J-09: the requested fetch window is captured ONCE here, before the walk starts -- never
+        # re-derived inside the writer or per-pair (`_run_one_pair` still calls its own
+        # `_fetch_window_now()`, unchanged, once per pair, for that pair's OWN fetch; this is a
+        # separate, record-keeping-only read of the same deterministic-per-UTC-day helper --
+        # goal-desk-iter-11 NOTES / assumptions.md iter-11 entry). `collected` is this job's own
+        # append-only mirror of every outcome `_publish` has seen so far, independent of
+        # `self._snapshot` -- so the crash-fallback write below (a whole-job failure) never risks
+        # reading a snapshot a NEWER job has already superseded.
+        _window_start, _window_end = _fetch_window_now()
+        requested_window = {"start": _window_start, "end": _window_end}
+        collected: list[dict] = []
+
         def _publish(entry: dict) -> None:
+            collected.append(entry)
             with self._lock:
                 current = self._snapshot
                 if current is None or current["id"] != job_id:
@@ -259,9 +298,22 @@ class DeskTopupComputeManager:
                     },
                 }
 
+        def _record_run(*, state: str, outcomes: list[dict]) -> None:
+            record_topup_run(
+                topup_run_store,
+                universe_snapshot_id=universe_snapshot_id,
+                requested_window=requested_window,
+                config_fingerprint=CONFIG.config_fingerprint(),
+                started_utc=started_utc,
+                finished_utc=_iso_utc_now(),
+                state=state,
+                pairs_total=pairs_total,
+                outcomes=outcomes,
+            )
+
         def _work() -> None:
             try:
-                run_topup(
+                outcomes = run_topup(
                     members, bar_store, bar_index, registry,
                     progress=_publish, should_abort=cancel_event.is_set,
                 )
@@ -270,8 +322,11 @@ class DeskTopupComputeManager:
                 # recorded as "failed" outcomes -- this only fires for something run_topup itself
                 # cannot recover from) -- surfaced verbatim, never swallowed.
                 self._resolve(job_id, "failed", error=str(exc))
+                _record_run(state="failed", outcomes=collected)
                 return
-            self._resolve(job_id, "cancelled" if cancel_event.is_set() else "done", error=None)
+            state = "cancelled" if cancel_event.is_set() else "done"
+            self._resolve(job_id, state, error=None)
+            _record_run(state=state, outcomes=outcomes)
 
         thread = threading.Thread(target=_work, name=f"desk-topup-compute:{job_id}", daemon=True)
         with self._lock:
@@ -346,6 +401,9 @@ def main() -> int:
         bar_store = get_bar_store()
         bar_index = get_bar_index()
         universe_store = UniverseStore(config.desk_universe_dir_resolved())
+        topup_run_store = TopupRunStore(
+            resolve_desk_topup_log_dir(config.desk_universe_dir_resolved())
+        )
 
         records, _errors = universe_store.list()
         if not records:
@@ -355,13 +413,37 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
+        universe_snapshot_id = records[-1]["id"]
         members = list(records[-1]["members"])
+        pairs_total = len(members) * len(DESK_TOPUP_TIMEFRAMES)
         print(
             f"desk top-up: {len(members)} member(s) x {len(DESK_TOPUP_TIMEFRAMES)} "
-            f"timeframe(s) = {len(members) * len(DESK_TOPUP_TIMEFRAMES)} pair(s)",
+            f"timeframe(s) = {pairs_total} pair(s)",
             flush=True,
         )
+        # J-09: the requested fetch window is captured ONCE, before the walk starts -- the SAME
+        # record-keeping-only read `DeskTopupComputeManager.trigger` uses (see that method's own
+        # comment); `run_topup`/`_run_one_pair` still call `_fetch_window_now()` themselves,
+        # unchanged, once per pair, for that pair's OWN fetch.
+        window_start, window_end = _fetch_window_now()
+        started_utc = _iso_utc_now()
         outcomes = run_topup(members, bar_store, bar_index, registry, progress=_cli_progress_printer())
+        # The CLI has no cancel signal -- a run that reaches this line always terminates "done"
+        # (the module docstring's J-09 section). An uncaught crash ABOVE this line (inside
+        # `run_topup` itself, escaping its own per-pair try/except) is the correct interrupted-run
+        # case: the process exits without ever calling the writer below, so the ledger stays
+        # honestly empty for this attempt -- never guarded against here.
+        record_topup_run(
+            topup_run_store,
+            universe_snapshot_id=universe_snapshot_id,
+            requested_window={"start": window_start, "end": window_end},
+            config_fingerprint=config.config_fingerprint(),
+            started_utc=started_utc,
+            finished_utc=_iso_utc_now(),
+            state="done",
+            pairs_total=pairs_total,
+            outcomes=outcomes,
+        )
     finally:
         store.close()
 

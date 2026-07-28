@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "journey": "J-09",
+  "name": "Every top-up run leaves an append-only record of what it attempted",
+  "default_timeout_ms": 8000,
+  "notes": [
+    "Recorded goal-desk-iter-11 by browser-qa-agent after a fixture-scoped rig (a throw-away copy of apps/backend/.data/, scoped env vars, never the ambient store) proved the full walk: honest-empty GET /research/desk/topup/runs before any run, a fixture-scoped ordinary run (state done, pairs_attempted == pairs_total), a fixture-scoped cancelled run (state cancelled, pairs_attempted < pairs_total, an amber 'N pairs not reached' note), and a fixture-scoped run with exactly one induced failure (a monkeypatched adapter double raising NoDataForWindow('no data for that window') on one call, mirroring test_desk_topup_compute.py's own failing-pair test technique) whose 'Failed pairs' list showed that detail verbatim and legible, with the Top-up Runs table auto-refreshing (no manual reload) within about a second of the run reaching its terminal state.",
+    "This replay script is DELIBERATELY READ-ONLY (goto only, no click) so it never mutates whichever backend/.data store is live at replay time -- J-09 ships no new interactive control (OUT OF SCOPE: 'no new button or control ships this iteration'), and the one pre-existing control that could produce a NEW recorded run (the J-02 'Top-up' button) triggers a real ~100-symbol walk against the vendor adapter, which this era's own NOTES/anti-goals reserve for an explicit, separately-reported operator act -- never an automated regression lane (the iter-4/iter-5 write-triggering-golden lesson).",
+    "Step 2's expected text 'No top-up runs recorded yet.' is a genuine backend-data assertion (GET /research/desk/topup/runs's own honest-empty payload rendered verbatim), not decorative chrome -- it is the literal first clause of J-09's own Acceptance line in docs/goal.md. It is TRUE against the ambient store as of goal-desk-iter-11 (measured live: GET /research/desk/topup/compute returns null and no J-09-aware top-up has ever run against apps/backend/.data/ -- see docs/handoffs/goal-desk-iter-11-dev.md). If a future operator-run top-up ever lands a real record on the ambient store, this step will fail for an honest environmental reason (the empty state genuinely no longer holds) rather than a product regression -- update the expected text to the new latest run's own rendered stats at that time, the same class of environment-dependency J-08.json's own notes already document for its dated history rows.",
+    "Step 3 is a post-match liveness check (this era's iter-4/iter-5 lesson): a further /desk navigation AFTER the key text match, proving the page is still alive and rendering correctly, not merely that the match happened a moment before a crash."
+  ],
+  "steps": [
+    {"n": 1, "journey": "J-09", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Top-up Runs"}},
+    {"n": 2, "journey": "J-09", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "No top-up runs recorded yet."}},
+    {"n": 3, "journey": "J-09", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}}
+  ]
+}

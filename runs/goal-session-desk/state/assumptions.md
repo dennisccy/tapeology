@@ -289,3 +289,110 @@ picture only a re-seeded scoped root could produce, for code that provably did n
 **Reversible:** yes — a later capture on a scoped root holding exactly one recording per date would
 replace iter-9's frame outright; if the owner reads the acceptance as "all clauses, same iteration",
 J-08 returns to `partial` and one short capture run closes it.
+
+## iter-11 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s J-09 step 1 names a top-up run record field "the requested fetch
+window" without specifying its shape. The top-up walk's own `_fetch_window_now()` helper
+(`desk_topup_compute.py:91-101`) already returns a plain `(start, end)` ISO-date tuple describing
+"the SAME `[start, end]` ISO window every top-up pair requests" (the module's own docstring), but it
+is currently called once PER PAIR inside `_run_one_pair`, not once per run, so there is no existing
+single value to copy onto a run-level record without a new decision.
+
+**We chose:** Register the Data-Contract shape as `requested_window: {"start": str, "end": str}` — a
+direct, minimal packaging of `_fetch_window_now()`'s own existing tuple into named keys, since the
+window is deterministic to the calendar day and the module's own docstring already treats it as one
+per-run concept ("the fetch horizon — a SINGLE wide lookback shared by all four pinned timeframes").
+We deliberately left the exact CAPTURE POINT open to the developer's build-time judgment (call the
+helper once at run start purely for record-keeping, vs. read the value off the first pair's own
+call) — both readings satisfy J-09's own "zero change to what `run_topup` itself computes" rail
+(this iteration's OUT OF SCOPE), and goal.md's text does not distinguish between them.
+
+**Reversible:** yes — `requested_window`'s shape can be widened later (e.g., a per-pair variant, if
+a future run ever spans a UTC day boundary) without touching any other field or the store's
+key/checksum discipline, since no other value derives from it.
+
+## iter-11 — developer
+
+**Ambiguity (closes the goal-decomposer's entry above):** the capture point for `requested_window`
+was left open. Chose: call `_fetch_window_now()` exactly ONCE in the caller (`DeskTopupComputeManager
+.trigger`'s own body, before the worker thread starts; the CLI's `main()` mirrors this before calling
+`run_topup`), never inside the writer and never a second time inside `_run_one_pair` (which keeps its
+own existing per-pair call byte-unchanged — verified: `git diff` on `_run_one_pair`/`run_topup` is
+empty). This is the plan's own explicit trap #3 resolution, implemented as written.
+
+**Ambiguity:** `docs/goal.md`'s J-09 step 4 and the phase spec's DoD both say the new "Top-up Runs"
+section sits "beside Screen History." Screen History (`section aria-label="Screen history"`) lives
+ONLY inside `DeskPopulatedScreen` — the branch rendered when `latest !== null` (a screen has been
+computed at least once). A top-up run is a wholly independent operator act from a screen run (the
+backend enforces no ordering between them — `desk_coverage`/`desk_topup_compute` never read the
+screen store), and TC-12's precondition ("a registered universe snapshot and zero top-up runs
+recorded") names nothing about screen state. Placing the new section literally "beside" Screen
+History (i.e., nested inside `DeskPopulatedScreen`, per the plan's own "recommended placement... not
+a hard requirement" wording) would make it invisible whenever no screen has ever been run, even if
+top-up runs exist — an artificial coupling with no basis in what the data actually depends on, and
+one that would make TC-12's honest-empty screenshot only reachable after ALSO running a screen.
+
+**We chose:** Render the Top-up Runs section at the top level of `/desk`, as its own `<section
+aria-label="Top-up runs">` placed immediately after the screen-state conditional (i.e., after
+whichever of `DeskNotComputedPanel`/`DeskPopulatedScreen` is showing) and before `</main>` — visible
+in EVERY reachable page state once its own independent GET resolves, never gated on whether a screen
+exists. This still reads as "beside" the screen content in the page's top-to-bottom flow; it simply
+does not require `latest !== null` to render, unlike the plan's literal suggested position (which the
+plan's own text explicitly permits changing, with disclosure — this entry is that disclosure).
+
+**Reversible:** yes — the section is one self-contained `<section>` block (`TopupRunsSection`) fed by
+its own `topupRunsResult` state and its own `fetchDeskTopupRuns()` call; moving it inside
+`DeskPopulatedScreen` (and/or duplicating it into `DeskNotComputedPanel`) later is a pure JSX
+relocation with zero change to the component's own internals, the fetch, or any backend contract.
+
+**Ambiguity:** the DoD/plan text ("each run showing date + id, universe snapshot id, terminal state,
+attempted-of-total pairs and counts by outcome, and — for the latest run — every failed pair...") could
+be read as requiring a per-outcome breakdown (reused/fetched/failed counts) on EVERY historical run
+row, not only the latest. The backend Data Contract's own precise field list, however, gives the
+`runs` list's meta-only entries every field EXCEPT `outcomes` (mirrors the screen list's own
+meta-only convention) — so a real per-outcome count is structurally undonable for any row except
+`latest`, which alone carries the full `outcomes` array.
+
+**We chose:** Historical `runs` rows show only what their meta actually carries (date, id, universe
+snapshot id, terminal state, attempted-of-total); per-outcome counts, every failed pair's verbatim
+detail, and the unreached-pairs count are rendered ONLY for `latest` — reading "for the latest run"
+as scoping the whole cluster of per-pair-derived facts, not only the failed-pair clause. This also
+matches this iteration's own explicit OUT OF SCOPE line ("no new interactive control on the Top-up
+Runs section" — no click-through exists to fetch a historical run's full record on demand, unlike
+Screen History's later J-05 click-through), so there is no path to a historical row's per-outcome
+breakdown even if the UI wanted to show one.
+
+**Reversible:** yes — a future iteration could add a per-run `outcome_counts` field to the backend's
+full-record schema (a Path-irrelevant, non-fingerprint-affecting addition, since it is derived
+entirely from `outcomes`) and thread it onto the meta projection, without touching the store's
+checksum/append-only discipline or any already-recorded file.
+
+## iter-11 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-09 Acceptance requires "a **`[NEW]`-flagged demo-narrator
+walkthrough** covers the top-up-run disclosure end to end." The recorded walkthrough
+(`reports/phase-goal-desk-iter-11-demo.json`) has exactly one J-09 step, `new: true`, whose
+narration and point-out describe only the honest-empty panel, with
+`reports/demo/goal-desk-iter-11/step-02.png` showing zero run rows. The phase spec's own TC-16 reads
+the clause as "an empty run history, **then a populated one with a failed pair**"; the audit rated
+the shortfall IMPORTANT (T3) and explicitly handed the call to the evaluator; the closure auditor
+rated the same fact non-blocking because showcase artifacts are non-blocking *for the pipeline gate*.
+`docs/goal.md` does not define "end to end".
+
+**We chose:** Score J-09 `partial`, not `passing`, and CONTINUE. Reasons: (i) the pipeline's
+"showcase artifacts are non-blocking" rule governs whether the PIPELINE halts, not whether a
+journey's own goal.md acceptance is met — the evaluator scores against goal.md, and this session set
+that precedent at iter-7 and iter-9; (ii) the walkthrough's narration asserts "every top-up run is
+saved for good. Its result can never be lost" over a picture that shows nothing saved — an
+unevidenced claim in the one artifact the non-programmer owner actually watches, which is precisely
+what the clause guards; (iii) decisively, the correct evidence is reachable TODAY with zero code
+change — the exact fixture-scoped rig with three checkpoint runs existed inside THIS iteration hours
+earlier and its recipe is scripted (`apps/backend/scripts/goal-desk-iter9-scoped-backend.sh`), so the
+cost is one short filming run, the same shape as iter-10's successful capture-only iteration. Every
+other J-09 clause was verified by the evaluator directly, including a byte-identity spy over the real
+`run_topup` and an independent forced-failure walk.
+
+**Reversible:** yes — if the owner reads "end to end" as "the walkthrough introduces the feature"
+(which the single empty-state step does), J-09 closes immediately on the evidence already on disk;
+a one-line clarification in J-09's acceptance text settles it either way.

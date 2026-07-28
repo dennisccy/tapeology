@@ -191,3 +191,22 @@ every golden that asserts on "the screen for date X".
 **Applies to:** any iteration that computes/records a snapshot into a store a golden script replays
 against — check the target store for an existing record under the same key first, and if a collision
 is unavoidable, disclose it in the script's `notes` and in the results report before the replay runs.
+
+## iter-11 — 2026-07-28T15:40:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The scoped-rig discipline now has a THIRD lane that can silently opt out. iter-9 taught
+that a rig existing in the dev lane does not protect the browser-QA lane; this iteration the
+browser-QA lane got it right (a `cp -a` copy under `$TMPDIR`, three checkpoint runs, disclosed in
+its own "Test rigs used" section) and the **demo/showcase lane** then recorded against the restored
+AMBIENT backend, which genuinely has zero top-up runs — so the `[NEW]` walkthrough could only ever
+show the empty panel, leaving `docs/goal.md`'s "covers the disclosure end to end" clause unmet on an
+otherwise complete journey. A feature whose whole point is *state that accumulates* cannot be
+demonstrated on a store deliberately kept empty. Second, smaller lesson from the same iteration: the
+audit found two spec'd contracts (TC-9's `get_endpoint` byte-identity, TC-7's interrupted-run
+guarantee) that every lane had *asserted* — by citing the 17-tool count, or by a test that ran no
+top-up at all — and that nothing had ever *executed*.
+**Applies to:** any iteration whose acceptance names a demo-narrator walkthrough for a feature that
+is invisible until data accumulates — name the scoped rig (and the records it must already hold) in
+the SHOWCASE dispatch, not only the dev and browser-QA ones; and any DoD line of the form "X reaches
+Y" — send a real request through the real path rather than reading an allowlist constant.

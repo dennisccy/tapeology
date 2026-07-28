@@ -10,6 +10,7 @@ import type {
   DeskScreenListResult,
   DeskScreenSnapshot,
   DeskTopupComputeSnapshot,
+  DeskTopupRunsListResult,
   EdgeReportComputeSnapshot,
   EdgeReportPayload,
   LevelsResponse,
@@ -1107,5 +1108,33 @@ export async function cancelDeskTopupCompute(): Promise<{ ok: boolean; error?: s
     return { ok: false, error };
   } catch {
     return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// era-desk-iter-11 (J-09): GET /research/desk/topup/runs — the durable, append-only top-up run
+// log's meta-only list + the latest full record, served VERBATIM. Mirrors `fetchDeskScreen`'s
+// exact `{ok, data, error}` shape byte-for-byte. An honest-empty (`{runs: [], latest: null}`)
+// result is a valid `ok:true` outcome — the caller renders it as "No top-up runs recorded yet.",
+// never a failure; `data: null` is reserved for a genuine non-200 / unreachable backend.
+export async function fetchDeskTopupRuns(): Promise<{
+  ok: boolean;
+  data: DeskTopupRunsListResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/topup/runs`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskTopupRunsListResult };
+    }
+    let error = "The top-up run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
   }
 }

@@ -9,6 +9,7 @@ import {
   fetchDeskScreenByDate,
   fetchDeskScreenCompute,
   fetchDeskTopupCompute,
+  fetchDeskTopupRuns,
   triggerDeskScreenCompute,
   triggerDeskTopupCompute,
 } from "@/lib/api";
@@ -20,6 +21,10 @@ import type {
   DeskScreenSkip,
   DeskScreenSnapshot,
   DeskTopupComputeSnapshot,
+  DeskTopupOutcome,
+  DeskTopupRun,
+  DeskTopupRunMeta,
+  DeskTopupRunsListResult,
 } from "@/lib/types";
 import { Metric, Panel } from "@/components/Panel";
 import { fmt } from "@/lib/format";
@@ -57,6 +62,16 @@ import { fmt } from "@/lib/format";
 // already held in `screenResult` state (no refetch). Every ranked/skip row is also a `Link` to
 // `/structure?symbol=<sym>&asof=<displayed snapshot's as_of>` — the era's one sanctioned additive
 // edit to `/structure` (its own query-param prefill, see that page's own comment).
+//
+// era-desk-iter-11 (J-09): a 4th mount-time GET — `/research/desk/topup/runs` — renders a
+// read-only, non-interactive "Top-up Runs" panel (no click-through, no new control; the OUT OF
+// SCOPE text for this iteration is explicit: read-only disclosure only). PLACEMENT: rendered
+// independent of whether a screen has EVER been computed (unlike Screen History, which lives only
+// inside the populated-screen view) — a top-up run is a wholly separate operator act from a screen
+// run, and the honest-empty/populated states this journey requires (TC-12/TC-13) never presuppose
+// a screen exists. This is a deliberate placement choice logged in
+// `runs/goal-session-desk/state/assumptions.md` (iter-11 entry), not the plan's own literal
+// "immediately after Screen History" suggestion (which that same plan text marks as non-binding).
 
 const NUMERIC_CELL = "px-2 py-1.5 text-right font-mono text-xs text-slate-200 whitespace-nowrap";
 const HEADER_CELL = "px-2 py-1 text-right text-[11px] font-medium text-slate-500";
@@ -490,6 +505,160 @@ function DeskHistoryTable({
   );
 }
 
+// --- Top-up run history (era-desk-iter-11, J-09) — a durable, append-only record of every top-up
+// run's outcome, read verbatim from `GET /research/desk/topup/runs` and nothing recomputed. Two
+// tiers, mirroring the meta-only-list / full-latest split the backend itself serves (the SAME
+// split `DeskHistoryTable` above uses for screens): `TopupRunsTable` renders every recorded run's
+// summary (date + id, universe snapshot, terminal state, attempted-of-total — the ONLY fields the
+// meta-only `runs` list carries), and `LatestTopupRunDetail` renders the full per-pair detail
+// (per-outcome counts, every failed pair's detail verbatim, the honest unreached-pairs count) for
+// the latest run ONLY — the one entry the backend's `latest` field actually carries `outcomes` for.
+// Read-only, no click-through, no new control (this iteration's own OUT OF SCOPE text). -----------
+
+function topupOutcomeCounts(outcomes: DeskTopupOutcome[]): {
+  reused: number;
+  fetched: number;
+  failed: number;
+} {
+  return {
+    reused: outcomes.filter((o) => o.outcome === "reused").length,
+    fetched: outcomes.filter((o) => o.outcome === "fetched").length,
+    failed: outcomes.filter((o) => o.outcome === "failed").length,
+  };
+}
+
+function TopupRunRow({ meta }: { meta: DeskTopupRunMeta }) {
+  return (
+    <tr data-testid="desk-topup-run-row" className="border-b border-slate-800/60 last:border-b-0">
+      <td className={LABEL_CELL}>{meta.started_utc.slice(0, 10)}</td>
+      <td className={LABEL_CELL} data-testid="desk-topup-run-id">
+        {meta.id}
+      </td>
+      <td className={LABEL_CELL} data-testid="desk-topup-run-state">
+        {meta.state}
+      </td>
+      <td className={NUMERIC_CELL} data-testid="desk-topup-run-attempted">
+        {meta.pairs_attempted} / {meta.pairs_total}
+      </td>
+      <td className={LABEL_CELL} data-testid="desk-topup-run-universe">
+        {meta.universe_snapshot_id ?? "—"}
+      </td>
+    </tr>
+  );
+}
+
+function TopupRunsTable({ runs }: { runs: DeskTopupRunMeta[] }) {
+  if (runs.length === 0) {
+    return <EmptyState testid="desk-topup-runs-empty" title="No top-up runs recorded yet." />;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="desk-topup-runs-table" className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-slate-800">
+            <th className={HEADER_CELL_LEFT}>date</th>
+            <th className={HEADER_CELL_LEFT}>run</th>
+            <th className={HEADER_CELL_LEFT}>state</th>
+            <th className={HEADER_CELL}>attempted / total</th>
+            <th className={HEADER_CELL_LEFT}>universe snapshot</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((meta) => (
+            <TopupRunRow key={meta.id} meta={meta} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// The latest run's own full detail — attempted-of-total, per-outcome counts, every failed pair's
+// detail rendered VERBATIM and legible (never truncated — TC-13 requires it readable in one
+// screenshot), and the honest count of pairs the run never reached (`pairs_total -
+// pairs_attempted`, zero when the run reached every pair — never rendered as a false "0 not
+// reached" claim of completeness the run didn't make; it is simply omitted when zero).
+function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
+  const counts = topupOutcomeCounts(run.outcomes);
+  const unreached = run.pairs_total - run.pairs_attempted;
+  const failedOutcomes = run.outcomes.filter((o) => o.outcome === "failed");
+  return (
+    <div
+      data-testid="desk-topup-run-latest-detail"
+      className="mt-4 space-y-3 border-t border-slate-800 pt-4"
+    >
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        Latest run — {run.started_utc.slice(0, 10)} · {run.id}
+      </h3>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+        <span data-testid="desk-topup-run-latest-state">state: {run.state}</span>
+        <span data-testid="desk-topup-run-latest-attempted">
+          {run.pairs_attempted} of {run.pairs_total} pairs attempted
+        </span>
+        <span data-testid="desk-topup-run-latest-counts">
+          {counts.reused} reused · {counts.fetched} fetched · {counts.failed} failed
+        </span>
+        {unreached > 0 && (
+          <span data-testid="desk-topup-run-latest-unreached" className="text-amber-200/70">
+            {unreached} pair{unreached === 1 ? "" : "s"} not reached
+          </span>
+        )}
+      </div>
+      {failedOutcomes.length > 0 && (
+        <div data-testid="desk-topup-run-latest-failed">
+          <h4 className="mb-1 text-[11px] font-medium text-slate-500">
+            Failed pairs ({failedOutcomes.length})
+          </h4>
+          <ul className="space-y-1">
+            {failedOutcomes.map((outcome, index) => (
+              <li
+                key={`${outcome.symbol}-${outcome.timeframe}-${index}`}
+                data-testid="desk-topup-run-latest-failed-row"
+                className="text-xs text-slate-400"
+              >
+                <span className="font-mono text-slate-300">
+                  {outcome.symbol} {outcome.timeframe}
+                </span>{" "}
+                —{" "}
+                <span data-testid="desk-topup-run-latest-failed-detail">
+                  {outcome.detail ?? "(no detail recorded)"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The section's own Loading/Unavailable/Populated states — independent of `screenResult` (a
+// top-up run's history is a separate concern from a screen's), fed by its own mount-time GET (see
+// `DeskPage` below). Mirrors the top-level ternary's exact three-state shape.
+function TopupRunsSection({
+  result,
+}: {
+  result: { ok: boolean; data: DeskTopupRunsListResult | null; error?: string } | null;
+}) {
+  if (result === null) {
+    return <LoadingPanel testid="desk-topup-runs-loading" />;
+  }
+  if (!result.ok || result.data === null) {
+    return (
+      <UnavailablePanel
+        testid="desk-topup-runs-unavailable"
+        message={result.error ?? "The top-up run history could not be loaded."}
+      />
+    );
+  }
+  return (
+    <div>
+      <TopupRunsTable runs={result.data.runs} />
+      {result.data.latest !== null && <LatestTopupRunDetail run={result.data.latest} />}
+    </div>
+  );
+}
+
 // --- Provenance line — universe snapshot id + date, as_of, config_fingerprint, and the pinned
 // bar-store signature. --------------------------------------------------------------------------
 //
@@ -867,6 +1036,15 @@ export default function DeskPage() {
   const [topupCancelRequested, setTopupCancelRequested] = useState(false);
   const [topupCancelError, setTopupCancelError] = useState<string | null>(null);
 
+  // era-desk-iter-11 (J-09): the durable top-up run log — independent of `screenResult`/
+  // `topupCompute` above (the latter is the CURRENT/last in-flight job's process-scoped progress;
+  // this is every COMPLETED run's persisted terminal outcome).
+  const [topupRunsResult, setTopupRunsResult] = useState<{
+    ok: boolean;
+    data: DeskTopupRunsListResult | null;
+    error?: string;
+  } | null>(null);
+
   // era-desk-iter-6 (J-05): the screen-history click-through. `viewingSnapshot` is `null` while
   // showing the top-level `latest` snapshot already held in `screenResult` (no refetch needed to
   // return to it — TC-2); once a history row is selected, it holds THAT date's own full snapshot,
@@ -876,9 +1054,10 @@ export default function DeskPage() {
   const [viewingSnapshot, setViewingSnapshot] = useState<DeskScreenSnapshot | null>(null);
   const [historyFetchError, setHistoryFetchError] = useState<string | null>(null);
 
-  // Mount: exactly three GETs, zero POSTs (TC-19) — the screen list/latest, and BOTH compute
-  // managers' current/last snapshot (seeds a page load mid-job or post-terminal without a
-  // spurious extra click — the /structure edge-report mount-seeding precedent).
+  // Mount: four GETs, zero POSTs (TC-19/TC-8) — the screen list/latest, BOTH compute managers'
+  // current/last snapshot (seeds a page load mid-job or post-terminal without a spurious extra
+  // click — the /structure edge-report mount-seeding precedent), and (era-desk-iter-11, J-09) the
+  // top-up run log's list + latest full record.
   useEffect(() => {
     let alive = true;
     fetchDeskScreen().then((result) => {
@@ -889,6 +1068,9 @@ export default function DeskPage() {
     });
     fetchDeskTopupCompute().then((result) => {
       if (alive && result.ok) setTopupCompute(result.data);
+    });
+    fetchDeskTopupRuns().then((result) => {
+      if (alive) setTopupRunsResult(result);
     });
     return () => {
       alive = false;
@@ -920,12 +1102,23 @@ export default function DeskPage() {
   }, [screenCompute]);
 
   // Poll the top-up job while running — independent of the screen compute poll above (the two
-  // compute managers are separate processes-scoped jobs).
+  // compute managers are separate processes-scoped jobs). era-desk-iter-11 (J-09): the instant a
+  // tick observes a terminal state, the run log is re-fetched exactly once — the SAME "on
+  // terminal, refresh the durable list" precedent the screen compute poll above already
+  // establishes — so the just-finished run's own record appears in Top-up Runs without a manual
+  // page reload. The SAME "keep the last known state, never fabricate one" discipline applies: a
+  // failed refetch here leaves whatever was already displayed untouched.
   useEffect(() => {
     if (topupCompute?.state !== "running") return;
     const handle = setInterval(async () => {
       const next = await fetchDeskTopupCompute();
       if (next.ok) setTopupCompute(next.data);
+      if (next.ok && next.data && next.data.state !== "running") {
+        const refreshed = await fetchDeskTopupRuns();
+        setTopupRunsResult((previous) =>
+          refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
+        );
+      }
     }, 700);
     return () => clearInterval(handle);
   }, [topupCompute]);
@@ -1074,6 +1267,17 @@ export default function DeskPage() {
             topupControlProps={topupControlProps}
           />
         )}
+
+        {/* era-desk-iter-11 (J-09): rendered independent of the screen conditional above — a
+            top-up run's durable history exists (or honestly doesn't) regardless of whether a
+            screen has ever been computed; see this file's own top-of-file comment for why this
+            placement deliberately differs from the plan's "immediately after Screen History"
+            suggestion. */}
+        <section aria-label="Top-up runs" className="mt-6">
+          <Panel title="Top-up Runs">
+            <TopupRunsSection result={topupRunsResult} />
+          </Panel>
+        </section>
       </main>
     </div>
   );

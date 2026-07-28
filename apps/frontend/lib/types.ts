@@ -914,3 +914,37 @@ export interface DeskTopupComputeSnapshot {
   error: string | null;
   progress: DeskTopupComputeProgress;
 }
+
+// era-desk-iter-11 (J-09) -- the durable, append-only top-up run log, served by
+// `GET /research/desk/topup/runs`. Distinct from `DeskTopupComputeSnapshot` above: the compute
+// snapshot is the CURRENT/last in-flight job's process-scoped progress (lost on restart, replaced
+// the instant a newer run starts); this is every COMPLETED run's terminal outcome, persisted to
+// disk once and never rewritten. `requested_window`/`pairs_total`/`pairs_attempted` are the run's
+// own recorded provenance -- never recomputed client-side. `outcomes` reuses `DeskTopupOutcome`
+// verbatim (byte-identical shape to the live compute progress's own per-pair entries).
+export interface DeskTopupRunMeta {
+  id: string;
+  universe_snapshot_id: string | null;
+  requested_window: { start: string; end: string };
+  config_fingerprint: string;
+  started_utc: string;
+  finished_utc: string;
+  state: "done" | "cancelled" | "failed";
+  pairs_total: number;
+  pairs_attempted: number;
+}
+
+// The full persisted record -- `DeskTopupRunMeta` plus the per-pair `outcomes` array. Only
+// `latest` (below) ever carries this full shape; the bulk `runs` list is meta-only (mirrors
+// `DeskScreenSnapshot`/`DeskScreenMeta`'s identical split).
+export interface DeskTopupRun extends DeskTopupRunMeta {
+  outcomes: DeskTopupOutcome[];
+}
+
+// `GET /research/desk/topup/runs` -- honest-empty-or-populated, HTTP 200 always, never 404.
+// `latest === null` iff no top-up run has EVER reached a terminal state -- the page's ONE
+// discriminator for the "No top-up runs recorded yet." empty state.
+export interface DeskTopupRunsListResult {
+  runs: DeskTopupRunMeta[];
+  latest: DeskTopupRun | null;
+}

@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-11",
+  "base_url": "http://localhost:3301",
+  "iteration": 11,
+  "default_timeout_ms": 15000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk page scans about 100 well-known stocks. It ranks each one by how close it sits to a key price level.",
+      "point_out": "Today's ranked list, with a fresh price reading for every row.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "d before as-of" }
+    },
+    {
+      "n": 2,
+      "title": "See the new record of every top-up run",
+      "narration": "Refreshing the Desk's price data is called a \"top-up.\" From now on, every top-up run is saved for good. Its result can never be lost.",
+      "point_out": "A new \"Top-up Runs\" panel sits at the bottom of the page. It plainly says none have been saved yet — the honest, correct starting point, not a mistake.",
+      "journey": "J-09",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"desk-topup-runs-empty\"]" }
+      },
+      "expect": { "text": "No top-up runs recorded yet." }
+    },
+    {
+      "n": 3,
+      "title": "Look back at a past scan",
+      "narration": "Every past scan is saved. Opening one shows it exactly as it was recorded, never mixed with today's numbers.",
+      "point_out": "A note confirming this is an older, saved scan, not today's.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"desk-history-row\"][data-screen-date=\"2026-06-22\"]" }
+      },
+      "expect": { "text": "Viewing the recorded screen for 2026-06-22 — not the latest." },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 4,
+      "title": "Jump from a ranked stock into its chart",
+      "narration": "Clicking any ranked stock opens that stock's own chart, already loaded for the same date.",
+      "point_out": "The Structure page opens with AAPL's own chart and price-level table, both loaded for that date.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"desk-screen-row\"][data-symbol=\"AAPL\"] [data-testid=\"desk-row-drill-in\"]" }
+      },
+      "expect": { "target": { "testid": "tradable-map-table" } },
+      "timeout_ms": 20000
+    },
+    {
+      "n": 5,
+      "title": "Move to the live tape reader",
+      "narration": "The Desk sits alongside two other pages, all reachable from the same menu at the top.",
+      "point_out": "The Cockpit page opens, ready to watch a stock's price action.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "link", "name": "Cockpit" } },
+      "expect": { "text": "Tape State" }
+    },
+    {
+      "n": 6,
+      "title": "Choose the simulated tape",
+      "narration": "You can try the reader on a made-up stock first. No live market feed is needed.",
+      "point_out": "The Simulated option is now selected.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Simulated" } }
+    },
+    {
+      "n": 7,
+      "title": "Name the simulated ticker",
+      "narration": "Typing a name sets up which made-up stock the tape will follow.",
+      "point_out": "The ticker field now holds the name just typed.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "SIM-BUYER" }
+    },
+    {
+      "n": 8,
+      "title": "Watch the tape settle into a read",
+      "narration": "Price bars move in real time. The tape settles into a plain-English read, like \"Buyer Control.\"",
+      "point_out": "The live read label above the moving price bars.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Buyer Control" }
+    },
+    {
+      "n": 9,
+      "title": "Open the price-level map fresh",
+      "narration": "The Structure page maps a stock's key support and resistance levels. This time, the symbol and date are typed in by hand.",
+      "point_out": "An empty form, waiting for a stock symbol and a date.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/structure" }
+    },
+    {
+      "n": 10,
+      "title": "Choose a stock to map",
+      "narration": "Typing in a stock loads its own price levels.",
+      "point_out": "The Symbol field now reads AAPL.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "Structure symbol" }, "text": "AAPL" }
+    },
+    {
+      "n": 11,
+      "title": "Choose the date to look at",
+      "narration": "Typing in the exact date and time to look at.",
+      "point_out": "The As-of field now reads the chosen date and time.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": { "css": "[data-testid=\"structure-as-of-input\"]" },
+        "text": "2026-06-22T21:00:00Z"
+      }
+    },
+    {
+      "n": 12,
+      "title": "Load its key price levels",
+      "narration": "Loading draws the stock's real price history with its key support and resistance levels marked on top.",
+      "point_out": "The chart and the level table both show a level near 300.11 — a well-known price wall for this stock.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": { "css": "[data-testid=\"structure-load-button\"]" }
+      },
+      "expect": { "text": "300.11" },
+      "timeout_ms": 20000
+    }
+  ]
+}

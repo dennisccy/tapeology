@@ -564,6 +564,69 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     `screen-2026-07-25-e184a7dc2f86` ranks NFLX #2 on `distance_bps 0.0` with no basis field in any
     row, so an 11-day spread of reading ages is invisible on one rank scale.)*
 
+- **J-09: Every top-up run leaves an append-only record of what it attempted**
+  - Steps:
+    1. Persist the top-up's OWN per-pair outcomes — the list `run_topup` already returns
+       (`desk_topup_compute.py:158`; entries `{"symbol", "timeframe", "outcome":
+       "reused"|"fetched"|"failed", "detail"}` built at :184, with the vendor/HTTP detail preserved
+       verbatim at :147) — as ONE frozen, checksummed, append-only run record per run, written once at
+       the run's terminal state by a SINGLE shared writer that BOTH callers use (the manager worker's
+       resolve path, :262/:282, and the CLI's `main`, :329): never two write paths, never a second
+       outcome shape, zero change to what `run_topup` itself computes. Recorded with it: run id,
+       universe snapshot id, the requested fetch window, `config_fingerprint`, started/finished UTC,
+       terminal state (`done`/`cancelled`/`failed`), `pairs_total` and `pairs_attempted` — so
+       "attempted and failed" and "never attempted" are distinct on the record, never conflated.
+    2. Own it exactly once: a new desk module (name at build discretion, e.g.
+       `app/research/desk_topup_log.py`) as the ONLY owner and `GET /research/desk/topup/runs` as the
+       ONLY serving endpoint (lightweight run-meta list + the latest full record; honest-empty
+       `{"runs": [], "latest": null}`, HTTP 200, before any run) — registered as a NEW row in the
+       blueprint's Data Contract BEFORE the code lands, storage dir a bare env-var-or-sibling default
+       like the screen store's (deliberately NOT a new `Config` field — the iter-3 precedent). The
+       record describes ATTEMPTS only: bar presence and freshness keep their single owner
+       (`desk_coverage` over `bar_index`) and no second coverage path is created anywhere.
+    3. Keep every era rail: page-load GETs never trigger a top-up (the 5C lesson); a record is never
+       rewritten, backfilled, or recomputed — a second run appends a new one; a run whose process ends
+       before its terminal write records NOTHING and the ledger never invents an entry for it (its
+       honest limit, asserted by a test); and NO MCP tool is added — J-06's exactly-17-tool contract
+       stays green and `get_endpoint`'s `/research/` allowlist already reaches the new path.
+    4. Surface it on `/desk`: a read-only "top-up runs" section beside the existing screen-history
+       table (same pattern, no recompute), each run showing date + id, universe snapshot id, terminal
+       state, attempted-of-total pairs and counts by outcome, and — for the latest run — every
+       `failed` pair with its recorded detail rendered verbatim plus the honest count of pairs the run
+       never reached; an honest empty state when no run is recorded; copy = descriptive measurement
+       only (no advice, imperative, urgency, or prediction language).
+    5. Test fixture-scoped: recorded outcomes byte-identical to `run_topup`'s return for the same
+       walk; a cancelled run recorded as `cancelled` with `pairs_attempted < pairs_total`; a failed
+       pair's detail stored verbatim; a second run appending without touching the first file; the GET
+       honest-empty before any run and triggering nothing.
+  - Acceptance: on the fixture-scoped rig `GET /research/desk/topup/runs` serves the honest empty
+    payload before any run and, after a fixture-scoped top-up, one record whose per-pair
+    `outcome`/`detail` values are byte-identical to what `run_topup` returned for that walk
+    (**single source of truth**: the run record is registered in the Data Contract with the new desk
+    module as its only owner and `GET /research/desk/topup/runs` as its only serving endpoint, it
+    records attempts only, and coverage/freshness still comes solely from `desk_coverage` over
+    `bar_index` — this SSOT criterion stands in place of a PnL-ledger append, which this era's
+    Non-Goals forbid); a cancelled run records `cancelled` with `pairs_attempted < pairs_total`, and a
+    run interrupted before its terminal write leaves the ledger honestly empty rather than a
+    fabricated entry; a second run appends a new record while every previously recorded file stays
+    byte-identical on disk (checksums unchanged); in a real browser after the T-9 clean rebuild,
+    `/desk` shows the honest no-run-recorded state in one screenshot and, after a fixture-scoped run,
+    the top-up-runs section with attempted-of-total, per-outcome counts and at least one `failed`
+    pair's recorded detail legible in another (T-10: no screenshot ⇒ `unknown`, never `passing`); a
+    **`[NEW]`-flagged demo-narrator walkthrough** covers the top-up-run disclosure end to end; and the
+    full backend suite is green with `Config().config_fingerprint()` still `08e471b10130e1e2`, zero
+    new `Config` fields, the `default` profile and `v1` byte-identical (engine equivalence green), the
+    MCP surface still exactly 17 tools, zero diff to
+    `tradability.py`/`levels.py`/`bars.py`/`StructureChart.tsx`, and `tests/test_copy_discipline.py`
+    green unmodified. *(Keyless core; browser-verifiable. Why: measured live 2026-07-28 —
+    `GET /research/desk/topup/compute` returns `null`, so the real ~100-symbol run that populated the
+    store left no trace anywhere; the frozen `BarStore` holds series for 65 symbols and 38 of the 101
+    members of `universe-2026-07-25-49b33fa31680` (the alphabetical tail `MA`…`XOM`) hold none —
+    exactly the 38 `skipped: no bars` rows of `screen-2026-07-27-936543601e75` (63 ranked / 38
+    skipped) — while 5 further members (AXP, BAC, DIS, HD, LMT) rank with `1h` dark beside a `4h`
+    series the era-5 contract resamples from that same `1h` fetch, so whether a pair was attempted,
+    refused, or never reached is unknowable today.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals
