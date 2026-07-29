@@ -869,6 +869,87 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     while their two sibling desk GETs serve them — today `integrity_errors` is empty everywhere, so this
     closes the channel before it is ever needed, never after.)*
 
+- **J-13: Every ranked briefing row states the price its wall sits at and the close it was measured from**
+  - Steps:
+    1. Record ONE desk-owned field on every NEW ranked screen row: `reference_close` — the daily close
+       `_resolve_reference_close_and_history` (`desk_screen.py:250`) ALREADY returns and `compute_screen`
+       already binds as `close` (`desk_screen.py:370`) before handing it to `_select_best_band` (`:373`)
+       and `_distance_bps` (`:379`). It is copied verbatim out of that same single walk's own return —
+       no second store read, no new accessor, no new arithmetic, no re-derivation of WHICH bar the basis
+       is (that stays `compute_tradability`'s exclusive decision): zero diff to
+       `bars.py`/`tradability.py`/`levels.py`/`bar_index.py` (no new field on any frozen return shape),
+       zero new `Config` field, no new index, no new cache. Skip rows carry nothing (the J-08/J-11 shape).
+    2. Register `reference_close` in the blueprint's Data Contract "Screen snapshots, rank rows, skip
+       rows" row BEFORE the code lands — one owner (`desk_screen.py`), one serving endpoint
+       (`GET /research/desk/screen`). The snapshot key (screen date, as_of, universe snapshot id,
+       `config_fingerprint`, bar-store signature) is unchanged, and the rank key — band class A>B>C, then
+       distance asc, then band score desc, then symbol asc — is UNCHANGED: this journey DISCLOSES, it
+       never ranks, filters, gates, weights, or scores. No threshold, no proximity/quality number, no
+       "price is inside the band" flag computed anywhere (this era's Non-Goals forbid new statistics and
+       gates outright), and the copy never advises, predicts, or implies action.
+    3. Keep the append-only rail: never backfill, rewrite, or recompute an already-recorded snapshot;
+       `GET /research/desk/screen` serves legacy rows exactly as recorded, and `/desk` renders their
+       absent close as an honest `"close not recorded in this snapshot"` — the established J-08/J-11
+       pattern (`apps/frontend/app/desk/page.tsx:236/318`) — never a value computed at read time, and in
+       particular NEVER re-derived from `distance_bps` and a band edge, which is precisely the
+       client-side recomputation the single-source-of-truth rail forbids.
+    4. Surface both prices on `/desk`: a descriptive `band` column rendering the row's OWN
+       already-recorded `price_low`–`price_high` (recorded on every ranked row of every snapshot ever
+       written and already typed at `lib/types.ts:801` — nothing new to record, only rendered) with the
+       row's `reference_close` beside it (e.g. `band 488.50–490.85 · close 490.85`), following the same
+       rounded-display split the distance/score/basis/history cells already use, with full precision in
+       the row anchor's existing consolidated honesty tooltip (the iter-7 pattern — never a per-cell
+       `title` under the stretched drill-in anchor). Copy = descriptive measurement only, and
+       `tests/test_copy_discipline.py` stays green unmodified.
+    5. Test fixture-scoped: a golden screen asserting the exact `reference_close` per ranked row —
+       including one row whose close lies INSIDE its own recorded band (`distance_bps` 0.0) and one whose
+       close lies outside it — and byte-identical row content on a re-run under identical pins; a guard
+       test that the row builder issues NO additional `BarStore` read beyond the one
+       `merged_bars(symbol, "1d")` walk it already makes (assert the call count, the J-11 precedent) and
+       that the frontend derives no price of its own (no arithmetic on `distance_bps`/`price_low`/
+       `price_high` anywhere in the page); the MCP `desk_screen` tool stays a byte-identical GET proxy
+       (J-06's exactly-17-tool contract unchanged).
+  - Acceptance: on the fixture-scoped rig a NEW screen run — for a screen date not already recorded under
+    the same five pins, so the store's identical-pin refusal is respected rather than worked around —
+    records `reference_close` on every ranked row, and each row's value is byte-identical to the close of
+    the `1d` bar dated at that row's own `basis_as_of` in
+    `GET /research/candles?symbol=<sym>&timeframe=1d` (the same merged, price-less-row-excluded read)
+    (**single source of truth**: the desk copies the canonical owner's own close out of the walk it
+    already makes, and the new value is registered in the Data Contract with `desk_screen.py` as its only
+    owner and `GET /research/desk/screen` as its only serving endpoint — this SSOT criterion stands in
+    place of a PnL-ledger append, which this era's Non-Goals forbid); the recorded rank order is
+    byte-identical to what the same pins produced before this change (disclosure only — a golden
+    comparison proves the rank key did not move); a re-run under identical pins reproduces byte-identical
+    rows and a same-pins re-run still returns the honest already-recorded response; every previously
+    recorded screen snapshot is proven byte-identical on disk (checksums unchanged, nothing backfilled)
+    and `/desk` renders their rows with their OWN recorded band range plus the honest
+    `"close not recorded in this snapshot"` state; in a real browser after the T-9 clean rebuild, `/desk`
+    shows the `band` column with at least one ranked row whose close lies inside its recorded band range
+    and one whose close lies outside it, both legible in the SAME screenshot (T-10: no screenshot ⇒
+    `unknown`, never `passing`); a **`[NEW]`-flagged demo-narrator walkthrough** covers the briefing's
+    price disclosure end to end; and the full backend suite is green with
+    `Config().config_fingerprint()` still `08e471b10130e1e2`, zero new `Config` fields, the `default`
+    profile and `v1` byte-identical (engine equivalence green), the MCP surface still exactly 17 tools,
+    zero diff to `tradability.py`/`levels.py`/`bars.py`/`bar_index.py`/`StructureChart.tsx`, and
+    `tests/test_copy_discipline.py` green unmodified. *(Keyless core; browser-verifiable. Why: measured
+    2026-07-29 from the running product's own artifacts — the string `price` does not occur ONCE in the
+    1,779-line `apps/frontend/app/desk/page.tsx`. The ranked table's nine columns are symbol, side,
+    class, distance, score, coverage, tick evidence, basis, history, and the row's composite tooltip
+    carries distance/score/basis/history/coverage only, so `price_low`/`price_high` — recorded on every
+    ranked row of all six snapshots on disk and typed at `lib/types.ts:801` — are rendered NOWHERE, and
+    the reference close is not even recorded: `compute_screen` binds it at `desk_screen.py:370`, feeds it
+    to the band selection and the distance, and drops it. In `screen-2026-07-29-ce0d82b8e9bf` (63 ranked
+    / 38 skipped) those closes span 21.92 to 1,185.87 and the recorded band widths span 18.1 to 100.0
+    bps, none of it on the page. The nine top-ranked rows every one read `0.00 bps`: for each, the close
+    sits exactly on the band's upper edge, INSIDE the recorded band (BRK-B support, band 488.50–490.85,
+    close 490.85; NFLX 73.45–73.83, close 73.83; HONA 195.16–195.87, close 195.87), while #10 LIN reads
+    `0.20 bps` with close 506.32 just BELOW a 506.33–509.61 resistance band and #19 AAPL reads `1.50 bps`
+    with close 333.02 below a 333.07–334.99 band — "price is in the wall" and "price is short of the
+    wall" print as the same small bps number today. The close is recoverable from a recorded row ONLY by
+    inverting `distance_bps` against a band edge under the row's own `side` (verified exact to 1.1e-13 on
+    all 63 rows), i.e. only by the client-side recomputation the Data Contract forbids — which is why it
+    must be recorded at its owner, never derived on the page.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

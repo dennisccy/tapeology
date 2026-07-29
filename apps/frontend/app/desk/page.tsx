@@ -104,6 +104,14 @@ import { fmt } from "@/lib/format";
 // `integrity_errors` carries an entry — the Universe ledger has no existing frontend section to
 // extend (never fetched/rendered on this page today, unlike the plan's premise; see the dev
 // handoff's Known Issues).
+//
+// goal-desk-iter-17 (J-13): a new `band` column on the ranked-rows table (`DeskRow`/
+// `DeskRowsTable`), plus one more line on the row's composite drill-in tooltip — the row's own
+// `reference_close` (the exact daily close its band selection and `distance_bps` were measured
+// against) rendered beside the row's already-recorded `price_low`–`price_high` band range, so
+// "the price is inside the wall" is a fact visible on screen instead of arithmetic recovered by
+// inverting `distance_bps` against a band edge. Read-only render, zero new endpoint, zero new
+// control — `reference_close` rides the already-fetched `GET /research/desk/screen` response.
 
 const NUMERIC_CELL = "px-2 py-1.5 text-right font-mono text-xs text-slate-200 whitespace-nowrap";
 const HEADER_CELL = "px-2 py-1 text-right text-[11px] font-medium text-slate-500";
@@ -245,6 +253,10 @@ function hasNoCoverageAtAll(coverage: Record<string, { has_bars: boolean }>): bo
 // `row.history_sessions` plus `row.history_start` untruncated (the visible "history" cell below
 // shows only the date portion, the SAME rounded-display/full-precision-on-hover split as basis) --
 // a legacy row (recorded before this iteration) has both keys absent, `== null` catches both.
+// era-desk-iter-17 (J-13): the SAME tooltip also carries the row's full-precision `reference_close`
+// beside its own `price_low`/`price_high` band range (the visible "band" cell below shows the
+// rounded values, the SAME split as distance/score/basis/history) -- a legacy row (recorded before
+// this iteration) has the key absent, `== null` catches both `undefined` and `null`.
 function deskRowDrillInTitle(row: DeskScreenRow): string {
   const coverageLines = Object.entries(row.coverage)
     .map(([timeframe, tf]) => `${timeframe} window last requested: ${tf.latest_window_end_utc ?? "never"}`)
@@ -257,7 +269,15 @@ function deskRowDrillInTitle(row: DeskScreenRow): string {
     row.history_sessions == null || row.history_start == null
       ? "history not recorded in this snapshot"
       : `history ${row.history_sessions} sessions from ${row.history_start}`;
-  return `distance ${row.distance_bps} bps · score ${row.band_score} · ${basisLine} · ${historyLine}${
+  // The band RANGE is recorded on every ranked row of every snapshot ever written (including every
+  // pre-iter-17 one), so it renders unconditionally -- only the CLOSE segment falls back when a
+  // legacy row has no `reference_close` key (goal.md J-13: "/desk renders their rows with their OWN
+  // recorded band range plus the honest 'close not recorded in this snapshot' state").
+  const bandLine =
+    row.reference_close == null
+      ? `band ${row.price_low}–${row.price_high} · close not recorded in this snapshot`
+      : `band ${row.price_low}–${row.price_high} · close ${row.reference_close}`;
+  return `distance ${row.distance_bps} bps · score ${row.band_score} · ${basisLine} · ${historyLine} · ${bandLine}${
     coverageLines ? ` · ${coverageLines}` : ""
   }`;
 }
@@ -276,8 +296,8 @@ function deskSkipDrillInTitle(skip: DeskScreenSkip): string {
 // DISPLAYED to two decimals (a `0.33523150389608725 bps` cell defeated the scanability the
 // briefing exists for — audit F3); the full-precision value is not lost — it is reachable via the
 // row's own drill-in anchor's composite `title` (`deskRowDrillInTitle` above, audit F2 fix), never
-// a per-cell `title` (iter-7 audit F1: this comment used to claim the opposite). The basis and
-// history columns follow the SAME split: a rounded, date-only display with the full-precision
+// a per-cell `title` (iter-7 audit F1: this comment used to claim the opposite). The basis,
+// history, and band columns follow the SAME split: a rounded display with the full-precision
 // value reachable only via that same composite tooltip. The band-class chip carries the "nearest
 // same-class band" caption
 // (assumptions.md iter-4 entry 1 — `_select_best_band` itself stays byte-unchanged; this copy
@@ -350,6 +370,21 @@ function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
           ? "history not recorded in this snapshot"
           : `history ${row.history_sessions} sessions · from ${row.history_start.slice(0, 10)}`}
       </td>
+      {/* era-desk-iter-17 (J-13): the exact price the row's band was measured from, beside its own
+          already-recorded price_low-price_high band range -- "the price is inside the wall"
+          becomes a legible fact instead of arithmetic recovered by inverting distance_bps against
+          a band edge (full precision -- the untruncated reference_close/price_low/price_high --
+          lives in the row anchor's own composite title above, NEVER a per-cell title here, the
+          same F2 lesson the basis/history columns already apply). `== null` catches a legacy
+          row's ENTIRELY ABSENT key (`undefined`), not just an explicit `null` -- and only the
+          CLOSE segment falls back: `price_low`/`price_high` are recorded on every ranked row of
+          every snapshot ever written, so the range itself always renders (goal-desk-iter-17 audit
+          F1). */}
+      <td className={LABEL_CELL} data-testid="desk-row-band">
+        {row.reference_close == null
+          ? `band ${fmt(row.price_low)}–${fmt(row.price_high)} · close not recorded in this snapshot`
+          : `band ${fmt(row.price_low)}–${fmt(row.price_high)} · close ${fmt(row.reference_close)}`}
+      </td>
     </tr>
   );
 }
@@ -379,6 +414,7 @@ function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) 
             <th className={HEADER_CELL_LEFT}>tick evidence</th>
             <th className={HEADER_CELL_LEFT}>basis</th>
             <th className={HEADER_CELL_LEFT}>history</th>
+            <th className={HEADER_CELL_LEFT}>band</th>
           </tr>
         </thead>
         <tbody>

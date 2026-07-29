@@ -918,3 +918,69 @@ this run are the same single image reused, so they prove the checks ran, not wha
 length limit, and the Desk page is now eight stacked sections and long. One sentence for the owner:
 every saved screen can now be opened by name, damaged files are named on screen instead of being
 dropped in silence, and this run touched none of your own data — please confirm the finish.
+
+## Iteration 17 — goal-desk-iter-17
+
+**Date:** 2026-07-29T09:28:21+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-13 "Every ranked briefing row states the price its wall sits at and the close it
+  was measured from" (new this run — the goal-proposer added it to `docs/goal.md` after iteration 16
+  closed the era, so the era reopened for one more disclosure journey, its sixth; it is built and
+  proven in a single run)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01 through J-12 all re-verified passing this run by saved-script replay — but only
+  after the independent audit noticed that two of them (J-11, J-12) had reached NO check at all,
+  because the plan file wrote the "must still work" list over two lines and the reading tool only
+  reads the first line; the audit replayed both, 2 of 2 passed. J-06 "17 machine-readable tools"
+  re-confirmed by my own count in the contract test plus my own full-suite run
+- Anti-goal violations: none new, none open. All three older items stay resolved and were re-checked
+  by me directly. For the second run in a row there is NO process deviation to carry: nothing was
+  written into the owner's own data folder — the only file touched there is a rebuildable cache
+  refreshed by ordinary page loads
+
+**Reasoning:** I did not take any report's word for the thing this run existed to produce. I opened
+the picture myself: one row, BRK-B, reads "band 488.50–490.85 · close 490.85" — the close sitting
+inside its own price range — and four lines below it LIN reads "band 506.33–509.61 · close 506.32",
+the close sitting just under its range; both in one image, taken on a throw-away rig whose web
+address the checker confirmed before treating the page as evidence. Then I proved the numbers
+instead of believing them: I read that saved screen straight off disk (its own checksum recomputes)
+and re-computed the closing price for all 63 ranked rows from the stored daily price files, using
+the same reader the wall computation uses — ZERO mismatches, 9 rows inside their range and 54
+outside. I checked nothing was quietly reordered: the same five pins produced the identical ranked
+order, 63 of 63, and the ONLY new value on any row is the close itself. I checked the honesty of the
+older records: all six saved screens on disk still carry no close on any row — absent, not empty —
+their checksums all recompute, and the page shows that state in plain words. I checked nothing was
+rewritten: not one of the 369 stored price files was modified and no screen file was written in the
+owner's folder. I re-ran the work: the whole back-end suite (exit 0, no failures, 8 skipped), the
+settings fingerprint (`08e471b10130e1e2`), the tool count (exactly 17), and a file-by-file check
+that every frozen file and the whole engine take a zero change. Coherence is COHERENCE-PASS. Two
+real defects were found by the independent audit rather than by the build, and both were fixed in
+place: the page was dropping the price RANGE on old rows — which is every row an operator can open
+today, so the new feature would have shown nothing on all real data — and the two-line plan list
+that hid two journeys from every check. One thing I judged rather than merely read, written in the
+assumptions ledger: the guided film for this feature exists and is flagged as new, but it was filmed
+against the old data before the fix, so it shows no price anywhere; I treated that as a defect in
+the recording, not in the product, because the behaviour is proven three other ways.
+
+**Next-step recommendation:** Halt — the goal is achieved. Six follow-ups for the owner, none a
+defect in the product and none blocking: (1) re-take the walkthrough film against a throw-away copy
+of the data with a fresh screen computed in it — and never start a second copy of the web front end
+from the same source folder while the first is running, because the two share one build folder and
+the running page silently starts talking to the wrong back end (this happened this run, was caught
+within seconds, and was cleaned up before any evidence was recorded); (2) have the plan-reading tool
+taught to read a list that wraps onto a second line, and to check that every journey named in the
+plan actually appears in the results — a re-wrapped line will otherwise hide journeys again; (3) the
+finishing check reports a failure that is not real: it searches for the phrase "backend-only" and
+finds the sentence "Nothing is backend-only in this iteration"; (4) the quality-check step wrote
+"passed" for a browser item whose cited picture does not show it, and quietly marked the film item
+"not applicable" — the audit caught both, so no conclusion is wrong, but "passed" must never be
+written for something the picture does not show; (5) still open by choice: the earlier same-day
+screen recording still needs one full-length picture, the nine replay pictures in this run are the
+same single image reused, keyboard access for the history rows, the run tables have no length limit,
+and the Desk page is now eight stacked sections and long; (6) nothing in your own data folder was
+changed this run. One sentence for the owner: every ranked row on the Desk page now states the
+wall's price range and the exact close it was measured from, proven number by number against your
+stored price files — please confirm the finish, and let the film be re-taken afterwards.

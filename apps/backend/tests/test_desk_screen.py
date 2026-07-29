@@ -928,7 +928,10 @@ def test_history_fields_add_zero_extra_merged_bars_calls(ctx, monkeypatch):
     identical inputs (the only OTHER source of ``merged_bars(symbol, "1d")`` calls in this walk, via
     ``tradability.py``'s own ``_select_daily_series`` and ``compute_levels``'s per-timeframe reads):
     the full walk must add exactly ONE more such call -- the SAME single call the row builder always
-    made -- never two."""
+    made -- never two. goal-desk-iter-17 (J-13) TC-7: `reference_close` is read from this SAME
+    `_resolve_reference_close_and_history` tuple (no separate accessor of its own), so this guard
+    already covers it -- no additional test is needed to prove `reference_close` adds zero further
+    `merged_bars` calls."""
     universe_store, bar_store, bar_index, dataset_store = ctx
     _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
 
@@ -999,6 +1002,190 @@ def test_aapl_row_history_cross_checks_against_get_candles(ctx, monkeypatch):
     assert len(filtered) == row["history_sessions"]
     earliest_ts = min(bar["ts"] for bar in filtered)
     assert _iso_of(earliest_ts) == row["history_start"]
+
+
+# ==================================================================================================
+# reference-close disclosure (goal-desk-iter-17, J-13) -- reference_close: the exact price the row's
+# band was measured against, so "the price is inside the wall" is a fact visible on screen instead
+# of arithmetic recovered by inverting distance_bps against a band edge.
+# ==================================================================================================
+
+
+def test_aapl_row_reference_close_equals_the_fixture_bars_own_recorded_close(ctx):
+    """TC-1/TC-19: `reference_close` is byte-identical to the AAPL fixture bar's own recorded close
+    at `basis_as_of` -- the SAME `expected_close` derivation
+    `test_aapl_row_cross_checks_byte_identical_to_the_real_tradability_route` already uses for its
+    own `distance_bps` assertion, confirming the new field is copied from the identical `close`
+    local that assertion is itself built from."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    row = next(r for r in screen["rows"] if r["symbol"] == "AAPL")
+
+    basis_date = datetime.fromisoformat(row["basis_as_of"].replace("Z", "+00:00")).date()
+    fixture = _load_yahoo_fixture(AAPL_DAILY_FIXTURE)
+    basis_bar = next(
+        b for b in fixture["bars"]
+        if datetime.fromtimestamp(b["epoch"], tz=timezone.utc).date() == basis_date
+    )
+    assert row["reference_close"] == basis_bar["close"]
+
+
+def test_reference_close_golden_in_band_and_out_of_band_rows(ctx, monkeypatch):
+    """TC-1: two controlled ranked rows -- one whose `reference_close` sits exactly on its selected
+    band's near edge (`distance_bps == 0.0`, the boundary case of "the price is inside the wall":
+    `price_low <= reference_close <= price_high`), and one whose close sits strictly outside its
+    band. `compute_tradability` is monkeypatched to return exact, controlled bands (the
+    `test_basis_fields_add_zero_extra_compute_tradability_calls` precedent) so both scenarios are
+    deterministic rather than hoped-for from real fixture data; the CLOSE itself is real -- resolved
+    by the real `_resolve_reference_close_and_history` walk over a synthetic daily bar seeded
+    through the real `BarStore`, never hand-set on the row."""
+    import app.research.desk_screen as desk_screen_module
+
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    inband_bar = _daily_bars("ABBV", start=date(2026, 6, 18), count=1)[0]
+    outband_bar = _daily_bars("ACN", start=date(2026, 6, 18), count=1)[0]
+    _seed_daily_bars(bar_store, bar_index, [inband_bar])
+    _seed_daily_bars(bar_store, bar_index, [outband_bar])
+
+    inband_basis = _iso_of(inband_bar.epoch)
+    outband_basis = _iso_of(outband_bar.epoch)
+
+    # price_low == the seeded close exactly -> distance_bps 0.0, and reference_close sits AT the
+    # near edge, i.e. inside [price_low, price_high].
+    inband_band = _band("resistance", inband_bar.close, inband_bar.close + 5.0, "A", 10.0)
+    # price_low strictly above the seeded close -> distance_bps > 0, reference_close outside
+    # [price_low, price_high].
+    outband_band = _band("resistance", outband_bar.close + 5.0, outband_bar.close + 10.0, "B", 5.0)
+
+    original = desk_screen_module.compute_tradability
+
+    def _tracked(store, symbol, as_of_epoch, config):
+        if symbol == "ABBV":
+            return {"no_bar_series_for_symbol": False, "basis_as_of": inband_basis, "bands": [inband_band]}
+        if symbol == "ACN":
+            return {"no_bar_series_for_symbol": False, "basis_as_of": outband_basis, "bands": [outband_band]}
+        return original(store, symbol, as_of_epoch, config)
+
+    monkeypatch.setattr(desk_screen_module, "compute_tradability", _tracked)
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    by_symbol = {r["symbol"]: r for r in screen["rows"]}
+
+    inband_row = by_symbol["ABBV"]
+    assert inband_row["reference_close"] == inband_bar.close
+    assert inband_row["distance_bps"] == 0.0
+    assert inband_row["price_low"] <= inband_row["reference_close"] <= inband_row["price_high"]
+
+    outband_row = by_symbol["ACN"]
+    assert outband_row["reference_close"] == outband_bar.close
+    assert outband_row["distance_bps"] > 0.0
+    assert not (outband_row["price_low"] <= outband_row["reference_close"] <= outband_row["price_high"])
+
+
+def test_row_order_is_unchanged_by_the_reference_close_addition(ctx):
+    """TC-3: `_row_rank_key` is computed entirely from `band_class`/`distance_bps`/`band_score`/
+    `symbol` -- unchanged this iteration (verify via `git diff`, appearing only as unchanged
+    CONTEXT) -- none of which the new `reference_close` field touches. The ranked-row symbol
+    SEQUENCE for this same fixture spread (the `test_rows_are_sorted_by_class_then_distance_then_
+    score_then_symbol` precedent) is exactly the sort of `_row_rank_key` over the SAME rows,
+    confirming the new field is a pure addition to row CONTENT, never a reordering."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_HOURLY_FIXTURE))
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    symbols = [r["symbol"] for r in screen["rows"]]
+    expected = [r["symbol"] for r in sorted(screen["rows"], key=_row_rank_key)]
+    assert symbols == expected
+    assert symbols == ["MSFT", "AAPL"], "pin the exact fixture-spread order so a silent reorder is caught"
+
+
+def test_aapl_row_reference_close_cross_checks_against_get_candles(ctx, monkeypatch):
+    """TC-2: `reference_close` is byte-identical to the `close` field of the `1d` bar dated at the
+    row's own `basis_as_of`, read via `GET /research/candles?symbol=AAPL&timeframe=1d` -- the SAME
+    route the chart itself reads -- mirroring `test_aapl_row_history_cross_checks_against_get_
+    candles`'s single-source-of-truth proof for the two history fields, applied to the new one."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app, get_market_adapter, manager
+    from app.research.routes import ResearchRegistry, set_registry
+    from app.research.store import JournalStore
+
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    row = next(r for r in screen["rows"] if r["symbol"] == "AAPL")
+
+    monkeypatch.setenv("TAPEOLOGY_BAR_DIR", str(bar_store.root))
+    journal = JournalStore(str(bar_store.root.parent / "journal.db"), CONFIG)
+    set_registry(ResearchRegistry(journal, CONFIG))
+    try:
+        with TestClient(app) as client:
+            resp = client.get(
+                "/research/candles", params={"symbol": "AAPL", "timeframe": "1d", "limit": 500}
+            )
+    finally:
+        for ticker in list(manager._engines.keys()):
+            manager.stop(ticker)
+        set_registry(None)
+        app.dependency_overrides.pop(get_market_adapter, None)
+        journal.close()
+
+    assert resp.status_code == 200
+    body = resp.json()
+
+    basis_epoch = datetime.fromisoformat(row["basis_as_of"].replace("Z", "+00:00")).timestamp()
+    filtered = [bar for bar in body["bars"] if bar["ts"] <= basis_epoch]
+    basis_bar = max(filtered, key=lambda b: b["ts"])
+    assert row["reference_close"] == basis_bar["close"]
+
+
+def test_reference_close_stays_byte_identical_on_a_recompute_under_identical_pins(ctx, tmp_path):
+    """TC-4: mirrors `test_history_fields_stay_byte_identical_on_a_recompute_under_identical_pins`
+    for `reference_close` specifically -- a screen recorded once, then a FRESH computation under
+    identical pins, is refused a second write, and the content already on disk (read back via
+    `list()`) is byte-identical to the second (unrecorded) computation's `reference_close` on every
+    ranked row."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    screen_store = ScreenStore(tmp_path / "screen")
+
+    first_screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    recorded = screen_store.record(**first_screen)
+
+    second_screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    with pytest.raises(ScreenAlreadyRecorded) as excinfo:
+        screen_store.record(**second_screen)
+    assert excinfo.value.existing_id == recorded["id"]
+
+    stored_records, errors = screen_store.list()
+    assert errors == []
+    assert json.dumps(stored_records[0]["rows"], sort_keys=True) == json.dumps(
+        second_screen["rows"], sort_keys=True
+    )
+    aapl_row = next(r for r in stored_records[0]["rows"] if r["symbol"] == "AAPL")
+    assert aapl_row["reference_close"] == next(
+        r for r in second_screen["rows"] if r["symbol"] == "AAPL"
+    )["reference_close"]
+
+
+def test_a_legacy_row_recorded_without_reference_close_serves_it_absent_never_backfilled(tmp_path):
+    """TC-5: the exact shape every screen snapshot recorded BEFORE this iteration has -- ranked rows
+    that OMIT `reference_close` entirely (never merely present-as-`null`) -- mirrors the basis/
+    history legacy-row precedents for the new field. `_record`'s own default row carries no such key
+    at all, so this is true by construction; this test pins that contract so a future change cannot
+    silently start defaulting or backfilling legacy rows on read."""
+    store = ScreenStore(tmp_path / "screen")
+    _record(store)  # `_record`'s own default row carries no reference_close key at all
+
+    records, errors = store.list()
+    assert errors == []
+    row = records[0]["rows"][0]
+    assert "reference_close" not in row
 
 
 # ==================================================================================================

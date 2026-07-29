@@ -251,3 +251,32 @@ acceptance line, and TC-13 was in fact unexecuted until the auditor ran it.
 **Applies to:** any iteration whose acceptance needs browser screenshots or a demo-narrator
 walkthrough, especially when another project's dev server is running on the same host; and any
 evaluator reading a QA report's per-TC verdict table.
+
+## iter-17 — 2026-07-29T09:28:21+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A wrapped metadata line is a silent verification hole: the phase spec wrote
+`Required-still-passing journeys:` over two physical lines, `replay_lane_spec_journeys`
+(`scripts/automation/lib/replay-lane.sh:70`) parses it with `head -1`, and J-11/J-12 therefore
+reached NEITHER the replay lane NOR the LLM fallback — while the merged results file confidently
+read "20/20 journeys passed". Nothing on disk disclosed the omission; only the audit's own
+spec-vs-results cross-read caught it.
+**Applies to:** every future iteration spec (keep `Target journeys:` / `Required-still-passing
+journeys:` on ONE physical line until the parser handles continuations), and any evaluator reading
+a merged results file — cross-check the spec's named journey set against the rows that actually
+exist, never trust the "N/N passed" count alone.
+
+## iter-17 — 2026-07-29T09:28:21+01:00 (second lesson)
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Two `next dev` processes started from the same `apps/frontend` directory share one
+`.next` build cache, so launching a scoped frontend on `:3392` silently re-bundled the AMBIENT
+`:3301` page with the SCOPED backend's `NEXT_PUBLIC_API_URL` — the ambient page began showing
+populated `reference_close` rows that a direct `curl` to `:8301` proved did not exist. The browser
+lane caught it within seconds by cross-checking the page against the API, cleared `.next`, and
+restarted; had it not, an entire evidence set would have been captured against the wrong store while
+every origin check still passed (the ORIGIN was right; the BUNDLED API BASE was not).
+**Applies to:** any lane needing a fixture-scoped rig on this project (browser-qa, demo-narrator,
+audit re-verification) — copy the whole `apps/frontend` tree to an isolated directory, or stop the
+ambient frontend first; and always cross-check one rendered value against a direct `curl` to the
+backend you believe you are serving, because `location.origin` alone cannot detect this.

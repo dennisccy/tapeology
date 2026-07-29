@@ -76,6 +76,17 @@ precedent exactly. A snapshot recorded BEFORE this addition simply has ranked ro
 two keys entirely -- the SAME append-only-row-content discipline the basis fields established:
 never defaulted, never backfilled, never present as ``null``.
 
+**Reference-close disclosure (goal-desk-iter-17, J-13).** Every RANKED row also carries
+``reference_close`` -- copied VERBATIM from the SAME ``close`` local
+``_resolve_reference_close_and_history`` already returns and this module already uses to call
+``_select_best_band``/``_distance_bps`` (zero new ``BarStore`` read, zero new accessor, zero
+re-derivation of which bar is the basis -- that stays ``compute_tradability``'s and
+``_resolve_reference_close_and_history``'s exclusive decision, unchanged). Skip rows never carry
+this field, matching the basis/history-disclosure precedent exactly. A snapshot recorded BEFORE
+this addition simply has ranked rows that OMIT this key entirely -- the SAME append-only-row-content
+discipline the basis/history fields established: never defaulted, never backfilled, never present
+as ``null``.
+
 **No new ``Config`` field.** The screen store's directory resolves via ``resolve_desk_screen_dir``
 below -- a bare ``TAPEOLOGY_DESK_SCREEN_DIR``-env-var-or-sibling-of-``desk_universe_dir_resolved()``
 default (the ``edge_report_cache.resolve_cache_db_path`` pattern) -- never a ``desk_screen_dir``
@@ -321,9 +332,10 @@ def compute_screen(
     the full snapshot content MINUS the store-assigned ``id``/``created_utc`` (``ScreenStore.record``
     assigns those): ``{screen_date, as_of, universe_snapshot_id, config_fingerprint,
     bar_store_signature, rows, skipped}``. Each RANKED row additionally carries ``basis_as_of``/
-    ``basis_age_days`` (goal-desk-iter-9, J-08) and ``history_sessions``/``history_start``
-    (goal-desk-iter-15, J-11) -- see the module docstring's "Basis disclosure" and "History
-    disclosure" sections; skip rows never carry any of the four.
+    ``basis_age_days`` (goal-desk-iter-9, J-08), ``history_sessions``/``history_start``
+    (goal-desk-iter-15, J-11), and ``reference_close`` (goal-desk-iter-17, J-13) -- see the module
+    docstring's "Basis disclosure", "History disclosure", and "Reference-close disclosure" sections;
+    skip rows never carry any of the five.
 
     ``progress``, if given, is called after EACH member with ``{"symbol": symbol}`` (the caller
     tracks its own done/total counters -- the ``desk_topup_compute.run_topup`` precedent).
@@ -386,6 +398,7 @@ def compute_screen(
                     "basis_age_days": _basis_age_days(result["basis_as_of"], as_of),
                     "history_sessions": history_sessions,
                     "history_start": history_start,
+                    "reference_close": close,
                 }
             )
 

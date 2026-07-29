@@ -372,3 +372,43 @@ the make-up lane, never to a new iteration goal.
 a passenger task, no program change, and repeatable at will since this journey only READS) produces
 the literal side-by-side NFLX comparison; nothing about the stored data prevents it, and the flag
 clears on any fresh capture.
+
+## iter-17 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-13 Acceptance ends with a conjunct: "a **`[NEW]`-flagged
+demo-narrator walkthrough** covers the briefing's price disclosure end to end", and the iteration
+spec's DEFINITION OF DONE item 4 names `Demo Verdict: RECORDED`. The artifact that exists
+(`reports/phase-goal-desk-iter-17-demo-results.md`, gallery `reports/demo/goal-desk-iter-17/`) IS a
+demo-narrator walkthrough and IS `[NEW]`-flagged on its J-13 steps, but (i) its verdict reads
+`RECORDED_WITH_NOTES` (three click timeouts plus one text expectation — all selector brittleness, not
+product defects: UT-07 proves the row click-through works and UT-08 proves the skip section renders),
+and (ii) it was recorded against the AMBIENT store at `:3301` BEFORE the audit's F1 fix, so all eight
+frames show only the legacy state — and the pre-F1 legacy string at that, i.e. no band range and no
+close anywhere in the film (I opened `step-03.png` and confirmed it). goal.md does not say whether a
+walkthrough that narrates a real-but-unpopulated state "covers the disclosure end to end", nor
+whether an incomplete showcase recording is a product gap or an evidence gap.
+
+**We chose:** Score J-13 `passing` and record the walkthrough shortfall as a CAPTURE DEFECT
+(`evidence_makeup: true`, methodology A.7) rather than an unmet acceptance conjunct — so it does not
+downgrade the journey and does not block GOAL_ACHIEVED. Five strands, each checked by me directly:
+(i) methodology A.7 names "the walkthrough recording is missing or badly cropped" and "a screenshot
+showing a different-but-equally-valid data range than the spec's example numbers" as capture defects,
+and its rail — "never applies when the asserted BEHAVIOR is unmet" — does not fire here, because the
+film shows a state the product genuinely produced, not behaviour contradicting the claim; (ii) the
+behaviour the film should have shown is proven three independent ways: `UT-05-result.png` (in-band
+BRK-B and out-of-band LIN in ONE frame, scoped rig, `location.origin` asserted before capture), the
+scoped snapshot on disk (63/63 ranked rows carry `reference_close`, 0/38 skip rows do, checksum
+recomputes), and my own re-derivation of every row's value from the stored `1d` bars with ZERO
+mismatches; (iii) the agent contract is explicit that an evidence/recording gap must "never [be]
+scored as blocking" and must "never [be] a new iteration's goal" — it rides a make-up capture; (iv)
+the in-session precedent one iteration back is identical in shape (iter-16 scored J-12 `passing` with
+`evidence_makeup: true` for a framing shortfall and returned GOAL_ACHIEVED); (v) the independent
+auditor, who rated this DoD item "NOT met", still recommended shipping and reached the same
+product-vs-artifact split, as did the ux-regression reviewer.
+
+**Reversible:** yes — one short re-filming run (`Depth: evidence` or a passenger task on whichever
+lane next touches `/desk`) on a fixture-scoped rig with a freshly computed screen produces the
+literal artifact, with zero program change; the flag clears on any fresh capture. If the owner reads
+the conjunct strictly, J-13 returns to `partial` until that re-filming lands — and the practical
+obstacle is now documented (two `next dev` processes from one source tree share `.next` and
+cross-contaminate which backend the ambient page serves).

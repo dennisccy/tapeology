@@ -1,7 +1,7 @@
 """era-desk-iter-6 (J-05) source-introspection guard tests -- the ``test_copy_discipline.py``
 pattern (read a frontend .tsx file as TEXT, assert on substrings; no browser, no runtime).
 
-Two guards, each proving something about the frontend a backend-only test suite otherwise could
+Three guards, each proving something about the frontend a backend-only test suite otherwise could
 not see:
 
   (a) TC-5 -- ``apps/frontend/app/desk/page.tsx`` never references any of the structure-side
@@ -13,6 +13,10 @@ not see:
       ``J-05-PREFILL-START``/``J-05-PREFILL-END`` markers in ``structure/page.tsx``) calls the
       SAME ``handleLoad`` the manual Load button already calls, and introduces no second
       fetch/compute path.
+  (c) goal-desk-iter-17 (J-13) TC-8 -- ``apps/frontend/app/desk/page.tsx`` never derives a price
+      value via arithmetic on ``row.distance_bps``/``row.price_low``/``row.price_high`` -- the new
+      ``band`` column/tooltip line renders ``row.reference_close`` beside the row's own
+      ``price_low``/``price_high``, never a value recomputed from them client-side.
 
 A guard that can never fail proves nothing -- each carries a seeded counter-test proving the
 detection logic itself actually catches a violation (the ``test_copy_discipline.py``
@@ -21,6 +25,7 @@ seeded-violation precedent)."""
 from __future__ import annotations
 
 import pathlib
+import re
 
 _FRONTEND_ROOT = pathlib.Path(__file__).resolve().parents[2] / "frontend"
 _DESK_PAGE = _FRONTEND_ROOT / "app" / "desk" / "page.tsx"
@@ -117,3 +122,34 @@ def test_structure_prefill_guard_can_fail_on_a_seeded_violation():
         "// J-05-PREFILL-END\n"
     )
     assert "handleLoad(" not in seeded_block_missing_handle_load
+
+
+# goal-desk-iter-17 (J-13) TC-8: no expression in the desk page may derive a NEW price value via
+# arithmetic on `distance_bps`/`price_low`/`price_high` -- the honest disclosure this journey ships
+# (`row.reference_close`, `row.price_low`-`row.price_high`) is a verbatim render of already-served
+# values, never a client-side recomputation of the very number `reference_close` exists to disclose
+# instead of forcing an operator (or agent) to invert `distance_bps` against a band edge.
+_PRICE_ARITHMETIC_FIELDS = r"row\.(distance_bps|price_low|price_high)"
+_PRICE_ARITHMETIC_PATTERN = re.compile(
+    rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
+)
+
+
+def test_desk_page_never_derives_a_price_via_arithmetic_on_distance_or_band_edges():
+    """TC-8: scans `apps/frontend/app/desk/page.tsx`'s source for any expression combining
+    `row.distance_bps`/`row.price_low`/`row.price_high` with an arithmetic operator. The new
+    `band` column/tooltip line (goal-desk-iter-17, J-13) renders `row.reference_close` beside
+    `row.price_low`/`row.price_high` as two side-by-side values, never a derived third one."""
+    source = _DESK_PAGE.read_text()
+    hits = _PRICE_ARITHMETIC_PATTERN.findall(source)
+    assert not hits, (
+        f"apps/frontend/app/desk/page.tsx derives a price value via arithmetic on distance_bps/"
+        f"price_low/price_high ({hits}) -- the page must render only what "
+        "GET /research/desk/screen already served, never recompute a price client-side"
+    )
+
+
+def test_desk_page_price_arithmetic_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- a lint that cannot fail proves nothing."""
+    seeded_source = "const implied = row.price_high - row.reference_close;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_source) is not None

@@ -804,6 +804,14 @@ export type EdgeReportPayload = EdgeReportResponse | EdgeReportNotComputed;
 // non-null on a NEWLY computed ranked row, entirely ABSENT (not `null`) on a row recorded before
 // this iteration -- callers must check `row.history_sessions == null` (loose equality), same as
 // the basis fields above.
+// era-desk-iter-17 (J-13) -- reference-close disclosure: the exact daily close the row's band
+// selection and `distance_bps` were measured against, copied verbatim from the SAME `close` local
+// `desk_screen.py` already resolves for the basis/history fields above -- zero new backend read.
+// Renders beside the row's own already-typed `price_low`/`price_high` band range so "the price is
+// inside the wall" is a fact on screen instead of arithmetic inverted out of `distance_bps`. Same
+// presence contract as basis/history: always non-null on a NEWLY computed ranked row, entirely
+// ABSENT (not `null`) on a row recorded before this iteration -- callers must check
+// `row.reference_close == null` (loose equality).
 export interface DeskScreenRow {
   symbol: string;
   side: "support" | "resistance";
@@ -818,6 +826,7 @@ export interface DeskScreenRow {
   basis_age_days: number | null;
   history_sessions: number | null;
   history_start: string | null;
+  reference_close?: number | null;
 }
 
 // A member the screen walked but could not rank -- two honest, distinct reasons, never conflated:
