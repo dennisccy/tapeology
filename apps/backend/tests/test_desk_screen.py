@@ -32,11 +32,13 @@ from app.research.desk_screen import (
     screen_as_of,
 )
 from app.research.desk_screen import (
+    _bands_by_class,
     _basis_age_days,
     _distance_bps,
     _epoch,
     _row_rank_key,
     _select_best_band,
+    _select_opposite_band,
 )
 from app.research.desk_universe import UniverseStore
 
@@ -228,6 +230,69 @@ def test_select_best_band_null_class_ranks_below_every_graded_class():
     ungraded_and_closer = _band("resistance", 100.1, 100.2, None, 999.0)
     best = _select_best_band([graded, ungraded_and_closer], 100.0)
     assert best is graded
+
+
+# ==================================================================================================
+# opposite-band selection + bands-by-class count (goal-desk-iter-18, J-14) -- pure-function unit
+# tests, mirroring the best-band-selection suite immediately above.
+# ==================================================================================================
+
+
+def test_select_opposite_band_returns_the_nearest_band_on_the_other_side():
+    best_side = _band("resistance", 105.0, 106.0, "A", 1.0)
+    near_opposite = _band("support", 99.0, 99.5, "B", 5.0)
+    far_opposite = _band("support", 80.0, 81.0, "B", 5.0)
+    opposite = _select_opposite_band([best_side, near_opposite, far_opposite], 100.0, "resistance")
+    assert opposite is near_opposite
+
+
+def test_select_opposite_band_is_null_when_no_band_exists_on_the_other_side():
+    """TC-8: an honest ``None`` -- never an invented or wrong-side band -- when every served band
+    shares the SAME side as the row's own selected ``best`` band."""
+    resistance_only = [
+        _band("resistance", 101.0, 102.0, "A", 10.0),
+        _band("resistance", 110.0, 111.0, "B", 1.0),
+    ]
+    assert _select_opposite_band(resistance_only, 100.0, "resistance") is None
+
+
+def test_select_opposite_band_prefers_higher_class_over_closer_distance():
+    """The opposite selection reuses `_select_best_band`'s IDENTICAL tie-break tuple -- class rank
+    outranks distance, exactly as the best-band suite above already proves for the same-side case."""
+    best_side = _band("resistance", 105.0, 106.0, "A", 1.0)
+    close_but_low_class = _band("support", 99.9, 99.95, "C", 500.0)
+    far_but_high_class = _band("support", 90.0, 91.0, "A", 1.0)
+    opposite = _select_opposite_band(
+        [best_side, close_but_low_class, far_but_high_class], 100.0, "resistance"
+    )
+    assert opposite is far_but_high_class
+
+
+def test_select_opposite_band_exact_tie_keeps_the_served_order_first_item():
+    """TC-9: tie-break stability across repeated calls on a tied fixture -- `min`'s own
+    first-of-tie order (never a second, invented tie-break), mirroring
+    `test_select_best_band_exact_tie_keeps_the_served_order_first_item` for the opposite side."""
+    best_side = _band("resistance", 105.0, 106.0, "A", 1.0)
+    a = _band("support", 99.0, 99.0, "B", 5.0)
+    b = _band("support", 99.0, 99.0, "B", 5.0)
+    assert _select_opposite_band([best_side, a, b], 100.0, "resistance") is a
+    assert _select_opposite_band([best_side, b, a], 100.0, "resistance") is b
+    # Repeated calls on the identical input return the identical result every time.
+    assert _select_opposite_band([best_side, a, b], 100.0, "resistance") is a
+    assert _select_opposite_band([best_side, a, b], 100.0, "resistance") is a
+
+
+def test_bands_by_class_counts_each_class_including_zero_and_unclassified():
+    bands = [
+        _band("resistance", 105.0, 106.0, "A", 1.0),
+        _band("resistance", 110.0, 111.0, "A", 1.0),
+        _band("support", 90.0, 91.0, None, 1.0),
+    ]
+    assert _bands_by_class(bands) == {"A": 2, "B": 0, "C": 0, "unclassified": 1}
+
+
+def test_bands_by_class_empty_list_is_all_zero():
+    assert _bands_by_class([]) == {"A": 0, "B": 0, "C": 0, "unclassified": 0}
 
 
 # ==================================================================================================
@@ -556,6 +621,45 @@ def test_aapl_row_cross_checks_byte_identical_to_the_real_tradability_route(ctx,
         (row["price_low"] if row["side"] == "resistance" else row["price_high"]) - expected_close
     ) / expected_close * 10_000.0
     assert row["distance_bps"] == pytest.approx(expected_distance)
+
+    # goal-desk-iter-18 (J-14) TC-2/TC-3/TC-4, against the REAL route rather than an injected band
+    # list: `bands_by_class` is a recount of the SAME served `bands`, and `opposite_band` -- when
+    # present -- is a real, uniquely-identifiable served band on the OTHER side whose distance
+    # reproduces the row's own `_distance_bps` formula against the row's own `reference_close`.
+    served_counts = {"A": 0, "B": 0, "C": 0, "unclassified": 0}
+    for band in body["bands"]:
+        served_counts[band["class"] if band["class"] is not None else "unclassified"] += 1
+    assert row["bands_by_class"] == served_counts
+    assert sum(row["bands_by_class"].values()) == len(body["bands"])
+
+    served_opposite = [b for b in body["bands"] if b["side"] != row["side"]]
+    if row["opposite_band"] is None:
+        assert served_opposite == [], (
+            "opposite_band may only be null when the canonical route served NO band on the other side"
+        )
+    else:
+        opposite_matching = [
+            b for b in served_opposite
+            if b["price_low"] == row["opposite_band"]["price_low"]
+            and b["price_high"] == row["opposite_band"]["price_high"]
+        ]
+        assert len(opposite_matching) == 1, (
+            "the disclosed opposite band must be a real, uniquely-identifiable served band on the "
+            "side the row's own band is NOT on"
+        )
+        served_opp = opposite_matching[0]
+        assert row["opposite_band"]["side"] == served_opp["side"] != row["side"]
+        assert row["opposite_band"]["band_class"] == served_opp["class"]
+        assert row["opposite_band"]["band_score"] == served_opp["quality_score"]
+        expected_opposite_distance = abs(
+            (
+                served_opp["price_low"]
+                if served_opp["side"] == "resistance"
+                else served_opp["price_high"]
+            )
+            - row["reference_close"]
+        ) / row["reference_close"] * 10_000.0
+        assert row["opposite_band"]["distance_bps"] == pytest.approx(expected_opposite_distance)
 
 
 def test_msft_partial_coverage_still_resolves_a_ranked_row_with_honest_coverage(ctx):
@@ -1186,6 +1290,229 @@ def test_a_legacy_row_recorded_without_reference_close_serves_it_absent_never_ba
     assert errors == []
     row = records[0]["rows"][0]
     assert "reference_close" not in row
+
+
+# ==================================================================================================
+# opposite-band disclosure (goal-desk-iter-18, J-14) -- opposite_band: the nearest band on the side
+# of price the row's own selected band did NOT choose; bands_by_class: a per-class count of every
+# band compute_tradability returned for that symbol. Both drawn from the SAME result["bands"] list
+# already held for `reference_close`/`distance_bps` -- zero new BarStore read, zero second
+# compute_tradability call.
+# ==================================================================================================
+
+
+def test_opposite_band_golden_near_far_and_null_class_rows(ctx, monkeypatch):
+    """TC-1/TC-2/TC-3/TC-4: three controlled ranked rows -- one whose nearest opposite-side band is
+    within 25 bps, one whose nearest opposite-side band is beyond 1,000 bps, and one whose nearest
+    opposite-side band carries `class: None` -- each proving `opposite_band`'s fields are copied
+    verbatim from `compute_tradability`'s own served band and `bands_by_class` sums to the symbol's
+    total band count. Mirrors the `test_reference_close_golden_in_band_and_out_of_band_rows`
+    precedent: `compute_tradability` is monkeypatched to return exact, controlled bands so all three
+    scenarios are deterministic, while the reference CLOSE itself is real -- resolved by the real
+    `_resolve_reference_close_and_history` walk over a synthetic daily bar seeded through the real
+    `BarStore`, never hand-set on the row."""
+    import app.research.desk_screen as desk_screen_module
+
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    near_bar = _daily_bars("ABBV", start=date(2026, 6, 18), count=1)[0]
+    far_bar = _daily_bars("ACN", start=date(2026, 6, 18), count=1)[0]
+    null_bar = _daily_bars("ADBE", start=date(2026, 6, 18), count=1)[0]
+    _seed_daily_bars(bar_store, bar_index, [near_bar])
+    _seed_daily_bars(bar_store, bar_index, [far_bar])
+    _seed_daily_bars(bar_store, bar_index, [null_bar])
+
+    near_basis = _iso_of(near_bar.epoch)
+    far_basis = _iso_of(far_bar.epoch)
+    null_basis = _iso_of(null_bar.epoch)
+
+    # ABBV: best band = resistance A right at close (distance_bps 0.0, always wins on class alone);
+    # opposite (support) band ~20 bps below close -- within the 25 bps evidence floor TC-12 names.
+    abbv_best = _band("resistance", near_bar.close, near_bar.close + 5.0, "A", 10.0)
+    abbv_opposite = _band("support", near_bar.close - 1.0, near_bar.close - 0.2, "B", 5.0)
+
+    # ACN: best band = resistance A right at close; opposite (support) band $20 below close --
+    # ~1,990 bps, well beyond the 1,000 bps evidence floor.
+    acn_best = _band("resistance", far_bar.close, far_bar.close + 5.0, "A", 10.0)
+    acn_opposite = _band("support", far_bar.close - 25.0, far_bar.close - 20.0, "C", 3.0)
+
+    # ADBE: best band = resistance A right at close; the ONLY opposite (support) band carries
+    # `class: None` -- proving `bands_by_class` counts it under "unclassified" and `opposite_band`
+    # still discloses it (an ungraded band is still a real, servable disclosure).
+    adbe_best = _band("resistance", null_bar.close, null_bar.close + 5.0, "A", 10.0)
+    adbe_opposite = _band("support", null_bar.close - 2.0, null_bar.close - 1.0, None, 1.0)
+
+    original = desk_screen_module.compute_tradability
+
+    def _tracked(store, symbol, as_of_epoch, config):
+        if symbol == "ABBV":
+            return {"no_bar_series_for_symbol": False, "basis_as_of": near_basis, "bands": [abbv_best, abbv_opposite]}
+        if symbol == "ACN":
+            return {"no_bar_series_for_symbol": False, "basis_as_of": far_basis, "bands": [acn_best, acn_opposite]}
+        if symbol == "ADBE":
+            return {"no_bar_series_for_symbol": False, "basis_as_of": null_basis, "bands": [adbe_best, adbe_opposite]}
+        return original(store, symbol, as_of_epoch, config)
+
+    monkeypatch.setattr(desk_screen_module, "compute_tradability", _tracked)
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    by_symbol = {r["symbol"]: r for r in screen["rows"]}
+
+    abbv_row = by_symbol["ABBV"]
+    assert abbv_row["opposite_band"] == {
+        "side": "support",
+        "band_class": "B",
+        "price_low": abbv_opposite["price_low"],
+        "price_high": abbv_opposite["price_high"],
+        "band_score": abbv_opposite["quality_score"],
+        "distance_bps": _distance_bps(abbv_opposite, near_bar.close),
+    }
+    assert abbv_row["opposite_band"]["distance_bps"] <= 25.0
+    assert abbv_row["bands_by_class"] == {"A": 1, "B": 1, "C": 0, "unclassified": 0}
+    assert sum(abbv_row["bands_by_class"].values()) == 2
+
+    acn_row = by_symbol["ACN"]
+    assert acn_row["opposite_band"] == {
+        "side": "support",
+        "band_class": "C",
+        "price_low": acn_opposite["price_low"],
+        "price_high": acn_opposite["price_high"],
+        "band_score": acn_opposite["quality_score"],
+        "distance_bps": _distance_bps(acn_opposite, far_bar.close),
+    }
+    assert acn_row["opposite_band"]["distance_bps"] > 1000.0
+    assert acn_row["bands_by_class"] == {"A": 1, "B": 0, "C": 1, "unclassified": 0}
+    assert sum(acn_row["bands_by_class"].values()) == 2
+
+    adbe_row = by_symbol["ADBE"]
+    assert adbe_row["opposite_band"] == {
+        "side": "support",
+        "band_class": None,
+        "price_low": adbe_opposite["price_low"],
+        "price_high": adbe_opposite["price_high"],
+        "band_score": adbe_opposite["quality_score"],
+        "distance_bps": _distance_bps(adbe_opposite, null_bar.close),
+    }
+    assert adbe_row["bands_by_class"] == {"A": 1, "B": 0, "C": 0, "unclassified": 1}
+    assert sum(adbe_row["bands_by_class"].values()) == 2
+
+
+def test_row_order_is_unchanged_by_the_opposite_band_addition(ctx):
+    """TC-5: `_row_rank_key` is computed entirely from `band_class`/`distance_bps`/`band_score`/
+    `symbol` -- unchanged this iteration (verify via `git diff`, appearing only as unchanged
+    CONTEXT) -- neither `opposite_band` nor `bands_by_class` touches it. The ranked-row symbol
+    SEQUENCE for this same fixture spread is exactly the sort of `_row_rank_key` over the SAME rows,
+    confirming both new fields are a pure addition to row CONTENT, never a reordering."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_HOURLY_FIXTURE))
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    symbols = [r["symbol"] for r in screen["rows"]]
+    expected = [r["symbol"] for r in sorted(screen["rows"], key=_row_rank_key)]
+    assert symbols == expected
+    assert symbols == ["MSFT", "AAPL"], "pin the exact fixture-spread order so a silent reorder is caught"
+
+
+def test_opposite_band_stays_byte_identical_on_a_recompute_under_identical_pins(ctx, tmp_path):
+    """TC-6: mirrors `test_reference_close_stays_byte_identical_on_a_recompute_under_identical_pins`
+    for `opposite_band`/`bands_by_class` specifically -- a screen recorded once, then a FRESH
+    computation under identical pins, is refused a second write, and the content already on disk
+    (read back via `list()`) is byte-identical to the second (unrecorded) computation's
+    `opposite_band`/`bands_by_class` on every ranked row."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    screen_store = ScreenStore(tmp_path / "screen")
+
+    first_screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    recorded = screen_store.record(**first_screen)
+
+    second_screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    with pytest.raises(ScreenAlreadyRecorded) as excinfo:
+        screen_store.record(**second_screen)
+    assert excinfo.value.existing_id == recorded["id"]
+
+    stored_records, errors = screen_store.list()
+    assert errors == []
+    assert json.dumps(stored_records[0]["rows"], sort_keys=True) == json.dumps(
+        second_screen["rows"], sort_keys=True
+    )
+    aapl_row = next(r for r in stored_records[0]["rows"] if r["symbol"] == "AAPL")
+    expected_aapl_row = next(r for r in second_screen["rows"] if r["symbol"] == "AAPL")
+    assert aapl_row["opposite_band"] == expected_aapl_row["opposite_band"]
+    assert aapl_row["bands_by_class"] == expected_aapl_row["bands_by_class"]
+
+
+def test_a_legacy_row_recorded_without_opposite_band_fields_serves_them_absent_never_backfilled(
+    tmp_path,
+):
+    """TC-7: the exact shape every screen snapshot recorded BEFORE this iteration has -- ranked rows
+    that OMIT `opposite_band`/`bands_by_class` entirely (never merely present-as-`null`) -- mirrors
+    the basis/history/reference-close legacy-row precedents for the two new fields. `_record`'s own
+    default row carries no such keys at all, so this is true by construction; this test pins that
+    contract so a future change cannot silently start defaulting or backfilling legacy rows on read."""
+    store = ScreenStore(tmp_path / "screen")
+    _record(store)  # `_record`'s own default row carries neither key at all
+
+    records, errors = store.list()
+    assert errors == []
+    row = records[0]["rows"][0]
+    assert "opposite_band" not in row
+    assert "bands_by_class" not in row
+
+
+def test_opposite_band_and_bands_by_class_add_zero_extra_compute_tradability_or_merged_bars_calls(
+    ctx, monkeypatch
+):
+    """TC-10: `opposite_band`/`bands_by_class` are pure selections/counts over the SAME
+    `result["bands"]` a symbol's SINGLE `compute_tradability` call already returned -- mirrors
+    `test_history_fields_add_zero_extra_merged_bars_calls`'s own call-count-guard style, extended to
+    also assert `compute_tradability` itself is invoked exactly once per symbol in a full screen
+    walk (never a second call to derive the opposite side), and that the derivation adds ZERO
+    `BarStore.merged_bars(symbol, "1d")` calls beyond what iteration 17 (`reference_close`/history)
+    already required."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+
+    as_of_epoch = _epoch(screen_as_of(SCREEN_DATE))
+    merged_calls: list[tuple[str, str]] = []
+    original_merged = BarStore.merged_bars
+
+    def _tracked_merged(self, symbol, timeframe):
+        merged_calls.append((symbol, timeframe))
+        return original_merged(self, symbol, timeframe)
+
+    monkeypatch.setattr(BarStore, "merged_bars", _tracked_merged)
+
+    from app.research.tradability import compute_tradability as _compute_tradability
+
+    _compute_tradability(bar_store, "AAPL", as_of_epoch, CONFIG)
+    baseline_1d_calls = sum(1 for symbol, tf in merged_calls if symbol == "AAPL" and tf == "1d")
+    merged_calls.clear()
+
+    import app.research.desk_screen as desk_screen_module
+
+    tradability_calls: list[str] = []
+    original_tradability = desk_screen_module.compute_tradability
+
+    def _tracked_tradability(store, symbol, as_of_epoch_arg, config):
+        tradability_calls.append(symbol)
+        return original_tradability(store, symbol, as_of_epoch_arg, config)
+
+    monkeypatch.setattr(desk_screen_module, "compute_tradability", _tracked_tradability)
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    assert any(r["symbol"] == "AAPL" for r in screen["rows"])
+
+    assert tradability_calls.count("AAPL") == 1, (
+        "opposite_band/bands_by_class must be derived from the symbol's single existing "
+        "compute_tradability call, never a second call"
+    )
+    full_1d_calls = sum(1 for symbol, tf in merged_calls if symbol == "AAPL" and tf == "1d")
+    assert full_1d_calls == baseline_1d_calls + 1, (
+        "opposite_band/bands_by_class must add ZERO extra merged_bars calls beyond what "
+        "iteration 17's reference_close/history disclosure already required"
+    )
 
 
 # ==================================================================================================

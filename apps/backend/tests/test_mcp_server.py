@@ -518,6 +518,71 @@ async def test_desk_screen_reference_close_field_proxies_verbatim(mcp_env, backe
 
 
 @pytest.mark.anyio
+async def test_desk_screen_opposite_band_and_bands_by_class_fields_proxy_verbatim(mcp_env, backend_paths):
+    """goal-desk-iter-18 (J-14) TC-14: `opposite_band`/`bands_by_class` -- `desk_screen.py`'s two
+    newest ranked-row fields -- are proxied byte-identical through both the `desk_screen` tool
+    (no-arg) and `get_endpoint`'s existing `/research/` allowlist prefix (`?date=`), with ZERO MCP
+    code change -- the same proxy contract every prior `desk_screen` row-field addition (basis/
+    history/reference-close) already covers automatically. Seeded under its own distinct date so
+    this test passes standalone."""
+    screen_dir = Path(backend_paths["TAPEOLOGY_DESK_SCREEN_DIR"])
+    ScreenStore(screen_dir).record(
+        screen_date="2026-07-30",
+        as_of="2026-07-30T21:00:00Z",
+        universe_snapshot_id="universe-2026-07-25-817cc184bbb3",
+        config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store_signature="mcp-test-opposite-band-signature",
+        rows=[
+            {
+                "symbol": "AMZN",
+                "side": "resistance",
+                "band_class": "A",
+                "distance_bps": 5.0,
+                "band_score": 4.2,
+                "price_low": 200.0,
+                "price_high": 202.0,
+                "coverage": {"1d": {"has_bars": True, "latest_window_end_utc": "2026-07-30T00:00:00Z"}},
+                "tick_evidence": True,
+                "reference_close": 199.9,
+                "opposite_band": {
+                    "side": "support",
+                    "band_class": "B",
+                    "price_low": 190.0,
+                    "price_high": 191.0,
+                    "band_score": 2.1,
+                    "distance_bps": 452.2,
+                },
+                "bands_by_class": {"A": 1, "B": 1, "C": 0, "unclassified": 0},
+            }
+        ],
+        skipped=[],
+    )
+
+    result = await call_tool("desk_screen", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/screen", timeout=5.0)
+    assert rest.status_code == 200
+    row = rest.json()["latest"]["rows"][0]
+    assert row["opposite_band"]["band_class"] == "B"
+    assert row["bands_by_class"] == {"A": 1, "B": 1, "C": 0, "unclassified": 0}
+    assert result.isError is False
+    assert result.content[0].text.encode("utf-8") == rest.content, (
+        "opposite_band/bands_by_class not byte-identical via the desk_screen tool"
+    )
+
+    date_path = "/research/desk/screen?date=2026-07-30"
+    result = await call_tool("get_endpoint", {"path": date_path})
+    rest = httpx.get(f"{mcp_env}{date_path}", timeout=5.0)
+    assert rest.status_code == 200
+    row = rest.json()["screen"]["rows"][0]
+    assert row["opposite_band"]["band_class"] == "B"
+    assert row["bands_by_class"] == {"A": 1, "B": 1, "C": 0, "unclassified": 0}
+    assert result.isError is False
+    assert result.content[0].text.encode("utf-8") == rest.content, (
+        "opposite_band/bands_by_class not byte-identical via get_endpoint"
+    )
+
+
+@pytest.mark.anyio
 async def test_datasets_tool_byte_identical_on_a_non_empty_live_list(mcp_env, backend_paths):
     """J-02 flips ``datasets`` from honest 404 to live data with ZERO MCP code changes: after
     recording a dataset (the committed reference window, keyless), the tool's JSON is

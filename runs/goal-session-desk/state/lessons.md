@@ -280,3 +280,18 @@ every origin check still passed (the ORIGIN was right; the BUNDLED API BASE was 
 audit re-verification) — copy the whole `apps/frontend` tree to an isolated directory, or stop the
 ambient frontend first; and always cross-check one rendered value against a direct `curl` to the
 backend you believe you are serving, because `location.origin` alone cannot detect this.
+
+## iter-18 — 2026-07-29T12:05:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The iteration spec's restatement of a goal.md rule silently overrode the rule itself:
+`docs/goal.md` J-14 step 1 asked for "distance ascending, then class rank descending", the
+decomposer wrote "(class rank DESCENDING, distance_bps ascending, ...) — the key `_select_best_band`
+already uses", and developer/reviewer/QA/coherence/audit all verified against the restatement, so a
+2-of-63-rows behavioural divergence (HONA, META) shipped past five green lanes. When a spec bullet
+paraphrases a goal.md selection/ordering/threshold rule, diff the paraphrase against the goal text
+verbatim before treating any downstream PASS as evidence — and re-measure the rule against the
+canonical owner on REAL data, not just the fixture, because the fixture's 6 rows happened to agree
+under both rules.
+**Applies to:** any iteration whose spec restates a goal.md rule in its own words (selection keys,
+rank keys, tie-breaks, thresholds); any `desk_screen.py` band-selection change.

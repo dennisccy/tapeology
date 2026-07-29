@@ -112,6 +112,17 @@ import { fmt } from "@/lib/format";
 // "the price is inside the wall" is a fact visible on screen instead of arithmetic recovered by
 // inverting `distance_bps` against a band edge. Read-only render, zero new endpoint, zero new
 // control — `reference_close` rides the already-fetched `GET /research/desk/screen` response.
+//
+// goal-desk-iter-18 (J-14): a new `opposite` column on the ranked-rows table — the row's own
+// `opposite_band` (the nearest band on the side of price the row's selected band did NOT choose),
+// rendered beside the existing columns with the same rounded-display split (full precision is not
+// carried in the tooltip for this field this iteration — only `bands_by_class` is, see below), an
+// honest "no band on the other side" for a recorded `null`, and the established legacy-absent copy
+// "opposite wall not recorded in this snapshot" for a pre-iteration row. Plus one more composite
+// drill-in tooltip line carrying the row's full-precision `bands_by_class` (a per-class count of
+// every band the canonical tradability computation returned for the symbol). Read-only render,
+// zero new endpoint, zero new control, zero client-side arithmetic — both fields ride the
+// already-fetched `GET /research/desk/screen` response verbatim.
 
 const NUMERIC_CELL = "px-2 py-1.5 text-right font-mono text-xs text-slate-200 whitespace-nowrap";
 const HEADER_CELL = "px-2 py-1 text-right text-[11px] font-medium text-slate-500";
@@ -257,6 +268,13 @@ function hasNoCoverageAtAll(coverage: Record<string, { has_bars: boolean }>): bo
 // beside its own `price_low`/`price_high` band range (the visible "band" cell below shows the
 // rounded values, the SAME split as distance/score/basis/history) -- a legacy row (recorded before
 // this iteration) has the key absent, `== null` catches both `undefined` and `null`.
+// era-desk-iter-18 (J-14): the SAME tooltip also carries the row's full-precision `bands_by_class`
+// -- a per-class count of every band the canonical tradability computation returned for the symbol
+// (the visible "opposite" cell below shows only the nearest opposite band, never this per-class
+// breakdown). A legacy row (recorded before this iteration) has the key entirely absent
+// (`undefined`, not `null`) -- `=== undefined` catches exactly that (unlike the `== null` fields
+// above, `bands_by_class` itself is never legitimately recorded as `null` on a new row, only absent
+// on a legacy one, so the stricter check is the honest one here).
 function deskRowDrillInTitle(row: DeskScreenRow): string {
   const coverageLines = Object.entries(row.coverage)
     .map(([timeframe, tf]) => `${timeframe} window last requested: ${tf.latest_window_end_utc ?? "never"}`)
@@ -277,7 +295,11 @@ function deskRowDrillInTitle(row: DeskScreenRow): string {
     row.reference_close == null
       ? `band ${row.price_low}–${row.price_high} · close not recorded in this snapshot`
       : `band ${row.price_low}–${row.price_high} · close ${row.reference_close}`;
-  return `distance ${row.distance_bps} bps · score ${row.band_score} · ${basisLine} · ${historyLine} · ${bandLine}${
+  const bandsByClassLine =
+    row.bands_by_class === undefined
+      ? "bands by class not recorded in this snapshot"
+      : `bands by class A ${row.bands_by_class.A} · B ${row.bands_by_class.B} · C ${row.bands_by_class.C} · unclassified ${row.bands_by_class.unclassified}`;
+  return `distance ${row.distance_bps} bps · score ${row.band_score} · ${basisLine} · ${historyLine} · ${bandLine} · ${bandsByClassLine}${
     coverageLines ? ` · ${coverageLines}` : ""
   }`;
 }
@@ -385,6 +407,23 @@ function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
           ? `band ${fmt(row.price_low)}–${fmt(row.price_high)} · close not recorded in this snapshot`
           : `band ${fmt(row.price_low)}–${fmt(row.price_high)} · close ${fmt(row.reference_close)}`}
       </td>
+      {/* era-desk-iter-18 (J-14): the nearest band on the side of price the row's OWN selected band
+          did NOT choose -- descriptive only, rounded display (full precision for this field is not
+          carried in the tooltip this iteration; the tooltip instead gains the row's `bands_by_class`
+          breakdown, see `deskRowDrillInTitle` above). Three distinguishable states: a populated
+          `opposite_band` (`opposite <side> <class> <low>–<high> · <distance> bps`), an honest
+          "no band on the other side" for a recorded `null` (the canonical band computation served
+          no band on that side at all), and the established legacy-absent copy "opposite wall not
+          recorded in this snapshot" for a row from before this iteration (`undefined`, not `null`). */}
+      <td className={LABEL_CELL} data-testid="desk-row-opposite">
+        {row.opposite_band === undefined
+          ? "opposite wall not recorded in this snapshot"
+          : row.opposite_band === null
+            ? "no band on the other side"
+            : `opposite ${row.opposite_band.side} ${row.opposite_band.band_class ?? "unclassified"} ${fmt(
+                row.opposite_band.price_low
+              )}–${fmt(row.opposite_band.price_high)} · ${fmt(row.opposite_band.distance_bps)} bps`}
+      </td>
     </tr>
   );
 }
@@ -415,6 +454,7 @@ function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) 
             <th className={HEADER_CELL_LEFT}>basis</th>
             <th className={HEADER_CELL_LEFT}>history</th>
             <th className={HEADER_CELL_LEFT}>band</th>
+            <th className={HEADER_CELL_LEFT}>opposite</th>
           </tr>
         </thead>
         <tbody>

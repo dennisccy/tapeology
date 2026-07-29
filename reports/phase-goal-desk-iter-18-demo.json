@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-18",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "We're visiting the /desk page to see the new disclosure features this iteration adds.",
+      "point_out": "The page loads with a 'Desk' heading and a short description about the screen.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Scroll the ranked table to see the new 'opposite' column",
+      "narration": "The table now has eleven columns instead of ten. The new rightmost 'opposite' column reveals information that was previously invisible.",
+      "point_out": "The header row shows all eleven columns: symbol, side, class, distance, score, coverage, tick evidence, basis, history, band, and the new 'opposite' column at the far right.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "table"
+        }
+      }
+    },
+    {
+      "n": 3,
+      "title": "Examine the top-ranked row (BRK-B)",
+      "narration": "Looking at the first ranked row, BRK-B ranks on a support wall at 0.00 bps with a high score of 1787. But every row now discloses: what's the nearest wall on the OTHER side of price?",
+      "point_out": "The BRK-B row shows its existing columns unchanged: support, Class A, 0.00 bps, score 1787, and the band it selected. The new 'opposite' column appears at the far right.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "tr[data-symbol='BRK-B']"
+        }
+      }
+    },
+    {
+      "n": 4,
+      "title": "Hover over a row to see the new tooltip line",
+      "narration": "When you hover over any ranked row, the drill-in tooltip now includes one more piece of information: how many candidate walls of each class the row's displayed wall was chosen from.",
+      "point_out": "The composite tooltip shows the row's distance, score, basis, history, band, and now also the 'bands by class' count breakdown at the end before the coverage timestamps.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "tr[data-symbol='BRK-B'] a"
+        }
+      }
+    },
+    {
+      "n": 5,
+      "title": "Scroll through the table to see multiple rows",
+      "narration": "Every ranked row on this page was recorded before this feature existed, so they all show the honest fallback text: 'opposite wall not recorded in this snapshot'. This is the correct behavior—the data simply wasn't captured when these rows were recorded.",
+      "point_out": "Every visible row's 'opposite' column reads exactly 'opposite wall not recorded in this snapshot' because these legacy snapshots predate the feature.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-screen-rows-table']"
+        }
+      }
+    },
+    {
+      "n": 6,
+      "title": "Confirm the skip table remains unchanged",
+      "narration": "The Skipped Members section below still shows only four columns, as it should—a skipped member was never ranked, so it has no opposite wall to disclose.",
+      "point_out": "Scroll down to see the 'Skipped' sections. Their tables show only the original four columns: symbol, reason, coverage, and tick evidence.",
+      "journey": "J-14",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "text": "Skipped"
+        }
+      }
+    },
+    {
+      "n": 7,
+      "title": "Review the column headers one more time",
+      "narration": "The new eleven-column table design is purely additive—every existing column (symbol, side, class, distance, score, coverage, tick evidence, basis, history, band) remains exactly as it was, and the new 'opposite' column adds the dimension that was previously invisible.",
+      "point_out": "All eleven header cells are visible, in order. The 'opposite' column is the rightmost header, revealing a data point that multiplies the value of every ranked row.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "opposite"
+      }
+    }
+  ]
+}

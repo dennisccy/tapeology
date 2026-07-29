@@ -17,6 +17,10 @@ not see:
       value via arithmetic on ``row.distance_bps``/``row.price_low``/``row.price_high`` -- the new
       ``band`` column/tooltip line renders ``row.reference_close`` beside the row's own
       ``price_low``/``price_high``, never a value recomputed from them client-side.
+  (d) goal-desk-iter-18 (J-14) TC-11 -- the SAME arithmetic guard, extended to also cover
+      ``row.opposite_band``'s ``distance_bps``/``price_low``/``price_high``/``band_score`` and
+      ``row.bands_by_class``'s ``A``/``B``/``C``/``unclassified`` counts -- the new ``opposite``
+      column/tooltip line renders these fields verbatim, never a derived distance, price, or count.
 
 A guard that can never fail proves nothing -- each carries a seeded counter-test proving the
 detection logic itself actually catches a violation (the ``test_copy_discipline.py``
@@ -129,23 +133,33 @@ def test_structure_prefill_guard_can_fail_on_a_seeded_violation():
 # (`row.reference_close`, `row.price_low`-`row.price_high`) is a verbatim render of already-served
 # values, never a client-side recomputation of the very number `reference_close` exists to disclose
 # instead of forcing an operator (or agent) to invert `distance_bps` against a band edge.
-_PRICE_ARITHMETIC_FIELDS = r"row\.(distance_bps|price_low|price_high)"
+# goal-desk-iter-18 (J-14): extended (never duplicated -- the iter-17 direct precedent) to also
+# cover `row.opposite_band.*`'s distance/price/score fields and `row.bands_by_class.*`'s per-class
+# counts -- the new `opposite` column/tooltip line renders these verbatim too, never a derived
+# distance, price, or count (e.g. a client-side "total bands" sum or an implied spread).
+_PRICE_ARITHMETIC_FIELDS = (
+    r"row\.(?:distance_bps|price_low|price_high"
+    r"|opposite_band\.(?:distance_bps|price_low|price_high|band_score)"
+    r"|bands_by_class\.(?:A|B|C|unclassified))"
+)
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
 )
 
 
 def test_desk_page_never_derives_a_price_via_arithmetic_on_distance_or_band_edges():
-    """TC-8: scans `apps/frontend/app/desk/page.tsx`'s source for any expression combining
-    `row.distance_bps`/`row.price_low`/`row.price_high` with an arithmetic operator. The new
-    `band` column/tooltip line (goal-desk-iter-17, J-13) renders `row.reference_close` beside
-    `row.price_low`/`row.price_high` as two side-by-side values, never a derived third one."""
+    """TC-8/TC-11: scans `apps/frontend/app/desk/page.tsx`'s source for any expression combining
+    `row.distance_bps`/`row.price_low`/`row.price_high` (goal-desk-iter-17, J-13) or
+    `row.opposite_band.*`/`row.bands_by_class.*` (goal-desk-iter-18, J-14) with an arithmetic
+    operator. The `band` column/tooltip line renders `row.reference_close` beside
+    `row.price_low`/`row.price_high`, and the new `opposite` column/tooltip line renders
+    `row.opposite_band`/`row.bands_by_class` verbatim -- never a derived value."""
     source = _DESK_PAGE.read_text()
     hits = _PRICE_ARITHMETIC_PATTERN.findall(source)
     assert not hits, (
-        f"apps/frontend/app/desk/page.tsx derives a price value via arithmetic on distance_bps/"
-        f"price_low/price_high ({hits}) -- the page must render only what "
-        "GET /research/desk/screen already served, never recompute a price client-side"
+        f"apps/frontend/app/desk/page.tsx derives a value via arithmetic on distance_bps/price_low/"
+        f"price_high/opposite_band/bands_by_class ({hits}) -- the page must render only what "
+        "GET /research/desk/screen already served, never recompute a value client-side"
     )
 
 
@@ -153,3 +167,17 @@ def test_desk_page_price_arithmetic_guard_can_fail_on_a_seeded_violation():
     """The lint CAN fail -- a lint that cannot fail proves nothing."""
     seeded_source = "const implied = row.price_high - row.reference_close;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_source) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_opposite_band_and_bands_by_class_arithmetic():
+    """TC-11 (goal-desk-iter-18, J-14) counter-test: the extended guard also catches arithmetic on
+    the new `opposite_band`/`bands_by_class` fields, not just the pre-existing distance_bps/
+    price_low/price_high ones."""
+    seeded_opposite = "const gap = row.opposite_band.price_high - row.price_high;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_opposite) is not None
+
+    seeded_score = "const combined = row.opposite_band.band_score + row.band_score;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_score) is not None
+
+    seeded_bands_by_class = "const total = row.bands_by_class.A + row.bands_by_class.B;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_bands_by_class) is not None

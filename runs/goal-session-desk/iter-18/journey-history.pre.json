@@ -1,0 +1,161 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "Universe ingestion — fetched, registered, honest",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/J-01-verify.png (deterministic golden replay, reports/phase-goal-desk-iter-17-ui-test-results.md row UT-J-01 PASS)",
+      "spec_hash": "dcad07154573cae27aff4a75ce71ac9ceca8c2969ec5c3d665aa3cbe08278819"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Coverage + explicit bar top-up over the universe",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/J-02-verify.png (row UT-J-02 PASS)",
+      "spec_hash": "a5cd4f6a0c3dbe67de9a65400250cf777e281712fbf3c90e54758e91971d306c"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The screen — pinned inputs, append-only snapshot, deterministic rank",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/J-03-verify.png (row UT-J-03 PASS). Evaluator re-derivation: the scoped-rig compute for the same five pins reproduced snapshot id screen-2026-07-28-ac07c9581a4f with a rank order identical 63/63 to the pre-change ambient record, and every ambient snapshot recomputes its stored file_checksum.",
+      "spec_hash": "74735994233da1614d5568bc57f2a42e60d7e51cf91bb0378f32add5c898bcd6"
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The /desk briefing page",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/J-04-verify.png (row UT-J-04 PASS) + UT-06-result.png (side/class/distance/score/basis/history/coverage byte-identical for BRK-B and LIN after the new column landed)",
+      "spec_hash": "0a3d005b39831ddc9eb0d481081ac613a2ec9e94b131c36394f9e649182faaec"
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "Ledger history + drill-in to /structure",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/J-05-verify.png (row UT-J-05 PASS; evaluator opened it — /structure prefilled AAPL, as-of 2026-06-22T23:59:59Z) + UT-07-result.png (row drill-in and in-place Screen History swap)",
+      "spec_hash": "cba063f7d5e92f608aa54c1b4d174e17e46e297b8dda20cd52532d9d5a1ae545"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "MCP contract v3 — 17 read-only tools",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-17-ui-test-results.md row UT-J-06 (PASS; goal.md marks this journey '(Keyless; automated.)' — no browser surface). Evaluator's own re-derivation: test_mcp_server.py EXPECTED_TOOLS parses to exactly 17 names, and the evaluator's own full backend suite run was green (exit 0, 0 failures).",
+      "spec_hash": "c3d5a8351c4ce5aa20449d2d1557f4599bad9cdecebbcde8f044e6d4d2908f6f"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The kept product stands — regression sentinel",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/J-07-verify.png (row UT-J-07 PASS; evaluator opened it — /structure AAPL as-of 2026-06-22 with the era's pinned wall drawn at 300.10/302.20). Evaluator re-derivation: zero diff to tradability.py, levels.py, bars.py, bar_index.py, desk_coverage.py, config.py, meta.py, mcp/__init__.py, StructureChart.tsx, PriceChart.tsx, test_copy_discipline.py and the whole app/engine/ tree; Config().config_fingerprint() = 08e471b10130e1e2.",
+      "spec_hash": "47ab77bdd843c8f7004f69b3c433dc9f167c8fce6195c9f21f48c061c7a7b7c5"
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "Every ranked briefing row names the bar its distance was measured from",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-9",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/J-08-verify.png (row UT-J-08 PASS) + UT-05-result.png (basis column unchanged beside the new band column)",
+      "spec_hash": "727585122a3bbcabfa1b789e25d4171cfd6f953422b134050a547ff883fb52f6"
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "Every top-up run leaves an append-only record of what it attempted",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-11",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/J-09-verify.png (row UT-J-09 PASS)",
+      "spec_hash": "df68d0f0595aaa98cc55b5e6dcff6c9bb23dcdeaeda198e9a890d714b3e855cc"
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The coverage the briefing shows is the coverage the frozen store can prove",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-14",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/J-10-verify.png (row UT-J-10 PASS)",
+      "spec_hash": "25ce1c02559425521e1b9950291926f058516a546e7f86443f3e3fbad5cb1ac5"
+    },
+    "J-11": {
+      "id": "J-11",
+      "name": "Every ranked briefing row states how much completed history its wall was measured over",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-15",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/J-11-verify.png (row UT-J-11 PASS — added by the AUDIT lane after finding P1: the spec's wrapped Required-still-passing line dropped J-11/J-12 from every verification lane; demo_runner.py --mode verify replayed both 2/2 PASS, raw artifact reports/phase-goal-desk-iter-17-regression-replay-results-audit.md) + UT-05-result.png (history column still reads 'history 27 sessions' for HONA beside 500-session rows)",
+      "spec_hash": "df33a467492f8ecf5b277b7dc3ea248da2724d43599cf0e713bfe5cd666800d1"
+    },
+    "J-12": {
+      "id": "J-12",
+      "name": "Every recorded screen the ledger lists can be read back — snapshots are addressable by id",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-16",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/J-12-verify.png (row UT-J-12 PASS — audit-lane replay, same P1 provenance as J-11) + UT-07-result.png (clicking the screen-2026-06-22-3ecd45c062c7 history row swaps the displayed snapshot in place, data-selected=true, no navigation). CARRIED capture defect from iter-16 (unchanged this iteration): the earlier same-date view's only genuine full capture is still a 1280x800 crop stopping above the NFLX row.",
+      "spec_hash": "a8328c17d7f39c777e6fbed78d106079403de703b68887550170f5486df2aa73",
+      "evidence_makeup": true
+    },
+    "J-13": {
+      "id": "J-13",
+      "name": "Every ranked briefing row states the price its wall sits at and the close it was measured from",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-17",
+      "last_passing_iter": "goal-desk-iter-17",
+      "first_seen_iter": "goal-desk-iter-17",
+      "last_evidence_path": "reports/qa/goal-desk-iter-17-evidence/UT-05-result.png (fixture-scoped rig :8392/:3392, location.origin asserted before capture; BRK-B 'band 488.50–490.85 · close 490.85' in-band beside LIN 'band 506.33–509.61 · close 506.32' out-of-band, both legible in ONE frame) + AUDIT-F1-legacy-band-range.png / -scrolled.png (legacy rows render their OWN band range plus 'close not recorded in this snapshot' after audit fix F1) + rows UT-01..UT-10 PASS in reports/phase-goal-desk-iter-17-ui-test-results.md. Evaluator's own re-derivation against the scoped snapshot on disk (/home/dennis-chan/.cache/iad/iad.goal-desk-iter-17.3302867/desk-iter17-scoped-qa/screen/screen-2026-07-28-ac07c9581a4f.json): file checksum recomputes; 63/63 ranked rows carry reference_close, 0/38 skip rows do; ZERO mismatches when every row's reference_close is compared to the close of the 1d bar dated at that row's own basis_as_of read from the store; 9 rows in-band and 54 out-of-band; rank order identical 63/63 to the pre-change ambient snapshot under the same five pins, and the ONLY new key on any ranked row is reference_close; all six ambient snapshots still carry 0 reference_close keys with valid checksums and pre-iteration mtimes.",
+      "spec_hash": "ba41be9214d73996ea500dd897680501cc9f115aae254fdd9463a3d172f51b65",
+      "evidence_makeup": true
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-desk-iter-3",
+      "anti_goal": "Snapshots are append-only and pinned. Universe and screen snapshots are dated, checksummed, append-only; every screen pins (universe snapshot id, screen date, as_of, fingerprint, bar-store signature); nothing is silently refetched, backfilled, recomputed in place, or rewritten — a new run is a new snapshot.",
+      "severity": "minor",
+      "evidence": "INTERCEPTED IN-ITERATION, NEVER LANDED. Pre-fix ScreenStore.record silently overwrote a snapshot file whose checksum had failed (iter-3 audit B1); fixed at desk_screen.py:467-473 plus two regression tests, sibling gap in UniverseStore.record closed in iter-4. ITER-17 RE-CONFIRMED by the evaluator directly: all six ambient screen snapshots recompute their stored file_checksum, every one has an mtime predating this iteration's 07:17 start (newest 2026-07-29 03:07), and the only file written anywhere under apps/backend/.data during the iteration window is the derived tradability_cache.db. The new screen compute for evidence ran in a scoped temp store, and the ambient legacy rows still carry no reference_close key.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-desk-iter-4",
+      "anti_goal": "Frozen foundations — the v1 strategy, the default profile, the tape engine's five states and thresholds, the frozen structure computations, the JSON BarStore, and every KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside them, never a mutation of them.",
+      "severity": "minor",
+      "evidence": "RESOLVED at iter-8 by the owner's own written ratification in docs/goal.md ('OWNER RATIFICATION — 2026-07-27 — R-1'). ITER-17 RE-CONFIRMED by the evaluator's own git diff against this iteration's snapshot 421c41c9: zero diff on tradability.py, levels.py, bars.py, bar_index.py, desk_coverage.py, config.py, meta.py, mcp/__init__.py, StructureChart.tsx, PriceChart.tsx, test_copy_discipline.py and the whole app/engine/ tree; the entire product diff is 6 files (desk_screen.py, 3 test files, app/desk/page.tsx, lib/types.ts); Config().config_fingerprint() printed 08e471b10130e1e2 on the evaluator's own run; the ratified inventory gained nothing.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-desk-iter-4",
+      "anti_goal": "Immutable data — registered datasets and bar series are append-only, checksummed, never re-tagged, never deleted, never content-perturbed. Splits are frozen at registration.",
+      "severity": "minor",
+      "evidence": "RESOLVED. The iter-4 price-less-bar write was repaired at three layers and the 60 affected series stay on disk untouched, excluded row-by-row on read — the behaviour R-1 ratified. ITER-17 RE-CONFIRMED: `find apps/backend/.data/bars -type f -newermt '2026-07-28 00:00'` returns 0 of 369 files, so not one recorded series was touched; no new screen snapshot was written to the ambient store; the browser lane's populated-row evidence was computed into a scoped temp copy at /home/dennis-chan/.cache/iad/iad.goal-desk-iter-17.3302867/desk-iter17-scoped-qa.",
+      "resolved": true
+    }
+  ],
+  "notes_iter_17": "GOAL_ACHIEVED. J-13 scored passing on evidence the evaluator opened and re-derived directly (see its last_evidence_path). Every anti-goal category answered explicitly in runs/goal-session-desk/iter-17/eval.md; scan-report.md CLEAN; coherence.md COHERENCE-PASS; no journeys-changed.md (all 12 prior spec_hashes recompute identical). Evaluator-run checks: backend suite exit 0 with 0 failures/errors and 8 skips (progress-mark count 1436 passed; the audit's own post-fix run reported 1435/8/0); Config().config_fingerprint() = 08e471b10130e1e2; EXPECTED_TOOLS parses to exactly 17; zero manifest diff (no package.json / requirements.txt / pyproject.toml change) so no new dependency; docs/goal.md's working-tree diff is 81 pure insertions, 0 deletions, ALL inside the AUTO:journeys marker block (514-953) with the Anti-goals section byte-unchanged, so the goal-proposer stayed inside its box; the evaluator's own process affinity is 4-7,12-15, so the host-guard cap held. NO WRITE to the owner's ambient store this iteration (second iteration in a row): the only touched file under apps/backend/.data is the derived tradability_cache.db. TWO IMPORTANT DEFECTS WERE FOUND AND FIXED BY THE AUDIT LANE, not by the build: F1 (legacy rows dropped the band range goal.md requires them to keep — 100% of live rows were affected) and P1 (the phase spec's wrapped 'Required-still-passing journeys:' line made replay-lane.sh's head -1 parse drop J-11/J-12 from EVERY verification lane while the merged file claimed '20/20 passed'). CAPTURE DEFECT recorded on J-13 (evidence_makeup: true, methodology A.7): the [NEW]-flagged demo-narrator walkthrough exists and is J-13-flagged but was recorded against the AMBIENT store before fix F1, so its eight frames narrate only the legacy state — never a populated in-band or out-of-band row — and its verdict is RECORDED_WITH_NOTES rather than RECORDED (audit D1). The product behaviour it should have shown is proven by UT-05 and by the evaluator's own re-derivation; the re-record rides the next lane that touches /desk. See assumptions.md iter-17.",
+  "updated_at": "2026-07-29T09:28:21+01:00"
+}

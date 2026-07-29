@@ -412,3 +412,34 @@ literal artifact, with zero program change; the flag clears on any fresh capture
 the conjunct strictly, J-13 returns to `partial` until that re-filming lands — and the practical
 obstacle is now documented (two `next dev` processes from one source tree share `.next` and
 cross-contaminate which backend the ambient page serves).
+
+## iter-18 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-14 step 1 states the opposite-band selection rule twice in ways
+that can be read against each other: "the nearest band on the side the row's own selected band is
+NOT on ... The selection is deterministic and stated on the record: distance ascending, then class
+rank descending (`_CLASS_RANK` ... an unclassified band ranks lowest, never highest), then
+`band_score` descending, resolved by `min`'s first-of-tie stability over `compute_tradability`'s own
+served order (the `_select_best_band` precedent)." The trailing parenthetical names the existing
+helper whose key is CLASS-first, which is what shipped; the sentence's own ordering and the
+journey's title ("the nearest wall on the OTHER side") say DISTANCE-first. goal.md does not say
+which wins, and its Acceptance paragraph pins only byte-identity with some band in the canonical
+list — a criterion the shipped rule satisfies.
+**We chose:** Read DISTANCE-first as the requirement and score J-14 `partial`. Four strands, each
+checked by me: (i) "nearest" appears three times (title, step 1's first clause, and the ordering
+clause), while the `_select_best_band` reference is attached to TIE STABILITY, not to the key order;
+(ii) J-14's own rationale in goal.md complains that class-first selection hides nearer bands
+("nothing on the page says a nearer band on the other side exists"), so implementing the new column
+with class-first reproduces the defect the journey exists to remove; (iii) I measured the divergence
+against `compute_tradability` for all 63 ranked members of the owner's own screen at as_of
+2026-07-29 — 2 rows differ (HONA 336.96 vs 153.67 bps; META 232.58 vs 92.05 bps), so this is a
+user-visible behavioural difference, not a wording quibble; (iv) the shipped code's own docstring
+(`desk_screen.py:89`) and frontend comment (`page.tsx:273`) both claim "the nearest band", so the
+implementation is inconsistent with itself under either reading. The opposite call (score `passing`,
+log an assumption) was available and would have closed the era; I judged that closing on a column
+whose headline promise fails on 3% of real rows is the worse error in a project whose first rail is
+honest measurement.
+**Reversible:** yes — either direction is a small change. Distance-first is a one-key edit in
+`_select_opposite_band` plus its goldens; grade-first can be ratified instead by editing goal.md's
+J-14 wording and both "nearest" comments. Nothing recorded blocks either: the only snapshot carrying
+these fields lives in a throwaway rig, and the owner's own store has none.

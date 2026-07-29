@@ -812,6 +812,17 @@ export type EdgeReportPayload = EdgeReportResponse | EdgeReportNotComputed;
 // presence contract as basis/history: always non-null on a NEWLY computed ranked row, entirely
 // ABSENT (not `null`) on a row recorded before this iteration -- callers must check
 // `row.reference_close == null` (loose equality).
+// era-desk-iter-18 (J-14) -- opposite-band disclosure: the nearest band on the side of price the
+// row's own selected band did NOT choose (`opposite_band`, itself nullable when
+// `compute_tradability` served no band on that other side at all), plus a per-class count of every
+// band `compute_tradability` returned for that symbol (`bands_by_class`) -- both selected/counted
+// from the SAME `result["bands"]` list `desk_screen.py` already holds for `reference_close`, zero
+// new backend read. Same legacy-row presence contract as basis/history/reference-close: both keys
+// are always present (though `opposite_band` may itself legitimately be `null`) on a NEWLY computed
+// ranked row, entirely ABSENT (not merely `null`) on a row recorded before this iteration --
+// callers must check `row.opposite_band === undefined` / `row.bands_by_class === undefined` (a
+// present `opposite_band: null` is an honest "no band on the other side", distinct from "not
+// recorded in this snapshot").
 export interface DeskScreenRow {
   symbol: string;
   side: "support" | "resistance";
@@ -827,6 +838,15 @@ export interface DeskScreenRow {
   history_sessions: number | null;
   history_start: string | null;
   reference_close?: number | null;
+  opposite_band?: {
+    side: "support" | "resistance";
+    band_class: "A" | "B" | "C" | null;
+    price_low: number;
+    price_high: number;
+    band_score: number;
+    distance_bps: number;
+  } | null;
+  bands_by_class?: { A: number; B: number; C: number; unclassified: number };
 }
 
 // A member the screen walked but could not rank -- two honest, distinct reasons, never conflated:

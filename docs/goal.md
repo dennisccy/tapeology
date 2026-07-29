@@ -950,6 +950,114 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     all 63 rows), i.e. only by the client-side recomputation the Data Contract forbids — which is why it
     must be recorded at its owner, never derived on the page.)*
 
+- **J-14: Every ranked briefing row states where the nearest wall on the OTHER side of price sits**
+  - Steps:
+    1. Record ONE desk-owned nested field on every NEW ranked screen row: `opposite_band` — the nearest
+       band on the side the row's own selected band is NOT on, taken from the SAME `result["bands"]` list
+       `compute_screen` already holds (`desk_screen.py:369` — the identical list `_select_best_band`
+       consumes at `:385`) and measured with the SAME `_distance_bps` helper (`desk_screen.py:231`)
+       against the SAME `close` the row already records as `reference_close` (`:382`/`:401`). Its values
+       are copied VERBATIM out of the canonical owner's own band dict — `{"side", "band_class",
+       "price_low", "price_high", "band_score", "distance_bps"}`, where `band_class`/`band_score` are
+       `compute_tradability`'s own `class`/`quality_score` passed straight through (never re-graded,
+       never re-scored; a band whose class is `null` is reported as recorded, never filtered out of the
+       candidate set) and the band's `members` list is never copied. The selection is deterministic and
+       stated on the record: distance ascending, then class rank descending (`_CLASS_RANK`,
+       `desk_screen.py:121` — an unclassified band ranks lowest, never highest), then `band_score`
+       descending, resolved by `min`'s first-of-tie stability over `compute_tradability`'s own served
+       order (the `_select_best_band` precedent). No second store read, no second `compute_tradability`
+       call, no new arithmetic beyond the existing helper: zero diff to
+       `tradability.py`/`levels.py`/`bars.py`/`bar_index.py` (no new field on any frozen return shape),
+       zero new `Config` field, no new index, no new cache. When the canonical return holds no band on
+       the other side the field is an honest `null`, never an invented band; skip rows carry nothing (the
+       J-08/J-11/J-13 shape).
+    2. Record, in that SAME single pass over that SAME list, one more desk-owned field: `bands_by_class`
+       — how many bands `compute_tradability` returned for this symbol, counted under the four fixed keys
+       `"A"`, `"B"`, `"C"`, `"unclassified"`, all four ALWAYS present (never sparse), so a row says how
+       many walls its one displayed wall was chosen from. It is a plain count of the canonical owner's own
+       output — never a grade, threshold, weight, or quality number.
+    3. Register both fields in the blueprint's Data Contract "Screen snapshots, rank rows, skip rows" row
+       BEFORE the code lands — one owner (`desk_screen.py`), one serving endpoint
+       (`GET /research/desk/screen`). The snapshot key (screen date, as_of, universe snapshot id,
+       `config_fingerprint`, bar-store signature) is unchanged, and the rank key — band class A>B>C, then
+       distance asc, then band score desc, then symbol asc — is UNCHANGED: this journey DISCLOSES, it
+       never ranks, filters, gates, weights, or scores. Neither new value enters `_row_rank_key`
+       (`desk_screen.py:252`) or any selection, and no "corridor width", "room", proximity flag,
+       threshold, or quality number is computed anywhere (this era's Non-Goals forbid new statistics and
+       gates outright); the copy never advises, predicts, or implies action.
+    4. Keep the append-only rail: never backfill, rewrite, or recompute an already-recorded snapshot;
+       `GET /research/desk/screen` serves legacy rows exactly as recorded, and `/desk` renders their
+       absent value as an honest `"opposite wall not recorded in this snapshot"` — the established
+       J-08/J-11/J-13 pattern (`apps/frontend/app/desk/page.tsx:266/270/278`) — never a value computed at
+       read time, and in particular NEVER derived on the page from the row's own band range, close, or
+       `distance_bps`, which is precisely the client-side recomputation the single-source-of-truth rail
+       forbids.
+    5. Surface it on `/desk`: exactly ONE new descriptive column, `opposite`, beside the existing `band`
+       column on the ranked table, rendering the recorded block in the same rounded-display split the
+       distance/score/basis/history/band cells already use (e.g. `opposite resistance A 490.88–494.22 ·
+       0.6 bps`), with an honest `"no band on the other side"` for a recorded `null` and the
+       legacy-absence copy above for a legacy row; full precision plus one `bands_by_class` line (e.g.
+       `10 bands · A 10 · B 0 · C 0 · unclassified 0`) in the row anchor's existing consolidated honesty
+       tooltip (the iter-7 pattern — never a per-cell `title` under the stretched drill-in anchor). Copy =
+       descriptive measurement only, and `tests/test_copy_discipline.py` stays green unmodified.
+    6. Test fixture-scoped: a golden screen asserting the exact `opposite_band` + `bands_by_class` per
+       ranked row — including one row whose nearest opposite wall is within 25 bps, one whose nearest
+       opposite wall is beyond 1,000 bps, and one whose nearest opposite band carries a `null` class — and
+       byte-identical row content on a re-run under identical pins; a unit test of the selector proving the
+       honest `null` when the canonical return holds no band on the other side and proving the tie-break is
+       stable; a guard test that the row builder issues NO additional `BarStore` read and NO second
+       `compute_tradability` call beyond the ones it already makes (assert the call counts — the
+       J-11/J-13 precedent) and that the frontend derives no distance or price of its own; a golden
+       comparison proving the recorded rank order is byte-identical to what the same pins produced before
+       this change; the MCP `desk_screen` tool stays a byte-identical GET proxy (J-06's exactly-17-tool
+       contract unchanged).
+  - Acceptance: on the fixture-scoped rig a NEW screen run — for a screen date not already recorded under
+    the same five pins, so the store's identical-pin refusal is respected rather than worked around —
+    records `opposite_band` and `bands_by_class` on every ranked row, and each row's `opposite_band`
+    `side`/`band_class`/`price_low`/`price_high`/`band_score` are byte-identical to the corresponding band
+    in `GET /research/tradability?symbol=<sym>&as_of=<that snapshot's own as_of>`'s own `bands` list, its
+    `distance_bps` reproduces that band's distance from the row's own recorded `reference_close` under the
+    SAME formula the row's own `distance_bps` already uses, and `bands_by_class` sums to that same list's
+    length (**single source of truth**: the desk selects from the canonical owner's own returned bands
+    inside the call it already makes and copies their values verbatim — no second read, no re-grading, no
+    re-scoring — and both new values are registered in the Data Contract with `desk_screen.py` as their
+    only owner and `GET /research/desk/screen` as their only serving endpoint; this SSOT criterion stands
+    in place of a PnL-ledger append, which this era's Non-Goals forbid); the recorded rank order is
+    byte-identical to what the same pins produced before this change (disclosure only — a golden
+    comparison proves the rank key did not move); a re-run under identical pins reproduces byte-identical
+    rows and a same-pins re-run still returns the honest already-recorded response; every previously
+    recorded screen snapshot is proven byte-identical on disk (checksums unchanged, nothing backfilled)
+    and `/desk` renders their rows with the honest `"opposite wall not recorded in this snapshot"` state;
+    in a real browser after the T-9 clean rebuild, `/desk` shows the `opposite` column with at least one
+    ranked row whose nearest opposite wall is within 25 bps and one whose nearest opposite wall is more
+    than 1,000 bps away, both legible in the SAME screenshot, plus one screenshot of a row tooltip
+    carrying its `bands_by_class` line (T-10: no screenshot ⇒ `unknown`, never `passing`); a
+    **`[NEW]`-flagged demo-narrator walkthrough** covers the briefing's opposite-wall disclosure end to
+    end, narrated over POPULATED ranked rows (which also closes iter-17's RECORDED_WITH_NOTES capture
+    gap, whose frames narrate the legacy state only); and the full backend suite is green with
+    `Config().config_fingerprint()` still `08e471b10130e1e2`, zero new `Config` fields, the `default`
+    profile and `v1` byte-identical (engine equivalence green), the MCP surface still exactly 17 tools,
+    zero diff to `tradability.py`/`levels.py`/`bars.py`/`bar_index.py`/`StructureChart.tsx`, and
+    `tests/test_copy_discipline.py` green unmodified. *(Keyless core; browser-verifiable. Why: measured
+    2026-07-29 against the canonical owner itself — `GET /research/tradability?as_of=2026-07-29T23:59:59Z`
+    for all 63 ranked members of `screen-2026-07-29-ce0d82b8e9bf` (63 ranked / 38 skipped): all 63 carry
+    bands on BOTH sides of price (typically 5 + 5 of the ≤10-band map; 52 of 63 hold the full 10), yet
+    each recorded row keeps exactly one. The distance from a row's own reference close to the nearest band
+    on the other side spans 0.0 to 12,178.8 bps — median 1,355, within 25 bps on 5 rows, beyond 500 bps on
+    48 — and the spread is invisible exactly where the briefing is densest: the nine top-ranked rows every
+    one read `support · class A · 0.00 bps`, while their nearest opposite wall sits at 0.6 bps for BRK-B
+    #1 (a class-A resistance band 490.88–494.22, score 3001, three cents above its close of 490.85),
+    72.7 bps for DHR #2, 1,457.5 bps for IBM #4 and 6,067.7 bps for CRM #6 — a 10,000× spread printed as
+    nine identical-looking rows. Two rows invert it: ISRG #63 ranks on a wall 4,311 bps away while an
+    unclassified support band sits 0.0 bps from its close, and CMCSA #62 the same with a class-B band —
+    the class-first selection (`_select_best_band`, `desk_screen.py:240`) is doing exactly what it is
+    specified to do, and nothing on the page says a nearer band on the other side exists. `DeskScreenRow`
+    (`lib/types.ts:815`) carries no field for it, and the ranked table's ten columns — symbol, side,
+    class, distance, score, coverage, tick evidence, basis, history, band — have no cell for it. The same
+    reads also close the backlog's `desk-row-band-class-uniformity` observation: all 63 rows read class A,
+    and 42 of them hold ten class-A bands, so `bands_by_class` is what makes the class column's constancy
+    legible instead of mysterious.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

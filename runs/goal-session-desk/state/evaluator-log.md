@@ -984,3 +984,57 @@ and the Desk page is now eight stacked sections and long; (6) nothing in your ow
 changed this run. One sentence for the owner: every ranked row on the Desk page now states the
 wall's price range and the exact close it was measured from, proven number by number against your
 stored price files — please confirm the finish, and let the film be re-taken afterwards.
+
+## Iteration 18 — goal-desk-iter-18
+
+**Date:** 2026-07-29T12:05:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- New this run, scored PARTIAL: J-14 "Every ranked briefing row states where the nearest wall on
+  the OTHER side of price sits" — built, on screen, numbers correct, but it does not always name
+  the CLOSEST wall on the other side, which is what the journey's own title and step 1 ask for
+- Unchanged: J-01 through J-13 all re-verified passing this run — twelve by saved-script replay
+  (12/12), and J-06 "17 machine-readable tools" by my own count of the tools in the running code
+- Carried, not blocking: the older films still owed for J-12 and J-13 stay owed; this run was
+  expected to close J-13's and did not
+- Anti-goal violations: none new, none open. All three older items stay resolved and were
+  re-checked by me directly. Nothing was written into the owner's own data folder: not one of the
+  369 stored price files changed, no screen or universe record was added there, and the only files
+  touched under it are rebuildable caches refreshed by ordinary page loads.
+
+**Reasoning:** I did not take any report's word for the thing this run existed to produce. I opened
+the picture myself: the new "opposite" column is filled on all six ranked rows, with a wall 0.00 bps
+away on one row and a wall 1208.73 bps away on another, both readable in the same image, on a
+throwaway rig whose own address and whose own record ids (absent from the owner's store) I checked.
+Then I proved the numbers instead of believing them: I read the new record straight off disk (its
+checksum recomputes) and re-computed every value from the price files through the same reader the
+wall computation uses — for all six rows the opposite wall's side, grade, price range and score are
+byte-for-byte the same as the canonical owner's own output, every distance reproduces, the per-grade
+counts match my own recount and add up to the number of walls, and the opposite side is never the
+row's own side. Then I checked the one thing nobody downstream checked: the goal file says the
+column must name the NEAREST wall on the other side ("distance ascending, then class rank
+descending"), but the plan file restated that as grade-first and the code follows the plan. I
+measured both rules against the owner's real 63-name screen, the very screen the goal file quotes:
+they disagree on 2 rows — HONA shows a wall 336.96 bps away when one sits 153.67 bps away, and META
+shows 232.58 bps when one sits 92.05 bps away. That is the exact blindness this journey was written
+to remove, reproduced one level deeper, and the code's own comments claim "nearest". So the journey
+is partial, not passing. Separately, the guided film is wrong — three of its six pictures are of the
+Structure page, and the new column appears in none of them — but that is an evidence gap, it rides
+the make-up lane and it is NOT what decides this verdict. Coherence is COHERENCE-PASS. Everything
+else is green: the whole product diff is six files, every frozen file takes a zero change, the
+settings fingerprint is `08e471b10130e1e2`, the tool count is exactly 17, and the copy lint is
+untouched and passing.
+
+**Next-step recommendation:** One more short run at full depth. First, make the "opposite" column
+show the CLOSEST wall on the other side rather than the best-graded one — a one-rule change in
+`apps/backend/app/research/desk_screen.py`, its stored comparisons, and the two comments that
+already claim "nearest"; if the owner prefers the current grade-first behaviour, then the goal file
+and both comments must stop saying "nearest" instead. Second, re-film the walkthrough on a throwaway
+copy of the data with a freshly computed screen, which also clears the two older films still owed.
+One sentence for the owner: the new column works and matches your stored prices exactly, but on 2 of
+your 63 names it points at a wall more than twice as far away as the closest one — please approve
+one short run to fix that and re-film the walkthrough.

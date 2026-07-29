@@ -87,6 +87,23 @@ this addition simply has ranked rows that OMIT this key entirely -- the SAME app
 discipline the basis/history fields established: never defaulted, never backfilled, never present
 as ``null``.
 
+**Opposite-band disclosure (goal-desk-iter-18, J-14).** Every RANKED row also carries
+``opposite_band`` -- the nearest band on the side of price the row's own selected ``best`` band did
+NOT choose, selected from the SAME ``result["bands"]`` list ``_select_best_band`` already ran over
+(zero new ``BarStore`` read, zero second ``compute_tradability`` call), ranked by the IDENTICAL
+``(class rank DESCENDING, distance_bps ascending, quality_score descending)`` tuple via ``min``'s
+own first-of-tie stability (see ``_select_opposite_band`` below) -- ``None`` when
+``compute_tradability`` returned no band on that other side at all, never an invented or
+wrong-side band. It also carries ``bands_by_class`` -- a plain count of ``result["bands"]`` under
+the four fixed keys ``"A"``/``"B"``/``"C"``/``"unclassified"`` (a band with ``class: None`` counts
+under ``"unclassified"``), all four always present even at zero -- no grade, threshold, or quality
+number, a count only. Skip rows never carry either field, matching the basis/history/reference-close
+precedent exactly. A snapshot recorded BEFORE this addition simply has ranked rows that OMIT these
+two keys entirely -- the SAME append-only-row-content discipline the basis/history/reference-close
+fields established: never defaulted, never backfilled (``opposite_band`` ITSELF may legitimately be
+recorded as ``null`` on a NEW row, when the canonical return holds no band on the other side -- that
+is distinct from the ROW omitting the key entirely, which only a pre-iteration snapshot ever does).
+
 **No new ``Config`` field.** The screen store's directory resolves via ``resolve_desk_screen_dir``
 below -- a bare ``TAPEOLOGY_DESK_SCREEN_DIR``-env-var-or-sibling-of-``desk_universe_dir_resolved()``
 default (the ``edge_report_cache.resolve_cache_db_path`` pattern) -- never a ``desk_screen_dir``
@@ -249,6 +266,29 @@ def _select_best_band(bands: list[dict], close: float) -> dict:
     return min(bands, key=key)
 
 
+def _select_opposite_band(bands: list[dict], close: float, best_side: str) -> dict | None:
+    """The nearest band on the side of price ``best_side`` did NOT select (goal-desk-iter-18, J-14)
+    -- filtered from the SAME ``bands`` list ``_select_best_band`` already ran over, then selected
+    by the IDENTICAL tie-break tuple via ``min``'s own first-of-tie stability (no second, invented
+    tie-break rule). ``None`` when no band exists on the other side at all -- never a guessed or
+    wrong-side substitute."""
+    opposite_side_bands = [band for band in bands if band["side"] != best_side]
+    if not opposite_side_bands:
+        return None
+    return _select_best_band(opposite_side_bands, close)
+
+
+def _bands_by_class(bands: list[dict]) -> dict[str, int]:
+    """A plain per-class count of ``bands`` (goal-desk-iter-18, J-14) -- a band with ``class: None``
+    counts under ``"unclassified"``; all four keys are always present, even at zero. A count only --
+    no grade, threshold, weight, or quality number."""
+    counts = {"A": 0, "B": 0, "C": 0, "unclassified": 0}
+    for band in bands:
+        key = band["class"] if band["class"] is not None else "unclassified"
+        counts[key] += 1
+    return counts
+
+
 def _row_rank_key(row: dict) -> tuple[int, float, float, str]:
     """The FINAL cross-symbol ``rows`` order (TC-14): the identical selection tuple above, plus
     ``symbol`` ascending as the final tie-break."""
@@ -333,9 +373,10 @@ def compute_screen(
     assigns those): ``{screen_date, as_of, universe_snapshot_id, config_fingerprint,
     bar_store_signature, rows, skipped}``. Each RANKED row additionally carries ``basis_as_of``/
     ``basis_age_days`` (goal-desk-iter-9, J-08), ``history_sessions``/``history_start``
-    (goal-desk-iter-15, J-11), and ``reference_close`` (goal-desk-iter-17, J-13) -- see the module
-    docstring's "Basis disclosure", "History disclosure", and "Reference-close disclosure" sections;
-    skip rows never carry any of the five.
+    (goal-desk-iter-15, J-11), ``reference_close`` (goal-desk-iter-17, J-13), and
+    ``opposite_band``/``bands_by_class`` (goal-desk-iter-18, J-14) -- see the module docstring's
+    "Basis disclosure", "History disclosure", "Reference-close disclosure", and "Opposite-band
+    disclosure" sections; skip rows never carry any of the seven.
 
     ``progress``, if given, is called after EACH member with ``{"symbol": symbol}`` (the caller
     tracks its own done/total counters -- the ``desk_topup_compute.run_topup`` precedent).
@@ -383,6 +424,7 @@ def compute_screen(
                 bar_store, symbol, result["basis_as_of"]
             )
             best = _select_best_band(result["bands"], close)
+            opposite = _select_opposite_band(result["bands"], close, best["side"])
             rows.append(
                 {
                     "symbol": symbol,
@@ -399,6 +441,19 @@ def compute_screen(
                     "history_sessions": history_sessions,
                     "history_start": history_start,
                     "reference_close": close,
+                    "opposite_band": (
+                        {
+                            "side": opposite["side"],
+                            "band_class": opposite["class"],
+                            "price_low": opposite["price_low"],
+                            "price_high": opposite["price_high"],
+                            "band_score": opposite["quality_score"],
+                            "distance_bps": _distance_bps(opposite, close),
+                        }
+                        if opposite is not None
+                        else None
+                    ),
+                    "bands_by_class": _bands_by_class(result["bands"]),
                 }
             )
 

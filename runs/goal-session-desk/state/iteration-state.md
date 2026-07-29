@@ -1,40 +1,40 @@
 # Iteration State — desk
 
-**After iteration:** 17 · **Date:** 2026-07-29 · **Verdict:** GOAL_ACHIEVED
+**After iteration:** 18 · **Date:** 2026-07-29 · **Verdict:** CONTINUE
 
 ## Journeys
 
-13 passing (J-01..J-13) · 0 failing · 0 unknown · 0 regressed — 13 total (J-01..J-12 by replay,
-J-06 by its 17-tool contract; J-13 by browser UT-05 + the evaluator's own 63-row re-derivation)
+13 passing (J-01..J-13) · 1 partial (J-14) — 14 total (J-01..J-12 replay 12/12, J-06 by its 17-tool contract, J-14 by browser UT-03/05/06 + the evaluator's own 6-row re-derivation)
 
 ## Active blockers
 
-- none — no failing journey, no open anti-goal violation, coherence COHERENCE-PASS, nobody waited on.
-- Carry-only (NEVER an iteration goal): J-13 `evidence_makeup` — the `[NEW]` demo film was recorded
-  on the AMBIENT store before audit fix F1, so its 8 frames show no price at all; re-film on a
-  fixture-scoped rig with a fresh screen. Plus carried J-12 `evidence_makeup` (one full-page
-  re-capture of the EARLIER same-date view; never cite iter-16's `UT-02-result.png` — wrong app).
-- Framework, human-owned: `replay_lane_spec_journeys` (`scripts/automation/lib/replay-lane.sh:70`)
-  truncates a WRAPPED journey-set line — keep `Required-still-passing journeys:` on ONE line.
+- J-14 selection rule (owner: dev) — `desk_screen.py:269` `_select_opposite_band` delegates to
+  `_select_best_band` (class-first), but `docs/goal.md` J-14's title + step 1 ask for the NEAREST
+  opposite band (distance first, class as tie-break). Evaluator measured it against
+  `compute_tradability` on the real 63-row screen (as_of 2026-07-29): 2 rows differ — HONA (shipped
+  class A 336.96 bps vs nearest class B 153.67 bps), META (class A 232.58 vs class C 92.05). Fix the
+  key + goldens + the two "nearest" comments (`desk_screen.py:89`, `app/desk/page.tsx:273`), OR
+  amend goal.md to stop claiming "nearest". Everything else in J-14 is verified correct.
+- Carry-only captures (NEVER an iteration goal): a `[NEW]` walkthrough over POPULATED rows for J-14
+  (iter-18's frames show `/structure`) — the same re-film clears J-13's; a full-page Screen History
+  frame clears J-12's. Framework: keep `Required-still-passing journeys:` on ONE physical line.
 
 ## Last 2 verdicts
 
-- iter 17: GOAL_ACHIEVED — J-13 proven: `reference_close` copied verbatim from the one walk
-  `desk_screen.py` already makes, rendered beside each row's own band range; UT-05 shows an in-band
-  and an out-of-band row in ONE frame; all 63 values re-derived from the stored `1d` bars with zero
-  mismatches; suite exit 0 / 8 skip; fingerprint `08e471b10130e1e2`; 17 MCP tools; ZERO ambient writes.
-- iter 16: GOAL_ACHIEVED — J-12 proven: the same-date pair is addressable by id, both run ledgers
-  name their own damaged files on screen.
+- iter 18: CONTINUE — J-14 built, stored, byte-identical to `compute_tradability`, but names the
+  best-GRADED opposite wall, not the NEAREST, on 2 of 63 real rows; walkthrough filmed the wrong
+  page. Suite green, fingerprint `08e471b10130e1e2`, 17 tools, zero ambient writes, COHERENCE-PASS.
+- iter 17: GOAL_ACHIEVED — J-13 proven (`reference_close` + each row's own band range, 63/63).
 
 ## Do not redo
 
-- J-13 done: `"reference_close": close` at `desk_screen.py:401` (zero new `BarStore` read); the
-  `band` column + `<th>` in `DeskRow`/`DeskRowsTable` and the `bandLine` in `deskRowDrillInTitle`;
-  audit fix F1 — legacy rows keep their OWN `band <low>–<high>` range PLUS `close not recorded in
-  this snapshot` (never collapse that back to the bare string).
-- The `[NEW]` walkthroughs for J-09/J-10/J-11/J-12 are CORRECT — do NOT re-record them; only J-13's
-  needs re-filming, as a passenger task. Do NOT build a `/desk` "Universe ledger" section.
-- Every iter-14/15/16 "do not redo" item stays binding (J-01..J-12 stacks; no legacy backfill; rank key
-  `_row_rank_key` unmoved; zero diff to every protected module, `config.py` and `engine/` included).
-- Never start a second `next dev` from `apps/frontend` while the ambient one runs — they share `.next`
-  and the ambient page silently starts serving the scoped backend's API base.
+- J-14 fields/storage/render/tests/MCP proxy are DONE and verified (`_select_opposite_band`,
+  `_bands_by_class`, `lib/types.ts`, `app/desk/page.tsx` opposite cell + tooltip line,
+  `test_desk_screen.py`, `test_desk_ui_guards.py`, `test_mcp_server.py`) — only the ORDER is open.
+- The `[NEW]` walkthroughs for J-09/J-10/J-11/J-12 are CORRECT — do NOT re-record them. Never write
+  a screen/universe snapshot into `apps/backend/.data`; evidence computes use a fixture-scoped rig
+  (iter-18: `…/iad.goal-desk-iter-18.3302867/scoped-rig-desk18`).
+- No `/desk` "Universe ledger" section; no CLI warmer for the new fields. Every iter-14..17 "do not
+  redo" item stays binding (no legacy backfill; `_row_rank_key` unmoved; zero diff to every
+  protected module, `config.py` and `engine/` included). Never start a second `next dev` from
+  `apps/frontend` while the ambient one runs (shared `.next`).
