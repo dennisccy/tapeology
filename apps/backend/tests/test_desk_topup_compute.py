@@ -687,15 +687,17 @@ def test_cancel_while_running_succeeds_and_a_subsequent_cancel_is_409(route_ctx,
 
 
 def test_get_topup_runs_before_any_run_is_the_honest_empty_payload_and_starts_nothing(route_ctx):
-    """TC-1 + TC-8: HTTP 200 ``{"runs": [], "latest": null}`` before any top-up run has ever
-    completed, and the GET itself triggers no compute (the ``/topup/compute`` snapshot stays
-    untouched)."""
+    """TC-1 + TC-8: HTTP 200 ``{"runs": [], "latest": null, "integrity_errors": []}`` before any
+    top-up run has ever completed, and the GET itself triggers no compute (the ``/topup/compute``
+    snapshot stays untouched). ``integrity_errors`` added goal-desk-iter-16 (J-12) — see
+    ``test_get_topup_runs_surfaces_a_corrupted_run_records_integrity_error`` below for the
+    non-empty case."""
     client, _fresh_manager, _tmp_path = route_ctx
     adapter = _inject_adapter(bars=_bars())
 
     r = client.get("/research/desk/topup/runs")
     assert r.status_code == 200
-    assert r.json() == {"runs": [], "latest": None}
+    assert r.json() == {"runs": [], "latest": None, "integrity_errors": []}
     assert adapter.fetch_bars_calls == []
 
     # TC-8, precisely: calling the new GET (any number of times) never starts a top-up compute --
@@ -750,6 +752,40 @@ def test_get_topup_runs_after_a_completed_run_serves_the_full_latest_record_and_
     assert meta["state"] == latest["state"]
     assert meta["pairs_total"] == latest["pairs_total"]
     assert meta["pairs_attempted"] == latest["pairs_attempted"]
+    assert body["integrity_errors"] == []  # a genuinely clean run has no integrity problem to name
+
+
+def test_get_topup_runs_surfaces_a_corrupted_run_records_integrity_error(route_ctx):
+    """goal-desk-iter-16 (J-12) TC-5: a corrupt run-record file planted in the run log's own
+    directory -- a SIBLING of `route_ctx`'s scoped `TAPEOLOGY_DESK_UNIVERSE_DIR`, resolved via
+    `get_topup_run_store` exactly as the route itself resolves it, never `apps/backend/.data` --
+    is named in `integrity_errors` and excluded from `runs`/`latest`, alongside one genuine record
+    that survives untouched."""
+    client, _fresh_manager, _tmp_path = route_ctx
+    store = get_topup_run_store()
+    genuine = store.record(
+        universe_snapshot_id="universe-2026-07-25-49b33fa31680",
+        requested_window={"start": "2024-07-28T00:00:00Z", "end": "2026-07-28T00:00:00Z"},
+        config_fingerprint=CONFIG.config_fingerprint(),
+        started_utc="2026-07-28T09:00:00.000000Z",
+        finished_utc="2026-07-28T09:05:00.000000Z",
+        state="done",
+        pairs_total=1,
+        outcomes=[{"symbol": "AAA", "timeframe": "1h", "outcome": "fetched", "detail": None}],
+    )
+    corrupt_path = store.root / "topup-2026-01-01-deadbeef0000.json"
+    corrupt_path.write_text("{not json")
+
+    r = client.get("/research/desk/topup/runs")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["runs"]) == 1
+    assert body["runs"][0]["id"] == genuine["id"]
+    assert body["latest"]["id"] == genuine["id"]
+    assert body["integrity_errors"] == [
+        {"file": corrupt_path.name, "error": body["integrity_errors"][0]["error"]}
+    ]
+    assert "corrupted or tampered" in body["integrity_errors"][0]["error"]
 
 
 def test_topup_run_store_directory_defaults_to_a_sibling_of_the_scoped_universe_dir(route_ctx):

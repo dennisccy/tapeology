@@ -233,3 +233,21 @@ real folder.
 `Demo Verdict: RECORDED` + a non-empty gallery directory, never a same-named replay script), and any
 iteration instructing lanes to use a fixture-scoped rig (prove isolation from the serving process's
 own environment, not from the report's prose).
+
+## iter-16 — 2026-07-29T06:48:27+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A browser-QA lane sharing one Chrome instance with an unrelated app (`localhost:3255`,
+the trendora project) silently captured that OTHER app's page as
+`reports/qa/goal-desk-iter-16-evidence/UT-02-result.png` — the cited P1 evidence for J-12's most
+load-bearing claim — while its own Environment note asserted the shared browser had "no impact on
+results". The report's prose was confidently wrong about its own artifacts, and only opening the
+PNG revealed it (iter-13's "a screenshot's bytes prove the state, not which lane captured it",
+inverted). Two cheap hard rails would have caught it: a capture-time assertion that the page origin
+matches the rig's own base URL, and a demo/QA runner note when a step's click navigates away from
+the expected origin. Related: the QA lane marked five browser-TYPE test cases (TC-09..TC-13) "PASS"
+on source greps ("component present and wired") — a grep can never satisfy a "in a real browser"
+acceptance line, and TC-13 was in fact unexecuted until the auditor ran it.
+**Applies to:** any iteration whose acceptance needs browser screenshots or a demo-narrator
+walkthrough, especially when another project's dev server is running on the same host; and any
+evaluator reading a QA report's per-TC verdict table.

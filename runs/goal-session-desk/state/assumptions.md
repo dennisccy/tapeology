@@ -329,3 +329,46 @@ dates being one day apart. Plus the fixture-scoped golden tests the spec asked f
 **Reversible:** yes — a future iteration computing a screen for a genuinely new date under the old
 and new code paths (or a golden fixture recorded pre-change and replayed post-change) would give the
 literal comparison; nothing about the recorded data prevents it.
+
+## iter-16 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s J-12 step 1 requires "`id` and `date` together is an honest refusal,
+never a silent precedence rule" but does not name the HTTP status code, nor whether the refusal
+should look like FastAPI's own automatic validation 422 or a hand-raised 400/409.
+**We chose:** Leave the exact status code to build discretion, requiring only that it is an honest
+4xx (never a 200 with either value silently preferred, never a 5xx). 422 is the natural choice since
+it matches this router's existing FastAPI-validation-refusal convention elsewhere (e.g. the screen
+compute's required-body 422), but the iteration spec does not pin it, since goal.md itself does not.
+**Reversible:** yes — a later iteration can tighten the exact status code with zero effect on any
+recorded data or any other clause, if the owner wants one pinned.
+
+## iter-16 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-12 Acceptance asks that the two same-date views be shown "with at
+least one row whose coverage badge differs between the two views legible across the screenshots (on
+the ambient rig this is ... NFLX's `1d` badge dark in `screen-2026-07-27-936543601e75` and lit in
+`screen-2026-07-27-3ad3c57aa6ba`)". The later view IS captured full-page (`UT-03-result.png`, NFLX
+row present), but the earlier view's only genuine capture
+(`AUDIT-UT-02-earlier-same-date-recording.png`, byte-identical to demo `step-03.png`) is a 1280x800
+viewport frame that stops above the NFLX row — the browser lane's own full-page `UT-02-result.png`
+turned out to be a screenshot of an unrelated application (audit T3, which I opened and confirmed).
+So the named row's badge is not legible on BOTH sides of the pair. goal.md does not say whether the
+named NFLX example is the required comparison or an illustration of "at least one row".
+**We chose:** Read "at least one row whose coverage badge differs ... legible across the
+screenshots" as the requirement and the NFLX line as its illustration, score J-12 `passing`, and
+record the framing shortfall as a capture defect (`evidence_makeup: true`, methodology A.7) rather
+than an unmet clause. Four strands, each checked by me: (i) the coverage difference IS legible
+across the pair — the earlier view carries the on-screen sentence "3 ranked row(s) below show every
+timeframe badge dark" and the later view does not; (ii) I re-derived the row-level difference from
+the two stored files directly — they differ on EXACTLY 4 ranked rows' `coverage` (NFLX, META, MSFT,
+NVDA), ranked order identical 63/63, and NFLX `1d` `has_bars` is `false` then `true`, precisely
+goal.md's example; (iii) the browser lane's UT-02/UT-03 rows record DOM `eval()` reads of the NFLX
+row's `data-has-bars` flipping `false` -> `true` between the two selections; (iv) methodology A.7's
+rail is respected — the asserted BEHAVIOUR is confirmed, only the artifact's crop is wrong, and no
+screenshot shows behaviour contradicting the claim. The strict reading would demand one more
+full-page capture of an already-working, already-photographed page, which the framework routes to
+the make-up lane, never to a new iteration goal.
+**Reversible:** yes — one full-page re-capture of the earlier recording (a `Depth: evidence` run or
+a passenger task, no program change, and repeatable at will since this journey only READS) produces
+the literal side-by-side NFLX comparison; nothing about the stored data prevents it, and the flag
+clears on any fresh capture.

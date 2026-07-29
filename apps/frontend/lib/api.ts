@@ -978,6 +978,35 @@ export async function fetchDeskScreenByDate(date: string): Promise<{
   }
 }
 
+// GET /research/desk/screen?id= — the exact persisted snapshot recorded under that id, verbatim,
+// or `null` when nothing matches (an honest "nothing recorded under this id", never an error).
+// goal-desk-iter-16 (J-12): the ONLY way to reach an EARLIER same-`screen_date` recording once a
+// later one exists (`?date=` always resolves the newest match) — mirrors `fetchDeskScreenByDate`
+// byte-for-byte except the query param name.
+export async function fetchDeskScreenById(id: string): Promise<{
+  ok: boolean;
+  data: DeskScreenSnapshot | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/screen?id=${encodeURIComponent(id)}`);
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data: (data.screen as DeskScreenSnapshot | null) ?? null };
+    }
+    let error = "The desk screen for that id could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
 // POST /research/desk/screen/compute — start (or, while one is already running, observe) the
 // single-flight screen compute job. `screenDate` is the CALLER's own today (the `todayUtcDate()`
 // helper, /structure's own "Today" shortcut precedent) — this function takes it as a parameter
@@ -1115,9 +1144,11 @@ export async function cancelDeskTopupCompute(): Promise<{ ok: boolean; error?: s
 
 // era-desk-iter-11 (J-09): GET /research/desk/topup/runs — the durable, append-only top-up run
 // log's meta-only list + the latest full record, served VERBATIM. Mirrors `fetchDeskScreen`'s
-// exact `{ok, data, error}` shape byte-for-byte. An honest-empty (`{runs: [], latest: null}`)
-// result is a valid `ok:true` outcome — the caller renders it as "No top-up runs recorded yet.",
-// never a failure; `data: null` is reserved for a genuine non-200 / unreachable backend.
+// exact `{ok, data, error}` shape byte-for-byte. An honest-empty (`{runs: [], latest: null,
+// integrity_errors: []}`) result is a valid `ok:true` outcome — the caller renders it as "No top-up
+// runs recorded yet.", never a failure; `data: null` is reserved for a genuine non-200 /
+// unreachable backend. `integrity_errors` (goal-desk-iter-16, J-12) passes through `res.json()`
+// verbatim — no function-body change needed, just the widened `DeskTopupRunsListResult` type.
 export async function fetchDeskTopupRuns(): Promise<{
   ok: boolean;
   data: DeskTopupRunsListResult | null;
@@ -1208,9 +1239,11 @@ export async function cancelDeskReconcileCompute(): Promise<{ ok: boolean; error
 // era-desk-iter-14 (J-10): GET /research/desk/coverage/reconcile/runs — the durable, append-only
 // reconciliation run log's meta-only list + the latest full record, served VERBATIM. Mirrors
 // `fetchDeskTopupRuns`'s exact `{ok, data, error}` shape byte-for-byte. An honest-empty
-// (`{runs: [], latest: null}`) result is a valid `ok:true` outcome — the caller renders it as
-// "No reconciliation run recorded yet.", never a failure; `data: null` is reserved for a genuine
-// non-200 / unreachable backend.
+// (`{runs: [], latest: null, integrity_errors: []}`) result is a valid `ok:true` outcome — the
+// caller renders it as "No reconciliation run recorded yet.", never a failure; `data: null` is
+// reserved for a genuine non-200 / unreachable backend. `integrity_errors` (goal-desk-iter-16,
+// J-12) passes through `res.json()` verbatim — no function-body change needed, just the widened
+// `DeskReconcileRunsListResult` type.
 export async function fetchDeskReconcileRuns(): Promise<{
   ok: boolean;
   data: DeskReconcileRunsListResult | null;

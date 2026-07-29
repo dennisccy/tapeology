@@ -849,3 +849,72 @@ later turn that number into a pass/fail rule; the Desk page is now eight stacked
 two screens saved on the same day cannot be told apart by a date-only lookup; and keyboard access
 for the history rows. One sentence for the owner: the new "history" column works, is honest about
 older records, and matches your stored price files exactly on every row — please confirm the finish.
+
+## Iteration 16 — goal-desk-iter-16
+
+**Date:** 2026-07-29T06:48:27+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-12 "Every recorded screen the ledger lists can be read back — snapshots are
+  addressable by id" (new this run — the goal-proposer added it to `docs/goal.md` after iteration
+  15 closed the era, so the era reopened for one more disclosure journey, its fifth; it is built,
+  proven and filmed in a single run)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-03, J-04, J-05, J-07, J-08, J-09, J-10, J-11 all re-verified passing this run by
+  saved-script replay; J-06 "17 machine-readable tools" re-confirmed by my own parse of the
+  contract test's tool list plus my own full-suite run; J-01 and J-02 carried (outside this run's
+  required set, their code untouched) and spot-checked against their own pictures
+- Anti-goal violations: none new, none open. All three older items stay resolved and were
+  re-checked by me directly. For the first time in three runs there is NO process deviation to
+  carry: this run wrote nothing at all into the owner's own data folder.
+
+**Reasoning:** I did not take any report's word for the thing this run existed to produce. I opened
+the pictures myself. The same day, 2026-07-27, now opens as two separate recordings: one names
+itself `screen-2026-07-27-936543601e75`, recorded at 21:42:14 on the 27th, with the warning "not
+the latest" and the note "3 ranked row(s) below show every timeframe badge dark"; the other names
+itself `screen-2026-07-27-3ad3c57aa6ba`, recorded at 21:30:16 on the 28th, same screen date, and
+without that note. I opened the history table and saw the two same-day rows carrying those two
+different recording times side by side. I opened the damaged-file picture and read, in plain words
+on the page, "1 file failed an integrity check and is excluded: topup-2026-07-28-audit0corrupt.json"
+and the same for the reconciliation list, with the two genuine runs still listed. Then I proved the
+numbers instead of believing them: I read both stored recordings straight off disk and they differ
+on EXACTLY four ranked rows' coverage — Netflix, Meta, Microsoft and Nvidia — with the ranked order
+identical on all 63 rows and Netflix's one-day badge genuinely flipping from off to on; all six
+stored recordings recompute their own checksums. I proved nothing was written: every stored file
+predates this run's start, not one of the 369 price files was modified, and the folder the
+damaged-file test would have used inside the owner's own data does not even exist, so that test
+really did use a throw-away folder. I re-ran the work: the whole back-end suite (1426 passed, 8
+skipped, 0 failed, exit 0), the settings fingerprint (`08e471b10130e1e2`), the tool count (exactly
+17), and a file-by-file check that every frozen file and the whole engine take a zero change. I read
+the new route code myself: one read of the store, nothing recomputed, nothing written, and the
+refusal when both lookups are given fires before the store is even opened. The film the goal file
+demands exists, marked new on all seven steps, and covers the whole arc. Coherence is
+COHERENCE-PASS. GOAL_ACHIEVED because all twelve journeys now have positive, opened evidence,
+nothing that used to work stopped working, and nothing is waiting on a person.
+
+**Next-step recommendation:** Halt — the goal is achieved. Six follow-ups for the owner, none a
+defect and none blocking: (1) one picture in this run's evidence folder, `UT-02-result.png`, is a
+screenshot of a completely different program — I opened it and confirmed it; the independent audit
+caught it, took correct pictures beside it, and left the bad one in place with a written warning
+rather than quietly deleting it; the picture-taking step was sharing one browser with an unrelated
+program while its own report claimed that had "no impact", and that check should become automatic;
+(2) the two same-day recordings are proven different on screen, but the exact row the goal text
+names (Netflix's one-day badge) is only visible in one of the two pictures — the other stops just
+above it; the difference is still plainly visible there as a sentence about dark badges, and I
+re-checked the stored files myself, so one full-length re-take would close this with no program
+change; (3) the checking step marked five browser test cases as passed while only reading source
+code — the real browser step did run the equivalents properly and the audit ran the one that had
+not run at all, so no conclusion is wrong, but "passed by reading the code" must never satisfy a
+test that says "in a browser"; (4) this run's own plan asked for a damaged-file line on a fourth
+list ("Universe") that has never existed on the page; the development step correctly refused to
+invent it and said so, and the goal file never asked for it — please have the plan text corrected
+rather than the section built; (5) two things stay open by choice: if EVERY saved screen were
+damaged at once the page would show the "nothing computed yet" panel and the screen list's own
+damaged-file line would be hidden exactly when it matters most, and eight regression pictures in
+this run are the same single image reused, so they prove the checks ran, not what each check saw;
+(6) still open from earlier runs: keyboard access for the history rows, the run tables have no
+length limit, and the Desk page is now eight stacked sections and long. One sentence for the owner:
+every saved screen can now be opened by name, damaged files are named on screen instead of being
+dropped in silence, and this run touched none of your own data — please confirm the finish.

@@ -718,11 +718,13 @@ def test_get_reconcile_compute_before_any_trigger_is_an_honest_null_and_starts_n
 
 
 def test_get_reconcile_runs_before_any_run_is_the_honest_empty_payload_and_starts_nothing(route_ctx):
-    """TC-6."""
+    """TC-6. ``integrity_errors`` added goal-desk-iter-16 (J-12) — see
+    ``test_get_reconcile_runs_surfaces_a_corrupted_run_records_integrity_error`` below for the
+    non-empty case."""
     client, fresh_manager, _tmp_path = route_ctx
     r = client.get("/research/desk/coverage/reconcile/runs")
     assert r.status_code == 200
-    assert r.json() == {"runs": [], "latest": None}
+    assert r.json() == {"runs": [], "latest": None, "integrity_errors": []}
     assert fresh_manager.snapshot() is None  # the unrelated compute snapshot stayed untouched
 
 
@@ -852,8 +854,11 @@ def test_tc20_get_reconcile_runs_survives_a_corrupted_run_record_file_alongside_
             break
         time.sleep(0.02)
 
+    # goal-desk-iter-16 (J-12) TC-6: the corrupt file is planted in this test's OWN scoped
+    # `route_ctx` dir (rooted under `tmp_path`) -- never `apps/backend/.data`.
     reconcile_dir = tmp_path / "index_reconcile_runs"
-    (reconcile_dir / "reconcile-2026-01-01-deadbeef0000.json").write_text("{not json")
+    corrupt_path = reconcile_dir / "reconcile-2026-01-01-deadbeef0000.json"
+    corrupt_path.write_text("{not json")
 
     r = client.get("/research/desk/coverage/reconcile/runs")
     assert r.status_code == 200
@@ -861,6 +866,10 @@ def test_tc20_get_reconcile_runs_survives_a_corrupted_run_record_file_alongside_
     assert len(body["runs"]) == 1  # the corrupted file is excluded, never fabricated, never a crash
     assert body["latest"] is not None
     assert body["latest"]["state"] == "done"
+    # TC-6: the store's own `errors` return is now surfaced, never silently discarded.
+    assert len(body["integrity_errors"]) == 1
+    assert body["integrity_errors"][0]["file"] == corrupt_path.name
+    assert "corrupted or tampered" in body["integrity_errors"][0]["error"]
 
 
 def test_tc8_route_level_a_reconcile_run_leaves_the_universe_snapshot_file_byte_identical(route_ctx):

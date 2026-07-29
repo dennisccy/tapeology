@@ -9,7 +9,7 @@ import {
   fetchDeskReconcileCompute,
   fetchDeskReconcileRuns,
   fetchDeskScreen,
-  fetchDeskScreenByDate,
+  fetchDeskScreenById,
   fetchDeskScreenCompute,
   fetchDeskTopupCompute,
   fetchDeskTopupRuns,
@@ -91,6 +91,19 @@ import { fmt } from "@/lib/format";
 // unconditionally, immediately after "Top-up runs" — the SAME "independent of screen state"
 // placement precedent iter-11 established, since reconciliation touches only the bar store/index,
 // never a screen. Page-load GETs still trigger nothing (T-4/5C, unchanged).
+//
+// goal-desk-iter-16 (J-12): individual addressability + honest ledger disclosure, zero new
+// endpoint/section. Screen History selection/highlighting switches from `screen_date`-keyed to
+// `id`-keyed (`fetchDeskScreenById`, the new `?id=` read) so an EARLIER same-`screen_date`
+// recording — unreachable via `?date=`, which always resolves the newest match — is individually
+// openable, and each history row now shows its own `created_utc` so two same-date rows read
+// distinctly. Provenance gains the displayed snapshot's own `id`/`created_utc` and, in the
+// default (latest) view only, describes itself as the most recently RECORDED screen rather than
+// "the latest screen date". The Screen History, Top-up Runs, and Index Reconciliation sections
+// each gained a count-plus-filename `IntegrityErrorsNote` whenever that ledger's own
+// `integrity_errors` carries an entry — the Universe ledger has no existing frontend section to
+// extend (never fetched/rendered on this page today, unlike the plan's premise; see the dev
+// handoff's Known Issues).
 
 const NUMERIC_CELL = "px-2 py-1.5 text-right font-mono text-xs text-slate-200 whitespace-nowrap";
 const HEADER_CELL = "px-2 py-1 text-right text-[11px] font-medium text-slate-500";
@@ -473,8 +486,15 @@ function DeskSkippedSection({ skipped, asOf }: { skipped: DeskScreenSkip[]; asOf
 // date's persisted snapshot (`GET /research/desk/screen?date=`) and swaps it into the page's
 // display in place; the click-through itself is a same-page state swap, never a navigation, so it
 // stays a plain `onClick` (not a `Link` — the `Link`/drill-in requirement below is only for
-// jumping to `/structure`). `selectedDate` highlights the currently-displayed row (`null` while
-// viewing the latest screen, since the latest need not be one of the listed historical rows). -----
+// jumping to `/structure`).
+//
+// goal-desk-iter-16 (J-12): selection/highlighting switches from `screen_date`-keyed to
+// `id`-keyed — the store's own 5-pin key already allows two recordings under the SAME
+// `screen_date` (a pre-/post-repair pair, e.g.), and a `screen_date`-keyed select/highlight could
+// only ever reach or distinguish one of the two. Each row now also shows its own `created_utc`
+// beside `screen_date` so two same-date rows read distinctly without opening either. `selectedId`
+// highlights the currently-displayed row's own id (see `DeskPage`'s `displayedSnapshot?.id`, which
+// covers BOTH a selected history entry and the default latest view). ------------------------------
 
 function DeskHistoryRow({
   meta,
@@ -482,20 +502,24 @@ function DeskHistoryRow({
   selected,
 }: {
   meta: DeskScreenMeta;
-  onSelect: (date: string) => void;
+  onSelect: (id: string) => void;
   selected: boolean;
 }) {
   return (
     <tr
       data-testid="desk-history-row"
+      data-screen-id={meta.id}
       data-screen-date={meta.screen_date}
       data-selected={selected}
-      onClick={() => onSelect(meta.screen_date)}
+      onClick={() => onSelect(meta.id)}
       className={`cursor-pointer border-b border-slate-800/60 transition-colors last:border-b-0 hover:bg-slate-900/40 ${
         selected ? "bg-slate-800/60" : ""
       }`}
     >
       <td className={LABEL_CELL}>{meta.screen_date}</td>
+      <td className={LABEL_CELL} data-testid="desk-history-created-utc">
+        {meta.created_utc}
+      </td>
       <td className={NUMERIC_CELL}>{meta.counts.rows}</td>
       <td className={NUMERIC_CELL}>{meta.counts.skipped}</td>
       <td className={LABEL_CELL} data-testid="desk-history-provenance">
@@ -508,11 +532,11 @@ function DeskHistoryRow({
 function DeskHistoryTable({
   screens,
   onSelect,
-  selectedDate,
+  selectedId,
 }: {
   screens: DeskScreenMeta[];
-  onSelect: (date: string) => void;
-  selectedDate: string | null;
+  onSelect: (id: string) => void;
+  selectedId: string | null;
 }) {
   if (screens.length === 0) {
     return <EmptyState testid="desk-history-empty" title="No screens recorded yet." />;
@@ -523,6 +547,7 @@ function DeskHistoryTable({
         <thead>
           <tr className="border-b border-slate-800">
             <th className={HEADER_CELL_LEFT}>date</th>
+            <th className={HEADER_CELL_LEFT}>recorded</th>
             <th className={HEADER_CELL}>rows</th>
             <th className={HEADER_CELL}>skipped</th>
             <th className={HEADER_CELL_LEFT}>provenance</th>
@@ -534,7 +559,7 @@ function DeskHistoryTable({
               key={meta.id}
               meta={meta}
               onSelect={onSelect}
-              selected={meta.screen_date === selectedDate}
+              selected={meta.id === selectedId}
             />
           ))}
         </tbody>
@@ -670,6 +695,29 @@ function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
   );
 }
 
+// --- Ledger integrity-error disclosure (goal-desk-iter-16, J-12) — a count-plus-filename inline
+// note, mirroring `desk-provenance-signature-note`'s plain-text styling (never a new alert/badge
+// component). Renders ONLY when the ledger's own payload carries at least one entry — absent
+// otherwise, never an empty-array placeholder. Shared across the Screen History, Top-up Runs, and
+// Index Reconciliation sections below (each already receives `integrity_errors` verbatim from its
+// own GET). ------------------------------------------------------------------------------------
+
+function IntegrityErrorsNote({
+  errors,
+  testid,
+}: {
+  errors: { file: string; error: string }[];
+  testid: string;
+}) {
+  if (errors.length === 0) return null;
+  return (
+    <p data-testid={testid} className="mt-2 text-[11px] text-amber-300">
+      {errors.length} file{errors.length === 1 ? "" : "s"} failed an integrity check and{" "}
+      {errors.length === 1 ? "is" : "are"} excluded: {errors.map((e) => e.file).join(", ")}
+    </p>
+  );
+}
+
 // The section's own Loading/Unavailable/Populated states — independent of `screenResult` (a
 // top-up run's history is a separate concern from a screen's), fed by its own mount-time GET (see
 // `DeskPage` below). Mirrors the top-level ternary's exact three-state shape.
@@ -693,6 +741,10 @@ function TopupRunsSection({
     <div>
       <TopupRunsTable runs={result.data.runs} />
       {result.data.latest !== null && <LatestTopupRunDetail run={result.data.latest} />}
+      <IntegrityErrorsNote
+        errors={result.data.integrity_errors}
+        testid="desk-topup-runs-integrity-errors"
+      />
     </div>
   );
 }
@@ -872,12 +924,16 @@ function ReconciliationSection({
     <div>
       <IndexReconciliationTable runs={result.data.runs} />
       {result.data.latest !== null && <LatestReconciliationDetail run={result.data.latest} />}
+      <IntegrityErrorsNote
+        errors={result.data.integrity_errors}
+        testid="desk-reconcile-runs-integrity-errors"
+      />
     </div>
   );
 }
 
-// --- Provenance line — universe snapshot id + date, as_of, config_fingerprint, and the pinned
-// bar-store signature. --------------------------------------------------------------------------
+// --- Provenance line — snapshot id + recorded-at time, universe snapshot id + date, as_of,
+// config_fingerprint, and the pinned bar-store signature. -------------------------------------
 //
 // The signature's LABEL (era-desk-iter-4 audit F1): `bar_store_signature` is a checksum —
 // `sha256(sorted (symbol, timeframe, latest_window_end_utc) tuples)[:16]` (desk_screen.py) — not a
@@ -887,14 +943,36 @@ function ReconciliationSection({
 // is a window end — each coverage badge's own `latest_window_end_utc` tooltip, which keeps it. Here
 // the honest name is the signature's own, with a caption saying what it summarizes. The blueprint's
 // registered wording is amended in the same commit.
-function DeskProvenance({ snapshot }: { snapshot: DeskScreenSnapshot }) {
+//
+// goal-desk-iter-16 (J-12): `id`/`created_utc` (a straight re-format of fields `DeskScreenSnapshot`
+// already carries — nothing derived) name EXACTLY which of possibly several same-date recordings is
+// on screen. `isViewingLatest` gates a default-view-only note: while showing `latest`
+// (`created_utc`-sorted newest recording, TC-12), the copy describes itself as "the most recently
+// recorded screen", never "the latest screen date" — a same-date recording can still exist earlier
+// and be reachable from Screen History below.
+function DeskProvenance({
+  snapshot,
+  isViewingLatest,
+}: {
+  snapshot: DeskScreenSnapshot;
+  isViewingLatest: boolean;
+}) {
   return (
     <div data-testid="desk-provenance">
+      <Metric label="Snapshot id" value={snapshot.id} />
+      <Metric label="Recorded at" value={snapshot.created_utc} />
       <Metric label="Universe snapshot" value={snapshot.universe_snapshot_id ?? "—"} />
       <Metric label="Screen date" value={snapshot.screen_date} />
       <Metric label="As of" value={snapshot.as_of} />
       <Metric label="Config fingerprint" value={snapshot.config_fingerprint} />
       <Metric label="Bar-store signature" value={snapshot.bar_store_signature} />
+      {isViewingLatest && (
+        <p data-testid="desk-provenance-latest-note" className="mt-1 text-[11px] text-slate-600">
+          This is the most recently recorded screen (by recorded-at time), not necessarily the
+          latest screen date — an earlier same-date recording can still exist and be opened from
+          Screen History below.
+        </p>
+      )}
       <p data-testid="desk-provenance-signature-note" className="mt-1 text-[11px] text-slate-600">
         The bar-store signature is a checksum over every member&apos;s window-last-requested
         timestamp at the moment this screen was computed — a pin, never a time. Each coverage
@@ -1235,22 +1313,24 @@ function DeskNotComputedPanel({
 function DeskPopulatedScreen({
   snapshot,
   screens,
+  screenIntegrityErrors,
   isViewingLatest,
   historyFetchError,
   onSelectHistory,
   onShowLatest,
-  selectedHistoryDate,
+  selectedHistoryId,
   screenControlProps,
   topupControlProps,
   reconcileControlProps,
 }: {
   snapshot: DeskScreenSnapshot;
   screens: DeskScreenMeta[];
+  screenIntegrityErrors: { file: string; error: string }[];
   isViewingLatest: boolean;
   historyFetchError: string | null;
-  onSelectHistory: (date: string) => void;
+  onSelectHistory: (id: string) => void;
   onShowLatest: () => void;
-  selectedHistoryDate: string | null;
+  selectedHistoryId: string | null;
   screenControlProps: ScreenControlProps;
   topupControlProps: TopupControlProps;
   reconcileControlProps: ReconcileControlProps;
@@ -1281,7 +1361,7 @@ function DeskPopulatedScreen({
 
       <section aria-label="Provenance">
         <Panel title="Provenance">
-          <DeskProvenance snapshot={snapshot} />
+          <DeskProvenance snapshot={snapshot} isViewingLatest={isViewingLatest} />
         </Panel>
       </section>
 
@@ -1310,7 +1390,11 @@ function DeskPopulatedScreen({
           <DeskHistoryTable
             screens={screens}
             onSelect={onSelectHistory}
-            selectedDate={selectedHistoryDate}
+            selectedId={selectedHistoryId}
+          />
+          <IntegrityErrorsNote
+            errors={screenIntegrityErrors}
+            testid="desk-screen-history-integrity-errors"
           />
         </Panel>
       </section>
@@ -1373,10 +1457,11 @@ export default function DeskPage() {
 
   // era-desk-iter-6 (J-05): the screen-history click-through. `viewingSnapshot` is `null` while
   // showing the top-level `latest` snapshot already held in `screenResult` (no refetch needed to
-  // return to it — TC-2); once a history row is selected, it holds THAT date's own full snapshot,
-  // fetched via the already-shipped `?date=` read (`fetchDeskScreenByDate`, zero new backend
-  // route). `historyFetchError` surfaces a failed/no-match click WITHOUT disturbing whatever is
-  // currently displayed (no crash, no blank state — the plan's own error-case requirement).
+  // return to it — TC-2); once a history row is selected, it holds THAT row's own full snapshot,
+  // fetched via the `?id=` read (`fetchDeskScreenById`, goal-desk-iter-16/J-12 — switched from the
+  // date-keyed variant so an earlier same-`screen_date` recording is individually reachable).
+  // `historyFetchError` surfaces a failed/no-match click WITHOUT disturbing whatever is currently
+  // displayed (no crash, no blank state — the plan's own error-case requirement).
   const [viewingSnapshot, setViewingSnapshot] = useState<DeskScreenSnapshot | null>(null);
   const [historyFetchError, setHistoryFetchError] = useState<string | null>(null);
 
@@ -1548,18 +1633,22 @@ export default function DeskPage() {
   }
 
   // era-desk-iter-6 (J-05): select a past history row — fetch-and-swap, no POST, no recompute
-  // (TC-1). A date with no matching recorded screen (`{"screen": null}`) or an unreachable backend
-  // both leave the currently-displayed snapshot exactly as it was — only the error note changes.
-  async function handleSelectHistoryScreen(date: string) {
+  // (TC-1). goal-desk-iter-16 (J-12): switched from `?date=` to `?id=` — a `screen_date`-keyed
+  // fetch could only ever resolve the NEWER of two same-date recordings (`?date=`'s own
+  // `matching[-1]` convention), so it structurally could not reach an earlier same-date entry;
+  // `?id=` addresses each recording individually. An unknown id (`{"screen": null}`) or an
+  // unreachable backend both leave the currently-displayed snapshot exactly as it was — only the
+  // error note changes.
+  async function handleSelectHistoryScreen(id: string) {
     setHistoryFetchError(null);
-    const result = await fetchDeskScreenByDate(date);
+    const result = await fetchDeskScreenById(id);
     if (result.ok && result.data !== null) {
       setViewingSnapshot(result.data);
       return;
     }
     setHistoryFetchError(
       result.ok
-        ? `No recorded screen matches ${date} — still showing the previously displayed screen.`
+        ? "No recorded screen matches that entry — still showing the previously displayed screen."
         : result.error ?? "That recorded screen could not be loaded.",
     );
   }
@@ -1601,6 +1690,7 @@ export default function DeskPage() {
 
   const latest = screenResult?.ok ? screenResult.data?.latest ?? null : null;
   const screens = screenResult?.ok ? screenResult.data?.screens ?? [] : [];
+  const screenIntegrityErrors = screenResult?.ok ? screenResult.data?.integrity_errors ?? [] : [];
   // The snapshot actually on screen: a selected history entry, or `latest` when none is selected.
   // `latest === null` (never `displayedSnapshot === null`) stays the ONE discriminator for the
   // honest "Desk screen not computed yet." empty state — with no screen ever recorded there is
@@ -1612,6 +1702,11 @@ export default function DeskPage() {
   // and a banner claiming "not the latest" there would state something false about the very
   // snapshot it is describing.
   const isViewingLatest = viewingSnapshot === null || viewingSnapshot.id === latest?.id;
+  // goal-desk-iter-16 (J-12): the id-based highlight for `DeskHistoryTable` — the SAME id the
+  // above `isViewingLatest` check already compares against, so the currently-displayed snapshot
+  // (a selected history entry OR the default `latest`) is always the one highlighted row, even
+  // when it shares its `screen_date` with another recorded entry.
+  const selectedHistoryId = viewingSnapshot?.id ?? latest?.id ?? null;
 
   return (
     <div className="min-h-screen">
@@ -1647,11 +1742,12 @@ export default function DeskPage() {
           <DeskPopulatedScreen
             snapshot={displayedSnapshot ?? latest}
             screens={screens}
+            screenIntegrityErrors={screenIntegrityErrors}
             isViewingLatest={isViewingLatest}
             historyFetchError={historyFetchError}
             onSelectHistory={handleSelectHistoryScreen}
             onShowLatest={handleShowLatest}
-            selectedHistoryDate={viewingSnapshot?.screen_date ?? null}
+            selectedHistoryId={selectedHistoryId}
             screenControlProps={screenControlProps}
             topupControlProps={topupControlProps}
             reconcileControlProps={reconcileControlProps}

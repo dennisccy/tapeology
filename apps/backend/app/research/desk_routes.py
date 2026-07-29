@@ -13,29 +13,39 @@ shape) and the desk bar top-up's three compute-manager routes (``POST``/``GET
 /research/desk/topup/compute``, ``POST /research/desk/topup/compute/cancel`` — mirrors
 ``routes.py``'s ``/edge-report/compute`` trio verbatim).
 
-J-03 (unmodified this iteration) adds the screen: ``GET /research/desk/screen`` (latest + ``?date=``
-+ a lightweight meta-only snapshot list — never full ``rows``/``skipped`` for every historical
-snapshot, see ``desk_screen.py``'s module docstring) and the screen's own three compute-manager
-routes (``POST``/``GET /research/desk/screen/compute``, ``POST
-/research/desk/screen/compute/cancel`` — mirrors the top-up trio exactly). Kept as its own module
-(mirroring the plan's stated preference) rather than folding into ``routes.py``, which is already
-large; mounted separately in ``app/main.py``.
+J-03 (base shape unmodified; ``GET /research/desk/screen`` extended goal-desk-iter-16) adds the
+screen: latest + ``?date=`` + ``?id=`` (J-12, below) + a lightweight meta-only snapshot list — never
+full ``rows``/``skipped`` for every historical snapshot, see ``desk_screen.py``'s module docstring —
+and the screen's own three compute-manager routes (``POST``/``GET /research/desk/screen/compute``,
+``POST /research/desk/screen/compute/cancel`` — mirrors the top-up trio exactly). Kept as its own
+module (mirroring the plan's stated preference) rather than folding into ``routes.py``, which is
+already large; mounted separately in ``app/main.py``.
 
-J-09 (unmodified this iteration) adds ONE new read: ``GET /research/desk/topup/runs`` (the durable,
-append-only top-up run log — ``desk_topup_log.py``'s lightweight run-meta list + the latest full
-record; honest-empty ``{"runs": [], "latest": null}`` before any run, never a 404). No new compute
+J-09 (base shape unmodified; response body extended goal-desk-iter-16) adds ONE new read:
+``GET /research/desk/topup/runs`` (the durable, append-only top-up run log — ``desk_topup_log.py``'s
+lightweight run-meta list + the latest full record + ``integrity_errors`` (J-12, below); honest-empty
+``{"runs": [], "latest": null, "integrity_errors": []}`` before any run, never a 404). No new compute
 manager, no new POST — the log is written by the ALREADY-existing top-up trigger/CLI paths
 (``desk_topup_compute.py`` threads the write through internally); this route is a pure read,
 mirroring ``GET /research/desk/universe``'s single-synchronous-read shape exactly.
 
-J-10 (this iteration, goal-desk-iter-14) adds the coverage-index reconciliation: a trigger/poll/
-cancel trio (``POST``/``GET /research/desk/coverage/reconcile/compute``,
-``POST /research/desk/coverage/reconcile/compute/cancel`` — mirrors the top-up trio exactly) plus
-ONE durable read (``GET /research/desk/coverage/reconcile/runs`` — mirrors ``GET
-/research/desk/topup/runs``'s exact honest-empty/meta-only-list/full-latest shape). All four routes
-are pure wiring over ``desk_index_reconcile.py`` — see that module's own docstring for the
-classify/repair/record mechanics. No new MCP tool (``get_endpoint``'s existing ``/research/``
-allowlist already reaches the new GET path); no new router, no ``main.py`` change.
+J-10 (base shape from goal-desk-iter-14; response body extended goal-desk-iter-16) adds the
+coverage-index reconciliation: a trigger/poll/cancel trio (``POST``/``GET
+/research/desk/coverage/reconcile/compute``, ``POST /research/desk/coverage/reconcile/compute/cancel``
+— mirrors the top-up trio exactly) plus ONE durable read (``GET
+/research/desk/coverage/reconcile/runs`` — mirrors ``GET /research/desk/topup/runs``'s exact
+honest-empty/meta-only-list/full-latest/``integrity_errors`` shape). All four routes are pure wiring
+over ``desk_index_reconcile.py`` — see that module's own docstring for the classify/repair/record
+mechanics. No new MCP tool (``get_endpoint``'s existing ``/research/`` allowlist already reaches the
+new GET path); no new router, no ``main.py`` change.
+
+J-12 (this iteration, goal-desk-iter-16) is a pure additive-read + disclosure change, no new
+module/route/MCP tool: (a) ``GET /research/desk/screen`` gains a sibling ``?id=`` read so an
+EARLIER same-``screen_date`` recording — unreachable via ``?date=``, which always resolves to the
+newest match — becomes individually addressable by its own id; supplying both ``?id=`` and
+``?date=`` is an honest 4xx refusal. (b) ``get_topup_runs``/``get_desk_index_reconcile_runs`` stop
+discarding their own ``store.list()``'s ``errors`` return — both now serve it as
+``integrity_errors``, the identical key/shape ``get_screen``/``get_universe`` already used.
 
 **Compute managers are module-level singletons here, NOT ``ResearchRegistry`` properties.**
 ``DeskTopupComputeManager`` (``desk_topup_compute.py``) reuses ``routes.record_bar_series``
@@ -269,15 +279,21 @@ def _topup_run_meta_only(record: dict) -> dict:
 
 @router.get("/topup/runs")
 def get_topup_runs(store: TopupRunStore = Depends(get_topup_run_store)) -> dict:
-    """``{"runs": [...meta-only...], "latest": <full record>|null}`` — an explicit HTTP 200
-    honest-empty payload (``{"runs": [], "latest": null}``) before any top-up run has ever reached
-    its terminal state, never a 404 (the ``GET /research/desk/universe`` convention). ``latest`` is
-    the most recently STARTED run, verbatim from disk — never recomputed on the GET (the
-    ``GET /research/desk/screen`` convention: a plain read, triggers nothing)."""
-    records, _errors = store.list()
+    """``{"runs": [...meta-only...], "latest": <full record>|null, "integrity_errors": [...]}`` —
+    an explicit HTTP 200 honest-empty payload (``{"runs": [], "latest": null,
+    "integrity_errors": []}``) before any top-up run has ever reached its terminal state, never a
+    404 (the ``GET /research/desk/universe`` convention). ``latest`` is the most recently STARTED
+    run, verbatim from disk — never recomputed on the GET (the ``GET /research/desk/screen``
+    convention: a plain read, triggers nothing). ``integrity_errors`` is ``store.list()``'s own
+    ``errors`` return, surfaced verbatim (goal-desk-iter-16, J-12) — the identical key/shape
+    ``get_screen``/``get_universe`` already use; a corrupted run-record file stays excluded from
+    ``runs``/``latest`` either way, this only stops silently dropping the store's own honesty
+    channel."""
+    records, errors = store.list()
     return {
         "runs": [_topup_run_meta_only(r) for r in records],
         "latest": records[-1] if records else None,
+        "integrity_errors": errors,
     }
 
 
@@ -311,16 +327,32 @@ def _screen_meta_only(record: dict) -> dict:
 
 
 @router.get("/screen")
-def get_screen(date: str | None = None, store: ScreenStore = Depends(get_screen_store)) -> dict:
-    """Two shapes, selected by whether ``?date=`` is given (Data Contract addition #1):
+def get_screen(
+    date: str | None = None, id: str | None = None, store: ScreenStore = Depends(get_screen_store)
+) -> dict:
+    """Three shapes, selected by ``?date=``/``?id=`` (Data Contract addition #1, extended
+    goal-desk-iter-16 J-12):
 
-      * no ``date``: ``{"screens": [...meta-only...], "latest": <full snapshot>|null,
+      * neither given: ``{"screens": [...meta-only...], "latest": <full snapshot>|null,
         "integrity_errors": [...]}`` — an explicit HTTP 200 honest-empty payload
         (``{"screens": [], "latest": null, "integrity_errors": []}``) before any screen has ever
         been computed, never a 404 (the ``GET /research/desk/universe`` convention).
-      * ``date=YYYY-MM-DD``: ``{"screen": <the exact persisted snapshot for the latest recording
-        on that date, verbatim>|null}`` — a plain read, NEVER recomputed on the GET (TC-6)."""
+      * ``date=YYYY-MM-DD`` (``id`` absent): ``{"screen": <the exact persisted snapshot for the
+        latest recording on that date, verbatim>|null}`` — a plain read, NEVER recomputed on the
+        GET (TC-6). Byte-unchanged by this iteration.
+      * ``id=<snapshot id>`` (``date`` absent): ``{"screen": <that exact persisted snapshot,
+        verbatim>|null}`` — the only way to reach an EARLIER same-``screen_date`` recording once a
+        later one exists (``?date=`` always resolves to the newest match); an unknown ``id`` is an
+        honest ``null`` at HTTP 200, never a 404 (the ``?date=`` convention, mirrored).
+      * ``id`` and ``date`` both given: an honest 4xx refusal — never a silent precedence rule."""
+    if id is not None and date is not None:
+        raise HTTPException(
+            status_code=422, detail="only one of `id` or `date` may be supplied, not both"
+        )
     records, errors = store.list()
+    if id is not None:
+        found = next((r for r in records if r["id"] == id), None)
+        return {"screen": found}
     if date is not None:
         matching = [r for r in records if r["screen_date"] == date]
         return {"screen": matching[-1] if matching else None}
@@ -494,16 +526,18 @@ def _reconcile_run_meta_only(record: dict) -> dict:
 
 @router.get("/coverage/reconcile/runs")
 def get_desk_index_reconcile_runs(store: ReconcileRunStore = Depends(get_reconcile_run_store)) -> dict:
-    """``{"runs": [...meta-only...], "latest": <full record>|null}`` — an explicit HTTP 200
-    honest-empty payload (``{"runs": [], "latest": null}``) before any reconciliation has ever
-    reached its terminal state, never a 404 (the ``GET /research/desk/topup/runs`` convention).
-    ``latest`` is the most recently STARTED run, verbatim from disk — never recomputed on the GET. A
-    corrupted run-record file is excluded from ``runs``/``latest`` (never fabricated, never crashes
-    this route) — ``ReconcileRunStore.list()``'s own ``errors`` return already surfaces it
-    explicitly at the store layer (mirrors ``get_topup_runs``'s identical choice not to duplicate
-    that channel into this response body)."""
-    records, _errors = store.list()
+    """``{"runs": [...meta-only...], "latest": <full record>|null, "integrity_errors": [...]}`` —
+    an explicit HTTP 200 honest-empty payload (``{"runs": [], "latest": null,
+    "integrity_errors": []}``) before any reconciliation has ever reached its terminal state, never
+    a 404 (the ``GET /research/desk/topup/runs`` convention). ``latest`` is the most recently
+    STARTED run, verbatim from disk — never recomputed on the GET. A corrupted run-record file is
+    excluded from ``runs``/``latest`` (never fabricated, never crashes this route) —
+    ``ReconcileRunStore.list()``'s own ``errors`` return is now surfaced verbatim as
+    ``integrity_errors`` (goal-desk-iter-16, J-12) — the identical key/shape ``get_screen``/
+    ``get_universe``/``get_topup_runs`` already use, instead of being silently discarded."""
+    records, errors = store.list()
     return {
         "runs": [_reconcile_run_meta_only(r) for r in records],
         "latest": records[-1] if records else None,
+        "integrity_errors": errors,
     }

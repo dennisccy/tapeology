@@ -951,10 +951,13 @@ export interface DeskTopupRun extends DeskTopupRunMeta {
 
 // `GET /research/desk/topup/runs` -- honest-empty-or-populated, HTTP 200 always, never 404.
 // `latest === null` iff no top-up run has EVER reached a terminal state -- the page's ONE
-// discriminator for the "No top-up runs recorded yet." empty state.
+// discriminator for the "No top-up runs recorded yet." empty state. `integrity_errors`
+// (goal-desk-iter-16, J-12) mirrors `DeskScreenListResult`/`DeskUniverseResult`'s identical field
+// -- surfaced from the store's own `.list()` return, never silently dropped.
 export interface DeskTopupRunsListResult {
   runs: DeskTopupRunMeta[];
   latest: DeskTopupRun | null;
+  integrity_errors: { file: string; error: string }[];
 }
 
 // era-desk-iter-14 (J-10) -- the coverage-index reconciliation: drift classification between the
@@ -1015,9 +1018,13 @@ export interface DeskReconcileRun extends DeskReconcileRunMeta {
 // `GET /research/desk/coverage/reconcile/runs` -- honest-empty-or-populated, HTTP 200 always,
 // never 404. `latest === null` iff no reconciliation has EVER reached a terminal state -- the
 // page's ONE discriminator for the "No reconciliation run recorded yet." empty state.
+// `integrity_errors` (goal-desk-iter-16, J-12) mirrors `DeskScreenListResult`/
+// `DeskUniverseResult`'s identical field -- surfaced from the store's own `.list()` return, never
+// silently dropped.
 export interface DeskReconcileRunsListResult {
   runs: DeskReconcileRunMeta[];
   latest: DeskReconcileRun | null;
+  integrity_errors: { file: string; error: string }[];
 }
 
 // The reconciliation compute manager's job snapshot, served VERBATIM by GET/POST

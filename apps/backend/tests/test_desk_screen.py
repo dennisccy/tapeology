@@ -999,3 +999,196 @@ def test_aapl_row_history_cross_checks_against_get_candles(ctx, monkeypatch):
     assert len(filtered) == row["history_sessions"]
     earliest_ts = min(bar["ts"] for bar in filtered)
     assert _iso_of(earliest_ts) == row["history_start"]
+
+
+# ==================================================================================================
+# screen ?id= read (goal-desk-iter-16, J-12) -- individual addressability, including an EARLIER
+# same-`screen_date` recording that `?date=` (which always resolves `matching[-1]`) can never reach.
+# ==================================================================================================
+
+
+@pytest.fixture
+def screen_route_ctx(tmp_path, monkeypatch):
+    """A live-routed screen store, scoped entirely under `tmp_path` (never `apps/backend/.data`):
+    same `TestClient`/`ResearchRegistry` wiring `test_aapl_row_cross_checks_byte_identical_to_the_
+    real_tradability_route` above already uses inline, lifted into a shared fixture for this
+    section's four route-level `?id=` tests."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app, get_market_adapter, manager as ws_manager
+    from app.research.routes import ResearchRegistry, set_registry
+    from app.research.store import JournalStore
+
+    monkeypatch.setenv("TAPEOLOGY_DESK_UNIVERSE_DIR", str(tmp_path / "universe"))
+    monkeypatch.setenv("TAPEOLOGY_BAR_DIR", str(tmp_path / "bars"))
+    monkeypatch.setenv("TAPEOLOGY_DESK_SCREEN_DIR", str(tmp_path / "screen"))
+    store = JournalStore(str(tmp_path / "journal.db"), CONFIG)
+    registry = ResearchRegistry(store, CONFIG)
+    set_registry(registry)
+    with TestClient(app) as client:
+        yield client, tmp_path
+    for ticker in list(ws_manager._engines.keys()):
+        ws_manager.stop(ticker)
+    set_registry(None)
+    app.dependency_overrides.pop(get_market_adapter, None)
+    store.close()
+
+
+def _plant_same_date_pair(screen_dir) -> tuple[dict, dict, dict]:
+    """Two records sharing `screen_date` but differing `bar_store_signature` -- the REAL shape
+    goal.md's own worked example names (a pre-/post-repair pair whose reconciliation changed
+    coverage, not the requested date). Returns `(store, earlier, later)`, `earlier`/`later`
+    determined by the store's OWN `created_utc`-then-`id` sort (never assumed from call order, since
+    two same-microsecond wall-clock writes would otherwise make that assumption flaky)."""
+    store = ScreenStore(screen_dir)
+    _record(store, screen_date="2026-07-27", as_of="2026-07-27T23:59:59Z", bar_store_signature="a" * 16)
+    _record(store, screen_date="2026-07-27", as_of="2026-07-27T23:59:59Z", bar_store_signature="b" * 16)
+    records, errors = store.list()
+    assert errors == []
+    matching = [r for r in records if r["screen_date"] == "2026-07-27"]
+    assert len(matching) == 2
+    return store, matching[0], matching[-1]
+
+
+def test_get_screen_by_id_returns_the_exact_record_byte_identical_to_disk(screen_route_ctx):
+    """TC-1: `?id=<the earlier id>` returns that exact record, byte-identical to its own file on
+    disk -- same `id`/`screen_date`/`as_of`/`rows`/`skipped` -- distinct from what `?date=` (which
+    still resolves only the later recording, TC-2 below) would return for the same date."""
+    client, tmp_path = screen_route_ctx
+    _store, earlier, _later = _plant_same_date_pair(tmp_path / "screen")
+
+    r = client.get("/research/desk/screen", params={"id": earlier["id"]})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["screen"] == earlier
+
+    on_disk = json.loads((tmp_path / "screen" / f"{earlier['id']}.json").read_text())
+    assert body["screen"] == on_disk["record"]["meta"]
+
+
+def test_get_screen_by_date_alone_still_resolves_only_the_later_recording(screen_route_ctx):
+    """TC-2: `?date=` (no `?id=`) is byte-unchanged by this iteration -- it still serves ONLY the
+    later of the two same-date recordings."""
+    client, tmp_path = screen_route_ctx
+    _store, earlier, later = _plant_same_date_pair(tmp_path / "screen")
+
+    r = client.get("/research/desk/screen", params={"date": "2026-07-27"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["screen"]["id"] == later["id"]
+    assert body["screen"]["id"] != earlier["id"]
+    assert body["screen"] == later
+
+
+def test_get_screen_by_unknown_id_is_an_honest_null_never_a_404(screen_route_ctx):
+    """TC-3: mirrors the `?date=` no-match convention -- an unrecognized `id` is `{"screen": null}`
+    at HTTP 200, never a 404."""
+    client, tmp_path = screen_route_ctx
+    _plant_same_date_pair(tmp_path / "screen")
+
+    r = client.get("/research/desk/screen", params={"id": "does-not-exist"})
+    assert r.status_code == 200
+    assert r.json() == {"screen": None}
+
+
+def test_get_screen_with_both_id_and_date_is_an_honest_4xx_refusal(screen_route_ctx):
+    """TC-4: supplying both query params is refused explicitly -- never a silent precedence rule
+    between the two lookup modes."""
+    client, tmp_path = screen_route_ctx
+    _store, earlier, _later = _plant_same_date_pair(tmp_path / "screen")
+
+    r = client.get(
+        "/research/desk/screen", params={"id": earlier["id"], "date": earlier["screen_date"]}
+    )
+    assert 400 <= r.status_code < 500
+    detail = r.json()["detail"]
+    assert "id" in detail and "date" in detail
+
+
+def test_get_screen_id_lookup_never_recomputes_and_the_meta_only_list_is_unaffected(screen_route_ctx):
+    """`?id=` is a plain read exactly like `?date=` (TC-6's own "recomputes nothing" clause,
+    extended): the no-param meta-only list/`latest`/`integrity_errors` shape is untouched by this
+    iteration, and issuing an `?id=` lookup leaves the store's own files byte-unchanged."""
+    client, tmp_path = screen_route_ctx
+    _store, earlier, later = _plant_same_date_pair(tmp_path / "screen")
+    earlier_path = tmp_path / "screen" / f"{earlier['id']}.json"
+    before = earlier_path.read_bytes()
+
+    client.get("/research/desk/screen", params={"id": earlier["id"]})
+
+    assert earlier_path.read_bytes() == before
+
+    listed = client.get("/research/desk/screen").json()
+    assert {row["id"] for row in listed["screens"]} == {earlier["id"], later["id"]}
+    assert listed["latest"]["id"] == later["id"]
+    assert listed["integrity_errors"] == []
+
+
+def test_sha256_of_every_universe_screen_topup_run_reconcile_run_file_is_unchanged_by_this_iteration(
+    screen_route_ctx,
+):
+    """TC-15: this iteration is a pure additive-READ (screen's new `?id=` branch) plus a
+    response-shape-only disclosure (`integrity_errors` surfaced on the two run-ledger GETs) --
+    neither touches a single byte on disk. A SHA-256 checksum of EVERY universe/screen/topup-run/
+    reconcile-run file, taken before and after exercising every GET this iteration touched
+    (including the new `?id=`/`?date=` reads and both ledger GETs, each called more than once), must
+    come back identical -- proving nothing was backfilled, rewritten, or re-tagged."""
+    import hashlib
+
+    from app.research.desk_index_reconcile import ReconcileRunStore
+    from app.research.desk_routes import get_reconcile_run_store, get_topup_run_store
+    from app.research.desk_topup_log import TopupRunStore
+
+    client, tmp_path = screen_route_ctx
+
+    UniverseStore(tmp_path / "universe").record(
+        members=["AAPL", "MSFT"], raw_members={"AAPL": "AAPL", "MSFT": "MSFT"},
+        source_url="https://example.invalid/constituents", min_members=1, max_members=999,
+    )
+    _screen_store, earlier, later = _plant_same_date_pair(tmp_path / "screen")
+
+    topup_store: TopupRunStore = get_topup_run_store()
+    topup_store.record(
+        universe_snapshot_id="universe-2026-07-25-49b33fa31680",
+        requested_window={"start": "2024-07-28T00:00:00Z", "end": "2026-07-28T00:00:00Z"},
+        config_fingerprint=CONFIG.config_fingerprint(),
+        started_utc="2026-07-28T09:00:00.000000Z", finished_utc="2026-07-28T09:05:00.000000Z",
+        state="done", pairs_total=1,
+        outcomes=[{"symbol": "AAA", "timeframe": "1h", "outcome": "fetched", "detail": None}],
+    )
+
+    reconcile_store: ReconcileRunStore = get_reconcile_run_store()
+    empty_drift = {"unindexed_series": [], "orphan_index_rows": [], "stale_checksum_rows": []}
+    reconcile_store.record(
+        config_fingerprint=CONFIG.config_fingerprint(),
+        started_utc="2026-07-28T09:00:00.000000Z", finished_utc="2026-07-28T09:05:00.000000Z",
+        state="done", series_on_disk=0, rows_indexed_before=0, rows_indexed_after=0,
+        drift_before=empty_drift, drift_after=empty_drift, store_errors=[],
+    )
+
+    tracked_dirs = [
+        tmp_path / "universe", tmp_path / "screen", topup_store.root, reconcile_store.root,
+    ]
+
+    def _checksums() -> dict[str, str]:
+        return {
+            str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+            for directory in tracked_dirs
+            for path in sorted(directory.glob("*.json"))
+        }
+
+    before = _checksums()
+    assert len(before) == 5  # 1 universe + 2 screen + 1 topup-run + 1 reconcile-run
+
+    client.get("/research/desk/screen")
+    client.get("/research/desk/screen", params={"date": "2026-07-27"})
+    client.get("/research/desk/screen", params={"id": earlier["id"]})
+    client.get("/research/desk/screen", params={"id": later["id"]})
+    client.get("/research/desk/screen", params={"id": "does-not-exist"})
+    client.get("/research/desk/topup/runs")
+    client.get("/research/desk/topup/runs")
+    client.get("/research/desk/coverage/reconcile/runs")
+    client.get("/research/desk/coverage/reconcile/runs")
+
+    after = _checksums()
+    assert after == before

@@ -420,6 +420,53 @@ async def test_get_endpoint_desk_screen_date_query_proxies_verbatim(mcp_env, bac
 
 
 @pytest.mark.anyio
+async def test_get_endpoint_desk_screen_id_query_proxies_verbatim(mcp_env, backend_paths):
+    """goal-desk-iter-16 (J-12) TC-7: ``get_endpoint`` reaches the NEW ``?id=`` lookup variant with
+    ZERO MCP code change (the existing ``/research/`` allowlist prefix already covers it) --
+    byte-identical for a matching id (seeded HERE, under its own distinct date so this test passes
+    standalone) and the honest ``{"screen": null}`` 200 for an unknown id (never a 404)."""
+    screen_dir = Path(backend_paths["TAPEOLOGY_DESK_SCREEN_DIR"])
+    recorded = ScreenStore(screen_dir).record(
+        screen_date="2026-07-27",
+        as_of="2026-07-27T21:00:00Z",
+        universe_snapshot_id="universe-2026-07-25-817cc184bbb3",
+        config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store_signature="mcp-test-id-query-signature",
+        rows=[
+            {
+                "symbol": "NFLX",
+                "side": "resistance",
+                "band_class": "A",
+                "distance_bps": 8.0,
+                "band_score": 2.5,
+                "price_low": 400.0,
+                "price_high": 402.0,
+                "coverage": {"1d": {"has_bars": True, "latest_window_end_utc": "2026-07-27T00:00:00Z"}},
+                "tick_evidence": True,
+            }
+        ],
+        skipped=[],
+    )
+
+    matching_path = f"/research/desk/screen?id={recorded['id']}"
+    result = await call_tool("get_endpoint", {"path": matching_path})
+    rest = httpx.get(f"{mcp_env}{matching_path}", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json()["screen"] is not None
+    assert rest.json()["screen"]["id"] == recorded["id"]
+    assert result.isError is False
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk screen id-match not byte-identical"
+
+    nonmatch_path = "/research/desk/screen?id=does-not-exist"
+    result = await call_tool("get_endpoint", {"path": nonmatch_path})
+    rest = httpx.get(f"{mcp_env}{nonmatch_path}", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json() == {"screen": None}
+    assert result.isError is False
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk screen id-nonmatch not byte-identical"
+
+
+@pytest.mark.anyio
 async def test_datasets_tool_byte_identical_on_a_non_empty_live_list(mcp_env, backend_paths):
     """J-02 flips ``datasets`` from honest 404 to live data with ZERO MCP code changes: after
     recording a dataset (the committed reference window, keyless), the tool's JSON is
@@ -906,8 +953,9 @@ async def test_get_endpoint_desk_topup_runs_byte_identical_with_no_new_tool(mcp_
     """goal-desk-iter-11 TC-9 (J-09): the NEW ``GET /research/desk/topup/runs`` route is reachable
     through ``get_endpoint``'s existing ``/research/`` allowlist prefix with ZERO MCP code change —
     no new tool, no ``_STATIC_PATHS`` entry — and the proxied body is byte-identical to its curl
-    equivalent (here the honest-empty ``{"runs": [], "latest": null}`` this module-scoped backend's
-    own temp desk dirs genuinely produce). The tool count assertion lives in
+    equivalent (here the honest-empty ``{"runs": [], "latest": null, "integrity_errors": []}`` this
+    module-scoped backend's own temp desk dirs genuinely produce — the ``integrity_errors`` key
+    goal-desk-iter-16/J-12 added). The tool count assertion lives in
     ``test_advertised_tool_set_is_exactly_capability_6``; this is the reachability half TC-9 names
     separately."""
     result = await call_tool("get_endpoint", {"path": "/research/desk/topup/runs"})
@@ -916,7 +964,7 @@ async def test_get_endpoint_desk_topup_runs_byte_identical_with_no_new_tool(mcp_
     assert result.isError is False
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "topup/runs not byte-identical"
-    assert rest.json() == {"runs": [], "latest": None}
+    assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
     assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 17
 
 

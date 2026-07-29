@@ -784,6 +784,91 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     difference, and `DeskScreenRow` (`lib/types.ts:801`) carries nothing about extent — a 27-session
     wall and a 500-session wall sit on one rank scale, indistinguishable on the page.)*
 
+- **J-12: Every recorded screen the ledger lists can be read back — snapshots are addressable by id**
+  - Steps:
+    1. Serve any recorded snapshot by its OWN id: add an `?id=<snapshot id>` branch to the
+       ALREADY-registered `GET /research/desk/screen` (`desk_routes.py:314`), returning that exact
+       persisted snapshot verbatim (`{"screen": <snapshot>|null}` — the `?date=` shape), a plain read
+       that recomputes nothing and writes nothing. `?date=` keeps its documented meaning
+       byte-identically ("the latest recording on that date", `desk_routes.py:326`); an unknown id is
+       an honest `{"screen": null}` at HTTP 200 (the `?date=` convention); `id` and `date` together is
+       an honest refusal, never a silent precedence rule. **Zero new value, zero new owner**:
+       `desk_screen.ScreenStore` stays the only owner and `GET /research/desk/screen` the only serving
+       endpoint — no new module, no new route, no new `Config` field, no new MCP tool (J-06's
+       exactly-17-tool contract stays green and `get_endpoint`'s `/research/` allowlist already reaches
+       the new query).
+    2. Register the additive `?id=` read param on the blueprint's Data Contract "Screen snapshots, rank
+       rows, skip rows" row BEFORE the code lands. The 5-pin snapshot key, every recorded row's content
+       and the rank key (band class A>B>C, then distance asc, then band score desc, then symbol asc) are
+       all UNCHANGED: this journey adds a READ path, never a value, never a ranking input.
+    3. Address history by id on `/desk`: history rows select `meta.id` and fetch `?id=` (they select
+       `meta.screen_date` today, `page.tsx:493`), the displayed snapshot is highlighted by id (today
+       `meta.screen_date === selectedDate` lights BOTH rows of a same-date pair, `page.tsx:537`), and
+       each entry shows its recorded-at `created_utc` beside its screen date so two recordings of one
+       screen date are distinguishable on the page.
+    4. Say which snapshot is on screen: the Provenance panel (`DeskProvenance`, `page.tsx:890`) gains the
+       displayed snapshot's own `id` and `created_utc` — both already carried by `DeskScreenSnapshot`
+       (`lib/types.ts:838`), a straight re-format of the served payload, nothing derived — and the
+       default view describes itself as the most recently RECORDED screen, which is what `latest` is
+       (`records[-1]` under `ScreenStore.list`'s `created_utc` sort, `desk_screen.py:478`), never "the
+       latest screen date". Copy = descriptive measurement only (no advice, imperative, urgency or
+       prediction language).
+    5. Disclose what cannot be read at all: `GET /research/desk/topup/runs` (`desk_routes.py:277`) and
+       `GET /research/desk/coverage/reconcile/runs` (`desk_routes.py:505`) serve their own store's
+       `errors` as `integrity_errors` exactly as `GET /research/desk/screen` (`:330`) and
+       `GET /research/desk/universe` (`:171`) already do — same channel, same key, same shape, no second
+       path — and `/desk` renders each ledger's integrity errors as an honest count-plus-filename line
+       (the page renders none today, for any ledger). No record is ever repaired, rewritten or hidden: a
+       file that fails verification stays out of `runs`/`latest` and is NAMED instead.
+    6. Test fixture-scoped: two snapshots sharing one `screen_date` under different
+       `bar_store_signature`s (the pre/post-reconciliation pair J-10's own repair produces) → `?id=`
+       returns EACH byte-identical to its own recorded file while `?date=` still returns the later
+       recording; unknown id honest-null; the GET triggers no compute and writes nothing; a corrupt
+       record file planted in a SCOPED store dir (never in `apps/backend/.data`) appears in each run
+       ledger's `integrity_errors` and stays out of `runs`/`latest`; the MCP `desk_screen` tool stays a
+       byte-identical no-arg GET proxy and `get_endpoint` proxies `?id=` verbatim.
+  - Acceptance: with two snapshots recorded for ONE screen date under different bar-store signatures,
+    `GET /research/desk/screen?id=<the earlier id>` serves that snapshot byte-identically to its own
+    recorded file on disk, and `?date=` still serves the later recording unchanged (a golden comparison
+    proves the shipped branch unmoved) (**single source of truth**: an additive READ param on the
+    already-registered endpoint — `desk_screen.ScreenStore` remains the only owner and
+    `GET /research/desk/screen` the only serving endpoint, registered in the Data Contract before the
+    code lands, with zero new value computed, zero recompute on the GET, zero new module/route/`Config`
+    field, and zero change to what any desk store RECORDS or to any recorded shape — this SSOT criterion
+    stands in place of a PnL-ledger append, which this era's Non-Goals forbid); an unknown id returns an
+    honest `{"screen": null}` at HTTP 200; every recorded universe, screen, top-up and reconciliation
+    file is proven byte-identical on disk before and after the iteration (SHA-256 listing — nothing
+    backfilled, repaired or rewritten); both run-ledger GETs carry `integrity_errors`, and a corrupt
+    record planted in a scoped store dir is named there while staying out of `runs`/`latest`; in a real
+    browser after the T-9 clean rebuild, `/desk`'s screen-history table shows the two same-date entries
+    with distinct recorded-at values and selecting each renders ITS OWN rows, with at least one row whose
+    coverage badge differs between the two views legible across the screenshots (on the ambient rig this
+    is the already-recorded 2026-07-27 pair: NFLX's `1d` badge dark in `screen-2026-07-27-936543601e75`
+    and lit in `screen-2026-07-27-3ad3c57aa6ba`), plus one screenshot of the honest integrity-error line
+    for the planted corrupt run record (T-10: no screenshot ⇒ `unknown`, never `passing`); a
+    **`[NEW]`-flagged demo-narrator walkthrough** covers reaching a same-date recorded snapshot end to
+    end; and the full backend suite is green with `Config().config_fingerprint()` still
+    `08e471b10130e1e2`, zero new `Config` fields, the `default` profile and `v1` byte-identical (engine
+    equivalence green), the MCP surface still exactly 17 tools, zero diff to
+    `tradability.py`/`levels.py`/`bars.py`/`bar_index.py`/`StructureChart.tsx`, and
+    `tests/test_copy_discipline.py` green unmodified. *(Keyless core; browser-verifiable. Why: measured
+    2026-07-29 from the running backend and the frozen store — `apps/backend/.data/screen` holds 6
+    recorded snapshots, two of them for screen date 2026-07-27: `screen-2026-07-27-936543601e75`
+    (bar-store signature `7eab5f03cf23e8c7`, recorded 2026-07-27T21:42:14Z) and
+    `screen-2026-07-27-3ad3c57aa6ba` (`350c85d18b1ff234`, recorded 2026-07-28T21:30:16Z). Their content
+    differs on exactly 4 ranked rows — META, MSFT, NFLX, NVDA `coverage` — i.e. the pre- and post-repair
+    state of J-10's own index reconciliation. `GET /research/desk/screen?date=2026-07-27` returns only
+    `3ad3c57aa6ba` (`matching[-1]`, `desk_routes.py:326`); the `screens` list advertises the other with
+    its id, checksum-pinned provenance and counts, but NO API path serves it, MCP `get_endpoint` has the
+    same date-only reach, and on `/desk` both history rows fetch the same date and both highlight — so
+    the pre-repair record that J-10's own acceptance rests on is listed and unreadable. Separately,
+    `latest` is `records[-1]` under a `created_utc` sort, so the page opens on
+    `screen-2026-07-28-ac07c9581a4f` although `screen-2026-07-29-ce0d82b8e9bf` carries the later screen
+    date, and nothing on the page names the snapshot being displayed. And both run ledgers drop their
+    store's own verification errors (`records, _errors = store.list()`, `desk_routes.py:277` and `:505`)
+    while their two sibling desk GETs serve them — today `integrity_errors` is empty everywhere, so this
+    closes the channel before it is ever needed, never after.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

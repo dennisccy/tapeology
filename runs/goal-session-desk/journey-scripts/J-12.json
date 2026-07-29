@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "journey": "J-12",
+  "name": "Every recorded screen the ledger lists can be read back — snapshots are addressable by id",
+  "default_timeout_ms": 15000,
+  "notes": [
+    "Verified goal-desk-iter-16 by browser-qa-agent (2026-07-29) live against the running rig at backend :8301 / frontend :3301, serving the real ambient apps/backend/.data/screen store. That store already carries the real same-screen_date pair J-10's own reconciliation produced: screen-2026-07-27-936543601e75 (recorded 2026-07-27T21:42:14.636275Z, NFLX 1d coverage badge data-has-bars=false) and screen-2026-07-27-3ad3c57aa6ba (recorded 2026-07-28T21:30:16.111871Z, NFLX 1d coverage badge data-has-bars=true). Clicking each row in turn (data-screen-id-keyed) drove the frontend's id-keyed fetch (GET /research/desk/screen?id=<id>) and confirmed via eval(): (1) only the clicked row's <tr> carries data-selected=\"true\" -- the sibling same-date row is never simultaneously highlighted; (2) the Provenance panel's rendered 'Snapshot id' and 'Recorded at' text update to that exact row's own id/created_utc; (3) the NFLX row's data-has-bars flips false->true between the two same-date recordings, proving the two rows genuinely serve different persisted content, not the same 'latest' resolution twice. The default (no-click) load also independently confirmed only the most-recently-RECORDED row (screen-2026-07-28-ac07c9581a4f, dated 2026-07-28, recorded 2026-07-29T02:07:39.867805Z) is highlighted -- NOT the chronologically-later 2026-07-29-dated row -- and the Provenance default-view note (data-testid=desk-provenance-latest-note) reads the exact reworded 'most recently recorded ... not necessarily the latest screen date' copy. Screenshots: reports/qa/goal-desk-iter-16-evidence/UT-02-result.png (earlier same-date recording), UT-03-result.png (later same-date recording), UT-06/UT-07-result.png (default-view Provenance + note).",
+    "This script clicks Screen History rows, which is SAFE to replay repeatedly: selecting a row only drives GET /research/desk/screen?id=<id>, a plain read that recomputes nothing and writes nothing (unlike J-09/J-10's write-triggering 'Top-up'/'Reconcile'/'Run Screen' buttons, which this script never touches). The two clicked ids (screen-2026-07-27-936543601e75 / screen-2026-07-27-3ad3c57aa6ba) are permanent, append-only records already on disk from J-10's own repair -- the append-only rail guarantees they stay readable at replay time on this rig.",
+    "Steps 3 and 5 use action type \"expect\" (a bare assertion, no interaction) to check the exact 'Recorded at' timestamp text rendered in Provenance after each click, proving the two same-date rows resolve to genuinely distinct recordings, not just distinct ids with the same displayed data.",
+    "Step 6 is a post-match liveness check (this era's iter-4/iter-5 lesson): a further /desk navigation AFTER the key assertions match, proving the page is still alive and rendering correctly."
+  ],
+  "steps": [
+    {"n": 1, "journey": "J-12", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
+    {"n": 2, "journey": "J-12", "action": {"type": "click", "target": {"css": "tr[data-screen-id=\"screen-2026-07-27-936543601e75\"]"}}, "expect": {"text": "screen-2026-07-27-936543601e75"}, "timeout_ms": 10000},
+    {"n": 3, "journey": "J-12", "action": {"type": "expect", "text": "2026-07-27T21:42:14.636275Z"}, "timeout_ms": 8000},
+    {"n": 4, "journey": "J-12", "action": {"type": "click", "target": {"css": "tr[data-screen-id=\"screen-2026-07-27-3ad3c57aa6ba\"]"}}, "expect": {"text": "screen-2026-07-27-3ad3c57aa6ba"}, "timeout_ms": 10000},
+    {"n": 5, "journey": "J-12", "action": {"type": "expect", "text": "2026-07-28T21:30:16.111871Z"}, "timeout_ms": 8000},
+    {"n": 6, "journey": "J-12", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}}
+  ]
+}
