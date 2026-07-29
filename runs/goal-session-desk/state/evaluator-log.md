@@ -1171,3 +1171,77 @@ requested yet). Carried, not defects: the Desk page is eight stacked sections an
 tables have no length limit, and the history rows cannot be reached by keyboard. One sentence for the
 owner: nothing on the Desk is broken and this run touched none of your data, but one film still has
 to be recorded and one line of the goal file needs your decision before the finish can be confirmed.
+
+## Iteration 21 — goal-desk-iter-21
+
+**Date:** 2026-07-30T00:35:00+01:00
+**Verdict:** STALLED
+**Depth dispatched:** evidence
+**Journey deltas:**
+- Newly passing: none — all fourteen were already passing
+- Newly failing: none
+- Regressed: none
+- Picture debt CLOSED: the guided walkthrough film the goal file demands for J-13 "the wall's price
+  range and the close it was measured from" and J-14 "where the nearest wall on the other side sits"
+  is now RECORDED (three frames under `reports/demo/goal-desk-iter-21/`, `Demo Verdict: RECORDED`).
+  J-13's make-up flag is cleared
+- Picture debt STILL OPEN and HUMAN-OWNED: J-14's photograph of the small hint that appears when the
+  mouse rests on a briefing row. It is a plain browser tooltip and the browser draws it outside the
+  picture it saves, so no program in this set-up can take it — this is the third run to try. The goal
+  file's own rule for that clause is "no screenshot means not passing", so only the owner can settle
+  it
+- Unchanged: J-04, J-05, J-07, J-12 re-verified this run by saved-script replay (4 of 4, with four
+  distinct pictures this time); J-13 and J-14 re-verified live in a real browser; J-06 "17
+  machine-readable tools" re-counted by me in the running code; J-01, J-02, J-03, J-08, J-09, J-10,
+  J-11 carried because the product code took a zero change, with J-01 and J-11 spot-checked
+- Anti-goal violations: none new, none open. The three older items stay resolved and were re-checked
+  by me directly. One deviation is carried and deliberately NOT scored as a violation: for the sixth
+  run in a row the evidence lanes served the owner's own data folder instead of a throwaway copy,
+  against this run's own plan — I read the serving program's own environment and found no
+  redirection at all. It only READ: not one file under that folder was created, changed or removed
+
+**Reasoning:** This run changed no program code and I confirmed that myself, not from a report: the
+difference against the run's own starting point is empty under `apps/`, `scripts/` and `config/`.
+So I checked the one thing this run existed to produce, and then I checked whether anything is left
+for the machine to do. The film exists and I opened its frame: the Desk page over the populated
+recording `screen-2026-07-20-ca185294a384`, its own provenance block naming that recording, the
+as-of date and the settings fingerprint. Then I proved the film's spoken numbers instead of
+believing them: I read that recording straight off disk — its stored checksum recomputes — and
+every value the narration quotes is there exactly, "band 488.50–490.91 · close 490.91" for the
+top row and "band 508.79–512.31 · close 508.77" for the row twenty places down, plus the opposite
+wall "490.97–494.39 · 1.22 basis points" beside a far one at "1128.29 basis points"; all 100 ranked
+rows carry all three new values. I also opened this run's two fresh browser pictures and read both
+pairs, near and far, close-inside and close-outside, each pair legible in one frame. I proved
+nothing was written into the owner's data: no file there was created, changed or removed during the
+run, the newest file predates it, ten recordings and 759 price files are untouched. I re-ran the
+cheap checks myself: the settings fingerprint prints `08e471b10130e1e2` and the tool list has
+exactly 17 entries. Coherence is COHERENCE-PASS. I did not call the goal achieved, and I did not
+ask for another run either. The only unmet line in the goal file is J-14's demand for a photograph
+of the row hint, that line carries its own rule that a missing photograph means "not passing", the
+independent second check at iteration 19 already refused the finish for exactly this and wrote that
+only the owner may relax it, and no program in this set-up can take that photograph. So the last
+step belongs to a person, not to the chain — that is a halt, not a loop. Three smaller things I
+found and did not hide: the film's three pictures are the same single image, the band column is cut
+off at that picture's right edge and the opposite column is not in it at all (the numbers are proven
+elsewhere, so this is cosmetic), and the film's first line says the rows are "sorted by distance"
+when the real order is class first, then distance, then score.
+
+**Next-step recommendation:** Halt and choose one line. Please pick one of four: (1) change the one
+line of `docs/goal.md` that asks for a photograph of the row hint so it asks for the hint's TEXT to
+be read out of the live page instead — that text is already proven correct — after which one short
+capture-and-check run re-verifies J-14 "where the nearest wall on the other side sits" against the
+new wording and the finish can be confirmed; (2) ask for the hint to be shown as an ordinary panel
+on the page that a picture can capture — a small program change nobody has requested yet, needing
+the fuller build pipeline; (3) approve a desktop-capture set-up for this one photograph, which would
+put a browser window on your own desktop and photograph your screen, so it needs your permission;
+(4) accept the finish as it stands, on the record that the hint's text is proven but never
+photographed. Two things to know while you decide, neither blocking: for the sixth run in a row the
+picture-taking lanes served your own data folder instead of a throwaway copy, against the run's own
+plan — this time they only READ, and I verified file by file that nothing of yours changed; the real
+fix is a rail that forces the serving program to point at a copy, not another written instruction.
+And the film, while recorded and accurate in what it says, shows the same single picture three times
+and does not display either of the two right-hand columns it talks about; closing that needs a small
+sideways-scroll ability in the recording tool and changes nothing in the product. One sentence for
+the owner: the film is recorded, nothing on the Desk is broken, and no data of yours was touched —
+please choose option 1, 2, 3 or 4 and then resume, because the chain has nothing productive left to
+do until you do.

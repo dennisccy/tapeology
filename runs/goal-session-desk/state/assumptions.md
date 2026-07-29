@@ -367,3 +367,36 @@ explicit `demo_runner.py` enhancement (a `scroll` action type driving `element.e
 el.scrollLeft = el.scrollWidth")` on the `overflow-x-auto` container, never a click) — a lean-depth
 tooling change, not a rewording of goal.md, and nothing recorded this iteration would need to be
 redone.
+
+## iter-21 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md` makes a `[NEW]`-flagged demo-narrator walkthrough an acceptance
+conjunct of J-13 ("covers the briefing's price disclosure end to end") and J-14 ("covers the
+briefing's opposite-wall disclosure end to end, narrated over POPULATED ranked rows"). The film
+recorded this iteration satisfies that text only if "covers … end to end" is read as ACCURATE
+NARRATION over a populated recording: `Demo Verdict: RECORDED`, both new steps `[NEW]`-flagged and
+tagged J-13/J-14, but its three frames are one byte-identical image (md5 `3b02db86…`) in which the
+`band` column is truncated at the frame's right edge and the `opposite` column is off-frame entirely
+(both sit past the ranked table's `overflow-x-auto` clientWidth; `demo_runner.py` has no scroll
+action and every in-row click navigates to `/structure`). goal.md does not say whether the
+walkthrough's OWN frames must display the columns it narrates.
+**We chose:** Read the conjunct as satisfied — narration over populated rows, with the pixel
+legibility resting on the separate screenshot conjunct — and clear J-13's `evidence_makeup`, while
+recording the frame shortfall openly in the verdict rather than as an unmet clause. Four strands,
+each checked by me directly: (i) I re-derived every number the narration quotes from the recorded
+snapshot on disk (`screen-2026-07-20-ca185294a384.json`, stored `file_checksum` recomputes) — BRK-B
+band `488.5`–`490.9100036621094` close `490.9100036621094`, LMT `508.78920085992235`–`512.3115234375`
+close `508.7699890136719`, BRK-B opposite resistance A `490.9700012207031`–`494.3949890136719` at
+`1.2221702174772953` bps, DIS at `1128.2895954803862` bps — zero mismatches, so the film misstates
+nothing; (ii) the frame I opened does show the populated recording, its provenance block and the
+`band` column's own range, i.e. it is genuinely over populated rows; (iii) both columns ARE legible
+in one frame in this same iteration's separate browser-QA captures (`UT-J-13-result.png`,
+`UT-J-14-result.png`), which is where goal.md puts that requirement; (iv) methodology A.7 names a
+badly-cropped recording a capture defect, and its rail ("never applies when the asserted BEHAVIOR is
+unmet") does not fire. The decomposer logged the same call before authoring the script
+(`assumptions.md` iter-21 — goal-decomposer). Note this assumption does NOT change my verdict: the
+halt rests on J-14's tooltip photograph, not on the film.
+**Reversible:** yes — a small `demo_runner.py` `scroll` action (`el.scrollLeft = el.scrollWidth` on
+the `overflow-x-auto` container, never a click) plus one re-record makes the columns visible inside
+the film's own frames; that is a lean-depth tooling change with zero product change, and nothing
+recorded this iteration would need to be redone.

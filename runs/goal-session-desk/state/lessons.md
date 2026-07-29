@@ -250,3 +250,35 @@ container-scroll action (or a full-page capture of the scrolled state, as the br
 what actually reveals those columns.
 **Applies to:** any iteration dispatched at `Depth: evidence`, and any demo-narrator run whose
 walkthrough is itself an acceptance conjunct in `docs/goal.md`.
+
+## iter-21 — 2026-07-30T00:35:00+01:00
+
+**Verdict:** STALLED
+**Lesson:** An acceptance clause can be permanently unsatisfiable by the pipeline while the product
+behind it is fully correct, and the framework's own two rails then point in opposite directions:
+`docs/goal.md`'s J-14 says "no screenshot ⇒ `unknown`, never `passing`" for a photograph of a native
+HTML `title` tooltip (`apps/frontend/app/desk/page.tsx:346`) that CDP cannot capture at all, while the
+evaluator contract says an evidence gap must never be scored as blocking or become an iteration's
+goal. Iterations 19, 20 and 21 all burned on that contradiction (one REJECT by the second key, two
+capture-only iterations). The resolution is neither another retry nor a silent `evidence_makeup`
+carry: it is to stop the loop and put the one-line clause decision to the owner (reword to "read out
+of the live DOM" · replace the `title` with an on-page panel · approve a desktop-capture rig · accept
+as-is) — STALLED on a human-owned unblock path, not CONTINUE.
+**Applies to:** any journey whose acceptance names a screenshot of browser-chrome-drawn UI (native
+`title`/`alt` tooltips, `select` popups, print dialogs, file pickers, OS context menus), and any
+`Depth: evidence` iteration that would be the third consecutive capture-only run.
+
+## iter-21 (second) — 2026-07-30T00:35:00+01:00
+
+**Verdict:** STALLED
+**Lesson:** `Demo Verdict: RECORDED` with a non-empty gallery is NOT proof the film shows anything:
+this run's three frames are one byte-identical image (md5 `3b02db86…`, the same PNG as
+`J-04-verify.png`) because `demo_runner.py`'s action vocabulary has no scroll primitive, every
+`/desk` ranked row is one stretched `next/link` (so any in-row click navigates away), and the two
+right-hand columns the film narrates sit past the table's `overflow-x-auto` clientWidth. Narration
+accuracy had to be proven a different way — by re-deriving every quoted number from the recorded
+snapshot on disk. Check frame md5s and what is actually inside the viewport before crediting a
+walkthrough conjunct.
+**Applies to:** any demo-narrator run whose walkthrough is an acceptance conjunct, and any future
+`demo_runner.py` enhancement (a `scroll` action driving `el.scrollLeft = el.scrollWidth` on the
+container, never a click, is the recorded remedy).
