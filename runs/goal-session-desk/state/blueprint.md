@@ -475,4 +475,22 @@ registered Data-Contract row) -- also because J-14's acceptance names a `[NEW]`-
 walkthrough narrated over POPULATED ranked rows, which goal.md's own text ties to closing iter-17's
 carried `RECORDED_WITH_NOTES` capture gap (its film showed only the legacy state), and the iter-12
 lesson (`lessons.md`) proved a `lean`-dispatched iteration cannot score a brand-new walkthrough clause
-within its own run (the demo-narrator lane runs after the goal-evaluator at `lean` depth). -->
+within its own run (the demo-narrator lane runs after the goal-evaluator at `lean` depth).
+
+NOTED at iter-19 (documentation currency only, no new Data-Contract row, no nav-skeleton change):
+iteration 18 shipped `opposite_band`/`bands_by_class` with `_select_opposite_band` delegating to
+`_select_best_band`'s own class-rank-first tie-break; the evaluator measured that selection against
+the canonical `compute_tradability` owner on the owner's own real 63-row screen and found it diverges
+from `docs/goal.md` J-14 step 1's literal "distance ascending, then class rank descending" order on 2
+of 63 rows (HONA, META) -- an interpretation call already logged in `assumptions.md` iter-18 (the
+evaluator's own "We chose: Read DISTANCE-first as the requirement" entry). iter-19 adds no new
+Data-Contract row and makes no nav-skeleton change -- it corrects `_select_opposite_band`'s own
+tie-break order to distance-first inside its SAME sole owner (`desk_screen.py`) and SAME serving
+endpoint (`GET /research/desk/screen`), updates that module's own docstring description of the order
+to match, updates the golden/unit tests that asserted the pre-fix class-first selection, and re-films
+the `[NEW]`-flagged demo-narrator walkthrough over POPULATED `/desk` rows -- closing both J-14's own
+walkthrough gap and iter-17's carried J-13 `RECORDED_WITH_NOTES` capture gap in the same recording.
+`_select_best_band` (the row's own same-side selection) and `_row_rank_key` (the cross-symbol rank
+order) are UNCHANGED -- only the opposite-side tie-break order moves. This note exists so a future
+reader does not mistake the corrected selection, or its re-verification against real data, for a new
+owner, endpoint, or shape. -->
