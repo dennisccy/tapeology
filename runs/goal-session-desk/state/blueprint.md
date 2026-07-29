@@ -510,4 +510,26 @@ J-12/J-13/J-14) -- it records the walkthrough against the already-recorded, fiel
 byte-for-byte) and captures the full-page J-12 screenshot, both from a read-only SCOPED COPY of
 `apps/backend/.data` (never a write into the ambient store, per the iter-9/11/14/15/17/19 scoped-rig
 lesson). This note exists so a future reader does not mistake either capture, or the scoped copy it
-was taken against, for a new owner, endpoint, or shape. -->
+was taken against, for a new owner, endpoint, or shape.
+
+NOTED at iter-21 (documentation currency only, no new Data-Contract row, no nav-skeleton change):
+iteration 20 recorded J-12's full-page crop but its own `[NEW]`-flagged demo-narrator walkthrough for
+J-13/J-14 still wrote `Demo Verdict: SKIPPED` with an empty gallery, because
+`reports/phase-goal-desk-iter-20-demo.json` embedded three JavaScript regex literals
+(`/screen.history/i`, `/scroll.*band/i`, `/scroll.*opposite/i`) where the schema requires plain JSON
+strings, and two of its steps modelled the sideways reveal of the `band`/`opposite` columns as a click
+on a "scroll..." button that has never existed. iter-21 makes no code change and adds no Data-Contract
+row (`Depth: evidence` -- capture + evaluate only, the rule-7 exception restated at iter-20: the prior
+evaluator's own next-step asked ONLY for evidence on already-passing J-13/J-14) -- it re-authors the
+demo script as valid JSON, parse-checks it (`demo_runner.py --mode lint`) before recording, and drops
+the nonexistent-button click entirely: `demo_runner.py`'s own action vocabulary
+(`goto`/`click`/`fill`/`expect`/`wait_for`, `scripts/automation/lib/demo_runner.py:36`) has no scroll
+primitive, and every ranked row (`apps/frontend/app/desk/page.tsx:335-427`, `data-testid=
+"desk-screen-row"`) is covered end-to-end by one stretched `next/link` anchor (`desk-row-drill-in`,
+`position: absolute; inset: 0` relative to the row) that navigates to `/structure` on a click anywhere
+in the row, including the `band`/`opposite` cells -- so the walkthrough narrates both disclosures
+through accurate `narration`/`point_out` text and `expect` assertions instead of a click-driven reveal,
+over the same already-recorded, fields-complete `screen-2026-07-20-ca185294a384` (100 ranked rows) a
+fresh scoped copy of `apps/backend/.data` serves, never the ambient store. This note exists so a future
+reader does not mistake the corrected script, or the scoped rig it was captured against, for a new
+owner, endpoint, or shape. -->

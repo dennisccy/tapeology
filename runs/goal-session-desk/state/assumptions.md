@@ -337,3 +337,33 @@ non-human work remains; the owner decision is raised explicitly in the recommend
 with zero program change. The tooltip photograph is NOT reversible in this rig: if the owner reads
 that clause literally, J-14 stays short of acceptance permanently unless the clause is reworded to
 "read out of the live DOM" or the native `title` is replaced by an on-page panel.
+
+## iter-21 — goal-decomposer
+
+**Ambiguity:** Iteration 20's own next-step recommendation asked to "express the sideways reveal of
+the two right-hand columns as a sideways scroll of the table rather than a click on a button that does
+not exist." Reading `scripts/automation/lib/demo_runner.py` directly shows its action vocabulary is
+exactly `{"goto", "click", "fill", "expect", "wait_for"}` (`:36`) — no scroll primitive exists, and
+adding one would be a tooling code change, which `Depth: evidence` explicitly does not carry (it
+"dispatches capture + evaluation only, skipping developer and reviewer"). Separately, every ranked row
+(`apps/frontend/app/desk/page.tsx:335-427`) is one stretched `next/link` anchor covering the whole row,
+so a `click` on the `band`/`opposite` cells navigates to `/structure` rather than scrolling anything.
+`docs/goal.md`'s J-14 acceptance already requires, and prior iterations already captured, a literal
+screenshot with both a near and a far opposite wall legible in one frame (a browser-QA deliverable,
+separate from the demo-narrator walkthrough); its walkthrough conjunct only says the film must "cover…
+end to end, narrated over POPULATED ranked rows" — it does not restate the screenshot's own
+legibility/single-frame requirement for the walkthrough's own frames.
+**We chose:** Direct this iteration's demo script to narrate the `band`/`opposite` disclosures via
+accurate `narration`/`point_out` text plus `expect` text assertions over the populated screen, and to
+NOT attempt any click-driven reveal of those columns (since every available click target inside the
+ranked table navigates away and no scroll action exists) — treating the walkthrough's "end to end,
+narrated over populated rows" clause as satisfied by correct narration over a populated recording, with
+the separate pixel-legibility requirement resting on the already-existing browser-QA screenshots. If a
+future record run's natural (unscrolled) capture happens to show the columns anyway, that is a bonus,
+not a requirement.
+**Reversible:** yes — if the owner reads the walkthrough conjunct as also requiring the two rightmost
+columns visually legible inside the demo gallery's own frames specifically, the remedy is a small,
+explicit `demo_runner.py` enhancement (a `scroll` action type driving `element.evaluate("el =>
+el.scrollLeft = el.scrollWidth")` on the `overflow-x-auto` container, never a click) — a lean-depth
+tooling change, not a rewording of goal.md, and nothing recorded this iteration would need to be
+redone.
