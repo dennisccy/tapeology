@@ -493,4 +493,21 @@ walkthrough gap and iter-17's carried J-13 `RECORDED_WITH_NOTES` capture gap in 
 `_select_best_band` (the row's own same-side selection) and `_row_rank_key` (the cross-symbol rank
 order) are UNCHANGED -- only the opposite-side tie-break order moves. This note exists so a future
 reader does not mistake the corrected selection, or its re-verification against real data, for a new
-owner, endpoint, or shape. -->
+owner, endpoint, or shape.
+
+NOTED at iter-20 (documentation currency only, no new Data-Contract row, no nav-skeleton change):
+iteration 19 shipped and independently re-verified the distance-first `_select_opposite_band` fix
+(GOAL_ACHIEVED) but was dispatched `lean`, so its own `[NEW]`-flagged demo-narrator walkthrough over
+POPULATED `/desk` rows never ran in-run (`reports/demo/goal-desk-iter-19/` does not exist), and a
+separately carried capture gap from iter-16 (a full-page screenshot of the earlier of J-12's two
+same-date recordings, `screen-2026-07-27-936543601e75.json`, showing the NFLX `1d` coverage badge
+together with the page's own "every timeframe badge dark" sentence in one frame) stayed open. iter-20
+makes no code change and adds no Data-Contract row (`Depth: evidence` -- capture + evaluate only, the
+rule-7 exception: the prior evaluator's own next-step asked ONLY for evidence on already-passing
+J-12/J-13/J-14) -- it records the walkthrough against the already-recorded, fields-complete screen
+`screen-2026-07-20-ca185294a384.json` (100 ranked rows, every row carrying `reference_close`,
+`price_low`/`price_high`, and `opposite_band` -- the same recording the iter-19 evaluator re-derived
+byte-for-byte) and captures the full-page J-12 screenshot, both from a read-only SCOPED COPY of
+`apps/backend/.data` (never a write into the ambient store, per the iter-9/11/14/15/17/19 scoped-rig
+lesson). This note exists so a future reader does not mistake either capture, or the scoped copy it
+was taken against, for a new owner, endpoint, or shape. -->
