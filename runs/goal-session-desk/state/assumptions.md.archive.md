@@ -308,3 +308,273 @@ REGRESSION and halt) stays available to the owner: the code is small, additive a
 the 60 affected data files were never modified.
 **Reversible:** yes
 
+
+<!-- condense.sh 2026-07-29T00:03:45Z: moved 14 entries (keep-iters=5) -->
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-04 acceptance demands a screenshot of "Run Screen shows live
+progress and an in-flight second trigger is refused", and the era's rule is "no screenshot ⇒ the
+journey is `unknown`, never `passing`" — but nothing says whether a screenshot whose LAYOUT was
+altered by the QA lane (two controls repositioned to the top-left and outlined via injected CSS, plus
+one poll reply held open for a few seconds so the sub-second state persisted) still counts as the
+required screenshot. The controls genuinely live at the bottom of a ~4500px page, past the 4320px
+full-page capture limit, so an unaided capture of that state is not possible without scrolling.
+**We chose:** Count it. The rendered elements are the real components in their real states with real
+values (`disabled` "Computing…" button, `desk-screen-compute-running` showing "0 / 103 members" +
+Cancel), which I corroborated three ways: the 8×8 pixel difference between the two shots falls exactly
+on the `h-2 w-2 animate-pulse` dot at `page.tsx:463-466` (a static forgery would not animate), the
+populated briefing behind them is exactly what `page.tsx:671-689` produces when a screen exists and a
+new run starts, and no request or response body was faked. So the position/outline injection is a
+capture aid of the same class as scrolling, not fabricated evidence. Consequence: J-04 is `passing`,
+and the next iteration's results report is required to disclose any such aid up front.
+**Reversible:** yes
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** The iter-5 spec's TC-7 demands the ambient `apps/backend/.data/` listing be
+"byte-for-byte identical" before and after the pass. The listing came out identical, but I found two
+files under it dated inside the iteration window: `bar_index.db-wal` (0 bytes) and `bar_index.db-shm`,
+created 15:00:31 when the deterministic J-07 replay booted the REAL backend. `docs/goal.md`'s
+immutable-data rail speaks of registered datasets and bar series, not of SQLite side-files.
+**We chose:** Not a violation and not a TC-7 failure. `bar_index.db` itself is untouched (mtime still
+2026-07-25 12:49), the WAL is empty (zero pending writes), and no bar/universe/screen/dataset record
+was added or changed — these are read-mode side-files, and they predate the browser pass (they were in
+BOTH of the QA lane's listings, which is why its 391-entry count exceeds the developer's earlier 389).
+Consequence: "ambient store untouched" is scored on registered CONTENT, not on SQLite bookkeeping
+side-files; a future iteration that finds a non-empty `-wal` or a changed `bar_index.db` mtime should
+treat that differently.
+**Reversible:** yes
+
+## iter-6 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s J-05 step 3 says "make each briefing row a drill-in link to
+`/structure?symbol=<sym>&asof=<as_of>`" without distinguishing ranked rows from skipped-member
+rows — both are rendered on `/desk`'s briefing table (blueprint.md's Data Contract already
+registers a `DeskScreenSkip` shape with its own `symbol` field, structurally identical to a ranked
+row for this purpose), but a skipped member by definition has no band/coverage evidence backing a
+"drill in to see the wall" motivation.
+**We chose:** Link BOTH row kinds. A skipped-member drill-in still lands on `/structure` with that
+symbol and the screen's `as_of` prefilled, and `/structure` will honestly render its own no-bars/
+empty state for that symbol at that date — exactly the same "describe, never fabricate" discipline
+this era already applies everywhere else, so there is no dishonest or misleading render to guard
+against. Narrowing to ranked-rows-only remains available if the owner prefers that scope.
+**Reversible:** yes
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s browser-evidence rail ("every browser acceptance needs a screenshot — no
+screenshot ⇒ the journey is `unknown`, never `passing`") says nothing about a screenshot captured on the
+tree as it stood BEFORE a fix landed later in the same iteration. J-05's four acceptance screenshots
+were taken by the browser-QA lane between 17:11 and 18:03; the auditor then changed
+`apps/frontend/app/desk/page.tsx:983` (`isViewingLatest` now compares snapshot ids instead of testing
+"was anything clicked") at the end of the iteration.
+**We chose:** Count the screenshots. The fix only alters one path — selecting the NEWEST screen's own
+history row — and none of the four captures exercises it (UT-03 selects 2026-06-22, UT-04 uses the
+Latest button, UT-05/UT-06 navigate away, UT-02 has no params), so each image still shows the state the
+current code produces for the case it depicts. Corroborated two ways: the auditor re-ran TC-1/TC-2/TC-3
+live on a fixture-scoped rig AFTER the fix with printed state for both directions, and the evaluator
+compared UT-03's rendered rows field-for-field against the real recorded snapshot JSON. Consequence:
+mid-iteration fixes do not automatically void earlier evidence — but only when the changed path is
+demonstrably outside every accepted capture; a fix touching a photographed path would require re-capture.
+**Reversible:** yes
+
+## iter-7 — goal-decomposer
+
+**Ambiguity:** iter-6's evaluator framed audit F2 (the whole-row drill-in link on `/desk` had made
+several per-cell `title` tooltips — full-precision `distance_bps`/`band_score`, per-timeframe
+"window last requested" freshness — unreachable by hover) as a choice between exactly two fixes:
+"the whole row is a link, or each cell keeps its hover detail." Neither `docs/goal.md` nor the
+blueprint states which cells, if any, may stop being part of the row's click target.
+
+**We chose:** Neither named option. Both risk breaking `runs/goal-session-desk/journey-scripts/J-05.json`
+step 4, which clicks the whole `desk-screen-row` testid (`<tr>`) and currently succeeds everywhere in
+the row because the drill-in anchor covers the full row via `absolute inset-0`; if the distance/score/
+coverage cells reclaimed pointer-event priority (either candidate's implied mechanism), a click
+landing over those cells could silently stop navigating — rebuilding/breaking J-05's own
+already-verified, binding "do not redo" click behavior. Instead, iter-7 consolidates every
+now-unreachable per-cell tooltip onto the row's own drill-in anchor (already the topmost element
+everywhere in the row): hovering anywhere in the row reveals one composite tooltip carrying the full
+`distance_bps`, full `band_score`, and each coverage entry's `latest_window_end_utc`. This makes zero
+change to the anchor's `href`, `absolute inset-0` positioning, or any click geometry, and does not
+touch audit F3's earlier, deliberate 2-decimal DISPLAY rounding (kept for scanability) — only WHERE
+the full-precision detail is reachable from.
+
+**Reversible:** yes — the composite-tooltip approach can be replaced by either originally-named
+option later if the owner prefers a different contract; no stored data or endpoint shape is affected.
+
+## iter-7 — goal-evaluator
+
+**Ambiguity:** The iter-7 audit recommended scoring J-07 as "passing on every clause that has
+evidence, with two clauses carried" (its §5.1). `docs/goal.md`'s J-07 acceptance, however, lists
+"kept-route byte-identity holds" and "zero out-of-inventory changes in the cumulative diff" as
+conditions, and its step 1 requires every guard test to pass byte-unmodified — nothing in the file
+says whether a disclosed, owner-escalated deviation counts as satisfying a condition it plainly
+contradicts.
+**We chose:** Score J-07 `partial`, not `passing` — a condition that is verifiably false today is
+unmet, however well disclosed — and halt with STALLED rather than carry the item a fifth time. The
+consequence is deliberate: the owner's one written decision (ratify / revert / narrow the wording)
+now gates the era, instead of the loop spending another iteration on work that cannot change the
+outcome. The audit's softer framing stays available: if the owner narrows J-07's wording to "no
+UNDISCLOSED out-of-inventory changes" plus "a guard test may be updated for a rename", the existing
+evidence closes the era immediately.
+**Reversible:** yes
+
+## iter-7 — goal-evaluator
+
+**Ambiguity:** J-07 step 2 asks for a browser walk of the "sim cockpit (`SIM-BUYER` settles
+`buyer_control`, chart candles + timeframe switch + band overlay + live tape bars)". `SIM-BUYER` is a
+synthetic ticker with no recorded bars and no tradable map, so its cockpit honestly renders "No
+recorded bars for SIM-BUYER." and "No tradable map for SIM-BUYER." — the candle-history and
+band-overlay halves of that sentence cannot be shown on that symbol at all.
+**We chose:** Treat the clause as met for the parts the sim symbol can show (settled `buyer_control`,
+live tape candles, the 10s/30s/60s tape-timeframe controls, six populated panels — all in
+`UT-08-cockpit-buyer-control.png`), treat historical candles + band overlay as evidenced on
+`/structure` instead (`UT-09-structure-aapl-wall.png`), and record the missing Historical-mode
+cockpit capture on a REAL symbol as an open J-07 gap rather than a failure. This does not change
+J-07's status (already `partial` for other reasons), but iteration 8 must take that picture before
+the clause is called complete.
+**Reversible:** yes
+
+## iter-8 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s J-07 step 3 asks for "kept-route responses byte-identical on
+identical inputs vs a baseline captured from the era-open commit `047c38e`" but names no exhaustive
+route list or input set, and no baseline was ever captured at era open (iter-7 audit T3) — so this
+iteration must pick, for the first time, exactly which routes and inputs constitute "the kept
+product's routes."
+
+**We chose:** the full set of pre-desk GET routes under `/research/` and `/meta/` (taxonomy,
+datasets(+id), bars(+id/candles), candles, levels, tradability, setups(+id), pnl/ledger, profiles,
+strategies, edge-report) plus `/meta/ui-routes`, exercised with the same concrete inputs prior
+iterations' own evidence already used (pinned AAPL as-of 2026-06-22/2026-07-25, the fixture universe
+member set) rather than every theoretically possible parameter combination — a bounded, reproducible
+set matching what J-07's acceptance text calls out by name (the AAPL wall, `/research/taxonomy`
+unchanged) rather than an exhaustive fuzz. The MCP tool-count delta (15→17) is cited from iter-7's
+own already-proven evidence, not re-diffed against a second checked-out MCP server, since J-06 is a
+binding "do not redo" item. Live WS tape frames are not diffed byte-for-byte (no engine change this
+era; the existing engine-equivalence suite already proves byte-identical `default` projections).
+
+**Reversible:** yes — a future iteration can widen the route/input set if a gap surfaces.
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** J-07 step 2 asks for a screenshot of the "Case Studies drill-in" on the current tree,
+and the era's rail is absolute ("no screenshot ⇒ the journey is `unknown`, never `passing`"). This
+iteration's Case Studies capture (`J-07-case-studies-drillin.png`) proves only that the panel RESOLVES
+and renders its honest empty state, on a disclosed fixture-scoped rig that contains no band-touch
+events at all — because the ambient store's `GET /research/setups` did not return inside a bounded 30 s
+probe (its scan cache is cold; see the second entry below). The one screenshot that shows a real event
+drill-in with real reaction/forward-return numbers is iter-7's
+`reports/qa/goal-desk-iter-7-evidence/UT-10-case-studies-drillin.png`.
+**We chose:** Count the iter-7 frame as satisfying that sub-clause for the current tree, because the
+code it depicts is provably unchanged — `git diff --name-only <iter-8 snapshot> HEAD -- apps/` is empty,
+`apps/backend/app/research/setups.py` has no diff at all this era, and `apps/frontend/app/structure/page.tsx`
+was last touched in iter-6 — and pair it with this iteration's fresh capture, which proves the same
+panel still resolves and still degrades honestly on today's build. The alternative (score the sub-clause
+unmet for want of a same-iteration capture) would have held the era open on a picture that only an
+operator cache-warm, not any product work, can produce.
+**Reversible:** yes — a later capture on a warmed ambient store would replace the iter-7 frame outright.
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** J-07's acceptance says "kept-route byte-identity holds on every route outside step 3's
+two named exemptions" (`/meta/ui-routes` and the MCP tool list). The captured baseline found a THIRD
+route differing: `/research/candles` for AAPL 1d, by exactly `integrity_errors` 0 -> 1 and
+`revised_timestamps` 188 -> 187. Read literally, the acceptance sentence makes any third difference a
+failure; step 3's own body, however, says a difference "is explained against R-1 or it is a defect",
+and R-1 adds "where the clauses below say untouched / byte-unmodified / out-of-inventory, they are read
+subject to R-1".
+**We chose:** Score the clause MET. I read the mechanism in code myself (`apps/backend/app/research/bars.py:518-547`
+collects price-less rows, excludes them from the merged view, and reports them through the existing
+`integrity_errors` channel) and confirmed it is precisely the behaviour the owner ratified in writing;
+`/research/levels` and `/research/tradability`, which read the SAME merged path, both MATCH, which
+bounds the effect to one route and one as-of window. Treating the owner's own ratified repair as a
+sentinel failure would mean the owner ratified something that automatically fails the sentinel.
+**Reversible:** yes — if the owner intended "exactly two differing routes, full stop", the era reopens
+with a single clarifying line in J-07's acceptance text.
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** Anti-goal "Every run is an explicit operator act … page-load GETs never trigger fetches
+or computes" *(critical)* versus what the operator will actually see: on the ambient `.data/`, loading
+`/structure` leaves the Case Studies panel on its loading skeleton for minutes, because this era added
+`desk_*` `Config` fields (explicitly sanctioned by the era's own Constraints, Path A) and that changed
+the content hash keying `setups_scan_cache.db`, so the pre-existing GET path now performs a real scan
+instead of a cache read.
+**We chose:** Not an anti-goal violation, and not a J-07 acceptance failure — recorded instead as an
+open OPERATOR item on J-07 and in the next-step recommendation. Reasons: the era added no such code
+path (`setups.py` and its route are byte-unchanged vs `047c38e`); the compute-on-miss behaviour predates
+the era; the served VALUES are byte-identical (`/research/setups` MATCHes in the baseline report); and
+the remedy is the existing operator-run scan, not product work the era is allowed to do (Non-Goals:
+"No engine, chart, or kept-surface work"). Had I scored it a minor violation, the verdict would have
+been CONTINUE on a latency item that no in-scope code change could fix.
+**Reversible:** yes — if the owner reads that rail as covering cache-key side effects, this becomes a
+minor unresolved violation and the era reopens for a warm-or-refuse fix on that panel.
+
+## iter-9 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s J-08 step 1 specifies `basis_age_days` only as "a plain arithmetic
+derivation from the row's own `basis_as_of` and the snapshot's own `as_of` (the `distance_bps`
+precedent, `desk_screen.py:197`)" — it names neither the exact formula nor whether the result is a
+whole-day integer or a fractional/float day count, and both `basis_as_of` and `as_of` are full ISO
+datetimes (not bare dates) whose time-of-day components can differ (e.g. an existing fixture pair
+resolves `as_of="2026-06-22T15:00:00Z"` against `basis_as_of="2026-06-18T04:00:00.000000Z"`).
+**We chose:** A whole calendar-date difference — `(date(as_of) - date(basis_as_of)).days`, an
+`int >= 0` — discarding the time-of-day component on both sides. This is the reading that
+reproduces the exact numbers the proposer measured live and cited in goal.md's own rationale
+(as-of 2026-07-25 minus basis 2026-07-24 = 1 d for AAPL; minus 2026-07-13 = 12 d for
+META/NFLX/NVDA) and matches every "N d" example in the acceptance text and the UI copy example
+("12 d before as-of"). A true elapsed-time formula (subtracting full timestamps, dividing by
+86400, then flooring or rounding) would give a different integer whenever the two time-of-day
+components straddle a day boundary, and does not reproduce the cited examples as cleanly.
+**Reversible:** yes — `basis_age_days`'s derivation can be swapped for a different formula in a
+later iteration without touching `basis_as_of`, the persisted 5-pin key, or any other row field;
+only already-recorded rows from this iteration forward would keep their original (never
+retroactively rewritten, per the append-only rail) values.
+
+## iter-9 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-08 acceptance requires a browser screenshot with "at least one
+fresh row (age ≤ 2 d) and one stale row (age ≥ 10 d) legible in the same screenshot". The captured
+evidence (`UT-03-fresh-vs-stale.png`) shows 3 d vs 14 d. The iteration's own test plan
+(`reports/phase-goal-desk-iter-9-ui-test-plan.md:112-115`) declares an "explicit, documented
+allowance" that a 7+ day spread satisfies the clause even when no row is ≤ 2 d, and the audit
+(T1, GAP not IMPORTANT) explicitly hands the call to the evaluator: accept the spread, or require
+the literal thresholds.
+**We chose:** Score J-08 `partial`, not `passing`, and CONTINUE. Reasons: (i) a test plan written
+downstream cannot amend `docs/goal.md`'s acceptance text — only the owner can; (ii) the allowance
+was unnecessary, which is decisive — I measured the canonical owner myself at
+`as_of 2026-07-25T23:59:59Z` on a throw-away copy of the bar store and got AAPL = 1 d and
+META/NFLX/NVDA = 12 d, so both thresholds are reachable TODAY with zero code change and zero write
+to the ambient store; (iii) this session's own iter-7 precedent ("a condition that is verifiably
+false today is unmet, however well disclosed"). The consequence is one short lean iteration whose
+only real deliverable is the correctly-parameterised screenshot. The softer reading stays available:
+if the owner narrows J-08's wording to "a legible fresh-vs-stale spread" (or restates the thresholds
+relative to the newest available bar rather than absolute days), the existing evidence closes the
+journey immediately.
+**Reversible:** yes
+
+## iter-9 — goal-evaluator
+
+**Ambiguity:** The browser-QA lane clicked "Run Screen" against the AMBIENT `apps/backend/.data/`
+rather than the throw-away copy this iteration's own spec NOTES and
+`apps/backend/scripts/goal-desk-iter9-scoped-backend.sh` directed (audit T3), writing a real
+`screen-2026-07-27-936543601e75.json` into the operator's ledger. `docs/goal.md` has no rail
+naming "the pipeline must not write to the ambient store"; the closest rails are "Every run is an
+explicit operator act", "Persistence stays scoped", "Snapshots are append-only and pinned" and
+"Immutable data".
+**We chose:** Not an anti-goal violation — a hygiene deviation, recorded in `journey-history.json`
+(`notes_iter_9`) and in the next-step recommendation instead. Each rail was checked individually:
+the run was an explicit button click (not a scheduler, daemon, auto-refresh, market-hours trigger,
+or page-load GET); it appended a NEW correctly-pinned snapshot rather than rewriting anything; both
+pre-existing snapshots are provably untouched (sha256 `530bb4f6b4a5a3fc…` / `9c2fddf6c4821a89…`,
+mtime 2026-07-25, predating the 20:21 start); no bar or dataset was written. Consequence to carry:
+prior iterations tracked "the owner's real data folder is unchanged" as a standing hygiene check,
+and that streak is now broken by a QA-produced (but genuine) screen record; and
+`journey-scripts/J-08.json` steps 3/6 now assume the replay target's latest screen carries basis
+fields.
+**Reversible:** yes — if the owner reads the scoped-rig discipline as a rail rather than a
+convention, this becomes a minor unresolved violation and the next iteration owes a remediation
+note (the file itself must stay: deleting it would breach the append-only rail).
+

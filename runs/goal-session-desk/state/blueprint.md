@@ -78,8 +78,12 @@ Tapeology
                                 made several per-cell hover tooltips (full-precision distance/score,
                                 per-timeframe freshness) unreachable — iter-7 consolidates them onto
                                 the row's own drill-in anchor, with zero change to click geometry.
-                                iter-11 (J-09, IN BUILD) adds a read-only "Top-up Runs" section
-                                beside Screen History — see the Data Contract row below.
+                                iter-11 (J-09) added a read-only "Top-up Runs" section beside
+                                Screen History — see the Data Contract row below. iter-14
+                                (J-10, IN BUILD) adds a read-only "Index Reconciliation"
+                                section beside Top-up Runs, plus a "Reconcile Index" trigger
+                                mirroring the Top-up button — see the Data Contract rows
+                                below.
 ```
 
 **Feature / journey homes** (each reachable in ≤2 clicks from the nav):
@@ -95,6 +99,7 @@ Tapeology
 | J-07 Kept-product regression sentinel | `/`, `/structure` | Cockpit, Structure |
 | J-08 Basis disclosure on ranked rows (measurement age) — implementation shipped iter-9; iter-10 closes the remaining literal-threshold screenshot evidence | `/desk` (ranked table column + row drill-in tooltip) | Desk |
 | J-09 Top-up run ledger (append-only record of what a top-up attempted) — implementation shipped iter-11; iter-12 (lean) could not close the remaining narrated-walkthrough evidence — the lane that produces it runs after scoring at lean depth — and also surfaced a capture-order defect; iter-13 (full depth, corrected empty-before-record order) re-attempts it | *(backend; surfaced as a read-only "Top-up Runs" section on `/desk`, beside Screen History — no standalone page)* | Desk |
+| J-10 Coverage-index reconciliation (drift classification + repair via the existing `BarIndex.reindex()`, append-only run ledger) — IN BUILD at iter-14 | *(backend; surfaced as a read-only "Index Reconciliation" section on `/desk`, beside Top-up Runs — no standalone page)* | Desk |
 
 ## Data Contract
 
@@ -134,6 +139,8 @@ Shape table):**
 | Screen compute progress | `app/research/desk_screen_compute.py` (`DeskScreenComputeManager`, shipped J-03, iter-3) | `POST /research/desk/screen/compute` (trigger, body `{"screen_date": "YYYY-MM-DD"}` REQUIRED — 422 if absent, never defaults to today), `GET /research/desk/screen/compute` (poll), `POST /research/desk/screen/compute/cancel` (cancel) — mirrors `/research/desk/topup/compute*` exactly | shape: `{"id": str, "state": "running"\|"done"\|"cancelled"\|"failed", "screen_date": str, "started_utc": str, "finished_utc": str \| null, "error": str \| null, "reused": bool, "screen_id": str \| null, "progress": {"members_total": int, "members_done": int, "current": str \| null}}`; single-flight; page-load GETs never trigger a compute; process-scoped bookkeeping, never a research value; an identical-pin trigger over an already-recorded snapshot returns it without recomputing (T-6/append-only). **`reused`/`screen_id` are an iter-4 (J-04) ADDITIVE amendment to this row's shape** (the fields did not exist before iter-4): `screen_id` is the resulting persisted snapshot's own `id` (populated once the job reaches a terminal state, `null` while running or before any trigger); `reused` is `true` when that snapshot already existed under the SAME 5-pin key before this job ran (a pure re-read, zero new file written) and `false` when this job's own walk is what created it — closes audit B2 (an otherwise-indistinguishable `"done"` for a fresh compute vs. a pure reuse). Computed by the SAME `DeskScreenComputeManager`, served by the SAME two routes — no second owner, no second endpoint. |
 | Route list (now 3 rows) | `app/meta.py` `UI_ROUTES` | `GET /meta/ui-routes` | same owner as the unchanged row above — J-04 (iter-4) appended the `/desk` entry there in the same commit the page shipped |
 | **Top-up run records (per-run outcome ledger)** — NEW at iter-11 (J-09) | new `app/research/desk_topup_log.py` (name at build discretion) | `GET /research/desk/topup/runs` | shape: `{"runs": [<lightweight meta only: id, universe_snapshot_id: str\|null, requested_window: {"start": str, "end": str}, config_fingerprint, started_utc, finished_utc, state: "done"\|"cancelled"\|"failed", pairs_total: int>=0, pairs_attempted: int>=0 — NEVER the full `outcomes` array, mirroring the screen list's meta-only convention>, ...], "latest": <same fields PLUS outcomes: [{"symbol": str, "timeframe": str, "outcome": "reused"\|"fetched"\|"failed", "detail": str\|null}, ...] byte-identical to `desk_topup_compute.run_topup`'s own return for that walk> \| null}` — honest-empty `{"runs": [], "latest": null}`, HTTP 200, before any run (never a 404 — the `desk_universe`/`desk_screen` convention). One frozen, checksummed, append-only JSON file per run (the `UniverseStore`/`ScreenStore` discipline: checksum-verified load, `record()` the only mutation, no update/delete) written EXACTLY ONCE, at a run's terminal state, by a SINGLE shared writer both `DeskTopupComputeManager`'s worker resolve path (`desk_topup_compute.py` `_work`/`_resolve`, ~:262/:282) and the CLI's `main` (~:329) call — never two write paths, never a second outcome shape, zero change to what `run_topup`/`_run_one_pair` themselves compute (`:123-188`). A run whose process ends before the writer's terminal call leaves NO record — the ledger never invents an entry for an interrupted run. Records ATTEMPTS only; bar presence/freshness keep their single existing owner (`desk_coverage.py` over `bar_index`, row above) — no second coverage path. Storage dir: a bare env-var-or-sibling-of-`desk_universe_dir_resolved()` default (the `resolve_desk_screen_dir` pattern) — deliberately NOT a new `Config` field. No MCP tool added — `get_endpoint`'s existing `/research/` allowlist (`ALLOWED_GET_PREFIXES`) already reaches this path with zero code change; J-06's exactly-17-tool contract is unaffected. See "RESOLVED at iter-11" below for the full build-time scope note. |
+| **Coverage-index reconciliation run records (durable ledger)** — NEW at iter-14 (J-10) | new `app/research/desk_index_reconcile.py` (name at build discretion) | `GET /research/desk/coverage/reconcile/runs` (exact path at build discretion) | shape: `{"runs": [<lightweight meta only: id, config_fingerprint, started_utc, finished_utc, state: "done"\|"cancelled"\|"failed", series_on_disk: int>=0, rows_indexed_before: int>=0, rows_indexed_after: int>=0 — NEVER the full drift/store-error detail, mirroring the topup-run-list's meta-only convention>, ...], "latest": <same fields PLUS drift_before: {"unindexed_series": [{"series_id","symbol","timeframe"}], "orphan_index_rows": [{"series_id"}], "stale_checksum_rows": [{"series_id"}]}, drift_after: <same three-bucket shape, expected empty for every pair this run repaired>, store_errors: [{"file","error"}] — verbatim from `BarStore.list()`'s own `errors`> \| null}` — honest-empty `{"runs": [], "latest": null}`, HTTP 200, before any run (never a 404 — the `desk_universe`/`desk_screen`/`desk_topup_log` convention). One frozen, checksummed, append-only JSON file per run (the `TopupRunStore` discipline: checksum-verified load, `record()` the only mutation, no update/delete), written EXACTLY ONCE at a run's terminal state by a SINGLE shared writer. Repairs ONLY through the EXISTING `BarIndex.reindex(store)` (`bar_index.py:198`) — zero diff to `bar_index.py`/`bars.py` (no new accessor, no schema change, no new index) and zero diff to `desk_coverage.py`/`tradability.py`/`levels.py` (coverage/freshness keep their single existing owner, `desk_coverage.get_desk_coverage` over `bar_index` — this row records the REPAIR only, never a second coverage path). Storage dir: a bare env-var-or-sibling-of-`desk_universe_dir_resolved()` default (the `resolve_desk_topup_log_dir` pattern) — deliberately NOT a new `Config` field. No MCP tool added — `get_endpoint`'s existing `/research/` allowlist already reaches this path with zero code change; J-06's exactly-17-tool contract is unaffected. No PnL-ledger append (this row's SSOT proof stands "in place of" one, per goal.md's own J-10 acceptance text). See "RESOLVED at iter-14" below for the full build-time scope note. |
+| **Coverage-index reconciliation compute progress** — NEW at iter-14 (J-10) | same new module (a compute-manager class mirroring `DeskTopupComputeManager`'s shape — single in-flight job slot, atomic snapshot publish, cooperative cancel) | `POST /research/desk/coverage/reconcile/compute` (trigger), `GET /research/desk/coverage/reconcile/compute` (poll), `POST /research/desk/coverage/reconcile/compute/cancel` (cancel) — exact subpaths at build discretion, mirrors `/research/desk/topup/compute*` | shape: `{"id": str, "state": "running"\|"done"\|"cancelled"\|"failed", "started_utc": str, "finished_utc": str \| null, "error": str \| null, "progress": {...phase/counters at build discretion, the `DeskScreenComputeManager.progress` precedent}}`; single-flight (a second trigger while running returns the unchanged existing snapshot, `started: false`); page-load GETs never trigger a compute (T-4/5C); process-scoped bookkeeping, honestly lost on restart, never a research value — the SAME contract every compute manager in this app already carries. This row's own terminal resolution is what calls the SINGLE shared writer that populates the durable row above, exactly once — the two rows can never disagree because they share one computation, just different lifetimes (the J-02/"Top-up compute progress" vs. J-09/"Top-up run records" precedent). No CLI warmer this iteration (see "RESOLVED at iter-14" below). |
 
 <!-- RESOLVED at iter-2: coverage's REST sub-path is the dedicated `GET /research/desk/coverage`
 endpoint (row above), per docs/goal.md Key Capability 2's build-time decision — registered here as
@@ -305,4 +312,33 @@ the genuinely live honest-empty state first, THEN records the same three-checkpo
 the populated state second on that same still-live rig, and assembles both captures into one
 `[NEW]`-flagged demo-narrator walkthrough. This note exists so a future reader does not mistake the
 re-recorded walkthrough, or the corrected-order rig it was captured against, for a new owner,
-endpoint, or shape. -->
+endpoint, or shape.
+
+RESOLVED at iter-14 (build-time scope for J-10, registered here BEFORE the build): the
+goal-proposer's third post-GOAL_ACHIEVED journey (era closed GOAL_ACHIEVED + CONFIRM_ACHIEVED at
+iter-13; proposer rationale: `state/proposer-result.json` + `state/enhancement-proposals.jsonl`,
+2026-07-28 — measured live against the frozen store and the derived index: `apps/backend/.data/bars`
+holds 369 series files while `.data/bar_index.db` holds 281 rows, so 88 recorded series carry no
+index row, and 7 of those land on screened member x timeframe pairs that render a dark-or-false
+coverage badge on `screen-2026-07-27-936543601e75`, while `BarIndex.reindex()` — the existing
+repair — has zero call sites outside its own test). Unlike J-08 (an additive field on an existing
+row) or J-09 (one wholly new durable store beside an ALREADY-existing compute-progress row), J-10
+adds TWO new Data-Contract rows — a durable run-record ledger (mirrors `TopupRunStore`'s discipline)
+AND a transient compute-progress row (mirrors `DeskTopupComputeManager`'s shape), because the
+reconcile action has no pre-existing compute manager of its own to extend the way J-09 extended
+J-02's — both registered above BEFORE any code lands, per this era's iter-1/2/3/9/11 precedent (see
+`assumptions.md` iter-14 for the full reasoning). No new page (the new "Index Reconciliation" section
+lives on the ALREADY-REGISTERED `/desk` canonical home, same as J-04/J-05/J-08/J-09), no nav-skeleton
+change, no new `Config` field, no new MCP tool (`get_endpoint`'s existing `/research/` allowlist
+already reaches the new GET path with zero code change — J-06's exactly-17 contract is unaffected).
+No CLI warmer is planned this iteration: unlike J-02/J-03, goal.md's own J-10 text never names one,
+and the repair itself is a fast, local, no-network index rebuild rather than a ~100-symbol vendor
+walk, so the UI trigger (and a direct `POST`, for the operator's real ambient-store run) is
+sufficient — logged in `assumptions.md` iter-14. `bar_index.py`, `bars.py`, `tradability.py`,
+`levels.py`, `desk_coverage.py` and `StructureChart.tsx` all take a ZERO diff — reconciliation
+changes only the derived index, never any canonical computation or the frozen chart. The reconcile
+run's fixture-scoped tests plant a SMALL, controlled drift case (per goal.md J-10 step 6); the real
+~88-pair ambient-store reconciliation stays an operator-run act, reported honestly if and when it
+happens, never a CI gate (goal.md's own parenthetical). The two other backlogged proposals (top-up-
+runs `integrity_errors` disclosure; coverage-freshness date-format consistency) are again NOT
+promoted this cycle — deferred to keep this iteration's scope to the one promoted journey. -->

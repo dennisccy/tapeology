@@ -21,22 +21,32 @@ routes (``POST``/``GET /research/desk/screen/compute``, ``POST
 (mirroring the plan's stated preference) rather than folding into ``routes.py``, which is already
 large; mounted separately in ``app/main.py``.
 
-J-09 (this iteration) adds ONE new read: ``GET /research/desk/topup/runs`` (the durable, append-only
-top-up run log — ``desk_topup_log.py``'s lightweight run-meta list + the latest full record; honest-
-empty ``{"runs": [], "latest": null}`` before any run, never a 404). No new compute manager, no new
-POST — the log is written by the ALREADY-existing top-up trigger/CLI paths (``desk_topup_compute.py``
-threads the write through internally); this route is a pure read, mirroring ``GET
-/research/desk/universe``'s single-synchronous-read shape exactly.
+J-09 (unmodified this iteration) adds ONE new read: ``GET /research/desk/topup/runs`` (the durable,
+append-only top-up run log — ``desk_topup_log.py``'s lightweight run-meta list + the latest full
+record; honest-empty ``{"runs": [], "latest": null}`` before any run, never a 404). No new compute
+manager, no new POST — the log is written by the ALREADY-existing top-up trigger/CLI paths
+(``desk_topup_compute.py`` threads the write through internally); this route is a pure read,
+mirroring ``GET /research/desk/universe``'s single-synchronous-read shape exactly.
 
-**Both compute managers are module-level singletons here, NOT ``ResearchRegistry`` properties.**
+J-10 (this iteration, goal-desk-iter-14) adds the coverage-index reconciliation: a trigger/poll/
+cancel trio (``POST``/``GET /research/desk/coverage/reconcile/compute``,
+``POST /research/desk/coverage/reconcile/compute/cancel`` — mirrors the top-up trio exactly) plus
+ONE durable read (``GET /research/desk/coverage/reconcile/runs`` — mirrors ``GET
+/research/desk/topup/runs``'s exact honest-empty/meta-only-list/full-latest shape). All four routes
+are pure wiring over ``desk_index_reconcile.py`` — see that module's own docstring for the
+classify/repair/record mechanics. No new MCP tool (``get_endpoint``'s existing ``/research/``
+allowlist already reaches the new GET path); no new router, no ``main.py`` change.
+
+**Compute managers are module-level singletons here, NOT ``ResearchRegistry`` properties.**
 ``DeskTopupComputeManager`` (``desk_topup_compute.py``) reuses ``routes.record_bar_series``
 in-process, so it must import FROM ``routes.py`` — if ``ResearchRegistry`` held the manager (the
 ``EdgeReportComputeManager`` precedent), ``routes.py`` would need to import IT back, a circular
-import. ``DeskScreenComputeManager`` (``desk_screen_compute.py``) has no such constraint (it needs
-nothing from ``routes.py``), but is placed here anyway for consistency with its sibling — there is
-no functional reason to prefer the registry either. Both are FastAPI dependencies instead (the
-``get_universe_fetcher`` seam), test-overridable via ``app.dependency_overrides`` exactly like
-every other store/seam in this module."""
+import. ``DeskScreenComputeManager`` (``desk_screen_compute.py``) and
+``DeskIndexReconcileComputeManager`` (``desk_index_reconcile.py``, J-10) have no such constraint
+(neither needs anything from ``routes.py``), but are placed here anyway for consistency with their
+sibling — there is no functional reason to prefer the registry either. All three are FastAPI
+dependencies instead (the ``get_universe_fetcher`` seam), test-overridable via
+``app.dependency_overrides`` exactly like every other store/seam in this module."""
 
 from __future__ import annotations
 
@@ -50,6 +60,11 @@ from .bar_index import BarIndex
 from .bars import BarStore
 from .datasets import DatasetStore
 from .desk_coverage import get_desk_coverage
+from .desk_index_reconcile import (
+    DeskIndexReconcileComputeManager,
+    ReconcileRunStore,
+    resolve_desk_index_reconcile_dir,
+)
 from .desk_screen import ScreenStore, resolve_desk_screen_dir
 from .desk_screen_compute import DeskScreenComputeManager
 from .desk_topup_compute import DeskTopupComputeManager
@@ -76,6 +91,10 @@ _desk_topup_manager = DeskTopupComputeManager()
 # The desk screen compute manager (J-03) — the SAME process-wide-singleton-behind-a-dependency
 # shape as ``_desk_topup_manager`` immediately above.
 _desk_screen_compute_manager = DeskScreenComputeManager()
+
+# The desk coverage-index reconciliation compute manager (J-10) — the SAME process-wide-singleton-
+# behind-a-dependency shape as its two siblings above.
+_desk_index_reconcile_manager = DeskIndexReconcileComputeManager()
 
 
 def get_universe_store() -> UniverseStore:
@@ -396,3 +415,95 @@ def cancel_desk_screen_compute(
         raise HTTPException(status_code=409, detail="no desk screen compute is currently running")
     manager.cancel()
     return {"cancelling": True}
+
+
+# --- Coverage-index reconciliation (J-10, goal-desk-iter-14) — a trigger/poll/cancel trio mirroring
+# the top-up compute trio exactly, plus ONE durable read mirroring ``GET /research/desk/topup/runs``.
+# See ``desk_index_reconcile.py`` for the classify/repair/record mechanics this only wires up. -------
+
+
+def get_reconcile_run_store() -> ReconcileRunStore:
+    """The reconciliation run log store rooted at a bare env-var-or-sibling-of-the-universe-dir
+    default (zero new ``Config`` field — see ``desk_index_reconcile.resolve_desk_index_reconcile_dir``)
+    — the ``get_topup_run_store`` pattern. A FastAPI dependency so tests can point it at a temp dir
+    via the env var or override it outright."""
+    return ReconcileRunStore(resolve_desk_index_reconcile_dir(CONFIG.desk_universe_dir_resolved()))
+
+
+def get_desk_reconcile_manager() -> DeskIndexReconcileComputeManager:
+    """The desk coverage-index reconciliation compute manager — a FastAPI dependency (the
+    ``get_desk_topup_manager`` pattern) so a test overrides it outright via
+    ``app.dependency_overrides`` for complete test-to-test isolation. The default resolves the
+    process-wide singleton constructed at module import time."""
+    return _desk_index_reconcile_manager
+
+
+@router.post("/coverage/reconcile/compute")
+def trigger_desk_index_reconcile_compute(
+    bar_store: BarStore = Depends(get_bar_store),
+    bar_index: BarIndex = Depends(get_bar_index),
+    manager: DeskIndexReconcileComputeManager = Depends(get_desk_reconcile_manager),
+    reconcile_run_store: ReconcileRunStore = Depends(get_reconcile_run_store),
+) -> dict:
+    """Start the single-flight coverage-index reconciliation job, or — if one is already running —
+    return it UNCHANGED (``started: False``, never a second concurrent job). Returns
+    ``{"started": bool, "compute": <snapshot>}``; the actual classify-repair-verify walk runs on a
+    background worker thread, off this request, so this route returns immediately. The job's
+    terminal outcome is durably recorded into ``reconcile_run_store`` once it resolves (inside
+    ``DeskIndexReconcileComputeManager.trigger`` itself) — this route only threads the store
+    dependency through. Needs no ``UniverseStore``/``ResearchRegistry`` — reconciliation never
+    touches universe membership or the bar-fetch path."""
+    return manager.trigger(bar_store, bar_index, reconcile_run_store)
+
+
+@router.get("/coverage/reconcile/compute")
+def get_desk_index_reconcile_compute(
+    manager: DeskIndexReconcileComputeManager = Depends(get_desk_reconcile_manager),
+) -> dict | None:
+    """The reconciliation job's current/last snapshot, served VERBATIM — or ``null`` if no
+    reconciliation has ever run this process. A plain read: never triggers a compute as a side
+    effect (GET-never-computes)."""
+    return manager.snapshot()
+
+
+@router.post("/coverage/reconcile/compute/cancel")
+def cancel_desk_index_reconcile_compute(
+    manager: DeskIndexReconcileComputeManager = Depends(get_desk_reconcile_manager),
+) -> dict:
+    """Cancel the in-flight reconciliation (cooperative — observed once, before the repair phase
+    starts). ``409`` when idle (no job has ever run, or the last job already reached a terminal
+    state) — mirrors ``cancel_desk_topup_compute``'s own 409-when-terminal shape."""
+    snapshot = manager.snapshot()
+    if snapshot is None or snapshot["state"] != "running":
+        raise HTTPException(
+            status_code=409, detail="no desk index reconciliation compute is currently running"
+        )
+    manager.cancel()
+    return {"cancelling": True}
+
+
+def _reconcile_run_meta_only(record: dict) -> dict:
+    """The lightweight projection ``GET /research/desk/coverage/reconcile/runs``'s bulk list serves
+    — every field EXCEPT ``drift_before``/``drift_after``/``store_errors`` (mirrors
+    ``_topup_run_meta_only``'s identical convention: a run record carrying full before/after drift
+    detail is materially larger than its own summary, so the list call never returns the full detail
+    for every historical run)."""
+    heavy_keys = ("drift_before", "drift_after", "store_errors")
+    return {key: value for key, value in record.items() if key not in heavy_keys}
+
+
+@router.get("/coverage/reconcile/runs")
+def get_desk_index_reconcile_runs(store: ReconcileRunStore = Depends(get_reconcile_run_store)) -> dict:
+    """``{"runs": [...meta-only...], "latest": <full record>|null}`` — an explicit HTTP 200
+    honest-empty payload (``{"runs": [], "latest": null}``) before any reconciliation has ever
+    reached its terminal state, never a 404 (the ``GET /research/desk/topup/runs`` convention).
+    ``latest`` is the most recently STARTED run, verbatim from disk — never recomputed on the GET. A
+    corrupted run-record file is excluded from ``runs``/``latest`` (never fabricated, never crashes
+    this route) — ``ReconcileRunStore.list()``'s own ``errors`` return already surfaces it
+    explicitly at the store layer (mirrors ``get_topup_runs``'s identical choice not to duplicate
+    that channel into this response body)."""
+    records, _errors = store.list()
+    return {
+        "runs": [_reconcile_run_meta_only(r) for r in records],
+        "latest": records[-1] if records else None,
+    }

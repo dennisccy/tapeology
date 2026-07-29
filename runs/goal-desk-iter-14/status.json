@@ -1,0 +1,26 @@
+{
+  "phase": "goal-desk-iter-14",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-29T01:35:00.000000Z",
+  "started_at": "2026-07-28T20:04:00.747386Z",
+  "cli": "claude",
+  "blockers": [],
+  "note": "Re-dispatched fresh as developer (Mode: INITIAL BUILD) against a working tree that already carried this iteration's complete implementation from an earlier pass (already reviewer-PASS / QA-PASS / audit-PASS_WITH_GAPS, session.json last_verdict GOAL_ACHIEVED, but nothing committed to git yet). No product code was changed this dispatch -- re-verified the full suite (1419 tests, 0 failed, 8 skipped), all sentinels (fingerprint 08e471b10130e1e2, MCP 17 tools, zero diff on the 10 protected files), and tsc clean. Prepared a FRESH fixture-scoped rig (the earlier pass's own rig no longer exists) at /home/dennis-chan/.cache/iad/iad.goal-desk-iter-14.3302867/desk-iter14-scoped-qa, stopped deliberately before the one-way-door reconcile trigger. See docs/handoffs/goal-desk-iter-14-dev.md's 'Re-dispatch note' for full detail.",
+  "changed_files": [
+    "apps/backend/app/research/desk_index_reconcile.py",
+    "apps/backend/tests/test_desk_index_reconcile.py",
+    "apps/backend/app/research/desk_routes.py",
+    "apps/frontend/lib/types.ts",
+    "apps/frontend/lib/api.ts",
+    "apps/frontend/app/desk/page.tsx",
+    "runs/goal-session-desk/journey-scripts/J-10.json",
+    "docs/handoffs/goal-desk-iter-14-dev.md",
+    "docs/handoffs/goal-desk-iter-14-frontend.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "qa_passed": false,
+  "scoped_rig_path": "/home/dennis-chan/.cache/iad/iad.goal-desk-iter-14.3302867/desk-iter14-scoped-qa",
+  "next_action": "review"
+}

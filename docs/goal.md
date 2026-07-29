@@ -627,6 +627,92 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     series the era-5 contract resamples from that same `1h` fetch, so whether a pair was attempted,
     refused, or never reached is unknowable today.)*
 
+- **J-10: The coverage the briefing shows is the coverage the frozen store can prove**
+  - Steps:
+    1. Classify the drift between the derived `bar_index` and the frozen `BarStore` using ONLY reads
+       that already exist — `BarStore.list(include_bars=False)`'s healthy records plus its own
+       `errors`, and `BarIndex.list()`'s indexed `series_id`s (`bar_index.py:178`) — into three
+       honest classes: a series on disk with no index row (attributed to its `symbol` × `timeframe`
+       from that record's own meta), an index row whose `series_id` is not on disk (reported by
+       `series_id` alone — never an invented meta), and a row indexed under a checksum the store no
+       longer reports. **Zero diff to `bar_index.py` and `bars.py`**: the drift is pure composition
+       of their existing public reads, no new accessor, no schema change, no new index.
+    2. Repair through the EXISTING `BarIndex.reindex(store)` (`bar_index.py:198`) and nothing else —
+       never a second index-building path — then re-run the identical comparison and record the
+       post-repair result together with `BarStore.list()`'s own `errors` **verbatim**, because
+       `reindex()` is DROP-and-repopulate over HEALTHY records only: a corrupt file that the rebuilt
+       index therefore cannot carry is disclosed on the record, never silently dropped.
+    3. Keep it an explicit operator act and never a page-load compute (T-4 and the 5C lesson):
+       trigger via `POST` through the established compute-manager pattern (`DeskTopupComputeManager`,
+       `desk_topup_compute.py` — single-flight, pollable progress, cancellable), and persist ONE
+       frozen, checksummed, append-only run record per run — run id, started/finished UTC, terminal
+       state (`done`/`cancelled`/`failed`), `config_fingerprint`, pre-repair drift counts + the
+       affected `symbol × timeframe` pairs, post-repair verification counts, and the store errors —
+       written EXACTLY ONCE at the run's terminal state by a SINGLE shared writer every caller uses
+       (the `desk_topup_log` J-09 discipline); a run whose process dies before that write records
+       NOTHING and the ledger never invents an entry for it.
+    4. Own it exactly once: a new desk module (name at build discretion, e.g.
+       `app/research/desk_index_reconcile.py`) as the ONLY owner and ONE serving endpoint (exact path
+       at build discretion, e.g. `GET /research/desk/coverage/reconcile/runs`) with an honest-empty
+       `{"runs": [], "latest": null}` HTTP 200 before any run — registered as a NEW row in the
+       blueprint's Data Contract BEFORE the code lands; storage dir a bare env-var-or-sibling default
+       (the `desk_screen`/`desk_topup_log` precedent — deliberately NOT a new `Config` field); NO MCP
+       tool added (J-06's exactly-17-tool contract stays green and `get_endpoint`'s `/research/`
+       allowlist already reaches the path). Coverage and freshness keep their single existing owner —
+       `desk_coverage.get_desk_coverage` over `bar_index` — and no second coverage path, cache, or
+       copy is created anywhere.
+    5. Surface it on `/desk`: a "Reconcile Index" trigger wired exactly like the existing Top-up
+       button (live progress + cancel, page-load GETs trigger nothing) and a read-only reconciliation
+       section beside Screen History and Top-up Runs showing the latest run's counts (series on disk,
+       rows indexed, drift before, drift after, affected pairs, store errors) with an honest
+       no-run-recorded empty state; copy = descriptive measurement only (no advice, imperative,
+       urgency, or prediction language).
+    6. Test fixture-scoped: a scoped store holding a series its scoped index has no row for →
+       `GET /research/desk/coverage` reports `has_bars: false` for that pair BEFORE the run and
+       `true` AFTER it, with the run record's pre/post counts matching that drift exactly; a planted
+       corrupt file is recorded verbatim as a store error and simply absent from the rebuilt index
+       (never fabricated); a second run appends a new record while every earlier record file stays
+       byte-identical; the GET is honest-empty before any run and triggers nothing.
+  - Acceptance: on the fixture-scoped rig, a pair whose series the frozen store holds but the derived
+    index has no row for reports `has_bars: false` from `GET /research/desk/coverage` before the run
+    and `true` after exactly one reconciliation run, and the recorded run states the same drift it
+    repaired (pre-repair count and affected pairs, post-repair verification, store errors verbatim)
+    (**single source of truth**: the run record is registered in the Data Contract with the new desk
+    module as its only owner and its one GET as its only serving endpoint; the index is rebuilt ONLY
+    through the existing `BarIndex.reindex()`; coverage and freshness still come solely from
+    `desk_coverage` over `bar_index`; and `bar_index.py`, `bars.py`, `tradability.py` and `levels.py`
+    take a ZERO diff — this SSOT criterion stands in place of a PnL-ledger append, which this era's
+    Non-Goals forbid); every `.data/bars/*.json` series file in the scoped root is proven
+    byte-identical before and after the run (SHA-256 listing) and every previously recorded universe,
+    screen and top-up record is proven byte-identical on disk (checksums unchanged, nothing
+    backfilled) — a reconciliation changes only the derived index, so the NEXT screen run is a NEW
+    append-only snapshot under a NEW `bar_store_signature` (`desk_screen.py`'s checksum over
+    `desk_coverage`'s reads), never a rewrite of an existing one; in a real browser after the T-9
+    clean rebuild, `/desk` shows the honest no-run-recorded state in one screenshot and, after a
+    fixture-scoped run, the reconciliation section with its drift counts plus a ranked row whose
+    coverage badge was dark before and is lit on a NEW screen run after — both legible (T-10: no
+    screenshot ⇒ `unknown`, never `passing`); a **`[NEW]`-flagged demo-narrator walkthrough** covers
+    the reconciliation end to end; and the full backend suite is green with
+    `Config().config_fingerprint()` still `08e471b10130e1e2`, zero new `Config` fields, the `default`
+    profile and `v1` byte-identical (engine equivalence green), the MCP surface still exactly 17
+    tools, zero diff to `StructureChart.tsx`, and `tests/test_copy_discipline.py` green unmodified.
+    *(Keyless core; browser-verifiable. Reconciling the AMBIENT index is an operator-run act, reported
+    honestly as run-or-not-run — never a CI gate. Why: measured 2026-07-28 directly from the frozen
+    store and the derived index — `apps/backend/.data/bars` holds 369 series files while
+    `.data/bar_index.db` holds 281 rows, so 88 recorded series carry no index row (and zero index rows
+    point at a series that is not on disk); intersected with the pinned universe
+    `universe-2026-07-25-49b33fa31680` and `desk_coverage.DESK_TOPUP_TIMEFRAMES` (`1h`,`4h`,`1d`,`1w`),
+    exactly 7 member × timeframe pairs are affected: META `1h`+`1d`, MSFT `4h`, NFLX `1h`+`1d`, NVDA
+    `1h`+`1d`. On `screen-2026-07-27-936543601e75` (63 ranked / 38 skipped) that renders as NFLX ranked
+    #5, META #48 and NVDA #57 with all four badges dark — covered by the page's own divergence note,
+    which fires only when EVERY badge in a row is dark (`app/desk/page.tsx:193/308`) — and MSFT #53 with
+    `4h` dark beside `1h`/`1d` lit and NO note at all: the store holds MSFT `4h` (that dark badge is
+    false) and holds no MSFT `1w` (that one is true), and nothing on the page distinguishes them.
+    `BarIndex.reindex()` is referenced only by `tests/test_bar_index.py` — zero call sites in `app/`
+    or `scripts/` — so no operator can reach the repair; and because `bar_store_signature` is a
+    checksum over `desk_coverage`'s index-backed reads, a series the index cannot see also cannot move
+    the pin the append-only screen ledger keys on.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals
@@ -711,7 +797,9 @@ audits; only ever grow more specific, never weaker):**
   beside trendora's. When `project-extensions/host-guard/host-guard.env` declares ceilings
   (CPU mask `4-7,12-15` — the complement of trendora's — plus BLAS thread caps and memory/task
   bounds), every heavy path respects them: headless engine runs self-wrap under the mask, and
-  interactive pump sessions are launched via `scripts/automation/host-guard-exec.sh claude`
-  (the engine pauses `AWAITING_HOST_GUARD`, resumable, on an unconfined pump). Never disable,
+  interactive pump sessions are auto-confined in place by the engine (`host-guard-adopt.sh`;
+  `scripts/automation/host-guard-exec.sh claude` is the optional from-birth wrapper) — the
+  engine pauses `AWAITING_HOST_GUARD` (resumable) only when confinement cannot be established.
+  Never disable,
   widen, or bypass these caps to make a run faster or a pause go away; widening the mask follows
   the verification ladder in `trendora/project-extensions/host-guard/README.md`. *(critical)*

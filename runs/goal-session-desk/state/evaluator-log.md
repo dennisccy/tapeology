@@ -727,3 +727,65 @@ just-finished run can stay hidden until you refresh in a narrow timing window, t
 limit, the Desk page is long, two screens saved on the same day cannot be told apart by a date-only
 lookup, and keyboard access for the history rows. One sentence for the owner: everything Era B
 promised, including the new top-up record, is built, proven and filmed — please confirm the finish.
+
+## Iteration 14 — goal-desk-iter-14
+
+**Date:** 2026-07-29T02:05:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-10 "The coverage the briefing shows is the coverage the frozen store can prove"
+  (new this run — the goal-proposer added it to `docs/goal.md` after iteration 13 closed the era,
+  so the era reopened for one journey; it is built, proven and filmed in a single run)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02, J-03, J-04, J-05, J-07, J-08, J-09 all re-verified passing this run by
+  saved-script replay against the throw-away copy; J-06 "17 machine-readable tools" re-confirmed by
+  my own parse of the contract test's tool list
+- Anti-goal violations: none new, none open. All three older items stay resolved and were
+  re-checked by me directly. One deviation is carried, deliberately NOT scored as a violation: an
+  earlier attempt at this same run performed the repair, and a fresh scan, against the owner's REAL
+  data folder instead of the throw-away copy its own plan named.
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to produce. I
+opened both pictures myself. The first shows "No reconciliation run recorded yet." with Apple's
+one-day price badge dark beside its three lit neighbours. The second, from the same rig one minute
+later, names the repair run, says 369 files on disk and 345 to 369 rows listed, lists all 24 missing
+Apple one-day entries by name, says "Drift after (0) no drift", and shows that same badge lit. Then
+I proved the numbers instead of believing them: I read the saved repair record straight off disk
+(state done, 369 on disk, 345 before, 369 after, 24 missing entries all Apple one-day, nothing left
+after, no damaged files, and its own checksum recomputes exactly), and I read both saved scans — the
+one from before the repair says Apple's one-day coverage is false, the one from after says true, and
+the one from after is a NEW file under a NEW store signature while the older one is still on disk
+with its checksum intact. Nothing recorded was rewritten: 369 price files on the rig, none modified;
+369 in the owner's own folder, none modified since 2026-07-27. I proved there is only one repair
+path (the existing rebuild call, at one place in the whole program) and that the new module reaches
+nothing outside the standard library and two in-house files. I re-ran the work: the whole back-end
+suite (1419 tests collected, exit 0), the settings fingerprint (`08e471b10130e1e2`), the tool count
+(exactly 17), and a file-by-file check that all ten protected files and the whole engine take a zero
+change. The guided walkthrough the goal file demands exists this time, flagged as new, with pictures
+for the empty panel, the trigger, the result, a fresh scan and the fixed badge — the exact condition
+that blocked iterations 11, 12 and 13. Coherence is COHERENCE-PASS. One thing I judged rather than
+merely read, written down in the assumptions ledger: the early repair of the owner's real data
+folder is a breach of this run's own plan, not of any project rule — the file list it rebuilt is the
+derived, rebuildable index the goal file itself calls derived, the repair used the one sanctioned
+path, no price file was touched, nothing was rewritten in place, and a person pressed the button.
+GOAL_ACHIEVED because all ten journeys now have positive, opened evidence, nothing that used to work
+stopped working, and nothing is waiting on a person.
+
+**Next-step recommendation:** Halt — the goal is achieved. Four follow-ups for the owner, none a
+defect and none blocking: (1) your real data folder's list of stored price files was repaired early,
+by the machine, going from 281 to 369 rows — so coverage badges that were falsely dark (Netflix,
+Meta, Nvidia, and Microsoft's four-hour badge) will read correctly on your next scan; one repair
+record and one extra scan record were added there, nothing was deleted, and it cannot be undone
+because permanent records are never deleted here; (2) commit the host-protection wording change in
+the goal file on its own track, alongside your own host caps edit; (3) six small improvements are
+disclosed and backlogged, none urgent — a failed repair is recorded as zeroes with no reason, a
+"cancel" only works before the rebuild starts and says nothing when it arrives too late, a very fast
+refresh can briefly show "no run recorded" for a run that just finished, the drift list prints in
+full with no limit, the "stale checksum" bucket never actually compares checksums, and a damaged
+record file's error is dropped before it reaches the page; (4) still open by choice: two scans saved
+on the same day cannot be told apart by a date-only lookup, keyboard access for the history rows,
+and the Desk page is now seven stacked sections and long. One sentence for the owner: everything
+this new self-check feature promised is built, proven and filmed — please confirm the finish, and
+note that your own data folder's file list was already repaired during the run.

@@ -6,6 +6,8 @@ import type {
   BarSeriesRecord,
   CreateBacktestParams,
   DatasetsListResult,
+  DeskReconcileComputeSnapshot,
+  DeskReconcileRunsListResult,
   DeskScreenComputeSnapshot,
   DeskScreenListResult,
   DeskScreenSnapshot,
@@ -1127,6 +1129,99 @@ export async function fetchDeskTopupRuns(): Promise<{
       return { ok: true, data: (await res.json()) as DeskTopupRunsListResult };
     }
     let error = "The top-up run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// era-desk-iter-14 (J-10): the coverage-index reconciliation trigger/poll/cancel trio, mirroring
+// `triggerDeskTopupCompute`/`fetchDeskTopupCompute`/`cancelDeskTopupCompute` byte-for-byte. No
+// request body (the backend needs nothing from the client to classify/repair the index).
+export async function triggerDeskReconcileCompute(): Promise<{
+  ok: boolean;
+  data?: { started: boolean; compute: DeskReconcileComputeSnapshot };
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/coverage/reconcile/compute`, { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data };
+    }
+    let error = "The index reconciliation could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/coverage/reconcile/compute — the reconciliation job's current/last snapshot,
+// served VERBATIM, or `null` if none has ever run this process. Mirrors `fetchDeskTopupCompute`.
+export async function fetchDeskReconcileCompute(): Promise<{
+  ok: boolean;
+  data: DeskReconcileComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/coverage/reconcile/compute`);
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as DeskReconcileComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+// POST /research/desk/coverage/reconcile/compute/cancel — cancel the in-flight reconciliation job.
+// Mirrors `cancelDeskTopupCompute`; the backend's 409 (idle) `detail` is surfaced VERBATIM.
+export async function cancelDeskReconcileCompute(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/coverage/reconcile/compute/cancel`, {
+      method: "POST",
+    });
+    if (res.ok) return { ok: true };
+    let error = "The index reconciliation could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// era-desk-iter-14 (J-10): GET /research/desk/coverage/reconcile/runs — the durable, append-only
+// reconciliation run log's meta-only list + the latest full record, served VERBATIM. Mirrors
+// `fetchDeskTopupRuns`'s exact `{ok, data, error}` shape byte-for-byte. An honest-empty
+// (`{runs: [], latest: null}`) result is a valid `ok:true` outcome — the caller renders it as
+// "No reconciliation run recorded yet.", never a failure; `data: null` is reserved for a genuine
+// non-200 / unreachable backend.
+export async function fetchDeskReconcileRuns(): Promise<{
+  ok: boolean;
+  data: DeskReconcileRunsListResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/coverage/reconcile/runs`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskReconcileRunsListResult };
+    }
+    let error = "The index reconciliation run history could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

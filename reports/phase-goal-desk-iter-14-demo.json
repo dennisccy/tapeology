@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-14",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the desk",
+      "narration": "The desk shows your holdings ranked by how close they sit to key price levels. Each row has small coverage badges showing which timeframes have price data stored.",
+      "point_out": "The desk page loads with the briefing ranked table and small coverage badges next to each symbol.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Briefing"}
+    },
+    {
+      "n": 2,
+      "title": "See the index reconciliation panel before any run",
+      "narration": "Scrolling to the bottom, you see a new Index Reconciliation panel. It is empty right now because no reconciliation has ever run. One stock in the briefing above has a dark coverage badge—the system thinks there is no data for that timeframe, even though data might be stored.",
+      "point_out": "The Index Reconciliation section reads 'No reconciliation run recorded yet.' Scroll up to find a stock with a dark (gray) coverage badge showing no data.",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "No reconciliation run recorded yet."}
+    },
+    {
+      "n": 3,
+      "title": "Click Reconcile Index to repair the internal list",
+      "narration": "Clicking Reconcile Index checks the system's internal file list against the real stored files, repairing any mismatches. The operation is fast and needs no network calls.",
+      "point_out": "The Reconcile Index button briefly shows it is working, then returns to normal within seconds.",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Reconcile Index"}},
+      "expect": {"text": "state: done"}
+    },
+    {
+      "n": 4,
+      "title": "Read the repair results",
+      "narration": "The panel now shows the reconciliation run's results: how many price-bar files exist on disk, how many rows the index had before the repair, and how many after. The Drift Before list shows which stock-timeframe pairs were missing from the index.",
+      "point_out": "The run finished with state: done. The rows-indexed count shows before and after numbers, and the Drift Before list names the pairs that were missing.",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"css": "[data-testid='desk-reconcile-run-latest-detail']"}},
+      "expect": {"text": "rows indexed"}
+    },
+    {
+      "n": 5,
+      "title": "Run a fresh screen to capture the fixed coverage",
+      "narration": "Now that the index is repaired, you run a fresh screen. This records a new briefing with the corrected coverage badges based on what you just fixed.",
+      "point_out": "The outcome line confirms 'Recorded a new snapshot' — not a reused one. A genuinely new snapshot was added.",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Run Screen"}},
+      "expect": {"text": "Recorded a new snapshot"}
+    },
+    {
+      "n": 6,
+      "title": "See the coverage badge now lit",
+      "narration": "Scroll back up to the briefing table and look at the same stock that had a dark badge before. After the reconciliation and the new screen run, that badge is now lit, matching its neighbors. The system now correctly recognizes the data.",
+      "point_out": "The coverage badge that was dark is now colored (lit), showing the data is confirmed. It matches the other badges on that row.",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"css": "[data-testid='desk-coverage-badge'][data-has-bars='true']"}
+    },
+    {
+      "n": 7,
+      "title": "Check that older records stayed unchanged",
+      "narration": "To prove the system never rewrites old records, scroll to Screen History and click a date before today. That older screen's own coverage badge for the same pair still shows dark — it was never changed. Only a new snapshot was added.",
+      "point_out": "A banner confirms 'Viewing the recorded screen for [date] — not the latest.' The same badge that is now lit in today's screen still shows dark in the older screen.",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Latest"}},
+      "expect": {"text": "Latest"}
+    },
+    {
+      "n": 8,
+      "title": "Coverage is now independently verifiable",
+      "narration": "The cycle is complete. You triggered a reconciliation, the system repaired its internal index, you ran a fresh screen, and the stuck coverage badge is now lit. The old screen record stayed intact, proving the repair was additive, never destructive. Your desk now shows coverage you can trust.",
+      "point_out": "The desk displays a full history of reconciliation runs and their results. You can run reconciliations whenever you need to keep coverage accurate.",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "region", "name": "Index Reconciliation"}},
+      "expect": {"text": "state:"}
+    }
+  ]
+}

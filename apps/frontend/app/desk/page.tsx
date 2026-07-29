@@ -3,17 +3,26 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
+  cancelDeskReconcileCompute,
   cancelDeskScreenCompute,
   cancelDeskTopupCompute,
+  fetchDeskReconcileCompute,
+  fetchDeskReconcileRuns,
   fetchDeskScreen,
   fetchDeskScreenByDate,
   fetchDeskScreenCompute,
   fetchDeskTopupCompute,
   fetchDeskTopupRuns,
+  triggerDeskReconcileCompute,
   triggerDeskScreenCompute,
   triggerDeskTopupCompute,
 } from "@/lib/api";
 import type {
+  DeskReconcileComputeSnapshot,
+  DeskReconcileDrift,
+  DeskReconcileRun,
+  DeskReconcileRunMeta,
+  DeskReconcileRunsListResult,
   DeskScreenComputeSnapshot,
   DeskScreenListResult,
   DeskScreenMeta,
@@ -72,6 +81,16 @@ import { fmt } from "@/lib/format";
 // a screen exists. This is a deliberate placement choice logged in
 // `runs/goal-session-desk/state/assumptions.md` (iter-11 entry), not the plan's own literal
 // "immediately after Screen History" suggestion (which that same plan text marks as non-binding).
+//
+// era-desk-iter-14 (J-10): a THIRD compute manager + a THIRD durable, append-only history section —
+// "Index Reconciliation" — repairing the derived `bar_index` against the frozen `BarStore` through
+// the existing `BarIndex.reindex()`. A 5th/6th mount-time GET (`/research/desk/coverage/
+// reconcile/compute` + `/research/desk/coverage/reconcile/runs`); `ReconcileIndexControl` sits
+// beside `ScreenComputeControl`/`TopupComputeControl` in the shared trigger panel (same UX pattern,
+// same live-progress-with-cancel shape); the read-only "Index Reconciliation" section is rendered
+// unconditionally, immediately after "Top-up runs" — the SAME "independent of screen state"
+// placement precedent iter-11 established, since reconciliation touches only the bar store/index,
+// never a screen. Page-load GETs still trigger nothing (T-4/5C, unchanged).
 
 const NUMERIC_CELL = "px-2 py-1.5 text-right font-mono text-xs text-slate-200 whitespace-nowrap";
 const HEADER_CELL = "px-2 py-1 text-right text-[11px] font-medium text-slate-500";
@@ -659,6 +678,185 @@ function TopupRunsSection({
   );
 }
 
+// --- Index reconciliation history (era-desk-iter-14, J-10) — a durable, append-only record of
+// every coverage-index reconciliation, read verbatim from `GET /research/desk/coverage/
+// reconcile/runs` and nothing recomputed. Mirrors the Top-up Runs split exactly:
+// `IndexReconciliationTable` renders every recorded run's summary (date + id, state, series on
+// disk, rows indexed before → after — the ONLY fields the meta-only `runs` list carries), and
+// `LatestReconciliationDetail` renders the full before/after drift detail + store errors for the
+// latest run ONLY — the one entry the backend's `latest` field actually carries them for.
+// Read-only, no click-through, no new control beyond the trigger/cancel button (which lives in the
+// shared "Run Screen / Top-up / Reconcile Index" panel below, not here). --------------------------
+
+function driftEntryCount(drift: DeskReconcileDrift): number {
+  return drift.unindexed_series.length + drift.orphan_index_rows.length + drift.stale_checksum_rows.length;
+}
+
+// Every affected pair/row across the three honest buckets, rendered as one flat, labeled list — the
+// bucket a row came from is stated inline (never merged into a single unlabeled count) since the
+// three buckets mean genuinely different things (a series never indexed vs. an index row with
+// nothing on disk vs. an index row whose file the store can no longer verify).
+function DriftList({ drift, testid }: { drift: DeskReconcileDrift; testid: string }) {
+  const total = driftEntryCount(drift);
+  if (total === 0) {
+    return (
+      <p data-testid={`${testid}-empty`} className="text-xs text-slate-500">
+        no drift
+      </p>
+    );
+  }
+  return (
+    <ul data-testid={testid} className="space-y-0.5">
+      {drift.unindexed_series.map((entry) => (
+        <li key={`unindexed-${entry.series_id}`} data-testid={`${testid}-entry`} className="text-xs text-slate-400">
+          <span className="font-mono text-slate-300">
+            {entry.symbol} {entry.timeframe}
+          </span>{" "}
+          — series on disk, no index row ({entry.series_id})
+        </li>
+      ))}
+      {drift.orphan_index_rows.map((entry) => (
+        <li key={`orphan-${entry.series_id}`} data-testid={`${testid}-entry`} className="text-xs text-slate-400">
+          <span className="font-mono text-slate-300">{entry.series_id}</span> — index row, no file on disk
+        </li>
+      ))}
+      {drift.stale_checksum_rows.map((entry) => (
+        <li key={`stale-${entry.series_id}`} data-testid={`${testid}-entry`} className="text-xs text-slate-400">
+          <span className="font-mono text-slate-300">{entry.series_id}</span> — index row, file on disk
+          fails its checksum
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function IndexReconciliationRunRow({ meta }: { meta: DeskReconcileRunMeta }) {
+  return (
+    <tr data-testid="desk-reconcile-run-row" className="border-b border-slate-800/60 last:border-b-0">
+      <td className={LABEL_CELL}>{meta.started_utc.slice(0, 10)}</td>
+      <td className={LABEL_CELL} data-testid="desk-reconcile-run-id">
+        {meta.id}
+      </td>
+      <td className={LABEL_CELL} data-testid="desk-reconcile-run-state">
+        {meta.state}
+      </td>
+      <td className={NUMERIC_CELL} data-testid="desk-reconcile-run-series-on-disk">
+        {meta.series_on_disk}
+      </td>
+      <td className={NUMERIC_CELL} data-testid="desk-reconcile-run-rows-indexed">
+        {meta.rows_indexed_before} {"→"} {meta.rows_indexed_after}
+      </td>
+    </tr>
+  );
+}
+
+function IndexReconciliationTable({ runs }: { runs: DeskReconcileRunMeta[] }) {
+  if (runs.length === 0) {
+    return <EmptyState testid="desk-reconcile-runs-empty" title="No reconciliation run recorded yet." />;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="desk-reconcile-runs-table" className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-slate-800">
+            <th className={HEADER_CELL_LEFT}>date</th>
+            <th className={HEADER_CELL_LEFT}>run</th>
+            <th className={HEADER_CELL_LEFT}>state</th>
+            <th className={HEADER_CELL}>series on disk</th>
+            <th className={HEADER_CELL}>rows indexed (before {"→"} after)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((meta) => (
+            <IndexReconciliationRunRow key={meta.id} meta={meta} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// The latest run's own full detail — series on disk, rows indexed before/after, the affected pairs
+// in BOTH the before and after drift (after is expected empty for every pair this run repaired —
+// rendered as "no drift" when it genuinely is, never hidden), and any store errors (corrupt files)
+// verbatim and legible (never truncated).
+function LatestReconciliationDetail({ run }: { run: DeskReconcileRun }) {
+  return (
+    <div
+      data-testid="desk-reconcile-run-latest-detail"
+      className="mt-4 space-y-3 border-t border-slate-800 pt-4"
+    >
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        Latest run — {run.started_utc.slice(0, 10)} · {run.id}
+      </h3>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+        <span data-testid="desk-reconcile-run-latest-state">state: {run.state}</span>
+        <span data-testid="desk-reconcile-run-latest-series-on-disk">{run.series_on_disk} series on disk</span>
+        <span data-testid="desk-reconcile-run-latest-rows-indexed">
+          rows indexed: {run.rows_indexed_before} before, {run.rows_indexed_after} after
+        </span>
+      </div>
+      <div>
+        <h4 className="mb-1 text-[11px] font-medium text-slate-500">
+          Drift before ({driftEntryCount(run.drift_before)})
+        </h4>
+        <DriftList drift={run.drift_before} testid="desk-reconcile-run-latest-drift-before" />
+      </div>
+      <div>
+        <h4 className="mb-1 text-[11px] font-medium text-slate-500">
+          Drift after ({driftEntryCount(run.drift_after)})
+        </h4>
+        <DriftList drift={run.drift_after} testid="desk-reconcile-run-latest-drift-after" />
+      </div>
+      {run.store_errors.length > 0 && (
+        <div data-testid="desk-reconcile-run-latest-store-errors">
+          <h4 className="mb-1 text-[11px] font-medium text-slate-500">
+            Store errors ({run.store_errors.length})
+          </h4>
+          <ul className="space-y-1">
+            {run.store_errors.map((error, index) => (
+              <li
+                key={`${error.file}-${index}`}
+                data-testid="desk-reconcile-run-latest-store-error-row"
+                className="text-xs text-slate-400"
+              >
+                <span className="font-mono text-slate-300">{error.file}</span> —{" "}
+                <span data-testid="desk-reconcile-run-latest-store-error-detail">{error.error}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The section's own Loading/Unavailable/Populated states — mirrors `TopupRunsSection`'s identical
+// three-state shape, fed by its own mount-time GET.
+function ReconciliationSection({
+  result,
+}: {
+  result: { ok: boolean; data: DeskReconcileRunsListResult | null; error?: string } | null;
+}) {
+  if (result === null) {
+    return <LoadingPanel testid="desk-reconcile-runs-loading" />;
+  }
+  if (!result.ok || result.data === null) {
+    return (
+      <UnavailablePanel
+        testid="desk-reconcile-runs-unavailable"
+        message={result.error ?? "The index reconciliation history could not be loaded."}
+      />
+    );
+  }
+  return (
+    <div>
+      <IndexReconciliationTable runs={result.data.runs} />
+      {result.data.latest !== null && <LatestReconciliationDetail run={result.data.latest} />}
+    </div>
+  );
+}
+
 // --- Provenance line — universe snapshot id + date, as_of, config_fingerprint, and the pinned
 // bar-store signature. --------------------------------------------------------------------------
 //
@@ -870,6 +1068,86 @@ function TopupComputeControl({
   );
 }
 
+// era-desk-iter-14 (J-10): a third compute control, wired exactly like `TopupComputeControl` — the
+// operation has no per-pair counters (it is a single classify-repair-verify walk, not a walk over
+// many pairs), so the running indicator shows the compute's own `progress.phase` label instead of
+// an "N / M" count.
+function ReconcileIndexControl({
+  compute,
+  onTrigger,
+  triggering,
+  triggerError,
+  onCancel,
+  cancelRequested,
+  cancelError,
+}: {
+  compute: DeskReconcileComputeSnapshot | null;
+  onTrigger: () => void;
+  triggering: boolean;
+  triggerError: string | null;
+  onCancel: () => void;
+  cancelRequested: boolean;
+  cancelError: string | null;
+}) {
+  const isRunning = compute?.state === "running";
+  const isFailed = compute?.state === "failed";
+  const isCancelled = compute?.state === "cancelled";
+  const buttonLabel = isRunning ? "Reconciling…" : isFailed ? "Retry Reconcile Index" : "Reconcile Index";
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {isFailed && compute?.error && (
+        <p data-testid="desk-reconcile-compute-error" className="text-xs text-red-300">
+          {compute.error}
+        </p>
+      )}
+      {triggerError && (
+        <p data-testid="desk-reconcile-compute-trigger-error" className="text-xs text-red-300">
+          {triggerError}
+        </p>
+      )}
+      {isCancelled && (
+        <p data-testid="desk-reconcile-compute-cancelled" className="text-xs text-amber-200/70">
+          Index reconciliation cancelled — the index was not repaired this run.
+        </p>
+      )}
+      <button
+        type="button"
+        data-testid="desk-reconcile-button"
+        onClick={onTrigger}
+        disabled={triggering || isRunning}
+        className={PRIMARY_BUTTON_CLASS}
+      >
+        {buttonLabel}
+      </button>
+      {isRunning && (
+        <div data-testid="desk-reconcile-compute-running" className="mt-1 flex flex-col items-center gap-1">
+          <p data-testid="desk-reconcile-compute-progress" className="text-xs text-amber-200/70">
+            <span
+              aria-hidden="true"
+              className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle"
+            />
+            {compute.progress.phase}
+          </p>
+          <button
+            type="button"
+            data-testid="desk-reconcile-compute-cancel"
+            onClick={onCancel}
+            disabled={cancelRequested}
+            className={CANCEL_BUTTON_CLASS}
+          >
+            {cancelRequested ? "Cancelling…" : "Cancel"}
+          </button>
+          {cancelError && (
+            <p data-testid="desk-reconcile-compute-cancel-error" className="text-xs text-red-300">
+              {cancelError}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ScreenControlProps {
   compute: DeskScreenComputeSnapshot | null;
   onTrigger: () => void;
@@ -890,6 +1168,16 @@ interface TopupControlProps {
   cancelError: string | null;
 }
 
+interface ReconcileControlProps {
+  compute: DeskReconcileComputeSnapshot | null;
+  onTrigger: () => void;
+  triggering: boolean;
+  triggerError: string | null;
+  onCancel: () => void;
+  cancelRequested: boolean;
+  cancelError: string | null;
+}
+
 // The honest empty state (TC-1): rendered iff `latest === null` — no screen has EVER been
 // computed. Doubles as the controls panel for a first-ever run (both Run Screen and Top-up live
 // here since there is nothing else to show yet); once a screen exists, the SAME two controls move
@@ -897,9 +1185,11 @@ interface TopupControlProps {
 function DeskNotComputedPanel({
   screen,
   topup,
+  reconcile,
 }: {
   screen: ScreenControlProps;
   topup: TopupControlProps;
+  reconcile: ReconcileControlProps;
 }) {
   return (
     <div
@@ -913,6 +1203,7 @@ function DeskNotComputedPanel({
       <div className="mt-3 flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-center sm:gap-12">
         <ScreenComputeControl {...screen} />
         <TopupComputeControl {...topup} />
+        <ReconcileIndexControl {...reconcile} />
       </div>
     </div>
   );
@@ -932,6 +1223,7 @@ function DeskPopulatedScreen({
   selectedHistoryDate,
   screenControlProps,
   topupControlProps,
+  reconcileControlProps,
 }: {
   snapshot: DeskScreenSnapshot;
   screens: DeskScreenMeta[];
@@ -942,6 +1234,7 @@ function DeskPopulatedScreen({
   selectedHistoryDate: string | null;
   screenControlProps: ScreenControlProps;
   topupControlProps: TopupControlProps;
+  reconcileControlProps: ReconcileControlProps;
 }) {
   return (
     <div className="space-y-6">
@@ -1003,11 +1296,12 @@ function DeskPopulatedScreen({
         </Panel>
       </section>
 
-      <section aria-label="Run Screen and Top-up controls">
-        <Panel title="Run Screen / Top-up">
+      <section aria-label="Run Screen, Top-up and Reconcile Index controls">
+        <Panel title="Run Screen / Top-up / Reconcile Index">
           <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-center sm:gap-12">
             <ScreenComputeControl {...screenControlProps} />
             <TopupComputeControl {...topupControlProps} />
+            <ReconcileIndexControl {...reconcileControlProps} />
           </div>
         </Panel>
       </section>
@@ -1045,6 +1339,19 @@ export default function DeskPage() {
     error?: string;
   } | null>(null);
 
+  // era-desk-iter-14 (J-10): the coverage-index reconciliation compute + its durable run log —
+  // mirrors the topup* hooks immediately above exactly, one pair per compute manager.
+  const [reconcileCompute, setReconcileCompute] = useState<DeskReconcileComputeSnapshot | null>(null);
+  const [reconcileTriggering, setReconcileTriggering] = useState(false);
+  const [reconcileTriggerError, setReconcileTriggerError] = useState<string | null>(null);
+  const [reconcileCancelRequested, setReconcileCancelRequested] = useState(false);
+  const [reconcileCancelError, setReconcileCancelError] = useState<string | null>(null);
+  const [reconcileRunsResult, setReconcileRunsResult] = useState<{
+    ok: boolean;
+    data: DeskReconcileRunsListResult | null;
+    error?: string;
+  } | null>(null);
+
   // era-desk-iter-6 (J-05): the screen-history click-through. `viewingSnapshot` is `null` while
   // showing the top-level `latest` snapshot already held in `screenResult` (no refetch needed to
   // return to it — TC-2); once a history row is selected, it holds THAT date's own full snapshot,
@@ -1054,10 +1361,11 @@ export default function DeskPage() {
   const [viewingSnapshot, setViewingSnapshot] = useState<DeskScreenSnapshot | null>(null);
   const [historyFetchError, setHistoryFetchError] = useState<string | null>(null);
 
-  // Mount: four GETs, zero POSTs (TC-19/TC-8) — the screen list/latest, BOTH compute managers'
-  // current/last snapshot (seeds a page load mid-job or post-terminal without a spurious extra
-  // click — the /structure edge-report mount-seeding precedent), and (era-desk-iter-11, J-09) the
-  // top-up run log's list + latest full record.
+  // Mount: six GETs, zero POSTs (TC-19/TC-8, extended era-desk-iter-14) — the screen list/latest,
+  // ALL THREE compute managers' current/last snapshot (seeds a page load mid-job or post-terminal
+  // without a spurious extra click — the /structure edge-report mount-seeding precedent), the
+  // top-up run log's list + latest full record (era-desk-iter-11, J-09), and (era-desk-iter-14,
+  // J-10) the reconciliation run log's list + latest full record.
   useEffect(() => {
     let alive = true;
     fetchDeskScreen().then((result) => {
@@ -1071,6 +1379,12 @@ export default function DeskPage() {
     });
     fetchDeskTopupRuns().then((result) => {
       if (alive) setTopupRunsResult(result);
+    });
+    fetchDeskReconcileCompute().then((result) => {
+      if (alive && result.ok) setReconcileCompute(result.data);
+    });
+    fetchDeskReconcileRuns().then((result) => {
+      if (alive) setReconcileRunsResult(result);
     });
     return () => {
       alive = false;
@@ -1123,6 +1437,25 @@ export default function DeskPage() {
     return () => clearInterval(handle);
   }, [topupCompute]);
 
+  // Poll the reconciliation job while running — independent of the other two polls above (three
+  // separate process-scoped jobs). era-desk-iter-14 (J-10): the SAME "on terminal, refresh the
+  // durable list once" precedent the other two polls already establish, and the SAME "keep the
+  // last known state, never fabricate one" discipline on a failed refetch.
+  useEffect(() => {
+    if (reconcileCompute?.state !== "running") return;
+    const handle = setInterval(async () => {
+      const next = await fetchDeskReconcileCompute();
+      if (next.ok) setReconcileCompute(next.data);
+      if (next.ok && next.data && next.data.state !== "running") {
+        const refreshed = await fetchDeskReconcileRuns();
+        setReconcileRunsResult((previous) =>
+          refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
+        );
+      }
+    }, 700);
+    return () => clearInterval(handle);
+  }, [reconcileCompute]);
+
   async function handleTriggerScreen() {
     setScreenTriggering(true);
     setScreenTriggerError(null);
@@ -1171,6 +1504,30 @@ export default function DeskPage() {
     }
   }
 
+  async function handleTriggerReconcile() {
+    setReconcileTriggering(true);
+    setReconcileTriggerError(null);
+    setReconcileCancelRequested(false);
+    setReconcileCancelError(null);
+    const result = await triggerDeskReconcileCompute();
+    setReconcileTriggering(false);
+    if (result.ok && result.data) {
+      setReconcileCompute(result.data.compute);
+    } else {
+      setReconcileTriggerError(result.error ?? "The index reconciliation could not be started.");
+    }
+  }
+
+  async function handleCancelReconcile() {
+    setReconcileCancelRequested(true);
+    setReconcileCancelError(null);
+    const result = await cancelDeskReconcileCompute();
+    if (!result.ok) {
+      setReconcileCancelRequested(false);
+      setReconcileCancelError(result.error ?? "The index reconciliation could not be cancelled.");
+    }
+  }
+
   // era-desk-iter-6 (J-05): select a past history row — fetch-and-swap, no POST, no recompute
   // (TC-1). A date with no matching recorded screen (`{"screen": null}`) or an unreachable backend
   // both leave the currently-displayed snapshot exactly as it was — only the error note changes.
@@ -1213,6 +1570,15 @@ export default function DeskPage() {
     cancelRequested: topupCancelRequested,
     cancelError: topupCancelError,
   };
+  const reconcileControlProps: ReconcileControlProps = {
+    compute: reconcileCompute,
+    onTrigger: handleTriggerReconcile,
+    triggering: reconcileTriggering,
+    triggerError: reconcileTriggerError,
+    onCancel: handleCancelReconcile,
+    cancelRequested: reconcileCancelRequested,
+    cancelError: reconcileCancelError,
+  };
 
   const latest = screenResult?.ok ? screenResult.data?.latest ?? null : null;
   const screens = screenResult?.ok ? screenResult.data?.screens ?? [] : [];
@@ -1250,7 +1616,11 @@ export default function DeskPage() {
             message={screenResult.error ?? "The desk screen could not be loaded."}
           />
         ) : latest === null ? (
-          <DeskNotComputedPanel screen={screenControlProps} topup={topupControlProps} />
+          <DeskNotComputedPanel
+            screen={screenControlProps}
+            topup={topupControlProps}
+            reconcile={reconcileControlProps}
+          />
         ) : (
           // `latest` is narrowed non-null by this ternary's own condition, so `displayedSnapshot ??
           // latest` re-establishes a non-null type for the prop below without an unsafe assertion —
@@ -1265,6 +1635,7 @@ export default function DeskPage() {
             selectedHistoryDate={viewingSnapshot?.screen_date ?? null}
             screenControlProps={screenControlProps}
             topupControlProps={topupControlProps}
+            reconcileControlProps={reconcileControlProps}
           />
         )}
 
@@ -1276,6 +1647,15 @@ export default function DeskPage() {
         <section aria-label="Top-up runs" className="mt-6">
           <Panel title="Top-up Runs">
             <TopupRunsSection result={topupRunsResult} />
+          </Panel>
+        </section>
+
+        {/* era-desk-iter-14 (J-10): the SAME "always rendered, independent of screen state"
+            placement precedent immediately above, applied to the reconciliation history —
+            reconciliation touches only the bar store/index, never a screen. */}
+        <section aria-label="Index Reconciliation" className="mt-6">
+          <Panel title="Index Reconciliation">
+            <ReconciliationSection result={reconcileRunsResult} />
           </Panel>
         </section>
       </main>

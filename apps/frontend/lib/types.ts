@@ -948,3 +948,83 @@ export interface DeskTopupRunsListResult {
   runs: DeskTopupRunMeta[];
   latest: DeskTopupRun | null;
 }
+
+// era-desk-iter-14 (J-10) -- the coverage-index reconciliation: drift classification between the
+// frozen bar-series files and the derived `bar_index`, repaired through the existing
+// `BarIndex.reindex()` (never a second index-building path). Mirrors `app/research/
+// desk_index_reconcile.py`'s served shapes byte-for-byte. Three honest drift buckets: a healthy
+// series with no index row (attributed by symbol+timeframe), an index row whose series_id is on
+// disk nowhere (orphan, series_id alone), an index row whose series_id points at a corrupted file
+// (stale checksum, series_id alone) -- the two `series_id`-only shapes are structurally identical
+// but kept as distinct named types (never a shared alias) so a future field added to only one
+// bucket cannot silently leak onto the other.
+export interface DeskReconcileUnindexedSeries {
+  series_id: string;
+  symbol: string;
+  timeframe: string;
+}
+
+export interface DeskReconcileOrphanRow {
+  series_id: string;
+}
+
+export interface DeskReconcileStaleChecksumRow {
+  series_id: string;
+}
+
+export interface DeskReconcileDrift {
+  unindexed_series: DeskReconcileUnindexedSeries[];
+  orphan_index_rows: DeskReconcileOrphanRow[];
+  stale_checksum_rows: DeskReconcileStaleChecksumRow[];
+}
+
+export interface DeskReconcileStoreError {
+  file: string;
+  error: string;
+}
+
+export interface DeskReconcileRunMeta {
+  id: string;
+  config_fingerprint: string;
+  started_utc: string;
+  finished_utc: string;
+  state: "done" | "cancelled" | "failed";
+  series_on_disk: number;
+  rows_indexed_before: number;
+  rows_indexed_after: number;
+}
+
+// The full persisted record -- `DeskReconcileRunMeta` plus the before/after drift detail and any
+// store errors (corrupt files, surfaced verbatim). Only `latest` (below) ever carries this full
+// shape; the bulk `runs` list is meta-only (mirrors `DeskTopupRun`/`DeskTopupRunMeta`'s identical
+// split).
+export interface DeskReconcileRun extends DeskReconcileRunMeta {
+  drift_before: DeskReconcileDrift;
+  drift_after: DeskReconcileDrift;
+  store_errors: DeskReconcileStoreError[];
+}
+
+// `GET /research/desk/coverage/reconcile/runs` -- honest-empty-or-populated, HTTP 200 always,
+// never 404. `latest === null` iff no reconciliation has EVER reached a terminal state -- the
+// page's ONE discriminator for the "No reconciliation run recorded yet." empty state.
+export interface DeskReconcileRunsListResult {
+  runs: DeskReconcileRunMeta[];
+  latest: DeskReconcileRun | null;
+}
+
+// The reconciliation compute manager's job snapshot, served VERBATIM by GET/POST
+// `/research/desk/coverage/reconcile/compute`. Mirrors `DeskTopupComputeSnapshot`'s shape;
+// `progress` here carries only a `phase` label -- reconciliation is a single classify-repair-verify
+// walk, not a per-pair loop, so there is no pairs_total/pairs_done counter to report.
+export interface DeskReconcileComputeProgress {
+  phase: "classifying" | "reindexing" | "verifying";
+}
+
+export interface DeskReconcileComputeSnapshot {
+  id: string;
+  state: "running" | "done" | "cancelled" | "failed";
+  started_utc: string | null;
+  finished_utc: string | null;
+  error: string | null;
+  progress: DeskReconcileComputeProgress;
+}
