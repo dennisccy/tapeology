@@ -233,3 +233,20 @@ the live DOM", and treat a walkthrough clause as a finalization-lane duty rather
 acceptance conjunct.
 **Applies to:** any journey whose acceptance names a tooltip screenshot or a `[NEW]`-flagged
 walkthrough; any iteration whose spec declares `Depth: full` for a walkthrough reason.
+
+## iter-20 — 2026-07-29T23:45:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The demo lane fails OPEN and silently: `reports/phase-goal-desk-iter-20-demo.json` was
+written with JavaScript regex literals (`"name": /screen.history/i`, lines 28/64/76) instead of JSON
+strings, so `demo_runner` could not parse ANY of its 8 correctly-aimed steps, wrote
+`Demo Verdict: SKIPPED` with a one-line "soft note", left `reports/demo/goal-desk-iter-20/` empty —
+and the pipeline still reported PASS everywhere else. On an `evidence`-depth iteration whose ONLY
+mandatory deliverable is that recording, a SKIPPED demo is a hard failure of the iteration, not a
+note; the script must be parse-checked (`demo_runner.py --mode lint`) before the record run. Second
+half of the same lesson: two of those steps modelled the horizontal reveal of `/desk`'s
+`band`/`opposite` columns as a click on a button named "scroll…" — no such button exists; a
+container-scroll action (or a full-page capture of the scrolled state, as the browser-qa lane did) is
+what actually reveals those columns.
+**Applies to:** any iteration dispatched at `Depth: evidence`, and any demo-narrator run whose
+walkthrough is itself an acceptance conjunct in `docs/goal.md`.

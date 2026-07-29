@@ -312,3 +312,28 @@ permanent by design (deleting them would itself breach the append-only rail). If
 "explicit operator act" as "the human, not an agent", the remedy is a rail that forces every evidence
 lane to point at a copy of the data (and a check that the SERVING process actually has it), not an
 undo of these files.
+
+## iter-20 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md` makes a `[NEW]`-flagged demo-narrator walkthrough an acceptance
+conjunct of J-13 and J-14, and my own agent contract says an evidence/recording gap must "never [be]
+scored as blocking" and must never become an iteration's goal. Iteration 20 WAS such an iteration (it
+was dispatched `Depth: evidence` on the prior evaluator's own recommendation) and its recording lane
+produced nothing (`Demo Verdict: SKIPPED`, empty gallery). goal.md does not say whether a missing
+walkthrough leaves a journey short of acceptance, and the framework's two rails point opposite ways.
+**We chose:** Split the two questions rather than answer them with one status. (i) The JOURNEY status
+stays `passing` for J-13 and J-14 with `evidence_makeup: true` — methodology A.7, since the asserted
+behaviour is proven (I opened the fresh screenshot and re-derived all its numbers from the recorded
+snapshot on disk, 5 sampled rows byte-identical, 100/100 rows carrying the new fields), and only the
+artifact is missing; the same call iters 17/18/19 made. (ii) The VERDICT is nonetheless `CONTINUE`,
+not `GOAL_ACHIEVED`, because iteration 19's independent second key
+(`runs/goal-session-desk/iter-19/eval-confirm.md`) already refused the finish citing this exact
+missing recording, so a first key asserting achievement would be knowingly contradicted rather than
+merely optimistic — and because a machine-doable next step exists (fix the malformed demo script and
+re-record), which is what `Depth: evidence` is for. I did NOT return STALLED even though one
+remaining conjunct (J-14's tooltip PHOTOGRAPH) is genuinely human-owned, because productive
+non-human work remains; the owner decision is raised explicitly in the recommendation instead.
+**Reversible:** yes — one valid demo script and one recording run close (i)'s flags on J-13 and J-14
+with zero program change. The tooltip photograph is NOT reversible in this rig: if the owner reads
+that clause literally, J-14 stays short of acceptance permanently unless the clause is reworded to
+"read out of the live DOM" or the native `title` is replaced by an on-page panel.

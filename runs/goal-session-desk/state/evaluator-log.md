@@ -1100,3 +1100,74 @@ track; (4) the new column names the nearest wall on the other side and how far a
 no claim that price will reach it. One sentence for the owner: the "opposite" column now names the
 genuinely nearest wall on the other side of price, proven row by row against your stored price
 files — please confirm the finish, and let the film be recorded afterwards.
+
+## Iteration 20 — goal-desk-iter-20
+
+**Date:** 2026-07-29T23:45:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** evidence
+**Journey deltas:**
+- Newly passing: none — all fourteen were already passing
+- Newly failing: none
+- Regressed: none
+- Picture debt CLOSED: J-12 "Every recorded screen the ledger lists can be read back" — the
+  full-length picture of the earlier of the two recordings made on 2026-07-27 now exists and I opened
+  it myself, so its make-up flag is cleared
+- Picture debt STILL OPEN: J-13 "the wall's price range and the close it was measured from" and J-14
+  "where the nearest wall on the other side sits" — the guided walkthrough film was NOT recorded.
+  The film step wrote "SKIPPED" and left an empty folder because its own instruction file was written
+  with three slash-delimited patterns where plain quoted text is required, so the file could not be
+  read at all. J-14's hover-hint photograph also stays impossible in this set-up
+- Unchanged: J-04, J-05, J-07 re-verified this run by saved-script replay; J-06 "17 machine-readable
+  tools" re-counted by me in the running code; J-01, J-02, J-03, J-08, J-09, J-10, J-11 carried
+  because the product code took a zero change this run, with J-01 and J-02 spot-checked against their
+  own pictures
+- Anti-goal violations: none new, none open. The three older items stay resolved. One deviation is
+  carried and deliberately NOT scored as a violation: the picture-taking step again served from the
+  owner's own data folder instead of a throwaway copy, against this run's own plan — but for the
+  first time in several runs it only READ, and I verified that myself: not one file under that folder
+  was created, changed or removed
+
+**Reasoning:** This run changed no program code — I confirmed that directly, not from a report: the
+difference against the iteration's own starting point is empty under `apps/`, and the working tree
+touches nothing there. So I checked the two things this run existed to produce. The first is good and
+I opened it: one full-length image carries the provenance block naming the recording
+`screen-2026-07-27-936543601e75` and its recording time, the sentence "3 ranked row(s) below show
+every timeframe badge dark", and the NFLX row with all four of its time-frame marks unlit beside rows
+whose marks are lit. Then I proved it from the stored files instead of believing the page: that
+recording holds NFLX with all four marks off and exactly 3 of 63 rows all-off — the same count the
+page prints — while the other recording of the same day holds NFLX's daily mark ON and no all-off
+rows at all; I opened the older picture of that second recording and read the lit mark there, so the
+comparison the goal file names is now readable across the pair. The second thing failed. The
+walkthrough film does not exist: the results file says "SKIPPED", the picture folder is empty, and I
+opened the film's own instruction file and found three lines written as slash-delimited patterns
+instead of quoted text, which makes the whole file unreadable; its eight steps were aimed correctly,
+so the plan was right and only the writing was broken. I also re-checked the fresh Desk pictures
+number by number against the stored recording: the row reading "band 488.50–490.91 · close 490.91"
+and the row reading "band 508.79–512.31 · close 508.77" are both in one image, near opposite walls of
+1.22, 1.38 and 2.40 basis points sit in the same frame as far ones of 1128.29, 2696.60 and 10788.88,
+and all five rows I sampled match the stored file exactly; all 100 ranked rows carry the three new
+values. I re-ran the cheap sentinel checks myself: the settings fingerprint prints
+`08e471b10130e1e2` and the tool list has exactly 17 entries. Coherence is COHERENCE-PASS. I did not
+call the goal finished, because the film the goal file demands for both J-13 and J-14 is still
+missing and because iteration 19's independent second check already refused the finish for that same
+missing film plus the un-photographable hover hint — saying "achieved" now would simply invite the
+same refusal.
+
+**Next-step recommendation:** One more short capture-only run, plus one decision only the owner can
+make. For the chain: record the walkthrough film over the populated Desk recording, covering the
+wall's price range with its close and the nearest wall on the other side. Two repairs first, both in
+the film's instruction file — write the click targets as ordinary quoted text, and express the
+sideways reveal of the two right-hand columns as a sideways scroll of the table rather than a click
+on a button that does not exist — and check the file can be read before the film runs, treating
+"SKIPPED" as a failure rather than a note. Do it on a throwaway copy of your data folder and prove
+the serving program really points at the copy; five runs in a row have quietly used your own folder.
+For the owner: the goal file asks for a photograph of the small hint that appears when the mouse
+rests on a briefing row, and this set-up cannot photograph that kind of hint at all — the browser
+draws it outside the image it saves, and three runs have now tried. Please pick one: change that line
+to ask for the hint's text to be read out of the live page (already proven correct), or ask for the
+hint to be shown as an ordinary panel that a picture can capture (a small program change nobody has
+requested yet). Carried, not defects: the Desk page is eight stacked sections and long, the run
+tables have no length limit, and the history rows cannot be reached by keyboard. One sentence for the
+owner: nothing on the Desk is broken and this run touched none of your data, but one film still has
+to be recorded and one line of the goal file needs your decision before the finish can be confirmed.

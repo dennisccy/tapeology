@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-20",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the desk briefing",
+      "narration": "The desk page displays a ranked table of symbols across the S&P 100 universe, with each row showing the symbol, rank, timeframe coverage badges, and historical price context.",
+      "point_out": "The desk page loads with symbols ranked by their nearest price walls. The page displays coverage badges (colored bars) for each timeframe.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "ranked row" }
+    },
+    {
+      "n": 2,
+      "title": "View screen history to select a recorded snapshot",
+      "narration": "The screen-history link on the desk page shows previously recorded snapshots. Each snapshot is dated and independently addressable by ID, so you can compare the same symbols across different recording times.",
+      "point_out": "The screen history panel appears, showing dated snapshots that can be selected to view the desk as it was recorded at that time. The same-day pair of recordings (936543601e75 from 2026-07-27 at 21:42 and 3ad3c57aa6ba from 2026-07-28 at 21:30) are both visible and independently selectable.",
+      "journey": "J-12",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": /screen.history/i } },
+      "expect": { "text": "2026-07-27" }
+    },
+    {
+      "n": 3,
+      "title": "Click the earlier same-day recording to view it",
+      "narration": "Clicking the 936543601e75 recording from 2026-07-27 at 21:42 loads that snapshot's view of the desk, showing which symbols had no bars recorded for any timeframe.",
+      "point_out": "The earlier recording (screen-2026-07-27-936543601e75) is loaded. NFLX row is visible, with all four timeframe badges (1h, 4h, 1d, 1w) showing dark (indicating no bars recorded for those timeframes). The briefing text states '3 ranked row(s) below show every timeframe badge dark' which includes NFLX.",
+      "journey": "J-12",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-id='screen-2026-07-27-936543601e75']" } },
+      "expect": { "text": "every timeframe badge dark" }
+    },
+    {
+      "n": 4,
+      "title": "View the populated screen recording to see full price context",
+      "narration": "The 2026-07-20 recording (screen-2026-07-20-ca185294a384) contains a complete snapshot of 100 ranked rows where every row has its price band and reference close recorded. This is the fields-complete snapshot used to demonstrate the price context features.",
+      "point_out": "The populated screen is loaded, showing the provenance panel with the snapshot ID, recorded date (2026-07-20), and the reference as-of time. The briefing sentence is now different since this screen has full coverage data.",
+      "journey": "J-13",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-id='screen-2026-07-20-ca185294a384']" } },
+      "expect": { "text": "2026-07-20" }
+    },
+    {
+      "n": 5,
+      "title": "Scroll to reveal the band column showing price ranges",
+      "narration": "Each ranked row displays its price band (the low and high of the recorded price range) alongside the reference close price. For example, BRK-B's band is 488.50–490.91 with its close at 490.91, showing it closed at the upper edge of its range. LMT shows close 508.77 below its band's lower edge of 508.79, an out-of-band close.",
+      "point_out": "The band column is now visible in the horizontally scrolled table. BRK-B (rank 1) shows 'band 488.50–490.91 · close 490.91' with the close inside the band at the upper edge. LMT (rank 3) shows 'band 508.79–512.31 · close 508.77', with the close below the band's low edge, both cases visible in one frame.",
+      "journey": "J-13",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": /scroll.*band/i } },
+      "expect": { "text": "band" }
+    },
+    {
+      "n": 6,
+      "title": "Continue scrolling to show the opposite column",
+      "narration": "The opposite column reveals the nearest wall on the other side of price for each ranked row. It shows the side (support or resistance), class (A, B, C), the price range of that opposite wall, and its distance in basis points. Rows like BRK-B (1.22 bps), UBER (1.38 bps), and MDT (2.40 bps) show very near opposite walls, while DIS (1128.29 bps) shows a distant one.",
+      "point_out": "The opposite column is fully visible. BRK-B's row shows 'opposite resistance A 490.97–494.39 · 1.22 bps'. UBER shows 'opposite support B ... · 1.38 bps'. MDT shows a distance of 2.40 bps (all within 25 bps). DIS shows 1128.29 bps (well beyond 1,000 bps). All cases are legible in one scrolled frame.",
+      "journey": "J-14",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": /scroll.*opposite/i } },
+      "expect": { "text": "opposite" }
+    },
+    {
+      "n": 7,
+      "title": "Verify legacy rows show the honest fallback message",
+      "narration": "When viewing older snapshots that were recorded before the band and opposite fields were added, the rows honestly display 'close not recorded in this snapshot' and 'opposite wall not recorded in this snapshot' rather than inventing data. This preserves the integrity of historical recordings.",
+      "point_out": "Clicking a legacy row from screen-2026-06-22 shows rows that render the honest 'close not recorded in this snapshot' message, confirming that the system does not backfill or recompute old data.",
+      "journey": "J-13",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "css": "[data-id='screen-2026-06-22-3ecd45c062c7']" } },
+      "expect": { "text": "close not recorded" }
+    },
+    {
+      "n": 8,
+      "title": "Return to the current desk view",
+      "narration": "The desk briefing stays ready to explore any recorded snapshot in its history. The screen-history dropdown remains accessible to jump between different recording times and compare how the universe's ranked structure changed.",
+      "point_out": "Back on the main desk page with the current view. The briefing is restored, and the screen-history link is ready for the next selection.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "ranked row" }
+    }
+  ]
+}
