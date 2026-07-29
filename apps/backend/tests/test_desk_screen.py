@@ -256,16 +256,20 @@ def test_select_opposite_band_is_null_when_no_band_exists_on_the_other_side():
     assert _select_opposite_band(resistance_only, 100.0, "resistance") is None
 
 
-def test_select_opposite_band_prefers_higher_class_over_closer_distance():
-    """The opposite selection reuses `_select_best_band`'s IDENTICAL tie-break tuple -- class rank
-    outranks distance, exactly as the best-band suite above already proves for the same-side case."""
+def test_select_opposite_band_prefers_closer_distance_over_higher_class():
+    """TC-1 (goal-desk-iter-19 correction): the opposite selection uses its OWN distance-first
+    tie-break tuple -- distinct from `_select_best_band`'s class-first tuple, which governs only
+    the row's own same-side selection (`test_select_best_band_prefers_higher_class_over_closer_
+    distance` above, unchanged). goal.md J-14 step 1: "distance ascending, then class rank
+    descending... then band_score descending" -- a close-but-lower-class opposite-side band beats a
+    farther-but-higher-class one."""
     best_side = _band("resistance", 105.0, 106.0, "A", 1.0)
     close_but_low_class = _band("support", 99.9, 99.95, "C", 500.0)
     far_but_high_class = _band("support", 90.0, 91.0, "A", 1.0)
     opposite = _select_opposite_band(
         [best_side, close_but_low_class, far_but_high_class], 100.0, "resistance"
     )
-    assert opposite is far_but_high_class
+    assert opposite is close_but_low_class
 
 
 def test_select_opposite_band_exact_tie_keeps_the_served_order_first_item():

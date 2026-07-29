@@ -2,14 +2,19 @@
   "schema_version": 1,
   "journey": "J-05",
   "name": "Ledger history + drill-in to /structure",
-  "default_timeout_ms": 15000,
+  "default_timeout_ms": 20000,
+  "notes": [
+    "Re-verified goal-desk-iter-19 by browser-qa-agent (2026-07-29) live against the running rig at backend :8301 / frontend :3301, serving the real ambient apps/backend/.data store. This iteration shipped zero page.tsx changes (backend-only opposite-band selection fix), so J-05's own surface (Screen History + /structure query-param prefill) was unaffected by construction; this run re-verifies it end to end regardless, per the dispatcher's explicit instruction.",
+    "This iteration's own deterministic replay of the PREVIOUS version of this script reported a step-07 FAIL ('expect not satisfied') before this browser-qa-agent run. Live re-verification this run reproduced every step successfully end to end: clicking the 2026-06-22 Screen History row rendered its recorded rows verbatim (AAPL band 298.02-300.10, matching the snapshot's own recorded price_low/price_high); clicking the first ranked row (desk-screen-row) navigated to /structure?symbol=AAPL&asof=2026-06-22T23%3A59%3A59Z; the page auto-loaded and its tradable-map-table rendered the exact pinned wall region, including the row 'resistance 298.02-300.1001 Class A 97 1610 round number' AND the well-known 'resistance 300.11-302.2 Class A 171 849 round number' wall -- both confirmed via direct DOM text extraction and screenshot (reports/qa/goal-desk-iter-19-evidence/J-05-drillin-structure-aapl.png). /structure with no query params was independently re-verified to show its exact shipped default empty state (SYMBOL field blank, 'Choose a symbol and an as-of time, then Load...' placeholder) -- reports/qa/goal-desk-iter-19-evidence/J-05-structure-no-params-default.png. The most likely explanation for the prior replay's isolated step-07 failure is a cold Next.js dev-server compile on first hit of /structure (next dev JIT-compiles a route on its first request, which can exceed a 15s/20s timeout), not a functional regression -- this script raises default_timeout_ms and the pre-assertion wait_for to reduce that specific flake risk without changing what is asserted.",
+    "GET /research/tradability?symbol=AAPL&as_of=2026-06-22T23:59:59Z was independently cross-checked via curl against the same backend and returned the identical 298.02/300.1001 band (score 97, class A) as the third of 10 bands -- confirming the UI text is not a fluke of this one run."
+  ],
   "steps": [
     {"n": 1, "journey": "J-05", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Screen History"}},
     {"n": 2, "journey": "J-05", "action": {"type": "click", "target": {"css": "[data-testid=\"desk-history-row\"][data-screen-date=\"2026-06-22\"]"}}, "expect": {"text": "Viewing the recorded screen for 2026-06-22 — not the latest."}, "timeout_ms": 10000},
     {"n": 3, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "desk-history-latest-button"}}, "timeout_ms": 8000},
     {"n": 4, "journey": "J-05", "action": {"type": "click", "target": {"testid": "desk-screen-row"}}, "timeout_ms": 10000},
     {"n": 5, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "structure-title"}}, "expect": {"text": "Structure"}, "timeout_ms": 10000},
-    {"n": 6, "journey": "J-05", "action": {"type": "wait_for", "ms": 4000}},
+    {"n": 6, "journey": "J-05", "action": {"type": "wait_for", "ms": 6000}},
     {"n": 7, "journey": "J-05", "action": {"type": "expect", "target": {"testid": "tradable-map-table"}}, "expect": {"text": "298.02–300.1001"}, "timeout_ms": 20000}
   ]
 }

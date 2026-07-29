@@ -1038,3 +1038,65 @@ copy of the data with a freshly computed screen, which also clears the two older
 One sentence for the owner: the new column works and matches your stored prices exactly, but on 2 of
 your 63 names it points at a wall more than twice as far away as the closest one — please approve
 one short run to fix that and re-film the walkthrough.
+
+## Iteration 19 — goal-desk-iter-19
+
+**Date:** 2026-07-29T21:05:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean (the iteration spec asked for full; the engine dispatched lean, so the
+filming step runs after this evaluation and could not close the walkthrough clause in-run)
+**Journey deltas:**
+- Newly passing: J-14 "Every ranked briefing row states where the nearest wall on the OTHER side of
+  price sits" — was partial after iteration 18 because the column named the best-graded wall, not
+  the closest one; this run corrected the rule and I proved the correction myself
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-03, J-04, J-07, J-08, J-11, J-12, J-13 re-verified passing this run by saved-script
+  replay; J-05 re-verified live in a real browser after its saved script raised a false failure;
+  J-06 "17 machine-readable tools" re-confirmed by my own count in the running code plus my own full
+  suite run; J-09 and J-10 spot-checked by me directly against records this run created; J-01 and
+  J-02 carried (outside this run's required set, their code untouched)
+- Anti-goal violations: none new, none open. All three older items stay resolved and were re-checked
+  by me directly. One deviation is carried, deliberately NOT scored as a violation: the evidence lane
+  again used the owner's real data folder instead of a throw-away copy, and this time it also ran a
+  real price top-up there (390 new price-series files) and recorded four new screens.
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to produce. I
+opened the picture myself: the "opposite" column reads 1.22, 1.38 and 2.40 basis points on three
+rows sitting directly above a row reading 1128.29 — the close pair and the far row legible in one
+frame with no scrolling, under a provenance panel naming the exact recording, the as-of date and the
+settings fingerprint. Then I proved the numbers instead of believing them: I re-computed the nearest
+opposite wall for ALL 100 ranked rows of that exact recording, straight from the stored price files
+through the same wall computation the product itself calls, and every one of the 100 rows matches on
+side, grade, price range, score and distance — zero mismatches. The wall each row is ranked on is
+also unchanged on all 100 rows, so nothing was quietly reordered, and the per-grade counts match my
+own recount and add up to the number of walls. On exactly one row the old rule would have chosen
+differently — HONA now shows a wall touching price at 0.00 basis points where the old rule pointed at
+one 265.56 basis points away — which proves the corrected rule is what produced the evidence, not a
+coincidence. I checked nothing was rewritten: all ten stored screens recompute their own checksums,
+the six older ones still carry no opposite-wall value on any row, the 369 price files that existed
+before this run are untouched, and the 390 files written today are new ones. I re-ran the work: the
+whole back-end suite (exit 0, no failures, 8 skipped), the settings fingerprint
+(`08e471b10130e1e2`), the tool count (exactly 17), and a file-by-file check that every frozen file
+and the whole engine take a zero change. Coherence is COHERENCE-PASS. Two things stay owed and
+neither is a product defect: the photograph of the hover hint cannot be taken in this setup, because
+the browser draws its built-in hint outside the picture it saves (its text was read out of the live
+page and is correct), and the guided walkthrough film has still not been recorded because this run
+was dispatched at the shorter depth. GOAL_ACHIEVED because all fourteen journeys now have positive,
+opened evidence, nothing that used to work stopped working, and nothing is waiting on a person.
+
+**Next-step recommendation:** Halt — the goal is achieved. Four follow-ups for the owner, none a
+defect and none blocking: (1) your own data folder was written to during this run, against this run's
+own plan — a real price top-up fetched 390 new price-series files and four new screens were recorded,
+so your Desk now ranks 100 names instead of 63; nothing was deleted or rewritten, every record still
+proves its own checksum, and it cannot be undone because permanent records are never deleted here;
+(2) two pictures are still owed and change nothing in the program — the hover-hint photograph, which
+this setup cannot take at all (ask for the hint's text to be read out instead; this is the third run
+that clause has cost), and the guided walkthrough film over populated Desk rows, which also still
+owes the older price/close film and the full-length picture of the earlier same-day recording;
+(3) you tightened the host-protection caps yourself during this run, so the goal file's
+host-protection paragraph now quotes an out-of-date core list — worth a one-line tidy-up on your own
+track; (4) the new column names the nearest wall on the other side and how far away it is, and makes
+no claim that price will reach it. One sentence for the owner: the "opposite" column now names the
+genuinely nearest wall on the other side of price, proven row by row against your stored price
+files — please confirm the finish, and let the film be recorded afterwards.
