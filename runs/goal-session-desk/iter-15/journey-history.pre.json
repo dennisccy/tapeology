@@ -1,0 +1,129 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "Universe ingestion — fetched, registered, honest",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-14",
+      "last_passing_iter": "goal-desk-iter-14",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-14-evidence/J-01-verify.png",
+      "spec_hash": "dcad07154573cae27aff4a75ce71ac9ceca8c2969ec5c3d665aa3cbe08278819"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Coverage + explicit bar top-up over the universe",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-14",
+      "last_passing_iter": "goal-desk-iter-14",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-14-evidence/J-02-verify.png",
+      "spec_hash": "a5cd4f6a0c3dbe67de9a65400250cf777e281712fbf3c90e54758e91971d306c"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The screen — pinned inputs, append-only snapshot, deterministic rank",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-14",
+      "last_passing_iter": "goal-desk-iter-14",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-14-evidence/J-03-verify.png",
+      "spec_hash": "74735994233da1614d5568bc57f2a42e60d7e51cf91bb0378f32add5c898bcd6"
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The /desk briefing page",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-14",
+      "last_passing_iter": "goal-desk-iter-14",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-14-evidence/J-04-verify.png",
+      "spec_hash": "0a3d005b39831ddc9eb0d481081ac613a2ec9e94b131c36394f9e649182faaec"
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "Ledger history + drill-in to /structure",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-14",
+      "last_passing_iter": "goal-desk-iter-14",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-14-evidence/J-05-verify.png",
+      "spec_hash": "cba063f7d5e92f608aa54c1b4d174e17e46e297b8dda20cd52532d9d5a1ae545"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "MCP contract v3 — 17 read-only tools",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-14",
+      "last_passing_iter": "goal-desk-iter-14",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-14-ui-test-results.md row UT-J-06 (SKIP — MCP has no browser surface, per goal.md's own '(Keyless; automated.)'); contract evidence re-derived by the evaluator itself: AST-parse of apps/backend/tests/test_mcp_server.py EXPECTED_TOOLS = exactly 17 tools, no reconcile-named tool; grep for 'reconcile' in apps/backend/app/mcp/__init__.py returns nothing",
+      "spec_hash": "c3d5a8351c4ce5aa20449d2d1557f4599bad9cdecebbcde8f044e6d4d2908f6f"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The kept product stands — regression sentinel",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-14",
+      "last_passing_iter": "goal-desk-iter-14",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/qa/goal-desk-iter-14-evidence/J-07-verify.png",
+      "spec_hash": "47ab77bdd843c8f7004f69b3c433dc9f167c8fce6195c9f21f48c061c7a7b7c5"
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "Every ranked briefing row names the bar its distance was measured from",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-14",
+      "last_passing_iter": "goal-desk-iter-14",
+      "first_seen_iter": "goal-desk-iter-9",
+      "last_evidence_path": "reports/qa/goal-desk-iter-14-evidence/J-08-verify.png",
+      "spec_hash": "727585122a3bbcabfa1b789e25d4171cfd6f953422b134050a547ff883fb52f6"
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "Every top-up run leaves an append-only record of what it attempted",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-14",
+      "last_passing_iter": "goal-desk-iter-14",
+      "first_seen_iter": "goal-desk-iter-11",
+      "last_evidence_path": "reports/qa/goal-desk-iter-14-evidence/J-09-verify.png",
+      "spec_hash": "df68d0f0595aaa98cc55b5e6dcff6c9bb23dcdeaeda198e9a890d714b3e855cc"
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The coverage the briefing shows is the coverage the frozen store can prove",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-14",
+      "last_passing_iter": "goal-desk-iter-14",
+      "first_seen_iter": "goal-desk-iter-14",
+      "last_evidence_path": "reports/qa/goal-desk-iter-14-evidence/UT-J-10-TC18-populated-after.png (after-state: Index Reconciliation panel reads reconcile-2026-07-29-74a66e4611a7 done, 369 series on disk, 345 -> 369 rows indexed, Drift before (24) all 'AAPL 1d — series on disk, no index row', Drift after (0) no drift, AAPL's 1d coverage badge lit) + reports/qa/goal-desk-iter-14-evidence/UT-J-10-TC17-empty-before.png (before-state on the SAME rig: 'No reconciliation run recorded yet.' with AAPL's 1d badge dark) + the [NEW]-flagged walkthrough reports/phase-goal-desk-iter-14-demo.json steps 2-8 with frames reports/demo/goal-desk-iter-14/step-02..06.png",
+      "spec_hash": "25ce1c02559425521e1b9950291926f058516a546e7f86443f3e3fbad5cb1ac5"
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-desk-iter-3",
+      "anti_goal": "Snapshots are append-only and pinned. Universe and screen snapshots are dated, checksummed, append-only; every screen pins (universe snapshot id, screen date, as_of, fingerprint, bar-store signature); nothing is silently refetched, backfilled, recomputed in place, or rewritten — a new run is a new snapshot.",
+      "severity": "minor",
+      "evidence": "INTERCEPTED IN-ITERATION, NEVER LANDED. Pre-fix ScreenStore.record silently overwrote a snapshot file whose checksum had failed (iter-3 audit B1); fixed at desk_screen.py:467-473 plus two regression tests, sibling gap in UniverseStore.record closed in iter-4. ITER-14 RE-CONFIRMED by the evaluator directly: zero diff on desk_screen.py / desk_universe.py / desk_topup_log.py; and the rail held again in practice — on the scoped rig the pre-repair screen screen-2026-07-27-073795dff864 (bar_store_signature 460ccfc8aed5f2db, AAPL 1d has_bars:false) is still on disk with its own file_checksum re-verifying AFTER the reconciliation run, while the post-repair screen is a NEW file screen-2026-07-29-e7e5de9a5815 (signature 643a581230fc110a, AAPL 1d has_bars:true).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-desk-iter-4",
+      "anti_goal": "Frozen foundations — the v1 strategy, the default profile, the tape engine's five states and thresholds, the frozen structure computations, the JSON BarStore, and every KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside them, never a mutation of them.",
+      "severity": "minor",
+      "evidence": "RESOLVED at iter-8 by the owner's own written ratification in docs/goal.md ('OWNER RATIFICATION — 2026-07-27 — R-1'). ITER-14 RE-CONFIRMED by the evaluator's own git diff against this iteration's snapshot 835f9967: zero diff on bar_index.py, bars.py, tradability.py, levels.py, desk_coverage.py, config.py, meta.py, mcp/__init__.py, StructureChart.tsx, PriceChart.tsx and the whole app/engine/ tree; Config().config_fingerprint() printed 08e471b10130e1e2 on the evaluator's own run; the ratified inventory gained nothing.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-desk-iter-4",
+      "anti_goal": "Immutable data — registered datasets and bar series are append-only, checksummed, never re-tagged, never deleted, never content-perturbed. Splits are frozen at registration.",
+      "severity": "minor",
+      "evidence": "RESOLVED. The iter-4 price-less-bar write was repaired at three layers and the 60 affected series stay on disk untouched, excluded row-by-row on read — the behaviour R-1 ratified. ITER-14 RE-CONFIRMED the strongest way this iteration allows: the ambient store still holds exactly 369 bar-series JSON files and `find apps/backend/.data/bars -name '*.json' -newermt 2026-07-27` returns 0 files, so not one recorded series was touched by this iteration's reconciliation work (which rebuilds only the derived bar_index.db); the scoped rig likewise shows 369 bar files with none modified today.",
+      "resolved": true
+    }
+  ],
+  "notes_iter_14": "No NEW goal.md anti-goal violation and none left open; all three older items stay resolved and were re-checked by the evaluator directly (see each entry's ITER-14 line). Every anti-goal category was answered explicitly in runs/goal-session-desk/iter-14/eval.md; scan-report.md is CLEAN; the whole product diff is 4 modified + 2 new files (desk_routes.py, app/desk/page.tsx, lib/api.ts, lib/types.ts + desk_index_reconcile.py, test_desk_index_reconcile.py); requirements.txt / pyproject.toml / package.json / package-lock.json all take a zero diff (no new dependency; the new module imports stdlib only plus two in-repo modules); every named guard test file (test_no_execution_path.py, test_no_credential_in_artifacts.py, test_copy_discipline.py, test_profile_equivalence.py, test_bar_index.py) is byte-unmodified; the evaluator re-ran the full backend suite itself (1419 collected, exit 0). RECORDED FOR THE RECORD, NOT SCORED AS A VIOLATION: (a) AMBIENT-STORE DEVIATION (audit finding B1) — an earlier QA pass of this same iteration triggered the REAL reconciliation and a new screen compute against the owner's ambient apps/backend/.data instead of a scoped copy, which the iteration spec put explicitly OUT OF SCOPE (docs/phases/goal-desk-iter-14.md:225-227 and NOTES:349-351). Evaluator-verified consequences: apps/backend/.data/index_reconcile_runs/ now holds one run record (reconcile-2026-07-28-43857811211f.json, 281 -> 369 rows, 88 unindexed -> 0), apps/backend/.data/bar_index.db now counts 369 rows, and apps/backend/.data/screen/ gained screen-2026-07-27-3ad3c57aa6ba.json while the prior screen-2026-07-27-936543601e75.json is untouched (mtime 2026-07-27). No goal.md rail is breached: no bar-series file was modified (0 of 369), bar_index is the derived/rebuildable accelerator goal.md itself calls derived, the repair went only through the sanctioned BarIndex.reindex(), nothing was rewritten in place, and the trigger was an explicit POST, never a scheduler. It was deliberately NOT reverted because deleting an append-only record would itself breach a critical rail. Same class as iter-9's carried hygiene deviation. (b) docs/goal.md's Anti-goals section carries an uncommitted host-guard wording sync (in-place pump adoption) — mtime 2026-07-28 21:39, the same minute as the owner's own project-extensions/host-guard/host-guard.env edit and ~1h AFTER the goal-proposer finished (proposer-result.json mtime 20:41), so it is owner-authored maintenance, not the proposer editing outside its AUTO:journeys box; it also does not weaken the rail ('Never disable, widen, or bypass these caps' is unchanged). (c) HOST PROTECTION honoured: the evaluator checked its own CPU affinity (taskset -pc = 4-7,12-15 = HOST_GUARD_CPU_LIST), so every process this iteration launched inherited the cap; host-guard.env was not widened by the chain.",
+  "updated_at": "2026-07-29T02:05:00+01:00"
+}

@@ -228,6 +228,10 @@ function hasNoCoverageAtAll(coverage: Record<string, { has_bars: boolean }>): bo
 // established for distance/score) plus `row.basis_age_days`. A legacy row (recorded before this
 // iteration) has BOTH keys absent, not merely `null` -- `== null` (loose equality) catches both
 // `undefined` and `null` in one check, per this project's own `fmt()` convention (lib/format.ts).
+// era-desk-iter-15 (J-11): the SAME tooltip also carries the row's history-depth detail --
+// `row.history_sessions` plus `row.history_start` untruncated (the visible "history" cell below
+// shows only the date portion, the SAME rounded-display/full-precision-on-hover split as basis) --
+// a legacy row (recorded before this iteration) has both keys absent, `== null` catches both.
 function deskRowDrillInTitle(row: DeskScreenRow): string {
   const coverageLines = Object.entries(row.coverage)
     .map(([timeframe, tf]) => `${timeframe} window last requested: ${tf.latest_window_end_utc ?? "never"}`)
@@ -236,7 +240,11 @@ function deskRowDrillInTitle(row: DeskScreenRow): string {
     row.basis_as_of == null || row.basis_age_days == null
       ? "basis not recorded in this snapshot"
       : `basis ${row.basis_as_of} (${row.basis_age_days} d before as-of)`;
-  return `distance ${row.distance_bps} bps · score ${row.band_score} · ${basisLine}${
+  const historyLine =
+    row.history_sessions == null || row.history_start == null
+      ? "history not recorded in this snapshot"
+      : `history ${row.history_sessions} sessions from ${row.history_start}`;
+  return `distance ${row.distance_bps} bps · score ${row.band_score} · ${basisLine} · ${historyLine}${
     coverageLines ? ` · ${coverageLines}` : ""
   }`;
 }
@@ -250,14 +258,15 @@ function deskSkipDrillInTitle(skip: DeskScreenSkip): string {
 }
 
 // One ranked row: symbol, side, band-class chip, distance-bps chip, band score, per-timeframe
-// coverage badges, tick-evidence badge, basis column (era-desk-iter-9/J-08) — every value read
-// verbatim from the snapshot. Distance and score are DISPLAYED to two decimals (a
-// `0.33523150389608725 bps` cell defeated the scanability the briefing exists for — audit F3); the
-// full-precision value is not lost — it is reachable via the row's own drill-in anchor's composite
-// `title` (`deskRowDrillInTitle` above, audit F2 fix), never a per-cell `title` (iter-7 audit F1:
-// this comment used to claim the opposite). The basis column follows the SAME split: a rounded,
-// date-only display with the full-precision `basis_as_of` reachable only via that same composite
-// tooltip. The band-class chip carries the "nearest same-class band" caption
+// coverage badges, tick-evidence badge, basis column (era-desk-iter-9/J-08), history column
+// (era-desk-iter-15/J-11) — every value read verbatim from the snapshot. Distance and score are
+// DISPLAYED to two decimals (a `0.33523150389608725 bps` cell defeated the scanability the
+// briefing exists for — audit F3); the full-precision value is not lost — it is reachable via the
+// row's own drill-in anchor's composite `title` (`deskRowDrillInTitle` above, audit F2 fix), never
+// a per-cell `title` (iter-7 audit F1: this comment used to claim the opposite). The basis and
+// history columns follow the SAME split: a rounded, date-only display with the full-precision
+// value reachable only via that same composite tooltip. The band-class chip carries the "nearest
+// same-class band" caption
 // (assumptions.md iter-4 entry 1 — `_select_best_band` itself stays byte-unchanged; this copy
 // keeps the chip honest about what the ranking actually selects rather than implying it is the
 // symbol's single strongest band).
@@ -319,6 +328,15 @@ function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
           ? "basis not recorded in this snapshot"
           : `basis ${row.basis_as_of.slice(0, 10)} · ${row.basis_age_days} d before as-of`}
       </td>
+      {/* era-desk-iter-15 (J-11): descriptive only, session count + start date (full precision --
+          the untruncated `history_start` -- lives in the row anchor's own composite `title` above,
+          NEVER a per-cell `title` here, the same F2 lesson the basis column above already applies).
+          `== null` catches a legacy row's ENTIRELY ABSENT keys (`undefined`), not just `null`. */}
+      <td className={LABEL_CELL} data-testid="desk-row-history">
+        {row.history_sessions == null || row.history_start == null
+          ? "history not recorded in this snapshot"
+          : `history ${row.history_sessions} sessions · from ${row.history_start.slice(0, 10)}`}
+      </td>
     </tr>
   );
 }
@@ -347,6 +365,7 @@ function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) 
             <th className={HEADER_CELL_LEFT}>coverage</th>
             <th className={HEADER_CELL_LEFT}>tick evidence</th>
             <th className={HEADER_CELL_LEFT}>basis</th>
+            <th className={HEADER_CELL_LEFT}>history</th>
           </tr>
         </thead>
         <tbody>

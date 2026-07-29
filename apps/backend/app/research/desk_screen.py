@@ -54,8 +54,9 @@ screen's final ``rows`` list (TC-14) -- one rule serves both jobs.
 still reflects whichever pinned timeframes genuinely have bars (never a fabricated all-false).
 
 **Basis disclosure (goal-desk-iter-9, J-08).** Every RANKED row also carries ``basis_as_of``
-(copied VERBATIM from ``result["basis_as_of"]`` -- the SAME value ``_resolve_reference_close``
-already consumes to find the reference close, so this costs zero additional
+(copied VERBATIM from ``result["basis_as_of"]`` -- the SAME value
+``_resolve_reference_close_and_history`` already consumes to find the reference close, so this
+costs zero additional
 ``BarStore``/``compute_tradability`` work) and ``basis_age_days`` (a plain calendar-date
 difference between that value and the row's own ``as_of``, mirroring ``_distance_bps``'s "plain
 arithmetic derivation" style -- see ``_basis_age_days`` below). Skip rows never carry these fields
@@ -64,6 +65,16 @@ this addition simply has ranked rows that OMIT these two keys entirely; ``Screen
 row-shape validation or enrichment (a plain checksum-verified passthrough), so
 ``GET /research/desk/screen`` serves that absence VERBATIM -- never defaulted, never backfilled
 (the append-only rail applies to row CONTENT, not just to the snapshot as a whole).
+
+**History disclosure (goal-desk-iter-15, J-11).** Every RANKED row also carries
+``history_sessions`` (the count of daily bars at or before ``basis_as_of``, derived in the SAME
+``store.merged_bars(symbol, "1d")`` ascending walk ``_resolve_reference_close_and_history`` already
+performs to resolve the reference close -- zero additional ``BarStore`` read) and ``history_start``
+(the earliest of those bars' own timestamp, formatted through the identical ``_iso`` function
+``basis_as_of`` itself uses). Skip rows never carry these fields, matching the basis-disclosure
+precedent exactly. A snapshot recorded BEFORE this addition simply has ranked rows that OMIT these
+two keys entirely -- the SAME append-only-row-content discipline the basis fields established:
+never defaulted, never backfilled, never present as ``null``.
 
 **No new ``Config`` field.** The screen store's directory resolves via ``resolve_desk_screen_dir``
 below -- a bare ``TAPEOLOGY_DESK_SCREEN_DIR``-env-var-or-sibling-of-``desk_universe_dir_resolved()``
@@ -233,23 +244,38 @@ def _row_rank_key(row: dict) -> tuple[int, float, float, str]:
     return (-_CLASS_RANK[row["band_class"]], row["distance_bps"], -row["band_score"], row["symbol"])
 
 
-# --- reference close price (TC-19) ----------------------------------------------------------------
+# --- reference close price + history disclosure (TC-19; goal-desk-iter-15, J-11) ------------------
 
 
-def _resolve_reference_close(store: BarStore, symbol: str, basis_as_of: str) -> float:
+def _resolve_reference_close_and_history(
+    store: BarStore, symbol: str, basis_as_of: str
+) -> tuple[float, int, str]:
     """The ONE daily bar in ``store.merged_bars(symbol, "1d")`` whose own timestamp -- formatted
-    through the SAME ``_iso`` function ``tradability.py`` uses -- matches ``basis_as_of`` verbatim.
-    Never re-derives WHICH bar is the basis (that stays ``compute_tradability``'s exclusive
-    decision); never touches ``tradability.py``'s or ``levels.py``'s return shape.
+    through the SAME ``_iso`` function ``tradability.py`` uses -- matches ``basis_as_of`` verbatim,
+    PLUS (goal-desk-iter-15, J-11 -- see the module docstring's "History disclosure" section) the
+    two history-depth fields derived from that SAME ascending walk: ``history_sessions`` (how many
+    bars were walked up to and including the match -- ``merged_bars`` is already ascending, so this
+    is simply a running count, never a second pass or a separate counting read) and
+    ``history_start`` (the FIRST bar's own timestamp seen in this same walk, formatted through the
+    identical ``_iso``). Never re-derives WHICH bar is the basis (that stays
+    ``compute_tradability``'s exclusive decision); never touches ``tradability.py``'s or
+    ``levels.py``'s return shape; issues exactly the ONE ``store.merged_bars`` call this function
+    already issued before J-11 (TC-6 -- zero extra store read).
 
     Structurally this bar always exists: ``basis_as_of`` is itself derived from a bar
     ``compute_tradability`` read via this EXACT accessor (``tradability.py``'s own
     ``_select_daily_series`` calls ``BarStore.merged_bars(symbol, "1d")``), and the store is
     immutable between the two reads within one screen computation -- a missing match is an
-    unreachable internal-invariant failure, surfaced loudly (never a fabricated close)."""
+    unreachable internal-invariant failure, surfaced loudly (never a fabricated close or history)."""
+    history_sessions = 0
+    history_start: str | None = None
     for bar in store.merged_bars(symbol, "1d"):
-        if _iso(bar.epoch) == basis_as_of:
-            return bar.close
+        history_sessions += 1
+        bar_iso = _iso(bar.epoch)
+        if history_start is None:
+            history_start = bar_iso
+        if bar_iso == basis_as_of:
+            return bar.close, history_sessions, history_start
     raise RuntimeError(
         f"internal invariant violated: no daily bar for {symbol!r} matches basis_as_of "
         f"{basis_as_of!r} -- compute_tradability's own basis bar must always be present in "
@@ -295,8 +321,9 @@ def compute_screen(
     the full snapshot content MINUS the store-assigned ``id``/``created_utc`` (``ScreenStore.record``
     assigns those): ``{screen_date, as_of, universe_snapshot_id, config_fingerprint,
     bar_store_signature, rows, skipped}``. Each RANKED row additionally carries ``basis_as_of``/
-    ``basis_age_days`` (goal-desk-iter-9, J-08 -- see the module docstring's "Basis disclosure"
-    section); skip rows never carry them.
+    ``basis_age_days`` (goal-desk-iter-9, J-08) and ``history_sessions``/``history_start``
+    (goal-desk-iter-15, J-11) -- see the module docstring's "Basis disclosure" and "History
+    disclosure" sections; skip rows never carry any of the four.
 
     ``progress``, if given, is called after EACH member with ``{"symbol": symbol}`` (the caller
     tracks its own done/total counters -- the ``desk_topup_compute.run_topup`` precedent).
@@ -340,7 +367,9 @@ def compute_screen(
                  "coverage": coverage, "tick_evidence": tick_evidence}
             )
         else:
-            close = _resolve_reference_close(bar_store, symbol, result["basis_as_of"])
+            close, history_sessions, history_start = _resolve_reference_close_and_history(
+                bar_store, symbol, result["basis_as_of"]
+            )
             best = _select_best_band(result["bands"], close)
             rows.append(
                 {
@@ -355,6 +384,8 @@ def compute_screen(
                     "tick_evidence": tick_evidence,
                     "basis_as_of": result["basis_as_of"],
                     "basis_age_days": _basis_age_days(result["basis_as_of"], as_of),
+                    "history_sessions": history_sessions,
+                    "history_start": history_start,
                 }
             )
 

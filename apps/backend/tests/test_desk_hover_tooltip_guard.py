@@ -91,13 +91,14 @@ def test_ranked_row_drill_in_tooltip_is_built_from_distance_score_and_coverage_f
     ``basis_as_of``/``basis_age_days`` -- the new basis column is a plain descriptive `<td>` with
     NO per-cell ``title`` of its own (the same F2 lesson applied proactively), so its full-precision
     detail must join this SAME consolidated tooltip or it is unreachable by pointer, exactly like
-    the three fields above."""
+    the three fields above. goal-desk-iter-15 (J-11) adds one more: ``row.history_start`` -- the
+    new history column applies the identical F2-proactive discipline."""
     source = _DESK_PAGE.read_text()
     fn_name = _anchor_title_function_name(source, "desk-row-drill-in")
     fn_source = _extract_function(source, fn_name)
     for needle in (
         "row.distance_bps", "row.band_score", "latest_window_end_utc",
-        "row.basis_as_of", "row.basis_age_days",
+        "row.basis_as_of", "row.basis_age_days", "row.history_start",
     ):
         assert needle in fn_source, (
             f"{fn_name}() never references {needle!r} -- the ranked row's composite hover "

@@ -214,3 +214,22 @@ because deleting append-only records is itself a rail breach.
 capture (empty-state panels over append-only stores) — state the rig path in EVERY lane dispatch,
 re-derive it after any re-dispatch, and have each lane assert the rig is live before acting rather
 than defaulting to the ambient store.
+
+## iter-15 — 2026-07-29T04:40:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Two evidence-lane failures hid behind green verdicts this iteration. (1) The authored
+`reports/phase-goal-desk-iter-15-demo.json` embedded JavaScript regex literals
+(`{"role":"link","name":/history.*sessions/}`); `json.loads` failed, `demo-phase.sh` recorded
+`Demo Verdict: SKIPPED` with an EMPTY captured-steps table and zero screenshots — a silent skip, not
+an error — and QA still marked the walkthrough test-case PASS because it checked the golden replay
+script `runs/goal-session-desk/journey-scripts/J-11.json` instead of the demo artifact. Only the hard
+audit caught it. (2) The "scoped rig" on `:8301` carried NO `TAPEOLOGY_*` env override (verified via
+`/proc/<pid>/environ`), so it served the owner's ambient `apps/backend/.data` — yet
+`ui-test-results.llm.md:109` asserts "no fallback to an ambient `apps/backend/.data` store was used".
+Scoped PORTS are not a scoped STORE; a lane can honestly believe it is isolated while writing to the
+real folder.
+**Applies to:** any iteration whose DoD names a `[NEW]`-flagged demo-narrator walkthrough (assert
+`Demo Verdict: RECORDED` + a non-empty gallery directory, never a same-named replay script), and any
+iteration instructing lanes to use a fixture-scoped rig (prove isolation from the serving process's
+own environment, not from the report's prose).

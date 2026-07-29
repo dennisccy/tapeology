@@ -798,6 +798,12 @@ export type EdgeReportPayload = EdgeReportResponse | EdgeReportNotComputed;
 // OMIT these two keys ENTIRELY (the append-only rail: legacy snapshots are never backfilled) --
 // the runtime value there is `undefined`, not `null`, so callers must check
 // `row.basis_as_of == null` (loose equality) to catch both, never `=== null` alone.
+// era-desk-iter-15 (J-11) -- history disclosure: how many completed daily sessions (and from what
+// start date) `basis_as_of` was measured over -- derived in the SAME `desk_screen.py` walk that
+// resolves `basis_as_of`/`basis_age_days`, so it carries the identical presence contract: always
+// non-null on a NEWLY computed ranked row, entirely ABSENT (not `null`) on a row recorded before
+// this iteration -- callers must check `row.history_sessions == null` (loose equality), same as
+// the basis fields above.
 export interface DeskScreenRow {
   symbol: string;
   side: "support" | "resistance";
@@ -810,6 +816,8 @@ export interface DeskScreenRow {
   tick_evidence: boolean;
   basis_as_of: string | null;
   basis_age_days: number | null;
+  history_sessions: number | null;
+  history_start: string | null;
 }
 
 // A member the screen walked but could not rank -- two honest, distinct reasons, never conflated:

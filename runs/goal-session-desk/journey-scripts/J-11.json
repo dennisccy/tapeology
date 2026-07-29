@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "journey": "J-11",
+  "name": "Every ranked briefing row states how much completed history its wall was measured over",
+  "default_timeout_ms": 15000,
+  "notes": [
+    "Verified goal-desk-iter-15 by browser-qa-agent (2026-07-29) live against the scoped rig at backend :8301 / frontend :3301 (screen-2026-07-28-ac07c9581a4f, 63 ranked rows, history_sessions spanning 27 (HONA) to 501 (AAPL)). Both HONA's row cell ('history 27 sessions · from 2026-06-15') and its drill-in anchor's title attribute ('... basis 2026-07-23T04:00:00.000000Z (5 d before as-of) · history 27 sessions from 2026-06-15T04:00:00.000000Z · ...') were read directly from the rendered DOM, alongside a long-history row (BRK-B, 'history 500 sessions · from 2024-07-25') simultaneously visible in one screenshot (reports/qa/goal-desk-iter-15-evidence/UT-02-result.png). A legacy screen recorded before this iteration's code (screen-2026-07-29-ce0d82b8e9bf) was also confirmed to render every row's history cell as the honest 'history not recorded in this snapshot' fallback with basis unaffected (UT-04-result.png), and the row click-through to /structure?symbol=...&asof=... still works unchanged (confirmed via window.location.href after click).",
+    "This script stays DELIBERATELY structural/generic (goto + expect only, no click, no exact session count) per the iteration's own binding NOTES: goal.md's J-11 rationale explicitly warns against treating its cited worked example as a literal number this or any later run must reproduce byte-for-byte -- the exact short/long split depends on whichever store the replay target holds. Step 3 asserts the generic substring 'sessions' on a desk-row-history cell, which is true for every ranked row regardless of its own count, and stays true after further screen runs on this or any other rig.",
+    "TC-8 (a <=60-session row and a >=400-session row legible in the SAME screenshot) and TC-9 (the composite tooltip's full-precision history_start on hover) are both live-browser-only checks not expressible in this deterministic text-match replay format: demo_runner.py's _check_expect has no numeric-range assertion, and 'hover' is not one of its supported action types. Both were verified directly by browser-qa-agent this iteration (see reports/phase-goal-desk-iter-15-ui-test-results.llm.md UT-02/UT-03) and captured to reports/qa/goal-desk-iter-15-evidence/.",
+    "This journey's evidence is NOT a one-way door (unlike J-09/J-10's honest-empty captures): a screen can be freely recomputed on the replay target to (re)create a wide session split without breaching the append-only rail, since re-filming only requires computing a fresh screen, never deleting a record."
+  ],
+  "steps": [
+    {"n": 1, "journey": "J-11", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
+    {"n": 2, "journey": "J-11", "action": {"type": "expect", "target": {"testid": "desk-screen-rows-table"}}, "expect": {"text": "history"}, "timeout_ms": 10000},
+    {"n": 3, "journey": "J-11", "action": {"type": "expect", "target": {"testid": "desk-row-history"}}, "expect": {"text": "sessions"}, "timeout_ms": 10000},
+    {"n": 4, "journey": "J-11", "action": {"type": "expect", "target": {"testid": "desk-title"}}, "expect": {"text": "Desk"}, "timeout_ms": 8000}
+  ]
+}

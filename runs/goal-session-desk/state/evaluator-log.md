@@ -789,3 +789,63 @@ on the same day cannot be told apart by a date-only lookup, keyboard access for 
 and the Desk page is now seven stacked sections and long. One sentence for the owner: everything
 this new self-check feature promised is built, proven and filmed — please confirm the finish, and
 note that your own data folder's file list was already repaired during the run.
+
+## Iteration 15 — goal-desk-iter-15
+
+**Date:** 2026-07-29T04:40:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-11 "Every ranked briefing row states how much completed history its wall was
+  measured over" (new this run — the goal-proposer added it to `docs/goal.md` after iteration 14
+  closed the era, so the era reopened for one more disclosure journey; it is built, proven and
+  filmed in a single run)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-03, J-04, J-05, J-07, J-08, J-09, J-10 all re-verified passing this run by
+  saved-script replay against the live rig; J-06 "17 machine-readable tools" re-confirmed by my own
+  count of the tools in the running code; J-01 and J-02 carried (outside this run's required set,
+  their code untouched) and spot-checked against their own pictures
+- Anti-goal violations: none new, none open. All three older items stay resolved and were
+  re-checked by me directly. One deviation is carried, deliberately NOT scored as a violation: the
+  development step ran a real screen against the owner's own data folder, and the "scoped" test rig
+  turned out to have no data-folder override, so the pictures and the film were taken there too —
+  against this run's own plan, and against what the browser report claims.
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to produce. I
+opened the picture myself: a 27-session row for HONA sits directly beside 500-session rows for
+BRK-B, DHR, HD and IBM, in one image, under a provenance block naming the screen date 2026-07-28
+and the settings fingerprint. Then I proved the numbers instead of believing them: I re-counted
+both new values for all 63 ranked rows straight from the stored daily price files, using the same
+reader the wall computation itself uses — zero mismatches, span 27 to 501, one row at or under 60
+and 57 at or above 400. I checked the honesty of the older record: the screen saved before this
+run's code carries neither new value on any of its 63 rows, absent rather than empty, and the film
+shows that state on screen as "history not recorded in this snapshot" while the neighbouring column
+still shows real dates. I checked nothing was quietly reordered: the ranked list is in exactly the
+same order as before, and every other value on every row is identical apart from one day-count that
+must differ because the two screens are one day apart. I checked nothing was rewritten: not one of
+the 369 stored price files was modified, no older record changed, and both records I read recompute
+their own checksums. I re-ran the work: the whole back-end suite (1418 passed, 8 skipped, 0 failed,
+exit 0), the settings fingerprint (`08e471b10130e1e2`), the tool count (exactly 17), and a
+file-by-file check that every frozen file and the whole engine take a zero change. The film the
+goal file demands exists, flagged as new, and covers the empty-history case and the short-versus-long
+case. Coherence is COHERENCE-PASS. One thing I judged rather than merely read, written down in the
+assumptions ledger: the real-data-folder run is a breach of this run's own plan, not of any project
+rule. GOAL_ACHIEVED because all eleven journeys now have positive, opened evidence, nothing that
+used to work stopped working, and nothing is waiting on a person.
+
+**Next-step recommendation:** Halt — the goal is achieved. Five follow-ups for the owner, none a
+defect and none blocking: (1) a new screen record for 2026-07-28 was written into your own data
+folder during this run and two rebuildable caches were refreshed — nothing deleted, no price file
+touched, and it cannot be undone because permanent records are never deleted here; (2) the checking
+step marked the "walkthrough exists" item as passed while looking at the wrong file, which let a
+silently skipped filming step through — the independent audit caught it and re-filmed properly, and
+that one check should become a hard stop; (3) one small test the plan listed was not written (a
+machine-tool pass-through check); the property is already proven a stronger way, so this is tidy-up
+only; (4) the picture named "tooltip" shows no tooltip, because a browser never paints that kind of
+hint into an image — the hint text itself was read out and is correct; (5) still open by choice: the
+word "history" counts daily bars only while a wall is built from four time frames, so nobody should
+later turn that number into a pass/fail rule; the Desk page is now eight stacked sections and long;
+two screens saved on the same day cannot be told apart by a date-only lookup; and keyboard access
+for the history rows. One sentence for the owner: the new "history" column works, is honest about
+older records, and matches your stored price files exactly on every row — please confirm the finish.

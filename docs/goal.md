@@ -713,6 +713,77 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     checksum over `desk_coverage`'s index-backed reads, a series the index cannot see also cannot move
     the pin the append-only screen ledger keys on.)*
 
+- **J-11: Every ranked briefing row states how much completed history its wall was measured over**
+  - Steps:
+    1. Record two desk-owned fields on every NEW ranked screen row: `history_sessions` — the count of
+       completed daily bars at or before that row's own `basis_as_of` — and `history_start`, the
+       earliest of those bars' own timestamps, formatted through the SAME `_iso` helper the row's
+       `basis_as_of` already uses. Both are derived INSIDE the single ascending walk over
+       `BarStore.merged_bars(symbol, "1d")` that `_resolve_reference_close` (`desk_screen.py:239`)
+       already performs — the exact accessor `tradability._select_daily_series`
+       (`tradability.py:163/180`) reads — so the desk issues no second store read and invents no
+       series of its own: zero diff to `bars.py`/`tradability.py`/`levels.py`/`bar_index.py` (no new
+       field on any frozen return shape), zero new `Config` field, no new index, no new cache.
+    2. Keep no-lookahead absolute: only bars at or before the row's OWN `basis_as_of` are counted (the
+       as-of clamp stays `compute_tradability`'s exclusive decision — `tradability.py:157`'s bounded
+       view — and the count never sees a bar the wall could not have seen). Both values are per-ROW,
+       never per-snapshot, and skip rows carry neither (the J-08 shape).
+    3. Register both fields in the blueprint's Data Contract "Screen snapshots, rank rows, skip rows"
+       row BEFORE the code lands — one owner (`desk_screen.py`), one serving endpoint
+       (`GET /research/desk/screen`). The snapshot key (screen date, as_of, universe snapshot id,
+       `config_fingerprint`, bar-store signature) is unchanged, and the rank key — band class A>B>C,
+       then distance asc, then band score desc, then symbol asc — is UNCHANGED: this journey
+       DISCLOSES, it never ranks, filters, gates, weights, or scores. No threshold, no
+       quality/confidence number, no "enough history" judgement anywhere (this era's Non-Goals forbid
+       new statistics and gates outright), and the copy never advises, predicts, or implies action.
+    4. Keep the append-only rail: never backfill, rewrite, or recompute an already-recorded snapshot;
+       `GET /research/desk/screen` serves legacy rows exactly as recorded, and `/desk` renders their
+       absent history as an honest `"history not recorded in this snapshot"` — the established J-08
+       pattern (`apps/frontend/app/desk/page.tsx:236/318`) — never a value computed at read time.
+    5. Surface it on `/desk`: a descriptive `history` column beside the existing `basis` column on the
+       ranked table (e.g. `history 500 sessions · from 2024-07-25`), with full precision in the row
+       anchor's existing consolidated honesty tooltip (the iter-7 pattern); copy = descriptive
+       measurement only, and `tests/test_copy_discipline.py` stays green unmodified.
+    6. Test fixture-scoped: a golden screen asserting the exact `history_sessions` + `history_start`
+       per ranked row — including one short-history member and one long-history member — and
+       byte-identical row content on a re-run under identical pins; a guard test that the row builder
+       performs NO additional `BarStore` read beyond the one `merged_bars(symbol, "1d")` walk it
+       already makes (assert the call count) and that the frontend derives neither value; the MCP
+       `desk_screen` tool stays a byte-identical GET proxy (J-06's exactly-17-tool contract unchanged).
+  - Acceptance: on the fixture-scoped rig a NEW screen run records `history_sessions` and
+    `history_start` on every ranked row; `history_sessions` equals the number of daily bars
+    `GET /research/candles?symbol=<sym>&timeframe=1d` (the same merged, price-less-row-excluded read)
+    reports at or before that row's own `basis_as_of`, and `history_start` is that read's earliest such
+    bar timestamp (**single source of truth**: the desk counts the canonical owner's own merged daily
+    series inside the walk it already makes, and both new values are registered in the Data Contract
+    with `desk_screen.py` as their only owner and `GET /research/desk/screen` as their only serving
+    endpoint — this SSOT criterion stands in place of a PnL-ledger append, which this era's Non-Goals
+    forbid); the recorded rank order is byte-identical to what the same pins produced before this
+    change (disclosure only — a golden comparison proves the rank key did not move); a re-run under
+    identical pins reproduces byte-identical rows and a same-pins re-run still returns the honest
+    already-recorded response; every previously recorded screen snapshot is proven byte-identical on
+    disk (checksums unchanged, nothing backfilled) and `/desk` renders their rows with the honest
+    `"history not recorded in this snapshot"` state; in a real browser after the T-9 clean rebuild,
+    `/desk` shows the `history` column with at least one ranked row of ≤ 60 sessions and one of ≥ 400
+    sessions legible in the SAME screenshot (T-10: no screenshot ⇒ `unknown`, never `passing`); a
+    **`[NEW]`-flagged demo-narrator walkthrough** covers the briefing's history disclosure end to end;
+    and the full backend suite is green with `Config().config_fingerprint()` still `08e471b10130e1e2`,
+    zero new `Config` fields, the `default` profile and `v1` byte-identical (engine equivalence green),
+    the MCP surface still exactly 17 tools, zero diff to
+    `tradability.py`/`levels.py`/`bars.py`/`bar_index.py`/`StructureChart.tsx`, and
+    `tests/test_copy_discipline.py` green unmodified. *(Keyless core; browser-verifiable. Why:
+    measured 2026-07-29 from the recorded snapshot `screen-2026-07-29-ce0d82b8e9bf` (63 ranked / 38
+    skipped) plus the frozen bar files on disk — the count of finite-priced merged daily bars at or
+    before each row's own `basis_as_of` spans 27 to 501, median 500: HONA ranks **#8** (support, class
+    A, `distance_bps` 0.0, `band_score` 51) on **27** sessions, its series meta recording
+    `covered_start_utc 2026-06-15` / `covered_end_utc 2026-07-24` (a ~6-week listing), directly beside
+    BRK-B #1, DHR #2, HD #3 and IBM #4 on **500** each, with NFLX #5 / META #48 / NVDA #57 on 382,
+    MSFT #53 on 388, TSLA #29 on 390 and AAPL #19 on 501. All four of HONA's coverage badges are lit
+    (`has_bars: true` ×4, `latest_window_end_utc 2026-07-25T00:00:00Z` — the requested-window end,
+    honestly labelled "window last requested"), so the badges structurally cannot express the
+    difference, and `DeskScreenRow` (`lib/types.ts:801`) carries nothing about extent — a 27-session
+    wall and a 500-session wall sit on one rank scale, indistinguishable on the page.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

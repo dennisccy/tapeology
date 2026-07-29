@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -30,7 +31,13 @@ from app.research.desk_screen import (
     resolve_desk_screen_dir,
     screen_as_of,
 )
-from app.research.desk_screen import _basis_age_days, _distance_bps, _row_rank_key, _select_best_band
+from app.research.desk_screen import (
+    _basis_age_days,
+    _distance_bps,
+    _epoch,
+    _row_rank_key,
+    _select_best_band,
+)
 from app.research.desk_universe import UniverseStore
 
 FIXTURE_UNIVERSE_DIR = Path(__file__).parent / "fixtures" / "universe"
@@ -466,6 +473,8 @@ def test_fixture_universe_with_zero_bars_skips_every_member_as_no_bars(ctx):
     assert {s["symbol"] for s in screen["skipped"]} == set(members)
     assert all(s["reason"] == "no_bars" for s in screen["skipped"])
     assert all(s["tick_evidence"] is False for s in screen["skipped"])
+    # TC-5 (goal-desk-iter-15, J-11): a skip row never carries either history-disclosure field.
+    assert all("history_sessions" not in s and "history_start" not in s for s in screen["skipped"])
 
 
 def test_aapl_row_cross_checks_byte_identical_to_the_real_tradability_route(ctx, monkeypatch):
@@ -588,6 +597,8 @@ def test_a_daily_series_with_no_resolvable_prior_session_is_skipped_no_basis(ctx
     assert entry["reason"] == "no_basis"
     assert entry["coverage"]["1d"]["has_bars"] is True
     assert entry["coverage"]["1h"]["has_bars"] is False
+    # TC-5 (goal-desk-iter-15, J-11): a "no_basis" skip row never carries either history field.
+    assert "history_sessions" not in entry and "history_start" not in entry
 
 
 def test_repeat_computation_in_two_fresh_instances_is_byte_identical(ctx, tmp_path):
@@ -762,3 +773,229 @@ def test_a_legacy_row_recorded_without_basis_fields_serves_them_absent_never_bac
     row = records[0]["rows"][0]
     assert "basis_as_of" not in row
     assert "basis_age_days" not in row
+
+
+# ==================================================================================================
+# history disclosure (goal-desk-iter-15, J-11) -- history_sessions / history_start
+# ==================================================================================================
+
+
+def _daily_bar_epoch(day: date) -> float:
+    """04:00 UTC -- the SAME daily-bar hour every Yahoo fixture in this file already uses."""
+    return datetime(day.year, day.month, day.day, 4, 0, 0, tzinfo=timezone.utc).timestamp()
+
+
+def _iso_of(epoch: float) -> str:
+    """The SAME epoch -> ISO formatting ``desk_screen.py``'s own ``_iso`` uses -- a local copy per
+    this project's own convention (each module/test owns its tiny formatting helper)."""
+    return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat(timespec="microseconds").replace(
+        "+00:00", "Z"
+    )
+
+
+def _daily_bars(symbol: str, start: date, count: int) -> list[RawBar]:
+    """``count`` synthetic daily bars for a REAL fixture-universe member (lessons.md iter-2: never a
+    synthetic ``AAA``-style symbol for a clause naming real symbols -- only the price/volume values
+    here are synthetic), one per calendar day starting at ``start``. Only the TIMESTAMPS matter to a
+    history-depth count, so price/volume are arbitrary constants."""
+    return [
+        RawBar(symbol, "1d", _daily_bar_epoch(start + timedelta(days=i)), 100.0, 101.0, 99.0, 100.5, 1000)
+        for i in range(count)
+    ]
+
+
+def _seed_daily_bars(bar_store: BarStore, bar_index: BarIndex, bars: list[RawBar]) -> None:
+    meta = bar_store.record(
+        symbol=bars[0].symbol, timeframe="1d",
+        window_start_utc=_iso_of(bars[0].epoch), window_end_utc=_iso_of(bars[-1].epoch + 86400.0),
+        feed="yahoo", bars=bars,
+    )
+    bar_index.insert(meta)
+
+
+def test_history_sessions_and_start_match_the_seeded_daily_series_up_to_basis(ctx):
+    """TC-1: a real fixture-universe member (ABBV) seeded with 5 synthetic daily bars, all dated
+    strictly before ``SCREEN_DATE`` (so every seeded bar counts and the basis resolves to the LAST
+    one) -- the ranked row's ``history_sessions`` equals the seeded count and ``history_start``
+    equals the earliest seeded bar's own timestamp."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    bars = _daily_bars("ABBV", start=date(2026, 6, 12), count=5)  # 06-12 .. 06-16, all < 06-22
+    _seed_daily_bars(bar_store, bar_index, bars)
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    row = next(r for r in screen["rows"] if r["symbol"] == "ABBV")
+
+    assert row["basis_as_of"] == _iso_of(bars[-1].epoch)
+    assert row["history_sessions"] == 5
+    assert row["history_start"] == _iso_of(bars[0].epoch)
+
+
+def test_history_sessions_is_not_off_by_one_when_the_basis_bar_is_the_series_first_bar(ctx):
+    """Error case (goal.md's own TESTING REQUIREMENTS): a member whose basis resolves to the VERY
+    FIRST bar in its own series -- ``history_sessions`` must read ``1``, never ``0`` (an off-by-one
+    undercount) nor any value implying a second, unseen bar."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    bars = _daily_bars("ABBV", start=date(2026, 6, 18), count=1)
+    _seed_daily_bars(bar_store, bar_index, bars)
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    row = next(r for r in screen["rows"] if r["symbol"] == "ABBV")
+
+    assert row["history_sessions"] == 1
+    assert row["history_start"] == row["basis_as_of"] == _iso_of(bars[0].epoch)
+
+
+def test_short_and_long_history_members_carry_visibly_different_session_counts_in_the_same_run(ctx):
+    """TC-2: two real fixture-universe members, each seeded with its OWN synthetic daily series --
+    ABBV short (5 sessions), ACN long (450 sessions), both entirely BEFORE ``SCREEN_DATE`` so every
+    seeded bar counts -- resolve visibly different ``history_sessions`` in the SAME screen run,
+    independently confirming the DoD's <=60 / >=400 split is reachable in THIS rig (iter-9 lesson:
+    never trust goal.md's own cited live numbers as a byte-for-byte target)."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    short_bars = _daily_bars("ABBV", start=date(2026, 6, 12), count=5)
+    long_bars = _daily_bars("ACN", start=date(2025, 1, 1), count=450)
+    _seed_daily_bars(bar_store, bar_index, short_bars)
+    _seed_daily_bars(bar_store, bar_index, long_bars)
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    by_symbol = {r["symbol"]: r for r in screen["rows"]}
+    assert "ABBV" in by_symbol and "ACN" in by_symbol
+
+    short_row, long_row = by_symbol["ABBV"], by_symbol["ACN"]
+    assert short_row["history_sessions"] == 5
+    assert short_row["history_start"] == _iso_of(short_bars[0].epoch)
+    assert long_row["history_sessions"] == 450
+    assert long_row["history_start"] == _iso_of(long_bars[0].epoch)
+
+    # The DoD's own split (<=60 short, >=400 long), confirmed reachable in THIS run.
+    assert short_row["history_sessions"] <= 60
+    assert long_row["history_sessions"] >= 400
+
+
+def test_history_fields_stay_byte_identical_on_a_recompute_under_identical_pins(ctx, tmp_path):
+    """TC-3: mirrors ``test_recording_a_freshly_computed_screen_twice_is_refused_and_basis_fields_
+    stay_byte_identical`` for the two NEW fields -- a screen recorded once, then a FRESH computation
+    under the identical pins, is refused a second write, and the content already on disk (read back
+    via ``list()``) is byte-identical to the second (unrecorded) computation's ``history_sessions``/
+    ``history_start`` on every ranked row."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    screen_store = ScreenStore(tmp_path / "screen")
+
+    first_screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    recorded = screen_store.record(**first_screen)
+
+    second_screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    with pytest.raises(ScreenAlreadyRecorded) as excinfo:
+        screen_store.record(**second_screen)
+    assert excinfo.value.existing_id == recorded["id"]
+
+    stored_records, errors = screen_store.list()
+    assert errors == []
+    assert json.dumps(stored_records[0]["rows"], sort_keys=True) == json.dumps(
+        second_screen["rows"], sort_keys=True
+    )
+    aapl_row = next(r for r in stored_records[0]["rows"] if r["symbol"] == "AAPL")
+    assert aapl_row["history_sessions"] == next(
+        r for r in second_screen["rows"] if r["symbol"] == "AAPL"
+    )["history_sessions"]
+    assert aapl_row["history_start"] is not None
+
+
+def test_a_legacy_row_recorded_without_history_fields_serves_them_absent_never_backfilled(tmp_path):
+    """TC-4: the exact shape every screen snapshot recorded BEFORE this iteration has: ranked rows
+    that OMIT ``history_sessions``/``history_start`` entirely (never merely present-as-``null``) --
+    mirrors ``test_a_legacy_row_recorded_without_basis_fields_serves_them_absent_never_backfilled``
+    for the two new fields. ``_record``'s own default row carries no such keys at all, so this is
+    true by construction; this test pins that contract so a future change cannot silently start
+    defaulting or backfilling legacy rows on read."""
+    store = ScreenStore(tmp_path / "screen")
+    _record(store)
+
+    records, errors = store.list()
+    assert errors == []
+    row = records[0]["rows"][0]
+    assert "history_sessions" not in row
+    assert "history_start" not in row
+
+
+def test_history_fields_add_zero_extra_merged_bars_calls(ctx, monkeypatch):
+    """TC-6: proves the row builder's reference-close-plus-history derivation
+    (``_resolve_reference_close_and_history``) issues exactly the ONE ``BarStore.merged_bars(symbol,
+    "1d")`` call it already issued before J-11 (goal-desk-iter-9's own reference-close walk) -- never
+    a second, separate walk for the history fields. Compares the per-symbol total ``merged_bars(...,
+    "1d")`` call count of a FULL screen walk against ``compute_tradability`` run ALONE on the
+    identical inputs (the only OTHER source of ``merged_bars(symbol, "1d")`` calls in this walk, via
+    ``tradability.py``'s own ``_select_daily_series`` and ``compute_levels``'s per-timeframe reads):
+    the full walk must add exactly ONE more such call -- the SAME single call the row builder always
+    made -- never two."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+
+    as_of_epoch = _epoch(screen_as_of(SCREEN_DATE))
+    calls: list[tuple[str, str]] = []
+    original = BarStore.merged_bars
+
+    def _tracked(self, symbol, timeframe):
+        calls.append((symbol, timeframe))
+        return original(self, symbol, timeframe)
+
+    monkeypatch.setattr(BarStore, "merged_bars", _tracked)
+
+    from app.research.tradability import compute_tradability as _compute_tradability
+
+    _compute_tradability(bar_store, "AAPL", as_of_epoch, CONFIG)
+    baseline_1d_calls = sum(1 for symbol, timeframe in calls if symbol == "AAPL" and timeframe == "1d")
+    calls.clear()
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    assert any(r["symbol"] == "AAPL" for r in screen["rows"]), "AAPL must resolve a ranked row"
+    full_1d_calls = sum(1 for symbol, timeframe in calls if symbol == "AAPL" and timeframe == "1d")
+
+    assert full_1d_calls == baseline_1d_calls + 1, (
+        "the row builder's reference-close+history derivation must add exactly ONE merged_bars "
+        "call beyond compute_tradability's own basis resolution -- never a second walk for history"
+    )
+
+
+def test_aapl_row_history_cross_checks_against_get_candles(ctx, monkeypatch):
+    """TC-7: single-source-of-truth cross-check -- the AAPL ranked row's ``history_sessions``/
+    ``history_start`` match ``GET /research/candles``'s own merged, price-less-row-excluded response
+    (the SAME route the chart itself reads) filtered to bars at or before the row's own
+    ``basis_as_of``, proving the desk never derives a divergent count from a second, independent
+    read."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app, get_market_adapter, manager
+    from app.research.routes import ResearchRegistry, set_registry
+    from app.research.store import JournalStore
+
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    row = next(r for r in screen["rows"] if r["symbol"] == "AAPL")
+
+    monkeypatch.setenv("TAPEOLOGY_BAR_DIR", str(bar_store.root))
+    journal = JournalStore(str(bar_store.root.parent / "journal.db"), CONFIG)
+    set_registry(ResearchRegistry(journal, CONFIG))
+    try:
+        with TestClient(app) as client:
+            resp = client.get(
+                "/research/candles", params={"symbol": "AAPL", "timeframe": "1d", "limit": 500}
+            )
+    finally:
+        for ticker in list(manager._engines.keys()):
+            manager.stop(ticker)
+        set_registry(None)
+        app.dependency_overrides.pop(get_market_adapter, None)
+        journal.close()
+
+    assert resp.status_code == 200
+    body = resp.json()
+
+    basis_epoch = datetime.fromisoformat(row["basis_as_of"].replace("Z", "+00:00")).timestamp()
+    filtered = [bar for bar in body["bars"] if bar["ts"] <= basis_epoch]
+    assert len(filtered) == row["history_sessions"]
+    earliest_ts = min(bar["ts"] for bar in filtered)
+    assert _iso_of(earliest_ts) == row["history_start"]

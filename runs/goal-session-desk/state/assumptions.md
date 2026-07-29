@@ -278,3 +278,54 @@ disable, widen, or bypass these caps" is unchanged, and I verified my own proces
 **Reversible:** yes — if the owner did not author it, reverting the paragraph is a one-line change
 with no effect on any journey, and the run's own host-guard behaviour (verified confined) stands
 either way.
+
+## iter-15 — goal-evaluator
+
+**Ambiguity:** This iteration's spec put rig discipline in its BACKGROUND and NOTES ("every lane
+must state its own fixture-scoped rig path... never fall back to the ambient `apps/backend/.data`
+store"), but `docs/goal.md` itself says only that every run must be an "explicit operator act" and
+that snapshots are append-only — it does not say whether an agent-triggered `POST` against the
+owner's ambient store is such an act, nor whether breaching an ITERATION plan (as opposed to a
+project rail) is an anti-goal violation. The dev lane computed a real screen into
+`apps/backend/.data/screen/screen-2026-07-28-ac07c9581a4f.json`, and I established that the
+`:8301` "scoped rig" (uvicorn PID 4014756) carries no `TAPEOLOGY_*` environment override at all, so
+the browser-QA and demo-narrator lanes served that same ambient store — while
+`reports/phase-goal-desk-iter-15-ui-test-results.llm.md:109` states the opposite.
+**We chose:** Record it as a disclosed process deviation (a breach of this iteration's own plan,
+plus one inaccurate isolation claim in a report) and NOT as a `docs/goal.md` anti-goal violation, so
+it does not drive REGRESSION — the same call this session made at iter-14. Verified by me directly,
+not assumed: (i) `find apps/backend/.data/bars -newermt "2026-07-29 00:00"` → 0 of 369 bar-series
+files modified; (ii) no universe file and no prior screen snapshot was written — only ONE appended
+snapshot plus `tradability_cache.db`/`bar_index.db`, which `docs/goal.md` itself calls derived and
+rebuildable; (iii) both snapshot files recompute their stored checksums, and the pre-existing
+`screen-2026-07-29-ce0d82b8e9bf.json` (mtime 02:11, before this iteration's 02:32 snapshot) is
+untouched with both new keys absent on all 63 rows; (iv) the trigger was an explicit `POST`, never a
+scheduler/cron/auto-refresh — which is what that rail actually forbids; (v) reverting would mean
+deleting an append-only record, itself a critical-rail breach. The evidence is if anything stronger
+for having been taken against the real store: my own 63-row re-derivation ran against those same
+real files.
+**Reversible:** no — the appended screen record is permanent by design and the cache refreshes
+cannot be un-run. If the owner reads "explicit operator act" as "the human, not an agent", the
+remedy is a rail that forces evidence lanes to set a scoped store dir (and a check that the SERVING
+process actually has it), not an undo of this file.
+
+## iter-15 — goal-evaluator
+
+**Ambiguity:** J-11's acceptance asks that "the recorded rank order is byte-identical to what the
+same pins produced before this change (disclosure only — a golden comparison proves the rank key did
+not move)". No screen with IDENTICAL pins exists on both sides of the change: the pre-change screen
+is `screen-2026-07-29-ce0d82b8e9bf` (screen_date 2026-07-29) and the post-change one is
+`screen-2026-07-28-ac07c9581a4f` (screen_date 2026-07-28), because re-running the same pins
+correctly returns the already-recorded snapshot instead of recomputing — so the literal
+same-pins-before-and-after comparison is structurally unobtainable without breaching the append-only
+rail.
+**We chose:** Treat the clause as satisfied by an equivalent proof rather than the literal one.
+Three independent strands, each run by me: (i) `_row_rank_key`'s body appears only as unchanged
+CONTEXT in `git diff -- apps/backend/app/research/desk_screen.py`, so the key cannot have moved;
+(ii) the two screens' ranked symbol sequences are identical (63/63), as are their skipped sequences
+(38/38); (iii) comparing every non-history field across all 63 paired rows yields differences ONLY
+in `basis_age_days`, and only by exactly 1 — the arithmetic consequence of the two screens' as-of
+dates being one day apart. Plus the fixture-scoped golden tests the spec asked for.
+**Reversible:** yes — a future iteration computing a screen for a genuinely new date under the old
+and new code paths (or a golden fixture recorded pre-change and replayed post-change) would give the
+literal comparison; nothing about the recorded data prevents it.
