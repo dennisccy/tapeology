@@ -1,40 +1,40 @@
 # Iteration State — desk
 
-**After iteration:** 21 · **Date:** 2026-07-30 · **Verdict:** STALLED
+**After iteration:** 22 · **Date:** 2026-07-30 · **Verdict:** GOAL_ACHIEVED
 
 ## Journeys
 
-14 passing (J-01..J-14) · 0 failing · 0 partial · 0 unknown — 14 total (only J-14 keeps `evidence_makeup`: the un-photographable tooltip; J-13's film debt is CLOSED)
+14 passing (J-01..J-14) · 0 failing/partial/unknown — 14 total; no `evidence_makeup`, no `pending_infra`.
 
 ## Active blockers
 
-- HUMAN (owner), the ONLY blocker: `docs/goal.md` J-14 demands "one screenshot of a row tooltip
-  carrying its `bands_by_class` line (T-10: no screenshot ⇒ `unknown`, never `passing`)". It is a
-  native browser tooltip (`apps/frontend/app/desk/page.tsx:346`, `deskRowDrillInTitle` :278) drawn
-  outside CDP's capture surface — 3 runs tried. Owner picks: reword to "read out of the live DOM"
-  (cheapest) · on-page panel instead of `title` (needs lean depth) · approve a desktop-capture rig ·
-  accept as-is. iter-19's second key (`iter-19/eval-confirm.md`) REJECTED the finish on this clause.
-- disclosed deviation, NOT a goal.md violation (6th run): both evidence lanes served the ambient
-  `apps/backend/.data`, not a scoped copy (uvicorn :8301 has no data-dir override per
-  `/proc/2071190/environ`); READ-ONLY this run. Fix = a rail proving the SERVING process uses a copy.
+- none. J-14's native-tooltip photograph (the only open item since iter-19) is CAPTURED:
+  `reports/qa/goal-desk-iter-22-evidence/J-14-tooltip.png` + `-crop.png`, owner-approved rig
+  `project-extensions/qa-rig/` (T-10a). Only the owner's confirm of the finish is outstanding.
+- Housekeeping (human, not blocking): the qa-rig is still RUNNING (Xvfb 3462046 + Chrome 3462134,
+  inside the host-guard mask `0-3,8-11`) — `xrig.sh down` when convenient.
+- Disclosed deviation, NOT a goal.md violation (7th run): evidence lanes served the ambient `.data`/`:3301`-`:8301` rig, not a scoped copy; READ-ONLY, verified file by file.
 
 ## Last 2 verdicts
 
-- iter 21: STALLED — the owed `[NEW]` walkthrough was RECORDED (narration verified number-by-number
-  against `screen-2026-07-20-ca185294a384` on disk); only the human-owned tooltip clause remains.
-- iter 20: CONTINUE — zero product diff; J-12's capture landed, demo lane wrote `SKIPPED`.
+- iter 22: GOAL_ACHIEVED — zero product diff; the owed tooltip photograph exists (both frames opened);
+  numbers re-derived from `screen-2026-07-20-ca185294a384.json` (checksum recomputes); J-14 re-verified
+  against the CHANGED goal text (T-10a), new `spec_hash`; COHERENCE-PASS; `08e471b10130e1e2`; 17 tools.
+- iter 21: STALLED — that photograph was then impossible in a headless/CDP rig (human-owned unblock);
+  the owner has since acted (T-10a + the rig).
 
 ## Do not redo
 
-- J-13/J-14 COMPLETE IN CODE and their `[NEW]` walkthrough IS RECORDED
-  (`reports/demo/goal-desk-iter-21/`, Demo Verdict RECORDED). Do not re-open `_select_opposite_band`,
-  `_select_best_band`, `_row_rank_key`; never make re-filming an iteration GOAL again.
-- J-12 complete including pictures; J-04/J-05/J-07/J-12 replayed green and fingerprint
-  `08e471b10130e1e2` + exactly 17 MCP tools re-counted at iter-21.
-- Never photograph a native `title` tooltip here (impossible — read the DOM text); never write a
-  screen/universe snapshot or top-up into `apps/backend/.data`; never run two `next dev` from
-  `apps/frontend` at once (shared `.next`).
+- J-14 COMPLETE INCLUDING ITS PHOTOGRAPH; J-12/J-13 complete including pictures + the iter-21 `[NEW]`
+  walkthrough (`RECORDED`). Never re-attempt these captures, never make re-filming an iteration GOAL,
+  do not re-open `_select_opposite_band`, `_select_best_band`, `_row_rank_key`.
+- Do not re-litigate T-10a (screenshot bar stands, the rig is how it is met, DOM read-out is a
+  cross-check only); do not edit `docs/goal.md`.
 - Zero diff stays law for `engine/`, `config.py`, `tradability.py`, `levels.py`, `bars.py`,
-  `bar_index.py`, `desk_coverage.py`, both charts, `test_copy_discipline.py`; no `/desk` "Universe
-  ledger"; no CLI warmer. Carried non-defects, only if an iteration already touches `/desk`: 8
-  stacked sections, unbounded run tables, no keyboard access on history rows, shallow goldens.
+  `bar_index.py`, `desk_coverage.py`, both charts, `test_copy_discipline.py`; pin
+  `08e471b10130e1e2`; 17 MCP tools; no `/desk` "Universe ledger"; no CLI warmer.
+- Never write a screen/universe snapshot or top-up into `apps/backend/.data`; never run two
+  `next dev` from `apps/frontend` at once (shared `.next`).
+- Carried non-defects, only if an iteration already touches them: replay/demo frames collapse to one
+  first-view image (`demo_runner.py --mode verify`), `/desk` 8 sections, unbounded run tables, history
+  rows not keyboard-reachable, shallow goldens, goal.md's stale host-mask paragraph.

@@ -532,4 +532,20 @@ through accurate `narration`/`point_out` text and `expect` assertions instead of
 over the same already-recorded, fields-complete `screen-2026-07-20-ca185294a384` (100 ranked rows) a
 fresh scoped copy of `apps/backend/.data` serves, never the ambient store. This note exists so a future
 reader does not mistake the corrected script, or the scoped rig it was captured against, for a new
-owner, endpoint, or shape. -->
+owner, endpoint, or shape.
+
+NOTED at iter-22 (documentation currency only, no new Data-Contract row, no nav-skeleton change):
+the STALLED halt after iteration 21 (J-14's native `title`-attribute tooltip screenshot is
+structurally uncapturable by any CDP-based screenshot, three tries) was resolved by the OWNER, not
+the chain: `docs/goal.md` gained trap **T-10a** (2026-07-30) ratifying `project-extensions/qa-rig/`
+(its own isolated `Xvfb` display, a real headed Chrome, real X-pointer hover, an X-level screen grab)
+as the sanctioned way to take that one screenshot — the acceptance bar itself (T-10, "no screenshot
+=> unknown, never passing") is UNCHANGED. iter-22 makes no product code change and adds no
+Data-Contract row (`Depth: evidence` — capture + evaluate only): it boots the rig, hovers the
+already-shipped `/desk` ranked row's own already-shipped drill-in anchor (`deskRowDrillInTitle`,
+`page.tsx:278`) on a scoped copy of the already-recorded, fields-complete
+`screen-2026-07-20-ca185294a384` screen, and photographs the native tooltip window the rig's own
+X-level grab can see (verified against a live negative-guard check in the same run, never assumed
+from the README). This note exists so a future reader does not mistake the rig, its state directory,
+or this capture for a new owner, endpoint, page, or Data-Contract row — `/desk`'s `opposite` column
+and its `bands_by_class` tooltip line were already fully registered at iter-18/19. -->

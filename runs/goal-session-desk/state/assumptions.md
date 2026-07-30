@@ -4,178 +4,6 @@ Append-only. An entry is added whenever scoring or planning required *interpreti
 `docs/goal.md` rather than just reading evidence. The human reviews these to catch
 silent interpretation calls early.
 
-## iter-14 — goal-decomposer
-
-**Ambiguity:** `docs/goal.md`'s J-10 step 3 says only to "trigger via `POST` through the established
-compute-manager pattern (`DeskTopupComputeManager`, `desk_topup_compute.py` — single-flight,
-pollable progress, cancellable)" and step 4 registers exactly one new Data-Contract row (the durable
-run record) "BEFORE the code lands." It does not say whether the transient in-flight progress a
-compute manager necessarily carries (state/progress while `"running"`) needs its OWN registered
-Data-Contract row — the way J-02's "Top-up compute progress" row already sits separately from J-09's
-later "Top-up run records" row — or whether J-10's one new module can carry that transient state
-unregistered, since nothing outside the run's own terminal write strictly needs to persist it.
-Separately, unlike J-02 ("an explicit operator-run top-up (POST + CLI)") and J-03 ("an operator-run
-screen (POST + CLI + `/desk` button)"), J-10's own text never mentions a CLI anywhere in its six
-steps or its acceptance paragraph.
-
-**We chose:** Register TWO new Data-Contract rows in `blueprint.md` — a durable "Coverage-index
-reconciliation run records" row (the one step 4 explicitly demands) and a transient "Coverage-index
-reconciliation compute progress" row mirroring J-02's original pattern — because "single-flight,
-pollable progress, cancellable" is itself a load-bearing contract surface (a future page or a test
-can poll it independently of the durable record, exactly as `/desk` already polls
-`GET /research/desk/topup/compute` separately from `GET /research/desk/topup/runs`), and leaving it
-unregistered would let a later iteration invent a second, divergent progress shape with no row to
-check it against. We also chose NOT to require a CLI warmer for J-10 this iteration: the repair is a
-fast, local, no-network index rebuild (unlike a ~100-symbol vendor walk), goal.md's own J-10 text
-never names one, and the `POST` route itself already serves the "operator-run act against the real
-ambient store" role goal.md's acceptance text describes.
-
-**Reversible:** yes — a CLI warmer can be added later as a thin wrapper over the same shared repair
-function with zero change to either registered row's shape; and if a future iteration decides the
-transient progress row was unnecessary to register separately, it can be folded back into the
-durable row's own module docstring without changing any served value.
-
-## iter-14 — goal-evaluator
-
-**Ambiguity:** An earlier QA pass of this iteration triggered the REAL coverage-index
-reconciliation and a new screen compute against the owner's ambient `apps/backend/.data`
-(`index_reconcile_runs/reconcile-2026-07-28-43857811211f.json`, 281 → 369 rows, 88 unindexed → 0;
-`screen/screen-2026-07-27-3ad3c57aa6ba.json`) — which `docs/phases/goal-desk-iter-14.md:225-227`
-and its NOTES:349-351 put explicitly OUT OF SCOPE. The auditor rated it IMPORTANT (B1) and did not
-revert it. `docs/goal.md` does not say whether an agent-triggered run against the ambient store is
-an "explicit operator act", nor whether rebuilding the DERIVED `bar_index` counts under the
-"Immutable data" rail that names "registered datasets and bar series".
-**We chose:** Record it as a disclosed process deviation (a breach of this iteration's own plan)
-and NOT as a `docs/goal.md` anti-goal violation, so it does not drive REGRESSION. Verified rather
-than assumed, each point by the evaluator directly: (i) 0 of 369 bar-series files were modified in
-the ambient store (`find … -newermt 2026-07-27` → 0), so no registered series was perturbed;
-(ii) `bar_index` is the derived, rebuildable accelerator `docs/goal.md` itself calls derived
-("frozen JSON = source of truth; any index over it is derived/rebuildable"), and the repair went
-only through the sanctioned `BarIndex.reindex()`; (iii) the previous screen snapshot
-`screen-2026-07-27-936543601e75.json` is untouched (mtime 2026-07-27) and the new one is an
-appended file, so the append-only rail holds; (iv) the trigger was an explicit `POST`, never a
-scheduler/cron/auto-refresh — which is what that rail actually forbids; (v) reverting would mean
-deleting an append-only record, itself a critical-rail breach. Same class as iter-9's carried
-hygiene deviation, and the effect is the repair `docs/goal.md`'s own J-10 rationale wanted, taken
-early and by the machine rather than by the operator.
-**Reversible:** no — the ambient run record and the new screen snapshot are permanent by design,
-and the index rebuild cannot be un-run (it can only be re-run). If the owner reads
-"explicit operator act" as "the human, not an agent", the correct remedy is a future rail that
-forbids evidence lanes from touching `apps/backend/.data` at all, not an undo of these files.
-
-## iter-14 — goal-evaluator
-
-**Ambiguity:** `docs/goal.md`'s Anti-goals section carries an uncommitted edit this iteration (the
-host-guard paragraph reworded from "interactive pump sessions are launched via
-`host-guard-exec.sh claude`" to "auto-confined in place by the engine (`host-guard-adopt.sh`…)").
-The critical anti-goal "The enhancement loop stays inside its box" forbids the GOAL-PROPOSER from
-editing that section, but the file itself does not record who made any given edit.
-**We chose:** Treat it as owner-authored maintenance, not a proposer breach, so it is not scored as
-a violation. Evidence: `docs/goal.md`'s mtime is 2026-07-28 21:39, the same minute as the owner's
-own `project-extensions/host-guard/host-guard.env` edit and ~1h AFTER the goal-proposer finished
-(`proposer-result.json` mtime 20:41); the proposer's own result file claims only the J-10 promotion
-inside the `AUTO:journeys` markers; the reviewer independently confirmed it documents the mechanism
-already committed separately as `b97bf32`; and the wording does not weaken the rail ("Never
-disable, widen, or bypass these caps" is unchanged, and I verified my own process affinity is
-`4-7,12-15`).
-**Reversible:** yes — if the owner did not author it, reverting the paragraph is a one-line change
-with no effect on any journey, and the run's own host-guard behaviour (verified confined) stands
-either way.
-
-## iter-15 — goal-evaluator
-
-**Ambiguity:** This iteration's spec put rig discipline in its BACKGROUND and NOTES ("every lane
-must state its own fixture-scoped rig path... never fall back to the ambient `apps/backend/.data`
-store"), but `docs/goal.md` itself says only that every run must be an "explicit operator act" and
-that snapshots are append-only — it does not say whether an agent-triggered `POST` against the
-owner's ambient store is such an act, nor whether breaching an ITERATION plan (as opposed to a
-project rail) is an anti-goal violation. The dev lane computed a real screen into
-`apps/backend/.data/screen/screen-2026-07-28-ac07c9581a4f.json`, and I established that the
-`:8301` "scoped rig" (uvicorn PID 4014756) carries no `TAPEOLOGY_*` environment override at all, so
-the browser-QA and demo-narrator lanes served that same ambient store — while
-`reports/phase-goal-desk-iter-15-ui-test-results.llm.md:109` states the opposite.
-**We chose:** Record it as a disclosed process deviation (a breach of this iteration's own plan,
-plus one inaccurate isolation claim in a report) and NOT as a `docs/goal.md` anti-goal violation, so
-it does not drive REGRESSION — the same call this session made at iter-14. Verified by me directly,
-not assumed: (i) `find apps/backend/.data/bars -newermt "2026-07-29 00:00"` → 0 of 369 bar-series
-files modified; (ii) no universe file and no prior screen snapshot was written — only ONE appended
-snapshot plus `tradability_cache.db`/`bar_index.db`, which `docs/goal.md` itself calls derived and
-rebuildable; (iii) both snapshot files recompute their stored checksums, and the pre-existing
-`screen-2026-07-29-ce0d82b8e9bf.json` (mtime 02:11, before this iteration's 02:32 snapshot) is
-untouched with both new keys absent on all 63 rows; (iv) the trigger was an explicit `POST`, never a
-scheduler/cron/auto-refresh — which is what that rail actually forbids; (v) reverting would mean
-deleting an append-only record, itself a critical-rail breach. The evidence is if anything stronger
-for having been taken against the real store: my own 63-row re-derivation ran against those same
-real files.
-**Reversible:** no — the appended screen record is permanent by design and the cache refreshes
-cannot be un-run. If the owner reads "explicit operator act" as "the human, not an agent", the
-remedy is a rail that forces evidence lanes to set a scoped store dir (and a check that the SERVING
-process actually has it), not an undo of this file.
-
-## iter-15 — goal-evaluator
-
-**Ambiguity:** J-11's acceptance asks that "the recorded rank order is byte-identical to what the
-same pins produced before this change (disclosure only — a golden comparison proves the rank key did
-not move)". No screen with IDENTICAL pins exists on both sides of the change: the pre-change screen
-is `screen-2026-07-29-ce0d82b8e9bf` (screen_date 2026-07-29) and the post-change one is
-`screen-2026-07-28-ac07c9581a4f` (screen_date 2026-07-28), because re-running the same pins
-correctly returns the already-recorded snapshot instead of recomputing — so the literal
-same-pins-before-and-after comparison is structurally unobtainable without breaching the append-only
-rail.
-**We chose:** Treat the clause as satisfied by an equivalent proof rather than the literal one.
-Three independent strands, each run by me: (i) `_row_rank_key`'s body appears only as unchanged
-CONTEXT in `git diff -- apps/backend/app/research/desk_screen.py`, so the key cannot have moved;
-(ii) the two screens' ranked symbol sequences are identical (63/63), as are their skipped sequences
-(38/38); (iii) comparing every non-history field across all 63 paired rows yields differences ONLY
-in `basis_age_days`, and only by exactly 1 — the arithmetic consequence of the two screens' as-of
-dates being one day apart. Plus the fixture-scoped golden tests the spec asked for.
-**Reversible:** yes — a future iteration computing a screen for a genuinely new date under the old
-and new code paths (or a golden fixture recorded pre-change and replayed post-change) would give the
-literal comparison; nothing about the recorded data prevents it.
-
-## iter-16 — goal-decomposer
-
-**Ambiguity:** `docs/goal.md`'s J-12 step 1 requires "`id` and `date` together is an honest refusal,
-never a silent precedence rule" but does not name the HTTP status code, nor whether the refusal
-should look like FastAPI's own automatic validation 422 or a hand-raised 400/409.
-**We chose:** Leave the exact status code to build discretion, requiring only that it is an honest
-4xx (never a 200 with either value silently preferred, never a 5xx). 422 is the natural choice since
-it matches this router's existing FastAPI-validation-refusal convention elsewhere (e.g. the screen
-compute's required-body 422), but the iteration spec does not pin it, since goal.md itself does not.
-**Reversible:** yes — a later iteration can tighten the exact status code with zero effect on any
-recorded data or any other clause, if the owner wants one pinned.
-
-## iter-16 — goal-evaluator
-
-**Ambiguity:** `docs/goal.md`'s J-12 Acceptance asks that the two same-date views be shown "with at
-least one row whose coverage badge differs between the two views legible across the screenshots (on
-the ambient rig this is ... NFLX's `1d` badge dark in `screen-2026-07-27-936543601e75` and lit in
-`screen-2026-07-27-3ad3c57aa6ba`)". The later view IS captured full-page (`UT-03-result.png`, NFLX
-row present), but the earlier view's only genuine capture
-(`AUDIT-UT-02-earlier-same-date-recording.png`, byte-identical to demo `step-03.png`) is a 1280x800
-viewport frame that stops above the NFLX row — the browser lane's own full-page `UT-02-result.png`
-turned out to be a screenshot of an unrelated application (audit T3, which I opened and confirmed).
-So the named row's badge is not legible on BOTH sides of the pair. goal.md does not say whether the
-named NFLX example is the required comparison or an illustration of "at least one row".
-**We chose:** Read "at least one row whose coverage badge differs ... legible across the
-screenshots" as the requirement and the NFLX line as its illustration, score J-12 `passing`, and
-record the framing shortfall as a capture defect (`evidence_makeup: true`, methodology A.7) rather
-than an unmet clause. Four strands, each checked by me: (i) the coverage difference IS legible
-across the pair — the earlier view carries the on-screen sentence "3 ranked row(s) below show every
-timeframe badge dark" and the later view does not; (ii) I re-derived the row-level difference from
-the two stored files directly — they differ on EXACTLY 4 ranked rows' `coverage` (NFLX, META, MSFT,
-NVDA), ranked order identical 63/63, and NFLX `1d` `has_bars` is `false` then `true`, precisely
-goal.md's example; (iii) the browser lane's UT-02/UT-03 rows record DOM `eval()` reads of the NFLX
-row's `data-has-bars` flipping `false` -> `true` between the two selections; (iv) methodology A.7's
-rail is respected — the asserted BEHAVIOUR is confirmed, only the artifact's crop is wrong, and no
-screenshot shows behaviour contradicting the claim. The strict reading would demand one more
-full-page capture of an already-working, already-photographed page, which the framework routes to
-the make-up lane, never to a new iteration goal.
-**Reversible:** yes — one full-page re-capture of the earlier recording (a `Depth: evidence` run or
-a passenger task, no program change, and repeatable at will since this journey only READS) produces
-the literal side-by-side NFLX comparison; nothing about the stored data prevents it, and the flag
-clears on any fresh capture.
-
 ## iter-17 — goal-evaluator
 
 **Ambiguity:** `docs/goal.md`'s J-13 Acceptance ends with a conjunct: "a **`[NEW]`-flagged
@@ -400,3 +228,32 @@ halt rests on J-14's tooltip photograph, not on the film.
 the `overflow-x-auto` container, never a click) plus one re-record makes the columns visible inside
 the film's own frames; that is a lean-depth tooling change with zero product change, and nothing
 recorded this iteration would need to be redone.
+
+## iter-22 — goal-evaluator
+
+**Ambiguity:** The entire GOAL_ACHIEVED verdict rests on a `docs/goal.md` edit I did not witness being
+made. The file gained **T-10a** ("OWNER RATIFICATION, 2026-07-30") plus a J-14 acceptance clause
+naming `project-extensions/qa-rig/`, and the rig itself appeared as three new files. Both are
+UNCOMMITTED working-tree changes, and `docs/goal.md`'s own anti-goals say the enhancement loop "MUST
+NOT edit human-authored journeys, this Anti-goals section, or any other part of this file" — T-10a sits
+OUTSIDE the `AUTO:journeys` marker block, so if an in-loop agent wrote it, that would itself be a
+critical violation rather than a ratification. Nothing in the repository records authorship.
+**We chose:** Treat the edit as the owner's own ratification and score J-14 against the new text.
+Four strands, each checked by me directly: (i) timing — `docs/goal.md` was modified at 08:26:18 and
+the rig files at 08:22–08:26, i.e. AFTER iteration 21's halt (`iter-21/eval.md` 00:17) and BEFORE this
+iteration's snapshot (`iter-22/snapshot-sha` 08:48), a window in which `session.json` recorded
+`status: STALLED` and no pipeline lane — proposer included — was dispatched; (ii) direction — the edit
+STRENGTHENS the bar it touches: the screenshot requirement is restated as standing "unchanged", T-10's
+"no screenshot ⇒ `unknown`" is preserved verbatim, a DOM read-out is explicitly demoted to "NOT the
+artifact", and three new obligations are added (named rig, `--require-title` guard, quote the reported
+`title` and attach BOTH frame and crop) — the opposite of what a loop-preserving agent edit would look
+like; (iii) content — it answers exactly option (3) of iteration 21's four-way question to the owner
+("approve a desktop-capture set-up"), with a variant that never touches the real desktop; (iv) the
+artifact it authorizes is self-validating, so crediting it cannot launder a false pass: the rig writes
+nothing unless a new X window appeared AND the hovered element's own `title` carries the substring, its
+refusal path was re-tested live this run (exit 4, no file), and I confirmed in the frame that the
+tooltip overlaps the bare desktop outside the browser window.
+**Reversible:** yes — if the edit turns out not to be yours, the remedy is to revert those goal.md
+lines and the verdict returns to iteration 21's `STALLED` state with the same four options open;
+nothing in the product changed this run (zero diff under `apps/`), so no code would need undoing, and
+the photograph itself stays valid evidence of what the page renders either way.

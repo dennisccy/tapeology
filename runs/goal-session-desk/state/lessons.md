@@ -117,59 +117,19 @@ append-only store) — and any lane tempted to re-run `--mode record` on a finis
 **Applies to:** any evaluator weighing "this lane independently re-verified X" when the cited image
 is byte-identical to an earlier lane's — treat the image as evidence of the STATE, not of the lane.
 
-## iter-14 — 2026-07-29T02:05:00+01:00
-
-**Verdict:** GOAL_ACHIEVED
-**Lesson:** The fixture-scoped rig lives under the pipeline's PID-scoped scratch dir
-(`/home/dennis-chan/.cache/iad/iad.<iter-name>.<pid>/`), so a re-dispatch of the SAME iteration
-gets a new PID and the previous pass's rig simply ceases to exist — with it, every artifact that
-depended on it. That is what happened here: pass 1 produced TC-17/TC-18 screenshots and a demo
-recording against rig `…154299`, the dev lane was re-dispatched, and pass 2 had to rebuild the rig
-at `…3302867` and re-capture. The one-way-door state (an append-only store's honest-EMPTY panel)
-must therefore be captured again on EVERY rebuilt rig, in the same seed → boot → capture-empty →
-trigger order — it cannot be carried over from a rig that no longer exists. Related: when a lane
-finds no live rig, it can quietly fall back to the AMBIENT store; that is exactly how this
-iteration's QA pass ran the real 88-pair reconciliation and a real screen compute against
-`apps/backend/.data` (audit B1), which the spec had put out of scope and which is irreversible
-because deleting append-only records is itself a rail breach.
+## iter-14 — 2026-07-29T02:05:00+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration whose acceptance needs a fixture-scoped rig or a one-way-door
 capture (empty-state panels over append-only stores) — state the rig path in EVERY lane dispatch,
 re-derive it after any re-dispatch, and have each lane assert the rig is live before acting rather
 than defaulting to the ambient store.
 
-## iter-15 — 2026-07-29T04:40:00+01:00
-
-**Verdict:** GOAL_ACHIEVED
-**Lesson:** Two evidence-lane failures hid behind green verdicts this iteration. (1) The authored
-`reports/phase-goal-desk-iter-15-demo.json` embedded JavaScript regex literals
-(`{"role":"link","name":/history.*sessions/}`); `json.loads` failed, `demo-phase.sh` recorded
-`Demo Verdict: SKIPPED` with an EMPTY captured-steps table and zero screenshots — a silent skip, not
-an error — and QA still marked the walkthrough test-case PASS because it checked the golden replay
-script `runs/goal-session-desk/journey-scripts/J-11.json` instead of the demo artifact. Only the hard
-audit caught it. (2) The "scoped rig" on `:8301` carried NO `TAPEOLOGY_*` env override (verified via
-`/proc/<pid>/environ`), so it served the owner's ambient `apps/backend/.data` — yet
-`ui-test-results.llm.md:109` asserts "no fallback to an ambient `apps/backend/.data` store was used".
-Scoped PORTS are not a scoped STORE; a lane can honestly believe it is isolated while writing to the
-real folder.
+## iter-15 — 2026-07-29T04:40:00+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration whose DoD names a `[NEW]`-flagged demo-narrator walkthrough (assert
 `Demo Verdict: RECORDED` + a non-empty gallery directory, never a same-named replay script), and any
 iteration instructing lanes to use a fixture-scoped rig (prove isolation from the serving process's
 own environment, not from the report's prose).
 
-## iter-16 — 2026-07-29T06:48:27+01:00
-
-**Verdict:** GOAL_ACHIEVED
-**Lesson:** A browser-QA lane sharing one Chrome instance with an unrelated app (`localhost:3255`,
-the trendora project) silently captured that OTHER app's page as
-`reports/qa/goal-desk-iter-16-evidence/UT-02-result.png` — the cited P1 evidence for J-12's most
-load-bearing claim — while its own Environment note asserted the shared browser had "no impact on
-results". The report's prose was confidently wrong about its own artifacts, and only opening the
-PNG revealed it (iter-13's "a screenshot's bytes prove the state, not which lane captured it",
-inverted). Two cheap hard rails would have caught it: a capture-time assertion that the page origin
-matches the rig's own base URL, and a demo/QA runner note when a step's click navigates away from
-the expected origin. Related: the QA lane marked five browser-TYPE test cases (TC-09..TC-13) "PASS"
-on source greps ("component present and wired") — a grep can never satisfy a "in a real browser"
-acceptance line, and TC-13 was in fact unexecuted until the auditor ran it.
+## iter-16 — 2026-07-29T06:48:27+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration whose acceptance needs browser screenshots or a demo-narrator
 walkthrough, especially when another project's dev server is running on the same host; and any
 evaluator reading a QA report's per-TC verdict table.
@@ -282,3 +242,31 @@ walkthrough conjunct.
 **Applies to:** any demo-narrator run whose walkthrough is an acceptance conjunct, and any future
 `demo_runner.py` enhancement (a `scroll` action driving `el.scrollLeft = el.scrollWidth` on the
 container, never a click, is the recorded remedy).
+
+## iter-22 — 2026-07-30T09:45:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A capture the harness "structurally cannot take" is not always a permanent gap — a native
+`title` tooltip that CDP can never photograph WAS photographed by moving the capture one layer down
+(own `Xvfb` display + real headed Chrome + real X pointer via `xdotool` + an X-level `ImageGrab`, at
+`project-extensions/qa-rig/`), and the tool's own two refusal paths (no new X window ⇒ exit 3, missing
+`--require-title` substring ⇒ exit 4) make the artifact self-validating. The tell that the artifact is
+genuine is visible in the frame itself: the tooltip is drawn PAST the browser window's edge onto the
+bare desktop, which an in-page screenshot can never show.
+**Applies to:** any journey whose acceptance names a screenshot of native browser UI (tooltips,
+`select` popups, file dialogs, print preview, permission prompts) — route it to the headed rig instead
+of declaring it uncapturable or rewording the clause; and any evaluator judging such an artifact
+should check the out-of-window overlap as the forgery test.
+
+## iter-22 (b) — 2026-07-30T09:45:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The deterministic replay lane saves the SAME first-view frame for every journey it
+verifies (this run: 5 replay frames + 4 demo frames collapsed to 3 distinct images; md5 `3b02db86…`
+recurs across iterations 21 and 22, and `J-04-verify.png` == `J-13-verify.png`). Replay PASS therefore
+rests on its `expect` assertions, never on its screenshot — an evaluator must not treat a replay frame
+as the journey's acceptance picture, and each journey still needs one dedicated capture somewhere in
+its history.
+**Applies to:** any iteration whose required-still-passing set is verified only by golden replay, and
+any future work on `demo_runner.py --mode verify` (capturing after the last assertion, not before the
+first, would fix it).

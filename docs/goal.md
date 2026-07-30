@@ -360,6 +360,16 @@ Traps (all learned the hard way in prior eras — read before EVERY iteration):
 - **T-10 · Evidence honesty.** No screenshot ⇒ `unknown`, never `passing`; backend-only proof
   never satisfies a browser acceptance line; the real 100-symbol top-up and real screens are
   operator-run acts reported as such, never simulated by fixtures pretending to be live.
+- **T-10a · Native browser UI is photographed on the approved headed rig** (OWNER RATIFICATION,
+  2026-07-30). Chrome draws native `title` tooltips as a separate X window owned by the browser
+  process, so CDP screenshots — every headless capture, Playwright's included — structurally
+  cannot contain them; iterations 19–21 each failed on exactly this and the session halted
+  `STALLED` for an owner ruling. The owner's ruling is: **the screenshot requirement stands
+  unchanged**, and it is satisfied by `project-extensions/qa-rig/` (own Xvfb display, real headed
+  Chrome, real X pointer, X-level grab — see its README). A DOM read-out of the `title` string is
+  a useful cross-check but is NOT the artifact and never substitutes for it. The rig refuses to
+  write a file unless the tooltip actually rendered as a new X window AND the hovered element's
+  own `title` carries the required substring, so a rig capture cannot be a false positive.
 
 ## Must-have user journeys
 
@@ -1031,7 +1041,11 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     in a real browser after the T-9 clean rebuild, `/desk` shows the `opposite` column with at least one
     ranked row whose nearest opposite wall is within 25 bps and one whose nearest opposite wall is more
     than 1,000 bps away, both legible in the SAME screenshot, plus one screenshot of a row tooltip
-    carrying its `bands_by_class` line (T-10: no screenshot ⇒ `unknown`, never `passing`); a
+    carrying its `bands_by_class` line — captured on the owner-approved headed rig per T-10a
+    (`project-extensions/qa-rig/`: `xrig.sh up`, then `capture-native-tooltip.py --hover-selector
+    '[data-testid="desk-row-drill-in"]' --require-title 'bands by class'`, quoting the tool's
+    reported `title` in the results row and attaching BOTH the full frame and the tooltip crop) —
+    (T-10: no screenshot ⇒ `unknown`, never `passing`); a
     **`[NEW]`-flagged demo-narrator walkthrough** covers the briefing's opposite-wall disclosure end to
     end, narrated over POPULATED ranked rows (which also closes iter-17's RECORDED_WITH_NOTES capture
     gap, whose frames narrate the legacy state only); and the full backend suite is green with

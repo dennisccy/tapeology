@@ -8,8 +8,8 @@ scripts/automation/lib/retro_collect.sh — no model wrote this. Counters marked
 
 - **Terminal status:** STALLED
 - **Final verdict:** STALLED
-- **Iterations used:** 8
-- **Halted at (UTC):** 2026-07-27T15:57:45.953290Z
+- **Iterations used:** 22
+- **Halted at (UTC):** 2026-07-29T23:27:12.442913Z
 
 ## Verdict sequence
 
@@ -24,6 +24,20 @@ iter 4: CONTINUE
 iter 5: CONTINUE
 iter 6: CONTINUE
 iter 7: STALLED
+iter 8: GOAL_ACHIEVED
+iter 9: CONTINUE
+iter 10: GOAL_ACHIEVED
+iter 11: CONTINUE
+iter 12: ESCALATE
+iter 13: GOAL_ACHIEVED
+iter 14: GOAL_ACHIEVED
+iter 15: GOAL_ACHIEVED
+iter 16: GOAL_ACHIEVED
+iter 17: GOAL_ACHIEVED
+iter 18: CONTINUE
+iter 19: CONTINUE
+iter 20: CONTINUE
+iter 21: STALLED
 ```
 
 ## Agent economics
@@ -32,23 +46,25 @@ Source: analyze_telemetry.py --json telemetry.jsonl (claude_usage events)
 
 | Agent | Invocations | Wall (s) | In tokens | Out tokens | Est. cost (USD) |
 |---|---|---|---|---|---|
-| auditor | 7 | 9353 | 7331 | 417980 | 0.0000 |
-| browser-qa-agent | 4 | 12756 | 1102 | 241672 | 0.0000 |
-| coherence-auditor | 7 | 1644 | 210 | 104858 | 0.0000 |
-| demo-narrator | 3 | 898 | 72 | 70872 | 0.0000 |
-| developer | 9 | 17878 | 5052 | 804905 | 0.0000 |
-| goal-decomposer | 8 | 6658 | 10385 | 475610 | 0.0000 |
-| goal-evaluator | 8 | 8766 | 4957 | 451733 | 0.0000 |
-| iteration-summarizer | 8 | 2194 | 146 | 202147 | 0.0000 |
-| orchestrator | 6 | 1763 | 3113 | 125197 | 0.0000 |
-| phase-closure-auditor | 6 | 904 | 124 | 55829 | 0.0000 |
-| qa | 13 | 3886 | 2026 | 108464 | 0.0000 |
-| readme-maintainer | 8 | 1321 | 222 | 98278 | 0.0000 |
-| reviewer | 9 | 5252 | 5156 | 206887 | 0.0000 |
-| ui-impact-analyst | 3 | 659 | 62 | 45386 | 0.0000 |
-| ui-test-designer | 3 | 1155 | 140 | 85678 | 0.0000 |
-| ux-regression-reviewer | 3 | 783 | 1179 | 52780 | 0.0000 |
-| TOTAL | 105 | 75871 | 41277 | 3548276 | 0.0000 |
+| auditor | 15 | 16784 | 8220 | 816477 | 0.0000 |
+| browser-qa-agent | 19 | 28938 | 4539 | 986123 | 0.0000 |
+| coherence-auditor | 20 | 3656 | 6155 | 213784 | 0.0000 |
+| demo-narrator | 17 | 7270 | 2939 | 538992 | 0.0000 |
+| developer | 24 | 44876 | 22983 | 1970441 | 0.0000 |
+| goal-decomposer | 22 | 15781 | 11157 | 1000190 | 0.0000 |
+| goal-evaluator | 30 | 24550 | 16968 | 1295442 | 0.0000 |
+| goal-proposer | 7 | 5060 | 623 | 288945 | 0.0000 |
+| iteration-summarizer | 22 | 6464 | 1715 | 416113 | 0.0000 |
+| orchestrator | 15 | 4092 | 21039 | 278604 | 0.0000 |
+| phase-closure-auditor | 10 | 1853 | 202 | 113892 | 0.0000 |
+| qa | 31 | 10015 | 9039 | 248598 | 0.0000 |
+| readme-maintainer | 18 | 3000 | 1409 | 190863 | 0.0000 |
+| retro-analyst | 1 | 35 | 26 | 2725 | 0.0000 |
+| reviewer | 23 | 12885 | 5824 | 452447 | 0.0000 |
+| ui-impact-analyst | 12 | 2535 | 260 | 172705 | 0.0000 |
+| ui-test-designer | 12 | 5983 | 534 | 368283 | 0.0000 |
+| ux-regression-reviewer | 11 | 3378 | 1451 | 215241 | 0.0000 |
+| TOTAL | 309 | 197155 | 115083 | 9569865 | 0.0000 |
 
 Per-step wall breakdown (analyze_telemetry.py --wall):
 
@@ -64,7 +80,7 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       goal-evaluator               8.6m  calls=1
       reviewer                     3.2m  calls=1
       pump-wait                  1.1m
-      unattributed (glue)        0.2m
+      unattributed (glue)        0.2m  (wall − agents(active) − quota)
   goal-desk-iter-1  depth=full  verdict=CONTINUE  wall=142.5m
       goal-evaluator              21.2m  calls=1
       iteration-summarizer        15.7m  calls=1
@@ -72,7 +88,7 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       coherence-auditor            3.6m  calls=1
       readme-maintainer            2.8m  calls=1
       pump-wait                  0.7m
-      unattributed (glue)       83.5m
+      unattributed (glue)       83.5m  (wall − agents(active) − quota)
   goal-desk-iter-2  depth=full  verdict=CONTINUE  wall=159.4m
       goal-evaluator              19.1m  calls=1
       iteration-summarizer        15.9m  calls=1
@@ -80,7 +96,7 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       coherence-auditor            8.3m  calls=1
       readme-maintainer            4.2m  calls=1
       pump-wait                  0.8m
-      unattributed (glue)       96.0m
+      unattributed (glue)       96.0m  (wall − agents(active) − quota)
   goal-desk-iter-3  depth=full  verdict=CONTINUE  wall=157.0m
       goal-decomposer             21.7m  calls=1
       iteration-summarizer        21.7m  calls=1
@@ -88,7 +104,7 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       coherence-auditor            5.9m  calls=1
       readme-maintainer            4.3m  calls=1
       pump-wait                  1.2m
-      unattributed (glue)       84.4m
+      unattributed (glue)       84.4m  (wall − agents(active) − quota)
   goal-desk-iter-4  depth=full  verdict=?  wall=?  (incomplete/interrupted attempt)
       iteration-summarizer        20.4m  calls=1
       goal-decomposer             20.4m  calls=1
@@ -102,7 +118,7 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       coherence-auditor            6.0m  calls=1
       (resume-skipped: goal-decomposer)
       pump-wait                  0.9m
-      unattributed (glue)      130.2m
+      unattributed (glue)      130.2m  (wall − agents(active) − quota)
   goal-desk-iter-5  depth=lean  verdict=CONTINUE  wall=90.9m
       browser-qa-agent            25.0m  calls=1
       developer                   19.9m  calls=1
@@ -122,7 +138,7 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       coherence-auditor            3.3m  calls=1
       readme-maintainer            2.3m  calls=1
       pump-wait                 10.1m
-      unattributed (glue)      192.5m
+      unattributed (glue)      192.5m  (wall − agents(active) − quota)
   goal-desk-iter-7  depth=full  verdict=?  wall=?  (incomplete/interrupted attempt)
       goal-evaluator            1100.0m  calls=1  failures=1
       iteration-summarizer        14.3m  calls=1
@@ -136,18 +152,264 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       readme-maintainer            2.5m  calls=1
       (resume-skipped: goal-decomposer, coherence-auditor)
       pump-wait                  0.5m
-      unattributed (glue)        0.0m
-  session: 8 completed iteration(s), mean wall 131.9m
-      total goal-evaluator            1253.5m
-      total goal-decomposer            119.1m
-      total iteration-summarizer       107.8m
-      total browser-qa-agent            72.3m
-      total coherence-auditor           33.6m
-      total developer                   32.4m
-      total readme-maintainer           28.1m
-      total reviewer                    16.3m
-      total AWAITING_PUMP paused gaps: 4.4m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED
+      unattributed (glue)        0.0m  (wall − agents(active) − quota)
+  goal-desk-iter-8  depth=lean  verdict=GOAL_ACHIEVED  wall=199.3m
+      browser-qa-agent            82.0m  calls=1
+      developer                   50.1m  calls=1
+      goal-evaluator              22.7m  calls=1
+      reviewer                     9.2m  calls=1
+      goal-decomposer              8.5m  calls=1
+      iteration-summarizer         4.9m  calls=1
+      coherence-auditor            3.1m  calls=1
+      readme-maintainer            2.0m  calls=1
+      (resume-skipped: coherence-auditor)
+      pump-wait                  3.7m
+      unattributed (glue)       16.9m  (wall − agents(active) − quota)
+  goal-desk-iter-9  depth=?  verdict=?  wall=?  (incomplete/interrupted attempt)
+  goal-desk-iter-9  depth=full  verdict=?  wall=?  (incomplete/interrupted attempt)
+      goal-decomposer             13.6m  calls=1
+      pump-wait                 13.7m
+  goal-desk-iter-9  depth=full  verdict=CONTINUE  wall=163.6m
+      goal-evaluator              16.5m  calls=1
+      coherence-auditor            5.2m  calls=1
+      (resume-skipped: goal-decomposer)
+      pump-wait                  0.7m
+      unattributed (glue)      141.9m  (wall − agents(active) − quota)
+  goal-desk-iter-10  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                   31.5m  calls=1
+      iteration-summarizer        17.0m  calls=1
+      goal-decomposer             17.0m  calls=1
+      readme-maintainer            2.9m  calls=1
+      pump-wait                  0.1m
+  goal-desk-iter-10  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                    0.7m  calls=1  failures=1
+      [engine] lean-pipeline       0.8m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer)
+      pump-wait                  0.7m
+  goal-desk-iter-10  depth=lean  verdict=GOAL_ACHIEVED  wall=90.7m
+      developer                   17.3m  calls=1
+      reviewer                    16.8m  calls=1
+      goal-evaluator              15.0m  calls=1
+      browser-qa-agent            14.7m  calls=1
+      iteration-summarizer         7.5m  calls=1
+      coherence-auditor            4.7m  calls=1
+      readme-maintainer            3.4m  calls=1
+      [engine] lean-pipeline      49.9m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer, coherence-auditor)
+      pump-wait                  4.7m
+      unattributed (glue)       11.1m  (wall − agents(active) − quota)
+  goal-desk-iter-11  depth=full  verdict=CONTINUE  wall=233.4m
+      goal-evaluator              24.1m  calls=1
+      goal-decomposer             15.1m  calls=1
+      coherence-auditor            4.8m  calls=1
+      [engine] full-pipeline     189.5m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  1.0m
+      unattributed (glue)      189.5m  (wall − agents(active) − quota)
+  goal-desk-iter-12  depth=lean  verdict=ESCALATE  wall=112.3m
+      developer                   48.5m  calls=1
+      browser-qa-agent            21.7m  calls=1
+      goal-decomposer             20.7m  calls=1
+      goal-evaluator              13.4m  calls=1
+      readme-maintainer           12.2m  calls=1
+      iteration-summarizer         8.5m  calls=1
+      reviewer                     6.8m  calls=1
+      coherence-auditor            2.8m  calls=1
+      [engine] lean-pipeline      78.1m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                 11.0m
+      overlap saved             22.4m  (parallel steps)
+  goal-desk-iter-13  depth=full  verdict=GOAL_ACHIEVED  wall=198.2m
+      iteration-summarizer        18.1m  calls=2
+      goal-decomposer             17.2m  calls=1
+      goal-evaluator              14.2m  calls=1
+      readme-maintainer            4.7m  calls=1
+      coherence-auditor            3.9m  calls=1
+      [engine] full-pipeline     128.3m  (contains agent time above)
+      [engine] showcase-join      15.1m  (contains agent time above)
+      pump-wait                  3.0m
+      unattributed (glue)      140.1m  (wall − agents(active) − quota)
+  goal-desk-iter-14  depth=full  verdict=?  wall=?  (incomplete/interrupted attempt)
+      goal-decomposer             21.4m  calls=1
+      coherence-auditor            3.5m  calls=1
+      [engine] full-pipeline     199.8m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  1.0m
+  goal-desk-iter-14  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                    0.1m  calls=1  failures=1
+      [engine] lean-pipeline       0.1m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer)
+      pump-wait                  0.0m
+  goal-desk-iter-14  depth=lean  verdict=GOAL_ACHIEVED  wall=77.7m
+      developer                   20.3m  calls=1
+      goal-evaluator              15.2m  calls=1
+      reviewer                    13.5m  calls=1
+      browser-qa-agent             9.3m  calls=1
+      coherence-auditor            9.3m  calls=1
+      readme-maintainer            8.1m  calls=1
+      iteration-summarizer         3.7m  calls=1
+      demo-narrator                1.7m  calls=1
+      browser-qa-replay            0.8m  calls=1
+      [engine] lean-pipeline      43.1m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer, coherence-auditor)
+      pump-wait                  0.6m
+      overlap saved              4.2m  (parallel steps)
+  goal-desk-iter-15  depth=full  verdict=GOAL_ACHIEVED  wall=133.4m
+      developer                   30.0m  calls=1
+      goal-evaluator              19.1m  calls=1
+      auditor                     15.5m  calls=1
+      browser-qa-agent            15.5m  calls=1
+      qa                          14.9m  calls=2
+      ui-impact-analyst           13.3m  calls=1
+      reviewer                     7.2m  calls=1
+      goal-decomposer              6.2m  calls=1
+      ui-test-designer             5.6m  calls=1
+      iteration-summarizer         3.6m  calls=1
+      ux-regression-reviewer       2.7m  calls=1
+      orchestrator                 2.3m  calls=1
+      coherence-auditor            2.0m  calls=1
+      readme-maintainer            1.8m  calls=1
+      demo-narrator                1.6m  calls=1
+      [engine] full-pipeline      96.0m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  1.1m
+      overlap saved              7.8m  (parallel steps)
+  goal-desk-iter-16  depth=full  verdict=GOAL_ACHIEVED  wall=129.6m
+      developer                   29.9m  calls=1
+      goal-evaluator              17.0m  calls=1
+      auditor                     16.8m  calls=1
+      qa                          11.2m  calls=2
+      ui-impact-analyst            9.5m  calls=1
+      browser-qa-agent             9.2m  calls=1
+      ui-test-designer             8.4m  calls=1
+      goal-decomposer              8.3m  calls=1
+      ux-regression-reviewer       5.0m  calls=1
+      iteration-summarizer         4.0m  calls=1
+      reviewer                     3.8m  calls=1
+      orchestrator                 3.1m  calls=1
+      coherence-auditor            2.9m  calls=1
+      readme-maintainer            2.2m  calls=1
+      demo-narrator                1.5m  calls=1
+      [engine] full-pipeline      90.4m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  1.1m
+      overlap saved              3.1m  (parallel steps)
+  goal-desk-iter-17  depth=full  verdict=GOAL_ACHIEVED  wall=151.1m
+      developer                   26.8m  calls=1
+      browser-qa-agent            24.9m  calls=1
+      goal-evaluator              19.6m  calls=1
+      auditor                     17.1m  calls=1
+      goal-decomposer             10.0m  calls=1
+      reviewer                     9.3m  calls=1
+      ui-test-designer             8.6m  calls=1
+      qa                           8.4m  calls=2
+      ui-impact-analyst            6.8m  calls=1
+      iteration-summarizer         5.2m  calls=1
+      orchestrator                 5.0m  calls=1
+      ux-regression-reviewer       4.4m  calls=1
+      coherence-auditor            2.4m  calls=1
+      readme-maintainer            1.9m  calls=1
+      demo-narrator                1.6m  calls=1
+      [engine] full-pipeline     107.7m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  1.3m
+      overlap saved              0.9m  (parallel steps)
+  goal-desk-iter-18  depth=full  verdict=CONTINUE  wall=118.2m
+      developer                   25.2m  calls=1
+      goal-evaluator              16.6m  calls=1
+      browser-qa-agent            15.7m  calls=1
+      auditor                     14.8m  calls=1
+      qa                          10.1m  calls=2
+      ui-test-designer             9.7m  calls=1
+      ui-impact-analyst            8.4m  calls=1
+      goal-decomposer              8.0m  calls=1
+      ux-regression-reviewer       5.3m  calls=1
+      reviewer                     3.6m  calls=1
+      orchestrator                 3.6m  calls=1
+      coherence-auditor            2.5m  calls=1
+      demo-narrator                1.4m  calls=1
+      [engine] full-pipeline      91.1m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  1.1m
+      overlap saved              6.9m  (parallel steps)
+  goal-desk-iter-19  depth=full  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                   21.1m  calls=1
+      qa                          10.3m  calls=2
+      ui-impact-analyst            8.7m  calls=1
+      iteration-summarizer         7.5m  calls=1
+      goal-decomposer              7.5m  calls=1
+      ui-test-designer             5.9m  calls=1
+      orchestrator                 3.5m  calls=1
+      reviewer                     2.1m  calls=1
+      readme-maintainer            1.8m  calls=1
+      [engine] showcase-join       2.0m  (contains agent time above)
+      pump-wait                  1.0m
+  goal-desk-iter-19  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                    0.2m  calls=1  failures=1
+      [engine] lean-pipeline       0.2m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer)
+      pump-wait                  0.2m
+  goal-desk-iter-19  depth=lean  verdict=CONTINUE  wall=192.4m
+      goal-evaluator             143.8m  calls=1
+      coherence-auditor           22.4m  calls=1
+      browser-qa-agent            22.3m  calls=1
+      developer                   11.8m  calls=1
+      reviewer                     9.4m  calls=1
+      goal-evaluator-confirm       4.9m  calls=1
+      browser-qa-replay            1.5m  calls=1
+      [engine] lean-pipeline      43.7m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer, coherence-auditor)
+      pump-wait                  0.6m
+      overlap saved             23.8m  (parallel steps)
+  goal-desk-iter-20  depth=lean  verdict=CONTINUE  wall=40.1m
+      goal-evaluator              16.2m  calls=1
+      browser-qa-agent            12.6m  calls=1
+      goal-decomposer              8.3m  calls=1
+      iteration-summarizer         8.3m  calls=1
+      demo-narrator                1.6m  calls=1
+      [engine] evidence-pipeline    15.5m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  0.2m
+      overlap saved              6.9m  (parallel steps)
+  goal-desk-iter-21  depth=lean  verdict=STALLED  wall=43.4m
+      iteration-summarizer        16.4m  calls=2
+      goal-evaluator              14.7m  calls=1
+      goal-decomposer             11.5m  calls=1
+      browser-qa-agent             9.3m  calls=1
+      demo-narrator                1.4m  calls=1
+      [engine] evidence-pipeline    12.2m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  0.4m
+      overlap saved              9.9m  (parallel steps)
+  session: 22 completed iteration(s), mean wall 133.6m
+      total goal-evaluator            1621.7m
+      total developer                  345.9m
+      total browser-qa-agent           309.5m
+      total goal-decomposer            292.3m
+      total iteration-summarizer       212.5m
+      total coherence-auditor          103.2m
+      total reviewer                    98.3m
+      total readme-maintainer           69.1m
+      total auditor                     64.2m
+      total qa                          54.9m
+      total ui-impact-analyst           46.8m
+      total ui-test-designer            38.2m
+      total orchestrator                17.4m
+      total ux-regression-reviewer      17.4m
+      total demo-narrator               10.8m
+      total goal-evaluator-confirm       4.9m
+      total browser-qa-replay            2.3m
+      total AWAITING_PUMP paused gaps: 8.8m
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED
 ```
 
 ## Friction counters
@@ -161,26 +423,26 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
 Last 20 lines of state/lessons.md:
 
 ```
-is chosen deliberately.
-**Applies to:** any iteration that makes a table row clickable/navigable, or that relies on a `title`
-tooltip to keep a rounded display honest — pair the change with a hit-test assertion naming the
-element expected to be topmost at each interactive cell's centre.
+of the live DOM" · replace the `title` with an on-page panel · approve a desktop-capture rig · accept
+as-is) — STALLED on a human-owned unblock path, not CONTINUE.
+**Applies to:** any journey whose acceptance names a screenshot of browser-chrome-drawn UI (native
+`title`/`alt` tooltips, `select` popups, print dialogs, file pickers, OS context menus), and any
+`Depth: evidence` iteration that would be the third consecutive capture-only run.
 
-## iter-7 — 2026-07-27T16:45:00+01:00
+## iter-21 (second) — 2026-07-30T00:35:00+01:00
 
 **Verdict:** STALLED
-**Lesson:** A sentinel journey that asserts "kept responses are byte-identical to an era-open
-baseline" is unfalsifiable unless iteration 0 actually CAPTURES that baseline — this era never did,
-so the clause sat unchecked for seven iterations and then blocked closure at the gate. Worse, the
-same era-close audit surfaced that a mid-era emergency repair to protected files (iter-4's
-price-less-bar fix in `bars.py` / `StructureChart.tsx` / a chart guard test) silently made THREE of
-that sentinel's clauses literally false; because each iteration had other productive work, the
-loop kept CONTINUE-ing past the one question only the owner could answer, four times.
-**Applies to:** any era whose goal.md contains a "byte-identical vs baseline" or "zero
-out-of-inventory diff" sentinel clause (capture the baseline artifact in iter-0 and store it under
-`runs/goal-session-<sid>/state/`), and any iteration that touches a file goal.md declares frozen —
-route the ratification to the human IMMEDIATELY (STALLED), not as a recommendation carried by later
-iterations.
+**Lesson:** `Demo Verdict: RECORDED` with a non-empty gallery is NOT proof the film shows anything:
+this run's three frames are one byte-identical image (md5 `3b02db86…`, the same PNG as
+`J-04-verify.png`) because `demo_runner.py`'s action vocabulary has no scroll primitive, every
+`/desk` ranked row is one stretched `next/link` (so any in-row click navigates away), and the two
+right-hand columns the film narrates sit past the table's `overflow-x-auto` clientWidth. Narration
+accuracy had to be proven a different way — by re-deriving every quoted number from the recorded
+snapshot on disk. Check frame md5s and what is actually inside the viewport before crediting a
+walkthrough conjunct.
+**Applies to:** any demo-narrator run whose walkthrough is an acceptance conjunct, and any future
+`demo_runner.py` enhancement (a `scroll` action driving `el.scrollLeft = el.scrollWidth` on the
+container, never a click, is the recorded remedy).
 ```
 
 ## Halt context
@@ -191,6 +453,6 @@ session.json halt-relevant fields:
 {
   "status": "STALLED",
   "last_verdict": "STALLED",
-  "parked_wip_sha": "6778962"
+  "parked_wip_sha": "bc884fb"
 }
 ```

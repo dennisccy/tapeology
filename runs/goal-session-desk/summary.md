@@ -1,18 +1,18 @@
 # Goal Session Summary — desk
 
-**Final verdict:** AWAITING_PUMP
-**Total iterations:** 19
-**Wall time (seconds):** 16
+**Final verdict:** STALLED
+**Total iterations:** 22
+**Wall time (seconds):** 16569
 **Quota pauses:** 0
 **Started:** 2026-07-25T01:04:47.481604Z
-**Finished:** 2026-07-29T18:50:07.004630Z
+**Finished:** 2026-07-29T23:27:12.442913Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/desk`. Open a PR with:
 
     gh pr create --base main --head goal/desk \
-      --title "feat: desk — AWAITING_PUMP" \
+      --title "feat: desk — STALLED" \
       --body-file runs/goal-session-desk/summary.md
 
 ## Final journey state
@@ -21,18 +21,18 @@ This session pushed iteration commits to `goal/desk`. Open a PR with:
 |---|---|---|
 | J-01 | passing | goal-desk-iter-18 |
 | J-02 | passing | goal-desk-iter-18 |
-| J-03 | passing | goal-desk-iter-18 |
-| J-04 | passing | goal-desk-iter-18 |
-| J-05 | passing | goal-desk-iter-18 |
-| J-06 | passing | goal-desk-iter-18 |
-| J-07 | passing | goal-desk-iter-18 |
-| J-08 | passing | goal-desk-iter-18 |
-| J-09 | passing | goal-desk-iter-18 |
-| J-10 | passing | goal-desk-iter-18 |
-| J-11 | passing | goal-desk-iter-18 |
-| J-12 | passing | goal-desk-iter-18 |
-| J-13 | passing | goal-desk-iter-18 |
-| J-14 | partial | - |
+| J-03 | passing | goal-desk-iter-19 |
+| J-04 | passing | goal-desk-iter-21 |
+| J-05 | passing | goal-desk-iter-21 |
+| J-06 | passing | goal-desk-iter-21 |
+| J-07 | passing | goal-desk-iter-21 |
+| J-08 | passing | goal-desk-iter-19 |
+| J-09 | passing | goal-desk-iter-19 |
+| J-10 | passing | goal-desk-iter-19 |
+| J-11 | passing | goal-desk-iter-19 |
+| J-12 | passing | goal-desk-iter-21 |
+| J-13 | passing | goal-desk-iter-21 |
+| J-14 | passing | goal-desk-iter-21 |
 
 ## Anti-goal violations
 
@@ -333,14 +333,49 @@ See `runs/goal-session-desk/telemetry.jsonl` for the structured event log.
       [engine] showcase-join       0.0m  (contains agent time above)
       (resume-skipped: goal-decomposer)
       pump-wait                  0.2m
-  session: 19 completed iteration(s), mean wall 140.1m
-      total goal-evaluator            1447.0m
-      total developer                  334.1m
-      total goal-decomposer            272.5m
-      total browser-qa-agent           265.3m
-      total iteration-summarizer       187.8m
-      total reviewer                    88.8m
-      total coherence-auditor           80.8m
+  goal-desk-iter-19  depth=lean  verdict=CONTINUE  wall=192.4m
+      goal-evaluator             143.8m  calls=1
+      coherence-auditor           22.4m  calls=1
+      browser-qa-agent            22.3m  calls=1
+      developer                   11.8m  calls=1
+      reviewer                     9.4m  calls=1
+      goal-evaluator-confirm       4.9m  calls=1
+      browser-qa-replay            1.5m  calls=1
+      [engine] lean-pipeline      43.7m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer, coherence-auditor)
+      pump-wait                  0.6m
+      overlap saved             23.8m  (parallel steps)
+  goal-desk-iter-20  depth=lean  verdict=CONTINUE  wall=40.1m
+      goal-evaluator              16.2m  calls=1
+      browser-qa-agent            12.6m  calls=1
+      goal-decomposer              8.3m  calls=1
+      iteration-summarizer         8.3m  calls=1
+      demo-narrator                1.6m  calls=1
+      [engine] evidence-pipeline    15.5m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  0.2m
+      overlap saved              6.9m  (parallel steps)
+  goal-desk-iter-21  depth=lean  verdict=STALLED  wall=43.4m
+      iteration-summarizer        16.4m  calls=2
+      goal-evaluator              14.7m  calls=1
+      goal-decomposer             11.5m  calls=1
+      browser-qa-agent             9.3m  calls=1
+      demo-narrator                1.4m  calls=1
+      [engine] evidence-pipeline    12.2m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  0.4m
+      overlap saved              9.9m  (parallel steps)
+  session: 22 completed iteration(s), mean wall 133.6m
+      total goal-evaluator            1621.7m
+      total developer                  345.9m
+      total browser-qa-agent           309.5m
+      total goal-decomposer            292.3m
+      total iteration-summarizer       212.5m
+      total coherence-auditor          103.2m
+      total reviewer                    98.3m
       total readme-maintainer           69.1m
       total auditor                     64.2m
       total qa                          54.9m
@@ -348,8 +383,9 @@ See `runs/goal-session-desk/telemetry.jsonl` for the structured event log.
       total ui-test-designer            38.2m
       total orchestrator                17.4m
       total ux-regression-reviewer      17.4m
-      total demo-narrator                7.8m
-      total browser-qa-replay            0.8m
-      total AWAITING_PUMP paused gaps: 7.9m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP
+      total demo-narrator               10.8m
+      total goal-evaluator-confirm       4.9m
+      total browser-qa-replay            2.3m
+      total AWAITING_PUMP paused gaps: 8.8m
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED
 ```
