@@ -270,3 +270,32 @@ its history.
 **Applies to:** any iteration whose required-still-passing set is verified only by golden replay, and
 any future work on `demo_runner.py --mode verify` (capturing after the last assertion, not before the
 first, would fix it).
+
+## iter-23 — 2026-07-30T11:50:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Two deterministic gates in the harness are word-matchers and both mis-fired this
+iteration, in opposite directions. `closure_gate.py`'s backend-only guard greps the bare substring
+`backend-only` over `reports/phase-<iter>-user-visible-changes.md`, so the ui-impact-analyst's honest
+sentence "Nothing else is backend-only:" produced a blocking CLOSURE-FAIL on a report that documents
+four real user-visible changes. Meanwhile `goal_gate.py results`' FAIL detector is
+`re.compile(r"\|\s*FAIL\s*\|")`, which does NOT match a **bolded** verdict cell — the merged results
+file's one genuine `| **FAIL** |` row (UT-07) passed the achievement gate silently. Never treat either
+gate's answer as the judgment: read the artifact.
+**Applies to:** any iteration whose closure verdict is CLOSURE-FAIL with "backend-only claim guard:
+INCONSISTENT" as the only blocking issue; and any evaluator relying on the achievement gate's
+results check instead of reading the results table row by row.
+
+## iter-23 — 2026-07-30T11:52:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The scoped-rig instruction has now been dropped for eight consecutive iterations, and the
+root cause is finally located: it lives in the iteration spec's NOTES, which the DEVELOPER's `plan.md`
+inherits but the browser-qa lane's own slice (`runs/<iter>/goal-slice-bqa.md`) does not. The slice
+carries goal.md's acceptance phrase ("on the fixture-scoped rig") with no recipe, so the lane
+reasonably used the standing `:3301`/`:8301` rig — and this time wrote a real 100-row screen snapshot
+into the operator's append-only store, which can never be removed. A written instruction in a file the
+lane never receives is not an instruction; the fix is either injecting the recipe into the bqa slice or
+a hard rail that refuses the write when the serving process points at the ambient store.
+**Applies to:** any iteration whose evidence lane must compute, record, or film against a data store —
+check `goal-slice-bqa.md` itself contains the scoped-rig paragraph before dispatch.

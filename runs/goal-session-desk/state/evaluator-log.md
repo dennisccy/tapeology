@@ -1306,3 +1306,71 @@ images, and this run's film is a plain re-recording of the one already recorded 
 (4) the goal file's host-protection paragraph still quotes your old CPU list, worth a one-line tidy-up
 on your own track. One sentence for you: the last owed photograph now exists and every number in it
 matches your stored records exactly — please confirm the finish, then shut the capture rig down.
+
+## Iteration 23 — goal-desk-iter-23
+
+**Date:** 2026-07-30T11:50:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-15 "Every ranked briefing row states what its wall is actually made of" — a brand
+  new journey, built for the first time this run. The count of journeys goes 14 to 15
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01 through J-14 all re-checked this run by saved-script replay (12 of 13 clean), with
+  J-09 "Every top-up run leaves a record" re-checked live in a real browser after its saved script
+  raised a false alarm; J-06 "17 machine-readable tools" re-counted by me in the running code; I
+  spot-checked J-05 and J-07 by opening their pictures myself, and I read the other columns off this
+  run's own fresh pictures
+- Anti-goal violations: none new, none open. The three older items stay resolved and I re-checked all
+  three myself. One deviation is carried and deliberately NOT scored as a violation: the picture-taking
+  lanes again used your own data folder instead of a throwaway copy — the eighth run in a row — and
+  this time they wrote to it (one new recorded screen)
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to produce. I
+opened the picture myself: in a single frame the new "levels" column reads "2 levels · 1h 1 · 1d 1",
+"5 levels · 1d 3 · 1h 1 · 4h 1", "155 levels · 1d 68 · 1h 57 · 1w 11 · 4h 19", "609 levels · 1m 474 ·
+5m 98 · 1d 28 · 1h 5 · 1w 3 · 4h 1" and "121 levels · 1d 58 · 1h 41 · 1w 8 · 4h 14" with the reused
+"round number" badge beside it — the thin wall, the thick wall and the badge all legible together,
+under a panel naming the exact recording and the settings fingerprint. Then I proved the numbers
+instead of believing them: for ALL 100 ranked rows of that recording I re-computed the wall from your
+stored price files through the very same computation the product calls, and every row matches on the
+number of levels, the round-number flag, the per-timeframe split INCLUDING the order the timeframes
+are listed in, and the wall's own side, grade, price range and score — 100 out of 100, zero
+mismatches. Every row's split adds up to its own count, the counts run from 1 to 4,014, sixteen rows
+are round-number walls, no timeframe is ever shown as a fabricated zero, the one skipped name carries
+none of the three, and nothing about a wall's individual levels was copied onto the row. The order of
+the ranked list did not move: it is still exactly the old four-part order, and it stays the same when
+I strip the three new values away. Nothing old was rewritten: all eleven stored screens recompute
+their own checksums, the ten older ones carry the new values on zero rows, their file dates still
+match their own recorded times, and the older screen on the page reads "composition not recorded in
+this snapshot" on every row in the picture I opened. I re-ran the work myself: the whole back-end
+suite (1,454 passed, 8 skipped, exit 0), the settings fingerprint (`08e471b10130e1e2`), the tool count
+(exactly 17), and a file-by-file check that the whole change is four files and every frozen file takes
+a zero change. Coherence is COHERENCE-PASS and the deterministic scan is CLEAN. Four things I found
+and did not hide, none of them a product defect: the new column is the table's twelfth and cannot be
+seen at 1,440 pixels without scrolling sideways — but I confirmed in the same picture that the table
+already stopped at "band" before this run, so this is an older layout condition, not something this
+run broke; the closure check failed on a word-matching mistake (it searches for the phrase
+"backend-only" and found it inside a sentence saying the opposite); the guided film is recorded and
+its frame does show the new column, but its verdict line reads "recorded with notes" because three of
+its click targets match a hundred cells at once; and the replay pictures are again mostly the same
+image.
+
+**Next-step recommendation:** Halt — the goal is achieved. Please confirm the finish. Four follow-ups,
+none a defect and none blocking. (1) Your own data folder was written to during this run, against this
+run's own plan: one new recorded screen for today now sits there and it is what your Desk shows by
+default. Nothing of yours was deleted or changed, every record still proves its own checksum, no
+prices were fetched, and every number in the new record matches your stored price files exactly — but
+it cannot be undone, because permanent records are never deleted here. The real fix is a rail that
+forces the picture-taking program to point at a copy; I found the cause this time — the instruction
+sent to the picture-taking lane was missing the paragraph that tells it how, while the builder's own
+instructions had it. (2) The briefing table now has twelve columns and the two newest cannot be seen
+without scrolling sideways at a normal window width. Before any thirteenth column is added, the right
+question is how the briefing shows this much detail at all — a grouped layout, or a per-row detail
+panel. (3) One word in a report file trips the closure check every time ("backend-only" inside a
+sentence denying it); rewording that one sentence, or narrowing the check, stops a false alarm
+recurring. (4) The film's click targets should name one row instead of all of them, which is the only
+reason its verdict says "recorded with notes". One sentence for you: the briefing now says what each
+wall is actually built of — proven row by row against your stored price files, one hundred rows out of
+one hundred — please confirm the finish.

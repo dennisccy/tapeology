@@ -183,8 +183,22 @@ def test_bar_store_signature_is_deterministic_across_fresh_instances(ctx):
 # ==================================================================================================
 
 
-def _band(side: str, price_low: float, price_high: float, band_class: str | None, quality: float) -> dict:
-    return {"side": side, "price_low": price_low, "price_high": price_high, "class": band_class, "quality_score": quality}
+def _band(
+    side: str, price_low: float, price_high: float, band_class: str | None, quality: float,
+    *, members: list[dict] | None = None, round_number: bool = False,
+) -> dict:
+    """A minimal band dict carrying every key `_select_best_band`/`_select_opposite_band`/the row
+    builder read. `members` defaults to a single synthetic `1d` level at `price_low` (goal-desk-
+    iter-23, J-15) -- an honest, valid single-member band -- so every EXISTING call site (none of
+    which cares about wall-composition) keeps working unchanged; `member_count` is ALWAYS
+    `len(members)`, mirroring `tradability.py`'s own `_band`, which never lets the two diverge."""
+    if members is None:
+        members = [{"price": price_low, "timeframe": "1d", "type": "level", "touch_count": 1}]
+    return {
+        "side": side, "price_low": price_low, "price_high": price_high, "class": band_class,
+        "quality_score": quality, "member_count": len(members), "round_number": round_number,
+        "members": members,
+    }
 
 
 def test_distance_bps_resistance_uses_the_low_edge():
@@ -664,6 +678,17 @@ def test_aapl_row_cross_checks_byte_identical_to_the_real_tradability_route(ctx,
             - row["reference_close"]
         ) / row["reference_close"] * 10_000.0
         assert row["opposite_band"]["distance_bps"] == pytest.approx(expected_opposite_distance)
+
+    # goal-desk-iter-23 (J-15) TC-2/TC-3: band_member_count/band_round_number are copied verbatim
+    # off the SAME served band's own member_count/round_number, and band_member_timeframes is a
+    # plain tally of that SAME band's own members list, summing to band_member_count.
+    assert row["band_member_count"] == served["member_count"]
+    assert row["band_round_number"] == served["round_number"]
+    expected_timeframes: dict[str, int] = {}
+    for member in served["members"]:
+        expected_timeframes[member["timeframe"]] = expected_timeframes.get(member["timeframe"], 0) + 1
+    assert row["band_member_timeframes"] == expected_timeframes
+    assert sum(row["band_member_timeframes"].values()) == row["band_member_count"]
 
 
 def test_msft_partial_coverage_still_resolves_a_ranked_row_with_honest_coverage(ctx):
@@ -1516,6 +1541,237 @@ def test_opposite_band_and_bands_by_class_add_zero_extra_compute_tradability_or_
     assert full_1d_calls == baseline_1d_calls + 1, (
         "opposite_band/bands_by_class must add ZERO extra merged_bars calls beyond what "
         "iteration 17's reference_close/history disclosure already required"
+    )
+
+
+# ==================================================================================================
+# wall-composition disclosure (goal-desk-iter-23, J-15) -- band_member_count/band_round_number/
+# band_member_timeframes, copied/tallied VERBATIM off the SAME `best` band `_select_best_band`
+# already returns. Mirrors the opposite-band/bands_by_class suite immediately above.
+# ==================================================================================================
+
+
+def test_band_member_fields_golden_single_member_and_intraday_dominated_rows(ctx, monkeypatch):
+    """TC-1/TC-4/TC-5: three controlled ranked rows -- one whose selected band holds a SINGLE
+    member (a zero-width `price_low == price_high` band, the goal.md worked example's own #45 SPG
+    shape), one whose selected band is dominated by intraday (`1m`/`5m`) members (the worked
+    example's own MSFT/AAPL shape), and one "normal" multi-timeframe confluence that is ALSO a
+    round-number band -- each proving `band_member_count`/`band_round_number` are copied verbatim
+    off the SAME `best` band dict, and `band_member_timeframes` is a plain per-timeframe tally of
+    that SAME band's own `members` list, summing to `band_member_count`, with an absent timeframe
+    simply missing (never a fabricated zero). Mirrors
+    `test_opposite_band_golden_near_far_and_null_class_rows`'s controlled-band monkeypatch style."""
+    import app.research.desk_screen as desk_screen_module
+
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    single_bar = _daily_bars("AIG", start=date(2026, 6, 18), count=1)[0]
+    intraday_bar = _daily_bars("AMGN", start=date(2026, 6, 18), count=1)[0]
+    normal_bar = _daily_bars("AMT", start=date(2026, 6, 18), count=1)[0]
+    _seed_daily_bars(bar_store, bar_index, [single_bar])
+    _seed_daily_bars(bar_store, bar_index, [intraday_bar])
+    _seed_daily_bars(bar_store, bar_index, [normal_bar])
+
+    single_basis = _iso_of(single_bar.epoch)
+    intraday_basis = _iso_of(intraday_bar.epoch)
+    normal_basis = _iso_of(normal_bar.epoch)
+
+    single_member = [{"price": single_bar.close, "timeframe": "1d", "type": "level", "touch_count": 1}]
+    aig_best = _band(
+        "resistance", single_bar.close, single_bar.close, "A", 10.0,
+        members=single_member, round_number=False,
+    )
+
+    intraday_members = (
+        [{"price": intraday_bar.close, "timeframe": "1m", "type": "level", "touch_count": 1} for _ in range(6)]
+        + [{"price": intraday_bar.close, "timeframe": "5m", "type": "level", "touch_count": 1} for _ in range(2)]
+        + [{"price": intraday_bar.close, "timeframe": "1d", "type": "level", "touch_count": 1}]
+    )
+    amgn_best = _band(
+        "resistance", intraday_bar.close, intraday_bar.close + 1.0, "B", 5.0,
+        members=intraday_members, round_number=False,
+    )
+
+    normal_members = (
+        [{"price": normal_bar.close, "timeframe": "1d", "type": "level", "touch_count": 1} for _ in range(3)]
+        + [{"price": normal_bar.close, "timeframe": "1h", "type": "level", "touch_count": 1} for _ in range(2)]
+        + [{"price": normal_bar.close, "timeframe": "4h", "type": "level", "touch_count": 1}]
+    )
+    amt_best = _band(
+        "resistance", normal_bar.close, normal_bar.close + 2.0, "A", 20.0,
+        members=normal_members, round_number=True,
+    )
+
+    original = desk_screen_module.compute_tradability
+
+    def _tracked(store, symbol, as_of_epoch, config):
+        if symbol == "AIG":
+            return {"no_bar_series_for_symbol": False, "basis_as_of": single_basis, "bands": [aig_best]}
+        if symbol == "AMGN":
+            return {"no_bar_series_for_symbol": False, "basis_as_of": intraday_basis, "bands": [amgn_best]}
+        if symbol == "AMT":
+            return {"no_bar_series_for_symbol": False, "basis_as_of": normal_basis, "bands": [amt_best]}
+        return original(store, symbol, as_of_epoch, config)
+
+    monkeypatch.setattr(desk_screen_module, "compute_tradability", _tracked)
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    by_symbol = {r["symbol"]: r for r in screen["rows"]}
+
+    aig_row = by_symbol["AIG"]
+    assert aig_row["price_low"] == aig_row["price_high"], "the zero-width band this fixture builds"
+    assert aig_row["band_member_count"] == 1
+    assert aig_row["band_round_number"] is False
+    assert aig_row["band_member_timeframes"] == {"1d": 1}
+    assert sum(aig_row["band_member_timeframes"].values()) == aig_row["band_member_count"]
+
+    amgn_row = by_symbol["AMGN"]
+    assert amgn_row["band_member_count"] == 9
+    assert amgn_row["band_round_number"] is False
+    assert amgn_row["band_member_timeframes"] == {"1m": 6, "5m": 2, "1d": 1}
+    assert list(amgn_row["band_member_timeframes"].keys()) == ["1m", "5m", "1d"], (
+        "key order is first-seen over the band's own already-sorted members list"
+    )
+    assert sum(amgn_row["band_member_timeframes"].values()) == amgn_row["band_member_count"]
+
+    amt_row = by_symbol["AMT"]
+    assert amt_row["band_member_count"] == 6
+    assert amt_row["band_round_number"] is True
+    assert amt_row["band_member_timeframes"] == {"1d": 3, "1h": 2, "4h": 1}
+    assert "1w" not in amt_row["band_member_timeframes"], (
+        "a timeframe with no member in this band is simply absent, never a fabricated zero"
+    )
+    assert sum(amt_row["band_member_timeframes"].values()) == amt_row["band_member_count"]
+
+
+def test_sum_of_band_member_timeframes_equals_band_member_count_on_every_ranked_row(ctx):
+    """TC-3: the sum invariant holds on EVERY ranked row of a REAL (non-monkeypatched) screen --
+    not just the controlled golden rows above."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_HOURLY_FIXTURE))
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    assert len(screen["rows"]) >= 1
+    for row in screen["rows"]:
+        assert sum(row["band_member_timeframes"].values()) == row["band_member_count"]
+
+
+def test_row_order_is_unchanged_by_the_band_member_fields_addition(ctx):
+    """TC-7: `_row_rank_key` is computed entirely from `band_class`/`distance_bps`/`band_score`/
+    `symbol` -- unchanged this iteration (verify via `git diff`, appearing only as unchanged
+    CONTEXT) -- none of `band_member_count`/`band_round_number`/`band_member_timeframes` touches
+    it. Mirrors `test_row_order_is_unchanged_by_the_opposite_band_addition`."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_DAILY_FIXTURE))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(MSFT_HOURLY_FIXTURE))
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    symbols = [r["symbol"] for r in screen["rows"]]
+    expected = [r["symbol"] for r in sorted(screen["rows"], key=_row_rank_key)]
+    assert symbols == expected
+    assert symbols == ["MSFT", "AAPL"], "pin the exact fixture-spread order so a silent reorder is caught"
+
+
+def test_band_member_fields_stay_byte_identical_on_a_recompute_under_identical_pins(ctx, tmp_path):
+    """TC-8: mirrors `test_opposite_band_stays_byte_identical_on_a_recompute_under_identical_pins`
+    for band_member_count/band_round_number/band_member_timeframes specifically -- a screen
+    recorded once, then a FRESH computation under identical pins, is refused a second write, and
+    the content already on disk is byte-identical to the second (unrecorded) computation's fields
+    on every ranked row."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    screen_store = ScreenStore(tmp_path / "screen")
+
+    first_screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    recorded = screen_store.record(**first_screen)
+
+    second_screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    with pytest.raises(ScreenAlreadyRecorded) as excinfo:
+        screen_store.record(**second_screen)
+    assert excinfo.value.existing_id == recorded["id"]
+
+    stored_records, errors = screen_store.list()
+    assert errors == []
+    assert json.dumps(stored_records[0]["rows"], sort_keys=True) == json.dumps(
+        second_screen["rows"], sort_keys=True
+    )
+    aapl_row = next(r for r in stored_records[0]["rows"] if r["symbol"] == "AAPL")
+    expected_aapl_row = next(r for r in second_screen["rows"] if r["symbol"] == "AAPL")
+    assert aapl_row["band_member_count"] == expected_aapl_row["band_member_count"]
+    assert aapl_row["band_round_number"] == expected_aapl_row["band_round_number"]
+    assert aapl_row["band_member_timeframes"] == expected_aapl_row["band_member_timeframes"]
+
+
+def test_a_legacy_row_recorded_without_band_member_fields_serves_them_absent_never_backfilled(
+    tmp_path,
+):
+    """TC-9: the exact shape every screen snapshot recorded BEFORE this iteration has -- ranked
+    rows that OMIT band_member_count/band_round_number/band_member_timeframes entirely (never
+    merely present-as-`null`) -- mirrors the basis/history/reference-close/opposite-band legacy-row
+    precedents. `_record`'s own default row carries no such keys at all, so this is true by
+    construction; this test pins that contract so a future change cannot silently start
+    defaulting or backfilling legacy rows on read."""
+    store = ScreenStore(tmp_path / "screen")
+    _record(store)  # `_record`'s own default row carries none of the three keys at all
+
+    records, errors = store.list()
+    assert errors == []
+    row = records[0]["rows"][0]
+    assert "band_member_count" not in row
+    assert "band_round_number" not in row
+    assert "band_member_timeframes" not in row
+
+
+def test_band_member_fields_add_zero_extra_compute_tradability_or_merged_bars_calls(ctx, monkeypatch):
+    """TC-6: band_member_count/band_round_number/band_member_timeframes are a pure copy/tally over
+    the SAME `best` band dict a symbol's SINGLE `compute_tradability` call already returned --
+    mirrors `test_opposite_band_and_bands_by_class_add_zero_extra_compute_tradability_or_merged_bars_calls`:
+    zero additional `compute_tradability` calls per symbol, zero additional `BarStore.merged_bars`
+    calls beyond what iteration 17/18's disclosures already required."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+
+    as_of_epoch = _epoch(screen_as_of(SCREEN_DATE))
+    merged_calls: list[tuple[str, str]] = []
+    original_merged = BarStore.merged_bars
+
+    def _tracked_merged(self, symbol, timeframe):
+        merged_calls.append((symbol, timeframe))
+        return original_merged(self, symbol, timeframe)
+
+    monkeypatch.setattr(BarStore, "merged_bars", _tracked_merged)
+
+    from app.research.tradability import compute_tradability as _compute_tradability
+
+    _compute_tradability(bar_store, "AAPL", as_of_epoch, CONFIG)
+    baseline_1d_calls = sum(1 for symbol, tf in merged_calls if symbol == "AAPL" and tf == "1d")
+    merged_calls.clear()
+
+    import app.research.desk_screen as desk_screen_module
+
+    tradability_calls: list[str] = []
+    original_tradability = desk_screen_module.compute_tradability
+
+    def _tracked_tradability(store, symbol, as_of_epoch_arg, config):
+        tradability_calls.append(symbol)
+        return original_tradability(store, symbol, as_of_epoch_arg, config)
+
+    monkeypatch.setattr(desk_screen_module, "compute_tradability", _tracked_tradability)
+
+    screen = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    aapl_row = next(r for r in screen["rows"] if r["symbol"] == "AAPL")
+    assert "band_member_count" in aapl_row
+
+    assert tradability_calls.count("AAPL") == 1, (
+        "band_member_count/band_round_number/band_member_timeframes must be derived from the "
+        "symbol's single existing compute_tradability call, never a second call"
+    )
+    full_1d_calls = sum(1 for symbol, tf in merged_calls if symbol == "AAPL" and tf == "1d")
+    assert full_1d_calls == baseline_1d_calls + 1, (
+        "band_member_count/band_round_number/band_member_timeframes must add ZERO extra "
+        "merged_bars calls beyond what iteration 17/18's disclosures already required"
     )
 
 

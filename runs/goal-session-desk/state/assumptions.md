@@ -257,3 +257,67 @@ tooltip overlaps the bare desktop outside the browser window.
 lines and the verdict returns to iteration 21's `STALLED` state with the same four options open;
 nothing in the product changed this run (zero diff under `apps/`), so no code would need undoing, and
 the photograph itself stays valid evidence of what the page renders either way.
+
+## iter-23 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-15 Acceptance opens with a WHERE clause — "on the fixture-scoped rig
+a NEW screen run ... records `band_member_count`, `band_round_number` and `band_member_timeframes` on
+every ranked row" — and this iteration's own spec repeats it (NOTES §1, DoD item 6). The evidence was
+produced on the AMBIENT rig instead: the browser-qa lane clicked "Run Screen" for 2026-07-30 against
+`:3301`/`:8301` and a real 100-row snapshot (`screen-2026-07-30-bad6387963ef`, created_utc
+2026-07-30T09:57:32Z) is now appended to `apps/backend/.data/screen/` and is `/desk`'s default latest
+view. goal.md does not say whether that phrase is a hard acceptance conjunct (evidence produced
+elsewhere does not count) or a hygiene qualifier on WHERE the run should happen.
+**We chose:** Read it as a hygiene qualifier and score J-15 `passing`, recording the breach as a
+disclosed process deviation — the eighth consecutive one, and the second that WROTE (iter-19 was the
+first) — rather than as an unmet conjunct or a goal.md anti-goal violation. Six strands, each checked
+by me directly, not accepted from a report: (i) the asserted BEHAVIOUR is proven at the highest bar
+this journey could ask for — I re-derived all 100 ranked rows from a fresh
+`compute_tradability(bar_store, symbol, as_of_epoch, Config())` and every row matches on count, flag,
+per-timeframe tally INCLUDING key order, and the band's own side/class/score/price range: 100/100, zero
+mismatches; the real store is what made the 1..4,014 spread and the single-member zero-width SPG band
+observable at all, so the evidence is stronger, not weaker, for where it was taken; (ii) every rail the
+WHERE clause exists to protect held — the write is a compliant APPEND (five pins present, a
+screen_date not previously recorded, so the identical-pin refusal was respected not worked around), all
+11 snapshots load with `integrity_errors == []`, the 10 pre-iteration ones carry the new keys on ZERO
+rows with file mtimes still equal to their own `created_utc`, and `find apps/backend/.data -newermt`
+shows the ONLY other files touched are two rebuildable `bar_index.db` sidecars — no bar series, no
+universe record, no top-up record, nothing deleted; (iii) the deviation is not disobedience but a
+dispatch gap I verified: `runs/goal-desk-iter-23/goal-slice-bqa.md` carries the acceptance phrase and
+NOT the spec's NOTES recipe, while the developer's `plan.md` does carry it; (iv) scoring it a violation
+would drive REGRESSION on a run with no product defect, and re-running on a scoped rig cannot undo the
+append (deleting it would itself breach the immutable-data rail) — so the remedy is forward-looking
+(a rail on the dispatch), which is what my recommendation asks for; (v) the same call was made and
+CONFIRMED by the second key at iters 19 and 22; (vi) the effect on the owner is real and is disclosed
+verbatim in the verdict, not buried.
+**Reversible:** no — the appended snapshot is permanent by design. If the owner reads the phrase as a
+hard conjunct, J-15 returns to `partial` and the remedy is one scoped-rig re-run for the artifact only
+(zero product change; every number is already proven), plus the dispatch rail.
+
+## iter-23 — goal-evaluator
+
+**Ambiguity:** Two artifacts fall short of their literal DoD/spec wording while their substance is met.
+(a) `reports/phase-goal-desk-iter-23-ui-test-results.md` carries one `**FAIL**` row: UT-07, a P2 `ux`
+test the ui-test-designer invented, asserting the `levels` column is reachable without horizontal
+scroll at 1440px. (b) `reports/phase-goal-desk-iter-23-demo-results.md` reads `Demo Verdict:
+RECORDED_WITH_NOTES`, while the spec's TC-12/DoD asks for the literal `RECORDED`. Neither shortfall is
+worded in `docs/goal.md`'s own J-15 acceptance.
+**We chose:** Score J-15 `passing` on both counts. For (a): goal.md's browser clause asks only that a
+`<= 5`-level row and a `>= 100`-level row be "legible in the SAME screenshot" plus a `round number`
+badge — met, and I read all five values in `UT-03-populated-levels-badge.png` myself; no clause
+mentions scroll-free discoverability, the spec itself MANDATED the placement ("beside the existing
+`band`/`opposite` columns"), and I confirmed in `UT-07-fail.png` that at 1440px the visible columns
+already stopped at `band` — the iter-18 `opposite` column is equally off-screen — so the condition is
+pre-existing and not a regression this iteration caused. I record it as an open UX-debt note and put
+"decide the table's future before a 13th column" in the recommendation instead of failing the journey
+for it. For (b): goal.md requires "a `[NEW]`-flagged demo-narrator walkthrough covers the briefing's
+wall-composition disclosure end to end, narrated over POPULATED ranked rows" — steps 02-05 are
+`[NEW]`-flagged and attributed to J-15, and I opened `reports/demo/goal-desk-iter-23/step-04.png` and
+read populated tallies (5/10/2/121/134/58/85 levels) with the `round number` badge; the four soft notes
+are all ambiguous multi-match click locators (`[data-testid='desk-row-levels']` matches 100 cells), a
+script-authoring defect in the capture tool, which methodology A.7 classes as a capture defect and not
+a behaviour failure. I did NOT set `evidence_makeup`, because the film's own frames DO show the column
+this time — there is nothing to re-capture.
+**Reversible:** yes — both are artifact-level. UT-07 turns green only on a layout decision (grouping, a
+detail panel, or retiring a column), which is a new journey's worth of work, not a J-15 fix; the demo
+verdict string turns to `RECORDED` on one edit to the script's locators with zero product change.

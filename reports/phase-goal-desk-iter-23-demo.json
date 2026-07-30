@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-23",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the desk screen",
+      "narration": "We're starting at the ranked briefing page that shows you, at a glance, which trading walls are worth tracking across your universe. This is where you make most of your decisions.",
+      "point_out": "The ranked table with 100 rows, one for each symbol in the universe. The page loads the screen snapshot and your briefing — the ranked list by wall strength and distance.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "desk-screen-rows-table"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Scroll right to the new levels column",
+      "narration": "Every ranked row now shows you how thick its wall actually is — not just where it sits and how close it is, but how many price levels built that wall. Scroll to the right to see it.",
+      "point_out": "The new `levels` column appears to the right of `opposite`. It shows a tally string like '155 levels · 1d 68 · 1h 57 · 4h 19 · 1w 11', describing how many levels the wall was built from at each timeframe.",
+      "journey": "J-15",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "columnheader",
+          "name": "opposite"
+        }
+      },
+      "expect": {
+        "text": "levels"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Look at a high-evidence row",
+      "narration": "Some walls are built from hundreds of levels across multiple timeframes. When you see a wall with 50+ or 100+ levels, you know it's confirmed by many touches across days, hours, and minutes.",
+      "point_out": "A row with a high level count (e.g., 155 levels, or higher). Notice how the per-timeframe split tells you whether most of the levels come from daily touches (1d), intraday touches (1h/4h/1w), or a mix.",
+      "journey": "J-15",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-row-levels']"
+        }
+      },
+      "expect": {
+        "text": "levels ·"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Spot the round-number badge",
+      "narration": "Some walls sit at round-number prices — like 100.00 or 50.00. When a wall is built at a round number, a small badge shows you that detail right on the ranked list. No need to drill into the details page.",
+      "point_out": "On some rows (not all), look for a small bordered badge reading 'round number' right next to the level tally. This wall is at a psychologically significant price level.",
+      "journey": "J-15",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "tradable-band-round-number"
+        }
+      },
+      "expect": {
+        "text": "round number"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Compare low-evidence and high-evidence rows",
+      "narration": "Two rows might read identical at every other column — 'support · Class A · 0.00 bps' — but their walls can be completely different. One might be a single touch, another might be 600+ levels. Now you can see that difference right here on the ranked list.",
+      "point_out": "Scroll vertically or left to compare multiple rows' levels columns. Find one row with just a few levels (2, 3, 5) and another with dozens. The briefing now closes the gap — you don't need to drill into the structure page to understand wall thickness.",
+      "journey": "J-15",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-row-levels']"
+        }
+      },
+      "expect": {
+        "text": "levels"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Open the screen history to show legacy behavior",
+      "narration": "Screens computed before this feature was built show an honest message: 'composition not recorded in this snapshot'. The system never guesses or backfills. You see exactly what was recorded when the snapshot was taken.",
+      "point_out": "If you select an older screen from the history, its rows will show 'composition not recorded in this snapshot' in the levels column. No fake data, ever.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Screen History"
+        }
+      },
+      "expect": {
+        "text": "Screen History"
+      }
+    }
+  ]
+}

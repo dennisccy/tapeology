@@ -847,6 +847,16 @@ export interface DeskScreenRow {
     distance_bps: number;
   } | null;
   bands_by_class?: { A: number; B: number; C: number; unclassified: number };
+  // goal-desk-iter-23 (J-15): copied VERBATIM from the SAME `best` band `desk_screen.py` already
+  // selected -- that band's own `member_count`/`round_number` (tradability.py:343) plus a plain
+  // per-timeframe tally of that SAME band's own `members` list (keys are only the timeframes
+  // actually present, never a fabricated zero). A row from a snapshot recorded BEFORE this
+  // iteration has all three keys entirely ABSENT (`undefined`), never present as `null` --
+  // `band_member_count` is always >= 1 on any row that carries it at all, so `=== undefined` is
+  // the honest legacy-absence check, matching `bands_by_class`'s own convention.
+  band_member_count?: number;
+  band_round_number?: boolean;
+  band_member_timeframes?: Record<string, number>;
 }
 
 // A member the screen walked but could not rank -- two honest, distinct reasons, never conflated:

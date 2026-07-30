@@ -123,6 +123,17 @@ import { fmt } from "@/lib/format";
 // every band the canonical tradability computation returned for the symbol). Read-only render,
 // zero new endpoint, zero new control, zero client-side arithmetic — both fields ride the
 // already-fetched `GET /research/desk/screen` response verbatim.
+//
+// goal-desk-iter-23 (J-15): a new `levels` column on the ranked-rows table — the row's own
+// `band_member_count`/`band_member_timeframes` rendered as a tally string (e.g. `155 levels · 1d
+// 68 · 1h 57 · 4h 19 · 1w 11`) plus `/structure`'s own "round number" badge (reused verbatim,
+// including its `data-testid`/className) when `band_round_number` is true. No new tooltip line —
+// every one of the three values is an exact integer or boolean, so there is nothing rounded to
+// disclose full precision for. The established legacy-absent copy "composition not recorded in
+// this snapshot" covers a pre-iteration row (`band_member_count === undefined`, never a computed
+// or inferred fallback from `band_score`/the band range/`bands_by_class`). Read-only render, zero
+// new endpoint, zero new control — all three fields ride the already-fetched `GET
+// /research/desk/screen` response verbatim.
 
 const NUMERIC_CELL = "px-2 py-1.5 text-right font-mono text-xs text-slate-200 whitespace-nowrap";
 const HEADER_CELL = "px-2 py-1 text-right text-[11px] font-medium text-slate-500";
@@ -424,6 +435,34 @@ function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
                 row.opposite_band.price_low
               )}–${fmt(row.opposite_band.price_high)} · ${fmt(row.opposite_band.distance_bps)} bps`}
       </td>
+      {/* goal-desk-iter-23 (J-15): what the row's own selected wall is actually made of --
+          band_member_count/band_member_timeframes as an exact tally string, plus /structure's own
+          "round number" badge (same data-testid/className, reused verbatim) when
+          band_round_number is true. Every value here is an exact integer or boolean -- no
+          rounding -- so no per-cell title is added (the F2 lesson does not apply: there is no
+          full-precision detail to hide behind a hover). `=== undefined` catches a legacy row's
+          ENTIRELY ABSENT key (band_member_count is always >= 1 by construction whenever it is
+          recorded at all, so it is never legitimately null) -- the same strict check
+          bands_by_class already uses. */}
+      <td className={LABEL_CELL} data-testid="desk-row-levels">
+        {row.band_member_count === undefined || row.band_member_timeframes === undefined
+          ? "composition not recorded in this snapshot"
+          : (
+              <>
+                {`${row.band_member_count} levels · ${Object.entries(row.band_member_timeframes)
+                  .map(([timeframe, count]) => `${timeframe} ${count}`)
+                  .join(" · ")}`}{" "}
+                {row.band_round_number && (
+                  <span
+                    data-testid="tradable-band-round-number"
+                    className="inline-block whitespace-nowrap rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[11px] text-slate-300"
+                  >
+                    round number
+                  </span>
+                )}
+              </>
+            )}
+      </td>
     </tr>
   );
 }
@@ -455,6 +494,7 @@ function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) 
             <th className={HEADER_CELL_LEFT}>history</th>
             <th className={HEADER_CELL_LEFT}>band</th>
             <th className={HEADER_CELL_LEFT}>opposite</th>
+            <th className={HEADER_CELL_LEFT}>levels</th>
           </tr>
         </thead>
         <tbody>

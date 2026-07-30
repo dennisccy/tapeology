@@ -109,6 +109,20 @@ fields established: never defaulted, never backfilled (``opposite_band`` ITSELF 
 recorded as ``null`` on a NEW row, when the canonical return holds no band on the other side -- that
 is distinct from the ROW omitting the key entirely, which only a pre-iteration snapshot ever does).
 
+**Wall-composition disclosure (goal-desk-iter-23, J-15).** Every RANKED row also carries
+``band_member_count`` (int) and ``band_round_number`` (bool) -- copied VERBATIM from the SAME
+``best`` band dict ``_select_best_band`` already returns (that band's own ``member_count``/
+``round_number`` keys, ``tradability.py:343`` -- zero second ``compute_tradability`` call, zero
+second ``BarStore`` read, zero touch to ``_select_best_band``/``_select_opposite_band``/
+``_row_rank_key``) -- plus ``band_member_timeframes`` (dict[str, int]), a plain per-timeframe tally
+of that SAME band's own ``members`` list (see ``_band_member_timeframes`` above). The band's own
+``members`` list itself is NEVER copied onto the row -- no member price/``touch_count``/``strength``
+is copied, only the count/flag/tally. Skip rows never carry any of the three, matching the basis/
+history/reference-close/opposite-band precedent exactly. A snapshot recorded BEFORE this addition
+simply has ranked rows that OMIT these three keys entirely -- the SAME append-only-row-content
+discipline the prior disclosures established: never defaulted, never backfilled, never present as
+``null``.
+
 **No new ``Config`` field.** The screen store's directory resolves via ``resolve_desk_screen_dir``
 below -- a bare ``TAPEOLOGY_DESK_SCREEN_DIR``-env-var-or-sibling-of-``desk_universe_dir_resolved()``
 default (the ``edge_report_cache.resolve_cache_db_path`` pattern) -- never a ``desk_screen_dir``
@@ -295,6 +309,23 @@ def _select_opposite_band(bands: list[dict], close: float, best_side: str) -> di
     return min(opposite_side_bands, key=key)
 
 
+def _band_member_timeframes(members: list[dict]) -> dict[str, int]:
+    """A plain per-timeframe tally of a SINGLE band's own ``members`` list (goal-desk-iter-23,
+    J-15) -- mirrors ``_bands_by_class``'s "plain dict tally" construction style, but UNLIKE that
+    precedent never fabricates a zero for an absent timeframe: only timeframes actually present
+    among ``members`` appear as keys at all. Key order is first-seen while walking ``members`` in
+    ``compute_tradability``'s own already-sorted order (``tradability.py:364``'s
+    ``sorted(..., key=itemgetter("price", "timeframe", "type"))``) -- Python dict insertion order
+    is stable, so this order is deterministic and reproducible across runs without any extra sort
+    of its own. Values always sum to ``len(members)`` (== the SAME band's own ``member_count``) by
+    construction -- every member increments exactly one key."""
+    tally: dict[str, int] = {}
+    for member in members:
+        timeframe = member["timeframe"]
+        tally[timeframe] = tally.get(timeframe, 0) + 1
+    return tally
+
+
 def _bands_by_class(bands: list[dict]) -> dict[str, int]:
     """A plain per-class count of ``bands`` (goal-desk-iter-18, J-14) -- a band with ``class: None``
     counts under ``"unclassified"``; all four keys are always present, even at zero. A count only --
@@ -390,10 +421,12 @@ def compute_screen(
     assigns those): ``{screen_date, as_of, universe_snapshot_id, config_fingerprint,
     bar_store_signature, rows, skipped}``. Each RANKED row additionally carries ``basis_as_of``/
     ``basis_age_days`` (goal-desk-iter-9, J-08), ``history_sessions``/``history_start``
-    (goal-desk-iter-15, J-11), ``reference_close`` (goal-desk-iter-17, J-13), and
-    ``opposite_band``/``bands_by_class`` (goal-desk-iter-18, J-14) -- see the module docstring's
-    "Basis disclosure", "History disclosure", "Reference-close disclosure", and "Opposite-band
-    disclosure" sections; skip rows never carry any of the seven.
+    (goal-desk-iter-15, J-11), ``reference_close`` (goal-desk-iter-17, J-13),
+    ``opposite_band``/``bands_by_class`` (goal-desk-iter-18, J-14), and ``band_member_count``/
+    ``band_round_number``/``band_member_timeframes`` (goal-desk-iter-23, J-15) -- see the module
+    docstring's "Basis disclosure", "History disclosure", "Reference-close disclosure",
+    "Opposite-band disclosure", and "Wall-composition disclosure" sections; skip rows never carry
+    any of the ten.
 
     ``progress``, if given, is called after EACH member with ``{"symbol": symbol}`` (the caller
     tracks its own done/total counters -- the ``desk_topup_compute.run_topup`` precedent).
@@ -471,6 +504,9 @@ def compute_screen(
                         else None
                     ),
                     "bands_by_class": _bands_by_class(result["bands"]),
+                    "band_member_count": best["member_count"],
+                    "band_round_number": best["round_number"],
+                    "band_member_timeframes": _band_member_timeframes(best["members"]),
                 }
             )
 

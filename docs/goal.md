@@ -1072,6 +1072,110 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     and 42 of them hold ten class-A bands, so `bands_by_class` is what makes the class column's constancy
     legible instead of mysterious.)*
 
+- **J-15: Every ranked briefing row states what its wall is actually made of**
+  - Steps:
+    1. Record three desk-owned fields on every NEW ranked screen row, all taken from the SAME band dict
+       `_select_best_band` (`desk_screen.py:262`) already returns — the band `compute_tradability` itself
+       built (`tradability._band`, `tradability.py:343`): `band_member_count` and `band_round_number`,
+       copied **VERBATIM** out of that band's own `member_count` / `round_number` keys (never
+       recomputed, never re-derived, never compared against a threshold), and `band_member_timeframes`,
+       a plain count of that SAME band's own `members` list under those members' own `timeframe` values
+       (the `bands_by_class` precedent, `_bands_by_class`, `desk_screen.py:298`) — keys are exactly the
+       timeframes present among those members in a deterministic order, values are integer counts whose
+       sum EQUALS `band_member_count`, and a timeframe with no member in this band is simply absent,
+       never a fabricated zero for a timeframe the symbol's own level computation never read. The band's
+       `members` list itself is NEVER copied into the record (the J-14 rule), no member price /
+       `touch_count` / `strength` is copied, and no second store read and no second `compute_tradability`
+       call is made: zero diff to `tradability.py`/`levels.py`/`bars.py`/`bar_index.py` (no new field on
+       any frozen return shape), zero new `Config` field, no new index, no new cache. Skip rows carry
+       none of the three (the J-08/J-11/J-13/J-14 shape).
+    2. Register all three in the blueprint's Data Contract "Screen snapshots, rank rows, skip rows" row
+       BEFORE the code lands — one owner (`desk_screen.py`), one serving endpoint
+       (`GET /research/desk/screen`). The snapshot key (screen date, as_of, universe snapshot id,
+       `config_fingerprint`, bar-store signature) is unchanged, and the rank key — band class A>B>C,
+       then distance asc, then band score desc, then symbol asc — is UNCHANGED: this journey DISCLOSES,
+       it never ranks, filters, gates, weights, or scores. Neither count nor the flag enters
+       `_row_rank_key` (`desk_screen.py:309`) or any band selection, and no "confluence quality",
+       "evidence depth", intraday-share ratio, threshold, or judgement about which composition is
+       BETTER is computed anywhere (this era's Non-Goals forbid new statistics and gates outright); the
+       copy never advises, predicts, or implies action.
+    3. Keep the append-only rail: never backfill, rewrite, or recompute an already-recorded snapshot;
+       `GET /research/desk/screen` serves legacy rows exactly as recorded, and `/desk` renders their
+       absent composition as an honest `"composition not recorded in this snapshot"` — the established
+       J-08/J-11/J-13/J-14 pattern (`apps/frontend/app/desk/page.tsx:383/392/407/420`) — never a value
+       computed at read time, and in particular never inferred on the page from `band_score`, the band
+       range, or `bands_by_class`, which is precisely the client-side recomputation the
+       single-source-of-truth rail forbids.
+    4. Surface it on `/desk`: exactly ONE new descriptive column, `levels`, beside the existing
+       `band`/`opposite` columns, rendering the row's OWN recorded counts and flag (e.g.
+       `155 levels · 1d 68 · 1h 57 · 4h 19 · 1w 11`) together with the same `round number` badge
+       `/structure`'s own band table already renders for the identical canonical field
+       (`apps/frontend/app/structure/page.tsx:612/619`), so the two pages describe one band in one
+       vocabulary. Every new value is an exact integer or boolean, so there is NO rounded display and
+       therefore NO new row-tooltip line is required or added by this journey (the iter-7 full-precision
+       tooltip pattern covers rounded numerics only; J-14's `bands_by_class` tooltip line stays exactly
+       as shipped, and no per-cell `title` is ever added under the stretched drill-in anchor). Copy =
+       descriptive measurement only, and `tests/test_copy_discipline.py` stays green unmodified.
+    5. Test fixture-scoped: a golden screen asserting the exact `band_member_count`,
+       `band_round_number` and `band_member_timeframes` per ranked row — including one row whose band
+       holds a SINGLE member (a zero-width `price_low == price_high` band) and one whose band is
+       dominated by intraday (`1m`/`5m`) members — plus the
+       `sum(band_member_timeframes.values()) == band_member_count` invariant asserted on every ranked
+       row, and byte-identical row content on a re-run under identical pins; a guard test that the row
+       builder issues NO additional `BarStore` read and NO second `compute_tradability` call beyond the
+       ones it already makes (assert the call counts — the J-11/J-13/J-14 precedent) and that the
+       frontend derives no count of its own; a golden comparison proving the recorded rank order is
+       byte-identical to what the same pins produced before this change; the MCP `desk_screen` tool
+       stays a byte-identical GET proxy (J-06's exactly-17-tool contract unchanged).
+  - Acceptance: on the fixture-scoped rig a NEW screen run — for a screen date not already recorded
+    under the same five pins, so the store's identical-pin refusal is respected rather than worked
+    around — records `band_member_count`, `band_round_number` and `band_member_timeframes` on every
+    ranked row, and each row's `band_member_count`/`band_round_number` are byte-identical to the
+    `member_count`/`round_number` of the corresponding band in
+    `GET /research/tradability?symbol=<sym>&as_of=<that snapshot's own as_of>`'s own `bands` list, while
+    `band_member_timeframes` is a plain tally of that SAME band's own `members` list by `timeframe` and
+    sums to that band's own `member_count` (**single source of truth**: the desk copies the canonical
+    owner's own band fields verbatim and counts that same band's own members inside the call it already
+    makes — no second read, no second compute, no re-grading, no re-scoring — and all three values are
+    registered in the Data Contract with `desk_screen.py` as their only owner and
+    `GET /research/desk/screen` as their only serving endpoint; this SSOT criterion stands in place of a
+    PnL-ledger append, which this era's Non-Goals forbid); the recorded rank order is byte-identical to
+    what the same pins produced before this change (disclosure only — a golden comparison proves the
+    rank key did not move); a re-run under identical pins reproduces byte-identical rows and a
+    same-pins re-run still returns the honest already-recorded response; every previously recorded
+    screen snapshot is proven byte-identical on disk (checksums unchanged, nothing backfilled) and
+    `/desk` renders their rows with the honest `"composition not recorded in this snapshot"` state; in a
+    real browser after the T-9 clean rebuild, `/desk` shows the `levels` column with at least one ranked
+    row whose band holds ≤ 5 levels and one whose band holds ≥ 100 levels legible in the SAME
+    screenshot, plus one row carrying the `round number` badge legible in that same frame or in one
+    further screenshot of the SAME rendered screen (T-10: no screenshot ⇒ `unknown`, never `passing`; no
+    native `title` tooltip is required by this journey, so the T-10a headed rig is not needed for it); a
+    **`[NEW]`-flagged demo-narrator walkthrough** covers the briefing's wall-composition disclosure end
+    to end, narrated over POPULATED ranked rows; and the full backend suite is green with
+    `Config().config_fingerprint()` still `08e471b10130e1e2`, zero new `Config` fields, the `default`
+    profile and `v1` byte-identical (engine equivalence green), the MCP surface still exactly 17 tools,
+    zero diff to `tradability.py`/`levels.py`/`bars.py`/`bar_index.py`/`StructureChart.tsx`, and
+    `tests/test_copy_discipline.py` green unmodified. *(Keyless core; browser-verifiable. Why: measured
+    2026-07-30 against the canonical owner's own recorded output — all 100 ranked rows of
+    `screen-2026-07-29-2a57de4e7415` (100 ranked / 1 skipped) matched to their own
+    `compute_tradability` returns cached in `.data/tradability_cache.db` on
+    (`side`,`price_low`,`price_high`,`quality_score`), 100/100 matched. The selected bands'
+    `member_count` spans **1 to 4,014** (quartiles 19 / 45.5 / 87) and `round_number` is **true on 16 of
+    the 100 rows** — and NEITHER value is recorded on any screen row or rendered anywhere on `/desk`,
+    while `/structure`'s own band table renders BOTH for the identical bands (a `member count` column
+    plus a `round number` badge, `app/structure/page.tsx:612/619`), so the briefing says less about a
+    wall than the page it drills into. The 15 top-ranked rows every one read `support · Class A ·
+    0.00 bps`, yet their walls are built of 2 to 609 levels: #4 MSFT's band holds **609** members of
+    which **572 are `1m`/`5m`** and only 28 are `1d`; #1 BRK-B's holds 155 (68 of them `1d`); #15 ORCL's
+    holds **2** (one `1h` + one `1d`); and #45 SPG's holds a **single** member, which is why its
+    recorded band is zero-width (`price_low == price_high == 231.72999572753906`) and prints today as
+    `band 231.73–231.73` with nothing saying why. Across the 100 rows composition spans 1 to 6 distinct
+    timeframes (75 rows are 4-timeframe confluences, 1 row a single timeframe) and 8 rows carry
+    intraday members, up to AAPL's 4,014-member band (3,895 of them `1m`/`5m`). `DeskScreenRow`
+    (`lib/types.ts:826`) carries no field for any of it, and the ranked table's eleven columns — symbol,
+    side, class, distance, score, coverage, tick evidence, basis, history, band, opposite — have no cell
+    for it.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals
