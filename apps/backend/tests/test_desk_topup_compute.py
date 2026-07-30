@@ -24,6 +24,7 @@ from __future__ import annotations
 import sys
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -562,6 +563,213 @@ def test_a_failing_pair_reports_failed_with_the_detail_preserved_and_the_run_con
 
 
 # ==================================================================================================
+# goal-desk-iter-26 (J-17) -- a per-pair fetch window derived from that pair's OWN frozen content
+# (never `bar_index.window_end_utc`), plus the honest "unchanged" outcome for a vendor call that
+# genuinely ran and returned only content already frozen. `_plant_bar_series`/`_epoch_days_ago`
+# give a test control over EXACTLY which bars are frozen for a pair BEFORE the walk under test
+# runs, by writing directly through `BarStore.record` -- bypassing `record_bar_series`/the fetch
+# route (and therefore `bar_index`) entirely, so a subsequent real walk's store-first index lookup
+# genuinely misses and falls through to the injected `FakeAdapter`.
+#
+# THE ONE EXISTING-ASSERTION CARVE-OUT (reviewer-directed; see
+# `reports/reviews/goal-desk-iter-26-review.md`, CRITICAL):
+# `test_cli_triggered_run_persists_a_record_with_the_identical_shape_as_a_manager_triggered_one`'s
+# `assert outcome.keys() == {...}` (above, ~line 1081) is the SINGLE existing assertion this
+# iteration edits -- its four-key literal is EXTENDED to the eight keys the Data Contract mandates
+# on every per-pair outcome entry (`requested_window`/`store_frozen_from`/`store_frozen_through`/
+# `window_basis`). It is a schema mirror, not a window pin, so the iteration spec's own
+# "disclose rather than edit" exception (which covers only tests pinning the SHIPPED WINDOW) does
+# not reach it, while the DEFINITION OF DONE's unqualified "full backend suite green" does.
+# There is no implementation of the mandated contract under which a REAL run's persisted outcome
+# entries keep exactly four keys. Proven structurally, not just observed: the SAME file's
+# `test_manager_triggered_runs_persisted_outcomes_are_byte_identical_to_run_topups_own_return`
+# requires the persisted record's `outcomes` to equal `run_topup`'s own raw return value
+# byte-for-byte, so the new fields MUST originate inside `run_topup`/`_run_one_pair` itself (never
+# a downstream enrichment step) for that assertion to keep holding -- which means every path
+# (manager- and CLI-triggered alike) produces the same eight-key entries. The edit preserves the
+# assertion's stated intent (exact cross-path key-SET equality against the one shared writer's
+# schema; a drift between the CLI and manager paths still fails it) and is the ONLY edit to any
+# pre-existing assertion in this file -- TC-7 (all-reused second run) and TC-8 (resumability), the
+# two the spec names explicitly, pass untouched. See `docs/handoffs/goal-desk-iter-26-dev.md`.
+# ==================================================================================================
+
+
+def _epoch_days_ago(days: float) -> float:
+    return (datetime.now(timezone.utc) - timedelta(days=days)).timestamp()
+
+
+def _plant_bar_series(bar_store: BarStore, *, symbol: str, timeframe: str, feed: str, bars) -> dict:
+    """Directly record a bar series into `bar_store` (bypassing `record_bar_series`/the fetch
+    route and `bar_index` entirely) -- see this section's own header comment."""
+    epochs = [b.epoch for b in bars]
+    window_start = datetime.fromtimestamp(min(epochs), tz=timezone.utc).date().isoformat() + "T00:00:00Z"
+    window_end = datetime.fromtimestamp(max(epochs), tz=timezone.utc).date().isoformat() + "T00:00:00Z"
+    return bar_store.record(
+        symbol=symbol, timeframe=timeframe,
+        window_start_utc=window_start, window_end_utc=window_end,
+        feed=feed, bars=list(bars),
+    )
+
+
+def test_desk_topup_compute_reads_merged_bars_and_never_reads_bar_index_window_end_utc():
+    """A source-introspection guard (TESTING REQUIREMENTS' own explicit ask): the window
+    derivation reads the canonical `BarStore.merged_bars` accessor and never ATTRIBUTE-ACCESSES
+    `bar_index`'s `window_end_utc` field — proven by reading `desk_topup_compute.py`'s own source
+    as text (the `test_desk_ui_guards.py` pattern, applied backend-side). Matches a literal
+    `.window_end_utc` attribute access (never present in this module's CODE — only in its prose,
+    which explains why it deliberately reads `merged_bars` instead), so a real regression (some
+    future edit reaching into `bar_index`'s own `window_end_utc` column) is what this guard would
+    actually catch — proven by the counter-test below."""
+    import pathlib
+    import re
+
+    source = pathlib.Path(desk_topup_compute.__file__).read_text()
+    assert "merged_bars(" in source
+    assert re.search(r"\.window_end_utc\b", source) is None
+
+
+def test_the_window_end_utc_guard_can_fail_on_a_seeded_violation():
+    """The guard above can never fail proves nothing -- a seeded `.window_end_utc` attribute
+    access is caught."""
+    import re
+
+    seeded = 'latest = bar_index.window_end_utc\nmerged_bars(x)\n'
+    assert re.search(r"\.window_end_utc\b", seeded) is not None
+
+
+def test_pair_window_is_the_byte_identical_full_lookback_when_nothing_is_frozen(manager_env):
+    """TC-2 (goal.md J-17): a pair with NO frozen bars asks for the byte-identical full
+    `_TOPUP_LOOKBACK_DAYS` window `_fetch_window_now()` already asks for today."""
+    _universe_store, bar_store, _bar_index, _registry, _topup_run_store = manager_env
+    expected_start, expected_end = desk_topup_compute._fetch_window_now()
+
+    window = desk_topup_compute._pair_window(bar_store, "NEW", "1d")
+
+    assert window["window_basis"] == "full_lookback"
+    assert window["requested_window"] == {"start": expected_start, "end": expected_end}
+    assert window["store_frozen_from"] is None
+    assert window["store_frozen_through"] is None
+
+
+def test_pair_window_is_the_byte_identical_full_lookback_when_frozen_history_is_shorter_than_the_lookback(
+    manager_env,
+):
+    """TC-3 (goal.md J-17): a pair whose frozen history does NOT reach back to the lookback start
+    keeps asking for the SAME full window -- short histories keep deepening exactly as they do
+    today."""
+    _universe_store, bar_store, _bar_index, registry, _topup_run_store = manager_env
+    short_epoch = _epoch_days_ago(10)  # far short of the 730-day lookback
+    from app.providers.adapters.base import RawBar
+
+    _plant_bar_series(
+        bar_store, symbol="SHORT", timeframe="1d", feed=registry.config.historical_feed,
+        bars=[RawBar("SHORT", "1d", short_epoch, 10.0, 11.0, 9.0, 10.5, 500)],
+    )
+    expected_start, expected_end = desk_topup_compute._fetch_window_now()
+
+    window = desk_topup_compute._pair_window(bar_store, "SHORT", "1d")
+
+    assert window["window_basis"] == "full_lookback"
+    assert window["requested_window"] == {"start": expected_start, "end": expected_end}
+    assert window["store_frozen_from"] == desk_topup_compute._iso_bar_epoch(short_epoch)
+    assert window["store_frozen_through"] == desk_topup_compute._iso_bar_epoch(short_epoch)
+
+
+def test_pair_window_is_a_tail_window_when_frozen_history_reaches_the_lookback_start(manager_env):
+    """TC-1 (goal.md J-17): a pair whose frozen bars reach back past `_TOPUP_LOOKBACK_DAYS` asks
+    for a tail window starting at its own newest frozen bar's UTC date."""
+    _universe_store, bar_store, _bar_index, registry, _topup_run_store = manager_env
+    deep_epoch = _epoch_days_ago(desk_topup_compute._TOPUP_LOOKBACK_DAYS + 70)  # past the lookback
+    newest_epoch = _epoch_days_ago(5)
+    from app.providers.adapters.base import RawBar
+
+    _plant_bar_series(
+        bar_store, symbol="DEEP", timeframe="1d", feed=registry.config.historical_feed,
+        bars=[
+            RawBar("DEEP", "1d", deep_epoch, 10.0, 11.0, 9.0, 10.5, 500),
+            RawBar("DEEP", "1d", newest_epoch, 20.0, 21.0, 19.0, 20.5, 700),
+        ],
+    )
+    _lookback_start, expected_end = desk_topup_compute._fetch_window_now()
+    expected_tail_start = (
+        datetime.fromtimestamp(newest_epoch, tz=timezone.utc).date().isoformat() + "T00:00:00Z"
+    )
+
+    window = desk_topup_compute._pair_window(bar_store, "DEEP", "1d")
+
+    assert window["window_basis"] == "tail"
+    assert window["requested_window"] == {"start": expected_tail_start, "end": expected_end}
+    assert window["store_frozen_from"] == desk_topup_compute._iso_bar_epoch(deep_epoch)
+    assert window["store_frozen_through"] == desk_topup_compute._iso_bar_epoch(newest_epoch)
+
+
+def test_run_topup_asks_the_fake_adapter_for_the_derived_tail_window_and_records_it_on_the_outcome(
+    manager_env,
+):
+    """TC-1's end-to-end half: the walk's fake adapter genuinely RECEIVES the derived tail window
+    (proven on `adapter.fetch_bars_calls`), and the recorded outcome entry carries the identical
+    `requested_window`/`window_basis`/`store_frozen_from`/`store_frozen_through`."""
+    _universe_store, bar_store, bar_index, registry, _topup_run_store = manager_env
+    deep_epoch = _epoch_days_ago(desk_topup_compute._TOPUP_LOOKBACK_DAYS + 70)
+    newest_epoch = _epoch_days_ago(5)
+    from app.providers.adapters.base import RawBar
+
+    _plant_bar_series(
+        bar_store, symbol="DEEP", timeframe="1d", feed=registry.config.historical_feed,
+        bars=[
+            RawBar("DEEP", "1d", deep_epoch, 10.0, 11.0, 9.0, 10.5, 500),
+            RawBar("DEEP", "1d", newest_epoch, 20.0, 21.0, 19.0, 20.5, 700),
+        ],
+    )
+    adapter = _inject_adapter(bars=_bars())  # distinct content -> a genuinely NEW series ("fetched")
+    expected_tail_start = (
+        datetime.fromtimestamp(newest_epoch, tz=timezone.utc).date().isoformat() + "T00:00:00Z"
+    )
+
+    outcomes = run_topup(["DEEP"], bar_store, bar_index, registry)
+
+    entry = next(o for o in outcomes if o["symbol"] == "DEEP" and o["timeframe"] == "1d")
+    assert entry["outcome"] == "fetched"
+    assert entry["window_basis"] == "tail"
+    assert entry["requested_window"]["start"] == expected_tail_start
+    assert entry["store_frozen_through"] == desk_topup_compute._iso_bar_epoch(newest_epoch)
+    call = next(c for c in adapter.fetch_bars_calls if c[0] == "DEEP" and c[3] == "1d")
+    assert call[1].astimezone(timezone.utc).date().isoformat() == expected_tail_start[:10]
+
+
+def test_a_vendor_answer_holding_only_already_frozen_bars_records_unchanged_not_failed(manager_env):
+    """TC-4 (goal.md J-17): the vendor's "you already have this" answer --
+    `record_bar_series`'s own 409 (`BarSeriesAlreadyRegistered`) -- is recorded as `"unchanged"`,
+    never `"failed"`: a genuine vendor call ran, but wrote no second series file.
+    `requested_window` and `store_frozen_through` are both present on the recorded entry."""
+    _universe_store, bar_store, bar_index, registry, _topup_run_store = manager_env
+    already_frozen = _bars()
+    _plant_bar_series(
+        bar_store, symbol="SAME", timeframe="1d", feed=registry.config.historical_feed,
+        bars=already_frozen,
+    )
+    before_series, before_errors = bar_store.list(include_bars=False)
+    assert before_errors == []
+    _inject_adapter(bars=already_frozen)  # the vendor's answer holds ONLY content already frozen
+
+    outcomes = run_topup(["SAME"], bar_store, bar_index, registry)
+
+    entry = next(o for o in outcomes if o["symbol"] == "SAME" and o["timeframe"] == "1d")
+    assert entry["outcome"] == "unchanged"
+    assert entry["detail"] is not None
+    assert entry["requested_window"] is not None
+    assert entry["store_frozen_through"] is not None
+
+    after_series, after_errors = bar_store.list(include_bars=False)
+    assert after_errors == []
+    # No second series file was written for this pair -- the store gained nothing new.
+    same_before = [m for m in before_series if m["symbol"] == "SAME" and m["timeframe"] == "1d"]
+    same_after = [m for m in after_series if m["symbol"] == "SAME" and m["timeframe"] == "1d"]
+    assert len(same_before) == 1
+    assert same_after == same_before
+
+
+# ==================================================================================================
 # Routes -- GET-never-computes, single-flight/cancel through HTTP, idle-cancel 409 (TC-15).
 # ==================================================================================================
 
@@ -875,7 +1083,17 @@ def test_cli_triggered_run_persists_a_record_with_the_identical_shape_as_a_manag
     assert len(record["outcomes"]) == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
     assert {o["outcome"] for o in record["outcomes"]} == {"fetched"}
     for outcome in record["outcomes"]:
-        assert outcome.keys() == {"symbol", "timeframe", "outcome", "detail"}
+        # goal-desk-iter-26 (J-17), the ONE reviewer-sanctioned carve-out to this iteration's
+        # "existing assertions pass unmodified" rule: this pin is a mirror of the SHARED writer's
+        # per-pair schema, extended -- not relaxed -- with the four Data-Contract fields every path
+        # now carries. It stays an exact key-SET equality, so cross-path schema drift (the property
+        # this test's own name claims) still fails it. See the section header below and
+        # `docs/handoffs/goal-desk-iter-26-dev.md` for why no implementation of the mandated
+        # contract can keep a real run's outcome entries at four keys.
+        assert outcome.keys() == {
+            "symbol", "timeframe", "outcome", "detail",
+            "requested_window", "store_frozen_from", "store_frozen_through", "window_basis",
+        }
 
 
 def test_cli_with_no_universe_snapshot_persists_no_run_record(tmp_path, monkeypatch):

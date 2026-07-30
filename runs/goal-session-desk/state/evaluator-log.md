@@ -1499,3 +1499,70 @@ replay tool keeps saving the same first view, so most replay pictures are one im
 tidy-up, not a product issue. One sentence for the owner: everything the Desk was asked to do is
 built, shown and proven, nothing of your data was touched — please confirm the finish, and treat
 the three notes as optional tidying.
+
+## Iteration 26 — goal-desk-iter-26
+
+**Date:** 2026-07-31T00:40:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-17 "A top-up asks the vendor only for the bars the frozen store cannot already
+  prove" — a brand new journey, built for the first time this run. The count of journeys goes 16 to 17
+- Newly failing: none
+- Regressed: none
+- Unchanged and re-checked this run: J-01 through J-05 and J-07 through J-16 by saved-script replay
+  (15 of 15 green, zero script edits), and J-06 "17 machine-readable tools" by a live check against a
+  running copy of the program. Nothing was dropped for time this run
+- Picture debt OPENED — the one thing this run did not produce: the short guided film that J-17's own
+  text in the goal file demands was never recorded, because the machine again downgraded the run to
+  the shorter depth that records no film. J-17 carries a make-up flag for it
+- Anti-goal violations: none new, none open. The three older items stay resolved and I re-checked all
+  three myself. Nothing of the owner's data was created, changed or removed this run
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to produce. I
+opened the picture myself: in one frame the Top-up Runs panel reads "0 reused · 6 fetched ·
+2 unchanged · 4 failed", then "2 pairs asked for a tail window · 10 pairs asked for the full lookback
+window", and under it four failed rows each showing its own "requested 2024-07-30 → 2026-07-30" —
+all three things the goal file asks for, legible together at a normal window size with nothing cut
+off at the right edge. Then I proved the numbers instead of believing them: I read the run's own
+saved record straight off disk and it holds exactly twelve entries of exactly eight fields each,
+tallying to those same four counts and that same two-versus-ten split, character for character. All
+three cases the goal file describes really happened on a real run: two pairs whose stored history
+already reaches far enough back asked only for a short tail starting on the exact day of their own
+newest stored bar; two pairs whose history starts one day too late asked for the same full window
+they ask for today; eight pairs with nothing stored asked for that same full window too. The
+"you already have this" answer from the data supplier is now recorded as "unchanged" rather than as
+a failure, and it wrote no second file — the run's folder holds exactly the four files it started
+with plus the six genuinely new ones. I re-ran the work myself rather than trusting the reports: the
+whole back-end test suite (1,474 passed, 8 skipped, exit 0, zero failures), the settings fingerprint
+(`08e471b10130e1e2`), the tool count (exactly 17), and a file-by-file check that thirteen named
+frozen files plus five guard test files all take a zero change. I proved nothing of the owner's was
+written: the only files touched under the data folder are two rebuildable database sidecars, and the
+counts still read 759 price files, 1 universe record, 11 screens and 1 top-up record. Coherence is
+COHERENCE-PASS and the deterministic scan is CLEAN. I did NOT call the goal finished, for one
+reason only: the goal file's own text for this new item also asks for a short guided film over a
+populated run, and no film was recorded — the plan for this run asked for the fuller pipeline that
+records one, and the machine downgraded it to the shorter one, exactly as happened two runs ago.
+Three further things I found and did not hide: the run edited one line of an existing test (a list
+of the four fields each entry used to carry, extended to the eight it now carries) which the run's
+own rules said not to touch — the rule and the work it ordered genuinely contradict each other, the
+line was widened rather than weakened, and I ratify it; the picture-taking step built the shared
+front-end bundle pointing at a throwaway backend that no longer exists, so the everyday page at
+port 3301 is now wired to nothing and every saved replay script will falsely fail until it is
+rebuilt; and no saved script was written for the new item, so it must be checked by a real browser
+pass next time.
+
+**Next-step recommendation:** One more short capture-and-check run, with no code change. Two jobs.
+(1) Record the guided film for J-17 "A top-up asks the vendor only for the bars the frozen store
+cannot already prove" over a populated run on a throwaway copy of the data, never the owner's own —
+its frames must show the four counts line and the tail-versus-full-window line, and each click in
+its script must name ONE row rather than many. (2) BEFORE anything else in that run, delete
+`apps/frontend/.next`, rebuild it, and restart both everyday processes: I checked the built files
+myself and they now point at a backend address that no longer exists, so the page at port 3301 shows
+nothing and all sixteen saved replay scripts would fail for a reason that has nothing to do with the
+product. One thing for the owner's own track, not blocking: the film's earlier notes from two runs
+ago (its wording, and the replay tool saving the same first picture over and over) are still open and
+still optional. One sentence for the owner: the Desk's top-up now says honestly what it asked the
+data supplier for and what came back — proven number by number against the run's own record — and
+the next short run only needs to rebuild the page and record the film before the finish can be
+proposed again.

@@ -242,3 +242,53 @@ def test_resolve_desk_topup_log_dir_defaults_to_a_sibling_of_the_universe_dir(mo
 def test_resolve_desk_topup_log_dir_env_override(monkeypatch):
     monkeypatch.setenv("TAPEOLOGY_DESK_TOPUP_LOG_DIR", "/tmp/custom-topup-log-dir")
     assert resolve_desk_topup_log_dir("/some/root/.data/universe") == "/tmp/custom-topup-log-dir"
+
+
+# --- goal-desk-iter-26 (J-17): the store is a pure passthrough for whatever per-pair outcome shape
+# a caller gives it -- it validates NOTHING about outcome-dict keys, so the four new fields
+# (`requested_window`/`store_frozen_from`/`store_frozen_through`/`window_basis`) need no store-side
+# code change; these tests document that the passthrough genuinely holds for the new shape, and
+# that an OLD-shape (pre-iter-26) run record still round-trips exactly as it always has (the
+# "legacy runs served verbatim, never backfilled" DoD clause, at the store layer). ------------------
+
+J17_OUTCOMES = [
+    {
+        "symbol": "AAA", "timeframe": "1d", "outcome": "unchanged",
+        "detail": "already registered", "requested_window": {"start": "2024-07-01T00:00:00Z", "end": "2026-07-30T00:00:00Z"},
+        "store_frozen_from": "2024-06-01T00:00:00.000000Z", "store_frozen_through": "2026-07-25T00:00:00.000000Z",
+        "window_basis": "tail",
+    },
+    {
+        "symbol": "BBB", "timeframe": "1d", "outcome": "fetched", "detail": None,
+        "requested_window": {"start": "2024-07-30T00:00:00Z", "end": "2026-07-30T00:00:00Z"},
+        "store_frozen_from": None, "store_frozen_through": None, "window_basis": "full_lookback",
+    },
+]
+
+
+def test_record_and_list_round_trip_the_new_j17_per_pair_fields_verbatim(tmp_path):
+    store = TopupRunStore(tmp_path / "topup_runs")
+    meta = _record_sample(store, outcomes=J17_OUTCOMES)
+
+    assert meta["outcomes"] == J17_OUTCOMES
+    records, errors = store.list()
+    assert errors == []
+    assert records[0]["outcomes"] == J17_OUTCOMES
+
+
+def test_a_legacy_pre_iter26_run_record_round_trips_without_the_new_fields(tmp_path):
+    """A run recorded BEFORE this iteration's code shipped never gains the four new fields at
+    read time -- `list()` serves it exactly as it was written, absent fields absent (never a
+    computed or backfilled value)."""
+    store = TopupRunStore(tmp_path / "topup_runs")
+    legacy_outcomes = [{"symbol": "AAA", "timeframe": "1h", "outcome": "fetched", "detail": None}]
+    meta = _record_sample(store, outcomes=legacy_outcomes)
+
+    assert meta["outcomes"] == legacy_outcomes
+    for outcome in meta["outcomes"]:
+        assert "window_basis" not in outcome
+        assert "requested_window" not in outcome
+
+    records, errors = store.list()
+    assert errors == []
+    assert records[0]["outcomes"] == legacy_outcomes

@@ -1,11 +1,11 @@
 # Goal Session Summary — desk
 
 **Final verdict:** AWAITING_PUMP
-**Total iterations:** 24
-**Wall time (seconds):** 15921
+**Total iterations:** 26
+**Wall time (seconds):** 19
 **Quota pauses:** 0
 **Started:** 2026-07-25T01:04:47.481604Z
-**Finished:** 2026-07-30T12:13:43.862304Z
+**Finished:** 2026-07-30T21:35:51.466563Z
 
 ## Branch
 
@@ -19,21 +19,22 @@ This session pushed iteration commits to `goal/desk`. Open a PR with:
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-desk-iter-23 |
-| J-02 | passing | goal-desk-iter-23 |
-| J-03 | passing | goal-desk-iter-23 |
-| J-04 | passing | goal-desk-iter-23 |
-| J-05 | passing | goal-desk-iter-23 |
-| J-06 | passing | goal-desk-iter-23 |
-| J-07 | passing | goal-desk-iter-23 |
-| J-08 | passing | goal-desk-iter-23 |
-| J-09 | passing | goal-desk-iter-23 |
-| J-10 | passing | goal-desk-iter-23 |
-| J-11 | passing | goal-desk-iter-23 |
-| J-12 | passing | goal-desk-iter-23 |
-| J-13 | passing | goal-desk-iter-23 |
-| J-14 | passing | goal-desk-iter-23 |
-| J-15 | passing | goal-desk-iter-23 |
+| J-01 | passing | goal-desk-iter-25 |
+| J-02 | passing | goal-desk-iter-24 |
+| J-03 | passing | goal-desk-iter-25 |
+| J-04 | passing | goal-desk-iter-25 |
+| J-05 | passing | goal-desk-iter-24 |
+| J-06 | passing | goal-desk-iter-25 |
+| J-07 | passing | goal-desk-iter-25 |
+| J-08 | passing | goal-desk-iter-25 |
+| J-09 | passing | goal-desk-iter-24 |
+| J-10 | passing | goal-desk-iter-24 |
+| J-11 | passing | goal-desk-iter-25 |
+| J-12 | passing | goal-desk-iter-25 |
+| J-13 | passing | goal-desk-iter-25 |
+| J-14 | passing | goal-desk-iter-25 |
+| J-15 | passing | goal-desk-iter-25 |
+| J-16 | passing | goal-desk-iter-25 |
 
 ## Anti-goal violations
 
@@ -410,24 +411,64 @@ See `runs/goal-session-desk/telemetry.jsonl` for the structured event log.
       [engine] lean-pipeline      43.4m  (contains agent time above)
       [engine] showcase-join       0.0m  (contains agent time above)
       pump-wait                  0.2m
-  session: 24 completed iteration(s), mean wall 130.0m
-      total goal-evaluator            1661.7m
-      total developer                  407.4m
-      total browser-qa-agent           346.9m
-      total goal-decomposer            319.3m
-      total iteration-summarizer       223.5m
-      total coherence-auditor          108.3m
-      total reviewer                   106.1m
+  goal-desk-iter-24  depth=lean  verdict=CONTINUE  wall=91.7m
+      developer                   42.3m  calls=1
+      reviewer                    20.9m  calls=2
+      goal-evaluator              16.2m  calls=1
+      browser-qa-agent            11.0m  calls=1
+      coherence-auditor            3.6m  calls=1
+      browser-qa-replay            1.5m  calls=1
+      [engine] lean-pipeline      75.6m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer, developer, coherence-auditor)
+      pump-wait                  3.2m
+      OVER BUDGET at browser-qa: 3793s > 3600s (mode=trim)
+      overlap saved              3.7m  (parallel steps)
+  goal-desk-iter-25  depth=lean  verdict=GOAL_ACHIEVED  wall=47.7m
+      goal-evaluator              14.3m  calls=1
+      browser-qa-agent            12.3m  calls=1
+      iteration-summarizer        10.4m  calls=2
+      goal-evaluator-confirm       6.7m  calls=1
+      goal-decomposer              5.5m  calls=1
+      demo-narrator                2.0m  calls=1
+      [engine] evidence-pipeline    16.1m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  0.4m
+      overlap saved              3.4m  (parallel steps)
+  goal-desk-iter-26  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                   36.0m  calls=1
+      reviewer                    16.8m  calls=1
+      coherence-auditor           13.7m  calls=1
+      goal-decomposer             10.2m  calls=1
+      browser-qa-replay            1.5m  calls=1
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  0.5m
+      OVER BUDGET at browser-qa: 3777s > 3600s (mode=trim)
+  goal-desk-iter-26  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                    0.2m  calls=1  failures=1
+      [engine] lean-pipeline       0.2m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer)
+      pump-wait                  0.2m
+  session: 26 completed iteration(s), mean wall 125.3m
+      total goal-evaluator            1692.2m
+      total developer                  485.9m
+      total browser-qa-agent           370.2m
+      total goal-decomposer            334.9m
+      total iteration-summarizer       233.9m
+      total reviewer                   143.8m
+      total coherence-auditor          125.7m
       total auditor                     81.3m
       total qa                          71.9m
       total readme-maintainer           70.7m
       total ui-impact-analyst           51.4m
       total ui-test-designer            38.2m
+      total goal-evaluator-confirm      22.8m
       total orchestrator                22.1m
       total ux-regression-reviewer      17.4m
-      total goal-evaluator-confirm      16.1m
-      total demo-narrator               14.1m
-      total browser-qa-replay            2.3m
-      total AWAITING_PUMP paused gaps: 8.8m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP
+      total demo-narrator               16.1m
+      total browser-qa-replay            5.3m
+      total AWAITING_PUMP paused gaps: 9.8m
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, machine_reset, AWAITING_PUMP
 ```

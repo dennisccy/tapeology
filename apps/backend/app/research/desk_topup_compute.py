@@ -39,6 +39,31 @@ at or after it. This reads only the ALREADY-RETURNED ``created_utc`` field — i
 ``record_bar_series``'s own adapter-selection/feed-derivation decisions, so it cannot drift out of
 sync with that logic.
 
+**goal-desk-iter-26, J-17 — a per-pair fetch window derived from the store's OWN content, plus the
+honest ``"unchanged"`` outcome.** ``_pair_window`` (below) reads ONE pair's own frozen bars via the
+SAME canonical ``BarStore.merged_bars`` accessor ``desk_screen.py``'s reference-close/history walk
+already uses (never ``bar_index``'s ``window_end_utc``, which records what an EARLIER run ASKED
+for, not what the store can prove) and picks one of two windows: the byte-identical full
+``_TOPUP_LOOKBACK_DAYS`` window ``_fetch_window_now()`` already asks for today (nothing frozen yet,
+or a frozen history that does not reach back that far — short histories keep deepening exactly as
+they do today), or — once the pair's frozen history reaches the lookback start — a TAIL window
+``[that pair's own newest frozen bar's UTC date, today]``, so the boundary session is always
+re-requested and re-merged, never assumed complete. ``_run_one_pair`` calls it once, internally, to
+build the actual fetch body; ``run_topup`` calls it again, independently, immediately BEFORE
+calling ``_run_one_pair`` for the SAME pair, purely to capture the pre-fetch provenance
+(``requested_window``/``store_frozen_from``/``store_frozen_through``/``window_basis``) for that
+pair's outcome entry — both reads see identical content because nothing is written to the store
+between them, so the two calls always agree. ``_run_one_pair``'s own call signature/return contract
+is UNCHANGED (still ``(symbol, timeframe, bar_store, bar_index, registry) -> (outcome, str|None)``)
+so every existing test that monkeypatches it wholesale keeps working unmodified.
+
+A tail window makes the vendor's "you already have this" answer — ``record_bar_series``'s own 409
+(``BarSeriesAlreadyRegistered``, ``routes.py:681``) — the NORMAL weekend/holiday response, not a
+failure: ``_run_one_pair`` now classifies a 409 specifically as ``"unchanged"`` (a vendor call ran
+and returned only bars already frozen), distinct from ``"reused"`` (a store-first exact-key hit,
+ZERO vendor calls — unchanged meaning). Every OTHER refusal keeps its verbatim detail and its
+``"failed"`` label.
+
 **J-09 — the append-only run log.** Every run's OWN already-computed outcomes are persisted, once,
 at terminal state, by the single shared writer ``desk_topup_log.record_topup_run`` — called from
 BOTH ``_work``'s two exit paths below (the ``except`` branch for a whole-job ``"failed"``, and the
@@ -123,6 +148,66 @@ def _parse_iso(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _iso_bar_epoch(epoch: float) -> str:
+    """The SAME epoch -> ISO formatting ``bars.py``'s own ``_iso_utc``/``desk_screen.py``'s own
+    ``_iso`` use — kept as a local copy (this project's per-module tiny-helper convention) so a
+    pair's OWN frozen-bar timestamps are formatted identically wherever they are read."""
+    return (
+        datetime.fromtimestamp(epoch, tz=timezone.utc)
+        .isoformat(timespec="microseconds")
+        .replace("+00:00", "Z")
+    )
+
+
+def _pair_window(bar_store: BarStore, symbol: str, timeframe: str) -> dict:
+    """goal-desk-iter-26, J-17 — derive ONE pair's fetch window from that pair's OWN frozen
+    content, read via the SAME canonical ``BarStore.merged_bars`` accessor (``bars.py:557``) —
+    never ``bar_index``'s ``window_end_utc``. A single ascending ``merged_bars`` read decides one
+    of three cases:
+
+      * nothing frozen for this pair -> the byte-identical full ``_TOPUP_LOOKBACK_DAYS`` window
+        ``_fetch_window_now()`` already asks for today (``window_basis: "full_lookback"``).
+      * the pair's frozen history does NOT reach back to that lookback start -> the SAME full
+        window (``"full_lookback"``) — short histories keep deepening exactly as they do today.
+      * the pair's frozen history reaches the lookback start -> a tail window
+        ``[that pair's own newest frozen bar's UTC date, today]`` (``"tail"``). The end bound stays
+        ``_fetch_window_now()``'s wall-clock today either way.
+
+    Returns ``{"requested_window": {"start", "end"}, "store_frozen_from", "store_frozen_through",
+    "window_basis"}`` — ``store_frozen_from``/``store_frozen_through`` are that pair's own
+    earliest/newest frozen bar (full ISO timestamp), both ``None`` together when nothing is
+    frozen. A PURE read (zero vendor calls, zero writes) — safe to call more than once against the
+    same pre-fetch store state (see the module docstring's J-17 section)."""
+    lookback_start, today = _fetch_window_now()
+    bars = bar_store.merged_bars(symbol, timeframe)
+    if not bars:
+        return {
+            "requested_window": {"start": lookback_start, "end": today},
+            "store_frozen_from": None,
+            "store_frozen_through": None,
+            "window_basis": "full_lookback",
+        }
+    frozen_from = _iso_bar_epoch(bars[0].epoch)
+    frozen_through = _iso_bar_epoch(bars[-1].epoch)
+    if frozen_from[:10] > lookback_start[:10]:
+        # The pair's OWN earliest frozen bar is more recent than the lookback start -- its
+        # history does not reach back that far yet. Keep asking for the same full window so a
+        # short history keeps deepening exactly as it does today.
+        return {
+            "requested_window": {"start": lookback_start, "end": today},
+            "store_frozen_from": frozen_from,
+            "store_frozen_through": frozen_through,
+            "window_basis": "full_lookback",
+        }
+    tail_start = frozen_through[:10] + "T00:00:00Z"
+    return {
+        "requested_window": {"start": tail_start, "end": today},
+        "store_frozen_from": frozen_from,
+        "store_frozen_through": frozen_through,
+        "window_basis": "tail",
+    }
+
+
 def _copy_snapshot(snapshot: dict) -> dict:
     """A caller-safe copy (the ``progress.outcomes`` list is fresh too) so a reader mutating what
     ``snapshot()`` returns can never poison ``DeskTopupComputeManager``'s own internal state (the
@@ -148,20 +233,31 @@ def _run_one_pair(
     """Fetch+record ONE ``(symbol, timeframe)`` pair through ``record_bar_series`` (in-process —
     never a second fetch-and-record implementation) and classify the honest outcome:
 
-      * ``"reused"``  — ``record_bar_series`` answered store-first (its own ``bar_index``-backed
+      * ``"reused"``    — ``record_bar_series`` answered store-first (its own ``bar_index``-backed
         coordinator), zero vendor calls.
-      * ``"fetched"`` — a real vendor call ran and a BRAND NEW series was recorded.
-      * ``"failed"``  — ``record_bar_series`` raised (the existing ``NoDataForWindow``/
-        ``VendorTimeout``/``UnsupportedTimeframe`` taxonomy, all converted to ``HTTPException``
-        inside ``record_bar_series``, or any other unexpected error) — the detail is preserved
-        verbatim, never swallowed, and the caller (``run_topup``) continues to the remaining pairs
-        rather than aborting the whole job."""
-    start, end = _fetch_window_now()
+      * ``"fetched"``   — a real vendor call ran and a BRAND NEW series was recorded.
+      * ``"unchanged"`` — goal-desk-iter-26 (J-17): a real vendor call ran (this pair's derived
+        window, see ``_pair_window``) and the vendor answered with content already registered —
+        ``record_bar_series``'s own 409 (``BarSeriesAlreadyRegistered``). A genuine vendor call, so
+        never conflated with ``"reused"``'s zero-vendor-calls meaning.
+      * ``"failed"``    — ``record_bar_series`` raised any OTHER error (the existing
+        ``NoDataForWindow``/``VendorTimeout``/``UnsupportedTimeframe`` taxonomy, all converted to
+        ``HTTPException`` inside ``record_bar_series``, or any other unexpected error) — the detail
+        is preserved verbatim, never swallowed, and the caller (``run_topup``) continues to the
+        remaining pairs rather than aborting the whole job.
+
+    The fetch window itself is this pair's OWN derived window (``_pair_window`` — goal-desk-iter-26,
+    J-17), never the run-wide wall-clock window unconditionally."""
+    window = _pair_window(bar_store, symbol, timeframe)
+    start = window["requested_window"]["start"]
+    end = window["requested_window"]["end"]
     body = BarRecordRequest(symbol=symbol, timeframe=timeframe, start=start, end=end)
     t_before = datetime.now(timezone.utc)
     try:
         result = record_bar_series(body=body, registry=registry, store=bar_store, index=bar_index)
     except HTTPException as exc:
+        if exc.status_code == 409:
+            return "unchanged", str(exc.detail)
         return "failed", str(exc.detail)
     except Exception as exc:  # noqa: BLE001 -- never swallowed, never aborts the whole run (TC-14)
         return "failed", str(exc)
@@ -185,7 +281,12 @@ def run_topup(
     """Walk ``members x DESK_TOPUP_TIMEFRAMES``, in order, calling ``_run_one_pair`` for each pair
     — the SOLE walker; ``DeskTopupComputeManager`` and the CLI warmer both call this and nothing
     else (the ``run_strategy_comparison_report`` precedent). Returns the list of per-pair outcome
-    dicts (``{"symbol", "timeframe", "outcome", "detail"}``), in iteration order.
+    dicts, in iteration order: ``{"symbol", "timeframe", "outcome", "detail"}`` plus (goal-desk-
+    iter-26, J-17) ``"requested_window"``, ``"store_frozen_from"``, ``"store_frozen_through"``,
+    ``"window_basis"`` — that pair's own pre-fetch provenance, captured via ``_pair_window``
+    IMMEDIATELY before ``_run_one_pair`` runs (so it reflects the store's content BEFORE this run's
+    fetch, exactly as the Data Contract requires) and independent of whatever ``_run_one_pair``
+    itself is (real or a test fake) — see the module docstring's J-17 section.
 
     ``progress``, if given, is called after EACH pair with the outcome dict just appended (so a
     caller can publish incremental state). ``should_abort``, if given and it returns ``True``
@@ -198,8 +299,18 @@ def run_topup(
         for timeframe in DESK_TOPUP_TIMEFRAMES:
             if should_abort is not None and should_abort():
                 return outcomes
+            window = _pair_window(bar_store, symbol, timeframe)
             outcome, detail = _run_one_pair(symbol, timeframe, bar_store, bar_index, registry)
-            entry = {"symbol": symbol, "timeframe": timeframe, "outcome": outcome, "detail": detail}
+            entry = {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "outcome": outcome,
+                "detail": detail,
+                "requested_window": window["requested_window"],
+                "store_frozen_from": window["store_frozen_from"],
+                "store_frozen_through": window["store_frozen_through"],
+                "window_basis": window["window_basis"],
+            }
             outcomes.append(entry)
             if progress is not None:
                 progress(entry)
@@ -449,8 +560,12 @@ def main() -> int:
 
     n_fetched = sum(1 for o in outcomes if o["outcome"] == "fetched")
     n_reused = sum(1 for o in outcomes if o["outcome"] == "reused")
+    n_unchanged = sum(1 for o in outcomes if o["outcome"] == "unchanged")
     n_failed = sum(1 for o in outcomes if o["outcome"] == "failed")
-    print(f"desk top-up complete: {n_fetched} fetched, {n_reused} reused, {n_failed} failed.")
+    print(
+        f"desk top-up complete: {n_fetched} fetched, {n_reused} reused, {n_unchanged} unchanged, "
+        f"{n_failed} failed."
+    )
     return 0 if n_failed == 0 else 1
 
 

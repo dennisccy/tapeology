@@ -150,36 +150,11 @@ backend you believe you are serving, because `location.origin` alone cannot dete
 **Applies to:** any iteration whose spec restates a goal.md rule in its own words (selection keys,
 rank keys, tie-breaks, thresholds); any `desk_screen.py` band-selection change.
 
-## iter-19 — 2026-07-29T21:05:00+01:00
-
-**Verdict:** GOAL_ACHIEVED
-**Lesson:** Two acceptance clauses in this session are structurally unsatisfiable by the lanes that
-are asked to satisfy them, and both cost evidence time again this run: a *screenshot* of the Desk
-row's hover hint can never exist, because the hint is a native HTML `title` attribute
-(`apps/frontend/app/desk/page.tsx:346`) that Chrome paints outside CDP's screenshot surface (third
-occurrence — iter-15 hit it, and this run hit it twice with two independent agents); and a
-`[NEW]`-flagged demo-narrator walkthrough cannot close in-run when the engine dispatches `lean`,
-which it did here even though `docs/phases/goal-desk-iter-19.md` declared `Depth: full` with that
-exact reason in its `Full trigger` field. Write tooltip clauses as "the hint's text is read out of
-the live DOM", and treat a walkthrough clause as a finalization-lane duty rather than an in-run
-acceptance conjunct.
+## iter-19 — 2026-07-29T21:05:00+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** any journey whose acceptance names a tooltip screenshot or a `[NEW]`-flagged
 walkthrough; any iteration whose spec declares `Depth: full` for a walkthrough reason.
 
-## iter-20 — 2026-07-29T23:45:00+01:00
-
-**Verdict:** CONTINUE
-**Lesson:** The demo lane fails OPEN and silently: `reports/phase-goal-desk-iter-20-demo.json` was
-written with JavaScript regex literals (`"name": /screen.history/i`, lines 28/64/76) instead of JSON
-strings, so `demo_runner` could not parse ANY of its 8 correctly-aimed steps, wrote
-`Demo Verdict: SKIPPED` with a one-line "soft note", left `reports/demo/goal-desk-iter-20/` empty —
-and the pipeline still reported PASS everywhere else. On an `evidence`-depth iteration whose ONLY
-mandatory deliverable is that recording, a SKIPPED demo is a hard failure of the iteration, not a
-note; the script must be parse-checked (`demo_runner.py --mode lint`) before the record run. Second
-half of the same lesson: two of those steps modelled the horizontal reveal of `/desk`'s
-`band`/`opposite` columns as a click on a button named "scroll…" — no such button exists; a
-container-scroll action (or a full-page capture of the scrolled state, as the browser-qa lane did) is
-what actually reveals those columns.
+## iter-20 — 2026-07-29T23:45:00+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration dispatched at `Depth: evidence`, and any demo-narrator run whose
 walkthrough is itself an acceptance conjunct in `docs/goal.md`.
 
@@ -316,3 +291,22 @@ populated frame, which is also what actually produced iter-25's usable frames.
 **Applies to:** any demo-narrator or golden-replay script step targeting a cell inside a `/desk`
 ranked row or skipped row (both carry the stretched anchor); also any future page that adopts the
 same stretched-link row pattern.
+
+## iter-26 — 2026-07-31T00:40:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** A "fixture-scoped rig" is only scoped on the BACKEND side. Standing up a second frontend
+with a different `NEXT_PUBLIC_API_URL` still runs `next build` against the ONE shared
+`apps/frontend/.next` directory, so the scoped build silently overwrites the ambient build's baked
+API base. Verified directly after this run: `.next/static/chunks/app/{layout,desk/page}.js` now
+contain `localhost:8000` and no longer contain `localhost:8301`, so the ambient `:3301` page points
+at a scoped backend that was torn down — all 16 golden replay scripts (which target `:3301`) would
+false-FAIL on the next run for a reason with nothing to do with the product. This run's own replays
+were safe only because they ran BEFORE the scoped build (proven by opening `J-13-verify.png`, which
+shows real ambient data). Also recurred verbatim from iter-24: the depth arbiter demoted a spec that
+explicitly asked for `Depth: full`, so the `[NEW]`-flagged walkthrough conjunct was structurally
+unreachable again.
+**Applies to:** any iteration whose evidence plan stands up a second frontend instance (scoped rig,
+alternate port, different API base) — build it into its OWN `distDir`/copy, or schedule
+`rm -rf apps/frontend/.next` + clean rebuild + restart of the ambient pair as the FIRST step of the
+next iteration; and any journey whose goal.md acceptance names a `[NEW]`-flagged walkthrough.

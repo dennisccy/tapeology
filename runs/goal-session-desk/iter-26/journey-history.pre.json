@@ -1,0 +1,189 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "Universe ingestion — fetched, registered, honest",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-01 PASS (deterministic golden replay, merged; zero script edits) + reports/qa/goal-desk-iter-25-evidence/J-01-verify.png. Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "dcad07154573cae27aff4a75ce71ac9ceca8c2969ec5c3d665aa3cbe08278819"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Coverage + explicit bar top-up over the universe",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-24",
+      "last_passing_iter": "goal-desk-iter-24",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "CARRIED under SPEED-9 evidence durability - product diff this iteration is EMPTY, so iter-24's evidence stands: reports/phase-goal-desk-iter-24-ui-test-results.md row UT-J-02 PASS + reports/qa/goal-desk-iter-24-evidence/J-02-verify.png. Evaluator corroboration this run: no bar-series file under apps/backend/.data/bars was created, modified or removed (find -newermt '2026-07-30 14:40' returns only rebuildable index sidecars), so no top-up ran; the four coverage badges render on one line per ranked row in this run's own fresh captures (UT-J-16-no-scroll-viewport.png, UT-J-16-eight-rows.png).",
+      "spec_hash": "a5cd4f6a0c3dbe67de9a65400250cf777e281712fbf3c90e54758e91971d306c"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The screen — pinned inputs, append-only snapshot, deterministic rank",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-03 PASS (deterministic golden replay, merged; zero script edits) + reports/qa/goal-desk-iter-25-evidence/J-03-verify.png. Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "74735994233da1614d5568bc57f2a42e60d7e51cf91bb0378f32add5c898bcd6"
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The /desk briefing page",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-04 PASS (deterministic golden replay, merged; zero script edits) + reports/qa/goal-desk-iter-25-evidence/J-04-verify.png. Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "0a3d005b39831ddc9eb0d481081ac613a2ec9e94b131c36394f9e649182faaec"
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "Ledger history + drill-in to /structure",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-24",
+      "last_passing_iter": "goal-desk-iter-24",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "CARRIED under SPEED-9 evidence durability (product diff EMPTY): reports/phase-goal-desk-iter-24-ui-test-results.md row UT-J-05 PASS + reports/qa/goal-desk-iter-24-evidence/J-05-verify.png. STABLE SPOT-CHECK the evaluator opened this run (methodology A.4): reports/qa/goal-desk-iter-25-evidence/UT-J-16-legacy-snapshot.png shows Screen History drill-in working live - the banner reads 'Viewing the recorded screen for 2026-06-22 - not the latest' with a Latest button and the provenance panel names screen-2026-06-22-3ecd45c062c7, recorded-at 2026-07-25T09:14:02.041409Z, fingerprint 08e471b10130e1e2. No contradiction with the recorded status.",
+      "spec_hash": "cba063f7d5e92f608aa54c1b4d174e17e46e297b8dda20cd52532d9d5a1ae545"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "MCP contract v3 — 17 read-only tools",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-06 PASS — DEFERRED-BUDGET of iter-24 now CLEARED. J-06 is a keyless/automated journey with no browser surface, so no screenshot is required by its own acceptance. EVALUATOR'S OWN RE-RUN (not a lane artifact): apps/backend/.venv python -c 'import app.mcp as m; tuple(m.TOOL_NAMES)==EXPECTED_TOOLS' -> True, len(TOOL_NAMES)==len(TOOLS)==17, names = backtests, bars, datasets, desk_screen, desk_universe, edge_report, get_endpoint, levels, pnl_ledger, setups, strategies, tape_features, tape_history, tape_state, taxonomy, tradability, ui_route_map, parsed straight out of EXPECTED_TOOLS at apps/backend/tests/test_mcp_server.py:52-70. DISCLOSED GAP (not a product defect): the lane could not complete a LIVE byte-identity proxy spot-check because .mcp.json wires TAPEOLOGY_API_BASE to http://localhost:8000 while only :8301/:3301 are up this session; the byte-identity clause rests on tests/test_mcp_server.py, last run green by the evaluator at iter-24 (1460 passed / 8 skipped) over a tree that is byte-identical today (zero diff under apps/). Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "c3d5a8351c4ce5aa20449d2d1557f4599bad9cdecebbcde8f044e6d4d2908f6f"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The kept product stands — regression sentinel",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-0",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-07 PASS (deterministic golden replay, merged; zero script edits) + reports/qa/goal-desk-iter-25-evidence/J-07-verify.png. Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "47ab77bdd843c8f7004f69b3c433dc9f167c8fce6195c9f21f48c061c7a7b7c5"
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "Every ranked briefing row names the bar its distance was measured from",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-9",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-08 PASS (deterministic golden replay, merged; zero script edits) + reports/qa/goal-desk-iter-25-evidence/J-08-verify.png. Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "727585122a3bbcabfa1b789e25d4171cfd6f953422b134050a547ff883fb52f6"
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "Every top-up run leaves an append-only record of what it attempted",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-24",
+      "last_passing_iter": "goal-desk-iter-24",
+      "first_seen_iter": "goal-desk-iter-11",
+      "last_evidence_path": "CARRIED under SPEED-9 evidence durability (product diff EMPTY): reports/phase-goal-desk-iter-24-ui-test-results.md row UT-J-09 PASS + reports/qa/goal-desk-iter-24-evidence/J-09-verify.png. Evaluator corroboration this run: the single top-up record apps/backend/.data/topup_runs/topup-2026-07-29-5de907c83fc4.json still recomputes its own file_checksum and keeps its 2026-07-29T13:04 mtime - untouched.",
+      "spec_hash": "df68d0f0595aaa98cc55b5e6dcff6c9bb23dcdeaeda198e9a890d714b3e855cc"
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The coverage the briefing shows is the coverage the frozen store can prove",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-24",
+      "last_passing_iter": "goal-desk-iter-24",
+      "first_seen_iter": "goal-desk-iter-14",
+      "last_evidence_path": "CARRIED under SPEED-9 evidence durability (product diff EMPTY): reports/phase-goal-desk-iter-24-ui-test-results.md row UT-J-10 PASS + reports/qa/goal-desk-iter-24-evidence/J-10-verify.png. STABLE SPOT-CHECK the evaluator opened this run (methodology A.4): reports/qa/goal-desk-iter-25-evidence/UT-J-16-skipped-table.png shows the skipped member NOW with 1h/4h/1w lit and 1d dark, reason 'no basis' - which matches that member's own coverage block in the record on disk exactly ({'1d': has_bars false; '1h','4h','1w': has_bars true}, reason 'no_basis'). No contradiction with the recorded status.",
+      "spec_hash": "25ce1c02559425521e1b9950291926f058516a546e7f86443f3e3fbad5cb1ac5"
+    },
+    "J-11": {
+      "id": "J-11",
+      "name": "Every ranked briefing row states how much completed history its wall was measured over",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-15",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-11 PASS (deterministic golden replay, merged; zero script edits) + reports/qa/goal-desk-iter-25-evidence/J-11-verify.png. Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "df33a467492f8ecf5b277b7dc3ea248da2724d43599cf0e713bfe5cd666800d1"
+    },
+    "J-12": {
+      "id": "J-12",
+      "name": "Every recorded screen the ledger lists can be read back — snapshots are addressable by id",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-16",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-12 PASS (deterministic golden replay, merged; zero script edits) + reports/qa/goal-desk-iter-25-evidence/J-12-verify.png. Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "a8328c17d7f39c777e6fbed78d106079403de703b68887550170f5486df2aa73"
+    },
+    "J-13": {
+      "id": "J-13",
+      "name": "Every ranked briefing row states the price its wall sits at and the close it was measured from",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-17",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-13 PASS (deterministic golden replay, merged; zero script edits) + reports/qa/goal-desk-iter-25-evidence/J-13-verify.png. Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "ba41be9214d73996ea500dd897680501cc9f115aae254fdd9463a3d172f51b65"
+    },
+    "J-14": {
+      "id": "J-14",
+      "name": "Every ranked briefing row states where the nearest wall on the OTHER side of price sits",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-18",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-14 PASS (deterministic golden replay, merged; zero script edits) + reports/qa/goal-desk-iter-25-evidence/J-14-verify.png. Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "0e6ce6bedcaa5d046e5c73a58e4ffd57c2e7a31d967fddfb8020bf05dce1c015"
+    },
+    "J-15": {
+      "id": "J-15",
+      "name": "Every ranked briefing row states what its wall is actually made of",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-23",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-15 PASS — DEFERRED-BUDGET of iter-24 now CLEARED by a formal lane re-check, and iter-24's cell-text change (' levels' dropped from the tally) is re-verified against the CURRENT render. Evidence the evaluator OPENED and read himself: reports/qa/goal-desk-iter-25-evidence/UT-J-15-levels-column.png (1425x8112 full page of screen-2026-07-30-bad6387963ef). In ONE 1425x900 region of that frame (rows 3-19) the evaluator read a >=100-level row (rank 4 MSFT '609 . 1m 474 . 5m 98 . 1d 28 . 1h 5 . 1w 3 . 4h 1'), a <=5-level row (rank 13 AMT '5 . 1d 3 . 1h 1 . 4h 1' and rank 15 ORCL '2 . 1h 1 . 1d 1') and the reused 'round number' badge (rank 16 MA '121 . 1d 58 . 1h 41 . 1w 8 . 4h 14 [round number]') together. Every one of those values was cross-checked BY THE EVALUATOR against the record on disk (apps/backend/.data/screen/screen-2026-07-30-bad6387963ef.json, record.meta.rows): BRK-B 155 {1d 68, 1h 57, 1w 11, 4h 19}; AMZN 144; MDLZ 53; MSFT 609 {1m 474, 5m 98, 1d 28, 1h 5, 1w 3, 4h 1}; HD 60; AMT 5; ORCL 2; MA 121 with band_round_number true; AAPL (rank 100) 4014 {1m 3105, 5m 790, 1w 22, 1d 45, 1h 35, 4h 17} — every one an exact match, including key ORDER. Invariant re-derived over ALL 100 ranked rows: sum(band_member_timeframes.values()) == band_member_count with ZERO violations, 100/100 rows carry all three fields, 16 rows carry round_number true, and the snapshot's stored file_checksum recomputes. No inline ' levels' word anywhere; only the column header carries it. Legacy absence re-proven in reports/qa/goal-desk-iter-25-evidence/UT-J-16-legacy-snapshot.png ('composition not recorded in this snapshot' on every row of screen-2026-06-22-3ecd45c062c7). A golden script runs/goal-session-desk/journey-scripts/J-15.json was authored this run (read-only) and replays PASS (J-15-verify.png). Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "05f4f149f514579f0a17b2f792e25c6568332bd36aeeb6c010bf9069c36f770d"
+    },
+    "J-16": {
+      "id": "J-16",
+      "name": "The briefing fits the page it is read on — every recorded disclosure legible without a sideways scroll",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-25",
+      "last_passing_iter": "goal-desk-iter-25",
+      "first_seen_iter": "goal-desk-iter-24",
+      "last_evidence_path": "reports/phase-goal-desk-iter-25-ui-test-results.md row UT-J-16 PASS. evidence_makeup CLEARED: the [NEW]-flagged demo-narrator walkthrough this journey's acceptance demands is now RECORDED (reports/phase-goal-desk-iter-25-demo-results.md, 6 captured frames under reports/demo/goal-desk-iter-25/). The evaluator OPENED the film's own frames: step-02.png (the [NEW]/J-16 step) and step-05.png both show the ranked table with ALL 13 columns including 'opposite' (e.g. 'opposite resistance A 497.20-500.67 . 0.40 bps') and 'levels' (e.g. '155 . 1d 68 . 1h 57 . 1w 11 . 4h 19', '609 . 1m 474 . 5m 98 . ...') legible INSIDE THE FRAME — this closes the iter-21/iter-23 frame gap the acceptance clause names verbatim. Every J-16/J-15 click target in reports/phase-goal-desk-iter-25-demo.json is scoped to exactly ONE row (tr[data-symbol=\"BRK-B\"|\"AMT\"|\"MSFT\"] [data-testid=...]), the second half of the same clause. Fresh browser evidence the evaluator opened: UT-J-16-no-scroll-viewport.png (1440x900, top row rank 1 BRK-B with rank/symbol/side/Class A chip/0.00 bps chip/score/4 coverage badges on ONE line/tick evidence/basis/history/band/opposite/levels all legible, no horizontal scrollbar; results row quotes table scrollWidth 1214 === container clientWidth 1214, document 1425===1425), UT-J-16-eight-rows.png (ranks 1..8 legible in served order: BRK-B, AMZN, MDLZ, MSFT, HD, LOW, ABT, NFLX; rows measured 57px), UT-J-16-skipped-table.png ('SKIPPED - NO BASIS SESSION (1)', NOW / no basis, 1h/4h/1w lit and 1d dark - matching the record's own coverage block), UT-J-16-legacy-snapshot.png (all five honest-absence strings on screen-2026-06-22-3ecd45c062c7). iter-24's missing artifact is CLOSED: reports/qa/goal-desk-iter-25-evidence/J-16-verify.png now exists on disk (written 15:00) from replaying journey-scripts/J-16.json, all 7 steps held. 'Render-only writes no record' proven by the evaluator with a SHA-256 listing of all 13 recorded files (all checksums recompute, all mtimes predate the run). DISCLOSED, not scored as an unmet clause: the demo verdict string reads RECORDED_WITH_NOTES, not RECORDED. All six notes are Playwright actionability TIMEOUTS on in-row cell clicks, not the iter-21/23 ambiguous-multi-match notes: every ranked row is covered by its own stretched drill-in anchor (absolute inset-0, apps/frontend/app/desk/page.tsx:416, whose own source comment at :454 says the anchor makes cells 'pointer-unreachable'), which step 4 of this journey REQUIRES to stay byte-unchanged - so no in-row cell click can ever succeed, and had one succeeded it would have navigated to /structure and destroyed the frame. See assumptions.md iter-25. Evaluator's own direct checks this iteration: the product diff is EMPTY (git status --porcelain -- apps/ scripts/ config/ returns nothing; iter-diff.md '(no changes)'), so SPEED-9 evidence durability carries every prior artifact forward unchanged; Config().config_fingerprint() re-run by the evaluator prints 08e471b10130e1e2; all 13 recorded files (11 screen snapshots, 1 universe snapshot, 1 top-up record) recompute their own file_checksum and every mtime predates this run (newest 2026-07-30T10:57); find apps/backend/.data -newermt '2026-07-30 14:40' returns ONLY bar_index.db-wal/-shm and dataset_index.db-wal/-shm (rebuildable sidecars) — this render-only iteration wrote no record at all.",
+      "spec_hash": "448b0715c37d3f449dede13d85604b511250f824c8f71322529571b72d6e2553"
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-desk-iter-3",
+      "anti_goal": "Snapshots are append-only and pinned. Universe and screen snapshots are dated, checksummed, append-only; every screen pins (universe snapshot id, screen date, as_of, fingerprint, bar-store signature); nothing is silently refetched, backfilled, recomputed in place, or rewritten — a new run is a new snapshot.",
+      "severity": "minor",
+      "evidence": "INTERCEPTED IN-ITERATION, NEVER LANDED. Pre-fix ScreenStore.record silently overwrote a snapshot file whose checksum had failed (iter-3 audit B1); fixed at desk_screen.py plus two regression tests, sibling gap in UniverseStore.record closed in iter-4. ITER-24 RE-CONFIRMED by the evaluator directly: this iteration wrote NOTHING at all - find apps/backend/.data -newermt '2026-07-30 12:20' returns only the two rebuildable bar_index.db sidecars; the 11 stored screen snapshots, the 1 universe snapshot, the 1 top-up record and the 2 reconciliation records all keep their pre-iteration mtimes. The product diff is 2 frontend/test files; no store code was touched.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-desk-iter-4",
+      "anti_goal": "Frozen foundations — the v1 strategy, the default profile, the tape engine's five states and thresholds, the frozen structure computations, the JSON BarStore, and every KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside them, never a mutation of them.",
+      "severity": "minor",
+      "evidence": "RESOLVED at iter-8 by the owner's own written ratification in docs/goal.md ('OWNER RATIFICATION — 2026-07-27 — R-1'). ITER-24 RE-CONFIRMED by the evaluator's own git diff against this iteration's snapshot 51a7495: the entire product diff is 2 files (apps/frontend/app/desk/page.tsx, apps/backend/tests/test_desk_ui_guards.py) with zero untracked files under apps/, so the whole backend, StructureChart.tsx, PriceChart.tsx and every guard test take a zero change; Config().config_fingerprint() printed 08e471b10130e1e2 on the evaluator's own run; the evaluator's own FULL backend suite run is 1460 passed / 8 skipped / exit 0 (engine + profile equivalence pins included).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-desk-iter-4",
+      "anti_goal": "Immutable data — registered datasets and bar series are append-only, checksummed, never re-tagged, never deleted, never content-perturbed. Splits are frozen at registration.",
+      "severity": "minor",
+      "evidence": "RESOLVED. The iter-4 price-less-bar write was repaired at three layers and the 60 affected series stay on disk untouched, excluded row-by-row on read — the behaviour R-1 ratified. ITER-24 RE-CONFIRMED by the evaluator directly: under apps/backend/.data the ONLY files created or modified during this iteration's window (find -newermt '2026-07-30 12:20') are the two rebuildable bar_index.db sidecars (-wal, -shm). Not a single bar series, dataset, universe snapshot, screen snapshot, top-up record or reconciliation record was created, modified or removed, and nothing was deleted anywhere. This also closes the 8-run ambient-write deviation streak: the iteration spec explicitly told every lane to read the already-recorded latest screen and trigger no Run Screen / top-up / reconcile, and both lanes obeyed.",
+      "resolved": true
+    }
+  ],
+  "updated_at": "2026-07-30T15:18:15+01:00",
+  "notes_iter_25": "Depth: evidence (capture + evaluation only; no developer, no reviewer - reports/reviews/goal-desk-iter-25-review.md is the engine's zero-change stub). Zero product diff; scan-report CLEAN; coherence COHERENCE-PASS (deterministic zero-change pass, not a crash stub); no journeys-changed.md (all 16 spec_hashes match the current docs/goal.md text, verified by the evaluator with goal_gate.py hash-journeys); no browser-infra token. Merged results: 12/12 PASS, zero FAIL cells, zero DEFERRED-BUDGET cells (goal_gate.py results exit 0; goal_gate.py coherence --for-achievement exit 0). Not re-verified this run and carried on durability: J-02, J-05, J-09, J-10 (outside the Required-still-passing set and not targets); J-05 and J-10 were spot-checked. NON-BLOCKING notes disclosed in eval.md: demo verdict RECORDED_WITH_NOTES (six actionability timeouts caused by the mandated stretched row anchor); demo frames collapse to 4 distinct images across 6 steps (step-02==step-03, step-01==step-08); demo steps 06/07 are the text-only 'full tour' section and have no frames by design; step-01's expect asserts the literal string 'desk-screen-rows-table' (a testid, not visible text) so it soft-noted; the film's NARRATION carries interpretive phrases the product itself is forbidden to render ('A wall with 155 levels is heavily confirmed', 'thin walls that might be noise', 'might be more sticky than one at 299.37', 'helps you plan your exit') - product copy is untouched and test_copy_discipline.py is green unmodified, see assumptions.md iter-25; replay verify frames remain largely one repeated first-view /desk image (the evaluator opened it and confirmed it is a genuine populated /desk render)."
+}

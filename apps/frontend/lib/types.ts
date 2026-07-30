@@ -940,11 +940,22 @@ export interface DeskScreenComputeSnapshot {
 // The desk bar top-up compute manager's job snapshot (`DeskTopupComputeManager`, shipped J-02,
 // iter-2), served VERBATIM by GET/POST `/research/desk/topup/compute`. THIS iteration (J-04) is
 // its first-ever UI consumer (a Top-up button on `/desk`) -- read-only wiring, zero shape change.
+// goal-desk-iter-26 (J-17): `requested_window`/`store_frozen_from`/`store_frozen_through`/
+// `window_basis` are additive to every per-pair outcome entry of a run recorded from THIS
+// iteration onward -- a run recorded BEFORE this iteration's code shipped never carries them
+// (`undefined` on that entry, never backfilled or computed at read time; the page renders the
+// honest "window basis not recorded in this run" fallback for such a run instead). `"unchanged"`
+// is a NEW outcome value: a vendor call ran and returned only bars already frozen (distinct from
+// `"reused"`'s zero-vendor-calls store-first hit).
 export interface DeskTopupOutcome {
   symbol: string;
   timeframe: string;
-  outcome: "reused" | "fetched" | "failed";
+  outcome: "reused" | "fetched" | "unchanged" | "failed";
   detail: string | null;
+  requested_window?: { start: string; end: string };
+  store_frozen_from?: string | null;
+  store_frozen_through?: string | null;
+  window_basis?: "tail" | "full_lookback";
 }
 
 export interface DeskTopupComputeProgress {

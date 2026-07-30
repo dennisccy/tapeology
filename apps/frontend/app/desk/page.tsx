@@ -806,16 +806,46 @@ function DeskHistoryTable({
 // (per-outcome counts, every failed pair's detail verbatim, the honest unreached-pairs count) for
 // the latest run ONLY — the one entry the backend's `latest` field actually carries `outcomes` for.
 // Read-only, no click-through, no new control (this iteration's own OUT OF SCOPE text). -----------
+//
+// goal-desk-iter-26 (J-17): the counts line gains an `unchanged` bucket (a vendor call ran and
+// returned only bars already frozen -- distinct from `reused`'s zero-vendor-calls meaning); a new
+// descriptive line states how many pairs asked for a tail window vs. the full lookback window
+// (`topupWindowBasisCounts` -- a plain tally, nothing derived); and each already-rendered failed
+// pair additionally shows its own recorded `requested_window`. A run recorded BEFORE this
+// iteration's code shipped lacks all four new fields on every outcome entry -- rendered as the
+// honest `WINDOW_BASIS_NOT_RECORDED` fallback, never computed or backfilled. No new section, no
+// new control, no new ranked-table column (J-16's measured width contract stays untouched).
 
 function topupOutcomeCounts(outcomes: DeskTopupOutcome[]): {
   reused: number;
   fetched: number;
+  unchanged: number;
   failed: number;
 } {
   return {
     reused: outcomes.filter((o) => o.outcome === "reused").length,
     fetched: outcomes.filter((o) => o.outcome === "fetched").length,
+    unchanged: outcomes.filter((o) => o.outcome === "unchanged").length,
     failed: outcomes.filter((o) => o.outcome === "failed").length,
+  };
+}
+
+// goal-desk-iter-26 (J-17) -- the honest fallback for a run recorded BEFORE this iteration's code
+// shipped: legacy runs never carry `window_basis` on any outcome entry, and the fields are never
+// computed or backfilled at read time (the established J-08/J-11/J-13 legacy-absence pattern).
+const WINDOW_BASIS_NOT_RECORDED = "window basis not recorded in this run";
+
+// A plain tally of the served payload's own `window_basis` field, nothing derived (the
+// `topupOutcomeCounts` precedent) -- `null` when ANY outcome in the run lacks `window_basis`
+// (a single shared writer lands a run's outcomes all at once, so a run is either entirely
+// pre-iter-26 or entirely post-iter-26 -- never a mix).
+function topupWindowBasisCounts(
+  outcomes: DeskTopupOutcome[],
+): { tail: number; full_lookback: number } | null {
+  if (outcomes.some((o) => o.window_basis === undefined)) return null;
+  return {
+    tail: outcomes.filter((o) => o.window_basis === "tail").length,
+    full_lookback: outcomes.filter((o) => o.window_basis === "full_lookback").length,
   };
 }
 
@@ -872,6 +902,7 @@ function TopupRunsTable({ runs }: { runs: DeskTopupRunMeta[] }) {
 // reached" claim of completeness the run didn't make; it is simply omitted when zero).
 function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
   const counts = topupOutcomeCounts(run.outcomes);
+  const windowBasisCounts = topupWindowBasisCounts(run.outcomes);
   const unreached = run.pairs_total - run.pairs_attempted;
   const failedOutcomes = run.outcomes.filter((o) => o.outcome === "failed");
   return (
@@ -888,13 +919,21 @@ function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
           {run.pairs_attempted} of {run.pairs_total} pairs attempted
         </span>
         <span data-testid="desk-topup-run-latest-counts">
-          {counts.reused} reused · {counts.fetched} fetched · {counts.failed} failed
+          {counts.reused} reused · {counts.fetched} fetched · {counts.unchanged} unchanged ·{" "}
+          {counts.failed} failed
         </span>
         {unreached > 0 && (
           <span data-testid="desk-topup-run-latest-unreached" className="text-amber-200/70">
             {unreached} pair{unreached === 1 ? "" : "s"} not reached
           </span>
         )}
+      </div>
+      <div data-testid="desk-topup-run-latest-window-basis" className="text-xs text-slate-400">
+        {windowBasisCounts === null
+          ? WINDOW_BASIS_NOT_RECORDED
+          : `${windowBasisCounts.tail} pair${windowBasisCounts.tail === 1 ? "" : "s"} asked for a ` +
+            `tail window · ${windowBasisCounts.full_lookback} pair` +
+            `${windowBasisCounts.full_lookback === 1 ? "" : "s"} asked for the full lookback window`}
       </div>
       {failedOutcomes.length > 0 && (
         <div data-testid="desk-topup-run-latest-failed">
@@ -914,6 +953,13 @@ function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
                 —{" "}
                 <span data-testid="desk-topup-run-latest-failed-detail">
                   {outcome.detail ?? "(no detail recorded)"}
+                </span>{" "}
+                <span data-testid="desk-topup-run-latest-failed-window" className="text-slate-500">
+                  ·{" "}
+                  {outcome.requested_window
+                    ? `requested ${outcome.requested_window.start.slice(0, 10)} → ` +
+                      `${outcome.requested_window.end.slice(0, 10)}`
+                    : WINDOW_BASIS_NOT_RECORDED}
                 </span>
               </li>
             ))}

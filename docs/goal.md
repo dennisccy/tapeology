@@ -1276,6 +1276,131 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     own it, while the iter-21 and iter-23 walkthrough films were RECORDED_WITH_NOTES for exactly this
     reason.)*
 
+- **J-17: A top-up asks the vendor only for the bars the frozen store cannot already prove**
+  - Steps:
+    1. Choose each pair's fetch window from that pair's OWN frozen content, read verbatim from the
+       canonical owner — the single ascending `BarStore.merged_bars(symbol, timeframe)` read
+       (`bars.py:557`, the SAME accessor `desk_screen._resolve_reference_close_and_history` and
+       `tradability._select_daily_series` already use), never from `bar_index`'s
+       `window_end_utc`, which records what an earlier run ASKED for rather than what the store can
+       prove (and whose single owner stays `desk_coverage`). Exactly three cases, decided per pair
+       inside the shared walker's own `_run_one_pair` (`desk_topup_compute.py:141`): a pair with
+       NOTHING frozen keeps the byte-identical full `_TOPUP_LOOKBACK_DAYS` window it asks for today
+       (`:98`/`_fetch_window_now`, `:109`); a pair whose frozen bars do NOT reach back to that
+       lookback start keeps that SAME full window, so short histories keep deepening exactly as they
+       do now; and a pair whose frozen bars already reach the lookback start asks for a tail window
+       `[the pair's own newest frozen bar's UTC date, today]`, so the boundary session is always
+       re-requested and re-merged, never assumed complete. The end bound stays `_fetch_window_now()`'s
+       wall-clock today, unchanged. **Zero diff** to `bars.py`, `record_bar_series`
+       (`routes.py:521`), `bar_index.py`, `desk_coverage.py`, `desk_screen.py`, `tradability.py` and
+       `levels.py`: the SAME single fetch-and-record seam is called with a different window — no
+       second fetch path, no new adapter, no new store, no new `Config` field (`_TOPUP_LOOKBACK_DAYS`
+       stays the module constant it is).
+    2. Name the vendor's "you already have this" answer honestly. `record_bar_series` refuses content
+       already registered with the frozen store's own 409 (`BarSeriesAlreadyRegistered`,
+       `routes.py:681`), which `_run_one_pair`'s `except HTTPException` records as `failed` today — a
+       tail window makes that the NORMAL weekend/holiday answer. Add exactly ONE new outcome value,
+       `unchanged` (a vendor call ran and returned only bars already frozen), beside J-09's shipped
+       `reused` (a store-first exact-key hit with ZERO vendor calls — its meaning stays
+       byte-unchanged), `fetched` and `failed`; every other refusal keeps its verbatim detail and its
+       `failed` label, and nothing is ever recorded as reused that a vendor call actually served.
+    3. Record what each pair asked for and why: on each per-pair outcome entry, `requested_window`
+       (`{start, end}` — the exact strings that pair sent), `store_frozen_from` and
+       `store_frozen_through` (that pair's own earliest/newest frozen bar, both `null` when nothing is
+       frozen) and `window_basis` (`"tail"` | `"full_lookback"`; names at build discretion), written
+       at the run's terminal state by the SAME single shared writer both callers already use
+       (`desk_topup_log.record_topup_run`, from the manager's resolve path and the CLI's `main`) —
+       never a second writer, never a second outcome shape. The run-level `requested_window` keeps its
+       recorded meaning verbatim (the run's own full-lookback bound). The append-only rail is
+       absolute: no recorded run is backfilled, rewritten or recomputed;
+       `GET /research/desk/topup/runs` serves legacy runs exactly as recorded and `/desk` renders
+       their absent fields as an honest `"window basis not recorded in this run"` (the established
+       J-08/J-11/J-13 legacy-absence pattern), never a value derived at read time.
+    4. Own it exactly once: register the added per-pair fields and the `unchanged` value on the
+       blueprint Data Contract's top-up-run-record row BEFORE the code lands — `desk_topup_log` stays
+       the only owner and `GET /research/desk/topup/runs` the only serving endpoint. No new endpoint,
+       route, store, `Config` field or MCP tool (J-06's exactly-17-tool contract stays green and
+       `get_endpoint`'s `/research/` allowlist already reaches the path). Coverage and freshness keep
+       their single existing owner — `desk_coverage.get_desk_coverage` over `bar_index` — and this
+       journey creates no second coverage path and serves no coverage value; the top-up stays an
+       explicit operator act (POST + CLI + the shipped button), page-load GETs trigger nothing, and no
+       scheduler, retry loop or auto-refresh is added anywhere.
+    5. Surface it on `/desk` inside the SHIPPED Top-up Runs section — no new section, no new control,
+       and NO new column on the ranked table, so J-16's measured width contract stands untouched: the
+       latest-run counts line extends to `N reused · N fetched · N unchanged · N failed`
+       (`topupOutcomeCounts`, `apps/frontend/app/desk/page.tsx:809` — a plain tally of the served
+       payload, nothing derived), one descriptive line states how many pairs asked for a tail window
+       and how many for the full lookback, and each already-rendered failed pair additionally shows
+       its own recorded `requested_window`. Copy = descriptive measurement only: the page states what
+       was asked for and what came back, and never a saving, waste, efficiency, speed or
+       recommendation claim; `tests/test_copy_discipline.py` stays green unmodified.
+    6. Test fixture-scoped with the suite's own injected fake adapter (the `test_desk_topup_compute.py`
+       pattern — no test touches the network): a pair whose planted frozen bars span past the lookback
+       start asks for a tail window starting at its own newest frozen bar (asserted BOTH on the
+       adapter's received arguments and on the recorded entry); a pair with a short frozen history and
+       a pair with nothing frozen each ask for the byte-identical full window they ask for today; a
+       fetch whose answer holds only already-frozen bars records `unchanged`, not `failed`, and writes
+       no second series file; and every EXISTING test in `test_desk_topup_compute.py` — including
+       TC-7's "a second run is all-reused with zero vendor calls" and TC-8's resumability guarantee —
+       passes UNMODIFIED (if any existing assertion genuinely pins the shipped window for a pair whose
+       frozen history already reaches the lookback start, disclose it in the iteration record rather
+       than edit the test).
+  - Acceptance: on the fixture-scoped rig, a pair whose frozen series reaches back past the lookback
+    start is asked for `[that pair's own newest frozen bar's UTC date, today]` — proven by the fake
+    adapter's received window AND by the run record's own `requested_window`/`store_frozen_through` —
+    while a pair with nothing frozen, and a pair whose frozen history stops short of the lookback
+    start, are each asked for the byte-identical full `_TOPUP_LOOKBACK_DAYS` window they are asked for
+    today (a golden comparison proves the shipped window unmoved for both); a vendor answer holding
+    only already-frozen bars is recorded `unchanged` with its `requested_window` and adds no second
+    series file, never `failed` (**single source of truth**: the window is derived only from the
+    canonical `BarStore`'s own merged read — never from `bar_index`'s request-bound `window_end_utc` —
+    the run record stays owned by `desk_topup_log` alone and served by `GET /research/desk/topup/runs`
+    alone, with the added fields and the new outcome value registered in the Data Contract BEFORE the
+    code lands, and coverage/freshness still come solely from `desk_coverage` over `bar_index`; this
+    SSOT criterion stands in place of a PnL-ledger append, which this era's Non-Goals forbid); every
+    bar series file already on disk is proven byte-identical before and after the iteration (SHA-256
+    listing — a top-up only ever APPENDS a new series; nothing is deleted, re-keyed, superseded or
+    rewritten), and every previously recorded universe, screen, top-up and reconciliation record is
+    proven byte-identical too, with legacy top-up runs rendering the honest `"window basis not
+    recorded in this run"` state; in a real browser after the T-9 clean rebuild, `/desk`'s Top-up Runs
+    section shows the four-outcome counts including at least one `unchanged`, the tail-versus-full
+    window line, and one failed pair with its own recorded `requested_window`, all legible in ONE
+    screenshot at a 1440×900 viewport with no horizontal scroll, and the ranked briefing table renders
+    exactly as J-16 shipped it (T-10: no screenshot ⇒ `unknown`, never `passing`; no native `title`
+    tooltip is required by this journey, so the T-10a headed rig is not needed); a
+    **`[NEW]`-flagged demo-narrator walkthrough** covers the top-up's window disclosure end to end,
+    narrated over a populated run; and the full backend suite is green with
+    `Config().config_fingerprint()` still `08e471b10130e1e2`, zero new `Config` fields, the `default`
+    profile and `v1` byte-identical (engine equivalence green), the MCP surface still exactly 17 tools,
+    zero diff to
+    `bars.py`/`bar_index.py`/`desk_coverage.py`/`desk_screen.py`/`tradability.py`/`levels.py`/`StructureChart.tsx`,
+    and `tests/test_copy_discipline.py` + `tests/test_desk_ui_guards.py` +
+    `tests/test_desk_hover_tooltip_guard.py` green unmodified. *(Keyless core; browser-verifiable. The
+    real ~100-symbol Yahoo top-up stays an operator-run act, reported honestly as run-or-not-run —
+    never a CI gate. Why: measured 2026-07-30 from the desk's own recorded ledger and the frozen store.
+    The one recorded real top-up, `topup-2026-07-29-5de907c83fc4` (404 pairs, 12:00:29Z → 12:04:53Z),
+    reports **`0 reused · 390 fetched · 14 failed`** — `reused` has never once been recorded on a real
+    run. Cause: `_fetch_window_now()` is wall-clock (end = today, start = 730 d earlier) while
+    `record_bar_series`'s store-first is an **exact-key** `(symbol, timeframe, window_start,
+    window_end)` index hit (its own docstring, `routes.py:558`), so a window whose end moves each day
+    can structurally never hit — Key Capability 2's "store-first (a symbol×timeframe already frozen in
+    the store is reused, never re-fetched)" is unreachable on the real path, and J-02's "a second run
+    reports all-reused" holds only for two runs inside one UTC day. Cost, measured against the store's
+    own files: for the **235** pairs the store ALREADY held before that run, the run downloaded
+    **276,714** bars and gained **13,533** new ones (**4.9 %**); for **174** of those 235 the entire
+    download yielded **≤ 5** new bars (91,226 downloaded, 348 new), median 4. AAPL `1d` is the clean
+    case — a 500-bar 730-day series re-downloaded to add exactly **one** bar to the 501 already frozen;
+    MSFT `1d` is the counter-case the full window must keep serving, gaining 112. Steady state today:
+    **390 of the 404** member × timeframe pairs already hold bars reaching past the lookback start,
+    **5** hold shorter histories (HONA ×4, MSFT `1h`) and **9** hold nothing (8 × `1h` + NOW `1d`), so
+    the next daily run under today's rule re-downloads on the order of the 462,535 bars / 68.5 MB that
+    run recorded across 390 series to gain a day. The whole store is 759 series files / 220 MB /
+    1,766,542 recorded rows, of which 301,271 (17.1 %) are timestamps another series for the same pair
+    already holds. And the wrinkle a tail window creates is already visible in the code: an
+    already-registered answer raises the store's 409 (`routes.py:681`), which `_run_one_pair` records
+    as `failed` — so without the `unchanged` outcome a weekend run would print a wall of false
+    failures.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals
