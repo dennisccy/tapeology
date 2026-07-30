@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "journey": "J-17",
+  "name": "A top-up asks the vendor only for the bars the frozen store cannot already prove",
+  "default_timeout_ms": 15000,
+  "steps": [
+    {"n": 1, "journey": "J-17", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
+    {"n": 2, "journey": "J-17", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-counts"}}, "expect": {"text": "0 reused · 390 fetched · 0 unchanged · 14 failed"}, "timeout_ms": 15000},
+    {"n": 3, "journey": "J-17", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-window-basis"}}, "expect": {"text": "window basis not recorded in this run"}, "timeout_ms": 10000},
+    {"n": 4, "journey": "J-17", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-failed"}}, "expect": {"text": "Failed pairs (14)"}, "timeout_ms": 10000}
+  ]
+}

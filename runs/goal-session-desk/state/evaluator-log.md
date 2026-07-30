@@ -1566,3 +1566,77 @@ still optional. One sentence for the owner: the Desk's top-up now says honestly 
 data supplier for and what came back — proven number by number against the run's own record — and
 the next short run only needs to rebuild the page and record the film before the finish can be
 proposed again.
+
+## Iteration 27 — goal-desk-iter-27
+
+**Date:** 2026-07-31T02:05:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** evidence
+**Journey deltas:**
+- Newly passing: none — all seventeen were already passing
+- Newly failing: none
+- Regressed: none
+- Re-checked this run: J-01 through J-16 by saved-script replay (16 of 16 green, zero script
+  edits, run AFTER the page bundle was rebuilt), and J-17 by a fresh real-browser pass on a
+  throwaway copy of the data. I also spot-checked J-05 and J-07 by opening their pictures myself
+  and re-counted J-06's tools in the running code. Nothing was dropped for time
+- Picture debt STILL OPEN — the one thing this run existed to produce. The short guided film that
+  J-17's own text demands was recorded this time, but it shows none of the journey: all five
+  frames are literally one and the same picture. J-17 keeps its make-up flag
+- Anti-goal violations: none new, none open. The three older items stay resolved and I re-checked
+  all three myself. Nothing of the owner's data was created, changed or removed this run
+
+**Reasoning:** This run changed no program code and I confirmed that myself: the difference
+against the run's own starting point is empty under `apps/`, `scripts/` and `config/`, with no new
+files there, and the program tree is byte-identical to the tree saved at the end of the last run.
+So I checked the three things this run existed to produce, and I opened them rather than reading
+about them. Two landed. First, the page bundle was rebuilt so the everyday page talks to the
+running program again — I re-read the rebuilt file myself and the address baked into it is now the
+right one (the one leftover mention of the old address is the dead last resort of a
+"use this, else this, else that" chain, not the value in use) — after which all sixteen saved
+scripts replayed green with no edits, closing the false-alarm risk the last run flagged. Second,
+the new top-up disclosure was photographed afresh: I opened the picture and read, in one frame at
+a normal window size with nothing cut off at the right, "0 reused · 6 fetched · 2 unchanged ·
+4 failed", then "2 pairs asked for a tail window · 10 pairs asked for the full lookback window",
+then four failed rows each naming its own "requested 2024-07-30 → 2026-07-30", with the ranked
+table beside it rendering unchanged at thirteen columns. The run behind that picture is real, not
+a stand-in: a throwaway copy of the data with genuine calls to the data supplier, and the failing
+rows fail because the ticker genuinely does not exist. The third thing failed, and I proved that
+rather than believing the report: all five frames of the guided film share ONE checksum, which is
+also byte-identical to eight of this same run's replay pictures, so not one frame is a new
+capture; I opened one and found the everyday Desk page at its top scroll position, with the
+top-up section not in frame at all. The cause is exact — the film was aimed at the everyday page
+while the populated run existed only on the throwaway copy, which the picture-taking step shut
+down one minute before the film step began. I re-ran the cheap checks myself: the settings
+fingerprint prints `08e471b10130e1e2`, the tool list has exactly 17 entries, and the six test
+files this work touches on pass together (136 passed, exit 0). I proved nothing of the owner's was
+written: the only files touched under the data folder are two rebuildable database sidecars, and
+the counts still read 759 price files, 1 universe record, 11 screens and 1 top-up record.
+Coherence is COHERENCE-PASS and the deterministic scan is CLEAN. I did NOT call the goal finished,
+for one reason only: the goal file makes that film part of what this item must deliver, it has now
+never been delivered in substance across two runs, and both of the finishes you confirmed earlier
+had films whose frames really did show their subject. One smaller thing I found and did not hide:
+a durable replay script for the new item was written this run, and it is honest but partial — it
+checks the same on-screen machinery against the everyday store's own older record rather than
+against a run that carries the new "unchanged" answer, which no lasting copy of the data can
+produce.
+
+**Next-step recommendation:** One more short capture-only run, no code change, with exactly one
+job: record the guided film so its own frames show the top-up disclosure. The fix is small and now
+precisely known — the film must be aimed at the throwaway copy where the populated run lives, not
+at the everyday page. The plan must say two things: keep that throwaway copy running until the
+film step has finished (this run shut it down one minute too early), and point the film at that
+copy's own address. The frames must show the four counts line, the tail-versus-full-window line
+and at least one failed row's own requested window, each step naming one row rather than all of
+them, and no click inside a briefing row (an invisible full-row link makes that impossible by
+design). I am bounding this deliberately: this is the LAST capture run I will ask for on this
+film. If the next attempt still cannot put that content in frame, the right call is to stop
+retrying, hand the film to you as optional showcase polish, and propose the finish on the evidence
+that already exists. You can also make that call now if you prefer — nothing about the Desk's
+behaviour is unproven. Two things for your own track, neither blocking: the replay tool keeps
+saving the same first view, so sixteen replay pictures are only three distinct images; and the
+backend test suite reads two files out of the run bookkeeping folder
+(`runs/goal-session-desk/journey-scripts/`), so archiving that folder would break the suite. One
+sentence for you: everything the Desk was asked to do works and is photographed, but the short
+film meant to walk through the newest piece was aimed at the wrong copy of the page and shows
+nothing — one more brief run should fix that, and if it does not, we should close anyway.

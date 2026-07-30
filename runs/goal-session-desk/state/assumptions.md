@@ -287,3 +287,37 @@ sidecars, with the 759 / 1 / 11 / 1 file counts unchanged.
 product change; nothing built this iteration would need redoing. If the owner instead reads the film
 as optional showcase polish, the remedy is to confirm the finish directly on this iteration's
 evidence, since every other J-17 acceptance conjunct is proven.
+
+## iter-27 — goal-evaluator
+
+**Ambiguity:** The same split iter-24 and iter-26 recorded, now on its second failed attempt.
+`docs/goal.md`'s J-17 acceptance makes a `[NEW]`-flagged demo-narrator walkthrough a conjunct, and
+the desk-era anti-goal "The enhancement loop stays inside its box" *(critical)* lists "include a
+`[NEW]`-flagged walkthrough" in a clause that mixes journey-TEXT requirements (an SSOT acceptance
+criterion) with BUILD-OUTCOME requirements (keep `default` and `v1` byte-identical) — so it is
+genuinely unclear whether the rail is satisfied by the proposer AUTHORING the clause (it did) or
+only by the chain DELIVERING the film (it has not). Against that, my own agent contract and
+methodology A.7 name "the walkthrough recording is missing" as a capture defect that must never be
+scored as blocking and never become an iteration's goal, while the verdict tree's step 3 (all
+journeys passing + no unresolved anti-goal + coherence clean) matches before step 5 and would
+therefore yield GOAL_ACHIEVED on a literal top-down read.
+**We chose:** Keep iter-24/iter-26's reading and return `CONTINUE` with `Depth: evidence` rather
+than reverse it. Four strands, each checked by me directly: (i) J-17's STATUS is unchanged at
+`passing` with `evidence_makeup: true` — I did NOT downgrade it, because the behaviour is proven
+by a fresh 1440x900 frame I opened, by the six test files I re-ran (136 passed, exit 0), by the
+re-run fingerprint `08e471b10130e1e2` and the re-counted 17 MCP tools, so A.7's rail is honoured in
+full; (ii) the two GOAL_ACHIEVED finishes the second key CONFIRMED in this session (iter-23, iter-25)
+both had films whose OWN frames showed their subject and whose notes were cosmetic — no confirmed
+precedent covers closing on a film that shows none of the journey, and iter-27's five frames are one
+byte-identical top-of-page image (md5 `dd3486a6bede477c9d9bb5475aa5bd27`, also equal to eight
+`J-*-verify.png` files); (iii) reversing a ruling made one run earlier, on the iteration that failed
+its own DoD, would be verdict drift driven by fatigue rather than by evidence — the fail-closed
+discipline in methodology B applies to the ambiguous rail too; (iv) the cause is now exactly known
+and one-line fixable (rig torn down at 00:28, narrator ran at 00:29 against the ambient `base_url`),
+so one more `evidence` run is proportionate where a vague one would not be. I bounded it explicitly
+in the recommendation: this is the LAST capture run I will ask for on this film, and if it fails
+again the film drops to the owner's optional track and the finish is proposed on existing evidence.
+**Reversible:** yes — entirely. If the owner reads the walkthrough as optional showcase polish (the
+A.7 reading), the finish can be confirmed directly on this iteration's evidence with zero further
+work: every other J-17 conjunct is proven, no journey status would move, and nothing built would
+need redoing.

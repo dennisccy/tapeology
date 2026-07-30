@@ -310,3 +310,19 @@ unreachable again.
 alternate port, different API base) — build it into its OWN `distDir`/copy, or schedule
 `rm -rf apps/frontend/.next` + clean rebuild + restart of the ambient pair as the FIRST step of the
 next iteration; and any journey whose goal.md acceptance names a `[NEW]`-flagged walkthrough.
+
+## iter-27 — 2026-07-31T02:05:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The browser-qa lane and the demo-narrator lane are separate dispatches, and the
+browser-qa lane tears its fixture-scoped rig down when it finishes — iter-27's rig on `:3391`/
+`:8391` died at 00:28, one minute before the narrator ran at 00:29 against `base_url`
+`http://localhost:3301`. Any acceptance clause demanding a film over data that exists ONLY on a
+scoped rig is therefore structurally unfilmable unless the iteration spec explicitly (a) forbids
+teardown until the demo step is done and (b) names the scoped frontend port as the film's
+`base_url`. The tell that this happened is cheap and should be checked every time: `md5sum
+reports/demo/<iter>/*.png` — if every frame shares one hash, and that hash also matches a
+`J-*-verify.png`, the film recorded the ambient page and saw nothing.
+**Applies to:** any iteration whose acceptance names a `[NEW]`-flagged demo-narrator walkthrough
+over data that only a throwaway/fixture-scoped rig can produce (top-up outcome counts, screen
+snapshots with specific pins, anything the ambient store cannot reproduce).
