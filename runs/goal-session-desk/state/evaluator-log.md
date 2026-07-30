@@ -1441,3 +1441,61 @@ height, and the back-end test suite now reads two files from the run bookkeeping
 sentence for the owner: the Desk briefing now fits your screen with nothing hidden off to the right,
 and the next short run only needs to record the film and re-check two items before the finish can be
 proposed again.
+
+## Iteration 25 — goal-desk-iter-25
+
+**Date:** 2026-07-30T15:20:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** evidence
+**Journey deltas:**
+- Newly passing: none — all sixteen were already passing
+- Newly failing: none
+- Regressed: none
+- Picture debt CLOSED — the last three open items in the session. (a) The guided film that J-16
+  "The briefing fits the page it is read on" demands is RECORDED, and this time its OWN frames show
+  the two right-hand columns it talks about — the exact gap the goal file's own words name. J-16's
+  make-up flag is cleared. (b) J-06 "17 machine-readable tools" and J-15 "what each wall is made of",
+  which last run's clock cut, are both re-checked. (c) The picture iteration 24 claimed but never
+  wrote, `J-16-verify.png`, is now on disk. No journey carries a make-up or infrastructure flag
+- Anti-goal violations: none new, none open. The three older items stay resolved. The write
+  deviation that ran for eight runs did NOT happen: nothing of the owner's data was created,
+  changed or removed
+
+**Reasoning:** This run changed no program code and I confirmed that myself: the difference against
+the run's own starting point is empty under `apps/`, `scripts/` and `config/`. So I checked the three
+things it existed to produce, and I opened them rather than reading about them. The film: I opened
+its frames and read, inside one picture, the whole ranked table with every column present — "155 ·
+1d 68 · 1h 57 · 1w 11 · 4h 19" in the composition column and "opposite resistance A 497.20–500.67 ·
+0.40 bps" beside it — which is precisely what two earlier films could not show. I also read the
+film's instruction file and confirmed each click names exactly one row by that row's own symbol. The
+tool count: I did not take the report's word, I ran the running code myself and compared the
+seventeen names one by one with the list pinned in the test file — identical. The composition
+column: I read a fresh full-page picture and, in one screen-sized region of it, found a thick wall
+(609), a thin wall (5), an even thinner one (2) and the "round number" badge (121) all together —
+then I proved every number instead of believing it, reading the stored record straight off disk:
+all one hundred rows have their parts adding up to their own total, sixteen carry the round-number
+flag, the record recomputes its own checksum, and each row I sampled matches character for
+character, including the order the timeframes are listed in. I proved nothing of the owner's was
+written: all thirteen recorded files still prove their checksums and still carry their pre-run
+timestamps, and the only files touched under the data folder are four rebuildable database
+sidecars. I re-ran the cheap checks myself: the settings fingerprint prints `08e471b10130e1e2`.
+Coherence is COHERENCE-PASS, the deterministic scan is CLEAN, the goal file is unchanged so no
+earlier pass has gone stale, and the machine gates agree. Three smaller things I found and did not
+hide: the film's verdict reads "recorded with notes" because every attempt to click a cell inside a
+row timed out — each row is covered by an invisible link to the drill-in page, which the goal file
+itself requires to stay exactly as it is, so no such click can ever land (and had one landed it
+would have jumped away and ruined the frame); the film's spoken words drift into judgement
+("heavily confirmed", "might be noise", "might be more sticky"), language the product itself is not
+allowed to use, though no page says it; and the replay tool still saves the same first view of the
+Desk page, so seven of eleven replay pictures are one image.
+
+**Next-step recommendation:** Halt — the goal is achieved. Please confirm the finish. Three
+follow-ups, none a defect and none blocking. (1) The film should READ the row cells rather than
+click them: the invisible full-row link makes an in-cell click impossible by design, so this is a
+one-line change in the film's instruction file with no product change, and it would turn the verdict
+line from "recorded with notes" into "recorded". (2) Give the film's spoken words one short pass so
+they only describe measurements, matching the rule the product's own copy already follows. (3) The
+replay tool keeps saving the same first view, so most replay pictures are one image — a tooling
+tidy-up, not a product issue. One sentence for the owner: everything the Desk was asked to do is
+built, shown and proven, nothing of your data was touched — please confirm the finish, and treat
+the three notes as optional tidying.

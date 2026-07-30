@@ -301,3 +301,18 @@ regardless of build quality.
 **Applies to:** any width/layout journey measured by DOM geometry (require per-cell bleed checks, not
 just table `scrollWidth`), and any journey whose goal.md acceptance names a `[NEW]`-flagged
 walkthrough (needs `full` or `evidence` depth — never `lean`).
+
+## iter-25 — 2026-07-30T15:20:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A demo/replay script can never `click` any cell inside a `/desk` ranked row: the row's
+stretched drill-in anchor (`absolute inset-0`, `apps/frontend/app/desk/page.tsx:416`, whose own
+comment at `:454` says the anchor makes cells "pointer-unreachable") intercepts every pointer event,
+so Playwright retries until the 8000 ms actionability timeout and emits a soft note — and if the
+click DID land it would navigate to `/structure` and destroy the very frame the step exists to
+capture. Per-row scoping via `tr[data-symbol="<SYM>"]` fixes the multi-match problem iter-20/23 hit
+but not this one; the right action for an in-row disclosure is `expect`-only text assertion over the
+populated frame, which is also what actually produced iter-25's usable frames.
+**Applies to:** any demo-narrator or golden-replay script step targeting a cell inside a `/desk`
+ranked row or skipped row (both carry the stretched anchor); also any future page that adopts the
+same stretched-link row pattern.

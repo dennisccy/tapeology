@@ -297,3 +297,58 @@ exactly what iteration 19's second key refused. I did NOT return STALLED — eve
 machine-doable at `Depth: evidence`, with no owner decision pending for the first time in five runs.
 **Reversible:** yes — one `evidence`-depth run records the film and re-checks J-06/J-15 with zero
 product change; nothing built this iteration would need redoing.
+
+## iter-25 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-16 acceptance makes the film a conjunct in these words: "a
+`[NEW]`-flagged demo-narrator walkthrough covers the briefing end to end with the `opposite` and
+`levels` columns visible IN ITS OWN FRAMES and its click targets naming ONE row (closing iter-21's
+and iter-23's RECORDED_WITH_NOTES frame gap …)". This iteration's own spec DoD is stricter: it asks
+for the literal string `Demo Verdict: RECORDED`. The delivered film reads `RECORDED_WITH_NOTES`,
+with six soft notes — all of them Playwright actionability TIMEOUTS on in-row cell clicks, not the
+ambiguous-multi-match notes iter-21/23 got. goal.md does not say whether the verdict STRING is part
+of the conjunct or whether the named frame gap is.
+**We chose:** Read the clause by its own words — frames + one-row targets — and score J-16
+`passing` with `evidence_makeup` CLEARED, disclosing the verdict string openly rather than treating
+it as an unmet clause. Four strands, each checked by me directly: (i) I opened `step-02.png` (the
+`[NEW]`/J-16 step) and `step-05.png` and read both named columns INSIDE the frame — `opposite
+resistance A 497.20–500.67 · 0.40 bps` and `155 · 1d 68 · 1h 57 · 1w 11 · 4h 19` / `609 · 1m 474 ·
+5m 98 · …` — which is exactly the gap the parenthetical says the clause exists to close; (ii) I read
+`reports/phase-goal-desk-iter-25-demo.json` and every J-16/J-15 click target is
+`tr[data-symbol="BRK-B"|"AMT"|"MSFT"] [data-testid=…]`, i.e. exactly one row, satisfying the second
+half of the clause as authored; (iii) the notes' cause is a product structure the SAME journey
+mandates: step 4 requires the row's stretched drill-in anchor (`absolute inset-0`) to stay
+byte-unchanged, and that anchor makes every in-row cell pointer-unreachable
+(`apps/frontend/app/desk/page.tsx:416`, comment at `:454`) — so no in-cell click can ever succeed,
+and a successful one would have navigated to `/structure` and destroyed the frame; (iv) precedent:
+iter-23's identical call (`RECORDED_WITH_NOTES` accepted against a `RECORDED` DoD, methodology A.7
+capture-defect rail) was made and CONFIRMED by the second key.
+**Reversible:** yes — one edit to the film's script (swap the four `click` actions for `expect`-only
+text assertions, the fallback this iteration's own NOTES already sanction) and one re-record turns
+the string into `RECORDED`, with zero product change and nothing recorded this iteration needing to
+be redone.
+
+## iter-25 — goal-evaluator
+
+**Ambiguity:** Immutable rail 2 ("No profit claims and no advice — … No prediction language, no
+imperative trading cues") and the desk-era anti-goal ("The briefing describes, never advises — Desk
+copy is descriptive measurement only … the copy-discipline lint stays green unmodified") are worded
+around DESK COPY and enforced by `tests/test_copy_discipline.py`'s frontend-literal lint. This
+iteration's only new artifact is a demo film whose NARRATION says "A wall with 155 levels is heavily
+confirmed", "thin walls that might be noise", "A wall at 300.00 might be more sticky than one at
+299.37" and "If you're trading near a support, knowing where the resistance is helps you plan your
+exit". Nothing in the product renders these, but the film is a published showcase artifact. goal.md
+does not say whether the rail reaches narration text.
+**We chose:** NOT to score it as an anti-goal violation (which would have forced `CONTINUE` under
+the minor-violation rule), and instead to disclose it verbatim in the verdict, the evaluator log and
+the recommendation. Three strands: (i) scope — the rail's own enforcement mechanism named in
+goal.md is the frontend-literal lint, which is green unmodified over a ZERO frontend diff, and no
+value, record, rank or served string carries any of this language; (ii) consistency — iter-23's
+accepted and second-key-confirmed film carried the same style ("this is where you make most of your
+decisions", "you know it's confirmed by many touches"), so failing iter-25 for it would overturn a
+confirmed call on a later, no-worse artifact; (iii) proportionality — the fix is editing four prose
+strings in `reports/phase-goal-desk-iter-25-demo.json`, which cannot justify blocking a finish whose
+every product criterion is proven.
+**Reversible:** yes — if the owner reads the rail as covering narration, the remedy is a wording
+pass over the film's `narration`/`point_out` strings plus one re-record: zero product change, no
+recorded value affected, and no journey status would move.

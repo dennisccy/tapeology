@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "journey": "J-15",
+  "name": "Every ranked briefing row states what its wall is actually made of",
+  "default_timeout_ms": 10000,
+  "notes": [
+    "Verified goal-desk-iter-25 by browser-qa-agent (2026-07-30) at a 1440x900 viewport against the ambient rig (backend :8301 / frontend :3301), reading the already-recorded latest screen screen-2026-07-30-bad6387963ef (100 ranked rows / 1 skipped) -- no Run Screen / top-up / reconcile triggered, zero append-only write (file listing byte-identical before/after: sha256 of screen-2026-07-30-bad6387963ef.json and screen-2026-06-22-3ecd45c062c7.json unchanged across the run).",
+    "Current (iter-24) in-cell text form confirmed via DOM eval on tr[data-symbol=\"BRK-B\"] [data-testid=\"desk-row-levels\"]: '155 · 1d 68 · 1h 57 · 1w 11 · 4h 19' -- the redundant ' levels' word is NOT in the cell (only the column header carries it); byte-identical to the stored snapshot JSON's band_member_count=155 / band_member_timeframes={1d:68,1h:57,1w:11,4h:19} for that row.",
+    "Cross-checked the extremes named in J-15's own acceptance line directly off the stored snapshot JSON and the live DOM: rank 13 AMT band_member_count=5 renders '5 · 1d 3 · 1h 1 · 4h 1'; rank 15 ORCL band_member_count=2 renders '2 · 1h 1 · 1d 1'; rank 4 MSFT band_member_count=609 renders '609 · 1m 474 · 5m 98 · 1d 28 · 1h 5 · 1w 3 · 4h 1'; rank 16 MA band_member_count=121 band_round_number=true renders '121 · 1d 58 · 1h 41 · 1w 8 · 4h 14' plus a 'round number' badge (data-testid=tradable-band-round-number) -- all in the SAME full-page screenshot top region (rows 1-17), reports/qa/goal-desk-iter-25-evidence/UT-J-15-levels-column.png.",
+    "Legacy pin unchanged: screen-2026-06-22-3ecd45c062c7 predates band_member_count/band_member_timeframes entirely, so every row permanently reads the honest fallback 'composition not recorded in this snapshot' under the append-only rail (re-confirmed this run via DOM text search).",
+    "This script clicks only a Screen History row, a plain read (GET /research/desk/screen?id=...) that recomputes and writes nothing -- safe to replay repeatedly."
+  ],
+  "steps": [
+    {"n": 1, "journey": "J-15", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
+    {"n": 2, "journey": "J-15", "action": {"type": "expect", "target": {"testid": "desk-screen-rows-table"}}, "timeout_ms": 10000},
+    {"n": 3, "journey": "J-15", "action": {"type": "expect", "text": "155 · 1d 68 · 1h 57 · 1w 11 · 4h 19"}, "timeout_ms": 8000},
+    {"n": 4, "journey": "J-15", "action": {"type": "click", "target": {"css": "tr[data-screen-id=\"screen-2026-06-22-3ecd45c062c7\"]"}}, "expect": {"text": "screen-2026-06-22-3ecd45c062c7"}, "timeout_ms": 10000},
+    {"n": 5, "journey": "J-15", "action": {"type": "expect", "text": "composition not recorded in this snapshot"}, "timeout_ms": 8000},
+    {"n": 6, "journey": "J-15", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}}
+  ]
+}

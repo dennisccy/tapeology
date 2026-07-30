@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-25",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the desk screen",
+      "narration": "The desk screen shows your complete ranked briefing — every wall worth tracking, ordered by strength and distance. Let's look at how all the information fits on one page.",
+      "point_out": "The ranked table loads with 100 rows, one for each symbol in the universe. You can see the first few columns: rank, symbol, side, class, distance, and score.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "desk-screen-rows-table"
+      }
+    },
+    {
+      "n": 2,
+      "title": "View the complete row — every column legible",
+      "narration": "The page layout has been tuned so every column fits without needing to scroll sideways. That means you can see the wall composition, price range, and opposite wall all in one glance.",
+      "point_out": "Notice that the table stays within the viewport width. All 13 columns are visible: rank, symbol, side, class, distance, score, coverage badges, basis, history, band, opposite, and levels. No horizontal scrollbar.",
+      "journey": "J-16",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "tr[data-symbol=\"BRK-B\"] [data-testid=\"desk-row-levels\"]"
+        }
+      },
+      "expect": {
+        "text": "155"
+      }
+    },
+    {
+      "n": 3,
+      "title": "See a thick wall — many levels across timeframes",
+      "narration": "Some walls are built from over a hundred price levels. The tally shows you how many levels contributed at each timeframe: daily, hourly, weekly, and 4-hour. A wall with 155 levels is heavily confirmed.",
+      "point_out": "The first row (BRK-B) shows '155 · 1d 68 · 1h 57 · 1w 11 · 4h 19' in the levels column. That means 155 total levels: 68 from daily touches, 57 from hourly, and so on. Each dot separates the counts.",
+      "journey": "J-15",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "tr[data-symbol=\"BRK-B\"] [data-testid=\"desk-row-opposite\"]"
+        }
+      },
+      "expect": {
+        "text": "opposite"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Check the opposite wall distance",
+      "narration": "The opposite column tells you where the nearest wall sits on the other side of price. If you're trading near a support, knowing where the resistance is helps you plan your exit.",
+      "point_out": "For BRK-B, the opposite wall is 'resistance · Class A · 497.20–500.67 · 0.40 bps'. That's 0.40 basis points away. The class badge tells you it's the same quality as the support wall you're looking at.",
+      "journey": "J-14",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "tr[data-symbol=\"AMT\"] [data-testid=\"desk-row-levels\"]"
+        }
+      },
+      "expect": {
+        "text": "5"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Compare thin and thick walls side by side",
+      "narration": "Not all walls are equal. Some are built from just a handful of levels — thin walls that might be noise. See how you can compare them without scrolling? The layout lets you read multiple walls at once.",
+      "point_out": "Rank 13 (AMT) shows just '5 · 1d 3 · 1h 1 · 4h 1'. That's a thin wall — only 5 levels total, and just 3 on the daily chart. By keeping all columns visible, you can instantly compare wall thickness across the whole ranked list.",
+      "journey": "J-15",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "tr[data-symbol=\"MSFT\"] [data-testid=\"desk-row-levels\"]"
+        }
+      },
+      "expect": {
+        "text": "609"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Look for the round-number badge",
+      "narration": "Some walls sit at psychologically important prices like 100.00 or 300.00. When that happens, a small badge appears right on the ranked list. No need to drill into details — you see it immediately.",
+      "point_out": "Look for a small bordered badge labeled 'round number'. Not every row has one, but when a wall is at a round price, the badge shows you right here on the briefing. A wall at 300.00 might be more sticky than one at 299.37.",
+      "journey": "J-15",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "tradable-band-round-number"
+        }
+      },
+      "expect": {
+        "text": "round number"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Check screen history for honest legacy data",
+      "narration": "Older snapshots don't have the wall composition recorded. Rather than guessing, the system shows you the honest truth: 'composition not recorded in this snapshot'. This way you always know what data you're working with.",
+      "point_out": "Open the Screen History and select an older screen. Its levels column will say 'composition not recorded in this snapshot' instead of a number. That's honest — the wall composition wasn't computed when that snapshot was taken.",
+      "journey": "J-12",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Screen History"
+        }
+      },
+      "expect": {
+        "text": "Screen History"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Return to the latest screen",
+      "narration": "You're now back at the latest screen with all the current wall composition data. This briefing is your single source of truth for wall strength, distance, price, and thickness across your entire universe.",
+      "point_out": "The desk page is fully loaded with the latest screen. Every row shows rank, symbol, class, distance, score, coverage, basis, history, band price range, opposite wall distance, and wall composition — all on screen at once, no scrolling.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    }
+  ]
+}
