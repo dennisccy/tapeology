@@ -1,27 +1,27 @@
 # Iteration State — desk
 
-**After iteration:** 23 · **Date:** 2026-07-30 · **Verdict:** GOAL_ACHIEVED
+**After iteration:** 24 · **Date:** 2026-07-30 · **Verdict:** CONTINUE
 
 ## Journeys
 
-15 passing (J-01..J-15) · 0 failing/partial/unknown — 15 total; no `evidence_makeup`, no `pending_infra`.
+16 passing (J-01..J-16) · 0 failing/partial/unknown — 16 total. J-06 + J-15 were `DEFERRED-BUDGET` this run (NOT tested; prior status kept; they block the achievement gate until re-verified). J-16 carries `evidence_makeup: true`.
 
 ## Active blockers
 
-- none. J-15 (built this iteration) is verified: one frame shows a 2-level, a 5-level and a 609-level row plus the `round number` badge; all 100 ranked rows re-derived against the canonical owner.
-- Open design question (no goal.md clause, not blocking): `/desk`'s ranked table is now 12 columns and `opposite`+`levels` need a sideways scroll at 1440px (UT-07 FAIL, pre-existing since iter-18) — the next proposer cycle should treat "how the briefing surfaces disclosure" as its own journey.
-- Harness bugs, not product: `closure_gate.py`'s bare `backend-only` substring guard false-fails CLOSURE on an honest report; `goal_gate.py results`' `| FAIL |` regex misses `| **FAIL** |`.
-- Disclosed deviation, NOT a goal.md violation (8th run, 2nd that WROTE): evidence lanes used the ambient `.data`/`:3301`-`:8301` rig and appended one real 100-row screen; cause = the NOTES recipe is missing from `runs/<iter>/goal-slice-bqa.md`. Also still running: the qa-rig (`xrig.sh down`).
+- None human-owned. Machine-owed, capture/verify only (next depth: `evidence`): (1) record J-16's `[NEW]`-flagged demo-narrator walkthrough with `opposite` + `levels` visible in its OWN frames, every click locator naming ONE row; (2) re-verify J-06 (17-tool contract) and J-15 — J-15's cell TEXT changed this run (`155 levels · 1d 68 · …` → `155 · 1d 68 · …`), so this is a real check, not a formality; (3) replay `runs/goal-session-desk/journey-scripts/J-16.json` — the QA lane claims a `J-16-verify.png` that is not on disk.
+- Harness, not product: `Depth: lean` records NO walkthrough, so the arbiter's `full-cap` demotion made J-16's film conjunct unreachable; `closure_gate.py`'s `backend-only` substring guard and `goal_gate.py results`' `| **FAIL** |` regex miss are still false-positive prone.
+- Coupling to watch: `test_desk_ui_guards.py` now reads `runs/goal-session-desk/journey-scripts/J-13.json` + `J-14.json` — archiving that folder breaks the backend suite.
 
 ## Last 2 verdicts
 
-- iter 23: GOAL_ACHIEVED — J-15 shipped and proven (100/100 rows match `compute_tradability`, key order included); rank order unmoved; legacy rows honest; suite 1454 pass/8 skip; `08e471b10130e1e2`; 17 tools; COHERENCE-PASS; scan CLEAN; 4-file product diff.
-- iter 22: GOAL_ACHIEVED — the owed native-tooltip photograph captured on the owner-approved T-10a rig; the session's last picture debt closed; zero product diff.
+- iter 24: CONTINUE — J-16 shipped and verified (table `scrollWidth` 1214 === container 1214, was 1795/1214; rows 57 px, was ~115; ranks 1..8 in served order; 13/13 goldens green, zero edits; suite 1460 pass/8 skip; `08e471b10130e1e2`; 17 tools; COHERENCE-PASS; scan CLEAN; 2-file diff; ZERO store write) — but 2 journeys were budget-deferred and the film was never recorded.
+- iter 23: GOAL_ACHIEVED — J-15 shipped and proven (100/100 rows match `compute_tradability`); the proposer then appended J-16.
 
 ## Do not redo
 
-- J-15 COMPLETE: `desk_screen.py`'s `_band_member_timeframes` + 3 verbatim row fields, `/desk`'s `levels` column reusing `/structure`'s `tradable-band-round-number` badge, `lib/types.ts` fields, legacy "composition not recorded in this snapshot". J-12/J-13/J-14 complete including their photographs.
-- Do NOT delete or backfill `.data/screen/screen-2026-07-30-bad6387963ef.json` (a valid pinned append — removing it breaches the immutable-data rail and destroys J-15's evidence); do NOT revert the iter-23 J-09 golden repair ("404 of 404 pairs attempted"); do not re-open J-01..J-14 beyond the replay check.
-- Zero diff stays law: `engine/`, `config.py`, `tradability.py`, `levels.py`, `bars.py`, `bar_index.py`, `desk_coverage.py`, both charts, `test_copy_discipline.py`, `_row_rank_key`, `_select_best_band`, `_select_opposite_band`; pin `08e471b10130e1e2`; 17 MCP tools; do not edit `docs/goal.md`.
-- Never write a screen/universe snapshot or top-up into `apps/backend/.data` — put the scoped-rig recipe in the browser-qa AND demo slices; never run two `next dev` from `apps/frontend` at once.
-- Carried non-defects (only if an iteration already touches them): replay frames collapse to one first-view image, demo click targets match all 100 rows, `/desk` 8 sections, unbounded run tables, history rows not keyboard-reachable, goal.md's stale host-mask paragraph.
+- J-16 layout is DONE and measured: `table-fixed` + 13-col `<colgroup>` summing to 1214 px, `flex-nowrap` coverage badges, `rank` cell = `.map` index + 1, class/distance chips reusing `CHIP_CLASS` (`apps/frontend/app/desk/page.tsx`). Do not re-tune widths without per-cell bleed measurement (`scrollWidth` alone cannot see bleed under `table-fixed`).
+- `band `/`opposite ` in-cell prefixes MUST stay (J-13.json/J-14.json pin the literal text via `get_by_text`); `basis `/`history `/` levels` are correctly dropped. Guard: `test_desk_row_cells_keep_the_label_prefix_their_golden_script_asserts`.
+- Guards already added (with seeded counter-tests): served-order (no `.sort(`/`.reverse(`/`.slice(` over `rows`) + testid presence — `apps/backend/tests/test_desk_ui_guards.py`.
+- Zero diff stays law: `engine/`, `config.py`, `desk_screen.py`, `tradability.py`, `levels.py`, `bars.py`, `bar_index.py`, `desk_coverage.py`, both charts, `test_copy_discipline.py`, `test_desk_hover_tooltip_guard.py`; pin `08e471b10130e1e2`; 17 MCP tools; do not edit `docs/goal.md`.
+- Keep evidence capture READ-ONLY: never trigger Run Screen / top-up / reconcile — iter-24 proved `.data` can stay byte-identical (only `bar_index.db-wal/-shm` moved), ending the 8-run write deviation. Do not delete `.data/screen/screen-2026-07-30-bad6387963ef.json`.
+- Accepted non-defects: 2 of 100 rows at 63 px (positions 24, 80 — the reused `round number` badge's own 22 px height; do not restyle that badge); replay frames collapse to one first-view image; `/desk` is 8 stacked sections; run tables unbounded; history rows not keyboard-reachable; goal.md's stale host-mask paragraph.

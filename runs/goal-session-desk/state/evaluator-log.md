@@ -1374,3 +1374,70 @@ recurring. (4) The film's click targets should name one row instead of all of th
 reason its verdict says "recorded with notes". One sentence for you: the briefing now says what each
 wall is actually built of — proven row by row against your stored price files, one hundred rows out of
 one hundred — please confirm the finish.
+
+## Iteration 24 — goal-desk-iter-24
+
+**Date:** 2026-07-30T14:45:00+01:00
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-16 "The briefing fits the page it is read on" — a brand new journey, built for the
+  first time this run. The count of journeys goes 15 to 16
+- Newly failing: none
+- Regressed: none
+- Unchanged and re-checked this run by saved-script replay: J-01, J-02, J-03, J-04, J-05, J-07, J-08,
+  J-09, J-10, J-11, J-12, J-13, J-14 (13 of 13 green, zero script edits)
+- NOT CHECKED this run — the run went over its time budget and the machine dropped them: J-06 "17
+  machine-readable tools" and J-15 "what each wall is made of". Both keep the status they had. I
+  checked both myself anyway: I counted the tools in the running code (exactly 17) and I read J-15's
+  column out of this run's own full-page picture
+- Anti-goal violations: none new, none open. The three older items stay resolved and I re-checked all
+  three myself. The deviation that ran for eight runs in a row — the picture-taking lanes using your
+  own data folder — did NOT happen this time in its harmful form: nothing of yours was written to at
+  all
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to produce. I
+opened the pictures myself. In one frame at a normal window size the top row shows its position,
+symbol, side, class, distance, score, all four coverage marks on ONE line, tick evidence, the basis
+date, the history depth, the wall's price range with its close, the nearest wall on the other side,
+and what the wall is made of — nothing cut off at the right edge. The measured numbers back the
+picture: the table is 1214 pixels wide inside a 1214-pixel box, where the same measurement at
+iteration 23 read 1795 inside 1214. A row is 57 pixels tall instead of about 115, so nine rows now
+fill the screen where three did. Then I proved the numbers instead of believing them: I read the
+recorded screen straight off disk and the top row matches the picture character for character — 155
+levels split 1d 68 / 1h 57 / 1w 11 / 4h 19, band 495.45–497.18 with close 497.18, opposite wall
+497.20–500.67 at 0.40 basis points, 502 sessions from 2024-07-25, basis 2026-07-27 three days before
+the as-of. I re-ran the work myself: the whole back-end suite (1,460 passed, 8 skipped, exit 0), the
+settings fingerprint (`08e471b10130e1e2`), the tool count (exactly 17), and a file-by-file check that
+the whole change is two files — the Desk page and one test file — so the entire back end, both
+charts and every frozen file take a zero change. I proved nothing of yours was written: the only
+files touched under your data folder are two rebuildable database sidecars. Coherence is
+COHERENCE-PASS and the deterministic scan is CLEAN. I did NOT call the goal finished. Two journeys
+were dropped from this run's re-check when it ran over its time budget, and a dropped check is not a
+pass. The film that J-16's own text demands was never recorded, because the machine downgraded this
+run to the shorter depth that records no film. And one small claim did not hold up: the picture the
+testing step says it produced for the new saved script is not on disk anywhere. Three further things
+I found and did not hide: two of the hundred rows are 63 pixels tall instead of 60, because the
+reused "round number" badge is taller than a line of text; the first attempt at this work quietly
+broke two saved scripts by deleting the words "band" and "opposite" from the cells, which the review
+caught and the fix restored with a new test that ties the page's text to the scripts' own expected
+text; and the back-end test suite now reads two files out of the run bookkeeping folder, which
+couples the product's tests to this session's own folder.
+
+**Next-step recommendation:** One more short capture-and-check run, with no code change. Three jobs.
+(1) Record the guided film for J-16 "The briefing fits the page it is read on" — it must show the
+"opposite" and "levels" columns inside its own frames, which is possible for the first time now that
+the table fits the page, and each click in its script must name ONE row rather than all hundred.
+(2) Re-check the two journeys this run ran out of time for: J-06 "17 machine-readable tools" and J-15
+"what each wall is made of". J-15 needs a real look, not a formality, because this run changed the
+words in that column — the tally read "155 levels · 1d 68 · …" and now reads "155 · 1d 68 · …", with
+the word "levels" left to the column heading. I checked it myself against this run's own full-page
+picture and it still shows a small wall (2 levels), a large wall (609 levels) and the "round number"
+badge together, but the formal check is owed. (3) Replay the newly saved J-16 script, because the
+picture it claims to have produced does not exist on disk. Two things for your own track, neither
+blocking: two of the hundred rows are three pixels taller than the target because of that badge's
+height, and the back-end test suite now reads two files from the run bookkeeping folder
+(`runs/goal-session-desk/journey-scripts/`), so archiving that folder would break the suite. One
+sentence for the owner: the Desk briefing now fits your screen with nothing hidden off to the right,
+and the next short run only needs to record the film and re-check two items before the finish can be
+proposed again.

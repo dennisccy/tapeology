@@ -1,0 +1,655 @@
+{
+  "scrollWidth": 1214,
+  "clientWidth": 1214,
+  "containerScrollWidth": 1214,
+  "containerClientWidth": 1214,
+  "docScrollWidth": 1440,
+  "docClientWidth": 1440,
+  "nRows": 100,
+  "heights": [
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    63,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    63,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    57,
+    56.5
+  ],
+  "badgeRows": [
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    },
+    {
+      "n": 4,
+      "tops": 1
+    }
+  ],
+  "first8": [
+    {
+      "rank": "1",
+      "symbol": "BRK-B",
+      "h": 57,
+      "cells": {
+        "side": "support",
+        "band-class": "Class Anearest same-class band",
+        "distance": "0.00 bps",
+        "score": "1673.00",
+        "tick-evidence": null,
+        "basis": "2026-07-27 \u00b7 3 d before as-of",
+        "history": "502 sessions \u00b7 from 2024-07-25",
+        "band": "band 495.45\u2013497.18 \u00b7 close 497.18",
+        "opposite": "opposite resistance A 497.20\u2013500.67 \u00b7 0.40 bps",
+        "levels": "155 \u00b7 1d 68 \u00b7 1h 57 \u00b7 1w 11 \u00b7 4h 19 "
+      }
+    },
+    {
+      "rank": "2",
+      "symbol": "AMZN",
+      "h": 57,
+      "cells": {
+        "side": "support",
+        "band-class": "Class Anearest same-class band",
+        "distance": "0.00 bps",
+        "score": "657.00",
+        "tick-evidence": "tick evidence",
+        "basis": "2026-07-27 \u00b7 3 d before as-of",
+        "history": "502 sessions \u00b7 from 2024-07-25",
+        "band": "band 229.89\u2013231.39 \u00b7 close 231.39",
+        "opposite": "opposite resistance A 231.40\u2013233.01 \u00b7 0.43 bps",
+        "levels": "144 \u00b7 1d 52 \u00b7 1h 57 \u00b7 4h 16 \u00b7 5m 15 \u00b7 1w 4 "
+      }
+    },
+    {
+      "rank": "3",
+      "symbol": "MDLZ",
+      "h": 57,
+      "cells": {
+        "side": "support",
+        "band-class": "Class Anearest same-class band",
+        "distance": "0.00 bps",
+        "score": "649.00",
+        "tick-evidence": null,
+        "basis": "2026-07-27 \u00b7 3 d before as-of",
+        "history": "500 sessions \u00b7 from 2024-07-29",
+        "band": "band 60.51\u201360.67 \u00b7 close 60.67",
+        "opposite": "opposite resistance A 60.67\u201361.10 \u00b7 0.82 bps",
+        "levels": "53 \u00b7 1h 12 \u00b7 1d 34 \u00b7 1w 6 \u00b7 4h 1 "
+      }
+    },
+    {
+      "rank": "4",
+      "symbol": "MSFT",
+      "h": 57,
+      "cells": {
+        "side": "support",
+        "band-class": "Class Anearest same-class band",
+        "distance": "0.00 bps",
+        "score": "413.00",
+        "tick-evidence": "tick evidence",
+        "basis": "2026-07-27 \u00b7 3 d before as-of",
+        "history": "500 sessions \u00b7 from 2024-07-29",
+        "band": "band 387.88\u2013389.10 \u00b7 close 389.10",
+        "opposite": "opposite resistance A 402.94\u2013405.76 \u00b7 355.69 bps",
+        "levels": "609 \u00b7 1m 474 \u00b7 5m 98 \u00b7 1d 28 \u00b7 1h 5 \u00b7 1w 3 \u00b7 4h 1 "
+      }
+    },
+    {
+      "rank": "5",
+      "symbol": "HD",
+      "h": 57,
+      "cells": {
+        "side": "support",
+        "band-class": "Class Anearest same-class band",
+        "distance": "0.00 bps",
+        "score": "299.00",
+        "tick-evidence": null,
+        "basis": "2026-07-27 \u00b7 3 d before as-of",
+        "history": "501 sessions \u00b7 from 2024-07-25",
+        "band": "band 334.11\u2013336.09 \u00b7 close 336.09",
+        "opposite": "opposite resistance A 341.06\u2013343.43 \u00b7 147.93 bps",
+        "levels": "60 \u00b7 1d 31 \u00b7 1h 16 \u00b7 4h 4 \u00b7 1w 9 "
+      }
+    },
+    {
+      "rank": "6",
+      "symbol": "LOW",
+      "h": 57,
+      "cells": {
+        "side": "support",
+        "band-class": "Class Anearest same-class band",
+        "distance": "0.00 bps",
+        "score": "169.00",
+        "tick-evidence": null,
+        "basis": "2026-07-27 \u00b7 3 d before as-of",
+        "history": "501 sessions \u00b7 from 2024-07-25",
+        "band": "band 210.78\u2013211.55 \u00b7 close 211.55",
+        "opposite": "opposite resistance A 219.24\u2013220.74 \u00b7 363.33 bps",
+        "levels": "27 \u00b7 1d 15 \u00b7 1h 6 \u00b7 4h 3 \u00b7 1w 3 "
+      }
+    },
+    {
+      "rank": "7",
+      "symbol": "ABT",
+      "h": 57,
+      "cells": {
+        "side": "support",
+        "band-class": "Class Anearest same-class band",
+        "distance": "0.00 bps",
+        "score": "157.00",
+        "tick-evidence": null,
+        "basis": "2026-07-27 \u00b7 3 d before as-of",
+        "history": "501 sessions \u00b7 from 2024-07-25",
+        "band": "band 103.92\u2013104.49 \u00b7 close 104.49",
+        "opposite": "opposite resistance A 109.14\u2013109.89 \u00b7 444.58 bps",
+        "levels": "31 \u00b7 1d 18 \u00b7 1h 5 \u00b7 4h 3 \u00b7 1w 5 "
+      }
+    },
+    {
+      "rank": "8",
+      "symbol": "NFLX",
+      "h": 57,
+      "cells": {
+        "side": "support",
+        "band-class": "Class Anearest same-class band",
+        "distance": "0.00 bps",
+        "score": "133.00",
+        "tick-evidence": "tick evidence",
+        "basis": "2026-07-27 \u00b7 3 d before as-of",
+        "history": "500 sessions \u00b7 from 2024-07-29",
+        "band": "band 70.13\u201370.40 \u00b7 close 70.40",
+        "opposite": "opposite resistance A 89.69\u201390.32 \u00b7 2740.77 bps",
+        "levels": "40 \u00b7 1d 15 \u00b7 1h 16 \u00b7 4h 7 \u00b7 1w 2 "
+      }
+    }
+  ],
+  "tableRect": {
+    "top": 569,
+    "height": 5737
+  }
+}

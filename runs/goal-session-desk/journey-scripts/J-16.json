@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "journey": "J-16",
+  "name": "The briefing fits the page it is read on — every recorded disclosure legible without a sideways scroll",
+  "default_timeout_ms": 10000,
+  "notes": [
+    "Verified goal-desk-iter-24 by browser-qa-agent (2026-07-30) at a 1440x900 viewport against the ambient rig (backend :8301 / frontend :3301), reading the already-recorded latest screen screen-2026-07-30-bad6387963ef (100 ranked rows / 1 skipped) -- no Run Screen / top-up / reconcile triggered, zero append-only write (SHA-256 listing identical before/after).",
+    "DOM measurement (not just eyeballed): table[data-testid=desk-screen-rows-table].scrollWidth (1214px) === its overflow-x-auto ancestor's clientWidth (1214px) -- zero horizontal scroll, closing iter-23's UT-07 FAIL (1795px inside 1214px). Document scrollWidth (1425) === clientWidth (1425) too.",
+    "Coverage badges: all 4 badges on rows 1-3 share one top y-coordinate (one line, never four). Row height: first 8 rows all 57px (<=60px target); across all 100 rows min 56.5 / max 63, with exactly 2 of 100 (ranked positions 24 and 80) at 63px -- an honest, disclosed 3px residual (round-number badge's own height on a 3rd line), non-blocking per the reviewer's own NOTE verdict.",
+    "rank cells on rows 1-8 read '1','2','3','4','5','6','7','8' in served order (no client-side sort/reorder -- guarded by test_desk_ui_guards.py).",
+    "TC-5: opened the legacy pre-J-15 snapshot screen-2026-06-22-3ecd45c062c7 via its Screen History row and confirmed via DOM text search all five honest-absence strings render verbatim ('basis not recorded in this snapshot', 'history not recorded in this snapshot', 'close not recorded in this snapshot', 'opposite wall not recorded in this snapshot', 'composition not recorded in this snapshot'); the Skipped Members table on the latest screen still groups honestly ('SKIPPED — NO BASIS SESSION (1)').",
+    "This script clicks only a Screen History row, a plain read (GET /research/desk/screen?id=...) that recomputes and writes nothing -- safe to replay repeatedly.",
+    "Class/distance chips confirmed rendered with the page's existing bordered text-[11px] badge style (same text as before this iteration, e.g. 'Class A', '0.00 bps')."
+  ],
+  "steps": [
+    {"n": 1, "journey": "J-16", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
+    {"n": 2, "journey": "J-16", "action": {"type": "expect", "target": {"testid": "desk-screen-rows-table"}}, "timeout_ms": 10000},
+    {"n": 3, "journey": "J-16", "action": {"type": "expect", "text": "BRK-B"}, "timeout_ms": 8000},
+    {"n": 4, "journey": "J-16", "action": {"type": "expect", "target": {"testid": "desk-row-rank"}}, "timeout_ms": 8000},
+    {"n": 5, "journey": "J-16", "action": {"type": "click", "target": {"css": "tr[data-screen-id=\"screen-2026-06-22-3ecd45c062c7\"]"}}, "expect": {"text": "screen-2026-06-22-3ecd45c062c7"}, "timeout_ms": 10000},
+    {"n": 6, "journey": "J-16", "action": {"type": "expect", "text": "composition not recorded in this snapshot"}, "timeout_ms": 8000},
+    {"n": 7, "journey": "J-16", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}}
+  ]
+}

@@ -134,47 +134,19 @@ own environment, not from the report's prose).
 walkthrough, especially when another project's dev server is running on the same host; and any
 evaluator reading a QA report's per-TC verdict table.
 
-## iter-17 — 2026-07-29T09:28:21+01:00
-
-**Verdict:** GOAL_ACHIEVED
-**Lesson:** A wrapped metadata line is a silent verification hole: the phase spec wrote
-`Required-still-passing journeys:` over two physical lines, `replay_lane_spec_journeys`
-(`scripts/automation/lib/replay-lane.sh:70`) parses it with `head -1`, and J-11/J-12 therefore
-reached NEITHER the replay lane NOR the LLM fallback — while the merged results file confidently
-read "20/20 journeys passed". Nothing on disk disclosed the omission; only the audit's own
-spec-vs-results cross-read caught it.
+## iter-17 — 2026-07-29T09:28:21+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** every future iteration spec (keep `Target journeys:` / `Required-still-passing
 journeys:` on ONE physical line until the parser handles continuations), and any evaluator reading
 a merged results file — cross-check the spec's named journey set against the rows that actually
 exist, never trust the "N/N passed" count alone.
 
-## iter-17 — 2026-07-29T09:28:21+01:00 (second lesson)
-
-**Verdict:** GOAL_ACHIEVED
-**Lesson:** Two `next dev` processes started from the same `apps/frontend` directory share one
-`.next` build cache, so launching a scoped frontend on `:3392` silently re-bundled the AMBIENT
-`:3301` page with the SCOPED backend's `NEXT_PUBLIC_API_URL` — the ambient page began showing
-populated `reference_close` rows that a direct `curl` to `:8301` proved did not exist. The browser
-lane caught it within seconds by cross-checking the page against the API, cleared `.next`, and
-restarted; had it not, an entire evidence set would have been captured against the wrong store while
-every origin check still passed (the ORIGIN was right; the BUNDLED API BASE was not).
+## iter-17 — 2026-07-29T09:28:21+01:00 (second lesson)  [condensed: body → lessons.md.archive.md]
 **Applies to:** any lane needing a fixture-scoped rig on this project (browser-qa, demo-narrator,
 audit re-verification) — copy the whole `apps/frontend` tree to an isolated directory, or stop the
 ambient frontend first; and always cross-check one rendered value against a direct `curl` to the
 backend you believe you are serving, because `location.origin` alone cannot detect this.
 
-## iter-18 — 2026-07-29T12:05:00+01:00
-
-**Verdict:** CONTINUE
-**Lesson:** The iteration spec's restatement of a goal.md rule silently overrode the rule itself:
-`docs/goal.md` J-14 step 1 asked for "distance ascending, then class rank descending", the
-decomposer wrote "(class rank DESCENDING, distance_bps ascending, ...) — the key `_select_best_band`
-already uses", and developer/reviewer/QA/coherence/audit all verified against the restatement, so a
-2-of-63-rows behavioural divergence (HONA, META) shipped past five green lanes. When a spec bullet
-paraphrases a goal.md selection/ordering/threshold rule, diff the paraphrase against the goal text
-verbatim before treating any downstream PASS as evidence — and re-measure the rule against the
-canonical owner on REAL data, not just the fixture, because the fixture's 6 rows happened to agree
-under both rules.
+## iter-18 — 2026-07-29T12:05:00+01:00  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration whose spec restates a goal.md rule in its own words (selection keys,
 rank keys, tie-breaks, thresholds); any `desk_screen.py` band-selection change.
 
@@ -299,3 +271,33 @@ lane never receives is not an instruction; the fix is either injecting the recip
 a hard rail that refuses the write when the serving process points at the ambient store.
 **Applies to:** any iteration whose evidence lane must compute, record, or film against a data store —
 check `goal-slice-bqa.md` itself contains the scoped-rig paragraph before dispatch.
+
+## iter-24 — 2026-07-30T14:45:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** Dropping an in-cell LABEL PREFIX is a silent golden-script breaker. `demo_runner.py`'s
+`_check_expect` resolves a bare `{"text": ...}` through Playwright `page.get_by_text`, which matches
+VISIBLE DOM TEXT only — the row's composite `title` attribute carrying the same word is invisible to
+it. Iter-24's first pass dropped `basis `/`history `/`band `/`opposite `/` levels`; `J-13.json` and
+`J-14.json` pin the literal strings `band 488.50–490.91 · close 490.91` and `opposite resistance A
+490.97–494.39 · 1.22 bps`, so those two prefixes had to be restored byte-identical (the other three
+were safe because their goldens pin mid-string substrings). The fix added
+`test_desk_row_cells_keep_the_label_prefix_their_golden_script_asserts`, which reads BOTH the page
+source and the golden JSON and fails if they drift apart.
+**Applies to:** any iteration that edits rendered TEXT (not just layout) on a page covered by stored
+golden replay scripts — grep the scripts' `expect.text` values before touching a cell's string.
+
+## iter-24 — 2026-07-30T14:45:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** Under `table-fixed` + `<colgroup>`, a `scrollWidth <= clientWidth` check CANNOT detect
+overflow: fixed layout ignores content when sizing, so a too-narrow column just paints its text over
+its neighbour while the table's own box stays exactly the sum of the colgroup widths. The dev only
+found the "nearest same-class band" caption bleeding into the next column by comparing each cell's
+content bounding box against its own `<td>` rect, per row. Also, `Depth: lean` records no
+demo-narrator walkthrough — the depth arbiter's `full-cap` demotion (telemetry `depth_demoted`)
+therefore made J-16's `[NEW]`-flagged-film acceptance conjunct structurally unreachable this run,
+regardless of build quality.
+**Applies to:** any width/layout journey measured by DOM geometry (require per-cell bleed checks, not
+just table `scrollWidth`), and any journey whose goal.md acceptance names a `[NEW]`-flagged
+walkthrough (needs `full` or `evidence` depth — never `lean`).

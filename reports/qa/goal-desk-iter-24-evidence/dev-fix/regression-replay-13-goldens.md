@@ -1,0 +1,38 @@
+# Regression Replay — goal-desk-iter-24
+
+**Phase:** goal-desk-iter-24
+**Date:** 2026-07-30
+**Written by:** demo_runner.py (deterministic replay)
+**Iteration:** 24
+
+---
+
+**Browser QA Verdict:** PASS
+
+**Overall:** 13/13 journeys passed (0 skipped)
+
+---
+
+## Results Table
+
+| Test ID | Name | Type | Priority | Expected | Actual | Verdict | Evidence |
+|---------|------|------|----------|----------|--------|---------|----------|
+| UT-J-01 | Universe ingestion — fetched, registered, honest | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-01-verify.png |
+| UT-J-02 | Coverage + explicit bar top-up over the universe | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-02-verify.png |
+| UT-J-03 | The screen — pinned inputs, append-only snapshot, deterministic rank | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-03-verify.png |
+| UT-J-04 | The /desk briefing page | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-04-verify.png |
+| UT-J-05 | Ledger history + drill-in to /structure | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-05-verify.png |
+| UT-J-07 | The kept product stands — regression sentinel | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-07-verify.png |
+| UT-J-08 | Every ranked briefing row names the bar its distance was measured from | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-08-verify.png |
+| UT-J-09 | Every top-up run leaves an append-only record of what it attempted | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-09-verify.png |
+| UT-J-10 | The coverage the briefing shows is the coverage the frozen store can prove | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-10-verify.png |
+| UT-J-11 | Every ranked briefing row states how much completed history its wall was measured over | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-11-verify.png |
+| UT-J-12 | Every recorded screen the ledger lists can be read back — snapshots are addressable by id | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-12-verify.png |
+| UT-J-13 | Every ranked briefing row states the price its wall sits at and the close it was measured from | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-13-verify.png |
+| UT-J-14 | Every ranked briefing row states where the nearest wall on the OTHER side of price sits | regression | P1 | journey replays end-to-end; all expects hold | journey replayed end-to-end; all expects held | PASS | reports/qa/goal-desk-iter-24-evidence/dev-fix/replay/J-14-verify.png |
+
+## Environment
+
+- **Frontend URL:** http://localhost:3301
+- **Browser:** Chromium via Playwright (deterministic replay, verify)
+- **Test Date:** 2026-07-30

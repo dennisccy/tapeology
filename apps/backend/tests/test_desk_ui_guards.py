@@ -1,7 +1,7 @@
 """era-desk-iter-6 (J-05) source-introspection guard tests -- the ``test_copy_discipline.py``
 pattern (read a frontend .tsx file as TEXT, assert on substrings; no browser, no runtime).
 
-Three guards, each proving something about the frontend a backend-only test suite otherwise could
+Guards, each proving something about the frontend a backend-only test suite otherwise could
 not see:
 
   (a) TC-5 -- ``apps/frontend/app/desk/page.tsx`` never references any of the structure-side
@@ -21,6 +21,12 @@ not see:
       ``row.opposite_band``'s ``distance_bps``/``price_low``/``price_high``/``band_score`` and
       ``row.bands_by_class``'s ``A``/``B``/``C``/``unclassified`` counts -- the new ``opposite``
       column/tooltip line renders these fields verbatim, never a derived distance, price, or count.
+  (e) goal-desk-iter-24 (J-16) TC-7 -- the ranked table's own layout REFLOW must not become a
+      layout that silently changes what's rendered: `rows` renders in served order only (no
+      `.sort(`/`.reverse(`/re-slice/comparator anywhere over `rows` -- the new `rank` cell is the
+      `.map` index, never a client-recomputed position), and every `data-testid` a shipped
+      journey's golden script or guard test depends on is still present in source after the
+      reflow.
 
 A guard that can never fail proves nothing -- each carries a seeded counter-test proving the
 detection logic itself actually catches a violation (the ``test_copy_discipline.py``
@@ -181,3 +187,172 @@ def test_desk_page_price_arithmetic_guard_catches_opposite_band_and_bands_by_cla
 
     seeded_bands_by_class = "const total = row.bands_by_class.A + row.bands_by_class.B;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_bands_by_class) is not None
+
+
+# goal-desk-iter-24 (J-16) TC-7 (a): the ranked table's own reflow adds a `rank` cell rendering
+# each row's own 1-based position in the served `rows` array (the `.map` index) -- this guard
+# proves the page never sorts, reverses, or re-slices `rows` to produce that position (or any
+# other display order) client-side. Matches a direct chain (`rows.sort(`), a spread-then-chain
+# (`[...rows].sort(`), and an intervening simple call (e.g. `rows.filter(...).sort(`) -- `.filter(`
+# alone (used elsewhere on this page only to COUNT rows, never to reorder or re-render them) is not
+# itself forbidden.
+_ROWS_REORDER_PATTERN = re.compile(
+    r"(?:\[\s*\.\.\.\s*rows\s*\]|\brows\b)\s*(?:\.\s*\w+\([^()]*\)\s*)*\.\s*(?:sort|reverse|slice)\s*\("
+)
+
+
+def test_desk_page_never_reorders_rows_client_side():
+    """TC-7: `rows` renders in the exact order `GET /research/desk/screen` served it in -- the
+    page never sorts, reverses, or re-slices it. The new `rank` cell renders each row's own
+    position in that SAME served order (the `.map` index), never a client-recomputed one."""
+    source = _DESK_PAGE.read_text()
+    match = _ROWS_REORDER_PATTERN.search(source)
+    assert match is None, (
+        f"apps/frontend/app/desk/page.tsx reorders `rows` client-side ({match.group(0)!r}) -- the "
+        "page must render the served order verbatim; the rank cell renders each row's own array "
+        "index, never a value derived from a client-side sort/reverse/slice"
+    )
+
+
+def test_desk_page_rows_reorder_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- a lint that cannot fail proves nothing."""
+    seeded_sort = "const ranked = [...rows].sort((a, b) => a.distance_bps - b.distance_bps);"
+    assert _ROWS_REORDER_PATTERN.search(seeded_sort) is not None
+
+    seeded_reverse = "const reversed = rows.reverse();"
+    assert _ROWS_REORDER_PATTERN.search(seeded_reverse) is not None
+
+    seeded_slice = "const page1 = rows.slice(0, 10);"
+    assert _ROWS_REORDER_PATTERN.search(seeded_slice) is not None
+
+    seeded_chained = "const top = rows.filter(hasTickEvidence).sort((a, b) => a.rank - b.rank);"
+    assert _ROWS_REORDER_PATTERN.search(seeded_chained) is not None
+
+
+# goal-desk-iter-24 (J-16) TC-7 (b): every `data-testid` a shipped journey's golden replay script,
+# guard test, or hover-tooltip contract depends on is still present in the source after the
+# reflow -- the reflow may move a disclosure's markup (a new element, a new line inside the SAME
+# row), but it must never drop, hide, or rename the testid itself. "the compute controls" (goal.md
+# J-16 step 4) are the three primary trigger buttons this page ships (Run Screen / Top-up /
+# Reconcile Index) -- untouched by this iteration's ranked-row-only reflow, checked here anyway as
+# the cheapest possible proof nothing regressed.
+_REQUIRED_DESK_TESTIDS = (
+    "desk-screen-rows-table",
+    "desk-row-drill-in",
+    "desk-row-side",
+    "desk-row-band-class",
+    "desk-row-distance",
+    "desk-row-score",
+    "desk-coverage-badges",
+    "desk-coverage-badge",
+    "desk-row-tick-evidence",
+    "desk-row-basis",
+    "desk-row-history",
+    "desk-row-band",
+    "desk-row-opposite",
+    "desk-row-levels",
+    "desk-skip-row",
+    "desk-history-row",
+    "desk-provenance",
+    "desk-title",
+    "desk-run-screen-button",
+    "desk-topup-button",
+    "desk-reconcile-button",
+)
+
+
+def test_desk_page_keeps_every_shipped_testid_after_the_reflow():
+    """TC-7: every testid a shipped journey's golden script/guard test/tooltip contract depends
+    on is still present in the reflowed source -- the layout changed, nothing else did."""
+    source = _DESK_PAGE.read_text()
+    missing = [testid for testid in _REQUIRED_DESK_TESTIDS if testid not in source]
+    assert not missing, (
+        f"apps/frontend/app/desk/page.tsx is missing testid(s) {missing} after the reflow -- a "
+        "shipped journey's golden script/guard test/tooltip contract depends on each of these "
+        "remaining present with the same text"
+    )
+
+
+def test_desk_page_testid_presence_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- a lint that cannot fail proves nothing."""
+    seeded_source = "const x = 1;"
+    missing = [testid for testid in _REQUIRED_DESK_TESTIDS if testid not in seeded_source]
+    assert missing == list(_REQUIRED_DESK_TESTIDS)
+
+
+# goal-desk-iter-24 (J-16) TC-6/TC-7 (c): the reflow's own regression guard for the defect the
+# iter-24 review caught -- dropping a ranked cell's in-cell label prefix ALSO deletes the literal
+# page text a stored golden replay script asserts through `page.get_by_text`, which matches
+# VISIBLE DOM TEXT only (the composite drill-in `title` carrying the same word is invisible to it).
+# TC-6 allows zero golden-script edits, so the two cells a golden pins by literal text
+# (`desk-row-band` <- J-13.json, `desk-row-opposite` <- J-14.json) must keep the prefix WORD the
+# script's expected text starts with. This guard reads BOTH artifacts and ties them together, so a
+# future prefix drop fails here (a fast, keyless, browser-free test) instead of only in a browser
+# replay lane. The other three disclosure cells (basis/history/levels) are deliberately absent from
+# this list: no stored golden asserts their prefixed text (J-08 pins "d before as-of", J-11 pins
+# "sessions", J-15 has no script), which is exactly why dropping THOSE prefixes was safe.
+_JOURNEY_SCRIPTS_DIR = (
+    pathlib.Path(__file__).resolve().parents[3] / "runs" / "goal-session-desk" / "journey-scripts"
+)
+
+_GOLDEN_TEXT_PINNED_CELLS = (
+    ("J-13.json", "desk-row-band", "band "),
+    ("J-14.json", "desk-row-opposite", "opposite "),
+)
+
+
+def _desk_cell_source(source: str, testid: str) -> str:
+    """The source of the single `<td ... data-testid="<testid>"> ... </td>` block."""
+    start = source.index(f'data-testid="{testid}"')
+    end = source.index("</td>", start)
+    return source[start:end]
+
+
+def _golden_expected_texts(script_name: str) -> list[str]:
+    """Every literal `text` a golden script asserts (step `expect` action or `expect` clause)."""
+    import json
+
+    data = json.loads((_JOURNEY_SCRIPTS_DIR / script_name).read_text())
+    texts: list[str] = []
+    for step in data.get("steps", []):
+        for holder in (step.get("action") or {}, step.get("expect") or {}):
+            text = holder.get("text")
+            if isinstance(text, str):
+                texts.append(text)
+    return texts
+
+
+def test_desk_row_cells_keep_the_label_prefix_their_golden_script_asserts():
+    """TC-6: the `band`/`opposite` cells still render the prefix WORD their stored golden replay
+    script's expected page text starts with -- dropping it fails J-13/J-14 on replay."""
+    source = _DESK_PAGE.read_text()
+    for script_name, testid, prefix in _GOLDEN_TEXT_PINNED_CELLS:
+        pinned = [t for t in _golden_expected_texts(script_name) if t.startswith(prefix)]
+        assert pinned, (
+            f"{script_name} no longer asserts any page text starting with {prefix!r} -- this pin "
+            f"has gone vacuous; re-derive it from the script's own expected texts"
+        )
+        cell = _desk_cell_source(source, testid)
+        assert f"`{prefix}" in cell, (
+            f"apps/frontend/app/desk/page.tsx's {testid} cell no longer renders the {prefix!r} "
+            f"label prefix, but {script_name} asserts the literal page text {pinned[0]!r} via "
+            f"page.get_by_text (visible DOM text only -- a `title` attribute does not satisfy it). "
+            f"TC-6 permits zero golden-script edits, so this cell must keep the prefix word."
+        )
+
+
+def test_desk_row_label_prefix_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- a lint that cannot fail proves nothing."""
+    seeded_cell = (
+        'data-testid="desk-row-band">\n'
+        "  {row.reference_close == null\n"
+        "    ? `${fmt(row.price_low)}–${fmt(row.price_high)} · close not recorded in this snapshot`\n"
+        "    : `${fmt(row.price_low)}–${fmt(row.price_high)} · close ${fmt(row.reference_close)}`}\n"
+        "</td>"
+    )
+    cell = _desk_cell_source(seeded_cell, "desk-row-band")
+    assert "`band " not in cell
+
+    # and the pin itself is non-vacuous: J-13/J-14 really do assert those literal texts today
+    assert any(t.startswith("band ") for t in _golden_expected_texts("J-13.json"))
+    assert any(t.startswith("opposite ") for t in _golden_expected_texts("J-14.json"))

@@ -134,11 +134,59 @@ import { fmt } from "@/lib/format";
 // or inferred fallback from `band_score`/the band range/`bands_by_class`). Read-only render, zero
 // new endpoint, zero new control — all three fields ride the already-fetched `GET
 // /research/desk/screen` response verbatim.
+//
+// goal-desk-iter-24 (J-16) — the ranked table's own REFLOW, zero backend diff, zero new value.
+// Iter-23's own `UT-07` measured the table at `scrollWidth` 1795px inside a 1214px container (the
+// `levels`/`opposite` columns fell entirely off-screen) and each row at ~115px tall (the coverage
+// badges wrapped into four lines). This iteration renders the SAME twelve disclosures, plus one
+// new `rank` cell (the row's own 1-based position in the served `rows` array -- rendered from the
+// `.map` index, never a client-side sort/reorder), inside a `table-fixed` + `<colgroup>` layout
+// sized to the page's own `mx-auto max-w-7xl` container: the coverage badges lose their
+// `flex-wrap` (one line, not four), the class/distance cells gain the page's own existing chip
+// style (`CHIP_CLASS` above), and the five widest disclosure cells (basis/history/band/opposite/
+// levels) relax `whitespace-nowrap` so long values wrap onto a second line inside a fixed column
+// width instead of stretching the table. Three of those five (basis/history/levels) also drop the
+// in-cell label prefix the column header already states; `band ` and `opposite ` KEEP theirs,
+// because the stored golden replay scripts J-13.json/J-14.json assert those two cells' literal
+// rendered text and TC-6 permits zero script edits (iter-24 review, two CRITICAL findings). Every
+// `data-testid`, every honest legacy-absence string ("basis not recorded in this snapshot", etc.),
+// and the row's stretched drill-in anchor (`href`, `absolute inset-0`, `data-testid`, composite
+// `title`) stay byte-unchanged -- only the layout and three redundant label words moved.
 
 const NUMERIC_CELL = "px-2 py-1.5 text-right font-mono text-xs text-slate-200 whitespace-nowrap";
 const HEADER_CELL = "px-2 py-1 text-right text-[11px] font-medium text-slate-500";
 const HEADER_CELL_LEFT = "px-2 py-1 text-left text-[11px] font-medium text-slate-500";
 const LABEL_CELL = "px-2 py-1.5 text-left text-xs text-slate-400 whitespace-nowrap";
+
+// goal-desk-iter-24 (J-16): the ranked table's own reflow, so every disclosure fits the page's
+// own `mx-auto max-w-7xl` container at a 1440px viewport with zero horizontal scroll (see the
+// comment above `DeskRowsTable`). `WRAP_LABEL_CELL` is `LABEL_CELL` minus `whitespace-nowrap` --
+// used ONLY on the five long disclosure cells (basis/history/band/opposite/levels), which now wrap
+// onto a second line inside their own `<colgroup>`-fixed column width instead of stretching the
+// table wider than its container. `CHIP_CLASS` is the page's OWN existing bordered badge style
+// (`desk-coverage-badge`'s non-conditional half, `TickEvidenceBadge`, and the `band_round_number`
+// badge already use this exact className) -- reused verbatim, never a new visual effect, for the
+// new class/distance chips.
+const WRAP_LABEL_CELL = "px-1.5 py-1 text-left text-xs text-slate-400 align-top";
+// The ranked table's OWN cell padding -- `py-1` (4px, vertical) and `px-1.5` (6px, horizontal)
+// instead of the `py-1.5`/`px-2` the shared constants above keep for the history/top-up/
+// reconciliation tables. Both numbers are load-bearing measurements, not taste:
+//   * `py-1` -- 4px less row height per cell is the difference between a 3-line ranked row
+//     measuring 61px (OVER J-16's own <=60px target) and 57px (inside it).
+//   * `px-1.5` -- 2px per cell side x 13 columns = 52px of the fixed 1214px container handed back
+//     to content instead of gutter, which is what lets the five wrapping disclosure columns hold
+//     their values in 3 lines instead of 4-5 (a 4-line row is 73px). The gutter between two
+//     columns' text is still 12px.
+// Type scale is untouched (`text-xs` body, `text-[11px]` chips/header) and only this one table is
+// affected -- `LABEL_CELL`/`NUMERIC_CELL`/`HEADER_CELL`/`HEADER_CELL_LEFT` above stay byte-
+// unchanged for the other three tables on this page.
+const ROW_LABEL_CELL = "px-1.5 py-1 text-left text-xs text-slate-400 whitespace-nowrap";
+const ROW_NUMERIC_CELL = "px-1.5 py-1 text-right font-mono text-xs text-slate-200 whitespace-nowrap";
+const ROW_BADGE_CELL = "px-1.5 py-1 text-left";
+const ROW_HEADER_CELL = "px-1.5 py-1 text-right text-[11px] font-medium text-slate-500";
+const ROW_HEADER_CELL_LEFT = "px-1.5 py-1 text-left text-[11px] font-medium text-slate-500";
+const CHIP_CLASS =
+  "inline-block whitespace-nowrap rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[11px] text-slate-300";
 
 const PRIMARY_BUTTON_CLASS =
   "rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-600 disabled:hover:bg-slate-800";
@@ -215,7 +263,10 @@ function DeskCoverageBadges({
   coverage: Record<string, { has_bars: boolean; latest_window_end_utc: string | null }>;
 }) {
   return (
-    <span data-testid="desk-coverage-badges" className="flex flex-wrap gap-1">
+    // goal-desk-iter-24 (J-16): `flex-wrap` dropped -- the four badges now render on ONE line
+    // (TC-3), the direct fix for the ~115px row height `UT-07-fail.png` measured (four badges
+    // wrapping into four lines).
+    <span data-testid="desk-coverage-badges" className="flex flex-nowrap items-center gap-1">
       {Object.entries(coverage).map(([timeframe, tf]) => (
         <span
           key={timeframe}
@@ -341,7 +392,11 @@ function deskSkipDrillInTitle(skip: DeskScreenSkip): string {
 // the "stretched link" pattern (`position: relative` on the `<tr>`, `absolute inset-0` on the
 // `<a>`): one real `next/link` anchor, valid nested-in-a-`<td>` markup, clickable anywhere in the
 // row — never a raw `<a>` wrapping the `<tr>` directly (invalid HTML) and never `router.push`.
-function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
+// goal-desk-iter-24 (J-16): `rank` is the row's own 1-based position in the DISPLAYED snapshot's
+// served `rows` array -- passed down from `DeskRowsTable`'s own `.map((row, index) => ...)`
+// index, never a value this component (or any client-side sort/reorder) computes itself. A plain
+// integer, no label implying action/quality/urgency (goal.md J-16 step 2).
+function DeskRow({ row, asOf, rank }: { row: DeskScreenRow; asOf: string; rank: number }) {
   return (
     <tr
       data-testid="desk-screen-row"
@@ -349,7 +404,10 @@ function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
       data-band-class={row.band_class ?? "none"}
       className="relative border-b border-slate-800/60 last:border-b-0 hover:bg-slate-900/40"
     >
-      <td className={LABEL_CELL} data-testid="desk-row-symbol">
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-row-rank">
+        {rank}
+      </td>
+      <td className={ROW_LABEL_CELL} data-testid="desk-row-symbol">
         <Link
           href={`/structure?symbol=${encodeURIComponent(row.symbol)}&asof=${encodeURIComponent(asOf)}`}
           data-testid="desk-row-drill-in"
@@ -359,49 +417,61 @@ function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
         />
         {row.symbol}
       </td>
-      <td className={LABEL_CELL} data-testid="desk-row-side">
+      <td className={ROW_LABEL_CELL} data-testid="desk-row-side">
         {row.side}
       </td>
-      <td className={LABEL_CELL} data-testid="desk-row-band-class">
+      {/* goal-desk-iter-24 (J-16): the class/distance cells now render inside the page's OWN
+          existing chip style (`CHIP_CLASS` -- the same className `TickEvidenceBadge`/the
+          `band_round_number` badge already use), with the SAME text either cell rendered before
+          this iteration -- every stored golden's text expect stays true. */}
+      <td className={ROW_LABEL_CELL} data-testid="desk-row-band-class">
         {row.band_class !== null ? (
           <>
-            <span>{`Class ${row.band_class}`}</span>
-            <span className="block text-[11px] text-slate-500">nearest same-class band</span>
+            <span className={CHIP_CLASS}>{`Class ${row.band_class}`}</span>
+            <span className="block whitespace-normal text-[11px] text-slate-500">
+              nearest same-class band
+            </span>
           </>
         ) : (
-          "Unclassified"
+          <span className={CHIP_CLASS}>Unclassified</span>
         )}
       </td>
-      <td className={NUMERIC_CELL} data-testid="desk-row-distance" title={String(row.distance_bps)}>
-        {fmt(row.distance_bps)} bps
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-row-distance" title={String(row.distance_bps)}>
+        <span className={CHIP_CLASS}>{fmt(row.distance_bps)} bps</span>
       </td>
-      <td className={NUMERIC_CELL} data-testid="desk-row-score" title={String(row.band_score)}>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-row-score" title={String(row.band_score)}>
         {fmt(row.band_score)}
       </td>
-      <td className="px-2 py-1.5 text-left" data-testid="desk-row-coverage">
+      <td className={ROW_BADGE_CELL} data-testid="desk-row-coverage">
         <DeskCoverageBadges coverage={row.coverage} />
       </td>
-      <td className="px-2 py-1.5 text-left">
+      <td className={ROW_BADGE_CELL}>
         {row.tick_evidence && <TickEvidenceBadge testid="desk-row-tick-evidence" />}
       </td>
       {/* era-desk-iter-9 (J-08): descriptive only, date portion of `basis_as_of` (full precision
           lives in the row anchor's own composite `title` above -- NEVER a per-cell `title` here,
           the iter-6/iter-7 F2 lesson applied proactively: a per-cell title under the stretched
           `absolute inset-0` anchor is pointer-unreachable). `== null` catches a legacy row's
-          ENTIRELY ABSENT keys (`undefined`), not just an explicit `null`. */}
-      <td className={LABEL_CELL} data-testid="desk-row-basis">
+          ENTIRELY ABSENT keys (`undefined`), not just an explicit `null`.
+          goal-desk-iter-24 (J-16): the redundant "basis " label prefix is dropped (the column
+          header already states it) and the cell switches to `WRAP_LABEL_CELL` so a long populated
+          value wraps onto a second line inside its own fixed column width instead of stretching
+          the table -- the honest-absence string itself is untouched. */}
+      <td className={WRAP_LABEL_CELL} data-testid="desk-row-basis">
         {row.basis_as_of == null || row.basis_age_days == null
           ? "basis not recorded in this snapshot"
-          : `basis ${row.basis_as_of.slice(0, 10)} · ${row.basis_age_days} d before as-of`}
+          : `${row.basis_as_of.slice(0, 10)} · ${row.basis_age_days} d before as-of`}
       </td>
       {/* era-desk-iter-15 (J-11): descriptive only, session count + start date (full precision --
           the untruncated `history_start` -- lives in the row anchor's own composite `title` above,
           NEVER a per-cell `title` here, the same F2 lesson the basis column above already applies).
-          `== null` catches a legacy row's ENTIRELY ABSENT keys (`undefined`), not just `null`. */}
-      <td className={LABEL_CELL} data-testid="desk-row-history">
+          `== null` catches a legacy row's ENTIRELY ABSENT keys (`undefined`), not just `null`.
+          goal-desk-iter-24 (J-16): "history " label prefix dropped, `WRAP_LABEL_CELL` -- same
+          reflow as the basis cell above. */}
+      <td className={WRAP_LABEL_CELL} data-testid="desk-row-history">
         {row.history_sessions == null || row.history_start == null
           ? "history not recorded in this snapshot"
-          : `history ${row.history_sessions} sessions · from ${row.history_start.slice(0, 10)}`}
+          : `${row.history_sessions} sessions · from ${row.history_start.slice(0, 10)}`}
       </td>
       {/* era-desk-iter-17 (J-13): the exact price the row's band was measured from, beside its own
           already-recorded price_low-price_high band range -- "the price is inside the wall"
@@ -412,8 +482,13 @@ function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
           row's ENTIRELY ABSENT key (`undefined`), not just an explicit `null` -- and only the
           CLOSE segment falls back: `price_low`/`price_high` are recorded on every ranked row of
           every snapshot ever written, so the range itself always renders (goal-desk-iter-17 audit
-          F1). */}
-      <td className={LABEL_CELL} data-testid="desk-row-band">
+          F1). goal-desk-iter-24 (J-16): this cell keeps its "band " label prefix on BOTH branches,
+          byte-unchanged -- iter-24's own review caught that J-13.json step 3 asserts the LITERAL
+          rendered text "band 488.50–490.91 · close 490.91" through `page.get_by_text` (visible DOM
+          text only -- the composite drill-in `title` this word also appears in is invisible to that
+          matcher), so dropping it here would fail a stored golden replay with zero script edits
+          allowed (TC-6). Only `WRAP_LABEL_CELL` (wrap instead of `whitespace-nowrap`) applies. */}
+      <td className={WRAP_LABEL_CELL} data-testid="desk-row-band">
         {row.reference_close == null
           ? `band ${fmt(row.price_low)}–${fmt(row.price_high)} · close not recorded in this snapshot`
           : `band ${fmt(row.price_low)}–${fmt(row.price_high)} · close ${fmt(row.reference_close)}`}
@@ -422,11 +497,15 @@ function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
           did NOT choose -- descriptive only, rounded display (full precision for this field is not
           carried in the tooltip this iteration; the tooltip instead gains the row's `bands_by_class`
           breakdown, see `deskRowDrillInTitle` above). Three distinguishable states: a populated
-          `opposite_band` (`opposite <side> <class> <low>–<high> · <distance> bps`), an honest
-          "no band on the other side" for a recorded `null` (the canonical band computation served
-          no band on that side at all), and the established legacy-absent copy "opposite wall not
-          recorded in this snapshot" for a row from before this iteration (`undefined`, not `null`). */}
-      <td className={LABEL_CELL} data-testid="desk-row-opposite">
+          `opposite_band` (`opposite <side> <class> <low>–<high> · <distance> bps`), an honest "no
+          band on the other side" for a recorded `null` (the canonical band computation served no band on
+          that side at all), and the established legacy-absent copy "opposite wall not recorded in
+          this snapshot" for a row from before this iteration (`undefined`, not `null`).
+          goal-desk-iter-24 (J-16): this cell keeps its "opposite " label prefix on the populated
+          branch, byte-unchanged, for the SAME reason the band cell above does -- J-14.json step 3
+          asserts the literal rendered text "opposite resistance A 490.97–494.39 · 1.22 bps" via
+          `page.get_by_text`, and TC-6 allows zero script edits. Only `WRAP_LABEL_CELL` applies. */}
+      <td className={WRAP_LABEL_CELL} data-testid="desk-row-opposite">
         {row.opposite_band === undefined
           ? "opposite wall not recorded in this snapshot"
           : row.opposite_band === null
@@ -443,13 +522,16 @@ function DeskRow({ row, asOf }: { row: DeskScreenRow; asOf: string }) {
           full-precision detail to hide behind a hover). `=== undefined` catches a legacy row's
           ENTIRELY ABSENT key (band_member_count is always >= 1 by construction whenever it is
           recorded at all, so it is never legitimately null) -- the same strict check
-          bands_by_class already uses. */}
-      <td className={LABEL_CELL} data-testid="desk-row-levels">
+          bands_by_class already uses.
+          goal-desk-iter-24 (J-16): the redundant " levels" label word is dropped from the tally
+          (the column header already says "levels"; the count/breakdown itself is unchanged text),
+          `WRAP_LABEL_CELL`. */}
+      <td className={WRAP_LABEL_CELL} data-testid="desk-row-levels">
         {row.band_member_count === undefined || row.band_member_timeframes === undefined
           ? "composition not recorded in this snapshot"
           : (
               <>
-                {`${row.band_member_count} levels · ${Object.entries(row.band_member_timeframes)
+                {`${row.band_member_count} · ${Object.entries(row.band_member_timeframes)
                   .map(([timeframe, count]) => `${timeframe} ${count}`)
                   .join(" · ")}`}{" "}
                 {row.band_round_number && (
@@ -480,26 +562,57 @@ function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) 
           ranked a symbol whose bars it never read.
         </p>
       )}
-      <table data-testid="desk-screen-rows-table" className="w-full border-collapse">
+      {/* goal-desk-iter-24 (J-16): `table-fixed` + an explicit `<colgroup>` -- each column takes
+          exactly its own assigned width regardless of content, so the table's OWN total width
+          (the sum of these thirteen widths) is a fixed, known quantity instead of the browser's
+          auto layout expanding to fit each column's widest single-line content (the direct cause
+          of iter-23's 1795px `scrollWidth`). The five long disclosure columns pair with
+          `WRAP_LABEL_CELL` (no `whitespace-nowrap`) so a value too long for its own column wraps
+          onto a second line instead of stretching the table wider than its container.
+          Every width below is a MEASURED number, not an estimate: the eight non-wrapping columns
+          each hold their own widest rendered content (measured cell-by-cell over the header plus
+          all 100 ranked rows of the latest populated screen, with zero overflow past any cell's
+          border box), and the remaining width is split across the five wrapping columns so each
+          one's longest value lands in 3 text lines -- a 3-line row measures 57px, inside J-16's
+          own <=60px target. They sum to 1214px, which is exactly this page's own
+          `mx-auto max-w-7xl` container width inside its `Panel` padding at a 1440px viewport, so
+          `scrollWidth === clientWidth` and no horizontal scrollbar can appear. */}
+      <table data-testid="desk-screen-rows-table" className="w-full table-fixed border-collapse">
+        <colgroup>
+          <col className="w-[36px]" />
+          <col className="w-[52px]" />
+          <col className="w-[66px]" />
+          <col className="w-[140px]" />
+          <col className="w-[96px]" />
+          <col className="w-[60px]" />
+          <col className="w-[122px]" />
+          <col className="w-[87px]" />
+          <col className="w-[81px]" />
+          <col className="w-[86px]" />
+          <col className="w-[96px]" />
+          <col className="w-[126px]" />
+          <col className="w-[166px]" />
+        </colgroup>
         <thead>
           <tr className="border-b border-slate-800">
-            <th className={HEADER_CELL_LEFT}>symbol</th>
-            <th className={HEADER_CELL_LEFT}>side</th>
-            <th className={HEADER_CELL_LEFT}>class</th>
-            <th className={HEADER_CELL}>distance</th>
-            <th className={HEADER_CELL}>score</th>
-            <th className={HEADER_CELL_LEFT}>coverage</th>
-            <th className={HEADER_CELL_LEFT}>tick evidence</th>
-            <th className={HEADER_CELL_LEFT}>basis</th>
-            <th className={HEADER_CELL_LEFT}>history</th>
-            <th className={HEADER_CELL_LEFT}>band</th>
-            <th className={HEADER_CELL_LEFT}>opposite</th>
-            <th className={HEADER_CELL_LEFT}>levels</th>
+            <th className={ROW_HEADER_CELL}>rank</th>
+            <th className={ROW_HEADER_CELL_LEFT}>symbol</th>
+            <th className={ROW_HEADER_CELL_LEFT}>side</th>
+            <th className={ROW_HEADER_CELL_LEFT}>class</th>
+            <th className={ROW_HEADER_CELL}>distance</th>
+            <th className={ROW_HEADER_CELL}>score</th>
+            <th className={ROW_HEADER_CELL_LEFT}>coverage</th>
+            <th className={ROW_HEADER_CELL_LEFT}>tick evidence</th>
+            <th className={ROW_HEADER_CELL_LEFT}>basis</th>
+            <th className={ROW_HEADER_CELL_LEFT}>history</th>
+            <th className={ROW_HEADER_CELL_LEFT}>band</th>
+            <th className={ROW_HEADER_CELL_LEFT}>opposite</th>
+            <th className={ROW_HEADER_CELL_LEFT}>levels</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <DeskRow key={row.symbol} row={row} asOf={asOf} />
+          {rows.map((row, index) => (
+            <DeskRow key={row.symbol} row={row} asOf={asOf} rank={index + 1} />
           ))}
         </tbody>
       </table>

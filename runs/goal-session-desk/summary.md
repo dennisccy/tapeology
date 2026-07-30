@@ -1,38 +1,39 @@
 # Goal Session Summary — desk
 
-**Final verdict:** STALLED
-**Total iterations:** 22
-**Wall time (seconds):** 16569
+**Final verdict:** AWAITING_PUMP
+**Total iterations:** 24
+**Wall time (seconds):** 15921
 **Quota pauses:** 0
 **Started:** 2026-07-25T01:04:47.481604Z
-**Finished:** 2026-07-29T23:27:12.442913Z
+**Finished:** 2026-07-30T12:13:43.862304Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/desk`. Open a PR with:
 
     gh pr create --base main --head goal/desk \
-      --title "feat: desk — STALLED" \
+      --title "feat: desk — AWAITING_PUMP" \
       --body-file runs/goal-session-desk/summary.md
 
 ## Final journey state
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-desk-iter-18 |
-| J-02 | passing | goal-desk-iter-18 |
-| J-03 | passing | goal-desk-iter-19 |
-| J-04 | passing | goal-desk-iter-21 |
-| J-05 | passing | goal-desk-iter-21 |
-| J-06 | passing | goal-desk-iter-21 |
-| J-07 | passing | goal-desk-iter-21 |
-| J-08 | passing | goal-desk-iter-19 |
-| J-09 | passing | goal-desk-iter-19 |
-| J-10 | passing | goal-desk-iter-19 |
-| J-11 | passing | goal-desk-iter-19 |
-| J-12 | passing | goal-desk-iter-21 |
-| J-13 | passing | goal-desk-iter-21 |
-| J-14 | passing | goal-desk-iter-21 |
+| J-01 | passing | goal-desk-iter-23 |
+| J-02 | passing | goal-desk-iter-23 |
+| J-03 | passing | goal-desk-iter-23 |
+| J-04 | passing | goal-desk-iter-23 |
+| J-05 | passing | goal-desk-iter-23 |
+| J-06 | passing | goal-desk-iter-23 |
+| J-07 | passing | goal-desk-iter-23 |
+| J-08 | passing | goal-desk-iter-23 |
+| J-09 | passing | goal-desk-iter-23 |
+| J-10 | passing | goal-desk-iter-23 |
+| J-11 | passing | goal-desk-iter-23 |
+| J-12 | passing | goal-desk-iter-23 |
+| J-13 | passing | goal-desk-iter-23 |
+| J-14 | passing | goal-desk-iter-23 |
+| J-15 | passing | goal-desk-iter-23 |
 
 ## Anti-goal violations
 
@@ -368,24 +369,65 @@ See `runs/goal-session-desk/telemetry.jsonl` for the structured event log.
       (resume-skipped: developer, reviewer, coherence-auditor)
       pump-wait                  0.4m
       overlap saved              9.9m  (parallel steps)
-  session: 22 completed iteration(s), mean wall 133.6m
-      total goal-evaluator            1621.7m
-      total developer                  345.9m
-      total browser-qa-agent           309.5m
-      total goal-decomposer            292.3m
-      total iteration-summarizer       212.5m
-      total coherence-auditor          103.2m
-      total reviewer                    98.3m
-      total readme-maintainer           69.1m
-      total auditor                     64.2m
-      total qa                          54.9m
-      total ui-impact-analyst           46.8m
+  goal-desk-iter-22  depth=lean  verdict=GOAL_ACHIEVED  wall=49.8m
+      goal-evaluator              13.3m  calls=1
+      goal-decomposer             10.3m  calls=1
+      browser-qa-agent             9.5m  calls=1
+      goal-evaluator-confirm       6.3m  calls=1
+      iteration-summarizer         6.1m  calls=1
+      coherence-auditor            2.5m  calls=1
+      demo-narrator                1.6m  calls=1
+      readme-maintainer            1.6m  calls=1
+      [engine] evidence-pipeline    12.2m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  2.7m
+      overlap saved              1.4m  (parallel steps)
+  goal-desk-iter-23  depth=full  verdict=GOAL_ACHIEVED  wall=131.4m
+      browser-qa-agent            27.9m  calls=1
+      goal-evaluator              26.7m  calls=1
+      developer                   18.1m  calls=1
+      auditor                     17.2m  calls=1
+      qa                          17.0m  calls=1
+      goal-decomposer              8.1m  calls=1
+      reviewer                     7.8m  calls=1
+      iteration-summarizer         4.9m  calls=1
+      goal-evaluator-confirm       4.9m  calls=1
+      orchestrator                 4.7m  calls=1
+      ui-impact-analyst            4.7m  calls=1
+      coherence-auditor            2.6m  calls=1
+      demo-narrator                1.7m  calls=1
+      [engine] full-pipeline      84.2m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: ui-test-design, ux-regression)
+      pump-wait                 17.1m
+      OVER BUDGET at qa-loop: 4503s > 3600s (mode=trim)
+      overlap saved             14.9m  (parallel steps)
+  goal-desk-iter-24  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                   43.4m  calls=1
+      goal-decomposer              8.6m  calls=1
+      reviewer                     0.0m  calls=1  failures=1
+      [engine] lean-pipeline      43.4m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  0.2m
+  session: 24 completed iteration(s), mean wall 130.0m
+      total goal-evaluator            1661.7m
+      total developer                  407.4m
+      total browser-qa-agent           346.9m
+      total goal-decomposer            319.3m
+      total iteration-summarizer       223.5m
+      total coherence-auditor          108.3m
+      total reviewer                   106.1m
+      total auditor                     81.3m
+      total qa                          71.9m
+      total readme-maintainer           70.7m
+      total ui-impact-analyst           51.4m
       total ui-test-designer            38.2m
-      total orchestrator                17.4m
+      total orchestrator                22.1m
       total ux-regression-reviewer      17.4m
-      total demo-narrator               10.8m
-      total goal-evaluator-confirm       4.9m
+      total goal-evaluator-confirm      16.1m
+      total demo-narrator               14.1m
       total browser-qa-replay            2.3m
       total AWAITING_PUMP paused gaps: 8.8m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP
 ```

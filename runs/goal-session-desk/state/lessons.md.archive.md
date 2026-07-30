@@ -384,3 +384,50 @@ acceptance line, and TC-13 was in fact unexecuted until the auditor ran it.
 walkthrough, especially when another project's dev server is running on the same host; and any
 evaluator reading a QA report's per-TC verdict table.
 
+
+<!-- condense.sh 2026-07-30T12:14:41Z: moved 3 entries (keep-iters=5) -->
+
+## iter-17 — 2026-07-29T09:28:21+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A wrapped metadata line is a silent verification hole: the phase spec wrote
+`Required-still-passing journeys:` over two physical lines, `replay_lane_spec_journeys`
+(`scripts/automation/lib/replay-lane.sh:70`) parses it with `head -1`, and J-11/J-12 therefore
+reached NEITHER the replay lane NOR the LLM fallback — while the merged results file confidently
+read "20/20 journeys passed". Nothing on disk disclosed the omission; only the audit's own
+spec-vs-results cross-read caught it.
+**Applies to:** every future iteration spec (keep `Target journeys:` / `Required-still-passing
+journeys:` on ONE physical line until the parser handles continuations), and any evaluator reading
+a merged results file — cross-check the spec's named journey set against the rows that actually
+exist, never trust the "N/N passed" count alone.
+
+## iter-17 — 2026-07-29T09:28:21+01:00 (second lesson)
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Two `next dev` processes started from the same `apps/frontend` directory share one
+`.next` build cache, so launching a scoped frontend on `:3392` silently re-bundled the AMBIENT
+`:3301` page with the SCOPED backend's `NEXT_PUBLIC_API_URL` — the ambient page began showing
+populated `reference_close` rows that a direct `curl` to `:8301` proved did not exist. The browser
+lane caught it within seconds by cross-checking the page against the API, cleared `.next`, and
+restarted; had it not, an entire evidence set would have been captured against the wrong store while
+every origin check still passed (the ORIGIN was right; the BUNDLED API BASE was not).
+**Applies to:** any lane needing a fixture-scoped rig on this project (browser-qa, demo-narrator,
+audit re-verification) — copy the whole `apps/frontend` tree to an isolated directory, or stop the
+ambient frontend first; and always cross-check one rendered value against a direct `curl` to the
+backend you believe you are serving, because `location.origin` alone cannot detect this.
+
+## iter-18 — 2026-07-29T12:05:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The iteration spec's restatement of a goal.md rule silently overrode the rule itself:
+`docs/goal.md` J-14 step 1 asked for "distance ascending, then class rank descending", the
+decomposer wrote "(class rank DESCENDING, distance_bps ascending, ...) — the key `_select_best_band`
+already uses", and developer/reviewer/QA/coherence/audit all verified against the restatement, so a
+2-of-63-rows behavioural divergence (HONA, META) shipped past five green lanes. When a spec bullet
+paraphrases a goal.md selection/ordering/threshold rule, diff the paraphrase against the goal text
+verbatim before treating any downstream PASS as evidence — and re-measure the rule against the
+canonical owner on REAL data, not just the fixture, because the fixture's 6 rows happened to agree
+under both rules.
+**Applies to:** any iteration whose spec restates a goal.md rule in its own words (selection keys,
+rank keys, tie-breaks, thresholds); any `desk_screen.py` band-selection change.
+

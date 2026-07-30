@@ -1,0 +1,20 @@
+{
+  "phase": "goal-desk-iter-24",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-30T14:05:00.000000Z",
+  "started_at": "2026-07-30T12:30:00.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "note": "FIX ROUND 1 complete against reports/reviews/goal-desk-iter-24-review.md (FAIL: 2 CRITICAL + 2 MINOR). (1+2) CRITICAL: restored the 'band ' prefix on both desk-row-band branches and the 'opposite ' prefix on desk-row-opposite's populated branch -- the reviewer was right that demo_runner's get_by_text matches visible DOM text only, so dropping them deleted the literal strings J-13.json/J-14.json step 3 assert; proven both ways by a seeded counter-check (dropped => both FAIL step 03; restored => both PASS). The three prefixes no golden pins by literal text (basis/history/levels) stay dropped as the spec sanctions. (3) MINOR: the 13 stored goldens were ACTUALLY replayed this time -- 13/13 PASS, 0 FAIL, 0 SKIP, zero script edits, against a clean rm -rf .next production build (TC-6). (4) MINOR: row height re-tuned rather than left worse -- the ranked table now uses its own py-1/px-1.5 cell padding (shared LABEL_CELL/NUMERIC_CELL/HEADER_CELL untouched, so the other three tables keep their density) plus re-derived colgroup widths 36/52/66/140/96/60/122/87/81/86/96/126/166 summing to exactly 1214px; measured on the final production build at 1440x900 over all 100 rows: scrollWidth 1214 === clientWidth 1214, document 1440/1440, row height min 56.5 / median 57 / p90 57 / max 63, 2 of 100 rows over 60px (positions 24 and 80, whose levels cell carries the reused 22px 'round number' badge on a third line), 0 of 100 rows with wrapped coverage badges, zero content overflow past any cell's border box on all 13 columns. Also added ONE disclosed guard test + seeded counter-test tying the two golden-pinned label prefixes to J-13.json/J-14.json's own asserted texts, so this defect cannot recur invisibly. Suite 1460 passed / 8 skipped / 0 failed; fingerprint 08e471b10130e1e2 unchanged; MCP 38 contract tests pass; zero diff on desk_screen/tradability/levels/bars/bar_index/desk_coverage/config/StructureChart/engine/mcp; TC-12 store SHA-256 listing byte-identical (15 files, zero append-only write); tsc + next build clean; both servers stopped (ports 3301/8301 free).",
+  "changed_files": [
+    "apps/frontend/app/desk/page.tsx",
+    "apps/backend/tests/test_desk_ui_guards.py",
+    "docs/handoffs/goal-desk-iter-24-dev.md",
+    "reports/qa/goal-desk-iter-24-evidence/dev-fix/"
+  ],
+  "tests_run": true,
+  "browser_checks_run": true,
+  "qa_passed": false,
+  "next_action": "review"
+}

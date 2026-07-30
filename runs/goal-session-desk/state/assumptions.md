@@ -4,77 +4,6 @@ Append-only. An entry is added whenever scoring or planning required *interpreti
 `docs/goal.md` rather than just reading evidence. The human reviews these to catch
 silent interpretation calls early.
 
-## iter-17 — goal-evaluator
-
-**Ambiguity:** `docs/goal.md`'s J-13 Acceptance ends with a conjunct: "a **`[NEW]`-flagged
-demo-narrator walkthrough** covers the briefing's price disclosure end to end", and the iteration
-spec's DEFINITION OF DONE item 4 names `Demo Verdict: RECORDED`. The artifact that exists
-(`reports/phase-goal-desk-iter-17-demo-results.md`, gallery `reports/demo/goal-desk-iter-17/`) IS a
-demo-narrator walkthrough and IS `[NEW]`-flagged on its J-13 steps, but (i) its verdict reads
-`RECORDED_WITH_NOTES` (three click timeouts plus one text expectation — all selector brittleness, not
-product defects: UT-07 proves the row click-through works and UT-08 proves the skip section renders),
-and (ii) it was recorded against the AMBIENT store at `:3301` BEFORE the audit's F1 fix, so all eight
-frames show only the legacy state — and the pre-F1 legacy string at that, i.e. no band range and no
-close anywhere in the film (I opened `step-03.png` and confirmed it). goal.md does not say whether a
-walkthrough that narrates a real-but-unpopulated state "covers the disclosure end to end", nor
-whether an incomplete showcase recording is a product gap or an evidence gap.
-
-**We chose:** Score J-13 `passing` and record the walkthrough shortfall as a CAPTURE DEFECT
-(`evidence_makeup: true`, methodology A.7) rather than an unmet acceptance conjunct — so it does not
-downgrade the journey and does not block GOAL_ACHIEVED. Five strands, each checked by me directly:
-(i) methodology A.7 names "the walkthrough recording is missing or badly cropped" and "a screenshot
-showing a different-but-equally-valid data range than the spec's example numbers" as capture defects,
-and its rail — "never applies when the asserted BEHAVIOR is unmet" — does not fire here, because the
-film shows a state the product genuinely produced, not behaviour contradicting the claim; (ii) the
-behaviour the film should have shown is proven three independent ways: `UT-05-result.png` (in-band
-BRK-B and out-of-band LIN in ONE frame, scoped rig, `location.origin` asserted before capture), the
-scoped snapshot on disk (63/63 ranked rows carry `reference_close`, 0/38 skip rows do, checksum
-recomputes), and my own re-derivation of every row's value from the stored `1d` bars with ZERO
-mismatches; (iii) the agent contract is explicit that an evidence/recording gap must "never [be]
-scored as blocking" and must "never [be] a new iteration's goal" — it rides a make-up capture; (iv)
-the in-session precedent one iteration back is identical in shape (iter-16 scored J-12 `passing` with
-`evidence_makeup: true` for a framing shortfall and returned GOAL_ACHIEVED); (v) the independent
-auditor, who rated this DoD item "NOT met", still recommended shipping and reached the same
-product-vs-artifact split, as did the ux-regression reviewer.
-
-**Reversible:** yes — one short re-filming run (`Depth: evidence` or a passenger task on whichever
-lane next touches `/desk`) on a fixture-scoped rig with a freshly computed screen produces the
-literal artifact, with zero program change; the flag clears on any fresh capture. If the owner reads
-the conjunct strictly, J-13 returns to `partial` until that re-filming lands — and the practical
-obstacle is now documented (two `next dev` processes from one source tree share `.next` and
-cross-contaminate which backend the ambient page serves).
-
-## iter-18 — goal-evaluator
-
-**Ambiguity:** `docs/goal.md`'s J-14 step 1 states the opposite-band selection rule twice in ways
-that can be read against each other: "the nearest band on the side the row's own selected band is
-NOT on ... The selection is deterministic and stated on the record: distance ascending, then class
-rank descending (`_CLASS_RANK` ... an unclassified band ranks lowest, never highest), then
-`band_score` descending, resolved by `min`'s first-of-tie stability over `compute_tradability`'s own
-served order (the `_select_best_band` precedent)." The trailing parenthetical names the existing
-helper whose key is CLASS-first, which is what shipped; the sentence's own ordering and the
-journey's title ("the nearest wall on the OTHER side") say DISTANCE-first. goal.md does not say
-which wins, and its Acceptance paragraph pins only byte-identity with some band in the canonical
-list — a criterion the shipped rule satisfies.
-**We chose:** Read DISTANCE-first as the requirement and score J-14 `partial`. Four strands, each
-checked by me: (i) "nearest" appears three times (title, step 1's first clause, and the ordering
-clause), while the `_select_best_band` reference is attached to TIE STABILITY, not to the key order;
-(ii) J-14's own rationale in goal.md complains that class-first selection hides nearer bands
-("nothing on the page says a nearer band on the other side exists"), so implementing the new column
-with class-first reproduces the defect the journey exists to remove; (iii) I measured the divergence
-against `compute_tradability` for all 63 ranked members of the owner's own screen at as_of
-2026-07-29 — 2 rows differ (HONA 336.96 vs 153.67 bps; META 232.58 vs 92.05 bps), so this is a
-user-visible behavioural difference, not a wording quibble; (iv) the shipped code's own docstring
-(`desk_screen.py:89`) and frontend comment (`page.tsx:273`) both claim "the nearest band", so the
-implementation is inconsistent with itself under either reading. The opposite call (score `passing`,
-log an assumption) was available and would have closed the era; I judged that closing on a column
-whose headline promise fails on 3% of real rows is the worse error in a project whose first rail is
-honest measurement.
-**Reversible:** yes — either direction is a small change. Distance-first is a one-key edit in
-`_select_opposite_band` plus its goldens; grade-first can be ratified instead by editing goal.md's
-J-14 wording and both "nearest" comments. Nothing recorded blocks either: the only snapshot carrying
-these fields lives in a throwaway rig, and the owner's own store has none.
-
 ## iter-19 — goal-evaluator
 
 **Ambiguity:** `docs/goal.md`'s J-14 Acceptance ends with two capture conjuncts — "plus one
@@ -321,3 +250,50 @@ this time — there is nothing to re-capture.
 **Reversible:** yes — both are artifact-level. UT-07 turns green only on a layout decision (grouping, a
 detail panel, or retiring a column), which is a new journey's worth of work, not a J-15 fix; the demo
 verdict string turns to `RECORDED` on one edit to the script's locators with zero product change.
+
+## iter-24 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-16 acceptance says "a ranked row's own measured height is ≤ 60 px
+(today ~115 px — the BRK-B / AMZN / MDLZ row baselines sit 115 px apart …)". The delivered layout
+measures 56.5–57 px on 98 of 100 rows (all of ranked positions 1–8, the ones TC-4 requires) but 63 px
+on exactly 2 rows (positions 24 META and 80 AMD). goal.md does not say whether "a ranked row" means
+EVERY row without exception or the row-height REGIME the ~115 px baseline names.
+**We chose:** Read it as the regime and score J-16 `passing`, recording the 3 px residual openly
+rather than as an unmet clause. Four strands, each checked by me: (i) the defect the 60 px number was
+measured against is fully closed — `DeskCoverageBadges` no longer wraps (I confirmed one badge line
+per row in `J-16-viewport.png` and across the 100-row full-page capture), which is the whole 115→57
+px move; (ii) the residual's cause is not text that failed to fit but the REUSED `round number`
+badge's own 22 px inline-block height landing on a third line, and that badge is `/structure`'s
+shipped element which J-15's own acceptance requires the desk to render identically — shrinking it
+would breach a different journey; (iii) the acceptance's operational purpose is met and I verified it
+in the picture: "at least the first EIGHT ranked rows legible with their rank positions 1…8" — the
+crop shows rows 1–9, and 22 rows fit in 1270 px; (iv) the reviewer independently judged it a
+non-blocking NOTE against `geometry.json`, and the ONE numeric regression this journey exists to fix
+(`scrollWidth` 1795 → 1214 inside 1214) is exactly, not approximately, closed.
+**Reversible:** yes — if the owner reads "≤ 60 px" as absolute, the remedy is layout-only and costs no
+recorded value: give the `levels` column ~12 px more width, or let those two rows' badge share a line.
+No product behaviour and no recorded field would change.
+
+## iter-24 — goal-evaluator
+
+**Ambiguity:** J-16's acceptance also makes a `[NEW]`-flagged demo-narrator walkthrough a conjunct
+("covers the briefing end to end with the `opposite` and `levels` columns visible IN ITS OWN FRAMES").
+No film was recorded: the engine's depth arbiter demoted the spec's `Depth: full` to `lean`
+(telemetry `depth_demoted`, reason `full-cap`), and the lean path records no walkthrough at all.
+Separately, the wall-clock trim marked UT-J-06 and UT-J-15 `DEFERRED-BUDGET` — not tested. My agent
+contract says an evidence/recording gap must never be scored as blocking and never become an
+iteration's goal, while goal.md makes this film part of acceptance; the two rails point opposite ways
+(the same split iters 17–20 faced for J-13/J-14).
+**We chose:** Split the two questions again. (i) J-16's STATUS is `passing` with
+`evidence_makeup: true` (methodology A.7 — the asserted behaviour is proven by artifacts I opened and
+by measurements I re-derived; only the film is missing). J-06 and J-15 keep `passing` per the
+DEFERRED-BUDGET rule, with `last_verified_iter` deliberately left at `goal-desk-iter-23` so the
+deferral stays visible and re-queued — I did NOT promote them on the strength of my own checks, even
+though I made those checks (17 tools enumerated in the running module; J-15's ≤5-level row, ≥100-level
+row and `round number` badge read out of this run's own full-page capture and matched to the record on
+disk). (ii) The VERDICT is `CONTINUE`, not `GOAL_ACHIEVED`: a deferred journey can never support the
+achievement gate, and asserting a finish while an acceptance-named film has never been recorded is
+exactly what iteration 19's second key refused. I did NOT return STALLED — every remaining step is
+machine-doable at `Depth: evidence`, with no owner decision pending for the first time in five runs.
+**Reversible:** yes — one `evidence`-depth run records the film and re-checks J-06/J-15 with zero
+product change; nothing built this iteration would need redoing.

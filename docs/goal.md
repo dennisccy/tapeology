@@ -1176,6 +1176,106 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     side, class, distance, score, coverage, tick evidence, basis, history, band, opposite — have no cell
     for it.)*
 
+- **J-16: The briefing fits the page it is read on — every recorded disclosure legible without a sideways scroll**
+  - Steps:
+    1. Reflow the ranked table so the ROW's own content fits the width the page actually gives it. The
+       scroll container is capped by `/desk`'s own `mx-auto max-w-7xl` (`apps/frontend/app/desk/page.tsx:1829`
+       — 1280 px), and the table's intrinsic content width is 1795 px, so simply widening the container
+       cannot fix it: at a 1440 px viewport even an uncapped container offers ~1408 px < 1795 px. Sanctioned
+       mechanisms, builder's choice, any combination: drop the in-cell label prefixes the column headers
+       (`:486`–`:497`) already state (`basis `/`history `/`band `/`opposite `/`N levels` ≈ 35 characters per
+       row), render the four coverage badges on ONE line instead of today's wrap-into-four
+       (`DeskCoverageBadges`' `flex flex-wrap`, `:218`), relax `LABEL_CELL`'s `whitespace-nowrap` (`:141`)
+       on the long disclosure cells, and/or lay the five disclosure fields out as a second line of the SAME
+       row. What is NOT sanctioned: dropping, hiding, collapsing behind a click, or moving into a native
+       `title` tooltip ANY of the twelve disclosures — each one is a shipped journey's own acceptance
+       clause (J-08 `basis`, J-11 `history`, J-13 `band`, J-14 `opposite`, J-15 `levels`) — and NOT shrinking
+       the table's base type below the page's existing `text-xs` scale to buy width.
+    2. Add the `rank` cell Key Capability 4 and J-04 step 2 both name first: the row's own 1-based position
+       in the DISPLAYED snapshot's own served `rows` array, rendered as a plain integer position (never a
+       label implying action, quality, or urgency). The rank ORDER is already recorded data (J-03 step 2:
+       "the order is data, recorded in the snapshot"), so this RENDERS recorded data and computes no new
+       value: zero new recorded field, zero backend diff — `desk_screen.py`'s row shape, the five-pin
+       snapshot key and `_row_rank_key` are untouched — and the page never sorts, re-orders, filters or
+       paginates `rows`, it renders the served order verbatim.
+    3. Render the class and distance cells as the chips Key Capability 4 ("band class chip, distance chip")
+       and Success Criterion 4 ("descriptive chips") name — and which this page's own source comment
+       (`:326`) already calls chips while the DOM carries none — reusing the page's OWN existing badge style
+       (the bordered `text-[11px]` style `desk-coverage-badge` / `tick evidence` / `round number` already
+       use), with the SAME text those cells render today so every stored golden's text expect stays true.
+    4. Keep every browser contract the shipped journeys rest on: each existing `data-testid` on `/desk`
+       keeps its element and its exact text (`desk-screen-rows-table`, `desk-row-drill-in`, `desk-row-side`,
+       `desk-row-band-class`, `desk-row-distance`, `desk-row-score`, `desk-coverage-badges`/`-badge`,
+       `desk-row-tick-evidence`, `desk-row-basis`, `desk-row-history`, `desk-row-band`, `desk-row-opposite`,
+       `desk-row-levels`, `desk-skip-row*`, `desk-history-row`, `desk-provenance`, `desk-title`, the compute
+       controls), and the row's stretched drill-in anchor keeps its `href`, its `absolute inset-0`, its
+       `data-testid` and its dynamic consolidated `title` byte-unchanged — so
+       `tests/test_desk_hover_tooltip_guard.py` and `tests/test_desk_ui_guards.py` stay green UNMODIFIED,
+       J-14's already-photographed `bands_by_class` tooltip keeps working, and the 13 stored golden replay
+       scripts (`runs/goal-session-desk/journey-scripts/J-01`…`J-14`; there is no `J-06` script) replay
+       green without a single script edit. If the reflow moves a disclosure out of its own `<td>`, its
+       testid moves WITH it and keeps the same text.
+    5. Zero backend diff, zero new value: no new field on any recorded shape, no new Data-Contract row
+       (nothing new is computed — the page renders `GET /research/desk/screen`'s served payload verbatim, as
+       it already does), no new endpoint/route/`Config` field, no new MCP tool. The page still derives no
+       price and no distance of its own (`test_desk_ui_guards.py`'s price-arithmetic guard stays green
+       unmodified), and legacy rows keep every honest-absence string exactly as shipped ("basis / history /
+       close / opposite wall / composition not recorded in this snapshot").
+    6. Test: extend the source-introspection guard suite (the `test_desk_ui_guards.py` pattern, with its own
+       seeded can-fail counter-test) with (a) the page renders `rows` in served order — no `.sort(`,
+       `.reverse(`, re-slice or comparator over `rows` anywhere in `page.tsx` — and (b) every testid named
+       in step 4 is still present in the source. Copy stays descriptive measurement only and
+       `tests/test_copy_discipline.py` stays green unmodified.
+  - Acceptance: in a real browser after the T-9 clean rebuild, at a 1440×900 viewport with NO horizontal
+    scrolling and no click, ONE screenshot of `/desk`'s populated briefing shows the top-ranked row's
+    `rank`, symbol, side, class, distance, score, coverage badges, tick-evidence, `basis`, `history`,
+    `band`, `opposite` AND `levels` values all legible at once, and the ranked table's own measured
+    `scrollWidth` is ≤ its scroll container's `clientWidth` with both numbers quoted in the UI-test results
+    row (this is iter-23's UT-07 turned PASS, measured exactly the way it was measured FAIL: 1795 px inside
+    1214 px); each ranked row's four coverage badges render on ONE line and a ranked row's own measured
+    height is ≤ 60 px (today ~115 px — the BRK-B / AMZN / MDLZ row baselines sit 115 px apart in
+    `reports/qa/goal-desk-iter-23-evidence/UT-07-fail.png`); a further screenshot of that same rendered
+    screen shows at least the first EIGHT ranked rows legible with their rank positions 1…8 in the served
+    order (a full-page capture or a crop of one is fine — today three ranked rows fill a 1440×900 frame);
+    and the skipped-members table still groups `no bars` / `no basis` honestly while a pre-J-15 snapshot
+    still renders every honest legacy-absence string (screenshot) (T-10: no screenshot ⇒ `unknown`, never
+    `passing`; **no native `title` tooltip is required by this journey** — every reveal is DOM content, so
+    the T-10a headed rig is NOT needed and no capture may depend on one) (**single source of truth**: this
+    journey renders only what `GET /research/desk/screen` already serves — `desk_screen.ScreenStore` remains
+    the only owner and that GET the only serving endpoint; the `rank` cell renders the row's own position in
+    the SERVED order (the order J-03 already records as data) and the page never re-orders, sorts, filters
+    or paginates it; zero new value is computed, zero recorded shape changes, no new Data-Contract row is
+    needed, and the BACKEND TAKES A ZERO DIFF — this SSOT criterion stands in place of a PnL-ledger append,
+    which this era's Non-Goals forbid); every stored golden replay script replays green with zero script
+    edits, `tests/test_desk_ui_guards.py` and `tests/test_desk_hover_tooltip_guard.py` pass unmodified, and
+    every recorded universe, screen, top-up and reconciliation file is proven byte-identical on disk
+    (SHA-256 listing — a render-only iteration writes no record at all); a **`[NEW]`-flagged demo-narrator
+    walkthrough** covers the briefing end to end with the `opposite` and `levels` columns visible IN ITS OWN
+    FRAMES and its click targets naming ONE row (closing iter-21's and iter-23's RECORDED_WITH_NOTES frame
+    gap, where the film narrated columns its own frames could not show); and the full backend suite is green
+    with `Config().config_fingerprint()` still `08e471b10130e1e2`, zero new `Config` fields, the `default`
+    profile and `v1` byte-identical (engine equivalence green), the MCP surface still exactly 17 tools, zero
+    diff to `desk_screen.py`/`tradability.py`/`levels.py`/`bars.py`/`bar_index.py`/`StructureChart.tsx`, and
+    `tests/test_copy_discipline.py` green unmodified. *(Keyless core; browser-verifiable. Why: measured
+    2026-07-30. Width — iter-23's own browser-QA measured the ranked table at `scrollWidth` 1795 px inside a
+    `clientWidth` 1214 px `overflow-x: auto` container at a 1440 px viewport, with the `levels` header's
+    rect at left 1658 / right 1901, entirely outside the visible window (`UT-07` = **FAIL**, P2/non-gating;
+    `UT-07-fail.png` shows the table cut off after `band`, so `opposite` (J-14) and `levels` (J-15) — the two
+    newest and densest disclosures — are unreachable at any monitor size because the cap is the page's own
+    `max-w-7xl`). Cause — for the #1 row of `screen-2026-07-30-bad6387963ef` (100 ranked / 1 skipped, all
+    100 rows `band_class A`, `distance_bps` median 3.38, 15 rows tied at 0.00) the five disclosure cells
+    carry 194 of the row's 263 rendered characters (74%), all inside `LABEL_CELL`'s `whitespace-nowrap`, and
+    the per-column maxima across the 100 rows sum to 309 characters (`opposite` 50, `levels` 62, `history`
+    38, `band` 36, `basis` 35) — about 35 of them per row being label prefixes the headers already state.
+    Height — `DeskCoverageBadges` is `flex flex-wrap`, so the four badges stack into four lines and each
+    ranked row is ~115 px tall: three rows fill a 1440×900 frame and 100 rows span ~11,500 px. Vision gap —
+    Key Capability 4 and J-04 step 2 both name `(rank, symbol, …)` first and Success Criterion 4 says
+    "descriptive chips", yet `grep rank app/desk/page.tsx` matches only comments and prose (16 hits, zero
+    cells) and the class/distance cells carry no chip styling. And iter-23's own iteration summary records
+    that "a layout decision … is due before any 13th column is added" and asks the next proposer cycle to
+    own it, while the iter-21 and iter-23 walkthrough films were RECORDED_WITH_NOTES for exactly this
+    reason.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

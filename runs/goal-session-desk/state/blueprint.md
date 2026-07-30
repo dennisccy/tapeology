@@ -107,7 +107,12 @@ Tapeology
                                 control. iter-23 (J-15, IN BUILD) adds one more table
                                 column ("levels") rendering each ranked row's own recorded
                                 wall composition (member count + per-timeframe tally +
-                                round-number badge) — no new section, no new control.
+                                round-number badge) — no new section, no new control. iter-24 (J-16, IN BUILD) adds NO new
+                                column and NO new section: it reflows the SAME disclosures
+                                (plus a new `rank` cell rendering the row's own already-recorded
+                                served position) to fit the page's own `max-w-7xl` width with
+                                zero horizontal scroll at a compact row height -- a pure layout
+                                change over already-served data, zero backend diff.
 ```
 
 **Feature / journey homes** (each reachable in ≤2 clicks from the nav):
@@ -129,6 +134,7 @@ Tapeology
 | J-13 Reference-close + band disclosure on ranked rows (price the wall sits at, beside the close it was measured from) — shipped iter-17, GOAL_ACHIEVED-verified | `/desk` (ranked table column + row drill-in tooltip) | Desk |
 | J-14 Opposite-wall disclosure on ranked rows (nearest band on the OTHER side of price, plus a `bands_by_class` count) — IN BUILD at iter-18 | `/desk` (ranked table column + row drill-in tooltip) | Desk |
 | J-15 Wall-composition disclosure on ranked rows (band member count + round-number flag + per-timeframe member tally) — IN BUILD at iter-23 | `/desk` (ranked table column) | Desk |
+| J-16 Table reflow -- every disclosure legible without a sideways scroll, plus a `rank` cell rendering the row's own already-recorded served position -- IN BUILD at iter-24 | `/desk` (ranked table layout only, zero new column beyond `rank`) | Desk |
 
 ## Data Contract
 
@@ -587,4 +593,34 @@ score a brand-new walkthrough clause within its own run (the demo-narrator lane 
 goal-evaluator at `lean` depth). The `band_member_timeframes` key order is left to build
 discretion (goal.md only requires "a deterministic order") — mirror the `_bands_by_class`
 precedent's own key style for consistency, and keep it stable across runs and across the golden
-test's own assertions. -->
+test's own assertions.
+
+RESOLVED at iter-24 (build-time scope for J-16, registered here BEFORE the build): the
+goal-proposer's ninth post-GOAL_ACHIEVED journey (era closed GOAL_ACHIEVED + CONFIRM_ACHIEVED
+at iter-23; proposer rationale measured live 2026-07-30 against iter-23's own browser-QA
+measurement, `UT-07-fail.png`: the ranked table's `scrollWidth` is 1795 px inside a `clientWidth`
+of 1214 px at a 1440 px viewport, so the `opposite` (J-14) and `levels` (J-15) columns sit
+entirely outside the visible window, and `DeskCoverageBadges`' `flex flex-wrap` stacks each
+row's four badges into four lines, ~115 px tall). Unlike every prior post-GOAL_ACHIEVED journey
+(J-08 through J-15, each adding a new served field and/or a new column), J-16 adds ZERO new
+Data-Contract row and ZERO new column: it is a pure reflow of the ALREADY-REGISTERED "Screen
+snapshots, rank rows, skip rows" row's ALREADY-SERVED fields inside the ALREADY-REGISTERED
+`/desk` canonical home (dropping in-cell label prefixes the column headers already state,
+collapsing the four coverage badges onto one line, and relaxing `LABEL_CELL`'s
+`whitespace-nowrap` on the long disclosure cells), plus one new `rank` cell that renders the
+row's own 1-based position in the SERVED `rows` array verbatim -- data J-03 already records as
+the array's own order, never a new computed value. No new page, no nav-skeleton change, no new
+endpoint, no new `Config` field, no new MCP tool (`desk_screen`'s existing byte-identical
+GET-proxy contract is untouched; J-06's exactly-17-tool contract is unaffected). Zero diff to
+`desk_screen.py`/`tradability.py`/`levels.py`/`bars.py`/`bar_index.py`/`StructureChart.tsx`/
+`desk_coverage.py` -- the page renders `GET /research/desk/screen`'s served payload verbatim,
+as it already does, and never sorts, reverses, re-slices, filters or paginates `rows` (a new
+source-introspection guard in `test_desk_ui_guards.py`, with its own seeded counter-test, proves
+it). Every existing `data-testid` and its exact rendered text stay byte-unchanged, so the 13
+stored golden replay scripts (`journey-scripts/J-01`...`J-14`) replay green with zero script
+edits and `test_desk_hover_tooltip_guard.py`/`test_copy_discipline.py` stay green unmodified.
+Depth is `full` this iteration (Full trigger 1: structural/cross-cutting -- the reflow touches
+the ONE shared `/desk` ranked-table render behind 9 already-shipped journeys' testids/tooltip/
+copy contracts, J-03/J-04/J-05/J-08/J-09/J-10/J-11/J-12/J-13/J-14/J-15, plus 13 golden replay
+scripts and 3 guard-test suites -- no single journey's own test coverage spans that blast
+radius; the evaluator's own recommendation for this iteration is also `full`). -->
