@@ -1,0 +1,22 @@
+{
+  "phase": "goal-desk-iter-36",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-31T13:02:02.000000Z",
+  "started_at": "2026-07-31T13:02:02.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "note": "INITIAL BUILD of J-21 (screen-pin disclosure). New backend module `app/research/desk_screen_pins.py` resolves the five pins for a caller-supplied screen_date through the SAME accessors run_screen_and_record already uses (screen_as_of, UniverseStore.list()'s latest record id, Config.config_fingerprint(), compute_bar_store_signature over desk_coverage.get_desk_coverage's index-only read) -- zero new derivation, zero BarStore read of any kind. New GET /research/desk/screen/pins endpoint (screen_date REQUIRED, 422 if absent) wired into desk_routes.py, taking no BarStore/DatasetStore/compute-manager dependency at all. Honest empty payload at HTTP 200 before any universe snapshot is registered. Frontend: DeskProvenance gains a resolved-pins block for the DISPLAYED snapshot's own screen_date; a new descriptive line renders inside the shared ScreenComputeControl (beside Run Screen, in both the empty-state panel and the populated page) querying the same endpoint for todayUtcDate(). Both are page-load/selection-change GETs only, no polling loop; todayPinsResult additionally refreshes once on the screen-compute poll's own terminal tick (same precedent the page already uses for its other ledgers). New test file test_desk_screen_pins.py covers TC-1..TC-8. Full backend suite: 1559 passed, 8 skipped, 0 failed. `npx tsc --noEmit` clean. Config().config_fingerprint() unchanged (08e471b10130e1e2), zero new Config fields, zero diff to desk_screen.py/desk_screen_compute.py/desk_coverage.py/tradability.py/levels.py/bars.py/bar_index.py/StructureChart.tsx. Pre-handoff: rm -rf .next + scripts/dev.sh started/stopped/restarted cleanly on :8301/:3301 with no port conflicts; live-verified the new endpoint against the REAL ambient store (byte-identical to goal.md's own iter-36 differ-state rationale text) and confirmed via Chrome MCP that /desk renders the differ copy correctly with zero console errors; all processes stopped before finishing. journey-scripts/J-21.json and the [NEW] demo-narrator walkthrough are intentionally NOT part of this handoff (browser-QA/demo-narrator's own pipeline steps, per the goal-desk-iter-35 precedent).",
+  "changed_files": [
+    "apps/backend/app/research/desk_screen_pins.py",
+    "apps/backend/app/research/desk_routes.py",
+    "apps/backend/tests/test_desk_screen_pins.py",
+    "apps/frontend/lib/types.ts",
+    "apps/frontend/lib/api.ts",
+    "apps/frontend/app/desk/page.tsx",
+    "docs/handoffs/goal-desk-iter-36-dev.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "next_action": "review"
+}

@@ -518,3 +518,25 @@ REAL frozen data is a stronger check than curl anyway, and it needs no rig.
 **Applies to:** any iteration whose acceptance says "byte-identical to what endpoint X serves" and
 whose reviewer flags it as structurally-only proven — do the in-process store-level round-trip
 rather than accepting the structural argument or re-standing-up the rig.
+
+## iter-36 — 2026-07-31T14:55:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Content-addressed record ids make a screenshot independently falsifiable: re-running
+`run_screen_and_record` over the SAME committed fixtures in my own scratch folder reproduced the
+exact snapshot id the browser-QA screenshot displays (`screen-2026-06-22-09cf660a4125`) and its
+signature `64c954949e3cf681` — so a fixture-scoped capture claim can be checked without standing up
+the rig at all. Prefer this over trusting a rig narrative whenever the state is fixture-derived.
+**Applies to:** any iteration whose acceptance state is captured on a fixture-scoped rig (desk
+screen/universe/top-up stores, or any store whose id derives from content).
+
+## iter-36 — 2026-07-31T14:55:00+01:00 (b)
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The engine has now demoted a `Depth: full` spec to `lean` on four consecutive
+iterations (32, 33, 35, 36), so the demo-narrator step has not run since iter-34 and TWO journeys
+(J-20, J-21) now owe a `[NEW]`-flagged walkthrough. A spec clause that only a `full` dispatch can
+satisfy is therefore not reliably satisfiable by asking for `full` — plan such clauses as
+`evidence`-depth passengers from the start, or expect them to accumulate.
+**Applies to:** any future journey whose acceptance names a `[NEW]`-flagged demo-narrator
+walkthrough.

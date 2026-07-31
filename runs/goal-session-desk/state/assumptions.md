@@ -822,3 +822,74 @@ second key reads the "ranked rows are identical" sentence as a genuine honesty d
 is one small frontend edit to the sentence (and, if wanted, a matching one-line edit to J-20's own
 step-5 text in `docs/goal.md`) — no stored value, no key, no rank order and no endpoint shape would
 change, and J-20's record half would stand untouched either way.
+
+## iter-36 — goal-decomposer
+
+**Ambiguity:** Two build-time calls, neither dictated numerically by `docs/goal.md`'s J-21 text.
+(i) Step 5(a) requires the Provenance panel's "match/differ statement" to be "computed at the OWNER
+and served — the page derives nothing, not even an equality (the J-20 rule)", but does not name an
+extra field or param carrying that boolean. (ii) The acceptance requires a real-browser screenshot
+of BOTH the match and differ states plus the honest empty state, but the ambient store today proves
+only the differ state (the goal.md rationale text itself: the index resolves
+`bar_store_signature 2ce14e8f252966f7`, which none of the 12 recorded snapshots carries), and the
+`lessons.md` iter-32 rule bars manufacturing the match state by clicking the ambient Run Screen
+button (a fresh "latest wins" write would invalidate sibling golden scripts pinned to the current
+one).
+**We chose:** (i) No new field/param is needed: since `ScreenStore`'s five-pin key is unique, a
+non-null `recorded` returned for the DISPLAYED snapshot's own `screen_date` can only ever name that
+same snapshot — so the endpoint's existing `recorded`-or-`null` answer already IS the match/differ
+statement; the frontend renders presence/absence only, deriving no comparison of its own. (ii) Plan
+the match and empty-state screenshots on a FIXTURE-SCOPED rig (a scoped store where a snapshot is
+freshly recorded, then queried immediately so nothing has moved) and the differ-state screenshot on
+the safe, already-populated AMBIENT `:3301`/`:8301` pair — never an ambient Run Screen click.
+**Reversible:** yes — entirely. (i) is a pure API-shape choice; if a future reviewer wants an
+explicit `matches_displayed` boolean instead of an implicit id-equality, that is an additive field
+with no stored-value change. (ii) is an evidence-routing choice only — it decides where three
+screenshots are taken, not what the product records; if the owner would rather see all three states
+on the ambient store, that becomes possible on its own once a future real top-up/screen run happens
+to reproduce a match naturally, with zero code change required.
+
+## iter-36 — goal-evaluator
+
+**Ambiguity:** J-21's Acceptance in `docs/goal.md` names a **`[NEW]`-flagged demo-narrator
+walkthrough** ("narrated over both states") as one of its own acceptance clauses (repeated as DoD
+item 6 / TC-14), but the engine dispatched `depth=lean` (`runs/goal-session-desk/iter-36/
+depth-dispatched` reads `lean`; `.steps/` holds only decomposer, developer, review-1, browser-qa,
+coherence — no demo-narrator), so no walkthrough could be recorded and `reports/demo/
+goal-desk-iter-36/` does not exist. My methodology A.7 names a missing walkthrough recording
+verbatim as a *capture defect*, and my agent contract forbids scoring an evidence gap as blocking
+or making capture an iteration's goal — which points at `passing` + `evidence_makeup`. This is the
+fourth consecutive run (32, 33, 35, 36) the machine shortened a spec asking for `full`, so the
+clause has now gone unmet repeatedly rather than once, and TWO journeys (J-20 and J-21) owe a film.
+**We chose:** Score J-21 `passing` with `evidence_makeup: true`, keep J-20's own
+`evidence_makeup: true`, and return GOAL_ACHIEVED with a `Depth: evidence` recommendation. Four
+strands, each checked by me directly rather than read: (i) A.7's rail is satisfied exactly — the
+asserted BEHAVIOUR is met, not merely claimed: I opened all three per-state PNGs (1440×900, nothing
+cut off) and then re-derived both answers outside the product's own reporting — today's signature
+`2ce14e8f252966f7` re-computed read-only over `.data`, matched against all 12 recorded screens (no
+carrier), and the fixture-scoped match state re-created from scratch in my own scratch folder,
+reproducing the picture's exact snapshot id `screen-2026-06-22-09cf660a4125`, its signature
+`64c954949e3cf681` and its 1-ranked/102-skipped counts; (ii) the goal's own T-10 rail ("no
+screenshot ⇒ `unknown`, never `passing`") is about the SCREENSHOT, and three exist which I opened —
+the walkthrough is a separate narrative artifact on a lane that gates nothing; (iii) iteration 30's
+logged bound ("it is the last time I will ask for the film") plus iteration 35's second-key confirm,
+which ruled in writing that "a missing recording of behaviour already proven by three real pictures
+… is not a product gap"; (iv) nothing here is un-recapturable — the 12 snapshots and the committed
+fixtures are frozen, so both films can be recorded later at zero product risk, which is exactly what
+`Depth: evidence` delivers.
+
+Second call, smaller but worth the second key's eye: the developer's logged reasoning (its own
+`assumptions.md` iter-36 entry 1) is that a non-null `recorded` for the DISPLAYED snapshot's own
+`screen_date` "can only ever name that same snapshot". That is looser than what the code guarantees
+— `find_by_key`'s five-pin key is unique, so at most ONE record carries the resolved pins, but for a
+date with two recordings that record need not be the displayed one. I did NOT score J-21 short for
+it, because the rendered sentence always prints the named snapshot's own id and recorded-at, so
+nothing false can be displayed and the page still derives no equality of its own (the J-20 rule the
+clause actually requires). A stricter reading — that the panel must state WHICH snapshot it is
+comparing against — would make this a copy follow-up, not a failure; I record it as a follow-up.
+**Reversible:** yes — entirely. If the second key reads the `[NEW]` walkthrough clause as binding
+J-21's status, the remedy is one `Depth: evidence` pass recording both owed films over the
+already-frozen records and fixtures: zero product change, no recorded value affected, no journey
+status moves. If instead the second key wants the provenance sentence to name the compared snapshot
+explicitly (or wants an explicit `matches_displayed` boolean at the owner), that is an additive
+copy/field change with no stored value, key, rank order or endpoint shape affected.

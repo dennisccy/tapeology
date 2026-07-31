@@ -70,6 +70,17 @@ triggering ``compute_tradability`` or any other recompute. No new store, no new 
 new MCP tool (the existing ``/research/`` allowlist already reaches the new path); no new router, no
 ``main.py`` change.
 
+J-21 (this iteration, goal-desk-iter-36) adds ONE new read: ``GET /research/desk/screen/pins``
+(``screen_date`` REQUIRED query param) — the five pins a screen run for that date would resolve
+RIGHT NOW, and whether a screen is already recorded under them, computed entirely by the new
+``desk_screen_pins.py`` over the SAME accessors ``run_screen_and_record`` already uses. This route
+takes a ``UniverseStore``/``BarIndex``/``ScreenStore`` dependency but NO ``BarStore``/
+``DatasetStore``/compute-manager dependency at all — it is structurally incapable of triggering
+``compute_tradability`` or any other recompute. An honest empty payload at HTTP 200 before any
+universe snapshot is registered (never a 4xx/5xx). No new store, no new compute manager, no new
+``Config`` field, no new MCP tool (the existing ``/research/`` allowlist already reaches the new
+path); no new router, no ``main.py`` change.
+
 **Compute managers are module-level singletons here, NOT ``ResearchRegistry`` properties.**
 ``DeskTopupComputeManager`` (``desk_topup_compute.py``) reuses ``routes.record_bar_series``
 in-process, so it must import FROM ``routes.py`` — if ``ResearchRegistry`` held the manager (the
@@ -102,6 +113,7 @@ from .desk_screen import ScreenStore, resolve_desk_screen_dir
 from .desk_screen_compute import DeskScreenComputeManager
 from .desk_screen_diff import ScreenDiffSelfCompareError, compute_screen_diff
 from .desk_screen_log import ScreenRunStore, resolve_desk_screen_log_dir
+from .desk_screen_pins import resolve_desk_screen_pins
 from .desk_topup_compute import DeskTopupComputeManager
 from .desk_topup_log import TopupRunStore, resolve_desk_topup_log_dir
 from .desk_universe import (
@@ -414,6 +426,25 @@ def get_screen_compare(
         return compute_screen_diff(store, id, base)
     except ScreenDiffSelfCompareError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/screen/pins")
+def get_desk_screen_pins(
+    screen_date: str,
+    universe_store: UniverseStore = Depends(get_universe_store),
+    bar_index: BarIndex = Depends(get_bar_index),
+    screen_store: ScreenStore = Depends(get_screen_store),
+) -> dict:
+    """goal-desk-iter-36 (J-21): the five pins a screen run for ``screen_date`` would resolve RIGHT
+    NOW, and whether a screen is already recorded under them — see ``desk_screen_pins.py``'s module
+    docstring. ``screen_date`` is a REQUIRED query param (FastAPI 422s a missing one — mirrors
+    ``ScreenComputeRequest.screen_date``'s own required convention; this endpoint never defaults to
+    the current wall-clock date, T-6). A plain read: writes nothing, triggers nothing, recomputes
+    nothing — this route takes no ``BarStore``/``DatasetStore``/compute-manager dependency at all,
+    so it is structurally incapable of a ``compute_tradability`` call or a ``BarStore`` read. An
+    honest empty payload at HTTP 200 before any universe snapshot is registered (never a 4xx/5xx —
+    mirrors ``get_universe``/``get_coverage``'s own honest-empty convention)."""
+    return resolve_desk_screen_pins(screen_date, universe_store, bar_index, CONFIG, screen_store)
 
 
 class ScreenComputeRequest(BaseModel):

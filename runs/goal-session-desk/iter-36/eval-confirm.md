@@ -1,0 +1,11 @@
+**Verdict:** CONFIRM_ACHIEVED
+
+## Reasoning
+
+I tried to break the claim and could not. I opened all three J-21 pictures myself: the match frame shows the recorded and the resolved bar-store signature both reading `64c954949e3cf681` with the line "A screen is recorded under these exact pins — screen-2026-06-22-09cf660a4125"; the differ frame shows recorded `ae2c740d1a70c9c7` against resolved `2ce14e8f252966f7` with "a run would walk 101 members" — exactly the value the goal's own note predicted independently; the empty frame shows "No universe snapshot is registered — whether a run today would reuse a recorded screen cannot be named." The same frames also carry, verbatim, the five row disclosures the eval credits to J-08/J-11/J-13/J-14/J-15.
+
+Evidence coverage holds. The nine journeys this iteration was required to keep green (J-01, J-03, J-04, J-06, J-07, J-12, J-16, J-18, J-20 — `docs/phases/goal-desk-iter-36.md:20`) all replayed green in `reports/phase-goal-desk-iter-36-regression-replay-results.md` (9/9), and the browser lane additionally swept all 21 saved scripts 21/21. The six carried-forward journeys sit outside that required set. `journey-history.json` has 21 passing, each with a text signature, and every past rule breach is marked resolved.
+
+I re-checked the safety rails myself rather than trusting the report. The whole product change is four edited files plus two new ones (`git diff --stat HEAD`): nothing touches the frozen computation, store, chart, settings, or tool-list files, and no existing test was edited. The seven removed lines are one component call and one comment. Nothing under the data folder was written after 13:00, and the counts still read 12 screens and 1 universe. Coherence is PASS, the scan is CLEAN, the review is PASS, and the gate report agrees with the digest and the eval on all 21 rows.
+
+The one shortfall is real and openly stated, not hidden: the short guided films for J-20 and J-21 were never recorded. Under the evaluator methodology (section A.7) a missing recording is a capture defect on behaviour that is already proven, must be flagged `evidence_makeup` — both journeys are — and must never block or become a build run. So it is not grounds to refuse. Confirming.

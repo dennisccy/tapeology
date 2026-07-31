@@ -1,7 +1,7 @@
 {
   "extended": true,
   "n_new_journeys": 1,
-  "n_proposals": 2,
+  "n_proposals": 3,
   "dry": false,
-  "summary": "Promoted J-20 (every recorded screen states how it differs from the screen recorded before it): measured read-only over the 12 recorded snapshots, 4 consecutive pairs differ in NO ranked-row field but basis_age_days while 7 pairs churn (95 of 100 rows changed rank, 12 flipped side, 37 symbols entered) and /desk renders both identically; backlogged one further candidate (the displayed screen's bar-store signature vs the store's current one - all 404 pinned pairs moved since the latest snapshot was recorded). Vision-claim coverage check: every Vision paragraph and Key Capability is carried by a journey except Vision para 2's 'coverage view' (GET /research/desk/coverage is served and registered but never rendered on /desk), which is already backlogged as desk-live-coverage-view-on-page and was NOT re-proposed."
+  "summary": "Promoted J-21 (the desk states, before the click, the five pins a screen run would resolve now and whether a snapshot is already recorded under them): measured 2026-07-31 read-only, the index resolves bar_store_signature 2ce14e8f252966f7 which none of the 12 recorded snapshots carries (404/404 pinned pairs moved in the 06:52Z top-up), so no screen is reusable and the same Run Screen click was recorded both as a 1m41s 101-member walk and as 14 ms reuse with nothing distinguishing them; vision-gap scan found two uncovered claims, both backlogged not promoted - Vision 2's 'coverage view' (GET /research/desk/coverage still has zero frontend clients and its freshness value is now identical, 2026-07-31T00:00:00Z, on all 404 pairs) and Key Capability 1's universe surface (GET/POST /research/desk/universe have zero frontend clients)."
 }

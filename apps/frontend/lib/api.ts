@@ -11,6 +11,7 @@ import type {
   DeskScreenCompareResult,
   DeskScreenComputeSnapshot,
   DeskScreenListResult,
+  DeskScreenPinsResult,
   DeskScreenRunsListResult,
   DeskScreenSnapshot,
   DeskTopupComputeSnapshot,
@@ -1286,6 +1287,38 @@ export async function fetchDeskScreenRuns(): Promise<{
       return { ok: true, data: (await res.json()) as DeskScreenRunsListResult };
     }
     let error = "The screen run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// goal-desk-iter-36 (J-21): GET /research/desk/screen/pins?screen_date= — the five pins a screen
+// run for that date would resolve RIGHT NOW, and whether a screen is already recorded under them,
+// served VERBATIM. Mirrors `fetchDeskScreenRuns`'s exact `{ok, data, error}` shape; the backend
+// always answers HTTP 200 (an honest empty payload before any universe snapshot is registered) —
+// `screen_date` is the ONLY required param, and this helper never defaults it itself (the caller
+// always passes its own already-resolved date, e.g. `todayUtcDate()` or a displayed snapshot's own
+// `screen_date`).
+export async function fetchDeskScreenPins(screenDate: string): Promise<{
+  ok: boolean;
+  data: DeskScreenPinsResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/desk/screen/pins?screen_date=${encodeURIComponent(screenDate)}`,
+    );
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskScreenPinsResult };
+    }
+    let error = "The screen-pin resolution could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

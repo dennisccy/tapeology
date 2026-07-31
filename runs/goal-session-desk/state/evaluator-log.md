@@ -2210,3 +2210,87 @@ you: the Desk now says plainly how today's screen differs from the one before it
 number against the frozen records myself and found no disagreement, and nothing of yours was
 written — so please confirm the finish and treat the five notes as optional tidying, starting with
 the "identical" wording.
+
+## Iteration 36 — goal-desk-iter-36
+
+**Date:** 2026-07-31T14:55:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean  (the plan asked for the full pipeline; the machine gave it the shorter
+setting for the FOURTH run in a row, so no film crew and no hard auditor were sent — but a
+programmer was sent, and the product half landed in full)
+**Journey deltas:**
+- Newly passing: J-21 "The desk says, before the click, whether a screen is already recorded under
+  the pins a run would resolve now" — a brand new item, built for the first time this run. The
+  count of items goes 20 to 21
+- Newly failing: none
+- Regressed: none
+- Re-checked this run: J-01, J-03, J-04, J-06, J-07, J-12, J-16, J-18 and J-20 by saved-script
+  replay (9 of 9 green, ZERO script edits — one new script was added for the new item and none was
+  changed). I also read J-08, J-11, J-13, J-14 and J-15 straight off this run's own fresh picture
+  of the briefing table, and re-counted the tool names in the running program myself (exactly 17).
+  Six items (J-02, J-05, J-09, J-10, J-17, J-19) carry forward without being re-tested, because
+  this run's whole change is six files that add lines to two panels and remove none. Nothing was
+  dropped for time and nothing was blocked by broken equipment
+- Picture debt: the short guided film for the new item was never recorded, because the shorter run
+  setting sends no film crew — so J-21 carries a make-up flag for the film only, and J-20's own
+  film, owed since last run, is still owed. No other item carries a make-up or equipment flag, and
+  no item is blocked by equipment
+- Anti-goal violations: none new, none open. The four older items stay resolved and I re-checked
+  each against this run's own evidence. Nothing of your data was created, changed or removed — the
+  only files newer than this run's start are two rebuildable database sidecars
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to build. First I
+opened all three pictures myself and read each state in one frame at the full window size with
+nothing cut off at the right. The "already recorded" state names the same universe record, the same
+settings fingerprint and the same library signature on both sides — recorded and resolved-now — and
+then says "A screen is recorded under these exact pins — screen-2026-06-22-09cf660a4125, recorded
+2026-07-31T13:22:41.106918Z." The "would walk" state, taken read-only against your real Desk, shows
+the screen on the page recorded under signature ae2c740d1a70c9c7 while today's signature resolves to
+2ce14e8f252966f7, and says "No screen is recorded under the pins that resolve right now for this
+date — a run would walk 101 members." The third picture, taken before anything was registered, says
+"No universe snapshot is registered — whether a run today would reuse a recorded screen cannot be
+named." Then I went past the pictures and proved the numbers instead of believing them. Against your
+real records, read-only, I re-derived today's signature myself and got 2ce14e8f252966f7, confirmed
+that not one of the twelve recorded screens carries it, and confirmed the pinned universe holds
+exactly 101 names — so the page's sentence is true to the letter. Then I re-created the "already
+recorded" state from scratch in a scratch folder of my own, using the committed sample universe and
+sample daily bars: the run recorded a screen whose name came out as screen-2026-06-22-09cf660a4125
+— the very name in the picture — under signature 64c954949e3cf681, with 1 ranked row and 102
+skipped, exactly as the picture shows. I then checked every field the new answer copies against the
+record's own file on disk: all identical. I planted one extra row in the scratch index and watched
+the answer flip honestly to "nothing recorded" with a different signature, after which a real run
+recorded a NEW screen while the earlier file stayed byte-for-byte unchanged. Asking twice gives a
+byte-identical answer, and there is no clock value in it. I also proved the new read cannot secretly
+recompute anything: I disabled the wall computation and every method of the price library and the
+answer still came back. I re-ran the work rather than trusting the reports: the whole back-end suite
+(1,559 passed, 8 skipped, 0 failed — up from last run's 1,551 by exactly the 8 new tests), the
+settings fingerprint (08e471b10130e1e2), and the tool list read out of the running program (exactly
+17 names). Every one of the twenty-one items' own text signatures matches the goal file, so no
+earlier pass has gone stale, and the goal file's own change this cycle is 139 added lines and no
+deletions, all inside the box the proposer is allowed to write in. The structure check is
+COHERENCE-PASS and the machine scan is CLEAN. I proved nothing of yours was written: no record file
+under the data folder is newer than this run's start, the counts still read 1,163 price files, 1
+universe record, 12 screens, 3 screen-run records, 2 top-up records and 2 index records, and every
+one of them still proves its own checksum. Six things I found and did not hide. The films for the
+new item and for the previous one were never recorded, because the machine shortened this run.
+Looking at an OLD screen from history, the provenance sentence is true but easy to misread: it
+describes today's pins, not the screen on the page. The programmer's own note claims a "recorded"
+answer can only ever name the screen shown on the page — that is looser than the truth, though the
+sentence always prints the screen's own name, so nothing false is displayed. The provenance block
+has no separate "no universe registered" wording and would say "a run would walk 0 members" in a
+state that cannot occur today. Nine of the twenty-one saved re-check scripts were replayed rather
+than all of them. And the eight saved re-check pictures are one and the same image, which is how
+that lane has always behaved here.
+
+**Next-step recommendation:** Halt — the goal is reached. Please confirm the finish. Six follow-ups,
+none a fault in what the product does and none blocking, and I recommend explicitly that none of
+them becomes a new build run: (1) two short guided films are owed — the new item's and the previous
+item's — and both ride along with any future run as passengers; (2) the provenance sentence is easy
+to misread when an old screen is on the page; (3) the programmer's "can only name the displayed
+screen" reasoning is looser than what the code guarantees, though the printed line is honest;
+(4) the provenance block would say "0 members" in a state that cannot occur today; (5) nine of
+twenty-one saved re-check scripts were replayed; (6) the eight saved re-check pictures are the same
+image. One sentence for you: the Desk now tells you in advance whether pressing Run Screen would
+re-use a screen it already has or start a fresh walk of 101 names — I re-created its answers from
+your frozen records myself and found no disagreement, and nothing of yours was written — so please
+confirm the finish and treat the six notes as optional tidying, starting with the two owed films.

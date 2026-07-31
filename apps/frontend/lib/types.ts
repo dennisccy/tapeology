@@ -1198,3 +1198,30 @@ export interface DeskScreenCompareResult {
   identical: boolean;
   counts: DeskScreenCompareCounts;
 }
+
+// goal-desk-iter-36 (J-21) -- `GET /research/desk/screen/pins?screen_date=`: the five pins a
+// screen run for that date would resolve RIGHT NOW, and whether a screen is already recorded
+// under them. `recorded` names the already-registered snapshot verbatim (its own `id`/
+// `created_utc`/`bar_store_signature`/ranked+skipped counts) or is an honest `null` -- the
+// presence/absence of `recorded` IS the match/differ statement (computed at the owner, served;
+// the page derives no equality of its own, the J-20 rule). An honest empty payload
+// (`universe_snapshot_id`/`bar_store_signature`: `null`, `members_total: 0`, `recorded: null`)
+// before any universe snapshot is registered -- HTTP 200, never a 404.
+export interface DeskScreenPinsRecorded {
+  id: string;
+  screen_date: string;
+  created_utc: string;
+  bar_store_signature: string;
+  ranked_count: number;
+  skipped_count: number;
+}
+
+export interface DeskScreenPinsResult {
+  screen_date: string;
+  as_of: string;
+  universe_snapshot_id: string | null;
+  config_fingerprint: string;
+  bar_store_signature: string | null;
+  members_total: number;
+  recorded: DeskScreenPinsRecorded | null;
+}

@@ -12,6 +12,7 @@ import {
   fetchDeskScreenById,
   fetchDeskScreenCompare,
   fetchDeskScreenCompute,
+  fetchDeskScreenPins,
   fetchDeskScreenRuns,
   fetchDeskTopupCompute,
   fetchDeskTopupRuns,
@@ -31,6 +32,7 @@ import type {
   DeskScreenComputeSnapshot,
   DeskScreenListResult,
   DeskScreenMeta,
+  DeskScreenPinsResult,
   DeskScreenRow,
   DeskScreenRun,
   DeskScreenRunMeta,
@@ -160,6 +162,23 @@ import { fmt } from "@/lib/format";
 // `data-testid`, every honest legacy-absence string ("basis not recorded in this snapshot", etc.),
 // and the row's stretched drill-in anchor (`href`, `absolute inset-0`, `data-testid`, composite
 // `title`) stay byte-unchanged -- only the layout and three redundant label words moved.
+//
+// goal-desk-iter-36 (J-21) -- the screen-pin disclosure. Before clicking Run Screen (or before
+// reading a past screen's own provenance), the operator sees whether a run right now would reuse
+// an already-recorded snapshot or walk the universe fresh -- an 8th mount-time GET (`GET
+// /research/desk/screen/pins?screen_date=`), rendered in TWO places, both extensions of already-
+// shipped sections (no new section, no new page): (a) `DeskProvenance` gains the pins resolved for
+// the DISPLAYED snapshot's own `screen_date`, refetched whenever the displayed snapshot changes
+// (mirrors `screenCompareResult`'s own effect, keyed the same way); (b) `ScreenComputeControl`
+// gains one descriptive line querying the SAME endpoint for `todayUtcDate()` -- the identical value
+// the trigger already submits -- so it renders beside the Run Screen button in BOTH the empty-state
+// panel and the populated page (the ONE shared component, never duplicated). In both places, the
+// served `recorded`-or-`null` answer IS the match/differ statement -- this page computes no
+// equality of its own (the J-20 rule; see `assumptions.md` iter-36 entry 1): a non-null `recorded`
+// names the snapshot a run would reuse (its own id + recorded-at), a `null` states that no screen
+// is recorded under the resolved pins and that a run would walk `members_total` members. Zero new
+// ranked-table column, zero change to any existing `data-testid`'s element or text -- purely
+// additive disclosure.
 
 const NUMERIC_CELL = "px-2 py-1.5 text-right font-mono text-xs text-slate-200 whitespace-nowrap";
 const HEADER_CELL = "px-2 py-1 text-right text-[11px] font-medium text-slate-500";
@@ -1699,12 +1718,62 @@ function ScreenComparisonSection({
 // (`created_utc`-sorted newest recording, TC-12), the copy describes itself as "the most recently
 // recorded screen", never "the latest screen date" — a same-date recording can still exist earlier
 // and be reachable from Screen History below.
+// goal-desk-iter-36 (J-21): the resolved-pins block appended to `DeskProvenance` below -- the pins
+// a run for THIS DISPLAYED snapshot's own `screen_date` would resolve right now, fetched via
+// `GET /research/desk/screen/pins`. `recorded === null` here means the DISPLAYED snapshot's own
+// key no longer matches what would resolve today (a "differ" state -- see the top-of-file comment
+// for why the page itself computes no separate match/differ equality).
+function DeskProvenancePins({
+  pins,
+}: {
+  pins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
+}) {
+  if (pins === null) {
+    return <p data-testid="desk-provenance-pins-loading" className="mt-2 text-[11px] text-slate-600">
+      Resolving the pins a run would use right now…
+    </p>;
+  }
+  if (!pins.ok || pins.data === null) {
+    return (
+      <p data-testid="desk-provenance-pins-unavailable" className="mt-2 text-[11px] text-amber-300">
+        {pins.error ?? "The pins that would resolve right now could not be loaded."}
+      </p>
+    );
+  }
+  // A screen only ever exists once a universe does (snapshots are never deleted -- Anti-goals'
+  // append-only rail), so `data.universe_snapshot_id` is never null here in practice; no separate
+  // empty-state branch is needed (the "differ" branch below already renders correctly on an all-
+  // null payload, see the module docstring precedent in `desk_screen_pins.py`).
+  const { data } = pins;
+  return (
+    <div data-testid="desk-provenance-pins" className="mt-2 border-t border-slate-800 pt-2">
+      <p className="text-[11px] font-medium text-slate-500">Pins resolved right now for this screen date</p>
+      <Metric label="Universe snapshot (resolved now)" value={data.universe_snapshot_id ?? "—"} />
+      <Metric label="Config fingerprint (resolved now)" value={data.config_fingerprint} />
+      <Metric label="Bar-store signature (resolved now)" value={data.bar_store_signature ?? "—"} />
+      {data.recorded !== null ? (
+        <p data-testid="desk-provenance-pins-match" className="mt-1 text-[11px] text-slate-400">
+          A screen is recorded under these exact pins — {data.recorded.id}, recorded{" "}
+          {data.recorded.created_utc}.
+        </p>
+      ) : (
+        <p data-testid="desk-provenance-pins-differ" className="mt-1 text-[11px] text-slate-400">
+          No screen is recorded under the pins that resolve right now for this date — a run would
+          walk {data.members_total} members.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function DeskProvenance({
   snapshot,
   isViewingLatest,
+  pins,
 }: {
   snapshot: DeskScreenSnapshot;
   isViewingLatest: boolean;
+  pins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
 }) {
   return (
     <div data-testid="desk-provenance">
@@ -1727,6 +1796,7 @@ function DeskProvenance({
         timestamp at the moment this screen was computed — a pin, never a time. Each coverage
         badge&apos;s tooltip carries that member&apos;s own window-last-requested value.
       </p>
+      <DeskProvenancePins pins={pins} />
     </div>
   );
 }
@@ -1737,6 +1807,58 @@ function DeskProvenance({
 // components (rather than one shared abstraction) since their progress shapes genuinely differ
 // (members vs pairs+outcomes) — this project's own simplicity convention. --------------------------
 
+// goal-desk-iter-36 (J-21): the descriptive line beside the Run Screen control, querying
+// `GET /research/desk/screen/pins` for `todayUtcDate()` -- the SAME value `handleTriggerScreen`
+// already submits to the trigger (below). Renders in BOTH places `ScreenComputeControl` itself
+// renders (the empty-state panel and the populated page's own control panel), since it lives
+// inside that ONE shared component -- no duplication. Honest empty state (T-11): before any
+// universe snapshot is registered, `data.universe_snapshot_id` is `null` and this renders that
+// fact plainly rather than a "0 members" claim that would misleadingly imply a real, resolvable
+// walk.
+function TodayScreenPinsNote({
+  pins,
+}: {
+  pins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
+}) {
+  if (pins === null) {
+    return (
+      <p data-testid="desk-run-screen-pins-loading" className="text-[11px] text-slate-600">
+        Resolving whether today&apos;s pins would reuse a recorded screen…
+      </p>
+    );
+  }
+  if (!pins.ok || pins.data === null) {
+    return (
+      <p data-testid="desk-run-screen-pins-unavailable" className="text-[11px] text-amber-300">
+        {pins.error ?? "Whether today's pins would reuse a recorded screen could not be loaded."}
+      </p>
+    );
+  }
+  const { data } = pins;
+  if (data.universe_snapshot_id === null) {
+    return (
+      <p data-testid="desk-run-screen-pins-empty" className="text-[11px] text-slate-600">
+        No universe snapshot is registered — whether a run today would reuse a recorded screen
+        cannot be named.
+      </p>
+    );
+  }
+  if (data.recorded !== null) {
+    return (
+      <p data-testid="desk-run-screen-pins-match" className="text-[11px] text-slate-500">
+        A run today would reuse the snapshot already recorded under today&apos;s pins —{" "}
+        {data.recorded.id}, recorded {data.recorded.created_utc}.
+      </p>
+    );
+  }
+  return (
+    <p data-testid="desk-run-screen-pins-differ" className="text-[11px] text-slate-500">
+      No screen is recorded under the pins that resolve for today — a run would walk{" "}
+      {data.members_total} members.
+    </p>
+  );
+}
+
 function ScreenComputeControl({
   compute,
   onTrigger,
@@ -1745,6 +1867,7 @@ function ScreenComputeControl({
   onCancel,
   cancelRequested,
   cancelError,
+  pins,
 }: {
   compute: DeskScreenComputeSnapshot | null;
   onTrigger: () => void;
@@ -1753,6 +1876,7 @@ function ScreenComputeControl({
   onCancel: () => void;
   cancelRequested: boolean;
   cancelError: string | null;
+  pins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
 }) {
   const isRunning = compute?.state === "running";
   const isFailed = compute?.state === "failed";
@@ -1786,6 +1910,7 @@ function ScreenComputeControl({
             : `Recorded a new snapshot — ${compute.screen_id}`}
         </p>
       )}
+      <TodayScreenPinsNote pins={pins} />
       <button
         type="button"
         data-testid="desk-run-screen-button"
@@ -2002,6 +2127,7 @@ interface ScreenControlProps {
   onCancel: () => void;
   cancelRequested: boolean;
   cancelError: string | null;
+  pins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
 }
 
 interface TopupControlProps {
@@ -2071,6 +2197,7 @@ function DeskPopulatedScreen({
   screenControlProps,
   topupControlProps,
   reconcileControlProps,
+  displayedPins,
 }: {
   snapshot: DeskScreenSnapshot;
   screens: DeskScreenMeta[];
@@ -2083,6 +2210,7 @@ function DeskPopulatedScreen({
   screenControlProps: ScreenControlProps;
   topupControlProps: TopupControlProps;
   reconcileControlProps: ReconcileControlProps;
+  displayedPins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
 }) {
   return (
     <div className="space-y-6">
@@ -2110,7 +2238,7 @@ function DeskPopulatedScreen({
 
       <section aria-label="Provenance">
         <Panel title="Provenance">
-          <DeskProvenance snapshot={snapshot} isViewingLatest={isViewingLatest} />
+          <DeskProvenance snapshot={snapshot} isViewingLatest={isViewingLatest} pins={displayedPins} />
         </Panel>
       </section>
 
@@ -2235,12 +2363,31 @@ export default function DeskPage() {
     error?: string;
   } | null>(null);
 
-  // Mount: seven GETs, zero POSTs (TC-19/TC-8, extended era-desk-iter-14/goal-desk-iter-29) — the
-  // screen list/latest, ALL THREE compute managers' current/last snapshot (seeds a page load
-  // mid-job or post-terminal without a spurious extra click — the /structure edge-report
-  // mount-seeding precedent), the top-up run log's list + latest full record (era-desk-iter-11,
-  // J-09), the reconciliation run log's list + latest full record (era-desk-iter-14, J-10), and
-  // (goal-desk-iter-29, J-18) the screen run log's list + latest full record.
+  // goal-desk-iter-36 (J-21): the screen-pin disclosure's two independent fetches. `todayPinsResult`
+  // answers "would a run RIGHT NOW reuse or walk?" for `todayUtcDate()` — the SAME value the Run
+  // Screen trigger already submits — and is rendered beside that control (both empty-state and
+  // populated views, since it lives inside the ONE shared `ScreenComputeControl`). `displayedPins`
+  // answers the SAME question for the currently DISPLAYED snapshot's own `screen_date` and is
+  // rendered inside `DeskProvenance`; it is refetched by its own effect below whenever the
+  // displayed snapshot changes (mirrors `screenCompareResult`'s own effect).
+  const [todayPinsResult, setTodayPinsResult] = useState<{
+    ok: boolean;
+    data: DeskScreenPinsResult | null;
+    error?: string;
+  } | null>(null);
+  const [displayedPinsResult, setDisplayedPinsResult] = useState<{
+    ok: boolean;
+    data: DeskScreenPinsResult | null;
+    error?: string;
+  } | null>(null);
+
+  // Mount: eight GETs, zero POSTs (TC-19/TC-8, extended era-desk-iter-14/goal-desk-iter-29/
+  // goal-desk-iter-36) — the screen list/latest, ALL THREE compute managers' current/last snapshot
+  // (seeds a page load mid-job or post-terminal without a spurious extra click — the /structure
+  // edge-report mount-seeding precedent), the top-up run log's list + latest full record
+  // (era-desk-iter-11, J-09), the reconciliation run log's list + latest full record
+  // (era-desk-iter-14, J-10), the screen run log's list + latest full record (goal-desk-iter-29,
+  // J-18), and (goal-desk-iter-36, J-21) today's own screen-pin resolution.
   useEffect(() => {
     let alive = true;
     fetchDeskScreen().then((result) => {
@@ -2263,6 +2410,9 @@ export default function DeskPage() {
     });
     fetchDeskReconcileRuns().then((result) => {
       if (alive) setReconcileRunsResult(result);
+    });
+    fetchDeskScreenPins(todayUtcDate()).then((result) => {
+      if (alive) setTodayPinsResult(result);
     });
     return () => {
       alive = false;
@@ -2295,6 +2445,14 @@ export default function DeskPage() {
         const refreshedRuns = await fetchDeskScreenRuns();
         setScreenRunsResult((previous) =>
           refreshedRuns.ok || previous === null || !previous.ok ? refreshedRuns : previous,
+        );
+        // goal-desk-iter-36 (J-21): a just-finished run changes whether TODAY's pins would now
+        // reuse or walk — the SAME "on terminal, refresh once" precedent the two refetches above
+        // already establish (NOTES: "at most a refetch where the page already refetches its
+        // ledgers on a terminal compute tick" — never a timer/poll of its own).
+        const refreshedTodayPins = await fetchDeskScreenPins(todayUtcDate());
+        setTodayPinsResult((previous) =>
+          refreshedTodayPins.ok || previous === null || !previous.ok ? refreshedTodayPins : previous,
         );
       }
     }, 700);
@@ -2450,6 +2608,7 @@ export default function DeskPage() {
     onCancel: handleCancelScreen,
     cancelRequested: screenCancelRequested,
     cancelError: screenCancelError,
+    pins: todayPinsResult,
   };
   const topupControlProps: TopupControlProps = {
     compute: topupCompute,
@@ -2511,6 +2670,25 @@ export default function DeskPage() {
     };
   }, [displayedSnapshot]);
 
+  // goal-desk-iter-36 (J-21): fetch the screen-pin resolution for the DISPLAYED snapshot's own
+  // `screen_date` — the SAME `displayedSnapshot` dependency the Screen Comparison effect above
+  // uses, since `DeskProvenance` (which renders this) describes that same snapshot. A page-load/
+  // selection-change GET only, never a timer or a click.
+  useEffect(() => {
+    const screenDate = displayedSnapshot?.screen_date ?? null;
+    if (screenDate === null) {
+      setDisplayedPinsResult(null);
+      return;
+    }
+    let alive = true;
+    fetchDeskScreenPins(screenDate).then((result) => {
+      if (alive) setDisplayedPinsResult(result);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [displayedSnapshot]);
+
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-6">
@@ -2554,6 +2732,7 @@ export default function DeskPage() {
             screenControlProps={screenControlProps}
             topupControlProps={topupControlProps}
             reconcileControlProps={reconcileControlProps}
+            displayedPins={displayedPinsResult}
           />
         )}
 

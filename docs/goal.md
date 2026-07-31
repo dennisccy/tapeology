@@ -1814,6 +1814,145 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     100 rows for the fourth day running" and "95 of 100 rows moved and 12 flipped side" render as the
     same screen: one ranked table, with no relation to anything recorded before it.)*
 
+- **J-21: The desk says, before the click, whether a screen is already recorded under the pins a run would resolve now**
+  - Steps:
+    1. Resolve the five pins for a CALLER-SUPPLIED screen date using ONLY the accessors that already own
+       each one, in the SAME order `run_screen_and_record` resolves them (`desk_screen_compute.py:155`–
+       `:161`): `desk_screen.screen_as_of` (`desk_screen.py:233`), the universe store's own latest record
+       id (`UniverseStore.list()`'s `records[-1]["id"]`), `Config.config_fingerprint()`, and
+       `desk_screen.compute_bar_store_signature` (`desk_screen.py:255`) over
+       `desk_coverage.get_desk_coverage`'s index-only read (`desk_coverage.py:40` → `BarIndex.coverage`,
+       `bar_index.py:154`) — **no `BarStore` read of any kind** (T-4), no new derivation, no new pin, no
+       second owner: the same functions over the same immutable store, so this resolution and a run's own
+       cannot disagree (the J-18 rule verbatim). The date comes from the caller — the page passes the SAME
+       `todayUtcDate()` value it already submits to the trigger (`apps/frontend/app/desk/page.tsx:228`/
+       `:2350`) — so nothing on the new path calls `now()`; the body is a pure function of (requested
+       date, the pinned universe record, the index's rows as they stand), identical inputs reproduce a
+       byte-identical body, and the payload carries no wall-clock field of its own (T-6).
+    2. Answer the one question those pins decide, through the owner that already answers it:
+       `ScreenStore.find_by_key` on exactly those five pins (`desk_screen.py:602` — the SAME lookup
+       J-18's pre-check makes at `desk_screen_compute.py:209`) either NAMES the snapshot already recorded
+       under them — its own `id`, `screen_date`, `created_utc`, `bar_store_signature` and ranked/skipped
+       counts copied VERBATIM out of that record's own meta — or is an honest `null`. Beside it,
+       `members_total`: the pinned universe record's own member count, read the way
+       `DeskScreenComputeManager.trigger` already reads it (`len(records[-1]["members"])`,
+       `desk_screen_compute.py:336`), so "a run would walk N members" is a recorded count and never an
+       estimate. Nothing is recomputed and nothing is ranked: zero `compute_tradability` calls, zero band
+       selections, zero rank-key evaluations, zero bar reads.
+    3. Own it exactly once: a new desk module (name at build discretion, e.g.
+       `app/research/desk_screen_pins.py`) as the ONLY owner and ONE serving endpoint (exact path at
+       build discretion, e.g. `GET /research/desk/screen/pins`) — registered as a NEW row in the
+       blueprint's Data Contract BEFORE the code lands. It PERSISTS NOTHING: no store, no file, no cache,
+       no index, no new `Config` field, no new MCP tool (J-06's exactly-17-tool contract stays green and
+       `get_endpoint`'s `/research/` allowlist already reaches the new path). The GET writes nothing,
+       computes nothing and triggers nothing (the 5C lesson): screen rows, skip rows, the five-pin
+       snapshot key and the rank key keep `desk_screen.ScreenStore` as their sole owner and
+       `GET /research/desk/screen` as their sole serving endpoint, with zero change to what any desk store
+       RECORDS or to any recorded shape; coverage and freshness keep their single existing owner
+       (`desk_coverage.get_desk_coverage` over `bar_index`) and no second coverage path, cache or copy is
+       created anywhere; and nothing this journey adds starts, schedules, retries or auto-refreshes any
+       screen, top-up or reconciliation run — every run stays an explicit operator act.
+    4. Disclose, never judge. The endpoint and the page state what the pins ARE and whether a recording
+       exists under them, and stop there. The bar-store signature is a checksum over every member's
+       window-LAST-REQUESTED value — the page's own shipped note already says so
+       (`apps/frontend/app/desk/page.tsx:1725`) — so a differing signature proves exactly ONE thing: that
+       no recorded screen carries these pins, i.e. a run for this date would walk rather than reuse. The
+       copy therefore never claims that bars arrived, that the library advanced, or that any ranked row
+       would change, never uses a fresh / stale / current / behind / up-to-date / outdated judgement, and
+       never advises, predicts, implies urgency or names an action to take; no threshold, score,
+       confidence or staleness number is computed anywhere (this era's Non-Goals forbid new statistics and
+       gates outright), and `tests/test_copy_discipline.py` stays green unmodified.
+    5. Surface it on `/desk` as ONE more mount-time GET beside the shipped ones (no timer, no polling
+       loop, no auto-refresh — at most a refetch where the page already refetches its ledgers on a
+       terminal compute tick): (a) the Provenance panel (`DeskProvenance`,
+       `apps/frontend/app/desk/page.tsx:1702`) renders the resolved pins beside the DISPLAYED snapshot's
+       own recorded pins, with the match/differ statement computed at the OWNER and served — the page
+       derives nothing, not even an equality (the J-20 rule); (b) one descriptive line beside the Run
+       Screen control names the snapshot a run for that date would reuse (its own recorded id and
+       recorded-at) or states that no screen is recorded under the resolved pins and that a run would walk
+       `members_total` members; and (c) an honest empty state when no universe snapshot is registered.
+       **No new ranked-table column and no change to the ranked table**, so J-16's measured width contract
+       stands untouched at a 1440×900 viewport; every existing `data-testid` keeps its element and its
+       exact text; the row's stretched drill-in anchor keeps its `href`, `absolute inset-0`, `data-testid`
+       and dynamic consolidated `title` byte-unchanged.
+    6. Test fixture-scoped, over scoped universe/screen/bar-index stores (never `apps/backend/.data`): the
+       GET's resolved pins are byte-identical, value by value, to the pins `run_screen_and_record` resolves
+       for the SAME date over the SAME stores (the two resolutions cannot disagree); with a snapshot
+       recorded under those pins the payload names it and every copied meta field is byte-identical to that
+       record's own file, and a trigger for that date still reuses exactly the named snapshot (J-18's
+       shipped behaviour, unchanged); after ONE row is planted in the scoped index the same GET for the same
+       date resolves a different `bar_store_signature` and reports `recorded: null`, and a trigger then
+       walks and records a NEW snapshot while the earlier file stays byte-identical; with no universe
+       snapshot the payload is an honest empty at HTTP 200; the GET writes nothing and makes ZERO
+       `compute_tradability` calls and ZERO `BarStore` reads (assert the call counts — the
+       J-11/J-13/J-14/J-15 precedent); the same inputs twice produce a byte-identical body; every EXISTING
+       test in `test_desk_screen.py`, `test_desk_screen_compute.py`, `test_desk_coverage.py`,
+       `test_desk_ui_guards.py` and `test_desk_hover_tooltip_guard.py` passes UNMODIFIED; and a static
+       sweep of all 20 stored golden replay scripts proves no string this journey adds can resolve ahead of
+       any script's intended target (the J-20 rule — the replay matcher takes the FIRST visible match), so
+       every golden replays green with ZERO script edits (if a collision is unavoidable, MOVE the added
+       copy rather than edit a script).
+  - Acceptance: on the fixture-scoped rig the new GET, for a screen date whose five pins a recorded
+    snapshot already carries, names THAT snapshot with its `id`/`created_utc`/`bar_store_signature` and
+    ranked/skipped counts byte-identical to the record on disk and reports `members_total` equal to the
+    pinned universe record's own member count, while a trigger for that date reuses exactly that snapshot;
+    after a single row is planted in the scoped bar index, the same GET resolves a different
+    `bar_store_signature`, reports `recorded: null`, and a trigger then walks every member and records a
+    NEW snapshot with the earlier file byte-identical on disk (**single source of truth**: the resolution
+    is a NEW value with exactly one owner — the new desk module — and exactly one serving endpoint,
+    registered in the Data Contract BEFORE the code lands; every pin is resolved through the accessor that
+    already owns it (`screen_as_of`, `UniverseStore.list`, `Config.config_fingerprint`,
+    `compute_bar_store_signature` over `desk_coverage`'s index-only read), never a second derivation, and
+    the recorded-or-not answer comes from `ScreenStore.find_by_key` — the same lookup the run path makes —
+    with `desk_screen.ScreenStore` remaining the sole owner of rows, skip rows, the five-pin key and the
+    rank key and `GET /research/desk/screen` their sole serving endpoint; the endpoint persists nothing,
+    computes nothing, reads no bar and serves no coverage value, and the page derives nothing, not even a
+    match/differ equality — this SSOT criterion stands in place of a PnL-ledger append, which this era's
+    Non-Goals forbid); the honest empty state is served at HTTP 200 when no universe snapshot is
+    registered; every recorded universe, screen, top-up, reconciliation and screen-run file is proven
+    byte-identical on disk before and after the iteration apart from the snapshots the iteration's own
+    fixture-scoped runs deliberately create (SHA-256 listing — this journey's own code records nothing);
+    in a real browser after the T-9 clean rebuild, at a 1440×900 viewport with no horizontal scroll and
+    the ranked briefing table rendering exactly as J-16 shipped it, `/desk` shows BOTH states across
+    screenshots — one in which the displayed screen's own recorded pins match the resolved ones and the
+    page names the snapshot a run would reuse, and one in which they differ and the page states that no
+    screen is recorded under the resolved pins and that a run would walk `members_total` members — plus
+    one screenshot of the honest empty state (T-10: no screenshot ⇒ `unknown`, never `passing`; no native
+    `title` tooltip is required by this journey, so the T-10a headed rig is NOT needed and no capture may
+    depend on one); a **`[NEW]`-flagged demo-narrator walkthrough** covers the pin disclosure end to end,
+    narrated over both states; and the full backend suite is green with `Config().config_fingerprint()`
+    still `08e471b10130e1e2`, zero new `Config` fields, the `default` profile and `v1` byte-identical
+    (engine equivalence green), the MCP surface still exactly 17 tools, zero diff to
+    `desk_screen.py`/`desk_screen_compute.py`/`desk_coverage.py`/`tradability.py`/`levels.py`/`bars.py`/`bar_index.py`/`StructureChart.tsx`,
+    and `tests/test_copy_discipline.py` + `tests/test_desk_ui_guards.py` +
+    `tests/test_desk_hover_tooltip_guard.py` green unmodified. *(Keyless core; browser-verifiable. Why:
+    measured 2026-07-31 read-only over the frozen artifacts (no service started, no product code run) —
+    the bar-store signature was reconstructed with the module's OWN algorithm (`_bar_store_signature`,
+    `desk_screen.py:242`: sorted `(symbol, timeframe, MAX(window_end_utc))` tuples over the pinned
+    universe's members × `DESK_TOPUP_TIMEFRAMES`, canonical JSON, `sha256[:16]`) directly from
+    `.data/bar_index.db`. **No recorded screen can be reused today, and the page cannot say so.** The 12
+    snapshots in `.data/screen` carry four distinct signatures (`d7bc8f8127904d0a` ×2,
+    `7eab5f03cf23e8c7`, `350c85d18b1ff234` ×3, `ae2c740d1a70c9c7` ×6); the index as it stands resolves
+    **`2ce14e8f252966f7`** — a value NO recorded screen carries. The displayed briefing
+    `screen-2026-07-31-c169546856c7` (100 ranked / 1 skipped, recorded `2026-07-31T02:00:29.054546Z` under
+    `ae2c740d1a70c9c7`) carries today's own screen date and looks current, but the 06:52→06:56Z top-up
+    `topup-2026-07-31-8fb5c9a1f737` moved `MAX(window_end_utc)` to `2026-07-31T00:00:00Z` for **404 of 404**
+    pinned member × timeframe pairs, so that snapshot's own recorded coverage differs from the live index
+    on 404 of 404 pairs and its pin can no longer be hit. **The same click therefore has two behaviours
+    and nothing distinguishes them:** the desk's own screen-run ledger records
+    `screenrun-2026-07-31-725c4ec2bfcd` walking 101 members in 1m41s (`01:58:48.238Z` → `02:00:29.056Z`)
+    beside `screenrun-2026-07-31-0662273df270` and `screenrun-2026-07-31-fe0829e64a0d`, which J-18's
+    pre-check resolved as `reused` in 14 ms and 16 ms — all three for screen date 2026-07-31, all three
+    invisible in advance. **And the briefing reads as if nothing were pending:** every one of its 100 rows
+    prints `basis 2026-07-27 · 4 d before as-of` while the frozen store now holds `1d` bars through
+    2026-07-30 for all 101 members (read from the series files' own `covered_end_utc`; the 40 pairs whose
+    legacy files predate that meta field were all recorded on or before `2026-07-21T22:35:58Z` and cannot
+    hold newer content), which invites the reading "no newer daily close exists" when the truth is that
+    this screen predates the top-up. `GET /research/desk/screen/compute` serves only the process-scoped
+    manager snapshot (`null` after a restart, its own docstring), and `compute_bar_store_signature` exists
+    precisely so a caller can resolve the pin "WITHOUT running the full per-member walk" — no endpoint,
+    no page and no MCP tool exposes it today.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals
