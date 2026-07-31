@@ -643,3 +643,31 @@ populated run and refreshes the two golden scripts; zero product change, no reco
 affected, and no journey status would move. If the owner instead objects to the ambient fetch, note
 that it cannot be undone (the 404 series are frozen and append-only) but that it also destroyed
 nothing — the pre-existing 759 series and all 20 records are byte-untouched.
+
+## iter-33 — goal-decomposer
+
+**Ambiguity:** Two calls, neither dictated numerically by `docs/goal.md` or by
+`runs/goal-session-desk/iter-32/eval-confirm.md`. (i) J-19 step 4 asks for "a short list of the
+pairs whose recorded date is earlier" but names no count — iter-32 rendered ALL of them (up to 303)
+while its own dev handoff called that "a short list," which is exactly what the confirm rejected as
+inconsistent with a real "short" reading. (ii) The confirm's decisive finding (full-timestamp
+`store_frozen_through_after` equality compared against a day-sliced render) could be closed at
+either layer: truncate to calendar-day precision when the value is STORED (a backend change to
+`_pair_window`/`_iso_bar_epoch`), or truncate only at DISPLAY time in the already-existing frontend
+derivation (`topupLibraryReach`).
+**We chose:** (i) Cap the rendered list to 20 rows, with an honest "showing N of M" disclosure only
+when the true total exceeds 20 — a concrete number the spec had to pick since none is given, chosen
+to be unambiguously "short" against a ~100-symbol universe without hiding the disclosure's own true
+total. (ii) Fix ONLY the frontend's display-time grouping, leaving `store_frozen_through`/
+`store_frozen_through_after`'s stored precision untouched. J-19's OWN acceptance text requires the
+stored field be "byte-identical to the newest bar `BarStore.merged_bars(...)` reports for that pair"
+— full precision is the correct stored contract; the journey's NAME ("records the DATE") is a
+display-granularity promise, not a storage one, and the goal's own "Zero diff to ... `desk_screen.py`
+/`tradability.py`/`levels.py`" language for J-19 already forecloses a backend edit here. This also
+keeps the fix inside the smallest surface (one existing frontend function plus its guard test), per
+the priority rubric's "smallest spec wins ties."
+**Reversible:** yes — entirely. Both are presentation-layer choices with no stored-data or contract
+shape implication: the cap number can be changed by editing one literal and one guard assertion, and
+if the owner later wants day-precision stored directly (rather than derived at display time), that is
+a separate, backward-compatible additive change (a new field or a truncated copy) that would not
+require undoing this iteration's fix — the display would simply read the new field instead.
