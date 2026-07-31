@@ -274,7 +274,7 @@ def run_screen_and_record(
         # `compute_screen`, or a `ScreenIntegrityError` from a damaged snapshot at this key) --
         # logged as "failed", then RE-RAISED verbatim so every existing caller's own crash-handling
         # (the manager's `_work` except-clause, an uncaught CLI crash) stays byte-unchanged.
-        failed_member = members[attempted] if attempted < len(members) else None
+        failed_member = members[attempted] if 0 < attempted < len(members) else None
         _log(
             state="failed", reused=False, members_attempted=attempted, ranked_count=0,
             skipped_by_reason=dict(_EMPTY_SKIPPED_BY_REASON), screen_id=None,

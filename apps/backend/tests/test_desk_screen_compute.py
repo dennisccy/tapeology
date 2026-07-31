@@ -732,6 +732,39 @@ def test_cli_second_invocation_with_identical_pins_reuses_the_existing_snapshot(
     assert errors == [] and len(records) == 1  # no second file
 
 
+def test_tc3_cli_run_leaves_exactly_one_matching_screen_run_record(tmp_path, monkeypatch, capsys):
+    """TC-3 (goal-desk-iter-31): a CLI-triggered run leaves exactly ONE durable ``ScreenRunStore``
+    record whose ``state``/``screen_id``/``members_attempted`` match the ``ScreenStore`` snapshot it
+    produced -- the SAME single shared writer (``run_screen_and_record``) the HTTP route uses,
+    exercised here through the CLI's own ``main()`` entry point. ``_set_cli_env`` sets no
+    ``TAPEOLOGY_DESK_SCREEN_LOG_DIR`` override, so the run log resolves to the sibling-of-universe
+    default (``resolve_desk_screen_log_dir``) -- the same ``tmp_path / "screen_runs"`` this file's
+    other ``ScreenRunStore`` fixtures already point at."""
+    _set_cli_env(monkeypatch, tmp_path)
+    _register_fixture_universe(tmp_path / "universe")
+    bar_store = BarStore(tmp_path / "bars")
+    bar_index = BarIndex(str(tmp_path / "bar_index.db"))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    monkeypatch.setattr(sys, "argv", ["desk_screen_compute", "--date", SCREEN_DATE])
+
+    exit_code = desk_screen_compute.main()
+    assert exit_code == 0
+    capsys.readouterr()
+
+    screen_store = ScreenStore(tmp_path / "screen")
+    screen_records, screen_errors = screen_store.list()
+    assert screen_errors == [] and len(screen_records) == 1
+    snapshot = screen_records[0]
+
+    screen_run_store = ScreenRunStore(tmp_path / "screen_runs")
+    run_records, run_errors = screen_run_store.list()
+    assert run_errors == [] and len(run_records) == 1
+    run = run_records[0]
+    assert run["state"] == "done"
+    assert run["screen_id"] == snapshot["id"]
+    assert run["members_attempted"] == run["members_total"]
+
+
 # ==================================================================================================
 # goal-desk-iter-29 (J-18) -- the screen-run log: the five-pin pre-check reuse short-circuit, and
 # ONE durable run record per terminal outcome (done/cancelled/failed), written by
@@ -913,6 +946,41 @@ def test_tc6_a_raising_member_records_state_failed_with_verbatim_error_and_faile
     assert run["state"] == "failed"
     assert run["error"] == "synthetic raise on member BBB"
     assert run["failed_member"] == "BBB"
+    assert run["screen_id"] is None
+    assert run["reused"] is False
+
+    screen_records, _errors = screen_store.list()
+    assert screen_records == []
+
+
+def test_tc1_a_crash_before_any_member_is_attempted_records_failed_member_null(
+    manager_env, monkeypatch, tmp_path,
+):
+    """TC-1 (goal-desk-iter-31): a run that crashes before ``_counting_progress`` ever fires
+    (``attempted == 0``) must never fabricate a ``failed_member`` -- it records ``null`` rather than
+    naming a symbol the walk never reached. Companion regression guard: TC-2, the test immediately
+    above (``test_tc6_a_raising_member_records_state_failed_with_verbatim_error_and_failed_member``,
+    unmodified), proves the ``attempted > 0`` case still names the genuinely in-progress member."""
+    universe_store, bar_store, bar_index, dataset_store, screen_store = manager_env
+    screen_run_store = ScreenRunStore(tmp_path / "screen_runs")
+
+    def fake_compute_screen(_us, _bs, _bi, _ds, _cfg, _sd, *, progress=None, should_abort=None):
+        raise RuntimeError("synthetic raise before any member is attempted")
+
+    monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
+
+    with pytest.raises(RuntimeError, match="synthetic raise before any member is attempted"):
+        run_screen_and_record(
+            universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
+            screen_run_store=screen_run_store,
+        )
+
+    records, errors = screen_run_store.list()
+    assert errors == [] and len(records) == 1
+    run = records[0]
+    assert run["state"] == "failed"
+    assert run["error"] == "synthetic raise before any member is attempted"
+    assert run["failed_member"] is None
     assert run["screen_id"] is None
     assert run["reused"] is False
 

@@ -1851,3 +1851,67 @@ sentence for the owner: the picture you asked for was taken and it is genuine, b
 the shortest setting and so skipped its own two small fixes and the film — please approve one ordinary
 run to finish those and tidy the two stray files, or tell me to close now and treat all five as
 optional.
+
+## Iteration 31 — goal-desk-iter-31
+
+**Date:** 2026-07-31T06:40:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: none — all eighteen were already passing
+- Newly failing: none
+- Regressed: none
+- Re-checked this run: J-01, J-02, J-03, J-04, J-06, J-07, J-09, J-10, J-12 and J-16 by saved-script
+  replay (10 of 10 green, zero script edits), and J-18 by six live browser checks plus its own
+  saved script (4 of 4 steps). I also read J-08, J-11, J-13, J-14 and J-15 straight off this run's
+  own fresh picture of the briefing table, and spot-checked J-05 and J-07 by opening their pictures
+  myself. Nothing was dropped for time and nothing was blocked by broken equipment
+- Picture debt CLOSED, this time by success: the short guided film was recorded again and its three
+  frames are genuinely different pictures, with the Screen Runs section and the repeat-run line
+  readable in the third. J-18's make-up flag is cleared. No item now carries a make-up or equipment
+  flag
+- Anti-goal violations: none new. The one that was open — two of the project's own files left
+  pointing at a folder that had been deleted — is now CLOSED, and I proved it by comparing both
+  files with the stored earlier version: zero difference, and no mention of the temporary folder
+  anywhere in them. All four recorded items are now resolved. Nothing of the owner's data was
+  created, changed or removed this run
+
+**Reasoning:** I did not take any report's word for the three things this run existed to do. First,
+I opened the picture myself and read, in one frame at a normal window size with nothing cut off at
+the right, the Screen Runs section holding all three of its records and, beneath them, the latest
+run reading exactly "state: done   0 of 101 members attempted   0s elapsed   reused
+screen-2026-07-31-c169546856c7 — no walk was performed" — with the false orange "101 members not
+reached" warning GONE and the row of zeros GONE. That absence can only happen against the new build,
+because the old page shows the orange warning for this exact record, so the page being served really
+does carry the fix. Second, I compared both stray project files with the version stored before the
+last run: zero difference on each, the reference line reads the ordinary "./.next/types/routes.d.ts"
+again, and searching both files for the temporary folder returns nothing. Third, I ran the work
+myself rather than trusting the reports: the whole back-end suite (1,502 passed, 8 skipped, 0
+failed, exit 0 — above the 1,500 mark and matching the auditor's own count), the six test files this
+work touches on plus the guard files together (179 tests, 0 failures), the settings fingerprint
+(`08e471b10130e1e2`) and the tool list read out of the running program (exactly 17 names). I also
+re-derived every item's own text signature from the goal file: all eighteen match, so no earlier
+pass has gone stale, and there is no note saying any item's wording changed. I proved nothing of the
+owner's was written: under the data folder only two rebuildable database sidecars are newer than
+this run's start, and the counts still read 759 price files, 1 universe record, 12 screens, 3 screen
+records, 1 top-up record and 2 index records. The structure check is COHERENCE-PASS, the machine
+scan is CLEAN, and the change itself is tiny and exactly what was ordered: five files, one changed
+line in the program, two changed lines on the page, sixty-eight added lines of tests, and the two
+file repairs. Three things I found and did not hide. A run that dies while working on the very first
+company now records a blank instead of that company's name — the exact error text is still kept, so
+nothing is invented, but a little less is said; this is precisely the rule the plan ordered, and the
+auditor asks that it not become another run. The line of counts is now hidden for every repeat run,
+including the rare case where a full walk really happened and only then found the answer already
+recorded; those numbers are still served by the program. And one note inside J-18's saved replay
+script now describes the old page wording; the note is never used when the script runs.
+
+**Next-step recommendation:** Halt — the goal is reached. Please confirm the finish. Four follow-ups,
+none a fault in what the product does and none blocking: (1) a run that dies on the very first
+company records a blank rather than that company's name; (2) the counts line is hidden for every
+repeat run, including the rare one that really did walk; (3) one written note inside J-18's saved
+replay script is out of date and is not used when the script runs; (4) the film's second frame
+stopped one section short of what its title names, while its third frame shows the subject clearly.
+The auditor recommends explicitly that none of these four become a new run, and I agree. One
+sentence for the owner: the Desk now tells the plain truth about a repeat screen run and about a run
+that died before it started, everything else is unchanged and proven, so please confirm the finish
+and treat the four notes as optional tidying.

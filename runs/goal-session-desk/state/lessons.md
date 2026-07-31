@@ -397,3 +397,30 @@ absolute scratchpad paths; the rig teardown then deletes the target, leaving a d
 restore both files (`git checkout --`) in its own teardown.
 
 **Applies to:** any browser-qa dispatch that provisions a second scoped frontend build.
+
+## iter-31 — 2026-07-31T06:40:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The `[NEW]`-flagged walkthrough finally produced distinct frames that show their subject
+when the demo-narrator ran against the SAME ambient `:3301`/`:8301` pair the browser-qa lane used —
+no scoped rig, therefore no teardown race (iter-27) and no `--base-url` override fight (iter-28).
+The residual defect is now purely a scroll-anchor one: `reports/demo/goal-desk-iter-31/step-02.png`
+is titled for the Screen Runs latest-run detail but landed on the Top-up Runs section one block
+above it, because `/desk` grew two sections between the script's anchor and its target.
+**Applies to:** any iteration recording a demo-narrator walkthrough of a `/desk` section — record
+against the ambient rig if the ambient store already carries the state to be narrated, and anchor
+each step on its own `data-testid` rather than a scroll position.
+
+## iter-31(b) — 2026-07-31T06:40:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Replacing a fabricated value with `null` can silently delete a genuinely-correct value:
+`desk_screen_compute.py:277`'s `attempted == 0` guard fixes the pre-loop crash (which used to name
+an innocent `members[0]`) but also blanks the case where the FIRST member is the one that raised,
+because `compute_screen` counts a member as attempted only AFTER it completes
+(`desk_screen.py:513`). Silence beats a lie here, so the fix is right — but the honest shape needs a
+"current member" signal, not a completed-count, and no test caught the conflation (both cases have
+`attempted == 0`).
+**Applies to:** any iteration replacing a fabricated field with `null` using a progress/completion
+counter as the discriminator — check whether "not started" and "in progress on item 0" are
+distinguishable before trusting the counter.

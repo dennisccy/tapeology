@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-31",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk page is where screen runs are recorded and reviewed. Let's load it to see what's new.",
+      "point_out": "The Desk page loads with a heading and several panels.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Desk" }
+    },
+    {
+      "n": 2,
+      "title": "View the latest screen run — it's a reused one",
+      "narration": "A reused run means the system recognized the same universe and screen state, so it didn't need to walk through the members again. This is a good outcome — it just says so honestly.",
+      "point_out": "The latest run shows 'reused screen-...' with the outcome text. Notice: no amber warning below it, and no counts line — the fix suppresses those misleading signals for reused runs.",
+      "journey": "J-18",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "heading", "name": "Latest run" } },
+      "expect": { "text": "reused" }
+    },
+    {
+      "n": 3,
+      "title": "See the Screen Runs history table — it still shows every run",
+      "narration": "The history table keeps a full record of every screen run the system has performed. This append-only ledger is untouched by our fix.",
+      "point_out": "The table shows multiple rows, including at least one full walk (101 / 101) and the reused runs. Every record is preserved.",
+      "journey": "J-18",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='desk-screen-runs-table']" } },
+      "expect": { "text": "101 / 101" }
+    },
+    {
+      "n": 4,
+      "title": "Navigate to Structure from the ledger",
+      "narration": "The ledger panel offers a drill-in link to the Structure page, where support and resistance levels are visualized in detail.",
+      "point_out": "Clicking the Structure link takes you to the full levels view with zones and bars.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "link", "name": "Structure" } },
+      "expect": { "text": "Structure" }
+    },
+    {
+      "n": 5,
+      "title": "Return to Desk via navigation",
+      "narration": "The top navigation makes it easy to jump between pages. Desk is now a first-class citizen in the app.",
+      "point_out": "Clicking the Desk link brings you back, and the page is still responsive and shows the same honest data.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "link", "name": "Desk" } },
+      "expect": { "text": "Desk" }
+    }
+  ]
+}

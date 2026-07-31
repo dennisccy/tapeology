@@ -532,3 +532,34 @@ unreached=101) — no click required.
 iteration's browser-qa dispatch can provision a scoped rig with a small registered fixture
 universe, click Run Screen once to produce a fresh full-attendance record, and screenshot it; no
 product code would need to change either way.
+
+## iter-31 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-18 step 3 says a `failed` run records "the exception detail
+VERBATIM plus the member the walk was on when it raised". After this iteration's spec-ordered fix
+(`desk_screen_compute.py:277`, `attempted == 0` → `failed_member: null`), a run that raises while
+processing the FIRST member no longer names that member — because `compute_screen` only counts a
+member as attempted after it completes (`desk_screen.py:513`, auditor finding B1). So one sub-case
+of that step's sentence is now unmet, while the same change removes a genuine fabrication in the
+pre-loop-crash case.
+**We chose:** Keep J-18 `passing` and let the change stand. Four strands, each checked by me
+directly: (i) J-18's ACCEPTANCE paragraph never tests `failed_member`'s content — it tests the
+honest-empty GET, the byte-identity of counts/pins/`screen_id` against the snapshot, the reused
+short-circuit, the cancelled case, and the "interrupted run leaves the ledger honestly empty rather
+than a fabricated entry" clause, which this change serves rather than breaks; (ii) the era's
+critical rail is "no fabricated data" — naming an innocent symbol is a claim, `null` is a silence,
+and the verbatim exception string is still recorded, so nothing is lost about WHAT happened; (iii)
+the shape was ordered verbatim by this iteration's own spec (TC-1, `docs/phases/goal-desk-iter-31.md:101-104`)
+and the hard auditor, having reproduced the conflation first-hand, explicitly instructs that it not
+be promoted into a follow-up iteration; (iv) distinguishing the two cases needs a new "current
+member" signal threaded through `compute_screen` — a new contract, i.e. new feature work, not a
+defect fix. Separately and non-blocking: the spec's DoD item 3 asks for
+`git status --porcelain -- apps/frontend/next-env.d.ts apps/frontend/tsconfig.json` to be EMPTY,
+which is literally impossible before this iteration is committed (HEAD carries the polluted
+content); I scored the substance instead — both files byte-identical to `48c5fc2^` by my own
+`git show … | diff -`, zero `scratchpad` hits.
+**Reversible:** yes — entirely. If the owner reads J-18 step 3 as binding the first-member case, the
+remedy is one small follow-up: pass the symbol into the progress callback BEFORE the member is
+processed (or add a separate `current_member` field) and assert it in
+`test_desk_screen_compute.py`; no recorded value changes, no snapshot shape moves, and no journey
+status would move.

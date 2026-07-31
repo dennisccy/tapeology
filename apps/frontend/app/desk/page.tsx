@@ -1328,13 +1328,13 @@ function LatestScreenRunDetail({ run }: { run: DeskScreenRun }) {
           {formatScreenRunElapsed(run.started_utc, run.finished_utc)} elapsed
         </span>
         <span data-testid="desk-screen-run-latest-outcome">{screenRunOutcomeText(run)}</span>
-        {unreached > 0 && (
+        {unreached > 0 && !(run.state === "done" && run.reused) && (
           <span data-testid="desk-screen-run-latest-unreached" className="text-amber-200/70">
             {unreached} member{unreached === 1 ? "" : "s"} not reached
           </span>
         )}
       </div>
-      {run.state === "done" && (
+      {run.state === "done" && !run.reused && (
         <div data-testid="desk-screen-run-latest-counts" className="text-xs text-slate-400">
           {run.ranked_count} ranked · {run.skipped_by_reason.no_bars} skipped (no bars) ·{" "}
           {run.skipped_by_reason.no_basis} skipped (no basis)

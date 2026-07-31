@@ -1,29 +1,27 @@
 # Iteration State — desk
 
-**After iteration:** 30 · **Date:** 2026-07-31 · **Verdict:** ESCALATE
+**After iteration:** 31 · **Date:** 2026-07-31 · **Verdict:** GOAL_ACHIEVED (first key)
 
 ## Journeys
 
-18 passing (J-01..J-18) · 0 failing/partial/unknown · 0 `DEFERRED-BUDGET` · 0 `pending_infra` · 1 `evidence_makeup` (J-18, for the walkthrough frames ONLY) — 18 total; all 18 `spec_hash` values re-derived and matching `docs/goal.md`.
+18 passing (J-01..J-18) · 0 failing/partial/unknown · 0 `DEFERRED-BUDGET` · 0 `pending_infra` · 0 `evidence_makeup` — 18 total; all 18 `spec_hash` values re-derived from `docs/goal.md` and matching.
 
 ## Active blockers
 
-- **MINOR anti-goal, OPEN (dev):** the scoped rig's build rewrote two TRACKED files — `apps/frontend/next-env.d.ts:3` and `apps/frontend/tsconfig.json`'s include list — with an absolute path into a scratchpad dir that teardown deleted (dangling `/// <reference>`). Fix: `git checkout --` both; make the rig restore them.
-- **Spec-vs-dispatch gap (dev):** `docs/phases/goal-desk-iter-30.md` says `Depth: lean` with 3 code changes IN SCOPE, but `iter-30/depth-dispatched` reads `evidence` → no developer ran, none landed. STILL OPEN: `desk/page.tsx` `LatestScreenRunDetail` renders `desk-screen-run-latest-unreached` + zeroed `desk-screen-run-latest-counts` for a `done && reused` run (TC-2 fails); `desk_screen_compute.py:277` sets `failed_member = members[0]` when `attempted == 0` (TC-4 fails); TC-4/5/6 tests unwritten.
-- **Doc drift (decomposer; COHERENCE-WARN):** `state/blueprint.md:673` asserts both fixes above shipped. They did not — correct that entry.
-- **Walkthrough (demo-narrator, needs `full`):** `reports/demo/goal-desk-iter-29/` step-02/03/04 are one image. PASSENGER task only, never an iteration goal; last request — if it duplicates again it drops to owner-optional.
+- **none.** All four recorded anti-goal items are `resolved` — iteration 30's MINOR one is CLOSED: `apps/frontend/next-env.d.ts` and `apps/frontend/tsconfig.json` are byte-identical to `48c5fc2^` (evaluator's own `git show … | diff -`, zero diff; `grep scratchpad` = 0 hits). `git status` still shows ` M` for both only because HEAD carries the polluted content — the revert ships in this iteration's commit.
+- Awaiting the second key (deterministic gates + fresh-context confirm). If it REJECTs, the only named items are the four owner-optional notes below — none is a product defect.
 - Coupling to watch: `test_desk_ui_guards.py` reads `journey-scripts/J-13.json` + `J-14.json` — archiving that folder breaks the backend suite.
 
 ## Last 2 verdicts
 
-- iter 30: ESCALATE (next run MUST be `full`) — the confirm's missing empty-state screenshot was captured on a throwaway scoped rig and the evaluator opened it (`reports/qa/goal-desk-iter-30-evidence/J-18-empty-state.png`); but the depth downgrade dropped 3 planned fixes, blueprint.md claims they shipped, and two tracked build files were left polluted. Suite 1500/8 exit 0, `08e471b10130e1e2`, 17 MCP tools, `.data` provably unwritten, scan CLEAN.
-- iter 29: GOAL_ACHIEVED (first key) — REJECTed by the second key (`iter-29/eval-confirm.md`): J-18's honest empty state was never photographed.
+- iter 31: GOAL_ACHIEVED — the two dropped honesty fixes landed and were verified in frame (`reports/qa/goal-desk-iter-31-evidence/UT-02-result.png`: a reused run shows no amber note and no zero-counts row), both build files reverted byte-for-byte, 10/10 golden replays green, J-18 replay 4/4, walkthrough frames distinct and on-subject. Suite 1502 pass / 8 skip / 0 fail, `08e471b10130e1e2`, 17 MCP tools, `.data` provably unwritten, scan CLEAN, coherence PASS, audit PASS_WITH_GAPS.
+- iter 30: ESCALATE — an `evidence` dispatch of a `lean` spec dropped three planned fixes and left two tracked build files polluted (all closed at iter-31).
 
 ## Do not redo
 
-- **J-18's empty-state screenshot is DONE** (`reports/qa/goal-desk-iter-30-evidence/J-18-empty-state.png`, unique md5, scoped rig, first action). The populated + reused screenshots are DONE and were accepted by the confirm (`reports/demo/goal-desk-iter-29/step-02.png`, `reports/qa/goal-desk-iter-29-evidence/UT-01-result.png`). Never re-capture any of the three.
-- **`journey-scripts/J-18.json` is already hardened** to stable `desk-screen-runs-table` substrings ("101 / 101", "no walk was performed") — iter-29 audit finding T1 is CLOSED. Do not re-pin it to ids.
-- **J-18 is BUILT** — `desk_screen_log.py` (sole owner), the five-pin pre-check + reuse short-circuit in `run_screen_and_record`, `GET /research/desk/screen/runs`, the `/desk` "Screen Runs" section. Do not re-implement. The auditor's B1 one-shot `logged` latch and the optional `screen_run_store=` kwarg are ratified — do not revert or "fix".
-- Do NOT run a capture-only iteration, and do NOT re-verify J-01..J-17 as an iteration goal (10 replayed green, 2 spot-checked, 5 corroborated in-frame this run).
-- J-16 layout is DONE and measured (`table-fixed` + 13-col `<colgroup>`). No 14th column, no width re-tuning; `band `/`opposite ` in-cell prefixes MUST stay. Never script a `click` inside a `/desk` ranked/skipped row — the stretched `absolute inset-0` anchor blocks it; use `expect`-only. Demo scripts stay READ-ONLY over the ambient store (never click Run Screen).
-- Zero diff stays law: `engine/`, `config.py`, `bars.py`, `bar_index.py`, `desk_coverage.py`, `desk_screen.py`, `tradability.py`, `levels.py`, `desk_topup_log.py`, `meta.py`, `mcp/__init__.py`, both charts, the guard test files; pin `08e471b10130e1e2`; 17 MCP tools; zero new `Config` fields. Accepted non-defect: replay/demo frame duplication (tooling).
+- **The four open notes are OWNER-OPTIONAL, not iteration work** (the hard auditor states this explicitly): B1 `failed_member: null` also covers a first-member crash; F1 the counts line is hidden on the rare `ScreenAlreadyRecorded` reuse race; T3 `journey-scripts/J-18.json`'s note 4 prose is stale (inert metadata, never read by the replay); the film's `step-02.png` scroll landed one section short. Do NOT spin any of them into a new iteration.
+- **The walkthrough film is DONE** (`reports/demo/goal-desk-iter-31/`, three distinct md5s, Screen Runs section readable in `step-03.png`). The iter-30 "last time I ask" bound is satisfied — never re-plan it.
+- **J-18 is BUILT and FIXED** — `desk_screen_log.py` (sole owner), the five-pin pre-check reuse short-circuit, `GET /research/desk/screen/runs`, the `/desk` "Screen Runs" section, plus iter-31's two guards (`0 < attempted < len(members)`; `run.state === "done" && !run.reused`). Do not re-implement or revert. `journey-scripts/J-18.json` is already hardened to stable substrings — do not re-pin it to ids.
+- **All J-18 screenshots are DONE** (empty state iter-30; populated/reused iter-29 + iter-31 UT-02/UT-03). Never re-capture. Do NOT run a capture-only iteration, and do NOT re-verify J-01..J-17 as an iteration goal.
+- J-16 layout is DONE and measured (`table-fixed` + 13-col `<colgroup>`). No 14th column, no width re-tuning; `band `/`opposite ` in-cell prefixes MUST stay. Never script a `click` inside a `/desk` ranked/skipped row — the stretched `absolute inset-0` anchor blocks it; use `expect`-only. Demo/replay scripts stay READ-ONLY over the ambient store.
+- Zero diff stays law: `engine/`, `config.py`, `bars.py`, `bar_index.py`, `desk_coverage.py`, `desk_screen.py`, `tradability.py`, `levels.py`, `desk_topup_log.py`, `meta.py`, `mcp/__init__.py`, both charts, the guard test files; pin `08e471b10130e1e2`; 17 MCP tools; zero new `Config` fields. Accepted non-defect: replay-frame duplication (tooling).
