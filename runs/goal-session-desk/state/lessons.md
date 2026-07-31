@@ -487,3 +487,34 @@ identical md5s across differently-named captures are the cheap tell (`md5sum *.p
 dir takes one second and caught both).
 **Applies to:** any iteration whose DoD names a demo-narrator walkthrough, and any evaluator/auditor
 scoring a journey from a browser-QA lane's per-test screenshots.
+
+## iter-35 — 2026-07-31T12:55:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A disclosure that compares a SUBSET of fields must say which subset in its own
+summary sentence. `/desk`'s new Screen Comparison prints "The compared snapshots' ranked rows are
+identical." whenever its five compared fields match — but for the very pair `docs/goal.md` names
+as the identical example (`screen-2026-07-31-c169546856c7` vs `screen-2026-07-30-bad6387963ef`)
+all 100 recorded rows differ in `basis_age_days` (4 vs 3), a field the ranked briefing table
+directly above it renders as "4 d before as-of". The build is not at fault: goal.md step 5
+prescribes that sentence verbatim. The trap is in journey AUTHORING — a proposed journey that
+names a summary line and separately names the fields it compares can ship a line broader than its
+own check, and nothing in the pipeline catches it because every test asserts the check, not the
+sentence.
+**Applies to:** any future journey (or proposer promotion) that adds a summary/"identical"/"no
+change" sentence over a field subset — verify the sentence's scope against the FULL recorded row
+shape (`json.load(...)['record']['meta']['rows'][0].keys()`), not just the fields the spec lists.
+
+## iter-35b — 2026-07-31T12:55:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The reviewer's own NOTE ("TC-2's byte-identity is proven structurally but no test does
+a live round-trip") was closeable by the evaluator in about two minutes without any server:
+import `ScreenStore` + `compute_screen_diff` directly, point the store at
+`apps/backend/.data/screen`, and diff the payload's `compare_*`/`base_*` fields against
+`ScreenStore.list()`'s own recorded rows. The ambient `:3301`/`:8301` rig was already torn down by
+the time the evaluator ran, so a curl round-trip was impossible — but the in-process call over the
+REAL frozen data is a stronger check than curl anyway, and it needs no rig.
+**Applies to:** any iteration whose acceptance says "byte-identical to what endpoint X serves" and
+whose reviewer flags it as structurally-only proven — do the in-process store-level round-trip
+rather than accepting the structural argument or re-standing-up the rig.

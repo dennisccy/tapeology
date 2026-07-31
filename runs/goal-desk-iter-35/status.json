@@ -1,0 +1,23 @@
+{
+  "phase": "goal-desk-iter-35",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-31T11:10:57.000000Z",
+  "started_at": "2026-07-31T00:00:00.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "note": "INITIAL BUILD for J-20 (screen comparison disclosure). New backend module app/research/desk_screen_diff.py (compute_screen_diff over ScreenStore.list() only -- zero BarStore/bar_index/dataset dependency, structurally incapable of a compute_tradability call, proven via a hasattr guard + a call-count-instrumented route test) plus one new GET /research/desk/screen/compare route in desk_routes.py (id/base query params; unresolved id -> honest 200 null; self-compare -> 422). New frontend 'Screen Comparison' section on /desk (apps/frontend/app/desk/page.tsx), rendered as the LAST section on the page (after Screen Runs, strictly after the ranked briefing table) so no existing golden's first-visible-match text search can resolve into it; new desk-screen-compare-* testid namespace (verified via a new source-guard test that it never reuses data-screen-id/desk-history-row/desk-screen-row/desk-row-*). New types (DeskScreenCompare*) in lib/types.ts, new fetchDeskScreenCompare in lib/api.ts. VERIFICATION: full backend suite `pytest tests/ -q` exit 0 -- 1551 passed, 8 skipped, 0 failed (includes 26 new tests in test_desk_screen_diff.py covering TC-1..TC-10 at both module and route level, and 5 new source-guard tests in test_desk_screen_compare_ui_guard.py). The three guard-test files the spec pins (test_copy_discipline.py, test_desk_ui_guards.py, test_desk_hover_tooltip_guard.py) were NOT edited and pass unmodified (47 tests). test_mcp_server.py's 17-tool contract passes unmodified (39 tests). Config().config_fingerprint() == 08e471b10130e1e2 (re-verified directly, unchanged). git diff --stat on desk_screen.py/tradability.py/levels.py/bars.py/bar_index.py/desk_coverage.py/StructureChart.tsx/config.py/main.py all EMPTY. Frontend `npm run build` compiles clean, zero type errors. Live smoke check: started uvicorn on a scratch port with scoped TAPEOLOGY_DESK_*/TAPEOLOGY_BAR_DIR env vars, confirmed GET /research/desk/screen/compare?id=does-not-exist returns HTTP 200 honest-null, server stopped cleanly, no process/port left behind. NOT part of this handoff (per this codebase's own pipeline division of labor): the [NEW]-flagged demo-narrator walkthrough and journey-scripts/J-20.json (browser-qa-agent's/demo-narrator's job, recorded after code lands) -- both are UI-chain and showcase steps downstream of dev. No real screen run triggered this iteration -- the ambient ledger's 12 recorded snapshots already carry the identical/churned/oldest-no-earlier examples the acceptance names. Did not independently re-verify the real ambient .data/ SHA-256 byte-identity listing (TC-17) -- the new route is structurally read-only and no ambient file was touched during development, but the auditor/QA lane should take that checksum listing as the authoritative proof.",
+  "changed_files": [
+    "apps/backend/app/research/desk_screen_diff.py",
+    "apps/backend/app/research/desk_routes.py",
+    "apps/backend/tests/test_desk_screen_diff.py",
+    "apps/backend/tests/test_desk_screen_compare_ui_guard.py",
+    "apps/frontend/lib/types.ts",
+    "apps/frontend/lib/api.ts",
+    "apps/frontend/app/desk/page.tsx",
+    "docs/handoffs/goal-desk-iter-35-dev.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "next_action": "review"
+}

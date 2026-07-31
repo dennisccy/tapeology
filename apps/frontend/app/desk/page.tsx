@@ -10,6 +10,7 @@ import {
   fetchDeskReconcileRuns,
   fetchDeskScreen,
   fetchDeskScreenById,
+  fetchDeskScreenCompare,
   fetchDeskScreenCompute,
   fetchDeskScreenRuns,
   fetchDeskTopupCompute,
@@ -24,6 +25,9 @@ import type {
   DeskReconcileRun,
   DeskReconcileRunMeta,
   DeskReconcileRunsListResult,
+  DeskScreenCompareResult,
+  DeskScreenCompareRow,
+  DeskScreenCompareSnapshotMeta,
   DeskScreenComputeSnapshot,
   DeskScreenListResult,
   DeskScreenMeta,
@@ -1485,6 +1489,198 @@ function ScreenRunsSection({
   );
 }
 
+// --- Screen comparison (goal-desk-iter-35, J-20) — a new read-only disclosure of how the screen
+// `/desk` is currently DISPLAYING differs from the screen recorded immediately before it. A pure,
+// stateless GET (`GET /research/desk/screen/compare?id=<the displayed screen's own id>`), fed by
+// its own mount/id-change effect in the page component below — no new control, no recompute
+// trigger (page-load GETs never trigger a compute, T-4/5C). Rendered as the LAST section on the
+// page (after Screen Runs, in its own top-level `<section>` below `DeskPopulatedScreen`) so no
+// EXISTING golden's own first-visible-match text search can ever resolve into it instead of its
+// real target (goal.md step 6) — the section also introduces no attribute/selector any shipped
+// golden's click target matches (never `data-screen-id`/`desk-history-row`/`desk-screen-row`/any
+// `desk-row-*` testid; every testid here is its own `desk-screen-compare-*` namespace). Every value
+// rendered is a verbatim re-format of the compare endpoint's own response; the one client-side
+// operation is a plain array slice for the display cap (the shipped `EARLIER_PAIRS_DISPLAY_CAP`
+// pattern, `topupLibraryReach` above), never a re-rank, re-score, or client-derived diff.
+
+const SCREEN_COMPARE_ROWS_DISPLAY_CAP = 20;
+
+function ScreenCompareMeta({
+  label,
+  meta,
+  testid,
+}: {
+  label: string;
+  meta: DeskScreenCompareSnapshotMeta;
+  testid: string;
+}) {
+  return (
+    <div data-testid={testid} className="text-xs text-slate-400">
+      <p className="text-slate-300">{label}</p>
+      <p data-testid={`${testid}-id`}>id {meta.id}</p>
+      <p data-testid={`${testid}-dates`}>
+        screen date {meta.screen_date} · recorded {meta.created_utc}
+      </p>
+      <p data-testid={`${testid}-signature`}>bar-store signature {meta.bar_store_signature}</p>
+    </div>
+  );
+}
+
+// Every cell renders the served value verbatim; a `null` field is only ever reached on an
+// "entered"/"left" row (the symbol has no row at all on that side — `side`/`distance_bps` have
+// carried no legacy-absence case since J-03's very first shipment), so the honest copy names WHICH
+// snapshot has no row for this symbol — the J-08/J-13/J-14 legacy-absence phrasing pattern, applied
+// here to a structurally-absent row rather than an omitted field on an existing one.
+function ScreenCompareRowView({ row }: { row: DeskScreenCompareRow }) {
+  const compareRankText = row.compare_rank ?? "not recorded in the compared snapshot";
+  const baseRankText = row.base_rank ?? "not recorded in the base snapshot";
+  const compareSideText = row.compare_side ?? "not recorded in the compared snapshot";
+  const baseSideText = row.base_side ?? "not recorded in the base snapshot";
+  const compareDistanceText =
+    row.compare_distance_bps == null
+      ? "not recorded in the compared snapshot"
+      : fmt(row.compare_distance_bps);
+  const baseDistanceText =
+    row.base_distance_bps == null ? "not recorded in the base snapshot" : fmt(row.base_distance_bps);
+  return (
+    <tr
+      data-testid="desk-screen-compare-row"
+      className="border-b border-slate-800/60 last:border-b-0"
+    >
+      <td className={LABEL_CELL} data-testid="desk-screen-compare-row-symbol">
+        {row.symbol}
+      </td>
+      <td className={LABEL_CELL} data-testid="desk-screen-compare-row-status">
+        {row.status}
+      </td>
+      <td className={NUMERIC_CELL} data-testid="desk-screen-compare-row-compare-rank">
+        {compareRankText}
+      </td>
+      <td className={NUMERIC_CELL} data-testid="desk-screen-compare-row-base-rank">
+        {baseRankText}
+      </td>
+      <td className={NUMERIC_CELL} data-testid="desk-screen-compare-row-rank-change">
+        {row.rank_change ?? "—"}
+      </td>
+      <td className={LABEL_CELL} data-testid="desk-screen-compare-row-compare-side">
+        {compareSideText}
+      </td>
+      <td className={LABEL_CELL} data-testid="desk-screen-compare-row-base-side">
+        {baseSideText}
+      </td>
+      <td className={NUMERIC_CELL} data-testid="desk-screen-compare-row-compare-distance">
+        {compareDistanceText}
+      </td>
+      <td className={NUMERIC_CELL} data-testid="desk-screen-compare-row-base-distance">
+        {baseDistanceText}
+      </td>
+    </tr>
+  );
+}
+
+// The capped table of the COMPARE snapshot's own first N rows (goal.md step 5, the shipped
+// `EARLIER_PAIRS_DISPLAY_CAP` pattern) — "left" rows describe symbols the compare snapshot never
+// ranked at all, so they are excluded from "the compare snapshot's own first N rows" and never
+// counted toward the cap. Order is rendered EXACTLY as `rows` already carries it (the compare
+// snapshot's own served rank order) — no `.sort(`/`.reverse(` of any kind, only a `.slice(` for the
+// cap (never applied to a variable literally named `rows`, so this table's own cap can never be
+// mistaken for a client-side reorder of the ranked briefing table above).
+function ScreenCompareTable({ rows }: { rows: DeskScreenCompareRow[] }) {
+  const compareOrdered = rows.filter((entry) => entry.status !== "left");
+  if (compareOrdered.length === 0) {
+    return (
+      <EmptyState
+        testid="desk-screen-compare-rows-empty"
+        title="No members ranked in the compared snapshot."
+      />
+    );
+  }
+  const shown = compareOrdered.slice(0, SCREEN_COMPARE_ROWS_DISPLAY_CAP);
+  return (
+    <div>
+      {compareOrdered.length > SCREEN_COMPARE_ROWS_DISPLAY_CAP && (
+        <p data-testid="desk-screen-compare-cap-note" className="mb-1 text-xs text-slate-400">
+          showing {shown.length} of {compareOrdered.length} rows
+        </p>
+      )}
+      <table data-testid="desk-screen-compare-table" className="w-full border-collapse">
+        <thead>
+          <tr>
+            <th className={HEADER_CELL_LEFT}>symbol</th>
+            <th className={HEADER_CELL_LEFT}>status</th>
+            <th className={HEADER_CELL}>rank (this)</th>
+            <th className={HEADER_CELL}>rank (base)</th>
+            <th className={HEADER_CELL}>rank change</th>
+            <th className={HEADER_CELL_LEFT}>side (this)</th>
+            <th className={HEADER_CELL_LEFT}>side (base)</th>
+            <th className={HEADER_CELL}>distance (this)</th>
+            <th className={HEADER_CELL}>distance (base)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((row) => (
+            <ScreenCompareRowView key={row.symbol} row={row} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// The section's own Loading/Unavailable/Populated states — mirrors `TopupRunsSection`'s/
+// `ScreenRunsSection`'s identical three-state shape, fed by its own mount/id-change effect in the
+// page component below. `data.compare === null` (an unresolved id) folds into the SAME Unavailable
+// rendering as a genuine fetch failure — this page never requests a compare for anything other
+// than the screen it is already displaying, so an honest "not found" here would only ever mean a
+// stale/raced fetch, not a state an operator can act on.
+function ScreenComparisonSection({
+  result,
+}: {
+  result: { ok: boolean; data: DeskScreenCompareResult | null; error?: string } | null;
+}) {
+  if (result === null) {
+    return <LoadingPanel testid="desk-screen-compare-loading" />;
+  }
+  if (!result.ok || result.data === null || result.data.compare === null) {
+    return (
+      <UnavailablePanel
+        testid="desk-screen-compare-unavailable"
+        message={result.error ?? "The screen comparison could not be loaded."}
+      />
+    );
+  }
+  const { compare, base, rows, identical, counts } = result.data;
+  return (
+    <div data-testid="desk-screen-compare-section" className="space-y-3">
+      <ScreenCompareMeta
+        label="This screen"
+        meta={compare}
+        testid="desk-screen-compare-meta-compare"
+      />
+      {base === null ? (
+        <p data-testid="desk-screen-compare-no-earlier" className="text-sm text-slate-400">
+          No earlier recorded screen exists to compare against.
+        </p>
+      ) : (
+        <>
+          <ScreenCompareMeta label="Compared against" meta={base} testid="desk-screen-compare-meta-base" />
+          <p data-testid="desk-screen-compare-counts" className="text-xs text-slate-400">
+            rows compared {counts.compared} · rank changed {counts.rank_changed} · side changed{" "}
+            {counts.side_changed} · entered {counts.entered} · left {counts.left}
+          </p>
+          {identical ? (
+            <p data-testid="desk-screen-compare-identical" className="text-sm text-slate-300">
+              The compared snapshots&apos; ranked rows are identical.
+            </p>
+          ) : (
+            <ScreenCompareTable rows={rows} />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // --- Provenance line — snapshot id + recorded-at time, universe snapshot id + date, as_of,
 // config_fingerprint, and the pinned bar-store signature. -------------------------------------
 //
@@ -2029,6 +2225,16 @@ export default function DeskPage() {
   const [viewingSnapshot, setViewingSnapshot] = useState<DeskScreenSnapshot | null>(null);
   const [historyFetchError, setHistoryFetchError] = useState<string | null>(null);
 
+  // goal-desk-iter-35 (J-20): the Screen Comparison section's own fetch result, keyed off
+  // WHICHEVER screen is currently displayed (`viewingSnapshot ?? latest`, the SAME
+  // `displayedSnapshot` value computed below) — refetched by its own effect whenever that id
+  // changes, independent of the seven mount-time GETs above.
+  const [screenCompareResult, setScreenCompareResult] = useState<{
+    ok: boolean;
+    data: DeskScreenCompareResult | null;
+    error?: string;
+  } | null>(null);
+
   // Mount: seven GETs, zero POSTs (TC-19/TC-8, extended era-desk-iter-14/goal-desk-iter-29) — the
   // screen list/latest, ALL THREE compute managers' current/last snapshot (seeds a page load
   // mid-job or post-terminal without a spurious extra click — the /structure edge-report
@@ -2284,6 +2490,27 @@ export default function DeskPage() {
   // when it shares its `screen_date` with another recorded entry.
   const selectedHistoryId = viewingSnapshot?.id ?? latest?.id ?? null;
 
+  // goal-desk-iter-35 (J-20): fetch the Screen Comparison payload for whichever screen is
+  // currently DISPLAYED (`displayedSnapshot`'s own id, the SAME snapshot the Briefing/Provenance
+  // sections above already render) — a page-load/id-change GET only, never triggered by a click
+  // (no new control ships this iteration). Re-fetches whenever the displayed screen changes (a
+  // history row selected, or reverting to Latest); `alive` guards against a stale response landing
+  // after a fast second switch, mirroring every other mount-time fetch effect on this page.
+  useEffect(() => {
+    const id = displayedSnapshot?.id ?? null;
+    if (id === null) {
+      setScreenCompareResult(null);
+      return;
+    }
+    let alive = true;
+    fetchDeskScreenCompare(id).then((result) => {
+      if (alive) setScreenCompareResult(result);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [displayedSnapshot]);
+
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-6">
@@ -2359,6 +2586,21 @@ export default function DeskPage() {
             <ScreenRunsSection result={screenRunsResult} />
           </Panel>
         </section>
+
+        {/* goal-desk-iter-35 (J-20): rendered LAST on the page — after the ranked briefing table
+            (inside DeskPopulatedScreen, far above) and after every other existing section — so no
+            shipped golden's own first-visible-match text search can resolve into it (goal.md step
+            6). Unlike Top-up Runs/Index Reconciliation/Screen Runs above, this section describes a
+            SPECIFIC screen (whichever one is currently displayed), so it only renders once a
+            screen exists at all (`latest !== null`) — mirroring the Briefing/Provenance sections'
+            own precondition instead of those three's "always rendered" one. */}
+        {latest !== null && (
+          <section aria-label="Screen Comparison" className="mt-6">
+            <Panel title="Screen Comparison">
+              <ScreenComparisonSection result={screenCompareResult} />
+            </Panel>
+          </section>
+        )}
       </main>
     </div>
   );

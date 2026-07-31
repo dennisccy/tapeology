@@ -1145,3 +1145,56 @@ export interface DeskScreenRunsListResult {
   latest: DeskScreenRun | null;
   integrity_errors: { file: string; error: string }[];
 }
+
+// goal-desk-iter-35 (J-20) -- the screen-comparison payload served by
+// `GET /research/desk/screen/compare`. `compare`/`base` are each a lightweight snapshot-identity
+// projection (pins + counts only -- never the full `rows`/`skipped` arrays, mirroring
+// `DeskScreenMeta`'s own convention); `base` is `null` on the ledger's oldest recorded snapshot
+// (`base_resolution: "none_earlier"`) or when an explicit `base=` id does not resolve
+// (`base_resolution` stays `"explicit"` either way -- a specific base WAS asked for, it just isn't
+// there). Every `compare_*`/`base_*` field on a row is copied VERBATIM from that snapshot's own
+// recorded row -- never derived client-side.
+export interface DeskScreenCompareSnapshotMeta {
+  id: string;
+  screen_date: string;
+  as_of: string;
+  created_utc: string;
+  bar_store_signature: string;
+  universe_snapshot_id: string | null;
+  ranked_count: number;
+  skipped_count: number;
+}
+
+export interface DeskScreenCompareRow {
+  symbol: string;
+  status: "compared" | "entered" | "left";
+  compare_rank: number | null;
+  base_rank: number | null;
+  rank_change: number | null;
+  compare_side: "support" | "resistance" | null;
+  base_side: "support" | "resistance" | null;
+  compare_band_class: "A" | "B" | "C" | null;
+  base_band_class: "A" | "B" | "C" | null;
+  compare_distance_bps: number | null;
+  base_distance_bps: number | null;
+  compare_basis_as_of: string | null;
+  base_basis_as_of: string | null;
+  skip_reason: "no_bars" | "no_basis" | null;
+}
+
+export interface DeskScreenCompareCounts {
+  compared: number;
+  rank_changed: number;
+  side_changed: number;
+  entered: number;
+  left: number;
+}
+
+export interface DeskScreenCompareResult {
+  compare: DeskScreenCompareSnapshotMeta | null;
+  base: DeskScreenCompareSnapshotMeta | null;
+  base_resolution: "explicit" | "default_prior_date" | "none_earlier" | null;
+  rows: DeskScreenCompareRow[];
+  identical: boolean;
+  counts: DeskScreenCompareCounts;
+}

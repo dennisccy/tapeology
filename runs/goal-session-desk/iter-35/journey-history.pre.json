@@ -1,0 +1,245 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "Universe ingestion — fetched, registered, honest",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-32",
+      "last_passing_iter": "goal-desk-iter-32",
+      "first_seen_iter": "goal-desk-iter-0",
+      "spec_hash": "dcad07154573cae27aff4a75ce71ac9ceca8c2969ec5c3d665aa3cbe08278819",
+      "last_evidence_path": "reports/phase-goal-desk-iter-32-ui-test-results.md row UT-J-01 PASS (deterministic golden-script replay, run 06:49Z) + reports/qa/goal-desk-iter-32-evidence/J-01-verify.png. Known replay-tool quirk (logged since iter-27): the verify frames are the page's first view, so 8 of the 9 share one md5 - the load-bearing proof is the replay assertion set, not the frame.",
+      "evidence_note": "RE-VERIFIED THIS ITERATION by deterministic golden replay against the ambient :3301/:8301 pair (demo_runner.py --mode verify, ZERO script edits): reports/phase-goal-desk-iter-31-regression-replay-results.md row UT-J-01 PASS (10/10 replayed green, 0 skipped, 0 DEFERRED-BUDGET) and the merged reports/phase-goal-desk-iter-31-ui-test-results.md row UT-J-01 PASS, evidence reports/qa/goal-desk-iter-31-evidence/J-01-verify.png. HONEST CAPTURE NOTE (carried since iter-22b; a replay-tool defect, never a product one): the verify frames duplicate because the replay tool re-saves the first view of the page it lands on - the load-bearing proof is the replay assertions themselves, which all held. EVALUATOR'S OWN RE-RUNS THIS ITERATION (not inherited from any report): full backend suite via --junitxml = tests 1510 / failures 0 / errors 0 / skipped 8 => 1502 passed, exit 0 (>= the 1,500 baseline); Config().config_fingerprint() = 08e471b10130e1e2; len(app.mcp.TOOL_NAMES) = 17 with the tool names enumerated live; owner's apps/backend/.data provably unwritten (only bar_index.db-wal/-shm newer than the run start; counts still 759 bar series / 1 universe / 12 screens / 3 screen runs / 1 top-up run / 2 reconcile runs). scan-report CLEAN; coherence COHERENCE-PASS; no journeys-changed.md; no browser-infra token; zero FAIL and zero DEFERRED-BUDGET rows in the merged results file."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Coverage + explicit bar top-up over the universe",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-32",
+      "last_passing_iter": "goal-desk-iter-32",
+      "first_seen_iter": "goal-desk-iter-0",
+      "spec_hash": "a5cd4f6a0c3dbe67de9a65400250cf777e281712fbf3c90e54758e91971d306c",
+      "last_evidence_path": "reports/phase-goal-desk-iter-32-ui-test-results.md row UT-J-02 PASS (deterministic golden-script replay, run 06:49Z) + reports/qa/goal-desk-iter-32-evidence/J-02-verify.png. Known replay-tool quirk (logged since iter-27): the verify frames are the page's first view, so 8 of the 9 share one md5 - the load-bearing proof is the replay assertion set, not the frame.",
+      "evidence_note": "RE-VERIFIED THIS ITERATION by deterministic golden replay against the ambient :3301/:8301 pair (demo_runner.py --mode verify, ZERO script edits): reports/phase-goal-desk-iter-31-regression-replay-results.md row UT-J-02 PASS (10/10 replayed green, 0 skipped, 0 DEFERRED-BUDGET) and the merged reports/phase-goal-desk-iter-31-ui-test-results.md row UT-J-02 PASS, evidence reports/qa/goal-desk-iter-31-evidence/J-02-verify.png. HONEST CAPTURE NOTE (carried since iter-22b; a replay-tool defect, never a product one): the verify frames duplicate because the replay tool re-saves the first view of the page it lands on - the load-bearing proof is the replay assertions themselves, which all held. EVALUATOR'S OWN RE-RUNS THIS ITERATION (not inherited from any report): full backend suite via --junitxml = tests 1510 / failures 0 / errors 0 / skipped 8 => 1502 passed, exit 0 (>= the 1,500 baseline); Config().config_fingerprint() = 08e471b10130e1e2; len(app.mcp.TOOL_NAMES) = 17 with the tool names enumerated live; owner's apps/backend/.data provably unwritten (only bar_index.db-wal/-shm newer than the run start; counts still 759 bar series / 1 universe / 12 screens / 3 screen runs / 1 top-up run / 2 reconcile runs). scan-report CLEAN; coherence COHERENCE-PASS; no journeys-changed.md; no browser-infra token; zero FAIL and zero DEFERRED-BUDGET rows in the merged results file."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The screen — pinned inputs, append-only snapshot, deterministic rank",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-31",
+      "last_passing_iter": "goal-desk-iter-31",
+      "first_seen_iter": "goal-desk-iter-0",
+      "spec_hash": "74735994233da1614d5568bc57f2a42e60d7e51cf91bb0378f32add5c898bcd6",
+      "last_evidence_path": "reports/qa/goal-desk-iter-31-evidence/J-03-verify.png",
+      "evidence_note": "RE-VERIFIED THIS ITERATION by deterministic golden replay against the ambient :3301/:8301 pair (demo_runner.py --mode verify, ZERO script edits): reports/phase-goal-desk-iter-31-regression-replay-results.md row UT-J-03 PASS (10/10 replayed green, 0 skipped, 0 DEFERRED-BUDGET) and the merged reports/phase-goal-desk-iter-31-ui-test-results.md row UT-J-03 PASS, evidence reports/qa/goal-desk-iter-31-evidence/J-03-verify.png. HONEST CAPTURE NOTE (carried since iter-22b; a replay-tool defect, never a product one): the verify frames duplicate because the replay tool re-saves the first view of the page it lands on - the load-bearing proof is the replay assertions themselves, which all held. EVALUATOR'S OWN RE-RUNS THIS ITERATION (not inherited from any report): full backend suite via --junitxml = tests 1510 / failures 0 / errors 0 / skipped 8 => 1502 passed, exit 0 (>= the 1,500 baseline); Config().config_fingerprint() = 08e471b10130e1e2; len(app.mcp.TOOL_NAMES) = 17 with the tool names enumerated live; owner's apps/backend/.data provably unwritten (only bar_index.db-wal/-shm newer than the run start; counts still 759 bar series / 1 universe / 12 screens / 3 screen runs / 1 top-up run / 2 reconcile runs). scan-report CLEAN; coherence COHERENCE-PASS; no journeys-changed.md; no browser-infra token; zero FAIL and zero DEFERRED-BUDGET rows in the merged results file."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The /desk briefing page",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-34",
+      "first_seen_iter": "goal-desk-iter-0",
+      "spec_hash": "0a3d005b39831ddc9eb0d481081ac613a2ec9e94b131c36394f9e649182faaec",
+      "last_evidence_path": "reports/phase-goal-desk-iter-34-ui-test-results.md row UT-J-04 PASS + reports/qa/goal-desk-iter-34-evidence/J-04-verify.png",
+      "evidence_note": "RE-VERIFIED THIS ITERATION by deterministic golden-script replay against the ambient :3301/:8301 pair after the mandatory rm -rf .next clean rebuild (T-9): reports/phase-goal-desk-iter-34-ui-test-results.md row UT-J-04 PASS (5/5 replay lane; the developer and the hard auditor each independently re-ran the same six-journey verify set and both got 6/6 PASS). HONEST CAPTURE NOTE (a replay-tool defect logged since iter-22b, never a product one): J-04/J-09/J-16/J-17/J-19 verify frames share one md5 (a254f673...) because the replay tool re-saves the page's first view - the load-bearing proof is the replay assertion set, which held. Product diff this iteration is exactly two files (apps/frontend/app/desk/page.tsx inside topupLibraryReach/LatestTopupRunDetail only, and apps/backend/tests/test_desk_topup_library_reach_guard.py); no ranked-table, coverage-badge, screen-run or nav code was touched. Evaluator's own re-runs: full backend suite 1520 passed / 8 skipped / 0 failed (exit 0); Config().config_fingerprint() = 08e471b10130e1e2; MCP tool list read out of the running module = exactly 17 names."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "Ledger history + drill-in to /structure",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-29",
+      "last_passing_iter": "goal-desk-iter-29",
+      "first_seen_iter": "goal-desk-iter-0",
+      "spec_hash": "cba063f7d5e92f608aa54c1b4d174e17e46e297b8dda20cd52532d9d5a1ae545",
+      "last_evidence_path": "reports/qa/goal-desk-iter-29-evidence/J-05-verify.png",
+      "evidence_note": "SPOT-CHECKED THIS ITERATION (methodology A.4, chosen from OUTSIDE the replay set): the evaluator opened reports/qa/goal-desk-iter-29-evidence/J-05-verify.png and read the /structure page landed from a briefing drill-in with the Load form prefilled (SYMBOL 'AAPL', AS-OF '2026-06-22T23:59:59Z') - consistent with, and not contradicting, the recorded passing status. NOT re-verified live (outside this iteration's Required-still-passing set). Carried forward under evidence durability (methodology A.6): this iteration's product diff is 5 files - desk_screen_compute.py (1 line), test_desk_screen_compute.py (+68), desk/page.tsx (LatestScreenRunDetail's 2 JSX guard lines ONLY), and the two build-plumbing files reverted - none of which touch /structure, its Load form, or the drill-in link. | ITER-34 SPOT-CHECK (methodology A.4): the evaluator re-opened reports/qa/goal-desk-iter-29-evidence/J-05-verify.png and read the /structure Load form prefilled from the drill-in query params (SYMBOL 'AAPL', AS-OF '2026-06-22T23:59:59Z') in frame - consistent with the recorded status. apps/frontend/app/structure/page.tsx is byte-unchanged this iteration (diff is 2 files), so SPEED-9 evidence durability keeps this artifact valid."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "MCP contract v3 — 17 read-only tools",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-32",
+      "first_seen_iter": "goal-desk-iter-0",
+      "spec_hash": "c3d5a8351c4ce5aa20449d2d1557f4599bad9cdecebbcde8f044e6d4d2908f6f",
+      "last_evidence_path": "reports/phase-goal-desk-iter-32-ui-test-results.md row UT-J-06 PASS (deterministic golden-script replay, run 06:49Z) + reports/qa/goal-desk-iter-32-evidence/J-06-verify.png. Known replay-tool quirk (logged since iter-27): the verify frames are the page's first view, so 8 of the 9 share one md5 - the load-bearing proof is the replay assertion set, not the frame.",
+      "evidence_note": "RE-DERIVED THIS ITERATION by the evaluator directly out of the running module (import app.mcp; TOOL_NAMES) = exactly 17 names: backtests, bars, datasets, desk_screen, desk_universe, edge_report, get_endpoint, levels, pnl_ledger, setups, strategies, tape_features, tape_history, tape_state, taxonomy, tradability, ui_route_map. The full backend suite (which carries tests/test_mcp_server.py's own == 17 assertion) is green. This is a code-level check, not a browser pass, so last_passing_iter stays at its last browser-verified iteration (goal-desk-iter-32); the product diff this iteration touches no MCP file."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The kept product stands — regression sentinel",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-34",
+      "first_seen_iter": "goal-desk-iter-0",
+      "spec_hash": "47ab77bdd843c8f7004f69b3c433dc9f167c8fce6195c9f21f48c061c7a7b7c5",
+      "last_evidence_path": "reports/phase-goal-desk-iter-34-ui-test-results.md row UT-J-07 PASS + reports/qa/goal-desk-iter-34-evidence/J-07-verify.png",
+      "evidence_note": "RE-VERIFIED THIS ITERATION by deterministic golden-script replay against the ambient :3301/:8301 pair after the mandatory rm -rf .next clean rebuild (T-9): reports/phase-goal-desk-iter-34-ui-test-results.md row UT-J-07 PASS (5/5 replay lane; the developer and the hard auditor each independently re-ran the same six-journey verify set and both got 6/6 PASS). HONEST CAPTURE NOTE (a replay-tool defect logged since iter-22b, never a product one): J-04/J-09/J-16/J-17/J-19 verify frames share one md5 (a254f673...) because the replay tool re-saves the page's first view - the load-bearing proof is the replay assertion set, which held. Product diff this iteration is exactly two files (apps/frontend/app/desk/page.tsx inside topupLibraryReach/LatestTopupRunDetail only, and apps/backend/tests/test_desk_topup_library_reach_guard.py); no ranked-table, coverage-badge, screen-run or nav code was touched. Evaluator's own re-runs: full backend suite 1520 passed / 8 skipped / 0 failed (exit 0); Config().config_fingerprint() = 08e471b10130e1e2; MCP tool list read out of the running module = exactly 17 names."
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "Every ranked briefing row names the bar its distance was measured from",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-34",
+      "first_seen_iter": "goal-desk-iter-9",
+      "spec_hash": "727585122a3bbcabfa1b789e25d4171cfd6f953422b134050a547ff883fb52f6",
+      "last_evidence_path": "reports/qa/goal-desk-iter-34-evidence/QA-desk-topup-reach-section.png",
+      "evidence_note": "RE-READ THIS ITERATION by the evaluator directly off a fresh 1440x900 browser capture taken this run (reports/qa/goal-desk-iter-34-evidence/QA-desk-topup-reach-section.png - mis-named by the QA lane, it is a top-of-page /desk capture): the ranked BRIEFING table renders every disclosure column in frame - basis '2026-07-27 - 4 d before as-of' (J-08), history '502 sessions - from 2024-07-25' (J-11), band 'band 495.45-497.18 - close 497.18' (J-13), opposite 'opposite resistance A 497.20-500.67 - 0.40 bps' (J-14), levels '155 - 1d 68 - 1h 57 - 1w 11 - 4h 19' (J-15), with no horizontal scroll. This iteration's diff adds no column and touches no ranked-table code; J-16's width contract also replayed PASS."
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "Every top-up run leaves an append-only record of what it attempted",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-34",
+      "first_seen_iter": "goal-desk-iter-11",
+      "spec_hash": "df68d0f0595aaa98cc55b5e6dcff6c9bb23dcdeaeda198e9a890d714b3e855cc",
+      "last_evidence_path": "reports/phase-goal-desk-iter-34-ui-test-results.md row UT-J-09 PASS + reports/qa/goal-desk-iter-34-evidence/J-09-verify.png",
+      "evidence_note": "RE-VERIFIED THIS ITERATION by deterministic golden-script replay against the ambient :3301/:8301 pair after the mandatory rm -rf .next clean rebuild (T-9): reports/phase-goal-desk-iter-34-ui-test-results.md row UT-J-09 PASS (5/5 replay lane; the developer and the hard auditor each independently re-ran the same six-journey verify set and both got 6/6 PASS). HONEST CAPTURE NOTE (a replay-tool defect logged since iter-22b, never a product one): J-04/J-09/J-16/J-17/J-19 verify frames share one md5 (a254f673...) because the replay tool re-saves the page's first view - the load-bearing proof is the replay assertion set, which held. Product diff this iteration is exactly two files (apps/frontend/app/desk/page.tsx inside topupLibraryReach/LatestTopupRunDetail only, and apps/backend/tests/test_desk_topup_library_reach_guard.py); no ranked-table, coverage-badge, screen-run or nav code was touched. Evaluator's own re-runs: full backend suite 1520 passed / 8 skipped / 0 failed (exit 0); Config().config_fingerprint() = 08e471b10130e1e2; MCP tool list read out of the running module = exactly 17 names."
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The coverage the briefing shows is the coverage the frozen store can prove",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-31",
+      "last_passing_iter": "goal-desk-iter-31",
+      "first_seen_iter": "goal-desk-iter-14",
+      "spec_hash": "25ce1c02559425521e1b9950291926f058516a546e7f86443f3e3fbad5cb1ac5",
+      "last_evidence_path": "reports/qa/goal-desk-iter-31-evidence/J-10-verify.png",
+      "evidence_note": "RE-VERIFIED THIS ITERATION by deterministic golden replay against the ambient :3301/:8301 pair (demo_runner.py --mode verify, ZERO script edits): reports/phase-goal-desk-iter-31-regression-replay-results.md row UT-J-10 PASS (10/10 replayed green, 0 skipped, 0 DEFERRED-BUDGET) and the merged reports/phase-goal-desk-iter-31-ui-test-results.md row UT-J-10 PASS, evidence reports/qa/goal-desk-iter-31-evidence/J-10-verify.png. HONEST CAPTURE NOTE (carried since iter-22b; a replay-tool defect, never a product one): the verify frames duplicate because the replay tool re-saves the first view of the page it lands on - the load-bearing proof is the replay assertions themselves, which all held. EVALUATOR'S OWN RE-RUNS THIS ITERATION (not inherited from any report): full backend suite via --junitxml = tests 1510 / failures 0 / errors 0 / skipped 8 => 1502 passed, exit 0 (>= the 1,500 baseline); Config().config_fingerprint() = 08e471b10130e1e2; len(app.mcp.TOOL_NAMES) = 17 with the tool names enumerated live; owner's apps/backend/.data provably unwritten (only bar_index.db-wal/-shm newer than the run start; counts still 759 bar series / 1 universe / 12 screens / 3 screen runs / 1 top-up run / 2 reconcile runs). scan-report CLEAN; coherence COHERENCE-PASS; no journeys-changed.md; no browser-infra token; zero FAIL and zero DEFERRED-BUDGET rows in the merged results file."
+    },
+    "J-11": {
+      "id": "J-11",
+      "name": "Every ranked briefing row states how much completed history its wall was measured over",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-34",
+      "first_seen_iter": "goal-desk-iter-15",
+      "spec_hash": "df33a467492f8ecf5b277b7dc3ea248da2724d43599cf0e713bfe5cd666800d1",
+      "last_evidence_path": "reports/qa/goal-desk-iter-34-evidence/QA-desk-topup-reach-section.png",
+      "evidence_note": "RE-READ THIS ITERATION by the evaluator directly off a fresh 1440x900 browser capture taken this run (reports/qa/goal-desk-iter-34-evidence/QA-desk-topup-reach-section.png - mis-named by the QA lane, it is a top-of-page /desk capture): the ranked BRIEFING table renders every disclosure column in frame - basis '2026-07-27 - 4 d before as-of' (J-08), history '502 sessions - from 2024-07-25' (J-11), band 'band 495.45-497.18 - close 497.18' (J-13), opposite 'opposite resistance A 497.20-500.67 - 0.40 bps' (J-14), levels '155 - 1d 68 - 1h 57 - 1w 11 - 4h 19' (J-15), with no horizontal scroll. This iteration's diff adds no column and touches no ranked-table code; J-16's width contract also replayed PASS."
+    },
+    "J-12": {
+      "id": "J-12",
+      "name": "Every recorded screen the ledger lists can be read back — snapshots are addressable by id",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-31",
+      "last_passing_iter": "goal-desk-iter-31",
+      "first_seen_iter": "goal-desk-iter-16",
+      "spec_hash": "a8328c17d7f39c777e6fbed78d106079403de703b68887550170f5486df2aa73",
+      "last_evidence_path": "reports/qa/goal-desk-iter-31-evidence/J-12-verify.png",
+      "evidence_note": "RE-VERIFIED THIS ITERATION by deterministic golden replay against the ambient :3301/:8301 pair (demo_runner.py --mode verify, ZERO script edits): reports/phase-goal-desk-iter-31-regression-replay-results.md row UT-J-12 PASS (10/10 replayed green, 0 skipped, 0 DEFERRED-BUDGET) and the merged reports/phase-goal-desk-iter-31-ui-test-results.md row UT-J-12 PASS, evidence reports/qa/goal-desk-iter-31-evidence/J-12-verify.png. HONEST CAPTURE NOTE (carried since iter-22b; a replay-tool defect, never a product one): the verify frames duplicate because the replay tool re-saves the first view of the page it lands on - the load-bearing proof is the replay assertions themselves, which all held. EVALUATOR'S OWN RE-RUNS THIS ITERATION (not inherited from any report): full backend suite via --junitxml = tests 1510 / failures 0 / errors 0 / skipped 8 => 1502 passed, exit 0 (>= the 1,500 baseline); Config().config_fingerprint() = 08e471b10130e1e2; len(app.mcp.TOOL_NAMES) = 17 with the tool names enumerated live; owner's apps/backend/.data provably unwritten (only bar_index.db-wal/-shm newer than the run start; counts still 759 bar series / 1 universe / 12 screens / 3 screen runs / 1 top-up run / 2 reconcile runs). scan-report CLEAN; coherence COHERENCE-PASS; no journeys-changed.md; no browser-infra token; zero FAIL and zero DEFERRED-BUDGET rows in the merged results file."
+    },
+    "J-13": {
+      "id": "J-13",
+      "name": "Every ranked briefing row states the price its wall sits at and the close it was measured from",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-34",
+      "first_seen_iter": "goal-desk-iter-17",
+      "spec_hash": "ba41be9214d73996ea500dd897680501cc9f115aae254fdd9463a3d172f51b65",
+      "last_evidence_path": "reports/qa/goal-desk-iter-34-evidence/QA-desk-topup-reach-section.png",
+      "evidence_note": "RE-READ THIS ITERATION by the evaluator directly off a fresh 1440x900 browser capture taken this run (reports/qa/goal-desk-iter-34-evidence/QA-desk-topup-reach-section.png - mis-named by the QA lane, it is a top-of-page /desk capture): the ranked BRIEFING table renders every disclosure column in frame - basis '2026-07-27 - 4 d before as-of' (J-08), history '502 sessions - from 2024-07-25' (J-11), band 'band 495.45-497.18 - close 497.18' (J-13), opposite 'opposite resistance A 497.20-500.67 - 0.40 bps' (J-14), levels '155 - 1d 68 - 1h 57 - 1w 11 - 4h 19' (J-15), with no horizontal scroll. This iteration's diff adds no column and touches no ranked-table code; J-16's width contract also replayed PASS."
+    },
+    "J-14": {
+      "id": "J-14",
+      "name": "Every ranked briefing row states where the nearest wall on the OTHER side of price sits",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-34",
+      "first_seen_iter": "goal-desk-iter-18",
+      "spec_hash": "0e6ce6bedcaa5d046e5c73a58e4ffd57c2e7a31d967fddfb8020bf05dce1c015",
+      "last_evidence_path": "reports/qa/goal-desk-iter-34-evidence/QA-desk-topup-reach-section.png",
+      "evidence_note": "RE-READ THIS ITERATION by the evaluator directly off a fresh 1440x900 browser capture taken this run (reports/qa/goal-desk-iter-34-evidence/QA-desk-topup-reach-section.png - mis-named by the QA lane, it is a top-of-page /desk capture): the ranked BRIEFING table renders every disclosure column in frame - basis '2026-07-27 - 4 d before as-of' (J-08), history '502 sessions - from 2024-07-25' (J-11), band 'band 495.45-497.18 - close 497.18' (J-13), opposite 'opposite resistance A 497.20-500.67 - 0.40 bps' (J-14), levels '155 - 1d 68 - 1h 57 - 1w 11 - 4h 19' (J-15), with no horizontal scroll. This iteration's diff adds no column and touches no ranked-table code; J-16's width contract also replayed PASS."
+    },
+    "J-15": {
+      "id": "J-15",
+      "name": "Every ranked briefing row states what its wall is actually made of",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-34",
+      "first_seen_iter": "goal-desk-iter-23",
+      "spec_hash": "05f4f149f514579f0a17b2f792e25c6568332bd36aeeb6c010bf9069c36f770d",
+      "last_evidence_path": "reports/qa/goal-desk-iter-34-evidence/QA-desk-topup-reach-section.png",
+      "evidence_note": "RE-READ THIS ITERATION by the evaluator directly off a fresh 1440x900 browser capture taken this run (reports/qa/goal-desk-iter-34-evidence/QA-desk-topup-reach-section.png - mis-named by the QA lane, it is a top-of-page /desk capture): the ranked BRIEFING table renders every disclosure column in frame - basis '2026-07-27 - 4 d before as-of' (J-08), history '502 sessions - from 2024-07-25' (J-11), band 'band 495.45-497.18 - close 497.18' (J-13), opposite 'opposite resistance A 497.20-500.67 - 0.40 bps' (J-14), levels '155 - 1d 68 - 1h 57 - 1w 11 - 4h 19' (J-15), with no horizontal scroll. This iteration's diff adds no column and touches no ranked-table code; J-16's width contract also replayed PASS."
+    },
+    "J-16": {
+      "id": "J-16",
+      "name": "The briefing fits the page it is read on — every recorded disclosure legible without a sideways scroll",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-34",
+      "first_seen_iter": "goal-desk-iter-24",
+      "spec_hash": "448b0715c37d3f449dede13d85604b511250f824c8f71322529571b72d6e2553",
+      "last_evidence_path": "reports/phase-goal-desk-iter-34-ui-test-results.md row UT-J-16 PASS + reports/qa/goal-desk-iter-34-evidence/J-16-verify.png",
+      "evidence_note": "RE-VERIFIED THIS ITERATION by deterministic golden-script replay against the ambient :3301/:8301 pair after the mandatory rm -rf .next clean rebuild (T-9): reports/phase-goal-desk-iter-34-ui-test-results.md row UT-J-16 PASS (5/5 replay lane; the developer and the hard auditor each independently re-ran the same six-journey verify set and both got 6/6 PASS). HONEST CAPTURE NOTE (a replay-tool defect logged since iter-22b, never a product one): J-04/J-09/J-16/J-17/J-19 verify frames share one md5 (a254f673...) because the replay tool re-saves the page's first view - the load-bearing proof is the replay assertion set, which held. Product diff this iteration is exactly two files (apps/frontend/app/desk/page.tsx inside topupLibraryReach/LatestTopupRunDetail only, and apps/backend/tests/test_desk_topup_library_reach_guard.py); no ranked-table, coverage-badge, screen-run or nav code was touched. Evaluator's own re-runs: full backend suite 1520 passed / 8 skipped / 0 failed (exit 0); Config().config_fingerprint() = 08e471b10130e1e2; MCP tool list read out of the running module = exactly 17 names."
+    },
+    "J-17": {
+      "id": "J-17",
+      "name": "A top-up asks the vendor only for the bars the frozen store cannot already prove",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-34",
+      "first_seen_iter": "goal-desk-iter-26",
+      "spec_hash": "4bf132f4424462a85040583c045a77733fb1116145073d8afaa441e29297f60e",
+      "last_evidence_path": "reports/phase-goal-desk-iter-34-ui-test-results.md row UT-J-17 PASS + reports/qa/goal-desk-iter-34-evidence/J-17-verify.png",
+      "evidence_note": "RE-VERIFIED THIS ITERATION by deterministic golden-script replay against the ambient :3301/:8301 pair after the mandatory rm -rf .next clean rebuild (T-9): reports/phase-goal-desk-iter-34-ui-test-results.md row UT-J-17 PASS (5/5 replay lane; the developer and the hard auditor each independently re-ran the same six-journey verify set and both got 6/6 PASS). HONEST CAPTURE NOTE (a replay-tool defect logged since iter-22b, never a product one): J-04/J-09/J-16/J-17/J-19 verify frames share one md5 (a254f673...) because the replay tool re-saves the page's first view - the load-bearing proof is the replay assertion set, which held. Product diff this iteration is exactly two files (apps/frontend/app/desk/page.tsx inside topupLibraryReach/LatestTopupRunDetail only, and apps/backend/tests/test_desk_topup_library_reach_guard.py); no ranked-table, coverage-badge, screen-run or nav code was touched. Evaluator's own re-runs: full backend suite 1520 passed / 8 skipped / 0 failed (exit 0); Config().config_fingerprint() = 08e471b10130e1e2; MCP tool list read out of the running module = exactly 17 names."
+    },
+    "J-18": {
+      "id": "J-18",
+      "name": "Every screen run leaves an append-only record of what it attempted - and a re-run under identical pins says so before it walks",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-32",
+      "last_passing_iter": "goal-desk-iter-32",
+      "first_seen_iter": "goal-desk-iter-29",
+      "last_evidence_path": "reports/phase-goal-desk-iter-32-ui-test-results.md row UT-J-18 PASS (deterministic golden-script replay, run 06:49Z) + reports/qa/goal-desk-iter-32-evidence/J-18-verify.png. Known replay-tool quirk (logged since iter-27): the verify frames are the page's first view, so 8 of the 9 share one md5 - the load-bearing proof is the replay assertion set, not the frame.",
+      "spec_hash": "b98dd520702f49c0973a13af0c357ee9069b5acd560195d8ac5c550d87851328",
+      "evidence_note": "THE TWO HONESTY FIXES ITERATION 30's DEPTH DOWNGRADE DROPPED LANDED THIS ITERATION AND THE EVALUATOR OPENED THE ARTIFACT RATHER THAN TRUSTING ANY REPORT. reports/qa/goal-desk-iter-31-evidence/UT-02-result.png (opened, read at 1440x900, nothing cut off at the right): the SCREEN RUNS table still holds all three ambient records (screenrun-2026-07-31-725c4ec2bfcd 101/101 -> screen-2026-07-31-c169546856c7; screenrun-2026-07-31-0662273df270 0/101 reused; screenrun-2026-07-31-fe0829e64a0d 0/101 reused - append-only intact, nothing removed), and the LATEST RUN detail block reads exactly 'state: done   0 of 101 members attempted   0s elapsed   reused screen-2026-07-31-c169546856c7 - no walk was performed' with NO amber 'members not reached' note and NO zeroed counts row. That absence is only possible against the NEW build (the pre-iteration code renders the amber note for this exact run: unreached = 101 - 0 > 0), so the served bundle demonstrably carries the fix. Corroborating rows in the merged reports/phase-goal-desk-iter-31-ui-test-results.md: UT-01 PASS (page loads, Screen Runs panel present), UT-02 PASS (both testids count=0 by live DOM eval), UT-03 PASS (history table retains all three runs), UT-04 PASS (TC-1 + TC-2 backend pair), UT-05 PASS (nav), UT-06 PASS (JSX diff = exactly the two added boolean guards). Golden replay of J-18.json (unchanged script, 4/4 steps) PASS - reports/qa/goal-desk-iter-31-evidence/J-18-verify.png, which the evaluator also opened: a real /desk render with live provenance (config fingerprint 08e471b10130e1e2 on screen), not an error page. EVIDENCE-MAKEUP FLAG CLEARED: the [NEW]-flagged walkthrough was re-recorded this iteration and its frames are genuinely distinct (md5 a254f673.../50419bf3.../0f19be68... - three different images) AND show the subject: the evaluator opened reports/demo/goal-desk-iter-31/step-03.png and read the SCREEN RUNS section with all three rows plus the same latest-run reused detail line in frame. One cosmetic wrinkle disclosed, not scored: step-02.png is titled for the latest screen run but its scroll landed one section short, on TOP-UP RUNS. Per the iter-30 evaluator's own written bound ('last time I ask'), no further film attempt is requested. BACKEND FIX proven by the evaluator's own run of the touched + guard files (test_desk_screen_compute.py, test_desk_screen.py, test_desk_screen_log.py, test_copy_discipline.py, test_desk_ui_guards.py, test_desk_hover_tooltip_guard.py = 179 tests, 0 failures) and by the full suite (1502 passed / 8 skipped / 0 failed, exit 0). DISCLOSED LIMITATION (auditor B1, spec-ordered, not a defect): failed_member = None now also covers a crash ON the first member, because compute_screen counts a member as attempted only after it completes - information loss, never fabrication; the verbatim exception string still records what happened."
+    },
+    "J-19": {
+      "id": "J-19",
+      "name": "Every top-up run records the date each pair's frozen history actually reaches",
+      "status": "passing",
+      "last_verified_iter": "goal-desk-iter-34",
+      "last_passing_iter": "goal-desk-iter-34",
+      "first_seen_iter": "goal-desk-iter-32",
+      "last_evidence_path": "reports/qa/goal-desk-iter-34-evidence/AUDIT-J-19-reach-block-verified.png (= reports/demo/goal-desk-iter-34/step-04.png, byte-identical) + reports/qa/goal-desk-iter-34-evidence/UT-J-19-topup-reach-crop.png + reports/phase-goal-desk-iter-34-ui-test-results.md rows UT-01..UT-07 PASS",
+      "spec_hash": "b74f81db9f9fb92ffb943bcfc7f3b20c13371f176f5227a98da65d9985fe432e",
+      "evidence_note": "PASSING - the iter-32/33 contradiction is gone, proven at three levels the evaluator checked personally. (1) SCREENSHOT: opened AUDIT-J-19-reach-block-verified.png (1280x800 raw viewport frame, byte-identical to the demo lane's step-04.png) and read in ONE frame with nothing cut off at the right: 'newest recorded reach 2026-07-30 - 303 pairs reach it', then 'Pairs recorded earlier (101)', then 'showing 20 of 101', then exactly 20 rows AAPL 1w .. C 1w each dated 2026-07-27 - no earlier row prints the day the reach line names as newest. The developer's crop UT-J-19-topup-reach-crop.png (1425px wide, cropped from a full-page capture taken at the acceptance's 1440x900 CSS viewport) shows the identical block. (2) INDEPENDENT RE-DERIVATION: the evaluator re-implemented topupLibraryReach's grouping in Python over the 404 stored outcomes of apps/backend/.data/topup_runs/topup-2026-07-31-8fb5c9a1f737.json (0 outcomes missing store_frozen_through_after) and reproduced the post-fix split exactly - newest day 2026-07-30 with 303 pairs, earlierTotal 101 all on 2026-07-27, and the SAME first-20 symbols in the SAME order the page renders - and also reproduced the pre-fix inversion from the same file (raw max 2026-07-30T19:30:00.000000Z, 101 newest / 303 earlier, of which 202 printed 2026-07-30). The newest day carries 3 distinct timestamps, which is exactly why the raw-precision compare inverted the split. (3) GUARDS + REPLAY: test_desk_topup_library_reach_guard.py grew 5 -> 11 tests (day-truncation + cap + render-wiring, each with a seeded-violation counterpart); the repointed runs/goal-session-desk/journey-scripts/J-19.json asserts only stable substrings ('reach it', 'Pairs recorded earlier') and testid existence - the bug-enshrining 'AAPL 4h - 2026-07-30' row assertion is gone - and replayed PASS. Zero backend production diff; the stored field, its owner (desk_topup_log) and its single serving endpoint are byte-unchanged. DISCLOSED, none blocking: (a) the 20 shown rows are the payload's first 20 in symbol order, not the 20 furthest behind (auditor F1) - invisible today because all 101 share one date; (b) the day-truncation guard is a source-substring check, so a differently-named reintroduction would slip past it (auditor T1; no JS test runner exists in this repo and the spec sanctioned source-introspection); (c) one seeded-violation counterpart is a tautology (auditor T2, test hygiene); (d) J-19.json step 5 asserts the cap element, which renders only while a run's true earlier-total exceeds 20 - a future real top-up can fail that step for a data reason, not a regression (auditor T3, disclosed in the script's own notes); (e) the LLM browser-QA lane's five per-test PNGs (UT-01/02/03/06/07-result.png) are byte-identical blank frames - the evaluator opened one and confirmed it is empty, so those citations do not support their rows; the same acceptance state is captured correctly in the two artifacts cited above, which the evaluator opened; (f) the demo walkthrough was recorded ([NEW] on steps 02-05) but frames 02-06 are the same image and step 06's narration names the briefing-table width while showing the reach block - presentation only, on a non-gating lane, and the frame that matters is genuine; (g) TC-5 (<=20 branch) and TC-6 (legacy run with no recorded reach) have no live artifact because no run on disk exercises them - both are unchanged, structurally guarded code paths and the dev handoff says so rather than claiming a screenshot. Nothing under apps/backend/.data was created, changed or removed this iteration: no file there is newer than the iteration start, and the counts still read 1163 bar series, 1 universe snapshot, 12 screens, 3 screen-run records and 2 top-up records."
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-desk-iter-3",
+      "anti_goal": "Snapshots are append-only and pinned. Universe and screen snapshots are dated, checksummed, append-only; every screen pins (universe snapshot id, screen date, as_of, fingerprint, bar-store signature); nothing is silently refetched, backfilled, recomputed in place, or rewritten — a new run is a new snapshot.",
+      "severity": "minor",
+      "evidence": "INTERCEPTED IN-ITERATION, NEVER LANDED. Pre-fix ScreenStore.record silently overwrote a snapshot file whose checksum had failed (iter-3 audit B1); fixed at desk_screen.py plus two regression tests, sibling gap in UniverseStore.record closed in iter-4. ITER-24 RE-CONFIRMED by the evaluator directly: this iteration wrote NOTHING at all - find apps/backend/.data -newermt '2026-07-30 12:20' returns only the two rebuildable bar_index.db sidecars; the 11 stored screen snapshots, the 1 universe snapshot, the 1 top-up record and the 2 reconciliation records all keep their pre-iteration mtimes. The product diff is 2 frontend/test files; no store code was touched.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-desk-iter-4",
+      "anti_goal": "Frozen foundations — the v1 strategy, the default profile, the tape engine's five states and thresholds, the frozen structure computations, the JSON BarStore, and every KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside them, never a mutation of them.",
+      "severity": "minor",
+      "evidence": "RESOLVED at iter-8 by the owner's own written ratification in docs/goal.md ('OWNER RATIFICATION — 2026-07-27 — R-1'). ITER-24 RE-CONFIRMED by the evaluator's own git diff against this iteration's snapshot 51a7495: the entire product diff is 2 files (apps/frontend/app/desk/page.tsx, apps/backend/tests/test_desk_ui_guards.py) with zero untracked files under apps/, so the whole backend, StructureChart.tsx, PriceChart.tsx and every guard test take a zero change; Config().config_fingerprint() printed 08e471b10130e1e2 on the evaluator's own run; the evaluator's own FULL backend suite run is 1460 passed / 8 skipped / exit 0 (engine + profile equivalence pins included).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-desk-iter-4",
+      "anti_goal": "Immutable data — registered datasets and bar series are append-only, checksummed, never re-tagged, never deleted, never content-perturbed. Splits are frozen at registration.",
+      "severity": "minor",
+      "evidence": "RESOLVED. The iter-4 price-less-bar write was repaired at three layers and the 60 affected series stay on disk untouched, excluded row-by-row on read — the behaviour R-1 ratified. ITER-24 RE-CONFIRMED by the evaluator directly: under apps/backend/.data the ONLY files created or modified during this iteration's window (find -newermt '2026-07-30 12:20') are the two rebuildable bar_index.db sidecars (-wal, -shm). Not a single bar series, dataset, universe snapshot, screen snapshot, top-up record or reconciliation record was created, modified or removed, and nothing was deleted anywhere. This also closes the 8-run ambient-write deviation streak: the iteration spec explicitly told every lane to read the already-recorded latest screen and trigger no Run Screen / top-up / reconcile, and both lanes obeyed.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-desk-iter-30",
+      "anti_goal": "Frozen foundations - the v1 strategy, the default profile, the tape engine's five states and thresholds, the frozen structure computations, the JSON BarStore, and every KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside them, never a mutation of them.",
+      "severity": "minor",
+      "evidence": "MINOR, mechanical, introduced by test infrastructure - no product behaviour changed, but two TRACKED files of the kept frontend app were MUTATED rather than left byte-identical, and they now carry a machine-local absolute path into a directory that no longer exists. apps/frontend/next-env.d.ts line 3 reads '/// <reference path=\".//home/dennis-chan/.cache/iad/shared/claude-1000/-home-dennis-chan-Gi || RESOLVED at goal-desk-iter-31, verified first-hand by the evaluator: `git show 48c5fc2^:apps/frontend/next-env.d.ts | diff - apps/frontend/next-env.d.ts` and the same for tsconfig.json both return ZERO diff (both files byte-identical to their pre-iteration-30 content); apps/frontend/next-env.d.ts:3 reads `/// <reference path=\"./.next/types/routes.d.ts\" />` again and `grep scratchpad` over both files returns 0 hits. `git status --porcelain` still shows ` M` for both ONLY because HEAD (48c5fc2) is the commit that carries the polluted content - the revert is in the working tree this iteration commits (auditor D1). No scoped rig existed this iteration to re-pollute them (browser-QA and the demo ran against the ambient :3301/:8301 pair).",
+      "resolved": true
+    }
+  ],
+  "updated_at": "2026-07-31T11:03:58+01:00",
+  "notes_iter_33": "iter-33 dispatched at depth `evidence` although its own spec asked for `full` (telemetry depth_demoted 'budget-breach' then depth_evidence_override, the latter fired only because J-19 was recorded `passing` with evidence_makeup - the SPEED-9 evidence backstop does not read that flag). No developer ran; product diff EMPTY. J-19 corrected passing -> partial so the backstop cannot fire again; verdict ESCALATE so the arbiter's first rung (prior-verdict-ESCALATE) grants a full pass with a developer and the demo lane. Anti-goal violations: none new; the four historical entries stay resolved and were re-checked. Prior per-iteration notes live in state/evaluator-log.md."
+}

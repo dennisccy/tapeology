@@ -61,6 +61,15 @@ itself is a pure read, mirroring ``GET /research/desk/topup/runs``'s single-sync
 exactly. No new MCP tool (``get_endpoint``'s existing ``/research/`` allowlist already reaches the
 new GET path); no new router, no ``main.py`` change.
 
+J-20 (this iteration, goal-desk-iter-35) adds ONE new read: ``GET /research/desk/screen/compare``
+(``?id=<compare id>&base=<base id>``) — how the named snapshot differs from the one recorded
+immediately before it, computed entirely by the new ``desk_screen_diff.py`` over two records already
+returned by ``get_screen_store``'s own ``ScreenStore.list()``. This route takes NO
+``BarStore``/``bar_index``/``DatasetStore`` dependency at all — it is structurally incapable of
+triggering ``compute_tradability`` or any other recompute. No new store, no new compute manager, no
+new MCP tool (the existing ``/research/`` allowlist already reaches the new path); no new router, no
+``main.py`` change.
+
 **Compute managers are module-level singletons here, NOT ``ResearchRegistry`` properties.**
 ``DeskTopupComputeManager`` (``desk_topup_compute.py``) reuses ``routes.record_bar_series``
 in-process, so it must import FROM ``routes.py`` — if ``ResearchRegistry`` held the manager (the
@@ -91,6 +100,7 @@ from .desk_index_reconcile import (
 )
 from .desk_screen import ScreenStore, resolve_desk_screen_dir
 from .desk_screen_compute import DeskScreenComputeManager
+from .desk_screen_diff import ScreenDiffSelfCompareError, compute_screen_diff
 from .desk_screen_log import ScreenRunStore, resolve_desk_screen_log_dir
 from .desk_topup_compute import DeskTopupComputeManager
 from .desk_topup_log import TopupRunStore, resolve_desk_topup_log_dir
@@ -385,6 +395,25 @@ def get_screen(
         "latest": records[-1] if records else None,
         "integrity_errors": errors,
     }
+
+
+@router.get("/screen/compare")
+def get_screen_compare(
+    id: str, base: str | None = None, store: ScreenStore = Depends(get_screen_store)
+) -> dict:
+    """goal-desk-iter-35 (J-20): how the snapshot named by ``id`` differs from the snapshot recorded
+    immediately before it (or from ``base``, when given) — Data Contract addition, see
+    ``desk_screen_diff.py``'s module docstring for the full computation. A plain read over
+    ``store.list()`` only: this route takes NO ``BarStore``/``bar_index``/``DatasetStore``
+    dependency, so it is structurally incapable of triggering a ``compute_tradability`` call or any
+    other recompute (TC-9). ``id == base`` is refused as an honest 422 (``ScreenDiffSelfCompareError``
+    — "a snapshot compared with itself", never a silent zero-diff no-op); an unresolved ``id`` is an
+    honest ``{"compare": null, ...}`` at HTTP 200, mirroring ``GET /research/desk/screen?id=``'s own
+    unknown-id convention (never a 404)."""
+    try:
+        return compute_screen_diff(store, id, base)
+    except ScreenDiffSelfCompareError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 class ScreenComputeRequest(BaseModel):

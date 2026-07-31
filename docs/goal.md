@@ -1671,6 +1671,149 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     window ends at wall-clock today for every pair it applies to, so after the next daily top-up even
     that faint request-bound difference collapses to one identical date for every successful pair.)*
 
+- **J-20: Every recorded screen states how it differs from the screen recorded before it**
+  - Steps:
+    1. Compare exactly TWO already-recorded snapshots, read verbatim through the accessor that already
+       owns them — `ScreenStore.list()` (`desk_screen.py:581`, the SAME `(records, errors)` read all
+       three branches of `GET /research/desk/screen` already make, `desk_routes.py:353`/`:377`/`:381`).
+       For every symbol ranked in the COMPARE snapshot, in that snapshot's OWN served rank order (the
+       order J-03 step 2 already records as data — never re-sorted, never re-ranked, never re-scored),
+       copy VERBATIM its own 1-based position plus its recorded `side`, `band_class`, `distance_bps`
+       and `basis_as_of`, and the same values from the BASE snapshot's own recorded row for that
+       symbol, plus `rank_change` — a plain integer subtraction of two ALREADY-RECORDED positions (the
+       `basis_age_days` precedent, `desk_screen.py:388`: arithmetic over recorded values, never a new
+       measurement). A symbol ranked in the compare snapshot but not in the base is reported as
+       `entered` carrying the base snapshot's own recorded skip `reason` (`no_bars`/`no_basis`) when it
+       has one and an honest `null` when that snapshot does not mention the symbol at all; a symbol
+       ranked in the base but not in the compare is `left`, the same way. **Zero diff** to
+       `desk_screen.py`'s recorded row/snapshot shapes and to
+       `tradability.py`/`levels.py`/`bars.py`/`bar_index.py`/`desk_coverage.py`; zero new `Config`
+       field; no `BarStore`, `bar_index` or dataset read of ANY kind; and nothing is recomputed — no
+       `compute_tradability` call, no band selection, no rank-key evaluation (assert the call counts,
+       the J-11/J-13/J-14/J-15 precedent).
+    2. Resolve the base in the OWNER, never on the page: the default base for a compare snapshot is the
+       recorded snapshot with the greatest `screen_date` STRICTLY earlier than the compare snapshot's
+       own `screen_date`, ties (two recordings of one earlier date) broken by the later `created_utc` —
+       i.e. exactly the record `GET /research/desk/screen?date=<that earlier date>` already serves
+       (`matching[-1]`, `desk_routes.py:381`), so the two reads can never disagree. An explicit
+       `base=<id>` overrides it. The payload ALWAYS names both snapshots it compared — `id`,
+       `screen_date`, `as_of`, `created_utc`, `bar_store_signature`, `universe_snapshot_id` and
+       ranked/skipped counts, each copied verbatim from that record's own meta — and states how the
+       base was chosen. When no earlier `screen_date` exists the payload is an honest "no earlier
+       recorded screen" state with `base: null`, never a fabricated comparison; an unknown id is an
+       honest `null` at HTTP 200 (the `?id=` convention, `desk_routes.py:377`); a snapshot compared
+       with itself is an honest refusal, never a silent no-op.
+    3. Own it exactly once: a new desk module (name at build discretion, e.g.
+       `app/research/desk_screen_diff.py`) as the ONLY owner and ONE serving endpoint (exact path at
+       build discretion, e.g. `GET /research/desk/screen/compare`) — registered as a NEW row in the
+       blueprint's Data Contract BEFORE the code lands. It PERSISTS NOTHING: no store, no file, no
+       cache, no index, no new `Config` field, no new MCP tool (J-06's exactly-17-tool contract stays
+       green and `get_endpoint`'s `/research/` allowlist already reaches the new path). The GET
+       recomputes nothing, writes nothing and triggers nothing (the 5C lesson); screen rows, skip rows,
+       the five-pin snapshot key and the rank key keep `desk_screen.ScreenStore` as their sole owner
+       and `GET /research/desk/screen` as their sole serving endpoint, and nothing about what a
+       snapshot records, how it is keyed, or how rows are ranked changes. Determinism is structural:
+       the body is a pure function of two IMMUTABLE recorded files, so the same two ids reproduce a
+       byte-identical body, and the payload carries no wall-clock field of its own (T-6).
+    4. Disclose, never judge. This journey states what two recordings say and stops there: it never
+       ranks, filters, gates, weights, scores, or orders by size of change, and it never measures
+       whether a wall held, broke, was reached, or produced any reaction — outcome measurement is
+       era-6 "The Referee" and stays entirely out (this era's Non-Goals). Concretely: no threshold, no
+       significance/confidence number, no churn/stability/volatility metric, no "notable"/"biggest
+       mover"/"top movers" framing, no ordering by `|rank_change|` anywhere (the compare snapshot's own
+       served order is the only order), no arrow or colour that gives a direction a valence, and no
+       advice, imperative, urgency or prediction language; `tests/test_copy_discipline.py` stays green
+       unmodified.
+    5. Surface it on `/desk` as ONE new read-only "Screen Comparison" section rendered AFTER the ranked
+       briefing table, beside the shipped Screen History / Top-up Runs / Index Reconciliation / Screen
+       Runs sections (the same table-plus-detail pattern, no new control, no recompute, page-load GETs
+       trigger nothing): both snapshots' own ids, screen dates, recorded-at and `bar_store_signature`s;
+       one descriptive counts line (rows compared, rank changed, side changed, entered, left); an
+       honest "the compared snapshots' ranked rows are identical" line when every compared field
+       matches; the honest no-earlier-screen state; and a capped table of the compare snapshot's own
+       first N rows (the shipped `EARLIER_PAIRS_DISPLAY_CAP` precedent,
+       `apps/frontend/app/desk/page.tsx:882`/`:1032`, with its honest "showing N of M" line) each
+       showing the symbol, this snapshot's recorded rank/side/distance and the base's own recorded
+       rank/side/distance, with an honest "not recorded in the compared snapshot" for a field the
+       base's row does not carry (the J-08/J-13/J-14 legacy-absence pattern) — never a value derived on
+       the page. The section describes whichever snapshot the page is DISPLAYING (the shipped `?id=`
+       history selection), so opening a past screen compares THAT screen. **No new ranked-table column
+       and no change to the ranked table**, so J-16's measured width contract stands untouched.
+    6. Keep every browser and test contract the shipped journeys rest on, and test fixture-scoped:
+       every existing `data-testid` keeps its element and its exact text; the new section introduces no
+       attribute or selector an existing golden's click target can match (it never reuses
+       `data-screen-id`, `desk-history-row`, `desk-screen-row` or any `desk-row-*` testid) and —
+       because the replay tool's text matcher takes the FIRST visible match
+       (`incredible_auto_dev/scripts/automation/lib/demo_runner.py:641`) — it renders after the ranked
+       table so no stored expect (J-16.json's `BRK-B`, J-13/J-14's literal band strings,
+       J-12/J-13/J-14's snapshot ids) can resolve into it; all 19 stored golden replay scripts replay
+       green with ZERO script edits and `tests/test_desk_ui_guards.py` +
+       `tests/test_desk_hover_tooltip_guard.py` pass unmodified. Backend tests over planted scoped
+       snapshots: two snapshots whose ranked rows are identical report zero changes; a pair with moved
+       ranks, a flipped side, an entered symbol and a left symbol reports each exactly once with both
+       recorded values verbatim; the oldest recorded snapshot reports the honest no-earlier-screen
+       state; an unknown id is an honest null; the same two ids twice produce a byte-identical body;
+       the GET writes nothing and issues no `compute_tradability` call (assert the call count); and a
+       legacy base row missing `basis_as_of` is reported absent, never derived.
+  - Acceptance: `GET` the new comparison endpoint for a recorded snapshot and it names both snapshots it
+    compared and reports, for every symbol ranked in the compare snapshot in that snapshot's OWN served
+    order, its recorded rank/side/`band_class`/`distance_bps`/`basis_as_of` beside the base snapshot's
+    own recorded values for the same symbol — each byte-identical to what
+    `GET /research/desk/screen?id=<that snapshot's id>` serves for that row — plus the entered/left sets
+    with the other snapshot's own recorded skip reason where it has one (**single source of truth**: the
+    comparison is a NEW value with exactly one owner, the new desk module, and exactly one serving
+    endpoint, registered in the Data Contract BEFORE the code lands; it reads two immutable recorded
+    snapshots through `ScreenStore.list` and copies their values verbatim — zero recompute, zero second
+    read of any store, zero change to what a snapshot records, to its five-pin key, or to the rank key,
+    which keep `desk_screen.ScreenStore` and `GET /research/desk/screen` as their sole owner and sole
+    serving endpoint, and the page derives no rank, distance or difference of its own — this SSOT
+    criterion stands in place of a PnL-ledger append, which this era's Non-Goals forbid); the default
+    base is the record `?date=` already serves for the greatest strictly-earlier screen date, the same
+    two ids reproduce a byte-identical body, the endpoint writes nothing, and every recorded universe,
+    screen, top-up, reconciliation and screen-run file is proven byte-identical on disk before and after
+    the iteration (SHA-256 listing — a read-only iteration records nothing); in a real browser after the
+    T-9 clean rebuild, at a 1440×900 viewport with no horizontal scroll and the ranked briefing table
+    rendering exactly as J-16 shipped it, `/desk` shows the Screen Comparison section in three states
+    across screenshots — the identical state (zero rank changes, zero side changes, zero entered, zero
+    left, both `bar_store_signature`s equal), a churned state with at least one row whose recorded rank
+    moved by ≥ 20 places and one whose side differs between the two recordings, and the honest
+    no-earlier-recorded-screen state on the ledger's oldest snapshot (on the ambient ledger as it stands
+    these are, respectively, `screen-2026-07-31-c169546856c7` vs `screen-2026-07-30-bad6387963ef`,
+    `screen-2026-07-25-bd0b37ebc426` vs `screen-2026-07-20-ca185294a384` — 95 of 100 rows changed rank,
+    12 changed side, PLTR recorded 7 then 84 — and `screen-2026-06-22-3ecd45c062c7`; if the ledger has
+    moved by build time, the same three states over whatever snapshots it then holds, reported honestly)
+    (T-10: no screenshot ⇒ `unknown`, never `passing`; no native `title` tooltip is required by this
+    journey, so the T-10a headed rig is not needed and no capture may depend on one); a
+    **`[NEW]`-flagged demo-narrator walkthrough** covers the screen-comparison disclosure end to end,
+    narrated over a populated ledger and over both the identical and the churned pair; and the full
+    backend suite is green with `Config().config_fingerprint()` still `08e471b10130e1e2`, zero new
+    `Config` fields, the `default` profile and `v1` byte-identical (engine equivalence green), the MCP
+    surface still exactly 17 tools, zero diff to
+    `desk_screen.py`/`desk_coverage.py`/`tradability.py`/`levels.py`/`bars.py`/`bar_index.py`/`StructureChart.tsx`,
+    and `tests/test_copy_discipline.py` + `tests/test_desk_ui_guards.py` +
+    `tests/test_desk_hover_tooltip_guard.py` green unmodified. *(Keyless core; browser-verifiable. Why:
+    measured 2026-07-31 read-only over the frozen artifacts (no service started, no product code run).
+    **The desk records 12 screens and relates none of them to any other.** No desk module and no line of
+    `apps/frontend/app/desk/page.tsx` compares two snapshots: `GET /research/desk/screen` serves a
+    meta-only `screens` list, a `latest`, and single snapshots by `?date=`/`?id=`, and every rendered
+    view is standalone. Yet the ledger's own pairs sit at both extremes and print identically. Pairing
+    each of the 12 with the record for its greatest strictly-earlier screen date: FOUR pairs changed
+    nothing at all — `screen-2026-07-31-c169546856c7` vs `screen-2026-07-30-bad6387963ef`, that one vs
+    `screen-2026-07-29-2a57de4e7415`, that one vs `screen-2026-07-28-817d92d9c924`, and
+    `screen-2026-07-28-ac07c9581a4f` vs `screen-2026-07-27-3ad3c57aa6ba` — 0 of 100 (0 of 63) rows
+    changed rank, side or `distance_bps`. A field-by-field diff of the four consecutive 100-row screens
+    07-28 → 07-29 → 07-30 → 07-31 shows the ONLY field that differs across all 100 ranked rows is
+    `basis_age_days` (3 → 4 for every row on the last step): all four share basis
+    `2026-07-27T04:00:00.000000Z` and bar-store signature `ae2c740d1a70c9c7`, and each cost a full walk —
+    `screenrun-2026-07-31-725c4ec2bfcd` records 101 members attempted, 01:58:48.238Z → 02:00:29.056Z.
+    SEVEN pairs churned instead: `screen-2026-07-25-bd0b37ebc426` vs `screen-2026-07-20-ca185294a384` —
+    95 of 100 common rows changed rank, 89 changed `distance_bps`, 12 changed side, PLTR 7 → 84, JPM
+    19 → 96, UBER 2 → 77, and only 5 of the top ten symbols stayed in it — and
+    `screen-2026-07-28-817d92d9c924` vs `screen-2026-07-27-3ad3c57aa6ba` — 61 of 63 common rows changed
+    rank, 8 changed side, 37 symbols entered the ranked set (AAPL 19 → 100). On `/desk` today, "the same
+    100 rows for the fourth day running" and "95 of 100 rows moved and 12 flipped side" render as the
+    same screen: one ranked table, with no relation to anything recorded before it.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

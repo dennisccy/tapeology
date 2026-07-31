@@ -2130,3 +2130,83 @@ than in a browser because no run on disk shows them. I recommend explicitly that
 becomes a new run. One sentence for you: the Desk's top-up panel now names one day as newest and
 never contradicts itself in the list beneath, and says honestly when that list is shortened —
 please confirm the finish and treat all seven notes as optional tidying.
+
+## Iteration 35 — goal-desk-iter-35
+
+**Date:** 2026-07-31T12:55:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean  (the plan asked for the full pipeline; the machine gave it the shorter
+setting for the third time this session, so no film crew and no hard auditor were sent — but this
+time a programmer WAS sent, and the product half really landed)
+**Journey deltas:**
+- Newly passing: J-20 "Every recorded screen states how it differs from the screen recorded
+  before it" — a brand new item, built for the first time this run. The count of items goes
+  19 to 20
+- Newly failing: none
+- Regressed: none
+- Re-checked this run: J-03, J-04, J-05, J-06, J-07, J-12, J-13, J-14, J-16 and J-18 by
+  saved-script replay (10 of 10 green, ZERO script edits). I also read J-08, J-11 and J-15
+  straight off this run's own fresh picture of the briefing table, and re-counted J-06's tool
+  names in the code myself (exactly 17). Six items (J-01, J-02, J-09, J-10, J-17, J-19) carry
+  forward without being re-tested, because this run's whole change adds lines and removes none —
+  357 added, 0 removed across four tracked files. Nothing was dropped for time and nothing was
+  blocked by broken equipment
+- Picture debt OPENED (small, and not a product fault): the short guided film for the new item
+  was never recorded, because the shorter run setting sends no film crew. J-20 carries a make-up
+  flag for the film only. No other item carries a make-up or equipment flag
+- Anti-goal violations: none new, none open. The four older items stay resolved and I re-checked
+  each against this run's own evidence. Nothing of your data was created, changed or removed —
+  not one file under the data folder is newer than this run's start
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to build. First
+I opened all three pictures myself and read each state in one frame with nothing cut off at the
+right: the same-screen state naming both records and printing "rows compared 100 · rank changed 0 ·
+side changed 0 · entered 0 · left 0"; the churned state naming the 07-25 and 07-20 records,
+printing "rows compared 100 · rank changed 95 · side changed 12", "showing 20 of 100 rows", and
+twenty rows carrying real movement (PEP 2 against 64, DHR 6 against 72, TMUS 10 against 71) and
+real side flips (UPS, DHR, HONA); and the oldest record printing "No earlier recorded screen exists
+to compare against." Then I went past the pictures and re-did the whole comparison by hand in plain
+Python over the twelve frozen record files, and got every rendered number back exactly — the same
+counts, the same twenty symbols in the same order, the same values, and the same oldest record.
+Then I closed the one gap the reviewer himself flagged as untested: I checked every field the
+comparison serves against the rows the screen record itself serves, both sides, both pairs — zero
+disagreements, the order untouched, and the rank change a plain subtraction of two already-recorded
+positions. I also proved the new reader cannot secretly recompute anything: the module binds only
+the screen store and its own error type, so the names it would need to do work are not there at
+all. Asking twice gives a byte-identical answer; there is no clock value in it; an unknown record
+answers honestly with nothing; comparing a record with itself is refused. I re-ran the work rather
+than trusting the reports: the whole back-end suite (1,551 passed, 8 skipped, 0 failed, exit 0 — up
+from iteration 34's 1,520 by exactly the 31 new tests), the settings fingerprint
+(`08e471b10130e1e2`), and the tool list read out of the code (exactly 17 names). Every one of the
+twenty items' own text signatures matches the goal file, so no earlier pass has gone stale. The
+structure check is COHERENCE-PASS and the machine scan is CLEAN. I proved nothing of yours was
+written: no file under the data folder is newer than this run's start, the counts still read 1,163
+price files, 1 universe record, 12 screens, 3 screen records, 2 top-up records and 2 index records,
+and all twelve screen files still prove their own checksums. Five things I found and did not hide.
+The most useful one first: the page prints "The compared snapshots' ranked rows are identical" for
+a pair whose 100 rows all differ in one field the briefing table above it shows — the age of the
+basis, 4 days against 3. The five things the comparison actually names are identical, and the goal
+file dictates that sentence word for word, so the build obeyed its instruction; the sentence is
+just wider than what it checks. Second, the film was never recorded, because the machine shortened
+this run. Third, asking for a record that does not exist returns a blank "how the base was chosen"
+field, a fourth value the written contract does not list. Fourth, ten of the nineteen saved
+re-check scripts were replayed rather than all nineteen, though not one was edited, and I proved on
+paper that the other nine cannot match the new section's wording or element names. Fifth, the three
+pictures are crops from full-page captures, because a direct capture at that depth comes back solid
+black here — the same quirk your second key already accepted last run.
+
+**Next-step recommendation:** Halt — the goal is reached. Please confirm the finish. Five
+follow-ups, none a fault in what the product computes and none blocking, and I recommend
+explicitly that none of them becomes a new build run. (1) The one worth your eye: change the
+"ranked rows are identical" sentence so it says what it actually compared, because for that pair
+every row's basis age really did move from 3 days to 4. (2) The short guided film for the new
+section was never recorded; everything it would have shown is already proven in three pictures I
+opened and in numbers I re-derived myself, so it rides along with any future run as a passenger,
+never as the reason for one. (3) Asking for a screen that does not exist returns a blank
+"how the base was chosen" field, one line short of the written contract. (4) Ten of nineteen saved
+re-check scripts were replayed, not all nineteen. (5) The three pictures are crops from full-page
+captures because a direct capture at that scroll depth comes back black here. One sentence for
+you: the Desk now says plainly how today's screen differs from the one before it, I checked every
+number against the frozen records myself and found no disagreement, and nothing of yours was
+written — so please confirm the finish and treat the five notes as optional tidying, starting with
+the "identical" wording.

@@ -8,6 +8,7 @@ import type {
   DatasetsListResult,
   DeskReconcileComputeSnapshot,
   DeskReconcileRunsListResult,
+  DeskScreenCompareResult,
   DeskScreenComputeSnapshot,
   DeskScreenListResult,
   DeskScreenRunsListResult,
@@ -1285,6 +1286,38 @@ export async function fetchDeskScreenRuns(): Promise<{
       return { ok: true, data: (await res.json()) as DeskScreenRunsListResult };
     }
     let error = "The screen run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// goal-desk-iter-35 (J-20): GET /research/desk/screen/compare?id= — how the named snapshot differs
+// from the screen recorded immediately before it, served VERBATIM (the default base; no `base=`
+// override ships a control this iteration — the section always describes whichever screen `/desk`
+// is currently DISPLAYING against ITS OWN default prior recording). Mirrors `fetchDeskScreenById`'s
+// exact `{ok, data, error}` shape; a 200 body is always returned (an unresolved `id` still comes
+// back `ok: true` with `data.compare === null` — the backend's own honest-null convention, never
+// surfaced here as an `ok: false` failure).
+export async function fetchDeskScreenCompare(id: string): Promise<{
+  ok: boolean;
+  data: DeskScreenCompareResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/desk/screen/compare?id=${encodeURIComponent(id)}`,
+    );
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskScreenCompareResult };
+    }
+    let error = "The screen comparison could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;
