@@ -1993,3 +1993,67 @@ rows print the same day as the "newest" line. One sentence for the owner: the De
 shows, for every top-up, how far each pair's price history actually reaches — I checked all 404 of
 them against the library itself and found no disagreement, and nothing of yours was changed — so
 please confirm the finish and treat the four notes as optional tidying.
+
+## Iteration 33 — goal-desk-iter-33
+
+**Date:** 2026-07-31T09:20:00+01:00
+**Verdict:** ESCALATE  (loop continues; the next run MUST use the full pipeline)
+**Depth dispatched:** evidence  (the plan asked for the full pipeline; the machine shortened it twice
+— first for a time-budget breach, then again because I had recorded the target item as "passing", so
+no programmer was sent)
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none — and I say that deliberately. Not one line of the product changed this run
+- CORRECTED (my own earlier mistake, not a break): J-19 "Every top-up run records the date each
+  pair's frozen history actually reaches" goes from "passing" to "partly done". Its record half is
+  proven and untouched; its page half still contradicts itself. Its "picture owed" flag is cleared,
+  because a film was recorded this run
+- Re-checked this run: J-04, J-07, J-09 and J-16 by saved-script replay (4 of 4 green), and J-17 by a
+  fresh real-browser pass after the saved script reported a break that was not one — the tool was
+  still looking for an older run's numbers, and the newer lane overturned it. I also opened J-07's and
+  J-17's own pictures myself. Thirteen further items carry forward on still-valid evidence, because
+  the product diff this run is empty
+- Anti-goal violations: none new, none open. The four older ones stay resolved and I re-checked them.
+  Nothing of your data was created, changed or removed — only two rebuildable database sidecars are
+  newer than this run's start
+- Disclosed, and not a product fault: this run's own short film NARRATES the fix as if it had shipped
+  ("now agree with each other", "now capped"), while its own frames show the opposite; two of its five
+  frames are also the same picture
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to fix. I opened
+the picture myself and read, in one frame at a normal window size, the sentence "newest recorded reach
+2026-07-30 · 101 pairs reach it" sitting directly above a list headed "Pairs recorded earlier (303)"
+whose first three rows read "AAPL 4h — 2026-07-30", "AAPL 1d — 2026-07-30" and "ABBV 4h — 2026-07-30"
+— the same day the sentence had just called the newest. Then I went past the picture and read the
+page's own code: it still compares those dates down to the millionth of a second while printing only
+the day, and nothing limits the list's length. I proved no fix could have landed: the project's own
+change list for this run is empty, the working folder is clean, and the last recorded change is still
+iteration 32's. The reason is on the record too — the machine shortened this run twice, and the second
+shortening happened precisely because I had marked this item "passing" at iteration 32, which told the
+machine only a picture was owed. That is my own error, and correcting the mark is the first thing this
+evaluation does. I did NOT call this a break. A break means something that worked stopped working;
+here the product is byte-for-byte the build your own second key already read and rejected, so there is
+nothing new for you to review and nothing for you to repair by hand. I re-ran what I could rather than
+trusting reports: the settings fingerprint still prints 08e471b10130e1e2; every one of the nineteen
+items' own text signatures still matches the goal file, so no earlier pass has gone stale; the machine
+scan is clean and the structure check reports no problem. I also proved nothing of yours was written:
+the counts still read 1,163 price files, 1 universe record, 3 screen records and 2 top-up records, and
+only two rebuildable database sidecars are newer than this run's start. Two further things I found and
+did not hide. This run's film claims the fix is in when it is not — written from the plan instead of
+from the page — so it must be recorded again after the fix. And the saved re-check script for this
+item currently asserts the mistake itself as if it were correct, so it has to be repointed in the same
+run as the fix; its sister script for J-17 was already repaired this run and is sitting uncommitted.
+
+**Next-step recommendation:** One ordinary FULL run with a programmer, four small jobs, nothing new.
+(1) Make the Desk page compare dates the same way it prints them — by calendar day — so the "newest
+recorded reach" sentence and the "Pairs recorded earlier" list can never name the same day. (2) Shorten
+that list: show at most 20 of the 303 pairs, keep the true total in the heading, and add one plain
+sentence like "showing 20 of 303" only when there are more than 20. (3) Repoint J-19's saved re-check
+script at wording that does not change — today it pins today's exact figures and even asserts the
+contradictory row as correct. (4) Re-record the short film once the page is fixed, with words taken
+from what the page actually shows. It must be the full run, not a short one: the last two runs were
+both shortened by the machine and both dropped the programmer, which is why this small fix has now
+waited two runs. One sentence for you: nothing broke and nothing of yours was touched, but the Desk's
+newest disclosure still contradicts the list printed under it — please approve one ordinary run to fix
+it and re-take its film.

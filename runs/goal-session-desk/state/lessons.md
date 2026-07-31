@@ -445,3 +445,27 @@ new script written for that panel must assert stable wording, never that run's o
 **Applies to:** any iteration whose evidence route triggers a real run against a "latest run"
 panel — `/desk`'s Top-up Runs, Screen Runs, or the reconciliation section — and any iteration
 writing a new golden script for a latest-wins surface.
+
+## iter-33 — 2026-07-31T09:20:00+01:00
+
+**Verdict:** ESCALATE
+**Lesson:** Scoring a journey `passing` + `evidence_makeup: true` when it still has real PRODUCT work
+left silently removes the developer from the next iteration: `run-goal.sh`'s SPEED-9 evidence backstop
+(:2455-2480) demotes lean → evidence when every target journey is recorded `passing` — and it never
+reads `evidence_makeup`. Stacked on the arbiter's budget-breach demotion (full → lean, :2374-2377),
+iter-33's spec-declared `full` became `evidence`, so the two-line `topupLibraryReach` fix the second
+key demanded was never written. Only a `partial`/`failing` status, or an ESCALATE/REGRESSION verdict
+(the arbiter's first rung, :2368), can force a builder back into the loop.
+**Applies to:** any iteration whose target journey is already recorded `passing`; any evaluator
+tempted to keep a `passing` status alive with a make-up flag after a second-key REJECT.
+
+## iter-33b — 2026-07-31T09:20:00+01:00
+
+**Verdict:** ESCALATE
+**Lesson:** The demo-narrator wrote `reports/phase-goal-desk-iter-33-demo-script.md` from the
+iteration SPEC's intent ("the newest date and the earlier-pairs list now agree with each other", "now
+capped") while its own captured frames show the unfixed, self-contradicting page — a false claim in a
+showcase artifact produced on a zero-diff iteration. Narration must be written from the rendered page,
+and a walkthrough recorded in an iteration where no code landed can only ever narrate the OLD state.
+**Applies to:** any evidence-depth or zero-diff iteration that still dispatches the demo lane; any
+reviewer/evaluator reading a demo script as evidence of behaviour.

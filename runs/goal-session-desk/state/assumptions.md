@@ -671,3 +671,35 @@ shape implication: the cap number can be changed by editing one literal and one 
 if the owner later wants day-precision stored directly (rather than derived at display time), that is
 a separate, backward-compatible additive change (a new field or a truncated copy) that would not
 require undoing this iteration's fix — the display would simply read the new field instead.
+
+## iter-33 — goal-evaluator
+
+**Ambiguity:** J-19 was recorded `passing` (iter-32) and this iteration's browser lane scored it FAIL,
+which reads literally as decision-tree C.1 ("any journey moved passing → failing → REGRESSION", i.e.
+halt for human review). But the halt semantics do not fit the facts: the product diff is EMPTY (git
+status clean, `iter-diff.md` "no changes", HEAD still `c534548`), so nothing deteriorated — the build
+is byte-identical to the one the owner's second key ALREADY reviewed and REJECTED
+(`iter-32/eval-confirm.md` finding 3), and the engine already converted that iteration's verdict to
+CONTINUE. Separately, J-19's own `docs/goal.md` clauses split cleanly: the record half (steps 1/2/3/5
+and the SSOT acceptance criterion — `store_frozen_through_after` byte-identical to
+`BarStore.merged_bars` for all 404 pairs, single owner, single endpoint, legacy fallback intact) is
+verified done and unchanged; only step 4's on-page disclosure fails.
+**We chose:** Score J-19 `partial` (the vocabulary's own "only some assertion steps passed"), set
+`last_passing_iter: null` (the iter-32 pass was my over-score, voided by the second key), clear
+`evidence_makeup` (a fresh walkthrough did land, even though it must be redone), and return ESCALATE
+rather than REGRESSION. Rationale, each strand checked by me directly rather than inferred: (i) I
+opened `UT-J-19-fail.png` and read the contradiction in one frame, and read
+`apps/frontend/app/desk/page.tsx:894-897` at source — so the defect is real and I am not softening it;
+(ii) REGRESSION's stated remedy is "human review + manual fix", and no unblock path here is
+human-owned — a developer fixes two frontend lines; (iii) `partial` still blocks the deterministic
+achievement gate, so nothing is waved through; (iv) ESCALATE is the mechanically effective verdict:
+`run-goal.sh:2368` grants a full pass on `prior-verdict-ESCALATE`, which outranks the budget-breach
+demotion that shortened this run, and a non-`passing` status disables the evidence backstop that
+removed the developer. I state plainly that a strict, literal reading of C.1 would have produced
+REGRESSION and a halt.
+**Reversible:** yes — entirely. If the owner (or the second key) reads the corrected status as a true
+regression warranting a stop, the remedy is to halt at once and treat the same four jobs as a manual
+fix list; no journey status would move differently, no built work would be undone, and no record has
+been altered. If instead the owner reads J-19's failing clause as optional polish, the same evidence
+supports keeping the journey `partial` and closing the era on the eighteen others plus J-19's proven
+record half.

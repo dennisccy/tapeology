@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-33",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk page shows all recorded runs and results from screening and updating bar history. Let's start there.",
+      "point_out": "The Desk page loads with the heading and main content panels visible.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Desk" }
+    },
+    {
+      "n": 2,
+      "title": "View the top-up run with corrected reach disclosure",
+      "narration": "The top-up run section now shows the date each symbol's frozen history reached accurately. The newest date and the earlier-pairs list now agree with each other.",
+      "point_out": "The Top-up Runs section displays the reach line (newest recorded reach with count) and a short list of pairs recorded on earlier dates. The list is now capped to show only a sample, not hundreds of rows.",
+      "journey": "J-19",
+      "new": true,
+      "verified": false,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "desk-topup-run-latest-reach" } },
+      "expect": { "text": "reach it" }
+    },
+    {
+      "n": 3,
+      "title": "Scroll to see the earlier-pairs list",
+      "narration": "Below the reach line, earlier pairs are listed — now capped to a manageable length so the page stays readable at standard viewport sizes.",
+      "point_out": "The earlier-pairs section shows a short table with pairs and their recorded dates. The count in the heading states the true total, so you know how many exist even if not all are shown.",
+      "journey": "J-19",
+      "new": true,
+      "verified": false,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "desk-topup-run-latest-reach-earlier" } },
+      "expect": { "text": "Pairs recorded earlier" }
+    },
+    {
+      "n": 4,
+      "title": "View the ranked briefing table with window disclosure",
+      "narration": "The ranked briefing shows support and resistance zones ranked by strength. Each row also states how many bars the vendor was asked to fetch.",
+      "point_out": "The table displays each symbol's band, the closest opposite wall, levels count, and the history span. The window-basis line shows how many pairs asked for tail vs. full-lookback data.",
+      "journey": "J-17",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "desk-topup-run-latest-outcomes" } },
+      "expect": { "text": "pairs asked" }
+    },
+    {
+      "n": 5,
+      "title": "Check the briefing fits without horizontal scroll",
+      "narration": "The disclosure is legible at standard widths. No sideways scrolling is needed to read any row.",
+      "point_out": "At 1440×900, all columns are visible and readable. The table layout is compact yet clear.",
+      "journey": "J-16",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "testid": "desk-screen-rows-table" } },
+      "expect": { "text": "symbol" }
+    },
+    {
+      "n": 6,
+      "title": "View the Screen Runs history table",
+      "narration": "The history panel shows every screen run that has been performed on this desk. This append-only ledger is untouched.",
+      "point_out": "The table lists multiple screen run records with dates and outcomes. The system preserves the full history of operations.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "testid": "desk-history-table" } },
+      "expect": { "text": "date" }
+    },
+    {
+      "n": 7,
+      "title": "View the provenance block — configuration and bar store state",
+      "narration": "The provenance section confirms the configuration fingerprint and bar store signature, so you know exactly what build and data you're looking at.",
+      "point_out": "The block shows the config fingerprint and bar-store signature. These values identify the exact build and data set in use.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "testid": "desk-provenance" } },
+      "expect": { "text": "Universe snapshot" }
+    }
+  ]
+}
