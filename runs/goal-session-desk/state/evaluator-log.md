@@ -1711,3 +1711,75 @@ themselves, which all held. (3) The two optional notes from iteration 25 about t
 and its verdict line stay open and stay optional. One sentence for you: everything the Desk was
 asked to do is built, shown in pictures and proven number by number, and nothing of your data was
 touched — please confirm the finish, and treat the missing film as optional workshop tidying.
+
+## Iteration 29 — goal-desk-iter-29
+
+**Date:** 2026-07-31T04:05:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-18 "Every screen run leaves an append-only record of what it attempted — and a
+  re-run under identical pins says so before it walks" — a brand new item, built for the first time
+  this run. The count of items goes 17 to 18
+- Newly failing: none
+- Regressed: none
+- Re-checked this run: J-03, J-04, J-05, J-06, J-07, J-09, J-10, J-12, J-16 and J-17 by saved-script
+  replay (10 of 10 green, zero script edits). I also spot-checked seven more by opening this run's
+  own fresh pictures myself — J-08, J-11, J-13, J-14 and J-15 in one frame of the film, and J-01 and
+  J-02 in the top-up picture. Nothing was dropped for time and nothing was blocked by broken
+  equipment
+- Picture debt OPENED (small, and not a product fault): the picture of the new section's "nothing
+  recorded yet" starting state was never saved, and three of the film's four frames are the same
+  image. J-18 carries a make-up flag for both
+- Anti-goal violations: none new, none open. The three older items stay resolved and I re-checked
+  all three myself
+- Disclosed deviation, not an anti-goal breach: the picture and film steps ran against your REAL
+  data folder instead of the throw-away copy this run's own plan required, so three real Run Screen
+  clicks ADDED one screen record (11 to 12) and a new folder holding three run records. Nothing that
+  was already there changed
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to build. I
+opened the picture myself and read, in one frame at a normal window size with nothing cut off at the
+right, the new Screen Runs panel holding two rows: a real walk over all 101 names that produced
+"screen-2026-07-31-c169546856c7", and under it a second click reading "0 / 101" and, in plain words,
+"reused screen-2026-07-31-c169546856c7 — no walk was performed". Then I proved the numbers instead
+of believing them: I read the run's own saved file straight off the disk and compared it field by
+field with the screen it names — 101 members total, 101 attempted, 100 ranked, 1 skipped for "no
+basis", the same five pins, the same id — and the screen file itself holds exactly 100 rows and
+exactly one skipped row, for the symbol NOW, for that same reason. The speed claim is measurable in
+those same two files, not in prose: the walk ran from 01:58:48.238068Z to 02:00:29.056457Z, one
+minute and 41 seconds; the repeat click ran from 02:01:55.486740Z to 02:01:55.500832Z, 14
+thousandths of a second, and wrote no second screen file. The short guided film was recorded and,
+for the first time in this session for a brand-new item, its own frames really show its subject: I
+opened one and read the populated ledger, both rows and the latest-run detail, in frame. I re-ran
+the work myself rather than trusting the reports: the whole back-end test suite (1,500 passed, 8
+skipped, exit 0, zero failures — above the 1,474 baseline and matching the auditor's own count), the
+settings fingerprint (`08e471b10130e1e2`), and the tool list read out of the running code (exactly
+17 names, no new tool). I proved nothing of yours was damaged: all sixteen record files on disk
+still prove their own checksums, no file that existed before this run has a newer timestamp, and the
+price-file count is still 759. The structure check reports no blocking problem, the machine scan is
+clean, and the goal file gained only the new item's own text, inside the block where the proposer is
+allowed to write, so no earlier pass has gone stale. Four things I found and did not hide. First,
+the picture and film steps ran against your real data folder instead of a copy, which added one
+screen record and three run records — pure addition, nothing altered, but not what the plan said.
+Second, the picture of the "nothing recorded yet" state does not exist: the picture tool returned
+blank frames early on, and by the time it was fixed this run's own click had filled the ledger,
+which can never be emptied again. Third, the film's own instruction file CLICKS the Run Screen
+button, which on any new date would start a real hour-scale walk and write into your data. Fourth,
+the new saved replay script for this item pins on today's exact run id, so the next real run on a
+new date will make it report a break that is not one.
+
+**Next-step recommendation:** Halt — the goal is achieved. Please confirm the finish. Five
+follow-ups, none a defect in what the product does and none blocking. (1) Repoint the saved replay
+script for J-18 at the runs table and at the stable words "no walk was performed" and "101 / 101",
+so it stops depending on today's run id. (2) Make future film scripts read the page only, never
+click Run Screen. (3) The "nothing recorded yet" picture can be re-taken on a throw-away copy of the
+data — optional polish; the behaviour is already proven by a test, by a live request returning the
+empty answer, and by a live reading of the page's own text. (4) When a run reuses an earlier answer
+the page correctly says "no walk was performed" but also shows an amber "101 members not reached"
+note and a row of zeros, which can read like a failure — every number is true, only the wording
+confuses. (5) Two small honesty gaps in the new record: a run that fails before it starts walking
+names the first symbol as "the one it was on", when blank would be honest, and nothing yet tests
+that a run started from the command line leaves a record. One sentence for you: the Desk now keeps
+an honest, permanent record of every screen run and answers a repeat click in a fraction of a second
+instead of redoing an hour of work — please confirm the finish, and treat the five notes as tidying.

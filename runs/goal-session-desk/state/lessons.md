@@ -353,3 +353,22 @@ clause. The invariant that actually mattered survived — the compiled `layout.j
 rebuild) rather than scoring the spec violation itself.
 **Applies to:** any iteration spec that tries to freeze a build artifact the pipeline's own
 start-services step owns.
+
+## iter-29 — 2026-07-31T04:05:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The evidence lanes ran against the OWNER'S ambient `apps/backend/.data` instead of the
+fixture-scoped rig the spec demanded, and the cost was not data loss (everything is append-only and
+every checksum still verifies) but IRREVERSIBILITY: the lane's own Run Screen click appended a
+record, so J-18's "no screen runs recorded yet" empty state can never be photographed on the ambient
+store again — an append-only ledger destroys its own empty state the first time you exercise it, so
+the empty-state screenshot must ALWAYS be captured before any populating action, and on a scoped
+copy. Two live landmines were planted by the same shortcut and are still open:
+`reports/phase-goal-desk-iter-29-demo.json` step 5 CLICKS "Run Screen" (on any new UTC date that is
+a guaranteed pin miss → a real ~1m41s 101-member walk writing a real snapshot into the owner's
+store), and `runs/goal-session-desk/journey-scripts/J-18.json` steps 2-3 assert on today's exact
+`screenrun-…-0662273df270` / `screen-2026-07-31-c169546856c7` ids, so the next real run makes it
+report a regression that is not one.
+**Applies to:** any iteration whose journey adds a NEW append-only ledger or first-run empty state;
+any browser-qa/demo-narrator lane authoring a golden script or demo script against the ambient
+`:3301/:8301` pair; any future desk journey with a "honest empty state" acceptance clause.

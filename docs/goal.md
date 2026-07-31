@@ -1401,6 +1401,156 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     as `failed` — so without the `unchanged` outcome a weekend run would print a wall of false
     failures.)*
 
+- **J-18: Every screen run leaves an append-only record of what it attempted — and a re-run under identical pins says so before it walks**
+  - Steps:
+    1. Resolve the run's five pins BEFORE the walk, using ONLY accessors that already exist and are
+       already each pin's single owner: `desk_screen.screen_as_of` (`desk_screen.py:233`), the
+       universe store's own latest record id (`UniverseStore.list()`'s `records[-1]["id"]` — the
+       identical read `compute_screen` makes at `:441`), `Config.config_fingerprint()`, and
+       `desk_screen.compute_bar_store_signature` (`:255`, which exists precisely "so a caller (or a
+       test) can resolve the 5-pin key's `bar_store_signature` component WITHOUT running the full
+       per-member walk", over `desk_coverage.get_desk_coverage`'s index-only read, T-4). **No new
+       derivation of any pin, no new value**: the signature keeps its single owner
+       (`_bar_store_signature` over `desk_coverage`), and `compute_screen` keeps resolving its own
+       pins exactly as it does today — the same functions over the same immutable store, so the two
+       resolutions cannot disagree.
+    2. Answer an already-recorded pin set without paying for the walk: inside the ONE shared entry
+       point both callers already use (`run_screen_and_record`, `desk_screen_compute.py:73`), a
+       `ScreenStore.find_by_key` hit on those five pins (`desk_screen.py:602` — the SAME lookup that
+       path already performs at `desk_screen_compute.py:114`, one line AFTER the walk it could have
+       avoided) returns the existing snapshot with `reused=True` immediately: zero
+       `compute_tradability` calls and no `BarStore` read beyond the index-only coverage read the pin
+       resolution already made. Nothing else moves — the manager's
+       `GET /research/desk/screen/compute` poll shape stays byte-unchanged (`state`/`reused`/
+       `screen_id` keep their exact recorded meanings; `progress.members_done` simply stays 0),
+       `ScreenStore.record` remains the ONLY writer and its `ScreenAlreadyRecorded` refusal remains
+       the structural backstop for the race where the store changes under a running walk, and a
+       trigger whose pins MISS runs the full walk byte-identically to today.
+    3. Persist ONE frozen, checksummed, append-only run record per run, written EXACTLY ONCE at the
+       run's terminal state by a SINGLE shared writer BOTH callers use — the manager's resolve path
+       (`desk_screen_compute.py:197`/`:226`) and the CLI's `main` (`:271`) — the J-09/J-10
+       `record_topup_run`/`record_reconcile_run` discipline verbatim. Recorded with it: run id,
+       `screen_date`, the five pins as resolved (each honestly `null` when a run failed before
+       resolving it), started/finished UTC, terminal state (`done`/`cancelled`/`failed`), `reused`
+       (true when step 2 short-circuited), `members_total` and `members_attempted` (so "attempted"
+       and "never reached" stay distinct — the J-09 rule), the walk's own outcome counts (ranked,
+       `skipped: no_bars`, `skipped: no_basis`), the resulting `screen_id` or an honest `null`, and —
+       on `failed` — the exception detail VERBATIM plus the member the walk was on when it raised.
+       This journey changes NO walk behavior: `compute_screen`'s member loop (`desk_screen.py:455`)
+       keeps its shipped semantics (no per-member guard is added, no error skip row is invented, a
+       cancelled partial walk is still never recorded) — the record makes the outcome legible, it
+       does not alter it. A run whose process ends before the terminal write records NOTHING and the
+       ledger never invents an entry for it (J-09's honest limit, asserted by a test).
+    4. Own it exactly once: a new desk module (name at build discretion, e.g.
+       `app/research/desk_screen_log.py`) as the ONLY owner and `GET /research/desk/screen/runs` as
+       the ONLY serving endpoint (lightweight run-meta list + the latest full record; honest-empty
+       `{"runs": [], "latest": null}`, HTTP 200, before any run), serving its own store's
+       verification errors as `integrity_errors` in the same key and shape its four sibling desk GETs
+       already use (the J-12 rule) — registered as a NEW row in the blueprint's Data Contract BEFORE
+       the code lands, storage dir a bare env-var-or-sibling default (the `resolve_desk_screen_dir`/
+       `resolve_desk_topup_log_dir` precedent — deliberately NOT a new `Config` field). The record
+       describes the RUN only: screen rows, skip rows and the five-pin snapshot key keep their single
+       owner (`desk_screen.ScreenStore`) and their single serving endpoint
+       (`GET /research/desk/screen`), and nothing about what a snapshot records, how it is keyed, or
+       how rows are ranked changes. No new MCP tool (J-06's exactly-17-tool contract stays green and
+       `get_endpoint`'s `/research/` allowlist already reaches the new path), no scheduler, no
+       auto-refresh, no retry loop — a screen run stays an explicit operator act and page-load GETs
+       trigger nothing.
+    5. Surface it on `/desk`: a read-only "Screen Runs" section beside the shipped Screen History,
+       Top-up Runs and Index Reconciliation sections (the same table-plus-latest-detail pattern, no
+       recompute, NO new control), each run showing its date + id, terminal state, members
+       attempted-of-total, the ranked/skipped counts, its own recorded start→finish elapsed and the
+       snapshot id it produced — or the honest "reused <id> — no walk was performed" and "nothing
+       recorded" states — with the latest run's failure detail rendered verbatim when it failed, an
+       honest no-run-recorded empty state, and its ledger's `integrity_errors` line. **No new
+       ranked-table column and no change to the ranked table**, so J-16's measured width contract and
+       every stored golden replay script stand untouched. Copy = descriptive measurement only: the
+       page states what a run attempted and what it produced, never advice, imperative, urgency,
+       prediction, or any saving/waste/efficiency/speed claim; `tests/test_copy_discipline.py` stays
+       green unmodified.
+    6. Test fixture-scoped: a completed run's recorded counts are byte-identical to its own
+       snapshot's `len(rows)` and its skip counts by reason; an identical-pin re-trigger records
+       `reused: true` with `members_attempted: 0`, makes provably ZERO `compute_tradability` calls
+       (assert the call count — the J-11/J-13/J-14/J-15 precedent), returns the SAME `screen_id` and
+       writes no second snapshot file; a cancelled run records `cancelled` with
+       `members_attempted < members_total` and `screen_id: null` while still recording no snapshot; a
+       raising member records `failed` with the detail verbatim and that member named, and no
+       snapshot; a second run appends a new record while the first record file stays byte-identical;
+       the GET is honest-empty before any run and triggers nothing; and every EXISTING test in
+       `test_desk_screen_compute.py` and `test_desk_screen.py` passes UNMODIFIED — in particular
+       `test_second_run_with_identical_pins_reuses_the_existing_snapshot_no_second_file` (:373),
+       `test_cli_second_invocation_with_identical_pins_reuses_the_existing_snapshot` (:718) and
+       `test_a_corrupted_snapshot_at_the_same_key_resolves_state_failed_never_a_silent_overwrite`
+       (:287), whose outcomes the pre-check must reproduce exactly (if one genuinely pins a full walk
+       on an identical-pin retrigger, disclose it in the iteration record rather than edit it — the
+       J-17 precedent).
+  - Acceptance: on the fixture-scoped rig `GET /research/desk/screen/runs` serves the honest empty
+    payload before any run and, after one fixture-scoped screen run, ONE record whose `members_total`/
+    `members_attempted`, ranked and skip-by-reason counts, five pins and `screen_id` are byte-identical
+    to the snapshot that run recorded (**single source of truth**: the run record is registered in the
+    Data Contract with the new desk module as its only owner and `GET /research/desk/screen/runs` as
+    its only serving endpoint; it records the RUN only — rows, skip rows, the five-pin key and the rank
+    order keep `desk_screen.ScreenStore` as their sole owner and `GET /research/desk/screen` as their
+    sole serving endpoint, with zero change to any recorded snapshot shape — and every pin is resolved
+    through the accessor that already owns it (`screen_as_of`, `UniverseStore.list`,
+    `Config.config_fingerprint`, `compute_bar_store_signature` over `desk_coverage`), never a second
+    derivation; this SSOT criterion stands in place of a PnL-ledger append, which this era's Non-Goals
+    forbid); a re-trigger under identical pins returns the SAME `screen_id` with `reused: true`,
+    records `members_attempted: 0`, makes zero `compute_tradability` calls and writes no second
+    snapshot file, while a trigger whose pins MISS still walks every member and records a snapshot
+    byte-identical to what those same pins produce today (a golden comparison proves the recorded rows
+    and their order unmoved); a cancelled run records `cancelled` with
+    `members_attempted < members_total`, `screen_id: null` and no snapshot; a run interrupted before
+    its terminal write leaves the ledger honestly empty rather than a fabricated entry; a second run
+    appends a new record while every previously recorded universe, screen, top-up and reconciliation
+    file is proven byte-identical on disk (SHA-256 listing — nothing backfilled, repaired or
+    rewritten); in a real browser after the T-9 clean rebuild, `/desk` shows the honest
+    no-run-recorded state in one screenshot and, after a fixture-scoped run, the Screen Runs section
+    with attempted-of-total, the ranked/skipped counts, the elapsed and the produced snapshot id
+    legible in another, plus one screenshot in which a `reused` run's own row states that no walk was
+    performed — all at a 1440×900 viewport with no horizontal scroll and the ranked briefing table
+    rendering exactly as J-16 shipped it (T-10: no screenshot ⇒ `unknown`, never `passing`; no native
+    `title` tooltip is required by this journey, so the T-10a headed rig is not needed); a
+    **`[NEW]`-flagged demo-narrator walkthrough** covers the screen-run disclosure end to end,
+    narrated over a populated ledger; and the full backend suite is green with
+    `Config().config_fingerprint()` still `08e471b10130e1e2`, zero new `Config` fields, the `default`
+    profile and `v1` byte-identical (engine equivalence green), the MCP surface still exactly 17
+    tools, zero diff to
+    `desk_screen.py`'s recorded row/snapshot shapes and to
+    `tradability.py`/`levels.py`/`bars.py`/`bar_index.py`/`desk_coverage.py`/`desk_topup_log.py`/`StructureChart.tsx`,
+    and `tests/test_copy_discipline.py` + `tests/test_desk_ui_guards.py` +
+    `tests/test_desk_hover_tooltip_guard.py` green unmodified. *(Keyless core; browser-verifiable. A
+    real ~101-member screen run stays an operator-run act, reported honestly as run-or-not-run — never
+    a CI gate. Why: measured 2026-07-31 from the desk's own artifacts. **The desk's central act is the
+    only compute whose runs vanish.** `.data/screen` holds 11 recorded snapshots and every one carries
+    exactly `{id, screen_date, as_of, universe_snapshot_id, config_fingerprint, bar_store_signature,
+    created_utc, rows, skipped}` — no start time, no duration, no members-attempted count, no terminal
+    state — while its two lesser siblings each keep a durable ledger: `.data/topup_runs` holds
+    `topup-2026-07-29-5de907c83fc4` (404 pairs, `12:00:29.889748Z` → `12:04:53.521809Z` = 4m23.6s) and
+    `.data/index_reconcile_runs` holds two reconcile records (5.5 s and 10.8 s), each with its own
+    state, counts and timings. `DeskScreenComputeManager`'s state is process-scoped and "honestly lost
+    on restart" (its own docstring, `desk_screen_compute.py:9-11`), so every screen run that failed,
+    was cancelled, or found its pins already recorded left NOTHING on disk anywhere; the only runs with
+    any trace are the 11 that happened to write a NEW snapshot, and even they cannot say how long they
+    took — the four recorded back-to-back on 2026-07-29 (`created_utc` 12:06:52.688, 12:15:46.801,
+    12:22:19.019, 12:24:33.312) sit 8m54s, 6m32s and 2m14s apart, which bounds nothing. **The silence
+    is paid for on every duplicate click.** `/desk`'s Run Screen always submits today's UTC date
+    (`todayUtcDate`, `apps/frontend/app/desk/page.tsx:204/209`) and `trigger` "ALWAYS runs the full
+    member walk … rather than pre-checking the store before paying for it"
+    (`desk_screen_compute.py:21`), calling `compute_tradability` DIRECTLY — never through the 128 MB
+    durable `tradability_cache.db` that `GET /research/tradability` reads (`:23-27`) — across all 101
+    members of `universe-2026-07-25-49b33fa31680`, after which `ScreenStore.record` refuses the
+    duplicate; iter-3's own dev handoff live-verified the first symbol alone taking several seconds
+    cold. **And the fix needs no new machinery:** the same docstring names it ("a future iteration can
+    add a cheap pre-check (the five pins resolve synchronously before the walk, the SAME way
+    `members_total` already does)"), `compute_bar_store_signature` (`desk_screen.py:255`) exists for
+    exactly that purpose, and `find_by_key` (`:602`) is already called on that path one line after the
+    walk. **When a run does die, the record is the only place the reason could live:**
+    `compute_screen`'s member loop (`desk_screen.py:455`) has no per-member guard and
+    `_resolve_reference_close_and_history` raises on its own invariant (`:378`), so one member's
+    exception discards all 100 ranked rows already computed — today into a process-scoped snapshot the
+    next restart erases.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

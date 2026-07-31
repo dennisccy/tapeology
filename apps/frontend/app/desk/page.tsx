@@ -11,6 +11,7 @@ import {
   fetchDeskScreen,
   fetchDeskScreenById,
   fetchDeskScreenCompute,
+  fetchDeskScreenRuns,
   fetchDeskTopupCompute,
   fetchDeskTopupRuns,
   triggerDeskReconcileCompute,
@@ -27,6 +28,9 @@ import type {
   DeskScreenListResult,
   DeskScreenMeta,
   DeskScreenRow,
+  DeskScreenRun,
+  DeskScreenRunMeta,
+  DeskScreenRunsListResult,
   DeskScreenSkip,
   DeskScreenSnapshot,
   DeskTopupComputeSnapshot,
@@ -167,6 +171,17 @@ const LABEL_CELL = "px-2 py-1.5 text-left text-xs text-slate-400 whitespace-nowr
 // (`desk-coverage-badge`'s non-conditional half, `TickEvidenceBadge`, and the `band_round_number`
 // badge already use this exact className) -- reused verbatim, never a new visual effect, for the
 // new class/distance chips.
+// goal-desk-iter-29 (J-18): a FOURTH durable, append-only history section — "Screen Runs" —
+// recording every screen run's own terminal outcome (done/cancelled/failed, reused or not),
+// mirroring "Top-up Runs"/"Index Reconciliation"'s exact section shape. A 7th mount-time GET
+// (`/research/desk/screen/runs`); the screen-compute poll's OWN terminal tick now also refreshes
+// this ledger once (the SAME "on terminal, refresh the durable list" precedent iter-11/iter-14
+// established for their own run logs). Rendered unconditionally as the fourth section, immediately
+// after "Index Reconciliation" — the SAME "independent of screen state" placement precedent its
+// three siblings already establish. No new ranked-table column, no new control: the existing Run
+// Screen button simply becomes cheaper on a duplicate-pin retrigger now that the backend resolves
+// the five pins before paying for the walk (`desk_screen_compute.py`'s own reuse short-circuit) —
+// that behavior change is invisible here beyond the new ledger disclosing it.
 const WRAP_LABEL_CELL = "px-1.5 py-1 text-left text-xs text-slate-400 align-top";
 // The ranked table's OWN cell padding -- `py-1` (4px, vertical) and `px-1.5` (6px, horizontal)
 // instead of the `py-1.5`/`px-2` the shared constants above keep for the history/top-up/
@@ -1207,6 +1222,169 @@ function ReconciliationSection({
   );
 }
 
+// --- Screen run history (goal-desk-iter-29, J-18) — a durable, append-only record of every screen
+// run's outcome — including ones that reused an already-recorded snapshot, were cancelled, or
+// failed — read verbatim from `GET /research/desk/screen/runs` and nothing recomputed. Mirrors the
+// Top-up Runs / Index Reconciliation split exactly: `ScreenRunsTable` renders every recorded run's
+// summary (date + id, terminal state, members attempted-of-total, and what it produced — the ONLY
+// fields the meta-only `runs` list carries), and `LatestScreenRunDetail` renders the full detail
+// (elapsed, ranked/skipped-by-reason counts, verbatim failure detail) for the latest run ONLY — the
+// one entry the backend's `latest` field actually carries them for. Read-only, no click-through, no
+// new control — the existing Run Screen button above simply becomes cheaper on a duplicate-pin
+// retrigger (the backend's own reuse short-circuit); that is not a new control. No new ranked-table
+// column, no change to the ranked table (J-16's measured width contract stays untouched). ----------
+
+// A run's own start→finish duration — a plain difference of two ALREADY-RECORDED timestamps (never
+// `Date.now()`, unlike `formatComputeElapsed` above which clocks a STILL-RUNNING job): a completed
+// run's elapsed time is itself a fixed, deterministic fact once both timestamps are on disk.
+function formatScreenRunElapsed(startedUtc: string, finishedUtc: string): string {
+  const ms = Date.parse(finishedUtc) - Date.parse(startedUtc);
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${String(seconds).padStart(2, "0")}s` : `${seconds}s`;
+}
+
+// The one-line, honest statement of what a run produced -- a freshly-recorded snapshot's own id, a
+// reused run's plain "no walk was performed" note, or (cancelled/failed) "nothing recorded" -- never
+// a fabricated id for a run that produced none.
+function screenRunOutcomeText(meta: DeskScreenRunMeta): string {
+  if (meta.state === "done" && meta.reused) {
+    return `reused ${meta.screen_id ?? "—"} — no walk was performed`;
+  }
+  if (meta.state === "done") {
+    return meta.screen_id ?? "nothing recorded";
+  }
+  return "nothing recorded";
+}
+
+function ScreenRunRow({ meta }: { meta: DeskScreenRunMeta }) {
+  return (
+    <tr data-testid="desk-screen-run-row" className="border-b border-slate-800/60 last:border-b-0">
+      <td className={LABEL_CELL}>{meta.screen_date}</td>
+      <td className={LABEL_CELL} data-testid="desk-screen-run-id">
+        {meta.id}
+      </td>
+      <td className={LABEL_CELL} data-testid="desk-screen-run-state">
+        {meta.state}
+      </td>
+      <td className={NUMERIC_CELL} data-testid="desk-screen-run-attempted">
+        {meta.members_attempted} / {meta.members_total}
+      </td>
+      <td className={LABEL_CELL} data-testid="desk-screen-run-outcome">
+        {screenRunOutcomeText(meta)}
+      </td>
+    </tr>
+  );
+}
+
+function ScreenRunsTable({ runs }: { runs: DeskScreenRunMeta[] }) {
+  if (runs.length === 0) {
+    return <EmptyState testid="desk-screen-runs-empty" title="No screen runs recorded yet." />;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="desk-screen-runs-table" className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-slate-800">
+            <th className={HEADER_CELL_LEFT}>date</th>
+            <th className={HEADER_CELL_LEFT}>run</th>
+            <th className={HEADER_CELL_LEFT}>state</th>
+            <th className={HEADER_CELL}>attempted / total</th>
+            <th className={HEADER_CELL_LEFT}>produced</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((meta) => (
+            <ScreenRunRow key={meta.id} meta={meta} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// The latest run's own full detail — state, attempted-of-total, elapsed, what it produced (or the
+// honest reused/nothing-recorded note), the ranked/skipped-by-reason counts on a completed walk,
+// and (state === "failed" only) the raising member's name plus the exception detail rendered
+// VERBATIM and legible (never truncated).
+function LatestScreenRunDetail({ run }: { run: DeskScreenRun }) {
+  const unreached = run.members_total - run.members_attempted;
+  return (
+    <div
+      data-testid="desk-screen-run-latest-detail"
+      className="mt-4 space-y-3 border-t border-slate-800 pt-4"
+    >
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        Latest run — {run.screen_date} · {run.id}
+      </h3>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+        <span data-testid="desk-screen-run-latest-state">state: {run.state}</span>
+        <span data-testid="desk-screen-run-latest-attempted">
+          {run.members_attempted} of {run.members_total} members attempted
+        </span>
+        <span data-testid="desk-screen-run-latest-elapsed">
+          {formatScreenRunElapsed(run.started_utc, run.finished_utc)} elapsed
+        </span>
+        <span data-testid="desk-screen-run-latest-outcome">{screenRunOutcomeText(run)}</span>
+        {unreached > 0 && (
+          <span data-testid="desk-screen-run-latest-unreached" className="text-amber-200/70">
+            {unreached} member{unreached === 1 ? "" : "s"} not reached
+          </span>
+        )}
+      </div>
+      {run.state === "done" && (
+        <div data-testid="desk-screen-run-latest-counts" className="text-xs text-slate-400">
+          {run.ranked_count} ranked · {run.skipped_by_reason.no_bars} skipped (no bars) ·{" "}
+          {run.skipped_by_reason.no_basis} skipped (no basis)
+        </div>
+      )}
+      {run.state === "failed" && (
+        <div data-testid="desk-screen-run-latest-failed" className="text-xs text-slate-400">
+          <span className="font-mono text-slate-300">
+            {run.failed_member ?? "(member not recorded)"}
+          </span>{" "}
+          —{" "}
+          <span data-testid="desk-screen-run-latest-failed-detail">
+            {run.error ?? "(no detail recorded)"}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The section's own Loading/Unavailable/Populated states — mirrors `TopupRunsSection`'s/
+// `ReconciliationSection`'s identical three-state shape, fed by its own mount-time GET.
+function ScreenRunsSection({
+  result,
+}: {
+  result: { ok: boolean; data: DeskScreenRunsListResult | null; error?: string } | null;
+}) {
+  if (result === null) {
+    return <LoadingPanel testid="desk-screen-runs-loading" />;
+  }
+  if (!result.ok || result.data === null) {
+    return (
+      <UnavailablePanel
+        testid="desk-screen-runs-unavailable"
+        message={result.error ?? "The screen run history could not be loaded."}
+      />
+    );
+  }
+  return (
+    <div>
+      <ScreenRunsTable runs={result.data.runs} />
+      {result.data.latest !== null && <LatestScreenRunDetail run={result.data.latest} />}
+      <IntegrityErrorsNote
+        errors={result.data.integrity_errors}
+        testid="desk-screen-runs-integrity-errors"
+      />
+    </div>
+  );
+}
+
 // --- Provenance line — snapshot id + recorded-at time, universe snapshot id + date, as_of,
 // config_fingerprint, and the pinned bar-store signature. -------------------------------------
 //
@@ -1730,6 +1908,17 @@ export default function DeskPage() {
     error?: string;
   } | null>(null);
 
+  // goal-desk-iter-29 (J-18): the durable, append-only SCREEN-run log — independent of
+  // `screenResult`/`screenCompute` above (the latter is the CURRENT/last in-flight job's
+  // process-scoped progress; this is every COMPLETED run's persisted terminal outcome, including
+  // reused/cancelled/failed ones) — mirrors the `topupRunsResult`/`reconcileRunsResult` hooks
+  // exactly.
+  const [screenRunsResult, setScreenRunsResult] = useState<{
+    ok: boolean;
+    data: DeskScreenRunsListResult | null;
+    error?: string;
+  } | null>(null);
+
   // era-desk-iter-6 (J-05): the screen-history click-through. `viewingSnapshot` is `null` while
   // showing the top-level `latest` snapshot already held in `screenResult` (no refetch needed to
   // return to it — TC-2); once a history row is selected, it holds THAT row's own full snapshot,
@@ -1740,11 +1929,12 @@ export default function DeskPage() {
   const [viewingSnapshot, setViewingSnapshot] = useState<DeskScreenSnapshot | null>(null);
   const [historyFetchError, setHistoryFetchError] = useState<string | null>(null);
 
-  // Mount: six GETs, zero POSTs (TC-19/TC-8, extended era-desk-iter-14) — the screen list/latest,
-  // ALL THREE compute managers' current/last snapshot (seeds a page load mid-job or post-terminal
-  // without a spurious extra click — the /structure edge-report mount-seeding precedent), the
-  // top-up run log's list + latest full record (era-desk-iter-11, J-09), and (era-desk-iter-14,
-  // J-10) the reconciliation run log's list + latest full record.
+  // Mount: seven GETs, zero POSTs (TC-19/TC-8, extended era-desk-iter-14/goal-desk-iter-29) — the
+  // screen list/latest, ALL THREE compute managers' current/last snapshot (seeds a page load
+  // mid-job or post-terminal without a spurious extra click — the /structure edge-report
+  // mount-seeding precedent), the top-up run log's list + latest full record (era-desk-iter-11,
+  // J-09), the reconciliation run log's list + latest full record (era-desk-iter-14, J-10), and
+  // (goal-desk-iter-29, J-18) the screen run log's list + latest full record.
   useEffect(() => {
     let alive = true;
     fetchDeskScreen().then((result) => {
@@ -1752,6 +1942,9 @@ export default function DeskPage() {
     });
     fetchDeskScreenCompute().then((result) => {
       if (alive && result.ok) setScreenCompute(result.data);
+    });
+    fetchDeskScreenRuns().then((result) => {
+      if (alive) setScreenRunsResult(result);
     });
     fetchDeskTopupCompute().then((result) => {
       if (alive && result.ok) setTopupCompute(result.data);
@@ -1774,6 +1967,10 @@ export default function DeskPage() {
   // reusing the PATTERN, not the endpoint). The instant a tick observes a terminal state, the
   // screen list is re-fetched exactly once so the briefing swaps in — zero new report-rendering
   // logic, the same "read verbatim, recompute nothing" discipline every section here follows.
+  // goal-desk-iter-29 (J-18): the SAME terminal tick also re-fetches the screen run log exactly
+  // once, so the just-finished run's own record appears in Screen Runs without a manual reload —
+  // the SAME "on terminal, refresh the durable list" precedent `topupRunsResult`/
+  // `reconcileRunsResult`'s own polls below already establish.
   useEffect(() => {
     if (screenCompute?.state !== "running") return;
     const handle = setInterval(async () => {
@@ -1788,6 +1985,10 @@ export default function DeskPage() {
         // failure IS the new state and is adopted.
         setScreenResult((previous) =>
           refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
+        );
+        const refreshedRuns = await fetchDeskScreenRuns();
+        setScreenRunsResult((previous) =>
+          refreshedRuns.ok || previous === null || !previous.ok ? refreshedRuns : previous,
         );
       }
     }, 700);
@@ -2046,6 +2247,16 @@ export default function DeskPage() {
         <section aria-label="Index Reconciliation" className="mt-6">
           <Panel title="Index Reconciliation">
             <ReconciliationSection result={reconcileRunsResult} />
+          </Panel>
+        </section>
+
+        {/* goal-desk-iter-29 (J-18): a fourth ledger section, the SAME "always rendered,
+            independent of screen state" placement precedent as its two siblings above — a screen
+            run's durable history (including reused/cancelled/failed runs) exists, or honestly
+            doesn't, regardless of whether the ranked briefing above is currently populated. */}
+        <section aria-label="Screen Runs" className="mt-6">
+          <Panel title="Screen Runs">
+            <ScreenRunsSection result={screenRunsResult} />
           </Panel>
         </section>
       </main>

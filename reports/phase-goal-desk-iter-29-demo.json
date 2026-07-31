@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-29",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk shows a ranked briefing of the universe at today's date, along with historical ledgers of every operation that built it.",
+      "point_out": "The Desk page loads with the 'Desk' heading at the top.",
+      "journey": "J-18",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Desk" }
+    },
+    {
+      "n": 2,
+      "title": "Scroll down to see the Screen Runs panel",
+      "narration": "At the bottom of the page, below the Index Reconciliation section, a new Screen Runs panel now shows a ledger of every screen computation that was attempted — including runs that reused an already-recorded result, or failed partway.",
+      "point_out": "The Screen Runs section is visible, showing a table with columns for date, run, state, attempted / total, and produced.",
+      "journey": "J-18",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "heading", "name": "Screen Runs" } }
+    },
+    {
+      "n": 3,
+      "title": "Observe the populated Screen Runs ledger",
+      "narration": "Each row in the table shows the date the run happened, its run id, the terminal state (done, cancelled, or failed), how many members were actually checked versus the total, and what was produced — a snapshot id, or an honest note if it was reused or produced nothing.",
+      "point_out": "The Screen Runs table shows at least one completed run with date, state, member count, and outcome.",
+      "journey": "J-18",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='desk-screen-runs-table']" } },
+      "expect": { "text": "done" }
+    },
+    {
+      "n": 4,
+      "title": "Scroll down further to see the Latest run detail block",
+      "narration": "Below the Screen Runs table, the 'Latest run' detail block shows additional information about the most recent screen computation — elapsed time, ranked and skipped counts, and on failure, the exact member name and error message.",
+      "point_out": "The Latest run detail block is visible with the state, member count, elapsed time, and outcome of the most recent run.",
+      "journey": "J-18",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='desk-screen-run-latest-detail']" } },
+      "expect": { "text": "state" }
+    },
+    {
+      "n": 5,
+      "title": "Scroll back up to see the Run Screen button",
+      "narration": "The existing 'Run Screen' button above the Desk briefing is now smarter — if you click it a second time on the same day with unchanged inputs, it short-circuits immediately and records the reuse instead of re-walking all ~101 members.",
+      "point_out": "The Run Screen button is visible in the middle of the page.",
+      "journey": "J-18",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Run Screen" } }
+    },
+    {
+      "n": 6,
+      "title": "Observe the ranked briefing table unchanged",
+      "narration": "The ranked briefing table above the Run Screen button — showing symbol, wall distance, score, and class — is pixel-identical to before. No new columns, no layout shift, and no horizontal scrollbar at the standard 1440-pixel width.",
+      "point_out": "The ranked table displays the familiar columns (symbol, side, class, distance, score, coverage, and more) with no horizontal scroll.",
+      "journey": "J-18",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "heading", "name": "Briefing" } },
+      "expect": { "role": "button", "name": "Run Screen" }
+    }
+  ]
+}

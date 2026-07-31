@@ -39,13 +39,27 @@ over ``desk_index_reconcile.py`` — see that module's own docstring for the cla
 mechanics. No new MCP tool (``get_endpoint``'s existing ``/research/`` allowlist already reaches the
 new GET path); no new router, no ``main.py`` change.
 
-J-12 (this iteration, goal-desk-iter-16) is a pure additive-read + disclosure change, no new
+J-12 (goal-desk-iter-16) is a pure additive-read + disclosure change, no new
 module/route/MCP tool: (a) ``GET /research/desk/screen`` gains a sibling ``?id=`` read so an
 EARLIER same-``screen_date`` recording — unreachable via ``?date=``, which always resolves to the
 newest match — becomes individually addressable by its own id; supplying both ``?id=`` and
 ``?date=`` is an honest 4xx refusal. (b) ``get_topup_runs``/``get_desk_index_reconcile_runs`` stop
 discarding their own ``store.list()``'s ``errors`` return — both now serve it as
 ``integrity_errors``, the identical key/shape ``get_screen``/``get_universe`` already used.
+
+J-18 (this iteration, goal-desk-iter-29) adds ONE new read: ``GET /research/desk/screen/runs`` (the
+durable, append-only screen-RUN log — ``desk_screen_log.py``'s lightweight run-meta list + the
+latest full record + ``integrity_errors``; honest-empty ``{"runs": [], "latest": null,
+"integrity_errors": []}`` before any run, never a 404) — the SAME shape its two siblings
+(``get_topup_runs``/``get_desk_index_reconcile_runs``) already serve. No new compute manager, no
+new POST — the log is written internally by ``run_screen_and_record`` (the single shared writer
+both ``DeskScreenComputeManager`` and the CLI call), which also now resolves the screen's five pins
+BEFORE the walk and short-circuits an identical-pin retrigger to the existing snapshot (zero
+``compute_tradability`` calls) — see ``desk_screen_compute.py``'s own module docstring. This route
+only threads a ``ScreenRunStore`` dependency through ``trigger_desk_screen_compute``; the route
+itself is a pure read, mirroring ``GET /research/desk/topup/runs``'s single-synchronous-read shape
+exactly. No new MCP tool (``get_endpoint``'s existing ``/research/`` allowlist already reaches the
+new GET path); no new router, no ``main.py`` change.
 
 **Compute managers are module-level singletons here, NOT ``ResearchRegistry`` properties.**
 ``DeskTopupComputeManager`` (``desk_topup_compute.py``) reuses ``routes.record_bar_series``
@@ -77,6 +91,7 @@ from .desk_index_reconcile import (
 )
 from .desk_screen import ScreenStore, resolve_desk_screen_dir
 from .desk_screen_compute import DeskScreenComputeManager
+from .desk_screen_log import ScreenRunStore, resolve_desk_screen_log_dir
 from .desk_topup_compute import DeskTopupComputeManager
 from .desk_topup_log import TopupRunStore, resolve_desk_topup_log_dir
 from .desk_universe import (
@@ -309,6 +324,15 @@ def get_screen_store() -> ScreenStore:
     return ScreenStore(resolve_desk_screen_dir(CONFIG.desk_universe_dir_resolved()))
 
 
+def get_screen_run_store() -> ScreenRunStore:
+    """goal-desk-iter-29 (J-18): the durable screen-run log store rooted at a bare
+    env-var-or-sibling-of-the-universe-dir default (zero new ``Config`` field — see
+    ``desk_screen_log.resolve_desk_screen_log_dir``) — the ``get_topup_run_store``/
+    ``get_reconcile_run_store`` pattern. A FastAPI dependency so tests can point it at a temp dir
+    via the env var or override it outright."""
+    return ScreenRunStore(resolve_desk_screen_log_dir(CONFIG.desk_universe_dir_resolved()))
+
+
 def _screen_meta_only(record: dict) -> dict:
     """The lightweight projection ``GET /research/desk/screen``'s bulk list serves — id/pins/
     counts only, NEVER the full ``rows``/``skipped`` arrays (see ``desk_screen.py``'s module
@@ -388,6 +412,7 @@ def trigger_desk_screen_compute(
     dataset_store: DatasetStore = Depends(get_dataset_store),
     screen_store: ScreenStore = Depends(get_screen_store),
     manager: DeskScreenComputeManager = Depends(get_desk_screen_compute_manager),
+    screen_run_store: ScreenRunStore = Depends(get_screen_run_store),
 ) -> dict:
     """Start the single-flight desk screen compute job for ``body.screen_date``, or — if one is
     already running — return it UNCHANGED (``started: False``, never a second concurrent job).
@@ -403,7 +428,12 @@ def trigger_desk_screen_compute(
     of them failed its integrity check, so the refusal names that cause separately rather than
     telling the operator nothing is registered when something is (era-desk-iter-4 audit B2): the
     action a damaged snapshot needs (look at the named file) is not the action an absent one needs
-    (fetch a universe)."""
+    (fetch a universe).
+
+    goal-desk-iter-29 (J-18): ``screen_run_store`` is threaded straight through to
+    ``manager.trigger`` so this run's terminal outcome (done/cancelled/failed/reused) is durably
+    logged — this route only threads the dependency through; the pre-check/reuse-short-circuit and
+    the actual record write both live inside ``run_screen_and_record``."""
     records, errors = universe_store.list()
     if not records:
         if errors:
@@ -422,6 +452,7 @@ def trigger_desk_screen_compute(
         )
     return manager.trigger(
         body.screen_date, universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store,
+        screen_run_store=screen_run_store,
     )
 
 
@@ -447,6 +478,39 @@ def cancel_desk_screen_compute(
         raise HTTPException(status_code=409, detail="no desk screen compute is currently running")
     manager.cancel()
     return {"cancelling": True}
+
+
+# --- The screen run log (goal-desk-iter-29, J-18) — ONE read: a lightweight run-meta list + the
+# latest full record. No POST here: the log is written internally by `run_screen_and_record` (the
+# single shared writer, `desk_screen_log.record_screen_run`) — this route is a pure read, mirroring
+# `GET /research/desk/topup/runs`'s exact honest-empty/meta-only-list/full-latest/
+# `integrity_errors` shape. -------------------------------------------------------------------------
+
+
+def _screen_run_meta_only(record: dict) -> dict:
+    """The lightweight projection ``GET /research/desk/screen/runs``'s bulk list serves — every
+    field EXCEPT ``ranked_count``/``skipped_by_reason``/``error``/``failed_member`` (mirrors
+    ``_topup_run_meta_only``'s identical convention)."""
+    heavy_keys = ("ranked_count", "skipped_by_reason", "error", "failed_member")
+    return {key: value for key, value in record.items() if key not in heavy_keys}
+
+
+@router.get("/screen/runs")
+def get_screen_runs(store: ScreenRunStore = Depends(get_screen_run_store)) -> dict:
+    """``{"runs": [...meta-only...], "latest": <full record>|null, "integrity_errors": [...]}`` —
+    an explicit HTTP 200 honest-empty payload (``{"runs": [], "latest": null,
+    "integrity_errors": []}``) before any screen run has ever reached its terminal state, never a
+    404 (the ``GET /research/desk/topup/runs`` convention). ``latest`` is the most recently STARTED
+    run, verbatim from disk — never recomputed on the GET. ``integrity_errors`` is ``store.list()``'s
+    own ``errors`` return, surfaced verbatim (the J-12 convention) — a corrupted run-record file
+    stays excluded from ``runs``/``latest`` either way, never fabricated, never crashes this
+    route."""
+    records, errors = store.list()
+    return {
+        "runs": [_screen_run_meta_only(r) for r in records],
+        "latest": records[-1] if records else None,
+        "integrity_errors": errors,
+    }
 
 
 # --- Coverage-index reconciliation (J-10, goal-desk-iter-14) — a trigger/poll/cancel trio mirroring

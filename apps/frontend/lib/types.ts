@@ -1093,3 +1093,51 @@ export interface DeskReconcileComputeSnapshot {
   error: string | null;
   progress: DeskReconcileComputeProgress;
 }
+
+// goal-desk-iter-29 (J-18) -- the durable, append-only SCREEN run log, served by
+// `GET /research/desk/screen/runs`. Distinct from `DeskScreenComputeSnapshot`: the compute
+// snapshot is the CURRENT/last in-flight job's process-scoped progress (lost on restart, replaced
+// the instant a newer run starts); this is every COMPLETED run's terminal outcome, persisted to
+// disk once and never rewritten. Mirrors `DeskTopupRunMeta`/`DeskReconcileRunMeta`'s identical
+// meta-only-list/full-latest split: the bulk `runs` list omits `ranked_count`/`skipped_by_reason`/
+// `error`/`failed_member` -- only `latest` (below) ever carries them.
+export interface DeskScreenRunMeta {
+  id: string;
+  screen_date: string;
+  universe_snapshot_id: string | null;
+  config_fingerprint: string;
+  bar_store_signature: string | null;
+  started_utc: string;
+  finished_utc: string;
+  state: "done" | "cancelled" | "failed";
+  reused: boolean;
+  members_total: number;
+  members_attempted: number;
+  screen_id: string | null;
+}
+
+export interface DeskScreenSkippedByReason {
+  no_bars: number;
+  no_basis: number;
+}
+
+// The full persisted record -- `DeskScreenRunMeta` plus the ranked/skipped-by-reason counts and
+// (failed runs only) the verbatim error + the member the walk was on when it raised. Only `latest`
+// (below) ever carries this full shape; the bulk `runs` list is meta-only.
+export interface DeskScreenRun extends DeskScreenRunMeta {
+  ranked_count: number;
+  skipped_by_reason: DeskScreenSkippedByReason;
+  error: string | null;
+  failed_member: string | null;
+}
+
+// `GET /research/desk/screen/runs` -- honest-empty-or-populated, HTTP 200 always, never 404.
+// `latest === null` iff no screen run has EVER reached a terminal state -- the page's ONE
+// discriminator for the "No screen runs recorded yet." empty state. `integrity_errors` mirrors
+// `DeskTopupRunsListResult`/`DeskReconcileRunsListResult`'s identical field -- surfaced from the
+// store's own `.list()` return, never silently dropped.
+export interface DeskScreenRunsListResult {
+  runs: DeskScreenRunMeta[];
+  latest: DeskScreenRun | null;
+  integrity_errors: { file: string; error: string }[];
+}

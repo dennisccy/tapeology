@@ -1085,6 +1085,25 @@ async def test_get_endpoint_desk_topup_runs_byte_identical_with_no_new_tool(mcp_
 
 
 @pytest.mark.anyio
+async def test_get_endpoint_desk_screen_runs_byte_identical_with_no_new_tool(mcp_env):
+    """goal-desk-iter-29 TC-1 (J-18): the NEW ``GET /research/desk/screen/runs`` route is reachable
+    through ``get_endpoint``'s existing ``/research/`` allowlist prefix with ZERO MCP code change —
+    no new tool, no ``_STATIC_PATHS`` entry — and the proxied body is byte-identical to its curl
+    equivalent (here the honest-empty ``{"runs": [], "latest": null, "integrity_errors": []}`` this
+    module-scoped backend's own temp desk dirs genuinely produce -- no test in this module ever
+    triggers a screen compute). The tool count assertion lives in
+    ``test_advertised_tool_set_is_exactly_capability_6``; this is the reachability half."""
+    result = await call_tool("get_endpoint", {"path": "/research/desk/screen/runs"})
+    rest = httpx.get(f"{mcp_env}/research/desk/screen/runs", timeout=5.0)
+    assert rest.status_code == 200
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "screen/runs not byte-identical"
+    assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
+    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 17
+
+
+@pytest.mark.anyio
 async def test_get_endpoint_refuses_non_allowlisted_paths_without_any_request(monkeypatch):
     """Refusal is decided BEFORE any request: with the backend base pointing at a dead port,
     a refused path must raise the refusal (an unreachable error would prove a request was

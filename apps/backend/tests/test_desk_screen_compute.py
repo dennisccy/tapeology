@@ -25,13 +25,14 @@ from fastapi.testclient import TestClient
 from app.config import CONFIG
 from app.main import app, get_market_adapter, manager as ws_manager
 from app.providers.adapters.base import RawBar
-from app.research import desk_screen_compute
+from app.research import desk_screen, desk_screen_compute
 from app.research.bar_index import BarIndex
 from app.research.bars import BarStore
 from app.research.datasets import DatasetStore
 from app.research.desk_routes import get_desk_screen_compute_manager
 from app.research.desk_screen import ScreenStore
 from app.research.desk_screen_compute import DeskScreenComputeManager, run_screen_and_record
+from app.research.desk_screen_log import ScreenRunStore
 from app.research.desk_universe import UniverseStore
 from app.research.routes import ResearchRegistry, set_registry
 from app.research.store import JournalStore
@@ -729,3 +730,318 @@ def test_cli_second_invocation_with_identical_pins_reuses_the_existing_snapshot(
     screen_store = ScreenStore(tmp_path / "screen")
     records, errors = screen_store.list()
     assert errors == [] and len(records) == 1  # no second file
+
+
+# ==================================================================================================
+# goal-desk-iter-29 (J-18) -- the screen-run log: the five-pin pre-check reuse short-circuit, and
+# ONE durable run record per terminal outcome (done/cancelled/failed), written by
+# `record_screen_run` from INSIDE `run_screen_and_record` (the one shared entry point both the
+# manager and the CLI call). TC-2 through TC-9 -- the three pre-existing tests named in the plan
+# (`test_second_run_with_identical_pins_reuses_the_existing_snapshot_no_second_file`,
+# `test_cli_second_invocation_with_identical_pins_reuses_the_existing_snapshot`,
+# `test_a_corrupted_snapshot_at_the_same_key_resolves_state_failed_never_a_silent_overwrite`, all
+# above) are untouched by this section.
+# ==================================================================================================
+
+
+@pytest.fixture
+def run_log_ctx(real_ctx, tmp_path):
+    universe_store, bar_store, bar_index, dataset_store, screen_store = real_ctx
+    screen_run_store = ScreenRunStore(tmp_path / "screen_runs")
+    return universe_store, bar_store, bar_index, dataset_store, screen_store, screen_run_store
+
+
+def _skip_tally(skipped: list[dict]) -> dict:
+    tally = {"no_bars": 0, "no_basis": 0}
+    for entry in skipped:
+        tally[entry["reason"]] += 1
+    return tally
+
+
+def test_tc2_tc4_a_pin_miss_run_walks_every_member_and_records_a_matching_run_log_entry(run_log_ctx):
+    """TC-2/TC-4: a fresh pin set walks every member and records ONE run whose counts/pins/
+    ``screen_id`` are byte-identical to the snapshot it produced."""
+    universe_store, bar_store, bar_index, dataset_store, screen_store, screen_run_store = run_log_ctx
+
+    recorded, reused = run_screen_and_record(
+        universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
+        screen_run_store=screen_run_store,
+    )
+    assert reused is False
+
+    records, errors = screen_run_store.list()
+    assert errors == [] and len(records) == 1
+    run = records[0]
+    assert run["state"] == "done"
+    assert run["reused"] is False
+    assert run["screen_date"] == recorded["screen_date"]
+    assert run["universe_snapshot_id"] == recorded["universe_snapshot_id"]
+    assert run["config_fingerprint"] == recorded["config_fingerprint"]
+    assert run["bar_store_signature"] == recorded["bar_store_signature"]
+    assert run["screen_id"] == recorded["id"]
+    assert run["members_total"] == run["members_attempted"]
+    assert run["ranked_count"] == len(recorded["rows"])
+    assert run["skipped_by_reason"] == _skip_tally(recorded["skipped"])
+    assert run["error"] is None and run["failed_member"] is None
+
+
+def test_tc3_an_identical_pin_retrigger_makes_zero_compute_tradability_calls_and_reuses(
+    run_log_ctx, monkeypatch,
+):
+    """TC-3: the reuse short-circuit resolves the five pins and hits ``ScreenStore.find_by_key``
+    BEFORE ``compute_screen`` (and therefore ``compute_tradability``) is ever called -- a real
+    call-counting wrapper around the REAL ``compute_tradability`` proves zero NEW calls on the
+    second, identical-pin invocation."""
+    universe_store, bar_store, bar_index, dataset_store, screen_store, screen_run_store = run_log_ctx
+
+    calls = {"n": 0}
+    real_compute_tradability = desk_screen.compute_tradability
+
+    def _counting_compute_tradability(*args, **kwargs):
+        calls["n"] += 1
+        return real_compute_tradability(*args, **kwargs)
+
+    monkeypatch.setattr(desk_screen, "compute_tradability", _counting_compute_tradability)
+
+    first, first_reused = run_screen_and_record(
+        universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
+        screen_run_store=screen_run_store,
+    )
+    assert first_reused is False
+    calls_after_first = calls["n"]
+    assert calls_after_first > 0  # the fixture universe has more than zero members
+
+    second, second_reused = run_screen_and_record(
+        universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
+        screen_run_store=screen_run_store,
+    )
+    assert second_reused is True
+    assert second["id"] == first["id"]
+    assert calls["n"] == calls_after_first, "the retrigger must make ZERO new compute_tradability calls"
+
+    records, errors = screen_run_store.list()
+    assert errors == [] and len(records) == 2  # two DISTINCT run-log entries -- one per attempt
+    second_run = records[1]
+    assert second_run["reused"] is True
+    assert second_run["members_attempted"] == 0
+    assert second_run["screen_id"] == first["id"]
+
+    screen_records, screen_errors = screen_store.list()
+    assert screen_errors == [] and len(screen_records) == 1  # no second screen snapshot file
+
+
+def test_tc5_a_cancellation_mid_walk_records_state_cancelled_with_partial_attempts_and_no_snapshot(
+    manager_env, monkeypatch, tmp_path,
+):
+    """TC-5: a walk cancelled partway through records ``state: "cancelled"``,
+    ``members_attempted < members_total``, ``screen_id: null`` -- and no snapshot file."""
+    universe_store, bar_store, bar_index, dataset_store, screen_store = manager_env
+    screen_run_store = ScreenRunStore(tmp_path / "screen_runs")
+
+    def fake_compute_screen(_us, _bs, _bi, _ds, _cfg, _sd, *, progress=None, should_abort=None):
+        rows: list[dict] = []
+        skipped: list[dict] = []
+        for symbol in SMALL_MEMBERS:
+            if should_abort is not None and should_abort():
+                break
+            skipped.append(
+                {"symbol": symbol, "skipped": True, "reason": "no_bars", "coverage": {}, "tick_evidence": False}
+            )
+            if progress is not None:
+                progress({"symbol": symbol})
+        return {
+            "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
+            "config_fingerprint": "y", "bar_store_signature": "z", "rows": rows, "skipped": skipped,
+        }
+
+    monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
+
+    calls = {"n": 0}
+
+    def should_abort() -> bool:
+        calls["n"] += 1
+        return calls["n"] > 1  # let the first member through, abort before the second
+
+    result, reused = run_screen_and_record(
+        universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
+        should_abort=should_abort, screen_run_store=screen_run_store,
+    )
+    assert result is None
+    assert reused is False
+
+    records, errors = screen_run_store.list()
+    assert errors == [] and len(records) == 1
+    run = records[0]
+    assert run["state"] == "cancelled"
+    assert run["members_attempted"] < run["members_total"]
+    assert run["screen_id"] is None
+    assert run["error"] is None
+
+    screen_records, _errors = screen_store.list()
+    assert screen_records == []
+
+
+def test_tc6_a_raising_member_records_state_failed_with_verbatim_error_and_failed_member(
+    manager_env, monkeypatch, tmp_path,
+):
+    """TC-6: a member whose computation raises during the walk records ``state: "failed"`` with
+    the exception detail verbatim and the raising member's own name -- and no snapshot file. The
+    raise ALSO propagates out of ``run_screen_and_record`` itself (re-raised after logging), so the
+    manager's/CLI's own existing crash-handling stays byte-unchanged."""
+    universe_store, bar_store, bar_index, dataset_store, screen_store = manager_env
+    screen_run_store = ScreenRunStore(tmp_path / "screen_runs")
+
+    def fake_compute_screen(_us, _bs, _bi, _ds, _cfg, _sd, *, progress=None, should_abort=None):
+        for symbol in SMALL_MEMBERS:  # sorted: ["AAA", "BBB"]
+            if symbol == "BBB":
+                raise RuntimeError("synthetic raise on member BBB")
+            if progress is not None:
+                progress({"symbol": symbol})
+        raise AssertionError("unreachable -- BBB always raises before this point")
+
+    monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
+
+    with pytest.raises(RuntimeError, match="synthetic raise on member BBB"):
+        run_screen_and_record(
+            universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
+            screen_run_store=screen_run_store,
+        )
+
+    records, errors = screen_run_store.list()
+    assert errors == [] and len(records) == 1
+    run = records[0]
+    assert run["state"] == "failed"
+    assert run["error"] == "synthetic raise on member BBB"
+    assert run["failed_member"] == "BBB"
+    assert run["screen_id"] is None
+    assert run["reused"] is False
+
+    screen_records, _errors = screen_store.list()
+    assert screen_records == []
+
+
+def test_tc7_omitting_the_run_store_leaves_no_durable_record_for_that_run(real_ctx, tmp_path):
+    """TC-7: a process that ends before the writer's terminal call (simulated here by simply never
+    supplying a ``screen_run_store``) leaves the ledger with no entry for that run -- the SAME
+    "structural, not policed" guarantee ``test_desk_screen_log.py`` proves at the store level,
+    exercised here through the real run path."""
+    universe_store, bar_store, bar_index, dataset_store, screen_store = real_ctx
+
+    recorded, reused = run_screen_and_record(
+        universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
+    )
+    assert recorded is not None and reused is False
+
+    # A store constructed AFTER the run, pointed at where a run log WOULD have lived, still finds
+    # nothing -- the run never called the writer, so nothing was ever written.
+    screen_run_store = ScreenRunStore(tmp_path / "screen_runs")
+    records, errors = screen_run_store.list()
+    assert records == [] and errors == []
+
+
+# --- Route-level: TC-1 (honest empty) + TC-8 (two sequential runs) --------------------------------
+
+
+def test_tc1_get_screen_runs_before_any_run_is_an_honest_empty_200(route_ctx):
+    client, _mgr, _tmp_path = route_ctx
+    r = client.get("/research/desk/screen/runs")
+    assert r.status_code == 200
+    assert r.json() == {"runs": [], "latest": None, "integrity_errors": []}
+
+
+def test_tc8_two_sequential_triggers_append_two_run_records_first_file_byte_unchanged(route_ctx):
+    """TC-8: a second (genuinely distinct-pin) trigger appends a new run record while the first
+    run's own log file stays byte-identical on disk, and the meta-only ``runs`` list carries both."""
+    client, fresh_manager, tmp_path = route_ctx
+    UniverseStore(tmp_path / "universe").record(
+        members=["AAA"], raw_members={"AAA": "AAA"},
+        source_url="https://example.invalid/constituents", min_members=1, max_members=999,
+    )
+
+    def _trigger_and_wait(screen_date: str) -> dict:
+        resp = client.post("/research/desk/screen/compute", json={"screen_date": screen_date})
+        assert resp.status_code == 200
+        deadline = time.time() + 5
+        snap = None
+        while time.time() < deadline:
+            snap = client.get("/research/desk/screen/compute").json()
+            if snap is not None and snap["state"] != "running":
+                break
+            time.sleep(0.02)
+        assert snap is not None and snap["state"] == "done"
+        return snap
+
+    first_snap = _trigger_and_wait(SCREEN_DATE)
+    assert first_snap["reused"] is False
+
+    log_dir = tmp_path / "screen_runs"
+    first_files = sorted(log_dir.glob("*.json"))
+    assert len(first_files) == 1
+    first_bytes = first_files[0].read_bytes()
+
+    runs_after_first = client.get("/research/desk/screen/runs").json()
+    assert len(runs_after_first["runs"]) == 1
+    assert runs_after_first["latest"]["state"] == "done"
+    assert "ranked_count" in runs_after_first["latest"]
+    assert "ranked_count" not in runs_after_first["runs"][0]  # meta-only list omits the heavy fields
+
+    # A DIFFERENT screen_date is a genuine pin miss -- a second, distinct run.
+    second_snap = _trigger_and_wait("2026-06-23")
+    assert second_snap["reused"] is False
+
+    assert first_files[0].read_bytes() == first_bytes  # byte-unchanged
+    runs_after_second = client.get("/research/desk/screen/runs").json()
+    assert len(runs_after_second["runs"]) == 2
+    fresh_manager.join_all(timeout=5)
+
+
+def test_a_terminal_log_write_that_raises_is_never_re_logged_as_a_second_failed_record(
+    manager_env, monkeypatch, tmp_path,
+):
+    """goal-desk-iter-29 audit (B1): the run log is written EXACTLY ONCE per run even when the
+    write itself FAILS. A raising terminal write (a full disk, a read-only log dir) must NOT be
+    caught by ``run_screen_and_record``'s outer except-clause and re-entered as a SECOND, "failed"
+    record -- that record would claim a terminal state the run never had (the snapshot really was
+    recorded) and carry the LEDGER's own I/O error as if it were a screen failure. The run leaves
+    NO record (the module's documented interrupted-run honesty) and the error propagates verbatim,
+    never silently swallowed."""
+    universe_store, bar_store, bar_index, dataset_store, screen_store = manager_env
+    screen_run_store = ScreenRunStore(tmp_path / "screen_runs")
+
+    def fake_compute_screen(_us, _bs, _bi, _ds, _cfg, _sd, *, progress=None, should_abort=None):
+        skipped = []
+        for symbol in SMALL_MEMBERS:
+            skipped.append(
+                {"symbol": symbol, "skipped": True, "reason": "no_bars", "coverage": {},
+                 "tick_evidence": False}
+            )
+            if progress is not None:
+                progress({"symbol": symbol})
+        return {
+            "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
+            "config_fingerprint": "y", "bar_store_signature": "z", "rows": [], "skipped": skipped,
+        }
+
+    monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
+
+    calls = {"n": 0}
+
+    def exploding_record_screen_run(*_args, **_kwargs):
+        calls["n"] += 1
+        raise OSError("[Errno 28] No space left on device: 'screen_runs'")
+
+    monkeypatch.setattr(desk_screen_compute, "record_screen_run", exploding_record_screen_run)
+
+    with pytest.raises(OSError, match="No space left on device"):
+        run_screen_and_record(
+            universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
+            screen_run_store=screen_run_store,
+        )
+
+    assert calls["n"] == 1, "a failed terminal write must never be re-entered as a second record"
+    records, errors = screen_run_store.list()
+    assert records == [] and errors == []  # no fabricated entry for a run whose write never landed
+    # The screen snapshot itself was still recorded before the ledger write was attempted -- the
+    # walk's own append-only result is untouched by this failure mode.
+    screen_records, screen_errors = screen_store.list()
+    assert screen_errors == [] and len(screen_records) == 1
