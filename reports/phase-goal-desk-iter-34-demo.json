@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-34",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk briefing page",
+      "narration": "We're looking at the top-up runs panel on the Desk page, where operators track the universe snapshots and bar history that power support and resistance analysis.",
+      "point_out": "The Desk page loads with the Top-up Runs table showing recorded runs, their states, and how many pairs were successfully handled.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Top-up Runs"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Scroll to the latest run detail",
+      "narration": "Each top-up run records the latest date our frozen store can demonstrate history for, called the recorded reach. For pairs recorded earlier than that reach date, the page now shows exactly when they were recorded.",
+      "point_out": "The latest run detail section displays the newest recorded reach date and a list of pairs recorded on earlier dates, with the dates matching exactly as printed.",
+      "journey": "J-19",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-topup-run-latest-detail']"
+        }
+      },
+      "expect": {
+        "text": "newest recorded reach"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Observe the fixed reach line",
+      "narration": "The reach line now correctly states the date all pairs reach, using calendar-day precision. This date and the dates in the earlier-pairs list below never overlap anymore.",
+      "point_out": "The 'newest recorded reach' line reads a single calendar date. Every row below it in 'Pairs recorded earlier' shows an earlier date — they never contradict each other.",
+      "journey": "J-19",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "heading",
+          "name": "newest recorded reach"
+        }
+      },
+      "expect": {
+        "text": "pairs reach it"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Check the honest disclosure cap",
+      "narration": "When a run has more than 20 pairs recorded earlier, the page now shows a plain, honest statement: 'showing X of Y', so you know the list was shortened and by exactly how much.",
+      "point_out": "Below the 'Pairs recorded earlier (N)' heading, a muted line reads 'showing 20 of 101', disclosing that 20 rows are displayed out of 101 total earlier pairs.",
+      "journey": "J-19",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-topup-run-latest-reach-earlier-cap']"
+        }
+      },
+      "expect": {
+        "text": "showing 20 of"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Verify exactly 20 rows render",
+      "narration": "The earlier-pairs list is now capped at 20 rows for readability. No matter the true total, you'll never scroll through hundreds of rows; the heading always tells you the real count.",
+      "point_out": "The list under 'Pairs recorded earlier' displays exactly 20 symbol/timeframe/date rows. Each row shows a consistent earlier date, never matching the newest recorded reach date.",
+      "journey": "J-19",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-topup-run-latest-reach-earlier-row']:first-of-type"
+        }
+      },
+      "expect": {
+        "text": "SYMBOL"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Confirm the table column width is unchanged",
+      "narration": "The fix only touched the display logic for reach disclosure and the earlier-pairs list. The main Top-up Runs summary table keeps its original five columns at their original widths.",
+      "point_out": "Scroll back up to the summary table. The columns 'date', 'run', 'state', 'attempted / total', and 'universe snapshot' are all present with no new columns added.",
+      "journey": "J-16",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-topup-runs-table']"
+        }
+      },
+      "expect": {
+        "text": "attempted / total"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Navigate to Cockpit to check adjacent pages",
+      "narration": "The Cockpit page shows the live trading dashboard with historical bars and support/resistance analysis. This page and the Structure page are completely unaffected by the reach-disclosure fix.",
+      "point_out": "Cockpit page loads without errors, showing the live chart and any open positions.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "link",
+          "name": "Cockpit"
+        }
+      },
+      "expect": {
+        "text": "Cockpit"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Navigate to Structure to verify no regression",
+      "narration": "The Structure page serves the tradable-map chart and level/zone details. This page continues to work as before — the fix was scoped only to the Desk page's reach disclosure.",
+      "point_out": "Structure page loads with the tradable-map chart and level/zone information visible.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "link",
+          "name": "Structure"
+        }
+      },
+      "expect": {
+        "text": "Structure"
+      }
+    }
+  ]
+}

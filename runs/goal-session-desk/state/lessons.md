@@ -469,3 +469,21 @@ showcase artifact produced on a zero-diff iteration. Narration must be written f
 and a walkthrough recorded in an iteration where no code landed can only ever narrate the OLD state.
 **Applies to:** any evidence-depth or zero-diff iteration that still dispatches the demo lane; any
 reviewer/evaluator reading a demo script as evidence of behaviour.
+
+## iter-34 — 2026-07-31T11:05:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Two evidence lanes failed *silently* this iteration and both were caught only because a
+later agent opened the artifact instead of reading the citation. (1) `demo_runner.py` degrades to
+`**Demo Verdict:** SKIPPED` with zero steps when its script JSON is malformed —
+`reports/phase-goal-desk-iter-34-demo.json:56` held a JavaScript regex literal (`"name": /newest
+recorded reach/`), which is not JSON — while `blueprint.md`'s `RESOLVED at iter-34` note already
+asserted the walkthrough "is recorded". (2) The LLM browser-QA lane wrote five byte-identical
+5,853-byte blank PNGs (`UT-01/02/03/06/07-result.png`) and cited them as "verified both visually in
+the screenshot and programmatically". Neither failure printed an error anywhere a reader would look.
+Rule that follows: a `recorded`/`RESOLVED` claim must be written AFTER reading `demo-results.md`'s
+own verdict line, and a screenshot citation is only evidence once someone has opened the file —
+identical md5s across differently-named captures are the cheap tell (`md5sum *.png` in the evidence
+dir takes one second and caught both).
+**Applies to:** any iteration whose DoD names a demo-narrator walkthrough, and any evaluator/auditor
+scoring a journey from a browser-QA lane's per-test screenshots.

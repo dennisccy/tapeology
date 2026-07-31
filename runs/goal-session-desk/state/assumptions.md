@@ -703,3 +703,38 @@ fix list; no journey status would move differently, no built work would be undon
 been altered. If instead the owner reads J-19's failing clause as optional polish, the same evidence
 supports keeping the journey `partial` and closing the era on the eighteen others plus J-19's proven
 record half.
+
+## iter-34 — goal-evaluator
+
+**Ambiguity:** J-19's acceptance in `docs/goal.md` demands the reach line AND at least one
+strictly-earlier pair "both legible in ONE screenshot at a 1440×900 viewport with no horizontal
+scroll", and a `[NEW]`-flagged demo-narrator walkthrough "narrated over a populated run". Neither
+clause is literally satisfied by a pristine artifact: the direct 1440×900 viewport capture of the
+deep-scrolled block came back solid black (the known black-frame quirk this project has hit since
+iter-27), so the two artifacts that DO show the state are (a) the auditor's raw 1280×800 viewport
+frame and (b) the developer's 1425-px-wide crop taken from a full-page capture at the 1440×900 CSS
+viewport; and the walkthrough that was recorded has five of its six frames byte-identical, with
+step 06's caption naming the briefing table while showing the top-up panel.
+
+**We chose:** Score J-19 `passing`, set no `evidence_makeup` flag, and return GOAL_ACHIEVED. Four
+strands, each checked by me directly rather than read: (i) the acceptance's SUBSTANCE — one frame,
+both facts legible, nothing cut off at the right — holds at 1280×800, which is a STRICTER width test
+for horizontal scroll than 1440, and the whole block occupies under 700 px of height so it fits a
+900-tall frame with room to spare; the 1440-viewport-derived crop shows the identical block, so the
+viewport number in the clause is met and only the framing of the file differs; (ii) the no-screenshot
+rail (methodology A.3, goal T-10) demands a screenshot EXISTS that shows the acceptance state, and
+two do — I opened both; (iii) I did not rest the pass on any picture alone: I re-derived the page's
+grouping in Python over the 404 stored outcomes and reproduced the rendered split, count and
+first-twenty ordering exactly, plus the pre-fix inversion from the same file; (iv) on the film, my
+own iteration-30 entry bound this explicitly ("it is the last time I will ask for the film; if it
+comes out duplicated again it becomes optional polish"), the DoD clause asks for a walkthrough to be
+RECORDED and one was (`demo-results.md` verdict `RECORDED`, steps 02-05 `[NEW]`), and its
+load-bearing frame is genuine — so duplicated frames are presentation on a non-gating lane, not a
+capture debt worth scheduling a make-up ride for.
+
+**Reversible:** yes — entirely. If the owner or the second key reads the 1440×900 clause as
+requiring an untouched viewport screenshot at exactly that size, or reads the `[NEW]` walkthrough
+clause as requiring six distinct frames with matching captions, the remedy is one `Depth: evidence`
+pass that re-captures the same, already-persisted page: zero product change, no recorded value
+affected, and no journey status would move — the run this evidence is taken over
+(`topup-2026-07-31-8fb5c9a1f737`) is frozen on disk and can be re-photographed at any time.

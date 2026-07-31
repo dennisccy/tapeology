@@ -1,0 +1,9 @@
+**Verdict:** CONFIRM_ACHIEVED
+
+## Reasoning
+
+I tried to break the claim and could not. The only item that changed state, J-19 "Every top-up run records the date each pair's frozen history actually reaches", I checked by opening the pictures myself: `reports/qa/goal-desk-iter-34-evidence/AUDIT-J-19-reach-block-verified.png` (one 1280x800 frame) and `UT-J-19-topup-reach-crop.png` (cropped from a 1425-wide page capture) both read "newest recorded reach 2026-07-30 · 303 pairs reach it", "Pairs recorded earlier (101)", "showing 20 of 101", and twenty rows all dated 2026-07-27 — an earlier date, side by side with the newest one, no sideways scroll. The numbers agree with the run itself: 303 + 101 = the 404 pairs attempted.
+
+I re-ran the goal-text fingerprints myself (`goal_gate.py hash-journeys`): all 19 recorded statuses match today's `docs/goal.md` text, so no pass was earned on wording that has since changed, and `journey-history.json` holds no unresolved rule violation. The scan of the change is CLEAN and the change is only two files (one page display function, one test file); the structure check reads COHERENCE-PASS. Review PASS, QA PASS, closure CLOSURE-PASS, replay 5/5 with no FAIL and no deferred row; the skipped UX reviewer was a declared non-blocking time trim.
+
+I spot-checked the shared citation `QA-desk-topup-reach-section.png` used for five briefing-row items and it genuinely shows the ranked rows with their basis date, history span, band price and close, opposite wall, and level make-up — the file name is misleading, the picture is not. The five blank `UT-0*-result.png` frames are real (identical, empty), but no item's pass rests on them alone, and the first evaluator said so plainly. The walkthrough film repeats one frame and mislabels its last caption; that is a defect in how the evidence was filmed, not in what the product does, and the same state is proven by the two frames I opened. Nothing here justifies another run.

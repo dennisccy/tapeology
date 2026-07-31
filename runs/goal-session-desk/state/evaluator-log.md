@@ -2057,3 +2057,76 @@ both shortened by the machine and both dropped the programmer, which is why this
 waited two runs. One sentence for you: nothing broke and nothing of yours was touched, but the Desk's
 newest disclosure still contradicts the list printed under it — please approve one ordinary run to fix
 it and re-take its film.
+
+## Iteration 34 — goal-desk-iter-34
+
+**Date:** 2026-07-31T11:05:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** full  (matches the plan's own `Depth: full`; the binding rule after an
+ESCALATE, and this time a programmer really was sent)
+**Journey deltas:**
+- Newly passing: J-19 "Every top-up run records the date each pair's frozen history actually
+  reaches" — it goes from "partly done" back to passing, and this time on a fix, not on an
+  over-score. All nineteen items are now passing
+- Newly failing: none
+- Regressed: none
+- Re-checked this run: J-04, J-07, J-09, J-16 and J-17 by saved-script replay (5 of 5 green; the
+  programmer and the hard auditor each ran the same six-item set independently and both got 6 of 6),
+  and J-19 by opening two real browser pictures myself. I also re-read J-08, J-11, J-13, J-14 and
+  J-15 straight off this run's own fresh 1440x900 picture of the briefing table, spot-checked J-05's
+  own picture, and re-counted J-06's tools in the running program (exactly 17). Six items carry
+  forward on still-valid evidence, because the whole product change is two files. Nothing was
+  dropped for time and nothing was blocked by broken equipment
+- Picture debt: NONE opened and none carried. The short guided film WAS recorded this run and its
+  key frame is genuine; five of its six frames being the same image is presentation only, on a lane
+  that gates nothing, and I am deliberately not turning it into a make-up job (the bound I set at
+  iteration 30 and repeated at 33)
+- Anti-goal violations: none new, none open. The four older ones stay resolved and I re-checked each
+  against this run's own evidence. Nothing of your data was created, changed or removed — not one
+  file under the data folder is newer than this run's start, not even a rebuildable database sidecar
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to fix. I opened
+the picture myself and read, in one frame at a normal window size with nothing cut off at the right:
+"newest recorded reach 2026-07-30 · 303 pairs reach it", then "Pairs recorded earlier (101)", then
+"showing 20 of 101", then exactly twenty rows — AAPL, ABBV, ABT, ACN, ADBE, AMAT, AMD, AMGN, AMT,
+AMZN, AVGO, AXP, BA, BAC, BKNG, BLK, BMY, BNY, BRK-B, C — every one dated 2026-07-27. Not one row
+prints the day the sentence above it calls the newest. Then I went past the picture and proved the
+numbers instead of believing them: I re-did the page's own grouping in Python over all 404 stored
+records of the real top-up run and got exactly the same answer — newest day 2026-07-30 with 303
+pairs, 101 genuinely earlier and all on 2026-07-27, and the same twenty names in the same order. I
+also re-created the OLD behaviour from the same file and reproduced the fault precisely: comparing
+the full timestamp picks 2026-07-30T19:30 as "newest", which leaves 101 newest and 303 earlier, of
+which 202 print 2026-07-30 — the exact contradiction your second key rejected. The newest day holds
+three different times of day, which is why the old comparison inverted the split. I re-ran the work
+myself rather than trusting the reports: the whole back-end suite (1,520 passed, 8 skipped, 0
+failed, exit 0 — up from iteration 32's 1,514 by exactly the six new tests), the settings
+fingerprint (08e471b10130e1e2), and the tool list read out of the running program (exactly 17
+names). Every one of the nineteen items' own text signature still matches the goal file, so no
+earlier pass has gone stale, and there is no note saying any item's wording changed. The structure
+check is COHERENCE-PASS and the machine scan is CLEAN. The product change is two files and nothing
+else: one display function on the Desk page, and one test file. Seven things I found and did not
+hide. The twenty pairs shown are the first twenty in name order rather than the twenty furthest
+behind — invisible today because all 101 share one date. The new test that checks the day-grouping
+reads the page's source text, so a rewrite under different names could slip past it; there is no
+JavaScript test runner in this project and the plan allowed this. One of the new "prove the guard
+can fail" tests checks a string against itself and proves nothing. J-19's saved replay script now
+asserts that the "showing 20 of ..." line exists, which is only true while a run has more than
+twenty earlier pairs. Five pictures the browser-check lane saved are blank frames — I opened one and
+confirmed it is empty — so those five citations prove nothing; the same state is correctly captured
+in the two pictures I opened. The film's frames 2 to 6 are the same image and its last caption names
+the briefing table while showing the top-up panel. And two small cases (a run with twenty or fewer
+earlier pairs, and an old run that recorded no reach) were checked by test rather than in a browser,
+because no run on disk shows either state — the programmer disclosed that rather than claiming a
+picture.
+
+**Next-step recommendation:** Halt — the goal is reached. Please confirm the finish. Seven
+follow-ups, none a fault in what the product does and none blocking: (1) the twenty shown pairs are
+the first twenty by name, not the twenty furthest behind; (2) the new day-grouping test reads source
+text rather than behaviour; (3) one "prove the guard can fail" test is empty; (4) J-19's saved
+script asserts a line that only exists while a run has more than twenty earlier pairs; (5) five
+browser-check pictures are blank frames; (6) five of the film's six frames are the same image and
+its last caption does not match its frame; (7) two small display cases were checked by test rather
+than in a browser because no run on disk shows them. I recommend explicitly that none of these seven
+becomes a new run. One sentence for you: the Desk's top-up panel now names one day as newest and
+never contradicts itself in the list beneath, and says honestly when that list is shortened —
+please confirm the finish and treat all seven notes as optional tidying.

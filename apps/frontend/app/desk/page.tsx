@@ -875,32 +875,60 @@ function topupWindowBasisCounts(
 // LIBRARY_REACH_NOT_RECORDED fallback, never computed or backfilled.
 const LIBRARY_REACH_NOT_RECORDED = "library reach not recorded in this run";
 
+// goal-desk-iter-34 (J-19 fix) -- the "earlier" list renders at most this many rows; the TRUE
+// total is preserved separately (`earlierTotal`) so the heading can disclose an honest
+// "showing 20 of N" instead of silently truncating or rendering an unbounded, fourteen-screen-tall
+// list (the iter-32/33 bug: 303 rows, no cap, no disclosure).
+const EARLIER_PAIRS_DISPLAY_CAP = 20;
+
 function topupLibraryReach(
   outcomes: DeskTopupOutcome[],
 ): {
   newestDate: string | null;
   newestCount: number;
   earlier: { symbol: string; timeframe: string; date: string | null }[];
+  earlierTotal: number;
 } | null {
   if (outcomes.some((o) => o.store_frozen_through_after === undefined)) return null;
-  const dates = outcomes
-    .map((o) => o.store_frozen_through_after)
-    .filter((d): d is string => typeof d === "string");
-  if (dates.length === 0) {
+  // goal-desk-iter-34 (J-19 fix) -- one day-truncated grouping key per outcome, derived ONCE
+  // (the SAME calendar-day precision the render already displays via `.slice(0, 10)`). Every
+  // grouping/comparison decision below reads this key -- never the raw microsecond-precision
+  // timestamp -- so a pair recorded a few hours behind another pair on the IDENTICAL calendar day
+  // can never be misclassified as "earlier" purely because of its own sub-day precision (the
+  // iter-32/33 bug, reproduced live: 202 of 303 pairs shown under "Pairs recorded earlier" printed
+  // the SAME day the reach line named as newest).
+  const dayKeyed = outcomes.map((o) => ({
+    outcome: o,
+    day:
+      typeof o.store_frozen_through_after === "string"
+        ? o.store_frozen_through_after.slice(0, 10)
+        : null,
+  }));
+  const days = dayKeyed.map((d) => d.day).filter((d): d is string => d !== null);
+  if (days.length === 0) {
     // Every pair in this run holds no frozen bars at all -- an honest all-null run, never a
     // computed extreme over an empty set.
-    return { newestDate: null, newestCount: 0, earlier: [] };
+    return { newestDate: null, newestCount: 0, earlier: [], earlierTotal: 0 };
   }
-  const newestDate = dates.reduce((max, d) => (d > max ? d : max), dates[0]);
-  const newestCount = outcomes.filter((o) => o.store_frozen_through_after === newestDate).length;
-  const earlier = outcomes
-    .filter((o) => o.store_frozen_through_after !== newestDate)
-    .map((o) => ({
-      symbol: o.symbol,
-      timeframe: o.timeframe,
-      date: o.store_frozen_through_after ?? null,
+  const newestDay = days.reduce((max, d) => (d > max ? d : max), days[0]);
+  const newestCount = dayKeyed.filter((d) => d.day === newestDay).length;
+  // Full precision is kept for the RETURNED `newestDate` (the render already truncates it to a
+  // calendar day at display time via `.slice(0, 10)`) -- only the grouping decision above used the
+  // truncated key.
+  const newestOutcome = dayKeyed.find((d) => d.day === newestDay)!.outcome;
+  const earlierAll = dayKeyed
+    .filter((d) => d.day !== newestDay)
+    .map(({ outcome }) => ({
+      symbol: outcome.symbol,
+      timeframe: outcome.timeframe,
+      date: outcome.store_frozen_through_after ?? null,
     }));
-  return { newestDate, newestCount, earlier };
+  return {
+    newestDate: newestOutcome.store_frozen_through_after ?? null,
+    newestCount,
+    earlier: earlierAll.slice(0, EARLIER_PAIRS_DISPLAY_CAP),
+    earlierTotal: earlierAll.length,
+  };
 }
 
 function TopupRunRow({ meta }: { meta: DeskTopupRunMeta }) {
@@ -996,11 +1024,16 @@ function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
           : `newest recorded reach ${libraryReach.newestDate.slice(0, 10)} · ` +
             `${libraryReach.newestCount} pair${libraryReach.newestCount === 1 ? "" : "s"} reach it`}
       </div>
-      {libraryReach !== null && libraryReach.earlier.length > 0 && (
+      {libraryReach !== null && libraryReach.earlierTotal > 0 && (
         <div data-testid="desk-topup-run-latest-reach-earlier">
           <h4 className="mb-1 text-[11px] font-medium text-slate-500">
-            Pairs recorded earlier ({libraryReach.earlier.length})
+            Pairs recorded earlier ({libraryReach.earlierTotal})
           </h4>
+          {libraryReach.earlierTotal > EARLIER_PAIRS_DISPLAY_CAP && (
+            <p data-testid="desk-topup-run-latest-reach-earlier-cap" className="mb-1 text-xs text-slate-400">
+              showing {libraryReach.earlier.length} of {libraryReach.earlierTotal}
+            </p>
+          )}
           <ul className="space-y-1">
             {libraryReach.earlier.map((item, index) => (
               <li
