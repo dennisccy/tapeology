@@ -429,3 +429,44 @@ verify, no pre-existing file has a post-run mtime, 759 price files unchanged).
 remedy is one `evidence`-depth run on a fixture-scoped rig (`TAPEOLOGY_DESK_UNIVERSE_DIR` +
 `TAPEOLOGY_DESK_SCREEN_LOG_DIR` scoped, `$FRONTEND_URL` pointed at it) capturing the empty state
 before any run: zero product change, no recorded value affected, and no journey status would move.
+
+## iter-30 — goal-decomposer
+
+**Ambiguity:** Iteration 29's GOAL_ACHIEVED proposal was REJECTed by the second-key confirm
+(`runs/goal-session-desk/iter-29/eval-confirm.md`) specifically because J-18's honest empty "no
+screen runs recorded yet" state was never photographed, and the confirm's own remedy names "one
+evidence-depth pass on a throw-away data folder to capture the empty Screen Runs state and
+re-record distinct walkthrough frames." Four prior lessons (iter-26/27/28) document that
+`Depth: evidence` structurally cannot provision a fixture-scoped rig (no developer dispatched,
+browser-qa's remit excludes provisioning) and that a scoped-rig `[NEW]` walkthrough needs `full`
+depth with explicit rig-provisioning — yet this iteration's binding depth recommendation
+(computed by the engine AFTER the reject; `session.json` `next_depth: "lean"`) is `lean`, and
+none of the four depth-binding escape conditions (prior ESCALATE/REGRESSION, prior
+coherence-FAIL, hardening cadence due, brand-new full-stack journey) literally hold — the REJECT
+is recorded as `CONTINUE`, not `ESCALATE`/`REGRESSION`.
+
+**We chose:** Honor the binding `lean` recommendation rather than force `full`, but restructure
+the deliverable so lean's real capability (a single browser-qa dispatch, no demo-narrator, hence
+no cross-lane rig-teardown race — the exact failure mode of iter-27/28) can close the confirm's
+PRIMARY, hard-blocking objection: the empty-state screenshot. Browser-qa provisions its OWN
+scoped rig (env-var scoping via `TAPEOLOGY_DESK_UNIVERSE_DIR`, verified by reading
+`resolve_desk_screen_log_dir`'s own implementation to sibling-scope the whole desk data tree with
+one env var — no code change needed) entirely within its own dispatch, screenshots the honest
+empty state as the FIRST action (before any populating click, closing the iter-29 lesson's
+ordering trap), and tears it down itself — no cross-dispatch coordination needed. The confirm's
+SECONDARY objection (distinct walkthrough frames, which needs demo-narrator) stays explicitly
+open and disclosed; lean cannot produce it (iter-24 lesson: lean records no demo-narrator
+walkthrough), and forcing `full` without a genuine escape condition would be silently demoted by
+the engine's arbiter anyway. I also used this iteration's real remaining slack to fix three
+genuine, small, evaluator-flagged product/test gaps (the misleading "N members not reached"
+amber note + zero-counts row on a reused run, the `failed_member` honesty gap when a run crashes
+before attempting any member, and missing CLI-triggered-run test coverage) so the iteration is
+not evidence-only (satisfying the priority rubric's rule 7 and the binding "Do not redo — do NOT
+run a capture-only iteration" instruction in the inlined iteration state).
+
+**Reversible:** yes — if the owner wants the walkthrough gap closed immediately regardless of the
+binding-depth rule, the remedy is a follow-up `full`-depth iteration (citing the owner's own
+override as its escape condition) that reruns only the demo-narrator capture on the same
+already-provisioned rig pattern; nothing built this iteration would need undoing, since the three
+code fixes and the empty-state capture are independently correct regardless of whether the
+walkthrough is later added.
