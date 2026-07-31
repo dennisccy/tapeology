@@ -592,6 +592,16 @@ def test_a_failing_pair_reports_failed_with_the_detail_preserved_and_the_run_con
 # pre-existing assertion in this file -- TC-7 (all-reused second run) and TC-8 (resumability), the
 # two the spec names explicitly, pass untouched. See `docs/handoffs/goal-desk-iter-26-dev.md`.
 # ==================================================================================================
+#
+# goal-desk-iter-32 (J-19) EXTENDS THE SAME CARVE-OUT BY ONE MORE KEY: `run_topup` now adds
+# `store_frozen_through_after` to every per-pair outcome entry (the date each pair's frozen history
+# actually reaches AFTER the attempt), for the IDENTICAL structural reason -- the byte-identity
+# assertion between `run_topup`'s own return value and the persisted record forces every new field
+# to originate inside `run_topup`/`_run_one_pair` itself, so a REAL run's outcome entries now carry
+# nine keys, not eight. The same single existing assertion (`outcome.keys() == {...}`, below) is
+# extended again, in place, to the nine-key set -- still an exact key-SET equality, so cross-path
+# schema drift still fails it. No OTHER pre-existing assertion in this file is touched.
+# ==================================================================================================
 
 
 def _epoch_days_ago(days: float) -> float:
@@ -767,6 +777,127 @@ def test_a_vendor_answer_holding_only_already_frozen_bars_records_unchanged_not_
     same_after = [m for m in after_series if m["symbol"] == "SAME" and m["timeframe"] == "1d"]
     assert len(same_before) == 1
     assert same_after == same_before
+
+
+# ==================================================================================================
+# goal-desk-iter-32 (J-19) -- `store_frozen_through_after`: the date each pair's frozen history
+# actually reaches AFTER the attempt, across all four outcome branches plus the holds-nothing/null
+# case. Fixture-scoped, no network -- the SAME `_plant_bar_series`/`_inject_adapter` seams the J-17
+# section above uses.
+# ==================================================================================================
+
+
+def test_store_frozen_through_after_equals_the_newest_bar_after_a_fetched_pair(manager_env):
+    """TC-1 (goal.md J-19): a pair whose fetch genuinely appends new bars records
+    `store_frozen_through_after` byte-identical to the newest bar `BarStore.merged_bars` reports
+    for that pair AFTER the walk -- later than its own pre-fetch `store_frozen_through`."""
+    _universe_store, bar_store, bar_index, registry, _topup_run_store = manager_env
+    deep_epoch = _epoch_days_ago(desk_topup_compute._TOPUP_LOOKBACK_DAYS + 70)
+    newest_epoch = _epoch_days_ago(5)
+    from app.providers.adapters.base import RawBar
+
+    _plant_bar_series(
+        bar_store, symbol="ADV", timeframe="1d", feed=registry.config.historical_feed,
+        bars=[
+            RawBar("ADV", "1d", deep_epoch, 10.0, 11.0, 9.0, 10.5, 500),
+            RawBar("ADV", "1d", newest_epoch, 20.0, 21.0, 19.0, 20.5, 700),
+        ],
+    )
+    fresh_epoch = _epoch_days_ago(1)  # strictly newer than the planted `newest_epoch` (5 days ago)
+    _inject_adapter(
+        bars=(
+            RawBar("ADV", "1d", newest_epoch, 20.0, 21.0, 19.0, 20.5, 700),
+            RawBar("ADV", "1d", fresh_epoch, 25.0, 26.0, 24.0, 25.5, 800),
+        )
+    )
+
+    outcomes = run_topup(["ADV"], bar_store, bar_index, registry)
+
+    entry = next(o for o in outcomes if o["symbol"] == "ADV" and o["timeframe"] == "1d")
+    assert entry["outcome"] == "fetched"
+    after_bars = bar_store.merged_bars("ADV", "1d")
+    expected_after = desk_topup_compute._iso_bar_epoch(after_bars[-1].epoch)
+    assert entry["store_frozen_through_after"] == expected_after
+    assert entry["store_frozen_through_after"] > entry["store_frozen_through"]
+
+
+def test_store_frozen_through_after_equals_the_pre_fetch_value_for_an_unchanged_pair(manager_env):
+    """TC-2 (goal.md J-19): a pair whose fetch is classified `"unchanged"` (a real vendor call
+    returned only content already frozen) records `store_frozen_through_after` byte-identical to
+    its own pre-fetch `store_frozen_through` -- nothing was written to the store."""
+    _universe_store, bar_store, bar_index, registry, _topup_run_store = manager_env
+    already_frozen = _bars()
+    _plant_bar_series(
+        bar_store, symbol="SAME2", timeframe="1d", feed=registry.config.historical_feed,
+        bars=already_frozen,
+    )
+    _inject_adapter(bars=already_frozen)
+
+    outcomes = run_topup(["SAME2"], bar_store, bar_index, registry)
+
+    entry = next(o for o in outcomes if o["symbol"] == "SAME2" and o["timeframe"] == "1d")
+    assert entry["outcome"] == "unchanged"
+    assert entry["store_frozen_through_after"] == entry["store_frozen_through"]
+    assert entry["store_frozen_through_after"] is not None
+
+
+def test_store_frozen_through_after_equals_the_pre_fetch_value_for_a_reused_pair(manager_env):
+    """TC-4 (goal.md J-19): a store-first exact-key hit (`"reused"`, zero vendor calls) records
+    `store_frozen_through_after` byte-identical to its own pre-fetch `store_frozen_through`."""
+    _universe_store, bar_store, bar_index, registry, _topup_run_store = manager_env
+    adapter = _inject_adapter(bars=_bars())
+    first = run_topup(["RSD"], bar_store, bar_index, registry)
+    assert {o["outcome"] for o in first} == {"fetched"}
+    calls_after_first = len(adapter.fetch_bars_calls)
+
+    second = run_topup(["RSD"], bar_store, bar_index, registry)
+
+    entry = next(o for o in second if o["symbol"] == "RSD" and o["timeframe"] == "1d")
+    assert entry["outcome"] == "reused"
+    assert len(adapter.fetch_bars_calls) == calls_after_first  # zero new vendor calls
+    assert entry["store_frozen_through_after"] == entry["store_frozen_through"]
+    assert entry["store_frozen_through_after"] is not None
+
+
+def test_store_frozen_through_after_equals_the_pre_fetch_value_for_a_failed_pair_holding_bars(
+    manager_env,
+):
+    """TC-3 (goal.md J-19): a pair whose fetch is classified `"failed"` -- but which already held
+    frozen bars before the attempt -- records `store_frozen_through_after` byte-identical to its
+    own pre-fetch `store_frozen_through`, never `null` (the pair still holds what it held before)."""
+    _universe_store, bar_store, bar_index, registry, _topup_run_store = manager_env
+    held_epoch = _epoch_days_ago(3)
+    from app.providers.adapters.base import RawBar
+
+    _plant_bar_series(
+        bar_store, symbol="FAILHOLD", timeframe="1d", feed=registry.config.historical_feed,
+        bars=[RawBar("FAILHOLD", "1d", held_epoch, 10.0, 11.0, 9.0, 10.5, 500)],
+    )
+    _inject_adapter(bars_raise=NoDataForWindow("no data for that window"))
+
+    outcomes = run_topup(["FAILHOLD"], bar_store, bar_index, registry)
+
+    entry = next(o for o in outcomes if o["symbol"] == "FAILHOLD" and o["timeframe"] == "1d")
+    assert entry["outcome"] == "failed"
+    assert entry["store_frozen_through"] is not None
+    assert entry["store_frozen_through_after"] == entry["store_frozen_through"]
+
+
+def test_store_frozen_through_after_is_null_when_the_pair_holds_nothing_and_the_fetch_fails(
+    manager_env,
+):
+    """TC-5 (goal.md J-19): a pair that holds NO frozen bars before the run, and whose fetch does
+    not result in any bars being recorded (`"failed"`), records `store_frozen_through_after` as
+    `null` -- exactly the shape `store_frozen_through` already uses for the same case."""
+    _universe_store, bar_store, bar_index, registry, _topup_run_store = manager_env
+    _inject_adapter(bars_raise=NoDataForWindow("no data for that window"))
+
+    outcomes = run_topup(["NOTHING"], bar_store, bar_index, registry)
+
+    entry = next(o for o in outcomes if o["symbol"] == "NOTHING" and o["timeframe"] == "1d")
+    assert entry["outcome"] == "failed"
+    assert entry["store_frozen_through"] is None
+    assert entry["store_frozen_through_after"] is None
 
 
 # ==================================================================================================
@@ -1084,15 +1215,19 @@ def test_cli_triggered_run_persists_a_record_with_the_identical_shape_as_a_manag
     assert {o["outcome"] for o in record["outcomes"]} == {"fetched"}
     for outcome in record["outcomes"]:
         # goal-desk-iter-26 (J-17), the ONE reviewer-sanctioned carve-out to this iteration's
-        # "existing assertions pass unmodified" rule: this pin is a mirror of the SHARED writer's
-        # per-pair schema, extended -- not relaxed -- with the four Data-Contract fields every path
-        # now carries. It stays an exact key-SET equality, so cross-path schema drift (the property
-        # this test's own name claims) still fails it. See the section header below and
-        # `docs/handoffs/goal-desk-iter-26-dev.md` for why no implementation of the mandated
-        # contract can keep a real run's outcome entries at four keys.
+        # "existing assertions pass unmodified" rule -- EXTENDED AGAIN by goal-desk-iter-32 (J-19)
+        # for the identical structural reason: this pin is a mirror of the SHARED writer's per-pair
+        # schema, extended -- not relaxed -- with the Data-Contract fields every path now carries
+        # (four from J-17, plus `store_frozen_through_after` from J-19). It stays an exact key-SET
+        # equality, so cross-path schema drift (the property this test's own name claims) still
+        # fails it. See the section header above `_epoch_days_ago` and
+        # `docs/handoffs/goal-desk-iter-26-dev.md` / `docs/handoffs/goal-desk-iter-32-dev.md` for
+        # why no implementation of the mandated contract can keep a real run's outcome entries at a
+        # smaller key count.
         assert outcome.keys() == {
             "symbol", "timeframe", "outcome", "detail",
             "requested_window", "store_frozen_from", "store_frozen_through", "window_basis",
+            "store_frozen_through_after",
         }
 
 

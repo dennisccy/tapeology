@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "journey": "J-19",
+  "name": "Every top-up run records the date each pair's frozen history actually reaches",
+  "default_timeout_ms": 10000,
+  "notes": [
+    "Written goal-desk-iter-32 by browser-qa-agent. This replay script is DELIBERATELY READ-ONLY (goto + expect only, no click) so it never triggers a new top-up run -- the shipped Top-up button walks a real ~100-symbol universe against the live Yahoo adapter, which this era's own NOTES/anti-goals reserve for an explicit, separately-reported operator act, never an automated regression lane (the same J-09/J-17 precedent).",
+    "The asserted values are the CURRENT ambient store's real latest top-up run (id topup-2026-07-31-8fb5c9a1f737, triggered this iteration via the shipped 'Top-up' button per iter-32's own recommended TC-1/TC-10/TC-14 evidence route -- an explicit, sanctioned operator act, not a fixture): 'newest recorded reach 2026-07-30 . 101 pairs reach it', 'Pairs recorded earlier (303)', and one concrete earlier-pair row 'AAPL 4h -- 2026-07-30'. Like J-09's and J-17's own asserted run-stat text, these are environment-dependent -- if a further real top-up run is ever recorded on the ambient store, these steps will need updating to that run's own reach/earlier values (an honest environmental change, not a regression), the same class of drift J-09.json's iter-23 note and J-17.json already document for their own asserted counts.",
+    "Step 1 establishes the Top-up Runs panel is present. Steps 2-4 target the new J-19 testids added beside the existing desk-topup-run-latest-window-basis line: desk-topup-run-latest-reach (the new reach-date + count line), desk-topup-run-latest-reach-earlier (the earlier-pairs list container, heading text asserted), and desk-topup-run-latest-reach-earlier-row (one concrete row, proving symbol/timeframe/date render verbatim). None of J-09.json's or J-17.json's own asserted testids/strings (desk-topup-run-latest-counts, desk-topup-run-latest-window-basis, desk-topup-run-latest-failed) are touched by this script or by the underlying J-19 change -- the new block sits strictly after the window-basis line, before the failed-pairs block.",
+    "A NEW top-up run was deliberately triggered on the ambient :3301/:8301 store this iteration (goal-desk-iter-32) to produce non-trivial store_frozen_through_after variance (some pairs reaching 2026-07-30, others recorded earlier at 2026-07-27/2026-07-28) -- this is the same class of ambient-state advance J-09.json's iter-23 note anticipated, and it also means J-17.json's OWN asserted strings ('0 reused . 390 fetched . 0 unchanged . 14 failed', 'window basis not recorded in this run', 'Failed pairs (14)') now read stale against this same latest run (it has 0 reused . 404 fetched . 0 unchanged . 0 failed, a recorded window basis, and no failed-pairs block at all since zero pairs failed) -- flagged here for whoever next replays J-17, not fixed in this dispatch (out of this iteration's assigned scope: J-19 only)."
+  ],
+  "steps": [
+    {"n": 1, "journey": "J-19", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Top-up Runs"}},
+    {"n": 2, "journey": "J-19", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-reach"}}, "expect": {"text": "newest recorded reach 2026-07-30 · 101 pairs reach it"}, "timeout_ms": 15000},
+    {"n": 3, "journey": "J-19", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-reach-earlier"}}, "expect": {"text": "Pairs recorded earlier (303)"}, "timeout_ms": 10000},
+    {"n": 4, "journey": "J-19", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-reach-earlier-row"}}, "expect": {"text": "AAPL 4h — 2026-07-30"}, "timeout_ms": 10000}
+  ]
+}

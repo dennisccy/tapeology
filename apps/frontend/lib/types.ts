@@ -956,6 +956,10 @@ export interface DeskTopupOutcome {
   store_frozen_from?: string | null;
   store_frozen_through?: string | null;
   window_basis?: "tail" | "full_lookback";
+  // goal-desk-iter-32 (J-19) -- this pair's own newest frozen bar AFTER the attempt (never
+  // `bar_index`'s `window_end_utc`); optional/additive, absent on a run recorded before this
+  // iteration's code shipped (the `store_frozen_through`-absence legacy contract, mirrored).
+  store_frozen_through_after?: string | null;
 }
 
 export interface DeskTopupComputeProgress {

@@ -1551,6 +1551,126 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     exception discards all 100 ranked rows already computed — today into a process-scoped snapshot the
     next restart erases.)*
 
+- **J-19: Every top-up run records the date each pair's frozen history actually reaches**
+  - Steps:
+    1. Record ONE new desk-owned field on every per-pair outcome entry the shared walker already
+       builds (`run_topup`'s `entry` dict, `desk_topup_compute.py:304`): `store_frozen_through_after`
+       (name at build discretion) — that pair's own newest frozen bar AFTER the attempt, read
+       VERBATIM from the canonical owner through the SAME pure accessor J-17 already uses,
+       `_pair_window` over `BarStore.merged_bars(symbol, timeframe)` (`desk_topup_compute.py:162`/
+       `:182`, whose own docstring already sanctions repeat calls — "A PURE read (zero vendor calls,
+       zero writes) — safe to call more than once"), called once more immediately after
+       `_run_one_pair` returns and recorded beside the pre-fetch `store_frozen_through` J-17 already
+       records. Never `bar_index`'s `window_end_utc` (whose single owner stays `desk_coverage`),
+       never a new accessor, never a second fetch, never arithmetic over bars, and never a change to
+       `_run_one_pair`'s two-value return shape — the manager-mechanics tests substitute a FAKE
+       `_run_one_pair` returning a two-tuple (`tests/test_desk_topup_compute.py:139`/`:192`/`:339`/
+       `:870`) and every one of them must keep passing unmodified. The value is `null` only when the
+       pair holds nothing at all, exactly the shape `store_frozen_through` already uses. **Zero
+       diff** to `bars.py`, `bar_index.py`, `desk_coverage.py`, `desk_screen.py`, `tradability.py`,
+       `levels.py` and `routes.py`'s `record_bar_series`; zero new `Config` field; no new store,
+       endpoint, route or MCP tool.
+    2. State what it does NOT mean, structurally. The record describes THIS RUN's own observation of
+       the frozen store at attempt time — the J-09 rule verbatim: coverage and freshness keep their
+       single existing owner (`desk_coverage.get_desk_coverage` over `bar_index`), this journey
+       creates no second coverage path, cache or copy, serves no coverage value, adds no coverage
+       read anywhere, and leaves the ranked table's own coverage badges and their "window last
+       requested" tooltip byte-unchanged (`apps/frontend/app/desk/page.tsx:284`/`:357`). `/desk`
+       still fetches no coverage endpoint, and no screen row shape changes.
+    3. Own it exactly once: register the added per-pair field on the blueprint Data Contract's
+       "Top-up run records" row BEFORE the code lands — `desk_topup_log` stays the only owner and
+       `GET /research/desk/topup/runs` the only serving endpoint, written by the SAME single shared
+       writer both callers already use (`desk_topup_log.record_topup_run`, from the manager's resolve
+       path `desk_topup_compute.py:413` and the CLI's `main` `:547`) — never a second writer, never a
+       second outcome shape. The append-only rail is absolute: no recorded run is backfilled,
+       rewritten or recomputed; `GET /research/desk/topup/runs` serves legacy runs exactly as
+       recorded and `/desk` renders their absent field as an honest `"library reach not recorded in
+       this run"` (the established J-08/J-11/J-13/J-17 legacy-absence pattern), never a value derived
+       at read time. The top-up stays an explicit operator act (POST + CLI + the shipped button),
+       page-load GETs trigger nothing, and no scheduler, retry loop or auto-refresh is added
+       anywhere.
+    4. Surface it on `/desk` inside the SHIPPED Top-up Runs section — no new section, no new control,
+       no new column on the runs table and NO new column on the ranked briefing table, so J-16's
+       measured width contract stands untouched: the latest-run detail gains one descriptive line
+       naming the newest date this run's own pairs reach and how many pairs reach it, plus a short
+       list of the pairs whose recorded date is earlier (or `null`), each rendered with its own
+       symbol, timeframe and recorded date verbatim — both a plain tally/extreme over the served
+       payload, nothing derived from bars (the `topupOutcomeCounts`/`topupWindowBasisCounts`
+       precedent, `apps/frontend/app/desk/page.tsx:834`/`:857`). Copy = descriptive measurement only:
+       the page states the dates the run recorded and never a fresh/stale/current/behind/up-to-date
+       judgement, an advice, imperative, urgency or prediction, and never a saving, waste,
+       efficiency, speed or recommendation claim; `tests/test_copy_discipline.py` stays green
+       unmodified.
+    5. Test fixture-scoped with the suite's own injected fake adapter (the
+       `test_desk_topup_compute.py` pattern — no test touches the network): a pair whose fetch
+       genuinely appends bars records an `after` value later than its own recorded
+       `store_frozen_through` and byte-identical to the newest bar `BarStore.merged_bars` then
+       reports for that pair; a pair recorded `unchanged` and a pair recorded `failed` each record
+       their pre-fetch value verbatim; a `reused` pair records its pre-fetch value; a pair that held
+       nothing and whose fetch failed records `null`; a second run appends a new record while the
+       first record file stays byte-identical; the GET is honest-empty before any run and triggers
+       nothing; and every EXISTING test in `test_desk_topup_compute.py` and `test_desk_topup_log.py`
+       — including TC-7's "a second run is all-reused with zero vendor calls", TC-8's resumability
+       guarantee, the manager-mechanics tests' fake `_run_one_pair`, and
+       `test_desk_topup_compute_reads_merged_bars_and_never_reads_bar_index_window_end_utc` (`:614`)
+       — passes UNMODIFIED (if one genuinely pins the walker's per-pair read count, disclose it in
+       the iteration record rather than edit it — the J-17 precedent).
+  - Acceptance: on the fixture-scoped rig every per-pair outcome entry of a NEW top-up run carries
+    `store_frozen_through_after` byte-identical to the newest bar
+    `BarStore.merged_bars(symbol, timeframe)` reports for that pair after the walk — later than its
+    own recorded `store_frozen_through` exactly for the pairs whose fetch appended bars, equal to it
+    for every `reused`/`unchanged`/`failed` pair, and `null` only for a pair holding nothing
+    (**single source of truth**: the value is read verbatim from the canonical `BarStore`'s own
+    merged read through the accessor J-17 already calls — never `bar_index`'s request-bound
+    `window_end_utc`, never a second fetch, never a new accessor — the run record stays owned by
+    `desk_topup_log` alone and served by `GET /research/desk/topup/runs` alone, with the added field
+    registered in the Data Contract BEFORE the code lands; it records this run's own ATTEMPT-time
+    observation and never current coverage, and coverage/freshness still come solely from
+    `desk_coverage` over `bar_index`, with the briefing's coverage badges and their tooltip
+    byte-unchanged — this SSOT criterion stands in place of a PnL-ledger append, which this era's
+    Non-Goals forbid); every bar series file already on disk is proven byte-identical before and
+    after the iteration (SHA-256 listing — a top-up only ever APPENDS a new series; nothing is
+    deleted, re-keyed, superseded or rewritten) and every previously recorded universe, screen,
+    top-up and reconciliation record is proven byte-identical too, with legacy top-up runs rendering
+    the honest `"library reach not recorded in this run"` state; in a real browser after the T-9
+    clean rebuild, `/desk`'s Top-up Runs section shows the latest run's reach line AND at least one
+    pair whose own recorded date is earlier than that newest date, both legible in ONE screenshot at
+    a 1440×900 viewport with no horizontal scroll, and the ranked briefing table renders exactly as
+    J-16 shipped it (T-10: no screenshot ⇒ `unknown`, never `passing`; no native `title` tooltip is
+    required by this journey, so the T-10a headed rig is not needed); a **`[NEW]`-flagged
+    demo-narrator walkthrough** covers the top-up's library-reach disclosure end to end, narrated
+    over a populated run; and the full backend suite is green with
+    `Config().config_fingerprint()` still `08e471b10130e1e2`, zero new `Config` fields, the `default`
+    profile and `v1` byte-identical (engine equivalence green), the MCP surface still exactly 17
+    tools, zero diff to
+    `bars.py`/`bar_index.py`/`desk_coverage.py`/`desk_screen.py`/`tradability.py`/`levels.py`/`StructureChart.tsx`,
+    and `tests/test_copy_discipline.py` + `tests/test_desk_ui_guards.py` +
+    `tests/test_desk_hover_tooltip_guard.py` green unmodified. *(Keyless core; browser-verifiable.
+    The real ~101-member top-up stays an operator-run act, reported honestly as run-or-not-run —
+    never a CI gate. Why: measured 2026-07-31 read-only over the frozen artifacts (no service
+    started, no product code run). **A top-up says what it asked for and what came back, never what
+    the library then holds.** The one recorded real run, `topup-2026-07-29-5de907c83fc4` (404 pairs,
+    12:00:29.889748Z → 12:04:53.521809Z, `0 reused · 390 fetched · 14 failed`), carries only
+    `{symbol, timeframe, outcome, detail}` per pair, and even a post-J-17 run records the store's
+    content only as it stood BEFORE each fetch (`store_frozen_through`) — so no artifact anywhere
+    states the date a pair's history reaches once a run ends. Reconstructing it took a walk of all
+    759 series files: that run advanced 235 pairs (by 3 d ×58, 4 d ×110, 5 d ×1, 6 d ×1, 7 d ×58,
+    14 d ×3, 15 d ×3, 22 d ×1), recorded 155 pairs for the first time, and failed 14. **What the
+    silence hides today:** the newest bar each pinned pair actually holds now spans 2026-07-21 to
+    2026-07-28 — `1h`: 88 members through 07-28, AAPL/AMT/BLK/LOW through 07-24, MSFT through 07-21,
+    and 8 members (MDT, MRK, MU, NEE, PEP, TMO, UNH, UPS) hold none; `4h`: 101 through 07-28; `1d`:
+    100 through 07-27 (NOW holds none — the screen's one `skipped: no basis` row); `1w`: 101 through
+    07-27. The only freshness the desk serves is `bar_index`'s `MAX(window_end_utc)` — the window a
+    run ASKED for — which for 394 of the 395 member × timeframe pairs that hold bars postdates the
+    newest bar actually held, by 1 day (193 pairs) or 2 days (201 pairs); the single exception is
+    MSFT `1h` (both read 2026-07-21). On `screen-2026-07-31-c169546856c7` (100 ranked / 1 skipped)
+    that renders as BLK #17 — a band of 134 levels, 53 of them `1h`, over a `1h` series that stops
+    2026-07-24 — beside BRK-B #1's 155-level band with 57 `1h` members over a series through
+    2026-07-28, both rows showing an identical lit `1h` badge whose only difference is a requested
+    window in a hover tooltip (`2026-07-25T00:00:00Z` vs `2026-07-29T00:00:00Z`). And J-17's tail
+    window ends at wall-clock today for every pair it applies to, so after the next daily top-up even
+    that faint request-bound difference collapses to one identical date for every successful pair.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

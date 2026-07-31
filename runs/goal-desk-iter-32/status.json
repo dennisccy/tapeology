@@ -1,0 +1,23 @@
+{
+  "phase": "goal-desk-iter-32",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-07-31T07:45:00.000000Z",
+  "started_at": "2026-07-31T07:20:00.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "note": "J-19 implemented: run_topup's per-pair loop calls _pair_window a second, independent time immediately after _run_one_pair returns, adding entry['store_frozen_through_after'] (never a new accessor, never bar_index.window_end_utc, never a second vendor fetch). _run_one_pair's two-value return contract is byte-unchanged. desk_topup_log.py needed zero code changes (pure passthrough persister). Five new fixture-scoped tests cover all four outcome branches (fetched/unchanged/reused/failed) plus the holds-nothing/null case; two new round-trip tests in test_desk_topup_log.py; a new source-introspection guard file (test_desk_topup_library_reach_guard.py, 5 tests) proves the shared fallback constant, block placement (between window-basis and failed-pairs, no reordering of J-09/J-17's golden-replay-asserted testids), and the null-on-absence structure. Frontend: DeskTopupOutcome gains store_frozen_through_after? in types.ts; page.tsx gains topupLibraryReach + LIBRARY_REACH_NOT_RECORDED + the new reach line/earlier-pairs list inside LatestTopupRunDetail, placed beside desk-topup-run-latest-window-basis, no new section/control/table column. ONE disclosed, precedented existing-assertion edit: test_cli_triggered_run_persists_a_record_with_the_identical_shape_as_a_manager_triggered_one's outcome.keys() pin extended from the iter-26-established eight keys to nine (+store_frozen_through_after) -- the SAME reviewer-ratified carve-out from iter-26, applied again for the identical structural reason (the byte-identity assertion against run_topup's own return forces every new field to originate inside run_topup, growing every path's key count); git diff -U0 on that test file shows deletions ONLY on that one assertion + its disclosure comment. Full suite: 1522 collected, 1514 passed, 8 skipped, 0 failed (this pytest install's -q mode prints no final summary line, a known pre-existing quirk; counts independently verified two ways -- progress-char parse and --collect-only per-file sum, both 1522). Config().config_fingerprint() = 08e471b10130e1e2 unchanged; zero new Config fields; MCP tool count still 17 (test_mcp_server.py, 39 passed). git diff --stat empty over bars.py/bar_index.py/desk_coverage.py/desk_screen.py/tradability.py/levels.py/routes.py/StructureChart.tsx/desk_topup_log.py/config.py/mcp/__init__.py. test_copy_discipline.py/test_desk_ui_guards.py/test_desk_hover_tooltip_guard.py all green unmodified (47 passed). Frontend: tsc --noEmit clean; rm -rf .next && next build succeeds, /desk route builds. scripts/dev.sh started both backend (:8301) and frontend (:3301) cleanly, verified GET /research/desk/topup/runs (200, the one real ambient run is a legacy record correctly lacking store_frozen_through_after on every outcome) and GET /meta/ui-routes (200); stopped, restarted a second time with no port conflicts, stopped again -- no stray tapeology process left running. NOT done in this dev pass (left to browser-qa/demo/audit lanes per this iteration's own NOTES and the iter-26 precedent): triggering the one new real top-up run against the ambient pair, the TC-10 browser screenshot, the [NEW]-flagged demo-narrator walkthrough, and the SHA-256 append-only byte-identity listing over all bar series files.",
+  "changed_files": [
+    "apps/backend/app/research/desk_topup_compute.py",
+    "apps/backend/tests/test_desk_topup_compute.py",
+    "apps/backend/tests/test_desk_topup_log.py",
+    "apps/backend/tests/test_desk_topup_library_reach_guard.py",
+    "apps/frontend/lib/types.ts",
+    "apps/frontend/app/desk/page.tsx",
+    "docs/handoffs/goal-desk-iter-32-dev.md",
+    "docs/handoffs/goal-desk-iter-32-frontend.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "next_action": "review"
+}

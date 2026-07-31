@@ -79,7 +79,33 @@ thing as a per-pair ``outcome: "failed"`` (already caught inside ``_run_one_pair
 whatever outcomes were published before the crash (a local ``collected`` list, independent of the
 shared ``self._snapshot`` to avoid any race with a superseding job); the CLI path has no cancel
 signal and normally only ever terminates ``"done"``, so an uncaught crash BEFORE its own writer
-call is the correct interrupted-run case — zero record, never a bug to guard against."""
+call is the correct interrupted-run case — zero record, never a bug to guard against.
+
+**goal-desk-iter-32, J-19 — the date each pair's frozen history actually reaches AFTER the run.**
+Every recorded run's own artifact (``requested_window``/``store_frozen_from``/
+``store_frozen_through``) describes the store's content BEFORE that pair's own fetch attempt —
+nothing anywhere records what the pair's frozen history reaches once the attempt ENDS. ``run_topup``
+closes that gap with ONE additive field, ``store_frozen_through_after``: immediately after
+``_run_one_pair`` returns for a pair, a SECOND, independent call to the SAME pure accessor,
+``_pair_window(bar_store, symbol, timeframe)`` (never a new accessor, never ``bar_index``'s
+``window_end_utc``, never arithmetic over bars), reads that pair's newest frozen bar as it stands
+right now and the value is copied onto the outcome entry verbatim. For a ``"reused"``/``"unchanged"``/
+``"failed"`` pair nothing was written to the store between the two calls, so the two reads always
+agree byte-for-byte with the pair's own pre-fetch ``store_frozen_through``; for a ``"fetched"`` pair
+the store gained a brand new series between the two calls, so the second read genuinely differs
+(later) from the first. The value is ``null`` only when the pair holds no frozen bars at all (never
+fetched anything, or fetched and failed) — exactly the shape ``store_frozen_through`` already uses.
+This is a strictly LOCAL, per-pair, attempt-time OBSERVATION — it states nothing about current
+coverage or freshness generally (that stays ``desk_coverage.get_desk_coverage`` over ``bar_index``,
+untouched), creates no second coverage path, and adds no new accessor, fetch, store, route, Config
+field, or MCP tool. ``_run_one_pair``'s own two-value return contract
+(``(symbol, timeframe, bar_store, bar_index, registry) -> (outcome, str | None)``) is UNCHANGED, so
+every existing test that monkeypatches it wholesale keeps working unmodified — the new field is
+computed entirely inside ``run_topup`` itself, one level above the fake boundary. The append-only
+writer, ``desk_topup_log.record_topup_run``, needs no change (a pure, schema-agnostic passthrough):
+a run recorded BEFORE this field existed keeps its outcome entries exactly as recorded, served
+verbatim, and ``/desk`` renders their absence as the honest ``"library reach not recorded in this
+run"`` fallback — never a computed or backfilled value."""
 
 from __future__ import annotations
 
@@ -286,7 +312,11 @@ def run_topup(
     ``"window_basis"`` — that pair's own pre-fetch provenance, captured via ``_pair_window``
     IMMEDIATELY before ``_run_one_pair`` runs (so it reflects the store's content BEFORE this run's
     fetch, exactly as the Data Contract requires) and independent of whatever ``_run_one_pair``
-    itself is (real or a test fake) — see the module docstring's J-17 section.
+    itself is (real or a test fake) — see the module docstring's J-17 section; plus (goal-desk-
+    iter-32, J-19) ``"store_frozen_through_after"`` — that SAME pair's own newest frozen bar AFTER
+    the attempt, read via a SECOND, independent ``_pair_window`` call immediately AFTER
+    ``_run_one_pair`` returns, ``null`` only when the pair holds nothing at all — see the module
+    docstring's J-19 section.
 
     ``progress``, if given, is called after EACH pair with the outcome dict just appended (so a
     caller can publish incremental state). ``should_abort``, if given and it returns ``True``
@@ -301,6 +331,15 @@ def run_topup(
                 return outcomes
             window = _pair_window(bar_store, symbol, timeframe)
             outcome, detail = _run_one_pair(symbol, timeframe, bar_store, bar_index, registry)
+            # goal-desk-iter-32 (J-19): a SECOND, independent call to the SAME pure accessor,
+            # immediately after the attempt, captures what this pair's frozen history actually
+            # reaches AFTER the walk -- never bar_index's window_end_utc (what the run ASKED for),
+            # never a new accessor, never arithmetic over bars. For "reused"/"unchanged"/"failed"
+            # pairs nothing was written between the two calls, so the two reads always agree; for
+            # a "fetched" pair the store gained a new series, so this second read genuinely
+            # reflects it. `null` only when the pair holds nothing at all (see the module
+            # docstring's J-19 section).
+            window_after = _pair_window(bar_store, symbol, timeframe)
             entry = {
                 "symbol": symbol,
                 "timeframe": timeframe,
@@ -310,6 +349,7 @@ def run_topup(
                 "store_frozen_from": window["store_frozen_from"],
                 "store_frozen_through": window["store_frozen_through"],
                 "window_basis": window["window_basis"],
+                "store_frozen_through_after": window_after["store_frozen_through"],
             }
             outcomes.append(entry)
             if progress is not None:

@@ -292,3 +292,50 @@ def test_a_legacy_pre_iter26_run_record_round_trips_without_the_new_fields(tmp_p
     records, errors = store.list()
     assert errors == []
     assert records[0]["outcomes"] == legacy_outcomes
+
+
+# goal-desk-iter-32 (J-19): one more additive field, `store_frozen_through_after` -- the SAME pure
+# passthrough contract, proven the same way: a fresh record round-trips the new field verbatim, and
+# a legacy record (pre-iter-32, or even pre-iter-26) never gains it at read time.
+
+J19_OUTCOMES = [
+    {
+        "symbol": "AAA", "timeframe": "1d", "outcome": "fetched", "detail": None,
+        "requested_window": {"start": "2024-07-30T00:00:00Z", "end": "2026-07-31T00:00:00Z"},
+        "store_frozen_from": None, "store_frozen_through": None, "window_basis": "full_lookback",
+        "store_frozen_through_after": "2026-07-30T00:00:00.000000Z",
+    },
+    {
+        "symbol": "BBB", "timeframe": "1d", "outcome": "reused", "detail": None,
+        "requested_window": {"start": "2024-07-31T00:00:00Z", "end": "2026-07-31T00:00:00Z"},
+        "store_frozen_from": "2024-06-01T00:00:00.000000Z",
+        "store_frozen_through": "2026-07-25T00:00:00.000000Z", "window_basis": "tail",
+        "store_frozen_through_after": "2026-07-25T00:00:00.000000Z",
+    },
+]
+
+
+def test_record_and_list_round_trip_the_new_j19_store_frozen_through_after_field_verbatim(tmp_path):
+    store = TopupRunStore(tmp_path / "topup_runs")
+    meta = _record_sample(store, outcomes=J19_OUTCOMES)
+
+    assert meta["outcomes"] == J19_OUTCOMES
+    records, errors = store.list()
+    assert errors == []
+    assert records[0]["outcomes"] == J19_OUTCOMES
+
+
+def test_a_legacy_pre_iter32_run_record_round_trips_without_store_frozen_through_after(tmp_path):
+    """A run recorded BEFORE this iteration's code shipped (including a pre-iter-26 run, which
+    lacks ALL five new fields) never gains `store_frozen_through_after` at read time."""
+    store = TopupRunStore(tmp_path / "topup_runs")
+    legacy_outcomes = [{"symbol": "AAA", "timeframe": "1h", "outcome": "fetched", "detail": None}]
+    meta = _record_sample(store, outcomes=legacy_outcomes)
+
+    assert meta["outcomes"] == legacy_outcomes
+    for outcome in meta["outcomes"]:
+        assert "store_frozen_through_after" not in outcome
+
+    records, errors = store.list()
+    assert errors == []
+    assert records[0]["outcomes"] == legacy_outcomes

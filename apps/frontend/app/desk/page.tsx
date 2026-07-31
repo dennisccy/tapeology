@@ -864,6 +864,45 @@ function topupWindowBasisCounts(
   };
 }
 
+// goal-desk-iter-32 (J-19) -- the actual date each pair's frozen history reaches AFTER the run,
+// distinct from `store_frozen_through` (this pair's PRE-fetch value, never rendered standalone on
+// this page) and from `window_basis`'s tail/full_lookback tally above: an EXTREME (the newest
+// `store_frozen_through_after` across the run's own pairs) plus how many pairs reach it, plus a
+// short list of the pairs whose own recorded reach date is earlier than that newest date (or
+// `null`) -- a plain read of the served payload, nothing derived from bars (the
+// `topupWindowBasisCounts` precedent). `null` when ANY outcome in the run lacks
+// `store_frozen_through_after` (a legacy run, pre-iter-32) -- rendered as the honest
+// LIBRARY_REACH_NOT_RECORDED fallback, never computed or backfilled.
+const LIBRARY_REACH_NOT_RECORDED = "library reach not recorded in this run";
+
+function topupLibraryReach(
+  outcomes: DeskTopupOutcome[],
+): {
+  newestDate: string | null;
+  newestCount: number;
+  earlier: { symbol: string; timeframe: string; date: string | null }[];
+} | null {
+  if (outcomes.some((o) => o.store_frozen_through_after === undefined)) return null;
+  const dates = outcomes
+    .map((o) => o.store_frozen_through_after)
+    .filter((d): d is string => typeof d === "string");
+  if (dates.length === 0) {
+    // Every pair in this run holds no frozen bars at all -- an honest all-null run, never a
+    // computed extreme over an empty set.
+    return { newestDate: null, newestCount: 0, earlier: [] };
+  }
+  const newestDate = dates.reduce((max, d) => (d > max ? d : max), dates[0]);
+  const newestCount = outcomes.filter((o) => o.store_frozen_through_after === newestDate).length;
+  const earlier = outcomes
+    .filter((o) => o.store_frozen_through_after !== newestDate)
+    .map((o) => ({
+      symbol: o.symbol,
+      timeframe: o.timeframe,
+      date: o.store_frozen_through_after ?? null,
+    }));
+  return { newestDate, newestCount, earlier };
+}
+
 function TopupRunRow({ meta }: { meta: DeskTopupRunMeta }) {
   return (
     <tr data-testid="desk-topup-run-row" className="border-b border-slate-800/60 last:border-b-0">
@@ -918,6 +957,7 @@ function TopupRunsTable({ runs }: { runs: DeskTopupRunMeta[] }) {
 function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
   const counts = topupOutcomeCounts(run.outcomes);
   const windowBasisCounts = topupWindowBasisCounts(run.outcomes);
+  const libraryReach = topupLibraryReach(run.outcomes);
   const unreached = run.pairs_total - run.pairs_attempted;
   const failedOutcomes = run.outcomes.filter((o) => o.outcome === "failed");
   return (
@@ -950,6 +990,33 @@ function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
             `tail window · ${windowBasisCounts.full_lookback} pair` +
             `${windowBasisCounts.full_lookback === 1 ? "" : "s"} asked for the full lookback window`}
       </div>
+      <div data-testid="desk-topup-run-latest-reach" className="text-xs text-slate-400">
+        {libraryReach === null || libraryReach.newestDate === null
+          ? LIBRARY_REACH_NOT_RECORDED
+          : `newest recorded reach ${libraryReach.newestDate.slice(0, 10)} · ` +
+            `${libraryReach.newestCount} pair${libraryReach.newestCount === 1 ? "" : "s"} reach it`}
+      </div>
+      {libraryReach !== null && libraryReach.earlier.length > 0 && (
+        <div data-testid="desk-topup-run-latest-reach-earlier">
+          <h4 className="mb-1 text-[11px] font-medium text-slate-500">
+            Pairs recorded earlier ({libraryReach.earlier.length})
+          </h4>
+          <ul className="space-y-1">
+            {libraryReach.earlier.map((item, index) => (
+              <li
+                key={`${item.symbol}-${item.timeframe}-${index}`}
+                data-testid="desk-topup-run-latest-reach-earlier-row"
+                className="text-xs text-slate-400"
+              >
+                <span className="font-mono text-slate-300">
+                  {item.symbol} {item.timeframe}
+                </span>{" "}
+                — {item.date ? item.date.slice(0, 10) : "no bars recorded"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {failedOutcomes.length > 0 && (
         <div data-testid="desk-topup-run-latest-failed">
           <h4 className="mb-1 text-[11px] font-medium text-slate-500">

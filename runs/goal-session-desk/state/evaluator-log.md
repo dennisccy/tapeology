@@ -1915,3 +1915,81 @@ The auditor recommends explicitly that none of these four become a new run, and 
 sentence for the owner: the Desk now tells the plain truth about a repeat screen run and about a run
 that died before it started, everything else is unchanged and proven, so please confirm the finish
 and treat the four notes as optional tidying.
+
+## Iteration 32 — goal-desk-iter-32
+
+**Date:** 2026-07-31T08:35:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean  (the plan asked for the full pipeline; the machine gave it the shorter
+setting, so no film crew and no hard auditor were sent)
+**Journey deltas:**
+- Newly passing: J-19 "Every top-up run records the date each pair's frozen history actually
+  reaches" — a brand new item, built for the first time this run. The count of items goes 18 to 19
+- Newly failing: none
+- Regressed: none
+- Re-checked this run: J-01, J-02, J-04, J-06, J-07, J-09, J-16, J-17 and J-18 by saved-script
+  replay (9 of 9 green, zero script edits). I also read J-08, J-11, J-13, J-14 and J-15 straight
+  off this run's own fresh picture of the briefing table, and re-counted J-06's tools in the
+  running code myself. Four items (J-03, J-05, J-10, J-12) carry forward on still-valid evidence,
+  because this run's whole change is six files and the page edit only adds lines. Nothing was
+  dropped for time and nothing was blocked by broken equipment
+- Picture debt OPENED (small, and not a product fault): the short guided film for the new item was
+  never recorded, because the shorter run setting sends no film crew. J-19 carries a make-up flag
+  for the film only. No other item carries a make-up or equipment flag
+- Anti-goal violations: none new, none open. The four older items stay resolved and I re-checked
+  them myself
+- Disclosed, and sanctioned by this run's own plan: to photograph the new feature the run pressed
+  the Desk's own Top-up button, which really did fetch from the vendor. That added 404 brand-new
+  price files and one new record to your data folder. Nothing that was already there changed
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to build. I
+opened the picture myself and read, in one frame at a normal window size with nothing cut off at
+the right, the Top-up Runs panel showing "state: done", "404 of 404 pairs attempted", "0 reused ·
+404 fetched · 0 unchanged · 0 failed", then the older window line "390 pairs asked for a tail
+window · 14 pairs asked for the full lookback window", then the NEW line "newest recorded reach
+2026-07-30 · 101 pairs reach it", then "Pairs recorded earlier (303)" with rows naming each pair,
+its timeframe and its own date — "AAPL 4h — 2026-07-30", "AAPL 1d — 2026-07-30", "AAPL 1w —
+2026-07-27". That last one is a genuinely earlier date, which is exactly what the goal file
+demands to see. Then I went past the picture and proved the numbers instead of believing them: I
+read the run's own saved file straight off the disk and compared all 404 pairs against the price
+library's own newest bar, one by one. Zero disagreements out of 404. The pattern is honest, not
+uniform: 294 pairs moved forward, 101 stayed exactly where they were (all the weekly ones —
+correct, because this week is not finished yet), 9 went from holding nothing at all to holding
+history, and not one moved backwards. The newest date is reached by exactly 101 pairs and 303 are
+not, which is precisely what the page prints. I proved nothing of yours was damaged: the run added
+404 brand-new price files (759 to 1,163) and one new record, and NOT ONE file that existed before
+this run has a newer timestamp — nothing was rewritten, re-keyed or deleted, and all 20 record
+files still prove their own checksums. I re-ran the work myself rather than trusting the reports:
+the whole back-end suite (exit 0, 1,514 passed, 8 skipped, zero failures — above iteration 31's
+1,502, and the twelve extra tests are exactly the new ones), the settings fingerprint
+(`08e471b10130e1e2`), and the tool list read out of the running program (exactly 17 names). I also
+re-derived every item's own text signature from the goal file: all eighteen older ones match, so
+no earlier pass has gone stale, and the new item's text sits inside the block the proposer is
+allowed to write in. The structure check is COHERENCE-PASS and the machine scan is CLEAN. Four
+things I found and did not hide. First, and most useful: the very act of photographing the new
+feature broke a saved check elsewhere. The real top-up replaced the run the page shows by default,
+so J-17's saved check still looks for the old run's numbers and for a "Failed pairs" block that no
+longer appears — this run had zero failures. J-17's feature is fine and I proved it in the same
+picture; only the saved check is out of date. Second, the new item's own saved check has the same
+weakness: it is pinned to today's exact figures and will report a false break after the next real
+top-up. Third, the film was never recorded, because the machine gave this run its shorter setting
+even though the plan asked for the full pipeline. Fourth, the list of pairs is complete rather
+than short — all 303 — which makes the page about fourteen screens tall and is what defeated the
+normal screenshot tool; and 202 of those 303 rows show the same day as the "newest" line above
+them, because the comparison uses the exact hour while the page prints only the day. Every number
+is true; only the reading is confusing.
+
+**Next-step recommendation:** Halt — the goal is reached. Please confirm the finish. Four
+follow-ups, none a fault in what the product does and none blocking. (1) Refresh J-17's saved
+check (`runs/goal-session-desk/journey-scripts/J-17.json`) to the new run's figures — if the
+session continues for any reason, do this first, or the automatic re-check will report a break
+that is not one. (2) Point the new item's saved check
+(`runs/goal-session-desk/journey-scripts/J-19.json`) at wording that does not change, instead of
+today's exact counts and dates. (3) The short guided film for J-19 was never recorded; everything
+it would have shown is already proven in a picture I opened and in numbers I checked myself, so it
+rides along with any future run as a passenger, never as a reason for one. (4) Two wording notes
+on the new panel: the list shows all 303 pairs rather than a short selection, and 202 of those
+rows print the same day as the "newest" line. One sentence for the owner: the Desk now records and
+shows, for every top-up, how far each pair's price history actually reaches — I checked all 404 of
+them against the library itself and found no disagreement, and nothing of yours was changed — so
+please confirm the finish and treat the four notes as optional tidying.

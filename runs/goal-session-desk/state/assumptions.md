@@ -563,3 +563,83 @@ remedy is one small follow-up: pass the symbol into the progress callback BEFORE
 processed (or add a separate `current_member` field) and assert it in
 `test_desk_screen_compute.py`; no recorded value changes, no snapshot shape moves, and no journey
 status would move.
+
+## iter-32 — goal-decomposer
+
+**Ambiguity:** The goal-proposer promoted a brand-new journey after iter-31's GOAL_ACHIEVED was
+CONFIRM_ACHIEVED by the second key. `docs/goal.md`'s `AUTO:journeys` block now carries **J-19**
+("Every top-up run records the date each pair's frozen history actually reaches") in full,
+undigested text — a genuinely new target journey, not one of the 18 stable/passing ones the
+inlined journey-history digest and iteration-state were computed against. This iteration's binding
+depth recommendation (`session.json` `next_depth: "lean"`) predates that promotion, and none of
+the four depth-binding escape conditions literally hold on the FACE of the recommendation (prior
+verdict was GOAL_ACHIEVED, not ESCALATE/REGRESSION; no coherence-FAIL; hardening cadence counter
+reads 0/6).
+**We chose:** Treat J-19 as this iteration's sole target and override the binding `lean`
+recommendation to `Depth: full`, citing the depth-binding rule's own fourth escape condition (a
+brand-new full-stack journey with real Data-Contract additions for a never-implemented target
+journey) and, for the metadata's required numbered trigger, trigger 1 (structural/cross-cutting) —
+the same citation pattern iterations 15, 17, 23, 24, 26 and 29 used for their own brand-new
+journeys. Evidence checked directly rather than assumed: (i) `state/proposer-result.json` reads
+`"summary": "Promoted J-19 ..."`, `n_new_journeys: 1`, `n_proposals: 3` (two siblings — coverage-
+freshness semantics 0.44, consecutive-screens-identical 0.46 — explicitly backlogged, not
+promoted); (ii) `docs/goal.md`'s `AUTO:journeys` block carries J-19's full step/acceptance text
+(matching the goal-slice's own undigested rendering), and a direct read of
+`apps/backend/app/research/desk_topup_compute.py` confirms the exact seam the spec names
+(`run_topup`'s per-pair `entry` dict at `:304-313`, and the pure, repeat-call-sanctioned
+`_pair_window` accessor at `:162-208`) is real and matches the goal text's line-number citations;
+(iii) J-19 genuinely needs backend code (one new field added to `run_topup`'s existing walk, via a
+second call to an already-pure accessor) AND frontend code (a new descriptive line + pairs list
+inside the already-shipped `LatestTopupRunDetail`, `apps/frontend/app/desk/page.tsx:918-986`) AND a
+first-ever `[NEW]`-flagged demo-narrator walkthrough for this disclosure — none of which a `lean`
+dispatch (no demo-narrator) can deliver, per the iter-12/13/24/26/29 lessons already on file.
+**Reversible:** yes — if the owner disagrees that J-19 should be built now (e.g. prefers to pause
+the enhancement loop on the confirmed 18-journey state), the remedy is to revert this iteration's
+blueprint edits (the J-19 feature/journey-home row, the "Top-up run records" Data Contract row's
+iter-32 addition sentence, and the "IN BUILD at iter-32" note — all purely additive, zero product
+diff) and re-dispatch a one-line "let the confirmed state stand" spec instead; nothing built this
+iteration would need undoing since no code has been written yet.
+
+## iter-32 — goal-evaluator
+
+**Ambiguity:** J-19's Acceptance paragraph in `docs/goal.md` names a **`[NEW]`-flagged
+demo-narrator walkthrough** as one of its own acceptance clauses (and the iter spec repeats it as
+DoD item 5 / TC-14), but the engine dispatched `depth=lean`
+(`runs/goal-session-desk/iter-32/depth-dispatched` reads `lean`; `.steps/` holds only decomposer,
+developer, review-1, browser-qa, coherence — no demo-narrator), so no walkthrough could be
+recorded. My own methodology A.7 names a missing walkthrough recording verbatim as a *capture
+defect*, and my agent contract forbids scoring an evidence gap as blocking or making capture an
+iteration's goal — which points at `passing` + `evidence_makeup`. But iteration 29's second-key
+confirm (`runs/goal-session-desk/iter-29/eval-confirm.md`) REJECTed a GOAL_ACHIEVED precisely over
+a missing named capture, so it is genuinely open whether an acceptance-clause capture binds the
+journey's status.
+
+**We chose:** Score J-19 `passing` with `evidence_makeup: true`, and return GOAL_ACHIEVED rather
+than a CONTINUE. Five strands, each checked by me directly rather than read: (i) A.7's rail is
+satisfied exactly — the asserted BEHAVIOUR is met, not merely claimed: I opened
+`UT-J-19-result.png` and read the reach line, the earlier-pairs heading and per-pair rows
+including a strictly-earlier date in ONE frame, and then went past the picture and swept all 404
+outcome entries in `topup-2026-07-31-8fb5c9a1f737.json` against `BarStore.merged_bars`, finding 0
+mismatches; only the RECORDING is missing; (ii) the goal's own T-10 rail ("no screenshot ⇒
+`unknown`, never `passing`") is about the SCREENSHOT, which exists and which I opened — the
+walkthrough is a separate, narrative artifact; (iii) iterations 24/26/27/28 burned four runs
+proving a capture-only loop does not converge, and iteration 28 closed the last such debt "by
+decision, not by success"; (iv) unlike iteration 29's rejected gap, nothing here is
+un-recapturable — the populated run is now permanently on disk, so the film can be recorded at any
+later time with zero product risk; (v) the real remaining work is NOT capture: two golden scripts
+need repair (J-17's is stale *because of* this run's own sanctioned evidence route), which is
+harness maintenance a developer does.
+
+Second, smaller call: I did NOT record the 404-pair real fetch into the owner's ambient store as
+an anti-goal violation. `Immutable data` and `Persistence stays scoped` both survive on the
+evidence — bar series went 759 → 1163 as 404 BRAND-NEW files with not one pre-existing file's
+mtime moved, all 20 record files verify their own SHA-256, and the fetch was a Top-up **button
+click**, i.e. the explicit operator act this iteration's own spec NOTES ordered as the evidence
+route. It is disclosed, not hidden.
+
+**Reversible:** yes — entirely. If the owner reads the `[NEW]` walkthrough clause as binding J-19's
+status, the remedy is one `full`-depth run that records the film over the already-persisted
+populated run and refreshes the two golden scripts; zero product change, no recorded value
+affected, and no journey status would move. If the owner instead objects to the ambient fetch, note
+that it cannot be undone (the 404 series are frozen and append-only) but that it also destroyed
+nothing — the pre-existing 759 series and all 20 records are byte-untouched.

@@ -424,3 +424,24 @@ because `compute_screen` counts a member as attempted only AFTER it completes
 **Applies to:** any iteration replacing a fabricated field with `null` using a progress/completion
 counter as the discriminator — check whether "not started" and "in progress on item 0" are
 distinguishable before trusting the counter.
+
+## iter-32 — 2026-07-31T08:35:00+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Producing evidence by exercising a REAL ambient run silently invalidates every other
+journey's golden script that was pinned to the previous run's rendered values. This iteration's
+spec explicitly (and correctly) chose the ambient Top-up button over a scoped rig to dodge the
+iter-27/28 teardown-race and dead-`base_url` failures — but the resulting
+`topup-2026-07-31-8fb5c9a1f737` displaced `topup-2026-07-29-5de907c83fc4` as `latest`, so
+`journey-scripts/J-17.json`'s three pinned assertions (`desk-topup-run-latest-counts` = "0 reused ·
+390 fetched · 0 unchanged · 14 failed", `desk-topup-run-latest-window-basis` = "window basis not
+recorded in this run", and the `desk-topup-run-latest-failed` testid, which does not even MOUNT at
+0 failed) are now stale and will false-FAIL on their next replay. The replay lane only passed this
+run because it happened to execute at 06:49Z, three minutes BEFORE the top-up started at 06:52:55Z.
+Whenever a plan sanctions a real ambient run against a "latest wins" panel, the same plan must list
+the sibling scripts pinned to that panel and schedule their refresh in the SAME iteration — and any
+new script written for that panel must assert stable wording, never that run's own counts/dates
+(`J-19.json` repeats the very mistake `J-18.json` was flagged for at iter-29).
+**Applies to:** any iteration whose evidence route triggers a real run against a "latest run"
+panel — `/desk`'s Top-up Runs, Screen Runs, or the reconciliation section — and any iteration
+writing a new golden script for a latest-wins surface.
