@@ -1,0 +1,12 @@
+**Verdict:** CONFIRM_ACHIEVED
+
+## Reasoning
+
+I tried to refute this finish and could not. What I checked myself:
+
+1. **Gates vs digest vs eval agree.** `iter-28/gate-report.md` = PASS on all six gates; `journey-history.json` holds exactly 17 journeys, all `passing`, every one carrying a `spec_hash`, zero `pending_infra`/`evidence_makeup` flags, and the only three anti-goal violations (iters 3–4, all minor) marked resolved. `scan-report.md` = CLEAN, `coherence.md` = COHERENCE-PASS, `phase-goal-desk-iter-28-ui-test-results.md` = 5/5 PASS with zero FAIL and zero `DEFERRED-BUDGET` rows. No contradiction anywhere.
+2. **The one disclosed gap is real, and it is not product.** J-17's acceptance also asks for a `[NEW]`-flagged demo-narrator walkthrough "narrated over a populated run". It did not land: `reports/phase-goal-desk-iter-28-demo-results.md` = RECORDED_WITH_NOTES with all four J-17 expects missed, and I confirmed all five frames share one md5 (`6d2567da0e250667551d2ac3c815b980`). I verified the eval's root cause at the exact lines: `scripts/automation/demo-phase.sh:316` always passes `--base-url "$FRONTEND_URL"`, and `scripts/automation/lib/demo_runner.py:1292` reads `opts.base_url or script.get("base_url")` — the command line wins, so the script's own `:3391` address is dead. That is recording-harness plumbing, unreachable at this depth, not a product defect.
+3. **The behaviour that walkthrough would narrate is proven in a still I opened.** `reports/qa/goal-desk-iter-27-evidence/J-17-topup-window-disclosure.png` shows, in ONE 1440-wide frame: `0 reused · 6 fetched · 2 unchanged · 4 failed` (the required `unchanged`), `2 pairs asked for a tail window · 10 pairs asked for the full lookback window`, `Failed pairs (4)` each with its own `requested 2024-07-30 → 2026-07-30`, the 13-column ranked table intact, fingerprint `08e471b10130e1e2`. That is every element J-17's browser line demands, and the product diff this run is empty, so it stands.
+4. **Nothing was quietly renegotiated.** The miss is stated in the eval's Summary, its anti-goal table, and its Halt Justification, and handed to the owner as optional. My own standing rule forbids scoring a demo recording as blocking; ordering a fourth attempt at a provably unobtainable artifact would be the infinite-loop anti-pattern, not evidence.
+
+I did not re-run tests or browsers, and did not re-open the fresh `J-17-result.png` (its results row matches the eval's description). Every anti-goal category is explicitly cleared in the eval's table and none is contradicted by what I read.

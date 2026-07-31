@@ -321,3 +321,40 @@ again the film drops to the owner's optional track and the finish is proposed on
 A.7 reading), the finish can be confirmed directly on this iteration's evidence with zero further
 work: every other J-17 conjunct is proven, no journey status would move, and nothing built would
 need redoing.
+
+## iter-28 — goal-evaluator
+
+**Ambiguity:** The same split iter-24, iter-26 and iter-27 recorded, now on its THIRD failed
+attempt. `docs/goal.md`'s J-17 acceptance makes a `[NEW]`-flagged demo-narrator walkthrough a
+conjunct, and the desk-era anti-goal "The enhancement loop stays inside its box" *(critical)* lists
+"include a `[NEW]`-flagged walkthrough" in a clause mixing journey-TEXT requirements with
+BUILD-OUTCOME requirements. Against that: my agent contract and methodology A.7 name "the
+walkthrough recording is missing" as a capture defect that must never be scored as blocking and
+never become an iteration's goal, and the verdict tree's step 3 (all journeys passing + no
+unresolved anti-goal + coherence clean) matches. Iteration 27 pre-committed in writing: "this is the
+LAST capture run I will ask for on this film. If the next attempt still cannot put that content in
+frame, the right call is to stop retrying, hand the film to you as optional showcase polish, and
+propose the finish on the evidence that already exists."
+**We chose:** REVERSE iter-24/26/27's `CONTINUE` reading and return `GOAL_ACHIEVED` (first key),
+with J-17 `passing` and `evidence_makeup` CLEARED, disclosing the unmet conjunct verbatim in eval.md,
+the evaluator log and journey-history rather than treating it as met. Five strands, each checked by
+me directly: (i) the BEHAVIOUR is proven three independent ways — this iteration's fresh
+`J-17-result.png`, which I opened and cropped, showing the legacy-absence disclosure clause
+photographed for the first time; iteration 27's `J-17-topup-window-disclosure.png`, which I re-opened
+and which stays valid because the product diff is EMPTY (methodology A.6); and the window-disclosure
+guard test inside the 1,474-pass suite I re-ran; (ii) the failure's cause is now pinned to the
+HARNESS, not the product, and is not fixable by any product change or by re-wording the spec —
+`demo-phase.sh:316` passes `--base-url "$FRONTEND_URL"` and `demo_runner.py:1292` lets the CLI beat
+the script's own (correctly authored) `"base_url": "http://localhost:3391"`, while `Depth: evidence`
+dispatches nobody permitted to stand up the scoped rig; (iii) the anti-goal governs the goal-PROPOSER
+("The goal-proposer may append journeys ONLY inside the marker block … proposed journeys MUST …
+include a `[NEW]`-flagged walkthrough"), and J-17's authored text DOES carry the clause — the
+proposer stayed inside its box; (iv) honouring iteration 27's own written bound is the
+evidence-driven call, whereas a fourth identical retry would be exactly the framework's #1
+anti-pattern (vague acceptance criteria → infinite loops); (v) this is the FIRST of two keys — the
+deterministic gates (which I ran: journeys 17/17, coherence, results, regressions all exit 0) plus a
+second fresh-context confirm can weigh the same disclosure before the finish stands.
+**Reversible:** yes — entirely. If the owner reads the walkthrough as a hard acceptance conjunct,
+the remedy is two lines of harness change (let a script's own `base_url` win, and provision the
+scoped rig from a `full`-depth iteration) plus one re-record: zero product change, no recorded value
+affected, and no journey status would move.

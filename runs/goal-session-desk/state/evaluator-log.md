@@ -1640,3 +1640,74 @@ backend test suite reads two files out of the run bookkeeping folder
 sentence for you: everything the Desk was asked to do works and is photographed, but the short
 film meant to walk through the newest piece was aimed at the wrong copy of the page and shows
 nothing — one more brief run should fix that, and if it does not, we should close anyway.
+
+## Iteration 28 — goal-desk-iter-28
+
+**Date:** 2026-07-31T01:11:43+01:00
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** evidence
+**Journey deltas:**
+- Newly passing: none — all seventeen were already passing
+- Newly failing: none
+- Regressed: none
+- Re-checked this run: J-04, J-07, J-09 and J-16 by saved-script replay (4 of 4 green, zero script
+  edits), and J-17 by a fresh real-browser pass on the everyday page. I also opened J-05's and
+  J-07's pictures myself and re-counted J-06's tools in the running code. Nothing was dropped for
+  time and nothing was blocked by broken equipment
+- Picture debt CLOSED BY DECISION, not by success — the third attempt at the short guided film for
+  J-17 again shows none of its subject. The last run promised in writing this would be the final
+  attempt asked for, so the film now moves to the owner's optional list and is no longer tracked as
+  journey debt. Its make-up flag is cleared. No journey carries a make-up or equipment flag
+- Anti-goal violations: none new, none open. The three older items stay resolved and I re-checked
+  all three myself. Nothing of the owner's data was created, changed or removed this run
+
+**Reasoning:** This run changed no program code and I proved that rather than assuming it: the
+difference against the run's own starting point is empty under `apps/`, `scripts/` and `config/`,
+and the program tree is byte-identical to the tree the last run started from. So I checked the
+things that carry the weight, and I opened them. The new picture taken this run shows, in one frame
+at a normal window size with nothing cut off at the right, the Top-up Runs section reading "0 reused
+· 390 fetched · 0 unchanged · 14 failed", then "window basis not recorded in this run", then
+"Failed pairs (14)" with every pair carrying that same honest note — which is exactly the state the
+goal file demands for a run recorded before the new fields existed, and it had never been
+photographed until now. The populated case stays proven by last run's picture, which I re-opened
+and re-read line by line: "0 reused · 6 fetched · 2 unchanged · 4 failed", "2 pairs asked for a tail
+window · 10 pairs asked for the full lookback window", and four failed rows each naming its own
+"requested 2024-07-30 → 2026-07-30". That older picture still counts because the code behind it did
+not change by one byte. I re-ran the work myself: the whole back-end suite (1,474 passed, 8 skipped,
+exit 0 — the same result as the last two runs), the settings fingerprint (`08e471b10130e1e2`), and
+the tool list enumerated in the running program (exactly 17 names, which I read out one by one). I
+proved nothing of the owner's was written: only four rebuildable database sidecars are newer than
+the run's start, and the counts still read 759 price files, 1 universe record, 11 screens and 1
+top-up record. Coherence is COHERENCE-PASS and the deterministic scan is CLEAN; the goal file is
+unchanged, so no earlier pass has gone stale. The one thing this run existed to produce failed for
+the third time, and I proved that too instead of reading it: all five frames of the guided film
+share one checksum, which is also byte-identical to this run's own J-16 picture, and I opened one
+and found the everyday Desk page at its top with the Top-up section not in frame. This time the
+cause is different from last time and it sits in the recording tool, not the product: the film's
+script was written correctly, naming the throwaway copy's own address, but the recording program is
+always handed the everyday address on the command line and the command line wins — so the address
+in the script can never take effect. On top of that, no throwaway copy was ever set up, because at
+this run depth nobody is sent who is allowed to set one up. I did NOT ask for a fourth attempt. The
+last run stated in writing that this was the final one it would request, everything the film would
+have narrated is already proven in pictures I opened, and reversing that promise would be drift
+rather than evidence. One further thing I found and did not hide: the plan said the everyday page's
+build must not be touched, and the run's own start-up step rebuilt it anyway at 00:50 — I checked
+the consequence instead of assuming one, and the built file still points at the right back-end
+address, with all four replays and the browser pass running green against exactly that build minutes
+later.
+
+**Next-step recommendation:** Halt — the goal is achieved. Please confirm the finish. Three
+follow-ups, none a defect and none blocking. (1) The short guided film for J-17 "A top-up asks the
+vendor only for the bars the frozen store cannot already prove" was never recorded showing its
+subject, across three tries. The reason is now known exactly: the recording program always receives
+the everyday page's address on the command line, which overrides the address written inside the
+film's own script, and at this run depth nobody is sent who may start the throwaway copy the film
+needs. Fixing it means changing two lines of workshop plumbing
+(`scripts/automation/demo-phase.sh:316` and `scripts/automation/lib/demo_runner.py:1292` — let the
+script's own address win), not one line of your product. Everything the film would have shown is
+already proven in still pictures I opened and read. (2) The replay tool keeps saving the same first
+view of the page, so most replay pictures are one image; the real proof is the replay checks
+themselves, which all held. (3) The two optional notes from iteration 25 about the film's wording
+and its verdict line stay open and stay optional. One sentence for you: everything the Desk was
+asked to do is built, shown in pictures and proven number by number, and nothing of your data was
+touched — please confirm the finish, and treat the missing film as optional workshop tidying.

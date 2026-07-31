@@ -326,3 +326,30 @@ reports/demo/<iter>/*.png` — if every frame shares one hash, and that hash als
 **Applies to:** any iteration whose acceptance names a `[NEW]`-flagged demo-narrator walkthrough
 over data that only a throwaway/fixture-scoped rig can produce (top-up outcome counts, screen
 snapshots with specific pins, anything the ambient store cannot reproduce).
+
+## iter-28 — 2026-07-31T01:11:43+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A demo-narrator script's own `base_url` field is DEAD whenever the film runs through the
+pipeline: `scripts/automation/demo-phase.sh:316` unconditionally passes `--base-url "$FRONTEND_URL"`
+and `scripts/automation/lib/demo_runner.py:1292` resolves `opts.base_url or script.get("base_url")`
+— the CLI wins. Iteration 28 authored `"base_url": "http://localhost:3391"` exactly as its spec
+demanded and the film still recorded against `:3301`. Compounding it, `Depth: evidence` dispatches
+no developer and the browser-qa agent's remit excludes provisioning, so no agent at that depth can
+stand up the scoped rig a fixture-populated film needs — making a scoped-rig walkthrough
+structurally unobtainable at `evidence` depth no matter how the spec is worded.
+**Applies to:** any iteration whose deliverable is a demo-narrator recording against a rig other
+than the ambient `$FRONTEND_URL` pair — plan it at `full` depth with an explicit rig-provisioning
+task, or fix the two harness lines first; never re-spec the same `evidence`-depth retry.
+
+## iter-28 — 2026-07-31T01:11:43+01:00
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** An iteration spec that says "do NOT rebuild `apps/frontend/.next`" cannot bind the
+engine's own service-start step, which regenerated it (dev mode) at 00:50 despite the OUT OF SCOPE
+clause. The invariant that actually mattered survived — the compiled `layout.js` still carried
+`localhost:8301` as the live base and every replay ran green against that same build minutes later
+— so check the CONSEQUENCE (grep the chunk for the API base, confirm evidence post-dates the
+rebuild) rather than scoring the spec violation itself.
+**Applies to:** any iteration spec that tries to freeze a build artifact the pipeline's own
+start-services step owns.
