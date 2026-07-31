@@ -372,3 +372,28 @@ report a regression that is not one.
 **Applies to:** any iteration whose journey adds a NEW append-only ledger or first-run empty state;
 any browser-qa/demo-narrator lane authoring a golden script or demo script against the ambient
 `:3301/:8301` pair; any future desk journey with a "honest empty state" acceptance clause.
+
+## iter-30 — 2026-07-31T05:10:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** The engine can dispatch a SHALLOWER depth than the spec was written for, and nothing in
+the pipeline notices: `docs/phases/goal-desk-iter-30.md` says `Depth: lean` and lists three code
+changes IN SCOPE, but `iter-30/depth-dispatched` reads `evidence`, so no developer ran, the three
+changes silently vanished, and `state/blueprint.md:673` was written ahead of the build asserting two
+of them had shipped. Only the coherence auditor caught it. Two rules follow: never write a blueprint
+"RESOLVED/NOTED at iter-N" entry in the past tense before the code lands, and always compare
+`iter-<N>/depth-dispatched` against the spec's own `Depth:` line before scoring.
+
+**Applies to:** any iteration whose spec lists IN SCOPE code changes; any decomposer writing a
+blueprint entry before the developer runs; any evaluator reconciling a spec against what actually ran.
+
+## iter-30(b) — 2026-07-31T05:10:00+01:00
+
+**Verdict:** CONTINUE
+**Lesson:** Provisioning a scoped frontend rig with `NEXT_DIST_DIR` pointed at a scratchpad makes
+Next.js rewrite the TRACKED `apps/frontend/next-env.d.ts` and `apps/frontend/tsconfig.json` with
+absolute scratchpad paths; the rig teardown then deletes the target, leaving a dangling
+`/// <reference path=...>` in the repo. The rig must either build from a copy of the frontend tree or
+restore both files (`git checkout --`) in its own teardown.
+
+**Applies to:** any browser-qa dispatch that provisions a second scoped frontend build.

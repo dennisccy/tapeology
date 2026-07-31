@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-desk-iter-30",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "not_yet": true,
+  "steps": []
+}

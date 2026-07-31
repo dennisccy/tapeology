@@ -32,9 +32,10 @@
     "**/*.ts",
     "**/*.tsx",
     ".next-eval-iter10/types/**/*.ts",
+    ".next-qa/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-qa/types/**/*.ts"
+    "/home/dennis-chan/.cache/iad/shared/claude-1000/-home-dennis-chan-Git-tapeology/ed2eda9d-a300-40af-b7d9-38fc5240ab66/scratchpad/iter30-rig/frontend-dist/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

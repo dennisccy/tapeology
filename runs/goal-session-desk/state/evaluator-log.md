@@ -1783,3 +1783,71 @@ names the first symbol as "the one it was on", when blank would be honest, and n
 that a run started from the command line leaves a record. One sentence for you: the Desk now keeps
 an honest, permanent record of every screen run and answers a repeat click in a fraction of a second
 instead of redoing an hour of work — please confirm the finish, and treat the five notes as tidying.
+
+## Iteration 30 — goal-desk-iter-30
+
+**Date:** 2026-07-31T05:10:00+01:00
+**Verdict:** ESCALATE  (loop continues; the next run MUST use the full pipeline)
+**Depth dispatched:** evidence
+**Journey deltas:**
+- Newly passing: none — all eighteen were already passing
+- Newly failing: none
+- Regressed: none
+- Re-checked this run: J-01, J-02, J-03, J-04, J-06, J-07, J-09, J-10, J-12 and J-16 by saved-script
+  replay (10 of 10 green, zero script edits), and J-18 by a fresh real-browser pass on a throw-away
+  copy of the data. I also opened J-05's and J-16's pictures myself and re-counted J-06's tools in
+  the running code. Nothing was dropped for time and nothing was blocked by broken equipment
+- Picture debt PART-CLOSED: the picture the owner's rejection asked for — the Desk page's honest
+  "No screen runs recorded yet." starting state, on a copy that had never run a screen — was taken
+  this run and I opened it. The second half of that same rejection, re-recording the short guided
+  film so its frames differ, was not attempted at all; J-18 keeps its make-up flag for the film only
+- Anti-goal violations: one NEW and MINOR, still open — the throw-away rig's build rewrote two
+  tracked files of the app (`apps/frontend/next-env.d.ts`, `apps/frontend/tsconfig.json`) so they now
+  point at a temporary folder that has since been deleted. Nothing the user sees changed. The three
+  older items stay resolved and I re-checked all three myself. Nothing of the owner's data was
+  created, changed or removed this run
+
+**Reasoning:** I did not take any report's word for the one thing this run existed to produce. I
+opened the picture myself and read, in one frame at a normal window size with nothing cut off at the
+right, a Desk page that had never been used: "Desk screen not computed yet.", "No top-up runs
+recorded yet.", "No reconciliation run recorded yet." and — the line the owner's rejection named —
+the Screen Runs panel reading "No screen runs recorded yet.". That picture is its own image, not a
+copy of any other frame, and it was taken as the very first thing done to a fresh, empty copy of the
+data on separate ports, which was then thrown away in the same step. I proved the owner's own data
+was neither used nor written: nothing under the data folder is newer than this run's start except
+two rebuildable database sidecars, and all three screen-run records carry timestamps from before this
+run. The two states the rejection accepted as already covered — the filled-in ledger and the
+"reused" row — I re-opened from the last run's film frame and read both rows plus the latest-run
+detail in frame; they stay valid because not one byte of program code changed this run. I re-ran the
+work myself rather than trusting the reports: the whole back-end test suite (1,500 passed, 8 skipped,
+exit 0 — exactly the last run's figure), the settings fingerprint (`08e471b10130e1e2`), and the tool
+list read out of the running code (exactly 17 names). I also re-derived every item's own text
+signature from the goal file: all eighteen match, so no earlier pass has gone stale. I did NOT call
+the goal finished, for three reasons, none of which is a fault in what the product does. First, the
+machine gave this run its shortest setting, which sends no programmer — so two small fixes the run's
+own plan ordered were never made: the Desk page still shows an amber "101 members not reached"
+warning and a row of zeros beside a reused run's own honest "no walk was performed" line, and a run
+that fails before reaching any symbol still names the first name on the list as the one it was on.
+Second, because of that, the session's own planning document now states in writing that both fixes
+shipped; they did not, and the structure check flagged exactly this. Third, the rig's build rewrote
+two tracked files of the app to point at a temporary folder it then deleted, which would be a stray
+mistake to commit at the moment of finishing. The film — the other half of the owner's rejection —
+was not re-recorded either, because this run setting sends no film crew; I am treating that as
+presentation, not behaviour, and it rides along with the next run rather than being its reason.
+
+**Next-step recommendation:** One FULL-pipeline build run, five small jobs, no new features. It must be the full pipeline because every job needs a worker the short settings do not send: a programmer for the code and tests, and the film crew for the film. (1) Put back
+the two app files the throw-away rig rewrote so the project no longer points at a deleted folder, and
+stop the rig rewriting them again. (2) Make the two fixes the last plan ordered but never made: a
+reused run should stop showing the amber "101 members not reached" warning and the row of zeros
+beside its own "no walk was performed" line, and a run that fails before reaching any symbol should
+leave that field blank rather than naming a symbol it never touched. (3) Add the three small tests
+the plan listed for those cases and for a run started from the command line. (4) Correct the
+session's planning document, which currently claims both fixes already shipped. (5) While the filled-in
+page is up, re-record the short guided film for J-18 "Every screen run leaves an append-only record of
+what it attempted" so its frames differ from one another — a passenger job, not the reason for the run.
+I am bounding that last one: it is the last time I will ask for the film; if it comes out duplicated
+again it becomes optional polish and the finish is proposed on the pictures that already exist. One
+sentence for the owner: the picture you asked for was taken and it is genuine, but the run was given
+the shortest setting and so skipped its own two small fixes and the film — please approve one ordinary
+run to finish those and tidy the two stray files, or tell me to close now and treat all five as
+optional.
