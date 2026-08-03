@@ -1225,3 +1225,21 @@ export interface DeskScreenPinsResult {
   members_total: number;
   recorded: DeskScreenPinsRecorded | null;
 }
+
+// ONE registered universe membership snapshot's own served meta -- `UniverseStore.record`'s return
+// value verbatim (desk_universe.py's `meta` dict), which `POST /research/desk/universe/fetch`
+// serves under its `universe` key. Every field is the store's own; nothing here is derived. The
+// refresh chain reads only `id` and `member_count`, but the shape is declared in full so a future
+// reader of this payload is not tempted to re-declare a narrower one.
+export interface DeskUniverseSnapshotMeta {
+  id: string;
+  date: string;
+  checksum: string;
+  member_count: number;
+  source_url: string;
+  min_members: number;
+  max_members: number;
+  created_utc: string;
+  members: string[];
+  raw_members: Record<string, string>;
+}

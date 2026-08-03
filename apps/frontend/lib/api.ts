@@ -16,6 +16,7 @@ import type {
   DeskScreenSnapshot,
   DeskTopupComputeSnapshot,
   DeskTopupRunsListResult,
+  DeskUniverseSnapshotMeta,
   EdgeReportComputeSnapshot,
   EdgeReportPayload,
   LevelsResponse,
@@ -1326,6 +1327,52 @@ export async function fetchDeskScreenPins(screenDate: string): Promise<{
       /* keep default */
     }
     return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/universe/fetch — fetch, parse, validate and register ONE new universe
+// membership snapshot. The explicit operator research action; nothing here runs on a schedule.
+//
+// Modelled on `recordBarSeries` above rather than on the `triggerDesk*Compute` trio, because it
+// shares that function's semantics exactly: a 409 means "content identical to something already
+// registered", which is a NORMAL no-op outcome and not a failure. So this returns `status` the
+// same way — the caller branches on `status === 409`, never on `ok` alone. Three distinct
+// outcomes the backend already separates (desk_routes.py):
+//   * 200 — a NEW snapshot was registered; `data` is its own served meta;
+//   * 409 — `UniverseAlreadyRegistered`, whose `detail` IS the existing snapshot's id. The
+//     membership is unchanged and there was nothing to register — never a rewrite;
+//   * 503 (vendor unreachable) / 422 (parse, charset or bounds failure) — genuine failures.
+// The backend's `detail` is surfaced VERBATIM in every failing case, never coerced into one
+// generic message.
+export async function triggerDeskUniverseFetch(): Promise<{
+  ok: boolean;
+  data: DeskUniverseSnapshotMeta | null;
+  status?: number;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/universe/fetch`, { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        ok: true,
+        data: (data.universe as DeskUniverseSnapshotMeta) ?? null,
+        status: res.status,
+      };
+    }
+    // Deliberately avoids the word a shipped golden pins on the /desk page ("fetched"): this
+    // string can render inside the refresh chain's own step list, which sits ABOVE the ledger
+    // sections, and the replay engine takes the first in-DOM-order substring match page-wide.
+    let error = "The universe membership could not be read.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, status: res.status, error };
   } catch {
     return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
   }

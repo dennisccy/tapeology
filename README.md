@@ -74,6 +74,120 @@ Current capabilities (iter-22):
 - **Desk screening briefing (iter-22 complete)** — the third top-level page (`/desk`) presents a daily briefing over a registered S&P 100 universe snapshot, showing per-symbol the closest tradable support/resistance band, its A/B/C class, the closing price it was measured from, and how many days of historical data back it. Every row displays coverage badges for which timeframes have bars recorded, a "nearest opposite-side wall" disclosure showing the wall on the other side of price (or an honest note when none exists), a hover tooltip breaking down the walls by quality class, and clickable drill-in to the Structure page for that symbol on that date. A "Provenance" line tracks which universe snapshot, screen date, and configuration produced the briefing. Explicit operator-run "Run Screen" and "Top-up" buttons with live progress and cancel show real-time work, never auto-triggered on page load. Browsable screen history lists every past run; clicking a past run renders that exact snapshot's saved rows (no recompute). A "Top-up Runs" section logs every bar-fetch attempt with outcome detail — how many series were reused from storage, freshly fetched, or failed — and a "Reconcile Index" tool keeps the coverage badges honest by checking for drift between the bar index and stored files. All numbers on the page are read from their canonical owners (the tradability module for bands, the bar index for coverage) and never recomputed in the browser.
 <!-- /AUTO:capabilities -->
 
+## Reading the Desk page
+
+`/desk` answers one question: **of the ~100 biggest US stocks, which ones are sitting closest to
+a price wall right now?** It is the "what should I look at today" list that sits in front of
+`/structure` — Structure shows one symbol's walls in detail, Desk ranks the whole universe by
+them. The page computes nothing in the browser; every value is read verbatim from one recorded
+screen snapshot.
+
+### The sections
+
+**Provenance** — the five pins that define the snapshot: which universe list, the screen date,
+the as-of instant, the config fingerprint (`08e471b10130e1e2`, the frozen algorithm epoch), and a
+bar-store signature. Identical pins ⇒ byte-identical result. Beneath them the page also resolves
+today's pins live, so it can tell you e.g. *"No screen is recorded under the pins that resolve
+right now for this date — a run would walk 101 members."*
+
+**Briefing** — the ranked list. One row per universe member, as of its basis session:
+
+| Column | What it means |
+|---|---|
+| `side` | Is the nearest wall support (below price) or resistance (above)? |
+| `class` | The wall's A/B/C conviction tier, inherited from the tradable map |
+| `distance` | How far price sits from that wall, in bps. `0.00` means price is *inside* the band |
+| `score` | The band's quality score |
+| `coverage` | Which timeframes (1h/4h/1d/1w) have bars backing the row, and how fresh |
+| `tick evidence` | Whether a recorded trade-by-trade dataset also exists for that symbol |
+| `basis` | The exact date of the bar the row was measured from, and its age in days |
+| `history` | How many completed sessions back the wall was measured over, and from when |
+| `band` | The wall's actual price range, beside the close it was measured against |
+| `opposite` | The nearest wall on the *other* side of price — or an honest "no band on the other side" |
+| `levels` | Raw level counts per timeframe behind the band |
+
+Rank order is deterministic: band class, then distance ascending, then score descending, then
+symbol — recorded in the snapshot, not re-sorted by the browser.
+
+**Skipped Members** — members that could not be ranked, with the reason (`no bars` /
+`no basis session`), rather than being quietly dropped.
+
+**Screen History / Top-up Runs / Screen Runs / Index Reconciliation** — append-only ledgers of
+every run. Nothing overwrites; a re-run under identical pins is refused and says so. Clicking a
+history row swaps the page to that exact recording (a read-back, no recompute).
+
+**Screen Comparison** — how the displayed snapshot differs from the one recorded before it:
+rows compared, rank changed, side changed, entered, left.
+
+### Refreshing the data
+
+Making the briefing current takes four acts, and **the order matters**: a screen's
+`bar_store_signature` pin is derived from the bar index and resolved *before* the member walk
+starts, so a screen run that precedes the bars and the index records a snapshot pinned to data it
+did not read.
+
+**Refresh Data** runs all four in that order from one click:
+
+| # | Step | What it does |
+|---|---|---|
+| 1 | Universe membership | Refetches the S&P 100 constituents. An unchanged membership is a **no-op**, not a failure — snapshots are immutable and are never re-recorded |
+| 2 | Bar top-up | Fills in missing bars across the universe. Store-first, so already-held pairs cost no vendor call |
+| 3 | Bar index | Reconciles the index against what is actually on disk, which is what the coverage badges read |
+| 4 | Screen for today | Walks the universe and records the ranked snapshot |
+
+It advances on each step finishing and **halts** on a failure or a cancel, marking the remaining
+steps honestly un-run. If a step's job is already running — you clicked Top-up yourself a minute
+ago — it **joins that run** rather than starting a second one, so single-flight is never bypassed.
+**Stop** cancels the current step's job and stops the sequence.
+
+The three individual controls remain below it — Run Screen, Top-up and Reconcile Index — and stay
+enabled while a sequence runs; step 1 is the one act with no button of its own. Re-clicking after
+an interruption is cheap: the membership answers 409, the top-up reuses what it holds, and a
+screen under identical pins short-circuits to a reuse. Nothing is persisted across a reload — a
+refresh sequence is never resumed automatically, so an interrupted one is restarted by clicking
+again, not continued.
+
+The same four acts are available from the command line:
+
+```bash
+cd apps/backend
+BE=http://localhost:8000        # this checkout's actual port — see the port note under "How to run"
+
+curl -X POST $BE/research/desk/universe/fetch                        # 1 — membership
+.venv/bin/python -m app.research.desk_topup_compute                  # 2 — bars (unattended)
+curl -X POST $BE/research/desk/coverage/reconcile/compute            # 3 — index
+.venv/bin/python -m app.research.desk_screen_compute --date "$(date -u +%F)"   # 4 — screen
+```
+
+The two compute steps also have background-job endpoints (`POST .../topup/compute`,
+`POST .../screen/compute`) that return immediately and are polled with the matching `GET`; the
+CLI forms above run to completion in the foreground instead.
+
+`--date` is required on the screen CLI and on `POST /research/desk/screen/compute` — neither ever
+defaults to today's wall clock, because the screen's `as_of` is a determinism pin.
+
+### What it does not do
+
+No trade signals, no positions, no PnL, no live prices. It is a proximity ranking over frozen
+daily bars — *"price is 4 bps from a Class A resistance"* is an observation, not a
+recommendation. Every button is operator-triggered; loading the page never starts a compute, and
+nothing on this page runs on a schedule.
+
+### How to read the ranking critically
+
+**Every ranked row is Class A**, so the primary sort key carries no information and the real
+ordering is distance-then-score. That held across two independent snapshots on different dates:
+
+| Snapshot | Ranked | Skipped | Class A | At `0.00` bps | Distance range |
+|---|---|---|---|---|---|
+| 2026-07-31 | 100 | 1 | 100 / 100 | 15 | 0.16 – 2400 bps |
+| 2026-08-03 | 101 | 0 | 101 / 101 | 11 | 0.02 – 1900 bps |
+
+A `0.00` bps row means price sits *inside* the band. The top of the list is meaningful; the tail
+is effectively saying *"this stock isn't near anything"* — 1900 bps is 19% away from its
+"nearest" wall. Whether Class A discriminates usefully across a universe this size is an open
+question: the ranking shipped, a validation of it did not.
+
 This project embeds the [`incredible_auto_dev`](https://github.com/dennisccy/incredible_auto_dev)
 AI multi-agent dev-chain as a **git subtree** at `incredible_auto_dev/`, following the same
 monorepo wiring as `trendora`.

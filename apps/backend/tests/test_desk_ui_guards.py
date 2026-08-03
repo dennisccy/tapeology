@@ -235,7 +235,12 @@ def test_desk_page_rows_reorder_guard_can_fail_on_a_seeded_violation():
 # row), but it must never drop, hide, or rename the testid itself. "the compute controls" (goal.md
 # J-16 step 4) are the three primary trigger buttons this page ships (Run Screen / Top-up /
 # Reconcile Index) -- untouched by this iteration's ranked-row-only reflow, checked here anyway as
-# the cheapest possible proof nothing regressed.
+# the cheapest possible proof nothing regressed. `desk-refresh-all-button` is the FOURTH compute
+# control by that same definition (it drives all three of the above in sequence, plus the
+# membership fetch). No golden script targets it and none ever should -- it is a write path, and
+# every shipped desk golden is deliberately read-only -- so this static presence pin is the ONLY
+# automated proof it still ships at all. Its behavioural guards live in
+# test_desk_refresh_chain_guard.py.
 _REQUIRED_DESK_TESTIDS = (
     "desk-screen-rows-table",
     "desk-row-drill-in",
@@ -258,6 +263,7 @@ _REQUIRED_DESK_TESTIDS = (
     "desk-run-screen-button",
     "desk-topup-button",
     "desk-reconcile-button",
+    "desk-refresh-all-button",
 )
 
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   cancelDeskReconcileCompute,
   cancelDeskScreenCompute,
@@ -19,6 +19,7 @@ import {
   triggerDeskReconcileCompute,
   triggerDeskScreenCompute,
   triggerDeskTopupCompute,
+  triggerDeskUniverseFetch,
 } from "@/lib/api";
 import type {
   DeskReconcileComputeSnapshot,
@@ -2119,6 +2120,240 @@ function ReconcileIndexControl({
   );
 }
 
+// REFRESH-CHAIN-START
+// One control that runs the four refresh acts in the order the data actually depends on:
+// the universe membership, the bar top-up, the bar index repair, then the screen for today.
+//
+// The order is not cosmetic. A screen's `bar_store_signature` pin is derived from `bar_index`
+// coverage and is resolved ONCE, before the member walk starts (desk_screen_compute.py) — so a
+// screen run that precedes the top-up and the index repair records a snapshot pinned to bars it
+// did not actually read.
+//
+// This is a CLIENT-side sequence over the four endpoints each existing control already calls. It
+// deliberately does NOT add a backend orchestrator: reaching the real compute managers from a
+// compute module would be a circular import (desk_topup_compute.py's own documented constraint),
+// so an orchestrator would have to call the walker functions directly and would therefore bypass
+// each manager's single-flight slot — letting a chained run and a hand-clicked control walk the
+// same BarStore at once. Driving the real endpoints gets single-flight for free: a POST against a
+// running job returns that job unchanged (`started: false`), which this chain ADOPTS.
+//
+// It also adds ZERO polling. The three per-compute poll effects inside DeskPage already keep
+// `topupCompute`/`reconcileCompute`/`screenCompute` current and already do their own terminal-tick
+// ledger refreshes; this chain only WAITS on the state they maintain, read through a ref mirror so
+// a plain async driver can see the newest value.
+//
+// Every step is an explicit operator act: the driver is reachable from the button's onClick and
+// nothing else. It is never called from an effect, never resumed after a reload, and never
+// scheduled. Re-clicking after an interrupted run is cheap and idempotent — the membership fetch
+// answers 409, the top-up is store-first, and a screen under identical pins short-circuits to a
+// reuse.
+
+const REFRESH_CHAIN_STEP_KEYS = ["universe", "topup", "reconcile", "screen"] as const;
+type RefreshChainStepKey = (typeof REFRESH_CHAIN_STEP_KEYS)[number];
+
+const REFRESH_CHAIN_STEP_LABELS: Record<RefreshChainStepKey, string> = {
+  universe: "Universe membership",
+  topup: "Bar top-up",
+  reconcile: "Bar index",
+  screen: "Screen for today",
+};
+
+// `noop` is a genuine fourth outcome, not a flavour of `done`: a 409 from the membership fetch
+// means the content is identical to a snapshot already registered, so there was nothing to
+// register. Calling that "done" would imply a write that never happened.
+type RefreshChainStepState =
+  | "queued"
+  | "running"
+  | "done"
+  | "noop"
+  | "cancelled"
+  | "failed"
+  | "skipped";
+
+interface RefreshChainStep {
+  key: RefreshChainStepKey;
+  state: RefreshChainStepState;
+  message: string;
+}
+
+interface RefreshChainRun {
+  steps: RefreshChainStep[];
+  outcome: "running" | "done" | "halted" | "cancelled";
+}
+
+// Literal class strings, never interpolated, so Tailwind's scanner emits them — the
+// FETCH_RESULT_COLOR precedent on /structure, in this page's own palette.
+const REFRESH_CHAIN_STEP_COLOR: Record<RefreshChainStepState, string> = {
+  queued: "text-slate-600",
+  running: "text-amber-200/70",
+  done: "text-emerald-300",
+  noop: "text-slate-500",
+  cancelled: "text-amber-200/70",
+  failed: "text-red-300",
+  skipped: "text-slate-600",
+};
+
+// The cancelled wording each step already ships in its own control, reused verbatim so the chain
+// and the control beside it can never disagree about what a cancel left behind.
+const REFRESH_CHAIN_CANCELLED: Record<RefreshChainStepKey, string> = {
+  universe: "stopped on request",
+  topup: "cancelled — pairs already recorded before the cancel stay stored",
+  reconcile: "cancelled — the index was not repaired this run",
+  screen: "cancelled — nothing was recorded this run",
+};
+
+// What each compute trigger hands back. Identical across all three managers.
+type ChainTriggerResult<T> = {
+  ok: boolean;
+  data?: { started: boolean; compute: T };
+  error?: string;
+};
+
+// The three snapshot shapes agree on exactly these fields, which is all the waiter needs.
+type ChainJobSnapshot = { id: string; state: string; error: string | null };
+
+const REFRESH_CHAIN_WAIT_TICK_MS = 250;
+
+function refreshChainSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+// Wait for the job this chain just started — or ADOPTED — to reach a terminal state. Issues ZERO
+// requests: it re-reads the snapshot the step's own existing poll effect already maintains.
+//
+// Matching the job's own `id` is load-bearing, not defensive. All three managers publish
+// `state: "running"` BEFORE their trigger returns, so the POST response is always `running`; and
+// when this wait begins React has not re-rendered yet, so `read()` still returns the PREVIOUS
+// run's snapshot — which, after a page load that seeded a finished job, is very often already
+// terminal. Advancing on the state alone would skip every step instantly.
+async function awaitRefreshChainJob<T extends ChainJobSnapshot>(
+  read: () => T | null,
+  jobId: string,
+  stopped: () => boolean,
+): Promise<T | null> {
+  for (;;) {
+    if (stopped()) return null;
+    const snapshot = read();
+    if (snapshot !== null && snapshot.id === jobId && snapshot.state !== "running") {
+      return snapshot;
+    }
+    await refreshChainSleep(REFRESH_CHAIN_WAIT_TICK_MS);
+  }
+}
+
+// Terminal one-liners. Each is a re-format of what the compute snapshot already served — never a
+// second read, never a derived number. The chain never reads a durable run ledger here: a step's
+// poll publishes the terminal snapshot BEFORE refetching its ledger, so a ledger read at this
+// instant would still hold the PREVIOUS run.
+function describeTopupDone(snapshot: DeskTopupComputeSnapshot): string {
+  const counts = topupOutcomeCounts(snapshot.progress.outcomes);
+  return `reused ${counts.reused} · new ${counts.fetched} · unchanged ${counts.unchanged} · failed ${counts.failed}`;
+}
+
+function describeReconcileDone(_snapshot: DeskReconcileComputeSnapshot): string {
+  // This manager's snapshot carries only `progress.phase` — it has no counts to re-render. The
+  // run's own numbers live in its durable record, shown in the ledger further down the page.
+  return "done — this run's own record is in the ledger below";
+}
+
+function describeScreenDone(snapshot: DeskScreenComputeSnapshot): string {
+  if (snapshot.screen_id === null) return "done";
+  return snapshot.reused
+    ? `reused the snapshot already recorded for these pins — ${snapshot.screen_id}`
+    : `recorded a new snapshot — ${snapshot.screen_id}`;
+}
+
+interface RefreshChainControlProps {
+  run: RefreshChainRun | null;
+  onRefreshAll: () => void;
+  onStop: () => void;
+  stopRequested: boolean;
+}
+
+function DeskRefreshChainControl({
+  run,
+  onRefreshAll,
+  onStop,
+  stopRequested,
+}: RefreshChainControlProps) {
+  const isRunning = run?.outcome === "running";
+  const isHalted = run?.outcome === "halted";
+  const buttonLabel = isRunning ? "Refreshing…" : isHalted ? "Retry Refresh Data" : "Refresh Data";
+  return (
+    <div data-testid="desk-refresh-control" className="flex flex-col items-center gap-1">
+      <button
+        type="button"
+        data-testid="desk-refresh-all-button"
+        onClick={onRefreshAll}
+        disabled={isRunning}
+        className={PRIMARY_BUTTON_CLASS}
+      >
+        {buttonLabel}
+      </button>
+      <p data-testid="desk-refresh-note" className="max-w-md text-center text-[11px] text-slate-600">
+        One click runs four steps in order: the universe membership, the bar top-up, the bar index,
+        then the screen for today. Each step calls the same endpoint its own control here already
+        calls; nothing runs without this click.
+      </p>
+      {run !== null && (
+        <>
+          <ol data-testid="desk-refresh-steps" className="mt-1 w-full max-w-md space-y-0.5">
+            {run.steps.map((step, index) => (
+              <li
+                key={step.key}
+                data-testid={`desk-refresh-step-${step.key}`}
+                className={`flex flex-wrap items-baseline gap-x-2 text-[11px] ${REFRESH_CHAIN_STEP_COLOR[step.state]}`}
+              >
+                <span className="font-mono">{index + 1}.</span>
+                <span className="font-medium">{REFRESH_CHAIN_STEP_LABELS[step.key]}</span>
+                {step.state === "running" && (
+                  <span
+                    aria-hidden="true"
+                    className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle"
+                  />
+                )}
+                <span>{step.message}</span>
+              </li>
+            ))}
+          </ol>
+          <p data-testid="desk-refresh-summary" className="text-[11px] text-slate-500">
+            {refreshChainSummary(run)}
+          </p>
+          {isRunning && (
+            <button
+              type="button"
+              data-testid="desk-refresh-stop"
+              onClick={onStop}
+              disabled={stopRequested}
+              className={CANCEL_BUTTON_CLASS}
+            >
+              {stopRequested ? "Stopping — the current step is finishing…" : "Stop"}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function refreshChainSummary(run: RefreshChainRun): string {
+  const activeIndex = run.steps.findIndex((step) => step.state === "running");
+  if (run.outcome === "running" && activeIndex >= 0) {
+    return `Step ${activeIndex + 1} of 4 — ${REFRESH_CHAIN_STEP_LABELS[run.steps[activeIndex].key]}.`;
+  }
+  if (run.outcome === "done") return "All four steps finished.";
+  if (run.outcome === "cancelled") return "Stopped on request — the later steps did not run.";
+  const stoppedAt = run.steps.find(
+    (step) => step.state === "failed" || step.state === "cancelled",
+  );
+  return stoppedAt
+    ? `Stopped at ${REFRESH_CHAIN_STEP_LABELS[stoppedAt.key]} — the later steps did not run.`
+    : "Stopped — the later steps did not run.";
+}
+// REFRESH-CHAIN-END
+
 interface ScreenControlProps {
   compute: DeskScreenComputeSnapshot | null;
   onTrigger: () => void;
@@ -2158,10 +2393,12 @@ function DeskNotComputedPanel({
   screen,
   topup,
   reconcile,
+  refreshChain,
 }: {
   screen: ScreenControlProps;
   topup: TopupControlProps;
   reconcile: ReconcileControlProps;
+  refreshChain: RefreshChainControlProps;
 }) {
   return (
     <div
@@ -2172,10 +2409,19 @@ function DeskNotComputedPanel({
       <p className="mt-1 text-xs text-amber-200/70">
         No screen has been recorded yet for the registered universe.
       </p>
-      <div className="mt-3 flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-center sm:gap-12">
-        <ScreenComputeControl {...screen} />
-        <TopupComputeControl {...topup} />
-        <ReconcileIndexControl {...reconcile} />
+      {/* The chained control sits above the three individual ones it drives — this is the
+          first-ever-run panel, where running all four in the right order matters most. The three
+          stay exactly as they were, and stay enabled: a hand-click on a step the chain has not
+          reached yet is harmless, since the chain adopts whatever is already running. */}
+      <div className="mt-3 flex flex-col items-center gap-4">
+        <DeskRefreshChainControl {...refreshChain} />
+        <div className="w-full border-t border-amber-800/40 pt-4">
+          <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-center sm:gap-12">
+            <ScreenComputeControl {...screen} />
+            <TopupComputeControl {...topup} />
+            <ReconcileIndexControl {...reconcile} />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2197,6 +2443,7 @@ function DeskPopulatedScreen({
   screenControlProps,
   topupControlProps,
   reconcileControlProps,
+  refreshChainControlProps,
   displayedPins,
 }: {
   snapshot: DeskScreenSnapshot;
@@ -2210,6 +2457,7 @@ function DeskPopulatedScreen({
   screenControlProps: ScreenControlProps;
   topupControlProps: TopupControlProps;
   reconcileControlProps: ReconcileControlProps;
+  refreshChainControlProps: RefreshChainControlProps;
   displayedPins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
 }) {
   return (
@@ -2278,10 +2526,15 @@ function DeskPopulatedScreen({
 
       <section aria-label="Run Screen, Top-up and Reconcile Index controls">
         <Panel title="Run Screen / Top-up / Reconcile Index">
-          <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-center sm:gap-12">
-            <ScreenComputeControl {...screenControlProps} />
-            <TopupComputeControl {...topupControlProps} />
-            <ReconcileIndexControl {...reconcileControlProps} />
+          <div className="flex flex-col items-center gap-4">
+            <DeskRefreshChainControl {...refreshChainControlProps} />
+            <div className="w-full border-t border-slate-800 pt-4">
+              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-center sm:gap-12">
+                <ScreenComputeControl {...screenControlProps} />
+                <TopupComputeControl {...topupControlProps} />
+                <ReconcileIndexControl {...reconcileControlProps} />
+              </div>
+            </div>
           </div>
         </Panel>
       </section>
@@ -2380,6 +2633,37 @@ export default function DeskPage() {
     data: DeskScreenPinsResult | null;
     error?: string;
   } | null>(null);
+
+  // The chained refresh (see the REFRESH-CHAIN block above). `refreshChain` is plain state and is
+  // deliberately NOT persisted: a reload clears it and nothing resumes, which is what keeps "every
+  // run is an explicit operator act" true structurally rather than by convention. Whatever job was
+  // in flight still shows in its own control after the reload — the mount seed and that step's own
+  // poll effect re-attach to it exactly as they always did.
+  const [refreshChain, setRefreshChain] = useState<RefreshChainRun | null>(null);
+  const [refreshChainStopRequested, setRefreshChainStopRequested] = useState(false);
+  const refreshChainStopRef = useRef(false);
+  const refreshChainActiveRef = useRef(false);
+
+  // Mirrors of the three compute snapshots, so the plain async driver below can read the newest
+  // value (a closure cannot). NOT a second source of truth: each holds exactly what its own
+  // useState already holds, and nothing ever writes to these except this one effect.
+  const topupComputeRef = useRef(topupCompute);
+  const reconcileComputeRef = useRef(reconcileCompute);
+  const screenComputeRef = useRef(screenCompute);
+  useEffect(() => {
+    topupComputeRef.current = topupCompute;
+    reconcileComputeRef.current = reconcileCompute;
+    screenComputeRef.current = screenCompute;
+  }, [topupCompute, reconcileCompute, screenCompute]);
+
+  // Unmounting (a nav away mid-chain) stops the driver at its next check — no POST after the page
+  // is gone, no setState on an unmounted component, no orphaned wait loop.
+  useEffect(
+    () => () => {
+      refreshChainStopRef.current = true;
+    },
+    [],
+  );
 
   // Mount: eight GETs, zero POSTs (TC-19/TC-8, extended era-desk-iter-14/goal-desk-iter-29/
   // goal-desk-iter-36) — the screen list/latest, ALL THREE compute managers' current/last snapshot
@@ -2500,7 +2784,13 @@ export default function DeskPage() {
     return () => clearInterval(handle);
   }, [reconcileCompute]);
 
-  async function handleTriggerScreen() {
+  // The three trigger handlers below each end with `return result;` (added for the refresh chain)
+  // so the chain can read the job's own id, the `started` flag and any verbatim error WITHOUT
+  // duplicating the per-control state bookkeeping each one already does. Their bodies are
+  // otherwise unchanged, and a value-returning function is still assignable to the `onTrigger: ()
+  // => void` prop the three controls declare, so those components and their props interfaces are
+  // untouched.
+  async function handleTriggerScreen(): Promise<ChainTriggerResult<DeskScreenComputeSnapshot>> {
     setScreenTriggering(true);
     setScreenTriggerError(null);
     setScreenCancelRequested(false);
@@ -2512,6 +2802,7 @@ export default function DeskPage() {
     } else {
       setScreenTriggerError(result.error ?? "The screen compute could not be started.");
     }
+    return result;
   }
 
   async function handleCancelScreen() {
@@ -2524,7 +2815,7 @@ export default function DeskPage() {
     }
   }
 
-  async function handleTriggerTopup() {
+  async function handleTriggerTopup(): Promise<ChainTriggerResult<DeskTopupComputeSnapshot>> {
     setTopupTriggering(true);
     setTopupTriggerError(null);
     setTopupCancelRequested(false);
@@ -2536,6 +2827,7 @@ export default function DeskPage() {
     } else {
       setTopupTriggerError(result.error ?? "The bar top-up could not be started.");
     }
+    return result;
   }
 
   async function handleCancelTopup() {
@@ -2548,7 +2840,9 @@ export default function DeskPage() {
     }
   }
 
-  async function handleTriggerReconcile() {
+  async function handleTriggerReconcile(): Promise<
+    ChainTriggerResult<DeskReconcileComputeSnapshot>
+  > {
     setReconcileTriggering(true);
     setReconcileTriggerError(null);
     setReconcileCancelRequested(false);
@@ -2560,6 +2854,7 @@ export default function DeskPage() {
     } else {
       setReconcileTriggerError(result.error ?? "The index reconciliation could not be started.");
     }
+    return result;
   }
 
   async function handleCancelReconcile() {
@@ -2570,6 +2865,175 @@ export default function DeskPage() {
       setReconcileCancelRequested(false);
       setReconcileCancelError(result.error ?? "The index reconciliation could not be cancelled.");
     }
+  }
+
+  // The chained refresh driver. Reachable from the Refresh Data button's onClick and NOTHING else
+  // — never an effect, never a timer, never a resume. Structure mirrors /structure's own
+  // `handleFetchYahoo`: a mutable step array republished after every transition so each outcome
+  // lands live rather than all at once at the end.
+  async function handleRefreshAll() {
+    if (refreshChainActiveRef.current) return;
+    refreshChainActiveRef.current = true;
+    refreshChainStopRef.current = false;
+    setRefreshChainStopRequested(false);
+
+    const steps: RefreshChainStep[] = REFRESH_CHAIN_STEP_KEYS.map((key) => ({
+      key,
+      state: "queued" as RefreshChainStepState,
+      message: "queued",
+    }));
+    const publish = (outcome: RefreshChainRun["outcome"]) =>
+      setRefreshChain({ steps: steps.map((step) => ({ ...step })), outcome });
+
+    // Halt: mark this step's own terminal outcome, mark every later step honestly un-run, and
+    // stop. A halted chain never issues another POST.
+    const halt = (index: number, state: RefreshChainStepState, message: string) => {
+      steps[index] = { key: steps[index].key, state, message };
+      for (let i = index + 1; i < steps.length; i += 1) {
+        steps[i] = {
+          key: steps[i].key,
+          state: "skipped",
+          message: "not run — the sequence stopped earlier",
+        };
+      }
+      publish(state === "cancelled" ? "cancelled" : "halted");
+      refreshChainActiveRef.current = false;
+    };
+
+    // Step 1 — the membership. Synchronous: no compute manager, no poll, no cancel route.
+    steps[0] = { key: "universe", state: "running", message: "reading the membership source…" };
+    publish("running");
+    const universe = await triggerDeskUniverseFetch();
+    if (refreshChainStopRef.current) {
+      halt(0, "cancelled", REFRESH_CHAIN_CANCELLED.universe);
+      return;
+    }
+    if (universe.ok && universe.data !== null) {
+      steps[0] = {
+        key: "universe",
+        state: "done",
+        message: `registered ${universe.data.member_count} members — ${universe.data.id}`,
+      };
+      // A NEW membership changes which snapshot today's pins resolve against, so refresh that ONE
+      // read here — the same "on a terminal outcome, refetch once" precedent the screen poll
+      // already uses for this exact endpoint. Never a timer, never a poll.
+      const pins = await fetchDeskScreenPins(todayUtcDate());
+      setTodayPinsResult((previous) =>
+        pins.ok || previous === null || !previous.ok ? pins : previous,
+      );
+    } else if (universe.status === 409) {
+      // Content identical to a snapshot already registered — there was nothing to register. A
+      // normal outcome, not a failure. The backend's own `detail` already names the existing
+      // snapshot and says why nothing was written, so it is surfaced VERBATIM after a one-word
+      // marker rather than re-wrapped in a sentence that repeats it.
+      steps[0] = {
+        key: "universe",
+        state: "noop",
+        message: `unchanged — ${universe.error ?? "this membership is already registered"}`,
+      };
+    } else {
+      halt(0, "failed", universe.error ?? "The universe membership could not be read.");
+      return;
+    }
+    publish("running");
+
+    // Steps 2-4 — three pollable jobs, each started through its OWN existing handler.
+    const runJob = async <T extends ChainJobSnapshot>(
+      index: number,
+      trigger: () => Promise<ChainTriggerResult<T>>,
+      read: () => T | null,
+      describeDone: (snapshot: T) => string,
+    ): Promise<boolean> => {
+      const key = steps[index].key;
+      if (refreshChainStopRef.current) {
+        halt(index, "cancelled", REFRESH_CHAIN_CANCELLED[key]);
+        return false;
+      }
+      steps[index] = { key, state: "running", message: "starting…" };
+      publish("running");
+
+      const started = await trigger();
+      if (!started.ok || !started.data) {
+        halt(index, "failed", started.error ?? "This step could not be started.");
+        return false;
+      }
+      // Single-flight adoption: `started: false` means a job was already running and the manager
+      // handed THAT job back unchanged. The chain waits on it — never treats it as an error, and
+      // never starts a second one.
+      const adopted = started.data.started === false;
+      steps[index] = {
+        key,
+        state: "running",
+        message: adopted ? "joined a job already running" : "running",
+      };
+      publish("running");
+
+      const settled = await awaitRefreshChainJob(
+        read,
+        started.data.compute.id,
+        () => refreshChainStopRef.current,
+      );
+      if (settled === null) {
+        halt(index, "cancelled", REFRESH_CHAIN_CANCELLED[key]);
+        return false;
+      }
+      if (settled.state === "done") {
+        const detail = describeDone(settled);
+        steps[index] = {
+          key,
+          state: "done",
+          message: adopted ? `joined a job already running — ${detail}` : detail,
+        };
+        publish("running");
+        return true;
+      }
+      if (settled.state === "cancelled") {
+        halt(index, "cancelled", REFRESH_CHAIN_CANCELLED[key]);
+        return false;
+      }
+      halt(index, "failed", settled.error ?? "This step failed.");
+      return false;
+    };
+
+    if (!(await runJob(1, handleTriggerTopup, () => topupComputeRef.current, describeTopupDone))) {
+      return;
+    }
+    if (
+      !(await runJob(
+        2,
+        handleTriggerReconcile,
+        () => reconcileComputeRef.current,
+        describeReconcileDone,
+      ))
+    ) {
+      return;
+    }
+    if (
+      !(await runJob(3, handleTriggerScreen, () => screenComputeRef.current, describeScreenDone))
+    ) {
+      return;
+    }
+
+    publish("done");
+    refreshChainActiveRef.current = false;
+  }
+
+  // Stopping does two independent things, both required: it stops the chain from advancing (the
+  // ref is read synchronously by the driver's next check), AND it cancels the step's own job
+  // through the cancel endpoint that step already ships. The membership fetch has no cancel route
+  // — a single synchronous POST — so the chain still stops, and the call already sent finishes
+  // server-side either way.
+  //
+  // The reverse path needs no code at all: a per-control Cancel drives that job to `cancelled`,
+  // which the waiter observes and the driver halts on.
+  async function handleStopRefreshChain() {
+    refreshChainStopRef.current = true;
+    setRefreshChainStopRequested(true);
+    const active = refreshChain?.steps.find((step) => step.state === "running") ?? null;
+    if (active === null) return;
+    if (active.key === "topup") await handleCancelTopup();
+    else if (active.key === "reconcile") await handleCancelReconcile();
+    else if (active.key === "screen") await handleCancelScreen();
   }
 
   // era-desk-iter-6 (J-05): select a past history row — fetch-and-swap, no POST, no recompute
@@ -2627,6 +3091,12 @@ export default function DeskPage() {
     onCancel: handleCancelReconcile,
     cancelRequested: reconcileCancelRequested,
     cancelError: reconcileCancelError,
+  };
+  const refreshChainControlProps: RefreshChainControlProps = {
+    run: refreshChain,
+    onRefreshAll: handleRefreshAll,
+    onStop: handleStopRefreshChain,
+    stopRequested: refreshChainStopRequested,
   };
 
   const latest = screenResult?.ok ? screenResult.data?.latest ?? null : null;
@@ -2715,6 +3185,7 @@ export default function DeskPage() {
             screen={screenControlProps}
             topup={topupControlProps}
             reconcile={reconcileControlProps}
+            refreshChain={refreshChainControlProps}
           />
         ) : (
           // `latest` is narrowed non-null by this ternary's own condition, so `displayedSnapshot ??
@@ -2732,6 +3203,7 @@ export default function DeskPage() {
             screenControlProps={screenControlProps}
             topupControlProps={topupControlProps}
             reconcileControlProps={reconcileControlProps}
+            refreshChainControlProps={refreshChainControlProps}
             displayedPins={displayedPinsResult}
           />
         )}
