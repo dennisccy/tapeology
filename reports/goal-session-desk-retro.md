@@ -6,43 +6,41 @@
 > Codes: P0/P1/P2 = how urgent · Effort S/M/L = how much work · Risk LOW/MED/HIGH
 > = chance a change breaks something else.
 
-**Session:** desk · **Terminal status:** STALLED · **Iterations:** 22
+**Session:** desk · **Terminal status:** GOAL_ACHIEVED · **Iterations:** 37
 
 ## Candidate items
 
-### RETRO-1 · Instrument and cap goal-evaluator wall time per iteration
-- **Proposed:** P1 · Effort M · Risk LOW
-- **Problem:** The goal-evaluator agent consumed 27 cumulative hours across 22 iterations, with a single failure in iter 7 taking over 18 hours before timing out. Teams planning future sessions have no visibility into when an evaluator is stalled or overconstrained.
-- **Evidence:** Agent economics — "total goal-evaluator: 1621.7m" and Wall-time report iter 7 — "goal-evaluator: 1100.0m calls=1 failures=1"
-- **Sketch:** Add a per-iteration wall-time circuit breaker to telemetry collection (e.g., alert if evaluator > 60m, fail if > 120m). Log cumulative evaluator minutes and frame-rate telemetry per journey to detect slow convergence early. Surface the threshold in session.json and loop documentation.
-- **Verify idea:** Run a multi-iteration session and confirm that an evaluator timeout (or near-limit) logs a clear warning in telemetry.jsonl before the iteration halts.
-
-### RETRO-2 · Require demo-walkthrough acceptance to include assertion source (not gallery presence alone)
+### RETRO-1 · Goal-evaluator wall-time outlier — rebalance agent economics
 - **Proposed:** P1 · Effort M · Risk MED
-- **Problem:** Demo-narrator verdicts report RECORDED success when the frame gallery is non-empty, even if the frames are byte-identical or scrolled off-screen, making the walkthrough unreliable as an acceptance criterion.
-- **Evidence:** Lessons tail — "Demo Verdict: RECORDED with a non-empty gallery is NOT proof the film shows anything: this run's three frames are one byte-identical image (md5 `3b02db86…`)" and "Narration accuracy had to be proven a different way — by re-deriving every quoted number from the recorded snapshot on disk."
-- **Sketch:** Change demo_runner.py to log frame-by-frame md5s and viewport position at each step. Modify the demo-narrator verdict logic to flag walkthrough conjuncts as REQUIRES_MANUAL if frame hashes repeat or if scrollable containers remain unseen. Reference `.claude/judgment-rubrics.md` evidence-floor rules when emitting the verdict.
-- **Verify idea:** Run a demo walkthrough on a scrollable UI element; confirm the verdict either includes frame hashes or marks the conjunct as requiring manual verification.
+- **Problem:** The goal-evaluator agent consumed 1894 minutes over 37 iterations while developer consumed 682 minutes — nearly 2.8× more wall time. This imbalance starves other agents and creates bottleneck risk.
+- **Evidence:** Agent economics — "total goal-evaluator 1893.6m" vs "total developer 682.1m" (lines 653–654). Iter 7 alone shows goal-evaluator 1100.0m with failures=1 (line 158).
+- **Sketch:** Analyze goal-evaluator dispatch: identify overlapping work with auditor/coherence-auditor, or excessive retry loops within verdict logic. Consider splitting verdict logic into fast binary path vs. deep analysis, or deferring non-blocking checks to post-verdict hooks.
+- **Verify idea:** Run same session headless; if goal-evaluator wall time drops below 2× developer time while maintaining verdict accuracy, rebalance is working.
 
-### RETRO-3 · Instrument iteration-resumption overhead and pipeline re-entry cost
+### RETRO-2 · Incomplete/interrupted attempts accumulate without deterministic cleanup
+- **Proposed:** P1 · Effort M · Risk LOW
+- **Problem:** At least 12 partial attempts across the session (lines 88, 123, 128, 157, 183, 184, 193, 199, 250, 256, 355, 367, 442, 474, 483) are marked "incomplete/interrupted" with no recorded halt reason. Resume logic skips agents silently, making root-cause diagnosis impossible for future optimization.
+- **Evidence:** Wall-time report — lines 86–672 show multiple "goal-desk-iter-<n> depth=<d> verdict=? wall=? (incomplete/interrupted attempt)" entries with no halt_reason logged.
+- **Sketch:** Add halt_reason field to session.json + telemetry event at every incomplete attempt, naming the trigger (heartbeat timeout, quota pause, engine reset, developer timeout). Aggregate halt reasons in retro-input.md so patterns become visible per-session.
+- **Verify idea:** Next session's retro report includes a "Halt reasons" counter section; review to find most common incomplete-attempt cause.
+
+### RETRO-3 · Resume-skipped agents suppress evidence without audit trail
+- **Proposed:** P1 · Effort S · Risk LOW
+- **Problem:** When iterations resume, agents marked "resume-skipped" are discarded silently. Coherence-auditor is resume-skipped in 12+ iterations; unknown whether skipped work was redundant, critical, or observable. This opacity makes verdicts unverifiable if critical evidence was skipped.
+- **Evidence:** Wall-time report — "(resume-skipped: coherence-auditor)" appears in lines 134, 146, 168, 190, 203, 215, 237, 260, 274, 394, 405, 419, 438, 471, 487, 510, 522, 540, 553, 573, 587, 598, 618, 633, 648.
+- **Sketch:** Before skipping an agent on resume, emit a checkpoint record naming the agent, iteration, depth, and incomplete state. Tag verdicts with critical-agent skips as "evidence incomplete." Human reviews whether tag correlates with rework in next iteration.
+- **Verify idea:** Retro report flags CONTINUE/GOAL_ACHIEVED with "critical agent(s) skipped"; human confirms no verdict accuracy loss correlates with the tag.
+
+### RETRO-4 · OVER BUDGET annotations lack halt mechanism — silent trim risks incomplete evaluation
+- **Proposed:** P2 · Effort L · Risk MED
+- **Problem:** Eleven OVER BUDGET instances (lines 440, 460, 482, 500, 542, 575, 589, 620, 635, 650) show agents exceeding 3600s inflight timeout in trim mode. These print as warnings but do NOT prevent the verdict, risking silent data loss or incomplete audit.
+- **Evidence:** Wall-time report — lines 440, 460, 482, 500, 542, 575, 589, 620, 635, 650 show "OVER BUDGET at <step>: <seconds>s > 3600s (mode=trim)".
+- **Sketch:** Convert OVER BUDGET in critical agents (auditor, goal-evaluator, coherence-auditor) to STALLED rather than CONTINUE. For non-critical agents, emit telemetry event counted as friction signal in retro. Tune trim timeout or parallelize overbudget agent work.
+- **Verify idea:** Next session records zero OVER BUDGET in critical agents, or OVER BUDGET halts execution for manual intervention (no silent trim).
+
+### RETRO-5 · Depth demotion (full→lean) breaks spec clause guarantees — breaks acceptance criteria
 - **Proposed:** P2 · Effort M · Risk LOW
-- **Problem:** Multiple iterations show incomplete attempts followed by resume-skipped phases (e.g., iter 7, 9, 10, 14, 19). The session loses wall time to re-entrant pipeline steps, but there is no metric tracking the cost of each resumption or root cause of the interruption.
-- **Evidence:** Wall-time report — "goal-desk-iter-7 (incomplete/interrupted attempt)" followed by "(resume-skipped: goal-decomposer, coherence-auditor)" and similar patterns in iters 9, 10, 14, 19 with "failures=1" or no verdict recorded.
-- **Sketch:** Add a resumption-tracker field to session.json (iter_id, original_verdict_attempt, skipped_agents, retry_count). Log the halt reason (timeout, out-of-quota, evaluator failure) in a new telemetry event class before resuming. Measure wall-time delta between first attempt and success.
-- **Verify idea:** Complete a full goal-mode session and confirm session.json contains a resumption summary showing at least one resume event with the halt reason and wall-time cost.
-
-### RETRO-4 · Reduce unattributed (glue) wall time in multi-phase iterations
-- **Proposed:** P2 · Effort L · Risk LOW
-- **Problem:** Full-pipeline iterations (depth=full) show 80–190m of unattributed (glue) time out of 150–230m total wall, suggesting serial bottlenecks between agent stages that are not logged.
-- **Evidence:** Wall-time report iter 1 — "unattributed (glue): 83.5m" out of "wall=142.5m", iter 2 — "unattributed (glue): 96.0m" out of "wall=159.4m", iter 6 — "unattributed (glue): 192.5m" out of "wall=236.5m".
-- **Sketch:** Decompose glue time by inserting telemetry checkpoints between agent dispatch and the next agent's start in the iteration orchestrator. Name the gap (e.g., "goal-decomposer→goal-evaluator delay", "artifact-write overhead"). Log to a new telemetry event class.
-- **Verify idea:** Run a single full-pipeline iteration and confirm telemetry.jsonl includes one checkpoint event per named glue gap, totaling 80% of the reported unattributed time.
-
-### RETRO-5 · Add deterministic halt-reason logging to session.json on STALLED verdict
-- **Proposed:** P2 · Effort S · Risk LOW
-- **Problem:** The session halted with STALLED status and parked_wip_sha, but session.json does not explain whether it halted due to hit-max-iterations, evaluator-unreachable, manual stop, or some other gate. Retro analysis cannot root-cause the halt without reading the lessons tail.
-- **Evidence:** Halt context — "status: STALLED, last_verdict: STALLED" with no halt_reason field; Lessons tail — "STALLED on a human-owned unblock path, not CONTINUE" suggests human action was required.
-- **Sketch:** Expand session.json to include halt_reason (string, one of: "max_iterations", "evaluator_unreachable", "manual_stop", "gate_blocked", "unknown") and halt_detail (human-readable explanation, e.g., "demo gallery frame hashes identical"). Emit halt_reason in the orchestrator's halt-decision log.
-- **Verify idea:** Halt a goal-mode session and confirm session.json contains both halt_reason and halt_detail fields.
-
-nothing recurred worth proposing beyond the five above (all friction counters are zero, verdict churn is documented in lessons, and the wall-time outlier in goal-evaluator has clear instrumentation gaps).
+- **Problem:** Engine demoted depth from full to lean on four consecutive iterations (32, 33, 35, 36), preventing demo-narrator from running. Two journeys owe unmet `[NEW]`-flagged walkthroughs. Journey specs that depend on demo-narrator have no fallback, so engine depth decisions can silently break acceptance criteria.
+- **Evidence:** Lessons tail — "The engine has now demoted a `Depth: full` spec to `lean` on four consecutive iterations (32, 33, 35, 36), so the demo-narrator step has not run since iter-34 and TWO journeys (J-20, J-21) now owe a `[NEW]`-flagged walkthrough" (lines 698–704).
+- **Sketch:** Tag demo-narrator walkthroughs as `evidence`-depth passengers in goal.md, not acceptance requirements. Or: add hard gate preventing full→lean demotion if unmet `[NEW]` walkthroughs exist; require human approval to demotion.
+- **Verify idea:** No future journey accumulates an unmet `[NEW]`-flagged walkthrough over 5+ verdicts; all satisfied before halt, or session escalates before demotion.

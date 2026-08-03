@@ -6,10 +6,10 @@ scripts/automation/lib/retro_collect.sh — no model wrote this. Counters marked
 
 ## Outcome
 
-- **Terminal status:** STALLED
-- **Final verdict:** STALLED
-- **Iterations used:** 22
-- **Halted at (UTC):** 2026-07-29T23:27:12.442913Z
+- **Terminal status:** GOAL_ACHIEVED
+- **Final verdict:** GOAL_ACHIEVED
+- **Iterations used:** 37
+- **Halted at (UTC):** 2026-07-31T20:34:22.478890Z
 
 ## Verdict sequence
 
@@ -38,6 +38,21 @@ iter 18: CONTINUE
 iter 19: CONTINUE
 iter 20: CONTINUE
 iter 21: STALLED
+iter 22: GOAL_ACHIEVED
+iter 23: GOAL_ACHIEVED
+iter 24: CONTINUE
+iter 25: GOAL_ACHIEVED
+iter 26: CONTINUE
+iter 27: CONTINUE
+iter 28: GOAL_ACHIEVED
+iter 29: CONTINUE
+iter 30: ESCALATE
+iter 31: GOAL_ACHIEVED
+iter 32: CONTINUE
+iter 33: ESCALATE
+iter 34: GOAL_ACHIEVED
+iter 35: GOAL_ACHIEVED
+iter 36: GOAL_ACHIEVED
 ```
 
 ## Agent economics
@@ -46,25 +61,25 @@ Source: analyze_telemetry.py --json telemetry.jsonl (claude_usage events)
 
 | Agent | Invocations | Wall (s) | In tokens | Out tokens | Est. cost (USD) |
 |---|---|---|---|---|---|
-| auditor | 15 | 16784 | 8220 | 816477 | 0.0000 |
-| browser-qa-agent | 19 | 28938 | 4539 | 986123 | 0.0000 |
-| coherence-auditor | 20 | 3656 | 6155 | 213784 | 0.0000 |
-| demo-narrator | 17 | 7270 | 2939 | 538992 | 0.0000 |
-| developer | 24 | 44876 | 22983 | 1970441 | 0.0000 |
-| goal-decomposer | 22 | 15781 | 11157 | 1000190 | 0.0000 |
-| goal-evaluator | 30 | 24550 | 16968 | 1295442 | 0.0000 |
-| goal-proposer | 7 | 5060 | 623 | 288945 | 0.0000 |
-| iteration-summarizer | 22 | 6464 | 1715 | 416113 | 0.0000 |
-| orchestrator | 15 | 4092 | 21039 | 278604 | 0.0000 |
+| auditor | 19 | 21008 | 11862 | 994005 | 0.0000 |
+| browser-qa-agent | 34 | 37607 | 6529 | 1510974 | 0.0000 |
+| coherence-auditor | 32 | 5129 | 6475 | 300526 | 0.0000 |
+| demo-narrator | 27 | 7688 | 3446 | 565311 | 0.0000 |
+| developer | 36 | 64322 | 39318 | 2787748 | 0.0000 |
+| goal-decomposer | 37 | 22614 | 11873 | 1427372 | 0.0000 |
+| goal-evaluator | 55 | 42523 | 34161 | 2140751 | 0.0000 |
+| goal-proposer | 14 | 11828 | 1324 | 676024 | 0.0000 |
+| iteration-summarizer | 37 | 10042 | 1995 | 717677 | 0.0000 |
+| orchestrator | 19 | 4689 | 21145 | 320187 | 0.0000 |
 | phase-closure-auditor | 10 | 1853 | 202 | 113892 | 0.0000 |
-| qa | 31 | 10015 | 9039 | 248598 | 0.0000 |
-| readme-maintainer | 18 | 3000 | 1409 | 190863 | 0.0000 |
-| retro-analyst | 1 | 35 | 26 | 2725 | 0.0000 |
-| reviewer | 23 | 12885 | 5824 | 452447 | 0.0000 |
-| ui-impact-analyst | 12 | 2535 | 260 | 172705 | 0.0000 |
+| qa | 35 | 11768 | 9965 | 284014 | 0.0000 |
+| readme-maintainer | 19 | 3046 | 1470 | 193343 | 0.0000 |
+| retro-analyst | 2 | 149 | 80 | 11304 | 0.0000 |
+| reviewer | 35 | 19353 | 6520 | 621959 | 0.0000 |
+| ui-impact-analyst | 16 | 3386 | 420 | 226964 | 0.0000 |
 | ui-test-designer | 12 | 5983 | 534 | 368283 | 0.0000 |
-| ux-regression-reviewer | 11 | 3378 | 1451 | 215241 | 0.0000 |
-| TOTAL | 309 | 197155 | 115083 | 9569865 | 0.0000 |
+| ux-regression-reviewer | 12 | 3499 | 1477 | 218277 | 0.0000 |
+| TOTAL | 451 | 276487 | 158796 | 13478611 | 0.0000 |
 
 Per-step wall breakdown (analyze_telemetry.py --wall):
 
@@ -390,32 +405,276 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       (resume-skipped: developer, reviewer, coherence-auditor)
       pump-wait                  0.4m
       overlap saved              9.9m  (parallel steps)
-  session: 22 completed iteration(s), mean wall 133.6m
-      total goal-evaluator            1621.7m
-      total developer                  345.9m
-      total browser-qa-agent           309.5m
-      total goal-decomposer            292.3m
-      total iteration-summarizer       212.5m
-      total coherence-auditor          103.2m
-      total reviewer                    98.3m
-      total readme-maintainer           69.1m
-      total auditor                     64.2m
-      total qa                          54.9m
-      total ui-impact-analyst           46.8m
+  goal-desk-iter-22  depth=lean  verdict=GOAL_ACHIEVED  wall=49.8m
+      goal-evaluator              13.3m  calls=1
+      goal-decomposer             10.3m  calls=1
+      browser-qa-agent             9.5m  calls=1
+      goal-evaluator-confirm       6.3m  calls=1
+      iteration-summarizer         6.1m  calls=1
+      coherence-auditor            2.5m  calls=1
+      demo-narrator                1.6m  calls=1
+      readme-maintainer            1.6m  calls=1
+      [engine] evidence-pipeline    12.2m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  2.7m
+      overlap saved              1.4m  (parallel steps)
+  goal-desk-iter-23  depth=full  verdict=GOAL_ACHIEVED  wall=131.4m
+      browser-qa-agent            27.9m  calls=1
+      goal-evaluator              26.7m  calls=1
+      developer                   18.1m  calls=1
+      auditor                     17.2m  calls=1
+      qa                          17.0m  calls=1
+      goal-decomposer              8.1m  calls=1
+      reviewer                     7.8m  calls=1
+      iteration-summarizer         4.9m  calls=1
+      goal-evaluator-confirm       4.9m  calls=1
+      orchestrator                 4.7m  calls=1
+      ui-impact-analyst            4.7m  calls=1
+      coherence-auditor            2.6m  calls=1
+      demo-narrator                1.7m  calls=1
+      [engine] full-pipeline      84.2m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: ui-test-design, ux-regression)
+      pump-wait                 17.1m
+      OVER BUDGET at qa-loop: 4503s > 3600s (mode=trim)
+      overlap saved             14.9m  (parallel steps)
+  goal-desk-iter-24  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                   43.4m  calls=1
+      goal-decomposer              8.6m  calls=1
+      reviewer                     0.0m  calls=1  failures=1
+      [engine] lean-pipeline      43.4m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  0.2m
+  goal-desk-iter-24  depth=lean  verdict=CONTINUE  wall=91.7m
+      developer                   42.3m  calls=1
+      reviewer                    20.9m  calls=2
+      goal-evaluator              16.2m  calls=1
+      browser-qa-agent            11.0m  calls=1
+      coherence-auditor            3.6m  calls=1
+      browser-qa-replay            1.5m  calls=1
+      [engine] lean-pipeline      75.6m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer, developer, coherence-auditor)
+      pump-wait                  3.2m
+      OVER BUDGET at browser-qa: 3793s > 3600s (mode=trim)
+      overlap saved              3.7m  (parallel steps)
+  goal-desk-iter-25  depth=lean  verdict=GOAL_ACHIEVED  wall=47.7m
+      goal-evaluator              14.3m  calls=1
+      browser-qa-agent            12.3m  calls=1
+      iteration-summarizer        10.4m  calls=2
+      goal-evaluator-confirm       6.7m  calls=1
+      goal-decomposer              5.5m  calls=1
+      demo-narrator                2.0m  calls=1
+      [engine] evidence-pipeline    16.1m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  0.4m
+      overlap saved              3.4m  (parallel steps)
+  goal-desk-iter-26  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                   36.0m  calls=1
+      reviewer                    16.8m  calls=1
+      coherence-auditor           13.7m  calls=1
+      goal-decomposer             10.2m  calls=1
+      browser-qa-replay            1.5m  calls=1
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  0.5m
+      OVER BUDGET at browser-qa: 3777s > 3600s (mode=trim)
+  goal-desk-iter-26  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                    0.2m  calls=1  failures=1
+      [engine] lean-pipeline       0.2m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer)
+      pump-wait                  0.2m
+  goal-desk-iter-26  depth=lean  verdict=CONTINUE  wall=89.9m
+      developer                   28.2m  calls=2
+      browser-qa-agent            21.1m  calls=1
+      goal-evaluator              20.4m  calls=1
+      reviewer                    18.8m  calls=2
+      coherence-auditor            2.9m  calls=1
+      browser-qa-replay            1.2m  calls=1
+      [engine] lean-pipeline      69.5m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer, coherence-auditor)
+      pump-wait                  2.2m
+      OVER BUDGET at coherence-auditor: 4169s > 3600s (mode=trim)
+      overlap saved              2.8m  (parallel steps)
+  goal-desk-iter-27  depth=lean  verdict=CONTINUE  wall=37.8m
+      browser-qa-agent            14.8m  calls=1
+      goal-evaluator              13.8m  calls=1
+      iteration-summarizer         5.9m  calls=1
+      goal-decomposer              5.9m  calls=1
+      demo-narrator                1.3m  calls=1
+      [engine] evidence-pipeline    17.9m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  0.1m
+      overlap saved              3.9m  (parallel steps)
+  goal-desk-iter-28  depth=lean  verdict=GOAL_ACHIEVED  wall=39.9m
+      goal-evaluator              20.4m  calls=1
+      iteration-summarizer         9.8m  calls=2
+      goal-decomposer              5.4m  calls=1
+      browser-qa-agent             4.0m  calls=1
+      goal-evaluator-confirm       3.1m  calls=1
+      demo-narrator                1.2m  calls=1
+      [engine] evidence-pipeline     6.5m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  0.2m
+      overlap saved              3.9m  (parallel steps)
+  goal-desk-iter-29  depth=full  verdict=CONTINUE  wall=140.5m
+      developer                   36.9m  calls=1
+      browser-qa-agent            24.8m  calls=1
+      goal-evaluator              19.5m  calls=1
+      reviewer                    18.4m  calls=1
+      auditor                     16.4m  calls=1
+      qa                          10.4m  calls=1
+      goal-decomposer              8.3m  calls=1
+      ui-impact-analyst            4.2m  calls=1
+      coherence-auditor            3.5m  calls=1
+      goal-evaluator-confirm       3.0m  calls=1
+      orchestrator                 2.9m  calls=1
+      demo-narrator                1.2m  calls=1
+      [engine] full-pipeline     106.0m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: ui-test-design, ux-regression)
+      pump-wait                 10.4m
+      OVER BUDGET at post-dev-fanout: 3995s > 3600s (mode=trim)
+      overlap saved              9.3m  (parallel steps)
+  goal-desk-iter-30  depth=lean  verdict=ESCALATE  wall=75.0m
+      goal-evaluator              44.9m  calls=1
+      iteration-summarizer        13.9m  calls=1
+      goal-decomposer             13.9m  calls=1
+      browser-qa-agent            10.3m  calls=1
+      coherence-auditor            3.8m  calls=1
+      demo-narrator                1.1m  calls=1
+      [engine] evidence-pipeline    12.3m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer)
+      pump-wait                  0.3m
+      overlap saved             12.9m  (parallel steps)
+  goal-desk-iter-31  depth=full  verdict=GOAL_ACHIEVED  wall=94.0m
+      developer                   13.9m  calls=1
+      iteration-summarizer        13.1m  calls=2
+      browser-qa-agent            12.7m  calls=1
+      goal-evaluator              12.3m  calls=1
+      auditor                     10.9m  calls=1
+      reviewer                    10.5m  calls=1
+      qa                          10.2m  calls=1
+      goal-decomposer              9.0m  calls=1
+      goal-evaluator-confirm       5.5m  calls=1
+      ui-impact-analyst            4.7m  calls=1
+      orchestrator                 2.8m  calls=1
+      ux-regression-reviewer       2.7m  calls=1
+      coherence-auditor            2.5m  calls=1
+      demo-narrator                1.4m  calls=1
+      [engine] full-pipeline      60.5m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: ui-test-design)
+      pump-wait                 10.4m
+      OVER BUDGET at coherence-auditor: 4177s > 3600s (mode=trim)
+      overlap saved             18.1m  (parallel steps)
+  goal-desk-iter-32  depth=lean  verdict=CONTINUE  wall=87.5m
+      browser-qa-agent            25.0m  calls=1
+      developer                   21.6m  calls=1
+      goal-evaluator              16.8m  calls=1
+      goal-decomposer             10.7m  calls=1
+      reviewer                     6.9m  calls=1
+      goal-evaluator-confirm       5.5m  calls=1
+      coherence-auditor            2.6m  calls=1
+      [engine] lean-pipeline      54.5m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  2.3m
+      OVER BUDGET at coherence-auditor: 3912s > 3600s (mode=trim)
+      overlap saved              1.6m  (parallel steps)
+  goal-desk-iter-33  depth=lean  verdict=ESCALATE  wall=37.3m
+      goal-decomposer             12.3m  calls=1
+      iteration-summarizer        12.3m  calls=1
+      goal-evaluator              11.2m  calls=1
+      browser-qa-agent            10.1m  calls=1
+      demo-narrator                1.7m  calls=1
+      [engine] evidence-pipeline    13.6m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  0.2m
+      overlap saved             10.4m  (parallel steps)
+  goal-desk-iter-34  depth=full  verdict=GOAL_ACHIEVED  wall=123.0m
+      developer                   33.6m  calls=1
+      auditor                     29.3m  calls=1
+      browser-qa-agent            16.5m  calls=1
+      goal-evaluator              12.8m  calls=1
+      qa                          12.5m  calls=1
+      iteration-summarizer         9.7m  calls=2
+      goal-decomposer              5.6m  calls=1
+      reviewer                     5.2m  calls=1
+      goal-evaluator-confirm       4.5m  calls=1
+      ui-impact-analyst            3.9m  calls=1
+      orchestrator                 2.6m  calls=1
+      coherence-auditor            2.1m  calls=1
+      demo-narrator                1.5m  calls=1
+      [engine] full-pipeline      93.7m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: ui-test-design, ux-regression)
+      pump-wait                 12.6m
+      OVER BUDGET at qa-loop: 4204s > 3600s (mode=trim)
+      overlap saved             16.8m  (parallel steps)
+  goal-desk-iter-35  depth=lean  verdict=GOAL_ACHIEVED  wall=95.5m
+      developer                   35.2m  calls=1
+      browser-qa-agent            18.0m  calls=1
+      goal-evaluator              15.5m  calls=1
+      goal-decomposer              7.1m  calls=1
+      goal-evaluator-confirm       6.9m  calls=1
+      reviewer                     6.8m  calls=1
+      iteration-summarizer         4.9m  calls=1
+      coherence-auditor            2.5m  calls=1
+      [engine] lean-pipeline      61.1m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  2.3m
+      OVER BUDGET at coherence-auditor: 4093s > 3600s (mode=trim)
+      overlap saved              1.4m  (parallel steps)
+  goal-desk-iter-36  depth=lean  verdict=GOAL_ACHIEVED  wall=85.5m
+      developer                   26.8m  calls=1
+      browser-qa-agent            17.0m  calls=1
+      goal-evaluator              13.6m  calls=1
+      goal-decomposer             10.2m  calls=1
+      reviewer                     7.9m  calls=1
+      goal-evaluator-confirm       4.5m  calls=1
+      iteration-summarizer         4.4m  calls=1
+      coherence-auditor            3.4m  calls=1
+      [engine] lean-pipeline      52.7m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  3.3m
+      OVER BUDGET at coherence-auditor: 3771s > 3600s (mode=trim)
+      overlap saved              2.4m  (parallel steps)
+  session: 37 completed iteration(s), mean wall 112.6m
+      total goal-evaluator            1893.6m
+      total developer                  682.1m
+      total browser-qa-agent           544.5m
+      total goal-decomposer            423.2m
+      total iteration-summarizer       307.9m
+      total reviewer                   218.2m
+      total coherence-auditor          149.0m
+      total auditor                    138.0m
+      total qa                         105.1m
+      total readme-maintainer           70.7m
+      total ui-impact-analyst           64.2m
+      total goal-evaluator-confirm      55.9m
       total ui-test-designer            38.2m
-      total orchestrator                17.4m
-      total ux-regression-reviewer      17.4m
-      total demo-narrator               10.8m
-      total goal-evaluator-confirm       4.9m
-      total browser-qa-replay            2.3m
-      total AWAITING_PUMP paused gaps: 8.8m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED
+      total orchestrator                30.5m
+      total demo-narrator               25.6m
+      total ux-regression-reviewer      20.1m
+      total browser-qa-replay            6.6m
+      total AWAITING_PUMP paused gaps: 10.5m
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, machine_reset, AWAITING_PUMP
 ```
 
 ## Friction counters
 
 - **Quota pauses:** 0 (source: session.json quota_pause_count / .quota-pause-count)
-- **Attempt-1 review FAILs:** 0 (source: telemetry review_verdict events, attempt 1)
+- **Attempt-1 review FAILs:** 2 (source: telemetry review_verdict events, attempt 1)
 - **Malformed-verdict rewrites:** 0 (source: telemetry deterministic_gate events with an invalid raw verdict; the gates' .malformed-verdict-count only tracks consecutive strikes)
 
 ## Lessons tail
@@ -423,26 +682,26 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
 Last 20 lines of state/lessons.md:
 
 ```
-of the live DOM" · replace the `title` with an on-page panel · approve a desktop-capture rig · accept
-as-is) — STALLED on a human-owned unblock path, not CONTINUE.
-**Applies to:** any journey whose acceptance names a screenshot of browser-chrome-drawn UI (native
-`title`/`alt` tooltips, `select` popups, print dialogs, file pickers, OS context menus), and any
-`Depth: evidence` iteration that would be the third consecutive capture-only run.
 
-## iter-21 (second) — 2026-07-30T00:35:00+01:00
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Content-addressed record ids make a screenshot independently falsifiable: re-running
+`run_screen_and_record` over the SAME committed fixtures in my own scratch folder reproduced the
+exact snapshot id the browser-QA screenshot displays (`screen-2026-06-22-09cf660a4125`) and its
+signature `64c954949e3cf681` — so a fixture-scoped capture claim can be checked without standing up
+the rig at all. Prefer this over trusting a rig narrative whenever the state is fixture-derived.
+**Applies to:** any iteration whose acceptance state is captured on a fixture-scoped rig (desk
+screen/universe/top-up stores, or any store whose id derives from content).
 
-**Verdict:** STALLED
-**Lesson:** `Demo Verdict: RECORDED` with a non-empty gallery is NOT proof the film shows anything:
-this run's three frames are one byte-identical image (md5 `3b02db86…`, the same PNG as
-`J-04-verify.png`) because `demo_runner.py`'s action vocabulary has no scroll primitive, every
-`/desk` ranked row is one stretched `next/link` (so any in-row click navigates away), and the two
-right-hand columns the film narrates sit past the table's `overflow-x-auto` clientWidth. Narration
-accuracy had to be proven a different way — by re-deriving every quoted number from the recorded
-snapshot on disk. Check frame md5s and what is actually inside the viewport before crediting a
-walkthrough conjunct.
-**Applies to:** any demo-narrator run whose walkthrough is an acceptance conjunct, and any future
-`demo_runner.py` enhancement (a `scroll` action driving `el.scrollLeft = el.scrollWidth` on the
-container, never a click, is the recorded remedy).
+## iter-36 — 2026-07-31T14:55:00+01:00 (b)
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The engine has now demoted a `Depth: full` spec to `lean` on four consecutive
+iterations (32, 33, 35, 36), so the demo-narrator step has not run since iter-34 and TWO journeys
+(J-20, J-21) now owe a `[NEW]`-flagged walkthrough. A spec clause that only a `full` dispatch can
+satisfy is therefore not reliably satisfiable by asking for `full` — plan such clauses as
+`evidence`-depth passengers from the start, or expect them to accumulate.
+**Applies to:** any future journey whose acceptance names a `[NEW]`-flagged demo-narrator
+walkthrough.
 ```
 
 ## Halt context
@@ -451,8 +710,8 @@ session.json halt-relevant fields:
 
 ```json
 {
-  "status": "STALLED",
-  "last_verdict": "STALLED",
+  "status": "GOAL_ACHIEVED",
+  "last_verdict": "GOAL_ACHIEVED",
   "parked_wip_sha": "bc884fb"
 }
 ```

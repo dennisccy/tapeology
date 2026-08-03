@@ -2166,3 +2166,14 @@
 {"model":"claude-sonnet-5","num_turns":7,"duration_ms":213161,"usage":{"input_tokens":14,"output_tokens":19326,"cache_read_input_tokens":432499,"cache_creation_input_tokens":106326},"agent":"iteration-summarizer","ts":"2026-07-31T13:52:20Z","session_id":"desk","iter":36,"event":"claude_usage","cli":"claude"}
 {"agent":"iteration-summarizer","exit_status":0,"duration_seconds":266,"quota_sleep_seconds":0,"active_seconds":266,"retries":0,"ts":"2026-07-31T13:52:20Z","session_id":"desk","iter":36,"event":"agent_invocation_end","cli":"claude"}
 {"iter_name":"goal-desk-iter-36","verdict":"GOAL_ACHIEVED","next_depth":"evidence","journey_deltas":{"newly_passing":15,"newly_failing":0,"regressed":0,"anti_goal_violations":4},"ts":"2026-07-31T13:52:21Z","session_id":"desk","iter":36,"event":"iter_end","cli":"claude"}
+{"branch":"goal/desk","commit_sha":"94eb1b02dc902d57748ca934075e95b22ff128ba","success":true,"error":"","verdict":"GOAL_ACHIEVED","ts":"2026-07-31T13:52:25Z","session_id":"desk","iter":36,"event":"iter_push","cli":"claude"}
+{"agent":"goal-proposer","ts":"2026-07-31T13:52:25Z","session_id":"desk","iter":36,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-proposer","status":"pickup-timeout","wait_seconds":24116,"run_seconds":0,"rc":"70","ts":"2026-07-31T20:34:21Z","session_id":"desk","iter":36,"event":"dispatch_wait","cli":"claude"}
+{"agent":"goal-proposer","exit_status":70,"duration_seconds":24116,"quota_sleep_seconds":0,"active_seconds":24116,"retries":0,"ts":"2026-07-31T20:34:21Z","session_id":"desk","iter":36,"event":"agent_invocation_end","cli":"claude"}
+{"agent":"iteration-summarizer","ts":"2026-07-31T20:34:22Z","session_id":"desk","iter":36,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"iteration-summarizer","status":"pickup-timeout","wait_seconds":0,"run_seconds":0,"rc":"70","ts":"2026-07-31T20:34:22Z","session_id":"desk","iter":36,"event":"dispatch_wait","cli":"claude"}
+{"agent":"iteration-summarizer","exit_status":70,"duration_seconds":0,"quota_sleep_seconds":0,"active_seconds":0,"retries":0,"ts":"2026-07-31T20:34:22Z","session_id":"desk","iter":36,"event":"agent_invocation_end","cli":"claude"}
+{"final_verdict":"GOAL_ACHIEVED","total_iterations":37,"wall_time_seconds":82671,"quota_pause_count":0,"ts":"2026-07-31T20:34:22Z","session_id":"desk","iter":36,"event":"session_end","cli":"claude"}
+{"agent":"retro-analyst","ts":"2026-07-31T20:34:22Z","session_id":"desk","iter":36,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"retro-analyst","status":"pickup-timeout","wait_seconds":0,"run_seconds":0,"rc":"70","ts":"2026-07-31T20:34:22Z","session_id":"desk","iter":36,"event":"dispatch_wait","cli":"claude"}
+{"agent":"retro-analyst","exit_status":70,"duration_seconds":1,"quota_sleep_seconds":0,"active_seconds":1,"retries":0,"ts":"2026-07-31T20:34:23Z","session_id":"desk","iter":36,"event":"agent_invocation_end","cli":"claude"}
