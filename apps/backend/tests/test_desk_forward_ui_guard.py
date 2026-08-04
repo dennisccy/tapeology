@@ -35,6 +35,9 @@ _REQUIRED_FORWARD_TESTIDS = (
     'data-testid="desk-forward-detail-touch"',
     'data-testid="desk-forward-detail-baseline"',
     'data-testid="desk-forward-summary-baseline"',
+    # The side-relative sign convention's own line: how to READ every directional number in the
+    # panel. Its presence is the static proof that the reading rule ships beside the numbers.
+    'data-testid="desk-forward-sign-convention"',
 )
 
 # The golden click-target attributes the compare guard already forbids its own block from reusing
@@ -87,6 +90,22 @@ def test_the_forward_block_never_reorders_or_caps_what_it_renders():
     assert not hits, (
         f"the Forward Returns block sorts/reverses/slices its rendered data ({hits}) -- every row "
         "renders in served order, uncapped; the scroll container is the size rail, never a slice"
+    )
+
+
+def test_the_sign_convention_line_reads_the_record_and_never_assumes_one():
+    """The panel must branch on the record's OWN served `return_sign_convention`, with an explicit
+    fallback for records written before the convention existed -- a hardcoded 'signed to side'
+    caption would mislabel every stored raw-signed record the append-only ledger still serves."""
+    source = _DESK_PAGE.read_text()
+    block = _forward_block(source)
+    assert "return_sign_convention" in block, (
+        "the Forward Returns block never reads the record's own return_sign_convention -- the "
+        "reading rule it prints would then be an assumption, not the record's own declaration"
+    )
+    assert "?? \"raw\"" in block, (
+        "the sign-convention read has no fallback for a record predating the convention -- those "
+        "carry raw price moves and must be labelled as such, never relabelled as side-signed"
     )
 
 

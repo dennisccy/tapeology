@@ -141,6 +141,19 @@ needs 1m (or 5m) bars for the screen date — the extended Top-up supplies them 
 a handful of touches per row — the panel proves the method, not an edge; the evidence
 accumulates by running the as-of range across many days and computing forward on each.
 
+**Which way is "good"** — every forward move is **signed to the row's own side**. A support
+wall's thesis is long, so its raw price move is served unchanged; a resistance wall's thesis is
+short, so its move is negated. One reading rule holds on both sides: **a positive number means
+price went the way the wall implied**. The seeded baseline carries the same sign as the row it is
+the null for, so *"did the wall beat a random minute?"* compares like with like. The two **max
+drawdowns are deliberately unsigned** and stay in absolute price direction (`long` = the worst
+move below entry, `short` = the worst move above it), so a row's own adverse excursion is
+whichever one matches its side — signing them would erase which way price actually travelled.
+The convention is declared in each record's `parameters.return_sign_convention` and hashed into
+its input signature, so a record written under a different one re-keys and recomputes rather than
+being re-read as if it were side-signed; the panel labels any such older record as raw instead of
+relabelling it.
+
 ### Refreshing the data
 
 Making the briefing current takes four acts, and **the order matters**: a screen's

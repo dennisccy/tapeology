@@ -532,12 +532,13 @@ def test_parameters_register_and_payload_version_served(env):
     screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
     result = compute_forward(screen, bar_store, CONFIG.config_fingerprint())
     recorded = forward_store.record(**result)
-    assert recorded["payload_version"] == 2
+    assert recorded["payload_version"] == 3
     assert recorded["parameters"] == {
         "horizons_minutes": [["1m", 1], ["5m", 5], ["1h", 60], ["4h", 240]],
         "max_touches_per_row": 8,
         "baseline_seed": 1729,
         "touch_timeframes": ["1m", "5m"],
+        "return_sign_convention": "side_relative",
     }
     assert recorded["register"] == FORWARD_REGISTER
     assert "horizons" not in recorded  # the v1 top-level key is gone
@@ -585,6 +586,97 @@ def test_signature_narrows_to_the_touch_timeframes_only(env):
     assert reused_third is False and third["id"] != first["id"]
     newest, versions = forward_store.newest_for_screen(screen["id"])
     assert versions == 2 and newest["id"] == third["id"]
+
+
+# --- the side-relative sign convention ------------------------------------------------------------
+
+
+def _falling_session(symbol: str) -> list[RawBar]:
+    """Two bars that touch the default band [99, 100] from below and then fall. Shared by the
+    sign tests so support and resistance are measured over BYTE-IDENTICAL price history and the
+    only difference between the two answers is the row's own side."""
+    return [
+        _bar(symbol, "1m", _minute(0), 98.4, 99.3, 98.2, 98.9),   # overlaps the band
+        _bar(symbol, "1m", _minute(1), 98.5, 98.6, 97.5, 98.01),  # price falls away
+    ]
+
+
+def test_returns_are_signed_to_the_rows_own_side(env):
+    """The convention: a POSITIVE forward number always means the wall worked. Support keeps the
+    raw price move (its thesis is long); resistance is negated (its thesis is short), so the same
+    falling session reads negative for support and positive for resistance."""
+    bar_store, screen_store, _ = env
+    _plant(bar_store, "SUP", "1m", _falling_session("SUP"))
+    _plant(bar_store, "RES", "1m", _falling_session("RES"))
+    screen = _record_screen(
+        screen_store, [_screen_row("SUP", "support"), _screen_row("RES", "resistance")]
+    )
+    rows = {r["symbol"]: r for r in compute_forward(screen, bar_store, CONFIG.config_fingerprint())["rows"]}
+
+    sup = rows["SUP"]["touches"][0]
+    assert (sup["entry_price"], sup["entry_kind"]) == (98.4, "open")  # min(open, price_high)
+    # raw (98.01 - 98.4) / 98.4 -> the long thesis lost; support serves it unchanged
+    assert sup["horizons"]["1m"]["return_pct"] == pytest.approx(-0.39634146341)
+    assert sup["to_close_pct"] == pytest.approx(-0.39634146341)
+
+    res = rows["RES"]["touches"][0]
+    assert (res["entry_price"], res["entry_kind"]) == (99.0, "edge")  # max(open, price_low)
+    # raw (98.01 - 99.0) / 99.0 = -1.0 -> the short thesis WON; resistance serves +1.0
+    assert res["horizons"]["1m"]["return_pct"] == pytest.approx(1.0)
+    assert res["to_close_pct"] == pytest.approx(1.0)
+    # ... and the averages/summary pool the signed values, never the raw ones
+    assert rows["RES"]["averages"]["1m"]["mean_pct"] == pytest.approx(1.0)
+    assert rows["RES"]["averages"]["to_close"]["mean_pct"] == pytest.approx(1.0)
+
+
+def test_the_mdd_pair_stays_in_absolute_price_direction_on_both_sides(env):
+    """The two drawdowns name their own direction, so they are NOT re-signed: `mdd_long` is always
+    the worst move BELOW entry and `mdd_short` always the worst move ABOVE it, on either side.
+    Both stay clamped <= 0 — signing them would destroy which way price actually went."""
+    bar_store, screen_store, _ = env
+    _plant(bar_store, "RES", "1m", _falling_session("RES"))
+    screen = _record_screen(screen_store, [_screen_row("RES", "resistance")])
+    touch = compute_forward(screen, bar_store, CONFIG.config_fingerprint())["rows"][0]["touches"][0]
+    # entry 99.0; session low 97.5, session high 99.3 — both measured from the touch bar onward
+    assert touch["mdd_long_pct"] == pytest.approx((97.5 - 99.0) / 99.0 * 100.0)
+    assert touch["mdd_short_pct"] == pytest.approx((99.0 - 99.3) / 99.0 * 100.0)
+    assert touch["mdd_long_pct"] < 0 and touch["mdd_short_pct"] < 0
+
+
+def test_baseline_anchors_carry_their_rows_sign_so_the_comparison_stays_like_for_like(env):
+    """The null must live in the SAME signed space as the touches it is the null for — otherwise
+    'did the wall beat a random minute?' compares a signed number against a raw one."""
+    bar_store, screen_store, _ = env
+    _plant(bar_store, "RES", "1m", _falling_session("RES"))
+    _plant(bar_store, "SUP", "1m", _falling_session("SUP"))
+    screen = _record_screen(
+        screen_store, [_screen_row("RES", "resistance"), _screen_row("SUP", "support")]
+    )
+    rows = {r["symbol"]: r for r in compute_forward(screen, bar_store, CONFIG.config_fingerprint())["rows"]}
+    # A monotonically falling session: every anchor's signed to-close is >= 0 on the short side
+    # and <= 0 on the long side, whichever minutes the seeded stream drew.
+    res_anchors = rows["RES"]["baseline_anchors"]
+    sup_anchors = rows["SUP"]["baseline_anchors"]
+    assert res_anchors and sup_anchors
+    assert all(anchor["to_close_pct"] >= 0 for anchor in res_anchors)
+    assert all(anchor["to_close_pct"] <= 0 for anchor in sup_anchors)
+    assert rows["RES"]["baseline_anchors"][0]["entry_kind"] == "close"
+
+
+def test_the_sign_convention_is_declared_in_the_parameters_and_re_keys_the_record(env, monkeypatch):
+    """The convention rides in `parameters` — so it is BOTH visible in the payload and hashed into
+    the input signature. That is what makes a stored raw-signed record re-key rather than be
+    silently reused as if it were side-signed."""
+    bar_store, screen_store, _ = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    fp = CONFIG.config_fingerprint()
+    base = compute_forward(screen, bar_store, fp)
+    assert base["parameters"]["return_sign_convention"] == "side_relative"
+    monkeypatch.setattr(desk_forward_module, "DESK_FORWARD_RETURN_SIGN_CONVENTION", "raw")
+    changed = compute_forward(screen, bar_store, fp)
+    assert changed["parameters"]["return_sign_convention"] == "raw"
+    assert changed["forward_input_signature"] != base["forward_input_signature"]
 
 
 def test_parameters_liveness_moves_payload_and_signature(env, monkeypatch):
@@ -777,7 +869,7 @@ def test_route_compute_runs_to_done_and_the_bulk_list_serves_v2_meta(route_ctx):
     payload = served.json()
     assert payload["versions"] == 1
     record = payload["forward"]
-    assert record["payload_version"] == 2
+    assert record["payload_version"] == 3
     assert record["rows"][0]["touches"][0]["horizons"]["1m"]["return_pct"] == pytest.approx(0.5)
     baseline_cell = record["summary"]["support"]["to_close"]["baseline"]
     assert baseline_cell["n"] == 1  # the matched anchor, in the never-truncated measure
@@ -836,7 +928,7 @@ def test_cli_records_into_the_env_scoped_store_and_unknown_id_exits_1(tmp_path, 
     forward_store = ForwardStore(resolve_desk_forward_dir(str(tmp_path / "universe")))
     records, errors = forward_store.list()
     assert errors == [] and len(records) == 1
-    assert records[0]["payload_version"] == 2
+    assert records[0]["payload_version"] == 3
 
     monkeypatch.setattr(sys, "argv", ["desk_forward_compute", "--screen-id", "screen-nope"])
     assert desk_forward_compute.main() == 1

@@ -39,6 +39,15 @@ band:
     the session's UTC date). ``to_close`` (the last session bar's close vs entry) owns the
     session-end story. ``return_pct`` values are PERCENT (x100), computed here -- the UI is
     guard-banned from arithmetic on served numbers.
+  * **Every directional return is SIGNED TO THE ROW'S OWN SIDE** (the horizons and ``to_close``;
+    ``DESK_FORWARD_RETURN_SIGN_CONVENTION``). A support wall's thesis is long, so its raw price
+    move is served unchanged; a resistance wall's thesis is short, so its move is NEGATED. One
+    reading rule holds on both sides: a POSITIVE number means price went the way the wall implied.
+    The sign is applied identically to a row's touches and to its own baseline anchors, so the
+    null it is compared against never drifts into the opposite space. The convention rides in
+    ``parameters`` -- hashed into ``forward_input_signature`` -- so a record written under a
+    different one re-keys and recomputes instead of being reused with its numbers re-read as if
+    they were side-signed. The two MDDs are the deliberate exception (see ``_measure_from``).
   * **Max drawdown, long AND short, per touch** from the entry through the session close over
     ``session_bars[touch_index:]`` -- the touch bar's own full range included (a low printed
     moments before the touch within that same bar counts; the smear is disclosed here rather
@@ -120,14 +129,27 @@ DESK_FORWARD_MEASURE_KEYS: tuple[str, ...] = (
     "1m", "5m", "1h", "4h", "to_close", "mdd_long", "mdd_short",
 )
 
+# The sign convention every directional return (the horizons and ``to_close``) is served in.
+# ``side_relative``: support keeps the raw price move (its thesis is long), resistance is NEGATED
+# (its thesis is short) -- so a POSITIVE number always means the wall worked, on either side, and
+# a row's touches and its own baseline anchors live in the same signed space. Read at call time by
+# ``forward_parameters`` so it rides in the payload AND in the input signature: a record written
+# under a different convention re-keys instead of being silently reused (the 2-pin reuse rule
+# compares signatures, and the numbers under it would otherwise be read as if side-signed).
+# The two MDDs are deliberately NOT re-signed -- see ``_measure_from``.
+DESK_FORWARD_RETURN_SIGN_CONVENTION = "side_relative"
+
 # The visible honesty register carried by EVERY forward payload. Lint-checked in tests via
 # test_copy_discipline.find_violations.
 FORWARD_REGISTER = (
-    "raw price moves after intraday touches of each ranked wall — entry is a modeled limit fill "
-    "at the band edge (the bar's open when it opened through), no fees and no exits modeled; "
-    "bars gapping entirely beyond the band are disclosed, not counted as touches; the baseline "
-    "is the same math anchored at seeded random minutes of the same session, measured from those "
-    "bars' closes — descriptive only, not a strategy result"
+    "price moves after intraday touches of each ranked wall, signed to the row's own side — a "
+    "support wall reads long and a resistance wall reads short, so a positive number always means "
+    "price went the way the wall implied; the two max drawdowns are not signed and stay in "
+    "absolute price direction. Entry is a modeled limit fill at the band edge (the bar's open "
+    "when it opened through), no fees and no exits modeled; bars gapping entirely beyond the band "
+    "are disclosed, not counted as touches; the baseline is the same math on the same sign, "
+    "anchored at seeded random minutes of the same session and measured from those bars' closes "
+    "— descriptive only, not a strategy result"
 )
 
 _FORWARD_DIR_ENV = "TAPEOLOGY_DESK_FORWARD_DIR"
@@ -177,6 +199,7 @@ def forward_parameters() -> dict:
         "max_touches_per_row": DESK_FORWARD_MAX_TOUCHES_PER_ROW,
         "baseline_seed": DESK_FORWARD_BASELINE_SEED,
         "touch_timeframes": list(DESK_FORWARD_TOUCH_TIMEFRAMES),
+        "return_sign_convention": DESK_FORWARD_RETURN_SIGN_CONVENTION,
     }
 
 
@@ -302,19 +325,38 @@ def _draw_anchor_indices(rng: random.Random, population: int, k: int) -> list[in
 # --- per-anchor measurement (shared by touches and baseline anchors) -------------------------------
 
 
+def _side_sign(side: str) -> float:
+    """The row's directional multiplier under ``DESK_FORWARD_RETURN_SIGN_CONVENTION``: a support
+    wall's thesis is long (``+1``, the raw price move), a resistance wall's is short (``-1``). Any
+    other value is treated as long -- a screen row carrying an unrecognised side still measures,
+    it simply is not negated (an honest degrade, never a crash mid-walk)."""
+    return -1.0 if side == "resistance" else 1.0
+
+
 def _measure_from(
     session_bars: list,
     index: int,
     entry: float,
     entry_kind: str,
     tf_minutes: int,
+    sign: float,
 ) -> dict:
     """One anchored measurement -- the SHARED shape for a touch and a baseline anchor (one
     client-side binding). Horizons are bar-count offsets on the touch series; a target past the
     session's last bar is measured AT the last bar with ``truncated: true`` and
     ``effective_minutes`` (bar-equivalent minutes, not wall clock). ``to_close`` and both MDDs
     are measured through the session close over ``session_bars[index:]`` -- the anchor bar's own
-    full range included (the pre-anchor smear the module docstring discloses)."""
+    full range included (the pre-anchor smear the module docstring discloses).
+
+    ``sign`` (the caller's ``_side_sign(row_side)``) multiplies every DIRECTIONAL return -- the
+    horizons and ``to_close`` -- so the served number reads against the row's own thesis. It is
+    applied identically to a touch and to a baseline anchor, so the null stays like-for-like.
+
+    The two MDDs are NOT multiplied: they name their own direction (``mdd_long`` is always the
+    worst move BELOW the entry, ``mdd_short`` always the worst move ABOVE it) and both stay
+    clamped ``<= 0`` on either side. Signing them would collapse two independent facts into one
+    and erase which way price actually travelled; the row's own adverse excursion is simply the
+    one matching its thesis (support -> ``mdd_long``, resistance -> ``mdd_short``)."""
     last = len(session_bars) - 1
     horizons: dict[str, dict] = {}
     for label, minutes in DESK_FORWARD_HORIZONS_MINUTES:
@@ -337,7 +379,7 @@ def _measure_from(
             truncated = False
             effective_minutes = minutes
         horizons[label] = {
-            "return_pct": (session_bars[measured_at].close - entry) / entry * 100.0,
+            "return_pct": sign * (session_bars[measured_at].close - entry) / entry * 100.0,
             "truncated": truncated,
             "effective_minutes": effective_minutes,
             "reason": None,
@@ -351,7 +393,7 @@ def _measure_from(
         "entry_price": entry,
         "entry_kind": entry_kind,
         "horizons": horizons,
-        "to_close_pct": (session_bars[last].close - entry) / entry * 100.0,
+        "to_close_pct": sign * (session_bars[last].close - entry) / entry * 100.0,
         "minutes_to_close": (last - index) * tf_minutes,
         "mdd_long_pct": min(0.0, (min(lows) - entry) / entry * 100.0),
         "mdd_short_pct": min(0.0, (entry - max(highs)) / entry * 100.0),
@@ -500,6 +542,10 @@ def compute_forward(
             session_bars, price_low, price_high, side, DESK_FORWARD_MAX_TOUCHES_PER_ROW
         )
 
+        # One sign for the row, shared by its touches and its own baseline anchors below — the
+        # null must live in the same signed space as what it is the null for.
+        sign = _side_sign(side)
+
         touches: list[dict] = []
         for index in touch_indices:
             bar = session_bars[index]
@@ -509,7 +555,7 @@ def compute_forward(
             else:
                 entry = max(bar.open, price_low)
                 entry_kind = "open" if bar.open > price_low else "edge"
-            touches.append(_measure_from(session_bars, index, entry, entry_kind, tf_minutes))
+            touches.append(_measure_from(session_bars, index, entry, entry_kind, tf_minutes, sign))
 
         # The baseline: k seeded random anchor bars, matched to the CAPPED touch count.
         baseline_anchors: list[dict] = []
@@ -522,7 +568,7 @@ def compute_forward(
                 if bar.low <= price_high and bar.high >= price_low:
                     anchors_in_band += 1
                 baseline_anchors.append(
-                    _measure_from(session_bars, index, bar.close, "close", tf_minutes)
+                    _measure_from(session_bars, index, bar.close, "close", tf_minutes, sign)
                 )
 
         out_rows.append(
@@ -571,7 +617,7 @@ def compute_forward(
         "as_of": screen["as_of"],
         "config_fingerprint": config_fingerprint,
         "forward_input_signature": signature,
-        "payload_version": 2,
+        "payload_version": 3,
         "parameters": forward_parameters(),
         "register": FORWARD_REGISTER,
         "rows": out_rows,

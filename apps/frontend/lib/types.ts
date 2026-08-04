@@ -1285,6 +1285,10 @@ export interface DeskForwardParameters {
   max_touches_per_row: number;
   baseline_seed: number;
   touch_timeframes: string[];
+  // The sign convention the record's directional returns (horizons + to_close) were computed
+  // under. OPTIONAL because it is absent from records written before the convention existed —
+  // those carry raw price moves, and the panel says so rather than relabelling them.
+  return_sign_convention?: string;
 }
 
 export interface DeskForwardRecord {

@@ -1529,9 +1529,11 @@ function ScreenRunsSection({
 // append-only forward ledger: for whichever screen snapshot the page currently DISPLAYS, each
 // ranked row's intraday touches of its OWN wall during the screen date's session (out-of-sample:
 // the wall map's basis reads sessions strictly before the screen date), per touch the modeled
-// limit-fill entry, forward moves in PERCENT at trading-bar horizons + to the session close, and
-// the long/short max drawdown — with server-computed per-row averages (untruncated-only pools,
-// truncation counted), a per-side summary of touches BESIDE the seeded random-minute baseline,
+// limit-fill entry, forward moves in PERCENT at trading-bar horizons + to the session close —
+// SIGNED to each row's own side by the backend (support long, resistance negated: positive always
+// means the wall worked), with the two max drawdowns left unsigned — and server-computed per-row
+// averages (untruncated-only pools, truncation counted), a per-side summary of touches BESIDE the
+// seeded random-minute baseline (drawn on the SAME sign, so the null is like-for-like),
 // and the record's register rendered VERBATIM. Every value is the served payload's own; nothing
 // is derived, capped, sorted, or sliced client-side. Clicking a row opens a detail panel BELOW
 // the table (the /structure SetupDrillIn separate-panel precedent) rendered from the ALREADY
@@ -1648,6 +1650,50 @@ function forwardMeasureHeader(key: string): string {
   if (key === "mdd_long") return "avg max drawdown (long, %)";
   if (key === "mdd_short") return "avg max drawdown (short, %)";
   return `avg fwd ${key} (%)`;
+}
+
+// The record's own declared sign convention, read VERBATIM from its served parameters. A record
+// written before the convention existed carries no key at all — it is reported as raw rather than
+// relabelled as something it is not (the numbers on disk are immutable; only the label can be
+// honest about them).
+const FORWARD_SIDE_RELATIVE = "side_relative";
+
+function forwardSignConvention(record: DeskForwardRecord): string {
+  return record.parameters.return_sign_convention ?? "raw";
+}
+
+// One line, rendered once above both tables, stating how to READ every directional number below.
+// Which sentence shows is a function of the record's own parameters — never an assumption.
+function ForwardSignNote({ record }: { record: DeskForwardRecord }) {
+  const convention = forwardSignConvention(record);
+  const sideRelative = convention === FORWARD_SIDE_RELATIVE;
+  return (
+    <p
+      data-testid="desk-forward-sign-convention"
+      className={`text-[11px] ${sideRelative ? "text-slate-400" : "text-amber-200/80"}`}
+    >
+      {sideRelative ? (
+        <>
+          The forward columns (
+          <span className="text-slate-300">fwd</span> and{" "}
+          <span className="text-slate-300">to close</span>) are{" "}
+          <span className="text-slate-300">signed to each row&apos;s own side</span> — a support
+          wall reads long, a resistance wall reads short — so a positive number always means price
+          went the way the wall implied. The two max drawdowns are deliberately unsigned: they stay
+          in absolute price direction, so a row&apos;s own adverse excursion is the one matching
+          its side (support → long, resistance → short).
+        </>
+      ) : (
+        <>
+          This record was computed before the side-relative convention and carries{" "}
+          <span className="text-amber-100">raw price moves</span> — on a resistance row a positive
+          number means price ROSE, against the wall. Compute again to record it under the current
+          convention (
+          <span className="font-mono">{convention}</span>).
+        </>
+      )}
+    </p>
+  );
 }
 
 // One averages cell: the served mean, full detail in the tooltip. n=0 is an honest dash (with
@@ -1877,7 +1923,9 @@ function DeskForwardSummaryView({ record }: { record: DeskForwardRecord }) {
   return (
     <div data-testid="desk-forward-summary" className="overflow-x-auto">
       <p className="mb-1 text-[11px] text-slate-500">
-        touches vs the seeded random-minute baseline — mean (%), untruncated pools only
+        touches vs the seeded random-minute baseline — mean (%), untruncated pools only. Both
+        lines carry the same sign as their side, so a touch row above its baseline row beat a
+        random minute of the same session.
       </p>
       <table className="w-full border-collapse text-xs">
         <thead>
@@ -2031,6 +2079,7 @@ function DeskForwardSection({
           file (new bars arriving re-key the inputs; nothing is rewritten)
         </p>
       )}
+      <ForwardSignNote record={record} />
       <DeskForwardSummaryView record={record} />
       <DeskForwardTable
         record={record}
