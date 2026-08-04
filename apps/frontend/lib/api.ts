@@ -11,6 +11,8 @@ import type {
   DeskScreenCompareResult,
   DeskScreenComputeSnapshot,
   DeskScreenListResult,
+  DeskForwardComputeSnapshot,
+  DeskForwardReadResult,
   DeskScreenPinsResult,
   DeskScreenRunsListResult,
   DeskScreenSnapshot,
@@ -1407,5 +1409,109 @@ export async function fetchDeskScreenCompare(id: string): Promise<{
     return { ok: false, data: null, error };
   } catch {
     return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// --- Forward returns (forward-test era) — the append-only measurement of what recorded price
+// history did AFTER a screen's as_of. One read keyed by the displayed snapshot's own id, plus the
+// standard trigger/poll/cancel compute trio (mirrors the desk screen-compute quartet's shapes
+// byte-for-byte; the backend's `detail` is surfaced VERBATIM on every failing path). -------------
+
+// GET /research/desk/forward?screen_id= — the named screen's NEWEST recorded forward result plus
+// an honest count of every version it has ever accumulated. A 200 with `forward: null` (an
+// unknown or never-computed screen) is `ok: true` — the backend's own honest-null convention
+// (the `fetchDeskScreenCompare` precedent), never surfaced as a failure.
+export async function fetchDeskForward(screenId: string): Promise<{
+  ok: boolean;
+  data: DeskForwardReadResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/desk/forward?screen_id=${encodeURIComponent(screenId)}`,
+    );
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskForwardReadResult };
+    }
+    let error = "The forward record could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/forward/compute — start (or, while one is already running, observe) the
+// single-flight forward compute job for one recorded screen snapshot. Mirrors
+// `triggerDeskScreenCompute`'s exact shape; the backend's own 422 (an unknown screen id) `detail`
+// is surfaced VERBATIM, never a client-fabricated message.
+export async function triggerDeskForwardCompute(screenId: string): Promise<{
+  ok: boolean;
+  data?: { started: boolean; compute: DeskForwardComputeSnapshot };
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/forward/compute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ screen_id: screenId }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data };
+    }
+    let error = "The forward compute could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/forward/compute — the forward compute job's current/last snapshot, served
+// VERBATIM, or `null` if none has ever run. Mirrors `fetchDeskScreenCompute`: `ok:false,
+// data:null` on any failure so a poll tick's caller keeps the last known view.
+export async function fetchDeskForwardCompute(): Promise<{
+  ok: boolean;
+  data: DeskForwardComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/forward/compute`);
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as DeskForwardComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+// POST /research/desk/forward/compute/cancel — cancel the in-flight forward compute job. Mirrors
+// `cancelDeskScreenCompute`; the backend's 409 (idle) `detail` is surfaced verbatim.
+export async function cancelDeskForwardCompute(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/forward/compute/cancel`, {
+      method: "POST",
+    });
+    if (res.ok) return { ok: true };
+    let error = "The forward compute could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
   }
 }

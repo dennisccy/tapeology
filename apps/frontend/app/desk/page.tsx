@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
+  cancelDeskForwardCompute,
   cancelDeskReconcileCompute,
   cancelDeskScreenCompute,
   cancelDeskTopupCompute,
+  fetchDeskForward,
+  fetchDeskForwardCompute,
   fetchDeskReconcileCompute,
   fetchDeskReconcileRuns,
   fetchDeskScreen,
@@ -16,12 +19,19 @@ import {
   fetchDeskScreenRuns,
   fetchDeskTopupCompute,
   fetchDeskTopupRuns,
+  triggerDeskForwardCompute,
   triggerDeskReconcileCompute,
   triggerDeskScreenCompute,
   triggerDeskTopupCompute,
   triggerDeskUniverseFetch,
 } from "@/lib/api";
 import type {
+  DeskForwardAvgCell,
+  DeskForwardComputeSnapshot,
+  DeskForwardReadResult,
+  DeskForwardRecord,
+  DeskForwardRow,
+  DeskForwardTouch,
   DeskReconcileComputeSnapshot,
   DeskReconcileDrift,
   DeskReconcileRun,
@@ -232,6 +242,12 @@ const PRIMARY_BUTTON_CLASS =
 
 const CANCEL_BUTTON_CLASS =
   "mt-1 rounded-md border border-slate-700 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50";
+
+// The as-of day text fields (forward-test era) — mirrors structure/page.tsx's own `INPUT_CLASS`
+// shape (each page owns its own copy of this tiny constant per this project's established
+// convention), narrowed and centered for a bare YYYY-MM-DD value.
+const ASOF_INPUT_CLASS =
+  "w-36 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-center font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50";
 
 // The secondary (quieter) button styling for the "Latest" history control — mirrors
 // structure/page.tsx's own `SECONDARY_BUTTON_CLASS` byte-for-byte (each page owns its own copy of
@@ -1509,6 +1525,532 @@ function ScreenRunsSection({
   );
 }
 
+// --- Forward returns (forward-test era, v2 touch-anchored) — the read-only surface over the
+// append-only forward ledger: for whichever screen snapshot the page currently DISPLAYS, each
+// ranked row's intraday touches of its OWN wall during the screen date's session (out-of-sample:
+// the wall map's basis reads sessions strictly before the screen date), per touch the modeled
+// limit-fill entry, forward moves in PERCENT at trading-bar horizons + to the session close, and
+// the long/short max drawdown — with server-computed per-row averages (untruncated-only pools,
+// truncation counted), a per-side summary of touches BESIDE the seeded random-minute baseline,
+// and the record's register rendered VERBATIM. Every value is the served payload's own; nothing
+// is derived, capped, sorted, or sliced client-side. Clicking a row opens a detail panel BELOW
+// the table (the /structure SetupDrillIn separate-panel precedent) rendered from the ALREADY
+// loaded record — plain selection state, zero new effects, no fetch. Rendered DEAD LAST on the
+// page so no shipped golden's first-visible-match text search can resolve into it. The compute
+// is an explicit operator act — its own button, its own poll, never started by Refresh Data and
+// never by a page load. ------------------------------------------------------------------------------
+
+interface ForwardControlProps {
+  compute: DeskForwardComputeSnapshot | null;
+  onTrigger: () => void;
+  triggering: boolean;
+  triggerError: string | null;
+  onCancel: () => void;
+  cancelRequested: boolean;
+  cancelError: string | null;
+  screenId: string | null;
+}
+
+function DeskForwardComputeControl({
+  compute,
+  onTrigger,
+  triggering,
+  triggerError,
+  onCancel,
+  cancelRequested,
+  cancelError,
+  screenId,
+}: ForwardControlProps) {
+  const isRunning = compute?.state === "running";
+  const isFailed = compute?.state === "failed";
+  const isCancelled = compute?.state === "cancelled";
+  const buttonLabel = isRunning ? "Computing…" : isFailed ? "Retry Compute Forward" : "Compute Forward";
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {isFailed && compute?.error && (
+        <p data-testid="desk-forward-compute-error" className="text-xs text-red-300">
+          {compute.error}
+        </p>
+      )}
+      {triggerError && (
+        <p data-testid="desk-forward-compute-trigger-error" className="text-xs text-red-300">
+          {triggerError}
+        </p>
+      )}
+      {isCancelled && (
+        <p data-testid="desk-forward-compute-cancelled" className="text-xs text-amber-200/70">
+          Forward compute cancelled — nothing was recorded this run.
+        </p>
+      )}
+      {compute?.state === "done" && compute.forward_id !== null && (
+        <p data-testid="desk-forward-compute-outcome" className="text-xs text-slate-500">
+          {compute.reused
+            ? `Reused the forward result already recorded for these inputs — ${compute.forward_id}`
+            : `Recorded a new forward result — ${compute.forward_id}`}
+        </p>
+      )}
+      {compute !== null && screenId !== null && compute.screen_id !== screenId && (
+        <p data-testid="desk-forward-compute-other-screen" className="text-xs text-slate-500">
+          The job shown describes {compute.screen_id}, not the snapshot displayed above.
+        </p>
+      )}
+      <button
+        type="button"
+        data-testid="desk-forward-compute-button"
+        onClick={onTrigger}
+        disabled={triggering || isRunning || screenId === null}
+        className={PRIMARY_BUTTON_CLASS}
+      >
+        {buttonLabel}
+      </button>
+      {isRunning && (
+        <div data-testid="desk-forward-compute-running" className="mt-1 flex flex-col items-center gap-1">
+          <p data-testid="desk-forward-compute-progress" className="text-xs text-amber-200/70">
+            <span
+              aria-hidden="true"
+              className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle"
+            />
+            {compute.progress.rows_done} / {compute.progress.rows_total} rows
+          </p>
+          {compute.progress.current && (
+            <p data-testid="desk-forward-compute-current" className="text-xs text-amber-200/70">
+              current: {compute.progress.current}
+            </p>
+          )}
+          <button
+            type="button"
+            data-testid="desk-forward-compute-cancel"
+            onClick={onCancel}
+            disabled={cancelRequested}
+            className={CANCEL_BUTTON_CLASS}
+          >
+            {cancelRequested ? "Cancelling — finishing the current row…" : "Cancel"}
+          </button>
+          {cancelError && (
+            <p data-testid="desk-forward-compute-cancel-error" className="text-xs text-red-300">
+              {cancelError}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The seven measure columns every averages/summary block serves, in serving order: the four
+// horizon labels come from the record's own parameters; the last three are fixed.
+function forwardMeasureKeys(record: DeskForwardRecord): string[] {
+  return [...record.parameters.horizons_minutes.map(([label]) => label), "to_close", "mdd_long", "mdd_short"];
+}
+
+function forwardMeasureHeader(key: string): string {
+  if (key === "to_close") return "avg to close (%)";
+  if (key === "mdd_long") return "avg max drawdown (long, %)";
+  if (key === "mdd_short") return "avg max drawdown (short, %)";
+  return `avg fwd ${key} (%)`;
+}
+
+// One averages cell: the served mean, full detail in the tooltip. n=0 is an honest dash (with
+// the truncation count named when that is the whole story).
+function ForwardAvgCellView({ cell, measureKey }: { cell: DeskForwardAvgCell | null; measureKey: string }) {
+  const avgCell = cell;
+  if (avgCell === null || avgCell.n === 0) {
+    return (
+      <td
+        className={ROW_NUMERIC_CELL}
+        data-testid={`desk-forward-row-avg-${measureKey}`}
+        title={
+          avgCell !== null && avgCell.n_truncated > 0
+            ? `no untruncated measurements — ${avgCell.n_truncated} truncated at the session end`
+            : undefined
+        }
+      >
+        —
+      </td>
+    );
+  }
+  return (
+    <td
+      className={ROW_NUMERIC_CELL}
+      data-testid={`desk-forward-row-avg-${measureKey}`}
+      title={`n ${avgCell.n} · mean ${String(avgCell.mean_pct)} · median ${String(avgCell.median_pct)} · truncated ${avgCell.n_truncated}`}
+    >
+      {fmt(avgCell.mean_pct)}
+    </td>
+  );
+}
+
+function DeskForwardRowView({
+  row,
+  measureKeys,
+  selected,
+  onSelect,
+}: {
+  row: DeskForwardRow;
+  measureKeys: string[];
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const touchTitle = [
+    row.reason ?? "",
+    row.touches_beyond_cap > 0 ? `${row.touches_beyond_cap} further touch(es) beyond the recorded cap` : "",
+    row.gap_through_before_first_touch
+      ? "price gapped entirely beyond the band before the first touch — not counted as a touch"
+      : "",
+    row.bars_fully_beyond_band > 0 ? `${row.bars_fully_beyond_band} bar(s) entirely beyond the band` : "",
+  ]
+    .filter((line) => line !== "")
+    .join(" · ");
+  return (
+    <tr
+      data-testid="desk-forward-row"
+      onClick={onSelect}
+      aria-selected={selected}
+      className={`cursor-pointer border-t border-slate-800/60 transition-colors hover:bg-slate-800/40 ${
+        selected ? "bg-slate-800/60" : ""
+      }`}
+      title={touchTitle !== "" ? touchTitle : undefined}
+    >
+      <td className={ROW_BADGE_CELL} data-testid="desk-forward-row-symbol">
+        <span className="font-mono text-xs text-slate-200">{row.symbol}</span>
+      </td>
+      <td className={ROW_BADGE_CELL} data-testid="desk-forward-row-side">
+        <span className={CHIP_CLASS}>{row.side}</span>
+      </td>
+      <td className={ROW_BADGE_CELL} data-testid="desk-forward-row-class">
+        <span className={CHIP_CLASS}>{row.band_class === null ? "Unclassified" : `Class ${row.band_class}`}</span>
+      </td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-forward-row-touches">
+        {row.touch_count}
+        {row.touches_beyond_cap > 0 && (
+          <span className="ml-1 text-[10px] text-amber-200/70">+{row.touches_beyond_cap}</span>
+        )}
+      </td>
+      {measureKeys.map((measureKey) => (
+        <ForwardAvgCellView key={measureKey} cell={row.averages[measureKey] ?? null} measureKey={measureKey} />
+      ))}
+    </tr>
+  );
+}
+
+// One anchored measurement line — the SHARED renderer for a touch and a baseline anchor (the
+// payload shapes are identical; anchors carry entry_kind "close").
+function ForwardTouchLine({ touch }: { touch: DeskForwardTouch }) {
+  const touchRow = touch;
+  return (
+    <li
+      data-testid="desk-forward-detail-touch"
+      className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-t border-slate-800/40 py-1 text-[11px] text-slate-300"
+    >
+      <span className="font-mono">{touchRow.at_utc.substring(11, 19)}Z</span>
+      <span>
+        {touchRow.entry_kind} fill{" "}
+        <span className="font-mono" title={String(touchRow.entry_price)}>
+          {fmt(touchRow.entry_price)}
+        </span>
+      </span>
+      {Object.entries(touchRow.horizons).map(([label, measure]) => {
+        const touchValue = measure;
+        if (touchValue.return_pct === null) {
+          return (
+            <span key={label} className="text-slate-600" title={touchValue.reason ?? undefined}>
+              {label} —
+            </span>
+          );
+        }
+        return (
+          <span
+            key={label}
+            title={`${String(touchValue.return_pct)} · effective ${String(touchValue.effective_minutes)} min`}
+          >
+            {label} {fmt(touchValue.return_pct)}
+            {touchValue.truncated ? "†" : ""}
+          </span>
+        );
+      })}
+      <span title={`${String(touchRow.to_close_pct)} · ${touchRow.minutes_to_close} min to the session end`}>
+        close {fmt(touchRow.to_close_pct)}
+      </span>
+      <span title={String(touchRow.mdd_long_pct)}>MDD L {fmt(touchRow.mdd_long_pct)}</span>
+      <span title={String(touchRow.mdd_short_pct)}>MDD S {fmt(touchRow.mdd_short_pct)}</span>
+    </li>
+  );
+}
+
+function DeskForwardDetail({ row }: { row: DeskForwardRow }) {
+  return (
+    <div
+      data-testid="desk-forward-detail"
+      className="rounded border border-slate-800 bg-slate-900/40 px-3 py-2"
+    >
+      <p className="text-xs text-slate-400">
+        <span className="font-mono text-slate-200">{row.symbol}</span>{" "}
+        <span className={CHIP_CLASS}>{row.side}</span> band{" "}
+        <span className="font-mono">
+          {row.band_price_low === null ? "—" : fmt(row.band_price_low)}–
+          {row.band_price_high === null ? "—" : fmt(row.band_price_high)}
+        </span>
+        {row.touch_basis !== null && (
+          <span className="ml-2 text-slate-500">
+            measured on {row.touch_basis.timeframe} · {row.touch_basis.bars_in_session} bars in the
+            session
+          </span>
+        )}
+      </p>
+      {row.reason !== null && <p className="mt-1 text-xs text-amber-300">{row.reason}</p>}
+      {row.gap_through_before_first_touch && (
+        <p className="mt-1 text-[11px] text-amber-200/70">
+          price gapped entirely beyond the band before the first touch — a resting order at the
+          edge would have filled there, but a gap is not a touch and is disclosed, never counted.
+        </p>
+      )}
+      {row.touches.length === 0 ? (
+        <p className="mt-1 text-xs text-slate-500">
+          The band was never touched in this session — every cell above is an honest absence.
+        </p>
+      ) : (
+        <ul className="mt-1">
+          {row.touches.map((touch) => (
+            <ForwardTouchLine key={touch.at_utc} touch={touch} />
+          ))}
+        </ul>
+      )}
+      <p className="mt-1 text-[10px] text-slate-600">† truncated at the session end</p>
+      {row.baseline_anchors.length > 0 && (
+        <details data-testid="desk-forward-detail-baseline" className="mt-2">
+          <summary className="cursor-pointer text-[11px] text-slate-500">
+            the seeded random-minute anchors this row is compared against ({row.baseline_anchors.length}
+            {row.anchors_in_band > 0 ? ` · ${row.anchors_in_band} inside the band` : ""})
+          </summary>
+          <ul className="mt-1">
+            {row.baseline_anchors.map((anchor) => (
+              <ForwardTouchLine key={anchor.at_utc} touch={anchor} />
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
+// The measure cells for ONE summary line (touches or baseline) — shared so the two explicit
+// rows above cannot drift apart.
+function ForwardSummaryCells({
+  record,
+  side,
+  source,
+  measureKeys,
+}: {
+  record: DeskForwardRecord;
+  side: "support" | "resistance";
+  source: "touches" | "baseline";
+  measureKeys: string[];
+}) {
+  return (
+    <>
+      {measureKeys.map((measureKey) => {
+        const summaryCell = record.summary[side]?.[measureKey]?.[source] ?? null;
+        if (summaryCell === null || summaryCell.n === 0) {
+          return (
+            <td key={measureKey} className={ROW_NUMERIC_CELL}>
+              —
+            </td>
+          );
+        }
+        return (
+          <td
+            key={measureKey}
+            className={ROW_NUMERIC_CELL}
+            title={`n ${summaryCell.n} · mean ${String(summaryCell.mean_pct)} · median ${String(summaryCell.median_pct)} · truncated ${summaryCell.n_truncated}`}
+          >
+            n {summaryCell.n} · {fmt(summaryCell.mean_pct)}
+          </td>
+        );
+      })}
+    </>
+  );
+}
+
+function DeskForwardSummaryView({ record }: { record: DeskForwardRecord }) {
+  const measureKeys = forwardMeasureKeys(record);
+  const sides: Array<"support" | "resistance"> = ["support", "resistance"];
+  return (
+    <div data-testid="desk-forward-summary" className="overflow-x-auto">
+      <p className="mb-1 text-[11px] text-slate-500">
+        touches vs the seeded random-minute baseline — mean (%), untruncated pools only
+      </p>
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr>
+            <th className={ROW_HEADER_CELL_LEFT}>side</th>
+            <th className={ROW_HEADER_CELL_LEFT}>source</th>
+            {measureKeys.map((measureKey) => (
+              <th key={measureKey} className={ROW_HEADER_CELL}>
+                {measureKey === "to_close" ? "to close" : measureKey.startsWith("mdd") ? measureKey.replace("_", " ") : `fwd ${measureKey}`}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sides.map((side) => (
+            <Fragment key={side}>
+              <tr data-testid="desk-forward-summary-touches" className="border-t border-slate-800/60">
+                <td className={ROW_BADGE_CELL} rowSpan={2}>
+                  <span className={CHIP_CLASS}>{side}</span>
+                </td>
+                <td className={`${ROW_BADGE_CELL} text-[11px] text-slate-300`}>touches</td>
+                <ForwardSummaryCells record={record} side={side} source="touches" measureKeys={measureKeys} />
+              </tr>
+              <tr data-testid="desk-forward-summary-baseline" className="border-t border-slate-800/40">
+                <td className={`${ROW_BADGE_CELL} text-[11px] text-slate-500`}>baseline</td>
+                <ForwardSummaryCells record={record} side={side} source="baseline" measureKeys={measureKeys} />
+              </tr>
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DeskForwardTable({
+  record,
+  selectedSymbol,
+  onSelectSymbol,
+}: {
+  record: DeskForwardRecord;
+  selectedSymbol: string | null;
+  onSelectSymbol: (symbol: string) => void;
+}) {
+  const measureKeys = forwardMeasureKeys(record);
+  if (record.rows.length === 0) {
+    return (
+      <EmptyState
+        testid="desk-forward-rows-empty"
+        title="No members carry a forward result in this record."
+      />
+    );
+  }
+  return (
+    <div
+      data-testid="desk-forward-table-scroll"
+      className="max-h-[26rem] overflow-x-auto overflow-y-auto rounded border border-slate-800"
+    >
+      <table data-testid="desk-forward-table" className="w-full border-collapse">
+        <thead className="sticky top-0 z-10 bg-slate-900">
+          <tr>
+            <th className={ROW_HEADER_CELL_LEFT}>member</th>
+            <th className={ROW_HEADER_CELL_LEFT}>side</th>
+            <th className={ROW_HEADER_CELL_LEFT}>class</th>
+            <th className={ROW_HEADER_CELL}>touches</th>
+            {measureKeys.map((measureKey) => (
+              <th key={measureKey} className={ROW_HEADER_CELL}>
+                {forwardMeasureHeader(measureKey)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {record.rows.map((row) => (
+            <DeskForwardRowView
+              key={row.symbol}
+              row={row}
+              measureKeys={measureKeys}
+              selected={row.symbol === selectedSymbol}
+              onSelect={() => onSelectSymbol(row.symbol)}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DeskForwardSection({
+  result,
+  control,
+  selectedSymbol,
+  onSelectSymbol,
+}: {
+  result: { ok: boolean; data: DeskForwardReadResult | null; error?: string } | null;
+  control: ForwardControlProps;
+  selectedSymbol: string | null;
+  onSelectSymbol: (symbol: string) => void;
+}) {
+  if (result === null) {
+    return <LoadingPanel testid="desk-forward-loading" />;
+  }
+  if (!result.ok || result.data === null) {
+    return (
+      <UnavailablePanel
+        testid="desk-forward-unavailable"
+        message={result.error ?? "The forward record could not be loaded."}
+      />
+    );
+  }
+  const record = result.data.forward;
+  if (record === null) {
+    return (
+      <div
+        data-testid="desk-forward-not-computed"
+        className="rounded-lg border border-amber-800/60 bg-amber-900/20 px-4 py-6 text-center"
+      >
+        <p className="text-sm font-medium text-amber-300">
+          No forward result is recorded for this snapshot.
+        </p>
+        <p className="mt-1 text-xs text-amber-200/70">
+          Compute reads the fine bars recorded for the snapshot&apos;s own session and measures
+          every intraday touch of each ranked wall — an explicit operator act, nothing runs on
+          page load.
+        </p>
+        <div className="mt-3 flex justify-center">
+          <DeskForwardComputeControl {...control} />
+        </div>
+      </div>
+    );
+  }
+  const selectedRow =
+    selectedSymbol === null
+      ? null
+      : record.rows.find((candidate) => candidate.symbol === selectedSymbol) ?? null;
+  return (
+    <div data-testid="desk-forward-section" className="space-y-3">
+      <div data-testid="desk-forward-meta" className="grid grid-cols-1 gap-1 sm:grid-cols-3">
+        <Metric label="Record" value={record.id} />
+        <Metric label="Recorded at" value={record.created_utc} />
+        <Metric label="For snapshot" value={record.screen_id} />
+      </div>
+      <p data-testid="desk-forward-counts" className="text-[11px] text-slate-500">
+        {record.rows_with_touches} of {record.rows.length} members touched their wall ·{" "}
+        {record.total_touches} touch(es) in all · click a row for every touch and the anchors it
+        is compared against
+      </p>
+      {result.data.versions > 1 && (
+        <p data-testid="desk-forward-versions" className="text-[11px] text-slate-500">
+          showing the newest recorded result of {result.data.versions} — earlier versions stay on
+          file (new bars arriving re-key the inputs; nothing is rewritten)
+        </p>
+      )}
+      <DeskForwardSummaryView record={record} />
+      <DeskForwardTable
+        record={record}
+        selectedSymbol={selectedSymbol}
+        onSelectSymbol={onSelectSymbol}
+      />
+      {selectedRow !== null && <DeskForwardDetail row={selectedRow} />}
+      <p
+        data-testid="desk-forward-register"
+        className="rounded border border-amber-800/60 bg-amber-900/20 px-2 py-1.5 text-[11px] text-amber-200"
+      >
+        {record.register}
+      </p>
+      <div className="flex justify-center">
+        <DeskForwardComputeControl {...control} />
+      </div>
+    </div>
+  );
+}
+
 // --- Screen comparison (goal-desk-iter-35, J-20) — a new read-only disclosure of how the screen
 // `/desk` is currently DISPLAYING differs from the screen recorded immediately before it. A pure,
 // stateless GET (`GET /research/desk/screen/compare?id=<the displayed screen's own id>`), fed by
@@ -1809,53 +2351,66 @@ function DeskProvenance({
 // (members vs pairs+outcomes) — this project's own simplicity convention. --------------------------
 
 // goal-desk-iter-36 (J-21): the descriptive line beside the Run Screen control, querying
-// `GET /research/desk/screen/pins` for `todayUtcDate()` -- the SAME value `handleTriggerScreen`
-// already submits to the trigger (below). Renders in BOTH places `ScreenComputeControl` itself
-// renders (the empty-state panel and the populated page's own control panel), since it lives
-// inside that ONE shared component -- no duplication. Honest empty state (T-11): before any
-// universe snapshot is registered, `data.universe_snapshot_id` is `null` and this renders that
-// fact plainly rather than a "0 members" claim that would misleadingly imply a real, resolvable
-// walk.
+// `GET /research/desk/screen/pins` for the RESOLVED To day -- the SAME value
+// `handleTriggerScreen`'s no-arg form submits to the trigger (below; blank inputs resolve to
+// today, keeping the shipped copy byte-identical). Renders in BOTH places `ScreenComputeControl`
+// itself renders, since it lives inside that ONE shared component -- no duplication. Honest empty
+// state (T-11): before any universe snapshot is registered, `data.universe_snapshot_id` is `null`
+// and this renders that fact plainly. The five testids are pinned by golden J-21 (existence-only)
+// and stay byte-identical; only the day-copy varies, keyed off the SERVED payload's own
+// `screen_date` (a mid-edit hold stays honest about which day it answers for).
 function TodayScreenPinsNote({
   pins,
+  runDay,
 }: {
   pins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
+  runDay: string | null;
 }) {
+  const pendingIsToday = runDay === null || runDay === todayUtcDate();
   if (pins === null) {
     return (
       <p data-testid="desk-run-screen-pins-loading" className="text-[11px] text-slate-600">
-        Resolving whether today&apos;s pins would reuse a recorded screen…
+        {pendingIsToday
+          ? "Resolving whether today's pins would reuse a recorded screen…"
+          : `Resolving whether the pins for ${runDay} would reuse a recorded screen…`}
       </p>
     );
   }
   if (!pins.ok || pins.data === null) {
     return (
       <p data-testid="desk-run-screen-pins-unavailable" className="text-[11px] text-amber-300">
-        {pins.error ?? "Whether today's pins would reuse a recorded screen could not be loaded."}
+        {pins.error ??
+          (pendingIsToday
+            ? "Whether today's pins would reuse a recorded screen could not be loaded."
+            : `Whether the pins for ${runDay} would reuse a recorded screen could not be loaded.`)}
       </p>
     );
   }
   const { data } = pins;
+  const servedIsToday = data.screen_date === todayUtcDate();
   if (data.universe_snapshot_id === null) {
     return (
       <p data-testid="desk-run-screen-pins-empty" className="text-[11px] text-slate-600">
-        No universe snapshot is registered — whether a run today would reuse a recorded screen
-        cannot be named.
+        {servedIsToday
+          ? "No universe snapshot is registered — whether a run today would reuse a recorded screen cannot be named."
+          : `No universe snapshot is registered — whether a run for ${data.screen_date} would reuse a recorded screen cannot be named.`}
       </p>
     );
   }
   if (data.recorded !== null) {
     return (
       <p data-testid="desk-run-screen-pins-match" className="text-[11px] text-slate-500">
-        A run today would reuse the snapshot already recorded under today&apos;s pins —{" "}
-        {data.recorded.id}, recorded {data.recorded.created_utc}.
+        {servedIsToday
+          ? `A run today would reuse the snapshot already recorded under today's pins — ${data.recorded.id}, recorded ${data.recorded.created_utc}.`
+          : `A run for ${data.screen_date} would reuse the snapshot already recorded under that day's pins — ${data.recorded.id}, recorded ${data.recorded.created_utc}.`}
       </p>
     );
   }
   return (
     <p data-testid="desk-run-screen-pins-differ" className="text-[11px] text-slate-500">
-      No screen is recorded under the pins that resolve for today — a run would walk{" "}
-      {data.members_total} members.
+      {servedIsToday
+        ? `No screen is recorded under the pins that resolve for today — a run would walk ${data.members_total} members.`
+        : `No screen is recorded under the pins that resolve for ${data.screen_date} — a run would walk ${data.members_total} members.`}
     </p>
   );
 }
@@ -1869,6 +2424,7 @@ function ScreenComputeControl({
   cancelRequested,
   cancelError,
   pins,
+  runDay,
 }: {
   compute: DeskScreenComputeSnapshot | null;
   onTrigger: () => void;
@@ -1878,6 +2434,7 @@ function ScreenComputeControl({
   cancelRequested: boolean;
   cancelError: string | null;
   pins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
+  runDay: string | null;
 }) {
   const isRunning = compute?.state === "running";
   const isFailed = compute?.state === "failed";
@@ -1911,12 +2468,12 @@ function ScreenComputeControl({
             : `Recorded a new snapshot — ${compute.screen_id}`}
         </p>
       )}
-      <TodayScreenPinsNote pins={pins} />
+      <TodayScreenPinsNote pins={pins} runDay={runDay} />
       <button
         type="button"
         data-testid="desk-run-screen-button"
         onClick={onTrigger}
-        disabled={triggering || isRunning}
+        disabled={triggering || isRunning || runDay === null}
         className={PRIMARY_BUTTON_CLASS}
       >
         {buttonLabel}
@@ -2158,6 +2715,94 @@ const REFRESH_CHAIN_STEP_LABELS: Record<RefreshChainStepKey, string> = {
   screen: "Screen for today",
 };
 
+// --- the as-of day range (forward-test era) -------------------------------------------------------
+// Two validated text fields govern the screen compute: To (blank = today) and From (blank = the
+// To day). The chain's screen step loops EVERY day in [From, To]; the standalone Run Screen
+// button runs only the To day. Deliberately NOT <input type="date">: the native picker is
+// locale-dependent (the TopBar J-35 precedent), and every literal in this block is scanned
+// against the shipped goldens' pinned substrings — copy here says "day", never the pinned word.
+
+const SCREEN_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+// The per-click ceiling on how many days one chain run may walk: a ~101-member screen walk takes
+// minutes per day, so an unbounded range would quietly become an hours-long click. A validation
+// constant, not a Config value — it shapes no recorded artifact, only how much one click starts.
+const SCREEN_DAY_RANGE_MAX_DAYS = 31;
+
+interface ResolvedScreenDayRange {
+  from: string;
+  to: string;
+  days: string[];
+}
+
+function isRealUtcDay(value: string): boolean {
+  if (!SCREEN_DAY_PATTERN.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function enumerateUtcDays(from: string, to: string): string[] {
+  const out: string[] = [];
+  const cursor = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  while (cursor.getTime() <= end.getTime()) {
+    out.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return out;
+}
+
+// null error = valid. Blank To resolves to today; blank From resolves to the To day.
+function validateScreenDayRange(
+  fromRaw: string,
+  toRaw: string,
+): { error: string | null; range: ResolvedScreenDayRange | null } {
+  const today = todayUtcDate();
+  const toValue = toRaw.trim() === "" ? today : toRaw.trim();
+  if (!isRealUtcDay(toValue)) {
+    return {
+      error: "Enter the To day as a real UTC YYYY-MM-DD, or leave it blank to run today.",
+      range: null,
+    };
+  }
+  if (toValue > today) {
+    return {
+      error: "The To day is after today — a screen can only run for today or an earlier day.",
+      range: null,
+    };
+  }
+  const fromValue = fromRaw.trim() === "" ? toValue : fromRaw.trim();
+  if (!isRealUtcDay(fromValue)) {
+    return {
+      error: "Enter the From day as a real UTC YYYY-MM-DD, or leave it blank to run one day.",
+      range: null,
+    };
+  }
+  if (fromValue > toValue) {
+    return { error: "The From day is after the To day.", range: null };
+  }
+  const days = enumerateUtcDays(fromValue, toValue);
+  if (days.length > SCREEN_DAY_RANGE_MAX_DAYS) {
+    return {
+      error: `That range spans ${days.length} days — one click runs at most ${SCREEN_DAY_RANGE_MAX_DAYS}.`,
+      range: null,
+    };
+  }
+  return { error: null, range: { from: fromValue, to: toValue, days } };
+}
+
+// Step labels follow the day(s) a RUN actually submitted — a copy choice only, never a derived
+// backend fact. A single-day run for today keeps the shipped label byte-identical.
+function refreshChainStepLabel(key: RefreshChainStepKey, run: RefreshChainRun): string {
+  if (key !== "screen") return REFRESH_CHAIN_STEP_LABELS[key];
+  if (run.runDayCount <= 1) {
+    return run.runTo === todayUtcDate()
+      ? REFRESH_CHAIN_STEP_LABELS.screen
+      : `Screen for ${run.runTo}`;
+  }
+  return `Screens for ${run.runFrom} → ${run.runTo}`;
+}
+
 // `noop` is a genuine fourth outcome, not a flavour of `done`: a 409 from the membership fetch
 // means the content is identical to a snapshot already registered, so there was nothing to
 // register. Calling that "done" would imply a write that never happened.
@@ -2179,6 +2824,11 @@ interface RefreshChainStep {
 interface RefreshChainRun {
   steps: RefreshChainStep[];
   outcome: "running" | "done" | "halted" | "cancelled";
+  // The as-of day range this run was clicked with — frozen at click time (a later input edit
+  // never rewrites a run's own account of itself). Single-day runs have runFrom === runTo.
+  runFrom: string;
+  runTo: string;
+  runDayCount: number;
 }
 
 // Literal class strings, never interpolated, so Tailwind's scanner emits them — the
@@ -2270,6 +2920,12 @@ interface RefreshChainControlProps {
   onRefreshAll: () => void;
   onStop: () => void;
   stopRequested: boolean;
+  fromDay: string;
+  toDay: string;
+  onFromDayChange: (value: string) => void;
+  onToDayChange: (value: string) => void;
+  dayRangeError: string | null;
+  resolvedRange: ResolvedScreenDayRange | null;
 }
 
 function DeskRefreshChainControl({
@@ -2277,25 +2933,78 @@ function DeskRefreshChainControl({
   onRefreshAll,
   onStop,
   stopRequested,
+  fromDay,
+  toDay,
+  onFromDayChange,
+  onToDayChange,
+  dayRangeError,
+  resolvedRange,
 }: RefreshChainControlProps) {
   const isRunning = run?.outcome === "running";
   const isHalted = run?.outcome === "halted";
   const buttonLabel = isRunning ? "Refreshing…" : isHalted ? "Retry Refresh Data" : "Refresh Data";
+  const rangeCopy =
+    resolvedRange === null
+      ? "the chosen day"
+      : resolvedRange.days.length > 1
+        ? `every day from ${resolvedRange.from} to ${resolvedRange.to}`
+        : resolvedRange.to === todayUtcDate()
+          ? "today"
+          : resolvedRange.to;
   return (
     <div data-testid="desk-refresh-control" className="flex flex-col items-center gap-1">
+      <div className="flex flex-wrap items-end justify-center gap-3">
+        <label className="flex flex-col items-center gap-1">
+          <span className="text-[11px] font-medium text-slate-500">
+            From day (UTC) — blank = the To day
+          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            data-testid="desk-as-of-from-input"
+            value={fromDay}
+            onChange={(e) => onFromDayChange(e.target.value)}
+            placeholder="YYYY-MM-DD"
+            disabled={isRunning}
+            aria-invalid={dayRangeError !== null}
+            className={`${ASOF_INPUT_CLASS} ${dayRangeError !== null ? "border-amber-500" : ""}`}
+          />
+        </label>
+        <label className="flex flex-col items-center gap-1">
+          <span className="text-[11px] font-medium text-slate-500">
+            To day (UTC) — blank = today
+          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            data-testid="desk-as-of-to-input"
+            value={toDay}
+            onChange={(e) => onToDayChange(e.target.value)}
+            placeholder="YYYY-MM-DD"
+            disabled={isRunning}
+            aria-invalid={dayRangeError !== null}
+            className={`${ASOF_INPUT_CLASS} ${dayRangeError !== null ? "border-amber-500" : ""}`}
+          />
+        </label>
+      </div>
+      {dayRangeError !== null && (
+        <p data-testid="desk-as-of-day-error" className="max-w-md text-center text-xs text-amber-300">
+          {dayRangeError}
+        </p>
+      )}
       <button
         type="button"
         data-testid="desk-refresh-all-button"
         onClick={onRefreshAll}
-        disabled={isRunning}
+        disabled={isRunning || dayRangeError !== null}
         className={PRIMARY_BUTTON_CLASS}
       >
         {buttonLabel}
       </button>
       <p data-testid="desk-refresh-note" className="max-w-md text-center text-[11px] text-slate-600">
         One click runs four steps in order: the universe membership, the bar top-up, the bar index,
-        then the screen for today. Each step calls the same endpoint its own control here already
-        calls; nothing runs without this click.
+        then the screen for {rangeCopy}. Each step calls the same endpoint its own control here
+        already calls; nothing runs without this click. Run Screen below runs the To day only.
       </p>
       {run !== null && (
         <>
@@ -2307,7 +3016,7 @@ function DeskRefreshChainControl({
                 className={`flex flex-wrap items-baseline gap-x-2 text-[11px] ${REFRESH_CHAIN_STEP_COLOR[step.state]}`}
               >
                 <span className="font-mono">{index + 1}.</span>
-                <span className="font-medium">{REFRESH_CHAIN_STEP_LABELS[step.key]}</span>
+                <span className="font-medium">{refreshChainStepLabel(step.key, run)}</span>
                 {step.state === "running" && (
                   <span
                     aria-hidden="true"
@@ -2341,7 +3050,7 @@ function DeskRefreshChainControl({
 function refreshChainSummary(run: RefreshChainRun): string {
   const activeIndex = run.steps.findIndex((step) => step.state === "running");
   if (run.outcome === "running" && activeIndex >= 0) {
-    return `Step ${activeIndex + 1} of 4 — ${REFRESH_CHAIN_STEP_LABELS[run.steps[activeIndex].key]}.`;
+    return `Step ${activeIndex + 1} of 4 — ${refreshChainStepLabel(run.steps[activeIndex].key, run)}.`;
   }
   if (run.outcome === "done") return "All four steps finished.";
   if (run.outcome === "cancelled") return "Stopped on request — the later steps did not run.";
@@ -2349,7 +3058,7 @@ function refreshChainSummary(run: RefreshChainRun): string {
     (step) => step.state === "failed" || step.state === "cancelled",
   );
   return stoppedAt
-    ? `Stopped at ${REFRESH_CHAIN_STEP_LABELS[stoppedAt.key]} — the later steps did not run.`
+    ? `Stopped at ${refreshChainStepLabel(stoppedAt.key, run)} — the later steps did not run.`
     : "Stopped — the later steps did not run.";
 }
 // REFRESH-CHAIN-END
@@ -2363,6 +3072,7 @@ interface ScreenControlProps {
   cancelRequested: boolean;
   cancelError: string | null;
   pins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
+  runDay: string | null;
 }
 
 interface TopupControlProps {
@@ -2616,14 +3326,14 @@ export default function DeskPage() {
     error?: string;
   } | null>(null);
 
-  // goal-desk-iter-36 (J-21): the screen-pin disclosure's two independent fetches. `todayPinsResult`
-  // answers "would a run RIGHT NOW reuse or walk?" for `todayUtcDate()` — the SAME value the Run
-  // Screen trigger already submits — and is rendered beside that control (both empty-state and
-  // populated views, since it lives inside the ONE shared `ScreenComputeControl`). `displayedPins`
-  // answers the SAME question for the currently DISPLAYED snapshot's own `screen_date` and is
-  // rendered inside `DeskProvenance`; it is refetched by its own effect below whenever the
-  // displayed snapshot changes (mirrors `screenCompareResult`'s own effect).
-  const [todayPinsResult, setTodayPinsResult] = useState<{
+  // goal-desk-iter-36 (J-21): the screen-pin disclosure's two independent fetches.
+  // `runPinsResult` (forward-test era rename of `todayPinsResult`) answers "would a run RIGHT NOW
+  // reuse or walk?" for the RESOLVED To day — the SAME value the Run Screen trigger submits
+  // (blank inputs resolve to today, byte-identical to the shipped behavior) — and is rendered
+  // beside that control. `displayedPins` answers the SAME question for the currently DISPLAYED
+  // snapshot's own `screen_date` and is refetched by its own effect below whenever the displayed
+  // snapshot changes (mirrors `screenCompareResult`'s own effect).
+  const [runPinsResult, setRunPinsResult] = useState<{
     ok: boolean;
     data: DeskScreenPinsResult | null;
     error?: string;
@@ -2633,6 +3343,31 @@ export default function DeskPage() {
     data: DeskScreenPinsResult | null;
     error?: string;
   } | null>(null);
+
+  // Forward-test era: the as-of day range governing the screen compute — the ONE date source.
+  // Blank To = today; blank From = the To day. Validated by `validateScreenDayRange` (a derived
+  // value, never an effect); invalid input disables BOTH Run Screen and Refresh Data.
+  const [fromDayInput, setFromDayInput] = useState("");
+  const [toDayInput, setToDayInput] = useState("");
+  const dayRange = validateScreenDayRange(fromDayInput, toDayInput);
+  const resolvedRange = dayRange.range;
+
+  // Forward-test era: the forward panel's own state — the displayed snapshot's newest recorded
+  // forward result (read-keyed on the displayed id, the `screenCompareResult` shape) plus the
+  // fourth compute manager's five-variable tuple (the screen/topup/reconcile convention).
+  const [forwardResult, setForwardResult] = useState<{
+    ok: boolean;
+    data: DeskForwardReadResult | null;
+    error?: string;
+  } | null>(null);
+  const [forwardCompute, setForwardCompute] = useState<DeskForwardComputeSnapshot | null>(null);
+  const [forwardTriggering, setForwardTriggering] = useState(false);
+  const [forwardTriggerError, setForwardTriggerError] = useState<string | null>(null);
+  const [forwardCancelRequested, setForwardCancelRequested] = useState(false);
+  const [forwardCancelError, setForwardCancelError] = useState<string | null>(null);
+  // The forward drill-in selection — plain client state over the ALREADY-loaded record (no
+  // effect, no fetch; the census stays at eleven effects). Reset inside the forward GET effect.
+  const [selectedForwardSymbol, setSelectedForwardSymbol] = useState<string | null>(null);
 
   // The chained refresh (see the REFRESH-CHAIN block above). `refreshChain` is plain state and is
   // deliberately NOT persisted: a reload clears it and nothing resumes, which is what keeps "every
@@ -2666,12 +3401,14 @@ export default function DeskPage() {
   );
 
   // Mount: eight GETs, zero POSTs (TC-19/TC-8, extended era-desk-iter-14/goal-desk-iter-29/
-  // goal-desk-iter-36) — the screen list/latest, ALL THREE compute managers' current/last snapshot
-  // (seeds a page load mid-job or post-terminal without a spurious extra click — the /structure
-  // edge-report mount-seeding precedent), the top-up run log's list + latest full record
-  // (era-desk-iter-11, J-09), the reconciliation run log's list + latest full record
-  // (era-desk-iter-14, J-10), the screen run log's list + latest full record (goal-desk-iter-29,
-  // J-18), and (goal-desk-iter-36, J-21) today's own screen-pin resolution.
+  // goal-desk-iter-36/forward-test era) — the screen list/latest, ALL FOUR compute managers'
+  // current/last snapshot (seeds a page load mid-job or post-terminal without a spurious extra
+  // click — the /structure edge-report mount-seeding precedent), the top-up run log's list +
+  // latest full record (era-desk-iter-11, J-09), the reconciliation run log's list + latest full
+  // record (era-desk-iter-14, J-10), and the screen run log's list + latest full record
+  // (goal-desk-iter-29, J-18). The J-21 screen-pin GET moved OUT of this effect into its own
+  // as-of-keyed effect immediately below (it must follow the operator's resolved To day, which
+  // on a fresh mount is today — byte-identical behavior).
   useEffect(() => {
     let alive = true;
     fetchDeskScreen().then((result) => {
@@ -2695,13 +3432,31 @@ export default function DeskPage() {
     fetchDeskReconcileRuns().then((result) => {
       if (alive) setReconcileRunsResult(result);
     });
-    fetchDeskScreenPins(todayUtcDate()).then((result) => {
-      if (alive) setTodayPinsResult(result);
+    fetchDeskForwardCompute().then((result) => {
+      if (alive && result.ok) setForwardCompute(result.data);
     });
     return () => {
       alive = false;
     };
   }, []);
+
+  // goal-desk-iter-36 (J-21) + forward-test era: the screen-pins disclosure follows the resolved
+  // To day. Fires on mount (blank inputs -> today, identical to the GET this replaced in the
+  // mount effect) and again only when a COMPLETE valid day is entered; while the fields are
+  // mid-edit/invalid it holds the last answer (the payload's own `screen_date` names which day it
+  // answers for). A GET only — never a trigger, never a timer.
+  useEffect(() => {
+    const check = validateScreenDayRange(fromDayInput, toDayInput);
+    if (check.range === null) return;
+    const day = check.range.to;
+    let alive = true;
+    fetchDeskScreenPins(day).then((result) => {
+      if (alive) setRunPinsResult(result);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [fromDayInput, toDayInput]);
 
   // Poll the screen compute job while running (mirrors /structure's edge-report poll pattern —
   // reusing the PATTERN, not the endpoint). The instant a tick observes a terminal state, the
@@ -2730,18 +3485,23 @@ export default function DeskPage() {
         setScreenRunsResult((previous) =>
           refreshedRuns.ok || previous === null || !previous.ok ? refreshedRuns : previous,
         );
-        // goal-desk-iter-36 (J-21): a just-finished run changes whether TODAY's pins would now
-        // reuse or walk — the SAME "on terminal, refresh once" precedent the two refetches above
-        // already establish (NOTES: "at most a refetch where the page already refetches its
-        // ledgers on a terminal compute tick" — never a timer/poll of its own).
-        const refreshedTodayPins = await fetchDeskScreenPins(todayUtcDate());
-        setTodayPinsResult((previous) =>
-          refreshedTodayPins.ok || previous === null || !previous.ok ? refreshedTodayPins : previous,
-        );
+        // goal-desk-iter-36 (J-21): a just-finished run changes whether the RESOLVED To day's
+        // pins would now reuse or walk — the SAME "on terminal, refresh once" precedent the two
+        // refetches above already establish (never a timer/poll of its own). Skipped while the
+        // inputs are mid-edit/invalid — the as-of-keyed effect refetches when they become valid.
+        const check = validateScreenDayRange(fromDayInput, toDayInput);
+        if (check.range !== null) {
+          const refreshedRunPins = await fetchDeskScreenPins(check.range.to);
+          setRunPinsResult((previous) =>
+            refreshedRunPins.ok || previous === null || !previous.ok ? refreshedRunPins : previous,
+          );
+        }
       }
     }, 700);
     return () => clearInterval(handle);
-  }, [screenCompute]);
+    // The as-of inputs join the deps so the terminal-tick refetch always reads the CURRENT
+    // resolved day (the interval only exists while a job runs, so re-registration is cheap).
+  }, [screenCompute, fromDayInput, toDayInput]);
 
   // Poll the top-up job while running — independent of the screen compute poll above (the two
   // compute managers are separate processes-scoped jobs). era-desk-iter-11 (J-09): the instant a
@@ -2790,12 +3550,21 @@ export default function DeskPage() {
   // otherwise unchanged, and a value-returning function is still assignable to the `onTrigger: ()
   // => void` prop the three controls declare, so those components and their props interfaces are
   // untouched.
-  async function handleTriggerScreen(): Promise<ChainTriggerResult<DeskScreenComputeSnapshot>> {
+  // Forward-test era: `day` is the chain's per-day loop parameter; the no-arg form (the Run
+  // Screen button's own `onTrigger`) runs the RESOLVED To day. Both buttons disable while the
+  // range is invalid, so the guard return below is a belt-and-braces rail, not a reachable path.
+  async function handleTriggerScreen(
+    day?: string,
+  ): Promise<ChainTriggerResult<DeskScreenComputeSnapshot>> {
+    const runDay = typeof day === "string" ? day : resolvedRange?.to;
+    if (runDay === undefined) {
+      return { ok: false, error: "The as-of day is not valid." };
+    }
     setScreenTriggering(true);
     setScreenTriggerError(null);
     setScreenCancelRequested(false);
     setScreenCancelError(null);
-    const result = await triggerDeskScreenCompute(todayUtcDate());
+    const result = await triggerDeskScreenCompute(runDay);
     setScreenTriggering(false);
     if (result.ok && result.data) {
       setScreenCompute(result.data.compute);
@@ -2873,6 +3642,11 @@ export default function DeskPage() {
   // lands live rather than all at once at the end.
   async function handleRefreshAll() {
     if (refreshChainActiveRef.current) return;
+    // The as-of range is captured ONCE, at click time — a later input edit never changes what a
+    // running (or finished) chain reports about itself. The button disables while the range is
+    // invalid, so this guard is a belt-and-braces rail, not a reachable path.
+    if (resolvedRange === null) return;
+    const range = resolvedRange;
     refreshChainActiveRef.current = true;
     refreshChainStopRef.current = false;
     setRefreshChainStopRequested(false);
@@ -2883,7 +3657,13 @@ export default function DeskPage() {
       message: "queued",
     }));
     const publish = (outcome: RefreshChainRun["outcome"]) =>
-      setRefreshChain({ steps: steps.map((step) => ({ ...step })), outcome });
+      setRefreshChain({
+        steps: steps.map((step) => ({ ...step })),
+        outcome,
+        runFrom: range.from,
+        runTo: range.to,
+        runDayCount: range.days.length,
+      });
 
     // Halt: mark this step's own terminal outcome, mark every later step honestly un-run, and
     // stop. A halted chain never issues another POST.
@@ -2914,11 +3694,11 @@ export default function DeskPage() {
         state: "done",
         message: `registered ${universe.data.member_count} members — ${universe.data.id}`,
       };
-      // A NEW membership changes which snapshot today's pins resolve against, so refresh that ONE
-      // read here — the same "on a terminal outcome, refetch once" precedent the screen poll
-      // already uses for this exact endpoint. Never a timer, never a poll.
-      const pins = await fetchDeskScreenPins(todayUtcDate());
-      setTodayPinsResult((previous) =>
+      // A NEW membership changes which snapshot the run's pins resolve against, so refresh that
+      // ONE read here for the captured To day — the same "on a terminal outcome, refetch once"
+      // precedent the screen poll already uses for this exact endpoint. Never a timer/poll.
+      const pins = await fetchDeskScreenPins(range.to);
+      setRunPinsResult((previous) =>
         pins.ok || previous === null || !previous.ok ? pins : previous,
       );
     } else if (universe.status === 409) {
@@ -3008,10 +3788,81 @@ export default function DeskPage() {
     ) {
       return;
     }
-    if (
-      !(await runJob(3, handleTriggerScreen, () => screenComputeRef.current, describeScreenDone))
-    ) {
-      return;
+
+    // Step 4 — the screen, once PER DAY of the captured range, oldest first (forward-test era).
+    // Each day is its own single-flight job through the SAME handler the Run Screen button uses;
+    // each is awaited to terminal before the next starts, so two walks never overlap. A day whose
+    // pins are already recorded resolves as an honest reuse. The first failed or cancelled day
+    // halts the chain there — later days are honestly un-run.
+    {
+      const screenIndex = 3;
+      let recordedCount = 0;
+      let reusedCount = 0;
+      let lastSettled: DeskScreenComputeSnapshot | null = null;
+      for (let dayIndex = 0; dayIndex < range.days.length; dayIndex += 1) {
+        const day = range.days[dayIndex];
+        if (refreshChainStopRef.current) {
+          halt(screenIndex, "cancelled", REFRESH_CHAIN_CANCELLED.screen);
+          return;
+        }
+        steps[screenIndex] = {
+          key: "screen",
+          state: "running",
+          message: `day ${dayIndex + 1} of ${range.days.length} — ${day}`,
+        };
+        publish("running");
+
+        const started = await handleTriggerScreen(day);
+        if (!started.ok || !started.data) {
+          halt(
+            screenIndex,
+            "failed",
+            `${day}: ${started.error ?? "this day's run could not be started"}`,
+          );
+          return;
+        }
+        const adopted = started.data.started === false;
+        if (adopted) {
+          steps[screenIndex] = {
+            key: "screen",
+            state: "running",
+            message: `day ${dayIndex + 1} of ${range.days.length} — ${day} · joined a job already running`,
+          };
+          publish("running");
+        }
+        const settled = await awaitRefreshChainJob(
+          () => screenComputeRef.current,
+          started.data.compute.id,
+          () => refreshChainStopRef.current,
+        );
+        if (settled === null) {
+          halt(screenIndex, "cancelled", `${day}: ${REFRESH_CHAIN_CANCELLED.screen}`);
+          return;
+        }
+        if (settled.state === "cancelled") {
+          halt(screenIndex, "cancelled", `${day}: ${REFRESH_CHAIN_CANCELLED.screen}`);
+          return;
+        }
+        if (settled.state !== "done") {
+          halt(screenIndex, "failed", `${day}: ${settled.error ?? "this day's run failed"}`);
+          return;
+        }
+        lastSettled = settled;
+        if (settled.reused) {
+          reusedCount += 1;
+        } else {
+          recordedCount += 1;
+        }
+      }
+      const dayCount = range.days.length;
+      steps[screenIndex] = {
+        key: "screen",
+        state: "done",
+        message:
+          dayCount === 1 && lastSettled !== null
+            ? describeScreenDone(lastSettled)
+            : `${dayCount} days — ${recordedCount} recorded · ${reusedCount} reused`,
+      };
     }
 
     publish("done");
@@ -3072,7 +3923,8 @@ export default function DeskPage() {
     onCancel: handleCancelScreen,
     cancelRequested: screenCancelRequested,
     cancelError: screenCancelError,
-    pins: todayPinsResult,
+    pins: runPinsResult,
+    runDay: resolvedRange?.to ?? null,
   };
   const topupControlProps: TopupControlProps = {
     compute: topupCompute,
@@ -3097,6 +3949,12 @@ export default function DeskPage() {
     onRefreshAll: handleRefreshAll,
     onStop: handleStopRefreshChain,
     stopRequested: refreshChainStopRequested,
+    fromDay: fromDayInput,
+    toDay: toDayInput,
+    onFromDayChange: setFromDayInput,
+    onToDayChange: setToDayInput,
+    dayRangeError: dayRange.error,
+    resolvedRange,
   };
 
   const latest = screenResult?.ok ? screenResult.data?.latest ?? null : null;
@@ -3158,6 +4016,89 @@ export default function DeskPage() {
       alive = false;
     };
   }, [displayedSnapshot]);
+
+  // Forward-test era: the displayed snapshot's newest recorded forward result — id-keyed, the
+  // `screenCompareResult` effect's exact shape. A GET only, never a trigger. The drill-in
+  // selection resets here too (plain state, no effect of its own): a different snapshot means a
+  // different record, so a stale selection must not carry across.
+  useEffect(() => {
+    const id = displayedSnapshot?.id ?? null;
+    setSelectedForwardSymbol(null);
+    if (id === null) {
+      setForwardResult(null);
+      return;
+    }
+    let alive = true;
+    fetchDeskForward(id).then((result) => {
+      if (alive) setForwardResult(result);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [displayedSnapshot]);
+
+  // Poll the forward compute job while running — the fourth manager's poll, mirroring the
+  // topup-poll shape with ONE terminal refetch: the displayed snapshot's own forward read
+  // (keep-last-known on failure). If the operator switched the displayed screen mid-compute, the
+  // refetch targets the NEWLY displayed id — the computed screen's record appears when it is
+  // displayed again, via the id-keyed read effect above. Honest, and stated here on purpose.
+  useEffect(() => {
+    if (forwardCompute?.state !== "running") return;
+    const handle = setInterval(async () => {
+      const next = await fetchDeskForwardCompute();
+      if (!next.ok) return;
+      setForwardCompute(next.data);
+      if (next.data && next.data.state !== "running") {
+        const id = displayedSnapshot?.id ?? null;
+        if (id !== null) {
+          const refreshed = await fetchDeskForward(id);
+          setForwardResult((previous) =>
+            refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
+          );
+        }
+      }
+    }, 700);
+    return () => clearInterval(handle);
+  }, [forwardCompute, displayedSnapshot]);
+
+  // Forward-test era: the compute trigger/cancel pair — exact mirrors of the screen pair above,
+  // placed here (after `displayedSnapshot`) because the trigger submits the DISPLAYED snapshot's
+  // own id. Reachable from the panel's buttons and nothing else.
+  async function handleTriggerForward() {
+    if (displayedSnapshot === null) return;
+    setForwardTriggering(true);
+    setForwardTriggerError(null);
+    setForwardCancelRequested(false);
+    setForwardCancelError(null);
+    const result = await triggerDeskForwardCompute(displayedSnapshot.id);
+    setForwardTriggering(false);
+    if (result.ok && result.data) {
+      setForwardCompute(result.data.compute);
+    } else {
+      setForwardTriggerError(result.error ?? "The forward compute could not be started.");
+    }
+  }
+
+  async function handleCancelForward() {
+    setForwardCancelRequested(true);
+    setForwardCancelError(null);
+    const result = await cancelDeskForwardCompute();
+    if (!result.ok) {
+      setForwardCancelRequested(false);
+      setForwardCancelError(result.error ?? "The forward compute could not be cancelled.");
+    }
+  }
+
+  const forwardControlProps: ForwardControlProps = {
+    compute: forwardCompute,
+    onTrigger: handleTriggerForward,
+    triggering: forwardTriggering,
+    triggerError: forwardTriggerError,
+    onCancel: handleCancelForward,
+    cancelRequested: forwardCancelRequested,
+    cancelError: forwardCancelError,
+    screenId: displayedSnapshot?.id ?? null,
+  };
 
   return (
     <div className="min-h-screen">
@@ -3249,6 +4190,23 @@ export default function DeskPage() {
           <section aria-label="Screen Comparison" className="mt-6">
             <Panel title="Screen Comparison">
               <ScreenComparisonSection result={screenCompareResult} />
+            </Panel>
+          </section>
+        )}
+
+        {/* Forward-test era: rendered DEAD LAST (the Screen Comparison iter-35 placement
+            precedent) — after every other section, so no shipped golden's first-visible-match
+            text search can resolve into it. Describes whichever snapshot is DISPLAYED, so it
+            shares the compare section's own `latest !== null` precondition. */}
+        {latest !== null && (
+          <section aria-label="Forward Returns" className="mt-6">
+            <Panel title="Forward Returns">
+              <DeskForwardSection
+                result={forwardResult}
+                control={forwardControlProps}
+                selectedSymbol={selectedForwardSymbol}
+                onSelectSymbol={setSelectedForwardSymbol}
+              />
             </Panel>
           </section>
         )}

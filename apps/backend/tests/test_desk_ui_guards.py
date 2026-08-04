@@ -143,10 +143,21 @@ def test_structure_prefill_guard_can_fail_on_a_seeded_violation():
 # cover `row.opposite_band.*`'s distance/price/score fields and `row.bands_by_class.*`'s per-class
 # counts -- the new `opposite` column/tooltip line renders these verbatim too, never a derived
 # distance, price, or count (e.g. a client-side "total bands" sum or an implied spread).
+# Forward-test era v2 (touch-anchored): extended AGAIN (the same never-duplicated discipline)
+# to cover the Forward Returns panel's numeric paths -- the row's own band range and touch
+# counts, plus the binding names its components MUST use (`touchRow` for a touch/anchor line,
+# `touchValue` for a per-horizon leaf, `avgCell` for a row average, `summaryCell` for a summary
+# cell) so a derived spread/sum/ratio over ANY served forward value is caught. The v1 `*_bps`
+# paths died with the close-anchored shape.
 _PRICE_ARITHMETIC_FIELDS = (
-    r"row\.(?:distance_bps|price_low|price_high"
+    r"row\.(?:distance_bps|price_low|price_high|reference_close"
     r"|opposite_band\.(?:distance_bps|price_low|price_high|band_score)"
-    r"|bands_by_class\.(?:A|B|C|unclassified))"
+    r"|bands_by_class\.(?:A|B|C|unclassified)"
+    r"|band_price_low|band_price_high|touch_count|touches_beyond_cap)"
+    r"|touchRow\.(?:entry_price|to_close_pct|mdd_long_pct|mdd_short_pct|minutes_to_close)"
+    r"|touchValue\.(?:return_pct|effective_minutes)"
+    r"|avgCell\.(?:mean_pct|median_pct)"
+    r"|summaryCell\.(?:mean_pct|median_pct)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -187,6 +198,30 @@ def test_desk_page_price_arithmetic_guard_catches_opposite_band_and_bands_by_cla
 
     seeded_bands_by_class = "const total = row.bands_by_class.A + row.bands_by_class.B;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_bands_by_class) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_forward_field_arithmetic():
+    """Forward-test era v2 counter-test: the extended guard also catches arithmetic over the
+    touch-anchored panel's served values -- the row's band range, a touch line's own numbers, a
+    per-horizon leaf, a row average, and a summary cell -- so a client-derived spread, sum, or
+    ratio over any of them is caught, exactly like the ranked-table fields before it."""
+    seeded_band = "const width = row.band_price_high - row.band_price_low;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_band) is not None
+
+    seeded_touch = "const range = touchRow.mdd_long_pct - touchRow.mdd_short_pct;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_touch) is not None
+
+    seeded_entry = "const off = touchRow.entry_price - row.price_low;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_entry) is not None
+
+    seeded_horizon = "const bps = touchValue.return_pct * 100;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_horizon) is not None
+
+    seeded_avg = "const skew = avgCell.mean_pct - avgCell.median_pct;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_avg) is not None
+
+    seeded_summary = "const lift = summaryCell.mean_pct - summaryCell.median_pct;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_summary) is not None
 
 
 # goal-desk-iter-24 (J-16) TC-7 (a): the ranked table's own reflow adds a `rank` cell rendering
@@ -264,6 +299,14 @@ _REQUIRED_DESK_TESTIDS = (
     "desk-topup-button",
     "desk-reconcile-button",
     "desk-refresh-all-button",
+    # Forward-test era: the as-of range fields (the chain's one date source) and the Forward
+    # Returns panel's primary surfaces -- same static-presence rationale as the compute controls
+    # above (no golden ever clicks a write path; presence is the cheapest proof they still ship).
+    "desk-as-of-from-input",
+    "desk-as-of-to-input",
+    "desk-forward-section",
+    "desk-forward-table",
+    "desk-forward-compute-button",
 )
 
 

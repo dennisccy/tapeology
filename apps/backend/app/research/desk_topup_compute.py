@@ -133,7 +133,12 @@ from .routes import (
 )
 from .store import JournalStore
 
-__all__ = ["DeskTopupComputeManager", "run_topup"]
+__all__ = [
+    "DESK_TOPUP_FINE_TIMEFRAMES",
+    "DeskTopupComputeManager",
+    "TOPUP_WALK_TIMEFRAMES",
+    "run_topup",
+]
 
 # The top-up's fetch horizon — a SINGLE wide lookback shared by all four pinned timeframes, chosen
 # to match the Yahoo adapter's OWN ``1h``/``4h`` retention ceiling
@@ -148,6 +153,28 @@ __all__ = ["DeskTopupComputeManager", "run_topup"]
 # module needs no per-timeframe retention table of its own — the adapter already owns that.
 _TOPUP_LOOKBACK_DAYS = 730
 
+# Forward-test era: the fine intraday set the WALKER additionally tops up, so the desk forward
+# measurement (``desk_forward.py``) has 1m/5m paths to read. Deliberately a SEPARATE constant from
+# ``desk_coverage.DESK_TOPUP_TIMEFRAMES``, which stays byte-identical: that constant feeds the
+# coverage payload's shape AND ``desk_screen._bar_store_signature``'s hashed tuple set, both
+# frozen — recording 1m/5m series is structurally invisible to the signature, so no recorded
+# screen's pins move. (The desk era's own "no 5m/1m in the desk top-up" acceptance text scoped to
+# the DAILY-CLOSE screen's needs; this union is the forward-era's additive decision, changing
+# nothing about what the screen itself reads.)
+DESK_TOPUP_FINE_TIMEFRAMES: tuple[str, ...] = ("1m", "5m")
+
+# The walker's full iteration set — coarse (pinned) first, fine appended.
+TOPUP_WALK_TIMEFRAMES: tuple[str, ...] = DESK_TOPUP_TIMEFRAMES + DESK_TOPUP_FINE_TIMEFRAMES
+
+# Per-timeframe lookback floor for the REQUESTED window: fine timeframes ask only for what the
+# vendor can actually serve (``yahoo.py``'s ``_INTERVAL_LIMITS``: 1m ≈ the last 30 days, 5m ≈ 60),
+# so ``_pair_window``'s EXISTING tail logic engages the day after the first fine fetch — the
+# frozen history already reaches a 30/60-day lookback start. Without this floor the full 730-day
+# request start could never be reached by frozen fine history, every daily run would re-request
+# (and re-record) the whole clamped span, and the append-only store would grow by ~1MB per symbol
+# per timeframe per day for data the store already holds.
+_TOPUP_FINE_LOOKBACK_DAYS: dict[str, int] = {"1m": 30, "5m": 60}
+
 
 def _iso_utc_now() -> str:
     return (
@@ -157,16 +184,18 @@ def _iso_utc_now() -> str:
     )
 
 
-def _fetch_window_now() -> tuple[str, str]:
+def _fetch_window_now(lookback_days: int = _TOPUP_LOOKBACK_DAYS) -> tuple[str, str]:
     """The ``[start, end]`` ISO window every top-up pair requests: ``end`` = today (UTC calendar
-    date), ``start`` = ``_TOPUP_LOOKBACK_DAYS`` earlier. Deliberately wall-clock: an operator-run
-    top-up asking "what bars exist as of today" is the SAME act as a manual ``POST /research/bars``
-    call with today's date — goal.md's T-6 no-wall-clock rule scopes to a SCREEN's ``as_of``
-    (J-03's determinism contract), never to a plain bar-fetch window (which the vendor adapter's
-    own retention clamp already honestly bounds/notes)."""
+    date), ``start`` = ``lookback_days`` earlier (the shared ``_TOPUP_LOOKBACK_DAYS`` default for
+    the coarse four; the fine timeframes pass their own retention floor — see
+    ``_TOPUP_FINE_LOOKBACK_DAYS``). Deliberately wall-clock: an operator-run top-up asking "what
+    bars exist as of today" is the SAME act as a manual ``POST /research/bars`` call with today's
+    date — goal.md's T-6 no-wall-clock rule scopes to a SCREEN's ``as_of`` (J-03's determinism
+    contract), never to a plain bar-fetch window (which the vendor adapter's own retention clamp
+    already honestly bounds/notes)."""
     now = datetime.now(timezone.utc)
     end = now.date().isoformat() + "T00:00:00Z"
-    start = (now - timedelta(days=_TOPUP_LOOKBACK_DAYS)).date().isoformat() + "T00:00:00Z"
+    start = (now - timedelta(days=lookback_days)).date().isoformat() + "T00:00:00Z"
     return start, end
 
 
@@ -204,7 +233,12 @@ def _pair_window(bar_store: BarStore, symbol: str, timeframe: str) -> dict:
     earliest/newest frozen bar (full ISO timestamp), both ``None`` together when nothing is
     frozen. A PURE read (zero vendor calls, zero writes) — safe to call more than once against the
     same pre-fetch store state (see the module docstring's J-17 section)."""
-    lookback_start, today = _fetch_window_now()
+    # Forward-test era: a FINE timeframe's lookback start is its own vendor-retention floor
+    # (``_TOPUP_FINE_LOOKBACK_DAYS``), not the shared 730 days — so after the first fine fetch the
+    # frozen history already reaches the start and the tail branch below engages, exactly as it
+    # always has for the coarse four.
+    lookback_days = _TOPUP_FINE_LOOKBACK_DAYS.get(timeframe, _TOPUP_LOOKBACK_DAYS)
+    lookback_start, today = _fetch_window_now(lookback_days)
     bars = bar_store.merged_bars(symbol, timeframe)
     if not bars:
         return {
@@ -321,12 +355,12 @@ def run_topup(
     ``progress``, if given, is called after EACH pair with the outcome dict just appended (so a
     caller can publish incremental state). ``should_abort``, if given and it returns ``True``
     BEFORE a pair starts, stops the walk early — the returned list is simply shorter than
-    ``len(members) * len(DESK_TOPUP_TIMEFRAMES)``; a cooperative stop, never a raise (there is no
+    ``len(members) * len(TOPUP_WALK_TIMEFRAMES)``; a cooperative stop, never a raise (there is no
     cache-publish step here to protect, unlike ``run_strategy_comparison_report``'s
     ``EdgeReportComputeCancelled``)."""
     outcomes: list[dict] = []
     for symbol in members:
-        for timeframe in DESK_TOPUP_TIMEFRAMES:
+        for timeframe in TOPUP_WALK_TIMEFRAMES:
             if should_abort is not None and should_abort():
                 return outcomes
             window = _pair_window(bar_store, symbol, timeframe)
@@ -405,7 +439,7 @@ class DeskTopupComputeManager:
             records, _errors = universe_store.list()
             universe_snapshot_id = records[-1]["id"] if records else None
             members: list[str] = list(records[-1]["members"]) if records else []
-            pairs_total = len(members) * len(DESK_TOPUP_TIMEFRAMES)
+            pairs_total = len(members) * len(TOPUP_WALK_TIMEFRAMES)
 
             job_id = uuid.uuid4().hex
             started_utc = _iso_utc_now()
@@ -566,9 +600,9 @@ def main() -> int:
             return 1
         universe_snapshot_id = records[-1]["id"]
         members = list(records[-1]["members"])
-        pairs_total = len(members) * len(DESK_TOPUP_TIMEFRAMES)
+        pairs_total = len(members) * len(TOPUP_WALK_TIMEFRAMES)
         print(
-            f"desk top-up: {len(members)} member(s) x {len(DESK_TOPUP_TIMEFRAMES)} "
+            f"desk top-up: {len(members)} member(s) x {len(TOPUP_WALK_TIMEFRAMES)} "
             f"timeframe(s) = {pairs_total} pair(s)",
             flush=True,
         )

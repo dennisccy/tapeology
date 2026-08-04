@@ -16,8 +16,9 @@ page's existing controls already drive. These guards pin the four properties tha
   (c) **No second trigger path.** The driver calls the three EXISTING ``handleTrigger*`` handlers,
       never the raw ``lib/api`` clients and never a bare ``fetch(`` -- the
       ``test_structure_prefill_reuses_the_existing_load_function`` precedent applied to this
-      block. It also adds no fourth poll: the page still has exactly three ``setInterval(`` calls,
-      because the chain WAITS on the state the three existing poll effects already maintain.
+      block. It also owns no poll of its own: the page has exactly one ``setInterval(`` per
+      compute manager (four, forward-test era), because the chain WAITS on the state the existing
+      poll effects already maintain.
   (d) **Honest step semantics.** The four steps appear once each, in order; the chain advances on
       ``"done"`` and halts on ``"failed"``/``"cancelled"``; and ``started`` is never used as a
       halt condition, because ``started: false`` means a job was already running and was adopted.
@@ -68,10 +69,16 @@ _DRIVER = "handleRefreshAll"
 _BUTTON_TESTID = "desk-refresh-all-button"
 _UNIVERSE_FETCH_PATH = "/research/desk/universe/fetch"
 
-# The page's own effect/timer census at the time this guard was written. Each is asserted as an
-# EXACT count rather than a bound, so a future edit that adds one has to come here and say why.
-_EXPECTED_EFFECT_COUNT = 8
-_EXPECTED_INTERVAL_COUNT = 3
+# The page's own effect/timer census. Each is asserted as an EXACT count rather than a bound,
+# so a future edit that adds one has to come here and say why. Re-derived for the forward-test
+# era: +1 as-of-keyed screen-pins GET (the J-21 pins read moved out of the mount effect so it
+# follows the operator's resolved To day — still a GET, never a trigger), +1 forward-record GET
+# keyed on the displayed snapshot (the screenCompareResult precedent), +1 forward-compute poll
+# (the FOURTH compute manager, mirroring the existing trio's poll shape exactly) — 8 -> 11
+# effects, 3 -> 4 intervals ("one per compute manager"), the single setTimeout stays the chain's
+# own wait tick.
+_EXPECTED_EFFECT_COUNT = 11
+_EXPECTED_INTERVAL_COUNT = 4
 _EXPECTED_TIMEOUT_COUNT = 1
 
 # Everything that could start real work. The chain's own driver is included: an effect that calls
@@ -82,10 +89,12 @@ _TRIGGER_CALLS = (
     "handleTriggerTopup(",
     "handleTriggerReconcile(",
     "handleTriggerScreen(",
+    "handleTriggerForward(",
     "triggerDeskUniverseFetch(",
     "triggerDeskTopupCompute(",
     "triggerDeskReconcileCompute(",
     "triggerDeskScreenCompute(",
+    "triggerDeskForwardCompute(",
 )
 
 # Machinery that can invoke a handler without a user click. None of it is used by this page today;
@@ -106,6 +115,12 @@ _FORBIDDEN_DRIVER_CALLS = (
     "triggerDeskTopupCompute(",
     "triggerDeskReconcileCompute(",
     "triggerDeskScreenCompute(",
+    # Forward-test era: the chain must NOT start the forward compute — measuring a recorded
+    # screen is its own operator act, never an implicit fifth step. BOTH the raw client and the
+    # handler are banned here (unlike the three entries above, whose handlers the chain
+    # legitimately calls).
+    "triggerDeskForwardCompute(",
+    "handleTriggerForward(",
 )
 
 _LINE_COMMENT = re.compile(r"//[^\n]*")
@@ -300,16 +315,18 @@ def test_the_chain_drives_the_existing_handlers_not_a_second_path():
     )
 
 
-def test_the_chain_adds_no_fourth_poll_and_one_sleep():
-    """The chain waits on the state the three existing poll effects already maintain, so the page
-    still has exactly three intervals; its only timer is the single wait-tick sleep."""
+def test_the_chain_adds_no_extra_poll_and_one_sleep():
+    """The chain waits on the state the per-manager poll effects already maintain, so the page
+    has exactly one interval per compute manager (four, forward-test era) and the chain itself
+    owns none; its only timer is the single wait-tick sleep."""
     stripped = _strip_comments(_DESK_PAGE.read_text())
     intervals = stripped.count("setInterval(")
     timeouts = stripped.count("setTimeout(")
     assert intervals == _EXPECTED_INTERVAL_COUNT, (
         f"apps/frontend/app/desk/page.tsx has {intervals} setInterval calls, expected "
-        f"{_EXPECTED_INTERVAL_COUNT} (one per compute manager) -- the refresh chain must not poll "
-        "the backend itself; it observes the state those three effects already keep current"
+        f"{_EXPECTED_INTERVAL_COUNT} (one per compute manager: screen, top-up, reconcile, "
+        "forward) -- the refresh chain must not poll the backend itself; it observes the state "
+        "those effects already keep current"
     )
     assert timeouts == _EXPECTED_TIMEOUT_COUNT, (
         f"apps/frontend/app/desk/page.tsx has {timeouts} setTimeout calls, expected "

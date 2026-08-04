@@ -39,6 +39,7 @@ from app.mcp import (
 )
 from app.providers.adapters.base import RawBar
 from app.research.bars import BarSeriesAlreadyRegistered, BarStore
+from app.research.desk_forward import FORWARD_REGISTER, ForwardStore, forward_parameters
 from app.research.desk_screen import ScreenStore
 from app.research.desk_universe import UniverseStore
 
@@ -46,9 +47,10 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 # Capability 6, verbatim — order and content are the advertised contract. ``bars`` (era-4 J-01),
 # ``levels`` (era-4 J-02), ``strategies`` (era-4 J-04), ``tradability`` (era-5B J-01), ``setups``
-# (era-5B J-02), and ``desk_universe``/``desk_screen`` (era-desk J-06, MCP contract v3 -- 15 -> 17
-# tools) are the newest additions, each positioned right after its dependency-order sibling (the
-# same store/registry+route+MCP shape, mirrored end to end).
+# (era-5B J-02), ``desk_universe``/``desk_screen`` (era-desk J-06, MCP contract v3 -- 15 -> 17
+# tools), and ``desk_forward`` (forward-test era, MCP contract v4 -- 17 -> 18 tools) are the
+# newest additions, each positioned right after its dependency-order sibling (the same
+# store/registry+route+MCP shape, mirrored end to end).
 EXPECTED_TOOLS = (
     "tape_state",
     "tape_features",
@@ -63,6 +65,7 @@ EXPECTED_TOOLS = (
     "edge_report",
     "desk_universe",
     "desk_screen",
+    "desk_forward",
     "pnl_ledger",
     "taxonomy",
     "ui_route_map",
@@ -114,6 +117,7 @@ def backend_paths(tmp_path_factory):
         "TAPEOLOGY_BAR_DIR": str(tmp_path_factory.mktemp("mcp-bars")),
         "TAPEOLOGY_DESK_UNIVERSE_DIR": str(tmp_path_factory.mktemp("mcp-desk-universe")),
         "TAPEOLOGY_DESK_SCREEN_DIR": str(tmp_path_factory.mktemp("mcp-desk-screen")),
+        "TAPEOLOGY_DESK_FORWARD_DIR": str(tmp_path_factory.mktemp("mcp-desk-forward")),
     }
 
 
@@ -464,6 +468,104 @@ async def test_get_endpoint_desk_screen_id_query_proxies_verbatim(mcp_env, backe
     assert rest.json() == {"screen": None}
     assert result.isError is False
     assert result.content[0].text.encode("utf-8") == rest.content, "desk screen id-nonmatch not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_forward_tool_byte_identical_on_the_honest_empty_state(mcp_env):
+    """Before any forward record has ever been computed, ``desk_forward`` proxies
+    ``GET /research/desk/forward``'s explicit HTTP 200 honest-empty payload -- never a 404 (the
+    ``desk_screen`` convention ``desk_forward.py`` itself follows)."""
+    result = await call_tool("desk_forward", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/forward", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json() == {"forwards": [], "latest": None, "integrity_errors": []}
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_forward not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_forward_tool_byte_identical_on_a_populated_state(mcp_env, backend_paths):
+    """The ``desk_screen`` populated-state precedent, applied to the forward store: seed ONE real
+    record directly through ``ForwardStore.record()`` -- the exact persistence call the forward
+    compute manager itself makes -- into the live backend's env-scoped
+    ``TAPEOLOGY_DESK_FORWARD_DIR``, then prove the tool's JSON is byte-identical to its curl
+    equivalent on a NON-EMPTY result, and that ``get_endpoint`` reaches the ``?screen_id=``
+    variant this tool does not expose."""
+    forward_dir = Path(backend_paths["TAPEOLOGY_DESK_FORWARD_DIR"])
+    _touch = {
+        "at_utc": "2026-06-22T13:30:00Z",
+        "entry_price": 300.11,
+        "entry_kind": "edge",
+        "horizons": {
+            label: {"return_pct": 0.1, "truncated": False, "effective_minutes": minutes, "reason": None}
+            for label, minutes in (("1m", 1), ("5m", 5), ("1h", 60), ("4h", 240))
+        },
+        "to_close_pct": 0.25,
+        "minutes_to_close": 300,
+        "mdd_long_pct": -0.25,
+        "mdd_short_pct": 0.0,
+    }
+    _cell = {"n": 1, "mean_pct": 0.1, "median_pct": 0.1, "n_truncated": 0}
+    recorded = ForwardStore(forward_dir).record(
+        screen_id="screen-2026-06-22-mcp-test",
+        screen_date=DESK_SCREEN_DATE,
+        as_of="2026-06-22T23:59:59Z",
+        config_fingerprint=CONFIG.config_fingerprint(),
+        forward_input_signature="mcp-test-forward-signature",
+        payload_version=2,
+        parameters=forward_parameters(),
+        register=FORWARD_REGISTER,
+        rows=[
+            {
+                "symbol": "AAPL",
+                "side": "resistance",
+                "band_class": "A",
+                "band_price_low": 300.0,
+                "band_price_high": 302.0,
+                "reason": None,
+                "touch_basis": {"timeframe": "1m", "session_date": DESK_SCREEN_DATE, "bars_in_session": 390},
+                "touch_count": 1,
+                "touches_beyond_cap": 0,
+                "bars_fully_beyond_band": 0,
+                "gap_through_before_first_touch": False,
+                "anchors_in_band": 0,
+                "touches": [_touch],
+                "baseline_anchors": [{**_touch, "entry_kind": "close"}],
+                "averages": {
+                    key: dict(_cell)
+                    for key in ("1m", "5m", "1h", "4h", "to_close", "mdd_long", "mdd_short")
+                },
+            }
+        ],
+        summary={
+            side: {
+                key: {"touches": dict(_cell), "baseline": dict(_cell)}
+                for key in ("1m", "5m", "1h", "4h", "to_close", "mdd_long", "mdd_short")
+            }
+            for side in ("support", "resistance")
+        },
+        rows_with_touches=1,
+        total_touches=1,
+    )
+    result = await call_tool("desk_forward", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/forward", timeout=5.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert len(body["forwards"]) >= 1, "the live list must be non-empty for this proof"
+    assert body["latest"] is not None
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_forward not byte-identical"
+
+    by_screen = f"/research/desk/forward?screen_id={recorded['screen_id']}"
+    proxied = await call_tool("get_endpoint", {"path": by_screen})
+    rest2 = httpx.get(f"{mcp_env}{by_screen}", timeout=5.0)
+    assert rest2.status_code == 200
+    assert rest2.json()["forward"] is not None
+    assert rest2.json()["versions"] == 1
+    assert proxied.isError is False
+    assert proxied.content[0].text.encode("utf-8") == rest2.content, "desk forward screen_id-query not byte-identical"
 
 
 @pytest.mark.anyio
@@ -1081,7 +1183,7 @@ async def test_get_endpoint_desk_topup_runs_byte_identical_with_no_new_tool(mcp_
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "topup/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
-    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 17
+    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 18
 
 
 @pytest.mark.anyio
@@ -1100,7 +1202,7 @@ async def test_get_endpoint_desk_screen_runs_byte_identical_with_no_new_tool(mcp
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "screen/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
-    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 17
+    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 18
 
 
 @pytest.mark.anyio

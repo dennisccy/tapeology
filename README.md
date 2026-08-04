@@ -98,7 +98,7 @@ right now for this date — a run would walk 101 members."*
 | `class` | The wall's A/B/C conviction tier, inherited from the tradable map |
 | `distance` | How far price sits from that wall, in bps. `0.00` means price is *inside* the band |
 | `score` | The band's quality score |
-| `coverage` | Which timeframes (1h/4h/1d/1w) have bars backing the row, and how fresh |
+| `coverage` | Which timeframes (1h/4h/1d/1w) have bars backing the row, and how fresh. The top-up also fetches 1m/5m for the Forward Returns panel — those two exist only for recent screens (vendor retention) and never enter this badge set or the bar-store signature |
 | `tick evidence` | Whether a recorded trade-by-trade dataset also exists for that symbol |
 | `basis` | The exact date of the bar the row was measured from, and its age in days |
 | `history` | How many completed sessions back the wall was measured over, and from when |
@@ -119,6 +119,28 @@ history row swaps the page to that exact recording (a read-back, no recompute).
 **Screen Comparison** — how the displayed snapshot differs from the one recorded before it:
 rows compared, rank changed, side changed, entered, left.
 
+**Forward Returns** — rendered last, for whichever snapshot is displayed: the forward test,
+touch-anchored. For each ranked row, every intraday **touch of its own wall during the screen
+date's session** is measured (a touch = a bar overlapping the band; a new touch only counts after
+price fully exits the band — the re-arm rule — capped per row with the excess disclosed). This is
+out-of-sample by construction: the wall map a screen ranks on is built from sessions *strictly
+before* the screen date, so that date's own trading never shaped the walls it is tested against.
+Per touch: a modeled limit-fill entry at the band edge (or the bar's open when it opened
+through), forward moves **in percent** at +1m/+5m/+1h/+4h trading-bars and **to the session
+close**, and the worst adverse excursion a long and a short would each have seen — with
+truncation at the session end flagged, never blended in (truncated values stay visible per touch
+but are excluded from the averages, and the exclusion count is shown). The table shows per-row
+averages; clicking a row opens every touch plus the **seeded random-minute baseline** it is
+compared against — the same math anchored at random minutes of the same session, which is the
+null that answers *"did touching the wall beat any random moment of that day?"*. Bars that gap
+entirely beyond the band are disclosed, not counted as touches (a resting order would have
+filled; the measurement says so rather than pretending). Compute is operator-triggered,
+pollable, cancellable, and versioned append-only — never run by Refresh Data. Touch detection
+needs 1m (or 5m) bars for the screen date — the extended Top-up supplies them for recent dates
+(Yahoo serves ~30 days of 1m, ~60 of 5m); older screens honestly read "—". One screen day yields
+a handful of touches per row — the panel proves the method, not an edge; the evidence
+accumulates by running the as-of range across many days and computing forward on each.
+
 ### Refreshing the data
 
 Making the briefing current takes four acts, and **the order matters**: a screen's
@@ -133,7 +155,15 @@ did not read.
 | 1 | Universe membership | Refetches the S&P 100 constituents. An unchanged membership is a **no-op**, not a failure — snapshots are immutable and are never re-recorded |
 | 2 | Bar top-up | Fills in missing bars across the universe. Store-first, so already-held pairs cost no vendor call |
 | 3 | Bar index | Reconciles the index against what is actually on disk, which is what the coverage badges read |
-| 4 | Screen for today | Walks the universe and records the ranked snapshot |
+| 4 | Screen | Walks the universe and records one ranked snapshot **per day of the chosen as-of range** |
+
+**The as-of range**: two fields govern the screen step — From and To (UTC days, `YYYY-MM-DD`).
+To blank = today; From blank = the To day. The chain records one screen per day in the range,
+oldest first — already-recorded days answer as honest reuses — capped at 31 days per click. The
+standalone Run Screen button runs the To day only. A future day, From after To, or a malformed
+day is refused inline and both buttons disable. Days in the range that weren't trading days still
+record a screen — its basis falls back to the last completed session (a Saturday shares Friday's
+basis, honestly pinned to its own as-of). Steps 1–3 always act on the stores as they are now.
 
 It advances on each step finishing and **halts** on a failure or a cancel, marking the remaining
 steps honestly un-run. If a step's job is already running — you clicked Top-up yourself a minute
@@ -164,7 +194,10 @@ The two compute steps also have background-job endpoints (`POST .../topup/comput
 CLI forms above run to completion in the foreground instead.
 
 `--date` is required on the screen CLI and on `POST /research/desk/screen/compute` — neither ever
-defaults to today's wall clock, because the screen's `as_of` is a determinism pin.
+defaults to today's wall clock, because the screen's `as_of` is a determinism pin. The forward
+measurement has the same shape: `.venv/bin/python -m app.research.desk_forward_compute
+--screen-id <id>` (or `POST $BE/research/desk/forward/compute` with `{"screen_id": ...}`; read
+back via `GET $BE/research/desk/forward?screen_id=<id>` or the `desk_forward` MCP tool).
 
 ### What it does not do
 

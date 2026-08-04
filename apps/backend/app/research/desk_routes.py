@@ -109,6 +109,8 @@ from .desk_index_reconcile import (
     ReconcileRunStore,
     resolve_desk_index_reconcile_dir,
 )
+from .desk_forward import ForwardStore, resolve_desk_forward_dir
+from .desk_forward_compute import DeskForwardComputeManager
 from .desk_screen import ScreenStore, resolve_desk_screen_dir
 from .desk_screen_compute import DeskScreenComputeManager
 from .desk_screen_diff import ScreenDiffSelfCompareError, compute_screen_diff
@@ -142,6 +144,10 @@ _desk_screen_compute_manager = DeskScreenComputeManager()
 # The desk coverage-index reconciliation compute manager (J-10) — the SAME process-wide-singleton-
 # behind-a-dependency shape as its two siblings above.
 _desk_index_reconcile_manager = DeskIndexReconcileComputeManager()
+
+# The desk forward-returns compute manager (forward-test era) — the SAME process-wide-singleton-
+# behind-a-dependency shape as its three siblings above.
+_desk_forward_compute_manager = DeskForwardComputeManager()
 
 
 def get_universe_store() -> UniverseStore:
@@ -571,6 +577,144 @@ def get_screen_runs(store: ScreenRunStore = Depends(get_screen_run_store)) -> di
         "latest": records[-1] if records else None,
         "integrity_errors": errors,
     }
+
+
+# --- Forward returns (forward-test era) — the append-only measurement of what recorded price
+# history did AFTER a screen's as_of: per-row horizon returns + next-session long/short max
+# drawdown. One read (latest-overall list / ?screen_id= newest + versions) plus the standard
+# trigger/poll/cancel compute trio. See ``desk_forward.py`` for the computation itself. -------------
+
+
+def get_forward_store() -> ForwardStore:
+    """The forward store rooted at a bare env-var-or-sibling-of-the-universe-dir default (zero new
+    ``Config`` field — see ``desk_forward.resolve_desk_forward_dir``) — the ``get_screen_store``
+    pattern. A FastAPI dependency so tests can point it at a temp dir via the env var or override
+    it outright."""
+    return ForwardStore(resolve_desk_forward_dir(CONFIG.desk_universe_dir_resolved()))
+
+
+def get_desk_forward_compute_manager() -> DeskForwardComputeManager:
+    """The desk forward compute manager — a FastAPI dependency (the
+    ``get_desk_screen_compute_manager`` pattern) so a test overrides it outright via
+    ``app.dependency_overrides`` for complete test-to-test isolation."""
+    return _desk_forward_compute_manager
+
+
+def _forward_meta_only(record: dict) -> dict:
+    """The lightweight projection ``GET /research/desk/forward``'s bulk list serves — id/pins/
+    parameters/counts only, NEVER the full ``rows``/``summary`` payloads (the
+    ``_screen_meta_only`` convention: a forward record carries ~101 rows of nested per-touch
+    dicts)."""
+    return {
+        "id": record["id"],
+        "screen_id": record["screen_id"],
+        "screen_date": record["screen_date"],
+        "as_of": record["as_of"],
+        "config_fingerprint": record["config_fingerprint"],
+        "forward_input_signature": record["forward_input_signature"],
+        "payload_version": record["payload_version"],
+        "parameters": record["parameters"],
+        "created_utc": record["created_utc"],
+        "counts": {
+            "rows": len(record["rows"]),
+            "rows_with_touches": record["rows_with_touches"],
+            "total_touches": record["total_touches"],
+        },
+    }
+
+
+@router.get("/forward")
+def get_forward(
+    screen_id: str | None = None, store: ForwardStore = Depends(get_forward_store)
+) -> dict:
+    """Two shapes, selected by ``?screen_id=`` (the ``GET /research/desk/screen`` convention):
+
+      * absent: ``{"forwards": [...meta-only...], "latest": <full newest record>|null,
+        "integrity_errors": [...]}`` — an explicit HTTP 200 honest-empty payload before any
+        forward record has ever been computed, never a 404.
+      * ``screen_id=``: ``{"forward": <that screen's NEWEST full record>|null, "versions": <how
+        many records that screen has ever accumulated>}`` — new bars arriving move the input
+        signature, so a re-compute records a new version and every older one is kept; an unknown
+        ``screen_id`` is an honest ``null``/``0`` at HTTP 200, never a 404.
+
+    A plain read: writes nothing, triggers nothing, recomputes nothing (GET-never-computes)."""
+    if screen_id is not None:
+        newest, versions = store.newest_for_screen(screen_id)
+        return {"forward": newest, "versions": versions}
+    records, errors = store.list()
+    return {
+        "forwards": [_forward_meta_only(r) for r in records],
+        "latest": records[-1] if records else None,
+        "integrity_errors": errors,
+    }
+
+
+class ForwardComputeRequest(BaseModel):
+    """Body for ``POST /research/desk/forward/compute`` — ``screen_id`` is REQUIRED (FastAPI 422s
+    a missing/absent body before the route handler runs); this endpoint never defaults to the
+    latest screen."""
+
+    screen_id: str
+
+
+@router.post("/forward/compute")
+def trigger_desk_forward_compute(
+    body: ForwardComputeRequest,
+    screen_store: ScreenStore = Depends(get_screen_store),
+    bar_store: BarStore = Depends(get_bar_store),
+    forward_store: ForwardStore = Depends(get_forward_store),
+    manager: DeskForwardComputeManager = Depends(get_desk_forward_compute_manager),
+) -> dict:
+    """Start the single-flight desk forward compute job for ``body.screen_id``, or — if one is
+    already running — return it UNCHANGED (``started: False``, never a second concurrent job).
+    Returns ``{"started": bool, "compute": <snapshot>}``; the walk runs on a background worker
+    thread, off this request, so this route returns immediately.
+
+    Refuses — 422, naming the unknown snapshot, never starting a job — when ``screen_id`` matches
+    no recorded screen (the ``trigger_desk_screen_compute`` no-universe refusal precedent: a
+    forward run over a nonexistent screen would fail anyway; refusing up front names the cause).
+    A screen store whose FILES all failed their integrity check is named separately, mirroring
+    that precedent's own two-cause honesty."""
+    records, errors = screen_store.list()
+    if not any(record["id"] == body.screen_id for record in records):
+        if errors and not records:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"no READABLE screen snapshot is registered -- nothing to measure forward: "
+                    f"{len(errors)} snapshot file(s) failed their integrity check and are excluded "
+                    "(" + "; ".join(f"{e['file']}: {e['error']}" for e in errors) + ")"
+                ),
+            )
+        raise HTTPException(
+            status_code=422,
+            detail=f"no recorded screen snapshot has id '{body.screen_id}' -- nothing to measure "
+            "forward from",
+        )
+    return manager.trigger(body.screen_id, screen_store, bar_store, CONFIG, forward_store)
+
+
+@router.get("/forward/compute")
+def get_desk_forward_compute(
+    manager: DeskForwardComputeManager = Depends(get_desk_forward_compute_manager),
+) -> dict | None:
+    """The forward compute job's current/last snapshot, served VERBATIM — or ``null`` if no
+    forward compute has ever run this process. A plain read: never triggers a compute as a side
+    effect (GET-never-computes)."""
+    return manager.snapshot()
+
+
+@router.post("/forward/compute/cancel")
+def cancel_desk_forward_compute(
+    manager: DeskForwardComputeManager = Depends(get_desk_forward_compute_manager),
+) -> dict:
+    """Cancel the in-flight desk forward compute (cooperative — observed between rows). ``409``
+    when idle — mirrors ``cancel_desk_screen_compute``'s own 409-when-terminal shape."""
+    snapshot = manager.snapshot()
+    if snapshot is None or snapshot["state"] != "running":
+        raise HTTPException(status_code=409, detail="no desk forward compute is currently running")
+    manager.cancel()
+    return {"cancelling": True}
 
 
 # --- Coverage-index reconciliation (J-10, goal-desk-iter-14) — a trigger/poll/cancel trio mirroring

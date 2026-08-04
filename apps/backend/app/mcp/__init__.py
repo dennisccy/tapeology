@@ -110,6 +110,11 @@ _STATIC_PATHS: dict[str, str] = {
     # `GET /research/desk/screen` -- that stays reachable only through `get_endpoint`.
     "desk_universe": "/research/desk/universe",
     "desk_screen": "/research/desk/screen",
+    # `desk_forward` (forward-test era) is the IDENTICAL no-required-param shape: the append-only
+    # forward-returns ledger's own base read serves a meta-only list + the newest full record
+    # (honest-empty 200 before any compute). The `?screen_id=` per-screen variant stays reachable
+    # only through `get_endpoint`, exactly like `desk_screen`'s own `?date=`.
+    "desk_forward": "/research/desk/forward",
 }
 
 _TAPE_PATHS: dict[str, str] = {
@@ -301,6 +306,22 @@ TOOLS: tuple[types.Tool, ...] = (
             "(`latest`, `null` before any screen is ever computed -- an explicit honest-empty "
             "200, never a 404), JSON verbatim. Takes no arguments here; `get_endpoint` reaches "
             "the `?date=` lookup variant for one specific past screen."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_forward",
+        description=(
+            "Read-only proxy of GET /research/desk/forward -- the forward-test era's append-only "
+            "touch-study ledger: for a recorded desk screen, each ranked row's intraday touches "
+            "of its own wall during the screen date's session (exit-re-arm rule, capped, "
+            "disclosed), per touch the modeled limit-fill entry, forward moves in PERCENT at "
+            "+1m/+5m/+1h/+4h trading-bars and to the session close, and the long/short max "
+            "drawdown -- with per-row averages, a per-side summary of touches beside a seeded "
+            "random-minute baseline, and the record's own descriptive register (a meta-only list "
+            "of every record plus the newest full one -- `latest`, `null` before any compute, an "
+            "explicit honest-empty 200, never a 404), JSON verbatim. Takes no arguments here; "
+            "`get_endpoint` reaches the `?screen_id=` per-screen variant."
         ),
         inputSchema=_object_schema({}),
     ),

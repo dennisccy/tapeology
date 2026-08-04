@@ -36,6 +36,7 @@ from app.research import desk_topup_compute
 from app.research.bar_index import BarIndex
 from app.research.bars import BarStore
 from app.research.desk_coverage import DESK_TOPUP_TIMEFRAMES
+from app.research.desk_topup_compute import DESK_TOPUP_FINE_TIMEFRAMES, TOPUP_WALK_TIMEFRAMES
 from app.research.desk_routes import get_desk_topup_manager, get_topup_run_store
 from app.research.desk_topup_compute import DeskTopupComputeManager, run_topup
 from app.research.desk_topup_log import TopupRunStore
@@ -124,8 +125,8 @@ def test_trigger_with_no_universe_snapshot_is_an_honest_zero_pair_job_that_compl
     mgr.join_all(timeout=5)
 
 
-def test_trigger_shape_pairs_total_equals_members_times_four(manager_env, monkeypatch):
-    """TC-6 (shape): ``pairs_total == N * len(DESK_TOPUP_TIMEFRAMES)``, known synchronously at
+def test_trigger_shape_pairs_total_equals_members_times_walk_set(manager_env, monkeypatch):
+    """TC-6 (shape): ``pairs_total == N * len(TOPUP_WALK_TIMEFRAMES)``, known synchronously at
     trigger time (before the background thread even starts)."""
     universe_store, bar_store, bar_index, registry, topup_run_store = manager_env
     universe_store.record(
@@ -140,15 +141,15 @@ def test_trigger_shape_pairs_total_equals_members_times_four(manager_env, monkey
 
     mgr = DeskTopupComputeManager()
     result = mgr.trigger(universe_store, bar_store, bar_index, registry, topup_run_store=topup_run_store)
-    assert result["compute"]["progress"]["pairs_total"] == len(FIVE_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
+    assert result["compute"]["progress"]["pairs_total"] == len(FIVE_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
 
     snap = _wait_for_terminal(mgr)
     assert snap["state"] == "done"
     outcomes = snap["progress"]["outcomes"]
-    assert len(outcomes) == len(FIVE_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
+    assert len(outcomes) == len(FIVE_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
     assert {o["outcome"] for o in outcomes} == {"fetched"}
     assert {(o["symbol"], o["timeframe"]) for o in outcomes} == {
-        (s, tf) for s in FIVE_MEMBERS for tf in DESK_TOPUP_TIMEFRAMES
+        (s, tf) for s in FIVE_MEMBERS for tf in TOPUP_WALK_TIMEFRAMES
     }
     mgr.join_all(timeout=5)
 
@@ -245,7 +246,7 @@ def test_a_cancellation_signal_resolves_state_cancelled_with_the_partial_outcome
     assert errors == []
     assert len(records) == 1
     assert records[0]["state"] == "cancelled"
-    assert records[0]["pairs_total"] == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
+    assert records[0]["pairs_total"] == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
     assert records[0]["pairs_attempted"] == 2
     assert records[0]["pairs_attempted"] < records[0]["pairs_total"]
     assert len(records[0]["outcomes"]) == 2
@@ -284,7 +285,7 @@ def test_an_unexpected_crash_outside_run_topup_resolves_state_failed(manager_env
     assert records[0]["state"] == "failed"
     assert records[0]["outcomes"] == []
     assert records[0]["pairs_attempted"] == 0
-    assert records[0]["pairs_total"] == len(DESK_TOPUP_TIMEFRAMES)  # 1 member x 4 timeframes
+    assert records[0]["pairs_total"] == len(TOPUP_WALK_TIMEFRAMES)  # 1 member x 6 timeframes
 
 
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
@@ -345,7 +346,7 @@ def test_snapshot_returns_are_independent_copies_never_a_shared_mutable_referenc
     snap["progress"]["outcomes"][0]["outcome"] = "POISONED"
 
     fresh = mgr.snapshot()
-    assert len(fresh["progress"]["outcomes"]) == 4  # AAA x 4 timeframes -- the mutation above is invisible
+    assert len(fresh["progress"]["outcomes"]) == len(TOPUP_WALK_TIMEFRAMES)  # AAA x 6 timeframes -- the mutation above is invisible
     assert all(o["outcome"] != "POISONED" for o in fresh["progress"]["outcomes"])
     mgr.join_all(timeout=5)
 
@@ -385,8 +386,8 @@ def test_manager_triggered_runs_persisted_outcomes_are_byte_identical_to_run_top
     assert len(records) == 1
     assert records[0]["outcomes"] == captured[0]  # byte-identical to run_topup's own return
     assert records[0]["state"] == "done"
-    assert records[0]["pairs_total"] == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
-    assert records[0]["pairs_attempted"] == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
+    assert records[0]["pairs_total"] == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
+    assert records[0]["pairs_attempted"] == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
     assert records[0]["universe_snapshot_id"] is not None
     assert records[0]["requested_window"]["start"] < records[0]["requested_window"]["end"]
     assert records[0]["config_fingerprint"] == CONFIG.config_fingerprint()
@@ -413,14 +414,20 @@ def test_first_run_fetches_every_pair_and_records_it(manager_env):
 
     assert snap["state"] == "done"
     outcomes = snap["progress"]["outcomes"]
-    assert len(outcomes) == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
+    assert len(outcomes) == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
     assert {o["outcome"] for o in outcomes} == {"fetched"}
-    assert len(adapter.fetch_bars_calls) == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
+    assert len(adapter.fetch_bars_calls) == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
     mgr.join_all(timeout=5)
 
 
 def test_second_run_over_the_same_universe_is_all_reused_with_zero_vendor_calls(manager_env):
-    """TC-7: store-first proven end to end."""
+    """TC-7: store-first proven end to end — split by regime since the forward-test era's fine
+    timeframes joined the walk. The COARSE four request the same full-lookback window both runs, so
+    the second run answers "reused" from the store with ZERO new vendor calls. The FINE two (1m/5m)
+    use a retention-floor lookback the fixture's own frozen history already reaches, so their
+    second run takes J-17's documented TAIL regime: one vendor call each that the store answers
+    with "you already have this" — the honest "unchanged" outcome, never a rewrite, never a
+    second recording."""
     universe_store, bar_store, bar_index, registry, topup_run_store = manager_env
     universe_store.record(
         members=sorted(TWO_MEMBERS), raw_members={m: m for m in TWO_MEMBERS},
@@ -433,7 +440,7 @@ def test_second_run_over_the_same_universe_is_all_reused_with_zero_vendor_calls(
     _wait_for_terminal(first_mgr)
     first_mgr.join_all(timeout=5)
     calls_after_first_run = len(adapter.fetch_bars_calls)
-    assert calls_after_first_run == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
+    assert calls_after_first_run == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
 
     second_mgr = DeskTopupComputeManager()
     second_mgr.trigger(universe_store, bar_store, bar_index, registry, topup_run_store=topup_run_store)
@@ -441,9 +448,13 @@ def test_second_run_over_the_same_universe_is_all_reused_with_zero_vendor_calls(
 
     assert snap["state"] == "done"
     outcomes = snap["progress"]["outcomes"]
-    assert len(outcomes) == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
-    assert {o["outcome"] for o in outcomes} == {"reused"}
-    assert len(adapter.fetch_bars_calls) == calls_after_first_run  # zero NEW vendor calls
+    assert len(outcomes) == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
+    coarse_outcomes = [o for o in outcomes if o["timeframe"] in DESK_TOPUP_TIMEFRAMES]
+    fine_outcomes = [o for o in outcomes if o["timeframe"] not in DESK_TOPUP_TIMEFRAMES]
+    assert {o["outcome"] for o in coarse_outcomes} == {"reused"}
+    assert {o["outcome"] for o in fine_outcomes} == {"unchanged"}
+    # Zero NEW vendor calls for the coarse four; exactly one tail-confirm call per fine pair.
+    assert len(adapter.fetch_bars_calls) == calls_after_first_run + len(fine_outcomes)
     second_mgr.join_all(timeout=5)
 
     # TC-6 (J-09): the second run appended a SECOND, distinct record -- the first stays exactly as
@@ -454,7 +465,7 @@ def test_second_run_over_the_same_universe_is_all_reused_with_zero_vendor_calls(
     assert len(records) == 2
     assert records[0]["id"] != records[1]["id"]
     assert {o["outcome"] for o in records[0]["outcomes"]} == {"fetched"}  # the FIRST run's own record
-    assert {o["outcome"] for o in records[1]["outcomes"]} == {"reused"}  # the SECOND run's own record
+    assert {o["outcome"] for o in records[1]["outcomes"]} == {"reused", "unchanged"}  # the SECOND run's own record
 
 
 def test_pairs_already_recorded_report_reused_while_the_rest_report_fetched_the_resumability_guarantee(
@@ -479,7 +490,7 @@ def test_pairs_already_recorded_report_reused_while_the_rest_report_fetched_the_
     # timeframe for the first 2 (of 5) members, in the SAME iteration order run_topup itself uses
     # -- via the SAME real record_bar_series path (run_topup directly, zero shortcuts), standing
     # in for what an earlier top-up job would have already written to the store before a cancel.
-    pre_populated = [(s, tf) for s in sorted(TWO_MEMBERS) for tf in DESK_TOPUP_TIMEFRAMES]
+    pre_populated = [(s, tf) for s in sorted(TWO_MEMBERS) for tf in TOPUP_WALK_TIMEFRAMES]
     run_topup(sorted(TWO_MEMBERS), bar_store, bar_index, registry)
     calls_after_prepopulate = len(adapter.fetch_bars_calls)
     assert calls_after_prepopulate == len(pre_populated)
@@ -490,13 +501,21 @@ def test_pairs_already_recorded_report_reused_while_the_rest_report_fetched_the_
 
     assert snap["state"] == "done"
     by_pair = {(o["symbol"], o["timeframe"]): o["outcome"] for o in snap["progress"]["outcomes"]}
+    # Pre-populated COARSE pairs answer store-first ("reused", zero calls); pre-populated FINE
+    # pairs sit in J-17's tail regime (the fixture's frozen history already reaches the fine
+    # retention-floor lookback start), so each makes one tail-confirm call the store answers
+    # "unchanged" -- the resumability guarantee holds either way: nothing is re-fetched into the
+    # store, nothing is recorded twice.
+    pre_populated_fine = [p for p in pre_populated if p[1] not in DESK_TOPUP_TIMEFRAMES]
     for pair in pre_populated:
-        assert by_pair[pair] == "reused", pair
-    remaining = [(s, tf) for s in sorted(FIVE_MEMBERS) if s not in TWO_MEMBERS for tf in DESK_TOPUP_TIMEFRAMES]
+        expected = "reused" if pair[1] in DESK_TOPUP_TIMEFRAMES else "unchanged"
+        assert by_pair[pair] == expected, pair
+    remaining = [(s, tf) for s in sorted(FIVE_MEMBERS) if s not in TWO_MEMBERS for tf in TOPUP_WALK_TIMEFRAMES]
     for pair in remaining:
         assert by_pair[pair] == "fetched", pair
-    # Only the REMAINING pairs made a new vendor call -- the pre-populated ones did not.
-    assert len(adapter.fetch_bars_calls) == calls_after_prepopulate + len(remaining)
+    # Only the REMAINING pairs plus the fine tail-confirms made a new vendor call -- the
+    # pre-populated coarse pairs did not.
+    assert len(adapter.fetch_bars_calls) == calls_after_prepopulate + len(remaining) + len(pre_populated_fine)
     mgr.join_all(timeout=5)
 
 
@@ -540,7 +559,7 @@ def test_a_failing_pair_reports_failed_with_the_detail_preserved_and_the_run_con
 
     assert snap["state"] == "done"  # the JOB completes even though one pair failed
     outcomes = snap["progress"]["outcomes"]
-    assert len(outcomes) == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)  # every pair attempted
+    assert len(outcomes) == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)  # every pair attempted
     failed = [o for o in outcomes if o["outcome"] == "failed"]
     assert len(failed) == 1
     assert "no data for that window" in failed[0]["detail"]
@@ -559,7 +578,7 @@ def test_a_failing_pair_reports_failed_with_the_detail_preserved_and_the_run_con
     persisted_failed = [o for o in records[0]["outcomes"] if o["outcome"] == "failed"]
     assert len(persisted_failed) == 1
     assert persisted_failed[0]["detail"] == failed[0]["detail"]
-    assert len(records[0]["outcomes"]) == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
+    assert len(records[0]["outcomes"]) == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
 
 
 # ==================================================================================================
@@ -854,7 +873,10 @@ def test_store_frozen_through_after_equals_the_pre_fetch_value_for_a_reused_pair
 
     entry = next(o for o in second if o["symbol"] == "RSD" and o["timeframe"] == "1d")
     assert entry["outcome"] == "reused"
-    assert len(adapter.fetch_bars_calls) == calls_after_first  # zero new vendor calls
+    # Zero new vendor calls for the coarse pairs; the two FINE pairs (1m/5m) each make one
+    # tail-confirm call in their documented "unchanged" regime (forward-test era) -- the reused
+    # 1d pair itself still costs nothing.
+    assert len(adapter.fetch_bars_calls) == calls_after_first + len(DESK_TOPUP_FINE_TIMEFRAMES)
     assert entry["store_frozen_through_after"] == entry["store_frozen_through"]
     assert entry["store_frozen_through_after"] is not None
 
@@ -964,7 +986,7 @@ def test_post_trigger_runs_to_completion_and_get_polls_the_same_snapshot(route_c
     assert r.status_code == 200
     body = r.json()
     assert body["started"] is True
-    assert body["compute"]["progress"]["pairs_total"] == len(DESK_TOPUP_TIMEFRAMES)
+    assert body["compute"]["progress"]["pairs_total"] == len(TOPUP_WALK_TIMEFRAMES)
 
     deadline = time.time() + 5
     snap = None
@@ -974,7 +996,7 @@ def test_post_trigger_runs_to_completion_and_get_polls_the_same_snapshot(route_c
             break
         time.sleep(0.02)
     assert snap["state"] == "done"
-    assert len(snap["progress"]["outcomes"]) == len(DESK_TOPUP_TIMEFRAMES)
+    assert len(snap["progress"]["outcomes"]) == len(TOPUP_WALK_TIMEFRAMES)
 
 
 def test_cancel_while_idle_is_409(route_ctx):
@@ -1077,9 +1099,9 @@ def test_get_topup_runs_after_a_completed_run_serves_the_full_latest_record_and_
     assert body["latest"] is not None
     latest = body["latest"]
     assert latest["state"] == "done"
-    assert latest["pairs_total"] == len(DESK_TOPUP_TIMEFRAMES)
-    assert latest["pairs_attempted"] == len(DESK_TOPUP_TIMEFRAMES)
-    assert len(latest["outcomes"]) == len(DESK_TOPUP_TIMEFRAMES)
+    assert latest["pairs_total"] == len(TOPUP_WALK_TIMEFRAMES)
+    assert latest["pairs_attempted"] == len(TOPUP_WALK_TIMEFRAMES)
+    assert len(latest["outcomes"]) == len(TOPUP_WALK_TIMEFRAMES)
     assert latest["universe_snapshot_id"] is not None
 
     # The bulk `runs` list carries the SAME run as a meta-only projection -- every field except
@@ -1209,9 +1231,9 @@ def test_cli_triggered_run_persists_a_record_with_the_identical_shape_as_a_manag
     assert record["requested_window"].keys() == {"start", "end"}
     assert record["config_fingerprint"] == CONFIG.config_fingerprint()
     assert record["state"] == "done"  # the CLI has no cancel signal -- always "done" on success
-    assert record["pairs_total"] == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
-    assert record["pairs_attempted"] == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
-    assert len(record["outcomes"]) == len(TWO_MEMBERS) * len(DESK_TOPUP_TIMEFRAMES)
+    assert record["pairs_total"] == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
+    assert record["pairs_attempted"] == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
+    assert len(record["outcomes"]) == len(TWO_MEMBERS) * len(TOPUP_WALK_TIMEFRAMES)
     assert {o["outcome"] for o in record["outcomes"]} == {"fetched"}
     for outcome in record["outcomes"]:
         # goal-desk-iter-26 (J-17), the ONE reviewer-sanctioned carve-out to this iteration's
@@ -1247,3 +1269,101 @@ def test_cli_with_no_universe_snapshot_persists_no_run_record(tmp_path, monkeypa
     records, errors = store.list()
     assert records == [] and errors == []
     assert not (tmp_path / "topup_runs").exists()
+
+
+# --- forward-test era: the fine-timeframes walk extension --------------------------------------------
+# `DESK_TOPUP_FINE_TIMEFRAMES` joins the WALK (`TOPUP_WALK_TIMEFRAMES`) without touching the pinned
+# `DESK_TOPUP_TIMEFRAMES` -- that constant feeds the coverage payload shape and
+# `desk_screen._bar_store_signature`'s hashed tuple set, both frozen. These tests pin the two
+# properties the extension must hold: the walker really covers the union, and recording fine series
+# is structurally invisible to the bar-store signature (no recorded screen's pins can move).
+
+
+def test_walk_set_is_the_pinned_coarse_set_plus_the_fine_set_in_order():
+    """The union is coarse-first, fine-appended -- and the pinned coverage constant itself is
+    byte-identical to its shipped value (the test_desk_coverage.py pin, re-asserted here at the
+    consumer)."""
+    assert DESK_TOPUP_TIMEFRAMES == ("1h", "4h", "1d", "1w")
+    assert DESK_TOPUP_FINE_TIMEFRAMES == ("1m", "5m")
+    assert TOPUP_WALK_TIMEFRAMES == ("1h", "4h", "1d", "1w", "1m", "5m")
+
+
+def test_recording_fine_series_leaves_the_bar_store_signature_byte_identical(manager_env):
+    """Forward-test era TC: `compute_bar_store_signature` hashes ONLY the pinned coarse set's
+    coverage tuples, so planting real 1m/5m series (what the extended walk now records) cannot
+    move any recorded screen's `bar_store_signature` pin."""
+    from app.providers.adapters.base import RawBar
+    from app.research.desk_screen import compute_bar_store_signature
+
+    universe_store, bar_store, bar_index, registry, _topup_run_store = manager_env
+    universe_store.record(
+        members=["SIGTEST"], raw_members={"SIGTEST": "SIGTEST"},
+        source_url="https://example.invalid/constituents", min_members=1, max_members=999,
+    )
+    before = compute_bar_store_signature(universe_store, bar_index)
+
+    epoch = _epoch_days_ago(2)
+    for timeframe in DESK_TOPUP_FINE_TIMEFRAMES:
+        meta = _plant_bar_series(
+            bar_store, symbol="SIGTEST", timeframe=timeframe,
+            feed=registry.config.historical_feed,
+            bars=[RawBar("SIGTEST", timeframe, epoch, 10.0, 11.0, 9.0, 10.5, 500)],
+        )
+        # Index the fine series too (the real walk records through record_bar_series, which
+        # inserts an index row) -- the signature must stay put even with the row PRESENT.
+        bar_index.insert(meta)
+
+    after = compute_bar_store_signature(universe_store, bar_index)
+    assert after == before
+
+
+def test_pair_window_fine_timeframe_uses_its_retention_floor_lookback():
+    """Forward-test era TC: a FINE pair with nothing frozen requests its own retention-floor
+    window (1m: 30 days, 5m: 60), not the shared 730-day lookback -- so the very first fine fetch
+    already reaches the lookback start and the NEXT run takes the tail branch instead of
+    re-requesting (and re-recording) the whole clamped span daily."""
+    from app.research.desk_topup_compute import (
+        _TOPUP_FINE_LOOKBACK_DAYS,
+        _fetch_window_now,
+        _pair_window,
+    )
+
+    class _EmptyStore:
+        def merged_bars(self, _symbol, _timeframe):
+            return []
+
+    empty = _EmptyStore()
+    for timeframe, lookback in _TOPUP_FINE_LOOKBACK_DAYS.items():
+        window = _pair_window(empty, "ANY", timeframe)
+        expected_start, expected_end = _fetch_window_now(lookback)
+        assert window["requested_window"] == {"start": expected_start, "end": expected_end}
+        assert window["window_basis"] == "full_lookback"
+    # The coarse four keep the shared 730-day window byte-identical.
+    coarse = _pair_window(empty, "ANY", "1d")
+    coarse_start, coarse_end = _fetch_window_now()
+    assert coarse["requested_window"] == {"start": coarse_start, "end": coarse_end}
+
+
+def test_pair_window_fine_tail_engages_once_frozen_history_reaches_the_floor(manager_env):
+    """Forward-test era TC: after one fine fetch (frozen history reaching the retention-floor
+    start), the SAME pair's next window is the TAIL from its own newest frozen bar's UTC date --
+    the daily steady state that keeps the append-only store from growing by a full clamped span
+    per day."""
+    from app.providers.adapters.base import RawBar
+    from app.research.desk_topup_compute import _pair_window
+
+    _universe_store, bar_store, _bar_index, registry, _topup_run_store = manager_env
+    # Safely AT-or-before the 30-day floor's calendar date regardless of the wall-clock hour this
+    # test runs at (29.5 days crosses the date boundary only before 12:00 UTC — a flake).
+    old_epoch = _epoch_days_ago(30.5)
+    new_epoch = _epoch_days_ago(0.5)
+    _plant_bar_series(
+        bar_store, symbol="TAILFINE", timeframe="1m", feed=registry.config.historical_feed,
+        bars=[
+            RawBar("TAILFINE", "1m", old_epoch, 10.0, 11.0, 9.0, 10.5, 500),
+            RawBar("TAILFINE", "1m", new_epoch, 10.5, 11.5, 10.0, 11.0, 500),
+        ],
+    )
+    window = _pair_window(bar_store, "TAILFINE", "1m")
+    assert window["window_basis"] == "tail"
+    assert window["requested_window"]["start"] == window["store_frozen_through"][:10] + "T00:00:00Z"

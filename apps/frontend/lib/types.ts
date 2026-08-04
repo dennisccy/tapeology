@@ -1226,6 +1226,101 @@ export interface DeskScreenPinsResult {
   recorded: DeskScreenPinsRecorded | null;
 }
 
+// Forward-test era v2 (touch-anchored) -- GET /research/desk/forward(?screen_id=) + its compute
+// trio. Every field is `desk_forward.py`'s own served shape VERBATIM (the authoritative payload);
+// nothing here is ever derived client-side -- the desk arithmetic guard covers the numeric paths.
+// All return/drawdown values are PERCENT, converted backend-side.
+export interface DeskForwardHorizonMeasure {
+  return_pct: number | null;
+  truncated: boolean;
+  effective_minutes: number | null;
+  reason: string | null;
+}
+
+// ONE anchored measurement -- the SHARED shape for a touch and a baseline anchor (touches carry
+// entry_kind "edge"/"open"; anchors carry "close").
+export interface DeskForwardTouch {
+  at_utc: string;
+  entry_price: number;
+  entry_kind: "edge" | "open" | "close";
+  horizons: Record<string, DeskForwardHorizonMeasure>;
+  to_close_pct: number;
+  minutes_to_close: number;
+  mdd_long_pct: number;
+  mdd_short_pct: number;
+}
+
+export interface DeskForwardAvgCell {
+  n: number;
+  mean_pct: number | null;
+  median_pct: number | null;
+  n_truncated: number;
+}
+
+export interface DeskForwardRow {
+  symbol: string;
+  side: "support" | "resistance";
+  band_class: string | null;
+  band_price_low: number | null;
+  band_price_high: number | null;
+  reason: string | null;
+  touch_basis: { timeframe: string; session_date: string; bars_in_session: number } | null;
+  touch_count: number;
+  touches_beyond_cap: number;
+  bars_fully_beyond_band: number;
+  gap_through_before_first_touch: boolean;
+  anchors_in_band: number;
+  touches: DeskForwardTouch[];
+  baseline_anchors: DeskForwardTouch[];
+  averages: Record<string, DeskForwardAvgCell>;
+}
+
+export interface DeskForwardSummaryCell {
+  touches: DeskForwardAvgCell;
+  baseline: DeskForwardAvgCell;
+}
+
+export interface DeskForwardParameters {
+  horizons_minutes: [string, number][];
+  max_touches_per_row: number;
+  baseline_seed: number;
+  touch_timeframes: string[];
+}
+
+export interface DeskForwardRecord {
+  id: string;
+  screen_id: string;
+  screen_date: string;
+  as_of: string;
+  config_fingerprint: string;
+  forward_input_signature: string;
+  payload_version: number;
+  parameters: DeskForwardParameters;
+  register: string;
+  created_utc: string;
+  rows: DeskForwardRow[];
+  summary: Record<"support" | "resistance", Record<string, DeskForwardSummaryCell>>;
+  rows_with_touches: number;
+  total_touches: number;
+}
+
+export interface DeskForwardReadResult {
+  forward: DeskForwardRecord | null;
+  versions: number;
+}
+
+export interface DeskForwardComputeSnapshot {
+  id: string;
+  state: "running" | "done" | "cancelled" | "failed";
+  screen_id: string;
+  started_utc: string | null;
+  finished_utc: string | null;
+  error: string | null;
+  reused: boolean;
+  forward_id: string | null;
+  progress: { rows_total: number; rows_done: number; current: string | null };
+}
+
 // ONE registered universe membership snapshot's own served meta -- `UniverseStore.record`'s return
 // value verbatim (desk_universe.py's `meta` dict), which `POST /research/desk/universe/fetch`
 // serves under its `universe` key. Every field is the store's own; nothing here is derived. The
