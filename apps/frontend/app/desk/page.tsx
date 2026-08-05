@@ -2114,13 +2114,33 @@ const FORWARD_UNMEASURED_HORIZON: DeskForwardHorizonMeasure = {
   reason: null,
 };
 
+// A touch instant on the reader's own wall clock. Every other stamp on this page is provenance —
+// a record id's timestamp, a window end — and stays raw UTC, but this one is read against a
+// trading session the operator either sat through or is about to: an hour's silent offset is the
+// difference between "the open" and "an hour into it". The browser owns the conversion (it knows
+// the reader's zone and its daylight-time rules; this page must not guess either), and the served
+// `at_utc` stays reachable in the cell's tooltip so the raw record is never a step removed.
+//
+// `hourCycle` is pinned rather than left to the locale: it keeps the shipped HH:MM:SS shape and
+// avoids the 12-hour and 24-vs-00 renderings some locales would otherwise choose.
+function formatTouchLocalTime(atUtc: string): string {
+  return new Date(atUtc).toLocaleTimeString(undefined, {
+    hourCycle: "h23",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 // One anchored measurement row — the SHARED renderer for a touch and a baseline anchor (the
 // payload shapes are identical; anchors carry entry_kind "close").
 function ForwardTouchRow({ touch, labels }: { touch: DeskForwardTouch; labels: string[] }) {
   const touchRow = touch;
   return (
     <tr data-testid="desk-forward-detail-touch" className="border-t border-slate-800/40">
-      <td className={FORWARD_TOUCH_CELL_LEFT}>{touchRow.at_utc.substring(11, 19)}Z</td>
+      <td className={FORWARD_TOUCH_CELL_LEFT} title={touchRow.at_utc}>
+        {formatTouchLocalTime(touchRow.at_utc)}
+      </td>
       <td className={FORWARD_TOUCH_CELL_LEFT}>{touchRow.entry_kind}</td>
       <td className={FORWARD_TOUCH_CELL} title={String(touchRow.entry_price)}>
         {fmt(touchRow.entry_price)}
@@ -2172,7 +2192,7 @@ function ForwardTouchTable({
             ))}
           </tr>
           <tr className="border-b border-slate-800">
-            <th className={FORWARD_TOUCH_HEAD}>time</th>
+            <th className={FORWARD_TOUCH_HEAD}>time (local)</th>
             <th className={FORWARD_TOUCH_HEAD}>fill</th>
             <th className={`${FORWARD_TOUCH_HEAD} text-right`}>entry</th>
             {[...labels, "close"].map((label) => (
