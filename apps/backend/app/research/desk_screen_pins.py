@@ -66,8 +66,8 @@ def resolve_desk_screen_pins(
 ) -> dict:
     """The five pins a screen run for ``screen_date`` would resolve RIGHT NOW, plus whether a
     screen is already recorded under them -- see the module docstring. ``screen_date`` is the
-    caller's own value (the page passes the SAME ``todayUtcDate()`` it already submits to the
-    trigger, ``apps/frontend/app/desk/page.tsx:228``/``:2350``) -- nothing here calls ``now()``
+    caller's own value (the page passes the SAME resolved To day it already submits to the trigger
+    -- blank inputs there resolve to the next upcoming US session date) -- nothing here calls ``now()``
     (T-6): identical inputs (this date, the pinned universe record, the index's rows as they stand)
     reproduce a byte-identical body, and the payload carries no wall-clock field of its own.
 

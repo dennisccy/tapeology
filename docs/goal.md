@@ -249,9 +249,12 @@ In priority order — kept-value integrity outranks new-surface completeness out
   `dataset_index` pattern. No snapshot is ever edited, re-keyed, or silently regenerated;
   re-running a screen for the same pins either reproduces byte-identical content or refuses with
   an honest already-recorded response. `journal.db` gets NO new tables (schema stays v8).
-- **No-lookahead as-of rule:** a screen for date D uses only bars fully completed at D's session
-  close (the store's no-lookahead clamp); the recorded `as_of` is part of the snapshot key; there
-  is no "refresh today's screen in place" — a new run is a new snapshot.
+- **No-lookahead as-of rule (morning-markup convention):** a screen for date D builds its map from
+  the last completed session STRICTLY BEFORE D (`tradability._resolve_basis`; every level read is
+  bounded to that prior session's close), so D's own session never enters the map and the forward
+  measurement reads D's own session out-of-sample. D therefore names the TRADE day, not the data
+  day. The recorded `as_of` (`D T23:59:59Z`) is the snapshot key's upper bound and part of the
+  snapshot key; there is no "refresh today's screen in place" — a new run is a new snapshot.
 - **Single source of truth:** the desk owns ONLY its new values (universe membership/metadata,
   coverage rows, screen rank rows). Band geometry, classes, scores come from
   `compute_tradability` (`app/research/tradability.py:381`) / `levels.py` verbatim; coverage

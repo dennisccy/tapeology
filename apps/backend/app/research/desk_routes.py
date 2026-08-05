@@ -606,10 +606,13 @@ def get_screen_runs(store: ScreenRunStore = Depends(get_screen_run_store)) -> di
     }
 
 
-# --- Forward returns (forward-test era) — the append-only measurement of what recorded price
-# history did AFTER a screen's as_of: per-row horizon returns + next-session long/short max
-# drawdown. One read (latest-overall list / ?screen_id= newest + versions) plus the standard
-# trigger/poll/cancel compute trio. See ``desk_forward.py`` for the computation itself. -------------
+# --- Forward returns (forward-test era) — the append-only, touch-anchored measurement of what
+# recorded intraday price did at each ranked row's own wall DURING THE SCREEN DATE'S OWN SESSION
+# (the map's basis reads sessions strictly before that date — ``tradability._resolve_basis`` — so
+# that session is out-of-sample by construction): per-row, per-touch horizon returns + long/short
+# max drawdowns through that same session's close. One read (latest-overall list / ?screen_id=
+# newest + versions) plus the standard trigger/poll/cancel compute trio. See ``desk_forward.py``
+# for the computation itself. ---------------------------------------------------------------------
 
 
 def get_desk_forward_compute_manager() -> DeskForwardComputeManager:

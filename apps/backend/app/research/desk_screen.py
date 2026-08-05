@@ -232,7 +232,14 @@ def _epoch(iso: str) -> float:
 
 def screen_as_of(screen_date: str) -> str:
     """T-6: ``as_of`` is a deterministic function of ``screen_date`` ALONE, never
-    ``datetime.now()`` -- see the module docstring's "as_of translation" section."""
+    ``datetime.now()`` -- see the module docstring's "as_of translation" section.
+
+    This value is the snapshot KEY's upper bound, not the levels basis: any instant inside
+    ``screen_date`` resolves the identical map, because ``tradability._resolve_basis`` is strictly
+    stricter -- it admits only daily bars whose session date is BEFORE ``screen_date`` and bounds
+    every level read to that prior session's close. So the screen date names the session the map is
+    marked up FOR (the trade day), never a session the map read. The forward measurement then reads
+    ``screen_date``'s own session, which is out-of-sample by that construction."""
     return f"{screen_date}T23:59:59Z"
 
 

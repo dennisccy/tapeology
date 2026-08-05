@@ -2403,6 +2403,10 @@ function DeskForwardSection({
         </p>
       )}
       <ForwardSignNote record={record} />
+      <p data-testid="desk-forward-window-note" className="text-[11px] text-slate-500">
+        Touches and every forward number here are measured within the screen date&apos;s own
+        session — the wall map itself was built only from sessions before it.
+      </p>
       <DeskForwardSummaryView record={record} />
       <DeskForwardTable
         record={record}
@@ -3541,9 +3545,10 @@ function DeskNotComputedPanel({
 // selected history entry) ever varies.
 //
 // Section order here is the page's first five, in the order an operator actually reads them:
-// Screen History (pick what you are looking at), Forward Returns (what happened next to the
-// snapshot you just picked), the controls (act on it), the ranked Briefing (the detail, one page at
-// a time), then Skipped Members. Forward Returns sat below the controls until the calendar landed;
+// Screen History (pick what you are looking at), Forward Returns (what the selected snapshot's own
+// screen-date session did at each recorded wall — same-session, touch-anchored, never a later
+// session), the controls (act on it), the ranked Briefing (the detail, one page at a time), then
+// Skipped Members. Forward Returns sat below the controls until the calendar landed;
 // it describes the DISPLAYED snapshot, so it now reads directly beneath the cell that selected it,
 // and the controls — which act rather than describe — follow. The provenance line used to sit
 // first; it is reference material and now renders dead last, out in `DeskPage`. The whole
@@ -3630,7 +3635,8 @@ function DeskPopulatedScreen({
 
       {/* Rendered here rather than at the page foot: the forward measurement describes whichever
           snapshot is DISPLAYED, so it belongs directly beneath the calendar cell that selected it —
-          read what happened next, then act. It needs no `latest !== null` wrapper of its own —
+          read what that same screen-date session did, then act. It needs no `latest !== null`
+          wrapper of its own —
           being inside this component already guarantees a snapshot exists. No `mt-6` either: the
           `space-y-6` parent owns the spacing between these five sections. */}
       <section aria-label="Forward Returns">
