@@ -498,10 +498,19 @@ async def test_desk_forward_tool_byte_identical_on_a_populated_state(mcp_env, ba
         "entry_price": 300.11,
         "entry_kind": "edge",
         "horizons": {
-            label: {"return_pct": 0.1, "truncated": False, "effective_minutes": minutes, "reason": None}
+            label: {
+                "return_pct": 0.1,
+                "exit_price": 300.41,
+                "mdd_long_pct": -0.25,
+                "mdd_short_pct": 0.0,
+                "truncated": False,
+                "effective_minutes": minutes,
+                "reason": None,
+            }
             for label, minutes in (("1m", 1), ("5m", 5), ("1h", 60), ("4h", 240))
         },
         "to_close_pct": 0.25,
+        "close_price": 300.86,
         "minutes_to_close": 300,
         "mdd_long_pct": -0.25,
         "mdd_short_pct": 0.0,

@@ -28,6 +28,7 @@ import {
 import type {
   DeskForwardAvgCell,
   DeskForwardComputeSnapshot,
+  DeskForwardHorizonMeasure,
   DeskForwardReadResult,
   DeskForwardRecord,
   DeskForwardRow,
@@ -1803,17 +1804,45 @@ function DeskForwardComputeControl({
   );
 }
 
-// The seven measure columns every averages/summary block serves, in serving order: the four
-// horizon labels come from the record's own parameters; the last three are fixed.
+// The horizon labels this record was measured at, read from its OWN parameters — never a
+// hardcoded list, so a record computed under a different horizon set still renders its own.
+function forwardHorizonLabels(record: DeskForwardRecord): string[] {
+  return record.parameters.horizons_minutes.map(([label]) => label);
+}
+
+// Every measure column an averages/summary block serves, in the backend's own serving order
+// (DESK_FORWARD_MEASURE_KEYS): the horizon returns, the session-end mark, then each adverse
+// excursion at every one of those SAME windows. `mdd_long_1h` is the worst move below entry
+// within the hour the `1h` return was measured over; the unsuffixed pair stays the session end.
 function forwardMeasureKeys(record: DeskForwardRecord): string[] {
-  return [...record.parameters.horizons_minutes.map(([label]) => label), "to_close", "mdd_long", "mdd_short"];
+  const labels = forwardHorizonLabels(record);
+  return [
+    ...labels,
+    "to_close",
+    ...labels.map((label) => `mdd_long_${label}`),
+    "mdd_long",
+    ...labels.map((label) => `mdd_short_${label}`),
+    "mdd_short",
+  ];
 }
 
 function forwardMeasureHeader(key: string): string {
   if (key === "to_close") return "avg to close (%)";
-  if (key === "mdd_long") return "avg max drawdown (long, %)";
-  if (key === "mdd_short") return "avg max drawdown (short, %)";
+  if (key === "mdd_long") return "avg max drawdown to close (long, %)";
+  if (key === "mdd_short") return "avg max drawdown to close (short, %)";
+  if (key.startsWith("mdd_long_")) return `avg max drawdown ${key.substring(9)} (long, %)`;
+  if (key.startsWith("mdd_short_")) return `avg max drawdown ${key.substring(10)} (short, %)`;
   return `avg fwd ${key} (%)`;
+}
+
+// The same seven-or-fifteen columns, in the compact form the side×source summary uses.
+function forwardMeasureShortHeader(key: string): string {
+  if (key === "to_close") return "to close";
+  if (key === "mdd_long") return "mdd long close";
+  if (key === "mdd_short") return "mdd short close";
+  if (key.startsWith("mdd_long_")) return `mdd long ${key.substring(9)}`;
+  if (key.startsWith("mdd_short_")) return `mdd short ${key.substring(10)}`;
+  return `fwd ${key}`;
 }
 
 // The record's own declared sign convention, read VERBATIM from its served parameters. A record
@@ -1943,51 +1972,178 @@ function DeskForwardRowView({
   );
 }
 
-// One anchored measurement line — the SHARED renderer for a touch and a baseline anchor (the
-// payload shapes are identical; anchors carry entry_kind "close").
-function ForwardTouchLine({ touch }: { touch: DeskForwardTouch }) {
-  const touchRow = touch;
+// The per-touch detail is a TABLE, not a line: every horizon now serves four numbers (the price
+// the return was measured to, the return itself, and that horizon's OWN two max drawdowns), and a
+// flex-wrapped run of ~23 values per touch is not readable. The exit price is here so the
+// arithmetic is checkable rather than asserted — entry, exit and return sit in one row — and each
+// horizon's drawdowns describe ITS window, so a 1h return no longer sits beside an excursion
+// measured over the remaining session.
+//
+// Cell shells, hoisted as literal class strings (Tailwind's scanner never sees an interpolation).
+const FORWARD_TOUCH_HEAD = "px-1.5 py-1 text-left text-[10px] font-medium text-slate-500";
+const FORWARD_TOUCH_GROUP_HEAD =
+  "border-l border-slate-800 px-1.5 pt-1 text-center text-[10px] font-medium text-slate-400";
+const FORWARD_TOUCH_CELL = "whitespace-nowrap px-1.5 py-1 text-right font-mono text-[11px] text-slate-300";
+const FORWARD_TOUCH_CELL_LEFT = "whitespace-nowrap px-1.5 py-1 text-left font-mono text-[11px] text-slate-300";
+const FORWARD_TOUCH_CELL_GROUP =
+  "whitespace-nowrap border-l border-slate-800 px-1.5 py-1 text-right font-mono text-[11px] text-slate-300";
+const FORWARD_TOUCH_CELL_ABSENT = "whitespace-nowrap px-1.5 py-1 text-right font-mono text-[11px] text-slate-600";
+
+// The four cells one horizon group renders. Every number is reached through `touchValue.<the
+// served field's own name>` — deliberately, and not merely as a style: that binding is what the
+// desk arithmetic guard scans for, so renaming these into local props would route the whole group
+// around the one lint that proves the page derives no value of its own.
+function ForwardTouchMeasureCells({
+  measure,
+  returnTitle,
+}: {
+  measure: DeskForwardHorizonMeasure;
+  returnTitle: string;
+}) {
+  const touchValue = measure;
+  // A record written before the exit price and per-horizon drawdowns were measured carries none
+  // of them; a horizon finer than its own touch series carries them present-and-null. Both are
+  // absences and read as one — never a fabricated zero.
+  const absent = touchValue.return_pct === null;
   return (
-    <li
-      data-testid="desk-forward-detail-touch"
-      className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-t border-slate-800/40 py-1 text-[11px] text-slate-300"
-    >
-      <span className="font-mono">{touchRow.at_utc.substring(11, 19)}Z</span>
-      <span>
-        {touchRow.entry_kind} fill{" "}
-        <span className="font-mono" title={String(touchRow.entry_price)}>
-          {fmt(touchRow.entry_price)}
-        </span>
-      </span>
-      {Object.entries(touchRow.horizons).map(([label, measure]) => {
-        const touchValue = measure;
-        if (touchValue.return_pct === null) {
-          return (
-            <span key={label} className="text-slate-600" title={touchValue.reason ?? undefined}>
-              {label} —
-            </span>
-          );
-        }
-        return (
-          <span
-            key={label}
-            title={`${String(touchValue.return_pct)} · effective ${String(touchValue.effective_minutes)} min`}
-          >
-            {label} {fmt(touchValue.return_pct)}
-            {touchValue.truncated ? "†" : ""}
-          </span>
-        );
-      })}
-      <span title={`${String(touchRow.to_close_pct)} · ${touchRow.minutes_to_close} min to the session end`}>
-        close {fmt(touchRow.to_close_pct)}
-      </span>
-      <span title={String(touchRow.mdd_long_pct)}>MDD L {fmt(touchRow.mdd_long_pct)}</span>
-      <span title={String(touchRow.mdd_short_pct)}>MDD S {fmt(touchRow.mdd_short_pct)}</span>
-    </li>
+    <>
+      <td
+        className={absent ? FORWARD_TOUCH_CELL_ABSENT : FORWARD_TOUCH_CELL_GROUP}
+        title={touchValue.reason ?? undefined}
+      >
+        {touchValue.exit_price === null || touchValue.exit_price === undefined
+          ? "—"
+          : fmt(touchValue.exit_price)}
+      </td>
+      <td className={absent ? FORWARD_TOUCH_CELL_ABSENT : FORWARD_TOUCH_CELL} title={returnTitle}>
+        {touchValue.return_pct === null ? "—" : fmt(touchValue.return_pct)}
+        {touchValue.truncated ? "†" : ""}
+      </td>
+      <td className={FORWARD_TOUCH_CELL}>
+        {touchValue.mdd_long_pct === null || touchValue.mdd_long_pct === undefined
+          ? "—"
+          : fmt(touchValue.mdd_long_pct)}
+      </td>
+      <td className={FORWARD_TOUCH_CELL}>
+        {touchValue.mdd_short_pct === null || touchValue.mdd_short_pct === undefined
+          ? "—"
+          : fmt(touchValue.mdd_short_pct)}
+      </td>
+    </>
   );
 }
 
-function DeskForwardDetail({ row }: { row: DeskForwardRow }) {
+// The session-end group in the SAME shape as a horizon leaf, so one renderer serves both. Every
+// field is a verbatim copy of a served value under a different key — never a derivation.
+function forwardCloseMeasure(touch: DeskForwardTouch): DeskForwardHorizonMeasure {
+  const touchRow = touch;
+  return {
+    return_pct: touchRow.to_close_pct,
+    exit_price: touchRow.close_price ?? null,
+    mdd_long_pct: touchRow.mdd_long_pct,
+    mdd_short_pct: touchRow.mdd_short_pct,
+    truncated: false, // the session end is where the bars stop, never a truncated horizon
+    effective_minutes: touchRow.minutes_to_close,
+    reason: null,
+  };
+}
+
+// A horizon this record never measured at all (a record predating a horizon in its own
+// parameters). Present-and-null, matching how the backend writes its own honest absences.
+const FORWARD_UNMEASURED_HORIZON: DeskForwardHorizonMeasure = {
+  return_pct: null,
+  exit_price: null,
+  mdd_long_pct: null,
+  mdd_short_pct: null,
+  truncated: false,
+  effective_minutes: null,
+  reason: null,
+};
+
+// One anchored measurement row — the SHARED renderer for a touch and a baseline anchor (the
+// payload shapes are identical; anchors carry entry_kind "close").
+function ForwardTouchRow({ touch, labels }: { touch: DeskForwardTouch; labels: string[] }) {
+  const touchRow = touch;
+  return (
+    <tr data-testid="desk-forward-detail-touch" className="border-t border-slate-800/40">
+      <td className={FORWARD_TOUCH_CELL_LEFT}>{touchRow.at_utc.substring(11, 19)}Z</td>
+      <td className={FORWARD_TOUCH_CELL_LEFT}>{touchRow.entry_kind}</td>
+      <td className={FORWARD_TOUCH_CELL} title={String(touchRow.entry_price)}>
+        {fmt(touchRow.entry_price)}
+      </td>
+      {labels.map((label) => {
+        const touchValue = touchRow.horizons[label] ?? FORWARD_UNMEASURED_HORIZON;
+        return (
+          <ForwardTouchMeasureCells
+            key={label}
+            measure={touchValue}
+            returnTitle={
+              touchValue.return_pct === null
+                ? (touchValue.reason ?? "")
+                : `${String(touchValue.return_pct)} · effective ${String(touchValue.effective_minutes)} min`
+            }
+          />
+        );
+      })}
+      <ForwardTouchMeasureCells
+        measure={forwardCloseMeasure(touchRow)}
+        returnTitle={`${String(touchRow.to_close_pct)} · ${touchRow.minutes_to_close} min to the session end`}
+      />
+    </tr>
+  );
+}
+
+// The touch/anchor table. Two header rows: one group per horizon (plus the session end), each
+// spanning its own four columns. ~23 columns fit no viewport, so it scrolls in its OWN container
+// — never the page body.
+function ForwardTouchTable({
+  touches,
+  labels,
+  testid,
+}: {
+  touches: DeskForwardTouch[];
+  labels: string[];
+  testid: string;
+}) {
+  return (
+    <div className="mt-1 overflow-x-auto">
+      <table data-testid={testid} className="w-full border-collapse">
+        <thead>
+          <tr>
+            <th className={FORWARD_TOUCH_HEAD} colSpan={3} />
+            {[...labels, "close"].map((label) => (
+              <th key={label} className={FORWARD_TOUCH_GROUP_HEAD} colSpan={4}>
+                {label}
+              </th>
+            ))}
+          </tr>
+          <tr className="border-b border-slate-800">
+            <th className={FORWARD_TOUCH_HEAD}>time</th>
+            <th className={FORWARD_TOUCH_HEAD}>fill</th>
+            <th className={`${FORWARD_TOUCH_HEAD} text-right`}>entry</th>
+            {[...labels, "close"].map((label) => (
+              <Fragment key={label}>
+                <th className={`${FORWARD_TOUCH_HEAD} border-l border-slate-800 text-right`}>
+                  exit
+                </th>
+                <th className={`${FORWARD_TOUCH_HEAD} text-right`}>ret %</th>
+                <th className={`${FORWARD_TOUCH_HEAD} text-right`}>MDD L %</th>
+                <th className={`${FORWARD_TOUCH_HEAD} text-right`}>MDD S %</th>
+              </Fragment>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {touches.map((touch) => (
+            <ForwardTouchRow key={touch.at_utc} touch={touch} labels={labels} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DeskForwardDetail({ row, labels }: { row: DeskForwardRow; labels: string[] }) {
   return (
     <div
       data-testid="desk-forward-detail"
@@ -2019,24 +2175,27 @@ function DeskForwardDetail({ row }: { row: DeskForwardRow }) {
           The band was never touched in this session — every cell above is an honest absence.
         </p>
       ) : (
-        <ul className="mt-1">
-          {row.touches.map((touch) => (
-            <ForwardTouchLine key={touch.at_utc} touch={touch} />
-          ))}
-        </ul>
+        <ForwardTouchTable
+          touches={row.touches}
+          labels={labels}
+          testid="desk-forward-detail-table"
+        />
       )}
-      <p className="mt-1 text-[10px] text-slate-600">† truncated at the session end</p>
+      <p className="mt-1 text-[10px] text-slate-600">
+        † truncated at the session end · exit is the close the return was measured to · each
+        group&apos;s MDD covers that horizon&apos;s own window
+      </p>
       {row.baseline_anchors.length > 0 && (
         <details data-testid="desk-forward-detail-baseline" className="mt-2">
           <summary className="cursor-pointer text-[11px] text-slate-500">
             the seeded random-minute anchors this row is compared against ({row.baseline_anchors.length}
             {row.anchors_in_band > 0 ? ` · ${row.anchors_in_band} inside the band` : ""})
           </summary>
-          <ul className="mt-1">
-            {row.baseline_anchors.map((anchor) => (
-              <ForwardTouchLine key={anchor.at_utc} touch={anchor} />
-            ))}
-          </ul>
+          <ForwardTouchTable
+            touches={row.baseline_anchors}
+            labels={labels}
+            testid="desk-forward-detail-baseline-table"
+          />
         </details>
       )}
     </div>
@@ -2098,7 +2257,7 @@ function DeskForwardSummaryView({ record }: { record: DeskForwardRecord }) {
             <th className={ROW_HEADER_CELL_LEFT}>source</th>
             {measureKeys.map((measureKey) => (
               <th key={measureKey} className={ROW_HEADER_CELL}>
-                {measureKey === "to_close" ? "to close" : measureKey.startsWith("mdd") ? measureKey.replace("_", " ") : `fwd ${measureKey}`}
+                {forwardMeasureShortHeader(measureKey)}
               </th>
             ))}
           </tr>
@@ -2250,7 +2409,9 @@ function DeskForwardSection({
         selectedSymbol={selectedSymbol}
         onSelectSymbol={onSelectSymbol}
       />
-      {selectedRow !== null && <DeskForwardDetail row={selectedRow} />}
+      {selectedRow !== null && (
+        <DeskForwardDetail row={selectedRow} labels={forwardHorizonLabels(record)} />
+      )}
       <p
         data-testid="desk-forward-register"
         className="rounded border border-amber-800/60 bg-amber-900/20 px-2 py-1.5 text-[11px] text-amber-200"

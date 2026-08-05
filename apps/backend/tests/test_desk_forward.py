@@ -113,6 +113,30 @@ def _in_band_bar(symbol: str, i: int, tf: str = "1m", low: float = 99.5, close: 
     return _bar(symbol, tf, _minute(i), 100.6, 100.8, low, close)
 
 
+FIXTURE_SYMBOL = "SESS"
+
+
+def _plant_fixture_session(bar_store: BarStore, symbol: str = FIXTURE_SYMBOL) -> None:
+    """A 90-bar 1m session that re-touches the default band [99, 100] several times and then
+    drifts away with a widening range. Deliberately NOT flat: the per-horizon assertions it
+    supports would pass vacuously on a session where every window saw the same extremes. Fully
+    deterministic -- a fixed arithmetic shape, never an RNG."""
+    bars = []
+    for i in range(90):
+        swing = (i % 7) - 3  # -3..3, so price re-enters the band every seventh minute
+        close = 100.0 + swing * 0.25 + i * 0.02
+        bars.append(
+            _bar(
+                symbol, "1m", _minute(i),
+                close - swing * 0.05,          # open
+                close + 0.20 + i * 0.01,       # high, widening
+                close - 0.30 - i * 0.01,       # low, widening
+                close,
+            )
+        )
+    _plant(bar_store, symbol, "1m", bars)
+
+
 @pytest.fixture
 def env(tmp_path):
     bar_store = BarStore(tmp_path / "bars")
@@ -355,6 +379,169 @@ def test_mdd_hand_checked_zero_clamp_and_touch_bar_smear(env):
     assert up["mdd_long_pct"] == 0.0                      # clamped: a real measured zero
 
 
+def test_the_session_mdds_are_unchanged_by_the_running_prefix_rewrite(env):
+    """The per-horizon drawdowns are read off a running-extreme pass over the SAME tail the
+    session MDD always used, so the session values must still equal the original one-shot formula
+    -- `min(low over the tail)` / `max(high over the tail)` against the entry, clamped. This is the
+    one place that refactor could have silently moved a recorded number."""
+    bar_store, screen_store, _ = env
+    bars = [_in_band_bar("SAME", 0, low=99.4, close=100.2)] + [
+        _bar("SAME", "1m", _minute(i), 100.2, 100.0 + i * 0.30, 100.0 - i * 0.20, 100.1)
+        for i in range(1, 9)
+    ]
+    _plant(bar_store, "SAME", "1m", bars)
+    screen = _record_screen(screen_store, [_screen_row("SAME", "support")])
+    touch = compute_forward(screen, bar_store, CONFIG.config_fingerprint())["rows"][0]["touches"][0]
+
+    entry = touch["entry_price"]
+    expected_long = min(0.0, (min(bar.low for bar in bars) - entry) / entry * 100.0)
+    expected_short = min(0.0, (entry - max(bar.high for bar in bars)) / entry * 100.0)
+    assert touch["mdd_long_pct"] == pytest.approx(expected_long)
+    assert touch["mdd_short_pct"] == pytest.approx(expected_short)
+    # 4h truncates to the last bar on a 9-bar session, so its window IS the session -- the two
+    # must therefore agree EXACTLY rather than merely approximately.
+    assert touch["horizons"]["4h"]["mdd_long_pct"] == touch["mdd_long_pct"]
+    assert touch["horizons"]["4h"]["mdd_short_pct"] == touch["mdd_short_pct"]
+
+
+def test_each_horizon_carries_the_drawdown_of_its_own_window_hand_checked(env):
+    """A 1m return must not be reported beside a drawdown measured over the whole session. Bars
+    are built so the adverse excursion deepens strictly AFTER the 1m mark, which is exactly the
+    case a single session-wide number could not tell apart."""
+    bar_store, screen_store, _ = env
+    bars = [
+        # touch bar: opens above the band, entry = edge 100.0; its own low 99.8 is the 1m window's
+        # worst (the disclosed pre-touch smear).
+        _bar("MW", "1m", _minute(0), 100.6, 100.4, 99.8, 100.1),
+        _bar("MW", "1m", _minute(1), 100.1, 100.5, 99.5, 100.0),   # 1m window ends here
+        _bar("MW", "1m", _minute(2), 100.0, 101.0, 99.0, 100.4),
+        _bar("MW", "1m", _minute(3), 100.4, 102.0, 98.0, 100.6),
+        _bar("MW", "1m", _minute(4), 100.6, 103.0, 97.0, 100.8),
+        _bar("MW", "1m", _minute(5), 100.8, 104.0, 96.0, 101.0),   # 5m window ends here
+    ]
+    _plant(bar_store, "MW", "1m", bars)
+    screen = _record_screen(screen_store, [_screen_row("MW", "support")])
+    touch = compute_forward(screen, bar_store, CONFIG.config_fingerprint())["rows"][0]["touches"][0]
+
+    # 1m = bars[0..1]: worst low 99.5, worst high 100.5, against entry 100.0.
+    assert touch["horizons"]["1m"]["mdd_long_pct"] == pytest.approx(-0.5)
+    assert touch["horizons"]["1m"]["mdd_short_pct"] == pytest.approx(-0.5)
+    # 5m = bars[0..5]: worst low 96.0, worst high 104.0.
+    assert touch["horizons"]["5m"]["mdd_long_pct"] == pytest.approx(-4.0)
+    assert touch["horizons"]["5m"]["mdd_short_pct"] == pytest.approx(-4.0)
+    # The session number is the widest of all -- the one this used to be the ONLY value for.
+    assert touch["mdd_long_pct"] == pytest.approx(-4.0)
+
+
+def test_a_horizons_drawdown_is_never_shallower_than_a_shorter_horizons(env):
+    """Nested windows: a longer horizon can only ever see more of the excursion. Proven over the
+    real fixture session rather than a hand-built one, across every touch AND every baseline
+    anchor -- the property must hold for the null too, or the comparison is not like-for-like."""
+    bar_store, screen_store, _ = env
+    _plant_fixture_session(bar_store)
+    screen = _record_screen(screen_store, [_screen_row(FIXTURE_SYMBOL, "support")])
+    row = compute_forward(screen, bar_store, CONFIG.config_fingerprint())["rows"][0]
+
+    events = row["touches"] + row["baseline_anchors"]
+    assert events, "the monotonicity scan is vacuous"
+    labels = [label for label, _minutes in DESK_FORWARD_HORIZONS_MINUTES]
+    for event in events:
+        measured = [
+            event["horizons"][label] for label in labels
+            if event["horizons"][label]["return_pct"] is not None
+        ]
+        for shorter, longer in zip(measured, measured[1:]):
+            assert longer["mdd_long_pct"] <= shorter["mdd_long_pct"]
+            assert longer["mdd_short_pct"] <= shorter["mdd_short_pct"]
+        for measure in measured:
+            assert measure["mdd_long_pct"] <= 0.0 and measure["mdd_short_pct"] <= 0.0
+        # The session pair is the widest window of all.
+        for measure in measured:
+            assert event["mdd_long_pct"] <= measure["mdd_long_pct"]
+            assert event["mdd_short_pct"] <= measure["mdd_short_pct"]
+
+
+# --- the exit price every return was measured to ---------------------------------------------------
+
+
+def test_exit_price_is_the_close_at_the_horizons_own_measurement_point(env):
+    bar_store, screen_store, _ = env
+    bars = [_in_band_bar("EX", 0)] + [
+        _bar("EX", "1m", _minute(i), 100.0, 100.4, 99.8, 100.0 + i * 0.01) for i in range(1, 6)
+    ]
+    _plant(bar_store, "EX", "1m", bars)
+    screen = _record_screen(screen_store, [_screen_row("EX", "support")])
+    touch = compute_forward(screen, bar_store, CONFIG.config_fingerprint())["rows"][0]["touches"][0]
+
+    assert touch["horizons"]["1m"]["exit_price"] == pytest.approx(bars[1].close)
+    assert touch["horizons"]["5m"]["exit_price"] == pytest.approx(bars[5].close)
+    # Truncated: measured AT the last bar, so the exit is the last bar's close -- the SAME point
+    # `return_pct` was measured to, never the price at the horizon that never arrived.
+    assert touch["horizons"]["1h"]["truncated"] is True
+    assert touch["horizons"]["1h"]["exit_price"] == pytest.approx(bars[-1].close)
+    assert touch["close_price"] == pytest.approx(bars[-1].close)
+
+
+def test_the_exit_price_reproduces_the_served_return_on_both_sides(env):
+    """The whole point of serving it: (exit - entry) / entry, signed to the row's side, must
+    reproduce the served return exactly. Checked on a resistance row too, where the sign flips."""
+    bar_store, screen_store, _ = env
+    _plant_fixture_session(bar_store)
+    screen = _record_screen(
+        screen_store,
+        [_screen_row(FIXTURE_SYMBOL, "support"), _screen_row(FIXTURE_SYMBOL, "resistance")],
+    )
+    rows = compute_forward(screen, bar_store, CONFIG.config_fingerprint())["rows"]
+    checked = 0
+    for row in rows:
+        sign = -1.0 if row["side"] == "resistance" else 1.0
+        for event in row["touches"] + row["baseline_anchors"]:
+            entry = event["entry_price"]
+            for measure in event["horizons"].values():
+                if measure["return_pct"] is None:
+                    continue
+                recomputed = sign * (measure["exit_price"] - entry) / entry * 100.0
+                assert measure["return_pct"] == pytest.approx(recomputed)
+                checked += 1
+            assert event["to_close_pct"] == pytest.approx(
+                sign * (event["close_price"] - entry) / entry * 100.0
+            )
+    assert checked, "the exit-price cross-check is vacuous"
+
+
+def test_a_horizon_finer_than_the_series_carries_every_key_present_and_null(env):
+    """The honest-absence branch. A missing key would read as "this record predates the field";
+    a null reads as "measured, no value" -- two different facts, never conflated."""
+    bar_store, screen_store, _ = env
+    _plant(bar_store, "FINE", "5m", [
+        _bar("FINE", "5m", _minute(0), 100.6, 100.8, 99.8, 100.2),
+        _bar("FINE", "5m", _minute(5), 100.2, 100.9, 100.0, 100.5),
+    ])
+    screen = _record_screen(screen_store, [_screen_row("FINE", "support")])
+    touch = compute_forward(screen, bar_store, CONFIG.config_fingerprint())["rows"][0]["touches"][0]
+
+    absent = touch["horizons"]["1m"]
+    assert absent["reason"] is not None
+    for key in ("return_pct", "exit_price", "mdd_long_pct", "mdd_short_pct", "effective_minutes"):
+        assert key in absent, f"{key} must be PRESENT and null, never missing"
+        assert absent[key] is None
+
+
+def test_baseline_anchors_carry_the_identical_new_fields(env):
+    """Like-for-like: the null is measured by the same function, so it gains every field a touch
+    gains -- otherwise the comparison quietly becomes apples-to-oranges."""
+    bar_store, screen_store, _ = env
+    _plant_fixture_session(bar_store)
+    screen = _record_screen(screen_store, [_screen_row(FIXTURE_SYMBOL, "support")])
+    row = compute_forward(screen, bar_store, CONFIG.config_fingerprint())["rows"][0]
+
+    assert row["touches"] and row["baseline_anchors"]
+    for anchor in row["baseline_anchors"]:
+        assert "close_price" in anchor
+        for measure in anchor["horizons"].values():
+            assert set(measure) == set(row["touches"][0]["horizons"]["5m"])
+
+
 # --- baseline --------------------------------------------------------------------------------------
 
 
@@ -499,6 +686,49 @@ def test_averages_pool_untruncated_only_with_truncation_counted(env):
     assert cell["mean_pct"] == pytest.approx(0.6)
     assert cell["median_pct"] == pytest.approx(0.6)
     assert row["averages"]["to_close"]["n"] == 2 and row["averages"]["to_close"]["n_truncated"] == 0
+    # A horizon's own drawdowns share its window, so they share its truncation rule exactly -- a
+    # truncated 1m measurement contributes neither its return nor its two drawdowns.
+    for key in ("mdd_long_1m", "mdd_short_1m"):
+        assert row["averages"][key]["n"] == 1 and row["averages"][key]["n_truncated"] == 1
+    # The session-end trio is never truncated: the session end is simply where the bars stop.
+    for key in ("mdd_long", "mdd_short"):
+        assert row["averages"][key]["n"] == 2 and row["averages"][key]["n_truncated"] == 0
+
+
+def test_the_per_horizon_averages_cover_every_declared_measure_key(env):
+    """The averages block is keyed in DESK_FORWARD_MEASURE_KEYS' own declared order -- that order
+    IS the column order both frontend tables render, so a drifted key set would silently drop or
+    reorder a column."""
+    bar_store, screen_store, _ = env
+    _plant_fixture_session(bar_store)
+    screen = _record_screen(screen_store, [_screen_row(FIXTURE_SYMBOL, "support")])
+    row = compute_forward(screen, bar_store, CONFIG.config_fingerprint())["rows"][0]
+
+    assert list(row["averages"]) == list(DESK_FORWARD_MEASURE_KEYS)
+    assert len(DESK_FORWARD_MEASURE_KEYS) == 15  # 4 horizons + to_close + 2 x (4 horizons + session)
+    for label, _minutes in DESK_FORWARD_HORIZONS_MINUTES:
+        for key in (f"mdd_long_{label}", f"mdd_short_{label}"):
+            assert key in row["averages"]
+
+
+def test_declaring_the_horizon_shape_re_keys_the_record(env, monkeypatch):
+    """The whole reason the shape rides in `parameters`: the 2-pin reuse rule compares input
+    signatures, and the recorded row shape is not otherwise in one. Without this, a screen already
+    measured would reuse a payload that predates a newly-added field, forever."""
+    import app.research.desk_forward as forward_module
+
+    bar_store, screen_store, _ = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    before = compute_forward(screen, bar_store, CONFIG.config_fingerprint())
+
+    monkeypatch.setattr(
+        forward_module, "DESK_FORWARD_HORIZON_MEASURES", ("return_pct", "exit_price"),
+    )
+    after = compute_forward(screen, bar_store, CONFIG.config_fingerprint())
+
+    assert after["forward_input_signature"] != before["forward_input_signature"]
+    assert after["parameters"]["horizon_measures"] == ["return_pct", "exit_price"]
 
 
 def test_summary_pools_by_side_with_baseline_beside_and_percent_convention(env):
@@ -532,13 +762,17 @@ def test_parameters_register_and_payload_version_served(env):
     screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
     result = compute_forward(screen, bar_store, CONFIG.config_fingerprint())
     recorded = forward_store.record(**result)
-    assert recorded["payload_version"] == 3
+    assert recorded["payload_version"] == 4
     assert recorded["parameters"] == {
         "horizons_minutes": [["1m", 1], ["5m", 5], ["1h", 60], ["4h", 240]],
         "max_touches_per_row": 8,
         "baseline_seed": 1729,
         "touch_timeframes": ["1m", "5m"],
         "return_sign_convention": "side_relative",
+        # The declared shape of every horizon leaf. It rides here, not merely in the version, so
+        # that adding a measured field genuinely re-keys the record rather than leaving every
+        # already-measured screen reusing a payload that predates the field.
+        "horizon_measures": ["return_pct", "exit_price", "mdd_long_pct", "mdd_short_pct"],
     }
     assert recorded["register"] == FORWARD_REGISTER
     assert "horizons" not in recorded  # the v1 top-level key is gone
@@ -869,7 +1103,7 @@ def test_route_compute_runs_to_done_and_the_bulk_list_serves_v2_meta(route_ctx):
     payload = served.json()
     assert payload["versions"] == 1
     record = payload["forward"]
-    assert record["payload_version"] == 3
+    assert record["payload_version"] == 4
     assert record["rows"][0]["touches"][0]["horizons"]["1m"]["return_pct"] == pytest.approx(0.5)
     baseline_cell = record["summary"]["support"]["to_close"]["baseline"]
     assert baseline_cell["n"] == 1  # the matched anchor, in the never-truncated measure
@@ -928,7 +1162,7 @@ def test_cli_records_into_the_env_scoped_store_and_unknown_id_exits_1(tmp_path, 
     forward_store = ForwardStore(resolve_desk_forward_dir(str(tmp_path / "universe")))
     records, errors = forward_store.list()
     assert errors == [] and len(records) == 1
-    assert records[0]["payload_version"] == 3
+    assert records[0]["payload_version"] == 4
 
     monkeypatch.setattr(sys, "argv", ["desk_forward_compute", "--screen-id", "screen-nope"])
     assert desk_forward_compute.main() == 1

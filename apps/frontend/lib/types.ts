@@ -1232,6 +1232,13 @@ export interface DeskScreenPinsResult {
 // All return/drawdown values are PERCENT, converted backend-side.
 export interface DeskForwardHorizonMeasure {
   return_pct: number | null;
+  // The close the return was measured TO (the last bar's close when truncated), and this
+  // horizon's OWN pair of max drawdowns — measured over its own window, not the whole session.
+  // OPTIONAL: absent from records written before these were measured. Rendered as an absence
+  // there, never as a zero (the return_sign_convention precedent).
+  exit_price?: number | null;
+  mdd_long_pct?: number | null;
+  mdd_short_pct?: number | null;
   truncated: boolean;
   effective_minutes: number | null;
   reason: string | null;
@@ -1245,6 +1252,9 @@ export interface DeskForwardTouch {
   entry_kind: "edge" | "open" | "close";
   horizons: Record<string, DeskForwardHorizonMeasure>;
   to_close_pct: number;
+  // to_close's own exit — the session's last close. Optional for the same reason as the horizon
+  // fields above.
+  close_price?: number | null;
   minutes_to_close: number;
   mdd_long_pct: number;
   mdd_short_pct: number;
@@ -1289,6 +1299,9 @@ export interface DeskForwardParameters {
   // under. OPTIONAL because it is absent from records written before the convention existed —
   // those carry raw price moves, and the panel says so rather than relabelling them.
   return_sign_convention?: string;
+  // What each horizon leaf in this record carries. Declared in the payload so a shape change
+  // re-keys the record instead of being silently reused. Optional for the same legacy reason.
+  horizon_measures?: string[];
 }
 
 export interface DeskForwardRecord {

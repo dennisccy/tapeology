@@ -154,8 +154,9 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|opposite_band\.(?:distance_bps|price_low|price_high|band_score)"
     r"|bands_by_class\.(?:A|B|C|unclassified)"
     r"|band_price_low|band_price_high|touch_count|touches_beyond_cap)"
-    r"|touchRow\.(?:entry_price|to_close_pct|mdd_long_pct|mdd_short_pct|minutes_to_close)"
-    r"|touchValue\.(?:return_pct|effective_minutes)"
+    r"|touchRow\.(?:entry_price|to_close_pct|close_price|mdd_long_pct|mdd_short_pct"
+    r"|minutes_to_close)"
+    r"|touchValue\.(?:return_pct|exit_price|mdd_long_pct|mdd_short_pct|effective_minutes)"
     r"|avgCell\.(?:mean_pct|median_pct)"
     r"|summaryCell\.(?:mean_pct|median_pct)"
 )
@@ -222,6 +223,24 @@ def test_desk_page_price_arithmetic_guard_catches_forward_field_arithmetic():
 
     seeded_summary = "const lift = summaryCell.mean_pct - summaryCell.median_pct;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_summary) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_exit_price_and_per_horizon_mdd_arithmetic():
+    """The exit price exists so a reader can CHECK the served return, not so the page can compute
+    one. Recomputing `(exit - entry) / entry` client-side would silently become a second owner of
+    the number `return_pct` already is -- caught, along with any derivation over a horizon's own
+    two drawdowns or the session-end close."""
+    seeded_return = "const pct = (touchValue.exit_price - touchRow.entry_price) / touchRow.entry_price;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_return) is not None
+
+    seeded_close = "const move = touchRow.close_price - touchRow.entry_price;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_close) is not None
+
+    seeded_horizon_mdd = "const span = touchValue.mdd_short_pct - touchValue.mdd_long_pct;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_horizon_mdd) is not None
+
+    seeded_worst = "const worst = Math.abs(touchValue.mdd_long_pct * 2);"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_worst) is not None
 
 
 # goal-desk-iter-24 (J-16) TC-7 (a): the ranked table's own reflow adds a `rank` cell rendering

@@ -124,9 +124,18 @@ DESK_FORWARD_MAX_TOUCHES_PER_ROW = 8
 DESK_FORWARD_BASELINE_SEED = 1729
 
 # The measure keys every averages/summary block carries, in serving order: the four horizon
-# labels, then the session-end mark, then the two adverse excursions.
+# labels, the session-end mark, then each adverse excursion at every one of those SAME windows --
+# `mdd_long_1h` is the worst move below entry within the hour the `1h` return was measured over,
+# and the unsuffixed `mdd_long`/`mdd_short` stay the session-end window they have always been.
+# Derived from DESK_FORWARD_HORIZONS_MINUTES rather than spelled out, so a horizon can never be
+# added to one and forgotten in the other.
 DESK_FORWARD_MEASURE_KEYS: tuple[str, ...] = (
-    "1m", "5m", "1h", "4h", "to_close", "mdd_long", "mdd_short",
+    tuple(label for label, _minutes in DESK_FORWARD_HORIZONS_MINUTES)
+    + ("to_close",)
+    + tuple(f"mdd_long_{label}" for label, _minutes in DESK_FORWARD_HORIZONS_MINUTES)
+    + ("mdd_long",)
+    + tuple(f"mdd_short_{label}" for label, _minutes in DESK_FORWARD_HORIZONS_MINUTES)
+    + ("mdd_short",)
 )
 
 # The sign convention every directional return (the horizons and ``to_close``) is served in.
@@ -138,6 +147,16 @@ DESK_FORWARD_MEASURE_KEYS: tuple[str, ...] = (
 # compares signatures, and the numbers under it would otherwise be read as if side-signed).
 # The two MDDs are deliberately NOT re-signed -- see ``_measure_from``.
 DESK_FORWARD_RETURN_SIGN_CONVENTION = "side_relative"
+
+# What every horizon leaf carries, declared so the payload states its own shape. It rides in
+# ``forward_parameters`` for the same reason ``return_sign_convention`` does: the 2-pin reuse rule
+# compares input signatures, and the recorded row SHAPE is not otherwise in one -- so without this,
+# adding a measured field would leave every already-recorded screen returning `reused=True`
+# forever and the new numbers would never exist for it. Declaring the shape makes a shape change
+# re-key, which is the only honest outcome: the old record is not the same measurement.
+DESK_FORWARD_HORIZON_MEASURES: tuple[str, ...] = (
+    "return_pct", "exit_price", "mdd_long_pct", "mdd_short_pct",
+)
 
 # The visible honesty register carried by EVERY forward payload. Lint-checked in tests via
 # test_copy_discipline.find_violations.
@@ -200,6 +219,7 @@ def forward_parameters() -> dict:
         "baseline_seed": DESK_FORWARD_BASELINE_SEED,
         "touch_timeframes": list(DESK_FORWARD_TOUCH_TIMEFRAMES),
         "return_sign_convention": DESK_FORWARD_RETURN_SIGN_CONVENTION,
+        "horizon_measures": list(DESK_FORWARD_HORIZON_MEASURES),
     }
 
 
@@ -356,13 +376,55 @@ def _measure_from(
     worst move BELOW the entry, ``mdd_short`` always the worst move ABOVE it) and both stay
     clamped ``<= 0`` on either side. Signing them would collapse two independent facts into one
     and erase which way price actually travelled; the row's own adverse excursion is simply the
-    one matching its thesis (support -> ``mdd_long``, resistance -> ``mdd_short``)."""
+    one matching its thesis (support -> ``mdd_long``, resistance -> ``mdd_short``).
+
+    **Every horizon also carries the price it was measured TO** (``exit_price`` -- the close at
+    that horizon's own ``measured_at``, the last bar's close when truncated) and **its OWN pair of
+    max drawdowns**, measured over that horizon's own window rather than the whole session. Both
+    exist for the same reason: a return alone is unreadable. Served beside the entry, the exit
+    makes the arithmetic checkable rather than asserted; and a 1h return sitting beside a drawdown
+    measured over the remaining six hours describes two different windows as if they were one.
+    ``to_close_pct``'s own exit is ``close_price`` at the top level (its "horizon" is the session
+    end, which has no entry in ``horizons``), and the top-level ``mdd_*_pct`` remain the
+    session-end window -- unchanged in meaning, so a record written before this addition still
+    reads exactly as it did.
+
+    The horizon windows are NESTED (1m within 5m within 1h within 4h within the session), so every
+    drawdown here -- per-horizon and session -- is a read off ONE running-extreme pass over the
+    same ``session_bars[index:]`` tail the session MDD always used. The session values are
+    therefore unchanged by construction, not merely by intent: ``running_low[-1]`` IS
+    ``min(bar.low for bar in tail)``."""
     last = len(session_bars) - 1
+
+    tail = session_bars[index:]
+    running_low: list[float] = []
+    running_high: list[float] = []
+    low_so_far: float | None = None
+    high_so_far: float | None = None
+    for bar in tail:
+        low_so_far = bar.low if low_so_far is None else min(low_so_far, bar.low)
+        high_so_far = bar.high if high_so_far is None else max(high_so_far, bar.high)
+        running_low.append(low_so_far)
+        running_high.append(high_so_far)
+
+    def _mdd_long(offset: int) -> float:
+        """The worst low below ``entry`` within the first ``offset + 1`` bars of the tail."""
+        return min(0.0, (running_low[offset] - entry) / entry * 100.0)
+
+    def _mdd_short(offset: int) -> float:
+        """The worst high above ``entry`` within the first ``offset + 1`` bars of the tail."""
+        return min(0.0, (entry - running_high[offset]) / entry * 100.0)
+
     horizons: dict[str, dict] = {}
     for label, minutes in DESK_FORWARD_HORIZONS_MINUTES:
         if minutes % tf_minutes != 0:
+            # An honest absence carries every key PRESENT and null -- never a missing key (a
+            # reader distinguishes "measured, no value" from "this shape predates the field").
             horizons[label] = {
                 "return_pct": None,
+                "exit_price": None,
+                "mdd_long_pct": None,
+                "mdd_short_pct": None,
                 "truncated": False,
                 "effective_minutes": None,
                 "reason": f"the {label} horizon is finer than the {tf_minutes}m touch series",
@@ -380,23 +442,24 @@ def _measure_from(
             effective_minutes = minutes
         horizons[label] = {
             "return_pct": sign * (session_bars[measured_at].close - entry) / entry * 100.0,
+            "exit_price": session_bars[measured_at].close,
+            "mdd_long_pct": _mdd_long(measured_at - index),
+            "mdd_short_pct": _mdd_short(measured_at - index),
             "truncated": truncated,
             "effective_minutes": effective_minutes,
             "reason": None,
         }
 
-    tail = session_bars[index:]
-    lows = [bar.low for bar in tail]
-    highs = [bar.high for bar in tail]
     return {
         "at_utc": _iso(session_bars[index].epoch),
         "entry_price": entry,
         "entry_kind": entry_kind,
         "horizons": horizons,
         "to_close_pct": sign * (session_bars[last].close - entry) / entry * 100.0,
+        "close_price": session_bars[last].close,
         "minutes_to_close": (last - index) * tf_minutes,
-        "mdd_long_pct": min(0.0, (min(lows) - entry) / entry * 100.0),
-        "mdd_short_pct": min(0.0, (entry - max(highs)) / entry * 100.0),
+        "mdd_long_pct": _mdd_long(last - index),
+        "mdd_short_pct": _mdd_short(last - index),
     }
 
 
@@ -420,10 +483,18 @@ def _avg_cell(values: list[float], n_truncated: int) -> dict:
 
 def _collect_measures(events: list[dict]) -> dict[str, tuple[list[float], int]]:
     """Per measure key: (pooled untruncated values, truncated-count) over one list of
-    touch-shaped events."""
+    touch-shaped events.
+
+    A horizon's own two drawdowns pool under the SAME truncation rule as its return, because they
+    share its window: a truncated 4h measurement covers less than four hours, so its drawdown is
+    no more comparable than its return. The session-end trio (``to_close``/``mdd_long``/
+    ``mdd_short``) pools every event -- the session end is never truncated, it is simply where the
+    bars stop."""
     pools: dict[str, tuple[list[float], int]] = {}
     for label, _minutes in DESK_FORWARD_HORIZONS_MINUTES:
-        values: list[float] = []
+        returns: list[float] = []
+        mdd_longs: list[float] = []
+        mdd_shorts: list[float] = []
         truncated = 0
         for event in events:
             measure = event["horizons"][label]
@@ -432,8 +503,18 @@ def _collect_measures(events: list[dict]) -> dict[str, tuple[list[float], int]]:
             if measure["truncated"]:
                 truncated += 1
             else:
-                values.append(measure["return_pct"])
-        pools[label] = (values, truncated)
+                returns.append(measure["return_pct"])
+                # `.get` (not `[...]`) for the two drawdowns alone: a record written before the
+                # per-horizon MDDs existed carries a horizon leaf without them, and an averages
+                # block recomputed over such an event must read that as an absent value rather
+                # than raising. A leaf THIS module writes always has both keys.
+                if measure.get("mdd_long_pct") is not None:
+                    mdd_longs.append(measure["mdd_long_pct"])
+                if measure.get("mdd_short_pct") is not None:
+                    mdd_shorts.append(measure["mdd_short_pct"])
+        pools[label] = (returns, truncated)
+        pools[f"mdd_long_{label}"] = (mdd_longs, truncated)
+        pools[f"mdd_short_{label}"] = (mdd_shorts, truncated)
     pools["to_close"] = ([event["to_close_pct"] for event in events], 0)
     pools["mdd_long"] = ([event["mdd_long_pct"] for event in events], 0)
     pools["mdd_short"] = ([event["mdd_short_pct"] for event in events], 0)
@@ -441,10 +522,10 @@ def _collect_measures(events: list[dict]) -> dict[str, tuple[list[float], int]]:
 
 
 def _averages_block(events: list[dict]) -> dict:
-    return {
-        key: _avg_cell(values, truncated)
-        for key, (values, truncated) in _collect_measures(events).items()
-    }
+    """Keyed in ``DESK_FORWARD_MEASURE_KEYS``' own declared order, not in whatever order the pools
+    happened to be built -- the served order IS the column order both tables render."""
+    pools = _collect_measures(events)
+    return {key: _avg_cell(*pools[key]) for key in DESK_FORWARD_MEASURE_KEYS}
 
 
 # --- the compute walker ----------------------------------------------------------------------------
@@ -617,7 +698,10 @@ def compute_forward(
         "as_of": screen["as_of"],
         "config_fingerprint": config_fingerprint,
         "forward_input_signature": signature,
-        "payload_version": 3,
+        # 4: every horizon leaf gained `exit_price` and its own pair of max drawdowns, and the
+        # touch gained `close_price` (see `_measure_from`). The version DESCRIBES the shape; it is
+        # `horizon_measures` inside `parameters` that makes the change re-key.
+        "payload_version": 4,
         "parameters": forward_parameters(),
         "register": FORWARD_REGISTER,
         "rows": out_rows,
