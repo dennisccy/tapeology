@@ -182,7 +182,7 @@ import { fmt } from "@/lib/format";
 // shipped sections (no new section, no new page): (a) `DeskProvenance` gains the pins resolved for
 // the DISPLAYED snapshot's own `screen_date`, refetched whenever the displayed snapshot changes
 // (mirrors `screenCompareResult`'s own effect, keyed the same way); (b) `ScreenComputeControl`
-// gains one descriptive line querying the SAME endpoint for `todayUtcDate()` -- the identical value
+// gains one descriptive line querying the SAME endpoint for the resolved To day -- the identical value
 // the trigger already submits -- so it renders beside the Run Screen button in BOTH the empty-state
 // panel and the populated page (the ONE shared component, never duplicated). In both places, the
 // served `recorded`-or-`null` answer IS the match/differ statement -- this page computes no
@@ -264,13 +264,67 @@ const SECONDARY_BUTTON_CLASS =
 const PAGER_BUTTON_CLASS =
   "rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] font-medium text-slate-400 transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:bg-slate-900 disabled:hover:text-slate-400";
 
-// Today's UTC calendar date (YYYY-MM-DD) — the value "Run Screen" submits as `screen_date`.
+// Today's UTC calendar date (YYYY-MM-DD) — the reference day the page's own copy compares against.
 // Mirrors /structure's own `todayUtcDate()` helper byte-for-byte (this project's own convention:
 // each module owns its tiny formatting helper rather than sharing one — see desk_screen.py's
 // `_iso` docstring). UTC, never the browser's local date, so the submitted date always matches
 // what the backend's own session-close basis resolves.
 function todayUtcDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+// The `nth` Sunday of a month as a UTC calendar date — the two US daylight-time boundaries below.
+function nthSundayUtc(year: number, monthIndex: number, nth: number): string {
+  const first = new Date(Date.UTC(year, monthIndex, 1));
+  const toFirstSunday = (7 - first.getUTCDay()) % 7;
+  return new Date(Date.UTC(year, monthIndex, 1 + toFirstSunday + (nth - 1) * 7))
+    .toISOString()
+    .slice(0, 10);
+}
+
+// US eastern daylight time runs from the second Sunday of March to the first Sunday of November.
+// Date granularity is exact for every value this can influence: both transitions fall on Sundays,
+// and `nextTradingStamp` rolls a weekend to Monday whatever the hour, so the close-hour branch is
+// never evaluated on a boundary day.
+function isUsEasternDaylightDate(day: string): boolean {
+  const year = Number(day.slice(0, 4));
+  return day >= nthSundayUtc(year, 2, 2) && day < nthSundayUtc(year, 10, 1);
+}
+
+// 16:00 US eastern expressed in UTC, on each side of the daylight-time boundary.
+const US_CLOSE_HOUR_UTC_DAYLIGHT = 20;
+const US_CLOSE_HOUR_UTC_STANDARD = 21;
+
+// The session a run started NOW would be marked up for — the value "Run Screen" submits as
+// `screen_date`, and the whole point of `screen_date` being the TRADE day: a screen dated D is
+// built from the last completed session before D (`tradability._resolve_basis`), so the useful
+// stamp is the next session an operator can still act on, never the one that already closed.
+//
+// Before that day's US close, that is today; at or after it, and on Saturdays and Sundays, it is
+// the next weekday. This keys on the ABSOLUTE close instant, so the operator's own timezone never
+// enters the result: preparing at 22:00 in London — an hour after the close, but still the same
+// UTC day — correctly stamps tomorrow, which stamping today's UTC date silently got wrong every
+// evening.
+//
+// US market holidays are deliberately NOT modelled. A stamp landing on one records a screen whose
+// map is real (the prior session's) and whose own session simply has no bars, which the forward
+// measurement already reports as an honest absence rather than a zero.
+//
+// `now` is a parameter so the boundaries can be exercised deterministically.
+function nextTradingStamp(now: Date = new Date()): string {
+  const cursor = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  const today = cursor.toISOString().slice(0, 10);
+  const closeHour = isUsEasternDaylightDate(today)
+    ? US_CLOSE_HOUR_UTC_DAYLIGHT
+    : US_CLOSE_HOUR_UTC_STANDARD;
+  const isWeekend = cursor.getUTCDay() === 0 || cursor.getUTCDay() === 6;
+  if (!isWeekend && now.getUTCHours() < closeHour) return today;
+  do {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  } while (cursor.getUTCDay() === 0 || cursor.getUTCDay() === 6);
+  return cursor.toISOString().slice(0, 10);
 }
 
 // --- Local loading/unavailable helpers — mirror structure/page.tsx's own LoadingPanel/
@@ -2730,8 +2784,8 @@ function DeskProvenance({
 
 // goal-desk-iter-36 (J-21): the descriptive line beside the Run Screen control, querying
 // `GET /research/desk/screen/pins` for the RESOLVED To day -- the SAME value
-// `handleTriggerScreen`'s no-arg form submits to the trigger (below; blank inputs resolve to
-// today, keeping the shipped copy byte-identical). Renders in BOTH places `ScreenComputeControl`
+// `handleTriggerScreen`'s no-arg form submits to the trigger (below; blank inputs resolve to the
+// upcoming US session date). Renders in BOTH places `ScreenComputeControl`
 // itself renders, since it lives inside that ONE shared component -- no duplication. Honest empty
 // state (T-11): before any universe snapshot is registered, `data.universe_snapshot_id` is `null`
 // and this renders that fact plainly. The five testids are pinned by golden J-21 (existence-only)
@@ -2847,6 +2901,14 @@ function ScreenComputeControl({
         </p>
       )}
       <TodayScreenPinsNote pins={pins} runDay={runDay} />
+      {/* The day the click will actually submit, stated BEFORE it is clicked. The resolved To day
+          is no longer always today's UTC date, and the case where it differs is the ordinary one:
+          an evening operator preparing after the US close is stamping tomorrow's session. */}
+      {runDay !== null && (
+        <p data-testid="desk-run-screen-stamp" className="text-[11px] text-slate-500">
+          Run Screen will record {runDay}.
+        </p>
+      )}
       <button
         type="button"
         data-testid="desk-run-screen-button"
@@ -3095,8 +3157,8 @@ const REFRESH_CHAIN_STEP_LABELS: Record<RefreshChainStepKey, string> = {
 };
 
 // --- the as-of day range (forward-test era) -------------------------------------------------------
-// Two validated text fields govern the screen compute: To (blank = today) and From (blank = the
-// To day). The chain's screen step loops EVERY day in [From, To]; the standalone Run Screen
+// Two validated text fields govern the screen compute: To (blank = the upcoming US session date)
+// and From (blank = the To day). The chain's screen step loops EVERY day in [From, To]; the standalone Run Screen
 // button runs only the To day. Deliberately NOT <input type="date">: the native picker is
 // locale-dependent (the TopBar J-35 precedent), and every literal in this block is scanned
 // against the shipped goldens' pinned substrings — copy here says "day", never the pinned word.
@@ -3108,9 +3170,9 @@ const SCREEN_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 // snapshot per date changed that arithmetic: a day whose bars already reach it resolves as a reuse
 // in tens of milliseconds without walking a single member (`desk_screen_decision.py`), so a long
 // range over an already-covered stretch is nearly free and only the genuinely-missing days cost
-// anything. The range is still bounded in the two ways that matter — a To day after today is
-// refused, and the chain's own Stop button ends a run between days — so an operator who asks for a
-// year gets a year, and can stop it.
+// anything. The range is still bounded in the two ways that matter — a To day after the upcoming
+// US session date is refused, and the chain's own Stop button ends a run between days — so an
+// operator who asks for a year gets a year, and can stop it.
 
 interface ResolvedScreenDayRange {
   from: string;
@@ -3135,29 +3197,31 @@ function enumerateUtcDays(from: string, to: string): string[] {
   return out;
 }
 
-// null error = valid. Blank To resolves to today; blank From resolves to the To day.
+// null error = valid. Blank To resolves to the upcoming US session; blank From resolves to the To
+// day. The ceiling is that same upcoming session rather than today's UTC date: after the close
+// they differ, and the later of the two is the one an operator can still act on.
 function validateScreenDayRange(
   fromRaw: string,
   toRaw: string,
 ): { error: string | null; range: ResolvedScreenDayRange | null } {
-  const today = todayUtcDate();
-  const toValue = toRaw.trim() === "" ? today : toRaw.trim();
+  const stamp = nextTradingStamp();
+  const toValue = toRaw.trim() === "" ? stamp : toRaw.trim();
   if (!isRealUtcDay(toValue)) {
     return {
-      error: "Enter the To day as a real UTC YYYY-MM-DD, or leave it blank to run today.",
+      error: "Enter the To day as a real YYYY-MM-DD, or leave it blank for the upcoming US session date.",
       range: null,
     };
   }
-  if (toValue > today) {
+  if (toValue > stamp) {
     return {
-      error: "The To day is after today — a screen can only run for today or an earlier day.",
+      error: "The To day is after the upcoming US session date — a run can cover that day or any earlier day.",
       range: null,
     };
   }
   const fromValue = fromRaw.trim() === "" ? toValue : fromRaw.trim();
   if (!isRealUtcDay(fromValue)) {
     return {
-      error: "Enter the From day as a real UTC YYYY-MM-DD, or leave it blank to run one day.",
+      error: "Enter the From day as a real YYYY-MM-DD, or leave it blank to run one day.",
       range: null,
     };
   }
@@ -3353,7 +3417,7 @@ function DeskRefreshChainControl({
       <div className="flex flex-wrap items-end justify-center gap-3">
         <label className="flex flex-col items-center gap-1">
           <span className="text-[11px] font-medium text-slate-500">
-            From day (UTC) — blank = the To day
+            From day — blank = the To day
           </span>
           <input
             type="text"
@@ -3369,7 +3433,7 @@ function DeskRefreshChainControl({
         </label>
         <label className="flex flex-col items-center gap-1">
           <span className="text-[11px] font-medium text-slate-500">
-            To day (UTC) — blank = today
+            To day — blank = upcoming US session
           </span>
           <input
             type="text"
@@ -3807,7 +3871,7 @@ export default function DeskPage() {
   // goal-desk-iter-36 (J-21): the screen-pin disclosure's two independent fetches.
   // `runPinsResult` (forward-test era rename of `todayPinsResult`) answers "would a run RIGHT NOW
   // reuse or walk?" for the RESOLVED To day — the SAME value the Run Screen trigger submits
-  // (blank inputs resolve to today, byte-identical to the shipped behavior) — and is rendered
+  // (blank inputs resolve to the upcoming US session date) — and is rendered
   // beside that control. `displayedPins` answers the SAME question for the currently DISPLAYED
   // snapshot's own `screen_date` and is refetched by its own effect below whenever the displayed
   // snapshot changes (mirrors `screenCompareResult`'s own effect).
@@ -4736,8 +4800,9 @@ export default function DeskPage() {
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
             The latest screen over the registered universe — ranked tradable walls, read verbatim
-            from GET /research/desk/screen. Run Screen walks the pinned universe as of today;
-            nothing here is recomputed in the browser.
+            from GET /research/desk/screen. Run Screen walks the pinned universe as of the To day —
+            blank resolves to the upcoming US session date; nothing here is recomputed in the
+            browser.
           </p>
         </header>
 
