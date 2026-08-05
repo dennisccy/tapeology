@@ -3539,6 +3539,31 @@ function DeskNotComputedPanel({
   );
 }
 
+// The latest session any ranked row's map consumed — a plain SELECTION of the served rows' own
+// `basis_as_of` values (the `topupWindowBasisCounts` "plain tally, nothing derived" precedent), so
+// the header below states a date the snapshot itself recorded rather than one the browser worked
+// out. Never a recomputation of any basis, never a re-sort of `rows`: a `for` loop, because the
+// page is allowed exactly one `rows`-slice expression file-wide (`test_desk_ui_guards.py`).
+//
+// A screen dated D is marked up from sessions strictly BEFORE D (`tradability._resolve_basis`), so
+// this date is D's PREDECESSOR, and stating it is the whole point — it is what makes the screen
+// date read as the trade day rather than the data day. Rows can disagree when one symbol's series
+// is staler than another's (each row's own `basis` cell already shows that); the latest is the
+// honest screen-level statement, since no row consumed anything after it.
+//
+// `null` when NO ranked row carries the field: rows recorded before goal-desk-iter-9 omit the key
+// entirely and are never backfilled (the established legacy-absence pattern), and a snapshot with
+// no ranked rows has nothing to report.
+function screenDataThroughDate(rows: DeskScreenRow[]): string | null {
+  let latest: string | null = null;
+  for (const row of rows) {
+    const value = row.basis_as_of;
+    if (value == null) continue;
+    if (latest === null || value > latest) latest = value;
+  }
+  return latest === null ? null : latest.substring(0, 10);
+}
+
 // The populated view — a real snapshot exists (`latest !== null`), whether it is the latest one
 // or a history row the operator selected. `snapshot` is the ONE displayed record; the Forward
 // Returns/Briefing/Skipped sections read it verbatim — only the SOURCE of `snapshot` (latest vs. a
@@ -3593,8 +3618,14 @@ function DeskPopulatedScreen({
   selectedForwardSymbol: string | null;
   onSelectForwardSymbol: (symbol: string) => void;
 }) {
+  const dataThrough = screenDataThroughDate(snapshot.rows);
   return (
     <div className="space-y-6">
+      <p data-testid="desk-screen-basis-note" className="text-xs text-slate-500">
+        {dataThrough === null
+          ? `Screen for ${snapshot.screen_date} — the sessions its map was built from are not recorded in this snapshot's rows.`
+          : `Screen for ${snapshot.screen_date} — built from data through ${dataThrough} close (each ranked row's basis cell names its own session).`}
+      </p>
       {!isViewingLatest && (
         <div
           data-testid="desk-viewing-indicator"
