@@ -495,11 +495,95 @@ def test_load_raises_screen_integrity_error_for_unparseable_json(tmp_path):
     assert records == [] and len(errors) == 1
 
 
-def test_store_has_no_update_or_delete_method():
-    """Immutability is structural, not policed (mirrors ``test_desk_universe.py``'s own
-    docstring discipline): no method on ``ScreenStore`` besides ``record`` mutates anything."""
+def test_store_has_no_in_place_rewrite_and_exactly_one_removal_path():
+    """Immutability is structural, not policed (mirrors ``test_desk_universe.py``'s own docstring
+    discipline). One snapshot per date narrowed the guarantee -- a recorded file is still NEVER
+    rewritten in place (``record`` only ever creates), but a date no longer accumulates copies, so
+    ``prune_superseded`` exists as the ONE removal path. This pins the exact public surface: any
+    NEW mutating method has to come here and justify itself."""
     public_methods = {name for name in dir(ScreenStore) if not name.startswith("_")}
-    assert public_methods == {"root", "list", "find_by_key", "record"}
+    assert public_methods == {
+        "root", "list", "find_by_key", "find_by_date", "record", "prune_superseded",
+    }
+
+
+def test_prune_superseded_removes_only_the_other_copies_of_that_date(tmp_path):
+    """The removal path, exactly scoped: every OTHER snapshot for the date goes, the kept one is
+    untouched BYTE-FOR-BYTE, and another date's snapshot is never in the blast radius."""
+    store, earlier, later = _plant_same_date_pair(tmp_path / "screen")
+    other_date = _record(
+        store, screen_date="2026-07-28", as_of="2026-07-28T23:59:59Z",
+        bar_store_signature="c" * 16,
+    )
+    kept_bytes = (store.root / f"{later['id']}.json").read_bytes()
+
+    removed = store.prune_superseded("2026-07-27", later["id"])
+
+    assert removed == [earlier["id"]]
+    assert not (store.root / f"{earlier['id']}.json").exists()
+    assert (store.root / f"{later['id']}.json").read_bytes() == kept_bytes
+    assert (store.root / f"{other_date['id']}.json").exists()
+    records, errors = store.list()
+    assert errors == []
+    assert {r["id"] for r in records} == {later["id"], other_date["id"]}
+
+
+def test_prune_superseded_on_a_date_with_one_copy_removes_nothing(tmp_path):
+    store = ScreenStore(tmp_path / "screen")
+    only = _record(store)
+
+    assert store.prune_superseded("2026-06-22", only["id"]) == []
+    assert (store.root / f"{only['id']}.json").exists()
+
+
+def test_prune_superseded_refuses_when_the_snapshot_to_keep_is_not_registered(tmp_path):
+    """A supersede runs only AFTER its replacement is safely on disk. An unregistered ``keep_id``
+    means the caller is about to delete a date's LAST copy -- refused loudly, nothing removed."""
+    store, earlier, later = _plant_same_date_pair(tmp_path / "screen")
+
+    with pytest.raises(ValueError):
+        store.prune_superseded("2026-07-27", "screen-2026-07-27-notrecorded")
+
+    assert (store.root / f"{earlier['id']}.json").exists()
+    assert (store.root / f"{later['id']}.json").exists()
+
+
+def test_the_screen_list_route_serves_the_latest_screen_date_not_the_latest_recording(
+    screen_route_ctx,
+):
+    """`latest` orders by ``screen_date`` first. Re-walking an OLDER date -- the routine act one
+    snapshot per date is built around -- must not make that older date the desk's default view just
+    because it was recorded most recently."""
+    client, tmp_path = screen_route_ctx
+    store = ScreenStore(tmp_path / "screen")
+    newest_date = _record(
+        store, screen_date="2026-08-04", as_of="2026-08-04T23:59:59Z",
+        bar_store_signature="a" * 16,
+    )
+    # Recorded AFTER it, but for an EARLIER screen date -- exactly what a re-walk of a stale date
+    # produces.
+    older_date = _record(
+        store, screen_date="2026-07-27", as_of="2026-07-27T23:59:59Z",
+        bar_store_signature="b" * 16,
+    )
+
+    listed = client.get("/research/desk/screen").json()
+
+    assert listed["latest"]["id"] == newest_date["id"]
+    assert listed["latest"]["screen_date"] == "2026-08-04"
+    assert older_date["created_utc"] >= newest_date["created_utc"]  # the recording order really is reversed
+    assert {row["id"] for row in listed["screens"]} == {newest_date["id"], older_date["id"]}
+
+
+def test_find_by_date_returns_the_newest_copy_of_that_date(tmp_path):
+    store, _earlier, later = _plant_same_date_pair(tmp_path / "screen")
+    _record(
+        store, screen_date="2026-07-28", as_of="2026-07-28T23:59:59Z",
+        bar_store_signature="c" * 16,
+    )
+
+    assert store.find_by_date("2026-07-27")["id"] == later["id"]
+    assert store.find_by_date("2026-01-01") is None
 
 
 # ==================================================================================================

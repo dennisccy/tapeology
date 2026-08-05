@@ -710,6 +710,25 @@ class ForwardStore:
             return None, 0
         return matching[-1], len(matching)
 
+    def prune_for_screen(self, screen_id: str) -> list[str]:
+        """Delete every recorded forward record measured against ``screen_id``, returning their ids
+        (oldest first). The mirror of ``ScreenStore.prune_superseded`` and its ONLY caller's reason
+        to exist: a forward record keys on ``screen_id``, so superseding a screen snapshot would
+        otherwise strand its measurements pointing at an id nothing can resolve.
+
+        Touches no other screen's records; a record whose file failed its integrity check is not
+        registered (``list`` withholds it and surfaces it in ``errors``) and so is never removed
+        either -- a damaged file keeps being surfaced honestly. An unknown ``screen_id`` is a plain
+        empty list, never an error."""
+        records, _errors = self.list()
+        removed: list[str] = []
+        for record in records:
+            if record["screen_id"] != screen_id:
+                continue
+            self._path(record["id"]).unlink()
+            removed.append(record["id"])
+        return removed
+
     def record(
         self,
         *,

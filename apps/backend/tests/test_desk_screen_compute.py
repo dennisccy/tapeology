@@ -127,7 +127,7 @@ def test_trigger_members_total_is_known_synchronously_before_any_background_work
         release.wait(timeout=5)
         return {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z",
-            "universe_snapshot_id": "x", "config_fingerprint": "y", "bar_store_signature": "z",
+            "universe_snapshot_id": "x", "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc",
             "rows": [], "skipped": [],
         }
 
@@ -182,7 +182,7 @@ def test_second_trigger_while_running_returns_the_same_job_started_false(manager
         release.wait(timeout=5)
         return {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z",
-            "universe_snapshot_id": "x", "config_fingerprint": "y", "bar_store_signature": "z",
+            "universe_snapshot_id": "x", "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc",
             "rows": [], "skipped": [],
         }
 
@@ -207,7 +207,7 @@ def test_trigger_after_a_terminal_job_starts_a_genuinely_new_job(manager_env, mo
         desk_screen_compute, "compute_screen",
         lambda *a, **k: {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
-            "config_fingerprint": "y", "bar_store_signature": "z", "rows": [], "skipped": [],
+            "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": [],
         },
     )
 
@@ -245,7 +245,7 @@ def test_a_cancellation_signal_resolves_state_cancelled_with_partial_progress_an
                 progress({"symbol": symbol})
         return {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
-            "config_fingerprint": "y", "bar_store_signature": "z", "rows": [], "skipped": [],
+            "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": [],
         }
 
     monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
@@ -296,7 +296,7 @@ def test_a_corrupted_snapshot_at_the_same_key_resolves_state_failed_never_a_sile
         desk_screen_compute, "compute_screen",
         lambda *a, **k: {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
-            "config_fingerprint": "y", "bar_store_signature": "z", "rows": [], "skipped": [],
+            "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": [],
         },
     )
 
@@ -329,7 +329,7 @@ def test_snapshot_returns_are_independent_copies_never_a_shared_mutable_referenc
         desk_screen_compute, "compute_screen",
         lambda *a, **k: {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
-            "config_fingerprint": "y", "bar_store_signature": "z", "rows": [], "skipped": [],
+            "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": [],
         },
     )
 
@@ -458,7 +458,7 @@ def test_initial_and_running_snapshot_carry_the_honest_reused_false_screen_id_nu
         release.wait(timeout=5)
         return {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z",
-            "universe_snapshot_id": "x", "config_fingerprint": "y", "bar_store_signature": "z",
+            "universe_snapshot_id": "x", "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc",
             "rows": [], "skipped": [],
         }
 
@@ -649,7 +649,7 @@ def test_cancel_while_running_succeeds_and_a_subsequent_cancel_is_409(route_ctx,
         release.wait(timeout=5)
         return {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
-            "config_fingerprint": "y", "bar_store_signature": "z", "rows": [], "skipped": [],
+            "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": [],
         }
 
     monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
@@ -884,7 +884,7 @@ def test_tc5_a_cancellation_mid_walk_records_state_cancelled_with_partial_attemp
                 progress({"symbol": symbol})
         return {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
-            "config_fingerprint": "y", "bar_store_signature": "z", "rows": rows, "skipped": skipped,
+            "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": rows, "skipped": skipped,
         }
 
     monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
@@ -1087,7 +1087,7 @@ def test_a_terminal_log_write_that_raises_is_never_re_logged_as_a_second_failed_
                 progress({"symbol": symbol})
         return {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
-            "config_fingerprint": "y", "bar_store_signature": "z", "rows": [], "skipped": skipped,
+            "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": skipped,
         }
 
     monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)

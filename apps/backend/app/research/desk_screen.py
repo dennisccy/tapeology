@@ -261,6 +261,92 @@ def compute_bar_store_signature(universe_store: UniverseStore, bar_index: BarInd
     return _bar_store_signature(get_desk_coverage(universe_store, bar_index))
 
 
+# --- the date-scoped completeness pins (one snapshot per date) ------------------------------------
+
+
+# The timeframe whose presence decides whether a member is rankable AT ALL: `compute_tradability`
+# resolves its basis from the DAILY series alone (`tradability.py`'s `_select_daily_series`), so
+# `no_bar_series_for_symbol` -- the `"no_bars"` skip reason -- is precisely "no 1d series".
+_DAILY_TIMEFRAME = "1d"
+
+
+def _clamp_to_as_of(latest_window_end_utc: str | None, as_of: str) -> str | None:
+    """``min(latest_window_end_utc, as_of)`` -- an honest ``None`` stays ``None`` (a member with no
+    bars at all is never given a fabricated coverage instant).
+
+    Compared as INSTANTS, never as strings: ``bar_index`` records ``window_end_utc`` at mixed
+    precision (``2026-07-25T00:00:00Z`` alongside ``2026-07-14T09:32:06.885430Z``), and a lexical
+    compare puts ``...T23:59:59.500000Z`` BEFORE ``...T23:59:59Z`` (``'.'`` sorts under ``'Z'``) --
+    the one same-second case where string order and chronological order disagree. The RETURNED value
+    is always one of the two inputs verbatim, never a reformatted instant, so the signature below
+    stays a hash of values this codebase actually wrote."""
+    if latest_window_end_utc is None:
+        return None
+    if _epoch(latest_window_end_utc) <= _epoch(as_of):
+        return latest_window_end_utc
+    return as_of
+
+
+def screen_coverage_signature(coverage: dict, as_of: str) -> str:
+    """``_bar_store_signature`` CLAMPED to ONE screen's own ``as_of``: a checksum over the sorted
+    ``(symbol, timeframe, min(latest_window_end_utc, as_of))`` tuples of an ALREADY-FETCHED
+    ``get_desk_coverage`` payload. Like ``_bar_store_signature`` it receives no store reference of
+    any kind, so it is structurally incapable of issuing a ``BarStore`` call.
+
+    **Why the clamp is the whole "one snapshot per date" fix.** A screen for date ``D`` can only
+    ever consume bars at or before ``as_of(D)``, so bars that arrive AFTER ``D`` cannot change a
+    single one of its rows -- yet they DO move ``bar_store_signature`` (which hashes every member's
+    unclamped latest instant), and the 5-pin key therefore read every re-run of an older date as a
+    brand-new key and wrote a second file for it. Clamped, the value is MONOTONE and settles: while
+    bars are still arriving for ``D`` or the sessions before it the signature genuinely moves (a
+    re-walk is warranted -- that is the ``63 ranked/38 skipped`` -> ``100/1`` case the live store
+    recorded), and once every member's coverage passes ``D`` every tuple is pinned at ``as_of`` and
+    no later top-up can ever move it again -- the date settles at exactly one snapshot, forever.
+
+    Recorded as a snapshot's own sixth pin. A snapshot recorded BEFORE this addition simply OMITS
+    the key entirely -- the SAME append-only-row-content discipline the row disclosures established
+    (never defaulted, never backfilled, never present as ``null``); ``desk_screen_decision`` handles
+    that absence explicitly rather than guessing a value for it."""
+    tuples = sorted(
+        (
+            member["symbol"],
+            timeframe,
+            _clamp_to_as_of(member["per_timeframe"][timeframe]["latest_window_end_utc"], as_of),
+        )
+        for member in coverage["members"]
+        for timeframe in DESK_TOPUP_TIMEFRAMES
+    )
+    return _sha256(_canonical(tuples))[:16]
+
+
+def rankable_member_count(coverage: dict) -> int:
+    """How many of the latest universe's members COULD rank at all right now: those whose ``1d``
+    series exists (see ``_DAILY_TIMEFRAME``). Derived from the SAME already-fetched coverage payload
+    -- zero store reads. This is a CEILING, not a prediction: a member with a daily series whose
+    every session falls after the screen date resolves no basis and is honestly skipped
+    (``"no_basis"``), which is why ``desk_screen_decision`` counts those skips as resolved."""
+    return sum(
+        1
+        for member in coverage["members"]
+        if member["per_timeframe"][_DAILY_TIMEFRAME]["has_bars"]
+    )
+
+
+def resolve_screen_pins(universe_store: UniverseStore, bar_index: BarIndex, as_of: str) -> dict:
+    """Every cheaply-resolvable pin for ONE screen date, from a SINGLE coverage fetch:
+    ``{"bar_store_signature", "screen_coverage_signature", "rankable_member_count"}``. The one
+    accessor both the compute path and the pins route call, so neither pays for a second
+    (index-only, but still per-member) coverage read and neither can drift from the other. Same
+    cheap-resolution property ``compute_bar_store_signature`` already had -- resolvable BEFORE the
+    ~100-member walk ever starts."""
+    coverage = get_desk_coverage(universe_store, bar_index)
+    return {
+        "bar_store_signature": _bar_store_signature(coverage),
+        "screen_coverage_signature": screen_coverage_signature(coverage, as_of),
+        "rankable_member_count": rankable_member_count(coverage),
+    }
+
+
 # --- best-band selection + distance_bps (assumptions.md iter-3, entry 1) -------------------------
 
 
@@ -444,6 +530,7 @@ def compute_screen(
     coverage_payload = get_desk_coverage(universe_store, bar_index)
     coverage_by_symbol = {m["symbol"]: m["per_timeframe"] for m in coverage_payload["members"]}
     bar_store_signature = _bar_store_signature(coverage_payload)
+    coverage_signature = screen_coverage_signature(coverage_payload, as_of)
 
     dataset_records, _dataset_errors = dataset_store.list()
     tick_symbols = {meta["symbol"] for meta in dataset_records}
@@ -524,6 +611,7 @@ def compute_screen(
         "universe_snapshot_id": universe_snapshot_id,
         "config_fingerprint": config_fingerprint,
         "bar_store_signature": bar_store_signature,
+        "screen_coverage_signature": coverage_signature,
         "rows": rows,
         "skipped": skipped,
     }
@@ -535,9 +623,15 @@ def compute_screen(
 class ScreenStore:
     """File-based store rooted at the config-owned screen directory -- the ONE reader/writer.
     Mirrors ``desk_universe.UniverseStore``'s discipline exactly: every load verifies a
-    whole-record checksum (``ScreenIntegrityError`` on any mismatch); the only mutation,
-    ``record``, refuses an identical 5-pin key (``ScreenAlreadyRecorded``, never a second file for
-    the same key); no update/delete function exists anywhere."""
+    whole-record checksum (``ScreenIntegrityError`` on any mismatch); ``record`` refuses an
+    identical 5-pin key (``ScreenAlreadyRecorded``, never a second file for the same key).
+
+    **One snapshot per date.** The immutability guarantee is narrower than it was: no method
+    rewrites a file IN PLACE (``record`` still only ever creates), but a date is no longer allowed
+    to accumulate copies. ``prune_superseded`` is the ONE removal path -- it deletes the OTHER files
+    for a date once a fresher snapshot for that date has been written, and can never touch the file
+    it was told to keep. The compute path always writes the replacement BEFORE pruning, so an
+    interrupted supersede leaves two copies (the old behaviour) and never zero."""
 
     def __init__(self, root: str | Path) -> None:
         self._root = Path(root)
@@ -617,6 +711,45 @@ class ScreenStore:
                 return record
         return None
 
+    def find_by_date(self, screen_date: str) -> dict | None:
+        """The NEWEST registered snapshot for one ``screen_date``, or ``None``. After
+        ``prune_superseded`` there is at most one per date anyway; "newest" is the honest tie-break
+        while a date still carries pre-cleanup copies (``list`` is already ``created_utc``-ascending,
+        so the last match is the newest). This -- not ``find_by_key`` -- is what
+        ``desk_screen_decision`` asks "is this date already complete?" about."""
+        records, _errors = self.list()
+        matching = [record for record in records if record["screen_date"] == screen_date]
+        return matching[-1] if matching else None
+
+    def prune_superseded(self, screen_date: str, keep_id: str) -> list[str]:
+        """Delete every OTHER registered snapshot for ``screen_date``, keeping ``keep_id``. Returns
+        the removed ids (oldest first) -- an empty list when the date already held only the one.
+
+        The store's ONE removal path, and deliberately a narrow one:
+
+        * it refuses (``ValueError``) when ``keep_id`` is not itself a registered snapshot for this
+          date -- a supersede can only ever run AFTER its replacement is safely on disk, so a
+          missing ``keep_id`` means the caller is about to delete a date's last copy;
+        * it never touches ``keep_id``'s own file, and never any date but this one;
+        * a file that failed its integrity check is not registered (``list`` withholds it and
+          surfaces it in ``errors``), so it is never in the removal set either -- a damaged snapshot
+          keeps being surfaced honestly rather than being quietly swept away by a supersede."""
+        records, _errors = self.list()
+        matching = [record for record in records if record["screen_date"] == screen_date]
+        if not any(record["id"] == keep_id for record in matching):
+            raise ValueError(
+                f"refusing to prune screen date {screen_date!r}: the snapshot to keep "
+                f"({keep_id!r}) is not registered for that date -- a supersede runs only after its "
+                f"replacement is on disk, never before"
+            )
+        removed: list[str] = []
+        for record in matching:
+            if record["id"] == keep_id:
+                continue
+            self._path(record["id"]).unlink()
+            removed.append(record["id"])
+        return removed
+
     def record(
         self,
         *,
@@ -627,12 +760,22 @@ class ScreenStore:
         bar_store_signature: str,
         rows: list[dict],
         skipped: list[dict],
+        screen_coverage_signature: str | None = None,
     ) -> dict:
         """Persist ONE new screen snapshot (record + register in a single explicit action). A
         snapshot already registered under this EXACT 5-pin key raises the 409-style
-        ``ScreenAlreadyRecorded`` (there is no update/re-record path at all -- immutability is
-        structural). A file already sitting at this key's own deterministic path but failing its
-        integrity check raises ``ScreenIntegrityError`` -- never a silent overwrite (see below)."""
+        ``ScreenAlreadyRecorded`` (there is no update/re-record path at all -- a recorded file is
+        never rewritten). A file already sitting at this key's own deterministic path but failing
+        its integrity check raises ``ScreenIntegrityError`` -- never a silent overwrite (see below).
+
+        ``screen_coverage_signature`` is the date-scoped completeness pin (see the function of that
+        name above). It is NOT part of the key or the id checksum -- it is a pure function of the
+        SAME coverage payload ``bar_store_signature`` is derived from, plus ``as_of`` (itself a pure
+        function of ``screen_date``), so it is fully determined by the five pins and adds no
+        distinguishing power. Omitting it (the default) writes a snapshot in the pre-addition shape
+        -- the key ABSENT from ``meta`` entirely, never ``null`` -- which is what every snapshot
+        recorded before this addition looks like on disk and what a test planting a legacy record
+        wants; the compute path always passes a real value."""
         existing = self.find_by_key(
             screen_date, as_of, universe_snapshot_id, config_fingerprint, bar_store_signature
         )
@@ -668,6 +811,8 @@ class ScreenStore:
             "rows": list(rows),
             "skipped": list(skipped),
         }
+        if screen_coverage_signature is not None:
+            meta["screen_coverage_signature"] = screen_coverage_signature
         record = {"meta": meta}
         payload = {"file_checksum": _sha256(_canonical(record)), "record": record}
         self._root.mkdir(parents=True, exist_ok=True)

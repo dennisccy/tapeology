@@ -70,14 +70,16 @@ from ..config import CONFIG, Config
 from .bar_index import BarIndex
 from .bars import BarStore
 from .datasets import DatasetStore
+from .desk_forward import ForwardStore, resolve_desk_forward_dir
 from .desk_screen import (
     ScreenAlreadyRecorded,
     ScreenStore,
-    compute_bar_store_signature,
     compute_screen,
     resolve_desk_screen_dir,
+    resolve_screen_pins,
     screen_as_of,
 )
+from .desk_screen_decision import resolve_screen_decision
 from .desk_screen_log import ScreenRunStore, record_screen_run, resolve_desk_screen_log_dir
 from .desk_universe import UniverseStore
 from .routes import get_bar_index, get_bar_store, get_dataset_store
@@ -129,27 +131,41 @@ def run_screen_and_record(
     progress: Callable[[dict], None] | None = None,
     should_abort: Callable[[], bool] | None = None,
     screen_run_store: ScreenRunStore | None = None,
+    forward_store: ForwardStore | None = None,
 ) -> tuple[dict | None, bool]:
-    """Compute ONE screen (``compute_screen`` -- the sole walker) and persist it, append-only.
-    Returns ``(record, reused)``:
+    """Compute ONE screen (``compute_screen`` -- the sole walker) and persist it. Returns
+    ``(record, reused)``:
 
       * a cancelled (partial) walk is NEVER recorded -- returns ``(None, False)`` (the caller
         distinguishes "cancelled, nothing recorded" from "recorded/reused" by the ``None`` check);
       * a freshly-persisted snapshot returns ``(record, False)``;
-      * an identical-pin screen already recorded returns the EXISTING snapshot's meta with
+      * a date already holding that date's full data returns the EXISTING snapshot's meta with
         ``(record, True)`` (never a second file, never a rewrite) -- ``ScreenAlreadyRecorded`` is
         caught here, not propagated, since reusing an already-recorded snapshot is a normal,
         expected outcome, not a failure (era-desk-iter-4 J-04, audit B2: this ``reused`` flag is
         what lets a caller distinguish "this job's walk is what created the snapshot" from "this
         job's walk found an already-recorded one and changed nothing").
 
-    goal-desk-iter-29 (J-18): the five pins are resolved BEFORE any walk, using ONLY existing
-    accessors -- a ``ScreenStore.find_by_key`` hit short-circuits immediately (``reused=True``,
-    ``members_attempted=0``, ZERO ``compute_screen``/``compute_tradability`` calls); a miss runs
-    ``compute_screen`` exactly as before. If ``screen_run_store`` is given, this function ALSO
-    persists exactly one durable run record (``desk_screen_log.record_screen_run``) at its own
-    terminal outcome -- ``screen_run_store=None`` (the default) skips this entirely, so every
-    EXISTING caller that does not pass one keeps working unmodified."""
+    goal-desk-iter-29 (J-18): the pins are resolved BEFORE any walk, using ONLY existing accessors
+    -- a reuse short-circuits immediately (``reused=True``, ``members_attempted=0``, ZERO
+    ``compute_screen``/``compute_tradability`` calls); anything else runs ``compute_screen`` exactly
+    as before.
+
+    **One snapshot per date.** The reuse question is now asked by ``resolve_screen_decision`` (its
+    module docstring owns the rule) against ``ScreenStore.find_by_date`` rather than by an exact
+    5-pin ``find_by_key`` match, because that match read a top-up of LATER days' bars -- which
+    cannot change one row of an earlier date -- as a brand-new key and wrote a second file for that
+    date. Whenever this function settles a date it prunes that date's other copies: after a fresh
+    record (the replacement is on disk FIRST, so an interrupted supersede leaves two copies and
+    never zero) and equally after a reuse (a date reached by a re-trigger converges even when no
+    walk was needed). Superseding a snapshot also drops the forward records measured against it --
+    they key on ``screen_id`` and would otherwise point at an id nothing can resolve -- which is
+    what ``forward_store`` is for; omitting it (the default) leaves them in place, so every EXISTING
+    caller keeps working unmodified.
+
+    If ``screen_run_store`` is given, this function ALSO persists exactly one durable run record
+    (``desk_screen_log.record_screen_run``) at its own terminal outcome -- ``screen_run_store=None``
+    (the default) skips this entirely."""
     started_utc = _iso_utc_now()
 
     as_of = screen_as_of(screen_date)
@@ -158,7 +174,8 @@ def run_screen_and_record(
     members = list(universe_records[-1]["members"]) if universe_records else []
     members_total = len(members)
     config_fingerprint = config.config_fingerprint()
-    bar_store_signature = compute_bar_store_signature(universe_store, bar_index)
+    pins = resolve_screen_pins(universe_store, bar_index, as_of)
+    bar_store_signature = pins["bar_store_signature"]
 
     # goal-desk-iter-29 audit (B1): the run log is written EXACTLY ONCE per run -- structurally, not
     # by convention. Without this latch, a terminal write that itself RAISES (a full disk, a
@@ -179,6 +196,7 @@ def run_screen_and_record(
         screen_id: str | None,
         error: str | None,
         failed_member: str | None,
+        superseded_screen_ids: list[str] | None = None,
     ) -> None:
         nonlocal logged
         if screen_run_store is None or logged:
@@ -201,19 +219,35 @@ def run_screen_and_record(
             screen_id=screen_id,
             error=error,
             failed_member=failed_member,
+            superseded_screen_ids=superseded_screen_ids,
         )
 
-    # goal-desk-iter-29 (J-18) step 2: an already-recorded pin set is answered WITHOUT paying for
-    # the walk -- zero `compute_screen`/`compute_tradability` calls, no `BarStore` read beyond the
-    # index-only coverage read `compute_bar_store_signature` already made above.
-    existing = screen_store.find_by_key(
-        screen_date, as_of, universe_snapshot_id, config_fingerprint, bar_store_signature
+    def _settle_date(keep_id: str) -> list[str]:
+        """Collapse ``screen_date`` down to the ONE snapshot ``keep_id``, dropping the forward
+        records measured against every copy removed. Returns the removed screen ids."""
+        superseded = screen_store.prune_superseded(screen_date, keep_id)
+        if forward_store is not None:
+            for superseded_id in superseded:
+                forward_store.prune_for_screen(superseded_id)
+        return superseded
+
+    # goal-desk-iter-29 (J-18) step 2: a date that already holds its own full data is answered
+    # WITHOUT paying for the walk -- zero `compute_screen`/`compute_tradability` calls, no
+    # `BarStore` read beyond the index-only coverage read `resolve_screen_pins` already made above.
+    existing = screen_store.find_by_date(screen_date)
+    decision = resolve_screen_decision(
+        existing, pins, screen_date=screen_date,
+        universe_snapshot_id=universe_snapshot_id, config_fingerprint=config_fingerprint,
     )
-    if existing is not None:
+    if decision["action"] == "reuse":
+        assert existing is not None  # `reuse` is only ever returned for a snapshot that exists
+        # A reuse settles the date too: a re-trigger over a date still carrying pre-cleanup copies
+        # converges on one file even though nothing needed re-walking.
+        superseded = _settle_date(existing["id"])
         _log(
             state="done", reused=True, members_attempted=0, ranked_count=0,
             skipped_by_reason=dict(_EMPTY_SKIPPED_BY_REASON), screen_id=existing["id"],
-            error=None, failed_member=None,
+            error=None, failed_member=None, superseded_screen_ids=superseded,
         )
         return existing, True
 
@@ -247,15 +281,26 @@ def run_screen_and_record(
                 universe_snapshot_id=result["universe_snapshot_id"],
                 config_fingerprint=result["config_fingerprint"],
                 bar_store_signature=result["bar_store_signature"],
+                screen_coverage_signature=result["screen_coverage_signature"],
                 rows=result["rows"],
                 skipped=result["skipped"],
             )
-            _log(
-                state="done", reused=False, members_attempted=attempted,
-                ranked_count=len(result["rows"]),
-                skipped_by_reason=_tally_skipped_by_reason(result["skipped"]),
-                screen_id=recorded["id"], error=None, failed_member=None,
-            )
+            # The replacement is on disk BEFORE its predecessors are removed, and the run is logged
+            # `done` even if the prune itself raises (a full disk, a read-only dir): the snapshot
+            # genuinely WAS recorded, so re-entering the outer handler and calling this run "failed"
+            # would be a fabrication. The `logged` latch makes that structural -- the error still
+            # propagates verbatim, it just never rewrites this run's own honest outcome.
+            superseded: list[str] = []
+            try:
+                superseded = _settle_date(recorded["id"])
+            finally:
+                _log(
+                    state="done", reused=False, members_attempted=attempted,
+                    ranked_count=len(result["rows"]),
+                    skipped_by_reason=_tally_skipped_by_reason(result["skipped"]),
+                    screen_id=recorded["id"], error=None, failed_member=None,
+                    superseded_screen_ids=superseded,
+                )
             return recorded, False
         except ScreenAlreadyRecorded as exc:
             existing2 = screen_store.find_by_key(
@@ -263,11 +308,13 @@ def run_screen_and_record(
                 result["config_fingerprint"], result["bar_store_signature"],
             )
             assert existing2 is not None and existing2["id"] == exc.existing_id
+            superseded = _settle_date(existing2["id"])
             _log(
                 state="done", reused=True, members_attempted=attempted,
                 ranked_count=len(result["rows"]),
                 skipped_by_reason=_tally_skipped_by_reason(result["skipped"]),
                 screen_id=existing2["id"], error=None, failed_member=None,
+                superseded_screen_ids=superseded,
             )
             return existing2, True
     except Exception as exc:  # noqa: BLE001 -- any OTHER failure (a raising member inside
@@ -313,6 +360,7 @@ class DeskScreenComputeManager:
         screen_store: ScreenStore,
         *,
         screen_run_store: ScreenRunStore | None = None,
+        forward_store: ForwardStore | None = None,
     ) -> dict:
         """Start a NEW screen compute job for ``screen_date``, or -- if one is already
         ``state == "running"`` -- return it UNCHANGED (``started: False``, single-flight, TC-7).
@@ -325,7 +373,9 @@ class DeskScreenComputeManager:
         ``run_screen_and_record`` -- an OPTIONAL, keyword-only, per-call dependency (default
         ``None``, unlike J-09/J-10's REQUIRED ``topup_run_store``/``reconcile_run_store``) so every
         EXISTING test that calls ``trigger`` positionally with no run-store argument keeps passing
-        unmodified; the real HTTP route (``desk_routes.py``) always supplies a real store."""
+        unmodified; the real HTTP route (``desk_routes.py``) always supplies a real store.
+        ``forward_store`` is threaded through the same way, for the same reason -- see
+        ``run_screen_and_record``'s own "One snapshot per date" section."""
         with self._lock:
             current = self._snapshot
             if current is not None and current["state"] == "running":
@@ -371,7 +421,7 @@ class DeskScreenComputeManager:
                 record, reused = run_screen_and_record(
                     universe_store, bar_store, bar_index, dataset_store, config, screen_store,
                     screen_date, progress=_publish, should_abort=cancel_event.is_set,
-                    screen_run_store=screen_run_store,
+                    screen_run_store=screen_run_store, forward_store=forward_store,
                 )
             except Exception as exc:  # noqa: BLE001 -- surfaced verbatim, never swallowed
                 self._resolve(job_id, "failed", error=str(exc))
@@ -468,10 +518,15 @@ def main() -> int:
     screen_run_store = ScreenRunStore(
         resolve_desk_screen_log_dir(config.desk_universe_dir_resolved())
     )
+    # Superseding a snapshot drops the forward records measured against it -- the CLI settles a
+    # date exactly the way the HTTP route does, or a run started from the terminal would leave
+    # forward records pointing at an id nothing can resolve.
+    forward_store = ForwardStore(resolve_desk_forward_dir(config.desk_universe_dir_resolved()))
 
     recorded, reused = run_screen_and_record(
         universe_store, bar_store, bar_index, dataset_store, config, screen_store,
         args.date, progress=_cli_progress_printer(), screen_run_store=screen_run_store,
+        forward_store=forward_store,
     )
     print(
         f"desk screen complete for {args.date}: {len(recorded['rows'])} ranked, "

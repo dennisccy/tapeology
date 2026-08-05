@@ -180,11 +180,18 @@ class ScreenRunStore:
         screen_id: str | None,
         error: str | None,
         failed_member: str | None,
+        superseded_screen_ids: list[str] | None = None,
     ) -> dict:
         """Persist ONE new screen-run record (record + register in a single explicit action) --
         ALWAYS a genuinely new file: no content-keyed dedup exists in this store (see the module
         docstring), so a second call with identical field values still appends a second, distinct
-        record."""
+        record.
+
+        ``superseded_screen_ids`` names the snapshots this run REPLACED (one snapshot per date --
+        see ``desk_screen_decision``), so an override is legible in the ledger rather than silent;
+        an empty list is the honest "this run superseded nothing". Omitting it (the default) leaves
+        the key ABSENT from ``meta`` entirely, never ``null`` -- which is exactly what every run
+        recorded before this addition looks like on disk."""
         if state not in _TERMINAL_STATES:
             raise ValueError(
                 f"invalid terminal state {state!r} -- must be one of {_TERMINAL_STATES}"
@@ -215,6 +222,8 @@ class ScreenRunStore:
             "error": error,
             "failed_member": failed_member,
         }
+        if superseded_screen_ids is not None:
+            meta["superseded_screen_ids"] = list(superseded_screen_ids)
         record = {"meta": meta}
         payload = {"file_checksum": _sha256(_canonical(record)), "record": record}
         self._root.mkdir(parents=True, exist_ok=True)
@@ -240,6 +249,7 @@ def record_screen_run(
     screen_id: str | None,
     error: str | None,
     failed_member: str | None,
+    superseded_screen_ids: list[str] | None = None,
 ) -> dict:
     """THE single shared writer (goal.md J-18 step 3) -- called exactly once, at a run's terminal
     state, from inside ``run_screen_and_record`` (``desk_screen_compute.py``) -- the ONE shared
@@ -264,4 +274,5 @@ def record_screen_run(
         screen_id=screen_id,
         error=error,
         failed_member=failed_member,
+        superseded_screen_ids=superseded_screen_ids,
     )

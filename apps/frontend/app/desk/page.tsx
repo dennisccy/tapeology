@@ -256,6 +256,13 @@ const ASOF_INPUT_CLASS =
 const SECONDARY_BUTTON_CLASS =
   "rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm font-medium text-slate-400 transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-slate-950";
 
+// The ranked table's page controls — SECONDARY_BUTTON_CLASS at a smaller scale, PLUS the
+// `disabled:` utilities it deliberately lacks (nothing else on this page disables a secondary
+// button). On the first and last page one of these is genuinely unavailable, and it has to read
+// that way rather than as a live control that does nothing.
+const PAGER_BUTTON_CLASS =
+  "rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] font-medium text-slate-400 transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:bg-slate-900 disabled:hover:text-slate-400";
+
 // Today's UTC calendar date (YYYY-MM-DD) — the value "Run Screen" submits as `screen_date`.
 // Mirrors /structure's own `todayUtcDate()` helper byte-for-byte (this project's own convention:
 // each module owns its tiny formatting helper rather than sharing one — see desk_screen.py's
@@ -604,18 +611,60 @@ function DeskRow({ row, asOf, rank }: { row: DeskScreenRow; asOf: string; rank: 
   );
 }
 
+// The ranked table renders one contiguous WINDOW of the served order at a time. This is not a
+// cap and not a reorder: every served row stays reachable through the pager, the order and
+// direction are the snapshot's own, and each rendered rank stays the row's ABSOLUTE position in
+// the served array (`pageStart + index + 1`) — so row 11 reads 11, never 1. The two shipped
+// display caps on this page (EARLIER_PAIRS_DISPLAY_CAP, SCREEN_COMPARE_ROWS_DISPLAY_CAP) TRUNCATE
+// with a disclosure; this one PAGES with a disclosure. Page state lives inside this component and
+// is reset by a `key={snapshot.id}` at the call site — a remount, never a twelfth effect.
+const RANKED_ROWS_PAGE_SIZE = 10;
+
 function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) {
   const uncoveredRanked = rows.filter((row) => hasNoCoverageAtAll(row.coverage)).length;
+  const [page, setPage] = useState(1);
+  const pageCount = Math.ceil(rows.length / RANKED_ROWS_PAGE_SIZE);
+  const pageStart = (page - 1) * RANKED_ROWS_PAGE_SIZE;
+  const pageRows = rows.slice(pageStart, pageStart + RANKED_ROWS_PAGE_SIZE);
   return (
     <div className="overflow-x-auto">
       {uncoveredRanked > 0 && (
         <p data-testid="desk-coverage-divergence-note" className="mb-2 text-[11px] text-slate-600">
-          {uncoveredRanked} ranked row(s) below show every timeframe badge dark. A row&apos;s rank
+          {uncoveredRanked} ranked row(s) in this screen show every timeframe badge dark — counted
+          over every ranked row the screen served, not only the page shown below. A row&apos;s rank
           comes from the bar store the screen read directly; its coverage badges come from the
           derived bar index — two independent reads, each rendered as served. A dark badge set beside
           a ranked row therefore means the index holds no entry for that pair, not that the screen
           ranked a symbol whose bars it never read.
         </p>
+      )}
+      {/* The pager appears only when the snapshot has more rows than one page holds, so every
+          snapshot small enough to fit renders exactly as it did before the window existed. */}
+      {pageCount > 1 && (
+        <div data-testid="desk-rows-pagination" className="mb-2 flex items-center gap-3">
+          <button
+            type="button"
+            data-testid="desk-rows-prev-page"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={page <= 1}
+            className={PAGER_BUTTON_CLASS}
+          >
+            Previous
+          </button>
+          <p data-testid="desk-rows-page-note" className="text-[11px] text-slate-500">
+            showing {pageStart + 1}–{pageStart + pageRows.length} of {rows.length} ranked rows ·
+            page {page} of {pageCount}
+          </p>
+          <button
+            type="button"
+            data-testid="desk-rows-next-page"
+            onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+            disabled={page >= pageCount}
+            className={PAGER_BUTTON_CLASS}
+          >
+            Next
+          </button>
+        </div>
       )}
       {/* goal-desk-iter-24 (J-16): `table-fixed` + an explicit `<colgroup>` -- each column takes
           exactly its own assigned width regardless of content, so the table's OWN total width
@@ -631,7 +680,11 @@ function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) 
           one's longest value lands in 3 text lines -- a 3-line row measures 57px, inside J-16's
           own <=60px target. They sum to 1214px, which is exactly this page's own
           `mx-auto max-w-7xl` container width inside its `Panel` padding at a 1440px viewport, so
-          `scrollWidth === clientWidth` and no horizontal scrollbar can appear. */}
+          `scrollWidth === clientWidth` and no horizontal scrollbar can appear.
+          That measurement predates the page window above and survives it unchanged: because the
+          layout is `table-fixed`, column widths are content-independent by construction, so a
+          10-row page renders in exactly the same 1214px as all 100 rows did. The window changes
+          WHICH rows are on screen, never how wide any column is. */}
       <table data-testid="desk-screen-rows-table" className="w-full table-fixed border-collapse">
         <colgroup>
           <col className="w-[36px]" />
@@ -666,8 +719,8 @@ function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) 
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
-            <DeskRow key={row.symbol} row={row} asOf={asOf} rank={index + 1} />
+          {pageRows.map((row, index) => (
+            <DeskRow key={row.symbol} row={row} asOf={asOf} rank={pageStart + index + 1} />
           ))}
         </tbody>
       </table>
@@ -765,89 +818,198 @@ function DeskSkippedSection({ skipped, asOf }: { skipped: DeskScreenSkip[]; asOf
   );
 }
 
-// --- Screen history — date + rows/skipped counts + provenance summary, from the meta-only
-// `screens` list. era-desk-iter-6 (J-05): now CLICKABLE — selecting a row fetches that exact
-// date's persisted snapshot (`GET /research/desk/screen?date=`) and swaps it into the page's
-// display in place; the click-through itself is a same-page state swap, never a navigation, so it
-// stays a plain `onClick` (not a `Link` — the `Link`/drill-in requirement below is only for
-// jumping to `/structure`).
+// --- Screen history — a year-at-a-glance calendar over the meta-only `screens` list. era-desk-iter-6
+// (J-05): CLICKABLE — selecting a recorded day fetches that exact snapshot
+// (`GET /research/desk/screen?id=`) and swaps it into the page's display in place; the click-through
+// itself is a same-page state swap, never a navigation, so it stays a plain `onClick` (not a `Link`
+// — the `Link`/drill-in requirement below is only for jumping to `/structure`).
 //
-// goal-desk-iter-16 (J-12): selection/highlighting switches from `screen_date`-keyed to
-// `id`-keyed — the store's own 5-pin key already allows two recordings under the SAME
-// `screen_date` (a pre-/post-repair pair, e.g.), and a `screen_date`-keyed select/highlight could
-// only ever reach or distinguish one of the two. Each row now also shows its own `created_utc`
-// beside `screen_date` so two same-date rows read distinctly without opening either. `selectedId`
-// highlights the currently-displayed row's own id (see `DeskPage`'s `displayedSnapshot?.id`, which
-// covers BOTH a selected history entry and the default latest view). ------------------------------
+// goal-desk-iter-16 (J-12): selection/highlighting is `id`-keyed, not `screen_date`-keyed, and each
+// cell carries BOTH (`data-screen-id`/`data-screen-date`). `selectedId` highlights the
+// currently-displayed snapshot's own id (see `DeskPage`'s `displayedSnapshot?.id`, which covers BOTH
+// a selected history entry and the default latest view).
+//
+// **Why a calendar replaced the table.** The backend now settles one snapshot per date
+// (`desk_screen_decision.py`) — under the old 5-pin key a top-up of LATER days' bars re-keyed an
+// EARLIER date and wrote a second row for it, and the table's job was largely to tell those
+// near-duplicate rows apart by `created_utc`. With a date carrying one snapshot, the useful question
+// is which dates the forward test actually covers and where the gaps are, which a list of rows
+// answers badly and a year grid answers at a glance. Nothing was lost with the row: the selected
+// snapshot's own id, `created_utc` and pins are exactly what the Provenance panel at the foot of
+// this page already renders, and per-day counts ride along in each cell's own `title`/`aria-label`.
+//
+// Days across, months down: twelve rows of a fixed 31 columns, so a gap reads as a gap rather than
+// as a shorter row. A day that does not exist in its month (Feb 30) renders as blank space — never
+// a dot, which would claim a date that never existed. -----------------------------------------------
 
-function DeskHistoryRow({
+const MONTH_LABELS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+
+const CALENDAR_DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
+
+// Literal class strings, never interpolated, so Tailwind's scanner emits them. Fixed-width cells
+// in fixed-width columns: a column that stretched to fill the panel turned each recorded day into
+// a wide bar and each empty one into a lone dot in a sea of space, which reads as a chart of
+// nothing. At `1.5rem` the 31 day columns sit as one compact block a reader takes in at a glance,
+// and a year is twelve short rows rather than a 31-row scroll.
+const CALENDAR_CELL_BASE =
+  "flex h-5 w-full items-center justify-center rounded-sm border font-mono text-[10px] transition-colors";
+const CALENDAR_CELL_EMPTY = "border-transparent text-slate-700";
+const CALENDAR_CELL_RECORDED =
+  "cursor-pointer border-emerald-700/60 bg-emerald-900/40 text-emerald-200 hover:bg-emerald-800/60";
+const CALENDAR_CELL_SELECTED =
+  "cursor-pointer border-emerald-300 bg-emerald-500/80 font-semibold text-slate-950";
+const CALENDAR_AXIS_LABEL = "font-mono text-[10px] text-slate-500";
+
+/** `YYYY-MM-DD` for a plain year/month/day triple — the same zero-padded shape every recorded
+ * `screen_date` already uses, built by string formatting rather than by constructing a `Date` (a
+ * `new Date(y, m, d)` would be LOCAL time and could land on the neighbouring UTC day). */
+function isoDay(year: number, monthIndex: number, day: number): string {
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** Whether `day` exists in that month at all — the one place the grid's blanks come from. */
+function isRealDayOfMonth(year: number, monthIndex: number, day: number): boolean {
+  return day <= new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+}
+
+function DeskHistoryDayCell({
+  isoDate,
   meta,
   onSelect,
   selected,
 }: {
-  meta: DeskScreenMeta;
+  isoDate: string;
+  meta: DeskScreenMeta | undefined;
   onSelect: (id: string) => void;
   selected: boolean;
 }) {
+  const day = isoDate.slice(8);
+  if (meta === undefined) {
+    return (
+      <button
+        type="button"
+        data-testid="desk-history-day"
+        data-screen-date={isoDate}
+        data-has-screen="false"
+        disabled
+        title={`${isoDate} — no screen recorded`}
+        className={`${CALENDAR_CELL_BASE} ${CALENDAR_CELL_EMPTY}`}
+      >
+        ·
+      </button>
+    );
+  }
+  const label =
+    `${isoDate} — ${meta.counts.rows} ranked, ${meta.counts.skipped} skipped, ` +
+    `recorded ${meta.created_utc}`;
   return (
-    <tr
-      data-testid="desk-history-row"
+    <button
+      type="button"
+      data-testid="desk-history-day"
       data-screen-id={meta.id}
-      data-screen-date={meta.screen_date}
+      data-screen-date={isoDate}
+      data-has-screen="true"
       data-selected={selected}
       onClick={() => onSelect(meta.id)}
-      className={`cursor-pointer border-b border-slate-800/60 transition-colors last:border-b-0 hover:bg-slate-900/40 ${
-        selected ? "bg-slate-800/60" : ""
+      title={label}
+      aria-label={label}
+      className={`${CALENDAR_CELL_BASE} ${
+        selected ? CALENDAR_CELL_SELECTED : CALENDAR_CELL_RECORDED
       }`}
     >
-      <td className={LABEL_CELL}>{meta.screen_date}</td>
-      <td className={LABEL_CELL} data-testid="desk-history-created-utc">
-        {meta.created_utc}
-      </td>
-      <td className={NUMERIC_CELL}>{meta.counts.rows}</td>
-      <td className={NUMERIC_CELL}>{meta.counts.skipped}</td>
-      <td className={LABEL_CELL} data-testid="desk-history-provenance">
-        {meta.universe_snapshot_id ?? "—"} · {meta.config_fingerprint} · {meta.bar_store_signature}
-      </td>
-    </tr>
+      {day}
+    </button>
   );
 }
 
-function DeskHistoryTable({
+function DeskHistoryCalendar({
   screens,
   onSelect,
   selectedId,
+  shownYear,
+  onShowYear,
 }: {
   screens: DeskScreenMeta[];
   onSelect: (id: string) => void;
   selectedId: string | null;
+  shownYear: number;
+  onShowYear: (year: number) => void;
 }) {
   if (screens.length === 0) {
     return <EmptyState testid="desk-history-empty" title="No screens recorded yet." />;
   }
+  // One snapshot per date is the backend's own rule; keeping the LAST match is the honest tie-break
+  // if a stray second copy is ever on disk (`screens` arrives `created_utc`-ascending), and it
+  // never hides that copy from the ledger the API serves — it only picks which one this cell opens.
+  const byDate = new Map<string, DeskScreenMeta>();
+  for (const meta of screens) {
+    byDate.set(meta.screen_date, meta);
+  }
+  const recordedThisYear = screens.filter((meta) =>
+    meta.screen_date.startsWith(`${shownYear}-`),
+  ).length;
+
   return (
-    <div className="overflow-x-auto">
-      <table data-testid="desk-history-table" className="w-full border-collapse">
-        <thead>
-          <tr className="border-b border-slate-800">
-            <th className={HEADER_CELL_LEFT}>date</th>
-            <th className={HEADER_CELL_LEFT}>recorded</th>
-            <th className={HEADER_CELL}>rows</th>
-            <th className={HEADER_CELL}>skipped</th>
-            <th className={HEADER_CELL_LEFT}>provenance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {screens.map((meta) => (
-            <DeskHistoryRow
-              key={meta.id}
-              meta={meta}
-              onSelect={onSelect}
-              selected={meta.id === selectedId}
-            />
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          data-testid="desk-history-prev-year"
+          onClick={() => onShowYear(shownYear - 1)}
+          className={PAGER_BUTTON_CLASS}
+        >
+          Previous
+        </button>
+        <span data-testid="desk-history-year-label" className="font-mono text-sm text-slate-200">
+          {shownYear}
+        </span>
+        <button
+          type="button"
+          data-testid="desk-history-next-year"
+          onClick={() => onShowYear(shownYear + 1)}
+          className={PAGER_BUTTON_CLASS}
+        >
+          Next
+        </button>
+        <span className="text-xs text-slate-500">
+          {recordedThisYear} recorded screen(s) in {shownYear}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <div data-testid="desk-history-calendar" className="w-fit">
+          <div className="grid grid-cols-[2.5rem_repeat(31,1.5rem)] gap-x-[2px] gap-y-[2px]">
+            <span />
+            {CALENDAR_DAYS.map((day) => (
+              <span key={day} className={`${CALENDAR_AXIS_LABEL} text-center`}>
+                {String(day).padStart(2, "0")}
+              </span>
+            ))}
+            {MONTH_LABELS.map((month, monthIndex) => (
+              <Fragment key={month}>
+                <span className={`${CALENDAR_AXIS_LABEL} text-right`}>{month}</span>
+                {CALENDAR_DAYS.map((day) => {
+                  if (!isRealDayOfMonth(shownYear, monthIndex, day)) {
+                    return <span key={day} />;
+                  }
+                  const isoDate = isoDay(shownYear, monthIndex, day);
+                  const meta = byDate.get(isoDate);
+                  return (
+                    <DeskHistoryDayCell
+                      key={day}
+                      isoDate={isoDate}
+                      meta={meta}
+                      onSelect={onSelect}
+                      selected={meta !== undefined && meta.id === selectedId}
+                    />
+                  );
+                })}
+              </Fragment>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -855,7 +1017,7 @@ function DeskHistoryTable({
 // --- Top-up run history (era-desk-iter-11, J-09) — a durable, append-only record of every top-up
 // run's outcome, read verbatim from `GET /research/desk/topup/runs` and nothing recomputed. Two
 // tiers, mirroring the meta-only-list / full-latest split the backend itself serves (the SAME
-// split `DeskHistoryTable` above uses for screens): `TopupRunsTable` renders every recorded run's
+// split `DeskHistoryCalendar` above uses for screens): `TopupRunsTable` renders every recorded run's
 // summary (date + id, universe snapshot, terminal state, attempted-of-total — the ONLY fields the
 // meta-only `runs` list carries), and `LatestTopupRunDetail` renders the full per-pair detail
 // (per-outcome counts, every failed pair's detail verbatim, the honest unreached-pairs count) for
@@ -1537,10 +1699,12 @@ function ScreenRunsSection({
 // and the record's register rendered VERBATIM. Every value is the served payload's own; nothing
 // is derived, capped, sorted, or sliced client-side. Clicking a row opens a detail panel BELOW
 // the table (the /structure SetupDrillIn separate-panel precedent) rendered from the ALREADY
-// loaded record — plain selection state, zero new effects, no fetch. Rendered DEAD LAST on the
-// page so no shipped golden's first-visible-match text search can resolve into it. The compute
-// is an explicit operator act — its own button, its own poll, never started by Refresh Data and
-// never by a page load. ------------------------------------------------------------------------------
+// loaded record — plain selection state, zero new effects, no fetch. Rendered THIRD on the page,
+// directly above the ranked briefing (it originally rendered dead last, for interception safety
+// the golden bare-symbol guard now provides instead). The compute is an explicit operator act —
+// its own button, its own poll, and (reversed) the Refresh Data chain's fifth step, which measures
+// every snapshot that click recorded. Never a page load and never a timer: both entry points are
+// a click. ------------------------------------------------------------------------------------------
 
 interface ForwardControlProps {
   compute: DeskForwardComputeSnapshot | null;
@@ -2309,7 +2473,7 @@ function ScreenComparisonSection({
 // on screen. `isViewingLatest` gates a default-view-only note: while showing `latest`
 // (`created_utc`-sorted newest recording, TC-12), the copy describes itself as "the most recently
 // recorded screen", never "the latest screen date" — a same-date recording can still exist earlier
-// and be reachable from Screen History below.
+// and be reachable from Screen History above (this line now renders dead last on the page).
 // goal-desk-iter-36 (J-21): the resolved-pins block appended to `DeskProvenance` below -- the pins
 // a run for THIS DISPLAYED snapshot's own `screen_date` would resolve right now, fetched via
 // `GET /research/desk/screen/pins`. `recorded === null` here means the DISPLAYED snapshot's own
@@ -2380,7 +2544,7 @@ function DeskProvenance({
         <p data-testid="desk-provenance-latest-note" className="mt-1 text-[11px] text-slate-600">
           This is the most recently recorded screen (by recorded-at time), not necessarily the
           latest screen date — an earlier same-date recording can still exist and be opened from
-          Screen History below.
+          Screen History above.
         </p>
       )}
       <p data-testid="desk-provenance-signature-note" className="mt-1 text-[11px] text-slate-600">
@@ -2754,7 +2918,7 @@ function ReconcileIndexControl({
 // answers 409, the top-up is store-first, and a screen under identical pins short-circuits to a
 // reuse.
 
-const REFRESH_CHAIN_STEP_KEYS = ["universe", "topup", "reconcile", "screen"] as const;
+const REFRESH_CHAIN_STEP_KEYS = ["universe", "topup", "reconcile", "screen", "forward"] as const;
 type RefreshChainStepKey = (typeof REFRESH_CHAIN_STEP_KEYS)[number];
 
 const REFRESH_CHAIN_STEP_LABELS: Record<RefreshChainStepKey, string> = {
@@ -2762,6 +2926,7 @@ const REFRESH_CHAIN_STEP_LABELS: Record<RefreshChainStepKey, string> = {
   topup: "Bar top-up",
   reconcile: "Bar index",
   screen: "Screen for today",
+  forward: "Forward returns",
 };
 
 // --- the as-of day range (forward-test era) -------------------------------------------------------
@@ -2773,10 +2938,14 @@ const REFRESH_CHAIN_STEP_LABELS: Record<RefreshChainStepKey, string> = {
 
 const SCREEN_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-// The per-click ceiling on how many days one chain run may walk: a ~101-member screen walk takes
-// minutes per day, so an unbounded range would quietly become an hours-long click. A validation
-// constant, not a Config value — it shapes no recorded artifact, only how much one click starts.
-const SCREEN_DAY_RANGE_MAX_DAYS = 31;
+// There is deliberately NO per-click day ceiling. One existed (31 days) back when every day in a
+// range paid for a full ~101-member walk, so a wide range was quietly an hours-long click. One
+// snapshot per date changed that arithmetic: a day whose bars already reach it resolves as a reuse
+// in tens of milliseconds without walking a single member (`desk_screen_decision.py`), so a long
+// range over an already-covered stretch is nearly free and only the genuinely-missing days cost
+// anything. The range is still bounded in the two ways that matter — a To day after today is
+// refused, and the chain's own Stop button ends a run between days — so an operator who asks for a
+// year gets a year, and can stop it.
 
 interface ResolvedScreenDayRange {
   from: string;
@@ -2830,14 +2999,10 @@ function validateScreenDayRange(
   if (fromValue > toValue) {
     return { error: "The From day is after the To day.", range: null };
   }
-  const days = enumerateUtcDays(fromValue, toValue);
-  if (days.length > SCREEN_DAY_RANGE_MAX_DAYS) {
-    return {
-      error: `That range spans ${days.length} days — one click runs at most ${SCREEN_DAY_RANGE_MAX_DAYS}.`,
-      range: null,
-    };
-  }
-  return { error: null, range: { from: fromValue, to: toValue, days } };
+  return {
+    error: null,
+    range: { from: fromValue, to: toValue, days: enumerateUtcDays(fromValue, toValue) },
+  };
 }
 
 // Step labels follow the day(s) a RUN actually submitted — a copy choice only, never a derived
@@ -2899,6 +3064,10 @@ const REFRESH_CHAIN_CANCELLED: Record<RefreshChainStepKey, string> = {
   topup: "cancelled — pairs already recorded before the cancel stay stored",
   reconcile: "cancelled — the index was not repaired this run",
   screen: "cancelled — nothing was recorded this run",
+  // Deliberately the top-up's wording rather than the screen's: this step is N jobs, not one, and
+  // the forward ledger is append-only per snapshot — so whatever finished before the cancel is
+  // genuinely on disk. Only the partial walk is discarded.
+  forward: "cancelled — results already recorded before the cancel stay stored",
 };
 
 // What each compute trigger hands back. Identical across all three managers.
@@ -2927,16 +3096,23 @@ function refreshChainSleep(ms: number): Promise<void> {
 // when this wait begins React has not re-rendered yet, so `read()` still returns the PREVIOUS
 // run's snapshot — which, after a page load that seeded a finished job, is very often already
 // terminal. Advancing on the state alone would skip every step instantly.
+//
+// `onTick`, when given, is called with each running snapshot the waiter observes. It exists for
+// the forward step, whose single job can walk ~101 members: without it that step shows one frozen
+// line for the whole walk, which reads as a hang and invites a needless Stop. It piggybacks this
+// same 250ms sleep — no new timer, no new request.
 async function awaitRefreshChainJob<T extends ChainJobSnapshot>(
   read: () => T | null,
   jobId: string,
   stopped: () => boolean,
+  onTick?: (snapshot: T) => void,
 ): Promise<T | null> {
   for (;;) {
     if (stopped()) return null;
     const snapshot = read();
-    if (snapshot !== null && snapshot.id === jobId && snapshot.state !== "running") {
-      return snapshot;
+    if (snapshot !== null && snapshot.id === jobId) {
+      if (snapshot.state !== "running") return snapshot;
+      onTick?.(snapshot);
     }
     await refreshChainSleep(REFRESH_CHAIN_WAIT_TICK_MS);
   }
@@ -2962,6 +3138,13 @@ function describeScreenDone(snapshot: DeskScreenComputeSnapshot): string {
   return snapshot.reused
     ? `reused the snapshot already recorded for these pins — ${snapshot.screen_id}`
     : `recorded a new snapshot — ${snapshot.screen_id}`;
+}
+
+function describeForwardDone(snapshot: DeskForwardComputeSnapshot): string {
+  if (snapshot.forward_id === null) return "done";
+  return snapshot.reused
+    ? `reused the result already recorded for these inputs — ${snapshot.forward_id}`
+    : `recorded a new result — ${snapshot.forward_id}`;
 }
 
 interface RefreshChainControlProps {
@@ -2996,7 +3179,7 @@ function DeskRefreshChainControl({
     resolvedRange === null
       ? "the chosen day"
       : resolvedRange.days.length > 1
-        ? `every day from ${resolvedRange.from} to ${resolvedRange.to}`
+        ? `every day from ${resolvedRange.from} to ${resolvedRange.to} (${resolvedRange.days.length} days)`
         : resolvedRange.to === todayUtcDate()
           ? "today"
           : resolvedRange.to;
@@ -3051,9 +3234,13 @@ function DeskRefreshChainControl({
         {buttonLabel}
       </button>
       <p data-testid="desk-refresh-note" className="max-w-md text-center text-[11px] text-slate-600">
-        One click runs four steps in order: the universe membership, the bar top-up, the bar index,
-        then the screen for {rangeCopy}. Each step calls the same endpoint its own control here
-        already calls; nothing runs without this click. Run Screen below runs the To day only.
+        One click runs five steps in order: the universe membership, the bar top-up, the bar index,
+        the screen for {rangeCopy}, then the forward returns for every snapshot this run recorded.
+        Each step calls the same endpoint its own control here already calls; nothing runs without
+        this click. A day whose bars already reach it is reused rather than re-walked, so a range
+        over ground already covered is quick; every genuinely missing day is a full walk, and the
+        forward step measures one snapshot at a time, so a wide range takes a while. Stop ends it
+        between days. Run Screen below runs the To day only.
       </p>
       {run !== null && (
         <>
@@ -3099,9 +3286,9 @@ function DeskRefreshChainControl({
 function refreshChainSummary(run: RefreshChainRun): string {
   const activeIndex = run.steps.findIndex((step) => step.state === "running");
   if (run.outcome === "running" && activeIndex >= 0) {
-    return `Step ${activeIndex + 1} of 4 — ${refreshChainStepLabel(run.steps[activeIndex].key, run)}.`;
+    return `Step ${activeIndex + 1} of ${REFRESH_CHAIN_STEP_KEYS.length} — ${refreshChainStepLabel(run.steps[activeIndex].key, run)}.`;
   }
-  if (run.outcome === "done") return "All four steps finished.";
+  if (run.outcome === "done") return "All five steps finished.";
   if (run.outcome === "cancelled") return "Stopped on request — the later steps did not run.";
   const stoppedAt = run.steps.find(
     (step) => step.state === "failed" || step.state === "cancelled",
@@ -3146,8 +3333,9 @@ interface ReconcileControlProps {
 
 // The honest empty state (TC-1): rendered iff `latest === null` — no screen has EVER been
 // computed. Doubles as the controls panel for a first-ever run (both Run Screen and Top-up live
-// here since there is nothing else to show yet); once a screen exists, the SAME two controls move
-// to a plain panel at the foot of the populated page (see DeskPage below).
+// here since there is nothing else to show yet); once a screen exists, the SAME four controls move
+// to a panel near the TOP of the populated page — its second section, directly under Screen
+// History (see DeskPopulatedScreen below).
 function DeskNotComputedPanel({
   screen,
   topup,
@@ -3187,9 +3375,19 @@ function DeskNotComputedPanel({
 }
 
 // The populated view — a real snapshot exists (`latest !== null`), whether it is the latest one
-// or a history row the operator selected. `snapshot` is the ONE displayed record; the Provenance/
-// Briefing/Skipped sections read it verbatim, same as before this iteration — only the SOURCE of
-// `snapshot` (latest vs. a selected history entry) is new.
+// or a history row the operator selected. `snapshot` is the ONE displayed record; the Forward
+// Returns/Briefing/Skipped sections read it verbatim — only the SOURCE of `snapshot` (latest vs. a
+// selected history entry) ever varies.
+//
+// Section order here is the page's first five, in the order an operator actually reads them:
+// Screen History (pick what you are looking at), Forward Returns (what happened next to the
+// snapshot you just picked), the controls (act on it), the ranked Briefing (the detail, one page at
+// a time), then Skipped Members. Forward Returns sat below the controls until the calendar landed;
+// it describes the DISPLAYED snapshot, so it now reads directly beneath the cell that selected it,
+// and the controls — which act rather than describe — follow. The provenance line used to sit
+// first; it is reference material and now renders dead last, out in `DeskPage`. The whole
+// registered ten-section order is pinned by
+// `test_desk_forward_ui_guard.py::test_the_page_renders_its_sections_in_the_registered_order`.
 function DeskPopulatedScreen({
   snapshot,
   screens,
@@ -3199,11 +3397,16 @@ function DeskPopulatedScreen({
   onSelectHistory,
   onShowLatest,
   selectedHistoryId,
+  shownYear,
+  onShowYear,
   screenControlProps,
   topupControlProps,
   reconcileControlProps,
   refreshChainControlProps,
-  displayedPins,
+  forwardResult,
+  forwardControlProps,
+  selectedForwardSymbol,
+  onSelectForwardSymbol,
 }: {
   snapshot: DeskScreenSnapshot;
   screens: DeskScreenMeta[];
@@ -3213,11 +3416,16 @@ function DeskPopulatedScreen({
   onSelectHistory: (id: string) => void;
   onShowLatest: () => void;
   selectedHistoryId: string | null;
+  shownYear: number;
+  onShowYear: (year: number) => void;
   screenControlProps: ScreenControlProps;
   topupControlProps: TopupControlProps;
   reconcileControlProps: ReconcileControlProps;
   refreshChainControlProps: RefreshChainControlProps;
-  displayedPins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
+  forwardResult: { ok: boolean; data: DeskForwardReadResult | null; error?: string } | null;
+  forwardControlProps: ForwardControlProps;
+  selectedForwardSymbol: string | null;
+  onSelectForwardSymbol: (symbol: string) => void;
 }) {
   return (
     <div className="space-y-6">
@@ -3243,42 +3451,34 @@ function DeskPopulatedScreen({
         </p>
       )}
 
-      <section aria-label="Provenance">
-        <Panel title="Provenance">
-          <DeskProvenance snapshot={snapshot} isViewingLatest={isViewingLatest} pins={displayedPins} />
-        </Panel>
-      </section>
-
-      <section aria-label="Briefing">
-        <Panel title="Briefing">
-          {snapshot.rows.length === 0 ? (
-            <EmptyState testid="desk-rows-empty" title="No members ranked in this screen." />
-          ) : (
-            <DeskRowsTable rows={snapshot.rows} asOf={snapshot.as_of} />
-          )}
-        </Panel>
-      </section>
-
-      <section aria-label="Skipped members">
-        <Panel title="Skipped Members">
-          {snapshot.skipped.length === 0 ? (
-            <EmptyState testid="desk-skipped-empty" title="No members were skipped in this screen." />
-          ) : (
-            <DeskSkippedSection skipped={snapshot.skipped} asOf={snapshot.as_of} />
-          )}
-        </Panel>
-      </section>
-
       <section aria-label="Screen history">
         <Panel title="Screen History">
-          <DeskHistoryTable
+          <DeskHistoryCalendar
             screens={screens}
             onSelect={onSelectHistory}
             selectedId={selectedHistoryId}
+            shownYear={shownYear}
+            onShowYear={onShowYear}
           />
           <IntegrityErrorsNote
             errors={screenIntegrityErrors}
             testid="desk-screen-history-integrity-errors"
+          />
+        </Panel>
+      </section>
+
+      {/* Rendered here rather than at the page foot: the forward measurement describes whichever
+          snapshot is DISPLAYED, so it belongs directly beneath the calendar cell that selected it —
+          read what happened next, then act. It needs no `latest !== null` wrapper of its own —
+          being inside this component already guarantees a snapshot exists. No `mt-6` either: the
+          `space-y-6` parent owns the spacing between these five sections. */}
+      <section aria-label="Forward Returns">
+        <Panel title="Forward Returns">
+          <DeskForwardSection
+            result={forwardResult}
+            control={forwardControlProps}
+            selectedSymbol={selectedForwardSymbol}
+            onSelectSymbol={onSelectForwardSymbol}
           />
         </Panel>
       </section>
@@ -3295,6 +3495,30 @@ function DeskPopulatedScreen({
               </div>
             </div>
           </div>
+        </Panel>
+      </section>
+
+      <section aria-label="Briefing">
+        <Panel title="Briefing">
+          {snapshot.rows.length === 0 ? (
+            <EmptyState testid="desk-rows-empty" title="No members ranked in this screen." />
+          ) : (
+            // `key={snapshot.id}` is the page-window reset: selecting a different snapshot
+            // remounts the table, so its page state returns to 1 instead of stranding the operator
+            // on a page the new snapshot may not have. A remount, deliberately — not a twelfth
+            // effect (the chain guard pins this page at exactly 11).
+            <DeskRowsTable key={snapshot.id} rows={snapshot.rows} asOf={snapshot.as_of} />
+          )}
+        </Panel>
+      </section>
+
+      <section aria-label="Skipped members">
+        <Panel title="Skipped Members">
+          {snapshot.skipped.length === 0 ? (
+            <EmptyState testid="desk-skipped-empty" title="No members were skipped in this screen." />
+          ) : (
+            <DeskSkippedSection skipped={snapshot.skipped} asOf={snapshot.as_of} />
+          )}
         </Panel>
       </section>
     </div>
@@ -3365,6 +3589,13 @@ export default function DeskPage() {
   const [viewingSnapshot, setViewingSnapshot] = useState<DeskScreenSnapshot | null>(null);
   const [historyFetchError, setHistoryFetchError] = useState<string | null>(null);
 
+  // The Screen History calendar's visible year. `null` means "follow whatever is displayed" — the
+  // year is then DERIVED from the displayed snapshot's own `screen_date` below, so the grid lands on
+  // the right year the moment the mount fetch resolves WITHOUT an effect of its own (the page's
+  // effect census is pinned; see test_desk_refresh_chain_guard.py). Clicking an arrow pins an
+  // explicit year so paging back through a quiet year is not yanked away by a re-render.
+  const [viewYear, setViewYear] = useState<number | null>(null);
+
   // goal-desk-iter-35 (J-20): the Screen Comparison section's own fetch result, keyed off
   // WHICHEVER screen is currently displayed (`viewingSnapshot ?? latest`, the SAME
   // `displayedSnapshot` value computed below) — refetched by its own effect whenever that id
@@ -3428,17 +3659,21 @@ export default function DeskPage() {
   const refreshChainStopRef = useRef(false);
   const refreshChainActiveRef = useRef(false);
 
-  // Mirrors of the three compute snapshots, so the plain async driver below can read the newest
+  // Mirrors of the four compute snapshots, so the plain async driver below can read the newest
   // value (a closure cannot). NOT a second source of truth: each holds exactly what its own
-  // useState already holds, and nothing ever writes to these except this one effect.
+  // useState already holds, and nothing ever writes to these except this one effect. The forward
+  // mirror joins THIS effect deliberately rather than opening its own — the page's effect census
+  // is pinned at eleven, and a fifth chain step is not a reason to spend the twelfth.
   const topupComputeRef = useRef(topupCompute);
   const reconcileComputeRef = useRef(reconcileCompute);
   const screenComputeRef = useRef(screenCompute);
+  const forwardComputeRef = useRef(forwardCompute);
   useEffect(() => {
     topupComputeRef.current = topupCompute;
     reconcileComputeRef.current = reconcileCompute;
     screenComputeRef.current = screenCompute;
-  }, [topupCompute, reconcileCompute, screenCompute]);
+    forwardComputeRef.current = forwardCompute;
+  }, [topupCompute, reconcileCompute, screenCompute, forwardCompute]);
 
   // Unmounting (a nav away mid-chain) stops the driver at its next check — no POST after the page
   // is gone, no setState on an unmounted component, no orphaned wait loop.
@@ -3843,6 +4078,15 @@ export default function DeskPage() {
     // each is awaited to terminal before the next starts, so two walks never overlap. A day whose
     // pins are already recorded resolves as an honest reuse. The first failed or cancelled day
     // halts the chain there — later days are honestly un-run.
+    // The ids the screen step ACTUALLY recorded, oldest first — step 5's whole input. Taken from
+    // each day's own settled snapshot, never re-read from a ledger and never re-derived from the
+    // day string. A REUSED day yields the pre-existing record's id, which is exactly the snapshot
+    // that day now stands on, so it is measured like any other. Deduped because a day's trigger
+    // can ADOPT a job the manager was already running for a DIFFERENT day, whose snapshot then
+    // names that other day's id — measuring it twice would be a second walk over one input.
+    const recordedScreenIds: string[] = [];
+    const seenScreenIds = new Set<string>();
+
     {
       const screenIndex = 3;
       let recordedCount = 0;
@@ -3897,6 +4141,10 @@ export default function DeskPage() {
           return;
         }
         lastSettled = settled;
+        if (settled.screen_id !== null && !seenScreenIds.has(settled.screen_id)) {
+          seenScreenIds.add(settled.screen_id);
+          recordedScreenIds.push(settled.screen_id);
+        }
         if (settled.reused) {
           reusedCount += 1;
         } else {
@@ -3911,6 +4159,121 @@ export default function DeskPage() {
           dayCount === 1 && lastSettled !== null
             ? describeScreenDone(lastSettled)
             : `${dayCount} days — ${recordedCount} recorded · ${reusedCount} reused`,
+      };
+    }
+
+    // Step 5 — the forward returns, once per snapshot THIS run recorded, oldest first. Serialized
+    // against a manager whose single-flight slot is process-wide: each job is awaited to terminal
+    // before the next starts, so two walks never overlap and the chain never queues behind itself.
+    // Every job goes through the SAME handler the Compute Forward button uses, so that panel's own
+    // state stays the single owner of the trigger state.
+    {
+      const forwardIndex = 4;
+      const total = recordedScreenIds.length;
+      if (total === 0) {
+        // A genuine no-op, not a `done`: the screen step recorded nothing to measure, and calling
+        // that "done" would imply a measurement that never happened (the membership-409 precedent).
+        steps[forwardIndex] = {
+          key: "forward",
+          state: "noop",
+          message: "nothing to measure — no snapshot was recorded",
+        };
+        publish("done");
+        refreshChainActiveRef.current = false;
+        return;
+      }
+
+      let newCount = 0;
+      let reusedForwardCount = 0;
+      let lastForward: DeskForwardComputeSnapshot | null = null;
+
+      for (let idIndex = 0; idIndex < total; idIndex += 1) {
+        const screenId = recordedScreenIds[idIndex];
+        const head = `measuring ${idIndex + 1} of ${total} — ${screenId}`;
+        let measured: DeskForwardComputeSnapshot | null = null;
+
+        // At most TWO attempts, through ONE call site. This manager's single-flight slot is
+        // process-wide rather than per-snapshot — its trigger hands back whatever job is running
+        // whatever id was asked for — so an adopted job may be measuring a DIFFERENT snapshot.
+        // Waiting on it is still right (never start a second walk), but it did not measure THIS
+        // id, so the chain asks once more now that the slot is free. A second mismatch is
+        // reported, never looped on.
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          if (refreshChainStopRef.current) {
+            halt(forwardIndex, "cancelled", REFRESH_CHAIN_CANCELLED.forward);
+            return;
+          }
+          steps[forwardIndex] = { key: "forward", state: "running", message: head };
+          publish("running");
+
+          const started = await handleTriggerForward(screenId);
+          if (!started.ok || !started.data) {
+            halt(
+              forwardIndex,
+              "failed",
+              `${screenId}: ${started.error ?? "this snapshot could not be measured"}`,
+            );
+            return;
+          }
+          const adopted = started.data.started === false;
+          const base = adopted ? `${head} · joined a job already running` : head;
+          let ticked = "";
+
+          const job = await awaitRefreshChainJob(
+            () => forwardComputeRef.current,
+            started.data.compute.id,
+            () => refreshChainStopRef.current,
+            (tick) => {
+              // "of", never a slash: a rendered "101 of 101" is inert, where "101 / 101" is a
+              // string a shipped golden pins against a table this control renders above.
+              const message = `${base} · ${tick.progress.rows_done} of ${tick.progress.rows_total} rows`;
+              if (message === ticked) return;
+              ticked = message;
+              steps[forwardIndex] = { key: "forward", state: "running", message };
+              publish("running");
+            },
+          );
+          if (job === null || job.state === "cancelled") {
+            halt(forwardIndex, "cancelled", `${screenId}: ${REFRESH_CHAIN_CANCELLED.forward}`);
+            return;
+          }
+          if (job.state !== "done") {
+            halt(
+              forwardIndex,
+              "failed",
+              `${screenId}: ${job.error ?? "this snapshot could not be measured"}`,
+            );
+            return;
+          }
+          if (job.screen_id === screenId) {
+            measured = job;
+            break;
+          }
+        }
+
+        if (measured === null) {
+          halt(
+            forwardIndex,
+            "failed",
+            `${screenId}: a job already running measured another snapshot`,
+          );
+          return;
+        }
+        lastForward = measured;
+        if (measured.reused) {
+          reusedForwardCount += 1;
+        } else {
+          newCount += 1;
+        }
+      }
+
+      steps[forwardIndex] = {
+        key: "forward",
+        state: "done",
+        message:
+          total === 1 && lastForward !== null
+            ? describeForwardDone(lastForward)
+            : `${total} snapshots — ${newCount} recorded · ${reusedForwardCount} reused`,
       };
     }
 
@@ -3934,6 +4297,7 @@ export default function DeskPage() {
     if (active.key === "topup") await handleCancelTopup();
     else if (active.key === "reconcile") await handleCancelReconcile();
     else if (active.key === "screen") await handleCancelScreen();
+    else if (active.key === "forward") await handleCancelForward();
   }
 
   // era-desk-iter-6 (J-05): select a past history row — fetch-and-swap, no POST, no recompute
@@ -4020,11 +4384,15 @@ export default function DeskPage() {
   // and a banner claiming "not the latest" there would state something false about the very
   // snapshot it is describing.
   const isViewingLatest = viewingSnapshot === null || viewingSnapshot.id === latest?.id;
-  // goal-desk-iter-16 (J-12): the id-based highlight for `DeskHistoryTable` — the SAME id the
+  // goal-desk-iter-16 (J-12): the id-based highlight for `DeskHistoryCalendar` — the SAME id the
   // above `isViewingLatest` check already compares against, so the currently-displayed snapshot
   // (a selected history entry OR the default `latest`) is always the one highlighted row, even
   // when it shares its `screen_date` with another recorded entry.
   const selectedHistoryId = viewingSnapshot?.id ?? latest?.id ?? null;
+  // The calendar's visible year: an explicitly-paged one, else the displayed snapshot's own year,
+  // else today's. A pure derivation — never an effect, never a fetch.
+  const shownYear =
+    viewYear ?? Number((displayedSnapshot?.screen_date ?? todayUtcDate()).slice(0, 4));
 
   // goal-desk-iter-35 (J-20): fetch the Screen Comparison payload for whichever screen is
   // currently DISPLAYED (`displayedSnapshot`'s own id, the SAME snapshot the Briefing/Provenance
@@ -4111,21 +4479,33 @@ export default function DeskPage() {
   }, [forwardCompute, displayedSnapshot]);
 
   // Forward-test era: the compute trigger/cancel pair — exact mirrors of the screen pair above,
-  // placed here (after `displayedSnapshot`) because the trigger submits the DISPLAYED snapshot's
-  // own id. Reachable from the panel's buttons and nothing else.
-  async function handleTriggerForward() {
-    if (displayedSnapshot === null) return;
+  // placed here (after `displayedSnapshot`) because the no-argument form submits the DISPLAYED
+  // snapshot's own id. Reachable from the panel's buttons and from the refresh chain's fifth
+  // step, which passes the id of each snapshot IT recorded — never the displayed one.
+  //
+  // The `typeof` test is load-bearing, not stylistic: `ForwardControlProps.onTrigger` is typed
+  // `() => void` and the button binds it straight to `onClick`, so React hands this function a
+  // MouseEvent as its first argument. Without the test that event would be POSTed as a screen id.
+  // The `handleTriggerScreen(day?)` precedent above, verbatim.
+  async function handleTriggerForward(
+    screenId?: string,
+  ): Promise<ChainTriggerResult<DeskForwardComputeSnapshot>> {
+    const runId = typeof screenId === "string" ? screenId : displayedSnapshot?.id;
+    if (runId === undefined) {
+      return { ok: false, error: "There is no recorded snapshot to measure." };
+    }
     setForwardTriggering(true);
     setForwardTriggerError(null);
     setForwardCancelRequested(false);
     setForwardCancelError(null);
-    const result = await triggerDeskForwardCompute(displayedSnapshot.id);
+    const result = await triggerDeskForwardCompute(runId);
     setForwardTriggering(false);
     if (result.ok && result.data) {
       setForwardCompute(result.data.compute);
     } else {
       setForwardTriggerError(result.error ?? "The forward compute could not be started.");
     }
+    return result;
   }
 
   async function handleCancelForward() {
@@ -4190,11 +4570,16 @@ export default function DeskPage() {
             onSelectHistory={handleSelectHistoryScreen}
             onShowLatest={handleShowLatest}
             selectedHistoryId={selectedHistoryId}
+            shownYear={shownYear}
+            onShowYear={setViewYear}
             screenControlProps={screenControlProps}
             topupControlProps={topupControlProps}
             reconcileControlProps={reconcileControlProps}
             refreshChainControlProps={refreshChainControlProps}
-            displayedPins={displayedPinsResult}
+            forwardResult={forwardResult}
+            forwardControlProps={forwardControlProps}
+            selectedForwardSymbol={selectedForwardSymbol}
+            onSelectForwardSymbol={setSelectedForwardSymbol}
           />
         )}
 
@@ -4228,13 +4613,12 @@ export default function DeskPage() {
           </Panel>
         </section>
 
-        {/* goal-desk-iter-35 (J-20): rendered LAST on the page — after the ranked briefing table
-            (inside DeskPopulatedScreen, far above) and after every other existing section — so no
-            shipped golden's own first-visible-match text search can resolve into it (goal.md step
-            6). Unlike Top-up Runs/Index Reconciliation/Screen Runs above, this section describes a
-            SPECIFIC screen (whichever one is currently displayed), so it only renders once a
-            screen exists at all (`latest !== null`) — mirroring the Briefing/Provenance sections'
-            own precondition instead of those three's "always rendered" one. */}
+        {/* goal-desk-iter-35 (J-20): rendered after the ranked briefing table (inside
+            DeskPopulatedScreen, far above) and after the three always-on ledger sections. Unlike
+            Top-up Runs/Index Reconciliation/Screen Runs above, this section describes a SPECIFIC
+            screen (whichever one is currently displayed), so it only renders once a screen exists
+            at all (`latest !== null`) — mirroring the Briefing section's own precondition instead
+            of those three's "always rendered" one. */}
         {latest !== null && (
           <section aria-label="Screen Comparison" className="mt-6">
             <Panel title="Screen Comparison">
@@ -4243,18 +4627,19 @@ export default function DeskPage() {
           </section>
         )}
 
-        {/* Forward-test era: rendered DEAD LAST (the Screen Comparison iter-35 placement
-            precedent) — after every other section, so no shipped golden's first-visible-match
-            text search can resolve into it. Describes whichever snapshot is DISPLAYED, so it
-            shares the compare section's own `latest !== null` precondition. */}
+        {/* The provenance line, rendered DEAD LAST. It used to open the populated view; it is
+            reference material — the pins a snapshot was recorded under — and it reads better as
+            the footnote to everything above it than as the first thing between the operator and
+            the briefing. Same `latest !== null` precondition (and the same non-null
+            re-establishment) as the Screen Comparison section directly above. Its own copy points
+            BACKWARDS up the page now: "opened from Screen History above". */}
         {latest !== null && (
-          <section aria-label="Forward Returns" className="mt-6">
-            <Panel title="Forward Returns">
-              <DeskForwardSection
-                result={forwardResult}
-                control={forwardControlProps}
-                selectedSymbol={selectedForwardSymbol}
-                onSelectSymbol={setSelectedForwardSymbol}
+          <section aria-label="Provenance" className="mt-6">
+            <Panel title="Provenance">
+              <DeskProvenance
+                snapshot={displayedSnapshot ?? latest}
+                isViewingLatest={isViewingLatest}
+                pins={displayedPinsResult}
               />
             </Panel>
           </section>

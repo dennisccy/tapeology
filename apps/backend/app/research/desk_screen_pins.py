@@ -9,12 +9,19 @@ owns it, in the SAME order ``run_screen_and_record`` resolves them
 ``UniverseStore.list()``'s own latest record id and member count (``universe_snapshot_id``,
 ``members_total`` -- read the way ``DeskScreenComputeManager.trigger`` already reads it,
 ``len(records[-1]["members"])``), ``Config.config_fingerprint()`` (``config_fingerprint``), and
-``desk_screen.compute_bar_store_signature`` over ``desk_coverage.get_desk_coverage``'s index-only
-read (``bar_store_signature``) -- zero new derivation, zero second owner, no ``BarStore`` read of
-any kind (T-4). The recorded-or-not answer comes from ``ScreenStore.find_by_key`` on exactly those
-five pins -- the SAME lookup J-18's pre-check already makes (``desk_screen_compute.py:209``). This
-resolution and a run's own therefore cannot disagree: same functions, same order, same immutable
-stores.
+``desk_screen.resolve_screen_pins`` over ``desk_coverage.get_desk_coverage``'s index-only read
+(``bar_store_signature`` plus the date-scoped completeness pins) -- zero new derivation, zero second
+owner, no ``BarStore`` read of any kind (T-4). The reuse-or-walk answer comes from
+``desk_screen_decision.resolve_screen_decision`` over ``ScreenStore.find_by_date`` -- literally the
+SAME function call the run itself makes (``desk_screen_compute.py``'s pre-check). This resolution
+and a run's own therefore cannot disagree: same functions, same order, same immutable stores.
+
+**The decision, disclosed before anything is clicked.** ``decision`` names what a run for this date
+would DO -- ``record`` (nothing is recorded for it yet), ``reuse`` (the recorded snapshot already
+holds that date's full data; the run walks nothing) or ``replace`` (a run will re-walk and supersede
+the named snapshot, because one snapshot per date is the rule) -- with the ``reason`` the decision
+module itself wrote. ``recorded`` stays what it always meant: the snapshot a run right now would
+reuse, and ``None`` whenever a run would walk instead.
 
 **Honest empty (TC-5).** Before any universe snapshot is ever registered, there is nothing to
 resolve a bar-store signature OVER -- ``desk_coverage.get_desk_coverage`` itself would report
@@ -45,7 +52,8 @@ from __future__ import annotations
 
 from ..config import Config
 from .bar_index import BarIndex
-from .desk_screen import ScreenStore, compute_bar_store_signature, screen_as_of
+from .desk_screen import ScreenStore, resolve_screen_pins, screen_as_of
+from .desk_screen_decision import resolve_screen_decision
 from .desk_universe import UniverseStore
 
 
@@ -69,6 +77,8 @@ def resolve_desk_screen_pins(
           "screen_date": str, "as_of": str, "universe_snapshot_id": str | None,
           "config_fingerprint": str, "bar_store_signature": str | None,
           "members_total": int,
+          "decision": {"action": "record"|"reuse"|"replace", "screen_id": str|None,
+                       "reason": str},
           "recorded": {
             "id": str, "screen_date": str, "created_utc": str, "bar_store_signature": str,
             "ranked_count": int, "skipped_count": int,
@@ -88,16 +98,33 @@ def resolve_desk_screen_pins(
             "config_fingerprint": config_fingerprint,
             "bar_store_signature": None,
             "members_total": 0,
+            "decision": {
+                "action": "record",
+                "screen_id": None,
+                "reason": (
+                    f"no universe snapshot is registered yet, so nothing can be screened for "
+                    f"{screen_date} -- fetch the universe first."
+                ),
+            },
             "recorded": None,
         }
 
     latest_universe = universe_records[-1]
     universe_snapshot_id = latest_universe["id"]
     members_total = len(latest_universe["members"])
-    bar_store_signature = compute_bar_store_signature(universe_store, bar_index)
+    pins = resolve_screen_pins(universe_store, bar_index, as_of)
+    bar_store_signature = pins["bar_store_signature"]
 
-    existing = screen_store.find_by_key(
-        screen_date, as_of, universe_snapshot_id, config_fingerprint, bar_store_signature
+    decision = resolve_screen_decision(
+        screen_store.find_by_date(screen_date), pins, screen_date=screen_date,
+        universe_snapshot_id=universe_snapshot_id, config_fingerprint=config_fingerprint,
+    )
+
+    # `recorded` keeps its shipped meaning verbatim: the snapshot a run RIGHT NOW would reuse, and
+    # an honest `None` whenever a run would walk instead. A snapshot a run would REPLACE is named by
+    # `decision.screen_id`, never smuggled in here as if it were going to be served again.
+    existing = (
+        screen_store.find_by_date(screen_date) if decision["action"] == "reuse" else None
     )
     recorded = None
     if existing is not None:
@@ -117,5 +144,6 @@ def resolve_desk_screen_pins(
         "config_fingerprint": config_fingerprint,
         "bar_store_signature": bar_store_signature,
         "members_total": members_total,
+        "decision": decision,
         "recorded": recorded,
     }

@@ -3,8 +3,9 @@
 
 Four properties, each the cheapest static proof available:
   (a) the panel's own block exists and ships its primary testids;
-  (b) its call site renders DEAD LAST -- after both the ranked table and the Screen Comparison
-      section, so no shipped golden's first-visible-match text search can resolve into it;
+  (b) the whole page renders its sections in the registered order -- the panel now renders THIRD,
+      directly above the ranked briefing, NOT dead last as it originally did; the bottom-placement
+      interception safety that move gave up is paid for by the bare-symbol golden guard below;
   (c) the block never sorts/reverses/slices what it renders (all rows, served order, uncapped);
   (d) the block never reuses a golden click-target attribute (the compare-guard's own tuple).
 
@@ -13,6 +14,7 @@ carries a seeded counter-test."""
 
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 
@@ -51,6 +53,51 @@ _FORBIDDEN_ROW_TESTID_ATTR_RE = re.compile(r'data-testid="desk-row-[a-z-]+"')
 
 _REORDER_RE = re.compile(r"\.\s*(?:sort|reverse|slice)\s*\(")
 
+# The page's registered section order, keyed on each `<section>`'s own `aria-label`. These beat
+# component-name needles on three counts: every one of the ten is unique in the file (a component
+# name is not -- `<DeskRefreshChainControl` occurs twice, since DeskNotComputedPanel renders the
+# same four controls, and `<DeskProvenance` also prefix-matches `<DeskProvenancePins`), they name
+# the actual DOM landmarks rather than the components that happen to fill them, and they are what
+# a screen reader announces -- so the order pinned here is the order a page reader experiences.
+_SECTION_ORDER = (
+    'aria-label="Screen history"',
+    # Forward Returns moved ABOVE the controls: the measurement describes whichever snapshot the
+    # calendar above just selected, so it reads directly beneath it -- what happened next, then the
+    # controls that act.
+    'aria-label="Forward Returns"',
+    'aria-label="Run Screen, Top-up and Reconcile Index controls"',
+    'aria-label="Briefing"',
+    'aria-label="Skipped members"',
+    'aria-label="Top-up runs"',
+    'aria-label="Index Reconciliation"',
+    'aria-label="Screen Runs"',
+    'aria-label="Screen Comparison"',
+    'aria-label="Provenance"',
+)
+
+# A bare ticker: what a golden must NOT pin as page-wide text now that an uncapped symbol table
+# renders above the briefing and the briefing itself renders one page at a time.
+_TICKER_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,5}$")
+
+_JOURNEY_SCRIPTS_DIR = (
+    pathlib.Path(__file__).resolve().parents[3] / "runs" / "goal-session-desk" / "journey-scripts"
+)
+
+
+def _golden_assertion_texts() -> list[tuple[str, object, str]]:
+    """Every literal text a shipped golden ASSERTS -- an `expect` clause's text, or an `expect`
+    ACTION's own text. A `fill` action's text is input, never an assertion, so it is excluded."""
+    found: list[tuple[str, object, str]] = []
+    for path in sorted(_JOURNEY_SCRIPTS_DIR.glob("J-*.json")):
+        for step in json.loads(path.read_text()).get("steps", []):
+            action = step.get("action") or {}
+            expect = step.get("expect") or {}
+            if isinstance(expect.get("text"), str):
+                found.append((path.name, step.get("n"), expect["text"]))
+            if action.get("type") == "expect" and isinstance(action.get("text"), str):
+                found.append((path.name, step.get("n"), action["text"]))
+    return found
+
 
 def _forward_block(source: str) -> str:
     start = source.index(_BLOCK_START)
@@ -69,18 +116,72 @@ def test_the_forward_block_exists_and_ships_its_testids():
     )
 
 
-def test_the_forward_section_call_site_renders_dead_last():
-    """DOM order is call-site order here: the ranked table, then the Screen Comparison section,
-    then the Forward Returns section — so every pinned golden text resolves to an element ABOVE
-    the new panel, and nothing renders after it to intercept."""
+def test_the_page_renders_its_sections_in_the_registered_order():
+    """The Forward Returns section no longer renders dead last -- it renders THIRD, directly above
+    the ranked briefing table, and the provenance line moved to the bottom.
+
+    DOM order is source order on this page, and that is a MAINTAINED invariant rather than a
+    coincidence: every `<section>` below is a JSX child of exactly one of two function bodies
+    (`DeskPopulatedScreen` for sections 1-5, `DeskPage` for 6-10), JSX children render in source
+    order within one return, and `DeskPopulatedScreen`'s own call site precedes `DeskPage`'s
+    remaining sections. The assertion below the loop pins that second half."""
     source = _DESK_PAGE.read_text()
-    ranked_call = source.index("<DeskRowsTable")
-    compare_call = source.index("<ScreenComparisonSection")
-    forward_call = source.index("<DeskForwardSection")
-    assert ranked_call < compare_call < forward_call, (
-        "the Forward Returns section must render after both the ranked table and the Screen "
-        "Comparison section — bottom placement is what makes its copy interception-safe"
+    for needle in _SECTION_ORDER:
+        assert source.count(needle) == 1, (
+            f"{needle!r} occurs {source.count(needle)} times -- a source-index order check over a "
+            "non-unique needle is a lie; every section landmark must be named exactly once"
+        )
+    # The invariant the whole comparison rests on: everything DeskPopulatedScreen renders comes
+    # before everything DeskPage renders after it.
+    assert source.index("<DeskPopulatedScreen") < source.index('aria-label="Top-up runs"'), (
+        "DeskPopulatedScreen no longer renders before the always-on ledger sections -- the "
+        "source-order == DOM-order invariant this guard depends on is gone"
     )
+    positions = [source.index(needle) for needle in _SECTION_ORDER]
+    assert positions == sorted(positions), (
+        "the /desk sections are not in the registered order; source order is "
+        f"{[name for _, name in sorted(zip(positions, _SECTION_ORDER))]}"
+    )
+
+
+def test_no_shipped_golden_pins_a_bare_symbol_as_page_wide_text():
+    """The guard that PAYS for the bottom placement given up above.
+
+    Forward Returns used to render dead last precisely so no golden's first-visible-match could
+    resolve into it. It now renders above the briefing, and it renders a `member` column over
+    every ranked symbol, uncapped. At the same time the briefing renders one 10-row page at a
+    time. So a golden step that pins a bare ticker as PAGE-WIDE text has two independent ways to
+    become a false green: it can match the forward table instead of the briefing, and the row it
+    meant to prove may not be in the DOM at all. Such a pin must be scoped to a target."""
+    texts = _golden_assertion_texts()
+    assert texts, "the golden scan is vacuous -- no journey scripts were read"
+    offenders = [(name, step, text) for name, step, text in texts if _TICKER_RE.match(text)]
+    assert not offenders, (
+        f"golden step(s) {offenders} pin a bare symbol as page-wide text -- scope the assertion to "
+        'the briefing, e.g. a css target of [data-testid="desk-screen-rows-table"] '
+        'td[data-testid="desk-row-symbol"]'
+    )
+
+
+def test_the_order_and_bare_symbol_guards_can_fail_on_seeded_violations():
+    seeded_order = '<section aria-label="Briefing" />\n<section aria-label="Forward Returns" />'
+    positions = [
+        seeded_order.index('aria-label="Forward Returns"'),
+        seeded_order.index('aria-label="Briefing"'),
+    ]
+    assert positions != sorted(positions)
+    assert _TICKER_RE.match("BRK-B") is not None
+    assert _TICKER_RE.match("AAPL") is not None
+    for clean in (
+        "Desk",
+        "Class A",
+        "d before as-of",
+        "101 / 101",
+        "08e471b10130e1e2",
+        "Universe snapshot",
+        "298.02–300.1001",
+    ):
+        assert _TICKER_RE.match(clean) is None
 
 
 def test_the_forward_block_never_reorders_or_caps_what_it_renders():

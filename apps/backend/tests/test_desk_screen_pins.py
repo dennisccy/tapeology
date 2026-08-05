@@ -117,6 +117,14 @@ def test_tc5_no_universe_snapshot_is_an_honest_empty_payload(tmp_path):
         "config_fingerprint": CONFIG.config_fingerprint(),
         "bar_store_signature": None,
         "members_total": 0,
+        "decision": {
+            "action": "record",
+            "screen_id": None,
+            "reason": (
+                f"no universe snapshot is registered yet, so nothing can be screened for "
+                f"{SCREEN_DATE} -- fetch the universe first."
+            ),
+        },
         "recorded": None,
     }
 
@@ -171,12 +179,12 @@ def test_tc1_tc2_resolved_pins_name_the_exact_snapshot_a_trigger_reuses(real_ctx
 
 
 # ==================================================================================================
-# TC-3/TC-4: one planted bar-index row shifts the signature; a trigger then walks fresh, leaving
-# the earlier snapshot file byte-identical on disk.
+# TC-3/TC-4: one planted bar-index row INSIDE the screen date's own window shifts the signature; a
+# trigger then walks fresh and REPLACES the earlier snapshot (one snapshot per date).
 # ==================================================================================================
 
 
-def test_tc3_tc4_a_planted_index_row_differs_the_signature_and_a_trigger_records_a_new_snapshot(
+def test_tc3_tc4_a_planted_index_row_differs_the_signature_and_a_trigger_replaces_the_snapshot(
     real_ctx,
 ):
     universe_store, bar_store, bar_index, dataset_store, screen_store = real_ctx
@@ -186,37 +194,87 @@ def test_tc3_tc4_a_planted_index_row_differs_the_signature_and_a_trigger_records
     )
     assert first_reused is False
     first_path = screen_store.root / f"{first['id']}.json"
-    first_bytes_before = first_path.read_bytes()
 
     before_plant = resolve_desk_screen_pins(
         SCREEN_DATE, universe_store, bar_index, CONFIG, screen_store
     )
     assert before_plant["recorded"]["id"] == first["id"]
+    assert before_plant["decision"]["action"] == "reuse"
 
+    # The planted row ends 2026-06-21, INSIDE this screen date's own as_of window -- bars this
+    # screen genuinely could have consumed, so the date's completeness pin moves and the recorded
+    # snapshot is honestly out of date.
     _plant_extra_index_row(bar_index)
 
     # TC-3: the same GET for the same date now resolves a DIFFERENT signature and an honest
-    # ``recorded: null`` -- the earlier snapshot's own key no longer matches what's live.
+    # ``recorded: null`` -- a run would walk, and the decision says so and names what it replaces.
     after_plant = resolve_desk_screen_pins(
         SCREEN_DATE, universe_store, bar_index, CONFIG, screen_store
     )
     assert after_plant["bar_store_signature"] != before_plant["bar_store_signature"]
     assert after_plant["universe_snapshot_id"] == before_plant["universe_snapshot_id"]
     assert after_plant["recorded"] is None
+    assert after_plant["decision"]["action"] == "replace"
+    assert after_plant["decision"]["screen_id"] == first["id"]
 
-    # TC-4: a trigger for the same date now walks every member fresh and records a NEW snapshot --
-    # the earlier file stays byte-identical on disk, never rewritten.
+    # TC-4: a trigger for the same date now walks every member fresh, records a NEW snapshot and
+    # supersedes the stale one -- the date is left holding exactly one copy.
     second, second_reused = run_screen_and_record(
         universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
     )
     assert second_reused is False
     assert second["id"] != first["id"]
     assert second["bar_store_signature"] == after_plant["bar_store_signature"]
-    assert first_path.read_bytes() == first_bytes_before
+    assert not first_path.exists()
 
     records, errors = screen_store.list()
     assert errors == []
-    assert {r["id"] for r in records} == {first["id"], second["id"]}
+    assert {r["id"] for r in records} == {second["id"]}
+
+
+def test_bars_arriving_AFTER_the_screen_date_never_re_dirty_it(real_ctx):
+    """The whole point of the date-scoped pin. A top-up that only extends coverage a member ALREADY
+    had past this date cannot change one row of it, so that date must stay reused -- zero walk, zero
+    second file. Under the old unclamped 5-pin key this exact sequence wrote a second snapshot for
+    the date, which is how the live store came to hold six dates with two copies each.
+
+    The pair extended here is AAPL/``1d``, whose fixture coverage already ends 2026-06-26 -- past
+    this screen's own 2026-06-22T23:59:59Z as_of, so its clamped tuple is already pinned AT as_of
+    and settled. (A pair crossing as_of for the FIRST time is the opposite case and rightly does
+    re-walk the date once: that is the session data the screen was missing arriving.)"""
+    universe_store, bar_store, bar_index, dataset_store, screen_store = real_ctx
+
+    first, _reused = run_screen_and_record(
+        universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
+    )
+    before = resolve_desk_screen_pins(SCREEN_DATE, universe_store, bar_index, CONFIG, screen_store)
+
+    # A later top-up: AAPL/1d coverage now runs to 2026-08-04, further past this screen's as_of.
+    bar_index.insert(
+        {
+            "symbol": "AAPL", "timeframe": "1d",
+            "window_start_utc": "2026-06-26T00:00:00Z", "window_end_utc": "2026-08-04T00:00:00Z",
+            "feed": "yahoo", "id": "planted-later-series", "checksum": "1" * 64, "bar_count": 1,
+        }
+    )
+
+    after = resolve_desk_screen_pins(SCREEN_DATE, universe_store, bar_index, CONFIG, screen_store)
+
+    # The UNCLAMPED pin moved (bars really did arrive) -- the date-scoped one did not, and the
+    # decision follows the date-scoped one.
+    assert after["bar_store_signature"] != before["bar_store_signature"]
+    assert after["decision"]["action"] == "reuse"
+    assert after["recorded"]["id"] == first["id"]
+
+    second, second_reused = run_screen_and_record(
+        universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
+    )
+    assert second_reused is True
+    assert second["id"] == first["id"]
+
+    records, errors = screen_store.list()
+    assert errors == []
+    assert {r["id"] for r in records} == {first["id"]}
 
 
 # ==================================================================================================
@@ -304,6 +362,14 @@ def test_route_no_universe_snapshot_is_an_honest_empty_200(route_ctx):
         "config_fingerprint": CONFIG.config_fingerprint(),
         "bar_store_signature": None,
         "members_total": 0,
+        "decision": {
+            "action": "record",
+            "screen_id": None,
+            "reason": (
+                f"no universe snapshot is registered yet, so nothing can be screened for "
+                f"{SCREEN_DATE} -- fetch the universe first."
+            ),
+        },
         "recorded": None,
     }
 

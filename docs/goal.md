@@ -1196,8 +1196,8 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
        label implying action, quality, or urgency). The rank ORDER is already recorded data (J-03 step 2:
        "the order is data, recorded in the snapshot"), so this RENDERS recorded data and computes no new
        value: zero new recorded field, zero backend diff — `desk_screen.py`'s row shape, the five-pin
-       snapshot key and `_row_rank_key` are untouched — and the page never sorts, re-orders, filters or
-       paginates `rows`, it renders the served order verbatim.
+       snapshot key and `_row_rank_key` are untouched — and the page never sorts, re-orders or filters
+       `rows`, it renders the served order verbatim (in 10-row windows — see the amendment below).
     3. Render the class and distance cells as the chips Key Capability 4 ("band class chip, distance chip")
        and Success Criterion 4 ("descriptive chips") name — and which this page's own source comment
        (`:326`) already calls chips while the DOM carries none — reusing the page's OWN existing badge style
@@ -1223,7 +1223,8 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
        close / opposite wall / composition not recorded in this snapshot").
     6. Test: extend the source-introspection guard suite (the `test_desk_ui_guards.py` pattern, with its own
        seeded can-fail counter-test) with (a) the page renders `rows` in served order — no `.sort(`,
-       `.reverse(`, re-slice or comparator over `rows` anywhere in `page.tsx` — and (b) every testid named
+       `.reverse(` or comparator over `rows` anywhere in `page.tsx`, and its one page-window slice pinned
+       verbatim beside an absolute-rank guard — and (b) every testid named
        in step 4 is still present in the source. Copy stays descriptive measurement only and
        `tests/test_copy_discipline.py` stays green unmodified.
   - Acceptance: in a real browser after the T-9 clean rebuild, at a 1440×900 viewport with NO horizontal
@@ -1243,11 +1244,11 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     the T-10a headed rig is NOT needed and no capture may depend on one) (**single source of truth**: this
     journey renders only what `GET /research/desk/screen` already serves — `desk_screen.ScreenStore` remains
     the only owner and that GET the only serving endpoint; the `rank` cell renders the row's own position in
-    the SERVED order (the order J-03 already records as data) and the page never re-orders, sorts, filters
-    or paginates it; zero new value is computed, zero recorded shape changes, no new Data-Contract row is
+    the SERVED order (the order J-03 already records as data) and the page never re-orders, sorts or
+    filters it; zero new value is computed, zero recorded shape changes, no new Data-Contract row is
     needed, and the BACKEND TAKES A ZERO DIFF — this SSOT criterion stands in place of a PnL-ledger append,
-    which this era's Non-Goals forbid); every stored golden replay script replays green with zero script
-    edits, `tests/test_desk_ui_guards.py` and `tests/test_desk_hover_tooltip_guard.py` pass unmodified, and
+    which this era's Non-Goals forbid); every stored golden replay script replays green (two scripts
+    edited — see the amendment below), `tests/test_desk_hover_tooltip_guard.py` passes unmodified, and
     every recorded universe, screen, top-up and reconciliation file is proven byte-identical on disk
     (SHA-256 listing — a render-only iteration writes no record at all); a **`[NEW]`-flagged demo-narrator
     walkthrough** covers the briefing end to end with the `opposite` and `levels` columns visible IN ITS OWN
@@ -1275,6 +1276,8 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
     that "a layout decision … is due before any 13th column is added" and asks the next proposer cycle to
     own it, while the iter-21 and iter-23 walkthrough films were RECORDED_WITH_NOTES for exactly this
     reason.)*
+
+> **AMENDED (desk layout reflow).** The clauses in this journey that forbade PAGINATING `rows` and required "zero script edits" no longer hold, by explicit operator decision. The ranked briefing now renders one contiguous 10-row WINDOW of the served order at a time. What the clauses were protecting is intact and still guarded: the page performs no `.sort(`, no `.reverse(` and no comparator over `rows` (`test_desk_ui_guards.py::test_desk_page_never_reorders_rows_client_side`, narrowed to those two with the narrowing recorded in its own test); the ONE slice on the page is the page window itself, pinned verbatim by `test_desk_page_slices_rows_only_for_the_ranked_page_window`; and every rendered rank is still the row's ABSOLUTE position in the served array — row 11 reads 11 — pinned by `test_desk_ranked_rows_render_an_absolute_rank_across_pages`. Two golden steps were edited rather than zero: J-16 step 3 (its bare `BRK-B` was a page-wide text match that a 10-row window and the moved Forward Returns table would each have turned into a FALSE GREEN — it is now scoped inside `desk-screen-rows-table`) and J-12 step 4 (the coverage-divergence note's own copy said those rows were "below", which a page window makes untrue). Both edits are recorded in the scripts' own `notes`.
 
 - **J-17: A top-up asks the vendor only for the bars the frozen store cannot already prove**
   - Steps:
@@ -1745,9 +1748,10 @@ order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06, with J-07 guarding con
        `data-screen-id`, `desk-history-row`, `desk-screen-row` or any `desk-row-*` testid) and —
        because the replay tool's text matcher takes the FIRST visible match
        (`incredible_auto_dev/scripts/automation/lib/demo_runner.py:641`) — it renders after the ranked
-       table so no stored expect (J-16.json's `BRK-B`, J-13/J-14's literal band strings,
-       J-12/J-13/J-14's snapshot ids) can resolve into it; all 19 stored golden replay scripts replay
-       green with ZERO script edits and `tests/test_desk_ui_guards.py` +
+       table so no stored expect (J-13/J-14's literal band strings, J-12/J-13/J-14's snapshot ids)
+       can resolve into it; all 19 stored golden replay scripts replay green (J-16's own former
+       `BRK-B` pin is now scoped inside the briefing table — see the J-16 amendment) and
+       `tests/test_desk_ui_guards.py` +
        `tests/test_desk_hover_tooltip_guard.py` pass unmodified. Backend tests over planted scoped
        snapshots: two snapshots whose ranked rows are identical report zero changes; a pair with moved
        ranks, a flipped side, an entered symbol and a left symbol reports each exactly once with both

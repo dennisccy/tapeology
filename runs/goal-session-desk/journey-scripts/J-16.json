@@ -4,6 +4,7 @@
   "name": "The briefing fits the page it is read on — every recorded disclosure legible without a sideways scroll",
   "default_timeout_ms": 10000,
   "notes": [
+    "UPDATED (desk layout reflow) by developer: step 3 was `expect text \"BRK-B\"`, a PAGE-WIDE first-in-DOM substring match. Two independent changes turned that into a false green rather than a failure. (1) The ranked briefing now renders one 10-row page at a time, and BRK-B is rank 60 of 101 in the ambient latest screen -- it is simply not in the DOM. (2) The Forward Returns panel moved from dead-last to THIRD, above the briefing, and its own table renders every ranked symbol uncapped -- so the text would have resolved there and gone green while proving nothing about the briefing at all. The step is now scoped to a symbol cell INSIDE desk-screen-rows-table: immune to both (different subtree; rank 1 is always on page 1). The general rule is now enforced by tests/test_desk_forward_ui_guard.py::test_no_shipped_golden_pins_a_bare_symbol_as_page_wide_text.",
     "Verified goal-desk-iter-24 by browser-qa-agent (2026-07-30) at a 1440x900 viewport against the ambient rig (backend :8301 / frontend :3301), reading the already-recorded latest screen screen-2026-07-30-bad6387963ef (100 ranked rows / 1 skipped) -- no Run Screen / top-up / reconcile triggered, zero append-only write (SHA-256 listing identical before/after).",
     "DOM measurement (not just eyeballed): table[data-testid=desk-screen-rows-table].scrollWidth (1214px) === its overflow-x-auto ancestor's clientWidth (1214px) -- zero horizontal scroll, closing iter-23's UT-07 FAIL (1795px inside 1214px). Document scrollWidth (1425) === clientWidth (1425) too.",
     "Coverage badges: all 4 badges on rows 1-3 share one top y-coordinate (one line, never four). Row height: first 8 rows all 57px (<=60px target); across all 100 rows min 56.5 / max 63, with exactly 2 of 100 (ranked positions 24 and 80) at 63px -- an honest, disclosed 3px residual (round-number badge's own height on a 3rd line), non-blocking per the reviewer's own NOTE verdict.",
@@ -15,7 +16,7 @@
   "steps": [
     {"n": 1, "journey": "J-16", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
     {"n": 2, "journey": "J-16", "action": {"type": "expect", "target": {"testid": "desk-screen-rows-table"}}, "timeout_ms": 10000},
-    {"n": 3, "journey": "J-16", "action": {"type": "expect", "text": "BRK-B"}, "timeout_ms": 8000},
+    {"n": 3, "journey": "J-16", "action": {"type": "expect", "target": {"css": "[data-testid=\"desk-screen-rows-table\"] td[data-testid=\"desk-row-symbol\"]"}}, "timeout_ms": 8000},
     {"n": 4, "journey": "J-16", "action": {"type": "expect", "target": {"testid": "desk-row-rank"}}, "timeout_ms": 8000},
     {"n": 5, "journey": "J-16", "action": {"type": "click", "target": {"css": "tr[data-screen-id=\"screen-2026-06-22-3ecd45c062c7\"]"}}, "expect": {"text": "screen-2026-06-22-3ecd45c062c7"}, "timeout_ms": 10000},
     {"n": 6, "journey": "J-16", "action": {"type": "expect", "text": "composition not recorded in this snapshot"}, "timeout_ms": 8000},

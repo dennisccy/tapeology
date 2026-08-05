@@ -361,6 +361,20 @@ def get_screen_run_store() -> ScreenRunStore:
     return ScreenRunStore(resolve_desk_screen_log_dir(CONFIG.desk_universe_dir_resolved()))
 
 
+def get_forward_store() -> ForwardStore:
+    """The forward store rooted at a bare env-var-or-sibling-of-the-universe-dir default (zero new
+    ``Config`` field — see ``desk_forward.resolve_desk_forward_dir``) — the ``get_screen_store``
+    pattern. A FastAPI dependency so tests can point it at a temp dir via the env var or override
+    it outright.
+
+    Declared HERE, above the screen routes rather than beside its own Forward-returns section
+    below, for one mechanical reason: ``POST /research/desk/screen/compute`` now depends on it (a
+    superseded snapshot's forward records go with it), and a ``Depends(...)`` default is evaluated
+    at function-DEFINITION time — a dependency declared further down the module would be an
+    unresolved name at import."""
+    return ForwardStore(resolve_desk_forward_dir(CONFIG.desk_universe_dir_resolved()))
+
+
 def _screen_meta_only(record: dict) -> dict:
     """The lightweight projection ``GET /research/desk/screen``'s bulk list serves — id/pins/
     counts only, NEVER the full ``rows``/``skipped`` arrays (see ``desk_screen.py``'s module
@@ -410,7 +424,17 @@ def get_screen(
         return {"screen": matching[-1] if matching else None}
     return {
         "screens": [_screen_meta_only(r) for r in records],
-        "latest": records[-1] if records else None,
+        # The latest SCREEN, not the latest RECORDING: ordered by `screen_date` first, `created_utc`
+        # only as the tie-break. `records[-1]` (recording order alone) meant that re-running an OLD
+        # date made that old date the desk's default view — 2026-07-27 outranking a recorded
+        # 2026-08-04 purely because it was walked more recently. That was always latent, but one
+        # snapshot per date turns "re-run an incomplete older date" from a rarity into the routine
+        # act the refresh flow is built around (`desk_screen_decision`), so the wrong reading now
+        # surfaces constantly. The tie-break keeps two same-date copies (pre-cleanup, or a
+        # crash-interrupted supersede) resolving to the newer recording exactly as before.
+        "latest": max(
+            records, key=lambda r: (r["screen_date"], r.get("created_utc", ""), r["id"])
+        ) if records else None,
         "integrity_errors": errors,
     }
 
@@ -479,6 +503,7 @@ def trigger_desk_screen_compute(
     screen_store: ScreenStore = Depends(get_screen_store),
     manager: DeskScreenComputeManager = Depends(get_desk_screen_compute_manager),
     screen_run_store: ScreenRunStore = Depends(get_screen_run_store),
+    forward_store: ForwardStore = Depends(get_forward_store),
 ) -> dict:
     """Start the single-flight desk screen compute job for ``body.screen_date``, or — if one is
     already running — return it UNCHANGED (``started: False``, never a second concurrent job).
@@ -499,7 +524,9 @@ def trigger_desk_screen_compute(
     goal-desk-iter-29 (J-18): ``screen_run_store`` is threaded straight through to
     ``manager.trigger`` so this run's terminal outcome (done/cancelled/failed/reused) is durably
     logged — this route only threads the dependency through; the pre-check/reuse-short-circuit and
-    the actual record write both live inside ``run_screen_and_record``."""
+    the actual record write both live inside ``run_screen_and_record``. ``forward_store`` is
+    threaded through for the same reason: superseding a snapshot (one per date) drops the forward
+    records measured against it, and the store that owns them is resolved here, not in there."""
     records, errors = universe_store.list()
     if not records:
         if errors:
@@ -518,7 +545,7 @@ def trigger_desk_screen_compute(
         )
     return manager.trigger(
         body.screen_date, universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store,
-        screen_run_store=screen_run_store,
+        screen_run_store=screen_run_store, forward_store=forward_store,
     )
 
 
@@ -583,14 +610,6 @@ def get_screen_runs(store: ScreenRunStore = Depends(get_screen_run_store)) -> di
 # history did AFTER a screen's as_of: per-row horizon returns + next-session long/short max
 # drawdown. One read (latest-overall list / ?screen_id= newest + versions) plus the standard
 # trigger/poll/cancel compute trio. See ``desk_forward.py`` for the computation itself. -------------
-
-
-def get_forward_store() -> ForwardStore:
-    """The forward store rooted at a bare env-var-or-sibling-of-the-universe-dir default (zero new
-    ``Config`` field — see ``desk_forward.resolve_desk_forward_dir``) — the ``get_screen_store``
-    pattern. A FastAPI dependency so tests can point it at a temp dir via the env var or override
-    it outright."""
-    return ForwardStore(resolve_desk_forward_dir(CONFIG.desk_universe_dir_resolved()))
 
 
 def get_desk_forward_compute_manager() -> DeskForwardComputeManager:

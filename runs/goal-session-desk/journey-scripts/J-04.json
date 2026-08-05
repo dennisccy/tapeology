@@ -3,13 +3,16 @@
   "journey": "J-04",
   "name": "The /desk briefing page",
   "default_timeout_ms": 15000,
+  "notes": [
+    "UPDATED (one snapshot per date) by developer: Screen History is now a year-at-a-glance calendar, not a table -- the backend settles exactly one snapshot per screen date (app/research/desk_screen_decision.py), so the near-duplicate same-date rows the table existed to tell apart no longer exist. This step's `desk-history-table` / 'date' header pin retargets to the calendar's own container and its statically-rendered 'Jan' month label -- a shell string present in the first paint, deliberately NOT async-list or <option> text (the era-5 headless-matcher lesson)."
+  ],
   "steps": [
     {"n": 1, "journey": "J-04", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
     {"n": 2, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "app-nav"}}, "expect": {"text": "Desk"}, "timeout_ms": 8000},
     {"n": 3, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "desk-title"}}, "expect": {"text": "Desk"}, "timeout_ms": 8000},
     {"n": 4, "journey": "J-04", "action": {"type": "expect", "target": {"css": "main"}}, "expect": {"text": "The latest screen over the registered universe"}, "timeout_ms": 8000},
     {"n": 5, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "desk-screen-rows-table"}}, "expect": {"text": "symbol"}, "timeout_ms": 10000},
-    {"n": 6, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "desk-history-table"}}, "expect": {"text": "date"}, "timeout_ms": 8000},
+    {"n": 6, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "desk-history-calendar"}}, "expect": {"text": "Jan"}, "timeout_ms": 8000},
     {"n": 7, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "desk-provenance"}}, "expect": {"text": "Universe snapshot"}, "timeout_ms": 10000},
     {"n": 8, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "app-nav"}}, "expect": {"text": "Cockpit"}, "timeout_ms": 8000},
     {"n": 9, "journey": "J-04", "action": {"type": "expect", "target": {"testid": "desk-title"}}, "expect": {"text": "Desk"}, "timeout_ms": 8000}

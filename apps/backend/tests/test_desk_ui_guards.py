@@ -232,20 +232,71 @@ def test_desk_page_price_arithmetic_guard_catches_forward_field_arithmetic():
 # alone (used elsewhere on this page only to COUNT rows, never to reorder or re-render them) is not
 # itself forbidden.
 _ROWS_REORDER_PATTERN = re.compile(
-    r"(?:\[\s*\.\.\.\s*rows\s*\]|\brows\b)\s*(?:\.\s*\w+\([^()]*\)\s*)*\.\s*(?:sort|reverse|slice)\s*\("
+    r"(?:\[\s*\.\.\.\s*rows\s*\]|\brows\b)\s*(?:\.\s*\w+\([^()]*\)\s*)*\.\s*(?:sort|reverse)\s*\("
 )
+
+# The ONE sanctioned `rows` slice on this page: the ranked table's own contiguous page window.
+# Matched separately from the reorder pattern above so the two intents stay distinct -- a reorder
+# changes WHICH order rows are in, a window changes only WHICH of them are on screen.
+_ROWS_SLICE_PATTERN = re.compile(
+    r"(?:\[\s*\.\.\.\s*rows\s*\]|\brows\b)\s*(?:\.\s*\w+\([^()]*\)\s*)*\.\s*slice\s*\("
+)
+_RANKED_PAGE_WINDOW = "rows.slice(pageStart, pageStart + RANKED_ROWS_PAGE_SIZE)"
+
+
+def _extract_function(source: str, name: str) -> str:
+    """The named function's full body by brace-walk (the `test_desk_hover_tooltip_guard.py`
+    helper shape -- each guard module owning its own copy is this suite's convention).
+
+    The parameter list is walked FIRST and skipped: every component on this page destructures its
+    props, so the first `{` after the function name opens the DESTRUCTURING PATTERN, not the body.
+    Walking from there returns `function Name({ rows, asOf }` and every assertion over it passes
+    vacuously -- a silent false green, which is the one failure mode a guard must not have."""
+    marker = f"function {name}("
+    start = source.index(marker)
+    paren_depth = 0
+    body_start = -1
+    for index in range(start + len(marker) - 1, len(source)):
+        char = source[index]
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+            if paren_depth == 0:
+                body_start = source.index("{", index)
+                break
+    assert body_start != -1, f"{name}'s parameter list never closes"
+    depth = 0
+    for index in range(body_start, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : index + 1]
+    raise AssertionError(f"{name}'s body never closes")
+
+
+def test_the_function_extractor_returns_a_body_not_a_props_pattern():
+    """A counter-test for the helper itself: every guard below is only as honest as this walk.
+    If it stops at the destructuring pattern, every `in` assertion over the result silently
+    passes on an empty haystack."""
+    seeded = "function Widget({ rows, asOf }: Props) {\n  const x = rows.slice(0, 2);\n}\n"
+    body = _extract_function(seeded, "Widget")
+    assert "rows.slice(0, 2)" in body, "the extractor stopped at the props pattern"
+    assert body.endswith("}")
 
 
 def test_desk_page_never_reorders_rows_client_side():
     """TC-7: `rows` renders in the exact order `GET /research/desk/screen` served it in -- the
-    page never sorts, reverses, or re-slices it. The new `rank` cell renders each row's own
-    position in that SAME served order (the `.map` index), never a client-recomputed one."""
+    page never sorts or reverses it. The `rank` cell renders each row's own position in that SAME
+    served order, never a client-recomputed one."""
     source = _DESK_PAGE.read_text()
     match = _ROWS_REORDER_PATTERN.search(source)
     assert match is None, (
         f"apps/frontend/app/desk/page.tsx reorders `rows` client-side ({match.group(0)!r}) -- the "
-        "page must render the served order verbatim; the rank cell renders each row's own array "
-        "index, never a value derived from a client-side sort/reverse/slice"
+        "page must render the served order verbatim; the rank cell renders each row's own served "
+        "position, never a value derived from a client-side sort/reverse"
     )
 
 
@@ -257,11 +308,80 @@ def test_desk_page_rows_reorder_guard_can_fail_on_a_seeded_violation():
     seeded_reverse = "const reversed = rows.reverse();"
     assert _ROWS_REORDER_PATTERN.search(seeded_reverse) is not None
 
-    seeded_slice = "const page1 = rows.slice(0, 10);"
-    assert _ROWS_REORDER_PATTERN.search(seeded_slice) is not None
-
     seeded_chained = "const top = rows.filter(hasTickEvidence).sort((a, b) => a.rank - b.rank);"
     assert _ROWS_REORDER_PATTERN.search(seeded_chained) is not None
+
+
+def test_the_reorder_guard_deliberately_no_longer_treats_a_window_slice_as_a_reorder():
+    """A deliberate, PAID-FOR narrowing, recorded rather than hidden.
+
+    This pattern used to forbid `slice` alongside `sort`/`reverse`, and its counter-test seeded
+    exactly ``rows.slice(0, 10)``. The ranked table now renders one 10-row page at a time, which
+    IS a `rows.slice(` -- so the guard had to either widen a loophole (slice a differently-NAMED
+    array and sail past `\\brows\\b`) or narrow honestly. It narrows honestly: a page window
+    preserves the served order, the served direction, and -- via `pageStart` -- the served
+    ABSOLUTE position of every row it renders, so it is not a reorder in any sense TC-7 meant.
+
+    The narrowing is bounded by the two guards below, which pin the exact window expression and
+    the exact rank expression. Deleting either one re-opens what this line gave up."""
+    assert _ROWS_REORDER_PATTERN.search("const page1 = rows.slice(0, 10);") is None
+    assert _ROWS_REORDER_PATTERN.search("const r = [...rows].sort(cmp);") is not None
+
+
+def test_desk_page_slices_rows_only_for_the_ranked_page_window():
+    """The page window is the ONLY `rows` slice on the page, and it is the exact contiguous
+    expression -- any other slice could drop, overlap or re-origin rows without the rank cell
+    noticing."""
+    source = _DESK_PAGE.read_text()
+    table = _extract_function(source, "DeskRowsTable")
+    file_hits = _ROWS_SLICE_PATTERN.findall(source)
+    assert len(file_hits) == 1, (
+        f"`rows` is sliced {len(file_hits)} time(s) in apps/frontend/app/desk/page.tsx -- the ONE "
+        "sanctioned slice is DeskRowsTable's own page window"
+    )
+    assert len(_ROWS_SLICE_PATTERN.findall(table)) == 1, (
+        "the one `rows` slice is not inside DeskRowsTable"
+    )
+    assert _RANKED_PAGE_WINDOW in table, (
+        f"DeskRowsTable no longer windows via {_RANKED_PAGE_WINDOW!r}"
+    )
+    assert "pageRows.map((row, index) =>" in table, (
+        "DeskRowsTable maps something other than its own page window"
+    )
+
+
+def test_desk_ranked_rows_render_an_absolute_rank_across_pages():
+    """Row 11 reads 11, never 1: the rank cell is the row's position in the SERVED array, which
+    under a page window means the window offset plus the map index."""
+    table = _extract_function(_DESK_PAGE.read_text(), "DeskRowsTable")
+    assert "rank={pageStart + index + 1}" in table, (
+        "the ranked table does not render an absolute rank"
+    )
+    assert "rank={index + 1}" not in table, (
+        "the ranked table passes a PAGE-relative rank -- page 2 would restart the briefing at 1 "
+        "and silently contradict the snapshot's own recorded order"
+    )
+
+
+def test_the_absolute_rank_guard_can_fail_on_a_seeded_violation():
+    seeded = (
+        "function DeskRowsTable() { pageRows.map((row, index) => <DeskRow rank={index + 1} />) }"
+    )
+    body = _extract_function(seeded, "DeskRowsTable")
+    assert "rank={pageStart + index + 1}" not in body
+    assert "rank={index + 1}" in body
+
+
+def test_the_ranked_table_resets_to_page_one_when_the_displayed_snapshot_changes():
+    """The reset is a React `key`, not a twelfth useEffect (the chain guard pins the page at
+    exactly 11). Deleting the key is a silent defect: selecting a 10-row screen from history
+    while on page 4 would leave the operator staring at an empty table."""
+    populated = _extract_function(_DESK_PAGE.read_text(), "DeskPopulatedScreen")
+    assert "<DeskRowsTable" in populated, "DeskRowsTable is no longer rendered by DeskPopulatedScreen"
+    assert "key={snapshot.id}" in populated, (
+        "the ranked table has no `key={snapshot.id}` -- its page state would survive a snapshot "
+        "switch, stranding the operator on a page the new snapshot may not have"
+    )
 
 
 # goal-desk-iter-24 (J-16) TC-7 (b): every `data-testid` a shipped journey's golden replay script,
@@ -292,7 +412,15 @@ _REQUIRED_DESK_TESTIDS = (
     "desk-row-opposite",
     "desk-row-levels",
     "desk-skip-row",
-    "desk-history-row",
+    # Screen History is a year-at-a-glance calendar, not a table: `desk-history-row` /
+    # `desk-history-table` retired with it (one snapshot per date removed the near-duplicate rows
+    # the table existed to tell apart -- see `DeskHistoryCalendar`'s own comment). `desk-history-day`
+    # is the click target J-05/J-08's goldens now use, still carrying `data-screen-date`.
+    "desk-history-calendar",
+    "desk-history-day",
+    "desk-history-year-label",
+    "desk-history-prev-year",
+    "desk-history-next-year",
     "desk-provenance",
     "desk-title",
     "desk-run-screen-button",
@@ -307,14 +435,32 @@ _REQUIRED_DESK_TESTIDS = (
     "desk-forward-section",
     "desk-forward-table",
     "desk-forward-compute-button",
+    # The ranked table's page window: the pager and its disclosure. Presence-only, same rationale
+    # as the compute controls above -- the window itself is proved by the slice/rank guards.
+    "desk-rows-pagination",
+    "desk-rows-prev-page",
+    "desk-rows-next-page",
+    "desk-rows-page-note",
 )
+
+
+def _missing_testids(source: str) -> list[str]:
+    """Which required testids are not ACTUALLY assigned in ``source``.
+
+    Matches the assignment ``testid="<id>"`` rather than a bare substring, which covers both the
+    literal ``data-testid="<id>"`` attribute and the ``testid=`` prop the shared `EmptyState`/
+    tooltip components take. The bare-substring form this guard used before was satisfied by a
+    PROSE COMMENT naming a testid -- live-verified: after the Screen History table was replaced by
+    the calendar, `desk-history-row` was gone from every element on the page and the guard still
+    passed, because a comment further down mentioned it. A guard that a comment can satisfy is not
+    a guard."""
+    return [testid for testid in _REQUIRED_DESK_TESTIDS if f'testid="{testid}"' not in source]
 
 
 def test_desk_page_keeps_every_shipped_testid_after_the_reflow():
     """TC-7: every testid a shipped journey's golden script/guard test/tooltip contract depends
-    on is still present in the reflowed source -- the layout changed, nothing else did."""
-    source = _DESK_PAGE.read_text()
-    missing = [testid for testid in _REQUIRED_DESK_TESTIDS if testid not in source]
+    on is still ASSIGNED in the reflowed source -- the layout changed, nothing else did."""
+    missing = _missing_testids(_DESK_PAGE.read_text())
     assert not missing, (
         f"apps/frontend/app/desk/page.tsx is missing testid(s) {missing} after the reflow -- a "
         "shipped journey's golden script/guard test/tooltip contract depends on each of these "
@@ -324,9 +470,106 @@ def test_desk_page_keeps_every_shipped_testid_after_the_reflow():
 
 def test_desk_page_testid_presence_guard_can_fail_on_a_seeded_violation():
     """The lint CAN fail -- a lint that cannot fail proves nothing."""
-    seeded_source = "const x = 1;"
-    missing = [testid for testid in _REQUIRED_DESK_TESTIDS if testid not in seeded_source]
-    assert missing == list(_REQUIRED_DESK_TESTIDS)
+    assert _missing_testids("const x = 1;") == list(_REQUIRED_DESK_TESTIDS)
+
+
+def test_desk_page_testid_presence_guard_is_not_satisfied_by_a_mere_mention():
+    """The tightened form's own counter-test: a testid named only in a comment (or in any other
+    prose) does not count as shipped."""
+    mentioned_only = "// never reuse desk-history-day as a click target here\n"
+    assert "desk-history-day" in _missing_testids(mentioned_only)
+
+
+# --- Screen History calendar (one snapshot per date) ----------------------------------------------
+
+
+_EMPTY_DAY_BRANCH = "if (meta === undefined) {"
+
+
+def _empty_day_branch(body: str) -> str:
+    """``DeskHistoryDayCell``'s no-screen branch, by brace-walk from its own `if`.
+
+    Deliberately NOT "everything before the recorded branch's first marker attribute": that would
+    make the guard depend on the ORDER attributes happen to be written in, which is exactly the
+    kind of incidental coupling that turns a guard into a trip hazard for the next editor."""
+    start = body.index(_EMPTY_DAY_BRANCH)
+    depth = 0
+    for index in range(body.index("{", start), len(body)):
+        if body[index] == "{":
+            depth += 1
+        elif body[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return body[start : index + 1]
+    raise AssertionError("DeskHistoryDayCell's no-screen branch never closes")
+
+
+def test_the_empty_day_branch_extractor_returns_only_that_branch():
+    """A counter-test for the helper: if the walk overshoots into the recorded branch, every
+    assertion below passes on the wrong haystack."""
+    branch = _empty_day_branch(_extract_function(_DESK_PAGE.read_text(), "DeskHistoryDayCell"))
+    assert 'data-has-screen="false"' in branch
+    assert 'data-has-screen="true"' not in branch
+
+
+def test_every_calendar_day_cell_is_a_plain_button_and_an_empty_day_is_disabled():
+    """The calendar's cells are ordinary click targets and nothing more: a `<button
+    type="button">` (never a form submit), and a day with no recorded screen is `disabled` rather
+    than a live target that would fire a fetch for a snapshot that does not exist."""
+    body = _extract_function(_DESK_PAGE.read_text(), "DeskHistoryDayCell")
+
+    buttons = body.count("<button")
+    assert buttons == 2, (
+        f"DeskHistoryDayCell renders {buttons} button(s) -- expected exactly two (the no-screen "
+        "branch and the recorded branch); a new branch has to state its own click semantics here"
+    )
+    assert body.count('type="button"') == 2, (
+        "every calendar day cell must be an explicit type=\"button\" -- a bare <button> inside a "
+        "form submits it"
+    )
+    empty_branch = _empty_day_branch(body)
+    assert "disabled" in empty_branch, (
+        "a calendar day with no recorded screen must be disabled -- a live target there would fire "
+        "a fetch for a snapshot that was never recorded"
+    )
+
+
+def test_a_calendar_cell_only_carries_a_screen_id_when_a_screen_was_recorded():
+    """`data-screen-id` is the id a golden clicks and the page then fetches. The no-screen branch
+    must not carry one at all -- an id there would be invented, not served."""
+    body = _extract_function(_DESK_PAGE.read_text(), "DeskHistoryDayCell")
+    empty_branch = _empty_day_branch(body)
+    assert "data-screen-id" not in empty_branch
+    assert 'data-screen-id={meta.id}' in body
+
+
+def test_the_calendar_never_renders_a_day_its_month_does_not_have():
+    """A fixed 31-row grid is only honest if 30 February renders as blank space rather than as a
+    cell claiming a date that never existed."""
+    body = _extract_function(_DESK_PAGE.read_text(), "DeskHistoryCalendar")
+    assert "isRealDayOfMonth(" in body, (
+        "DeskHistoryCalendar must skip days its month does not have -- the 31-row grid otherwise "
+        "renders 30/31 February as real dates"
+    )
+
+
+def test_the_calendar_guards_can_fail_on_a_seeded_violation():
+    """The lints CAN fail -- lints that cannot fail prove nothing."""
+    seeded = (
+        'function DeskHistoryDayCell({ meta }: Props) {\n'
+        '  if (meta === undefined) {\n'
+        '    return <button data-screen-id="invented" data-has-screen="false">·</button>;\n'
+        "  }\n"
+        '  return <button data-has-screen="true">{day}</button>;\n'
+        "}\n"
+    )
+    body = _extract_function(seeded, "DeskHistoryDayCell")
+    empty_branch = _empty_day_branch(body)
+    assert body.count('type="button"') != 2  # the type is missing entirely
+    assert "disabled" not in empty_branch  # the dead cell is still clickable
+    assert "data-screen-id" in empty_branch  # and carries an invented id
+
+    assert "isRealDayOfMonth(" not in "function DeskHistoryCalendar({ screens }: Props) {\n}\n"
 
 
 # goal-desk-iter-24 (J-16) TC-6/TC-7 (c): the reflow's own regression guard for the defect the

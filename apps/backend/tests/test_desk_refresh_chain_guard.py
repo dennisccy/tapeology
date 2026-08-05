@@ -2,9 +2,10 @@
 ``test_desk_ui_guards.py`` pattern (read the frontend .tsx as TEXT, assert on structure; no
 browser, no runtime).
 
-The control runs four refresh acts in order -- the universe membership fetch, the bar top-up, the
-bar index reconciliation, then the screen for today -- by driving the SAME four endpoints the
-page's existing controls already drive. These guards pin the four properties that make that safe:
+The control runs five refresh acts in order -- the universe membership fetch, the bar top-up, the
+bar index reconciliation, the screen for each day of the as-of range, then the forward returns for
+every snapshot that run recorded -- by driving the SAME five endpoints the page's existing controls
+already drive. These guards pin the four properties that make that safe:
 
   (a) **No mount path.** No ``useEffect`` argument list anywhere in the page references the chain
       driver or any compute trigger. This is the era's own critical anti-goal ("Every run is an
@@ -13,13 +14,13 @@ page's existing controls already drive. These guards pin the four properties tha
   (b) **The entry point is click-only.** ``handleRefreshAll`` appears in exactly two syntactic
       shapes -- its own declaration, and the single props binding -- and the button carries a
       plain ``onClick`` with no focus/ref auto-invocation.
-  (c) **No second trigger path.** The driver calls the three EXISTING ``handleTrigger*`` handlers,
+  (c) **No second trigger path.** The driver calls the four EXISTING ``handleTrigger*`` handlers,
       never the raw ``lib/api`` clients and never a bare ``fetch(`` -- the
       ``test_structure_prefill_reuses_the_existing_load_function`` precedent applied to this
       block. It also owns no poll of its own: the page has exactly one ``setInterval(`` per
       compute manager (four, forward-test era), because the chain WAITS on the state the existing
       poll effects already maintain.
-  (d) **Honest step semantics.** The four steps appear once each, in order; the chain advances on
+  (d) **Honest step semantics.** The five steps appear once each, in order; the chain advances on
       ``"done"`` and halts on ``"failed"``/``"cancelled"``; and ``started`` is never used as a
       halt condition, because ``started: false`` means a job was already running and was adopted.
 
@@ -44,8 +45,9 @@ trusted past them:
 
 The only real proof of "fires only on click" is the runtime one: load the page repeatedly with no
 click and observe that all four compute snapshots keep their ``id`` and ``started_utc``, and every
-durable run ledger keeps its length. That is an operator-run verification, reported run-or-not-run,
-never a CI gate.
+durable run ledger keeps its length -- a fifth STEP must not add a mount POST. That check and every
+other runtime claim here is an operator-run verification, reported run-or-not-run, never a CI
+gate.
 
 Every guard carries a seeded counter-test proving the detection logic actually catches a
 violation (the ``test_copy_discipline.py`` seeded-violation precedent)."""
@@ -76,7 +78,9 @@ _UNIVERSE_FETCH_PATH = "/research/desk/universe/fetch"
 # keyed on the displayed snapshot (the screenCompareResult precedent), +1 forward-compute poll
 # (the FOURTH compute manager, mirroring the existing trio's poll shape exactly) — 8 -> 11
 # effects, 3 -> 4 intervals ("one per compute manager"), the single setTimeout stays the chain's
-# own wait tick.
+# own wait tick. The fifth chain step added NONE of the three: its `forwardComputeRef` mirror went
+# into the EXISTING mirror effect, it starts no poll (the forward poll already existed) and it
+# reuses the one wait tick. 11/4/1 standing unchanged across that change is part of the design.
 _EXPECTED_EFFECT_COUNT = 11
 _EXPECTED_INTERVAL_COUNT = 4
 _EXPECTED_TIMEOUT_COUNT = 1
@@ -115,12 +119,32 @@ _FORBIDDEN_DRIVER_CALLS = (
     "triggerDeskTopupCompute(",
     "triggerDeskReconcileCompute(",
     "triggerDeskScreenCompute(",
-    # Forward-test era: the chain must NOT start the forward compute — measuring a recorded
-    # screen is its own operator act, never an implicit fifth step. BOTH the raw client and the
-    # handler are banned here (unlike the three entries above, whose handlers the chain
-    # legitimately calls).
+    # Forward-test era, REVERSED by operator decision. This tuple previously banned BOTH the raw
+    # client and `handleTriggerForward(` here, on the reasoning that "measuring a recorded screen
+    # is its own operator act, never an implicit fifth step".
+    #
+    # What changed, and why: a forward result is only meaningful against a screen snapshot that
+    # already exists, and the chain is the thing that creates them -- over a whole as-of range, at
+    # that. Leaving the measurement out meant a 31-day refresh finished with 31 unmeasured
+    # snapshots and 31 manual clicks still to do, each one requiring the operator to first select
+    # that snapshot in the history list. The chain now measures every snapshot IT recorded, as a
+    # serialized fifth step.
+    #
+    # What was given up, stated plainly: a Refresh Data click now starts N forward computes rather
+    # than zero, and the click is roughly twice the wall-clock it was. That cost is serialized so
+    # two walks never overlap, stoppable at any row boundary, and cheap on a re-click because the
+    # backend's own 2-pin reuse short-circuits an already-measured input with zero bar reads. It
+    # used to be bounded by a 31-day SCREEN_DAY_RANGE_MAX_DAYS cap on the range as well; that cap
+    # is gone (one snapshot per date makes an already-covered day a tens-of-milliseconds reuse
+    # rather than a full walk, so the ceiling was pricing work the chain no longer does), leaving
+    # Stop as the operator's bound on a wide range.
+    #
+    # What did NOT change, and is still guarded here: the raw client stays banned, so the chain
+    # drives the panel's own handler and that panel's state stays the single owner of the trigger
+    # state -- exactly the invariant the three entries above encode. `handleTriggerForward(` also
+    # stays in _TRIGGER_CALLS, so no useEffect may reach it: the era anti-goal holds unbroken, a
+    # page load still computes nothing, and the fifth step runs only because someone clicked.
     "triggerDeskForwardCompute(",
-    "handleTriggerForward(",
 )
 
 _LINE_COMMENT = re.compile(r"//[^\n]*")
@@ -302,7 +326,7 @@ def test_the_refresh_chain_block_markers_exist():
 
 
 def test_the_chain_drives_the_existing_handlers_not_a_second_path():
-    """The driver reuses the three shipped trigger handlers -- it never calls the raw lib/api
+    """The driver reuses the four shipped trigger handlers -- it never calls the raw lib/api
     clients and never opens a bare fetch of its own."""
     body = _extract_function(_strip_comments(_DESK_PAGE.read_text()), _DRIVER)
     hits = [needle for needle in _FORBIDDEN_DRIVER_CALLS if needle in body]
@@ -351,15 +375,18 @@ def test_the_universe_fetch_path_literal_lives_only_in_the_api_client():
 # --- (d) honest step semantics --------------------------------------------------------------------
 
 
-def test_the_chain_runs_the_four_steps_in_order():
-    """Membership, then top-up, then index, then screen -- once each, in that order, because a
-    screen's bar-store pin is resolved before its walk and would otherwise pin stale bars."""
+def test_the_chain_runs_the_five_steps_in_order():
+    """Membership, then top-up, then index, then screen, then the forward returns -- once each, in
+    that order. The screen runs after the bars and the index because its bar-store pin is resolved
+    before its walk and would otherwise pin stale bars; the forward step runs last because it
+    measures the snapshots the screen step just recorded."""
     body = _extract_function(_strip_comments(_DESK_PAGE.read_text()), _DRIVER)
     expected = (
         "triggerDeskUniverseFetch(",
         "handleTriggerTopup",
         "handleTriggerReconcile",
         "handleTriggerScreen",
+        "handleTriggerForward",
     )
     positions = []
     for needle in expected:
@@ -369,7 +396,48 @@ def test_the_chain_runs_the_four_steps_in_order():
         positions.append(body.index(needle))
     assert positions == sorted(positions), (
         f"{_DRIVER} runs its steps out of order -- found at offsets {positions}; the screen must "
-        "run last, after the bars and the index it pins"
+        "run after the bars and the index it pins, and the forward step after the screens it "
+        "measures"
+    )
+
+
+def test_the_forward_step_measures_the_ids_this_run_recorded():
+    """Step 5 measures the snapshots THIS run recorded -- never whichever snapshot the history
+    panel happens to be displaying, which has nothing to do with the range that was just clicked.
+    The no-argument form of the handler is the panel button's, and reaching for it here would
+    silently measure the wrong thing."""
+    body = _extract_function(_strip_comments(_DESK_PAGE.read_text()), _DRIVER)
+    assert re.search(r"handleTriggerForward\(\s*\w+\s*\)", body) is not None, (
+        f"{_DRIVER} calls handleTriggerForward with no explicit snapshot id -- the no-argument "
+        "form measures the DISPLAYED snapshot, which is not what this run recorded"
+    )
+    assert "displayedSnapshot" not in body, (
+        f"{_DRIVER} reads displayedSnapshot -- the fifth step must measure the ids the screen step "
+        "itself collected, never the panel's current selection"
+    )
+    assert "await handleTriggerForward(" in body, (
+        f"{_DRIVER} does not await the forward trigger -- the manager is single-flight, so an "
+        "un-awaited second trigger would adopt the first job instead of measuring its own snapshot"
+    )
+
+
+def test_the_forward_step_guard_can_fail_on_seeded_violations():
+    seeded_no_arg = "const started = await handleTriggerForward();"
+    assert re.search(r"handleTriggerForward\(\s*\w+\s*\)", seeded_no_arg) is None
+    seeded_displayed = "const started = await handleTriggerForward(displayedSnapshot.id);"
+    assert "displayedSnapshot" in seeded_displayed
+
+
+def test_the_chain_never_renders_a_slash_progress_readout():
+    """A hazard the needle scan below provably cannot catch: `_rendered_literals` strips `${...}`
+    before comparing, so a template like `${done} / ${total} rows` reduces to " /  rows" and
+    passes -- while RENDERING `101 / 101`, a string J-18 pins against the screen-runs table. This
+    control renders above that table, so the replay engine's first-in-DOM match would resolve
+    here. The chain writes progress as "N of M"."""
+    hits = [literal for literal in _rendered_literals(_DESK_PAGE.read_text()) if " / " in literal]
+    assert not hits, (
+        f"refresh-chain copy renders a slash progress readout {hits} -- write it as 'N of M'; a "
+        "rendered '101 / 101' would intercept J-18's golden match page-wide"
     )
 
 
