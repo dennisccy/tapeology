@@ -108,12 +108,16 @@ export interface SymbolMatch {
 // The chart renders these VERBATIM — it never re-bins candles or re-derives a marker's state.
 
 // One OHLC candle: `time` is the bin's left edge in LOGICAL seconds (the engine's timeline).
+// `volume` sums the bin's own trade sizes (engine/history.py's `_BarAccumulator`) — the same
+// figure the wall-clock `BarRow` carries, so the chart's volume pane draws real traded volume in
+// tape mode as well as history mode.
 export interface OhlcBar {
   time: number;
   open: number;
   high: number;
   low: number;
   close: number;
+  volume: number;
 }
 
 // One meaningful tape-state-transition marker. `state`/`confidence` are the engine's OWN
@@ -1324,6 +1328,133 @@ export interface DeskForwardRecord {
 export interface DeskForwardReadResult {
   forward: DeskForwardRecord | null;
   versions: number;
+}
+
+// `GET /research/desk/forward/pins?screen_id=` -- how much of that snapshot a measurement could
+// POSSIBLY reach, disclosed before anything is clicked. `members_with_fine_series` is an UPPER
+// BOUND (a recorded 1m/5m series whose WINDOW covers the session, which is not the same as bars in
+// it), and every string rendered from it must say so.
+export interface DeskForwardPinsResult {
+  screen_id: string;
+  screen_date: string | null;
+  as_of: string | null;
+  touch_timeframes: string[];
+  members_total: number;
+  members_with_fine_series: number;
+  versions: number;
+  recorded: {
+    id: string;
+    created_utc: string;
+    rows_with_touches: number;
+    total_touches: number;
+  } | null;
+  /**
+   * Where the screen date sits relative to the DAILY bars on file — the one thing that separates
+   * "this date is a weekend or a market holiday" from "this real session's fine bars fell off the
+   * vendor's retention floor" from "this date has not happened yet". Resolved by
+   * `desk_sessions.py` over the screen's own ranked members; `"unknown"` whenever the daily bars
+   * cannot answer, never a guess.
+   */
+  session: {
+    state:
+      | "recorded_session"
+      | "not_a_recorded_session"
+      | "after_recorded_evidence"
+      | "before_recorded_evidence"
+      | "unknown";
+    evidence: DeskSessionEvidence | null;
+  };
+}
+
+/** What a session claim rests on: which members' daily bars were read, and the span they cover. */
+export interface DeskSessionEvidence {
+  anchor_timeframe: string;
+  anchor_symbols: string[];
+  from: string | null;
+  through: string | null;
+  sessions_total: number;
+}
+
+/** `GET /research/desk/sessions` — which dates in range are recorded trading sessions. */
+export interface DeskSessionsResult {
+  sessions: string[];
+  non_sessions: string[];
+  evidence: DeskSessionEvidence;
+}
+
+/**
+ * `GET /research/desk/backfill/plan` — what a deep 1m/5m backfill WOULD fetch, said before it is
+ * started. `clamped_end` is the load-bearing disclosure: every window ends before the region the
+ * Yahoo top-up already covers (~30 days back for 1m, ~60 for 5m), because a contested timestamp
+ * resolves in favour of the most recently recorded series and an overlap would permanently replace
+ * the recent tape's Yahoo prices with SIP ones.
+ */
+export interface DeskDeepBackfillPlan {
+  requested_window: { start: string; end: string };
+  timeframes: string[];
+  members_total: number;
+  chunks_total: number;
+  per_timeframe: Record<string, { chunks: number; clamped_end: string }>;
+}
+
+/** One chunk's outcome inside a running or finished backfill. */
+export interface DeskDeepBackfillOutcome {
+  symbol: string;
+  timeframe: string;
+  start: string;
+  end: string;
+  outcome: "fetched" | "reused" | "unchanged" | "failed";
+  detail: string | null;
+  bars_recorded: number;
+}
+
+/** The process-scoped snapshot of the single in-flight (or last-terminal) backfill job. */
+export interface DeskDeepBackfillComputeSnapshot {
+  id: string;
+  state: "running" | "done" | "cancelled" | "failed";
+  started_utc: string;
+  finished_utc: string | null;
+  error: string | null;
+  requested_window: { start: string; end: string };
+  timeframes: string[];
+  progress: {
+    chunks_total: number;
+    chunks_done: number;
+    bars_recorded: number;
+    outcomes: DeskDeepBackfillOutcome[];
+  };
+}
+
+// One terminal forward-measurement attempt, from the durable append-only run log. Survives the
+// compute manager's process-scoped snapshot, which is what makes "this ran and found nothing"
+// (a `done` row whose `rows_absent_no_fine_bars` covers the whole snapshot) distinguishable from
+// "this never ran" (no row at all) after a reload.
+export interface DeskForwardRun {
+  id: string;
+  screen_id: string;
+  screen_date: string | null;
+  config_fingerprint: string;
+  forward_input_signature: string | null;
+  started_utc: string;
+  finished_utc: string;
+  state: "done" | "cancelled" | "failed";
+  reused: boolean;
+  rows_total: number;
+  rows_measured: number;
+  rows_absent_no_fine_bars: number;
+  rows_with_touches: number;
+  total_touches: number;
+  forward_id: string | null;
+  error: string | null;
+}
+
+// `GET /research/desk/forward/runs` -- honest-empty-or-populated, HTTP 200 always, never 404.
+// Unlike the screen ledger's list this is NOT meta-only: a forward run record carries counts only,
+// so `runs` and `latest` are the same shape.
+export interface DeskForwardRunsListResult {
+  runs: DeskForwardRun[];
+  latest: DeskForwardRun | null;
+  integrity_errors: { file: string; error: string }[];
 }
 
 export interface DeskForwardComputeSnapshot {

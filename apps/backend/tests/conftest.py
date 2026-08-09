@@ -42,3 +42,21 @@ def _reset_store_verified_caches():
     datasets_module._reset_verified_cache_for_tests()
     setups_module._reset_scan_cache_for_tests()
     yield
+
+
+@pytest.fixture(autouse=True)
+def _walk_the_screen_in_process(monkeypatch):
+    """The desk screen walks IN THIS PROCESS for the whole suite.
+
+    ``desk_screen`` divides its member walk across worker processes by default (see
+    ``_SCREEN_WORKERS_ENV``), which is right for an operator's ~100-member run and wrong for every
+    test: the hermetic universe fixtures already exceed the worker threshold, so each screen test
+    would spawn four fresh interpreters — and, more importantly, the walk's reads would happen where
+    a ``monkeypatch`` cannot see them, silently voiding the call-count guards that prove
+    ``compute_tradability``/``merged_bars`` are called exactly once per member.
+
+    Tests that are ABOUT the parallel walk opt back in explicitly by setting the same variable —
+    see ``test_desk_screen_parallel.py``, which is where the worker path's own equivalence to this
+    one is proven."""
+    monkeypatch.setenv("TAPEOLOGY_DESK_SCREEN_WORKERS", "1")
+    yield

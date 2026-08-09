@@ -45,6 +45,7 @@ def test_serialize_history_matches_engine_buffer():
                 "high": b.high,
                 "low": b.low,
                 "close": b.close,
+                "volume": b.volume,
             }
         buf_markers = engine.history.markers()
         assert len(out["markers"]) == len(buf_markers)

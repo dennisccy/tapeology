@@ -81,8 +81,28 @@ _UNIVERSE_FETCH_PATH = "/research/desk/universe/fetch"
 # own wait tick. The fifth chain step added NONE of the three: its `forwardComputeRef` mirror went
 # into the EXISTING mirror effect, it starts no poll (the forward poll already existed) and it
 # reuses the one wait tick. 11/4/1 standing unchanged across that change is part of the design.
-_EXPECTED_EFFECT_COUNT = 11
-_EXPECTED_INTERVAL_COUNT = 4
+#
+# 11 -> 13 for the two reads that make an ABSENT forward record legible instead of ambiguous, both
+# keyed on the displayed snapshot exactly as the forward-record read beside them is, and both plain
+# GETs: +1 forward-coverage read (how many of this snapshot's ranked members hold a fine series
+# covering its session — an upper bound on what a measurement could reach, disclosed before the
+# click rather than discovered hours into a run) and +1 forward-run-ledger read (whether a
+# measurement of this snapshot has ever finished, which is what distinguishes "never ran" from "ran
+# and found nothing"). They are separate effects rather than branches of the record read because
+# they answer different questions and matter MOST when that read returns null. Intervals and the
+# timeout are untouched: the ledger's refresh piggybacks the EXISTING forward-compute poll's own
+# terminal tick, and the chain still owns exactly one sleep.
+#
+# 13 -> 15 and 4 -> 5 for the deep fine-bar backfill, the FIFTH compute manager: +1 poll (mirroring
+# the existing four polls' shape exactly -- registered only while a job the operator STARTED is
+# running, and it calls no trigger) and +1 plan read keyed on the backfill's own From/To (a plain
+# GET that issues no vendor call, reads no BarStore and starts nothing; it exists so the operator
+# sees how many windows, and where each timeframe stops against the keyless vendor's own history,
+# BEFORE committing to a sweep measured in hours). The timeout is untouched -- the chain still owns
+# exactly one sleep. Neither new effect can reach a trigger, which is the property the scan below
+# actually polices; the counts are here so that scan stays provably complete.
+_EXPECTED_EFFECT_COUNT = 15
+_EXPECTED_INTERVAL_COUNT = 5
 _EXPECTED_TIMEOUT_COUNT = 1
 
 # Everything that could start real work. The chain's own driver is included: an effect that calls
@@ -180,8 +200,10 @@ def _effect_blocks(source: str) -> list[str]:
 
 def _extract_function(source: str, name: str) -> str:
     """The named function's own body -- a brace-depth walk from its declaration's first ``{``
-    (the ``test_desk_hover_tooltip_guard.py`` precedent)."""
-    match = re.search(rf"\bfunction\s+{re.escape(name)}\s*\(", source)
+    (the ``test_desk_hover_tooltip_guard.py`` precedent). The optional ``<...>`` accepts a GENERIC
+    declaration (``function awaitRefreshChainJob<T extends ChainJobSnapshot>(``) -- without it the
+    waiter's own guards would silently fail to find the function they guard."""
+    match = re.search(rf"\bfunction\s+{re.escape(name)}\s*(?:<[^(]*?>)?\s*\(", source)
     assert match is not None, f"{name} is not declared in the source"
     opening = source.index("{", match.end())
     depth = 0
@@ -376,10 +398,15 @@ def test_the_universe_fetch_path_literal_lives_only_in_the_api_client():
 
 
 def test_the_chain_runs_the_five_steps_in_order():
-    """Membership, then top-up, then index, then screen, then the forward returns -- once each, in
-    that order. The screen runs after the bars and the index because its bar-store pin is resolved
-    before its walk and would otherwise pin stale bars; the forward step runs last because it
-    measures the snapshots the screen step just recorded."""
+    """Membership, then top-up, then index, then screen, then the forward returns -- each named
+    exactly once, in that order. The screen runs after the bars and the index because its bar-store
+    pin is resolved before its walk and would otherwise pin stale bars; the forward measurement
+    follows the screen because it measures a snapshot that has to exist first.
+
+    The last two are INTERLEAVED per day rather than run as two passes (see
+    ``test_the_forward_measurement_runs_inside_the_day_loop`` below), which this ordering assertion
+    is deliberately compatible with: the forward trigger still appears exactly once, and still
+    after the screen trigger, because it sits directly beneath it inside the one loop."""
     body = _extract_function(_strip_comments(_DESK_PAGE.read_text()), _DRIVER)
     expected = (
         "triggerDeskUniverseFetch(",
@@ -426,6 +453,127 @@ def test_the_forward_step_guard_can_fail_on_seeded_violations():
     assert re.search(r"handleTriggerForward\(\s*\w+\s*\)", seeded_no_arg) is None
     seeded_displayed = "const started = await handleTriggerForward(displayedSnapshot.id);"
     assert "displayedSnapshot" in seeded_displayed
+
+
+def _day_loop_body(driver_body: str) -> str:
+    """The per-day loop's own body -- a brace walk from ``for (let dayIndex`` (the
+    ``_extract_function`` technique, applied to a loop)."""
+    match = re.search(r"for\s*\(\s*let\s+dayIndex\b", driver_body)
+    assert match is not None, "the driver has no per-day loop"
+    opening = driver_body.index("{", match.end())
+    depth = 0
+    for index in range(opening, len(driver_body)):
+        char = driver_body[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return driver_body[opening : index + 1]
+    raise AssertionError("the day loop's body never closes -- the brace walk ran off the end")
+
+
+def test_the_forward_measurement_runs_inside_the_day_loop():
+    """A DURABILITY property, not a style choice. These ran as two passes -- every screen, then
+    every measurement -- so the second pass began only once the first had finished. On 2026-08-06 a
+    51-day range spent 2h42m recording screens and produced ZERO forward records: the chain lives
+    entirely in the tab, is never resumed after a reload, and whatever ended it in that window took
+    all 51 measurements with it, leaving nothing on disk and no trace they had been due.
+
+    Measuring each day beside its own screen is what makes an interrupted range keep every day it
+    actually finished. If the forward trigger ever moves back out of this loop, that guarantee is
+    silently gone while every other assertion in this file still passes."""
+    body = _extract_function(_strip_comments(_DESK_PAGE.read_text()), _DRIVER)
+    loop = _day_loop_body(body)
+    assert "handleTriggerScreen" in loop, (
+        "the per-day loop no longer runs the screen -- this guard is anchored to the wrong loop"
+    )
+    assert "handleTriggerForward" in loop, (
+        f"{_DRIVER} triggers the forward measurement OUTSIDE its per-day loop -- an interrupted "
+        "range then loses every measurement it had not reached, which is exactly the 2026-08-06 "
+        "loss this interleaving exists to prevent"
+    )
+
+
+def test_the_session_filter_runs_once_before_the_loop_and_never_per_day():
+    """The chain enumerated raw CALENDAR days, so a range screened weekends, US market holidays and
+    dates that had not happened yet exactly like real sessions -- ~280 of the 939 snapshots on disk
+    on 2026-08-08, every one of them carrying an all-absent forward record. The filter that fixes
+    that must resolve ONCE, before the loop: a per-day call would put a network round-trip in front
+    of every day of a 51-day range."""
+    body = _extract_function(_strip_comments(_DESK_PAGE.read_text()), _DRIVER)
+    assert body.count("handleLoadSessionDays(") == 1, (
+        f"{_DRIVER} resolves the recorded sessions {body.count('handleLoadSessionDays(')} times -- "
+        "it must be exactly one awaited read before the per-day loop"
+    )
+    assert "handleLoadSessionDays" not in _day_loop_body(body), (
+        f"{_DRIVER} resolves the recorded sessions INSIDE its per-day loop -- one round-trip per "
+        "day of the range, for an answer that does not change while the chain runs"
+    )
+    assert "runDays[dayIndex]" in _day_loop_body(body), (
+        "the per-day loop still reads the unfiltered calendar days -- the filter's output is not "
+        "what gets screened"
+    )
+
+
+def test_the_session_filter_fails_open_on_every_unproven_answer():
+    """The rail that keeps this from screening LESS than it used to on evidence it does not have: a
+    failed call, an unreachable backend and a store with no daily bars must each return the
+    caller's own day list unchanged."""
+    body = _extract_function(_strip_comments(_DESK_PAGE.read_text()), "handleLoadSessionDays")
+    assert "if (!result.ok || result.data === null) return { days, skipped: 0 };" in body, (
+        "handleLoadSessionDays no longer returns the caller's own days when the read fails"
+    )
+    assert "result.data.evidence.anchor_symbols.length === 0" in body, (
+        "handleLoadSessionDays no longer fails open when no member holds a daily series -- an "
+        "empty session set would then read as 'nothing traded' and screen nothing at all"
+    )
+    # Intersecting with `sessions` is load-bearing: subtracting `non_sessions` would keep every
+    # future date, which is exactly what put two future-dated snapshots on disk.
+    assert "sessions.has(day)" in body, (
+        "handleLoadSessionDays no longer intersects with the recorded sessions -- subtracting the "
+        "proven non-sessions alone keeps every date past the last recorded daily bar"
+    )
+    assert "non_sessions" not in body
+
+
+def test_the_day_loop_guard_can_fail_on_a_seeded_violation():
+    seeded = (
+        "for (let dayIndex = 0; dayIndex < n; dayIndex += 1) { await handleTriggerScreen(day); }\n"
+        "for (const id of ids) { await handleTriggerForward(id); }"
+    )
+    assert "handleTriggerForward" not in _day_loop_body(seeded)
+
+
+def test_the_job_waiter_is_bounded_and_the_driver_names_a_lost_job():
+    """The waiter looped unbounded while ``read()`` returned null -- and null is exactly what a
+    backend restart produces (the manager's snapshot is process-scoped, so the poll sets state to
+    null and then stops polling). The step sat on one frozen line forever, with no error and no
+    timeout. A job that can no longer be observed is a failed step, and the chain must say so."""
+    stripped = _strip_comments(_DESK_PAGE.read_text())
+    waiter = _extract_function(stripped, "awaitRefreshChainJob")
+    assert "REFRESH_CHAIN_LOST_JOB_TICKS" in waiter, (
+        "awaitRefreshChainJob has no tick budget -- a job the backend forgot would hang the step "
+        "forever with no error"
+    )
+    assert '"lost"' in waiter, "awaitRefreshChainJob never reports a lost job as its own outcome"
+
+    body = _extract_function(stripped, _DRIVER)
+    assert '"lost"' in body, (
+        f"{_DRIVER} never handles a lost job -- the waiter's third outcome must halt the step "
+        "explicitly, never fall through as if it had settled"
+    )
+
+
+def test_the_lost_job_budget_is_counted_in_ticks_not_wall_clock():
+    """A backgrounded tab has its timers throttled to >=1s, so a wall-clock deadline would fail a
+    perfectly healthy run whose operator switched away. The budget counts ticks for that reason."""
+    stripped = _strip_comments(_DESK_PAGE.read_text())
+    waiter = _extract_function(stripped, "awaitRefreshChainJob")
+    assert "Date.now()" not in waiter and "performance.now()" not in waiter, (
+        "awaitRefreshChainJob reads a wall clock -- a throttled background tab would then be "
+        "reported as a lost job"
+    )
 
 
 def test_the_chain_never_renders_a_slash_progress_readout():

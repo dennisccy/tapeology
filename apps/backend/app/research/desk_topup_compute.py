@@ -110,9 +110,13 @@ run"`` fallback — never a computed or backfilled value."""
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import threading
+import time
 import uuid
+from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
@@ -174,6 +178,46 @@ TOPUP_WALK_TIMEFRAMES: tuple[str, ...] = DESK_TOPUP_TIMEFRAMES + DESK_TOPUP_FINE
 # (and re-record) the whole clamped span, and the append-only store would grow by ~1MB per symbol
 # per timeframe per day for data the store already holds.
 _TOPUP_FINE_LOOKBACK_DAYS: dict[str, int] = {"1m": 30, "5m": 60}
+
+# How many pairs the walk may have in flight at once. A pair is dominated by ONE vendor round-trip
+# (the walk's own bookkeeping is memoized reads), so the walk is network-bound and overlapping a few
+# pairs is what turns ~600 serial round-trips into ~600/N. The default mirrors
+# ``TAPEOLOGY_EDGE_SWEEP_WORKERS``'s 4 and the config's own
+# ``historical_chunk_max_concurrency``; the ceiling keeps a vendor that starts rate-limiting from
+# being hammered harder, and ``=1`` restores the strictly serial walk exactly as it was.
+#
+# An env knob and a module constant, never a ``Config`` field: it shapes no recorded value, only how
+# many of the SAME requests are outstanding at once, so ``config_fingerprint`` stays frozen (the
+# ``_TOPUP_LOOKBACK_DAYS``/``_INTERVAL_LIMITS`` rationale verbatim).
+_TOPUP_FETCH_WORKERS_ENV = "TAPEOLOGY_DESK_TOPUP_FETCH_WORKERS"
+_DEFAULT_TOPUP_FETCH_WORKERS = 4
+_MAX_TOPUP_FETCH_WORKERS = 8
+
+# A vendor that answers "too many requests" is telling the walk it is already too wide. The
+# remainder of that run is then walked ONE pair at a time (never a raise, never a retry storm) --
+# the affected pair keeps its honest ``"failed"`` outcome and detail, exactly as a serial walk would
+# have recorded it.
+_RATE_LIMIT_MARKERS = ("rate limit", "too many requests", "429")
+
+
+def _topup_fetch_workers() -> int:
+    """The configured in-flight pair count, clamped to ``[1, _MAX_TOPUP_FETCH_WORKERS]``. An unset,
+    empty, or unparseable value is the default — a malformed knob must never fail a run."""
+    raw = os.environ.get(_TOPUP_FETCH_WORKERS_ENV)
+    if not raw:
+        return _DEFAULT_TOPUP_FETCH_WORKERS
+    try:
+        requested = int(raw.strip())
+    except ValueError:
+        return _DEFAULT_TOPUP_FETCH_WORKERS
+    return max(1, min(_MAX_TOPUP_FETCH_WORKERS, requested))
+
+
+def _looks_rate_limited(entry: dict) -> bool:
+    if entry.get("outcome") != "failed":
+        return False
+    detail = str(entry.get("detail") or "").lower()
+    return any(marker in detail for marker in _RATE_LIMIT_MARKERS)
 
 
 def _iso_utc_now() -> str:
@@ -249,10 +293,31 @@ def _pair_window(bar_store: BarStore, symbol: str, timeframe: str) -> dict:
         }
     frozen_from = _iso_bar_epoch(bars[0].epoch)
     frozen_through = _iso_bar_epoch(bars[-1].epoch)
-    if frozen_from[:10] > lookback_start[:10]:
+    is_fine = timeframe in _TOPUP_FINE_LOOKBACK_DAYS
+    if not is_fine and frozen_from[:10] > lookback_start[:10]:
         # The pair's OWN earliest frozen bar is more recent than the lookback start -- its
         # history does not reach back that far yet. Keep asking for the same full window so a
         # short history keeps deepening exactly as it does today.
+        #
+        # FINE timeframes are exempt, and the exemption is the whole point rather than a shortcut
+        # (2026-08-04 regression -- see the test of that name). Two facts collide there:
+        #
+        #   * `lookback_start` is a CALENDAR date while the vendor's first served bar is the next
+        #     TRADING day, so whenever the floor lands on a weekend or holiday `frozen_from` is
+        #     strictly later than it and this branch reads a fully-deepened history as a short one.
+        #     On 2026-08-04 the 1m floor was Sunday 07-05 and the first bar Monday 07-06; the 5m
+        #     floor was Friday 06-05 and escaped purely by calendar luck.
+        #   * a `full_lookback` window is a pure function of the UTC date, so the day's SECOND run
+        #     recomputes the identical key and `record_bar_series` answers it store-first with zero
+        #     vendor calls. That day the 09:01 run recorded through 08-03 (the session opens 13:30)
+        #     and the 20:57 run -- after the close -- reused for 97 of 101 symbols. The session was
+        #     never asked for, and `desk_forward` fell back to 5m for that date.
+        #
+        # There is nothing to deepen INTO for a fine timeframe: `yahoo._INTERVAL_LIMITS` caps 1m at
+        # ~30 days and 5m at ~60, so the retention floor IS the maximum depth and re-requesting the
+        # full clamped span returns the same bars. The tail's start moves with `frozen_through` --
+        # which advances exactly when new bars land -- so a post-close run after a pre-open run
+        # always asks something the store cannot already answer.
         return {
             "requested_window": {"start": lookback_start, "end": today},
             "store_frozen_from": frozen_from,
@@ -358,37 +423,76 @@ def run_topup(
     ``len(members) * len(TOPUP_WALK_TIMEFRAMES)``; a cooperative stop, never a raise (there is no
     cache-publish step here to protect, unlike ``run_strategy_comparison_report``'s
     ``EdgeReportComputeCancelled``)."""
+    def walk_one(symbol: str, timeframe: str) -> dict:
+        """ONE pair's complete outcome entry — the walk's whole body for a single pair, so the
+        serial and overlapped paths below run byte-identical work and differ only in how many are
+        outstanding at once."""
+        window = _pair_window(bar_store, symbol, timeframe)
+        outcome, detail = _run_one_pair(symbol, timeframe, bar_store, bar_index, registry)
+        # goal-desk-iter-32 (J-19): a SECOND, independent call to the SAME pure accessor,
+        # immediately after the attempt, captures what this pair's frozen history actually
+        # reaches AFTER the walk -- never bar_index's window_end_utc (what the run ASKED for),
+        # never a new accessor, never arithmetic over bars. For "reused"/"unchanged"/"failed"
+        # pairs nothing was written between the two calls, so the two reads always agree; for
+        # a "fetched" pair the store gained a new series, so this second read genuinely
+        # reflects it. `null` only when the pair holds nothing at all (see the module
+        # docstring's J-19 section).
+        #
+        # Both reads stay this pair's OWN provenance when pairs overlap: `_pair_window` folds only
+        # `(symbol, timeframe)`'s own recordings, and no two pairs in the walk share one, so a
+        # concurrent pair's write can never move either bound.
+        window_after = _pair_window(bar_store, symbol, timeframe)
+        return {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "outcome": outcome,
+            "detail": detail,
+            "requested_window": window["requested_window"],
+            "store_frozen_from": window["store_frozen_from"],
+            "store_frozen_through": window["store_frozen_through"],
+            "window_basis": window["window_basis"],
+            "store_frozen_through_after": window_after["store_frozen_through"],
+        }
+
+    pairs = [(symbol, timeframe) for symbol in members for timeframe in TOPUP_WALK_TIMEFRAMES]
     outcomes: list[dict] = []
-    for symbol in members:
-        for timeframe in TOPUP_WALK_TIMEFRAMES:
+    workers = _topup_fetch_workers()
+
+    if workers <= 1:
+        for symbol, timeframe in pairs:
             if should_abort is not None and should_abort():
                 return outcomes
-            window = _pair_window(bar_store, symbol, timeframe)
-            outcome, detail = _run_one_pair(symbol, timeframe, bar_store, bar_index, registry)
-            # goal-desk-iter-32 (J-19): a SECOND, independent call to the SAME pure accessor,
-            # immediately after the attempt, captures what this pair's frozen history actually
-            # reaches AFTER the walk -- never bar_index's window_end_utc (what the run ASKED for),
-            # never a new accessor, never arithmetic over bars. For "reused"/"unchanged"/"failed"
-            # pairs nothing was written between the two calls, so the two reads always agree; for
-            # a "fetched" pair the store gained a new series, so this second read genuinely
-            # reflects it. `null` only when the pair holds nothing at all (see the module
-            # docstring's J-19 section).
-            window_after = _pair_window(bar_store, symbol, timeframe)
-            entry = {
-                "symbol": symbol,
-                "timeframe": timeframe,
-                "outcome": outcome,
-                "detail": detail,
-                "requested_window": window["requested_window"],
-                "store_frozen_from": window["store_frozen_from"],
-                "store_frozen_through": window["store_frozen_through"],
-                "window_basis": window["window_basis"],
-                "store_frozen_through_after": window_after["store_frozen_through"],
-            }
+            entry = walk_one(symbol, timeframe)
             outcomes.append(entry)
             if progress is not None:
                 progress(entry)
-    return outcomes
+        return outcomes
+
+    # Overlapped walk: up to `workers` pairs in flight, results consumed STRICTLY in pair order, so
+    # `outcomes` and every `progress` call are byte-identical in content and sequence to the serial
+    # walk above -- only the wall-clock differs. A pair is dispatched only while `should_abort` is
+    # false, so a cancelled run still ends with a short list; pairs already dispatched are allowed
+    # to finish and be recorded (the era-5C "already in flight always completes and persists"
+    # rule), since those pairs HAVE started.
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="desk-topup") as pool:
+        inflight: deque[Future] = deque()
+        dispatched = 0
+        degraded = False
+        while True:
+            aborted = should_abort is not None and should_abort()
+            limit = 1 if degraded else workers
+            while not aborted and dispatched < len(pairs) and len(inflight) < limit:
+                symbol, timeframe = pairs[dispatched]
+                inflight.append(pool.submit(walk_one, symbol, timeframe))
+                dispatched += 1
+            if not inflight:
+                return outcomes
+            entry = inflight.popleft().result()  # a raise here propagates, exactly as when serial
+            if not degraded and _looks_rate_limited(entry):
+                degraded = True
+            outcomes.append(entry)
+            if progress is not None:
+                progress(entry)
 
 
 class DeskTopupComputeManager:
@@ -573,9 +677,9 @@ def main() -> int:
     successful pair up to a failure stays recorded) if any pair's outcome is ``"failed"``, else 0."""
     parser = argparse.ArgumentParser(
         description="Era B \"The Desk\" J-02 CLI warmer -- top up bars for every member of the "
-        "latest registered universe snapshot across the pinned DESK_TOPUP_TIMEFRAMES set "
-        "(1h/4h/1d/1w), store-first, through the SAME POST /research/bars fetch-and-record logic "
-        "the route uses."
+        "latest registered universe snapshot across TOPUP_WALK_TIMEFRAMES (the pinned coarse set "
+        "1h/4h/1d/1w, plus the fine 1m/5m the forward measurement reads), store-first, through the "
+        "SAME POST /research/bars fetch-and-record logic the route uses."
     )
     parser.parse_args()
 
@@ -612,7 +716,9 @@ def main() -> int:
         # unchanged, once per pair, for that pair's OWN fetch.
         window_start, window_end = _fetch_window_now()
         started_utc = _iso_utc_now()
+        walk_started = time.perf_counter()
         outcomes = run_topup(members, bar_store, bar_index, registry, progress=_cli_progress_printer())
+        walk_seconds = time.perf_counter() - walk_started
         # The CLI has no cancel signal -- a run that reaches this line always terminates "done"
         # (the module docstring's J-09 section). An uncaught crash ABOVE this line (inside
         # `run_topup` itself, escaping its own per-pair try/except) is the correct interrupted-run
@@ -636,9 +742,14 @@ def main() -> int:
     n_reused = sum(1 for o in outcomes if o["outcome"] == "reused")
     n_unchanged = sum(1 for o in outcomes if o["outcome"] == "unchanged")
     n_failed = sum(1 for o in outcomes if o["outcome"] == "failed")
+    # The wall-clock is printed, never recorded: how long a walk took is a property of the machine
+    # and the vendor that day, not of the bars it froze, so it has no place in an append-only run
+    # record. (A run's own ``started_utc``/``finished_utc`` already bound it durably for anyone who
+    # needs it after the fact.)
     print(
         f"desk top-up complete: {n_fetched} fetched, {n_reused} reused, {n_unchanged} unchanged, "
-        f"{n_failed} failed."
+        f"{n_failed} failed in {walk_seconds:.1f}s "
+        f"({_topup_fetch_workers()} pair(s) in flight)."
     )
     return 0 if n_failed == 0 else 1
 

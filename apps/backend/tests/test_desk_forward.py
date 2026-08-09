@@ -44,9 +44,14 @@ from app.research.desk_forward import (
     _touch_scan,
     compute_forward,
     compute_forward_input_signature,
+    forward_row_counts,
+    no_fine_bars_reason,
     resolve_desk_forward_dir,
 )
 from app.research.desk_forward_compute import DeskForwardComputeManager, run_forward_and_record
+from app.research.desk_forward_log import ForwardRunStore
+from app.research.desk_forward_pins import resolve_desk_forward_pins
+from app.research.bar_index import BarIndex
 from app.research.desk_routes import get_desk_forward_compute_manager
 from app.research.desk_screen import ScreenStore
 from app.research.routes import ResearchRegistry, set_registry
@@ -966,6 +971,227 @@ def test_recorded_file_round_trips_byte_identical(env):
     assert _canonical(records[0]["summary"]) == _canonical(result["summary"])
 
 
+# --- the durable run ledger (forward-test era) -------------------------------------------------------
+# The store's own discipline lives in test_desk_forward_log.py; these prove the SHARED WRITER
+# contract -- that `record_forward_run` is reached from inside `run_forward_and_record`, the ONE
+# entry point both the manager's worker and the CLI call, at every terminal outcome and only there.
+
+
+def test_a_run_with_no_ledger_store_writes_no_run_record(env, tmp_path):
+    """The default. Every pre-existing caller passes no store and must keep behaving identically --
+    the compute path is unchanged, and nothing is written anywhere new."""
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+
+    record, reused = run_forward_and_record(screen_store, bar_store, CONFIG, forward_store, screen["id"])
+
+    assert record is not None and reused is False
+    assert not (tmp_path / "forward_runs").exists()
+
+
+def test_a_completed_run_records_one_ledger_row_naming_what_it_measured(env, tmp_path):
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0), _above_band_bar("AAA", 1)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    run_store = ForwardRunStore(tmp_path / "forward_runs")
+
+    record, _reused = run_forward_and_record(
+        screen_store, bar_store, CONFIG, forward_store, screen["id"], forward_run_store=run_store,
+    )
+
+    rows, errors = run_store.list()
+    assert errors == []
+    assert len(rows) == 1
+    assert rows[0]["state"] == "done"
+    assert rows[0]["reused"] is False
+    assert rows[0]["screen_id"] == screen["id"]
+    assert rows[0]["screen_date"] == SCREEN_DATE
+    assert rows[0]["forward_id"] == record["id"]
+    assert rows[0]["forward_input_signature"] == record["forward_input_signature"]
+    assert rows[0]["rows_total"] == 1
+    assert rows[0]["rows_measured"] == 1
+    assert rows[0]["rows_absent_no_fine_bars"] == 0
+    assert rows[0]["total_touches"] == record["total_touches"]
+    assert rows[0]["error"] is None
+
+
+def test_a_run_over_a_date_with_no_fine_bars_records_that_it_ran_and_found_nothing(env, tmp_path):
+    """The whole point of this ledger. A screen whose session holds no 1m/5m bars still produces a
+    real forward record -- of pure absence -- and the ledger says so, which is what distinguishes it
+    from a measurement that never ran at all (that leaves no row)."""
+    bar_store, screen_store, forward_store = env
+    # 1d bars only: the touch ladder is 1m/5m, so every row is an honest absence.
+    _plant(bar_store, "AAA", "1d", [_bar("AAA", "1d", _minute(0), 100.0, 101.0, 99.0, 100.5)])
+    screen = _record_screen(
+        screen_store, [_screen_row("AAA", "support"), _screen_row("BBB", "resistance")]
+    )
+    run_store = ForwardRunStore(tmp_path / "forward_runs")
+
+    record, _reused = run_forward_and_record(
+        screen_store, bar_store, CONFIG, forward_store, screen["id"], forward_run_store=run_store,
+    )
+
+    assert all(row["reason"] is not None for row in record["rows"])
+    row = run_store.list_for_screen(screen["id"])[0]
+    assert row["state"] == "done"
+    assert (row["rows_total"], row["rows_measured"], row["rows_absent_no_fine_bars"]) == (2, 0, 2)
+    assert row["total_touches"] == 0
+
+
+def test_a_reused_run_records_a_second_row_carrying_the_existing_records_counts(env, tmp_path):
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0), _above_band_bar("AAA", 1)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    run_store = ForwardRunStore(tmp_path / "forward_runs")
+    first, _ = run_forward_and_record(
+        screen_store, bar_store, CONFIG, forward_store, screen["id"], forward_run_store=run_store,
+    )
+
+    second, reused = run_forward_and_record(
+        screen_store, bar_store, CONFIG, forward_store, screen["id"], forward_run_store=run_store,
+    )
+
+    assert reused is True and second["id"] == first["id"]
+    rows = run_store.list_for_screen(screen["id"])
+    assert len(rows) == 2  # a reuse is its own real attempt, never folded into the first
+    assert rows[1]["reused"] is True
+    assert rows[1]["forward_id"] == first["id"]
+    # ...and it reports what that record HOLDS, never a misleading row of zeroes.
+    assert rows[1]["rows_measured"] == rows[0]["rows_measured"] == 1
+    assert rows[1]["total_touches"] == rows[0]["total_touches"]
+
+
+def test_a_cancelled_walk_records_a_cancelled_row_and_names_no_forward_record(env, tmp_path):
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    run_store = ForwardRunStore(tmp_path / "forward_runs")
+
+    record, _reused = run_forward_and_record(
+        screen_store, bar_store, CONFIG, forward_store, screen["id"],
+        should_abort=lambda: True, forward_run_store=run_store,
+    )
+
+    assert record is None
+    assert forward_store.list() == ([], [])  # a partial walk is never recorded
+    row = run_store.list_for_screen(screen["id"])[0]
+    assert row["state"] == "cancelled"
+    assert row["forward_id"] is None
+    assert row["rows_total"] == 1  # the run's SCOPE, not how far the partial walk got
+
+
+def test_a_failing_walk_records_a_failed_row_carrying_the_error_and_re_raises(env, tmp_path, monkeypatch):
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    run_store = ForwardRunStore(tmp_path / "forward_runs")
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("the bar store went away mid-walk")
+
+    monkeypatch.setattr(desk_forward_compute, "compute_forward", _boom)
+
+    with pytest.raises(RuntimeError, match="went away mid-walk"):
+        run_forward_and_record(
+            screen_store, bar_store, CONFIG, forward_store, screen["id"],
+            forward_run_store=run_store,
+        )
+
+    row = run_store.list_for_screen(screen["id"])[0]
+    assert row["state"] == "failed"
+    assert row["error"] == "the bar store went away mid-walk"
+    assert row["forward_id"] is None
+
+
+def test_an_unknown_screen_id_records_a_failed_row_with_an_honest_null_date(env, tmp_path):
+    bar_store, screen_store, forward_store = env
+    run_store = ForwardRunStore(tmp_path / "forward_runs")
+
+    with pytest.raises(ForwardScreenNotFound):
+        run_forward_and_record(
+            screen_store, bar_store, CONFIG, forward_store, "screen-nope",
+            forward_run_store=run_store,
+        )
+
+    rows, _errors = run_store.list()
+    assert len(rows) == 1
+    assert rows[0]["state"] == "failed"
+    assert rows[0]["screen_date"] is None  # never fabricated from the id string
+    assert "screen-nope" in rows[0]["error"]
+
+
+def test_a_ledger_write_that_itself_raises_leaves_no_row_and_never_double_logs(env, tmp_path, monkeypatch):
+    """The B1 latch. A terminal ledger write that fails (a full disk, a read-only log dir) must not
+    be caught by the outer handler and re-entered as a SECOND "failed" row -- that would fabricate a
+    measurement failure out of the LEDGER's own I/O error, for a record that really was persisted."""
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    run_store = ForwardRunStore(tmp_path / "forward_runs")
+    calls = []
+
+    def _failing_record(*_args, **kwargs):
+        calls.append(kwargs["state"])
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(run_store, "record", _failing_record)
+
+    with pytest.raises(OSError, match="no space left on device"):
+        run_forward_and_record(
+            screen_store, bar_store, CONFIG, forward_store, screen["id"],
+            forward_run_store=run_store,
+        )
+
+    assert calls == ["done"]  # exactly one attempt -- never re-entered as a "failed" second row
+    assert len(forward_store.list()[0]) == 1  # ...and the forward record itself really is on disk
+
+
+def test_the_manager_threads_the_ledger_store_through_to_the_walk(env, tmp_path):
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    run_store = ForwardRunStore(tmp_path / "forward_runs")
+
+    manager = DeskForwardComputeManager()
+    manager.trigger(screen["id"], screen_store, bar_store, CONFIG, forward_store, run_store)
+    snap = _wait_for_terminal(manager)
+
+    assert snap["state"] == "done"
+    row = run_store.list_for_screen(screen["id"])[0]
+    assert row["forward_id"] == snap["forward_id"]
+    manager.join_all(timeout=5)
+
+
+def test_the_no_fine_bars_reason_is_built_and_classified_by_one_owner(env):
+    """`forward_row_counts` classifies the sentence `compute_forward` writes. If the two ever drift,
+    every ledger row's absent count silently becomes zero while the records still say otherwise."""
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1d", [_bar("AAA", "1d", _minute(0), 100.0, 101.0, 99.0, 100.5)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+
+    result = compute_forward(screen, bar_store, CONFIG.config_fingerprint())
+
+    assert result["rows"][0]["reason"] == no_fine_bars_reason(SCREEN_DATE)
+    assert forward_row_counts(result["rows"])["rows_absent_no_fine_bars"] == 1
+
+
+def test_the_other_absence_reason_is_not_counted_as_a_missing_fine_bar(env):
+    """A screen row carrying no band price range is a DIFFERENT absence -- one no top-up can fix --
+    so folding it into the fine-bar count would overstate what fetching bars would recover."""
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)])
+    screen = _record_screen(
+        screen_store, [_screen_row("AAA", "support", price_low=None, price_high=None)]
+    )
+
+    result = compute_forward(screen, bar_store, CONFIG.config_fingerprint())
+    counts = forward_row_counts(result["rows"])
+
+    assert result["rows"][0]["reason"] is not None
+    assert counts == {"rows_total": 1, "rows_measured": 0, "rows_absent_no_fine_bars": 0}
+
+
 # --- the manager -----------------------------------------------------------------------------------
 
 
@@ -1035,6 +1261,209 @@ def test_manager_cancel_mid_walk_records_nothing(env, monkeypatch):
     records, _errors = forward_store.list()
     assert records == []
     manager.join_all(timeout=5)
+
+
+# --- the coverage preflight (forward-test era) -------------------------------------------------------
+# What a measurement could POSSIBLY reach, disclosed before anything is clicked. Index-only: these
+# assert against `BarIndex` rows, never `BarStore` content, which is the whole point (the exact
+# answer costs the same as the walk).
+
+
+def _pins_env(tmp_path):
+    bar_store = BarStore(tmp_path / "bars")
+    screen_store = ScreenStore(tmp_path / "screen")
+    forward_store = ForwardStore(tmp_path / "forward")
+    bar_index = BarIndex(str(tmp_path / "bar_index.db"))
+    return bar_store, screen_store, forward_store, bar_index
+
+
+def test_forward_pins_counts_the_members_whose_fine_window_covers_the_screen_date(tmp_path):
+    bar_store, screen_store, forward_store, bar_index = _pins_env(tmp_path)
+    # AAA's 1m window covers the screen date; BBB's 1m window stops a month before it (the 2025
+    # shape: a screen whose map is real while its session's fine bars were never fetchable).
+    bar_index.insert(_plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)]))
+    bar_index.insert(
+        bar_store.record(
+            symbol="BBB", timeframe="1m", window_start_utc="2026-05-01T00:00:00Z",
+            window_end_utc="2026-05-30T00:00:00Z", feed="test", bars=[_in_band_bar("BBB", 0)],
+        )
+    )
+    screen = _record_screen(
+        screen_store, [_screen_row("AAA", "support"), _screen_row("BBB", "support")]
+    )
+
+    pins = resolve_desk_forward_pins(screen["id"], screen_store, bar_index, forward_store)
+
+    assert pins["screen_id"] == screen["id"]
+    assert pins["screen_date"] == SCREEN_DATE
+    assert pins["as_of"] == AS_OF
+    assert pins["touch_timeframes"] == ["1m", "5m"]
+    assert pins["members_total"] == 2
+    assert pins["members_with_fine_series"] == 1
+    assert pins["versions"] == 0
+    assert pins["recorded"] is None
+
+
+def test_forward_pins_counts_a_member_once_whichever_ladder_rung_covers_the_date(tmp_path):
+    """The walk takes the FINEST rung holding bars, so a 5m-only member is as reachable as a 1m
+    one — and a member with both must not be counted twice."""
+    bar_store, screen_store, forward_store, bar_index = _pins_env(tmp_path)
+    bar_index.insert(_plant(bar_store, "BOTH", "1m", [_in_band_bar("BOTH", 0)]))
+    bar_index.insert(_plant(bar_store, "BOTH", "5m", [_in_band_bar("BOTH", 0, tf="5m")]))
+    bar_index.insert(_plant(bar_store, "FIVEONLY", "5m", [_in_band_bar("FIVEONLY", 0, tf="5m")]))
+    screen = _record_screen(
+        screen_store, [_screen_row("BOTH", "support"), _screen_row("FIVEONLY", "support")]
+    )
+
+    pins = resolve_desk_forward_pins(screen["id"], screen_store, bar_index, forward_store)
+
+    assert pins["members_total"] == 2
+    assert pins["members_with_fine_series"] == 2
+
+
+def test_forward_pins_ignores_the_coarse_timeframes_entirely(tmp_path):
+    """A member with years of 1d/1h bars covering the date is still unreachable: the touch ladder
+    is 1m/5m only, and counting coarse coverage here would promise measurements that cannot
+    happen."""
+    bar_store, screen_store, forward_store, bar_index = _pins_env(tmp_path)
+    bar_index.insert(_plant(bar_store, "COARSE", "1d", [_in_band_bar("COARSE", 0, tf="1d")]))
+    bar_index.insert(_plant(bar_store, "COARSE", "1h", [_in_band_bar("COARSE", 0, tf="1h")]))
+    screen = _record_screen(screen_store, [_screen_row("COARSE", "support")])
+
+    pins = resolve_desk_forward_pins(screen["id"], screen_store, bar_index, forward_store)
+
+    assert pins["members_total"] == 1
+    assert pins["members_with_fine_series"] == 0
+
+
+def test_forward_pins_is_an_upper_bound_not_a_promise(tmp_path):
+    """The honesty this whole disclosure rests on. A covering WINDOW is not bars in that SESSION: a
+    series recorded over the month with nothing on the screen date itself still counts here, and
+    the run then measures nothing. The count may only ever be read as "at most"."""
+    bar_store, screen_store, forward_store, bar_index = _pins_env(tmp_path)
+    # A window spanning June, holding a single bar from a DIFFERENT day than the screen date.
+    other_day = _bar("EMPTY", "1m", E_OPEN - 5 * 86400.0, 100.0, 100.5, 99.5, 100.2)
+    bar_index.insert(_plant(bar_store, "EMPTY", "1m", [other_day]))
+    screen = _record_screen(screen_store, [_screen_row("EMPTY", "support")])
+
+    pins = resolve_desk_forward_pins(screen["id"], screen_store, bar_index, forward_store)
+    assert pins["members_with_fine_series"] == 1  # the window covers the date...
+
+    result = compute_forward(screen, bar_store, CONFIG.config_fingerprint())
+    assert result["rows"][0]["reason"] == no_fine_bars_reason(SCREEN_DATE)  # ...the session is empty
+
+
+def test_forward_pins_names_the_recorded_measurement_once_one_exists(tmp_path):
+    bar_store, screen_store, forward_store, bar_index = _pins_env(tmp_path)
+    bar_index.insert(_plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0), _above_band_bar("AAA", 1)]))
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    record, _reused = run_forward_and_record(screen_store, bar_store, CONFIG, forward_store, screen["id"])
+
+    pins = resolve_desk_forward_pins(screen["id"], screen_store, bar_index, forward_store)
+
+    assert pins["versions"] == 1
+    assert pins["recorded"] == {
+        "id": record["id"],
+        "created_utc": record["created_utc"],
+        "rows_with_touches": record["rows_with_touches"],
+        "total_touches": record["total_touches"],
+    }
+
+
+def test_forward_pins_on_an_unknown_screen_id_is_honestly_empty(tmp_path):
+    _bar_store, screen_store, forward_store, bar_index = _pins_env(tmp_path)
+
+    pins = resolve_desk_forward_pins("screen-nope", screen_store, bar_index, forward_store)
+
+    assert pins == {
+        "screen_id": "screen-nope",
+        "screen_date": None,
+        "as_of": None,
+        "touch_timeframes": ["1m", "5m"],
+        "members_total": 0,
+        "members_with_fine_series": 0,
+        "versions": 0,
+        "recorded": None,
+        # An id that resolves to no screen resolves to no date either, so there is nothing to
+        # place against the daily bars -- unknown, whether or not a store was supplied.
+        "session": {"state": "unknown", "evidence": None},
+    }
+
+
+def test_forward_pins_takes_a_bar_store_only_for_the_session_state(tmp_path):
+    """The fine-coverage count still resolves through ``BarIndex`` alone -- the reason this guard
+    existed, and the reason a page-load GET can afford it. The ``bar_store`` parameter was added
+    for exactly one thing (``session.state``: whether the screen date has a recorded daily bar),
+    reaches one accessor over a bounded handful of anchors, and DEFAULTS TO NONE so the honest
+    non-answer survives a caller that has none. Asserted on the signature so a future parameter
+    still has to come here and say why."""
+    import inspect
+
+    signature = inspect.signature(resolve_desk_forward_pins)
+    assert list(signature.parameters) == [
+        "screen_id", "screen_store", "bar_index", "forward_store", "bar_store",
+    ]
+    assert signature.parameters["bar_store"].default is None
+
+
+def test_forward_pins_without_a_bar_store_says_unknown_rather_than_guessing(tmp_path):
+    _bar_store, screen_store, forward_store, bar_index = _pins_env(tmp_path)
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+
+    pins = resolve_desk_forward_pins(screen["id"], screen_store, bar_index, forward_store)
+
+    assert pins["session"] == {"state": "unknown", "evidence": None}
+
+
+def test_forward_pins_names_a_screen_date_with_a_recorded_daily_bar_a_session(tmp_path):
+    bar_store, screen_store, forward_store, bar_index = _pins_env(tmp_path)
+    _plant(bar_store, "AAA", "1d", [_bar("AAA", "1d", E_OPEN, 100.0, 101.0, 99.0, 100.5)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+
+    pins = resolve_desk_forward_pins(
+        screen["id"], screen_store, bar_index, forward_store, bar_store=bar_store
+    )
+
+    assert pins["session"]["state"] == "recorded_session"
+    assert pins["session"]["evidence"]["anchor_symbols"] == ["AAA"]
+
+
+def test_forward_pins_names_a_screen_date_the_daily_bars_bracket_but_skip(tmp_path):
+    """The weekend/holiday case, and the whole reason a table of em-dashes was unreadable: daily
+    bars exist on both sides of the screen date and none on it."""
+    bar_store, screen_store, forward_store, bar_index = _pins_env(tmp_path)
+    _plant(
+        bar_store, "AAA", "1d",
+        [
+            _bar("AAA", "1d", E_OPEN - 86400.0, 100.0, 101.0, 99.0, 100.5),
+            _bar("AAA", "1d", E_OPEN + 86400.0, 100.0, 101.0, 99.0, 100.5),
+        ],
+    )
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+
+    pins = resolve_desk_forward_pins(
+        screen["id"], screen_store, bar_index, forward_store, bar_store=bar_store
+    )
+
+    assert pins["session"]["state"] == "not_a_recorded_session"
+
+
+def test_forward_pins_names_a_screen_date_past_the_last_recorded_daily_bar(tmp_path):
+    """The ``/desk`` default view on 2026-08-08: the newest recorded screen was the coming Monday,
+    for which no daily bar exists yet. Distinct from a proven non-session -- nothing is claimed
+    about whether that Monday will trade."""
+    bar_store, screen_store, forward_store, bar_index = _pins_env(tmp_path)
+    _plant(
+        bar_store, "AAA", "1d",
+        [_bar("AAA", "1d", E_OPEN - 5 * 86400.0, 100.0, 101.0, 99.0, 100.5)],
+    )
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+
+    pins = resolve_desk_forward_pins(
+        screen["id"], screen_store, bar_index, forward_store, bar_store=bar_store
+    )
+
+    assert pins["session"]["state"] == "after_recorded_evidence"
 
 
 # --- the routes ------------------------------------------------------------------------------------
@@ -1115,6 +1544,69 @@ def test_route_compute_runs_to_done_and_the_bulk_list_serves_v2_meta(route_ctx):
     assert meta["parameters"]["max_touches_per_row"] == 8
     assert "rows" not in meta
     assert listing["latest"]["id"] == record["id"]
+
+
+def test_the_runs_and_pins_routes_are_honestly_empty_before_anything_is_computed(route_ctx):
+    client, _manager, _tmp = route_ctx
+    runs = client.get("/research/desk/forward/runs")
+    assert runs.status_code == 200
+    assert runs.json() == {"runs": [], "latest": None, "integrity_errors": []}
+
+    pins = client.get("/research/desk/forward/pins", params={"screen_id": "screen-nope"})
+    assert pins.status_code == 200
+    assert pins.json()["members_total"] == 0
+    assert pins.json()["members_with_fine_series"] == 0
+    assert pins.json()["recorded"] is None
+
+    assert client.get("/research/desk/forward/pins").status_code == 422  # screen_id is REQUIRED
+
+
+def test_the_runs_route_records_a_row_the_compute_snapshot_would_have_lost(route_ctx):
+    """The whole point, end to end: the manager's own snapshot is process-scoped, so after a
+    restart it says nothing about what ran. The ledger row survives it, and says both that the
+    measurement happened and what it found."""
+    client, manager, tmp = route_ctx
+    bar_store = BarStore(tmp / "bars")
+    screen_store = ScreenStore(tmp / "screen")
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0), _above_band_bar("AAA", 1)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+
+    client.post("/research/desk/forward/compute", json={"screen_id": screen["id"]})
+    snap = _wait_for_terminal(manager)
+
+    runs = client.get("/research/desk/forward/runs").json()
+    assert len(runs["runs"]) == 1
+    row = runs["runs"][0]
+    assert row["state"] == "done"
+    assert row["screen_id"] == screen["id"]
+    assert row["forward_id"] == snap["forward_id"]
+    assert row["rows_total"] == 1
+    assert row["rows_absent_no_fine_bars"] == 0
+    assert runs["latest"]["id"] == row["id"]
+
+    narrowed = client.get("/research/desk/forward/runs", params={"screen_id": screen["id"]}).json()
+    assert [r["id"] for r in narrowed["runs"]] == [row["id"]]
+    other = client.get("/research/desk/forward/runs", params={"screen_id": "screen-other"}).json()
+    assert other == {"runs": [], "latest": None, "integrity_errors": []}
+
+
+def test_the_pins_route_discloses_the_reachable_upper_bound_for_a_recorded_snapshot(route_ctx):
+    client, _manager, tmp = route_ctx
+    bar_store = BarStore(tmp / "bars")
+    screen_store = ScreenStore(tmp / "screen")
+    bar_index = BarIndex(str(tmp / "bar_index.db"))  # where get_bar_index resolves for this env
+    bar_index.insert(_plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)]))
+    screen = _record_screen(
+        screen_store, [_screen_row("AAA", "support"), _screen_row("NOFINE", "support")]
+    )
+
+    pins = client.get("/research/desk/forward/pins", params={"screen_id": screen["id"]}).json()
+
+    assert pins["screen_date"] == SCREEN_DATE
+    assert pins["members_total"] == 2
+    assert pins["members_with_fine_series"] == 1
+    assert pins["touch_timeframes"] == ["1m", "5m"]
+    assert pins["versions"] == 0 and pins["recorded"] is None
 
 
 # --- register, fingerprint, CLI --------------------------------------------------------------------

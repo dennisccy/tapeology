@@ -424,8 +424,26 @@ def get_dataset(dataset_id: str, store: DatasetStore = Depends(get_dataset_store
 def get_bar_store() -> BarStore:
     """The bar store rooted at the config-owned directory (``TAPEOLOGY_BAR_DIR`` override,
     package-anchored default). A FastAPI dependency so tests can point it at a temp dir via the
-    env var or override it outright (the ``get_dataset_store`` pattern)."""
-    return BarStore(CONFIG.bar_dir_resolved())
+    env var or override it outright (the ``get_dataset_store`` pattern).
+
+    Also wires the durable stat-keyed verified-metadata cache (``bar_verify_cache.py``) on the
+    SAME config-DERIVED, env-overridable shape ``get_bar_index``/``get_dataset_store`` use — the
+    ``TAPEOLOGY_BAR_VERIFY_CACHE_DB`` env var if set, else a file co-located as a SIBLING of the
+    resolved bar directory (``.data/bars`` -> ``.data/bar_verify_cache.db``). ``config.py`` stays
+    byte-identical, so ``config_fingerprint`` is unaffected; and every existing test gets this
+    hermetically for free, since the derived default lives beside whatever ``TAPEOLOGY_BAR_DIR``
+    the test points at."""
+    return BarStore(CONFIG.bar_dir_resolved(), verify_cache_db_path=bar_verify_cache_db_path())
+
+
+def bar_verify_cache_db_path() -> str:
+    """The resolved durable bar-verify-cache path — the ONE resolver every entry point shares
+    (the FastAPI dependency above, the desk CLI warmers, and each worker process of a parallel
+    screen walk), so a worker can never end up re-verifying a store the server already remembers."""
+    override = os.environ.get("TAPEOLOGY_BAR_VERIFY_CACHE_DB")
+    if override:
+        return override
+    return os.path.join(os.path.dirname(CONFIG.bar_dir_resolved()), "bar_verify_cache.db")
 
 
 def get_bar_index() -> BarIndex:

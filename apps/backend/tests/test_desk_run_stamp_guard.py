@@ -9,17 +9,26 @@ passes. For anyone east of New York the gap is the ordinary evening case, not an
 recorded a screen for a session already over. Saturdays and Sundays stamped a date with no session
 at all.
 
-``nextTradingStamp`` keys on the absolute close instant (16:00 US eastern, in UTC on each side of
-the daylight-time boundary), so the operator's own timezone never enters the result.
+``nextTradingStamp`` keys on the absolute close instant -- 16:00 US eastern -- so the operator's
+own timezone never enters the result.
+
+It used to reach that instant by hand: two UTC close hours (20 and 21) picked apart by a
+``isUsEasternDaylightDate`` predicate that re-derived the second-Sunday-of-March and
+first-Sunday-of-November boundaries itself. That is a rule the US Congress has moved before and can
+move again, restated in this page rather than looked up. It now reads the ET wall-clock hour
+straight off ``formatDateTimeET``, whose zone comes from the IANA database via ``Intl``, so the
+daylight-time rule is data rather than arithmetic and there is exactly one close hour to name.
+These guards pin THAT structure; the counter-tests below still name the two deleted constants so
+the hand-rolled table cannot quietly return.
 
 Guards:
 
   (a) the resolver is WIRED -- the blank-To default and the ceiling in ``validateScreenDayRange``
       both come from ``nextTradingStamp``, and neither is still ``todayUtcDate()``. A stamp the
       submit path does not use is decoration.
-  (b) the resolver keys on the close instant -- it takes an injectable ``now``, branches on the UTC
-      weekday, and carries both close hours and both daylight-time boundaries. It reads no clock of
-      its own beyond ``now`` and fetches nothing.
+  (b) the resolver keys on the close instant -- it takes an injectable ``now``, resolves both the
+      day and the hour through the ONE shared ET formatter, and names its close hour once. It reads
+      no clock of its own beyond ``now``, carries no offset table, and fetches nothing.
   (c) the target is STATED before the click, and its copy clears the lint.
   (d) that copy cannot intercept a page-wide golden assertion.
 
@@ -55,9 +64,9 @@ _RENDERED_STAMP = "Run Screen will record 2026-08-06."
 # operator has to translate.
 _RENDERED_COPY = (
     _RENDERED_STAMP,
-    "To day — blank = upcoming US session",
-    "From day — blank = the To day",
-    "Enter the To day as a real YYYY-MM-DD, or leave it blank for the upcoming US session date.",
+    "To day (US market day) — blank = upcoming US session",
+    "From day (US market day) — blank = the To day",
+    "Enter the To day as a real yyyy-MM-dd, or leave it blank for the upcoming US session date.",
     "The To day is after the upcoming US session date — a run can cover that day or any earlier day.",
 )
 
@@ -188,8 +197,9 @@ def test_the_submitted_day_resolves_through_the_session_stamp():
 
 
 def test_the_stamp_keys_on_the_close_instant_not_the_operators_clock():
-    """(b) The resolver's structure: an injectable ``now``, a UTC-weekday branch, both close hours
-    and both daylight-time boundaries. Nothing here may read a clock of its own or fetch."""
+    """(b) The resolver's structure: an injectable ``now``, both the day and the close-hour
+    comparison read through the ONE shared ET formatter, one named close hour, and a weekday branch
+    taken on the MARKET date. Nothing here may read a clock of its own or fetch."""
     source = _DESK_PAGE.read_text()
     stamp = _extract_function(source, "nextTradingStamp")
     assert "now: Date = new Date()" in stamp, (
@@ -197,25 +207,42 @@ def test_the_stamp_keys_on_the_close_instant_not_the_operators_clock():
         "unexercisable, and this repo has no frontend test runner to catch that"
     )
     assert "getUTCDay()" in stamp, "nextTradingStamp no longer branches on the UTC weekday"
-    for constant in ("US_CLOSE_HOUR_UTC_DAYLIGHT", "US_CLOSE_HOUR_UTC_STANDARD"):
-        assert constant in stamp, f"nextTradingStamp no longer reads {constant}"
-    assert "isUsEasternDaylightDate(" in stamp, (
-        "nextTradingStamp no longer picks the close hour by daylight-time state -- one of the two "
-        "halves of the year would roll an hour early or late"
+    # The day and the hour BOTH come from the shared formatter. Deriving either from `now`'s own
+    # local or UTC fields is the regression class this whole guard exists for: two operators in
+    # different zones would stamp different sessions from the same instant.
+    assert "formatDateET(now)" in stamp, (
+        "nextTradingStamp no longer resolves the market DATE through the shared ET formatter"
+    )
+    assert "formatDateTimeET(now" in stamp, (
+        "nextTradingStamp no longer reads the market HOUR through the shared ET formatter -- a "
+        "close comparison against the operator's own hour is wrong everywhere but New York"
+    )
+    assert "US_CLOSE_HOUR_ET" in stamp, "nextTradingStamp no longer reads US_CLOSE_HOUR_ET"
+    assert "const US_CLOSE_HOUR_ET = 16;" in source, (
+        "the close hour is no longer named once as an ET wall-clock hour"
     )
     for forbidden in ("fetch(", "Math.random", "toLocaleDateString", "getTimezoneOffset"):
         assert forbidden not in stamp, (
             f"nextTradingStamp contains {forbidden!r} -- the stamp must be a pure function of the "
             "absolute instant, never of where the operator happens to be"
         )
-    assert "const US_CLOSE_HOUR_UTC_DAYLIGHT = 20;" in source
-    assert "const US_CLOSE_HOUR_UTC_STANDARD = 21;" in source
-    boundaries = _extract_function(source, "isUsEasternDaylightDate")
-    assert "nthSundayUtc(year, 2, 2)" in boundaries, (
-        "the daylight-time window no longer starts on the second Sunday of March"
-    )
-    assert "nthSundayUtc(year, 10, 1)" in boundaries, (
-        "the daylight-time window no longer ends on the first Sunday of November"
+    # The hand-rolled daylight-time table this replaced must not come back. Its two UTC close hours
+    # and its own second-Sunday/first-Sunday arithmetic restated a rule that has been legislated
+    # more than once; the IANA zone behind `formatDateTimeET` is the maintained copy of it.
+    for retired in (
+        "US_CLOSE_HOUR_UTC_DAYLIGHT",
+        "US_CLOSE_HOUR_UTC_STANDARD",
+        "isUsEasternDaylightDate",
+        "nthSundayUtc",
+    ):
+        assert retired not in source, (
+            f"{retired!r} is back on the page -- the daylight-time rule belongs to the IANA zone "
+            "the shared formatter reads, never to hand-written boundary arithmetic here"
+        )
+    # The zone itself is named exactly once, in the shared module.
+    datetime_lib = (_FRONTEND_ROOT / "lib" / "datetime.ts").read_text()
+    assert 'US_MARKET_TZ = "America/New_York"' in datetime_lib, (
+        "the market zone is no longer named once in lib/datetime.ts"
     )
 
 
@@ -243,6 +270,12 @@ def test_the_shipped_labels_no_longer_promise_today():
         "the To-day label still promises today"
     )
     assert re.search(r"blank it? blank to run today", source) is None
+    # The fields name the SESSION they submit, not a timezone. `(UTC)` on a day field asked the
+    # operator to translate a value that has no clock to translate.
+    assert "(UTC)" not in source, (
+        "a day field is labelled with a timezone again -- these submit a bare US market date, and "
+        "naming a zone on a value with no clock is an instruction to convert nothing"
+    )
 
 
 def test_the_run_stamp_copy_cannot_intercept_a_shipped_golden():
@@ -282,6 +315,28 @@ def test_the_run_stamp_guards_can_fail_on_seeded_violations():
     stamp = _extract_function(seeded_stamp, "nextTradingStamp")
     assert "now: Date = new Date()" not in stamp
     assert "getUTCDay()" not in stamp
+    assert "formatDateET(now)" not in stamp
+    assert "US_CLOSE_HOUR_ET" not in stamp
+
+    # The two ways the clock can go wrong that a bare "does it compile" check would not see: the
+    # operator's own hour standing in for the exchange's, and a re-hand-rolled daylight-time table.
+    seeded_local_stamp = (
+        "function nextTradingStamp(now: Date = new Date()): string {\n"
+        "  const etHour = now.getHours();\n"
+        "  return now.toISOString().slice(0, 10);\n"
+        "}\n"
+    )
+    local_stamp = _extract_function(seeded_local_stamp, "nextTradingStamp")
+    assert "formatDateTimeET(now" not in local_stamp
+
+    seeded_dst_table = (
+        "const US_CLOSE_HOUR_UTC_DAYLIGHT = 20;\n"
+        "function isUsEasternDaylightDate(iso: string): boolean { return true; }\n"
+    )
+    assert any(
+        retired in seeded_dst_table
+        for retired in ("US_CLOSE_HOUR_UTC_DAYLIGHT", "isUsEasternDaylightDate")
+    )
 
     seeded_control = "function ScreenComputeControl({ runDay }: Props) {\n  return null;\n}\n"
     assert _STAMP_TESTID not in _extract_function(seeded_control, "ScreenComputeControl")

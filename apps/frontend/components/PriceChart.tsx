@@ -168,9 +168,10 @@ export function PriceChart({
   );
 
   // The live tape bars (the moving bars), mapped to the shared real-epoch `BarRow` shape the chart
-  // draws. Tape mode: the logical-second candles at true clock time (`epoch_anchor + logical_ts`,
-  // volume unknown -> 0). History mode: the wall-clock timeframe candles VERBATIM (already real-epoch
-  // rows with volume). Read-only projections — no re-binning.
+  // draws. Tape mode: the logical-second candles at true clock time (`epoch_anchor + logical_ts`),
+  // carrying the volume the engine's bar accumulator now sums per bin. History mode: the wall-clock
+  // timeframe candles VERBATIM (already real-epoch rows with volume). Read-only projections — no
+  // re-binning, and the volume is the served figure either way (never a placeholder).
   const liveBars = useMemo<BarRow[]>(() => {
     if (!history) return [];
     if (history.kind === "tape") {
@@ -181,7 +182,7 @@ export function PriceChart({
         high: b.high,
         low: b.low,
         close: b.close,
-        volume: 0,
+        volume: b.volume,
       }));
     }
     return history.timeframe_bars;
@@ -378,7 +379,6 @@ export function PriceChart({
         onNeedOlder={barWindow.loadOlder}
         loadingMore={barWindow.loading}
         secondsVisible={view.kind === "tape"}
-        clockFormatter
         extraMarkers={extraMarkers}
         extraPriceLines={extraPriceLines}
       />
@@ -386,7 +386,8 @@ export function PriceChart({
       <p className="mt-2 text-xs text-slate-500" data-testid="cockpit-chart-caption">
         {view.kind === "history"
           ? `Recorded ${view.timeframe} bars sit left of the start marker; bars to its right are built live from the tape.`
-          : `Logical ${view.bar}s bars built live from the tape.`}
+          : `Logical ${view.bar}s bars built live from the tape.`}{" "}
+        Traded volume is drawn beneath the candles; times are US Eastern.
       </p>
 
       {/* era-5B J-06: the tradable-band overlay's companion strip. Additive/non-blocking — while

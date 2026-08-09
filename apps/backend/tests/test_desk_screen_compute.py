@@ -17,6 +17,7 @@ import shutil
 import sys
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -558,6 +559,94 @@ def test_post_trigger_with_no_universe_registered_refuses_and_persists_nothing(r
     assert "POST /research/desk/universe/fetch" in r.json()["detail"]
 
 
+# --- The non-session refusal --------------------------------------------------------------------
+# The second reason a screen compute refuses before starting anything, and the same defect class as
+# the no-universe refusal above: a screen for a Saturday, a US market holiday, or a date that has
+# not happened yet is permanent, useless, and structurally unmeasurable (its forward record comes
+# back all-absent by construction). ~280 of the 939 snapshots on disk on 2026-08-08 were exactly
+# that. The refusal is derived from recorded DAILY bars, never a hardcoded calendar, and fails OPEN
+# on every unproven case -- which is what keeps every hermetic fixture in this suite working.
+
+
+def _plant_daily_sessions(tmp_path, symbol: str, days: list[str]) -> None:
+    """One daily bar per named date, into the SAME scoped bar dir ``route_ctx`` points the app at."""
+    bar_store = BarStore(tmp_path / "bars")
+    bar_store.record(
+        symbol=symbol, timeframe="1d",
+        window_start_utc=f"{days[0]}T00:00:00Z", window_end_utc=f"{days[-1]}T23:59:59Z",
+        feed="yahoo",
+        bars=[
+            RawBar(
+                symbol, "1d",
+                datetime.fromisoformat(f"{day}T14:30:00+00:00").timestamp(),
+                10.0, 11.0, 9.0, 10.5, 1000,
+            )
+            for day in days
+        ],
+    )
+
+
+def _register_one_member(tmp_path, symbol: str = "AAA") -> None:
+    UniverseStore(tmp_path / "universe").record(
+        members=[symbol], raw_members={symbol: symbol},
+        source_url="https://example.invalid/constituents", min_members=1, max_members=999,
+    )
+
+
+def test_post_trigger_on_a_bracketed_non_session_refuses_and_persists_nothing(route_ctx):
+    """The daily bars record 2026-06-05 and 2026-06-08 and nothing between -- so 2026-06-06 is
+    PROVABLY not a session, and screening it would leave a snapshot nothing can ever measure."""
+    client, fresh_manager, tmp_path = route_ctx
+    _register_one_member(tmp_path)
+    _plant_daily_sessions(tmp_path, "AAA", ["2026-06-04", "2026-06-05", "2026-06-08"])
+
+    r = client.post("/research/desk/screen/compute", json={"screen_date": "2026-06-06"})
+
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert "2026-06-06 is not a recorded trading session" in detail
+    # The refusal names its evidence rather than asserting a calendar nobody here holds.
+    assert "AAA" in detail and "2026-06-04 through 2026-06-08" in detail
+    assert client.get("/research/desk/screen").json()["screens"] == []
+    assert fresh_manager.snapshot() is None
+
+
+def test_post_trigger_on_a_recorded_session_is_not_refused(route_ctx):
+    """The other direction of the same guard -- a lint that only ever refuses proves nothing."""
+    client, _mgr, tmp_path = route_ctx
+    _register_one_member(tmp_path)
+    _plant_daily_sessions(tmp_path, "AAA", ["2026-06-04", "2026-06-05", "2026-06-08"])
+
+    r = client.post("/research/desk/screen/compute", json={"screen_date": "2026-06-05"})
+
+    assert r.status_code == 200
+    assert r.json()["started"] is True
+
+
+def test_post_trigger_past_the_last_recorded_daily_bar_is_not_refused(route_ctx):
+    """A date after the anchors' recorded span is NOT claimed as a non-session: daily bars cannot
+    prove anything about a session nobody has recorded yet. The refresh chain drops those dates by
+    intersecting with the recorded sessions instead; this route refuses only what is provable."""
+    client, _mgr, tmp_path = route_ctx
+    _register_one_member(tmp_path)
+    _plant_daily_sessions(tmp_path, "AAA", ["2026-06-04", "2026-06-05"])
+
+    r = client.post("/research/desk/screen/compute", json={"screen_date": "2099-01-01"})
+
+    assert r.status_code == 200
+
+
+def test_post_trigger_with_no_daily_bars_recorded_refuses_nothing(route_ctx):
+    """The fail-open rail that keeps every hermetic fixture in this suite working: with no daily
+    evidence at all, the refusal is silent and this route behaves exactly as it did before."""
+    client, _mgr, tmp_path = route_ctx
+    _register_one_member(tmp_path)
+
+    r = client.post("/research/desk/screen/compute", json={"screen_date": "2026-06-06"})
+
+    assert r.status_code == 200
+
+
 def test_post_trigger_refusal_names_a_damaged_universe_snapshot_rather_than_claiming_none_exists(
     route_ctx,
 ):
@@ -714,6 +803,31 @@ def test_cli_with_date_runs_to_completion_against_a_scoped_fixture_dir(tmp_path,
     records, errors = screen_store.list()
     assert errors == [] and len(records) == 1
     assert any(r["symbol"] == "AAPL" for r in records[0]["rows"])
+
+
+def test_cli_refuses_a_bracketed_non_session_so_the_terminal_is_not_a_way_around_the_route(
+    tmp_path, monkeypatch, capsys
+):
+    """The CLI carries the identical non-session refusal ``POST /research/desk/screen/compute``
+    applies. Without it, the guard would be one `python -m` away from being bypassed -- and the
+    snapshots it exists to stop are exactly the ones a scripted range walk produces.
+
+    2026-06-20 is a Saturday: the AAPL daily fixture records the sessions on both sides of it and
+    nothing on it."""
+    _set_cli_env(monkeypatch, tmp_path)
+    _register_fixture_universe(tmp_path / "universe")
+    bar_store = BarStore(tmp_path / "bars")
+    bar_index = BarIndex(str(tmp_path / "bar_index.db"))
+    _seed_yahoo_fixture(bar_store, bar_index, _load_yahoo_fixture(AAPL_DAILY_FIXTURE))
+    monkeypatch.setattr(sys, "argv", ["desk_screen_compute", "--date", "2026-06-20"])
+
+    exit_code = desk_screen_compute.main()
+
+    assert exit_code == 2
+    assert "2026-06-20 is not a recorded trading session" in capsys.readouterr().out
+    # Nothing was walked and nothing was persisted.
+    records, errors = ScreenStore(tmp_path / "screen").list()
+    assert errors == [] and records == []
 
 
 def test_cli_second_invocation_with_identical_pins_reuses_the_existing_snapshot(tmp_path, monkeypatch, capsys):

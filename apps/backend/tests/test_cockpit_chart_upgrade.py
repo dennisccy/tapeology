@@ -74,9 +74,14 @@ def test_price_chart_passes_live_and_overlay_props_to_the_renderer():
         "extraMarkers={extraMarkers}",
         "extraPriceLines={extraPriceLines}",
         'asOfLabel="start"',
-        "clockFormatter",
     ):
         assert prop in source, f"expected the cockpit to pass {prop} to StructureChart"
+    # The axis formatter is no longer a cockpit-only prop: StructureChart renders every axis on the
+    # market clock unconditionally, so the cockpit must NOT be re-granted an opt-in for it (that
+    # opt-in is exactly what let the two pages disagree about what a given tick meant).
+    assert "clockFormatter" not in source, (
+        "the ET axis is unconditional in StructureChart — the cockpit must not pass an opt-in prop"
+    )
 
 
 # --- 3. live "history" bars are the backend's timeframe bars (no client re-binning) -------------
@@ -126,7 +131,6 @@ def test_structure_chart_cockpit_props_are_optional_with_defaults():
         "extraMarkers?: ChartMarkerSpec[]",
         "extraPriceLines?: ChartPriceLineSpec[]",
         "secondsVisible?: boolean",
-        "clockFormatter?: boolean",
         "asOfLabel?: string",
     ):
         assert decl in source, f"expected optional prop {decl}"
@@ -136,10 +140,34 @@ def test_structure_chart_cockpit_props_are_optional_with_defaults():
         "extraMarkers = []",
         "extraPriceLines = []",
         "secondsVisible = false",
-        "clockFormatter = false",
         'asOfLabel = "as-of"',
     ):
         assert default in source, f"expected default {default}"
+    # One clock for both pages: the axis + crosshair formatter is applied at chart creation for
+    # EVERY caller, never behind a per-call-site flag. That opt-in is exactly what let the cockpit
+    # render local time while /structure fell through to the library's UTC default, so the two
+    # charts disagreed about what "09:30" meant.
+    assert "clockFormatter" not in source, (
+        "StructureChart must not carry an opt-in axis-formatter prop"
+    )
+    assert "tickMarkFormatter: (time: number, tickMarkType: number) =>" in source, (
+        "the axis tick formatter no longer reads the library's own tick GRANULARITY -- printing "
+        "the full 23-character stamp on every tick leaves a wide chart showing four labels and "
+        "repeats a meaningless 00:00:00 across every daily bar"
+    )
+    assert "timeFormatter: (time: number) => formatDateTimeET(time * 1000)" in source, (
+        "the crosshair readout no longer prints the COMPLETE market-clock stamp -- that readout is "
+        "where a precise reading is asked for rather than scanned"
+    )
+    # Both label shapes come from the shared module. A tick that marks a day/month/year prints a
+    # date; a tick inside a session prints the clock time alone. Both are ET.
+    for granularity in (
+        "lc.TickMarkType.TimeWithSeconds",
+        "lc.TickMarkType.Time",
+        "formatTimeET(time * 1000)",
+        "formatDateET(time * 1000)",
+    ):
+        assert granularity in source, f"expected the granularity-aware axis label: {granularity}"
     # The drawing additions must not have re-introduced fitContent (the squeeze paging exists to end).
     assert "fitContent(" not in _code(STRUCTURE_CHART)
 

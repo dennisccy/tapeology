@@ -280,7 +280,7 @@ def test_lint_rejects_a_seeded_banned_phrase(phrase):
         "Record your entry; record your exit.",
         # UI field instructions — "Enter a ticker" is typing into a field, never a trade command.
         "Enter a ticker symbol to watch.",
-        "Enter a valid date as dd-MM-yyyy.",
+        "Enter a valid date as yyyy-MM-dd.",
         # The measurement-framing honesty copy — DENIES edge / profit / win-rate / forecast (negated).
         "These are journaled measurements — not a profitability claim, an edge, a win rate, or a forecast.",
         "Realized move in R units, never currency, never a profit/loss claim.",

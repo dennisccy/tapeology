@@ -62,6 +62,7 @@ from __future__ import annotations
 
 import argparse
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Callable
@@ -74,6 +75,7 @@ from .desk_forward import ForwardStore, resolve_desk_forward_dir
 from .desk_screen import (
     ScreenAlreadyRecorded,
     ScreenStore,
+    _screen_workers,
     compute_screen,
     resolve_desk_screen_dir,
     resolve_screen_pins,
@@ -81,6 +83,7 @@ from .desk_screen import (
 )
 from .desk_screen_decision import resolve_screen_decision
 from .desk_screen_log import ScreenRunStore, record_screen_run, resolve_desk_screen_log_dir
+from .desk_sessions import refuse_if_not_a_session
 from .desk_universe import UniverseStore
 from .routes import get_bar_index, get_bar_store, get_dataset_store
 
@@ -523,15 +526,33 @@ def main() -> int:
     # forward records pointing at an id nothing can resolve.
     forward_store = ForwardStore(resolve_desk_forward_dir(config.desk_universe_dir_resolved()))
 
+    # The identical non-session refusal ``POST /research/desk/screen/compute`` applies, so the
+    # terminal is not a way around it (a screen for a Saturday, a market holiday, or a date that
+    # has not happened yet is permanent, useless and structurally unmeasurable). Fails OPEN: with
+    # no daily bars recorded nothing is refused, and this CLI behaves exactly as it did before.
+    universe_records, _universe_errors = universe_store.list()
+    if universe_records:
+        refusal = refuse_if_not_a_session(
+            args.date, bar_store, list(universe_records[-1]["members"])
+        )
+        if refusal is not None:
+            print(f"refused: {refusal}")
+            return 2
+
+    walk_started = time.perf_counter()
     recorded, reused = run_screen_and_record(
         universe_store, bar_store, bar_index, dataset_store, config, screen_store,
         args.date, progress=_cli_progress_printer(), screen_run_store=screen_run_store,
         forward_store=forward_store,
     )
+    # Printed, never recorded: how long a walk took is a property of this machine on this day, not
+    # of the screen it resolved, and the run record's own started/finished pair already bounds it.
     print(
         f"desk screen complete for {args.date}: {len(recorded['rows'])} ranked, "
         f"{len(recorded['skipped'])} skipped -- snapshot {recorded['id']} "
-        f"({'reused existing' if reused else 'newly recorded'})."
+        f"({'reused existing' if reused else 'newly recorded'}) "
+        f"in {time.perf_counter() - walk_started:.1f}s "
+        f"({_screen_workers()} worker process(es))."
     )
     return 0
 

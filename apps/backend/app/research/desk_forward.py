@@ -94,7 +94,9 @@ import json
 import os
 import random
 import statistics
+from bisect import bisect_left, bisect_right
 from datetime import date, datetime, timezone
+from operator import attrgetter
 from pathlib import Path
 from typing import Callable
 
@@ -114,6 +116,15 @@ DESK_FORWARD_HORIZONS_MINUTES: tuple[tuple[str, int], ...] = (
 # The touch-detection ladder, finest first. Coarser than 5m, "the moment price touched" is
 # fiction -- a row with neither series on the screen date reads as an honest absence instead.
 DESK_FORWARD_TOUCH_TIMEFRAMES: tuple[str, ...] = ("1m", "5m")
+
+# The head of that absence's own sentence. `compute_forward` writes exactly two absence reasons,
+# and the durable run ledger (`desk_forward_log.py`) counts ONE of them -- the "this session has no
+# fine bars" case, which is precisely what distinguishes a measurement that ran and found nothing
+# from one that never ran at all. The sentence is BUILT and CLASSIFIED in this module (see
+# `no_fine_bars_reason`/`forward_row_counts` below) so the two can never drift apart. A
+# byte-identical extraction of the literal `compute_forward` already wrote: every record on disk
+# keeps classifying correctly.
+_NO_FINE_BARS_REASON_HEAD = "no 1m or 5m bars recorded for the "
 
 # The per-row touch cap (with the exit-re-arm rule; the beyond-cap count is disclosed). Bounds a
 # pathological band-hugging session without hiding that it was one.
@@ -261,7 +272,71 @@ def _session_date(epoch: float) -> date:
     return datetime.fromtimestamp(epoch, tz=timezone.utc).date()
 
 
+def _session_slice(bars: list, window_date: date, as_of_epoch: float) -> list:
+    """The contiguous run of ``bars`` on ``window_date``'s own UTC session, at or before
+    ``as_of_epoch`` — the SAME rows the equivalent per-bar filter
+    ``[b for b in bars if _session_date(b.epoch) == window_date and b.epoch <= as_of_epoch]``
+    selects, in the same order, found by binary search instead of a full pass.
+
+    Two facts make the two forms equivalent. ``BarStore.merged_bars`` returns its fold strictly
+    ascending by epoch (``sorted(by_ts)``), and ``_session_date`` is monotonic in epoch (it is that
+    epoch's UTC calendar date) — so the rows satisfying both predicates are always ONE contiguous
+    run, and its two ends are exactly what ``bisect`` locates. The date test is rewritten as the
+    half-open epoch window ``[midnight, midnight + one day)`` that defines that calendar date, and
+    the ``as_of`` bound stays inclusive, so neither end moves by a row.
+
+    Why it matters: a 1m pair on the live store holds ~360k rows and one session is ~390 of them,
+    so the linear form re-read the whole intraday history of every ranked symbol to keep a tenth of
+    a percent of it (measured ~0.3s per symbol per timeframe, ~10s per forward run)."""
+    if not bars:
+        return []
+    day_start = datetime(
+        window_date.year, window_date.month, window_date.day, tzinfo=timezone.utc
+    ).timestamp()
+    day_end = day_start + 86_400.0
+    epoch_of = attrgetter("epoch")
+    low = bisect_left(bars, day_start, key=epoch_of)
+    # The date window is half-open at `day_end`; the as-of bound is inclusive. Whichever binds
+    # first is the end of the run.
+    high = min(
+        bisect_left(bars, day_end, key=epoch_of),
+        bisect_right(bars, as_of_epoch, key=epoch_of),
+    )
+    return bars[low:high] if high > low else []
+
+
 _TF_MINUTES: dict[str, int] = {"1m": 1, "5m": 5}
+
+
+def no_fine_bars_reason(screen_date: str) -> str:
+    """The absence sentence a row carries when the screen date's OWN session holds no 1m/5m bars --
+    the single most common outcome for any date older than the fine vendor retention. Built here
+    and classified by ``forward_row_counts`` below, so the ledger's count and the record's own
+    sentence share one owner."""
+    return (
+        f"{_NO_FINE_BARS_REASON_HEAD}{screen_date} session — touches cannot "
+        "be measured (top up the fine timeframes, then compute again)"
+    )
+
+
+def forward_row_counts(rows: list[dict]) -> dict:
+    """``{"rows_total", "rows_measured", "rows_absent_no_fine_bars"}`` over a forward record's own
+    rows -- the attempt-level summary the durable run ledger records, DERIVED from the record's
+    rows rather than re-walked, and equally correct for a record the caller just computed and one
+    it reused off disk. Rows absent for the OTHER reason (a screen row carrying no band price
+    range) are deliberately counted in neither bucket beyond ``rows_total``: they are a different
+    absence, and folding them into the fine-bar count would overstate what a top-up could fix."""
+    absent_no_fine_bars = sum(
+        1
+        for row in rows
+        if isinstance(row.get("reason"), str)
+        and row["reason"].startswith(_NO_FINE_BARS_REASON_HEAD)
+    )
+    return {
+        "rows_total": len(rows),
+        "rows_measured": sum(1 for row in rows if row.get("reason") is None),
+        "rows_absent_no_fine_bars": absent_no_fine_bars,
+    }
 
 
 def compute_forward_input_signature(
@@ -598,22 +673,15 @@ def compute_forward(
         session_bars: list = []
         touch_timeframe: str | None = None
         for tf in DESK_FORWARD_TOUCH_TIMEFRAMES:
-            candidate = [
-                bar
-                for bar in bar_store.merged_bars(symbol, tf)
-                if _session_date(bar.epoch) == window_date and bar.epoch <= as_of_epoch
-            ]
+            candidate = _session_slice(
+                bar_store.merged_bars(symbol, tf), window_date, as_of_epoch
+            )
             if candidate:
                 session_bars = candidate
                 touch_timeframe = tf
                 break
         if touch_timeframe is None:
-            out_rows.append(
-                _absent_row(
-                    f"no 1m or 5m bars recorded for the {screen_date} session — touches cannot "
-                    "be measured (top up the fine timeframes, then compute again)"
-                )
-            )
+            out_rows.append(_absent_row(no_fine_bars_reason(screen_date)))
             if progress is not None:
                 progress({"symbol": symbol})
             continue

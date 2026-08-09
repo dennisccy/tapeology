@@ -495,16 +495,53 @@ def test_load_raises_screen_integrity_error_for_unparseable_json(tmp_path):
     assert records == [] and len(errors) == 1
 
 
-def test_store_has_no_in_place_rewrite_and_exactly_one_removal_path():
+def test_store_has_no_in_place_rewrite_and_exactly_two_removal_paths():
     """Immutability is structural, not policed (mirrors ``test_desk_universe.py``'s own docstring
-    discipline). One snapshot per date narrowed the guarantee -- a recorded file is still NEVER
-    rewritten in place (``record`` only ever creates), but a date no longer accumulates copies, so
-    ``prune_superseded`` exists as the ONE removal path. This pins the exact public surface: any
-    NEW mutating method has to come here and justify itself."""
+    discipline). A recorded file is still NEVER rewritten in place (``record`` only ever creates);
+    what has narrowed twice is which removals are allowed:
+
+    * ``prune_superseded`` -- the automatic one the compute path runs, which structurally cannot
+      leave a date with nothing (one snapshot per date);
+    * ``prune_dates`` -- the operator one, and the only method that CAN empty a date. It exists for
+      snapshots recorded for dates that never traded, which no supersede can replace because there
+      is no correct snapshot for such a date to be replaced WITH. Nothing in the compute path calls
+      it; its only caller is ``desk_screen_cleanup``'s dry-run-by-default ``--non-sessions`` mode.
+
+    This pins the exact public surface: any NEW mutating method has to come here and justify
+    itself."""
     public_methods = {name for name in dir(ScreenStore) if not name.startswith("_")}
     assert public_methods == {
-        "root", "list", "find_by_key", "find_by_date", "record", "prune_superseded",
+        "root", "list", "find_by_key", "find_by_date", "record",
+        "prune_superseded", "prune_dates",
     }
+
+
+def test_prune_dates_removes_a_dates_last_copy_and_touches_no_other_date(tmp_path):
+    """The property that separates it from ``prune_superseded``: it empties a date. Scoped exactly
+    -- another date's snapshot is never in the blast radius, and a date not named is untouched."""
+    store, earlier, later = _plant_same_date_pair(tmp_path / "screen")
+    other_date = _record(
+        store, screen_date="2026-07-28", as_of="2026-07-28T23:59:59Z",
+        bar_store_signature="c" * 16,
+    )
+    survivor_bytes = (store.root / f"{other_date['id']}.json").read_bytes()
+
+    removed = store.prune_dates({earlier["screen_date"]})
+
+    assert sorted(removed) == sorted([earlier["id"], later["id"]])
+    records, errors = store.list()
+    assert errors == []
+    assert [r["id"] for r in records] == [other_date["id"]]
+    assert (store.root / f"{other_date['id']}.json").read_bytes() == survivor_bytes
+
+
+def test_prune_dates_on_a_date_holding_nothing_is_a_silent_no_op(tmp_path):
+    store, earlier, _later = _plant_same_date_pair(tmp_path / "screen")
+
+    assert store.prune_dates({"2099-01-01"}) == []
+    assert store.prune_dates(frozenset()) == []
+    records, _errors = store.list()
+    assert len(records) == 2
 
 
 def test_prune_superseded_removes_only_the_other_copies_of_that_date(tmp_path):

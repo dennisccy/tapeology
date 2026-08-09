@@ -124,6 +124,7 @@ def _ohlc_bar(bar: OhlcBar) -> dict:
         "high": bar.high,
         "low": bar.low,
         "close": bar.close,
+        "volume": bar.volume,
     }
 
 

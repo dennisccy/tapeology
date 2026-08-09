@@ -5,10 +5,15 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import {
   cancelDeskForwardCompute,
   cancelDeskReconcileCompute,
+  cancelDeskDeepBackfillCompute,
   cancelDeskScreenCompute,
   cancelDeskTopupCompute,
+  fetchDeskDeepBackfillCompute,
+  fetchDeskDeepBackfillPlan,
   fetchDeskForward,
   fetchDeskForwardCompute,
+  fetchDeskForwardPins,
+  fetchDeskForwardRuns,
   fetchDeskReconcileCompute,
   fetchDeskReconcileRuns,
   fetchDeskScreen,
@@ -17,8 +22,10 @@ import {
   fetchDeskScreenCompute,
   fetchDeskScreenPins,
   fetchDeskScreenRuns,
+  fetchDeskSessions,
   fetchDeskTopupCompute,
   fetchDeskTopupRuns,
+  triggerDeskDeepBackfillCompute,
   triggerDeskForwardCompute,
   triggerDeskReconcileCompute,
   triggerDeskScreenCompute,
@@ -26,12 +33,17 @@ import {
   triggerDeskUniverseFetch,
 } from "@/lib/api";
 import type {
+  DeskDeepBackfillComputeSnapshot,
+  DeskDeepBackfillPlan,
   DeskForwardAvgCell,
   DeskForwardComputeSnapshot,
   DeskForwardHorizonMeasure,
+  DeskForwardPinsResult,
   DeskForwardReadResult,
   DeskForwardRecord,
   DeskForwardRow,
+  DeskForwardRun,
+  DeskForwardRunsListResult,
   DeskForwardTouch,
   DeskReconcileComputeSnapshot,
   DeskReconcileDrift,
@@ -58,6 +70,13 @@ import type {
   DeskTopupRunsListResult,
 } from "@/lib/types";
 import { Metric, Panel } from "@/components/Panel";
+import {
+  formatDateET,
+  formatDateTimeET,
+  formatDayMarker,
+  formatTimeET,
+  todayEtDate,
+} from "@/lib/datetime";
 import { fmt } from "@/lib/format";
 
 // The /desk page (Era B "The Desk" J-04) — the third top-nav page, reached from the persistent
@@ -246,7 +265,7 @@ const CANCEL_BUTTON_CLASS =
 
 // The as-of day text fields (forward-test era) — mirrors structure/page.tsx's own `INPUT_CLASS`
 // shape (each page owns its own copy of this tiny constant per this project's established
-// convention), narrowed and centered for a bare YYYY-MM-DD value.
+// convention), narrowed and centered for a bare yyyy-MM-dd value.
 const ASOF_INPUT_CLASS =
   "w-36 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-center font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50";
 
@@ -264,46 +283,16 @@ const SECONDARY_BUTTON_CLASS =
 const PAGER_BUTTON_CLASS =
   "rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] font-medium text-slate-400 transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:bg-slate-900 disabled:hover:text-slate-400";
 
-// Today's UTC calendar date (YYYY-MM-DD) — the reference day the page's own copy compares against.
-// Mirrors /structure's own `todayUtcDate()` helper byte-for-byte (this project's own convention:
-// each module owns its tiny formatting helper rather than sharing one — see desk_screen.py's
-// `_iso` docstring). UTC, never the browser's local date, so the submitted date always matches
-// what the backend's own session-close basis resolves.
-function todayUtcDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-// The `nth` Sunday of a month as a UTC calendar date — the two US daylight-time boundaries below.
-function nthSundayUtc(year: number, monthIndex: number, nth: number): string {
-  const first = new Date(Date.UTC(year, monthIndex, 1));
-  const toFirstSunday = (7 - first.getUTCDay()) % 7;
-  return new Date(Date.UTC(year, monthIndex, 1 + toFirstSunday + (nth - 1) * 7))
-    .toISOString()
-    .slice(0, 10);
-}
-
-// US eastern daylight time runs from the second Sunday of March to the first Sunday of November.
-// Date granularity is exact for every value this can influence: both transitions fall on Sundays,
-// and `nextTradingStamp` rolls a weekend to Monday whatever the hour, so the close-hour branch is
-// never evaluated on a boundary day.
-function isUsEasternDaylightDate(day: string): boolean {
-  const year = Number(day.slice(0, 4));
-  return day >= nthSundayUtc(year, 2, 2) && day < nthSundayUtc(year, 10, 1);
-}
-
-// 16:00 US eastern expressed in UTC, on each side of the daylight-time boundary.
-const US_CLOSE_HOUR_UTC_DAYLIGHT = 20;
-const US_CLOSE_HOUR_UTC_STANDARD = 21;
-
 // The session a run started NOW would be marked up for — the value "Run Screen" submits as
 // `screen_date`, and the whole point of `screen_date` being the TRADE day: a screen dated D is
 // built from the last completed session before D (`tradability._resolve_basis`), so the useful
 // stamp is the next session an operator can still act on, never the one that already closed.
 //
-// Before that day's US close, that is today; at or after it, and on Saturdays and Sundays, it is
-// the next weekday. This keys on the ABSOLUTE close instant, so the operator's own timezone never
-// enters the result: preparing at 22:00 in London — an hour after the close, but still the same
-// UTC day — correctly stamps tomorrow, which stamping today's UTC date silently got wrong every
+// Before the US close, that is today's MARKET date; at or after it, and on Saturdays and Sundays,
+// it is the next weekday. Everything is read on the exchange's own clock (`todayEtDate` and the
+// ET hour below), so the operator's own timezone never enters the result: preparing at 22:00 in
+// London — an hour after the close — correctly stamps tomorrow, and so does preparing at 09:00 in
+// Hong Kong, where the local date has already rolled over but New York is still on the prior
 // evening.
 //
 // US market holidays are deliberately NOT modelled. A stamp landing on one records a screen whose
@@ -311,16 +300,17 @@ const US_CLOSE_HOUR_UTC_STANDARD = 21;
 // measurement already reports as an honest absence rather than a zero.
 //
 // `now` is a parameter so the boundaries can be exercised deterministically.
+const US_CLOSE_HOUR_ET = 16; // 16:00 ET
+
 function nextTradingStamp(now: Date = new Date()): string {
-  const cursor = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-  const today = cursor.toISOString().slice(0, 10);
-  const closeHour = isUsEasternDaylightDate(today)
-    ? US_CLOSE_HOUR_UTC_DAYLIGHT
-    : US_CLOSE_HOUR_UTC_STANDARD;
+  const today = formatDateET(now);
+  // The ET wall-clock hour and weekday of `now`. Both are read off the market date derived above
+  // (never off `now`'s UTC or local fields), so a single clock decides the whole result.
+  const etHour = Number(formatDateTimeET(now, { zone: false }).slice(11, 13));
+  // Anchor at NOON UTC on the market date so the weekday is that date's, free of any offset edge.
+  const cursor = new Date(`${today}T12:00:00Z`);
   const isWeekend = cursor.getUTCDay() === 0 || cursor.getUTCDay() === 6;
-  if (!isWeekend && now.getUTCHours() < closeHour) return today;
+  if (!isWeekend && etHour < US_CLOSE_HOUR_ET) return today;
   do {
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   } while (cursor.getUTCDay() === 0 || cursor.getUTCDay() === 6);
@@ -390,7 +380,7 @@ function DeskCoverageBadges({
           data-testid="desk-coverage-badge"
           data-timeframe={timeframe}
           data-has-bars={tf.has_bars}
-          title={`window last requested: ${tf.latest_window_end_utc ?? "never"}`}
+          title={`window last requested: ${tf.latest_window_end_utc ? formatDayMarker(tf.latest_window_end_utc) : "never"}`}
           className={`inline-block whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] ${
             tf.has_bars
               ? "border-emerald-800/60 bg-emerald-900/20 text-emerald-300"
@@ -433,16 +423,19 @@ function hasNoCoverageAtAll(coverage: Record<string, { has_bars: boolean }>): bo
 // titles carried is composed directly onto the ANCHOR's own `title` instead: hovering ANYWHERE in
 // the row now reveals one composite tooltip. Full precision -- never the rounded 2-decimal DISPLAY
 // audit F3 chose for scanability (this is a hover detail, not a rendered cell).
-// era-desk-iter-9 (J-08): the composite tooltip also carries the row's full-precision basis
-// detail -- `row.basis_as_of` untruncated (the visible "basis" cell below shows only the date
-// portion for scanability, the SAME rounded-display/full-precision-on-hover split already
-// established for distance/score) plus `row.basis_age_days`. A legacy row (recorded before this
-// iteration) has BOTH keys absent, not merely `null` -- `== null` (loose equality) catches both
-// `undefined` and `null` in one check, per this project's own `fmt()` convention (lib/format.ts).
+// era-desk-iter-9 (J-08): the composite tooltip also carries the row's basis detail -- the full
+// `row.basis_as_of` DATE AND TIME (the visible "basis" cell below shows only the date portion for
+// scanability, the SAME rounded-display/detail-on-hover split already established for
+// distance/score) plus `row.basis_age_days`. A legacy row (recorded before this iteration) has BOTH
+// keys absent, not merely `null` -- `== null` (loose equality) catches both `undefined` and `null`
+// in one check, per this project's own `fmt()` convention (lib/format.ts).
 // era-desk-iter-15 (J-11): the SAME tooltip also carries the row's history-depth detail --
-// `row.history_sessions` plus `row.history_start` untruncated (the visible "history" cell below
-// shows only the date portion, the SAME rounded-display/full-precision-on-hover split as basis) --
-// a legacy row (recorded before this iteration) has both keys absent, `== null` catches both.
+// `row.history_sessions` plus `row.history_start`'s full date and time (the visible "history" cell
+// below shows only the date portion, the SAME split as basis) -- a legacy row (recorded before this
+// iteration) has both keys absent, `== null` catches both.
+// Both stamps read on the market clock to the second, like every other date-time this product
+// shows; the stored microseconds are dropped, since a wall touch has no meaning at that resolution
+// and this tooltip exists to be READ, not to be a copy of the record.
 // era-desk-iter-17 (J-13): the SAME tooltip also carries the row's full-precision `reference_close`
 // beside its own `price_low`/`price_high` band range (the visible "band" cell below shows the
 // rounded values, the SAME split as distance/score/basis/history) -- a legacy row (recorded before
@@ -456,16 +449,21 @@ function hasNoCoverageAtAll(coverage: Record<string, { has_bars: boolean }>): bo
 // on a legacy one, so the stricter check is the honest one here).
 function deskRowDrillInTitle(row: DeskScreenRow): string {
   const coverageLines = Object.entries(row.coverage)
-    .map(([timeframe, tf]) => `${timeframe} window last requested: ${tf.latest_window_end_utc ?? "never"}`)
+    .map(
+      ([timeframe, tf]) =>
+        `${timeframe} window last requested: ${
+          tf.latest_window_end_utc ? formatDayMarker(tf.latest_window_end_utc) : "never"
+        }`,
+    )
     .join(" · ");
   const basisLine =
     row.basis_as_of == null || row.basis_age_days == null
       ? "basis not recorded in this snapshot"
-      : `basis ${row.basis_as_of} (${row.basis_age_days} d before as-of)`;
+      : `basis ${formatDateTimeET(row.basis_as_of)} (${row.basis_age_days} d before as-of)`;
   const historyLine =
     row.history_sessions == null || row.history_start == null
       ? "history not recorded in this snapshot"
-      : `history ${row.history_sessions} sessions from ${row.history_start}`;
+      : `history ${row.history_sessions} sessions from ${formatDateTimeET(row.history_start)}`;
   // The band RANGE is recorded on every ranked row of every snapshot ever written (including every
   // pre-iter-17 one), so it renders unconditionally -- only the CLOSE segment falls back when a
   // legacy row has no `reference_close` key (goal.md J-13: "/desk renders their rows with their OWN
@@ -487,7 +485,12 @@ function deskRowDrillInTitle(row: DeskScreenRow): string {
 // coverage-freshness portion, never a fabricated value for a field that does not exist on that row.
 function deskSkipDrillInTitle(skip: DeskScreenSkip): string {
   return Object.entries(skip.coverage)
-    .map(([timeframe, tf]) => `${timeframe} window last requested: ${tf.latest_window_end_utc ?? "never"}`)
+    .map(
+      ([timeframe, tf]) =>
+        `${timeframe} window last requested: ${
+          tf.latest_window_end_utc ? formatDayMarker(tf.latest_window_end_utc) : "never"
+        }`,
+    )
     .join(" · ");
 }
 
@@ -528,7 +531,7 @@ function DeskRow({ row, asOf, rank }: { row: DeskScreenRow; asOf: string; rank: 
         <Link
           href={`/structure?symbol=${encodeURIComponent(row.symbol)}&asof=${encodeURIComponent(asOf)}`}
           data-testid="desk-row-drill-in"
-          aria-label={`Open ${row.symbol} in Structure as of ${asOf}`}
+          aria-label={`Open ${row.symbol} in Structure as of ${formatDateTimeET(asOf)}`}
           title={deskRowDrillInTitle(row)}
           className="absolute inset-0"
         />
@@ -577,7 +580,7 @@ function DeskRow({ row, asOf, rank }: { row: DeskScreenRow; asOf: string; rank: 
       <td className={WRAP_LABEL_CELL} data-testid="desk-row-basis">
         {row.basis_as_of == null || row.basis_age_days == null
           ? "basis not recorded in this snapshot"
-          : `${row.basis_as_of.slice(0, 10)} · ${row.basis_age_days} d before as-of`}
+          : `${formatDateET(row.basis_as_of)} · ${row.basis_age_days} d before as-of`}
       </td>
       {/* era-desk-iter-15 (J-11): descriptive only, session count + start date (full precision --
           the untruncated `history_start` -- lives in the row anchor's own composite `title` above,
@@ -588,7 +591,7 @@ function DeskRow({ row, asOf, rank }: { row: DeskScreenRow; asOf: string; rank: 
       <td className={WRAP_LABEL_CELL} data-testid="desk-row-history">
         {row.history_sessions == null || row.history_start == null
           ? "history not recorded in this snapshot"
-          : `${row.history_sessions} sessions · from ${row.history_start.slice(0, 10)}`}
+          : `${row.history_sessions} sessions · from ${formatDateET(row.history_start)}`}
       </td>
       {/* era-desk-iter-17 (J-13): the exact price the row's band was measured from, beside its own
           already-recorded price_low-price_high band range -- "the price is inside the wall"
@@ -801,7 +804,7 @@ function DeskSkipRow({ skip, asOf }: { skip: DeskScreenSkip; asOf: string }) {
         <Link
           href={`/structure?symbol=${encodeURIComponent(skip.symbol)}&asof=${encodeURIComponent(asOf)}`}
           data-testid="desk-skip-row-drill-in"
-          aria-label={`Open ${skip.symbol} in Structure as of ${asOf}`}
+          aria-label={`Open ${skip.symbol} in Structure as of ${formatDateTimeET(asOf)}`}
           title={deskSkipDrillInTitle(skip)}
           className="absolute inset-0"
         />
@@ -917,7 +920,7 @@ const CALENDAR_CELL_SELECTED =
   "cursor-pointer border-emerald-300 bg-emerald-500/80 font-semibold text-slate-950";
 const CALENDAR_AXIS_LABEL = "font-mono text-[10px] text-slate-500";
 
-/** `YYYY-MM-DD` for a plain year/month/day triple — the same zero-padded shape every recorded
+/** `yyyy-MM-dd` for a plain year/month/day triple — the same zero-padded shape every recorded
  * `screen_date` already uses, built by string formatting rather than by constructing a `Date` (a
  * `new Date(y, m, d)` would be LOCAL time and could land on the neighbouring UTC day). */
 function isoDay(year: number, monthIndex: number, day: number): string {
@@ -958,7 +961,7 @@ function DeskHistoryDayCell({
   }
   const label =
     `${isoDate} — ${meta.counts.rows} ranked, ${meta.counts.skipped} skipped, ` +
-    `recorded ${meta.created_utc}`;
+    `recorded ${formatDateTimeET(meta.created_utc)}`;
   return (
     <button
       type="button"
@@ -1148,7 +1151,8 @@ function topupLibraryReach(
 } | null {
   if (outcomes.some((o) => o.store_frozen_through_after === undefined)) return null;
   // goal-desk-iter-34 (J-19 fix) -- one day-truncated grouping key per outcome, derived ONCE
-  // (the SAME calendar-day precision the render already displays via `.slice(0, 10)`). Every
+  // (the SAME market calendar day the render displays, via the one shared ET formatter -- the two
+  // MUST stay derived the same way, or a pair groups under one day and prints another). Every
   // grouping/comparison decision below reads this key -- never the raw microsecond-precision
   // timestamp -- so a pair recorded a few hours behind another pair on the IDENTICAL calendar day
   // can never be misclassified as "earlier" purely because of its own sub-day precision (the
@@ -1158,7 +1162,7 @@ function topupLibraryReach(
     outcome: o,
     day:
       typeof o.store_frozen_through_after === "string"
-        ? o.store_frozen_through_after.slice(0, 10)
+        ? formatDateET(o.store_frozen_through_after)
         : null,
   }));
   const days = dayKeyed.map((d) => d.day).filter((d): d is string => d !== null);
@@ -1169,9 +1173,9 @@ function topupLibraryReach(
   }
   const newestDay = days.reduce((max, d) => (d > max ? d : max), days[0]);
   const newestCount = dayKeyed.filter((d) => d.day === newestDay).length;
-  // Full precision is kept for the RETURNED `newestDate` (the render already truncates it to a
-  // calendar day at display time via `.slice(0, 10)`) -- only the grouping decision above used the
-  // truncated key.
+  // Full precision is kept for the RETURNED `newestDate` (the render truncates it to a market
+  // calendar day at display time through the same ET formatter) -- only the grouping decision
+  // above used the truncated key.
   const newestOutcome = dayKeyed.find((d) => d.day === newestDay)!.outcome;
   const earlierAll = dayKeyed
     .filter((d) => d.day !== newestDay)
@@ -1191,7 +1195,9 @@ function topupLibraryReach(
 function TopupRunRow({ meta }: { meta: DeskTopupRunMeta }) {
   return (
     <tr data-testid="desk-topup-run-row" className="border-b border-slate-800/60 last:border-b-0">
-      <td className={LABEL_CELL}>{meta.started_utc.slice(0, 10)}</td>
+      <td className={LABEL_CELL} title={`${meta.started_utc} (raw UTC record)`}>
+        {formatDateET(meta.started_utc)}
+      </td>
       <td className={LABEL_CELL} data-testid="desk-topup-run-id">
         {meta.id}
       </td>
@@ -1251,7 +1257,7 @@ function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
       className="mt-4 space-y-3 border-t border-slate-800 pt-4"
     >
       <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-        Latest run — {run.started_utc.slice(0, 10)} · {run.id}
+        Latest run — {formatDateET(run.started_utc)} · {run.id}
       </h3>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
         <span data-testid="desk-topup-run-latest-state">state: {run.state}</span>
@@ -1278,7 +1284,7 @@ function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
       <div data-testid="desk-topup-run-latest-reach" className="text-xs text-slate-400">
         {libraryReach === null || libraryReach.newestDate === null
           ? LIBRARY_REACH_NOT_RECORDED
-          : `newest recorded reach ${libraryReach.newestDate.slice(0, 10)} · ` +
+          : `newest recorded reach ${formatDateET(libraryReach.newestDate)} · ` +
             `${libraryReach.newestCount} pair${libraryReach.newestCount === 1 ? "" : "s"} reach it`}
       </div>
       {libraryReach !== null && libraryReach.earlierTotal > 0 && (
@@ -1301,7 +1307,7 @@ function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
                 <span className="font-mono text-slate-300">
                   {item.symbol} {item.timeframe}
                 </span>{" "}
-                — {item.date ? item.date.slice(0, 10) : "no bars recorded"}
+                — {item.date ? formatDateET(item.date) : "no bars recorded"}
               </li>
             ))}
           </ul>
@@ -1328,9 +1334,14 @@ function LatestTopupRunDetail({ run }: { run: DeskTopupRun }) {
                 </span>{" "}
                 <span data-testid="desk-topup-run-latest-failed-window" className="text-slate-500">
                   ·{" "}
+                  {/* DAY MARKERS, not instants: the backend builds these as
+                      `now.date().isoformat() + "T00:00:00Z"` (desk_topup_compute), so they name a
+                      calendar day and carry a midnight only as padding. Read lexically via
+                      `formatDayMarker` — zone-converting them would report the fetch window a full
+                      day early (UTC midnight is 20:00 ET the evening before). */}
                   {outcome.requested_window
-                    ? `requested ${outcome.requested_window.start.slice(0, 10)} → ` +
-                      `${outcome.requested_window.end.slice(0, 10)}`
+                    ? `requested ${formatDayMarker(outcome.requested_window.start)} → ` +
+                      `${formatDayMarker(outcome.requested_window.end)}`
                     : WINDOW_BASIS_NOT_RECORDED}
                 </span>
               </li>
@@ -1451,7 +1462,9 @@ function DriftList({ drift, testid }: { drift: DeskReconcileDrift; testid: strin
 function IndexReconciliationRunRow({ meta }: { meta: DeskReconcileRunMeta }) {
   return (
     <tr data-testid="desk-reconcile-run-row" className="border-b border-slate-800/60 last:border-b-0">
-      <td className={LABEL_CELL}>{meta.started_utc.slice(0, 10)}</td>
+      <td className={LABEL_CELL} title={`${meta.started_utc} (raw UTC record)`}>
+        {formatDateET(meta.started_utc)}
+      </td>
       <td className={LABEL_CELL} data-testid="desk-reconcile-run-id">
         {meta.id}
       </td>
@@ -1505,7 +1518,7 @@ function LatestReconciliationDetail({ run }: { run: DeskReconcileRun }) {
       className="mt-4 space-y-3 border-t border-slate-800 pt-4"
     >
       <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-        Latest run — {run.started_utc.slice(0, 10)} · {run.id}
+        Latest run — {formatDateET(run.started_utc)} · {run.id}
       </h3>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
         <span data-testid="desk-reconcile-run-latest-state">state: {run.state}</span>
@@ -1761,6 +1774,16 @@ function ScreenRunsSection({
 // every snapshot that click recorded. Never a page load and never a timer: both entry points are
 // a click. ------------------------------------------------------------------------------------------
 
+/**
+ * What the session filter kept, and how many days it dropped. Named rather than inline so the
+ * count survives into the step's own message — a range that shrank must never read as a range
+ * that was short.
+ */
+interface SessionDayFilter {
+  days: string[];
+  skipped: number;
+}
+
 interface ForwardControlProps {
   compute: DeskForwardComputeSnapshot | null;
   onTrigger: () => void;
@@ -1770,6 +1793,155 @@ interface ForwardControlProps {
   cancelRequested: boolean;
   cancelError: string | null;
   screenId: string | null;
+}
+
+// --- What a measurement of THIS snapshot could reach, said before it is clicked ------------------
+// The measurement reads 1m/5m only, and those are fetched from a vendor that retains roughly the
+// last 30 days of 1m and 60 of 5m — so a screen for an older date is perfectly real while its
+// measurement is structurally empty. Learning that used to cost the run; on a 51-day range it cost
+// hours. This line is the disclosure, and it is deliberately an UPPER bound: the backend counts
+// members holding a recorded fine SERIES WINDOW covering the session, which is more than the
+// members holding BARS in it (a holiday, a halt, or a top-up that ran pre-open all leave a covering
+// window with nothing in it). "At most" is therefore load-bearing copy, not hedging.
+function ForwardCoverageNote({
+  result,
+}: {
+  result: { ok: boolean; data: DeskForwardPinsResult | null; error?: string } | null;
+}) {
+  if (result === null || !result.ok || result.data === null) return null;
+  const pins = result.data;
+  if (pins.screen_date === null || pins.members_total === 0) return null;
+  const ladder = pins.touch_timeframes.join("/");
+  return (
+    <p data-testid="desk-forward-coverage" className="text-[11px] text-slate-500">
+      {pins.members_with_fine_series} of {pins.members_total} ranked members have a recorded{" "}
+      {ladder} series whose window covers the {pins.screen_date} session — so at most that many rows
+      can carry a measurement. A covering window is not the same as bars in that session, so the
+      measurement itself may reach fewer.
+    </p>
+  );
+}
+
+// --- When NOT ONE row carries a measurement, say why ---------------------------------------------
+// The failure this fixes: an all-absent record does not render the amber "not computed" panel — it
+// renders the full section, with a real record, real member names, and every numeric cell an
+// em-dash. Nothing on screen distinguished the three situations that produce that, and the reason
+// string was reachable only by hovering a row. On 2026-08-08 the page opened on the coming Monday
+// (the newest recorded screen), so the very first thing a reader saw was 101 rows of dashes with no
+// account of why.
+//
+// The three readings come from `session.state`, which the pins GET resolves from recorded DAILY
+// bars (`desk_sessions.py`) — the backend states where the date sits and stops there; the sentence
+// is composed here, where the record's own rows are also in hand. Every branch describes what IS
+// recorded; none advises, predicts, or blames.
+function forwardAbsenceText(state: string | undefined, screenDate: string): string {
+  const head = `No 1m or 5m bars are recorded for the ${screenDate} session`;
+  if (state === "not_a_recorded_session") {
+    return `${head}, and no daily bar is recorded for that date either — it is not a recorded trading session.`;
+  }
+  if (state === "after_recorded_evidence") {
+    return `${head}, and no daily bar is recorded for it yet — the session has not been recorded.`;
+  }
+  if (state === "recorded_session") {
+    return `${head}, though a daily bar is. The fine timeframes reach back about 30 days (1m) and 60 days (5m) from the vendor, so an older session's bars are no longer served.`;
+  }
+  return `${head}.`;
+}
+
+function ForwardAbsenceNote({
+  record,
+  pinsResult,
+}: {
+  record: DeskForwardRecord;
+  pinsResult: { ok: boolean; data: DeskForwardPinsResult | null; error?: string } | null;
+}) {
+  // The visible condition exactly: a record with rows, not one of which carries a measurement. A
+  // predicate over the served `reason` field — no served number is recomputed here.
+  const allAbsent = record.rows.length > 0 && record.rows.every((row) => row.reason !== null);
+  if (!allAbsent) return null;
+  const state =
+    pinsResult !== null && pinsResult.ok && pinsResult.data !== null
+      ? pinsResult.data.session.state
+      : undefined;
+  return (
+    <p
+      data-testid="desk-forward-all-absent"
+      className="rounded border border-amber-800/60 bg-amber-900/20 px-2 py-1.5 text-[11px] text-amber-200"
+    >
+      {forwardAbsenceText(state, record.screen_date)} Every cell below is an honest absence, not a
+      zero.
+    </p>
+  );
+}
+
+// --- The durable record of what measuring THIS snapshot attempted -------------------------------
+// The compute manager's own snapshot is process-scoped and gone on restart, so without this an
+// absent forward record is ambiguous: never measured, or measured and empty? A row here says the
+// measurement happened; `absent (no fine bars)` says what it found. No row at all, and it did not
+// run. Rendered INSIDE the Forward Returns section rather than as a page section of its own — the
+// registered section order is pinned, and this describes the same snapshot that section does.
+function forwardRunOutcomeText(run: DeskForwardRun): string {
+  if (run.state === "failed") return run.error ?? "failed — no detail recorded";
+  if (run.state === "cancelled") return "cancelled — nothing recorded";
+  return run.reused ? `reused ${run.forward_id}` : `recorded ${run.forward_id}`;
+}
+
+function ForwardRunsNote({
+  result,
+}: {
+  result: { ok: boolean; data: DeskForwardRunsListResult | null; error?: string } | null;
+}) {
+  if (result === null || !result.ok || result.data === null) return null;
+  const runs = result.data.runs;
+  if (runs.length === 0) {
+    return (
+      <p data-testid="desk-forward-runs-empty" className="text-[11px] text-slate-500">
+        No measurement of this snapshot has ever finished — nothing has been attempted, or an
+        attempt ended before it could record anything.
+      </p>
+    );
+  }
+  return (
+    <details data-testid="desk-forward-runs" className="text-[11px] text-slate-500">
+      <summary className="cursor-pointer">
+        {runs.length} recorded measurement attempt{runs.length === 1 ? "" : "s"} for this snapshot
+      </summary>
+      <div className="mt-1 overflow-x-auto">
+        <table data-testid="desk-forward-runs-table" className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-slate-800">
+              <th className={HEADER_CELL_LEFT}>started</th>
+              <th className={HEADER_CELL_LEFT}>state</th>
+              <th className={HEADER_CELL}>measured</th>
+              <th className={HEADER_CELL}>absent (no fine bars)</th>
+              <th className={HEADER_CELL}>touches</th>
+              <th className={HEADER_CELL_LEFT}>produced</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.map((run) => (
+              <tr key={run.id} data-testid="desk-forward-run-row" className="border-t border-slate-800/60">
+                <td className={LABEL_CELL} title={`${run.started_utc} (raw UTC record)`}>
+                  {formatDateTimeET(run.started_utc)}
+                </td>
+                <td className={LABEL_CELL}>{run.state}</td>
+                <td className={ROW_NUMERIC_CELL} data-testid="desk-forward-run-measured">
+                  {run.rows_measured} of {run.rows_total}
+                </td>
+                <td className={ROW_NUMERIC_CELL} data-testid="desk-forward-run-absent">
+                  {run.rows_absent_no_fine_bars}
+                </td>
+                <td className={ROW_NUMERIC_CELL}>{run.total_touches}</td>
+                <td className={LABEL_CELL} data-testid="desk-forward-run-outcome">
+                  {forwardRunOutcomeText(run)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
 }
 
 function DeskForwardComputeControl({
@@ -2114,22 +2286,21 @@ const FORWARD_UNMEASURED_HORIZON: DeskForwardHorizonMeasure = {
   reason: null,
 };
 
-// A touch instant on the reader's own wall clock. Every other stamp on this page is provenance —
-// a record id's timestamp, a window end — and stays raw UTC, but this one is read against a
-// trading session the operator either sat through or is about to: an hour's silent offset is the
-// difference between "the open" and "an hour into it". The browser owns the conversion (it knows
-// the reader's zone and its daylight-time rules; this page must not guess either), and the served
-// `at_utc` stays reachable in the cell's tooltip so the raw record is never a step removed.
+// A touch instant on the EXCHANGE clock, as `HH:mm:ss`. Every touch in this table belongs to one
+// screen-date session, so the date would repeat on every row and is left to the column header and
+// the section's own screen date; only the time varies. US Eastern because that is the clock the
+// session itself runs on — an hour's silent offset is the difference between "the open" and "an
+// hour into it", and reading these on the operator's own clock (as this table briefly did) forces
+// them to carry that offset in their head to line a touch up against the market's own schedule.
+// The served `at_utc` stays reachable in the cell's tooltip so the raw record is never a step
+// removed.
 //
-// `hourCycle` is pinned rather than left to the locale: it keeps the shipped HH:MM:SS shape and
-// avoids the 12-hour and 24-vs-00 renderings some locales would otherwise choose.
-function formatTouchLocalTime(atUtc: string): string {
-  return new Date(atUtc).toLocaleTimeString(undefined, {
-    hourCycle: "h23",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+// The time-alone rendering comes from the shared module (`formatTimeET`) rather than from cutting
+// down a full stamp here. This block is source-scanned for the array operations that could quietly
+// reorder or cap a rendered row set, and that scan cannot tell a string being trimmed from rows
+// being dropped — so the shape belongs in the formatter module, where it is also reusable.
+function formatTouchEtTime(atUtc: string): string {
+  return formatTimeET(atUtc);
 }
 
 // One anchored measurement row — the SHARED renderer for a touch and a baseline anchor (the
@@ -2138,8 +2309,8 @@ function ForwardTouchRow({ touch, labels }: { touch: DeskForwardTouch; labels: s
   const touchRow = touch;
   return (
     <tr data-testid="desk-forward-detail-touch" className="border-t border-slate-800/40">
-      <td className={FORWARD_TOUCH_CELL_LEFT} title={touchRow.at_utc}>
-        {formatTouchLocalTime(touchRow.at_utc)}
+      <td className={FORWARD_TOUCH_CELL_LEFT} title={`${touchRow.at_utc} (raw UTC record)`}>
+        {formatTouchEtTime(touchRow.at_utc)}
       </td>
       <td className={FORWARD_TOUCH_CELL_LEFT}>{touchRow.entry_kind}</td>
       <td className={FORWARD_TOUCH_CELL} title={String(touchRow.entry_price)}>
@@ -2192,7 +2363,7 @@ function ForwardTouchTable({
             ))}
           </tr>
           <tr className="border-b border-slate-800">
-            <th className={FORWARD_TOUCH_HEAD}>time (local)</th>
+            <th className={FORWARD_TOUCH_HEAD}>time (ET)</th>
             <th className={FORWARD_TOUCH_HEAD}>fill</th>
             <th className={`${FORWARD_TOUCH_HEAD} text-right`}>entry</th>
             {[...labels, "close"].map((label) => (
@@ -2413,11 +2584,15 @@ function DeskForwardTable({
 
 function DeskForwardSection({
   result,
+  pinsResult,
+  runsResult,
   control,
   selectedSymbol,
   onSelectSymbol,
 }: {
   result: { ok: boolean; data: DeskForwardReadResult | null; error?: string } | null;
+  pinsResult: { ok: boolean; data: DeskForwardPinsResult | null; error?: string } | null;
+  runsResult: { ok: boolean; data: DeskForwardRunsListResult | null; error?: string } | null;
   control: ForwardControlProps;
   selectedSymbol: string | null;
   onSelectSymbol: (symbol: string) => void;
@@ -2448,6 +2623,10 @@ function DeskForwardSection({
           every intraday touch of each ranked wall — an explicit operator act, nothing runs on
           page load.
         </p>
+        <div className="mt-3 space-y-1 text-left">
+          <ForwardCoverageNote result={pinsResult} />
+          <ForwardRunsNote result={runsResult} />
+        </div>
         <div className="mt-3 flex justify-center">
           <DeskForwardComputeControl {...control} />
         </div>
@@ -2462,7 +2641,7 @@ function DeskForwardSection({
     <div data-testid="desk-forward-section" className="space-y-3">
       <div data-testid="desk-forward-meta" className="grid grid-cols-1 gap-1 sm:grid-cols-3">
         <Metric label="Record" value={record.id} />
-        <Metric label="Recorded at" value={record.created_utc} />
+        <Metric label="Recorded at" value={formatDateTimeET(record.created_utc)} />
         <Metric label="For snapshot" value={record.screen_id} />
       </div>
       <p data-testid="desk-forward-counts" className="text-[11px] text-slate-500">
@@ -2481,6 +2660,8 @@ function DeskForwardSection({
         Touches and every forward number here are measured within the screen date&apos;s own
         session — the wall map itself was built only from sessions before it.
       </p>
+      <ForwardCoverageNote result={pinsResult} />
+      <ForwardAbsenceNote record={record} pinsResult={pinsResult} />
       <DeskForwardSummaryView record={record} />
       <DeskForwardTable
         record={record}
@@ -2496,6 +2677,7 @@ function DeskForwardSection({
       >
         {record.register}
       </p>
+      <ForwardRunsNote result={runsResult} />
       <div className="flex justify-center">
         <DeskForwardComputeControl {...control} />
       </div>
@@ -2533,7 +2715,7 @@ function ScreenCompareMeta({
       <p className="text-slate-300">{label}</p>
       <p data-testid={`${testid}-id`}>id {meta.id}</p>
       <p data-testid={`${testid}-dates`}>
-        screen date {meta.screen_date} · recorded {meta.created_utc}
+        screen date {meta.screen_date} · recorded {formatDateTimeET(meta.created_utc)}
       </p>
       <p data-testid={`${testid}-signature`}>bar-store signature {meta.bar_store_signature}</p>
     </div>
@@ -2749,7 +2931,7 @@ function DeskProvenancePins({
       {data.recorded !== null ? (
         <p data-testid="desk-provenance-pins-match" className="mt-1 text-[11px] text-slate-400">
           A screen is recorded under these exact pins — {data.recorded.id}, recorded{" "}
-          {data.recorded.created_utc}.
+          {formatDateTimeET(data.recorded.created_utc)}.
         </p>
       ) : (
         <p data-testid="desk-provenance-pins-differ" className="mt-1 text-[11px] text-slate-400">
@@ -2773,10 +2955,10 @@ function DeskProvenance({
   return (
     <div data-testid="desk-provenance">
       <Metric label="Snapshot id" value={snapshot.id} />
-      <Metric label="Recorded at" value={snapshot.created_utc} />
+      <Metric label="Recorded at" value={formatDateTimeET(snapshot.created_utc)} />
       <Metric label="Universe snapshot" value={snapshot.universe_snapshot_id ?? "—"} />
       <Metric label="Screen date" value={snapshot.screen_date} />
-      <Metric label="As of" value={snapshot.as_of} />
+      <Metric label="As of" value={formatDateTimeET(snapshot.as_of)} />
       <Metric label="Config fingerprint" value={snapshot.config_fingerprint} />
       <Metric label="Bar-store signature" value={snapshot.bar_store_signature} />
       {isViewingLatest && (
@@ -2818,7 +3000,7 @@ function TodayScreenPinsNote({
   pins: { ok: boolean; data: DeskScreenPinsResult | null; error?: string } | null;
   runDay: string | null;
 }) {
-  const pendingIsToday = runDay === null || runDay === todayUtcDate();
+  const pendingIsToday = runDay === null || runDay === todayEtDate();
   if (pins === null) {
     return (
       <p data-testid="desk-run-screen-pins-loading" className="text-[11px] text-slate-600">
@@ -2839,7 +3021,7 @@ function TodayScreenPinsNote({
     );
   }
   const { data } = pins;
-  const servedIsToday = data.screen_date === todayUtcDate();
+  const servedIsToday = data.screen_date === todayEtDate();
   if (data.universe_snapshot_id === null) {
     return (
       <p data-testid="desk-run-screen-pins-empty" className="text-[11px] text-slate-600">
@@ -2853,8 +3035,8 @@ function TodayScreenPinsNote({
     return (
       <p data-testid="desk-run-screen-pins-match" className="text-[11px] text-slate-500">
         {servedIsToday
-          ? `A run today would reuse the snapshot already recorded under today's pins — ${data.recorded.id}, recorded ${data.recorded.created_utc}.`
-          : `A run for ${data.screen_date} would reuse the snapshot already recorded under that day's pins — ${data.recorded.id}, recorded ${data.recorded.created_utc}.`}
+          ? `A run today would reuse the snapshot already recorded under today's pins — ${data.recorded.id}, recorded ${formatDateTimeET(data.recorded.created_utc)}.`
+          : `A run for ${data.screen_date} would reuse the snapshot already recorded under that day's pins — ${data.recorded.id}, recorded ${formatDateTimeET(data.recorded.created_utc)}.`}
       </p>
     );
   }
@@ -2922,8 +3104,8 @@ function ScreenComputeControl({
       )}
       <TodayScreenPinsNote pins={pins} runDay={runDay} />
       {/* The day the click will actually submit, stated BEFORE it is clicked. The resolved To day
-          is no longer always today's UTC date, and the case where it differs is the ordinary one:
-          an evening operator preparing after the US close is stamping tomorrow's session. */}
+          is not simply "today" on any clock, and the case where it differs is the ordinary one: an
+          evening operator preparing after the US close is stamping tomorrow's session. */}
       {runDay !== null && (
         <p data-testid="desk-run-screen-stamp" className="text-[11px] text-slate-500">
           Run Screen will record {runDay}.
@@ -3057,6 +3239,154 @@ function TopupComputeControl({
   );
 }
 
+// --- The deep fine-bar backfill control ----------------------------------------------------------
+// A fourth compute control, wired exactly like `TopupComputeControl`, for the one operation the
+// ordinary top-up structurally cannot perform: fetching 1m/5m history older than the keyless
+// vendor's ~30/60-day retention floor, from the credentialed one.
+//
+// Why this needs its own control rather than a step in the Refresh Data chain: it is credentialed,
+// it is expensive (a full sweep back to 2025 is ~3,900 chunks and tens of millions of bars over
+// hours), and it is a decision about a RANGE rather than about today. So it takes its own From/To,
+// discloses its plan before the click, and shows a real Cancel — every chunk already recorded is
+// answered store-first on the next run, so an interrupted sweep resumes rather than restarting.
+//
+// The clamp note is the load-bearing copy. Every window ends before the region the keyless top-up
+// already covers, because a contested timestamp resolves in favour of the most recently recorded
+// series — an overlapping fetch would replace the recent tape's adjusted prices with the
+// credentialed vendor's raw ones, permanently, in a store where nothing can be deleted.
+function DeepBackfillControl({
+  compute,
+  plan,
+  fromDay,
+  toDay,
+  onFromDayChange,
+  onToDayChange,
+  onTrigger,
+  triggering,
+  triggerError,
+  onCancel,
+  cancelRequested,
+  cancelError,
+}: DeepBackfillControlProps) {
+  const isRunning = compute?.state === "running";
+  const isFailed = compute?.state === "failed";
+  const isCancelled = compute?.state === "cancelled";
+  const buttonLabel = isRunning
+    ? "Backfilling…"
+    : isFailed
+      ? "Retry Deep Backfill"
+      : "Deep Backfill";
+  const latestOutcome =
+    isRunning && compute.progress.outcomes.length > 0
+      ? compute.progress.outcomes[compute.progress.outcomes.length - 1]
+      : null;
+  const planData = plan !== null && plan.ok ? plan.data : null;
+  return (
+    <div data-testid="desk-deep-backfill-control" className="flex flex-col items-center gap-1">
+      <div className="flex flex-wrap items-end justify-center gap-3">
+        <label className="flex flex-col items-center gap-1">
+          <span className="text-[11px] font-medium text-slate-500">Backfill from day</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            data-testid="desk-deep-backfill-from-input"
+            value={fromDay}
+            onChange={(e) => onFromDayChange(e.target.value)}
+            placeholder="yyyy-MM-dd"
+            disabled={isRunning}
+            className={ASOF_INPUT_CLASS}
+          />
+        </label>
+        <label className="flex flex-col items-center gap-1">
+          <span className="text-[11px] font-medium text-slate-500">Backfill to day</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            data-testid="desk-deep-backfill-to-input"
+            value={toDay}
+            onChange={(e) => onToDayChange(e.target.value)}
+            placeholder="yyyy-MM-dd"
+            disabled={isRunning}
+            className={ASOF_INPUT_CLASS}
+          />
+        </label>
+      </div>
+      {planData !== null && (
+        <p data-testid="desk-deep-backfill-plan" className="max-w-md text-center text-[11px] text-slate-500">
+          {planData.chunks_total} window(s) over {planData.members_total} member(s):{" "}
+          {Object.entries(planData.per_timeframe)
+            .map(([timeframe, detail]) => `${timeframe} ${detail.chunks} through ${detail.clamped_end}`)
+            .join(" · ")}
+          . Each timeframe stops where the keyless top-up&apos;s own history begins, so the two
+          vendors&apos; bars meet without one replacing the other.
+        </p>
+      )}
+      {plan !== null && !plan.ok && (
+        <p data-testid="desk-deep-backfill-plan-error" className="text-xs text-red-300">
+          {plan.error ?? "The backfill plan could not be loaded."}
+        </p>
+      )}
+      {isFailed && compute?.error && (
+        <p data-testid="desk-deep-backfill-error" className="text-xs text-red-300">
+          {compute.error}
+        </p>
+      )}
+      {triggerError && (
+        <p data-testid="desk-deep-backfill-trigger-error" className="text-xs text-red-300">
+          {triggerError}
+        </p>
+      )}
+      {isCancelled && (
+        <p data-testid="desk-deep-backfill-cancelled" className="text-xs text-amber-200/70">
+          Backfill cancelled — windows already recorded before the cancel stay stored, and a later
+          run reads them from the store rather than fetching them again.
+        </p>
+      )}
+      <button
+        type="button"
+        data-testid="desk-deep-backfill-button"
+        onClick={onTrigger}
+        disabled={triggering || isRunning}
+        className={PRIMARY_BUTTON_CLASS}
+      >
+        {buttonLabel}
+      </button>
+      {isRunning && (
+        <div data-testid="desk-deep-backfill-running" className="mt-1 flex flex-col items-center gap-1">
+          <p data-testid="desk-deep-backfill-progress" className="text-xs text-amber-200/70">
+            <span
+              aria-hidden="true"
+              className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle"
+            />
+            {compute.progress.chunks_done} / {compute.progress.chunks_total} windows ·{" "}
+            {compute.progress.bars_recorded} bars recorded
+          </p>
+          {latestOutcome && (
+            <p data-testid="desk-deep-backfill-current" className="text-xs text-amber-200/70">
+              last: {latestOutcome.symbol} {latestOutcome.timeframe} {latestOutcome.start.slice(0, 10)} —{" "}
+              {latestOutcome.outcome}
+            </p>
+          )}
+          <button
+            type="button"
+            data-testid="desk-deep-backfill-cancel"
+            onClick={onCancel}
+            disabled={cancelRequested}
+            className={CANCEL_BUTTON_CLASS}
+          >
+            {cancelRequested ? "Cancelling — finishing the current window…" : "Cancel"}
+          </button>
+          {cancelError && (
+            <p data-testid="desk-deep-backfill-cancel-error" className="text-xs text-red-300">
+              {cancelError}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // era-desk-iter-14 (J-10): a third compute control, wired exactly like `TopupComputeControl` — the
 // operation has no per-pair counters (it is a single classify-repair-verify walk, not a walk over
 // many pairs), so the running indicator shows the compute's own `progress.phase` label instead of
@@ -3138,15 +3468,20 @@ function ReconcileIndexControl({
 }
 
 // REFRESH-CHAIN-START
-// One control that runs the four refresh acts in the order the data actually depends on:
-// the universe membership, the bar top-up, the bar index repair, then the screen for today.
+// One control that runs the refresh acts in the order the data actually depends on: the universe
+// membership, the bar top-up, the bar index repair, and then — per day of the as-of range — that
+// day's screen followed by that day's own forward measurement.
 //
 // The order is not cosmetic. A screen's `bar_store_signature` pin is derived from `bar_index`
 // coverage and is resolved ONCE, before the member walk starts (desk_screen_compute.py) — so a
 // screen run that precedes the top-up and the index repair records a snapshot pinned to bars it
-// did not actually read.
+// did not actually read. The forward measurement follows its own day's screen for the same class
+// of reason: it measures a recorded snapshot, so the snapshot has to exist first.
 //
-// This is a CLIENT-side sequence over the four endpoints each existing control already calls. It
+// The last two are INTERLEAVED rather than run as two passes, and that is a durability property,
+// not a stylistic one — see the driver's own comment at the loop for the 2026-08-06 run this cost.
+//
+// This is a CLIENT-side sequence over the endpoints each existing control already calls. It
 // deliberately does NOT add a backend orchestrator: reaching the real compute managers from a
 // compute module would be a circular import (desk_topup_compute.py's own documented constraint),
 // so an orchestrator would have to call the walker functions directly and would therefore bypass
@@ -3200,13 +3535,19 @@ interface ResolvedScreenDayRange {
   days: string[];
 }
 
-function isRealUtcDay(value: string): boolean {
+// A `screen_date` is a bare CALENDAR DAY with no clock and no zone — the wire value the backend
+// stores and keys its snapshots on. So both helpers below stay day-arithmetic: UTC is used purely
+// as a fixed frame to step a cursor in whole days (never to convert anything), which is why a
+// round trip through it must return the input unchanged. Nothing here reads a timezone, and the
+// fields these govern are labelled as US market days because that is what the SESSION they name
+// is, not because any conversion happens.
+function isRealCalendarDay(value: string): boolean {
   if (!SCREEN_DAY_PATTERN.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-function enumerateUtcDays(from: string, to: string): string[] {
+function enumerateCalendarDays(from: string, to: string): string[] {
   const out: string[] = [];
   const cursor = new Date(`${from}T00:00:00Z`);
   const end = new Date(`${to}T00:00:00Z`);
@@ -3218,17 +3559,17 @@ function enumerateUtcDays(from: string, to: string): string[] {
 }
 
 // null error = valid. Blank To resolves to the upcoming US session; blank From resolves to the To
-// day. The ceiling is that same upcoming session rather than today's UTC date: after the close
-// they differ, and the later of the two is the one an operator can still act on.
+// day. The ceiling is that same upcoming session rather than the current date on any clock: after
+// the close they differ, and the later of the two is the one an operator can still act on.
 function validateScreenDayRange(
   fromRaw: string,
   toRaw: string,
 ): { error: string | null; range: ResolvedScreenDayRange | null } {
   const stamp = nextTradingStamp();
   const toValue = toRaw.trim() === "" ? stamp : toRaw.trim();
-  if (!isRealUtcDay(toValue)) {
+  if (!isRealCalendarDay(toValue)) {
     return {
-      error: "Enter the To day as a real YYYY-MM-DD, or leave it blank for the upcoming US session date.",
+      error: "Enter the To day as a real yyyy-MM-dd, or leave it blank for the upcoming US session date.",
       range: null,
     };
   }
@@ -3239,9 +3580,9 @@ function validateScreenDayRange(
     };
   }
   const fromValue = fromRaw.trim() === "" ? toValue : fromRaw.trim();
-  if (!isRealUtcDay(fromValue)) {
+  if (!isRealCalendarDay(fromValue)) {
     return {
-      error: "Enter the From day as a real YYYY-MM-DD, or leave it blank to run one day.",
+      error: "Enter the From day as a real yyyy-MM-dd, or leave it blank to run one day.",
       range: null,
     };
   }
@@ -3250,7 +3591,7 @@ function validateScreenDayRange(
   }
   return {
     error: null,
-    range: { from: fromValue, to: toValue, days: enumerateUtcDays(fromValue, toValue) },
+    range: { from: fromValue, to: toValue, days: enumerateCalendarDays(fromValue, toValue) },
   };
 }
 
@@ -3259,7 +3600,7 @@ function validateScreenDayRange(
 function refreshChainStepLabel(key: RefreshChainStepKey, run: RefreshChainRun): string {
   if (key !== "screen") return REFRESH_CHAIN_STEP_LABELS[key];
   if (run.runDayCount <= 1) {
-    return run.runTo === todayUtcDate()
+    return run.runTo === todayEtDate()
       ? REFRESH_CHAIN_STEP_LABELS.screen
       : `Screen for ${run.runTo}`;
   }
@@ -3331,20 +3672,44 @@ type ChainJobSnapshot = { id: string; state: string; error: string | null };
 
 const REFRESH_CHAIN_WAIT_TICK_MS = 250;
 
+// How many consecutive wait ticks may pass without the waiter observing the job it is waiting on
+// before it declares that job LOST. Deliberately counted in TICKS rather than wall-clock ms: a
+// backgrounded browser tab has its timers throttled to >=1s, so a wall-clock deadline would fail a
+// perfectly healthy run whose operator switched tabs. 80 ticks is ~20s in a foreground tab and
+// stretches with the throttle — an upper bound on "something is wrong", never a deadline on the
+// job itself, which may legitimately run for minutes.
+const REFRESH_CHAIN_LOST_JOB_TICKS = 80;
+
 function refreshChainSleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
 
+// The three ways a wait can end. `lost` is a genuine third outcome rather than a flavour of
+// `stopped`: nothing was cancelled and nothing settled — the job the chain is holding an id for
+// stopped being observable at all.
+type RefreshChainWait<T> =
+  | { outcome: "settled"; snapshot: T }
+  | { outcome: "stopped" }
+  | { outcome: "lost" };
+
 // Wait for the job this chain just started — or ADOPTED — to reach a terminal state. Issues ZERO
 // requests: it re-reads the snapshot the step's own existing poll effect already maintains.
 //
-// Matching the job's own `id` is load-bearing, not defensive. All three managers publish
+// Matching the job's own `id` is load-bearing, not defensive. All four managers publish
 // `state: "running"` BEFORE their trigger returns, so the POST response is always `running`; and
 // when this wait begins React has not re-rendered yet, so `read()` still returns the PREVIOUS
 // run's snapshot — which, after a page load that seeded a finished job, is very often already
 // terminal. Advancing on the state alone would skip every step instantly.
+//
+// **Why the tick budget exists.** This loop used to run unbounded while `read()` returned null,
+// and null is exactly what a backend restart produces: the manager's snapshot is process-scoped,
+// so `GET .../compute` answers null, the poll effect (gated on `state === "running"`) sets its
+// state to null and then stops polling, the ref mirror follows — and the step sat on one frozen
+// "measuring 1 of 51" line forever, with no error, no timeout and nothing on disk to say what had
+// happened. A run that cannot be observed any more is a failed step, and saying so is the whole
+// fix. The budget resets on every sighting, so a long walk never trips it.
 //
 // `onTick`, when given, is called with each running snapshot the waiter observes. It exists for
 // the forward step, whose single job can walk ~101 members: without it that step shows one frozen
@@ -3355,17 +3720,27 @@ async function awaitRefreshChainJob<T extends ChainJobSnapshot>(
   jobId: string,
   stopped: () => boolean,
   onTick?: (snapshot: T) => void,
-): Promise<T | null> {
+): Promise<RefreshChainWait<T>> {
+  let unseenTicks = 0;
   for (;;) {
-    if (stopped()) return null;
+    if (stopped()) return { outcome: "stopped" };
     const snapshot = read();
     if (snapshot !== null && snapshot.id === jobId) {
-      if (snapshot.state !== "running") return snapshot;
+      if (snapshot.state !== "running") return { outcome: "settled", snapshot };
+      unseenTicks = 0;
       onTick?.(snapshot);
+    } else {
+      unseenTicks += 1;
+      if (unseenTicks > REFRESH_CHAIN_LOST_JOB_TICKS) return { outcome: "lost" };
     }
     await refreshChainSleep(REFRESH_CHAIN_WAIT_TICK_MS);
   }
 }
+
+// What a `lost` wait tells the operator. One sentence, in the step list, naming the cause it
+// almost always is — never a bare "failed", which would send them looking at the data.
+const REFRESH_CHAIN_LOST_JOB_MESSAGE =
+  "the backend no longer knows about this job — it restarted while this step was waiting";
 
 // Terminal one-liners. Each is a re-format of what the compute snapshot already served — never a
 // second read, never a derived number. The chain never reads a durable run ledger here: a step's
@@ -3429,7 +3804,7 @@ function DeskRefreshChainControl({
       ? "the chosen day"
       : resolvedRange.days.length > 1
         ? `every day from ${resolvedRange.from} to ${resolvedRange.to} (${resolvedRange.days.length} days)`
-        : resolvedRange.to === todayUtcDate()
+        : resolvedRange.to === todayEtDate()
           ? "today"
           : resolvedRange.to;
   return (
@@ -3437,7 +3812,7 @@ function DeskRefreshChainControl({
       <div className="flex flex-wrap items-end justify-center gap-3">
         <label className="flex flex-col items-center gap-1">
           <span className="text-[11px] font-medium text-slate-500">
-            From day — blank = the To day
+            From day (US market day) — blank = the To day
           </span>
           <input
             type="text"
@@ -3445,7 +3820,7 @@ function DeskRefreshChainControl({
             data-testid="desk-as-of-from-input"
             value={fromDay}
             onChange={(e) => onFromDayChange(e.target.value)}
-            placeholder="YYYY-MM-DD"
+            placeholder="yyyy-MM-dd"
             disabled={isRunning}
             aria-invalid={dayRangeError !== null}
             className={`${ASOF_INPUT_CLASS} ${dayRangeError !== null ? "border-amber-500" : ""}`}
@@ -3453,7 +3828,7 @@ function DeskRefreshChainControl({
         </label>
         <label className="flex flex-col items-center gap-1">
           <span className="text-[11px] font-medium text-slate-500">
-            To day — blank = upcoming US session
+            To day (US market day) — blank = upcoming US session
           </span>
           <input
             type="text"
@@ -3461,7 +3836,7 @@ function DeskRefreshChainControl({
             data-testid="desk-as-of-to-input"
             value={toDay}
             onChange={(e) => onToDayChange(e.target.value)}
-            placeholder="YYYY-MM-DD"
+            placeholder="yyyy-MM-dd"
             disabled={isRunning}
             aria-invalid={dayRangeError !== null}
             className={`${ASOF_INPUT_CLASS} ${dayRangeError !== null ? "border-amber-500" : ""}`}
@@ -3484,12 +3859,15 @@ function DeskRefreshChainControl({
       </button>
       <p data-testid="desk-refresh-note" className="max-w-md text-center text-[11px] text-slate-600">
         One click runs five steps in order: the universe membership, the bar top-up, the bar index,
-        the screen for {rangeCopy}, then the forward returns for every snapshot this run recorded.
-        Each step calls the same endpoint its own control here already calls; nothing runs without
-        this click. A day whose bars already reach it is reused rather than re-walked, so a range
-        over ground already covered is quick; every genuinely missing day is a full walk, and the
-        forward step measures one snapshot at a time, so a wide range takes a while. Stop ends it
-        between days. Run Screen below runs the To day only.
+        then — for {rangeCopy}, one day at a time — that day&apos;s screen followed by its own
+        forward returns. Only the days a recorded daily bar says actually traded are screened, so
+        weekends, market holidays and days that have not happened yet are skipped and counted
+        rather than recorded. Each step calls the same endpoint its own control here already calls;
+        nothing runs without this click. A day whose bars already reach it is reused rather than
+        re-walked, so a range over ground already covered is quick; every genuinely missing day is
+        a full walk, so a wide range takes a while. Stop ends it between days, and every day
+        finished before that keeps both its screen and its measurement. Run Screen below runs the
+        To day only.
       </p>
       {run !== null && (
         <>
@@ -3580,6 +3958,21 @@ interface ReconcileControlProps {
   cancelError: string | null;
 }
 
+interface DeepBackfillControlProps {
+  compute: DeskDeepBackfillComputeSnapshot | null;
+  plan: { ok: boolean; data: DeskDeepBackfillPlan | null; error?: string } | null;
+  fromDay: string;
+  toDay: string;
+  onFromDayChange: (value: string) => void;
+  onToDayChange: (value: string) => void;
+  onTrigger: () => void;
+  triggering: boolean;
+  triggerError: string | null;
+  onCancel: () => void;
+  cancelRequested: boolean;
+  cancelError: string | null;
+}
+
 // The honest empty state (TC-1): rendered iff `latest === null` — no screen has EVER been
 // computed. Doubles as the controls panel for a first-ever run (both Run Screen and Top-up live
 // here since there is nothing else to show yet); once a screen exists, the SAME four controls move
@@ -3589,11 +3982,13 @@ function DeskNotComputedPanel({
   screen,
   topup,
   reconcile,
+  deepBackfill,
   refreshChain,
 }: {
   screen: ScreenControlProps;
   topup: TopupControlProps;
   reconcile: ReconcileControlProps;
+  deepBackfill: DeepBackfillControlProps;
   refreshChain: RefreshChainControlProps;
 }) {
   return (
@@ -3617,6 +4012,11 @@ function DeskNotComputedPanel({
             <TopupComputeControl {...topup} />
             <ReconcileIndexControl {...reconcile} />
           </div>
+          {/* Rendered on its own row below the other three: it takes a range of its own, and its
+              sweep is measured in hours rather than the minutes theirs take. */}
+          <div className="mt-4 border-t border-amber-800/40 pt-4">
+            <DeepBackfillControl {...deepBackfill} />
+          </div>
         </div>
       </div>
     </div>
@@ -3638,6 +4038,12 @@ function DeskNotComputedPanel({
 // `null` when NO ranked row carries the field: rows recorded before goal-desk-iter-9 omit the key
 // entirely and are never backfilled (the established legacy-absence pattern), and a snapshot with
 // no ranked rows has nothing to report.
+//
+// The SELECTION compares the raw ISO strings (lexicographic order is chronological order on a
+// common `Z` suffix, and full precision is what makes ties resolvable); only the winner is
+// formatted, through the same `formatDateET` every other `basis_as_of` render on this page uses.
+// `basis_as_of` is a true instant — a daily bar's own stamp, `...T04:00:00Z` = ET midnight — so it
+// is a date ON the market clock, not a day marker to read lexically.
 function screenDataThroughDate(rows: DeskScreenRow[]): string | null {
   let latest: string | null = null;
   for (const row of rows) {
@@ -3645,7 +4051,7 @@ function screenDataThroughDate(rows: DeskScreenRow[]): string | null {
     if (value == null) continue;
     if (latest === null || value > latest) latest = value;
   }
-  return latest === null ? null : latest.substring(0, 10);
+  return latest === null ? null : formatDateET(latest);
 }
 
 // The populated view — a real snapshot exists (`latest !== null`), whether it is the latest one
@@ -3677,8 +4083,11 @@ function DeskPopulatedScreen({
   screenControlProps,
   topupControlProps,
   reconcileControlProps,
+  deepBackfillControlProps,
   refreshChainControlProps,
   forwardResult,
+  forwardPinsResult,
+  forwardRunsResult,
   forwardControlProps,
   selectedForwardSymbol,
   onSelectForwardSymbol,
@@ -3696,8 +4105,11 @@ function DeskPopulatedScreen({
   screenControlProps: ScreenControlProps;
   topupControlProps: TopupControlProps;
   reconcileControlProps: ReconcileControlProps;
+  deepBackfillControlProps: DeepBackfillControlProps;
   refreshChainControlProps: RefreshChainControlProps;
   forwardResult: { ok: boolean; data: DeskForwardReadResult | null; error?: string } | null;
+  forwardPinsResult: { ok: boolean; data: DeskForwardPinsResult | null; error?: string } | null;
+  forwardRunsResult: { ok: boolean; data: DeskForwardRunsListResult | null; error?: string } | null;
   forwardControlProps: ForwardControlProps;
   selectedForwardSymbol: string | null;
   onSelectForwardSymbol: (symbol: string) => void;
@@ -3758,6 +4170,8 @@ function DeskPopulatedScreen({
         <Panel title="Forward Returns">
           <DeskForwardSection
             result={forwardResult}
+            pinsResult={forwardPinsResult}
+            runsResult={forwardRunsResult}
             control={forwardControlProps}
             selectedSymbol={selectedForwardSymbol}
             onSelectSymbol={onSelectForwardSymbol}
@@ -3765,8 +4179,8 @@ function DeskPopulatedScreen({
         </Panel>
       </section>
 
-      <section aria-label="Run Screen, Top-up and Reconcile Index controls">
-        <Panel title="Run Screen / Top-up / Reconcile Index">
+      <section aria-label="Run Screen, Top-up, Reconcile Index and Deep Backfill controls">
+        <Panel title="Run Screen / Top-up / Reconcile Index / Deep Backfill">
           <div className="flex flex-col items-center gap-4">
             <DeskRefreshChainControl {...refreshChainControlProps} />
             <div className="w-full border-t border-slate-800 pt-4">
@@ -3775,6 +4189,11 @@ function DeskPopulatedScreen({
                 <TopupComputeControl {...topupControlProps} />
                 <ReconcileIndexControl {...reconcileControlProps} />
               </div>
+            </div>
+            {/* Its own row: this one takes a range of its own and reaches back years, where the
+                three above act on the recent window the chain already covers. */}
+            <div className="w-full border-t border-slate-800 pt-4">
+              <DeepBackfillControl {...deepBackfillControlProps} />
             </div>
           </div>
         </Panel>
@@ -3834,6 +4253,27 @@ export default function DeskPage() {
   const [topupRunsResult, setTopupRunsResult] = useState<{
     ok: boolean;
     data: DeskTopupRunsListResult | null;
+    error?: string;
+  } | null>(null);
+
+  // The deep fine-bar backfill compute + its own From/To and pre-click plan — mirrors the topup*
+  // hooks above exactly, one set per compute manager. Its range is separate from the chain's on
+  // purpose: the chain screens recent days, this reaches back years, and typing one range should
+  // never silently rearm the other.
+  const [deepBackfillCompute, setDeepBackfillCompute] =
+    useState<DeskDeepBackfillComputeSnapshot | null>(null);
+  const [deepBackfillTriggering, setDeepBackfillTriggering] = useState(false);
+  const [deepBackfillTriggerError, setDeepBackfillTriggerError] = useState<string | null>(null);
+  const [deepBackfillCancelRequested, setDeepBackfillCancelRequested] = useState(false);
+  const [deepBackfillCancelError, setDeepBackfillCancelError] = useState<string | null>(null);
+  const [deepBackfillFromDay, setDeepBackfillFromDay] = useState("2025-01-01");
+  // A lazy initializer, not an effect: the To day starts at the same upcoming-session stamp the
+  // chain's own To default uses, and the backend's clamp then truncates it to where the keyless
+  // top-up's history begins — which IS the disclosure, rather than something to pre-guess here.
+  const [deepBackfillToDay, setDeepBackfillToDay] = useState(() => nextTradingStamp());
+  const [deepBackfillPlan, setDeepBackfillPlan] = useState<{
+    ok: boolean;
+    data: DeskDeepBackfillPlan | null;
     error?: string;
   } | null>(null);
 
@@ -3920,6 +4360,19 @@ export default function DeskPage() {
   const [forwardResult, setForwardResult] = useState<{
     ok: boolean;
     data: DeskForwardReadResult | null;
+    error?: string;
+  } | null>(null);
+  // The two reads that make an ABSENT forward record legible rather than ambiguous: what a
+  // measurement of this snapshot could possibly reach, and whether one has ever finished. Both are
+  // keyed on the displayed snapshot exactly as `forwardResult` is, and both are plain GETs.
+  const [forwardPinsResult, setForwardPinsResult] = useState<{
+    ok: boolean;
+    data: DeskForwardPinsResult | null;
+    error?: string;
+  } | null>(null);
+  const [forwardRunsResult, setForwardRunsResult] = useState<{
+    ok: boolean;
+    data: DeskForwardRunsListResult | null;
     error?: string;
   } | null>(null);
   const [forwardCompute, setForwardCompute] = useState<DeskForwardComputeSnapshot | null>(null);
@@ -4091,6 +4544,38 @@ export default function DeskPage() {
     return () => clearInterval(handle);
   }, [topupCompute]);
 
+  // Poll the deep-backfill job while running — the fifth compute manager's own poll, mirroring the
+  // four above exactly. Only ever registered while a job the operator started is running, and it
+  // calls no trigger: a page load still starts nothing.
+  useEffect(() => {
+    if (deepBackfillCompute?.state !== "running") return;
+    const handle = setInterval(async () => {
+      const next = await fetchDeskDeepBackfillCompute();
+      if (next.ok) setDeepBackfillCompute(next.data);
+    }, 700);
+    return () => clearInterval(handle);
+  }, [deepBackfillCompute]);
+
+  // The backfill's pre-click plan, re-read whenever its own range changes. A plain GET that issues
+  // no vendor call, reads no BarStore and starts nothing — the whole point is that the operator
+  // sees how many windows, and where each timeframe stops, BEFORE committing to a sweep that can
+  // take hours. A failed read leaves the last known plan untouched rather than blanking it.
+  useEffect(() => {
+    if (deepBackfillFromDay === "" || deepBackfillToDay === "") return;
+    let alive = true;
+    (async () => {
+      const result = await fetchDeskDeepBackfillPlan(deepBackfillFromDay, deepBackfillToDay);
+      if (alive) {
+        setDeepBackfillPlan((previous) =>
+          result.ok || previous === null || !previous.ok ? result : previous,
+        );
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [deepBackfillFromDay, deepBackfillToDay]);
+
   // Poll the reconciliation job while running — independent of the other two polls above (three
   // separate process-scoped jobs). era-desk-iter-14 (J-10): the SAME "on terminal, refresh the
   // durable list once" precedent the other two polls already establish, and the SAME "keep the
@@ -4140,6 +4625,32 @@ export default function DeskPage() {
     return result;
   }
 
+  // Which days of the captured range are worth screening at all. The chain used to enumerate raw
+  // CALENDAR days, so a [From, To] range screened Saturdays, Sundays, US market holidays and dates
+  // that had not happened yet exactly like real sessions — each one recording a real screen whose
+  // forward measurement is empty by construction. On 2026-08-08 that was ~268 weekend + ~10 holiday
+  // + 2 future snapshots on disk out of 939.
+  //
+  // A plain read, awaited ONCE before the per-day loop — no effect, no timer, no poll. Fails OPEN
+  // in every unproven case: a failed call, an unreachable backend, or a store with no daily bars
+  // all return the caller's own day list unchanged, so the chain never screens LESS than it used
+  // to on evidence it does not have.
+  async function handleLoadSessionDays(
+    days: string[],
+    from: string,
+    to: string,
+  ): Promise<SessionDayFilter> {
+    const result = await fetchDeskSessions(from, to);
+    if (!result.ok || result.data === null) return { days, skipped: 0 };
+    if (result.data.evidence.anchor_symbols.length === 0) return { days, skipped: 0 };
+    // Intersect with the recorded sessions rather than subtracting `non_sessions`: a day past the
+    // last recorded daily bar is in neither list, and screening it is exactly what produced the
+    // future-dated snapshots this filter exists to stop.
+    const sessions = new Set(result.data.sessions);
+    const kept = days.filter((day) => sessions.has(day));
+    return { days: kept, skipped: days.length - kept.length };
+  }
+
   async function handleCancelScreen() {
     setScreenCancelRequested(true);
     setScreenCancelError(null);
@@ -4163,6 +4674,30 @@ export default function DeskPage() {
       setTopupTriggerError(result.error ?? "The bar top-up could not be started.");
     }
     return result;
+  }
+
+  async function handleTriggerDeepBackfill() {
+    setDeepBackfillTriggering(true);
+    setDeepBackfillTriggerError(null);
+    setDeepBackfillCancelRequested(false);
+    setDeepBackfillCancelError(null);
+    const result = await triggerDeskDeepBackfillCompute(deepBackfillFromDay, deepBackfillToDay);
+    setDeepBackfillTriggering(false);
+    if (result.ok && result.data) {
+      setDeepBackfillCompute(result.data.compute);
+    } else {
+      setDeepBackfillTriggerError(result.error ?? "The deep backfill could not be started.");
+    }
+  }
+
+  async function handleCancelDeepBackfill() {
+    setDeepBackfillCancelRequested(true);
+    setDeepBackfillCancelError(null);
+    const result = await cancelDeskDeepBackfillCompute();
+    if (!result.ok) {
+      setDeepBackfillCancelRequested(false);
+      setDeepBackfillCancelError(result.error ?? "The deep backfill could not be cancelled.");
+    }
   }
 
   async function handleCancelTopup() {
@@ -4319,12 +4854,16 @@ export default function DeskPage() {
         started.data.compute.id,
         () => refreshChainStopRef.current,
       );
-      if (settled === null) {
+      if (settled.outcome === "stopped") {
         halt(index, "cancelled", REFRESH_CHAIN_CANCELLED[key]);
         return false;
       }
-      if (settled.state === "done") {
-        const detail = describeDone(settled);
+      if (settled.outcome === "lost") {
+        halt(index, "failed", REFRESH_CHAIN_LOST_JOB_MESSAGE);
+        return false;
+      }
+      if (settled.snapshot.state === "done") {
+        const detail = describeDone(settled.snapshot);
         steps[index] = {
           key,
           state: "done",
@@ -4333,11 +4872,11 @@ export default function DeskPage() {
         publish("running");
         return true;
       }
-      if (settled.state === "cancelled") {
+      if (settled.snapshot.state === "cancelled") {
         halt(index, "cancelled", REFRESH_CHAIN_CANCELLED[key]);
         return false;
       }
-      halt(index, "failed", settled.error ?? "This step failed.");
+      halt(index, "failed", settled.snapshot.error ?? "This step failed.");
       return false;
     };
 
@@ -4355,210 +4894,259 @@ export default function DeskPage() {
       return;
     }
 
-    // Step 4 — the screen, once PER DAY of the captured range, oldest first (forward-test era).
-    // Each day is its own single-flight job through the SAME handler the Run Screen button uses;
-    // each is awaited to terminal before the next starts, so two walks never overlap. A day whose
-    // pins are already recorded resolves as an honest reuse. The first failed or cancelled day
-    // halts the chain there — later days are honestly un-run.
-    // The ids the screen step ACTUALLY recorded, oldest first — step 5's whole input. Taken from
-    // each day's own settled snapshot, never re-read from a ledger and never re-derived from the
-    // day string. A REUSED day yields the pre-existing record's id, which is exactly the snapshot
-    // that day now stands on, so it is measured like any other. Deduped because a day's trigger
-    // can ADOPT a job the manager was already running for a DIFFERENT day, whose snapshot then
-    // names that other day's id — measuring it twice would be a second walk over one input.
-    const recordedScreenIds: string[] = [];
+    // Steps 4 and 5 — the screen and then the forward measurement, PER DAY of the captured range,
+    // oldest first. Each day is screened, and that day's own snapshot is measured, before the next
+    // day starts (forward-test era; interleaved after the 2026-08-06 loss described below).
+    //
+    // **Why interleaved rather than two phases.** These ran as two passes — every screen, then
+    // every measurement — and the second pass began only once the first had finished. On
+    // 2026-08-06 a 51-day range spent 2h42m recording screens and then produced ZERO forward
+    // records: the chain lives entirely in this tab, is never resumed after a reload, and whatever
+    // ended it in that window took all 51 measurements with it, leaving nothing on disk and no
+    // trace that they had been due. Measuring each day beside its own screen makes the run
+    // resumable in the only sense that matters here — an interrupted range keeps every day it
+    // actually finished, and the operator re-clicks for the rest (each finished day then resolving
+    // as a cheap reuse on both halves).
+    //
+    // Each half is its own single-flight job through the SAME handler its own button uses, and
+    // each is awaited to terminal before anything else starts — so two walks never overlap and the
+    // chain never queues behind itself. A day whose pins are already recorded resolves as an
+    // honest reuse. The first failed or cancelled day halts the chain there; later days are
+    // honestly un-run, and every earlier day stays recorded.
+    //
+    // Snapshot ids are deduped across days: a day's trigger can ADOPT a job the manager was
+    // already running for a DIFFERENT day, whose snapshot then names that other day's id —
+    // measuring it twice would be a second walk over one input.
+    const screenIndex = 3;
+    const forwardIndex = 4;
+    // Non-sessions are dropped BEFORE the loop, from one awaited read (never a per-day call). What
+    // survives is what the daily bars on file say actually traded; `skippedDays` is disclosed in
+    // the step's own message so a range that shrank never looks like a range that was short.
+    steps[screenIndex] = {
+      key: "screen",
+      state: "running",
+      // Deliberately avoids the word a shipped golden pins page-wide (see the chain guard's own
+      // collision check) — this line renders above the ledger sections, so a match here would
+      // resolve the golden and stop it proving anything.
+      message: "reading which days actually traded…",
+    };
+    publish("running");
+    const sessionDays = await handleLoadSessionDays(range.days, range.from, range.to);
+    const runDays = sessionDays.days;
+    const skippedDays = sessionDays.skipped;
+    const dayCount = runDays.length;
     const seenScreenIds = new Set<string>();
+    let recordedCount = 0;
+    let reusedCount = 0;
+    let lastSettled: DeskScreenComputeSnapshot | null = null;
+    let measuredCount = 0;
+    let newForwardCount = 0;
+    let reusedForwardCount = 0;
+    let lastForward: DeskForwardComputeSnapshot | null = null;
 
-    {
-      const screenIndex = 3;
-      let recordedCount = 0;
-      let reusedCount = 0;
-      let lastSettled: DeskScreenComputeSnapshot | null = null;
-      for (let dayIndex = 0; dayIndex < range.days.length; dayIndex += 1) {
-        const day = range.days[dayIndex];
-        if (refreshChainStopRef.current) {
-          halt(screenIndex, "cancelled", REFRESH_CHAIN_CANCELLED.screen);
-          return;
-        }
+    // Both steps' own terminal messages, written from whatever the loop actually got through. Used
+    // on the normal ending AND before any mid-loop halt: `halt` marks only the steps AFTER the one
+    // it names, so a screen step left "running" while the forward step failed would be a lie.
+    // A range that shrank must never read as a range that was short: whatever the session filter
+    // dropped is named in the same sentence as what ran.
+    const skippedNote =
+      skippedDays === 0 ? "" : ` · ${skippedDays} day(s) skipped — not a recorded session`;
+    const settleScreenStep = () => {
+      if (dayCount === 0) {
+        // A genuine no-op, not a `done` (the forward step's own precedent below): nothing was
+        // screened, and calling that "done" would imply a walk that never happened.
         steps[screenIndex] = {
           key: "screen",
-          state: "running",
-          message: `day ${dayIndex + 1} of ${range.days.length} — ${day}`,
+          state: "noop",
+          message: `no day in this range is a recorded session — ${skippedDays} day(s) skipped`,
         };
-        publish("running");
-
-        const started = await handleTriggerScreen(day);
-        if (!started.ok || !started.data) {
-          halt(
-            screenIndex,
-            "failed",
-            `${day}: ${started.error ?? "this day's run could not be started"}`,
-          );
-          return;
-        }
-        const adopted = started.data.started === false;
-        if (adopted) {
-          steps[screenIndex] = {
-            key: "screen",
-            state: "running",
-            message: `day ${dayIndex + 1} of ${range.days.length} — ${day} · joined a job already running`,
-          };
-          publish("running");
-        }
-        const settled = await awaitRefreshChainJob(
-          () => screenComputeRef.current,
-          started.data.compute.id,
-          () => refreshChainStopRef.current,
-        );
-        if (settled === null) {
-          halt(screenIndex, "cancelled", `${day}: ${REFRESH_CHAIN_CANCELLED.screen}`);
-          return;
-        }
-        if (settled.state === "cancelled") {
-          halt(screenIndex, "cancelled", `${day}: ${REFRESH_CHAIN_CANCELLED.screen}`);
-          return;
-        }
-        if (settled.state !== "done") {
-          halt(screenIndex, "failed", `${day}: ${settled.error ?? "this day's run failed"}`);
-          return;
-        }
-        lastSettled = settled;
-        if (settled.screen_id !== null && !seenScreenIds.has(settled.screen_id)) {
-          seenScreenIds.add(settled.screen_id);
-          recordedScreenIds.push(settled.screen_id);
-        }
-        if (settled.reused) {
-          reusedCount += 1;
-        } else {
-          recordedCount += 1;
-        }
+        return;
       }
-      const dayCount = range.days.length;
       steps[screenIndex] = {
         key: "screen",
         state: "done",
         message:
           dayCount === 1 && lastSettled !== null
-            ? describeScreenDone(lastSettled)
-            : `${dayCount} days — ${recordedCount} recorded · ${reusedCount} reused`,
+            ? `${describeScreenDone(lastSettled)}${skippedNote}`
+            : `${recordedCount + reusedCount} of ${dayCount} days — ${recordedCount} recorded · ${reusedCount} reused${skippedNote}`,
       };
-    }
-
-    // Step 5 — the forward returns, once per snapshot THIS run recorded, oldest first. Serialized
-    // against a manager whose single-flight slot is process-wide: each job is awaited to terminal
-    // before the next starts, so two walks never overlap and the chain never queues behind itself.
-    // Every job goes through the SAME handler the Compute Forward button uses, so that panel's own
-    // state stays the single owner of the trigger state.
-    {
-      const forwardIndex = 4;
-      const total = recordedScreenIds.length;
-      if (total === 0) {
-        // A genuine no-op, not a `done`: the screen step recorded nothing to measure, and calling
-        // that "done" would imply a measurement that never happened (the membership-409 precedent).
+    };
+    const settleForwardStep = () => {
+      if (measuredCount === 0) {
+        // A genuine no-op, not a `done`: nothing was recorded to measure, and calling that "done"
+        // would imply a measurement that never happened (the membership-409 precedent).
         steps[forwardIndex] = {
           key: "forward",
           state: "noop",
           message: "nothing to measure — no snapshot was recorded",
         };
-        publish("done");
-        refreshChainActiveRef.current = false;
         return;
       }
-
-      let newCount = 0;
-      let reusedForwardCount = 0;
-      let lastForward: DeskForwardComputeSnapshot | null = null;
-
-      for (let idIndex = 0; idIndex < total; idIndex += 1) {
-        const screenId = recordedScreenIds[idIndex];
-        const head = `measuring ${idIndex + 1} of ${total} — ${screenId}`;
-        let measured: DeskForwardComputeSnapshot | null = null;
-
-        // At most TWO attempts, through ONE call site. This manager's single-flight slot is
-        // process-wide rather than per-snapshot — its trigger hands back whatever job is running
-        // whatever id was asked for — so an adopted job may be measuring a DIFFERENT snapshot.
-        // Waiting on it is still right (never start a second walk), but it did not measure THIS
-        // id, so the chain asks once more now that the slot is free. A second mismatch is
-        // reported, never looped on.
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-          if (refreshChainStopRef.current) {
-            halt(forwardIndex, "cancelled", REFRESH_CHAIN_CANCELLED.forward);
-            return;
-          }
-          steps[forwardIndex] = { key: "forward", state: "running", message: head };
-          publish("running");
-
-          const started = await handleTriggerForward(screenId);
-          if (!started.ok || !started.data) {
-            halt(
-              forwardIndex,
-              "failed",
-              `${screenId}: ${started.error ?? "this snapshot could not be measured"}`,
-            );
-            return;
-          }
-          const adopted = started.data.started === false;
-          const base = adopted ? `${head} · joined a job already running` : head;
-          let ticked = "";
-
-          const job = await awaitRefreshChainJob(
-            () => forwardComputeRef.current,
-            started.data.compute.id,
-            () => refreshChainStopRef.current,
-            (tick) => {
-              // "of", never a slash: a rendered "101 of 101" is inert, where "101 / 101" is a
-              // string a shipped golden pins against a table this control renders above.
-              const message = `${base} · ${tick.progress.rows_done} of ${tick.progress.rows_total} rows`;
-              if (message === ticked) return;
-              ticked = message;
-              steps[forwardIndex] = { key: "forward", state: "running", message };
-              publish("running");
-            },
-          );
-          if (job === null || job.state === "cancelled") {
-            halt(forwardIndex, "cancelled", `${screenId}: ${REFRESH_CHAIN_CANCELLED.forward}`);
-            return;
-          }
-          if (job.state !== "done") {
-            halt(
-              forwardIndex,
-              "failed",
-              `${screenId}: ${job.error ?? "this snapshot could not be measured"}`,
-            );
-            return;
-          }
-          if (job.screen_id === screenId) {
-            measured = job;
-            break;
-          }
-        }
-
-        if (measured === null) {
-          halt(
-            forwardIndex,
-            "failed",
-            `${screenId}: a job already running measured another snapshot`,
-          );
-          return;
-        }
-        lastForward = measured;
-        if (measured.reused) {
-          reusedForwardCount += 1;
-        } else {
-          newCount += 1;
-        }
-      }
-
       steps[forwardIndex] = {
         key: "forward",
         state: "done",
         message:
-          total === 1 && lastForward !== null
+          measuredCount === 1 && lastForward !== null
             ? describeForwardDone(lastForward)
-            : `${total} snapshots — ${newCount} recorded · ${reusedForwardCount} reused`,
+            : `${measuredCount} snapshots — ${newForwardCount} recorded · ${reusedForwardCount} reused`,
       };
+    };
+
+    for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
+      const day = runDays[dayIndex];
+      const dayHead = `day ${dayIndex + 1} of ${dayCount} — ${day}`;
+      if (refreshChainStopRef.current) {
+        halt(screenIndex, "cancelled", REFRESH_CHAIN_CANCELLED.screen);
+        return;
+      }
+      steps[screenIndex] = { key: "screen", state: "running", message: dayHead };
+      publish("running");
+
+      const started = await handleTriggerScreen(day);
+      if (!started.ok || !started.data) {
+        halt(
+          screenIndex,
+          "failed",
+          `${day}: ${started.error ?? "this day's run could not be started"}`,
+        );
+        return;
+      }
+      const adopted = started.data.started === false;
+      if (adopted) {
+        steps[screenIndex] = {
+          key: "screen",
+          state: "running",
+          message: `${dayHead} · joined a job already running`,
+        };
+        publish("running");
+      }
+      const settled = await awaitRefreshChainJob(
+        () => screenComputeRef.current,
+        started.data.compute.id,
+        () => refreshChainStopRef.current,
+      );
+      if (settled.outcome === "stopped") {
+        halt(screenIndex, "cancelled", `${day}: ${REFRESH_CHAIN_CANCELLED.screen}`);
+        return;
+      }
+      if (settled.outcome === "lost") {
+        halt(screenIndex, "failed", `${day}: ${REFRESH_CHAIN_LOST_JOB_MESSAGE}`);
+        return;
+      }
+      if (settled.snapshot.state === "cancelled") {
+        halt(screenIndex, "cancelled", `${day}: ${REFRESH_CHAIN_CANCELLED.screen}`);
+        return;
+      }
+      if (settled.snapshot.state !== "done") {
+        halt(screenIndex, "failed", `${day}: ${settled.snapshot.error ?? "this day's run failed"}`);
+        return;
+      }
+      lastSettled = settled.snapshot;
+      if (settled.snapshot.reused) {
+        reusedCount += 1;
+      } else {
+        recordedCount += 1;
+      }
+
+      // This day's own snapshot, measured now — never whichever snapshot the history panel happens
+      // to be displaying. An id already measured earlier in this run (an adoption crossing days)
+      // is skipped rather than walked twice.
+      const screenId = settled.snapshot.screen_id;
+      if (screenId === null || seenScreenIds.has(screenId)) continue;
+      seenScreenIds.add(screenId);
+
+      const head = `measuring ${measuredCount + 1} of ${dayCount} — ${screenId}`;
+      let measured: DeskForwardComputeSnapshot | null = null;
+
+      // At most TWO attempts, through ONE call site. This manager's single-flight slot is
+      // process-wide rather than per-snapshot — its trigger hands back whatever job is running
+      // whatever id was asked for — so an adopted job may be measuring a DIFFERENT snapshot.
+      // Waiting on it is still right (never start a second walk), but it did not measure THIS id,
+      // so the chain asks once more now that the slot is free. A second mismatch is reported,
+      // never looped on.
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        if (refreshChainStopRef.current) {
+          settleScreenStep();
+          halt(forwardIndex, "cancelled", REFRESH_CHAIN_CANCELLED.forward);
+          return;
+        }
+        steps[forwardIndex] = { key: "forward", state: "running", message: head };
+        publish("running");
+
+        const startedForward = await handleTriggerForward(screenId);
+        if (!startedForward.ok || !startedForward.data) {
+          settleScreenStep();
+          halt(
+            forwardIndex,
+            "failed",
+            `${screenId}: ${startedForward.error ?? "this snapshot could not be measured"}`,
+          );
+          return;
+        }
+        const adoptedForward = startedForward.data.started === false;
+        const base = adoptedForward ? `${head} · joined a job already running` : head;
+        let ticked = "";
+
+        const job = await awaitRefreshChainJob(
+          () => forwardComputeRef.current,
+          startedForward.data.compute.id,
+          () => refreshChainStopRef.current,
+          (tick) => {
+            // "of", never a slash: a rendered "101 of 101" is inert, where "101 / 101" is a
+            // string a shipped golden pins against a table this control renders above.
+            const message = `${base} · ${tick.progress.rows_done} of ${tick.progress.rows_total} rows`;
+            if (message === ticked) return;
+            ticked = message;
+            steps[forwardIndex] = { key: "forward", state: "running", message };
+            publish("running");
+          },
+        );
+        if (job.outcome === "stopped") {
+          settleScreenStep();
+          halt(forwardIndex, "cancelled", `${screenId}: ${REFRESH_CHAIN_CANCELLED.forward}`);
+          return;
+        }
+        if (job.outcome === "lost") {
+          settleScreenStep();
+          halt(forwardIndex, "failed", `${screenId}: ${REFRESH_CHAIN_LOST_JOB_MESSAGE}`);
+          return;
+        }
+        if (job.snapshot.state === "cancelled") {
+          settleScreenStep();
+          halt(forwardIndex, "cancelled", `${screenId}: ${REFRESH_CHAIN_CANCELLED.forward}`);
+          return;
+        }
+        if (job.snapshot.state !== "done") {
+          settleScreenStep();
+          halt(
+            forwardIndex,
+            "failed",
+            `${screenId}: ${job.snapshot.error ?? "this snapshot could not be measured"}`,
+          );
+          return;
+        }
+        if (job.snapshot.screen_id === screenId) {
+          measured = job.snapshot;
+          break;
+        }
+      }
+
+      if (measured === null) {
+        settleScreenStep();
+        halt(forwardIndex, "failed", `${screenId}: a job already running measured another snapshot`);
+        return;
+      }
+      lastForward = measured;
+      measuredCount += 1;
+      if (measured.reused) {
+        reusedForwardCount += 1;
+      } else {
+        newForwardCount += 1;
+      }
     }
 
+    settleScreenStep();
+    settleForwardStep();
     publish("done");
     refreshChainActiveRef.current = false;
   }
@@ -4630,6 +5218,20 @@ export default function DeskPage() {
     cancelRequested: topupCancelRequested,
     cancelError: topupCancelError,
   };
+  const deepBackfillControlProps: DeepBackfillControlProps = {
+    compute: deepBackfillCompute,
+    plan: deepBackfillPlan,
+    fromDay: deepBackfillFromDay,
+    toDay: deepBackfillToDay,
+    onFromDayChange: setDeepBackfillFromDay,
+    onToDayChange: setDeepBackfillToDay,
+    onTrigger: handleTriggerDeepBackfill,
+    triggering: deepBackfillTriggering,
+    triggerError: deepBackfillTriggerError,
+    onCancel: handleCancelDeepBackfill,
+    cancelRequested: deepBackfillCancelRequested,
+    cancelError: deepBackfillCancelError,
+  };
   const reconcileControlProps: ReconcileControlProps = {
     compute: reconcileCompute,
     onTrigger: handleTriggerReconcile,
@@ -4674,7 +5276,7 @@ export default function DeskPage() {
   // The calendar's visible year: an explicitly-paged one, else the displayed snapshot's own year,
   // else today's. A pure derivation — never an effect, never a fetch.
   const shownYear =
-    viewYear ?? Number((displayedSnapshot?.screen_date ?? todayUtcDate()).slice(0, 4));
+    viewYear ?? Number((displayedSnapshot?.screen_date ?? todayEtDate()).slice(0, 4));
 
   // goal-desk-iter-35 (J-20): fetch the Screen Comparison payload for whichever screen is
   // currently DISPLAYED (`displayedSnapshot`'s own id, the SAME snapshot the Briefing/Provenance
@@ -4736,6 +5338,42 @@ export default function DeskPage() {
     };
   }, [displayedSnapshot]);
 
+  // The displayed snapshot's forward COVERAGE — how much of it a measurement could reach at all.
+  // Its own effect rather than a branch of the read above, because the two answer different
+  // questions and a record's absence is exactly when this one matters most. A GET only.
+  useEffect(() => {
+    const id = displayedSnapshot?.id ?? null;
+    if (id === null) {
+      setForwardPinsResult(null);
+      return;
+    }
+    let alive = true;
+    fetchDeskForwardPins(id).then((result) => {
+      if (alive) setForwardPinsResult(result);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [displayedSnapshot]);
+
+  // The displayed snapshot's durable measurement ATTEMPTS. Keyed identically; refetched on the
+  // forward compute's terminal tick below, since a finished measurement is exactly what adds a row
+  // here. A GET only.
+  useEffect(() => {
+    const id = displayedSnapshot?.id ?? null;
+    if (id === null) {
+      setForwardRunsResult(null);
+      return;
+    }
+    let alive = true;
+    fetchDeskForwardRuns(id).then((result) => {
+      if (alive) setForwardRunsResult(result);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [displayedSnapshot]);
+
   // Poll the forward compute job while running — the fourth manager's poll, mirroring the
   // topup-poll shape with ONE terminal refetch: the displayed snapshot's own forward read
   // (keep-last-known on failure). If the operator switched the displayed screen mid-compute, the
@@ -4753,6 +5391,13 @@ export default function DeskPage() {
           const refreshed = await fetchDeskForward(id);
           setForwardResult((previous) =>
             refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
+          );
+          // The ledger gains a row on EVERY terminal outcome — including the ones that record no
+          // forward result at all (a cancel, a failure, a walk that found nothing to measure), which
+          // is precisely when the read above changes nothing and this one is the only evidence.
+          const runs = await fetchDeskForwardRuns(id);
+          setForwardRunsResult((previous) =>
+            runs.ok || previous === null || !previous.ok ? runs : previous,
           );
         }
       }
@@ -4838,6 +5483,7 @@ export default function DeskPage() {
             screen={screenControlProps}
             topup={topupControlProps}
             reconcile={reconcileControlProps}
+            deepBackfill={deepBackfillControlProps}
             refreshChain={refreshChainControlProps}
           />
         ) : (
@@ -4858,8 +5504,11 @@ export default function DeskPage() {
             screenControlProps={screenControlProps}
             topupControlProps={topupControlProps}
             reconcileControlProps={reconcileControlProps}
+            deepBackfillControlProps={deepBackfillControlProps}
             refreshChainControlProps={refreshChainControlProps}
             forwardResult={forwardResult}
+            forwardPinsResult={forwardPinsResult}
+            forwardRunsResult={forwardRunsResult}
             forwardControlProps={forwardControlProps}
             selectedForwardSymbol={selectedForwardSymbol}
             onSelectForwardSymbol={setSelectedForwardSymbol}

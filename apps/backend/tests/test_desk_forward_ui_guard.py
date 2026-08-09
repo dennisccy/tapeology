@@ -45,6 +45,22 @@ _REQUIRED_FORWARD_TESTIDS = (
     # The side-relative sign convention's own line: how to READ every directional number in the
     # panel. Its presence is the static proof that the reading rule ships beside the numbers.
     "desk-forward-sign-convention",
+    # The two surfaces that make an ABSENT forward record legible rather than ambiguous, and which
+    # therefore have to ship BESIDE `desk-forward-not-computed` rather than instead of it: how much
+    # of this snapshot a measurement could reach at all (an upper bound, disclosed before the click
+    # -- learning it by running the measurement cost 2h42m on 2026-08-06), and whether one has ever
+    # finished. `desk-forward-runs-empty` is the load-bearing half of the second: a snapshot with no
+    # record AND no attempt was never measured, where one with a `done` attempt and no record was
+    # measured and found nothing.
+    "desk-forward-coverage",
+    "desk-forward-runs",
+    "desk-forward-runs-empty",
+    "desk-forward-runs-table",
+    # The third such surface, and the one an all-absent record needs most: a record where NOT ONE
+    # row carries a measurement renders the full section (real id, real members, every numeric cell
+    # an em-dash), never the amber `desk-forward-not-computed` panel -- so without this line the
+    # only account of why was a per-row `title` tooltip. Static presence is its automated proof.
+    "desk-forward-all-absent",
 )
 
 # The golden click-target attributes the compare guard already forbids its own block from reusing
@@ -75,7 +91,9 @@ _SECTION_ORDER = (
     # calendar above just selected, so it reads directly beneath it -- what happened next, then the
     # controls that act.
     'aria-label="Forward Returns"',
-    'aria-label="Run Screen, Top-up and Reconcile Index controls"',
+    # Renamed, not reordered: the controls section gained a fourth control (the deep fine-bar
+    # backfill), and a landmark a screen reader announces must name what it actually contains.
+    'aria-label="Run Screen, Top-up, Reconcile Index and Deep Backfill controls"',
     'aria-label="Briefing"',
     'aria-label="Skipped members"',
     'aria-label="Top-up runs"',
@@ -303,6 +321,37 @@ def test_the_session_end_group_copies_served_values_and_derives_none():
         f"forwardCloseMeasure derives a value ({_ARITHMETIC_RE.findall(body)}) -- it may only "
         "re-key already-served numbers under the horizon-leaf field names"
     )
+
+
+def test_the_all_absent_note_reads_the_served_reason_field_not_a_recomputed_count():
+    """The banner must fire on the condition a reader actually sees -- a record with rows, not one
+    of which carries a measurement -- and must reach that by testing the served `reason` field
+    rather than re-deriving any served number client-side."""
+    body = _extract_function(_DESK_PAGE.read_text(), "ForwardAbsenceNote")
+    assert "record.rows.every((row) => row.reason !== null)" in body, (
+        "ForwardAbsenceNote no longer derives its condition from the served per-row `reason` "
+        "field -- a recomputed count would be a second, drift-prone owner of that fact"
+    )
+    assert "record.rows.length > 0" in body, (
+        "a record with NO rows already has its own honest empty state (desk-forward-rows-empty); "
+        "the absence banner must not claim that case too"
+    )
+
+
+def test_the_all_absent_note_has_a_distinct_sentence_for_every_session_state():
+    """Three situations produce an identical table of em-dashes -- a non-session, a real session
+    past the vendor's fine-bar retention floor, and a date that has not happened yet. The whole
+    point of the banner is that they no longer read the same, so each branch must ship its own
+    sentence, plus a bare fallback for when the daily bars cannot say."""
+    body = _extract_function(_DESK_PAGE.read_text(), "forwardAbsenceText")
+    for state in ("not_a_recorded_session", "after_recorded_evidence", "recorded_session"):
+        assert f'state === "{state}"' in body, f"no distinct sentence for session state {state}"
+    assert "no daily bar is recorded for that date either" in body
+    assert "the session has not been recorded" in body
+    assert "reach back about 30 days (1m) and 60 days (5m)" in body
+    # No branch may assert a cause the served state does not carry: the `unknown` fallback states
+    # the absence and stops.
+    assert body.count("return `${head}") >= 1, "the unknown state has no bare fallback sentence"
 
 
 def test_the_forward_block_reuses_no_golden_click_target():

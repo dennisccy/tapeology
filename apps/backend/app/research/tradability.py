@@ -148,8 +148,8 @@ class _PriorSessionBarView:
         self._store = store
         self._cutoff_epoch = cutoff_epoch
 
-    def list(self) -> tuple[list[dict], list[dict]]:
-        return self._store.list()
+    def list(self, *, include_bars: bool = True) -> tuple[list[dict], list[dict]]:
+        return self._store.list(include_bars=include_bars)
 
     def load_bars(self, bar_series_id: str) -> list[RawBar]:
         return [b for b in self._store.load_bars(bar_series_id) if b.epoch <= self._cutoff_epoch]
@@ -171,7 +171,9 @@ def _select_daily_series(store: BarStore, symbol: str) -> tuple[list[RawBar] | N
     ``None`` -- with ``has_any_series_for_symbol`` still ``True`` -- when ``symbol`` has
     recordings but none on the daily timeframe: no basis is derivable, an honest state distinct
     from "no series at all" (see ``compute_tradability``)."""
-    records, _integrity_errors = store.list()
+    # ``include_bars=False``: this enumeration reads only ``symbol``/``timeframe`` — the bars
+    # themselves are then read through ``merged_bars`` below, exactly as before.
+    records, _integrity_errors = store.list(include_bars=False)
     matching_any = [r for r in records if r["symbol"] == symbol]
     if not matching_any:
         return None, False

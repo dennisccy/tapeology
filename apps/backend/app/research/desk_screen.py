@@ -133,14 +133,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import multiprocessing
 import os
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
 from ..config import Config
 from .bar_index import BarIndex
-from .bars import BarStore
+from .bars import BarStore, release_row_caches
 from .datasets import DatasetStore
 from .desk_coverage import DESK_TOPUP_TIMEFRAMES, get_desk_coverage
 from .desk_universe import UniverseStore
@@ -496,6 +498,164 @@ def _basis_age_days(basis_as_of: str, as_of: str) -> int:
 # --- the row computation (the SOLE walker; the manager and the CLI both call this) ----------------
 
 
+# How many worker PROCESSES share the member walk. The walk is CPU-bound (per member: one merged
+# fold per timeframe, then the vectorized pivot/touch pass) and every member is independent, so it
+# divides cleanly — but it divides across PROCESSES rather than threads because that work is pure
+# Python and NumPy under one GIL.
+#
+# The ceiling is deliberate and low. ``edge_report.py``'s sweep keeps its own pool CLI-only,
+# explicitly out of the always-on uvicorn process; this pool is the considered exception, so it is
+# bounded on both sides: at most ``_MAX_SCREEN_WORKERS`` children, created INSIDE an
+# already-triggered single-flight job and torn down when that job ends, so the server never holds
+# idle children. Children inherit this process's CPU affinity, so the host-guard mask still binds
+# them. ``=1`` walks in this process exactly as before the pool existed.
+_SCREEN_WORKERS_ENV = "TAPEOLOGY_DESK_SCREEN_WORKERS"
+_DEFAULT_SCREEN_WORKERS = 4
+_MAX_SCREEN_WORKERS = 4
+# Below this many members the spawn cost (a fresh interpreter plus this package's imports per
+# child) outweighs the walk, so a small or hermetic walk stays in-process.
+_MIN_MEMBERS_FOR_WORKERS = 12
+
+# How many members a walk reads before releasing the cached candles behind them. Small enough that
+# peak memory stays a few members' worth of intraday history rather than the whole universe's, large
+# enough that the release itself is not on any hot path.
+_MEMBERS_PER_CACHE_RELEASE = 8
+
+# Chunks per worker. More chunks than workers lets the pool's queue even out unequal members, and
+# keeps each chunk small enough that finishing one is a visible step of progress rather than a
+# quarter of the walk landing at once.
+_CHUNKS_PER_WORKER = 3
+
+
+def _screen_workers() -> int:
+    """The configured worker-process count, clamped to ``[1, _MAX_SCREEN_WORKERS]``. An unset,
+    empty, or unparseable value is the default — a malformed knob must never fail a run."""
+    raw = os.environ.get(_SCREEN_WORKERS_ENV)
+    if not raw:
+        return _DEFAULT_SCREEN_WORKERS
+    try:
+        requested = int(raw.strip())
+    except ValueError:
+        return _DEFAULT_SCREEN_WORKERS
+    return max(1, min(_MAX_SCREEN_WORKERS, requested))
+
+
+def _read_members_in_worker(
+    *,
+    symbols: list[str],
+    bar_dir: str,
+    verify_cache_db_path: str | None,
+    as_of_epoch: float,
+    config: Config,
+) -> dict[str, tuple[dict, tuple | None]]:
+    """ONE worker-process task: the per-member STORE READS for a slice of the walk.
+
+    Returns ``{symbol: (tradability_result, reference_or_None)}`` — exactly what the in-process
+    walk computes per member, and nothing else. Every decision made FROM those values (best band,
+    distances, the cross-symbol rank, the served row shape) stays in the parent, so determinism has
+    a single home and cannot depend on how the members were divided.
+
+    MUST be a module-level function (picklable by reference) for the ``spawn`` context, and builds
+    its own ``BarStore`` from EXPLICIT paths — a store object cannot usefully cross a process
+    boundary. Wiring the same durable verify cache is what keeps a child cheap: without it each one
+    would re-verify the whole store before reading its first symbol (``_read_members_in_worker``'s
+    whole benefit, measured ~15s per child, would be spent on that)."""
+    bar_store = BarStore(bar_dir, verify_cache_db_path=verify_cache_db_path)
+    return _read_members(symbols, bar_store, as_of_epoch, config)
+
+
+def _read_members(
+    symbols: list[str],
+    bar_store: BarStore,
+    as_of_epoch: float,
+    config: Config,
+) -> dict[str, tuple[dict, tuple | None]]:
+    """The per-member store reads for ``symbols`` — the ONE body both the in-process walk and each
+    worker process run, so neither can drift from the other.
+
+    Every symbol's candles are dead the moment its row is resolved (a screen touches each member
+    once), so the row caches are released periodically rather than allowed to accumulate the whole
+    universe's intraday history — see ``bars.release_row_caches``. Without it a 101-member walk
+    peaked at ~2.3GB and four concurrent workers exceeded the host's memory ceiling."""
+    out: dict[str, tuple[dict, tuple | None]] = {}
+    for position, symbol in enumerate(symbols):
+        if position and position % _MEMBERS_PER_CACHE_RELEASE == 0:
+            release_row_caches()
+        result = compute_tradability(bar_store, symbol, as_of_epoch, config)
+        reference: tuple | None = None
+        if not result["no_bar_series_for_symbol"] and result["basis_as_of"] is not None:
+            reference = _resolve_reference_close_and_history(
+                bar_store, symbol, result["basis_as_of"]
+            )
+        out[symbol] = (result, reference)
+    return out
+
+
+def _member_reads(
+    members: list[str],
+    bar_store: BarStore,
+    as_of_epoch: float,
+    config: Config,
+    *,
+    progress: Callable[[dict], None] | None,
+    should_abort: Callable[[], bool] | None,
+) -> dict[str, tuple[dict, tuple | None]]:
+    """Every member's store reads, walked in this process or divided across worker processes.
+
+    ``progress`` is called once per member in MEMBER order either way, and a member missing from the
+    returned mapping is one the walk never reached — the caller stops there rather than inventing a
+    row. Cancellation is checked before each unit of work is handed out; a unit already dispatched
+    runs to completion (the era-5C "already in flight always completes" rule), so a cancelled
+    parallel walk stops on a chunk boundary rather than an exact member."""
+    workers = _screen_workers()
+    reads: dict[str, tuple[dict, tuple | None]] = {}
+
+    if workers <= 1 or len(members) < _MIN_MEMBERS_FOR_WORKERS:
+        for symbol in members:
+            if should_abort is not None and should_abort():
+                return reads
+            reads.update(_read_members([symbol], bar_store, as_of_epoch, config))
+            if progress is not None:
+                progress({"symbol": symbol})
+        return reads
+
+    # CONTIGUOUS slices, and more of them than there are workers. Contiguous so that finishing a
+    # chunk advances the member PREFIX and progress can be reported as the walk goes rather than in
+    # one jump at the end; more than workers so the pool's own queue absorbs the fact that members
+    # are not equal-cost (a symbol's cost tracks how much intraday history it holds).
+    size = max(1, -(-len(members) // (workers * _CHUNKS_PER_WORKER)))
+    chunks = [members[i : i + size] for i in range(0, len(members), size)]
+    verify_cache_db_path = bar_store.verify_cache_db_path
+    bar_dir = str(bar_store.root)
+
+    reported = 0
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
+        futures = []
+        for chunk in chunks:
+            if should_abort is not None and should_abort():
+                break
+            futures.append(
+                pool.submit(
+                    _read_members_in_worker,
+                    symbols=chunk,
+                    bar_dir=bar_dir,
+                    verify_cache_db_path=verify_cache_db_path,
+                    as_of_epoch=as_of_epoch,
+                    config=config,
+                )
+            )
+        for future in futures:
+            reads.update(future.result())
+            # Report the members that are now contiguously ready. Whatever order the chunks land
+            # in, a progress counter reads the SAME member sequence a single-process walk produces.
+            if progress is not None:
+                while reported < len(members) and members[reported] in reads:
+                    progress({"symbol": members[reported]})
+                    reported += 1
+    return reads
+
+
 def compute_screen(
     universe_store: UniverseStore,
     bar_store: BarStore,
@@ -546,12 +706,16 @@ def compute_screen(
 
     rows: list[dict] = []
     skipped: list[dict] = []
+    reads = _member_reads(
+        members, bar_store, as_of_epoch, config,
+        progress=progress, should_abort=should_abort,
+    )
     for symbol in members:
-        if should_abort is not None and should_abort():
-            break
+        if symbol not in reads:
+            break  # the walk stopped here (cancelled) — never a fabricated row for what it skipped
         coverage = coverage_by_symbol[symbol]
         tick_evidence = symbol in tick_symbols
-        result = compute_tradability(bar_store, symbol, as_of_epoch, config)
+        result, reference = reads[symbol]
 
         if result["no_bar_series_for_symbol"]:
             skipped.append(
@@ -564,9 +728,7 @@ def compute_screen(
                  "coverage": coverage, "tick_evidence": tick_evidence}
             )
         else:
-            close, history_sessions, history_start = _resolve_reference_close_and_history(
-                bar_store, symbol, result["basis_as_of"]
-            )
+            close, history_sessions, history_start = reference
             best = _select_best_band(result["bands"], close)
             opposite = _select_opposite_band(result["bands"], close, best["side"])
             rows.append(
@@ -604,9 +766,6 @@ def compute_screen(
                 }
             )
 
-        if progress is not None:
-            progress({"symbol": symbol})
-
     rows.sort(key=_row_rank_key)
     # `skipped` is already symbol-ascending by construction (walked in `members`' own sorted
     # order, per `desk_universe.UniverseStore.record`'s `sorted(normalized_to_raw)` -- never
@@ -635,10 +794,19 @@ class ScreenStore:
 
     **One snapshot per date.** The immutability guarantee is narrower than it was: no method
     rewrites a file IN PLACE (``record`` still only ever creates), but a date is no longer allowed
-    to accumulate copies. ``prune_superseded`` is the ONE removal path -- it deletes the OTHER files
-    for a date once a fresher snapshot for that date has been written, and can never touch the file
-    it was told to keep. The compute path always writes the replacement BEFORE pruning, so an
-    interrupted supersede leaves two copies (the old behaviour) and never zero."""
+    to accumulate copies. There are now TWO removal paths, and the split is deliberate:
+
+    * ``prune_superseded(screen_date, keep_id)`` -- the automatic one, run by the compute path
+      itself. It deletes the OTHER files for a date once a fresher snapshot for that date has been
+      written, can never touch the file it was told to keep, and structurally REFUSES to leave a
+      date with nothing. The compute path always writes the replacement BEFORE pruning, so an
+      interrupted supersede leaves two copies (the old behaviour) and never zero.
+    * ``prune_dates(dates)`` -- the operator one, and the only method in this class that can remove
+      a date entirely. It exists for snapshots that should never have been recorded at all (a
+      Saturday, a market holiday, a date that has not happened yet), which no supersede can ever
+      replace because there is no correct snapshot for such a date to replace them WITH. Nothing in
+      the compute path calls it; its only caller is ``desk_screen_cleanup``'s explicit,
+      dry-run-by-default CLI mode."""
 
     def __init__(self, root: str | Path) -> None:
         self._root = Path(root)
@@ -755,6 +923,31 @@ class ScreenStore:
                 continue
             self._path(record["id"]).unlink()
             removed.append(record["id"])
+        return removed
+
+    def prune_dates(self, dates: set[str] | frozenset[str]) -> list[str]:
+        """Delete EVERY registered snapshot whose ``screen_date`` is in ``dates``, including a
+        date's last one. Returns the removed ids (oldest first).
+
+        The store's second removal path, and the only one that can empty a date. It exists for the
+        one case ``prune_superseded`` structurally cannot serve: a snapshot recorded for a date
+        that is not a trading session at all. There is no correct snapshot for a Saturday to be
+        superseded BY, so "keep the newest" has nothing to keep -- the record should not exist.
+
+        Deliberately dumb about WHICH dates qualify: this method deletes exactly what it is handed
+        and decides nothing. The judgement lives in ``desk_screen_cleanup.plan_non_session_cleanup``
+        (which derives it from recorded daily bars and fails open), so a caller can always inspect
+        the plan before anything is unlinked.
+
+        A file that failed its integrity check is not registered (``list`` withholds it and
+        surfaces it in ``errors``), so it is never in the removal set -- a damaged snapshot keeps
+        being surfaced honestly rather than being quietly swept away here."""
+        records, _errors = self.list()
+        removed: list[str] = []
+        for record in records:
+            if record["screen_date"] in dates:
+                self._path(record["id"]).unlink()
+                removed.append(record["id"])
         return removed
 
     def record(

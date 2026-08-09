@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BarRow, SrLevel, TradabilityBand } from "@/lib/types";
-import { formatDateTimeDMY } from "@/lib/datetime";
+import { formatDateET, formatDateTimeET, formatTimeET } from "@/lib/datetime";
 import { EmptyHint } from "./Panel";
 
 // The /structure page's price chart (J-01): candles from ONE representative recorded bar series
@@ -18,8 +18,7 @@ import { EmptyHint } from "./Panel";
 //     the recorded store bars; updated in place each poll so the last bar animates.
 //   * `extraMarkers` / `extraPriceLines` — pre-built display specs (tape-state markers + thesis
 //     geometry) the cockpit overlays; the component draws them verbatim, deciding nothing.
-//   * `secondsVisible` / `clockFormatter` — the cockpit's true-clock axis (the tape's own second-
-//     resolution axis), matching the retired PriceChart's own formatting.
+//   * `secondsVisible` — the cockpit's second-resolution axis (the tape's own granularity).
 //   * `asOfLabel` — the boundary marker's caption ("start" on the cockpit, "as-of" on /structure).
 //
 // era-5B J-05 (additive): an optional `bands` prop overlays the tradable map's price bands
@@ -69,6 +68,22 @@ const BAND_COLORS = {
   support: { strong: "#34d399", dim: "#3f8570" }, // emerald-400 / dimmed emerald
 };
 
+// The candle palette, named once so the volume histogram below can tint each bar to match the
+// candle it sits under (rather than restating the hex values a third time).
+const UP_COLOR = "#34d399"; // emerald-400
+const DOWN_COLOR = "#fb7185"; // rose-400
+
+// The volume pane's own price scale. Kept off the candles' scale so volume — which is orders of
+// magnitude larger than price — can never rescale or flatten them. `scaleMargins.top` pushes the
+// histogram into the bottom fifth of the canvas; the candles' own margins keep them clear of it.
+const VOLUME_SCALE_ID = "volume";
+const VOLUME_SCALE_MARGINS = { top: 0.8, bottom: 0 } as const;
+const PRICE_SCALE_MARGINS = { top: 0.1, bottom: 0.25 } as const;
+
+// Volume bars sit UNDER the candles, so they are drawn at reduced opacity: at full strength the
+// histogram competes with the price action it is meant to annotate. `88` is the alpha byte.
+const VOLUME_ALPHA = "88";
+
 // A ready-to-draw series marker (the cockpit builds these from its served tape-state + thesis
 // values; this component draws them verbatim on the live series).
 export interface ChartMarkerSpec {
@@ -107,6 +122,18 @@ function isDrawableCandle(bar: BarRow): boolean {
   );
 }
 
+// One served row as a volume histogram point, tinted to match the candle above it. A row whose
+// stored `volume` is missing or non-finite contributes 0 height rather than crashing the series —
+// the same defence-in-depth `isDrawableCandle` applies to prices. The bar is still drawn (its
+// candle is), so a zero here reads as "no volume recorded for this bar", never as a gap.
+function volumePoint(bar: BarRow) {
+  return {
+    time: bar.ts as any,
+    value: Number.isFinite(bar.volume) ? bar.volume : 0,
+    color: (bar.close >= bar.open ? UP_COLOR : DOWN_COLOR) + VOLUME_ALPHA,
+  };
+}
+
 export function StructureChart({
   bars,
   levels,
@@ -120,7 +147,6 @@ export function StructureChart({
   extraMarkers = [],
   extraPriceLines = [],
   secondsVisible = false,
-  clockFormatter = false,
 }: {
   bars: BarRow[];
   levels: SrLevel[];
@@ -135,7 +161,6 @@ export function StructureChart({
   extraMarkers?: ChartMarkerSpec[];
   extraPriceLines?: ChartPriceLineSpec[];
   secondsVisible?: boolean;
-  clockFormatter?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Only drawable rows reach the library (see isDrawableCandle). Everything downstream — the
@@ -166,11 +191,10 @@ export function StructureChart({
   const liveMarkersRef = useRef<any>(null);
   const drawnLiveRef = useRef<BarRow[]>([]);
   const extraPriceLinesRef = useRef<any[]>([]);
-  // `clockFormatter` is read ONCE at chart creation (documented as not runtime-switchable — the
-  // cockpit always passes true, /structure never passes it), through a ref so it is current when
-  // the mount-only creation effect runs.
-  const clockFormatterRef = useRef(clockFormatter);
-  clockFormatterRef.current = clockFormatter;
+  // The two volume histogram series, mirroring the two candlestick series one-for-one (recorded
+  // store bars and live tape bars) so each inherits its partner's paging / in-place-update path.
+  const volumeSeriesRef = useRef<any>(null);
+  const liveVolumeSeriesRef = useRef<any>(null);
   // Whether anything has been drawn yet — the first data for a chart chooses its own viewport,
   // every later update preserves the operator's.
   const drawnRef = useRef(false);
@@ -211,38 +235,74 @@ export function StructureChart({
           vertLines: { color: "#1e293b" }, // slate-800
           horzLines: { color: "#1e293b" },
         },
-        rightPriceScale: { borderColor: "#1e293b" },
-        timeScale: { borderColor: "#1e293b", timeVisible: true, secondsVisible: false },
+        rightPriceScale: { borderColor: "#1e293b", scaleMargins: PRICE_SCALE_MARGINS },
+        timeScale: {
+          borderColor: "#1e293b",
+          timeVisible: true,
+          secondsVisible: false,
+          // Every candle's real UTC-epoch `time` is read on the MARKET clock through the ONE shared
+          // formatter — the same clock the rest of the product shows, so an axis reading can be
+          // compared against a table cell without converting anything. lightweight-charts passes
+          // UTCTimestamp SECONDS. Applied unconditionally: /structure previously fell through to
+          // the library's own UTC default while the cockpit rendered local time, which made the two
+          // charts disagree about what "09:30" meant.
+          //
+          // The library also passes the tick's own GRANULARITY, and the label follows it: a tick
+          // that marks a day/month/year prints `yyyy-MM-dd`, a tick inside a session prints the
+          // clock time alone. Both are shapes this product already uses, and both are ET. Printing
+          // the full 23-character stamp on every tick instead would leave a wide chart showing four
+          // labels, and would repeat a meaningless `00:00:00` across every daily bar. The COMPLETE
+          // stamp lives on the crosshair readout below, which is where a precise reading is asked
+          // for rather than scanned.
+          tickMarkFormatter: (time: number, tickMarkType: number) =>
+            tickMarkType === lc.TickMarkType.TimeWithSeconds
+              ? formatTimeET(time * 1000)
+              : tickMarkType === lc.TickMarkType.Time
+                ? formatTimeET(time * 1000, { seconds: false })
+                : formatDateET(time * 1000),
+        },
+        localization: {
+          timeFormatter: (time: number) => formatDateTimeET(time * 1000),
+        },
         crosshair: { mode: lc.CrosshairMode.Normal },
       });
-      // True-clock axis (cockpit only): render each candle's real UTC-epoch `time` as
-      // `dd-MM-yyyy HH:mm:ss` in the operator's local zone via the ONE shared formatter (J-31 /
-      // J-35), matching the retired PriceChart. lightweight-charts passes UTCTimestamp SECONDS.
-      if (clockFormatterRef.current) {
-        chart.applyOptions({
-          timeScale: { tickMarkFormatter: (time: number) => formatDateTimeDMY(time * 1000) },
-          localization: { timeFormatter: (time: number) => formatDateTimeDMY(time * 1000) },
-        });
-      }
       const series = chart.addSeries(lc.CandlestickSeries, {
-        upColor: "#34d399", // emerald-400
-        downColor: "#fb7185", // rose-400
-        wickUpColor: "#34d399",
-        wickDownColor: "#fb7185",
+        upColor: UP_COLOR,
+        downColor: DOWN_COLOR,
+        wickUpColor: UP_COLOR,
+        wickDownColor: DOWN_COLOR,
         borderVisible: false,
       });
       // The live tape-bar series — SAME palette, so recorded + live candles read as one instrument.
       const liveSeries = chart.addSeries(lc.CandlestickSeries, {
-        upColor: "#34d399",
-        downColor: "#fb7185",
-        wickUpColor: "#34d399",
-        wickDownColor: "#fb7185",
+        upColor: UP_COLOR,
+        downColor: DOWN_COLOR,
+        wickUpColor: UP_COLOR,
+        wickDownColor: DOWN_COLOR,
+        borderVisible: false,
+      });
+      // The traded-volume pane: one histogram per candlestick series, both bound to their own
+      // price scale in the bottom fifth of the canvas. `volume` is served on every bar row the
+      // chart already draws (the recorded store's `BarRow` and, since the logical-bar volume
+      // addition, the tape's own candles too) — these draw that value, deriving nothing.
+      const volumeOptions = {
+        priceFormat: { type: "volume" as const },
+        priceScaleId: VOLUME_SCALE_ID,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      };
+      const volumeSeries = chart.addSeries(lc.HistogramSeries, volumeOptions);
+      const liveVolumeSeries = chart.addSeries(lc.HistogramSeries, volumeOptions);
+      chart.priceScale(VOLUME_SCALE_ID).applyOptions({
+        scaleMargins: VOLUME_SCALE_MARGINS,
         borderVisible: false,
       });
 
       chartRef.current = chart;
       seriesRef.current = series;
       liveSeriesRef.current = liveSeries;
+      volumeSeriesRef.current = volumeSeries;
+      liveVolumeSeriesRef.current = liveVolumeSeries;
       libRef.current = lc;
       // The tape-state + thesis markers ride the live series' own marker primitive (the as-of
       // boundary marker rides the store series' — created lazily below).
@@ -267,6 +327,8 @@ export function StructureChart({
         chartRef.current = null;
         seriesRef.current = null;
         liveSeriesRef.current = null;
+        volumeSeriesRef.current = null;
+        liveVolumeSeriesRef.current = null;
         markersRef.current = null;
         liveMarkersRef.current = null;
         priceLinesRef.current = [];
@@ -359,6 +421,9 @@ export function StructureChart({
         : null;
 
     series.setData(candles);
+    // The volume pane rides the SAME rows in the SAME effect, so it inherits the paging, the cap
+    // trim and the anchor-preserving viewport logic below without a second data path of its own.
+    volumeSeriesRef.current?.setData(drawableBars.map(volumePoint));
     drawnBarsRef.current = drawableBars;
 
     if (candles.length === 0) {
@@ -423,12 +488,18 @@ export function StructureChart({
       candles.length >= prev.length &&
       drawableLiveBars[prev.length - 1]?.ts === prev[prev.length - 1]?.ts;
 
+    const liveVolume = liveVolumeSeriesRef.current;
+
     if (canIncrement) {
       for (let i = prev.length - 1; i < candles.length; i++) {
         liveSeries.update(candles[i]);
+        // The last bar's volume grows with it as trades land, so it is `update`d on exactly the
+        // same in-place path as the candle it belongs to.
+        liveVolume?.update(volumePoint(drawableLiveBars[i]));
       }
     } else {
       liveSeries.setData(candles);
+      liveVolume?.setData(drawableLiveBars.map(volumePoint));
       // First live paint with NO recorded store bars owning the viewport (tape mode, or history
       // mode for a symbol with no recordings): show the last screenful of live bars. When store
       // candles exist, the store data effect above owns the viewport (around the as-of boundary),
@@ -567,6 +638,9 @@ export function StructureChart({
   }, [extraMarkers, chartReady]);
 
   // --- Apply the true-clock second-resolution axis toggle (cockpit only) ------------------------
+  // This is what decides whether the library asks the tick formatter above for a `Time` or a
+  // `TimeWithSeconds` tick, so it still governs the axis label's shape (`HH:mm` vs `HH:mm:ss`) —
+  // the tape watches seconds, the recorded-bar charts do not.
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;

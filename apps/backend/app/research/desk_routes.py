@@ -94,6 +94,7 @@ dependencies instead (the ``get_universe_fetcher`` seam), test-overridable via
 
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -104,6 +105,14 @@ from .bar_index import BarIndex
 from .bars import BarStore
 from .datasets import DatasetStore
 from .desk_coverage import get_desk_coverage
+from .desk_deep_backfill import (
+    DESK_DEEP_TIMEFRAMES,
+    DeepBackfillRunStore,
+    DeskDeepBackfillComputeManager,
+    deep_window_ceiling,
+    plan_deep_windows,
+    resolve_desk_deep_backfill_log_dir,
+)
 from .desk_index_reconcile import (
     DeskIndexReconcileComputeManager,
     ReconcileRunStore,
@@ -111,11 +120,19 @@ from .desk_index_reconcile import (
 )
 from .desk_forward import ForwardStore, resolve_desk_forward_dir
 from .desk_forward_compute import DeskForwardComputeManager
+from .desk_forward_log import ForwardRunStore, resolve_desk_forward_log_dir
+from .desk_forward_pins import resolve_desk_forward_pins
 from .desk_screen import ScreenStore, resolve_desk_screen_dir
 from .desk_screen_compute import DeskScreenComputeManager
 from .desk_screen_diff import ScreenDiffSelfCompareError, compute_screen_diff
 from .desk_screen_log import ScreenRunStore, resolve_desk_screen_log_dir
 from .desk_screen_pins import resolve_desk_screen_pins
+from .desk_sessions import (
+    is_known_non_session,
+    recorded_session_dates,
+    refuse_if_not_a_session,
+    session_evidence,
+)
 from .desk_topup_compute import DeskTopupComputeManager
 from .desk_topup_log import TopupRunStore, resolve_desk_topup_log_dir
 from .desk_universe import (
@@ -148,6 +165,9 @@ _desk_index_reconcile_manager = DeskIndexReconcileComputeManager()
 # The desk forward-returns compute manager (forward-test era) — the SAME process-wide-singleton-
 # behind-a-dependency shape as its three siblings above.
 _desk_forward_compute_manager = DeskForwardComputeManager()
+
+# The deep fine-bar backfill compute manager — the SAME shape as its four siblings above.
+_desk_deep_backfill_manager = DeskDeepBackfillComputeManager()
 
 
 def get_universe_store() -> UniverseStore:
@@ -458,6 +478,51 @@ def get_screen_compare(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/sessions")
+def get_desk_sessions(
+    from_day: str | None = None,
+    to_day: str | None = None,
+    universe_store: UniverseStore = Depends(get_universe_store),
+    bar_store: BarStore = Depends(get_bar_store),
+) -> dict:
+    """Which dates in ``[from_day, to_day]`` are RECORDED trading sessions — the one owner of that
+    question (``desk_sessions.py``), derived from recorded daily bars rather than any hardcoded
+    calendar. Both query params are optional; omitting them serves the anchors' whole recorded
+    span.
+
+    Serves ``{"sessions": [...], "non_sessions": [...], "evidence": {...}}``, where
+    ``non_sessions`` lists only the dates in range that are PROVABLY not sessions (inside the
+    evidence bounds and absent from the set) — a date after the last recorded daily bar appears in
+    neither list, because daily bars cannot prove anything about a session that has not been
+    recorded yet.
+
+    ``evidence.anchor_symbols == []`` is the honest-unknown state: no member holds a daily series,
+    so both lists come back empty and every caller falls back to the behaviour it had before this
+    route existed (fail open). A plain read: writes nothing, triggers nothing, recomputes nothing,
+    and never reads the wall clock."""
+    universe_records, _errors = universe_store.list()
+    members = list(universe_records[-1]["members"]) if universe_records else []
+    evidence = session_evidence(bar_store, members)
+    sessions = recorded_session_dates(bar_store, members)
+
+    in_range = sorted(
+        day
+        for day in sessions
+        if (from_day is None or day >= from_day) and (to_day is None or day <= to_day)
+    )
+    non_sessions: list[str] = []
+    if from_day is not None and to_day is not None:
+        cursor = date.fromisoformat(from_day)
+        last = date.fromisoformat(to_day)
+        while cursor <= last:
+            day = cursor.isoformat()
+            if is_known_non_session(day, sessions, evidence):
+                non_sessions.append(day)
+            cursor += timedelta(days=1)
+
+    return {"sessions": in_range, "non_sessions": non_sessions, "evidence": evidence}
+
+
 @router.get("/screen/pins")
 def get_desk_screen_pins(
     screen_date: str,
@@ -521,6 +586,15 @@ def trigger_desk_screen_compute(
     action a damaged snapshot needs (look at the named file) is not the action an absent one needs
     (fetch a universe).
 
+    Refuses a SECOND way — 422, again before any job starts — when ``screen_date`` is provably not
+    a trading session (``desk_sessions.refuse_if_not_a_session``: the daily bars on file bracket
+    the date and record nothing on it). This is the same defect class as the no-universe refusal:
+    a screen for a Saturday, a market holiday or a date that has not happened yet is permanent,
+    useless and structurally unmeasurable — ~280 of the 939 snapshots on disk on 2026-08-08 were
+    exactly that. It fails OPEN by construction: with no daily bars recorded, nothing is refused
+    and the route behaves exactly as it did before. The CLI carries the identical guard, so the
+    terminal is not a way around it.
+
     goal-desk-iter-29 (J-18): ``screen_run_store`` is threaded straight through to
     ``manager.trigger`` so this run's terminal outcome (done/cancelled/failed/reused) is durably
     logged — this route only threads the dependency through; the pre-check/reuse-short-circuit and
@@ -543,6 +617,11 @@ def trigger_desk_screen_compute(
             detail="no universe snapshot is registered -- nothing to screen (run "
             "POST /research/desk/universe/fetch first)",
         )
+    refusal = refuse_if_not_a_session(
+        body.screen_date, bar_store, list(records[-1]["members"])
+    )
+    if refusal is not None:
+        raise HTTPException(status_code=422, detail=refusal)
     return manager.trigger(
         body.screen_date, universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store,
         screen_run_store=screen_run_store, forward_store=forward_store,
@@ -622,6 +701,14 @@ def get_desk_forward_compute_manager() -> DeskForwardComputeManager:
     return _desk_forward_compute_manager
 
 
+def get_forward_run_store() -> ForwardRunStore:
+    """The durable forward-run log store rooted at a bare env-var-or-sibling-of-the-universe-dir
+    default (zero new ``Config`` field — see ``desk_forward_log.resolve_desk_forward_log_dir``) —
+    the ``get_screen_run_store`` pattern. A FastAPI dependency so tests can point it at a temp dir
+    via the env var or override it outright."""
+    return ForwardRunStore(resolve_desk_forward_log_dir(CONFIG.desk_universe_dir_resolved()))
+
+
 def _forward_meta_only(record: dict) -> dict:
     """The lightweight projection ``GET /research/desk/forward``'s bulk list serves — id/pins/
     parameters/counts only, NEVER the full ``rows``/``summary`` payloads (the
@@ -685,6 +772,7 @@ def trigger_desk_forward_compute(
     screen_store: ScreenStore = Depends(get_screen_store),
     bar_store: BarStore = Depends(get_bar_store),
     forward_store: ForwardStore = Depends(get_forward_store),
+    forward_run_store: ForwardRunStore = Depends(get_forward_run_store),
     manager: DeskForwardComputeManager = Depends(get_desk_forward_compute_manager),
 ) -> dict:
     """Start the single-flight desk forward compute job for ``body.screen_id``, or — if one is
@@ -713,7 +801,9 @@ def trigger_desk_forward_compute(
             detail=f"no recorded screen snapshot has id '{body.screen_id}' -- nothing to measure "
             "forward from",
         )
-    return manager.trigger(body.screen_id, screen_store, bar_store, CONFIG, forward_store)
+    return manager.trigger(
+        body.screen_id, screen_store, bar_store, CONFIG, forward_store, forward_run_store
+    )
 
 
 @router.get("/forward/compute")
@@ -737,6 +827,61 @@ def cancel_desk_forward_compute(
         raise HTTPException(status_code=409, detail="no desk forward compute is currently running")
     manager.cancel()
     return {"cancelling": True}
+
+
+@router.get("/forward/runs")
+def get_forward_runs(
+    screen_id: str | None = None, store: ForwardRunStore = Depends(get_forward_run_store)
+) -> dict:
+    """``{"runs": [...], "latest": <record>|null, "integrity_errors": [...]}`` — the durable log of
+    what every forward measurement attempted, surviving the compute manager's process-scoped
+    snapshot (see ``desk_forward_log.py``). ``?screen_id=`` narrows to one snapshot's own runs (the
+    ``GET /research/desk/forward`` convention), and then ``latest`` is that snapshot's newest run
+    rather than the store's.
+
+    An explicit HTTP 200 honest-empty payload before any forward run has ever reached its terminal
+    state, never a 404 (the ``GET /research/desk/screen/runs`` convention). ``latest`` is the most
+    recently STARTED run, verbatim from disk — never recomputed on the GET. ``integrity_errors`` is
+    ``store.list()``'s own ``errors`` return, surfaced verbatim — a corrupted run-record file stays
+    excluded from ``runs``/``latest`` either way, never fabricated, never crashes this route.
+
+    An absent row here and an absent forward record together mean the measurement never ran; an
+    absent forward record BESIDE a ``done`` row means it ran and found nothing to measure. Telling
+    those two apart is the reason this endpoint exists."""
+    records, errors = store.list()
+    if screen_id is not None:
+        records = [record for record in records if record.get("screen_id") == screen_id]
+    return {
+        "runs": records,
+        "latest": records[-1] if records else None,
+        "integrity_errors": errors,
+    }
+
+
+@router.get("/forward/pins")
+def get_desk_forward_pins(
+    screen_id: str,
+    screen_store: ScreenStore = Depends(get_screen_store),
+    bar_index: BarIndex = Depends(get_bar_index),
+    forward_store: ForwardStore = Depends(get_forward_store),
+    bar_store: BarStore = Depends(get_bar_store),
+) -> dict:
+    """How much of the snapshot named by ``screen_id`` a forward measurement could POSSIBLY reach
+    right now — how many of its ranked members hold a recorded 1m/5m series whose window covers the
+    screen date's own session — plus where that screen date sits relative to the daily bars on file
+    (``session.state``) and whether a measurement is already recorded. See
+    ``desk_forward_pins.py``'s module docstring; ``members_with_fine_series`` is an explicit UPPER
+    bound, never a prediction of what a run would measure.
+
+    ``screen_id`` is a REQUIRED query param (FastAPI 422s a missing one — the
+    ``ForwardComputeRequest.screen_id`` convention; this endpoint never defaults to the latest
+    screen). A plain read: writes nothing, triggers nothing, recomputes nothing — the ``BarStore``
+    dependency reaches exactly one accessor (``merged_bars(symbol, "1d")``, over a bounded handful
+    of anchor members) and no compute manager, so this route remains structurally incapable of a
+    walk. An unresolved ``screen_id`` is an honest all-zero body at HTTP 200, never a 404."""
+    return resolve_desk_forward_pins(
+        screen_id, screen_store, bar_index, forward_store, bar_store=bar_store
+    )
 
 
 # --- Coverage-index reconciliation (J-10, goal-desk-iter-14) — a trigger/poll/cancel trio mirroring
@@ -828,6 +973,177 @@ def get_desk_index_reconcile_runs(store: ReconcileRunStore = Depends(get_reconci
     records, errors = store.list()
     return {
         "runs": [_reconcile_run_meta_only(r) for r in records],
+        "latest": records[-1] if records else None,
+        "integrity_errors": errors,
+    }
+
+
+# --- The deep fine-bar backfill — a trigger/poll/cancel trio mirroring the top-up trio exactly,
+# plus ONE durable read mirroring ``GET /research/desk/topup/runs``, plus a pre-click plan
+# disclosure. See ``desk_deep_backfill.py`` for the window-clamp and chunking mechanics this only
+# wires up. ------------------------------------------------------------------------------------
+
+
+def get_desk_deep_backfill_manager() -> DeskDeepBackfillComputeManager:
+    """The deep-backfill compute manager — a FastAPI dependency (the ``get_desk_topup_manager``
+    pattern) so a test overrides it outright via ``app.dependency_overrides`` for complete
+    test-to-test isolation."""
+    return _desk_deep_backfill_manager
+
+
+def get_deep_backfill_run_store() -> DeepBackfillRunStore:
+    """The deep-backfill run log store rooted at a bare env-var-or-sibling-of-the-universe-dir
+    default (zero new ``Config`` field) — the ``get_topup_run_store`` pattern."""
+    return DeepBackfillRunStore(
+        resolve_desk_deep_backfill_log_dir(CONFIG.desk_universe_dir_resolved())
+    )
+
+
+class DeepBackfillComputeRequest(BaseModel):
+    """Body for ``POST /research/desk/backfill/compute``. Both dates are REQUIRED — this endpoint
+    never defaults to a wall-clock-derived range, because a backfill's range is exactly the thing an
+    operator is deciding. ``timeframes`` defaults to the touch ladder a forward measurement can
+    actually read."""
+
+    from_day: str
+    to_day: str
+    timeframes: list[str] | None = None
+
+
+@router.get("/backfill/plan")
+def get_desk_deep_backfill_plan(
+    from_day: str,
+    to_day: str,
+    universe_store: UniverseStore = Depends(get_universe_store),
+) -> dict:
+    """What a backfill over ``[from_day, to_day]`` WOULD fetch, said before anything is clicked:
+    how many chunks, over how many symbols, per timeframe, and the effective end each timeframe
+    clamps to.
+
+    The clamp is the load-bearing disclosure. Every window ends before the region the Yahoo top-up
+    already covers (~30 days back for 1m, ~60 for 5m), because ``BarStore.merged_bars`` resolves a
+    contested timestamp in favour of the most recently CREATED series — so an overlapping deep fetch
+    would silently replace the recent tape's Yahoo prices with SIP ones, permanently. A caller
+    asking for a range inside that region gets an honest zero-chunk plan rather than an overlap.
+
+    A plain read: writes nothing, triggers nothing, issues no vendor call, and never reads a
+    ``BarStore``."""
+    records, _errors = universe_store.list()
+    members = list(records[-1]["members"]) if records else []
+    today = datetime.now(timezone.utc).date()
+    chunks = plan_deep_windows(members, DESK_DEEP_TIMEFRAMES, from_day, to_day, today)
+    per_timeframe = {
+        timeframe: {
+            "chunks": sum(1 for c in chunks if c["timeframe"] == timeframe),
+            "clamped_end": deep_window_ceiling(timeframe, today),
+        }
+        for timeframe in DESK_DEEP_TIMEFRAMES
+    }
+    return {
+        "requested_window": {"start": from_day, "end": to_day},
+        "timeframes": list(DESK_DEEP_TIMEFRAMES),
+        "members_total": len(members),
+        "chunks_total": len(chunks),
+        "per_timeframe": per_timeframe,
+    }
+
+
+@router.post("/backfill/compute")
+def trigger_desk_deep_backfill_compute(
+    body: DeepBackfillComputeRequest,
+    universe_store: UniverseStore = Depends(get_universe_store),
+    bar_store: BarStore = Depends(get_bar_store),
+    bar_index: BarIndex = Depends(get_bar_index),
+    registry: ResearchRegistry = Depends(get_registry),
+    manager: DeskDeepBackfillComputeManager = Depends(get_desk_deep_backfill_manager),
+    run_store: DeepBackfillRunStore = Depends(get_deep_backfill_run_store),
+) -> dict:
+    """Start the single-flight deep fine-bar backfill over the LATEST universe snapshot's members
+    for ``[from_day, to_day]``, or — if one is already running — return it UNCHANGED
+    (``started: False``, never a second concurrent job). Returns
+    ``{"started": bool, "compute": <snapshot>}``; the walk runs on a background worker thread, so
+    this route returns immediately however long the backfill takes.
+
+    Refuses — 422, before starting anything — when no universe snapshot is registered (the
+    ``trigger_desk_screen_compute`` precedent) or when ``timeframes`` names something outside the
+    touch ladder this module backfills.
+
+    This is an explicit, credentialed, expensive operator act: a full 1m+5m sweep back to 2025 is
+    ~3,900 chunks and tens of millions of bars over hours of sequential vendor pagination. Cancel is
+    real, and every chunk already recorded is answered store-first on the next run — so an
+    interrupted sweep resumes rather than restarting."""
+    records, errors = universe_store.list()
+    if not records:
+        if errors:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"no READABLE universe snapshot is registered -- nothing to backfill: "
+                    f"{len(errors)} snapshot file(s) failed their integrity check and are excluded "
+                    "(" + "; ".join(f"{e['file']}: {e['error']}" for e in errors) + ")"
+                ),
+            )
+        raise HTTPException(
+            status_code=422,
+            detail="no universe snapshot is registered -- nothing to backfill (run "
+            "POST /research/desk/universe/fetch first)",
+        )
+    timeframes = tuple(body.timeframes) if body.timeframes else DESK_DEEP_TIMEFRAMES
+    unsupported = [t for t in timeframes if t not in DESK_DEEP_TIMEFRAMES]
+    if unsupported:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"cannot deep-backfill {unsupported} -- this path serves only "
+                f"{list(DESK_DEEP_TIMEFRAMES)}, the timeframes a forward measurement reads; the "
+                "coarse timeframes already reach back years through the ordinary top-up"
+            ),
+        )
+    return manager.trigger(
+        universe_store, bar_store, bar_index, registry, run_store,
+        from_day=body.from_day, to_day=body.to_day, timeframes=timeframes,
+    )
+
+
+@router.get("/backfill/compute")
+def get_desk_deep_backfill_compute(
+    manager: DeskDeepBackfillComputeManager = Depends(get_desk_deep_backfill_manager),
+) -> dict | None:
+    """The backfill job's current/last snapshot, served VERBATIM — or ``null`` if none has ever run
+    this process. A plain read: never triggers a compute as a side effect (GET-never-computes)."""
+    return manager.snapshot()
+
+
+@router.post("/backfill/compute/cancel")
+def cancel_desk_deep_backfill_compute(
+    manager: DeskDeepBackfillComputeManager = Depends(get_desk_deep_backfill_manager),
+) -> dict:
+    """Cancel the in-flight backfill (cooperative — observed between chunks). ``409`` when idle,
+    mirroring ``cancel_desk_topup_compute``. Chunks already in flight finish and are recorded: they
+    have already paid for their vendor call."""
+    snapshot = manager.snapshot()
+    if snapshot is None or snapshot["state"] != "running":
+        raise HTTPException(status_code=409, detail="no deep backfill is currently running")
+    manager.cancel()
+    return {"cancelling": True}
+
+
+def _deep_backfill_run_meta_only(record: dict) -> dict:
+    """The lightweight projection the bulk list serves — every field EXCEPT ``outcomes`` (mirrors
+    ``_topup_run_meta_only``: a run over ~3,900 chunks carries a per-chunk list far larger than its
+    own summary, so the list call never returns it for every historical run)."""
+    return {key: value for key, value in record.items() if key != "outcomes"}
+
+
+@router.get("/backfill/runs")
+def get_desk_deep_backfill_runs(store: DeepBackfillRunStore = Depends(get_deep_backfill_run_store)) -> dict:
+    """``{"runs": [...meta-only...], "latest": <full record>|null, "integrity_errors": [...]}`` —
+    an explicit HTTP 200 honest-empty payload before any backfill has reached a terminal state,
+    never a 404 (the ``GET /research/desk/topup/runs`` convention). ``latest`` is the most recently
+    STARTED run, verbatim from disk — never recomputed on the GET."""
+    records, errors = store.list()
+    return {
+        "runs": [_deep_backfill_run_meta_only(r) for r in records],
         "latest": records[-1] if records else None,
         "integrity_errors": errors,
     }

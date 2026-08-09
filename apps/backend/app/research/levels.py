@@ -550,7 +550,10 @@ def compute_levels(store: BarStore, symbol: str, as_of_epoch: float, config: Con
     introduces no new fabricated or aliased state here: the distinct corrupt-series honest state
     remains owned by ``GET /research/bars`` (a deliberate, unchanged decision -- see the dev
     handoff)."""
-    records, _integrity_errors = store.list()
+    # ``include_bars=False``: this enumeration reads only ``symbol``/``timeframe`` (via
+    # ``_timeframes_for``) — the bars are read per timeframe through ``merged_bars`` below, from
+    # the same verified load. The projection changes nothing about WHICH series are healthy.
+    records, _integrity_errors = store.list(include_bars=False)
     matching = [r for r in records if r["symbol"] == symbol]
     if not matching:
         return {"levels": [], "no_bar_series_for_symbol": True, "confluence_zones": []}
@@ -613,7 +616,7 @@ def level_change_points(store: BarStore, symbol: str) -> tuple[float, ...]:
 
     Returns an empty tuple for a symbol with no healthy recorded series at all -- the
     ``no_bar_series_for_symbol`` precedent's honest absence, never a fabricated instant."""
-    records, _integrity_errors = store.list()
+    records, _integrity_errors = store.list(include_bars=False)
     matching = [r for r in records if r["symbol"] == symbol]
     if not matching:
         return ()

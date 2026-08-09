@@ -237,17 +237,138 @@ def test_band_lines_still_read_only_served_band_fields():
 # --- the current-day shortcuts -------------------------------------------------------------------
 
 
-def test_today_shortcut_buttons_fill_utc_dates_without_submitting():
+def test_today_shortcut_buttons_fill_market_dates_without_submitting():
+    """Both shortcuts fill only -- neither submits -- and both resolve "today" on the EXCHANGE
+    clock.
+
+    The date they fill is the market's, not the browser's and not UTC's. Either of those rolls over
+    while New York is still on the prior evening, so for an operator east of Greenwich they fill in
+    a session that has not traded yet: at 09:00 in Hong Kong both already read tomorrow. `Today` is
+    a shortcut for "the session I am looking at", and only the exchange's own date is that."""
     source = _read(STRUCTURE_PAGE)
     for testid in ("fetch-today-button", "structure-as-of-today-button"):
         assert f'data-testid="{testid}"' in source
         marker = source.index(f'data-testid="{testid}"')
         window = source[marker - 200 : marker + 400]
         assert 'type="button"' in window, f"{testid} must not submit its form"
-    assert "toISOString().slice(0, 10)" in source, (
-        "the Today shortcut must fill a UTC calendar date — a local date silently shifts the "
-        "window by a day for operators west of Greenwich"
+        assert "todayEtDate()" in window, (
+            f"{testid} no longer resolves today on the market clock -- a UTC or local date fills a "
+            "session that has not happened for any operator east of New York"
+        )
+    assert "todayUtcDate()" not in source, (
+        "the page is resolving its own UTC today again -- there is one shared `todayEtDate()`"
     )
     # The as-of shortcut reuses the page's EXISTING end-of-day convention rather than inventing a
-    # second one (the same instant a post-fetch As-of seed uses).
-    assert "endOfDayUtc(todayUtcDate())" in source
+    # second one (the same instant a post-fetch As-of seed uses). The DAY is the market's; the
+    # end-of-day INSTANT stays anchored to that day's UTC midnight, because the backend's
+    # `_resolve_basis` selects the prior session off the as-of's own UTC calendar date -- moving it
+    # to the end of the ET day would cross UTC midnight and advance the basis by a session.
+    assert "endOfDayUtc(todayEtDate())" in source
+    assert "toISOString().slice(0, 10)" in source, (
+        "endOfDayUtc no longer derives its day-end from the value's own UTC calendar date"
+    )
+
+
+# --- 4. the traded-volume pane ------------------------------------------------------------------
+#
+# The histogram under the candles is drawn by the SHARED chart component, so one set of properties
+# governs it on the cockpit and on both /structure charts. Four of them could be undone by a
+# refactor while the pane still rendered something, and each failure is quiet:
+#
+#   * created outside the mount-only effect -> a second series added per data change, leaking one
+#     per update until the chart is unusable;
+#   * on the candles' own price scale -> volume is orders of magnitude larger than price, so the
+#     candles flatten to a line;
+#   * fed from a NEW third data effect -> it stops inheriting the paging/anchor and in-place-update
+#     work the two existing effects already do, and drifts out of step with the candles it annotates;
+#   * a constant colour -> the bar no longer says which way its own candle went, which is the only
+#     reason to tint it at all.
+
+
+def _mount_effect(source: str) -> str:
+    """The chart-creation effect's body -- from `lc.createChart(` to its own `}, []);`.
+
+    `test_chart_is_created_once_and_not_rebuilt_per_data_change` above already proves that terminator
+    IS mount-only, so slicing to it is the same boundary, not a second opinion about it."""
+    creation = source.index("lc.createChart(")
+    tail = source[creation:]
+    end = re.search(r"\},\s*\[\s*\]\s*\)\s*;", tail)
+    assert end, "could not find the end of the mount-only chart-creation effect"
+    return tail[: end.end()]
+
+
+def test_the_volume_pane_is_built_once_on_its_own_scale():
+    source = _read(STRUCTURE_CHART)
+    mount = _mount_effect(source)
+    assert mount.count("lc.HistogramSeries") == 2, (
+        "the two volume series (recorded + live) are no longer created inside the mount-only "
+        "effect -- creating a series per data change leaks one on every update"
+    )
+    assert source.count("lc.HistogramSeries") == 2, (
+        "a volume series is created somewhere outside the mount-only effect"
+    )
+    assert "priceScaleId: VOLUME_SCALE_ID" in mount, (
+        "the volume series no longer has a price scale of its own -- sharing the candles' scale "
+        "flattens them, since volume is orders of magnitude larger than price"
+    )
+    assert "chart.priceScale(VOLUME_SCALE_ID).applyOptions({" in mount
+    assert "const VOLUME_SCALE_MARGINS = { top: 0.8, bottom: 0 } as const;" in source, (
+        "the volume scale's margins no longer confine the histogram to the bottom fifth"
+    )
+    assert "scaleMargins: VOLUME_SCALE_MARGINS" in mount
+
+
+def test_the_volume_pane_rides_the_two_existing_data_effects():
+    """Both the recorded-bar path and the live-bar path feed it, and neither is a new effect."""
+    source = _read(STRUCTURE_CHART)
+    assert "volumeSeriesRef.current?.setData(drawableBars.map(volumePoint));" in source, (
+        "the recorded-bars effect no longer feeds the volume pane -- it would keep whatever the "
+        "previous window left behind while the candles paged away from it"
+    )
+    assert "liveVolume?.update(volumePoint(" in source, (
+        "the live path no longer updates the last volume bar IN PLACE -- the growing bar's volume "
+        "would freeze while its candle kept moving"
+    )
+    assert "liveVolume?.setData(drawableLiveBars.map(volumePoint));" in source, (
+        "the live path's wholesale-redraw branch no longer feeds the volume pane"
+    )
+    # The effect inventory is unchanged: the pane was threaded through what was already there.
+    assert len(re.findall(r"\buseEffect\(", source)) == 8, (
+        "the number of effects in StructureChart changed -- the volume pane must ride the two "
+        "EXISTING data effects (store bars, live bars), never add a third of its own"
+    )
+
+
+def test_each_volume_bar_is_tinted_by_its_own_candles_direction():
+    source = _read(STRUCTURE_CHART)
+    assert "color: (bar.close >= bar.open ? UP_COLOR : DOWN_COLOR) + VOLUME_ALPHA," in source, (
+        "volume bars no longer take their colour from their own candle's direction -- a single "
+        "flat colour says nothing the candle above it does not already say"
+    )
+    # The palette is named once and shared with the candles, never restated as a second literal.
+    assert 'const UP_COLOR = "#34d399"' in source and 'const DOWN_COLOR = "#fb7185"' in source
+    assert "upColor: UP_COLOR" in source, (
+        "the candle series no longer reads the same palette constants the histogram tints from -- "
+        "the two would drift apart"
+    )
+    # A row with no recorded volume draws a zero-height bar rather than crashing the series.
+    assert "Number.isFinite(bar.volume) ? bar.volume : 0" in source
+
+
+def test_the_volume_pane_guards_can_fail_on_seeded_violations():
+    """Each detection above, seeded -- a guard that cannot fail proves nothing."""
+    seeded_own_effect = (
+        "useEffect(() => {\n"
+        "  chart.addSeries(lc.HistogramSeries, volumeOptions);\n"
+        "}, [drawableBars]);\n"
+    )
+    assert re.search(r"\},\s*\[\s*\]\s*\)\s*;", seeded_own_effect) is None
+
+    seeded_shared_scale = "chart.addSeries(lc.HistogramSeries, { priceFormat: { type: 'volume' } });"
+    assert "priceScaleId: VOLUME_SCALE_ID" not in seeded_shared_scale
+
+    seeded_flat_color = 'color: "#34d399" + VOLUME_ALPHA,'
+    assert (
+        "color: (bar.close >= bar.open ? UP_COLOR : DOWN_COLOR) + VOLUME_ALPHA,"
+        not in seeded_flat_color
+    )

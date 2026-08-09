@@ -5,14 +5,9 @@ import type { ConnStatus, DataSourceMode, TapeSnapshot, WatchParams } from "@/li
 import {
   ET_SESSION_CLOSE,
   ET_SESSION_OPEN,
-  etWallTimeToUtc,
   formatWatchedSource,
-  isValidDMY,
-  localZoneLabel,
-  parseDMYToIsoDate,
-  resolveLocalWindowInstant,
-  resolveSessionPreset,
-  utcToLocalTimeInput,
+  isValidIsoDate,
+  resolveEtWindowInstant,
 } from "@/lib/datetime";
 import { DataSourceSelector } from "./DataSourceSelector";
 import { FeedBasisBadge } from "./FeedBasisBadge";
@@ -67,8 +62,16 @@ const INPUT_CLASS =
 const REPLAY_SPEEDS = [1, 2, 5, 10];
 
 // US regular-trading-hours session quick-picks (J-20). The ET wall-clock anchors come from named
-// constants in lib/datetime (no scattered literals); the ET->local/UTC mapping is DST-correct via
-// America/New_York. Each entry fills the start/end window in one click.
+// constants in lib/datetime (no scattered literals). Each entry fills the start/end window in one
+// click.
+//
+// Now that the time fields are themselves read as ET wall-clock, a quick-pick is a LITERAL fill of
+// those fields — the anchors go straight in and `resolveHistoricalWindow` maps them to UTC through
+// the same path a hand-typed window takes. (While entry was operator-local these had to be
+// converted to the reader's zone first, and the resolved instants stashed separately, because an ET
+// session can straddle two LOCAL calendar dates — 16:00 ET is 04:00 next-day in Hong Kong — which
+// re-resolving local HH:MM against the single date field would silently shift. On the exchange
+// clock the fields and the anchors agree by construction, so that whole apparatus is gone.)
 const SESSION_QUICK_PICKS: {
   key: string;
   label: string;
@@ -83,6 +86,12 @@ const SESSION_QUICK_PICKS: {
 // A small window so single-instant presets (Open / Close) yield a valid start < end: anchor +
 // this many minutes. RTH uses the full 9:30->16:00 span, so this only pads the point presets.
 const PRESET_POINT_SPAN_MIN = 1;
+
+// `HH:MM:SS` for an ET anchor, the shape the `step="1"` time inputs carry.
+function timeInputValue(hour: number, minute: number, second = 0): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(hour)}:${pad(minute)}:${pad(second)}`;
+}
 
 // Shared chrome for the quick-pick buttons (neutral — no buy/sell semantics on the picker).
 const QUICK_PICK_CLASS =
@@ -116,45 +125,32 @@ export function TopBar({
   error: string | null;
 }) {
   const [symbol, setSymbol] = useState("");
-  // The custom dd-MM-yyyy date field (J-35): the user types `dd-MM-yyyy` (the SINGLE entry+display
-  // format) and we derive the internal `YYYY-MM-DD` (`date`) the row-12 resolver + ET quick-picks
-  // already consume — so timezone resolution is UNCHANGED (no silent UTC shift; J-20 stays green).
+  // The custom `yyyy-MM-dd` date field: the typed text IS the internal value the row-12 resolver
+  // and the ET quick-picks consume, so there is no second date representation to keep in step.
+  // (A native `<input type="date">` is deliberately not used — it renders and reads in the
+  // BROWSER's locale and zone, the two things this product now fixes to one format and one clock.)
   const [dateText, setDateText] = useState("");
-  const date = parseDMYToIsoDate(dateText) ?? ""; // internal ISO plumbing; "" when invalid/empty
+  const date = isValidIsoDate(dateText) ? dateText.trim() : ""; // "" when invalid/empty
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [speed, setSpeed] = useState(1);
-  // When a US-session quick-pick is clicked, we keep the already-resolved tz-aware UTC instants
-  // here and submit them VERBATIM. This is correct even when the session spans two LOCAL calendar
-  // dates (e.g. 16:00 ET = 04:00 next-day in Hong Kong) — a case that re-resolving local HH:MM
-  // against the single date input would silently shift. Any manual edit to date/start/end clears
-  // it, handing control back to the per-field local resolver (manual entry still fully works).
-  const [presetWindow, setPresetWindow] = useState<{ start: string; end: string } | null>(null);
   // Inline validation message (J-24): set on a Watch attempt with invalid input, so an empty
   // symbol or a missing/invalid historical window gives immediate feedback and is NEVER a silent
   // no-op. Cleared as soon as the offending input is corrected (the field onChange handlers).
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // The operator's local zone label, shown on the Historical picker so they see which zone their
-  // entry is interpreted in (satisfies "all market/session times shown carry an explicit zone
-  // label"). Computed once per render from the runtime Intl zone — display only.
-  const zoneLabel = localZoneLabel();
-
-  // Manual edits to any window field invalidate a prior quick-pick selection AND clear a stale
-  // validation message (J-24) so the inline feedback tracks the live input.
+  // Manual edits to any window field clear a stale validation message (J-24) so the inline
+  // feedback tracks the live input.
   function onDateChange(value: string) {
     setDateText(value);
-    setPresetWindow(null);
     setValidationError(null);
   }
   function onStartTimeChange(value: string) {
     setStartTime(value);
-    setPresetWindow(null);
     setValidationError(null);
   }
   function onEndTimeChange(value: string) {
     setEndTime(value);
-    setPresetWindow(null);
     setValidationError(null);
   }
   // Symbol edits clear a stale validation message too (J-24).
@@ -163,20 +159,21 @@ export function TopBar({
     setValidationError(null);
   }
 
-  // Apply a US-session quick-pick: resolve the ET anchors for the chosen date to tz-aware UTC
-  // instants (DST-correct), store them for a verbatim submit, AND fill the visible time inputs
-  // with their LOCAL equivalents so the user sees the window in their own zone. A point preset
-  // (Open / Close) is padded by PRESET_POINT_SPAN_MIN so start < end is always valid.
+  // Apply a US-session quick-pick: fill the ET time fields with the session anchors directly. The
+  // fields ARE the exchange clock now, so a pick needs no conversion and nothing stashed aside —
+  // `resolveHistoricalWindow` maps the filled values to UTC through the same DST-correct path a
+  // hand-typed window takes. A point preset (Open / Close) is padded by PRESET_POINT_SPAN_MIN so
+  // start < end is always valid.
   function applyQuickPick(pick: (typeof SESSION_QUICK_PICKS)[number]) {
     if (!date) return; // disabled in the UI, but never produce a malformed/empty window
-    const startUtc = etWallTimeToUtc(date, pick.start.hour, pick.start.minute);
-    let endUtc = etWallTimeToUtc(date, pick.end.hour, pick.end.minute);
-    if (endUtc.getTime() <= startUtc.getTime()) {
-      endUtc = new Date(startUtc.getTime() + PRESET_POINT_SPAN_MIN * 60000);
-    }
-    setStartTime(utcToLocalTimeInput(startUtc));
-    setEndTime(utcToLocalTimeInput(endUtc));
-    setPresetWindow({ start: startUtc.toISOString(), end: endUtc.toISOString() });
+    const isPoint =
+      pick.end.hour === pick.start.hour && pick.end.minute === pick.start.minute;
+    const endMinutes = isPoint
+      ? pick.start.hour * 60 + pick.start.minute + PRESET_POINT_SPAN_MIN
+      : pick.end.hour * 60 + pick.end.minute;
+    setStartTime(timeInputValue(pick.start.hour, pick.start.minute));
+    setEndTime(timeInputValue(Math.floor(endMinutes / 60), endMinutes % 60));
+    setValidationError(null);
   }
 
   // Prefer the engine's canonical stream status whenever a snapshot is present; fall back to
@@ -204,12 +201,12 @@ export function TopBar({
     !!snapshot &&
     !["closed", "failed"].includes(snapshot.stream_status);
 
-  // Resolve the Historical window once (preset verbatim, else the manual local fields). Returns
+  // Resolve the Historical window once, reading the date + time fields as ET wall-clock. Returns
   // null when the window is missing/invalid (end <= start) so both the disabled-Watch gate and the
   // submit guard share one definition of "valid window" — no divergence.
   function resolveHistoricalWindow(): { start: string; end: string } | null {
-    const start = presetWindow ? presetWindow.start : resolveLocalWindowInstant(date, startTime);
-    const end = presetWindow ? presetWindow.end : resolveLocalWindowInstant(date, endTime);
+    const start = resolveEtWindowInstant(date, startTime);
+    const end = resolveEtWindowInstant(date, endTime);
     if (!start || !end) return null;
     if (new Date(end).getTime() <= new Date(start).getTime()) return null;
     return { start, end };
@@ -228,10 +225,10 @@ export function TopBar({
       return;
     }
     if (mode === "historical") {
-      // A non-empty but malformed/out-of-range dd-MM-yyyy date gets its own explicit message (J-35
-      // error case: e.g. 31-02-2026) rather than the generic window message — never a silent no-op.
-      if (dateText.trim() && !isValidDMY(dateText)) {
-        setValidationError("Enter a valid date as dd-MM-yyyy.");
+      // A non-empty but malformed/out-of-range date gets its own explicit message (e.g.
+      // 2026-02-31) rather than the generic window message — never a silent no-op.
+      if (dateText.trim() && !isValidIsoDate(dateText)) {
+        setValidationError("Enter a valid date as yyyy-MM-dd.");
         return;
       }
       const window = resolveHistoricalWindow();
@@ -282,28 +279,32 @@ export function TopBar({
 
           {mode === "historical" && (
             <>
-              {/* Custom dd-MM-yyyy date input (J-35) — replaces the native <input type="date">,
-                  so both ENTRY and DISPLAY are dd-MM-yyyy (no locale-dependent native picker). It
-                  still carries the explicit local zone label below and resolves to the SAME
-                  tz-aware instant via the row-12 resolver (no silent UTC shift; J-20 holds). An
-                  invalid value drives inline validation (J-24) — never a silent no-op. */}
+              {/* Custom yyyy-MM-dd date input — replaces the native <input type="date">, whose
+                  rendering AND reading both follow the browser's locale/zone, the two things this
+                  product fixes to one format and one clock. Entry is US-Eastern (see the ET label
+                  below) and resolves to a tz-aware UTC instant via the row-12 resolver before the
+                  fetch (no naive value, no silent UTC shift). An invalid value drives inline
+                  validation (J-24) — never a silent no-op. */}
               <input
                 type="text"
                 inputMode="numeric"
-                aria-label="Date"
+                aria-label="Date (US Eastern)"
                 value={dateText}
                 onChange={(e) => onDateChange(e.target.value)}
-                placeholder="dd-MM-yyyy"
-                aria-invalid={dateText.trim().length > 0 && !isValidDMY(dateText)}
+                placeholder="yyyy-MM-dd"
+                aria-invalid={dateText.trim().length > 0 && !isValidIsoDate(dateText)}
                 className={`w-32 ${INPUT_CLASS} ${
-                  dateText.trim().length > 0 && !isValidDMY(dateText)
+                  dateText.trim().length > 0 && !isValidIsoDate(dateText)
                     ? "border-amber-500"
                     : ""
                 }`}
               />
+              {/* `step="1"` so the fields read HH:MM:SS — the same second-resolution shape every
+                  date-time this product displays carries. */}
               <input
                 type="time"
-                aria-label="Start time"
+                step="1"
+                aria-label="Start time (US Eastern)"
                 value={startTime}
                 onChange={(e) => onStartTimeChange(e.target.value)}
                 className={`${INPUT_CLASS} [color-scheme:dark]`}
@@ -311,19 +312,20 @@ export function TopBar({
               <span className="text-slate-600">–</span>
               <input
                 type="time"
-                aria-label="End time"
+                step="1"
+                aria-label="End time (US Eastern)"
                 value={endTime}
                 onChange={(e) => onEndTimeChange(e.target.value)}
                 className={`${INPUT_CLASS} [color-scheme:dark]`}
               />
-              {/* Explicit local zone label: the user's date/time entry is interpreted in THIS zone
-                  and resolved to a tz-aware UTC instant before the fetch (no silent UTC shift). */}
+              {/* Explicit zone label: the date/time entry beside it is read as US EXCHANGE time and
+                  resolved to a tz-aware UTC instant before the fetch (no silent UTC shift). */}
               <span
-                aria-label="Local timezone"
-                title="Your date and time entry is interpreted in this timezone"
+                aria-label="Entry timezone"
+                title="Your date and time entry is read as US Eastern (exchange) time"
                 className="font-mono text-xs text-slate-500"
               >
-                {zoneLabel}
+                ET
               </span>
               <select
                 aria-label="Replay speed"
@@ -347,43 +349,30 @@ export function TopBar({
                 ))}
               </select>
 
-              {/* US-session quick-picks (J-20). Each fills a valid RTH start/end in one click and
-                  is annotated with its LOCAL equivalent for the chosen date (DST-correct via
-                  America/New_York). Disabled until a date is chosen, so a pick can never produce a
-                  malformed/empty window. */}
+              {/* US-session quick-picks (J-20). Each fills a valid RTH start/end in one click.
+                  The fields are the exchange clock, so a pick's anchors go in verbatim and need no
+                  local-equivalent annotation. Disabled until a date is chosen, so a pick can never
+                  produce a malformed/empty window. */}
               <div
                 role="group"
                 aria-label="US session quick-picks"
                 className="flex flex-wrap items-center gap-1.5"
               >
-                {SESSION_QUICK_PICKS.map((pick) => {
-                  const preset = resolveSessionPreset(date, pick.start, pick.end);
-                  const annotation = preset
-                    ? pick.key === "rth"
-                      ? ` (${preset.startLocal}–${preset.endLocal} local)`
-                      : ` (${preset.startLocal} local)`
-                    : "";
-                  return (
-                    <button
-                      key={pick.key}
-                      type="button"
-                      onClick={() => applyQuickPick(pick)}
-                      disabled={!date}
-                      aria-label={`${pick.label}${annotation}`}
-                      title={
-                        date
-                          ? `Fill the window with ${pick.label}${annotation}`
-                          : "Choose a date first"
-                      }
-                      className={QUICK_PICK_CLASS}
-                    >
-                      <span>{pick.label}</span>
-                      {annotation && (
-                        <span className="ml-1 font-mono text-slate-500">{annotation.trim()}</span>
-                      )}
-                    </button>
-                  );
-                })}
+                {SESSION_QUICK_PICKS.map((pick) => (
+                  <button
+                    key={pick.key}
+                    type="button"
+                    onClick={() => applyQuickPick(pick)}
+                    disabled={!date}
+                    aria-label={pick.label}
+                    title={
+                      date ? `Fill the window with ${pick.label}` : "Choose a date first"
+                    }
+                    className={QUICK_PICK_CLASS}
+                  >
+                    {pick.label}
+                  </button>
+                ))}
               </div>
             </>
           )}

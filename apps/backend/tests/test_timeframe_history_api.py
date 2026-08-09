@@ -48,7 +48,11 @@ async def test_bar_mode_top_level_keys_and_rows_are_byte_identical():
         assert set(body) == {"bar", "epoch_anchor", "bars", "markers"}
         assert body["bars"], "a warmed buyer scenario must have accrued candles"
         for row in body["bars"]:
-            assert set(row) == {"time", "open", "high", "low", "close"}  # no ts/volume here
+            # `time` (LOGICAL seconds), never the timeframe mode's real-epoch `ts` — that
+            # distinction is what this guard protects. `volume` is shared by both modes: the
+            # logical bars accrue the same TradeEvent.size the timeframe bars do, so the cockpit's
+            # tape chart draws real traded volume rather than an all-zero pane.
+            assert set(row) == {"time", "open", "high", "low", "close", "volume"}
         for marker in body["markers"]:
             assert set(marker) == {"time", "state", "confidence"}  # no bucket_ts here
     await manager.shutdown()

@@ -50,10 +50,15 @@ TIMEFRAME_SECONDS: dict[str, int] = {
 
 @dataclass(frozen=True)
 class OhlcBar:
-    """One candle: open/high/low/close of the watched price over a logical-time bin.
+    """One candle: open/high/low/close/volume of the watched price over a logical-time bin.
 
     ``start`` is the bin's left edge in LOGICAL seconds (``floor(ts / bar) * bar``); a bar is
-    emitted only for a bin that contained at least one trade.
+    emitted only for a bin that contained at least one trade. ``volume`` sums the
+    ``TradeEvent.size`` of every trade in the bin — the SAME size the engine already hands this
+    buffer for its wall-clock ``TimeframeBar``s, so the cockpit's tape chart can draw real traded
+    volume instead of an all-zero pane. It is a pure accumulation of an already-received field: no
+    new event source, and it never enters ``classify(...)`` or the marker series, so the logical
+    candles' OHLC and the classification stay byte-identical to before it existed.
     """
 
     start: float
@@ -61,6 +66,7 @@ class OhlcBar:
     high: float
     low: float
     close: float
+    volume: int = 0
 
 
 @dataclass(frozen=True)
@@ -96,20 +102,20 @@ class TimeframeBar:
 
 
 class _BarAccumulator:
-    """Mutable OHLC accumulator for a single bar size; frozen ``OhlcBar``s are read off it."""
+    """Mutable OHLC+volume accumulator for a single bar size; frozen ``OhlcBar``s are read off it."""
 
     def __init__(self, bar_size: int, max_bars: int) -> None:
         self._bar_size = bar_size
         self._max_bars = max_bars
-        # Bin left-edge -> mutable [open, high, low, close]; insertion order is time order
+        # Bin left-edge -> mutable [open, high, low, close, volume]; insertion order is time order
         # because logical timestamps arrive monotonically non-decreasing.
         self._bars: dict[float, list[float]] = {}
 
-    def add(self, timestamp: float, price: float) -> None:
+    def add(self, timestamp: float, price: float, size: int = 0) -> None:
         start = (timestamp // self._bar_size) * self._bar_size
         existing = self._bars.get(start)
         if existing is None:
-            self._bars[start] = [price, price, price, price]
+            self._bars[start] = [price, price, price, price, float(size)]
             # Bound retained candles (Phase-1 in-memory): drop the oldest bins.
             while len(self._bars) > self._max_bars:
                 oldest = next(iter(self._bars))
@@ -118,11 +124,12 @@ class _BarAccumulator:
             existing[1] = max(existing[1], price)  # high
             existing[2] = min(existing[2], price)  # low
             existing[3] = price                    # close (latest trade in the bin)
+            existing[4] += float(size)             # volume (sum of trade sizes)
 
     def bars(self) -> tuple[OhlcBar, ...]:
         return tuple(
-            OhlcBar(start=start, open=o, high=h, low=lo, close=c)
-            for start, (o, h, lo, c) in self._bars.items()
+            OhlcBar(start=start, open=o, high=h, low=lo, close=c, volume=int(v))
+            for start, (o, h, lo, c, v) in self._bars.items()
         )
 
 
@@ -216,16 +223,17 @@ class HistoryBuffer:
 
     def add_trade(self, timestamp: float, price: float, size: int = 0) -> None:
         """Bin one trade into every logical-second bar size AND, once a real-epoch anchor is known,
-        into every wall-clock timeframe (with volume).
+        into every wall-clock timeframe. Both carry volume.
 
-        The logical-second binning runs FIRST and is byte-identical to before this capability. The
-        wall-clock timeframe binning is additive: it maps the logical ts to a real instant
+        The logical-second binning runs FIRST and its OHLC is byte-identical to before this
+        capability (volume rides alongside and feeds nothing but the chart). The wall-clock
+        timeframe binning is additive: it maps the logical ts to a real instant
         (``anchor + timestamp``), so it is skipped entirely while the anchor is unset (an anchorless
         engine accumulates no timeframe bars — honest absence). ``size`` defaults to 0 so every
-        pre-existing caller is unchanged (its timeframe volume, when an anchor is later set, is 0).
+        pre-existing caller is unchanged (its accumulated volume is then 0).
         """
         for accumulator in self._accumulators.values():
-            accumulator.add(timestamp, price)
+            accumulator.add(timestamp, price, size)
         if self._epoch_anchor is not None and self._tf_accumulators:
             real = self._epoch_anchor + timestamp
             for tf_acc in self._tf_accumulators.values():

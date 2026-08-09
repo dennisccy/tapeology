@@ -30,6 +30,7 @@ that costs at most a store-first miss.
 from __future__ import annotations
 
 import sqlite3
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -83,8 +84,15 @@ class BarIndex:
             Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        # ONE connection shared by every caller, so every statement below runs under this lock.
+        # ``check_same_thread=False`` lets threads share the connection, but a connection carries
+        # ONE transaction state: two threads entering ``with self._conn`` at once interleave a
+        # BEGIN with a COMMIT and SQLite answers "bad parameter or other API misuse". That became
+        # reachable when the desk top-up walk began overlapping pairs (each recording a series and
+        # indexing it), so the serialization is a correctness requirement, not a precaution.
+        self._lock = threading.Lock()
         self._apply_pragmas()
-        with self._conn:
+        with self._lock, self._conn:
             self._conn.execute(_SCHEMA)
             self._drop_legacy_table_if_present()
 
@@ -124,11 +132,12 @@ class BarIndex:
         normalize ``symbol`` the SAME way it will be stored (the route does this). ``feed`` is part
         of the key: the same window recorded from two vendors is two recordings, and one must never
         answer a lookup for the other."""
-        row = self._conn.execute(
-            "SELECT series_id, checksum, bar_count FROM bar_index "
-            "WHERE symbol=? AND timeframe=? AND window_start_utc=? AND window_end_utc=? AND feed=?",
-            (symbol, timeframe, window_start_utc, window_end_utc, feed),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT series_id, checksum, bar_count FROM bar_index "
+                "WHERE symbol=? AND timeframe=? AND window_start_utc=? AND window_end_utc=? AND feed=?",
+                (symbol, timeframe, window_start_utc, window_end_utc, feed),
+            ).fetchone()
         if row is None:
             return None
         return BarIndexHit(row["series_id"], row["checksum"], row["bar_count"])
@@ -139,7 +148,7 @@ class BarIndex:
         actually got written are the only honest key). Idempotent (``INSERT OR REPLACE``): a
         second insert under the identical key overwrites with fresh values — the self-heal path
         when a stale entry pointed at a since-deleted/corrupted series and a real re-fetch ran."""
-        with self._conn:
+        with self._lock, self._conn:
             self._conn.execute(
                 "INSERT OR REPLACE INTO bar_index "
                 "(symbol, timeframe, window_start_utc, window_end_utc, feed, series_id, checksum, bar_count) "
@@ -167,13 +176,43 @@ class BarIndex:
         field on ``BarIndexHit`` would have broken ``tests/test_bar_index.py``'s existing
         equality assertions, which construct ``BarIndexHit`` with exactly its original three
         fields — this accessor exists instead of that)."""
-        row = self._conn.execute(
-            "SELECT COUNT(*) AS n, MAX(window_end_utc) AS latest FROM bar_index "
-            "WHERE symbol=? AND timeframe=?",
-            (symbol, timeframe),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COUNT(*) AS n, MAX(window_end_utc) AS latest FROM bar_index "
+                "WHERE symbol=? AND timeframe=?",
+                (symbol, timeframe),
+            ).fetchone()
         has_bars = row["n"] > 0
         return has_bars, (row["latest"] if has_bars else None)
+
+    def covers_date(self, symbol: str, timeframe: str, day: str) -> bool:
+        """Does this ``(symbol, timeframe)`` hold a recorded series whose WINDOW contains the UTC
+        calendar day ``day`` (``YYYY-MM-DD``)? A SINGLE indexed aggregate over the two window
+        columns already on every row — the ``coverage()`` accessor's shape, asking a date-scoped
+        question instead of a latest-instant one, and like it never resolved through ``BarStore``
+        (T-4: coverage reads ``bar_index`` only).
+
+        **An UPPER BOUND, never a promise.** A window containing the day proves only that the
+        recording was ASKED for a span including it — not that that session has bars. A holiday, a
+        halt, or a fetch that ran before the session opened all leave a covering window with
+        nothing in it: on 2026-08-06 three windows covered the date and zero rows were measurable,
+        because the top-up ran at 06:39Z and the US session opens 13:30Z. Callers must word what
+        they render accordingly (``desk_forward_pins``), and the exact answer stays where it has
+        always lived — ``compute_forward``'s own per-row ``merged_bars`` read.
+
+        The ``substr(...,1,10)`` comparison is load-bearing rather than cosmetic: this index holds
+        BOTH window-string shapes the recording path has ever written — a bare ``2025-01-01`` and a
+        full ``2026-08-05T00:00:00Z`` — so comparing the raw strings would rank
+        ``'2026-08-05' > '2026-08-05T00:00:00Z'`` wrongly at the boundary. Truncating both sides to
+        the calendar day compares like with like, and both bounds are INCLUSIVE: a window is
+        recorded as the days it was asked for, so its own end date is covered."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COUNT(*) AS n FROM bar_index WHERE symbol=? AND timeframe=? "
+                "AND substr(window_start_utc,1,10) <= ? AND substr(window_end_utc,1,10) >= ?",
+                (symbol, timeframe, day, day),
+            ).fetchone()
+        return row["n"] > 0
 
     def list(self, symbol: str | None = None, timeframe: str | None = None) -> list[BarIndexHit]:
         """Every indexed entry matching the given (optional, independently combinable) filters.
@@ -190,7 +229,8 @@ class BarIndex:
             params.append(timeframe)
         if clauses:
             query += " WHERE " + " AND ".join(clauses)
-        rows = self._conn.execute(query, params).fetchall()
+        with self._lock:
+            rows = self._conn.execute(query, params).fetchall()
         return [BarIndexHit(row["series_id"], row["checksum"], row["bar_count"]) for row in rows]
 
     # --- reindex (rebuild from the canonical store) -----------------------------------------------
@@ -202,8 +242,10 @@ class BarIndex:
         constructing a fresh ``BarIndex`` at the same path, then calling ``reindex()``, reproduces
         identical lookups — this index holds metadata only and owns nothing; its loss loses and
         fabricates nothing."""
-        records, _errors = store.list()
-        with self._conn:
+        # ``include_bars=False``: the index stores METADATA only (symbol/timeframe/window/feed/
+        # count/checksum), so the candle payload this rebuild would copy is never read.
+        records, _errors = store.list(include_bars=False)
+        with self._lock, self._conn:
             self._conn.execute("DELETE FROM bar_index")
             for meta in records:
                 self._conn.execute(

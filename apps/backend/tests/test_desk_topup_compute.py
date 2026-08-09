@@ -209,7 +209,14 @@ def test_a_cancellation_signal_resolves_state_cancelled_with_the_partial_outcome
 ):
     """Cancellation mechanics: the worker observes ``should_abort`` BETWEEN pairs and stops early
     -- the job resolves ``"cancelled"`` with exactly the outcomes recorded before the signal fired,
-    never a raise, never a fabricated remaining outcome."""
+    never a raise, never a fabricated remaining outcome.
+
+    Walked ONE pair at a time so the exact counts below are meaningful. The mechanics under test
+    (state resolves ``"cancelled"``, outcomes stop, the run record mirrors the partial walk) do not
+    depend on how many pairs are in flight; the exact NUMBER does, since an overlapped walk lets
+    pairs already dispatched finish. ``test_desk_topup_parallel.py`` pins the overlapped walk's own
+    cancellation shape."""
+    monkeypatch.setenv(desk_topup_compute._TOPUP_FETCH_WORKERS_ENV, "1")
     universe_store, bar_store, bar_index, registry, topup_run_store = manager_env
     universe_store.record(
         members=sorted(TWO_MEMBERS), raw_members={m: m for m in TWO_MEMBERS},
@@ -301,7 +308,12 @@ def test_a_walk_interrupted_before_the_terminal_write_leaves_zero_run_record(
     gain zero files even though two pairs were already attempted and recorded in memory — never a
     fabricated, partial, or "pending" record (``test_desk_topup_log.py``'s store-level sibling test
     proves the same for a store that was never touched at all; this one proves the MANAGER never
-    writes speculatively mid-walk)."""
+    writes speculatively mid-walk).
+
+    Walked ONE pair at a time so "died on the third pair" is exactly what happens; an overlapped
+    walk would have dispatched later pairs before the third raised, which changes the count without
+    changing anything this test is about."""
+    monkeypatch.setenv(desk_topup_compute._TOPUP_FETCH_WORKERS_ENV, "1")
     universe_store, bar_store, bar_index, registry, topup_run_store = manager_env
     universe_store.record(
         members=sorted(TWO_MEMBERS), raw_members={m: m for m in TWO_MEMBERS},
@@ -1319,9 +1331,16 @@ def test_recording_fine_series_leaves_the_bar_store_signature_byte_identical(man
 
 def test_pair_window_fine_timeframe_uses_its_retention_floor_lookback():
     """Forward-test era TC: a FINE pair with nothing frozen requests its own retention-floor
-    window (1m: 30 days, 5m: 60), not the shared 730-day lookback -- so the very first fine fetch
-    already reaches the lookback start and the NEXT run takes the tail branch instead of
-    re-requesting (and re-recording) the whole clamped span daily."""
+    window (1m: 30 days, 5m: 60), not the shared 730-day lookback.
+
+    This docstring used to claim that the first fine fetch "already reaches the lookback start so
+    the NEXT run takes the tail branch". That was false, and the 2026-08-04 run records disproved
+    it: the floor is a calendar date while the first served bar is the next TRADING day, so a
+    weekend floor left the pair reading as short-of-depth forever. What actually puts a fine pair
+    on the tail is holding ANY frozen bars at all -- see
+    `test_pair_window_fine_tail_engages_even_when_the_floor_lands_on_a_non_trading_day`. The
+    retention-floor lookback still matters for the case tested here: the FIRST fetch, with nothing
+    frozen, must ask for 30/60 days rather than 730."""
     from app.research.desk_topup_compute import (
         _TOPUP_FINE_LOOKBACK_DAYS,
         _fetch_window_now,
@@ -1367,3 +1386,71 @@ def test_pair_window_fine_tail_engages_once_frozen_history_reaches_the_floor(man
     window = _pair_window(bar_store, "TAILFINE", "1m")
     assert window["window_basis"] == "tail"
     assert window["requested_window"]["start"] == window["store_frozen_through"][:10] + "T00:00:00Z"
+
+
+def test_pair_window_fine_tail_engages_even_when_the_floor_lands_on_a_non_trading_day(manager_env):
+    """The 2026-08-04 regression, in the shape it actually occurred.
+
+    A fine pair's retention floor is a CALENDAR date (`now - 30 days`), but the vendor's first
+    served bar is the next TRADING day, so whenever the floor lands on a weekend or holiday the
+    pair's own earliest frozen bar is strictly LATER than the floor. Under the old
+    `frozen_from > lookback_start` guard that read as "this history has not deepened yet" and
+    pinned the pair to `full_lookback` -- a window that is a pure function of the UTC date, so the
+    day's SECOND run recomputed the identical key, hit the store-first index, and answered
+    `reused` with zero vendor calls.
+
+    Measured consequence on 2026-08-04 (`.data/topup_runs/topup-2026-08-04-49c6bf03c47f.json`):
+    the 09:01 UTC run recorded 1m bars through 08-03 (the US session opens 13:30), and the 20:57
+    run -- after that session closed -- reused for 97 of 101 symbols. The 08-04 session was never
+    asked for, so `desk_forward` fell back to the 5m ladder rung for that date and every 1m
+    horizon became an honest absence. 5m escaped only by calendar luck: its 60-day floor that day
+    was a Friday.
+
+    There is nothing to deepen INTO for a fine timeframe -- the vendor retention floor is the
+    maximum depth that will ever be served -- so a fine pair holding any bars belongs on the tail,
+    whose start moves with `frozen_through` exactly when new bars land."""
+    from app.providers.adapters.base import RawBar
+    from app.research.desk_topup_compute import _fetch_window_now, _pair_window
+
+    _universe_store, bar_store, _bar_index, registry, _topup_run_store = manager_env
+    floor_start, _today = _fetch_window_now(30)
+    # The skew: the earliest frozen bar sits a day AFTER the floor, exactly as a Monday sits after
+    # a Sunday floor. `_epoch_days_ago(29)` is inside the 30-day floor by a full day, so this holds
+    # at any wall-clock hour.
+    first_epoch = _epoch_days_ago(29)
+    _plant_bar_series(
+        bar_store, symbol="SKEWFINE", timeframe="1m", feed=registry.config.historical_feed,
+        bars=[
+            RawBar("SKEWFINE", "1m", first_epoch, 10.0, 11.0, 9.0, 10.5, 500),
+            RawBar("SKEWFINE", "1m", _epoch_days_ago(1.5), 10.5, 11.5, 10.0, 11.0, 500),
+        ],
+    )
+
+    window = _pair_window(bar_store, "SKEWFINE", "1m")
+
+    # The premise of the regression: this pair's history genuinely does NOT reach the floor.
+    assert window["store_frozen_from"][:10] > floor_start[:10]
+    # ...and it must still take the tail, so a second run the same day asks a question the store
+    # cannot already answer.
+    assert window["window_basis"] == "tail"
+    assert window["requested_window"]["start"] == window["store_frozen_through"][:10] + "T00:00:00Z"
+
+
+def test_pair_window_coarse_short_history_still_keeps_deepening(manager_env):
+    """The counterpart the fix must NOT change. For the coarse four, deepening is real (Yahoo
+    serves ~730 days of 1h and unbounded 1d/1w), so a pair whose frozen history falls short of the
+    730-day lookback keeps asking for the full window until it fills in."""
+    from app.providers.adapters.base import RawBar
+    from app.research.desk_topup_compute import _fetch_window_now, _pair_window
+
+    _universe_store, bar_store, _bar_index, registry, _topup_run_store = manager_env
+    _plant_bar_series(
+        bar_store, symbol="SHORTCOARSE", timeframe="1d", feed=registry.config.historical_feed,
+        bars=[RawBar("SHORTCOARSE", "1d", _epoch_days_ago(10), 10.0, 11.0, 9.0, 10.5, 500)],
+    )
+
+    window = _pair_window(bar_store, "SHORTCOARSE", "1d")
+
+    assert window["window_basis"] == "full_lookback"
+    expected_start, expected_end = _fetch_window_now()
+    assert window["requested_window"] == {"start": expected_start, "end": expected_end}

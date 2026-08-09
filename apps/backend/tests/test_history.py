@@ -62,8 +62,8 @@ def test_ohlc_bins_trades_by_logical_timestamp_at_10s():
     )
     bars = engine.history.bars(10)
     assert bars == (
-        OhlcBar(start=0.0, open=100.0, high=101.0, low=99.0, close=99.0),
-        OhlcBar(start=10.0, open=100.5, high=100.7, low=100.5, close=100.7),
+        OhlcBar(start=0.0, open=100.0, high=101.0, low=99.0, close=99.0, volume=300),
+        OhlcBar(start=10.0, open=100.5, high=100.7, low=100.5, close=100.7, volume=200),
     )
 
 
@@ -81,14 +81,14 @@ def test_ohlc_bins_at_30s_and_60s_for_same_stream():
     )
     bars30 = engine.history.bars(30)
     assert bars30 == (
-        OhlcBar(0.0, 100.0, 102.0, 100.0, 102.0),
-        OhlcBar(30.0, 101.0, 103.0, 101.0, 103.0),
-        OhlcBar(60.0, 100.0, 100.0, 100.0, 100.0),
+        OhlcBar(0.0, 100.0, 102.0, 100.0, 102.0, 200),
+        OhlcBar(30.0, 101.0, 103.0, 101.0, 103.0, 200),
+        OhlcBar(60.0, 100.0, 100.0, 100.0, 100.0, 100),
     )
     bars60 = engine.history.bars(60)
     assert bars60 == (
-        OhlcBar(0.0, 100.0, 103.0, 100.0, 103.0),
-        OhlcBar(60.0, 100.0, 100.0, 100.0, 100.0),
+        OhlcBar(0.0, 100.0, 103.0, 100.0, 103.0, 400),
+        OhlcBar(60.0, 100.0, 100.0, 100.0, 100.0, 100),
     )
 
 
@@ -98,7 +98,23 @@ def test_quotes_do_not_create_candles_only_trades_do():
     _feed(engine, [_quote(2.0), _quote(5.0)])
     assert engine.history.bars(10) == ()
     engine.process_event(_trade(7.0, 100.0))
-    assert engine.history.bars(10) == (OhlcBar(0.0, 100.0, 100.0, 100.0, 100.0),)
+    assert engine.history.bars(10) == (OhlcBar(0.0, 100.0, 100.0, 100.0, 100.0, 100),)
+
+
+def test_logical_bars_accrue_traded_volume_per_bin():
+    # Volume is the SUM of each bin's own trade sizes — the same TradeEvent.size the engine already
+    # hands the buffer for its wall-clock timeframe bars. A quote contributes nothing.
+    engine = _engine()
+    _feed(
+        engine,
+        [
+            _trade(1.0, 100.0, size=250),
+            _quote(2.0),
+            _trade(4.0, 100.5, size=75),
+            _trade(12.0, 101.0, size=10),
+        ],
+    )
+    assert [b.volume for b in engine.history.bars(10)] == [325, 10]
 
 
 def test_empty_bins_are_not_invented():

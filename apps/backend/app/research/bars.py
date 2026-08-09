@@ -50,6 +50,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
+import sqlite3
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -57,6 +60,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..providers.adapters.base import RawBar
+from .bar_verify_cache import BarVerifyCache
 
 
 class BarSeriesNotFound(Exception):
@@ -191,6 +195,16 @@ class _LoadedBarSeries:
 # below for the ~2s racy-write guard that additionally refuses to publish a just-written file.
 _VERIFIED_CACHE: dict[str, tuple[int, int, _LoadedBarSeries]] = {}
 
+# The metadata-ONLY twin of ``_VERIFIED_CACHE``, same ``(path) -> (st_size, st_mtime_ns, value)``
+# shape and same atomic-publish discipline, holding just a series' ``meta`` dict.
+#
+# Every whole-store scan (``list``, and ``_merged_rows``' "which files belong to this pair?" pass)
+# needs ONLY metadata, and metadata is ~200 bytes against a series' megabytes of candles. Keeping
+# the two tiers separate means such a scan neither parses nor retains the rows: on the live desk
+# store that turns a cold scan's ~15s / ~1.5GB of retained rows into a single SQLite query, and
+# leaves ``_VERIFIED_CACHE`` holding only the pairs an analytic reader actually folded.
+_META_CACHE: dict[str, tuple[int, int, dict]] = {}
+
 # A file whose mtime is within this many seconds of "now" (at read time) is never published to the
 # cache — the guard against a same-granularity rewrite being served stale (two writes landing
 # within one mtime-resolution tick could otherwise be indistinguishable by stat alone).
@@ -206,6 +220,103 @@ _RACY_WRITE_GUARD_SECONDS = 2.0
 # ALONG in the cached value (rather than being recomputed, or routed through the uncacheable
 # ``errors`` set) so a pair holding one is memoized exactly like any other.
 _MERGED_CACHE: dict[tuple, tuple[list[dict], dict, list[dict]]] = {}
+
+
+# The typed twin of ``_MERGED_CACHE``, under the SAME key: the ``RawBar`` projection ``merged_bars``
+# serves. ``_MERGED_CACHE`` memoizes the FOLD but not the per-row ``_row_to_bar`` construction, so
+# every analytic read of an already-folded pair still rebuilt one ``RawBar`` per stored row (measured
+# ~474k constructions per screened member, since a screen reads the same "1d" pair three times and
+# each of six timeframes at least once). ``RawBar`` is a FROZEN dataclass, so the instances
+# themselves are safe to share across callers; only the enclosing list is rebuilt per call, exactly
+# as ``get``/``list`` hand out fresh containers over cached content.
+_TYPED_MERGED_CACHE: dict[tuple, list[RawBar]] = {}
+
+
+# The name-sorted file list of a store root, keyed by that DIRECTORY's own
+# ``(st_mtime_ns, st_ctime_ns)``. A directory's mtime changes whenever an entry is created or
+# removed, so an unchanged pair means the SET of files is unchanged — and this cache holds nothing
+# else: each file is still stat'd and, on any stat change, re-verified in full on every read, so a
+# file edited in place (which does NOT touch the directory's mtime) is caught exactly as before.
+# What it removes is only the repeated readdir + Path construction + sort, which a screened member
+# paid eight times over and a top-up walk 1,818 times.
+#
+# Measured on this filesystem: consecutive file creations never share a directory mtime (minimum
+# observed gap ~12µs against nanosecond-resolution stamps), and ``record`` additionally evicts its
+# own root explicitly, so an in-process write is never missed even if a clock were coarser.
+_DIR_LISTING_CACHE: dict[str, tuple[int, int, list[tuple[Path, str]]]] = {}
+
+# The pair-locating scan behind ``_merged_entry``, keyed by the same directory generation:
+# ``{root: (dir_mtime_ns, dir_ctime_ns, [(path, meta)], errors)}``.
+#
+# Answering "which files belong to (symbol, timeframe)?" means knowing every file's symbol and
+# timeframe, and re-establishing that from scratch cost a stat of the WHOLE store per merged read —
+# 1.1M syscalls for a 72-pair top-up slice, ~40% of that walk. Since a file's identity can only
+# change by rewriting it, and a bar series is append-only and immutable by construction, that
+# mapping is stable for as long as the directory's own entry set is.
+#
+# This memo NEVER decides whether a served bar is trustworthy. Every file the fold actually reads
+# still goes through ``_cached_load`` — a fresh stat, and a full re-verify on any change — so a
+# corrupt or edited file in the pair being folded raises exactly as before. ``list`` deliberately
+# does NOT use this memo: it is the store-wide read, so it re-stats every file and keeps reporting
+# store-wide integrity errors first-hand.
+_PAIR_SCAN_CACHE: dict[str, tuple[int, int, list[tuple[Path, dict]], list[dict]]] = {}
+
+
+def _series_entries(root: Path) -> list[tuple[Path, str, os.stat_result]]:
+    """Every recorded series file under ``root``, NAME-sorted, each paired with its cache key
+    (``str(path)``) and a freshly read stat — the one enumeration ``list`` and ``_merged_entry``
+    share.
+
+    Replaces ``sorted(root.glob("*.json"))`` + a separate ``path.stat()`` per file. Both halves are
+    equivalences, not approximations:
+
+      * **Order.** ``Path.__lt__`` compares ``_parts_normcase`` tuples; for two files in the SAME
+        directory every part but the last is equal, so the comparison reduces to the file name.
+        Sorting the names as plain strings therefore yields the identical sequence — at a fraction
+        of the cost (~62k tuple-materializing Path comparisons per call became 62k string
+        comparisons). Order is observable: it fixes the sequence of the ``errors`` list both readers
+        return.
+      * **Stat.** The stat is handed to ``_cached_load`` rather than re-read there, removing one
+        ``stat(2)`` per file per read while the cache's validity test stays byte-for-byte the same
+        ``(st_size, st_mtime_ns)`` comparison against the same file. It is read through bare
+        ``os.stat`` on the already-built path string rather than ``Path.stat`` — the same syscall,
+        without ``pathlib``'s per-call re-parsing, which measured ~4x the cost of the syscall itself
+        at this scale.
+
+    The ``Path`` objects and their key strings are cached with the listing, since rebuilding 5,104
+    of them per read cost more than the syscalls did. Every file is still stat'd on every call, so a
+    file edited in place — which leaves the directory's own mtime untouched — is still caught.
+
+    A file that vanishes between the scan and its load is simply not in this list (or raises its own
+    explicit error on load), exactly as a glob taken a moment later would have behaved."""
+    key = str(root)
+    try:
+        dir_st = os.stat(key)
+    except OSError:
+        _DIR_LISTING_CACHE.pop(key, None)
+        return []
+
+    cached = _DIR_LISTING_CACHE.get(key)  # read-local-reference-before-inspect
+    if cached is not None and cached[0] == dir_st.st_mtime_ns and cached[1] == dir_st.st_ctime_ns:
+        listing = cached[2]
+    else:
+        try:
+            with os.scandir(root) as entries:
+                names = sorted(
+                    entry.name for entry in entries if entry.name.endswith(".json") and entry.is_file()
+                )
+        except OSError:
+            return []
+        listing = [(root / name, os.path.join(key, name)) for name in names]
+        _DIR_LISTING_CACHE[key] = (dir_st.st_mtime_ns, dir_st.st_ctime_ns, listing)  # atomic rebind
+
+    found: list[tuple[Path, str, os.stat_result]] = []
+    for path, path_key in listing:
+        try:
+            found.append((path, path_key, os.stat(path_key)))
+        except OSError:
+            continue  # removed since the listing was taken — the same absence a fresh scan reports
+    return found
 
 
 def _slice_rows(
@@ -239,12 +350,34 @@ def _slice_rows(
     return [dict(rows[i]) for i in window], first > 0, last < len(rows) - 1
 
 
+def release_row_caches() -> None:
+    """Drop every cached CANDLE, keeping the cheap metadata tiers.
+
+    The row-bearing caches are unbounded by design — a stat match must serve an already-verified
+    record with zero I/O — which is right for a store read repeatedly and wrong for a SWEEP that
+    touches each symbol once and never returns to it. A ~101-member screen retained every member's
+    folds to the end and peaked at ~2.3GB; four such walks in worker processes exceeded the host's
+    memory ceiling outright and the pool died mid-run.
+
+    Releasing them is purely a memory decision and can never change an answer: the next read of an
+    evicted pair re-verifies and re-folds it from the canonical file, producing the identical bytes.
+    ``_META_CACHE`` and ``_DIR_LISTING_CACHE`` deliberately survive — they are small (metadata and
+    file names, not candles) and they are what make that re-read cheap."""
+    _VERIFIED_CACHE.clear()
+    _MERGED_CACHE.clear()
+    _TYPED_MERGED_CACHE.clear()
+
+
 def _reset_verified_cache_for_tests() -> None:
     """Test-only: clears the module-level verified-record cache. Never called from any production
     code path — exists solely so tests (and the autouse ``conftest.py`` fixture) can guarantee no
     cross-test cache leakage (TC-12)."""
     _VERIFIED_CACHE.clear()
+    _META_CACHE.clear()
     _MERGED_CACHE.clear()
+    _TYPED_MERGED_CACHE.clear()
+    _DIR_LISTING_CACHE.clear()
+    _PAIR_SCAN_CACHE.clear()
 
 
 class BarStore:
@@ -256,8 +389,39 @@ class BarStore:
     fully-verified record with zero I/O; ANY stat mismatch re-runs ``_load`` in full, recomputing
     both checksums with no bypass (the ``DatasetStore`` pattern)."""
 
-    def __init__(self, root: str | Path) -> None:
+    def __init__(self, root: str | Path, *, verify_cache_db_path: str | None = None) -> None:
         self._root = Path(root)
+        # Opt-in, exactly like ``DatasetStore``'s durable index: a store constructed without a path
+        # behaves precisely as it did before the cache existed (in-process caching only), so every
+        # test that builds a bare ``BarStore(tmp_path)`` keeps its from-scratch verification.
+        self._verify_cache_db_path = verify_cache_db_path
+        self._verify_cache: BarVerifyCache | None = None
+        self._verify_cache_lock = threading.Lock()
+
+    def _durable_verify_cache(self) -> BarVerifyCache | None:
+        if self._verify_cache_db_path is None:
+            return None
+        if self._verify_cache is None:
+            # Guarded because a store is shared across the top-up walk's threads: without it two
+            # of them would open two connections to the same DB and one would be silently dropped.
+            with self._verify_cache_lock:
+                if self._verify_cache is None and self._verify_cache_db_path is not None:
+                    try:
+                        self._verify_cache = BarVerifyCache(self._verify_cache_db_path)
+                    except sqlite3.Error:
+                        # A derived cache that cannot be opened is a missing optimisation, never a
+                        # failed read: fall through to full verification, exactly as if no path
+                        # had been given.
+                        self._verify_cache_db_path = None
+        return self._verify_cache
+
+    @property
+    def verify_cache_db_path(self) -> str | None:
+        """The durable verify-cache path this store was constructed with, if any — read-only, and
+        exposed so a caller that must rebuild an equivalent store somewhere else (a screen worker
+        process, which cannot receive the store object itself) wires the same cache rather than
+        starting cold."""
+        return self._verify_cache_db_path
 
     @property
     def root(self) -> Path:
@@ -308,7 +472,48 @@ class BarStore:
             )
         return _LoadedBarSeries(meta=meta, rows=rows)
 
-    def _cached_load(self, path: Path) -> _LoadedBarSeries:
+    def _verified_load(self, path: Path, st: os.stat_result, key: str) -> _LoadedBarSeries:
+        """``_load``, but skipping the two checksum recomputations when the durable cache already
+        vouches for this file's exact ``(size, mtime_ns)``.
+
+        The skipped work is not the hashing — that is ~0.35s of a 14.3s cold whole-store verify. It
+        is the two ``json.dumps(sort_keys=True)`` canonicalizations the checksums hash, ~10.3s of
+        that 14.3s. So a remembered file still has to be read and parsed to obtain its candles, but
+        it does not have to be re-serialized twice to re-prove something a prior process already
+        proved about these very bytes.
+
+        The shape checks are NOT skipped: a file must still present ``record``/``meta``/``bars`` of
+        the right types, so a remembered row can never turn a malformed file into a served series.
+        Only the two content proofs are elided, and only behind an exact stat match — the same
+        condition under which the in-process tier already serves a record without re-reading it at
+        all."""
+        durable = self._durable_verify_cache()
+        if durable is None:
+            return self._load(path)  # the full verifier — unchanged, never bypassed
+        try:
+            remembered = durable.lookup(key, st.st_size, st.st_mtime_ns)
+        except sqlite3.Error:
+            remembered = None
+        if remembered is None:
+            return self._load(path)
+
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, ValueError) as exc:
+            raise BarSeriesIntegrityError(
+                f"bar series file '{path.name}' is not parseable ({exc}) — corrupted or tampered"
+            ) from exc
+        record = data.get("record") if isinstance(data, dict) else None
+        meta = record.get("meta") if isinstance(record, dict) else None
+        rows = record.get("bars") if isinstance(record, dict) else None
+        if not isinstance(meta, dict) or not isinstance(rows, list):
+            raise BarSeriesIntegrityError(
+                f"bar series file '{path.name}' does not carry the expected record shape — "
+                f"corrupted or tampered"
+            )
+        return _LoadedBarSeries(meta=meta, rows=rows)
+
+    def _cached_load(self, path: Path, st: os.stat_result | None = None) -> _LoadedBarSeries:
         """era-fast_wall J-02 — the stat-keyed cache-or-verify wrapper around ``_load``, consulted
         by every reader (``get``/``list``/``load_bars``, via ``_load_by_id`` and ``list`` below).
         A stat match (``st_size`` AND ``st_mtime_ns`` both unchanged since the cached publish)
@@ -318,25 +523,122 @@ class BarStore:
         re-verifies — and re-fails — on every subsequent call until it is fixed. A file whose
         mtime is within ``_RACY_WRITE_GUARD_SECONDS`` of "now" is never published (nor served from
         a stale earlier publish, since the mismatch check already forces a fresh verify) — the
-        guard against a same-mtime-granularity rewrite being served stale."""
-        try:
-            st = path.stat()
-        except OSError:
-            # Let the real loader raise its own explicit, typed error for a vanished/unreadable
-            # file — the identical failure this call would have hit uncached.
-            return self._load(path)
+        guard against a same-mtime-granularity rewrite being served stale.
+
+        ``st``, when given, is the stat a directory scan (``_series_entries``) already read for this
+        exact path — the same ``(st_size, st_mtime_ns)`` values a ``path.stat()`` here would return,
+        so passing it only avoids a duplicate syscall and never changes which branch is taken."""
+        if st is None:
+            try:
+                st = path.stat()
+            except OSError:
+                # Let the real loader raise its own explicit, typed error for a vanished/unreadable
+                # file — the identical failure this call would have hit uncached.
+                return self._load(path)
 
         key = str(path)
         cached = _VERIFIED_CACHE.get(key)  # read-local-reference-before-inspect
         if cached is not None and cached[0] == st.st_size and cached[1] == st.st_mtime_ns:
             return cached[2]
 
-        loaded = self._load(path)  # the full verifier — unchanged, never bypassed
+        loaded = self._verified_load(path, st, key)
 
         now_ns = time.time_ns()
         if (now_ns - st.st_mtime_ns) >= _RACY_WRITE_GUARD_SECONDS * 1_000_000_000:
             _VERIFIED_CACHE[key] = (st.st_size, st.st_mtime_ns, loaded)  # single atomic rebind
+            _META_CACHE[key] = (st.st_size, st.st_mtime_ns, loaded.meta)
         return loaded
+
+    def _pair_scan(self) -> tuple[list[tuple[Path, dict]], list[dict]]:
+        """``_scan_meta``, memoized for as long as the store's directory holds the same entries —
+        the enumeration ``_merged_entry`` uses purely to decide WHICH files a pair is made of.
+
+        See ``_PAIR_SCAN_CACHE`` for why this is safe: the answer is a question about file identity,
+        which an append-only store only changes by adding or removing files, and every file the fold
+        goes on to read is still stat'd and re-verified individually."""
+        key = str(self._root)
+        try:
+            dir_st = os.stat(key)
+        except OSError:
+            _PAIR_SCAN_CACHE.pop(key, None)
+            return [], []
+        cached = _PAIR_SCAN_CACHE.get(key)  # read-local-reference-before-inspect
+        if cached is not None and cached[0] == dir_st.st_mtime_ns and cached[1] == dir_st.st_ctime_ns:
+            return cached[2], [dict(row) for row in cached[3]]
+        found, errors = self._scan_meta()
+        _PAIR_SCAN_CACHE[key] = (dir_st.st_mtime_ns, dir_st.st_ctime_ns, found, errors)
+        return found, [dict(row) for row in errors]
+
+    def _scan_meta(self) -> tuple[list[tuple[Path, dict]], list[dict]]:
+        """Every healthy series' verified METADATA under this store's root, in the same name-sorted
+        order ``_series_entries`` yields, plus the same explicit error row per file that failed
+        verification — the ONE whole-store enumeration ``list`` and ``_merged_entry`` share.
+
+        Three layers per file, checked in order and mirroring ``DatasetStore._cached_meta``: the
+        in-process ``_META_CACHE`` (a stat match serves already-verified metadata with zero I/O);
+        the OPTIONAL durable ``BarVerifyCache``, read ONCE for the whole directory rather than per
+        file; and the full ``_load`` verifier for anything neither layer can vouch for at this exact
+        ``(size, mtime_ns)``. An integrity error is never cached at any layer, so a corrupt file
+        re-verifies — and re-fails — on every call. Freshly verified rows are published to the
+        durable cache in ONE transaction at the end, subject to the same
+        ``_RACY_WRITE_GUARD_SECONDS`` rule that governs the in-process tiers.
+
+        Metadata is all either caller needs to decide WHICH series exist and which belong to a pair;
+        candles are then loaded only for the files that survive that decision (``_merged_entry``) or
+        when the caller explicitly asks for them (``list(include_bars=True)``)."""
+        entries = _series_entries(self._root)
+        # One slot per file, filled in place, so the directory's own order survives the two-pass
+        # split below without a second sort.
+        slots: list[tuple[Path, dict] | None] = [None] * len(entries)
+        pending: list[tuple[int, Path, str, os.stat_result]] = []
+        for position, (path, key, st) in enumerate(entries):
+            cached = _META_CACHE.get(key)  # read-local-reference-before-inspect
+            if cached is not None and cached[0] == st.st_size and cached[1] == st.st_mtime_ns:
+                slots[position] = (path, cached[2])
+            else:
+                pending.append((position, path, key, st))
+        if not pending:
+            return [slot for slot in slots if slot is not None], []
+
+        # The durable cache is consulted ONLY when the in-process tier could not answer for some
+        # file — so a warm process issues no query at all, and a cold one issues exactly one for the
+        # whole directory.
+        remembered: dict[str, tuple[int, int, str]] = {}
+        durable = self._durable_verify_cache()
+        if durable is not None:
+            try:
+                remembered = durable.lookup_all()
+            except sqlite3.Error:
+                remembered = {}  # a derived cache is an optimisation; never a read failure
+
+        errors: list[dict] = []
+        publish: list[tuple[str, int, int, dict]] = []
+        now_ns = time.time_ns()
+        guard_ns = _RACY_WRITE_GUARD_SECONDS * 1_000_000_000
+        for position, path, key, st in pending:
+            row = remembered.get(key)
+            if row is not None and row[0] == st.st_size and row[1] == st.st_mtime_ns:
+                meta = json.loads(row[2])
+                if (now_ns - st.st_mtime_ns) >= guard_ns:
+                    _META_CACHE[key] = (st.st_size, st.st_mtime_ns, meta)  # single atomic rebind
+                slots[position] = (path, meta)
+                continue
+            try:
+                loaded = self._cached_load(path, st)  # the full verifier — never bypassed
+            except BarSeriesIntegrityError as exc:
+                errors.append({"position": position, "file": path.name, "error": str(exc)})
+                continue
+            slots[position] = (path, loaded.meta)
+            if (now_ns - st.st_mtime_ns) >= guard_ns:
+                publish.append((key, st.st_size, st.st_mtime_ns, loaded.meta))
+
+        if durable is not None and publish:
+            try:
+                durable.insert_many(publish)
+            except sqlite3.Error:
+                pass  # remembering is best-effort; the next read simply re-verifies
+        errors.sort(key=lambda row: row.pop("position"))  # directory order, as a single scan gave
+        return [slot for slot in slots if slot is not None], errors
 
     def _load_by_id(self, bar_series_id: str) -> _LoadedBarSeries:
         path = self._path(bar_series_id)
@@ -376,17 +678,21 @@ class BarStore:
         The default is unchanged, so a no-param call is byte-identical to before."""
         if not self._root.exists():
             return [], []
+        found, errors = self._scan_meta()
         records: list[dict] = []
-        errors: list[dict] = []
-        for path in sorted(self._root.glob("*.json")):
-            try:
-                loaded = self._cached_load(path)
-                if include_bars:
-                    records.append({**loaded.meta, "bars": [dict(row) for row in loaded.rows]})
-                else:
-                    records.append({**loaded.meta})
-            except BarSeriesIntegrityError as exc:
-                errors.append({"file": path.name, "error": str(exc)})
+        if not include_bars:
+            records = [{**meta} for _path, meta in found]
+        else:
+            # The candle payload was explicitly asked for, so every series is loaded in full —
+            # through the same verified load, with the metadata scan above having already settled
+            # which files are healthy.
+            for path, _meta in found:
+                try:
+                    loaded = self._cached_load(path)
+                except BarSeriesIntegrityError as exc:
+                    errors.append({"file": path.name, "error": str(exc)})
+                    continue
+                records.append({**loaded.meta, "bars": [dict(row) for row in loaded.rows]})
         records.sort(key=lambda meta: (meta.get("created_utc", ""), meta.get("id", "")))
         return records, errors
 
@@ -469,6 +775,11 @@ class BarStore:
         return rows, has_more_before, has_more_after, meta
 
     def _merged_rows(self, symbol: str, timeframe: str) -> tuple[list[dict], dict]:
+        """The fold behind ``merged_candles`` — see ``_merged_entry``, which this projects."""
+        _key, merged, meta = self._merged_entry(symbol, timeframe)
+        return merged, meta
+
+    def _merged_entry(self, symbol: str, timeframe: str) -> tuple[tuple | None, list[dict], dict]:
         """The memoized fold behind ``merged_candles``. Returns the ascending merged rows (the
         cached list itself — every caller slices + copies before serving) plus the meta describing
         how it was built.
@@ -490,20 +801,31 @@ class BarStore:
         series are append-only and are never deleted, re-tagged, or content-perturbed — so the
         exclusion lives here, on the read that every chart and every analytic consumer shares. The
         per-series report is part of the MEMOIZED value (not of ``errors``), so the fold stays
-        memoized for the affected pairs exactly as before."""
-        if not self._root.exists():
-            return [], {"series_ids": [], "bar_count": 0, "revised_timestamps": 0, "integrity_errors": []}
+        memoized for the affected pairs exactly as before.
 
+        Returns the memo KEY alongside the fold (``None`` when nothing was cacheable — an
+        unverifiable file makes the error set part of the answer), so ``merged_bars`` can memoize
+        its own typed projection under the very same key rather than inventing a second identity
+        for the same content."""
+        if not self._root.exists():
+            return None, [], {"series_ids": [], "bar_count": 0, "revised_timestamps": 0, "integrity_errors": []}
+
+        # Which files belong to this pair is a METADATA question, so it is answered from the
+        # metadata scan; only the files that actually contribute are then loaded with their candles.
+        # Every file in the store is still stat-checked and, on any stat change, re-verified in
+        # full — so a corrupt file anywhere is surfaced in ``integrity_errors`` here exactly as it
+        # always was, whether or not it belongs to the pair being folded.
+        found, errors = self._pair_scan()
         contributing: list[_LoadedBarSeries] = []
-        errors: list[dict] = []
-        for path in sorted(self._root.glob("*.json")):
+        for path, meta in found:
+            if meta.get("symbol") != symbol or meta.get("timeframe") != timeframe:
+                continue
             try:
                 loaded = self._cached_load(path)
             except BarSeriesIntegrityError as exc:
                 errors.append({"file": path.name, "error": str(exc)})
                 continue
-            if loaded.meta.get("symbol") == symbol and loaded.meta.get("timeframe") == timeframe:
-                contributing.append(loaded)
+            contributing.append(loaded)
 
         # Oldest-created first, so the LAST writer into the ts map is the most recently created
         # series -- the documented winner for a timestamp several recordings hold.
@@ -511,7 +833,7 @@ class BarStore:
         key = (symbol, timeframe, tuple((s.meta.get("id"), s.meta.get("checksum")) for s in contributing))
         cached = _MERGED_CACHE.get(key)  # read-local-reference-before-inspect
         if cached is not None and not errors:
-            return cached[0], {**cached[1], "integrity_errors": [dict(e) for e in cached[2]]}
+            return key, cached[0], {**cached[1], "integrity_errors": [dict(e) for e in cached[2]]}
 
         by_ts: dict[float, dict] = {}
         revised: set[float] = set()
@@ -544,7 +866,11 @@ class BarStore:
         }
         if not errors:
             _MERGED_CACHE[key] = (merged, meta, priceless)  # single atomic rebind
-        return merged, {**meta, "integrity_errors": errors + [dict(e) for e in priceless]}
+        return (
+            key if not errors else None,
+            merged,
+            {**meta, "integrity_errors": errors + [dict(e) for e in priceless]},
+        )
 
     def load_bars(self, bar_series_id: str) -> list[RawBar]:
         """The stored candle series as typed ``RawBar`` records (verified load, exact stored
@@ -580,11 +906,24 @@ class BarStore:
 
         Returns ``[]`` for a (symbol, timeframe) with no healthy recorded series — an honest
         absence, exactly as ``list()`` reports one (a corrupt file is skipped by the shared
-        verified load, never served as data)."""
+        verified load, never served as data).
+
+        The typed projection is memoized under the fold's OWN key (``_TYPED_MERGED_CACHE``), so a
+        pair read repeatedly — as a screened member's "1d" is, three times per member — builds its
+        ``RawBar`` records once instead of once per read. The returned LIST is always fresh, so a
+        caller sorting or truncating it in place can never poison a later read; the ``RawBar``
+        records inside it are frozen dataclasses and therefore safe to share."""
         normalized_symbol = symbol.strip().upper()
         normalized_timeframe = timeframe.strip()
-        rows, _meta = self._merged_rows(normalized_symbol, normalized_timeframe)
-        return [_row_to_bar(normalized_symbol, normalized_timeframe, row) for row in rows]
+        key, rows, _meta = self._merged_entry(normalized_symbol, normalized_timeframe)
+        if key is not None:
+            cached = _TYPED_MERGED_CACHE.get(key)  # read-local-reference-before-inspect
+            if cached is not None:
+                return list(cached)
+        typed = [_row_to_bar(normalized_symbol, normalized_timeframe, row) for row in rows]
+        if key is not None:
+            _TYPED_MERGED_CACHE[key] = typed  # single atomic rebind
+        return list(typed)
 
     # --- the one mutation: record/register --------------------------------------------------------
 
@@ -630,8 +969,11 @@ class BarStore:
                 )
         checksum = _content_checksum(symbol, timeframe, feed, rows)
         # Registration-time duplicate scan over the HEALTHY registry — the exact same series
-        # content is never recorded twice.
-        existing, _errors = self.list()
+        # content is never recorded twice. ``include_bars=False``: the scan compares ONLY
+        # ``meta["checksum"]``, so copying every stored candle of every series (3.25M rows on the
+        # live store, ~0.6s per write) buys nothing — the verified metadata this projection serves
+        # is the same verified metadata, minus a payload no line below reads.
+        existing, _errors = self.list(include_bars=False)
         for meta in existing:
             if meta["checksum"] == checksum:
                 raise BarSeriesAlreadyRegistered(meta["id"], meta["symbol"], meta["timeframe"])
@@ -654,5 +996,20 @@ class BarStore:
         record = {"meta": meta, "bars": rows}
         payload = {"file_checksum": _sha256(_canonical(record)), "record": record}
         self._root.mkdir(parents=True, exist_ok=True)
-        self._path(meta["id"]).write_text(json.dumps(payload))
+        # Written to a sibling temp file and renamed into place: ``os.replace`` is atomic within a
+        # directory, so a concurrent reader — a parallel top-up thread, or a screen worker process
+        # scanning the same store — observes the file either absent or complete, never as the
+        # half-flushed prefix a plain ``write_text`` can expose. The temp name is prefixed so a
+        # crash between write and rename leaves an obvious, ignorable artifact rather than
+        # something ``_series_entries`` would mistake for a series (it matches ``*.json`` only
+        # after the rename).
+        final = self._path(meta["id"])
+        staging = self._root / f".{meta['id']}.json.partial"
+        staging.write_text(json.dumps(payload))
+        os.replace(staging, final)
+        # Belt-and-braces beside the directory mtime the rename just bumped: an explicit eviction
+        # makes an in-process write visible to the very next read regardless of any clock's
+        # resolution.
+        _DIR_LISTING_CACHE.pop(str(self._root), None)
+        _PAIR_SCAN_CACHE.pop(str(self._root), None)
         return {**meta, "bars": rows}

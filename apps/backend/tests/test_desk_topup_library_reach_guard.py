@@ -139,9 +139,22 @@ def _topup_library_reach_body(source: str) -> str:
 # pairs shown under "Pairs recorded earlier" printed the SAME calendar day the reach line named as
 # newest). This check is a pure function of the source text so it can be re-run, unmodified,
 # against a seeded violation below.
+#
+# EITHER truncation counts. `.slice(0, 10)` was the original; `formatDateET(...)` is the shared
+# market-clock formatter the whole UI moved to. What the guard is actually about is that a DAY, not
+# a microsecond, decides the grouping -- and both forms produce one. (They also agree on this
+# field: `store_frozen_through_after` is a mid-session stamp, e.g. `2026-08-06T19:30:00.000000Z`,
+# whose UTC and ET calendar dates are the same. A field stamped at UTC midnight would NOT agree,
+# which is why day markers get `formatDayMarker` instead -- see lib/datetime.ts.)
+_DAY_TRUNCATIONS = (
+    r"store_frozen_through_after[^\n;]*\.slice\(0,\s*10\)",
+    r"formatDateET\([^\n;]*store_frozen_through_after",
+)
+
+
 def _day_truncation_check(body: str) -> bool:
-    has_day_truncated_key = (
-        re.search(r"store_frozen_through_after[^\n;]*\.slice\(0,\s*10\)", body) is not None
+    has_day_truncated_key = any(
+        re.search(pattern, body) is not None for pattern in _DAY_TRUNCATIONS
     )
     has_raw_precision_bug = (
         "store_frozen_through_after === newestDate" in body

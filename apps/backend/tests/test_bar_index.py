@@ -296,3 +296,67 @@ def test_coverage_reads_the_raw_iso_string_not_a_parsed_epoch(tmp_path):
     index.insert(meta)
 
     assert index.coverage("PG", "1d") == (True, "2026-06-04T00:00:00.000000Z")
+
+
+# --- covers_date: the date-scoped coverage question ---------------------------------------------
+
+
+def test_covers_date_on_an_empty_index_is_false(tmp_path):
+    index = BarIndex(str(tmp_path / "index.db"))
+    assert index.covers_date("PG", "1d", "2026-06-02") is False
+
+
+def test_covers_date_is_inclusive_of_both_window_bounds(tmp_path):
+    """A window is recorded as the days it was ASKED for, so its own first and last day are both
+    covered -- and a day outside it is not."""
+    store = BarStore(tmp_path / "bars")
+    index = BarIndex(str(tmp_path / "index.db"))
+    index.insert(_record(store))  # 2026-06-01T00:00:00Z .. 2026-06-04T00:00:00Z
+
+    assert index.covers_date("PG", "1d", "2026-06-01") is True  # the start day
+    assert index.covers_date("PG", "1d", "2026-06-02") is True  # inside
+    assert index.covers_date("PG", "1d", "2026-06-04") is True  # the end day
+    assert index.covers_date("PG", "1d", "2026-05-31") is False  # the day before
+    assert index.covers_date("PG", "1d", "2026-06-05") is False  # the day after
+    assert index.covers_date("PG", "1h", "2026-06-02") is False  # another timeframe
+    assert index.covers_date("F", "1d", "2026-06-02") is False  # another symbol
+
+
+def test_covers_date_compares_calendar_days_across_both_stored_window_shapes(tmp_path):
+    """The live index holds BOTH window-string shapes the recording path has ever written: a bare
+    ``2025-01-01`` (the Alpaca-recorded fine series) and a full ``2026-08-05T00:00:00Z``. A raw
+    string comparison ranks ``'2026-06-04' > '2026-06-04T00:00:00Z'``, so the end day of a
+    timestamped window would read as UNCOVERED. Truncating both sides to the calendar day is what
+    makes the two shapes answer the same question."""
+    store = BarStore(tmp_path / "bars")
+    index = BarIndex(str(tmp_path / "index.db"))
+    index.insert(_record(store, symbol="PG", start="2026-06-01", end="2026-06-04"))
+    index.insert(_record(store, symbol="F", start="2026-06-01T00:00:00Z", end="2026-06-04T00:00:00Z"))
+
+    for symbol in ("PG", "F"):
+        assert index.covers_date(symbol, "1d", "2026-06-01") is True
+        assert index.covers_date(symbol, "1d", "2026-06-04") is True
+        assert index.covers_date(symbol, "1d", "2026-06-05") is False
+
+
+def test_covers_date_is_true_when_any_one_recording_covers_the_day(tmp_path):
+    """Two recordings for one pair (an earlier top-up, then a later one) leave two rows; the day
+    is covered when ANY of them contains it -- the count-based query, never the max window only."""
+    store = BarStore(tmp_path / "bars")
+    index = BarIndex(str(tmp_path / "index.db"))
+    index.insert(_record(store, start="2026-06-01T00:00:00Z", end="2026-06-04T00:00:00Z"))
+    # A genuinely different series -- `BarStore.record` refuses identical CONTENT outright, so a
+    # second recording of one pair must carry its own bars (the max-window-end test's precedent).
+    july = _bar(
+        "PG", "1d", datetime(2026, 7, 1, tzinfo=timezone.utc).timestamp(), 151.0, 152.0, 150.5, 151.5, 800_000
+    )
+    index.insert(
+        store.record(
+            symbol="PG", timeframe="1d", window_start_utc="2026-07-01T00:00:00Z",
+            window_end_utc="2026-07-04T00:00:00Z", feed="yahoo", bars=[july],
+        )
+    )
+
+    assert index.covers_date("PG", "1d", "2026-06-02") is True  # only the FIRST window holds it
+    assert index.covers_date("PG", "1d", "2026-07-02") is True  # only the SECOND does
+    assert index.covers_date("PG", "1d", "2026-06-20") is False  # the gap between them

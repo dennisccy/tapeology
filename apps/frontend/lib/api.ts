@@ -6,16 +6,21 @@ import type {
   BarSeriesRecord,
   CreateBacktestParams,
   DatasetsListResult,
+  DeskDeepBackfillComputeSnapshot,
+  DeskDeepBackfillPlan,
   DeskReconcileComputeSnapshot,
   DeskReconcileRunsListResult,
   DeskScreenCompareResult,
   DeskScreenComputeSnapshot,
   DeskScreenListResult,
   DeskForwardComputeSnapshot,
+  DeskForwardPinsResult,
   DeskForwardReadResult,
+  DeskForwardRunsListResult,
   DeskScreenPinsResult,
   DeskScreenRunsListResult,
   DeskScreenSnapshot,
+  DeskSessionsResult,
   DeskTopupComputeSnapshot,
   DeskTopupRunsListResult,
   DeskUniverseSnapshotMeta,
@@ -1014,9 +1019,10 @@ export async function fetchDeskScreenById(id: string): Promise<{
 }
 
 // POST /research/desk/screen/compute — start (or, while one is already running, observe) the
-// single-flight screen compute job. `screenDate` is the CALLER's own today (the `todayUtcDate()`
-// helper, /structure's own "Today" shortcut precedent) — this function takes it as a parameter
-// rather than resolving it itself, so the page owns the ONE date source. Mirrors
+// single-flight screen compute job. `screenDate` is the CALLER's own resolved day (on /desk, the
+// upcoming-session stamp; /structure's "Today" shortcuts resolve theirs through the shared
+// `todayEtDate()`) — this function takes it as a parameter rather than resolving it itself, so the
+// page owns the ONE date source. Mirrors
 // `triggerEdgeReportCompute`'s exact shape; the backend's own 422 (e.g. no universe registered)
 // `detail` is surfaced VERBATIM, never a client-fabricated message.
 export async function triggerDeskScreenCompute(screenDate: string): Promise<{
@@ -1307,8 +1313,8 @@ export async function fetchDeskScreenRuns(): Promise<{
 // served VERBATIM. Mirrors `fetchDeskScreenRuns`'s exact `{ok, data, error}` shape; the backend
 // always answers HTTP 200 (an honest empty payload before any universe snapshot is registered) —
 // `screen_date` is the ONLY required param, and this helper never defaults it itself (the caller
-// always passes its own already-resolved date, e.g. `todayUtcDate()` or a displayed snapshot's own
-// `screen_date`).
+// always passes its own already-resolved date, e.g. /desk's `nextTradingStamp()` or a displayed
+// snapshot's own `screen_date`).
 export async function fetchDeskScreenPins(screenDate: string): Promise<{
   ok: boolean;
   data: DeskScreenPinsResult | null;
@@ -1331,6 +1337,135 @@ export async function fetchDeskScreenPins(screenDate: string): Promise<{
     return { ok: false, data: null, error };
   } catch {
     return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/sessions — which dates in [from, to] are RECORDED trading sessions, derived
+// from recorded daily bars rather than any hardcoded calendar (`desk_sessions.py`).
+//
+// `non_sessions` lists only the dates the daily bars PROVE are not sessions (inside the anchors'
+// recorded span and absent from it). A date past the last recorded daily bar appears in neither
+// list, because daily bars cannot prove anything about a session nobody has recorded yet — so a
+// caller that wants "days worth screening" must intersect with `sessions`, not merely subtract
+// `non_sessions`. An empty `evidence.anchor_symbols` is the honest-unknown state and every caller
+// falls back to whatever it did before this endpoint existed.
+export async function fetchDeskSessions(
+  fromDay: string,
+  toDay: string,
+): Promise<{ ok: boolean; data: DeskSessionsResult | null; error?: string }> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/desk/sessions?from_day=${encodeURIComponent(fromDay)}` +
+        `&to_day=${encodeURIComponent(toDay)}`,
+    );
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskSessionsResult };
+    }
+    let error = "The recorded trading sessions could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// --- The deep fine-bar backfill (1m/5m from the credentialed vendor, for the years the keyless
+// top-up cannot reach). The trigger/poll/cancel trio mirrors the top-up's own clients exactly,
+// plus a pre-click plan read. ---------------------------------------------------------------------
+
+// GET /research/desk/backfill/plan — how many chunks a backfill over [from, to] would fetch, and
+// the effective end each timeframe clamps to. Issues no vendor call and writes nothing.
+export async function fetchDeskDeepBackfillPlan(
+  fromDay: string,
+  toDay: string,
+): Promise<{ ok: boolean; data: DeskDeepBackfillPlan | null; error?: string }> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/desk/backfill/plan?from_day=${encodeURIComponent(fromDay)}` +
+        `&to_day=${encodeURIComponent(toDay)}`,
+    );
+    if (res.ok) return { ok: true, data: (await res.json()) as DeskDeepBackfillPlan };
+    let error = "The backfill plan could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/backfill/compute — start the single-flight deep backfill. `started: false`
+// means one was already running and this call adopted it, never that anything failed.
+export async function triggerDeskDeepBackfillCompute(
+  fromDay: string,
+  toDay: string,
+): Promise<{
+  ok: boolean;
+  data?: { started: boolean; compute: DeskDeepBackfillComputeSnapshot };
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/backfill/compute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from_day: fromDay, to_day: toDay }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data };
+    }
+    let error = "The deep backfill could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+export async function fetchDeskDeepBackfillCompute(): Promise<{
+  ok: boolean;
+  data: DeskDeepBackfillComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/backfill/compute`);
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as DeskDeepBackfillComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+export async function cancelDeskDeepBackfillCompute(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/backfill/compute/cancel`, {
+      method: "POST",
+    });
+    if (res.ok) return { ok: true };
+    let error = "The deep backfill could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
   }
 }
 
@@ -1434,6 +1569,65 @@ export async function fetchDeskForward(screenId: string): Promise<{
       return { ok: true, data: (await res.json()) as DeskForwardReadResult };
     }
     let error = "The forward record could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/forward/pins?screen_id= — how much of that snapshot a measurement could
+// POSSIBLY reach (how many ranked members hold a recorded 1m/5m series covering its session), plus
+// whether one is already recorded. Mirrors `fetchDeskScreenPins`'s exact `{ok, data, error}` shape;
+// the backend always answers HTTP 200, including an all-zero body for an unresolved id.
+export async function fetchDeskForwardPins(screenId: string): Promise<{
+  ok: boolean;
+  data: DeskForwardPinsResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/desk/forward/pins?screen_id=${encodeURIComponent(screenId)}`,
+    );
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskForwardPinsResult };
+    }
+    let error = "The forward coverage could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/forward/runs?screen_id= — the durable, append-only FORWARD run log narrowed
+// to one snapshot, served VERBATIM. Mirrors `fetchDeskScreenRuns`'s exact `{ok, data, error}`
+// shape. An honest-empty result is a valid `ok: true` outcome and means something specific: no
+// measurement of this snapshot has ever reached a terminal state. Paired with an absent forward
+// record it says "never run"; beside a `done` row an absent record says "ran, found nothing".
+export async function fetchDeskForwardRuns(screenId: string): Promise<{
+  ok: boolean;
+  data: DeskForwardRunsListResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/desk/forward/runs?screen_id=${encodeURIComponent(screenId)}`,
+    );
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskForwardRunsListResult };
+    }
+    let error = "The forward run history could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

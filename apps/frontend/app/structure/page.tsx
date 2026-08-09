@@ -44,6 +44,12 @@ import { MAX_LOADED_BARS, useBarWindow } from "@/lib/useBarWindow";
 import { useRecordedSeries } from "@/lib/useRecordedSeries";
 import { useTradability } from "@/lib/useTradability";
 import { boundaryTs, pickRepresentativeSeries, timeframesInOrder } from "@/lib/timeframes";
+import {
+  formatDateET,
+  formatDateTimeET,
+  parseEtDateTimeToUtcIso,
+  todayEtDate,
+} from "@/lib/datetime";
 import { SymbolSearch } from "@/components/SymbolSearch";
 import { StructureChart } from "@/components/StructureChart";
 import { Panel } from "@/components/Panel";
@@ -68,7 +74,7 @@ import { FeedBasisBadge } from "@/components/FeedBasisBadge";
 // params are absent stays byte-for-byte what it was before this iteration (T-8).
 //
 // Era-5 J-05 added the page's first explicit write action: a fetch-control section (symbol +
-// timeframe + UTC date range + a "Fetch from Yahoo Finance" button). Submitting POSTs
+// timeframe + market-day range + a "Fetch from Yahoo Finance" button). Submitting POSTs
 // `/research/bars` (keyless; store-first — an already-fetched window is served from storage with
 // zero network calls, never a `409`), then loads the fetched symbol/window-end through the
 // EXISTING Load path (`handleLoad`). A "Yahoo Finance" provenance badge (the SAME `FeedBasisBadge`
@@ -260,9 +266,14 @@ const FETCH_RESULT_COLOR: Record<FetchTimeframeOutcome["state"], string> = {
 // date is stamped AFTER that date's UTC midnight (a 1d bar ~04:00Z, intraday later) — so seeding the
 // verbatim `window_end_utc` (midnight) would hide every newly-included end-date bar. Seeding the
 // LAST second of the end's UTC day admits every end-date bar (the last 1m bucket starts 23:59:00)
-// and never a next-day bar. Bare `YYYY-MM-DD` gets the suffix; a naive timestamp is treated as UTC
+// and never a next-day bar. Bare `yyyy-MM-dd` gets the suffix; a naive timestamp is treated as UTC
 // (matching the backend's own `parse_utc_epoch`); an unparseable value is returned unchanged (the
 // fetch itself would already have 422'd).
+//
+// This stays a UTC-day computation even though the As-of FIELD now displays and reads US Eastern:
+// the field is a pure display/entry conversion, while `_resolve_basis` selects the prior session by
+// the as-of's own UTC calendar date. Re-anchoring this to the end of the ET day would push the
+// instant past UTC midnight and silently advance the resolved basis by one session.
 function endOfDayUtc(rawEnd: string): string {
   const trimmed = rawEnd.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return `${trimmed}T23:59:59Z`;
@@ -273,7 +284,9 @@ function endOfDayUtc(rawEnd: string): string {
 }
 
 // The one caption both charts print under their canvas: what is actually loaded, out of what the
-// merged recordings hold, and how that merge was built. Every number is served
+// merged recordings hold, how that merge was built, and the two things about the drawing itself an
+// operator cannot read off the pixels — that the lower strip is traded volume (served with each
+// bar, never derived here) and which clock the time axis is on. Every number is served
 // (`GET /research/candles`) or a count of already-served rows — nothing here is estimated.
 // `revised` names the timestamps more than one recording covered with differing values (Yahoo
 // re-derives adjusted prices per fetch; a mid-session bar is superseded by its completed self) —
@@ -298,7 +311,8 @@ function chartCaption(args: {
     : "";
   return (
     `Candles: ${timeframe} — ${loaded.toLocaleString()} of ${available.toLocaleString()} bars loaded ` +
-    `around the query time (${recordings}${revisions}). Zoom or scroll to load more.${cap}`
+    `around the query time (${recordings}${revisions}). Zoom or scroll to load more.${cap}` +
+    " Traded volume is drawn beneath the candles; times are US Eastern."
   );
 }
 
@@ -309,17 +323,9 @@ function chartCaption(args: {
 function describeRecording(record: BarSeriesRecord, vendorLabel: string): string {
   const covered =
     record.covered_start_utc && record.covered_end_utc
-      ? ` ${record.covered_start_utc.slice(0, 10)} → ${record.covered_end_utc.slice(0, 10)}`
+      ? ` ${formatDateET(record.covered_start_utc)} → ${formatDateET(record.covered_end_utc)}`
       : "";
   return `${vendorLabel} ${record.bar_count.toLocaleString()} bars${covered}`;
-}
-
-// Today's UTC calendar date (`YYYY-MM-DD`) — the value both "Today" shortcut buttons fill their
-// date fields with. UTC (never the browser's local date) because every date field on this page is
-// UTC-labelled and the backend parses them as UTC; using a local date would silently shift the
-// window by a day for operators west of Greenwich late in the day.
-function todayUtcDate(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 // The secondary (quieter) button styling used by the two "Today" shortcuts — the same shape as the
@@ -1641,6 +1647,10 @@ function StructurePageContent() {
     return () => clearInterval(handle);
   }, [v1Backtest, structureTapeBacktest]);
 
+  // `asOf` arrives here as a tz-aware UTC ISO instant — the form converts the operator's ET entry
+  // ONCE at the submit boundary (`handleSubmit`), and the two programmatic callers (the `?asof=`
+  // drill-in and the post-fetch seed) already hold UTC instants. So everything below this line,
+  // and everything on the wire, stays exactly the UTC the backend has always parsed.
   function handleLoad(symbol: string, asOf: string) {
     const trimmedSymbol = symbol.trim();
     const trimmedAsOf = asOf.trim();
@@ -1708,14 +1718,18 @@ function StructurePageContent() {
     if (!symbol || !asOf) return;
     prefillRanRef.current = true;
     setSymbolInput(symbol);
-    setAsOfInput(asOf);
+    // The link carries a UTC instant (it is a wire value from /desk); the field shows it on the
+    // market clock, the one format this product displays.
+    setAsOfInput(formatDateTimeET(asOf, { zone: false }));
     handleLoad(symbol, asOf);
   }, [searchParams]);
   // J-05-PREFILL-END
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    handleLoad(symbolInput, asOfInput);
+    const asOfUtc = parseEtDateTimeToUtcIso(asOfInput);
+    if (!asOfUtc) return; // the Load button is already disabled on a malformed value
+    handleLoad(symbolInput, asOfUtc);
   }
 
   // J-05 (era-5C): the fetch control's submit — ONE click fetches ALL six Yahoo timeframes. The
@@ -1805,7 +1819,7 @@ function StructurePageContent() {
     const seedSymbol = firstRecorded ? firstRecorded.symbol : symbol.toUpperCase();
     const seedAsOf = endOfDayUtc(firstRecorded ? firstRecorded.window_end_utc : end);
     setSymbolInput(seedSymbol);
-    setAsOfInput(seedAsOf);
+    setAsOfInput(formatDateTimeET(seedAsOf, { zone: false }));
     // Publishing the query IS the load now (the shared hooks fetch off it); the seq bump inside
     // guarantees a genuine refetch even when the seeded query equals the previous one — required
     // here, since the store just gained the recordings this very flow wrote.
@@ -1915,7 +1929,13 @@ function StructurePageContent() {
     handleRunComparison();
   }
 
-  const canSubmit = symbolInput.trim() !== "" && asOfInput.trim() !== "";
+  const canSubmit =
+    symbolInput.trim() !== "" && parseEtDateTimeToUtcIso(asOfInput) !== undefined;
+  // A TYPED-IN as-of that does not parse. An EMPTY field is not "invalid" — it is simply not filled
+  // in yet, and a form that scolds before anything is typed is noise (the same distinction the
+  // cockpit's date field draws).
+  const asOfEntryInvalid =
+    asOfInput.trim() !== "" && parseEtDateTimeToUtcIso(asOfInput) === undefined;
   const canFetch =
     fetchSymbolInput.trim() !== "" &&
     fetchStartInput.trim() !== "" &&
@@ -2093,24 +2113,54 @@ function StructurePageContent() {
           </label>
           <label className="block">
             <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
-              As-of (UTC, ISO-8601)
+              As-of (ET)
             </span>
+            {/* Entry is US-Eastern wall time and resolves to a tz-aware UTC instant once, at
+                submit (`handleSubmit`), so what is typed on the exchange clock is exactly what is
+                queried. An unparseable value only DISABLES Load, which on its own is a silent
+                no-op — the field says so instead, mirroring the cockpit window picker's inline
+                validation. Worth stating out loud here because this field's own placeholder used
+                to BE a raw ISO instant, so a returning operator's muscle memory types the one
+                shape it no longer takes. */}
             <input
               data-testid="structure-as-of-input"
               value={asOfInput}
               onChange={(e) => setAsOfInput(e.target.value)}
-              placeholder="2026-06-09T21:00:00Z"
-              className={INPUT_CLASS}
+              placeholder="2026-06-09 17:00:00"
+              aria-invalid={asOfEntryInvalid}
+              className={`${INPUT_CLASS} ${asOfEntryInvalid ? "border-amber-500" : ""}`}
             />
+            {asOfEntryInvalid && (
+              <span
+                role="status"
+                aria-live="polite"
+                data-testid="structure-as-of-validation"
+                className="mt-1 block font-mono text-xs text-amber-400"
+              >
+                Enter the as-of as yyyy-MM-dd HH:mm:ss on the market clock.
+              </span>
+            )}
           </label>
-          {/* The as-of shortcut: fills the field with the LAST second of today's UTC day — the
-              SAME `endOfDayUtc` instant this page already seeds As-of with after a fetch, so a
-              "today" load admits every bar recorded so far today and never a next-day bar. It
-              fills the field only; loading stays the operator's explicit click. */}
+          {/* The as-of shortcut: fills the field with the LAST second of the UTC day that today's
+              MARKET date names — the SAME `endOfDayUtc` instant this page already seeds As-of with
+              after a fetch, so a "today" load admits every bar recorded so far today and never a
+              next-day bar. It fills the field only; loading stays the operator's explicit click.
+              The instant is UNCHANGED by the move to an ET-displayed field — it is simply shown on
+              the market clock now, which is why it reads 19:59:59 rather than 23:59:59 in summer.
+              Two clocks meet here on purpose. The DAY comes from `todayEtDate`, because the session
+              an operator means by "today" is the exchange's, not their own (east of New York the
+              local date has already rolled over while New York is still on the prior evening). The
+              end-of-day INSTANT stays anchored to that day's UTC midnight, because `_resolve_basis`
+              picks the prior session off the as-of's own UTC calendar date — re-anchoring it to the
+              end of the ET day would push it past UTC midnight and silently advance the map's basis
+              by a session. */}
           <button
             type="button"
             data-testid="structure-as-of-today-button"
-            onClick={() => setAsOfInput(endOfDayUtc(todayUtcDate()))}
+            title="Fill with the end of today's market day, shown on the market clock"
+            onClick={() =>
+              setAsOfInput(formatDateTimeET(endOfDayUtc(todayEtDate()), { zone: false }))
+            }
             className={SECONDARY_BUTTON_CLASS}
           >
             Today
@@ -2185,14 +2235,27 @@ function StructurePageContent() {
               ) : tradability.bands.length === 0 ? (
                 <EmptyState
                   testid="tradable-map-no-bands"
-                  title={`No tradable map derivable for ${tradability.symbol} as of ${tradability.as_of}.`}
+                  title={`No tradable map derivable for ${tradability.symbol} as of ${formatDateTimeET(tradability.as_of)}.`}
                   detail="A bar series is recorded, but no prior-session basis is derivable yet."
                 />
               ) : (
                 <div className="space-y-4">
                   <p data-testid="tradable-map-basis" className="text-xs text-slate-500">
                     Map basis (prior completed session close):{" "}
-                    <span className="font-mono text-slate-300">{tradability.basis_as_of}</span>
+                    {/* Bands only exist once a basis resolved, so this is non-null in practice;
+                        the guard keeps the absence honest rather than rendering an empty span. */}
+                    <span
+                      className="font-mono text-slate-300"
+                      title={
+                        tradability.basis_as_of
+                          ? `${tradability.basis_as_of} (raw UTC record)`
+                          : undefined
+                      }
+                    >
+                      {tradability.basis_as_of
+                        ? formatDateTimeET(tradability.basis_as_of)
+                        : "not recorded"}
+                    </span>
                   </p>
                   {barSeriesState.phase === "loading" ? (
                     <LoadingPanel testid="tradable-map-chart-loading" />
@@ -2283,7 +2346,7 @@ function StructurePageContent() {
                 ) : levels.levels.length === 0 ? (
                   <EmptyState
                     testid="structure-no-levels"
-                    title={`No levels found for ${levels.symbol} as of ${levels.as_of}.`}
+                    title={`No levels found for ${levels.symbol} as of ${formatDateTimeET(levels.as_of)}.`}
                     detail="A bar series is recorded, but nothing is derivable at this as-of time."
                   />
                 ) : (
@@ -2505,7 +2568,7 @@ function StructurePageContent() {
         <section aria-label="Fetch bars" className="mt-6">
           <Panel title="Fetch bars">
             <p className="mb-3 -mt-1 max-w-3xl text-xs text-slate-600">
-              Fetch real historical bars for a symbol and UTC date range, on this explicit click.
+              Fetch real historical bars for a symbol and market-day range, on this explicit click.
               One click fetches all six supported timeframes (1w, 1d, 4h, 1h, 5m, 1m; 4h is derived
               from real 1h bars). The end date is included in full. Yahoo Finance is the keyless
               source, and it keeps intraday history for a limited time — 1m for the last 30 days,
@@ -2533,7 +2596,7 @@ function StructurePageContent() {
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Start date (UTC)
+                  Start date (US market day)
                 </span>
                 <input
                   data-testid="fetch-start-input"
@@ -2545,7 +2608,7 @@ function StructurePageContent() {
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
-                  End date (UTC, inclusive)
+                  End date (US market day, inclusive)
                 </span>
                 <input
                   data-testid="fetch-end-input"
@@ -2555,15 +2618,18 @@ function StructurePageContent() {
                   className={INPUT_CLASS}
                 />
               </label>
-              {/* The current-day shortcut: sets BOTH dates to today's UTC calendar date (the end
+              {/* The current-day shortcut: sets BOTH dates to today's MARKET calendar date (the end
                   date is inclusive server-side, so start = end = today is exactly today's session).
+                  The market's date, not the browser's or UTC's: for an operator east of New York
+                  those roll over hours before the session they mean, so either of the others fills
+                  in a day that has not traded yet.
                   It fills the fields only — fetching stays the operator's explicit click, since it
                   is this page's one write action. */}
               <button
                 type="button"
                 data-testid="fetch-today-button"
                 onClick={() => {
-                  const today = todayUtcDate();
+                  const today = todayEtDate();
                   setFetchStartInput(today);
                   setFetchEndInput(today);
                 }}
