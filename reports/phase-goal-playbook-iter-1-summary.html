@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>goal-playbook-iter-1 — Iteration Summary</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0; padding: 0; color: #1f2328; background: #f6f8fa; line-height: 1.5;
+}
+.container { max-width: 880px; margin: 0 auto; padding: 24px 16px 80px; }
+.hero {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 28px; margin-bottom: 16px; text-align: center;
+}
+.hero.pass { border-top: 6px solid #1a7f37; }
+.hero.fail { border-top: 6px solid #cf222e; }
+.hero.inprogress { border-top: 6px solid #d4a72c; }
+.hero h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+.hero h2 { margin: 0 0 14px 0; font-size: 1rem; color: #57606a; font-weight: 500; }
+.badge-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.95rem;
+}
+.badge.pass { background: #dafbe1; color: #1a7f37; }
+.badge.fail { background: #ffebe9; color: #cf222e; }
+.badge.inprogress { background: #fff8c5; color: #9a6700; }
+.badge .badge-enum { font-size: 0.68em; opacity: 0.7; font-weight: 500; margin-left: 6px; }
+.signal-badge { padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; }
+.signal-badge.improving { background: #dafbe1; color: #1a7f37; }
+.signal-badge.holding { background: #ddf4ff; color: #0969da; }
+.signal-badge.stalling { background: #fff8c5; color: #9a6700; }
+.signal-badge.regressing { background: #ffebe9; color: #cf222e; }
+.signal-badge.na { background: #f6f8fa; color: #57606a; }
+.meta { color: #57606a; font-size: 0.875rem; margin: 10px 0 16px; }
+.journey-row {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 4px;
+}
+.journey-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 0.85rem;
+  background: #f6f8fa; border: 1px solid #d0d7de;
+}
+.journey-pill.passing, .journey-pill.already_passing { background: #dafbe1; color: #1a7f37; border-color: #b4e2c0; }
+.journey-pill.failing, .journey-pill.regressed { background: #ffebe9; color: #cf222e; border-color: #f1aeb0; }
+.journey-pill.partial { background: #fff8c5; color: #9a6700; border-color: #eed888; }
+.journey-pill.unknown { background: #f6f8fa; color: #57606a; }
+.hero-image { margin-top: 18px; }
+.hero-image img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+details {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  margin-bottom: 12px;
+}
+details > summary {
+  cursor: pointer; padding: 14px 18px; font-weight: 600; font-size: 1.05rem;
+  list-style: none; user-select: none; display: flex; align-items: center; gap: 8px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: '▶'; transition: transform 0.15s; font-size: 0.75rem; color: #57606a;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+.accordion-body { padding: 0 18px 18px; }
+.accordion-body h3 { font-size: 0.95rem; color: #57606a; margin: 16px 0 6px; }
+.why-text { background: #f6f8fa; padding: 10px 12px; border-radius: 6px; margin: 4px 0 12px; }
+ul.bullets { margin: 6px 0 14px; padding-left: 22px; }
+ul.bullets li { margin-bottom: 4px; }
+ol.steps { padding-left: 0; list-style: none; counter-reset: step; }
+ol.steps > li {
+  counter-increment: step; padding: 12px 0 12px 44px;
+  border-top: 1px solid #eaeef2; position: relative;
+}
+ol.steps > li:first-child { border-top: none; }
+ol.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 14px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #0969da; color: white; display: flex;
+  align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600;
+}
+.step-shot { margin-top: 10px; }
+.step-shot img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+.next-step-box {
+  background: #ddf4ff; padding: 12px 16px; border-radius: 6px;
+  border-left: 4px solid #0969da; margin: 12px 0;
+}
+.drill-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.drill-table th, .drill-table td {
+  text-align: left; padding: 8px 6px; border-bottom: 1px solid #eaeef2;
+}
+.drill-table th { background: #f6f8fa; }
+.verdict-cell.PASS, .verdict-cell.CLOSURE-PASS, .verdict-cell.GOAL_ACHIEVED { color: #1a7f37; font-weight: 600; }
+.verdict-cell.FAIL, .verdict-cell.CLOSURE-FAIL, .verdict-cell.REGRESSION { color: #cf222e; font-weight: 600; }
+.verdict-cell.CONTINUE, .verdict-cell.ESCALATE, .verdict-cell.STALLED { color: #9a6700; font-weight: 600; }
+.verdict-cell.SKIPPED, .verdict-cell.UNKNOWN, .verdict-cell.IN-PROGRESS { color: #57606a; }
+.footer-note { text-align: center; color: #6e7781; font-size: 0.8rem; margin-top: 24px; }
+.iter-card {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 16px 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 14px;
+}
+.iter-card .left { flex-shrink: 0; }
+.iter-card .body { flex: 1 1 auto; }
+.iter-card .body .title { font-weight: 600; }
+.iter-card .body .sub { color: #57606a; font-size: 0.88rem; margin-top: 2px; }
+.iter-card a.open { color: #0969da; text-decoration: none; font-weight: 500; }
+.iter-card a.open:hover { text-decoration: underline; }
+.matrix { width: 100%; border-collapse: collapse; margin: 12px 0 22px; font-size: 0.88rem; }
+.matrix th, .matrix td { padding: 6px 8px; border: 1px solid #d0d7de; text-align: center; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix .cell-passing, .matrix .cell-already_passing { background: #dafbe1; color: #1a7f37; }
+.matrix .cell-failing, .matrix .cell-regressed { background: #ffebe9; color: #cf222e; }
+.matrix .cell-partial { background: #fff8c5; color: #9a6700; }
+.matrix .cell-unknown { background: #f6f8fa; color: #57606a; }
+.no-summary {
+  background: #fff8c5; border: 1px solid #eed888; padding: 14px 18px;
+  border-radius: 8px; color: #9a6700; margin-bottom: 14px;
+}
+/* Plain-language layer — the primary, non-technical view. */
+.plain-words {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 24px; margin: 18px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.plain-words .pw-heading {
+  margin: 0 0 14px; font-size: 1.15rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.pw-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.pw-card {
+  background: white; border-radius: 8px; padding: 14px 16px;
+  border: 1px solid #e3eaf3;
+}
+.pw-card .pw-label {
+  font-size: 0.78rem; font-weight: 600; color: #57606a;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.pw-card .pw-text {
+  margin: 0; font-size: 1rem; color: #1f2328; line-height: 1.45;
+}
+.pw-empty { color: #8c959f; font-style: italic; font-size: 0.95rem; }
+.tech-divider {
+  margin: 18px 0 8px; text-align: center;
+  color: #6e7781; font-size: 0.82rem; font-style: italic;
+  border-top: 1px dashed #d0d7de; padding-top: 12px;
+}
+/* Watch-it-work — narrated screenshot gallery from demo-narrator. */
+.watch-it-work {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 18px 22px; margin: 10px 0 6px;
+}
+.wiw-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.wiw-heading {
+  margin: 0; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.demo-badge {
+  font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 12px;
+  border: 1px solid transparent; letter-spacing: 0.04em;
+}
+.demo-badge.demo-recorded { background: #dafbe1; color: #1a7f37; border-color: #aceebb; }
+.demo-badge.demo-notes    { background: #fff8c5; color: #9a6700; border-color: #e8d97e; }
+.demo-badge.demo-skipped  { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+.demo-badge.demo-pending  { background: #ddf4ff; color: #0969da; border-color: #b6e3ff; }
+.demo-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.demo-step {
+  margin: 0; padding: 12px; background: #f6f8fa;
+  border: 1px solid #d0d7de; border-radius: 8px;
+}
+.demo-step-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.demo-step-num {
+  font-weight: 600; color: #57606a; font-variant-numeric: tabular-nums;
+}
+.demo-step-title { color: #1f2328; font-weight: 500; }
+.demo-new {
+  background: #ddf4ff; color: #0969da; font-size: 0.7rem; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px; letter-spacing: 0.06em;
+}
+.demo-shot { margin-bottom: 8px; }
+.demo-shot img {
+  width: 100%; height: auto; border-radius: 4px; border: 1px solid #d0d7de;
+  display: block;
+}
+.demo-narration {
+  margin: 0; color: #1f2328; font-size: 0.92rem; line-height: 1.4;
+}
+.demo-empty {
+  margin: 8px 0 0; color: #57606a; font-style: italic;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.demo-notes-wrap { margin-top: 14px; }
+.demo-notes-wrap summary {
+  cursor: pointer; color: #9a6700; font-weight: 500; font-size: 0.9rem;
+}
+.demo-notes-wrap[open] summary { margin-bottom: 6px; }
+/* Story so far + latest demo (session index plain-language top). */
+.story-so-far {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 14px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.story-heading {
+  margin: 0 0 12px; font-size: 1.1rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.story-body { font-size: 1rem; color: #1f2328; line-height: 1.55; }
+.story-body .story-h { margin: 14px 0 6px; color: #1f2328; }
+.story-body p { margin: 0 0 10px; }
+.session-demo {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 0; margin: 8px 0 6px; overflow: hidden;
+}
+.session-demo-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 22px;
+  background: #f6f8fa; border-bottom: 1px solid #d6e4f0;
+  font-weight: 600; color: #1f2328; font-size: 0.95rem;
+}
+.session-demo-head a.open { color: #0969da; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+.session-demo-head a.open:hover { text-decoration: underline; }
+.session-demo .watch-it-work {
+  border: none; border-radius: 0; box-shadow: none; margin: 0;
+}
+/* Delivered link banner — sits on the session index when GOAL_ACHIEVED. */
+.delivered-link {
+  margin: 14px 0; padding: 14px 22px;
+  background: #dafbe1; border: 1px solid #aceebb; border-radius: 10px;
+  color: #1a7f37; font-size: 1rem;
+}
+.delivered-link a {
+  color: #1a7f37; font-weight: 600; text-decoration: none; margin-left: 8px;
+}
+.delivered-link a:hover { text-decoration: underline; }
+.delivered-back {
+  margin: 8px 0 14px; padding: 0; font-size: 0.9rem;
+}
+.delivered-back a { color: #0969da; text-decoration: none; }
+.delivered-back a:hover { text-decoration: underline; }
+.delivered-body {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 28px; margin: 12px 0;
+}
+.delivered-body h2.story-h { margin-top: 0; }
+/* Feature manual (session index, top of page). */
+.cover-vision {
+  margin: 8px 0 14px; color: #57606a; font-size: 1.02rem;
+  font-style: italic; max-width: 60ch;
+}
+.feature-toc {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 20px 26px; margin: 14px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.feature-toc-heading {
+  margin: 0 0 14px; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.feature-toc-list {
+  margin: 0; padding-left: 22px; font-size: 1rem; line-height: 1.7;
+}
+.feature-toc-list li { padding: 2px 0; }
+.feature-toc-list a {
+  color: #1f2328; text-decoration: none; font-weight: 500;
+}
+.feature-toc-list a:hover { color: #0969da; text-decoration: underline; }
+.toc-extra-header {
+  list-style: none; margin: 10px 0 4px -22px;
+  font-size: 0.82rem; color: #57606a; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.feature-manual { margin: 14px 0; }
+.feature-section {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 16px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+  scroll-margin-top: 12px;
+}
+.feature-heading {
+  margin: 0 0 10px; font-size: 1.2rem; color: #1f2328;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.feature-description {
+  margin: 0 0 16px; color: #1f2328; font-size: 1rem; line-height: 1.55;
+}
+.feature-description-label {
+  font-weight: 600; color: #57606a; margin-right: 4px;
+}
+.feature-note {
+  margin: 8px 0 12px; padding: 8px 12px;
+  background: #fff8c5; border: 1px solid #eed888; border-radius: 6px;
+  color: #9a6700; font-size: 0.88rem;
+}
+.feature-source {
+  margin: 12px 0 0; font-size: 0.88rem; color: #57606a;
+}
+.feature-source a { color: #0969da; text-decoration: none; }
+.feature-source a:hover { text-decoration: underline; }
+.feature-empty {
+  margin: 10px 0; padding: 12px 16px;
+  background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+  color: #57606a; font-style: italic;
+}
+.status-pill {
+  font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+  letter-spacing: 0.04em; white-space: nowrap; display: inline-block;
+}
+.status-pill-passing { background: #dafbe1; color: #1a7f37; border: 1px solid #aceebb; }
+.status-pill-failing { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-regressed { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-partial { background: #fff8c5; color: #9a6700; border: 1px solid #e8d97e; }
+.status-pill-unknown { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.status-pill-coming-soon { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.developer-view {
+  margin: 28px 0 6px;
+  border: 1px dashed #d0d7de; border-radius: 8px;
+}
+.developer-view > summary {
+  cursor: pointer; padding: 12px 16px;
+  color: #57606a; font-size: 0.92rem; font-weight: 500;
+  background: #f6f8fa; border-radius: 8px;
+}
+.developer-view[open] > summary {
+  border-bottom: 1px dashed #d0d7de;
+  border-radius: 8px 8px 0 0;
+}
+.developer-view-body { padding: 12px 18px; }
+</style>
+</head><body><div class='container'>
+<section class='hero inprogress'><div class='badge-row'><div class='badge inprogress'><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+<circle cx="12" cy="12" r="11" fill="#d4a72c"/>
+<path d="M12 6v6l4 2.5" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg><span>Building — on track</span><span class='badge-enum'>CONTINUE</span></div><span class='signal-badge improving'>Direction: improving</span></div><h1>Iteration 1  ·  session playbook</h1><h2>J-01 ships: opening-range breakout signals detected, recorded, and readable via a new backend endpoint (no UI yet).</h2><div class='meta'>2026-08-10 · goal-full</div><div class='meta'>Journeys: 1/10 passing</div><div class='journey-row'><span class='journey-pill passing' title='The signal contract — opening-range breaks end to end, lookahead-clean and pre-registered — passing'>J-01 · ✓ working</span><span class='journey-pill failing' title='Every signal measured — the rail&#x27;s own conventions, anchored at the trigger bar — failing'>J-02 · ✗ broken</span><span class='journey-pill failing' title='The Playbook lands on /desk — failing'>J-03 · ✗ broken</span><span class='journey-pill failing' title='The continuation family — JBE, DBI, cup-and-handle — failing'>J-04 · ✗ broken</span><span class='journey-pill failing' title='The climax family — capitulation entry, euphoria marker — failing'>J-05 · ✗ broken</span><span class='journey-pill failing' title='The range family — range trades, double top/bottom — failing'>J-06 · ✗ broken</span><span class='journey-pill failing' title='The back-scan — every recorded session, resumable and append-only — failing'>J-07 · ✗ broken</span><span class='journey-pill failing' title='The evidence view — distributions beside the null, min-n honest — failing'>J-08 · ✗ broken</span><span class='journey-pill failing' title='MCP contract v4 — 20 read-only tools — failing'>J-09 · ✗ broken</span><span class='journey-pill partial' title='The kept product stands — regression sentinel — partial'>J-10 · ~ partial</span></div></section>
+<section class='plain-words'><h2 class='pw-heading'>In plain words</h2><div class='pw-grid'><div class='pw-card'><div class='pw-label'>What you can do now</div><p class='pw-text'>You can still watch a simulated ticker&#x27;s live buy-and-sell pressure, load a real stock&#x27;s chart with support-and-resistance walls drawn on it, and run the desk&#x27;s daily screen for a ranked briefing with forward-looking return numbers — all of that keeps working exactly as before. Behind the scenes, the desk can now also spot and permanently record a stock&#x27;s &quot;opening range breakout&quot; for any trading day it has data for, though there&#x27;s no button for it yet — only someone with direct technical access can ask for it today.</p></div><div class='pw-card'><div class='pw-label'>What changed this time</div><p class='pw-text'>Nothing changed on the pages you can already click through — Cockpit, Structure, and Desk all look and behave exactly the same. Behind the scenes, we built the first piece of a new pattern-recognition feature: the desk now watches the opening minutes of a trading session and permanently writes down every time a stock breaks cleanly out of that early range, plus an honest note whenever it doesn&#x27;t have enough data to tell. This isn&#x27;t shown on any screen yet — that comes in a later step.</p></div><div class='pw-card'><div class='pw-label'>What&#x27;s next</div><p class='pw-text'>Next, the desk will start measuring what price actually did after each pattern it spots, using its existing measuring rules.</p></div></div></section>
+<div class='tech-divider'><span>Technical detail below — open if you want the developer view.</span></div>
+<details><summary>What was done</summary><div class='accordion-body'><ul class='bullets'><li>Product changes: apps/backend/app/research/desk_playbook_features.py, apps/backend/app/research/desk_playbook_detect.py, apps/backend/app/research/desk_playbook.py, apps/backend/app/research/desk_routes.py, GET /research/desk/playbook</li><li>Built the 8 shared primitives (opening range, baselines, swing pivots, zone touches, market context, and more) in `desk_playbook_features.py`, each attributed to its existing `desk_forward`/`levels` precedent.</li><li>Built the `open_high_break`/`open_low_break` detector pair in `desk_playbook_detect.py` — constant-free, lookahead-clean (new generic property test), never imports `setups.py`/`backtests.py`.</li><li>Built `desk_playbook.py`: ~40 spec constants, `playbook_parameters()`/`compute_playbook_input_signature()`, and an append-only `PlaybookStore` (no update/delete method) plus `compute_playbook()`&#x27;s session walk with honest per-symbol absences.</li><li>Wired `GET /research/desk/playbook` (`?date=`/`?id=`, honest-empty, never 404) into `desk_routes.py` — the only change to that shared file.</li><li>Added 42 new tests (full suite 1968 pass / 8 skip pre-audit, 1969/8 after the audit&#x27;s own added test); `Config().config_fingerprint()` unchanged (`08e471b10130e1e2`); zero diff to `desk_forward.py`/`desk_screen*.py`/`setups.py`/`bars.py`/`apps/frontend/`.</li><li>Audit found and fixed a critical honesty bug in the same iteration: the 5m opening-range fallback was building a fabricated range from bars outside the opening window on gapped sessions; it now records an honest disclosed absence instead, with a regression test.</li></ul></div></details>
+<details><summary>What's left + Next step</summary><div class='accordion-body'><h3>Still open</h3><ul class='bullets'><li>Journey J-02 (Every signal measured — the rail&#x27;s own conventions, anchored at the trigger bar) failing — targeted next.</li><li>Journey J-03 (The Playbook lands on /desk) failing — no UI surface exists yet.</li><li>Journey J-04 (The continuation family — JBE, DBI, cup-and-handle) failing.</li><li>Journey J-05 (The climax family — capitulation entry, euphoria marker) failing.</li><li>Journey J-06 (The range family — range trades, double top/bottom) failing.</li><li>Journey J-07 (The back-scan — every recorded session, resumable and append-only) failing.</li><li>Journey J-08 (The evidence view — distributions beside the null, min-n honest) failing.</li><li>Journey J-09 (MCP contract v4 — 20 read-only tools) failing — MCP is still at 18 tools.</li><li>Journey J-10 (The kept product stands — regression sentinel) still partial — this iteration&#x27;s required golden-script replay (`journey-scripts/J-10.json`) was not run; must be requested explicitly next time or it will be skipped again.</li><li>Two owner rulings needed in `docs/playbook-detector-spec.md` before J-08 (what &quot;P4&quot; mechanically means for an opening-range break; whether the opening-range 10-bar threshold belongs in the spec&#x27;s own constants table), plus three test-debt gaps the audit named (end-to-end tests for the 5-minute-fallback case and the both-sides-break case, and one detector fixture with a populated market index).</li></ul><h3>Next step</h3><div class='next-step-box'>Build J-02 &quot;Every signal measured&quot; next, at full depth — the step that measures what price did after each signal, reusing the desk&#x27;s existing measuring rules rather than a second copy of them. Three pieces of carried work should ride along inside J-02&#x27;s own cycle rather than becoming their own iteration: (1) run the J-10 browser replay (`journey-scripts/J-10.json`) as soon as the next iteration brings the app up — it has now been skipped once and must be asked for explicitly or it will be skipped again; (2) close the three test gaps the audit named — one end-to-end test each for the 5-minute-fallback case and the both-sides-break case, plus one test where the market index actually has bars; (3) get two owner rulings written into `docs/playbook-detector-spec.md` before J-08 — what &quot;P4&quot; means for an opening-range break, and whether the 10-bar threshold belongs in the spec&#x27;s own constants table. Also: commit iteration 1&#x27;s seven files before the next iteration starts, so the next diff isn&#x27;t blamed on iteration 2.</div></div></details>
+<details><summary>Assumptions made</summary><div class='accordion-body'><ul class='bullets'><li>iter-1 · goal-evaluator — Ambiguity: `docs/goal.md` marks &quot;No threshold exists outside the spec&quot; as critical, but `desk_playbook_detect.py:276` settles a spec rule (§3.1&#x27;s &quot;P4&quot; principle) in code without inventing a threshold or a sweep; the auditor was genuinely unsure between GAP and IMPORTANT, and critical severity would force a REGRESSION halt. We chose: minor, not critical — nothing is fabricated, no threshold invented, no sweep exists, and the field is a disclosure label gating no computation; recorded as an open minor violation needing an owner ruling in `docs/playbook-detector-spec.md` before J-08 groups evidence by principle. Reversible: yes</li><li>iter-1 · goal-evaluator — Ambiguity: J-10&#x27;s required verification (TC-14, the golden-script replay) was executed by nobody this iteration, and the auditor recommended recording J-10 as `unknown-by-replay`; the goal never says whether a sentinel journey keeps its status when the iteration provably touches none of its surfaces. We chose: kept J-10 at `partial` (its prior status) under the evidence-durability rule — the frontend diff is empty and the only shipped-file change is `desk_routes.py` at +75/-0 inside one new block, so iter-0&#x27;s screenshots still show the current product; the un-run replay is recorded as an explicit gap demanded of the next iteration. Reversible: yes</li><li>iter-0 · goal-evaluator — Ambiguity: J-10&#x27;s acceptance text bundles kept-product behaviour with a clause (&quot;MCP = exactly 20 tools&quot;) that only becomes true at the end of the era, and the goal never says how to score J-10 mid-flight. We chose: `partial` — the kept half is fully evidenced (screenshots, suite 1926/8, fingerprint `08e471b10130e1e2`), while the 20-tool clause is recorded as not-yet-satisfiable rather than a failure of the kept product, mirroring how the previous era&#x27;s baseline scored its own sentinel journey. Reversible: yes</li></ul></div></details>
+<details><summary>Direction signal</summary><div class='accordion-body'><div class='why-text'><strong>Why:</strong> J-01 &quot;The signal contract&quot; moved from failing to passing this iteration — 43 new tests, a full suite of 1969 pass / 8 skip, and the live route independently re-verified by the evaluator — with zero other journeys newly failing or regressed. The audit caught and fixed a critical-severity honesty bug in the same cycle before anything shipped (a fabricated opening-range value on gapped sessions, now an honest disclosed absence with a permanent regression test); the evaluator&#x27;s own verdict stayed CONTINUE, treating the catch as the safety net working rather than a setback. The two gaps carried forward — J-10&#x27;s still-unrun browser replay and one open minor spec-completeness item — are both explicitly assigned to J-02 next.</div><h3>Trend</h3><ul class='bullets'><li>Newly passing this iter: J-01</li><li>Newly passing in last 2 iters total: J-01</li><li>Regressions in last 2 iters: none</li><li>Anti-goal violations in last 2 iters: iter-1: 1 critical (found and fixed in-iteration, regression test added) + 1 minor (open, needs an owner ruling); iter-0: none</li><li>Iters with no journey state change: 0 of last 2</li></ul><h3>Latest evaluator reasoning</h3><div class='why-text'>J-01 &quot;The signal contract&quot; is genuinely built and it works. The desk can now find opening-range break signals on its own recorded bars and write them down in a permanent, never-rewritten record, and a reader who asks for a session with nothing recorded gets an honest &quot;nothing here&quot; answer instead of an error. I did not take this from the write-ups: I ran the 43 new tests myself, ran the whole test suite myself (1969 passed, 8 skipped), asked the new address for data four different ways and read the answers, and checked with git that no protected file was touched. One serious honesty bug was found and fixed inside this same iteration by the audit step: a session missing its first few bars was being handed a made-up &quot;opening range&quot; that looked exactly like a real one.</div></div></details>
+<details><summary>Artifacts</summary><div class='accordion-body'><table class='drill-table'><thead><tr><th>Report</th><th>Verdict</th><th>Path</th></tr></thead><tbody><tr><td>Iter spec</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/phases/goal-playbook-iter-1.md'>docs/phases/goal-playbook-iter-1.md</a></td></tr><tr><td>Dev handoff</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/handoffs/goal-playbook-iter-1-dev.md'>docs/handoffs/goal-playbook-iter-1-dev.md</a></td></tr><tr><td>Review</td><td><span class='verdict-cell PASS_WITH_NOTES'>PASS_WITH_NOTES</span></td><td><a href='reviews/goal-playbook-iter-1-review.md'>reports/reviews/goal-playbook-iter-1-review.md</a></td></tr><tr><td>Browser QA</td><td><span class='verdict-cell SKIPPED'>SKIPPED</span></td><td><a href='phase-goal-playbook-iter-1-ui-test-results.md'>reports/phase-goal-playbook-iter-1-ui-test-results.md</a></td></tr><tr><td>Implementation summary</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-playbook-iter-1-implementation-summary.md'>reports/phase-goal-playbook-iter-1-implementation-summary.md</a></td></tr><tr><td>User-visible changes</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-playbook-iter-1-user-visible-changes.md'>reports/phase-goal-playbook-iter-1-user-visible-changes.md</a></td></tr><tr><td>What to click</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-playbook-iter-1-what-to-click.md'>reports/phase-goal-playbook-iter-1-what-to-click.md</a></td></tr><tr><td>UI surface map</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-playbook-iter-1-ui-surface-map.md'>reports/phase-goal-playbook-iter-1-ui-surface-map.md</a></td></tr><tr><td>UI test plan</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-playbook-iter-1-ui-test-plan.md'>reports/phase-goal-playbook-iter-1-ui-test-plan.md</a></td></tr><tr><td>QA</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='qa/goal-playbook-iter-1-qa.md'>reports/qa/goal-playbook-iter-1-qa.md</a></td></tr><tr><td>Audit</td><td><span class='verdict-cell PASS_WITH_GAPS'>PASS_WITH_GAPS</span></td><td><a href='../docs/handoffs/goal-playbook-iter-1-audit.md'>docs/handoffs/goal-playbook-iter-1-audit.md</a></td></tr><tr><td>Closure</td><td><span class='verdict-cell CLOSURE-PASS'>CLOSURE-PASS</span></td><td><a href='phase-goal-playbook-iter-1-closure-verdict.md'>reports/phase-goal-playbook-iter-1-closure-verdict.md</a></td></tr><tr><td>Goal evaluation</td><td><span class='verdict-cell CONTINUE'>CONTINUE</span></td><td><a href='../runs/goal-session-playbook/iter-1/eval.md'>runs/goal-session-playbook/iter-1/eval.md</a></td></tr><tr><td>Journey history</td><td><span class='verdict-cell —'>—</span></td><td><a href='../runs/goal-session-playbook/state/journey-history.json'>runs/goal-session-playbook/state/journey-history.json</a></td></tr></tbody></table></div></details>
+<details><summary>Timing — where this iteration's wall time went</summary><div class='accordion-body'><pre>== Wall-time report: session playbook
+  goal-playbook-iter-1  depth=full  verdict=CONTINUE  wall=152.9m
+      developer                   58.0m  calls=1
+      reviewer                    29.5m  calls=1
+      auditor                     18.3m  calls=1
+      goal-evaluator              14.0m  calls=1
+      iteration-summarizer        12.3m  calls=1
+      goal-decomposer             12.2m  calls=1
+      qa                           7.6m  calls=1
+      coherence-auditor            5.9m  calls=1
+      orchestrator                 5.4m  calls=1
+      readme-maintainer            1.6m  calls=1
+      [engine] full-pipeline     119.0m  (contains agent time above)
+      [engine] showcase-join       1.7m  (contains agent time above)
+      pump-wait                  0.9m
+      OVER BUDGET at post-dev-fanout: 6416s &gt; 3600s (mode=trim)
+      overlap saved             11.9m  (parallel steps)</pre></div></details>
+<div class='footer-note'>Generated 2026-08-10 11:02 by <code>render_iteration_summary.py</code> · source: <a href='phase-goal-playbook-iter-1-iteration-summary.md'>phase-goal-playbook-iter-1-iteration-summary.md</a></div>
+</div></body></html>

@@ -41,3 +41,23 @@ exists, and the field is a disclosure label that gates no computation. Recorded 
 violation requiring an owner ruling in `docs/playbook-detector-spec.md` before J-08 groups evidence
 by principle.
 **Reversible:** yes
+
+## iter-2 — goal-decomposer
+
+**Ambiguity:** The iter-1 audit (`docs/handoffs/goal-playbook-iter-1-audit.md` B3/B4) flagged
+`PLAYBOOK_OR_MIN_1M_BARS` missing from spec §1's table, and the code's `principles = ["P4"] if
+spike_verdict == "constructive"` mapping existing without matching spec prose, as each needing an
+"owner ruling" before further code relies on them. Neither the audit nor `docs/goal.md` says
+whether that "owner" must be the human operator or can be resolved inside the goal-mode chain when
+the fix is zero-behavior-change documentation catch-up.
+**We chose:** scoped both into iter-2 as developer-executed, documentation-only edits to
+`docs/playbook-detector-spec.md` — B3 transcribes a value/rationale already stated in the spec's own
+§2 prose and already in code (`desk_playbook.py:94`'s comment) into §1's table; B4 states in spec
+prose the exact discriminator (`spike_into_trigger_verdict == "constructive"`) the already-shipped,
+already-tested code already uses, reusing a discriminator §0 already defines. Neither invents a
+threshold, changes a value, or alters tested behavior — both catch the spec up to what iter-1
+already shipped, per the audit's own "defensible"/"the right call" language. Fallback if either
+turns out NOT zero-behavior-change on closer look: T-1's own escape hatch (drop it from the
+iteration, record the drop, surface it for the human operator explicitly) rather than force a
+resolution.
+**Reversible:** yes
