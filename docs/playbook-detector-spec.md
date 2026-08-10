@@ -132,6 +132,7 @@ continuation, P5 decreasing-volume reversal, P6 passive accumulation/distributio
 | `PLAYBOOK_MAX_CHASE_FRAC` | 0.002 | BOOK — 3–5c chase on ~$20 ≈ 0.2% |
 | `PLAYBOOK_STOP_PAD_FRAC` | 0.30 | BOOK — 20–40% stop padding; midpoint |
 | `PLAYBOOK_OR_MINUTES` | 15 | BOOK — opening range = first 15–20 min; lower endpoint |
+| `PLAYBOOK_OR_MIN_1M_BARS` | 10 | ADAPTATION — §2 primitive 2's own floor: fewer than 10 of the 15 one-minute bars on file degrades the opening range to the 5m basis (J-01 audit B3: named in code from birth, tabulated here) |
 | `PLAYBOOK_NARROW_OR_MAX_MBR` | 3.0 | ADAPTATION — relative form of the ≤25c narrow range |
 | `PLAYBOOK_JUMP_MIN_MULT` | 1.5 | BOOK — jump ≥ 1.5–2× base; stated minimum |
 | `PLAYBOOK_JUMP_MIN_MOVE_MBR` | 3.0 | ADAPTATION — floor so tiny/tiny can't satisfy the ratio |
@@ -216,8 +217,10 @@ cases. Side/band/entry/measurement always follow §0.
 - **Invalidation.** Long: `S = or_low`, `invalidation = or_low − 0.30·(or_high − or_low)`
   (BOOK structure + BOOK pad). Short mirrored.
 - **Disclosures.** `or_width_mbr`, `or_bars_used`, `opening_range_basis`,
-  `open_vs_prior_close_pct` (gap context), `slots_to_break`. Principles: P4 when pre-break
-  pullbacks were shallow and dry, else structural-only.
+  `open_vs_prior_close_pct` (gap context), `slots_to_break`. Principles: `["P4"]` exactly when
+  `spike_into_trigger_verdict == "constructive"` (§0's already-defined discriminator — pre-break
+  pullbacks were shallow and dry); `[]` (structural-only) otherwise (J-01 audit B4: this mechanical
+  reading is the pre-registered rule, matching `desk_playbook_detect.py`'s implementation verbatim).
 - **Edge cases.** `gap_open` triggers at slot 3 are common on trend opens —
   `gapped_beyond_chase` does the honesty work. No 1m and no 5m OR ⇒ silent symbol-session
   (disclosed absence).

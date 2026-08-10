@@ -1,40 +1,37 @@
 # Iteration State — playbook
 
-**After iteration:** 1 · **Date:** 2026-08-10 · **Verdict:** CONTINUE
+**After iteration:** 2 · **Date:** 2026-08-10 · **Verdict:** CONTINUE
 
 ## Journeys
 
-1 passing (J-01) · 8 failing (J-02..J-09, unstarted) · 1 partial (J-10 sentinel — its "MCP = 20 tools" clause needs J-09) — 10 total
+2 passing (J-01 J-02) · 7 failing (J-03 J-04 J-05 J-06 J-07 J-08 J-09) · 1 partial (J-10) — 10 total
 
 ## Active blockers
 
-- none human-owned. All dev work; J-02 (measurement) is the next link.
-- Evidence debt: J-10's golden replay (`journey-scripts/J-10.json`) was NOT run in iter-1 — the
-  browser lane self-skips on `Frontend Present: no`. Ask for it explicitly next iteration.
-- Housekeeping: iter-1's 7 product files are still UNCOMMITTED (HEAD = iter-0 showcase commit).
+- none. J-10 stays `partial` only because its own text asks for 20 MCP tools and there are 18 until
+  J-09 ships (owner: dev, `apps/backend/app/mcp/__init__.py`). Its browser replay now PASSES.
 
 ## Last 2 verdicts
 
-- iter 1: CONTINUE — J-01 verified passing (43 new tests, suite 1969/8, route probed live); audit
-  found+fixed a fabricated-opening-range bug in-iteration; 8 journeys still unbuilt.
-- iter 0: CONTINUE — verified-absent baseline; 9 journeys failing, kept product intact.
+- iter 2: CONTINUE — J-02 measurement shipped and evaluator-verified (suite 2025 pass / 8 skip, rail
+  imported not copied, zero diff to every frozen module); J-10's missing replay run and passed.
+- iter 1: CONTINUE — J-01 detection shipped; one critical fabricated-opening-range bug found and
+  fixed inside the iteration; J-10's replay was skipped.
 
 ## Do not redo
 
-- J-01 is DONE and verified — do not rebuild `desk_playbook_features.py` (8 primitives),
-  `desk_playbook_detect.py` (open_high/low_break), or `desk_playbook.py` (spec §1 constants,
-  parameters+signature, `PlaybookStore`, `compute_playbook`) + `GET /research/desk/playbook`.
-- Fixed, do not re-fix: `opening_range`'s 5m fallback now filters to the 09:30–09:45 window
-  (`desk_playbook_features.py:123`) + test at `tests/test_desk_playbook_features.py:117`.
-- Floors re-verified in iter-1 — do not re-derive: suite **1969 pass / 8 skip**, fingerprint
-  **`08e471b10130e1e2`**, MCP still **18** tools, nav = 3 routes, zero diff on `desk_forward.py`,
-  `desk_screen*.py`, `setups.py`, `bars.py`, `levels.py`, `config.py`, `mcp/__init__.py`, frontend.
-- J-10 is `partial` BY DESIGN until J-09 — never plan an iteration to "fix" it; a `partial`
-  sentinel will NOT auto-trip the regression halt: treat ANY kept-surface break as stop-and-review.
-
-## Next target
-
-- J-02 only (imported-rail measurement: `_measure_from`, `invalidation_breached`, seeded anchors,
-  `desk_playbook_compute.py` trio + CLI, `desk_playbook_log.py`), **full** depth. Required-still-
-  passing: J-10 — its replay MUST run. Carry in: 3 audit test gaps (T1/T3) + owner rulings on spec
-  §1's `PLAYBOOK_OR_MIN_1M_BARS` row and §3.1's P4 rule (B3/B4).
+- **J-01 detection + J-02 measurement are DONE.** `desk_playbook.py` (`compute_playbook`,
+  `_measure_signal`, `_invalidation_breached`, baseline draw, `summary`), `desk_playbook_compute.py`
+  (single-flight manager + CLI), `desk_playbook_log.py` (terminal-state-only ledger), and the four
+  routes in `desk_routes.py` are built and tested (99 playbook tests).
+- **Rail-import discipline is settled** — `_measure_from`/`_draw_anchor_indices`/`_avg_cell`/
+  `_collect_measures` imported at `desk_playbook.py:52-62`; `desk_forward.py` keeps a zero diff.
+- **Audit gaps T1×2, T3 and spec catch-ups B3/B4 are CLOSED** (tests `:620`, `:632`, detect `:224`,
+  `:250`, `:682`; spec §1 table row + §3.1 prose). Iter-1's open minor anti-goal item is resolved.
+- **J-10's golden replay ran and PASSED this iteration** — `reports/phase-goal-playbook-iter-2-
+  regression-replay-results.md` + `J-10-verify.png`; `journey-scripts/J-10.json` is unedited. Do not
+  re-litigate the earlier FAIL: it was a backend alive-but-not-listening, not the product.
+- **Next target = J-03 "The Playbook lands on /desk"** at full depth, carrying four small items:
+  the literal `"measurement not recorded in this record"` copy; drop the unused import at
+  `desk_routes.py:126`; use `desk_forward._side_sign` at `desk_playbook.py:170`/`:281`; make the
+  baseline draw safe for multi-signal setups (`desk_playbook.py:557`) BEFORE J-04 lands.

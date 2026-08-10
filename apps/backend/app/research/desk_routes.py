@@ -123,7 +123,9 @@ from .desk_forward import ForwardStore, resolve_desk_forward_dir
 from .desk_forward_compute import DeskForwardComputeManager
 from .desk_forward_log import ForwardRunStore, resolve_desk_forward_log_dir
 from .desk_forward_pins import resolve_desk_forward_pins
-from .desk_playbook import PlaybookStore, resolve_desk_playbook_dir
+from .desk_playbook import PlaybookSessionRefused, PlaybookStore, resolve_desk_playbook_dir
+from .desk_playbook_compute import DeskPlaybookComputeManager
+from .desk_playbook_log import PlaybookRunStore, resolve_desk_playbook_log_dir
 from .desk_screen import ScreenStore, resolve_desk_screen_dir
 from .desk_screen_compute import DeskScreenComputeManager
 from .desk_screen_diff import ScreenDiffSelfCompareError, compute_screen_diff
@@ -170,6 +172,10 @@ _desk_forward_compute_manager = DeskForwardComputeManager()
 
 # The deep fine-bar backfill compute manager — the SAME shape as its four siblings above.
 _desk_deep_backfill_manager = DeskDeepBackfillComputeManager()
+
+# The desk playbook compute manager (Era B2, J-02) — the SAME process-wide-singleton-behind-a-
+# dependency shape as its five siblings above.
+_desk_playbook_compute_manager = DeskPlaybookComputeManager()
 
 
 def get_universe_store() -> UniverseStore:
@@ -947,10 +953,14 @@ def get_desk_forward_pins(
     )
 
 
-# --- The Playbook (Era B2, J-01) — pre-registered, lookahead-clean intraday setups detected on the
-# desk's own recorded 5m/1m bars (docs/playbook-detector-spec.md). J-01 ships detection only (no
-# measurement, no compute-manager/trigger route, no CLI) plus this ONE read; see desk_playbook.py
-# for the computation, store, and parameters/signature recipe this route only serves verbatim. ----
+# --- The Playbook (Era B2) — pre-registered, lookahead-clean intraday setups detected on the
+# desk's own recorded 5m/1m bars (docs/playbook-detector-spec.md). J-01 shipped detection only (no
+# measurement, no compute-manager/trigger route, no CLI) plus the ONE read below; see
+# desk_playbook.py for the computation, store, and parameters/signature recipe this route only
+# serves verbatim. J-02 (this iteration) extends `compute_playbook` to MEASURE every signal in the
+# same walk (see desk_playbook.py's own docstring) and adds the compute trigger/poll/cancel trio +
+# the durable run ledger, below the GET route — mirrors the forward-returns trio exactly; see
+# desk_playbook_compute.py / desk_playbook_log.py. ---------------------------------------------------
 
 
 def get_playbook_store() -> PlaybookStore:
@@ -1016,6 +1026,121 @@ def get_playbook(
     records, errors = store.list()
     return {
         "playbooks": [_playbook_meta_only(r) for r in records],
+        "latest": records[-1] if records else None,
+        "integrity_errors": errors,
+    }
+
+
+# --- The playbook compute (Era B2, J-02) — trigger/poll/cancel trio mirroring the forward-returns
+# trio exactly, plus ONE durable read mirroring `GET /research/desk/forward/runs`. See
+# `desk_playbook_compute.py` for the single-flight manager + `run_playbook_and_record` mechanics
+# and `desk_playbook_log.py` for the run ledger this wires up. ---------------------------------------
+
+
+def get_desk_playbook_compute_manager() -> DeskPlaybookComputeManager:
+    """The desk playbook compute manager — a FastAPI dependency (the
+    ``get_desk_forward_compute_manager`` pattern) so a test overrides it outright via
+    ``app.dependency_overrides`` for complete test-to-test isolation."""
+    return _desk_playbook_compute_manager
+
+
+def get_playbook_run_store() -> PlaybookRunStore:
+    """The durable playbook-run log store rooted at a bare env-var-or-sibling-of-the-universe-dir
+    default (zero new ``Config`` field — see ``desk_playbook_log.resolve_desk_playbook_log_dir``) —
+    the ``get_forward_run_store`` pattern. A FastAPI dependency so tests can point it at a temp dir
+    via the env var or override it outright."""
+    return PlaybookRunStore(resolve_desk_playbook_log_dir(CONFIG.desk_universe_dir_resolved()))
+
+
+class PlaybookComputeRequest(BaseModel):
+    """Body for ``POST /research/desk/playbook/compute`` — ``session_date`` is REQUIRED (FastAPI
+    422s a missing/absent body before the route handler runs, the ``ForwardComputeRequest``/
+    ``ScreenComputeRequest`` convention); this endpoint never defaults to the current wall-clock
+    date (T-6) or to the latest recorded session."""
+
+    session_date: str
+
+
+@router.post("/playbook/compute")
+def trigger_desk_playbook_compute(
+    body: PlaybookComputeRequest,
+    universe_store: UniverseStore = Depends(get_universe_store),
+    bar_store: BarStore = Depends(get_bar_store),
+    playbook_store: PlaybookStore = Depends(get_playbook_store),
+    manager: DeskPlaybookComputeManager = Depends(get_desk_playbook_compute_manager),
+    playbook_run_store: PlaybookRunStore = Depends(get_playbook_run_store),
+) -> dict:
+    """Start the single-flight desk playbook compute job for ``body.session_date``, or — if one is
+    already ``status`` in (``"running"``, ``"cancelling"``) — return it UNCHANGED
+    (``started: False``, never a second concurrent job). Returns
+    ``{"started": bool, "compute": <snapshot>}``; the walk runs on a background worker thread, off
+    this request, so this route returns immediately.
+
+    Refuses — 422, naming the non-session date, never starting a job or writing a ledger row — when
+    ``body.session_date`` is provably not a trading session (``desk_sessions.
+    refuse_if_not_a_session`` — the ``trigger_desk_screen_compute`` precedent). This is a PRE-check:
+    ``run_playbook_and_record`` carries the identical guard internally too (for the CLI path, which
+    has no route in front of it, and for the race), but reaching it from this route would mean a
+    job was already created and a "refused_non_session" ledger row already written for a date this
+    route could have refused for free."""
+    records, _errors = universe_store.list()
+    members = list(records[-1]["members"]) if records else []
+    refusal = refuse_if_not_a_session(body.session_date, bar_store, members)
+    if refusal is not None:
+        raise HTTPException(status_code=422, detail=refusal)
+    return manager.trigger(
+        body.session_date, universe_store, bar_store, CONFIG, playbook_store,
+        playbook_run_store=playbook_run_store,
+    )
+
+
+@router.get("/playbook/compute")
+def get_desk_playbook_compute(
+    manager: DeskPlaybookComputeManager = Depends(get_desk_playbook_compute_manager),
+) -> dict:
+    """The playbook compute job's current/last snapshot, served VERBATIM —
+    ``{"status", "session_date", "signals_done", "signals_total", "error"}``, ALWAYS a body (never
+    ``null``: ``status == "idle"`` before any compute has ever run this process). A plain read:
+    never triggers a compute as a side effect (GET-never-computes)."""
+    return manager.snapshot()
+
+
+@router.post("/playbook/compute/cancel")
+def cancel_desk_playbook_compute(
+    manager: DeskPlaybookComputeManager = Depends(get_desk_playbook_compute_manager),
+) -> dict:
+    """Cancel the in-flight desk playbook compute (cooperative — observed between members). ``409``
+    when idle (no job has ever run, or the last job already reached a terminal state) — mirrors
+    ``cancel_desk_forward_compute``'s own 409-when-terminal shape."""
+    snapshot = manager.snapshot()
+    if snapshot["status"] != "running":
+        raise HTTPException(status_code=409, detail="no desk playbook compute is currently running")
+    manager.cancel()
+    return {"cancelling": True}
+
+
+@router.get("/playbook/runs")
+def get_playbook_runs(
+    session_date: str | None = None, store: PlaybookRunStore = Depends(get_playbook_run_store)
+) -> dict:
+    """``{"runs": [...], "latest": <record>|null, "integrity_errors": [...]}`` — the durable log of
+    what every playbook compute attempted, surviving the compute manager's process-scoped snapshot
+    (see ``desk_playbook_log.py``). ``?session_date=`` narrows to one date's own runs (the
+    ``GET /research/desk/forward/runs?screen_id=`` convention), and then ``latest`` is that date's
+    newest run rather than the store's.
+
+    An explicit HTTP 200 honest-empty payload before any playbook run has ever reached a LOGGED
+    terminal state, never a 404. ``latest`` is the most recently STARTED run, verbatim from disk —
+    never recomputed on the GET. ``integrity_errors`` is ``store.list()``'s own ``errors`` return,
+    surfaced verbatim — a corrupted run-record file stays excluded from ``runs``/``latest`` either
+    way, never fabricated, never crashes this route. A cancelled attempt never appears here at all
+    (``desk_playbook_log.py``'s own terminal-excludes-cancelled contract) — its absence looks
+    identical to a run that never happened, by design."""
+    records, errors = store.list()
+    if session_date is not None:
+        records = [record for record in records if record.get("session_date") == session_date]
+    return {
+        "runs": records,
         "latest": records[-1] if records else None,
         "integrity_errors": errors,
     }

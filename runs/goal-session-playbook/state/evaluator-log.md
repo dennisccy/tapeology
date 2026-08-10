@@ -65,3 +65,43 @@ measuring rules rather than write a second copy. Ask it explicitly to also run t
 browser check that was skipped this time, to add the three missing tests the audit listed, and to
 get two wording decisions written into the detector spec. Also commit iteration 1's seven files
 before the next iteration starts.
+
+---
+
+## Iteration 2 — goal-playbook-iter-2
+
+**Date:** 2026-08-10T19:40:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-02 "Every signal measured"
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-01 "The signal contract" passing (re-verified); J-03..J-09 failing (not
+  targeted); J-10 "The kept product stands" partial — its missing browser replay was run this time
+  and passed, but its own wording still asks for 20 Claude tools and there are 18 until J-09
+- Anti-goal violations: none new; iteration 1's open minor one (a detector rule written in code but
+  not in the spec) is now resolved by a documentation-only spec edit, proven by a test that the code
+  line did not move
+
+**Reasoning:** I checked the work myself instead of trusting the write-ups. I re-ran the whole
+backend test suite (exit 0, 2025 passed, 8 skipped, nothing failed — above the 1969 floor), re-ran
+the 99 playbook tests, asked the running code for the pin (`08e471b10130e1e2`) and the Claude tool
+count (18) directly, and used git to prove that the measuring rail file and every other protected
+file, plus the whole website folder, have zero changes. I read the new code: the measuring maths is
+imported from the existing rail, not copied, and the random baseline uses a named seed string per
+row rather than global randomness. The kept-product check that iteration 1 skipped was run this
+time by the pipeline's own replay: the report says pass, and the report and its screenshot were
+written in the same second (19:10:03), so the picture belongs to that run — I opened it and the Desk
+page shows its Screen History and Forward Returns as shipped. One earlier attempt this iteration had
+produced a failing report; the developer traced it to a backend that was alive but no longer
+answering, fixed the environment, and did not touch the sentinel script (git confirms it is
+unedited) — I re-verified that the final artifacts agree with each other.
+
+**Next-step recommendation:** Build J-03 "The Playbook lands on /desk" next, at full depth — this is
+the first time the playbook becomes visible to the person using the product, it needs real browser
+screenshots, and it touches the protective tests around the Desk page. Ask it to also carry four
+small clean-ups inside the same cycle: write the exact "measurement not recorded in this record"
+sentence the goal names, drop the unused import the review flagged, reuse the rail's own long/short
+helper instead of repeating it, and make the baseline-anchor draw safe for setups that can fire more
+than once per symbol in a day before the new setup families arrive.

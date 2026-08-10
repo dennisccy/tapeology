@@ -44,14 +44,21 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import random
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from .desk_forward import (
     DESK_FORWARD_BASELINE_SEED,
     DESK_FORWARD_HORIZONS_MINUTES,
     DESK_FORWARD_HORIZON_MEASURES,
+    DESK_FORWARD_MAX_TOUCHES_PER_ROW,
     DESK_FORWARD_MEASURE_KEYS,
+    _avg_cell,
+    _collect_measures,
+    _draw_anchor_indices,
+    _measure_from,
 )
 from .desk_playbook_detect import detect_opening_range_breaks
 from .desk_playbook_features import baselines, opening_range, rth_session_slice
@@ -144,9 +151,14 @@ PLAYBOOK_REGISTER = (
     "every threshold is fixed in advance in docs/playbook-detector-spec.md, never fit to outcomes. "
     "A signal is a recorded observation, not advice: invalidation_price is the book's own "
     "structural level, disclosed as geometry, never a stop order, a size, or an account concept. "
-    "This record does not yet carry a measurement — forward returns, invalidation-breach, and the "
-    "seeded random-anchor baseline are added by a later compute pass; no fills, no costs, and no "
-    "probability, expectancy, edge, or significance claim are made anywhere on this payload"
+    "Each signal's forward block is measured with the desk forward rail's own conventions — "
+    "trading-bar horizons, dual max drawdown, truncation honesty — anchored at the entry already "
+    "decided at detection time, never recomputed a second way; invalidation_breached discloses "
+    "whether price ever traded through that structural level, never an exit model; baseline_anchors "
+    "and summary compare every signal against the SAME math anchored at seeded random minutes of "
+    "the same session. A record computed before this measurement pass existed carries an honest "
+    "absence instead — no fills, no costs, and no probability, expectancy, edge, or significance "
+    "claim are made anywhere on this payload"
 )
 
 _PLAYBOOK_DIR_ENV = "TAPEOLOGY_DESK_PLAYBOOK_DIR"
@@ -249,6 +261,14 @@ def playbook_parameters() -> dict:
         "rail_horizons_minutes": [list(pair) for pair in DESK_FORWARD_HORIZONS_MINUTES],
         "rail_baseline_seed": DESK_FORWARD_BASELINE_SEED,
         "rail_horizon_measures": list(DESK_FORWARD_HORIZON_MEASURES),
+        # J-02: the rail's own per-row touch cap, reused verbatim (never re-derived) as the
+        # per-(setup_id, side) pooling cap on baseline_anchors/summary -- bounds a pathological
+        # many-symbols-firing-the-same-setup session exactly the way it already bounds a
+        # band-hugging one, without hiding that it was one (signals_beyond_cap discloses the rest).
+        # Embedding it here is also what re-keys every J-01-era (unmeasured) record: the SAME
+        # session_date and bar content under J-02's code now hashes a DIFFERENT parameters blob, so
+        # a fresh compute mints a genuinely NEW version instead of matching the old, unmeasured one.
+        "rail_max_touches_per_row": DESK_FORWARD_MAX_TOUCHES_PER_ROW,
     }
 
 
@@ -298,11 +318,121 @@ def _prior_session_close(bars_5m: list, session_date: str) -> float | None:
     return prior_bars[-1].close if prior_bars else None
 
 
-def compute_playbook(universe_store, bar_store, config_fingerprint: str, session_date: str) -> dict:
-    """Detect the opening-range-break family for EVERY member of the latest registered universe
-    snapshot, on ``session_date``'s own recorded bars -- returns everything ``PlaybookStore.record``
-    needs minus the store-assigned ``id``/``recorded_at`` (the ``compute_forward``/``compute_screen``
-    contract shape: a PURE compute, never itself a store write).
+def _measurement_anchor(
+    session_5m: list, session_1m: list, trigger_idx_5m: int, trigger_price: float
+) -> tuple[list, int, int]:
+    """Map ONE signal's already-detected 5m trigger bar to its OWN measurement anchor on the
+    finest series ITS OWN trigger window can actually supply -- spec Sec0's 5m->1m mapping: the
+    first 1m bar of the trigger bar's own ``[epoch, epoch+300)`` window whose ``[low, high]``
+    contains the trigger price ``T``, falling back to that window's first 1m bar. A gap spanning
+    the WHOLE window (no 1m bar inside it at all) degrades THIS signal to the 5m basis rather than
+    silently borrowing a bar from a neighboring 5m window -- ``_measure_from``'s own per-horizon
+    ``reason`` field (the ``minutes % tf_minutes`` mismatch) already discloses the coarser basis
+    honestly, so no new served field is needed for the degrade itself. A session carrying no 1m
+    bars at all degrades every one of its signals the same way, for free -- "session-level, not
+    per-signal" falls out of this rule rather than needing a separate pre-check.
+
+    Returns ``(measure_bars, anchor_index, tf_minutes)`` -- the SAME series/tf a baseline anchor
+    for this signal's own (symbol, setup_id) must also use, so the null lives in the same basis as
+    what it is the null for."""
+    trigger_bar_5m = session_5m[trigger_idx_5m]
+    if not session_1m:
+        return session_5m, trigger_idx_5m, 5
+    window_start = trigger_bar_5m.epoch
+    window_end = window_start + 300.0
+    window_1m = [
+        (idx, bar) for idx, bar in enumerate(session_1m) if window_start <= bar.epoch < window_end
+    ]
+    if not window_1m:
+        return session_5m, trigger_idx_5m, 5
+    for idx, bar in window_1m:
+        if bar.low <= trigger_price <= bar.high:
+            return session_1m, idx, 1
+    first_idx, _first_bar = window_1m[0]
+    return session_1m, first_idx, 1
+
+
+def _invalidation_breached(
+    measure_bars: list,
+    anchor_index: int,
+    invalidation_price: float,
+    side: str,
+    tf_minutes: int,
+    forward: dict,
+) -> dict:
+    """The same-pass, OUTSIDE-``_measure_from`` disclosure spec Sec0 requires (so the rail's own
+    served horizon shape never changes): did price ever trade through ``invalidation_price`` from
+    the anchor bar through the session close, and -- if so -- at what bar-equivalent minute offset
+    (``first_breach_minutes``: ONE session-wide fact, the same value on every horizon leaf that
+    reaches it -- never re-derived per horizon, never a guess). A horizon key is ``True`` when the
+    first breach falls AT OR BEFORE that horizon's own already-measured ``effective_minutes``
+    (reusing ``forward``'s own truncation-honest window -- never a second, independent walk); a
+    horizon this signal could not even measure at this tf (``reason`` set, ``effective_minutes``
+    null) is vacuously ``False`` -- it never observed anything. ``to_close`` spans the whole
+    remaining session by definition, so it is ``True`` exactly when any breach was ever observed at
+    all. Long: breached when a bar's low reaches the level (below entry); short: mirrored (high)."""
+    tail = measure_bars[anchor_index:]
+    first_breach_offset: int | None = None
+    for offset, bar in enumerate(tail):
+        breached = (
+            bar.low <= invalidation_price if side == "long" else bar.high >= invalidation_price
+        )
+        if breached:
+            first_breach_offset = offset
+            break
+    first_breach_minutes = (
+        first_breach_offset * tf_minutes if first_breach_offset is not None else None
+    )
+
+    result: dict = {}
+    for label, _minutes in DESK_FORWARD_HORIZONS_MINUTES:
+        effective = forward["horizons"][label]["effective_minutes"]
+        result[label] = (
+            first_breach_minutes is not None
+            and effective is not None
+            and first_breach_minutes <= effective
+        )
+    result["to_close"] = first_breach_minutes is not None
+    result["first_breach_minutes"] = first_breach_minutes
+    return result
+
+
+def _measure_signal(signal: dict, session_5m: list, session_1m: list) -> tuple[dict, dict, list, int]:
+    """Measure ONE already-detected signal through the rail's own ``_measure_from`` -- THE call
+    site the convention-identity test compares against a direct ``desk_forward._measure_from`` call
+    with the identical arguments. Reuses the signal's own already-detected ``entry``/``entry_kind``
+    (spec Sec0's stop-through convention, decided at J-01 detection time) and ``trigger_price``
+    verbatim -- nothing here re-derives them a second way. Returns
+    ``(forward, invalidation_breached, measure_bars, tf_minutes)`` -- the last two so the caller's
+    baseline-anchor draw for this signal's (symbol, setup_id) measures on the SAME basis."""
+    trigger_idx_5m = signal["geometry"]["slots_to_break"]
+    measure_bars, anchor_index, tf_minutes = _measurement_anchor(
+        session_5m, session_1m, trigger_idx_5m, signal["trigger_price"]
+    )
+    sign = 1.0 if signal["side"] == "long" else -1.0
+    forward = _measure_from(
+        measure_bars, anchor_index, signal["entry"], signal["entry_kind"], tf_minutes, sign
+    )
+    breached = _invalidation_breached(
+        measure_bars, anchor_index, signal["invalidation_price"], signal["side"], tf_minutes, forward
+    )
+    return forward, breached, measure_bars, tf_minutes
+
+
+def compute_playbook(
+    universe_store,
+    bar_store,
+    config_fingerprint: str,
+    session_date: str,
+    *,
+    progress: Callable[[dict], None] | None = None,
+    should_abort: Callable[[], bool] | None = None,
+) -> dict:
+    """Detect AND measure the opening-range-break family for EVERY member of the latest registered
+    universe snapshot, on ``session_date``'s own recorded bars, in the SAME walk -- returns
+    everything ``PlaybookStore.record`` needs minus the store-assigned ``id``/``recorded_at`` (the
+    ``compute_forward``/``compute_screen`` contract shape: a PURE compute, never itself a store
+    write).
 
     Session-honesty first: ``desk_sessions.refuse_if_not_a_session`` is checked before any bar is
     read for detection (no separate compute-manager/route layer exists yet this iteration, so this
@@ -310,7 +440,21 @@ def compute_playbook(universe_store, bar_store, config_fingerprint: str, session
     is walked. Per member: no 5m bars for the session, a thin/zero baseline, or no buildable opening
     range are each a disclosed ``absences`` row (never a crash, never a guess); everything else
     reaches the detector, which may add a signal, an ``ambiguous_outside_bar`` diagnostic, or
-    neither (a legitimate "the setup did not form" outcome -- not an absence)."""
+    neither (a legitimate "the setup did not form" outcome -- not an absence).
+
+    J-02: every detected signal is measured in the SAME pass -- ``_measure_signal`` attaches
+    ``forward`` (the rail's own ``_measure_from`` shape, anchored on the finest series THIS
+    signal's own trigger window can supply) and ``invalidation_breached`` (computed OUTSIDE
+    ``_measure_from``, never touching its served shape). In-cap signals (per ``(setup_id, side)``,
+    capped at the rail's own ``DESK_FORWARD_MAX_TOUCHES_PER_ROW`` -- see ``playbook_parameters``)
+    also draw ONE seeded random-anchor baseline measurement each
+    (``f"{PLAYBOOK_BASELINE_SEED}:playbook-{session_date}:{symbol}:{setup_id}"``, a fresh per-
+    symbol-and-setup stream so pooling is walk-order-independent), pooled across every symbol
+    sharing that ``(setup_id, side)`` into the record's ``baseline_anchors``/``summary``; a pool
+    that exceeds the cap discloses the excess via ``signals_beyond_cap`` rather than silently
+    dropping it. ``progress``, if given, is called after EACH member with ``{"symbol": symbol}``
+    (whether it fired, was absent, or neither); a ``should_abort`` returning True stops the walk
+    early -- the CALLER must then discard the partial result (a cancelled walk is never recorded)."""
     universe_records, _universe_errors = universe_store.list()
     members = list(universe_records[-1]["members"]) if universe_records else []
 
@@ -331,14 +475,27 @@ def compute_playbook(universe_store, bar_store, config_fingerprint: str, session
     signals: list[dict] = []
     absences: list[dict] = []
     diagnostics: list[dict] = []
+    # Cross-symbol pools keyed "<setup_id>:<side>" -- the ONLY pooling boundary that makes sense
+    # this iteration, since a single symbol-session can carry at most ONE opening-range-break
+    # signal (the detector's own mutual-exclusion rule); a future multi-signal-per-session detector
+    # (J-04's JBE) pools into the SAME dict by construction, no rewrite needed.
+    signal_pool: dict[str, list[dict]] = {}
+    baseline_pool: dict[str, list[dict]] = {}
+    pool_counts: dict[str, int] = {}
+    pool_beyond_cap: dict[str, int] = {}
 
     for symbol in members:
+        if should_abort is not None and should_abort():
+            break
+
         bars_5m = bar_store.merged_bars(symbol, "5m")
         session_5m = rth_session_slice(bars_5m, session_date)
         if not session_5m:
             absences.append(
                 {"symbol": symbol, "reason": f"no 5m bars recorded for the {session_date} session"}
             )
+            if progress is not None:
+                progress({"symbol": symbol})
             continue
 
         baseline = baselines(
@@ -355,6 +512,8 @@ def compute_playbook(universe_store, bar_store, config_fingerprint: str, session
                     ),
                 }
             )
+            if progress is not None:
+                progress({"symbol": symbol})
             continue
 
         bars_1m = bar_store.merged_bars(symbol, "1m")
@@ -371,6 +530,8 @@ def compute_playbook(universe_store, bar_store, config_fingerprint: str, session
                     ),
                 }
             )
+            if progress is not None:
+                progress({"symbol": symbol})
             continue
 
         signal, diagnostic = detect_opening_range_breaks(
@@ -378,20 +539,69 @@ def compute_playbook(universe_store, bar_store, config_fingerprint: str, session
             params, _prior_session_close(bars_5m, session_date),
         )
         if signal is not None:
+            session_1m = rth_session_slice(bars_1m, session_date)
+            forward, breached, measure_bars, tf_minutes = _measure_signal(signal, session_5m, session_1m)
+            signal["forward"] = forward
+            signal["invalidation_breached"] = breached
             signals.append(signal)
+
+            pool_key = f"{signal['setup_id']}:{signal['side']}"
+            count_so_far = pool_counts.get(pool_key, 0)
+            pool_counts[pool_key] = count_so_far + 1
+            if count_so_far < DESK_FORWARD_MAX_TOUCHES_PER_ROW:
+                signal_pool.setdefault(pool_key, []).append(forward)
+                sign = 1.0 if signal["side"] == "long" else -1.0
+                rng = random.Random(
+                    f"{PLAYBOOK_BASELINE_SEED}:playbook-{session_date}:{symbol}:{signal['setup_id']}"
+                )
+                k = min(1, len(measure_bars))  # this symbol's own capped signal count is <= 1
+                for anchor_idx in _draw_anchor_indices(rng, len(measure_bars), k):
+                    anchor_bar = measure_bars[anchor_idx]
+                    baseline_pool.setdefault(pool_key, []).append(
+                        _measure_from(
+                            measure_bars, anchor_idx, anchor_bar.close, "close", tf_minutes, sign
+                        )
+                    )
+            else:
+                pool_beyond_cap[pool_key] = pool_beyond_cap.get(pool_key, 0) + 1
         if diagnostic is not None:
             diagnostics.append(diagnostic)
+        if progress is not None:
+            progress({"symbol": symbol})
+
+    summary: dict[str, dict] = {}
+    for pool_key, pooled_signals in signal_pool.items():
+        signal_measures = _collect_measures(pooled_signals)
+        pooled_baseline = baseline_pool.get(pool_key, [])
+        baseline_measures = _collect_measures(pooled_baseline)
+        summary[pool_key] = {
+            key: {
+                "signals": _avg_cell(*signal_measures[key]),
+                "baseline": _avg_cell(*baseline_measures[key]),
+            }
+            for key in PLAYBOOK_SIGNAL_MEASURES
+        }
 
     return {
         "session_date": session_date,
         "config_fingerprint": config_fingerprint,
         "playbook_input_signature": signature,
-        "payload_version": 1,
+        # 2: every signal now carries `forward` + `invalidation_breached`, and the record gains
+        # `baseline_anchors`/`summary`/`signals_beyond_cap` (see the module + this function's own
+        # docstrings). The version DESCRIBES the shape; it is the new `rail_max_touches_per_row` key
+        # inside `parameters` (see `playbook_parameters`) that makes the change actually RE-KEY: a
+        # J-01-era record's own signature is untouched (its file is never rewritten), but a fresh
+        # compute over the SAME session_date/bar content now hashes a DIFFERENT parameters blob and
+        # so mints a genuinely new version rather than matching the old, unmeasured one.
+        "payload_version": 2,
         "parameters": params,
         "register": PLAYBOOK_REGISTER,
         "signals": signals,
         "absences": absences,
         "diagnostics": diagnostics,
+        "baseline_anchors": dict(baseline_pool),
+        "summary": summary,
+        "signals_beyond_cap": pool_beyond_cap,
     }
 
 
@@ -453,14 +663,22 @@ class PlaybookStore:
     @staticmethod
     def _registered(meta: dict) -> dict:
         """One verified ``meta`` in the shape every read of this store hands back: fresh copies of
-        the nested ``signals``/``absences``/``diagnostics`` lists (the ``ForwardStore``
-        per-list-copy discipline, so a caller mutating what it received can never poison a later
-        read)."""
+        the nested ``signals``/``absences``/``diagnostics``/``baseline_anchors``/``summary`` (the
+        ``ForwardStore`` per-list-copy discipline, so a caller mutating what it received can never
+        poison a later read). ``.get(..., default)`` on every J-02 field: a J-01-era record on disk
+        carries none of them -- TC-11's honest-absence contract -- and must keep reading back
+        verbatim rather than raising on a missing key."""
         return {
             **meta,
             "signals": [dict(s) for s in meta["signals"]],
             "absences": [dict(a) for a in meta["absences"]],
             "diagnostics": [dict(d) for d in meta.get("diagnostics", [])],
+            "baseline_anchors": {
+                key: [dict(m) for m in measures]
+                for key, measures in meta.get("baseline_anchors", {}).items()
+            },
+            "summary": {key: dict(value) for key, value in meta.get("summary", {}).items()},
+            "signals_beyond_cap": dict(meta.get("signals_beyond_cap", {})),
         }
 
     def list(self) -> tuple[list[dict], list[dict]]:
@@ -542,11 +760,17 @@ class PlaybookStore:
         signals: list[dict],
         absences: list[dict],
         diagnostics: list[dict],
+        baseline_anchors: dict[str, list[dict]] | None = None,
+        summary: dict[str, dict] | None = None,
+        signals_beyond_cap: dict[str, int] | None = None,
     ) -> dict:
         """Persist ONE new playbook record (append-only). An identical 2-pin key raises
         ``PlaybookAlreadyRecorded``; a file already at this key's own deterministic path but
         failing its integrity check raises ``PlaybookIntegrityError`` -- never a silent overwrite
-        (the ``ForwardStore.record`` refuse-loudly branch verbatim)."""
+        (the ``ForwardStore.record`` refuse-loudly branch verbatim). ``baseline_anchors``/
+        ``summary``/``signals_beyond_cap`` default to empty (J-02's measurement fields; a caller
+        planting a J-01-shaped, pre-measurement record -- e.g. a fixture for the "measurement not
+        recorded in this record" absence contract -- simply omits them)."""
         existing = self.find_by_key(session_date, playbook_input_signature)
         if existing is not None:
             raise PlaybookAlreadyRecorded(existing["id"])
@@ -571,6 +795,11 @@ class PlaybookStore:
             "signals": list(signals),
             "absences": list(absences),
             "diagnostics": list(diagnostics),
+            "baseline_anchors": {
+                key: list(measures) for key, measures in (baseline_anchors or {}).items()
+            },
+            "summary": {key: dict(value) for key, value in (summary or {}).items()},
+            "signals_beyond_cap": dict(signals_beyond_cap or {}),
         }
         record = {"meta": meta}
         payload = {"file_checksum": _sha256(_canonical(record)), "record": record}

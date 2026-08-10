@@ -46,3 +46,27 @@ all 42 tests, the review, and QA passed over it. It surfaced only when the audit
 land before J-07's back-scan touches real recorded sessions.
 **Applies to:** any playbook detector/primitive work that indexes bars by position
 (`desk_playbook_features.py`, `desk_playbook_detect.py`), and J-07's back-scan.
+
+## iter-2 — 2026-08-10T19:40:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** The baseline-anchor draw in `desk_playbook.py:557` hard-codes `k = min(1, len(bars))`
+and rebuilds `random.Random(f"{seed}:playbook-{date}:{symbol}:{setup_id}")` *inside* the per-signal
+branch. That is correct today only because an opening-range break can fire at most once per symbol
+per session; the moment a family fires twice for one (symbol, setup_id), the same seed string will
+draw the SAME anchor index twice and the baseline pool will silently duplicate instead of growing.
+**Applies to:** any iteration adding a detector family that can fire more than once per
+symbol-session (J-04 JBE/DBI/cup-and-handle, J-05 capitulation, J-06 range/double-top) — fix the
+draw before adding the family, not after.
+
+## iter-2 — 2026-08-10T19:40:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A golden-replay FAIL is not evidence of a product regression until the services are
+proven alive by a REQUEST, not by a PID. This iteration's first replay reported `step 05 expected
+"300.11" did not appear` while the backend process existed at 99% CPU but had already closed its
+listening socket (post-SIGTERM uvicorn): `ss -ltnp` had no row for 8301 and `curl /health` returned
+HTTP 000. Re-run on clean services it passed four times with the golden script byte-unedited.
+**Applies to:** every iteration whose Required-still-passing set includes a browser/replay journey —
+check `curl /health` (and the 3301/8301 pair, not 3000/8000) before believing a replay failure, and
+never relax a golden assertion to make it green.

@@ -214,6 +214,67 @@ def test_a_session_that_never_breaks_either_side_fires_nothing():
     assert diagnostic is None
 
 
+# --- audit T3: the detector's populated-SPY branches -------------------------------------------------
+# Every fixture above passes `index_bars=[]` -- only the no-SPY-bars null branch ever ran. These two
+# exercise a REAL, non-empty SPY 5m series: a trigger late enough in the session (slot 10) for
+# `market_context`'s lookback window (needs >= PLAYBOOK_MKT_LOOKBACK_BARS+1 == 7 prior SPY bars) to
+# resolve at all.
+
+
+def test_market_context_populated_spy_reports_a_supportive_direction():
+    """A clearly rising SPY beside a long trigger -- `direction` resolves non-null, and specifically
+    "supportive" (SPY moved > the neutral band, signed with the signal's own long side)."""
+    bars = [_bar("RS2", E_OPEN + i * 300.0, 100.1, 100.3, 100.0, 100.2, 500) for i in range(10)]
+    bars.append(_bar("RS2", E_OPEN + 10 * 300.0, 100.6, 101.2, 100.5, 101.0, 1000))  # slot 10: trigger
+
+    spy_bars = [
+        _bar(
+            "SPY", E_OPEN + i * 300.0,
+            400.0 + i * 0.3, 400.2 + i * 0.3, 399.9 + i * 0.3, 400.1 + i * 0.3, 500,
+        )
+        for i in range(10)
+    ]
+    or_result = {"high": 100.3, "low": 100.0, "width": 0.3, "basis": "1m", "bars_used": 15}
+    baseline = {"mbr": 1.0, "sessions": 10, "slot_volume_medians": {i: 500 for i in range(11)}}
+    index_baseline = {"mbr": 1.0, "sessions": 10, "slot_volume_medians": {}}
+
+    signal, diagnostic = detect_opening_range_breaks(
+        bars, or_result, baseline, "RS2", SESSION_DATE, spy_bars, index_baseline, _PARAMS, None,
+    )
+    assert diagnostic is None and signal is not None
+    assert signal["market"]["direction"] == "supportive"
+    assert signal["market"]["market_move_mbr"] == pytest.approx(1.8)
+    assert signal["market"]["reason"] is None
+
+
+def test_market_context_relative_strength_strong_when_stock_high_and_spy_low():
+    """The stock closing near its own session-high-so-far while SPY closes near ITS OWN
+    session-low-so-far -- `relative_strength_strong: True` for a long (spec Sec0)."""
+    bars = [_bar("RS1", E_OPEN + i * 300.0, 100.1, 100.3, 100.0, 100.2, 500) for i in range(9)]
+    bars.append(_bar("RS1", E_OPEN + 9 * 300.0, 100.3, 100.5, 100.1, 100.45, 500))  # near its own high
+    bars.append(_bar("RS1", E_OPEN + 10 * 300.0, 100.6, 101.2, 100.5, 101.0, 1000))  # slot 10: trigger
+
+    spy_bars = [
+        _bar(
+            "SPY", E_OPEN + i * 300.0,
+            400.3 - i * 0.1, 400.5 - i * 0.1, 400.1 - i * 0.1, 400.2 - i * 0.1, 500,
+        )
+        for i in range(9)
+    ]
+    spy_bars.append(_bar("SPY", E_OPEN + 9 * 300.0, 399.4, 399.6, 399.0, 399.05, 500))  # near its own low
+
+    or_result = {"high": 100.3, "low": 100.0, "width": 0.3, "basis": "1m", "bars_used": 15}
+    baseline = {"mbr": 1.0, "sessions": 10, "slot_volume_medians": {i: 500 for i in range(11)}}
+    index_baseline = {"mbr": 1.0, "sessions": 10, "slot_volume_medians": {}}
+
+    signal, diagnostic = detect_opening_range_breaks(
+        bars, or_result, baseline, "RS1", SESSION_DATE, spy_bars, index_baseline, _PARAMS, None,
+    )
+    assert diagnostic is None and signal is not None
+    assert signal["market"]["direction"] is not None  # a real, populated-SPY market block
+    assert signal["market"]["relative_strength_strong"] is True
+
+
 # --- TC-6: the generic lookahead property test -----------------------------------------------------
 #
 # Registered fixtures, each ``(session_bars, or_result, baseline, symbol, index_bars,

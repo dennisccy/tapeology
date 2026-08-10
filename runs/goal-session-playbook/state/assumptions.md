@@ -61,3 +61,31 @@ turns out NOT zero-behavior-change on closer look: T-1's own escape hatch (drop 
 iteration, record the drop, surface it for the human operator explicitly) rather than force a
 resolution.
 **Reversible:** yes
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** J-02's acceptance text in `docs/goal.md` says J-01-era records must serve "with the
+honest `\"measurement not recorded in this record\"` absence". That exact sentence exists nowhere in
+the product — the backend instead serves a structural absence (no `forward` key on the signal, empty
+`baseline_anchors`/`summary`/`signals_beyond_cap`, `payload_version` 1) plus a register sentence in
+its own words. The same quoted string is also listed under J-03 as UI copy for legacy records.
+**We chose:** counted J-02's absence requirement as met by the structural, machine-detectable
+absence (proven never-backfilled and SHA-256-unchanged by
+`test_j01_era_record_serves_verbatim_with_honest_absence_and_unchanged_sha`), and moved the literal
+sentence into J-03's binding carry list, where the goal itself places it as page copy.
+**Reversible:** yes
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** The critical anti-goal "No threshold exists outside the spec" plus §1's own header
+("the COMPLETE tunable surface — nothing else exists") sit against a new numeric knob the code now
+depends on: the cross-symbol pooling cap for `baseline_anchors`/`summary`, implemented as the rail's
+existing `DESK_FORWARD_MAX_TOUCHES_PER_ROW`, which appears in no row of `docs/playbook-detector-spec.md`
+§1. J-02's own step 3 demands "signal caps + beyond-cap disclosure" without naming a constant.
+**We chose:** not a violation. The spec's §0 Measurement paragraph already delegates this area
+verbatim ("Horizons, measures, dual MDD, truncation honesty, and the seeded random-anchor baseline
+are the rail's, unchanged"), the number is imported rather than invented, it is echoed into
+`playbook_parameters()` as `rail_max_touches_per_row` so a future change re-keys records, and no code
+path iterates it against outcomes. Recorded as an observation only — if the owner disagrees, the fix
+is one spec row, not a code change.
+**Reversible:** yes
