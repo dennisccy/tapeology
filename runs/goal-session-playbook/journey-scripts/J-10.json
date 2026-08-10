@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "journey": "J-10",
+  "name": "The kept product stands — regression sentinel",
+  "default_timeout_ms": 15000,
+  "steps": [
+    {"n": 1, "journey": "J-10", "action": {"type": "goto", "url": "/"}, "expect": {"text": "Try: SIM-BUYER"}},
+    {"n": 2, "journey": "J-10", "action": {"type": "fill", "target": {"label": "Ticker"}, "text": "SIM-BUYER"}},
+    {"n": 3, "journey": "J-10", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Watching"}},
+    {"n": 4, "journey": "J-10", "action": {"type": "goto", "url": "/structure?symbol=AAPL&asof=2026-06-22T23%3A59%3A59Z"}, "expect": {"text": "Structure"}},
+    {"n": 5, "journey": "J-10", "action": {"type": "click", "target": {"testid": "structure-load-button"}}, "expect": {"text": "300.11"}},
+    {"n": 6, "journey": "J-10", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Forward Returns"}}
+  ]
+}
