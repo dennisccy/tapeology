@@ -17,6 +17,9 @@ import type {
   DeskForwardPinsResult,
   DeskForwardReadResult,
   DeskForwardRunsListResult,
+  DeskPlaybookComputeSnapshot,
+  DeskPlaybookReadResult,
+  DeskPlaybookRunsListResult,
   DeskScreenPinsResult,
   DeskScreenRunsListResult,
   DeskScreenSnapshot,
@@ -1713,5 +1716,139 @@ export async function cancelDeskForwardCompute(): Promise<{ ok: boolean; error?:
     return { ok: false, error };
   } catch {
     return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// --- The Playbook (Era B2, J-01/J-02/J-03) -- goal-playbook-iter-3: the FIRST UI callers of these
+// already-shipped endpoints. Mirrors the forward-compute trio above byte-for-byte in shape. --------
+
+// GET /research/desk/playbook(?date=|?id=) — the newest recorded playbook for a session date, or
+// the exact record under one id (the `fetchDeskScreenByDate`/`fetchDeskScreenById` convention,
+// combined into ONE function since the backend route itself takes either, never both — the
+// `desk_routes.py` 422 on both). Exactly one of `params.date`/`params.id` is expected; passing
+// neither would read the route's bulk `{playbooks, latest, integrity_errors}` shape instead, which
+// this function does not serve (no caller on this page needs it).
+export async function fetchDeskPlaybook(params: {
+  date?: string;
+  id?: string;
+}): Promise<{ ok: boolean; data: DeskPlaybookReadResult | null; error?: string }> {
+  try {
+    const query =
+      params.id !== undefined
+        ? `id=${encodeURIComponent(params.id)}`
+        : `date=${encodeURIComponent(params.date ?? "")}`;
+    const res = await fetch(`${API_BASE}/research/desk/playbook?${query}`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskPlaybookReadResult };
+    }
+    let error = "The playbook record could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/playbook/compute — start (or, while one is already running, observe) the
+// single-flight playbook compute job for one session date. Mirrors `triggerDeskForwardCompute`'s
+// exact shape; the backend's own 422 (a non-session date) `detail` is surfaced VERBATIM, never a
+// client-fabricated message.
+export async function triggerDeskPlaybookCompute(sessionDate: string): Promise<{
+  ok: boolean;
+  data?: { started: boolean; compute: DeskPlaybookComputeSnapshot };
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/playbook/compute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_date: sessionDate }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data };
+    }
+    let error = "The playbook compute could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/playbook/compute — the playbook compute job's current/last snapshot, served
+// VERBATIM. Mirrors `fetchDeskForwardCompute`: `ok:false, data:null` on any failure so a poll
+// tick's caller keeps the last known view — never fabricates a snapshot.
+export async function fetchDeskPlaybookCompute(): Promise<{
+  ok: boolean;
+  data: DeskPlaybookComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/playbook/compute`);
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as DeskPlaybookComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+// POST /research/desk/playbook/compute/cancel — cancel the in-flight playbook compute job. Mirrors
+// `cancelDeskForwardCompute`; the backend's 409 (idle) `detail` is surfaced verbatim.
+export async function cancelDeskPlaybookCompute(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/playbook/compute/cancel`, {
+      method: "POST",
+    });
+    if (res.ok) return { ok: true };
+    let error = "The playbook compute could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/playbook/runs(?session_date=) — the durable, append-only PLAYBOOK run log,
+// served VERBATIM. Mirrors `fetchDeskForwardRuns`'s exact `{ok, data, error}` shape. An honest-
+// empty result is a valid `ok: true` outcome: no playbook compute for this session has ever
+// reached a LOGGED terminal state (a cancelled run leaves no row at all — `desk_playbook_log.py`'s
+// own terminal-excludes-cancelled contract).
+export async function fetchDeskPlaybookRuns(sessionDate?: string): Promise<{
+  ok: boolean;
+  data: DeskPlaybookRunsListResult | null;
+  error?: string;
+}> {
+  try {
+    const query = sessionDate !== undefined ? `?session_date=${encodeURIComponent(sessionDate)}` : "";
+    const res = await fetch(`${API_BASE}/research/desk/playbook/runs${query}`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskPlaybookRunsListResult };
+    }
+    let error = "The playbook run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
   }
 }

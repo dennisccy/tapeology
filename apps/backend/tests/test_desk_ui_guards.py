@@ -149,6 +149,14 @@ def test_structure_prefill_guard_can_fail_on_a_seeded_violation():
 # `touchValue` for a per-horizon leaf, `avgCell` for a row average, `summaryCell` for a summary
 # cell) so a derived spread/sum/ratio over ANY served forward value is caught. The v1 `*_bps`
 # paths died with the close-anchored shape.
+# goal-playbook-iter-3 (J-03): extended AGAIN for the Playbook Signals section's own NEW numeric
+# fields -- `signal.trigger_price`/`signal.invalidation_price` (a playbook signal's own served
+# prices, with no forward-panel analogue). The section's per-horizon forward cells and baseline
+# summary cells introduce NO new binding at all: `PlaybookSignalForward`/`PlaybookSummaryCells`
+# reuse `ForwardTouchTable`/`ForwardTouchMeasureCells`/`ForwardAvgCellView` VERBATIM, so those
+# values are already reached through the EXISTING `touchRow.*`/`touchValue.*`/`avgCell.*` bindings
+# this guard already covers -- see test_desk_page_price_arithmetic_guard_catches_playbook_field_
+# arithmetic below for the counter-test proving both the new and the reused bindings are caught.
 _PRICE_ARITHMETIC_FIELDS = (
     r"row\.(?:distance_bps|price_low|price_high|reference_close"
     r"|opposite_band\.(?:distance_bps|price_low|price_high|band_score)"
@@ -159,6 +167,7 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|touchValue\.(?:return_pct|exit_price|mdd_long_pct|mdd_short_pct|effective_minutes)"
     r"|avgCell\.(?:mean_pct|median_pct)"
     r"|summaryCell\.(?:mean_pct|median_pct)"
+    r"|signal\.(?:trigger_price|invalidation_price)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -241,6 +250,24 @@ def test_desk_page_price_arithmetic_guard_catches_exit_price_and_per_horizon_mdd
 
     seeded_worst = "const worst = Math.abs(touchValue.mdd_long_pct * 2);"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_worst) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_playbook_field_arithmetic():
+    """goal-playbook-iter-3 (J-03) counter-test: the extended guard catches arithmetic on the
+    Playbook Signals section's own NEW `signal.trigger_price`/`signal.invalidation_price` bindings,
+    and -- since that section's forward-cell/summary-cell renderers REUSE `ForwardTouchTable`/
+    `ForwardTouchMeasureCells`/`ForwardAvgCellView` verbatim rather than re-declaring lookalikes --
+    also still catches arithmetic on the `touchRow`/`touchValue`/`avgCell` bindings those shared
+    renderers use, proving the reuse did not quietly route the playbook's forward/baseline numbers
+    around this guard."""
+    seeded_trigger = "const stop = signal.trigger_price - signal.invalidation_price;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_trigger) is not None
+
+    seeded_forward = "const gain = touchValue.exit_price - touchRow.entry_price;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_forward) is not None
+
+    seeded_baseline = "const edge = avgCell.mean_pct - avgCell.median_pct;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_baseline) is not None
 
 
 # goal-desk-iter-24 (J-16) TC-7 (a): the ranked table's own reflow adds a `rank` cell rendering

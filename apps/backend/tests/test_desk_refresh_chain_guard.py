@@ -101,8 +101,25 @@ _UNIVERSE_FETCH_PATH = "/research/desk/universe/fetch"
 # BEFORE committing to a sweep measured in hours). The timeout is untouched -- the chain still owns
 # exactly one sleep. Neither new effect can reach a trigger, which is the property the scan below
 # actually polices; the counts are here so that scan stays provably complete.
-_EXPECTED_EFFECT_COUNT = 15
-_EXPECTED_INTERVAL_COUNT = 5
+#
+# 15 -> 17 and 5 -> 6 for the Playbook Signals section (goal-playbook-iter-3, J-03) -- the SIXTH
+# compute manager (`desk_playbook_compute.py`), entirely independent of the refresh chain (a
+# playbook run is never a sixth chain step; the section owns its own session date, resolved from
+# the ALREADY-fetched `sessionsResult`, never from the chain's own as-of range). +1 effect: the
+# resolved-date-keyed read, batched into ONE effect for both the playbook record GET and its run-
+# ledger GET (the mount-effect "several GETs, one effect" precedent, applied here since both
+# answer the SAME resolved date rather than different questions the way the forward-coverage/
+# forward-run-ledger pair above does). +1 effect, +1 interval: the playbook-compute poll, mirroring
+# the existing five polls' shape exactly (registered only while a job the operator STARTED is
+# running -- "running" OR "cancelling", since this manager's own snapshot has no distinct
+# "cancelled" terminal state; a completed cancel reverts it straight to "idle", which already
+# fails both conditions and stops the poll). The mount-time seed for this SIXTH compute snapshot
+# joined the EXISTING nine-GET mount effect (no new effect for it, the `forwardComputeRef` mirror
+# precedent). The timeout is untouched -- the playbook section has no wait-tick of its own; it is
+# not part of the chain. Neither new effect can reach a trigger, which is the property the scan
+# below actually polices; the counts are here so that scan stays provably complete.
+_EXPECTED_EFFECT_COUNT = 17
+_EXPECTED_INTERVAL_COUNT = 6
 _EXPECTED_TIMEOUT_COUNT = 1
 
 # Everything that could start real work. The chain's own driver is included: an effect that calls
@@ -119,6 +136,10 @@ _TRIGGER_CALLS = (
     "triggerDeskReconcileCompute(",
     "triggerDeskScreenCompute(",
     "triggerDeskForwardCompute(",
+    # goal-playbook-iter-3 (J-03): the Playbook Signals section's own handler/client pair --
+    # mirrors the handleTriggerForward(/triggerDeskForwardCompute( pair immediately above exactly.
+    "handleTriggerPlaybook(",
+    "triggerDeskPlaybookCompute(",
 )
 
 # Machinery that can invoke a handler without a user click. None of it is used by this page today;

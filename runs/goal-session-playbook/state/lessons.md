@@ -70,3 +70,30 @@ HTTP 000. Re-run on clean services it passed four times with the golden script b
 **Applies to:** every iteration whose Required-still-passing set includes a browser/replay journey —
 check `curl /health` (and the 3301/8301 pair, not 3000/8000) before believing a replay failure, and
 never relax a golden assertion to make it green.
+
+## iter-3 — 2026-08-10T21:20:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The browser-QA lane exercised the legacy-record state by planting a synthetic
+`payload_version` 1 record straight into the operator's REAL store
+(`apps/backend/.data/playbook/playbook-2026-08-04-e0f249f57785.json`) and by running real computes
+over the live 101-member universe — both outside the iteration spec's own "fixture-scoped only"
+line. The store has no delete path by design (v1, deliberately), so a QA artifact planted there is
+permanent until someone removes the file by hand. The era-5B scoped-keyless recipe already solves
+this: set `TAPEOLOGY_DESK_PLAYBOOK_DIR` (and the log dirs) to a scratch path for the rig.
+**Applies to:** every browser-QA pass that needs a planted record or a compute — J-04/J-05/J-06
+fixture signals, J-07's back-scan runs, J-08's evidence cells; scope the store env vars before the
+first plant, and never rely on a delete path the design intentionally omits.
+
+## iter-3 — 2026-08-10T21:20:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** `/desk` is now ~37,000px tall with the Playbook section populated, and headless Chrome
+paints blank/black at any deep `scrollTo` and truncates `fullpage:true` captures — so the shipped
+tail sections could not be photographed at all. The working technique (used and documented by the
+browser-qa agent) is to `display:none` the sibling `<section>`s above the target via `eval` for the
+duration of the capture only, never touching source. Every functional assertion still runs against
+the fully-rendered DOM.
+**Applies to:** any iteration adding another `/desk` section (J-07 Backscan, J-08 Playbook
+Evidence) — plan the capture technique up front, and treat a blank deep-scroll screenshot as a
+capture defect to work around, never as evidence of a missing section.

@@ -107,3 +107,36 @@ iter-3 consolidates the three duplicated `1.0 if side == "long" else -1.0` liter
 in `desk_playbook_features.py`, satisfying the evaluator's actual concern (one owner, not three
 copies) without importing an incompatible helper or touching `desk_forward.py`.
 **Reversible:** yes
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** J-03's step 1 in `docs/goal.md` lists the provenance line as "record id, signature,
+parameters hash, fingerprint", but no `parameters_hash` field is served anywhere by
+`desk_playbook.py`/`desk_playbook_compute.py`, and the iteration's IN SCOPE forbids inventing
+fields. `compute_playbook_input_signature`'s own recipe already folds the canonical parameters blob
+(plus bar checksums and the config fingerprint) into `playbook_input_signature`, and the full
+parameters blob is embedded verbatim in every payload. J-03's binding "Acceptance:" paragraph says
+only "provenance", without enumerating fields.
+**We chose:** counted the provenance requirement as MET by record id +
+`playbook_input_signature` + `config_fingerprint` + the rendered sentence stating what the
+signature hashes (visible in `reports/qa/goal-playbook-iter-3-evidence/J-03-TC2-populated-table.png`).
+Rejected the alternative of a client-computed parameters hash, which would compute a served value
+in the browser — the exact single-source-of-truth violation the era's anti-goals forbid. Flagged
+for an owner ruling before J-07/J-08 reuse the same provenance line.
+**Reversible:** yes
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** The browser-QA lane planted a synthetic `payload_version` 1 record into the
+operator's live playbook store (`apps/backend/.data/playbook/playbook-2026-08-04-e0f249f57785.json`)
+to exercise TC-5. `docs/goal.md`'s foundation invariant "no fabricated data" and the critical
+"no recorded playbook file is ever rewritten, backfilled, pruned, or superseded" rail do not say
+whether a self-disclosing test fixture APPENDED to a real store by the verification lane is a
+critical violation (which would force a REGRESSION halt) or a hygiene defect.
+**We chose:** minor, not critical. Nothing was rewritten or perturbed (append only); the record
+declares itself in its own payload (`playbook_input_signature: "bqa-legacy-fixture-signature"`,
+register "…(browser-qa TC-5 fixture)"); it is git-ignored and never left the machine; and the
+critical "evidence pools ONE signature" rail structurally prevents it from ever entering a
+distribution. Recorded as an OPEN minor violation whose fix (delete the file; scope future plants
+to `TAPEOLOGY_DESK_PLAYBOOK_DIR`) is required before the era can be declared achieved.
+**Reversible:** yes

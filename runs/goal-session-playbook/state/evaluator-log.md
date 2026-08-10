@@ -105,3 +105,45 @@ small clean-ups inside the same cycle: write the exact "measurement not recorded
 sentence the goal names, drop the unused import the review flagged, reuse the rail's own long/short
 helper instead of repeating it, and make the baseline-anchor draw safe for setups that can fire more
 than once per symbol in a day before the new setup families arrive.
+
+---
+
+## Iteration 3 — goal-playbook-iter-3
+
+**Date:** 2026-08-10T21:20:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-03 "The Playbook lands on /desk"
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-01 "The signal contract" and J-02 "Every signal measured" passing
+  (re-verified by the test suite this iteration; the browser lane's own rows for them were
+  cut for time and marked DEFERRED-BUDGET); J-04..J-09 failing (not targeted); J-10 "The kept
+  product stands" partial — its browser replay passed again, but its own wording still asks for
+  20 Claude tools and there are 18 until J-09 ships
+- Anti-goal violations: 1 new minor, still open — the browser check wrote a made-up test record
+  into the operator's own local store (`apps/backend/.data/playbook/playbook-2026-08-04-e0f249f57785.json`);
+  it is uncommitted, it labels itself a fixture in its own text, and the "one signature only"
+  rule keeps it out of every distribution, so it is a clean-up, not a corruption
+
+**Reasoning:** I checked the work myself rather than trusting the write-ups. I opened all six
+pictures: the empty panel with a working Run Playbook button, the filled table with a real TXN
+signal (trigger 09:55 ET at 283.17, invalidation 286.48, results across five time horizons beside
+a random-chance row, and an honest "no market bars for this session" line), the "already running"
+refusal shown beside a live progress bar, the market-closed refusal in the backend's own words, and
+a pre-measurement record printing "measurement not recorded in this record" in every result cell. I
+re-ran the entire backend suite to completion: it exited clean, 2044 tests collected, 2036 passed
+and 8 skipped, above the 2025 floor. I asked the running code for the pin (`08e471b10130e1e2`) and
+the Claude tool count (18) directly, and used git to prove the measuring rail file and every other
+protected file have zero changes. The one thing I would not sign off silently: this iteration was
+planned as a deep one and was run in fast mode, so no auditor read it — and the auditor is who
+caught a fabricated opening range the last time detection maths landed.
+
+**Next-step recommendation:** Build J-04 "The continuation family" (jump-base-explosion,
+drop-base-implosion, cup-and-handle) next, and run it as a deep iteration with the auditor. Carry
+three small items inside it: delete the stray made-up test record from the local store and send
+future browser checks to their own scratch folder; settle in writing whether the page's existing
+signature counts as the "parameters hash" the goal names, before the back-scan and evidence pages
+reuse the same provenance line; and re-take pictures of the lower Desk sections, which are now too
+far down a very tall page for the headless browser to photograph.

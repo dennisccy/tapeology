@@ -61,7 +61,7 @@ from .desk_forward import (
     _measure_from,
 )
 from .desk_playbook_detect import detect_opening_range_breaks
-from .desk_playbook_features import baselines, opening_range, rth_session_slice
+from .desk_playbook_features import baselines, opening_range, rth_session_slice, side_sign
 from .desk_sessions import refuse_if_not_a_session
 
 __all__ = [
@@ -409,7 +409,7 @@ def _measure_signal(signal: dict, session_5m: list, session_1m: list) -> tuple[d
     measure_bars, anchor_index, tf_minutes = _measurement_anchor(
         session_5m, session_1m, trigger_idx_5m, signal["trigger_price"]
     )
-    sign = 1.0 if signal["side"] == "long" else -1.0
+    sign = side_sign(signal["side"])
     forward = _measure_from(
         measure_bars, anchor_index, signal["entry"], signal["entry_kind"], tf_minutes, sign
     )
@@ -417,6 +417,25 @@ def _measure_signal(signal: dict, session_5m: list, session_1m: list) -> tuple[d
         measure_bars, anchor_index, signal["invalidation_price"], signal["side"], tf_minutes, forward
     )
     return forward, breached, measure_bars, tf_minutes
+
+
+def _baseline_seed(session_date: str, symbol: str, setup_id: str, firing_index: int) -> str:
+    """The baseline-anchor draw's own seed for ONE signal firing of ``(symbol, setup_id)`` within
+    ``session_date`` -- ``firing_index`` is the running WITHIN-SESSION count of prior firings of
+    this EXACT ``(symbol, setup_id)`` pair (``0`` for the first).
+
+    **The recipe is UNCHANGED -- no discriminator suffix at all -- for ``firing_index == 0``.**
+    Every currently-recordable signal (opening-range-break fires at MOST once per symbol-session,
+    the detector's own mutual-exclusion rule) draws the byte-identical seed it always has, so a
+    fresh compute over already-recorded fixture inputs reproduces byte-identical output before vs.
+    after this change. A detector that CAN fire more than once for the same ``(symbol, setup_id)``
+    in one session (J-04's JBE ladder steps) gets a distinguishing ``:<firing_index>`` suffix from
+    its SECOND firing on, so each firing draws an INDEPENDENT anchor index instead of colliding on
+    the identical one the un-discriminated seed would draw twice -- today this is a genuine no-op
+    (the collision it guards against cannot occur yet), but it must land before J-04 lands a
+    detector that can trigger it."""
+    discriminator = "" if firing_index == 0 else f":{firing_index}"
+    return f"{PLAYBOOK_BASELINE_SEED}:playbook-{session_date}:{symbol}:{setup_id}{discriminator}"
 
 
 def compute_playbook(
@@ -483,6 +502,12 @@ def compute_playbook(
     baseline_pool: dict[str, list[dict]] = {}
     pool_counts: dict[str, int] = {}
     pool_beyond_cap: dict[str, int] = {}
+    # The baseline-draw seed's own per-firing discriminator (see `_baseline_seed`) -- keyed
+    # "<symbol>:<setup_id>", DISTINCT from `pool_counts` above (that one bounds the CROSS-SYMBOL
+    # pooling cap; this one counts how many times THIS symbol's own (symbol, setup_id) pair has
+    # already fired THIS session, currently always 0 since a symbol is walked once and the
+    # opening-range-break detector fires at most one signal per call).
+    firing_counts: dict[str, int] = {}
 
     for symbol in members:
         if should_abort is not None and should_abort():
@@ -550,9 +575,12 @@ def compute_playbook(
             pool_counts[pool_key] = count_so_far + 1
             if count_so_far < DESK_FORWARD_MAX_TOUCHES_PER_ROW:
                 signal_pool.setdefault(pool_key, []).append(forward)
-                sign = 1.0 if signal["side"] == "long" else -1.0
+                sign = side_sign(signal["side"])
+                firing_key = f"{symbol}:{signal['setup_id']}"
+                firing_index = firing_counts.get(firing_key, 0)
+                firing_counts[firing_key] = firing_index + 1
                 rng = random.Random(
-                    f"{PLAYBOOK_BASELINE_SEED}:playbook-{session_date}:{symbol}:{signal['setup_id']}"
+                    _baseline_seed(session_date, symbol, signal["setup_id"], firing_index)
                 )
                 k = min(1, len(measure_bars))  # this symbol's own capped signal count is <= 1
                 for anchor_idx in _draw_anchor_indices(rng, len(measure_bars), k):

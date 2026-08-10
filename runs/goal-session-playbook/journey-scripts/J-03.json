@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "journey": "J-03",
+  "name": "The Playbook lands on /desk",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "journey": "J-03",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Playbook Signals"}
+    },
+    {
+      "n": 2,
+      "journey": "J-03",
+      "action": {
+        "type": "fill",
+        "target": {"testid": "desk-playbook-date-input"},
+        "text": "2024-01-06"
+      }
+    },
+    {
+      "n": 3,
+      "journey": "J-03",
+      "action": {
+        "type": "click",
+        "target": {"role": "button", "name": "Run Playbook"}
+      },
+      "expect": {"text": "is not a recorded trading session"}
+    }
+  ]
+}

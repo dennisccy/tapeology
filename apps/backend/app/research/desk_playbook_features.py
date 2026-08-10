@@ -45,6 +45,7 @@ __all__ = [
     "vertical_move",
     "zone_touches",
     "market_context",
+    "side_sign",
 ]
 
 # Regular trading hours, ET wall-clock -- a market-structure fact, not a tunable (the
@@ -294,3 +295,20 @@ def market_context(
         "close_before": prior[-1].close,
         "bars_available": len(prior),
     }
+
+
+def side_sign(side: str) -> float:
+    """The playbook's OWN long/short directional multiplier: ``+1.0`` for ``"long"``, ``-1.0`` for
+    ``"short"`` -- the single owner of a literal (``1.0 if side == "long" else -1.0``) that used to
+    be written three separate times across ``desk_playbook.py`` (``_measure_signal`` and the
+    baseline-draw branch of ``compute_playbook``) and ``desk_playbook_detect.py``
+    (``_market_block``).
+
+    **Deliberately NOT `desk_forward._side_sign`, and never imported from it.** That helper is
+    built exclusively for the rail's OWN support/resistance wall vocabulary
+    (``-1.0 if side == "resistance" else 1.0``): `desk_forward._side_sign("short")` returns
+    ``+1.0`` (since ``"short" != "resistance"``), which would silently flip every short-side
+    playbook signal's forward return and MDD sign positive -- a fabricated-data bug, not a fix.
+    `desk_forward._measure_from`'s own docstring confirms ``sign`` is a caller-supplied float: each
+    caller computes its OWN sign for its OWN side vocabulary, and this is the playbook's."""
+    return 1.0 if side == "long" else -1.0

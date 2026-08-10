@@ -31,7 +31,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from ..providers.adapters.base import RawBar
-from .desk_playbook_features import market_context, rth_session_slice, vertical_move, zone_touches
+from .desk_playbook_features import (
+    market_context,
+    rth_session_slice,
+    side_sign,
+    vertical_move,
+    zone_touches,
+)
 
 __all__ = ["detect_opening_range_breaks"]
 
@@ -157,7 +163,7 @@ def _market_block(
             "reason": "SPY's own baseline MBR is unavailable -- cannot normalize the market move",
         }
 
-    sign = 1.0 if side == "long" else -1.0
+    sign = side_sign(side)
     move_mbr = mkt["move"] / index_mbr
     signed = sign * move_mbr
     band = params["mkt_neutral_band_mbr"]

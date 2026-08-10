@@ -123,7 +123,7 @@ from .desk_forward import ForwardStore, resolve_desk_forward_dir
 from .desk_forward_compute import DeskForwardComputeManager
 from .desk_forward_log import ForwardRunStore, resolve_desk_forward_log_dir
 from .desk_forward_pins import resolve_desk_forward_pins
-from .desk_playbook import PlaybookSessionRefused, PlaybookStore, resolve_desk_playbook_dir
+from .desk_playbook import PlaybookStore, resolve_desk_playbook_dir
 from .desk_playbook_compute import DeskPlaybookComputeManager
 from .desk_playbook_log import PlaybookRunStore, resolve_desk_playbook_log_dir
 from .desk_screen import ScreenStore, resolve_desk_screen_dir

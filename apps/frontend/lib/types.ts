@@ -1469,6 +1469,173 @@ export interface DeskForwardComputeSnapshot {
   progress: { rows_total: number; rows_done: number; current: string | null };
 }
 
+// --- The Playbook (Era B2, J-01/J-02/J-03) -- GET /research/desk/playbook(?date=|?id=) + its
+// compute trio + its durable run ledger. Every field is `desk_playbook.py`'s/
+// `desk_playbook_compute.py`'s/`desk_playbook_log.py`'s own served shape VERBATIM; nothing here is
+// ever derived client-side. A signal's own `forward` block reuses `DeskForwardTouch` /
+// `DeskForwardHorizonMeasure` VERBATIM (not re-declared as a lookalike): `_measure_signal` measures
+// every playbook signal through the SAME `desk_forward._measure_from` the forward rail's own
+// touches/anchors are measured through, so the shape is byte-identical by construction. ------------
+
+export interface DeskPlaybookGeometry {
+  or_high: number;
+  or_low: number;
+  or_width_mbr: number;
+  or_bars_used: number;
+  opening_range_basis: "1m" | "5m";
+  slots_to_break: number;
+  open_vs_prior_close_pct: number | null;
+}
+
+export interface DeskPlaybookVolume {
+  rvol_trigger_bar: number | null;
+  approach_rvol_max: number | null;
+  spike_into_trigger_verdict: "exhausted_spike" | "constructive" | "neutral";
+  spiky_approach: boolean;
+}
+
+export interface DeskPlaybookMarket {
+  direction: "supportive" | "against" | "neutral" | null;
+  market_move_mbr: number | null;
+  book_would_skip_market: boolean;
+  relative_strength_strong: boolean;
+  source: "SPY";
+  reason: string | null;
+}
+
+export interface DeskPlaybookDisclosures {
+  gapped_beyond_chase: boolean;
+  session_bar_count: number;
+  attempt_count: number;
+  bars_to_close: number;
+  concurrent_signals: string[];
+  euphoria_recent: boolean;
+  capitulation_recent: boolean;
+}
+
+// `_invalidation_breached`'s own flat shape: one boolean per rail horizon label plus `to_close`,
+// and the ONE session-wide `first_breach_minutes` fact every horizon leaf reads (never re-derived
+// per horizon). The index signature covers the per-horizon-label keys (`"1m"`/`"5m"`/`"1h"`/`"4h"`),
+// which vary with the record's own `parameters.rail_horizons_minutes` rather than a hardcoded set.
+export interface DeskPlaybookInvalidationBreached {
+  to_close: boolean;
+  first_breach_minutes: number | null;
+  [horizonLabel: string]: boolean | number | null;
+}
+
+export interface DeskPlaybookSignal {
+  symbol: string;
+  setup_id: string;
+  side: "long" | "short";
+  trigger_ts: string;
+  trigger_price: number;
+  entry: number;
+  entry_kind: "level" | "gap_open";
+  price_low: number;
+  price_high: number;
+  invalidation_price: number;
+  geometry: DeskPlaybookGeometry;
+  volume: DeskPlaybookVolume;
+  market: DeskPlaybookMarket;
+  principles: string[];
+  disclosures: DeskPlaybookDisclosures;
+  // OPTIONAL: absent on a `payload_version` 1 (J-01-era, pre-measurement) record's signal -- the
+  // panel renders the literal "measurement not recorded in this record" string for these, never a
+  // blank or a fabricated value.
+  forward?: DeskForwardTouch;
+  invalidation_breached?: DeskPlaybookInvalidationBreached;
+}
+
+export interface DeskPlaybookAbsence {
+  symbol: string;
+  reason: string;
+}
+
+export interface DeskPlaybookDiagnostic {
+  symbol: string;
+  diagnostic: string;
+  at_utc: string;
+}
+
+// One (setup_id:side) pool's per-measure-key summary cell -- the playbook's OWN `{signals,
+// baseline}` split (its record's own field name is `signals`, never `touches` -- the forward
+// rail's vocabulary for a wall's price touches has no playbook analogue).
+export interface DeskPlaybookSummaryCell {
+  signals: DeskForwardAvgCell;
+  baseline: DeskForwardAvgCell;
+}
+
+// The parameters blob embedded verbatim in every record AND hashed into `playbook_input_signature`
+// -- ~45 pre-registered constants (docs/playbook-detector-spec.md). Only the two fields the UI
+// actually reads are named; the rest stay reachable through the index signature rather than being
+// individually re-declared for no reader (nothing here is rendered as arithmetic in any case).
+export interface DeskPlaybookParameters {
+  setups: string[];
+  rail_horizons_minutes: [string, number][];
+  // The rail's own measure-key shape, echoed verbatim (DESK_FORWARD_MEASURE_KEYS) -- the ONE list
+  // every `summary`/`baseline_anchors` pool cell is keyed by; read here rather than re-derived
+  // client-side from `rail_horizons_minutes` (the `forwardMeasureKeys` precedent this section
+  // deliberately does NOT repeat, since the backend already serves the exact list it used).
+  signal_measures: string[];
+  [key: string]: unknown;
+}
+
+export interface DeskPlaybookRecord {
+  id: string;
+  session_date: string;
+  config_fingerprint: string;
+  playbook_input_signature: string;
+  payload_version: number;
+  parameters: DeskPlaybookParameters;
+  register: string;
+  recorded_at: string;
+  signals: DeskPlaybookSignal[];
+  absences: DeskPlaybookAbsence[];
+  diagnostics: DeskPlaybookDiagnostic[];
+  baseline_anchors: Record<string, DeskForwardTouch[]>;
+  summary: Record<string, Record<string, DeskPlaybookSummaryCell>>;
+  signals_beyond_cap: Record<string, number>;
+}
+
+// `GET /research/desk/playbook?date=` -- mirrors `DeskForwardReadResult`'s shape. `versions` is
+// OMITTED by the `?id=` read (the record it names either exists or it doesn't; "how many versions
+// this date has ever accumulated" is a `?date=`-only question) -- never fabricated as 0/1 there.
+export interface DeskPlaybookReadResult {
+  playbook: DeskPlaybookRecord | null;
+  versions?: number;
+}
+
+export interface DeskPlaybookComputeSnapshot {
+  status: "idle" | "running" | "cancelling" | "done" | "error";
+  session_date: string | null;
+  signals_done: number;
+  signals_total: number;
+  error: string | null;
+}
+
+// One terminal playbook-compute attempt, from the durable append-only run log -- survives the
+// compute manager's process-scoped snapshot (the `DeskForwardRun` precedent). Never `"cancelled"`:
+// a cancelled playbook run is never logged at all (`desk_playbook_log.py`'s own terminal-excludes-
+// cancelled contract).
+export interface DeskPlaybookRun {
+  run_id: string;
+  session_date: string;
+  config_fingerprint: string;
+  playbook_input_signature: string | null;
+  started_at: string;
+  finished_at: string;
+  outcome: "recorded" | "reused" | "refused_non_session" | "failed";
+  signals_recorded: number;
+  playbook_id: string | null;
+  error: string | null;
+}
+
+export interface DeskPlaybookRunsListResult {
+  runs: DeskPlaybookRun[];
+  latest: DeskPlaybookRun | null;
+  integrity_errors: { file: string; error: string }[];
+}
+
 // ONE registered universe membership snapshot's own served meta -- `UniverseStore.record`'s return
 // value verbatim (desk_universe.py's `meta` dict), which `POST /research/desk/universe/fetch`
 // serves under its `universe` key. Every field is the store's own; nothing here is derived. The

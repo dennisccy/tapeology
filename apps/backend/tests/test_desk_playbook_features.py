@@ -20,6 +20,7 @@ from app.research.desk_playbook_features import (
     market_context,
     opening_range,
     rth_session_slice,
+    side_sign,
     swing_pivots,
     vertical_move,
     zone_touches,
@@ -305,3 +306,21 @@ def test_market_context_computes_the_move_once_enough_bars_exist():
     assert result == {
         "move": pytest.approx(0.6), "close_before": pytest.approx(400.9), "bars_available": 10,
     }
+
+
+# --- side_sign (goal-playbook-iter-3, J-03: the one owner of the playbook's own long/short sign) ---
+
+
+def test_side_sign_long_is_positive_and_short_is_negative():
+    assert side_sign("long") == 1.0
+    assert side_sign("short") == -1.0
+
+
+def test_side_sign_is_never_desk_forwards_side_sign():
+    """Deliberately NOT `desk_forward._side_sign` -- that helper is built for the rail's OWN
+    support/resistance vocabulary and returns +1.0 for "short" (since "short" != "resistance"),
+    which would silently flip every short-side playbook signal's sign positive."""
+    from app.research.desk_forward import _side_sign as rail_side_sign
+
+    assert rail_side_sign("short") == 1.0  # the rail's own answer -- proves the two must differ
+    assert side_sign("short") == -1.0

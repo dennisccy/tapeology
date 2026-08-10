@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 from datetime import datetime
 
 import pytest
@@ -25,13 +26,18 @@ from app.research import desk_playbook as desk_playbook_module
 from app.research import desk_playbook_detect as desk_playbook_detect_module
 from app.research import desk_playbook_features as desk_playbook_features_module
 from app.research.bars import BarStore
-from app.research.desk_forward import DESK_FORWARD_MAX_TOUCHES_PER_ROW, _measure_from
+from app.research.desk_forward import (
+    DESK_FORWARD_MAX_TOUCHES_PER_ROW,
+    _draw_anchor_indices,
+    _measure_from,
+)
 from app.research.desk_playbook import (
     PLAYBOOK_REGISTER,
     PlaybookAlreadyRecorded,
     PlaybookIntegrityError,
     PlaybookSessionRefused,
     PlaybookStore,
+    _baseline_seed,
     _invalidation_breached,
     _measure_signal,
     _measurement_anchor,
@@ -417,6 +423,100 @@ def test_playbook_register_passes_copy_discipline():
     assert find_violations(PLAYBOOK_REGISTER) == []
 
 
+# --- goal-playbook-iter-3 (J-03): the sign-duplication consolidation (TC-10) -----------------------
+
+import re as _re  # noqa: E402 -- kept local to this guard section, mirroring the test's own scope
+
+
+def _strip_python_docstrings_and_comments(source: str) -> str:
+    """A source-introspection guard must scan CODE, not the prose that explains it -- this
+    module's own `side_sign` docstring necessarily discusses the literal it replaces and the
+    rail's `_side_sign` it is deliberately NOT, which would otherwise false-positive the very
+    guards below (the ``test_desk_ui_guards.py``/``test_desk_refresh_chain_guard.py``
+    comment-stripping precedent, applied to Python: triple-quoted docstrings and ``#`` comments
+    are removed; ordinary single/double-quoted string literals in real code are left alone)."""
+    without_triple = _re.sub(r'"""(?:.|\n)*?"""', "", source)
+    without_triple = _re.sub(r"'''(?:.|\n)*?'''", "", without_triple)
+    return _re.sub(r"#[^\n]*", "", without_triple)
+
+
+def test_no_playbook_module_still_writes_the_inline_sign_literal():
+    """The one owner is now `desk_playbook_features.side_sign` -- the literal
+    ``1.0 if side == "long" else -1.0`` (in either quote style) must appear nowhere in
+    `desk_playbook.py`'s or `desk_playbook_detect.py`'s own CODE any more (every former call site
+    -- `desk_playbook.py`'s `_measure_signal` and `compute_playbook`'s baseline-draw branch,
+    `desk_playbook_detect.py`'s `_market_block` -- now calls `side_sign` instead), and appears
+    EXACTLY ONCE in `desk_playbook_features.py` -- `side_sign`'s own function body, the single
+    canonical implementation the other two modules now call instead of repeating."""
+    literal_variants = (
+        '1.0 if side == "long" else -1.0',
+        "1.0 if side == 'long' else -1.0",
+        '1.0 if signal["side"] == "long" else -1.0',
+    )
+    for module in (desk_playbook_module, desk_playbook_detect_module):
+        source = _strip_python_docstrings_and_comments(open(module.__file__, encoding="utf-8").read())
+        for literal in literal_variants:
+            assert literal not in source, (
+                f"{module.__file__} still writes the inline sign literal {literal!r} -- it must "
+                "call desk_playbook_features.side_sign instead (the single owner)"
+            )
+
+    features_source = _strip_python_docstrings_and_comments(
+        open(desk_playbook_features_module.__file__, encoding="utf-8").read()
+    )
+    assert features_source.count('1.0 if side == "long" else -1.0') == 1, (
+        "the literal must appear EXACTLY ONCE in desk_playbook_features.py -- side_sign's own "
+        "single canonical implementation, never a second copy"
+    )
+
+
+def test_no_playbook_module_imports_desk_forwards_side_sign():
+    """`desk_forward._side_sign` is built exclusively for the rail's own support/resistance
+    vocabulary -- importing it into a playbook module's CODE would silently flip every short
+    signal's sign positive (see `side_sign`'s own docstring, which is exactly why this scan strips
+    docstrings before looking). Zero diff to `desk_forward.py` itself."""
+    for module in (desk_playbook_module, desk_playbook_detect_module, desk_playbook_features_module):
+        source = _strip_python_docstrings_and_comments(open(module.__file__, encoding="utf-8").read())
+        assert "_side_sign" not in source, (
+            f"{module.__file__} references _side_sign in its own code -- the playbook must use its "
+            "OWN desk_playbook_features.side_sign, never desk_forward's"
+        )
+
+
+def test_measure_signal_and_baseline_draw_both_call_the_shared_side_sign():
+    """Counter-test: proves the source-scan above actually distinguishes the fixed source from the
+    old, un-consolidated one -- a literal reintroduced anywhere in real CODE (not merely prose) is
+    still caught after stripping."""
+    seeded_source = 'sign = 1.0 if signal["side"] == "long" else -1.0\n'
+    stripped = _strip_python_docstrings_and_comments(seeded_source)
+    assert '1.0 if signal["side"] == "long" else -1.0' in stripped
+
+    seeded_docstring_only = '"""mentions 1.0 if side == "long" else -1.0 in prose only."""\n'
+    assert '1.0 if side == "long" else -1.0' not in _strip_python_docstrings_and_comments(
+        seeded_docstring_only
+    )
+
+    playbook_source = open(desk_playbook_module.__file__, encoding="utf-8").read()
+    assert playbook_source.count("side_sign(signal[\"side\"])") == 2  # _measure_signal + baseline draw
+    detect_source = open(desk_playbook_detect_module.__file__, encoding="utf-8").read()
+    assert "side_sign(side)" in detect_source
+
+
+# --- goal-playbook-iter-3 (J-03): desk_routes.py drops the unused import (TC-13) --------------------
+
+
+def test_desk_routes_no_longer_imports_playbook_session_refused():
+    """`PlaybookSessionRefused` is caught internally by `desk_playbook_compute.py`, never by the
+    route layer -- the import at `desk_routes.py` was dead. The app still starts and serves
+    cleanly with it removed."""
+    from app.research import desk_routes as desk_routes_module
+
+    source = open(desk_routes_module.__file__, encoding="utf-8").read()
+    assert "PlaybookSessionRefused" not in source
+    response = TestClient(app).get("/research/desk/playbook")
+    assert response.status_code == 200
+
+
 # --- J-02: measurement -- convention identity (TC-1) --------------------------------------------
 
 
@@ -522,6 +622,86 @@ def test_baseline_anchors_are_seeded_and_reproducible(tmp_path, bar_store, unive
     pool = first["baseline_anchors"]["open_high_break:long"]
     assert len(pool) == 1  # k = min(this symbol's 1 signal, session bar count)
     assert pool[0]["entry_kind"] == "close"
+
+
+def test_baseline_seed_at_firing_index_zero_matches_the_original_recipe_literal():
+    """TC-12: `firing_index=0`'s seed carries NO discriminator suffix at all -- byte-identical to
+    the pre-fix literal recipe (`f"{PLAYBOOK_BASELINE_SEED}:playbook-{session_date}:{symbol}:
+    {setup_id}"`)."""
+    seed0 = _baseline_seed(SESSION_DATE, "AAA", "open_high_break", 0)
+    assert seed0 == f"1729:playbook-{SESSION_DATE}:AAA:open_high_break"
+    from app.research.desk_forward import DESK_FORWARD_BASELINE_SEED
+
+    assert seed0 == f"{DESK_FORWARD_BASELINE_SEED}:playbook-{SESSION_DATE}:AAA:open_high_break"
+
+
+def test_single_firing_baseline_draw_uses_firing_index_zero(monkeypatch, tmp_path, bar_store, universe_store):
+    """TC-12: every currently-recordable signal (opening-range-break fires at most once per
+    symbol-session) draws its baseline anchor at `firing_index=0` -- the ONE case
+    `_baseline_seed` reproduces byte-identically to the pre-fix recipe (the test above). Combined,
+    these two prove the seed-collision fix is a genuine no-op for any signal this iteration's
+    detectors can actually produce."""
+    _plant_baseline_sessions(bar_store, "AAA")
+    _plant_firing_session(bar_store, "AAA")
+    calls: list[tuple] = []
+    original = desk_playbook_module._baseline_seed
+
+    def _spy(session_date, symbol, setup_id, firing_index):
+        calls.append((session_date, symbol, setup_id, firing_index))
+        return original(session_date, symbol, setup_id, firing_index)
+
+    monkeypatch.setattr(desk_playbook_module, "_baseline_seed", _spy)
+    compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+    assert calls == [(SESSION_DATE, "AAA", "open_high_break", 0)]
+
+
+def test_seed_collision_fix_reproduces_byte_identical_output_for_recordable_data(
+    tmp_path, bar_store, universe_store
+):
+    """TC-12: record the canonical single-fire fixture, then run a FRESH compute over the identical
+    inputs post-fix -- every byte of the result (especially `baseline_anchors`/`summary`) matches,
+    and re-recording under the identical key is refused (the same file, never a new version); the
+    original file on disk is untouched."""
+    store, meta = _record_aaa(tmp_path, bar_store, universe_store)
+    path = store._path(meta["id"])
+    before = _sha256_file(path)
+
+    fresh = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+    assert fresh["baseline_anchors"] == meta["baseline_anchors"]
+    assert fresh["summary"] == meta["summary"]
+    assert fresh["signals"] == meta["signals"]
+
+    with pytest.raises(PlaybookAlreadyRecorded):
+        store.record(**fresh)
+    assert _sha256_file(path) == before
+
+
+def test_two_firings_of_the_same_symbol_setup_pair_draw_independent_non_colliding_anchors():
+    """TC-11: a synthetic fixture where the SAME (symbol, setup_id) pair fires TWICE within one
+    session -- each firing's own seed differs (`firing_index` 0 vs 1) and the anchor indices they
+    draw differ too, so the baseline pool genuinely grows to reflect BOTH independent draws instead
+    of the identical index being drawn twice (today's actual walk cannot yet produce two firings of
+    one symbol -- opening-range-break fires at most once per symbol-session -- so this fixture
+    exercises the seed/draw machinery directly, exactly as the DoD frames it: a no-op today, load-
+    bearing the moment a detector CAN fire twice for one (symbol, setup_id))."""
+    measure_bars = [
+        _bar("AAA", "5m", E_OPEN + i * 300.0, 100.0 + i, 100.5 + i, 99.5 + i, 100.2 + i)
+        for i in range(20)
+    ]
+    pool: list[dict] = []
+    seeds: list[str] = []
+    for firing_index in range(2):
+        seed = _baseline_seed(SESSION_DATE, "AAA", "open_high_break", firing_index)
+        seeds.append(seed)
+        rng = random.Random(seed)
+        (anchor_idx,) = _draw_anchor_indices(rng, len(measure_bars), 1)
+        anchor_bar = measure_bars[anchor_idx]
+        pool.append(_measure_from(measure_bars, anchor_idx, anchor_bar.close, "close", 5, 1.0))
+
+    assert seeds[0] != seeds[1]  # no seed collision -- the discriminator changed the seed
+    assert seeds[1] == f"{seeds[0]}:1"
+    assert len(pool) == 2  # the baseline pool grew to reflect both independent draws
+    assert pool[0]["at_utc"] != pool[1]["at_utc"]  # the two draws landed on different anchor bars
 
 
 def test_baseline_anchors_unchanged_by_an_unrelated_zero_signal_symbol(tmp_path, bar_store):

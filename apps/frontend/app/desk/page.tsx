@@ -25,8 +25,13 @@ import {
   fetchDeskSessions,
   fetchDeskTopupCompute,
   fetchDeskTopupRuns,
+  cancelDeskPlaybookCompute,
+  fetchDeskPlaybook,
+  fetchDeskPlaybookCompute,
+  fetchDeskPlaybookRuns,
   triggerDeskDeepBackfillCompute,
   triggerDeskForwardCompute,
+  triggerDeskPlaybookCompute,
   triggerDeskReconcileCompute,
   triggerDeskScreenCompute,
   triggerDeskTopupCompute,
@@ -45,6 +50,14 @@ import type {
   DeskForwardRun,
   DeskForwardRunsListResult,
   DeskForwardTouch,
+  DeskPlaybookAbsence,
+  DeskPlaybookComputeSnapshot,
+  DeskPlaybookReadResult,
+  DeskPlaybookRecord,
+  DeskPlaybookRun,
+  DeskPlaybookRunsListResult,
+  DeskPlaybookSignal,
+  DeskPlaybookSummaryCell,
   DeskReconcileComputeSnapshot,
   DeskReconcileDrift,
   DeskReconcileRun,
@@ -3682,6 +3695,40 @@ function validateScreenDayRange(
   };
 }
 
+// goal-playbook-iter-3 (J-03): a single-date variant of `validateScreenDayRange` above -- the
+// Playbook Signals section takes ONE session date, not a range, so the two-bound machinery above
+// does not apply. Blank resolves to the newest date PROVEN by `sessionsResult`'s own recorded-
+// session set (already fetched at mount for the history calendar, read through
+// `provenSessionWindow` exactly as the calendar does) -- deliberately NOT `nextTradingStamp()`
+// (screen's OWN "the upcoming session, whether or not it has traded yet" default): a playbook
+// needs bars that already exist to detect against, so its blank default is the newest date proven
+// to have them, never a future guess. A well-formed but not-yet-proven date is still accepted here
+// (this function only checks the STRING is a real calendar day) -- whether it is actually a
+// recorded trading session is the backend's own call, surfaced verbatim from a Run Playbook click
+// against it, never pre-empted by a client-authored guess (see the Playbook Signals section's own
+// non-session-refusal handling).
+function validatePlaybookSessionDay(
+  raw: string,
+  sessionsResult: { ok: boolean; data: DeskSessionsResult | null } | null,
+): { error: string | null; date: string | null } {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    const window = provenSessionWindow(sessionsResult);
+    if (window === null || window.sessions.size === 0) {
+      return { error: null, date: null }; // nothing recorded yet to default to -- an honest null
+    }
+    return { error: null, date: [...window.sessions].sort().at(-1) ?? null };
+  }
+  if (!isRealCalendarDay(trimmed)) {
+    return {
+      error:
+        "Enter the session date as a real yyyy-MM-dd, or leave it blank for the most recent recorded session.",
+      date: null,
+    };
+  }
+  return { error: null, date: trimmed };
+}
+
 // Step labels follow the day(s) a RUN actually submitted — a copy choice only, never a derived
 // backend fact. A single-day run for today keeps the shipped label byte-identical.
 function refreshChainStepLabel(key: RefreshChainStepKey, run: RefreshChainRun): string {
@@ -4335,6 +4382,695 @@ function DeskPopulatedScreen({
 
 // --- The page --------------------------------------------------------------------------------------
 
+// --- Playbook Signals (Era B2, J-01/J-02/J-03) -- goal-playbook-iter-3: the FIRST time
+// GET /research/desk/playbook's already-shipped (J-01/J-02) shapes render anywhere in the UI.
+// Rendered as its OWN, self-contained section BELOW every shipped /desk section (Blueprint's own
+// pre-planned placement) -- it owns its own session-date input (blank = the most recent RECORDED
+// session, never "today") and its own compute trigger/poll/cancel trio, entirely independent of
+// the screen history's displayed snapshot and NOT wired into the refresh chain above. A signal's
+// own `forward` block is measured through the identical `desk_forward._measure_from` call the
+// forward rail's own touches/anchors are measured through, so its shape is byte-identical to
+// `DeskForwardTouch` by construction -- this section reuses `ForwardTouchTable`/
+// `ForwardTouchMeasureCells`/`ForwardAvgCellView` VERBATIM for it rather than re-declaring a
+// lookalike renderer, which is also what keeps every `touchRow.*`/`touchValue.*`/`avgCell.*`
+// price-arithmetic guard binding covering this section's forward cells with zero new bindings to
+// introduce for them. -------------------------------------------------------------------------------
+
+const PLAYBOOK_LEGACY_ABSENCE = "measurement not recorded in this record";
+
+function playbookSetupLabel(setupId: string): string {
+  if (setupId === "open_high_break") return "Open-High Break";
+  if (setupId === "open_low_break") return "Open-Low Break";
+  return setupId;
+}
+
+function playbookHorizonLabels(record: DeskPlaybookRecord): string[] {
+  return record.parameters.rail_horizons_minutes.map(([label]) => label);
+}
+
+function playbookPoolKey(signal: DeskPlaybookSignal): string {
+  return `${signal.setup_id}:${signal.side}`;
+}
+
+// The signals table's own row identity -- (trigger_ts, symbol, setup_id) is unique within one
+// record even once a future detector (J-04) can fire more than once for the same symbol in a
+// session, since each firing has its own trigger_ts.
+function playbookSignalKey(signal: DeskPlaybookSignal): string {
+  return `${signal.trigger_ts}:${signal.symbol}:${signal.setup_id}`;
+}
+
+type PlaybookControlProps = {
+  compute: DeskPlaybookComputeSnapshot | null;
+  onTrigger: () => void;
+  triggering: boolean;
+  triggerError: string | null;
+  onCancel: () => void;
+  cancelRequested: boolean;
+  cancelError: string | null;
+  sessionDate: string | null;
+};
+
+// Mirrors `DeskForwardComputeControl` in shape, adapted to `desk_playbook_compute.py`'s own
+// snapshot fields (`status`/`session_date`/`signals_done`/`signals_total`/`error` -- NOT the
+// forward manager's `state`/`progress.rows_*` shape, a genuinely different served contract).
+function DeskPlaybookComputeControl({
+  compute,
+  onTrigger,
+  triggering,
+  triggerError,
+  onCancel,
+  cancelRequested,
+  cancelError,
+  sessionDate,
+}: PlaybookControlProps) {
+  const isRunning = compute?.status === "running" || compute?.status === "cancelling";
+  const isError = compute?.status === "error";
+  const buttonLabel = isRunning ? "Computing…" : isError ? "Retry Run Playbook" : "Run Playbook";
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {isError && compute?.error && (
+        <p data-testid="desk-playbook-compute-error" className="text-xs text-red-300">
+          {compute.error}
+        </p>
+      )}
+      {triggerError && (
+        <p data-testid="desk-playbook-compute-trigger-error" className="text-xs text-red-300">
+          {triggerError}
+        </p>
+      )}
+      {compute?.status === "done" && (
+        <p data-testid="desk-playbook-compute-outcome" className="text-xs text-slate-500">
+          Playbook run complete for {compute.session_date}.
+        </p>
+      )}
+      <button
+        type="button"
+        data-testid="desk-playbook-compute-button"
+        onClick={onTrigger}
+        disabled={triggering || isRunning || sessionDate === null}
+        className={PRIMARY_BUTTON_CLASS}
+      >
+        {buttonLabel}
+      </button>
+      {isRunning && (
+        <div data-testid="desk-playbook-compute-running" className="mt-1 flex flex-col items-center gap-1">
+          <p data-testid="desk-playbook-compute-progress" className="text-xs text-amber-200/70">
+            <span
+              aria-hidden="true"
+              className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle"
+            />
+            {compute.signals_done} / {compute.signals_total} member(s) walked
+          </p>
+          <button
+            type="button"
+            data-testid="desk-playbook-compute-cancel"
+            onClick={onCancel}
+            disabled={cancelRequested || compute?.status === "cancelling"}
+            className={CANCEL_BUTTON_CLASS}
+          >
+            {cancelRequested || compute?.status === "cancelling"
+              ? "Cancelling — finishing the current member…"
+              : "Cancel"}
+          </button>
+          {cancelError && (
+            <p data-testid="desk-playbook-compute-cancel-error" className="text-xs text-red-300">
+              {cancelError}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One signal's forward measurement, rendered through the SAME touch-table renderer the Forward
+// Returns panel already uses. `forward` is absent on a `payload_version` 1 (pre-measurement)
+// record's signal -- the legacy-absence literal, never blank or a fabricated value.
+function PlaybookSignalForward({ signal, labels }: { signal: DeskPlaybookSignal; labels: string[] }) {
+  if (signal.forward === undefined) {
+    return (
+      <p data-testid="desk-playbook-signal-forward-absent" className="text-xs text-amber-200/70">
+        {PLAYBOOK_LEGACY_ABSENCE}
+      </p>
+    );
+  }
+  return (
+    <ForwardTouchTable
+      touches={[signal.forward]}
+      labels={labels}
+      testid="desk-playbook-signal-forward-table"
+    />
+  );
+}
+
+function PlaybookInvalidationBreachedNote({
+  signal,
+  labels,
+}: {
+  signal: DeskPlaybookSignal;
+  labels: string[];
+}) {
+  const breached = signal.invalidation_breached;
+  if (breached === undefined) {
+    return (
+      <p data-testid="desk-playbook-signal-breach-absent" className="text-xs text-amber-200/70">
+        {PLAYBOOK_LEGACY_ABSENCE}
+      </p>
+    );
+  }
+  const marks = [...labels, "to_close"].map(
+    (label) => `${label}: ${breached[label] === true ? "breached" : "not breached"}`,
+  );
+  return (
+    <p data-testid="desk-playbook-signal-breach" className="text-xs text-slate-400">
+      {marks.join(" · ")}
+      {breached.first_breach_minutes !== null &&
+        ` · first breach at ${breached.first_breach_minutes} min`}
+    </p>
+  );
+}
+
+function PlaybookSignalDetail({
+  record,
+  signal,
+  labels,
+}: {
+  record: DeskPlaybookRecord;
+  signal: DeskPlaybookSignal;
+  labels: string[];
+}) {
+  const { geometry, volume, market, disclosures } = signal;
+  const poolKey = playbookPoolKey(signal);
+  return (
+    <div
+      data-testid="desk-playbook-signal-detail"
+      className="rounded border border-slate-800 bg-slate-900/40 px-3 py-2"
+    >
+      <p className="text-xs text-slate-400">
+        <span className="font-mono text-slate-200">{signal.symbol}</span>{" "}
+        <span className={CHIP_CLASS}>{playbookSetupLabel(signal.setup_id)}</span>{" "}
+        <span className={CHIP_CLASS}>{signal.side}</span> trigger{" "}
+        <span className="font-mono" title={String(signal.trigger_price)}>
+          {fmt(signal.trigger_price)}
+        </span>{" "}
+        at {formatTimeET(signal.trigger_ts)} ET · entry{" "}
+        <span className="font-mono">{fmt(signal.entry)}</span> ({signal.entry_kind}) · invalidation{" "}
+        <span className="font-mono" title={String(signal.invalidation_price)}>
+          {fmt(signal.invalidation_price)}
+        </span>
+      </p>
+      <p className="mt-1 text-[11px] text-slate-500">
+        opening range {fmt(geometry.or_low)}–{fmt(geometry.or_high)} ({geometry.opening_range_basis}{" "}
+        basis, {geometry.or_bars_used} bars) · width {fmt(geometry.or_width_mbr)} MBR · broke at
+        slot {geometry.slots_to_break}
+        {geometry.open_vs_prior_close_pct !== null &&
+          ` · open vs prior close ${fmt(geometry.open_vs_prior_close_pct)}%`}
+      </p>
+      <p className="mt-1 text-[11px] text-slate-500">
+        volume: {volume.spike_into_trigger_verdict}
+        {volume.rvol_trigger_bar !== null && ` · trigger RVOL ${fmt(volume.rvol_trigger_bar)}`}
+        {volume.approach_rvol_max !== null && ` · approach RVOL max ${fmt(volume.approach_rvol_max)}`}
+        {volume.spiky_approach && " · spiky approach into the trigger"}
+      </p>
+      <p className="mt-1 text-[11px] text-slate-500">
+        market (SPY): {market.direction ?? "unavailable"}
+        {market.market_move_mbr !== null && ` · move ${fmt(market.market_move_mbr)} MBR`}
+        {market.relative_strength_strong && " · relative strength strong"}
+        {market.reason !== null && ` · ${market.reason}`}
+      </p>
+      <p className="mt-1 text-[11px] text-slate-500">
+        {disclosures.gapped_beyond_chase && "gapped beyond chase · "}
+        {disclosures.attempt_count} approach attempt(s) · {disclosures.bars_to_close} bar(s) to
+        close
+        {disclosures.euphoria_recent && " · euphoria recent"}
+        {disclosures.capitulation_recent && " · capitulation recent"}
+      </p>
+      {signal.principles.length > 0 && (
+        <p className="mt-1 text-[11px] text-slate-500">principles: {signal.principles.join(", ")}</p>
+      )}
+      <div className="mt-2">
+        <p className="mb-1 text-[11px] font-medium text-slate-500">forward measurement</p>
+        <PlaybookSignalForward signal={signal} labels={labels} />
+      </div>
+      <div className="mt-2">
+        <p className="mb-1 text-[11px] font-medium text-slate-500">invalidation disclosure</p>
+        <PlaybookInvalidationBreachedNote signal={signal} labels={labels} />
+      </div>
+      <p data-testid="desk-playbook-signal-baseline-note" className="mt-2 text-[11px] text-slate-500">
+        {signal.forward === undefined
+          ? PLAYBOOK_LEGACY_ABSENCE
+          : `baseline: ${(record.baseline_anchors[poolKey] ?? []).length} anchor(s) recorded for ` +
+            `the ${poolKey} pool — see the summary below`}
+      </p>
+    </div>
+  );
+}
+
+function PlaybookSignalRow({
+  signal,
+  selected,
+  onSelect,
+}: {
+  signal: DeskPlaybookSignal;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <tr
+      data-testid="desk-playbook-signal-row"
+      onClick={onSelect}
+      aria-selected={selected}
+      className={`cursor-pointer border-t border-slate-800/60 transition-colors hover:bg-slate-800/40 ${
+        selected ? "bg-slate-800/60" : ""
+      }`}
+    >
+      <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-symbol">
+        <span className="font-mono text-xs text-slate-200">{signal.symbol}</span>
+      </td>
+      <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-setup">
+        <span className={CHIP_CLASS}>{playbookSetupLabel(signal.setup_id)}</span>
+      </td>
+      <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-side">
+        <span className={CHIP_CLASS}>{signal.side}</span>
+      </td>
+      <td className={ROW_LABEL_CELL} title={`${signal.trigger_ts} (raw UTC record)`}>
+        {formatTimeET(signal.trigger_ts)}
+      </td>
+      <td className={ROW_NUMERIC_CELL} title={String(signal.trigger_price)}>
+        {fmt(signal.trigger_price)}
+      </td>
+      <td className={ROW_NUMERIC_CELL} title={String(signal.invalidation_price)}>
+        {fmt(signal.invalidation_price)}
+      </td>
+      <td className={ROW_LABEL_CELL}>{signal.entry_kind}</td>
+    </tr>
+  );
+}
+
+function PlaybookSignalsTable({
+  record,
+  labels,
+  selectedSignalKey,
+  onSelectSignal,
+}: {
+  record: DeskPlaybookRecord;
+  labels: string[];
+  selectedSignalKey: string | null;
+  onSelectSignal: (key: string | null) => void;
+}) {
+  if (record.signals.length === 0) {
+    return (
+      <EmptyState testid="desk-playbook-signals-empty" title="No signals fired in this session." />
+    );
+  }
+  return (
+    <div
+      data-testid="desk-playbook-table-scroll"
+      className="max-h-[26rem] overflow-x-auto overflow-y-auto rounded border border-slate-800"
+    >
+      <table data-testid="desk-playbook-table" className="w-full border-collapse">
+        <thead className="sticky top-0 z-10 bg-slate-900">
+          <tr>
+            <th className={ROW_HEADER_CELL_LEFT}>symbol</th>
+            <th className={ROW_HEADER_CELL_LEFT}>setup</th>
+            <th className={ROW_HEADER_CELL_LEFT}>side</th>
+            <th className={ROW_HEADER_CELL_LEFT}>trigger (ET)</th>
+            <th className={ROW_HEADER_CELL}>trigger price</th>
+            <th className={ROW_HEADER_CELL}>invalidation price</th>
+            <th className={ROW_HEADER_CELL_LEFT}>entry</th>
+          </tr>
+        </thead>
+        <tbody>
+          {/* rows render in the SAME order the record itself serves them (trigger ts, symbol) —
+              never sorted, reversed, or re-sliced client-side. */}
+          {record.signals.map((signal) => {
+            const key = playbookSignalKey(signal);
+            return (
+              <PlaybookSignalRow
+                key={key}
+                signal={signal}
+                selected={key === selectedSignalKey}
+                onSelect={() => onSelectSignal(key === selectedSignalKey ? null : key)}
+              />
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PlaybookAbsencesTable({ absences }: { absences: DeskPlaybookAbsence[] }) {
+  return (
+    <div data-testid="desk-playbook-absences" className="overflow-x-auto">
+      <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+        Absences ({absences.length})
+      </h3>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-slate-800">
+            <th className={HEADER_CELL_LEFT}>symbol</th>
+            <th className={HEADER_CELL_LEFT}>reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {absences.map((absence) => (
+            <tr
+              key={absence.symbol}
+              data-testid="desk-playbook-absence-row"
+              className="border-t border-slate-800/60"
+            >
+              <td className={LABEL_CELL}>{absence.symbol}</td>
+              <td className={LABEL_CELL}>{absence.reason}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// The measure cells for ONE summary line (signals or baseline) — reuses `ForwardAvgCellView`
+// VERBATIM (the `avgCell` binding the price-arithmetic guard already covers).
+function PlaybookSummaryCells({
+  pool,
+  source,
+  measureKeys,
+}: {
+  pool: Record<string, DeskPlaybookSummaryCell>;
+  source: "signals" | "baseline";
+  measureKeys: string[];
+}) {
+  return (
+    <>
+      {measureKeys.map((measureKey) => (
+        <ForwardAvgCellView
+          key={measureKey}
+          cell={pool[measureKey]?.[source] ?? null}
+          measureKey={measureKey}
+        />
+      ))}
+    </>
+  );
+}
+
+function PlaybookSummaryView({ record }: { record: DeskPlaybookRecord }) {
+  const measureKeys = record.parameters.signal_measures;
+  const poolKeys = Object.keys(record.summary);
+  if (poolKeys.length === 0) return null;
+  return (
+    <div data-testid="desk-playbook-summary" className="overflow-x-auto">
+      <p className="mb-1 text-[11px] text-slate-500">
+        signals vs the seeded random-minute baseline — mean (%), untruncated pools only. Both lines
+        carry the same sign (long positive, short negative), so a signal row above its baseline row
+        beat a random minute of the same session.
+      </p>
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr>
+            <th className={ROW_HEADER_CELL_LEFT}>setup : side</th>
+            <th className={ROW_HEADER_CELL_LEFT}>source</th>
+            {measureKeys.map((measureKey) => (
+              <th key={measureKey} className={ROW_HEADER_CELL}>
+                {forwardMeasureShortHeader(measureKey)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {poolKeys.map((poolKey) => (
+            <Fragment key={poolKey}>
+              <tr data-testid="desk-playbook-summary-signals" className="border-t border-slate-800/60">
+                <td className={ROW_BADGE_CELL} rowSpan={2}>
+                  <span className={CHIP_CLASS}>{poolKey}</span>
+                  {(record.signals_beyond_cap[poolKey] ?? 0) > 0 && (
+                    <span className="ml-1 text-[10px] text-amber-200/70">
+                      +{record.signals_beyond_cap[poolKey]} beyond cap
+                    </span>
+                  )}
+                </td>
+                <td className={`${ROW_BADGE_CELL} text-[11px] text-slate-300`}>signals</td>
+                <PlaybookSummaryCells
+                  pool={record.summary[poolKey]}
+                  source="signals"
+                  measureKeys={measureKeys}
+                />
+              </tr>
+              <tr data-testid="desk-playbook-summary-baseline" className="border-t border-slate-800/40">
+                <td className={`${ROW_BADGE_CELL} text-[11px] text-slate-500`}>baseline</td>
+                <PlaybookSummaryCells
+                  pool={record.summary[poolKey]}
+                  source="baseline"
+                  measureKeys={measureKeys}
+                />
+              </tr>
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function playbookRunOutcomeText(run: DeskPlaybookRun): string {
+  if (run.outcome === "failed") return run.error ?? "failed — no detail recorded";
+  if (run.outcome === "refused_non_session") return run.error ?? "refused — not a recorded session";
+  return run.outcome === "reused" ? `reused ${run.playbook_id}` : `recorded ${run.playbook_id}`;
+}
+
+// Mirrors `ForwardRunsNote` — the durable run log surviving the compute manager's process-scoped
+// snapshot (a cancelled run leaves no row at all here — `desk_playbook_log.py`'s own contract).
+function PlaybookRunsNote({
+  result,
+}: {
+  result: { ok: boolean; data: DeskPlaybookRunsListResult | null; error?: string } | null;
+}) {
+  if (result === null || !result.ok || result.data === null) return null;
+  const runs = result.data.runs;
+  if (runs.length === 0) {
+    return (
+      <p data-testid="desk-playbook-runs-empty" className="text-[11px] text-slate-500">
+        No playbook compute for this session has ever finished — nothing has been attempted, or an
+        attempt ended before it could record anything.
+      </p>
+    );
+  }
+  return (
+    <details data-testid="desk-playbook-runs" className="text-[11px] text-slate-500">
+      <summary className="cursor-pointer">
+        {runs.length} recorded compute attempt{runs.length === 1 ? "" : "s"} for this session
+      </summary>
+      <div className="mt-1 overflow-x-auto">
+        <table data-testid="desk-playbook-runs-table" className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-slate-800">
+              <th className={HEADER_CELL_LEFT}>started</th>
+              <th className={HEADER_CELL_LEFT}>outcome</th>
+              <th className={HEADER_CELL}>signals</th>
+              <th className={HEADER_CELL_LEFT}>produced</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.map((run) => (
+              <tr
+                key={run.run_id}
+                data-testid="desk-playbook-run-row"
+                className="border-t border-slate-800/60"
+              >
+                <td className={LABEL_CELL} title={`${run.started_at} (raw UTC record)`}>
+                  {formatDateTimeET(run.started_at)}
+                </td>
+                <td className={LABEL_CELL}>{run.outcome}</td>
+                <td className={ROW_NUMERIC_CELL} data-testid="desk-playbook-run-signals">
+                  {run.signals_recorded}
+                </td>
+                <td className={LABEL_CELL} data-testid="desk-playbook-run-outcome">
+                  {playbookRunOutcomeText(run)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
+function PlaybookRecordView({
+  result,
+  runsResult,
+  control,
+  selectedSignalKey,
+  onSelectSignal,
+}: {
+  result: { ok: boolean; data: DeskPlaybookReadResult | null; error?: string } | null;
+  runsResult: { ok: boolean; data: DeskPlaybookRunsListResult | null; error?: string } | null;
+  control: PlaybookControlProps;
+  selectedSignalKey: string | null;
+  onSelectSignal: (key: string | null) => void;
+}) {
+  if (control.sessionDate === null) {
+    return (
+      <UnavailablePanel
+        testid="desk-playbook-no-session"
+        message="No recorded trading session is on file yet to default the date to — enter one explicitly."
+      />
+    );
+  }
+  if (result === null) {
+    return <LoadingPanel testid="desk-playbook-loading" />;
+  }
+  if (!result.ok || result.data === null) {
+    return (
+      <UnavailablePanel
+        testid="desk-playbook-unavailable"
+        message={result.error ?? "The playbook record could not be loaded."}
+      />
+    );
+  }
+  const record = result.data.playbook;
+  if (record === null) {
+    return (
+      <div
+        data-testid="desk-playbook-not-computed"
+        className="rounded-lg border border-amber-800/60 bg-amber-900/20 px-4 py-6 text-center"
+      >
+        <p className="text-sm font-medium text-amber-300">Playbook not computed for this session.</p>
+        <p className="mt-1 text-xs text-amber-200/70">
+          Run Playbook detects and measures the opening-range-break family on{" "}
+          {control.sessionDate}&apos;s own recorded bars — an explicit operator act, nothing runs on
+          page load.
+        </p>
+        <div className="mt-3 space-y-1 text-left">
+          <PlaybookRunsNote result={runsResult} />
+        </div>
+        <div className="mt-3 flex justify-center">
+          <DeskPlaybookComputeControl {...control} />
+        </div>
+      </div>
+    );
+  }
+  const labels = playbookHorizonLabels(record);
+  const selectedSignal =
+    selectedSignalKey === null
+      ? null
+      : record.signals.find((signal) => playbookSignalKey(signal) === selectedSignalKey) ?? null;
+  return (
+    <div data-testid="desk-playbook-record" className="space-y-3">
+      <div data-testid="desk-playbook-meta" className="grid grid-cols-1 gap-1 sm:grid-cols-3">
+        <Metric label="Record" value={record.id} />
+        <Metric label="Recorded at" value={formatDateTimeET(record.recorded_at)} />
+        <Metric label="Session date" value={record.session_date} />
+      </div>
+      <div data-testid="desk-playbook-provenance" className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+        <Metric label="Playbook input signature" value={record.playbook_input_signature} />
+        <Metric label="Config fingerprint" value={record.config_fingerprint} />
+      </div>
+      <p data-testid="desk-playbook-signature-note" className="text-[11px] text-slate-600">
+        The input signature hashes every member&apos;s (and SPY&apos;s) recorded bar checksums, the
+        config fingerprint, and the full parameters blob — every threshold this record used — so a
+        changed constant re-keys and mints a new version rather than rewriting this one.
+      </p>
+      {record.payload_version === 1 && (
+        <p data-testid="desk-playbook-legacy-record-note" className="text-xs text-amber-200/70">
+          This record predates measurement — {PLAYBOOK_LEGACY_ABSENCE} for any of its signals; only
+          detection fields are available.
+        </p>
+      )}
+      {(result.data.versions ?? 0) > 1 && (
+        <p data-testid="desk-playbook-versions" className="text-[11px] text-slate-500">
+          showing the newest recorded result of {result.data.versions} — earlier versions stay on
+          file (new bars or a parameters change re-key the inputs; nothing is rewritten)
+        </p>
+      )}
+      <p data-testid="desk-playbook-counts" className="text-[11px] text-slate-500">
+        {record.signals.length} signal(s) · {record.absences.length} absence(s) · click a row for
+        its full disclosures and forward measurement
+      </p>
+      <PlaybookSummaryView record={record} />
+      <PlaybookSignalsTable
+        record={record}
+        labels={labels}
+        selectedSignalKey={selectedSignalKey}
+        onSelectSignal={onSelectSignal}
+      />
+      {selectedSignal !== null && (
+        <PlaybookSignalDetail record={record} signal={selectedSignal} labels={labels} />
+      )}
+      {record.absences.length > 0 && <PlaybookAbsencesTable absences={record.absences} />}
+      <p
+        data-testid="desk-playbook-register"
+        className="rounded border border-amber-800/60 bg-amber-900/20 px-2 py-1.5 text-[11px] text-amber-200"
+      >
+        {record.register}
+      </p>
+      <PlaybookRunsNote result={runsResult} />
+      <div className="flex justify-center">
+        <DeskPlaybookComputeControl {...control} />
+      </div>
+    </div>
+  );
+}
+
+function PlaybookSection({
+  dateInput,
+  onDateInputChange,
+  validated,
+  result,
+  runsResult,
+  control,
+  selectedSignalKey,
+  onSelectSignal,
+}: {
+  dateInput: string;
+  onDateInputChange: (value: string) => void;
+  validated: { error: string | null; date: string | null };
+  result: { ok: boolean; data: DeskPlaybookReadResult | null; error?: string } | null;
+  runsResult: { ok: boolean; data: DeskPlaybookRunsListResult | null; error?: string } | null;
+  control: PlaybookControlProps;
+  selectedSignalKey: string | null;
+  onSelectSignal: (key: string | null) => void;
+}) {
+  return (
+    <div data-testid="desk-playbook-section" className="space-y-3">
+      <p className="max-w-3xl text-sm text-slate-500">
+        The book&apos;s opening-range-break signals, detected on this session&apos;s own recorded
+        5m/1m bars and measured with the desk forward rail&apos;s own conventions — read verbatim
+        from GET /research/desk/playbook. Nothing here is recomputed in the browser.
+      </p>
+      <div className="flex flex-col items-center gap-1">
+        <label className="flex flex-col items-center gap-1">
+          <span className="text-[11px] font-medium text-slate-500">
+            Session date (yyyy-MM-dd) — blank = the most recent recorded session
+          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            data-testid="desk-playbook-date-input"
+            value={dateInput}
+            onChange={(e) => onDateInputChange(e.target.value)}
+            placeholder="yyyy-MM-dd"
+            aria-invalid={validated.error !== null}
+            className={`${ASOF_INPUT_CLASS} ${validated.error !== null ? "border-amber-500" : ""}`}
+          />
+        </label>
+        {validated.error !== null && (
+          <p data-testid="desk-playbook-date-error" className="max-w-md text-center text-xs text-amber-300">
+            {validated.error}
+          </p>
+        )}
+      </div>
+      <PlaybookRecordView
+        result={result}
+        runsResult={runsResult}
+        control={control}
+        selectedSignalKey={selectedSignalKey}
+        onSelectSignal={onSelectSignal}
+      />
+    </div>
+  );
+}
+
 export default function DeskPage() {
   const [screenResult, setScreenResult] = useState<{
     ok: boolean;
@@ -4511,6 +5247,32 @@ export default function DeskPage() {
   // effect, no fetch; the census stays at eleven effects). Reset inside the forward GET effect.
   const [selectedForwardSymbol, setSelectedForwardSymbol] = useState<string | null>(null);
 
+  // goal-playbook-iter-3 (J-03): the Playbook Signals section's own state — entirely independent
+  // of the screen history/forward-returns state above, and NOT wired into the refresh chain below
+  // (a playbook run is its own explicit operator act on its OWN session date, never a sixth chain
+  // step). `playbookDateInput` is the raw text field; `validatePlaybookSessionDay` (a derived
+  // value, never an effect — the `dayRange`/`validateScreenDayRange` precedent) resolves it
+  // against `sessionsResult` (already fetched above for the history calendar) to the date a
+  // read/run actually targets.
+  const [playbookDateInput, setPlaybookDateInput] = useState("");
+  const [playbookResult, setPlaybookResult] = useState<{
+    ok: boolean;
+    data: DeskPlaybookReadResult | null;
+    error?: string;
+  } | null>(null);
+  const [playbookRunsResult, setPlaybookRunsResult] = useState<{
+    ok: boolean;
+    data: DeskPlaybookRunsListResult | null;
+    error?: string;
+  } | null>(null);
+  const [playbookCompute, setPlaybookCompute] = useState<DeskPlaybookComputeSnapshot | null>(null);
+  const [playbookTriggering, setPlaybookTriggering] = useState(false);
+  const [playbookTriggerError, setPlaybookTriggerError] = useState<string | null>(null);
+  const [playbookCancelRequested, setPlaybookCancelRequested] = useState(false);
+  const [playbookCancelError, setPlaybookCancelError] = useState<string | null>(null);
+  const [selectedPlaybookSignal, setSelectedPlaybookSignal] = useState<string | null>(null);
+  const playbookValidated = validatePlaybookSessionDay(playbookDateInput, sessionsResult);
+
   // The chained refresh (see the REFRESH-CHAIN block above). `refreshChain` is plain state and is
   // deliberately NOT persisted: a reload clears it and nothing resumes, which is what keeps "every
   // run is an explicit operator act" true structurally rather than by convention. Whatever job was
@@ -4588,6 +5350,13 @@ export default function DeskPage() {
     });
     fetchDeskForwardCompute().then((result) => {
       if (alive && result.ok) setForwardCompute(result.data);
+    });
+    // goal-playbook-iter-3 (J-03): seeds the Playbook Signals compute control mid-job or
+    // post-terminal without a spurious extra click — the same mount-seed precedent every other
+    // compute manager's snapshot above already follows, joined into this SAME effect (the page's
+    // effect census is pinned; see test_desk_refresh_chain_guard.py).
+    fetchDeskPlaybookCompute().then((result) => {
+      if (alive && result.ok) setPlaybookCompute(result.data);
     });
     return () => {
       alive = false;
@@ -5554,6 +6323,60 @@ export default function DeskPage() {
     return () => clearInterval(handle);
   }, [forwardCompute, displayedSnapshot]);
 
+  // goal-playbook-iter-3 (J-03): the resolved-date-keyed reads — this session's own playbook
+  // record and its durable run ledger. A GET only, refetched whenever the raw INPUT or the proven
+  // session window changes (the latter only matters while the field is blank, so a blank input
+  // adopts the newest recorded session the moment `sessionsResult` itself resolves after mount).
+  useEffect(() => {
+    setSelectedPlaybookSignal(null);
+    if (playbookValidated.date === null) {
+      setPlaybookResult(null);
+      setPlaybookRunsResult(null);
+      return;
+    }
+    let alive = true;
+    const date = playbookValidated.date;
+    fetchDeskPlaybook({ date }).then((result) => {
+      if (alive) setPlaybookResult(result);
+    });
+    fetchDeskPlaybookRuns(date).then((result) => {
+      if (alive) setPlaybookRunsResult(result);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [playbookValidated.date]);
+
+  // Poll the playbook compute job while running/cancelling — mirrors the forward-compute poll
+  // above (700ms, ONE terminal refetch of the resolved date's own record + run ledger). A
+  // completed CANCEL reverts the snapshot straight to "idle" with no distinct terminal state of
+  // its own (`desk_playbook_compute.py`'s own contract) — covered here since neither "running" nor
+  // "cancelling" matches that shape any more, so the poll simply stops and the terminal-refetch
+  // branch below never fires for a cancel (nothing was ever recorded for one; refetching would
+  // show nothing new anyway).
+  useEffect(() => {
+    if (playbookCompute?.status !== "running" && playbookCompute?.status !== "cancelling") return;
+    const date = playbookValidated.date;
+    const handle = setInterval(async () => {
+      const next = await fetchDeskPlaybookCompute();
+      if (!next.ok) return;
+      setPlaybookCompute(next.data);
+      const settled =
+        next.data !== null && next.data.status !== "running" && next.data.status !== "cancelling";
+      if (settled && date !== null) {
+        const refreshed = await fetchDeskPlaybook({ date });
+        setPlaybookResult((previous) =>
+          refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
+        );
+        const runs = await fetchDeskPlaybookRuns(date);
+        setPlaybookRunsResult((previous) =>
+          runs.ok || previous === null || !previous.ok ? runs : previous,
+        );
+      }
+    }, 700);
+    return () => clearInterval(handle);
+  }, [playbookCompute, playbookValidated.date]);
+
   // Forward-test era: the compute trigger/cancel pair — exact mirrors of the screen pair above,
   // placed here (after `displayedSnapshot`) because the no-argument form submits the DISPLAYED
   // snapshot's own id. Reachable from the panel's buttons and from the refresh chain's fifth
@@ -5593,6 +6416,64 @@ export default function DeskPage() {
       setForwardCancelError(result.error ?? "The forward compute could not be cancelled.");
     }
   }
+
+  // goal-playbook-iter-3 (J-03): trigger/cancel — mirrors handleTriggerForward/handleCancelForward
+  // in shape, submitting the RESOLVED playbook date rather than a screen id. Single-flight is
+  // PROCESS-WIDE here (`desk_playbook_compute.py`'s own manager, never per-session-date): a second
+  // click while ANY playbook compute is running is REFUSED and the refusal is surfaced, never
+  // silently adopted as though it had started a run for THIS date (unlike the refresh chain's own
+  // "joined a job already running" adoption elsewhere on this page — TC-3 asks for a refusal here,
+  // not a join). Takes no argument (unlike `handleTriggerForward(screenId?)`, which is also called
+  // from the refresh chain with an explicit id) — the playbook section has no such second caller.
+  async function handleTriggerPlaybook() {
+    if (playbookValidated.date === null) {
+      setPlaybookTriggerError(
+        playbookValidated.error ??
+          "Enter a session date, or leave it blank once a session is recorded.",
+      );
+      return;
+    }
+    const date = playbookValidated.date;
+    setPlaybookTriggering(true);
+    setPlaybookTriggerError(null);
+    const result = await triggerDeskPlaybookCompute(date);
+    setPlaybookTriggering(false);
+    if (!result.ok || result.data === undefined) {
+      setPlaybookTriggerError(result.error ?? "The playbook compute could not be started.");
+      return;
+    }
+    setPlaybookCompute(result.data.compute);
+    if (!result.data.started) {
+      const runningDate = result.data.compute.session_date;
+      setPlaybookTriggerError(
+        runningDate !== null && runningDate !== date
+          ? `Refused — a playbook compute is already running for ${runningDate}. Wait for it to ` +
+              "finish, then try again."
+          : "Refused — a playbook compute is already running. Wait for it to finish, then try again.",
+      );
+    }
+  }
+
+  async function handleCancelPlaybook() {
+    setPlaybookCancelRequested(true);
+    setPlaybookCancelError(null);
+    const result = await cancelDeskPlaybookCompute();
+    if (!result.ok) {
+      setPlaybookCancelRequested(false);
+      setPlaybookCancelError(result.error ?? "The playbook compute could not be cancelled.");
+    }
+  }
+
+  const playbookControlProps: PlaybookControlProps = {
+    compute: playbookCompute,
+    onTrigger: handleTriggerPlaybook,
+    triggering: playbookTriggering,
+    triggerError: playbookTriggerError,
+    onCancel: handleCancelPlaybook,
+    cancelRequested: playbookCancelRequested,
+    cancelError: playbookCancelError,
+    sessionDate: playbookValidated.date,
+  };
 
   const forwardControlProps: ForwardControlProps = {
     compute: forwardCompute,
@@ -5727,6 +6608,27 @@ export default function DeskPage() {
             </Panel>
           </section>
         )}
+
+        {/* goal-playbook-iter-3 (J-03): the Playbook Signals section, rendered BELOW every shipped
+            section above (screen history, forward returns, refresh chain, briefing, skipped,
+            runs/pins/compare/provenance) — Blueprint's own pre-planned placement for this exact
+            section. Rendered unconditionally (its own session-date input resolves independently of
+            whatever screen snapshot is currently displayed above), the SAME "always rendered"
+            precedent Top-up Runs/Index Reconciliation/Screen Runs already establish. */}
+        <section aria-label="Playbook Signals" className="mt-6">
+          <Panel title="Playbook Signals">
+            <PlaybookSection
+              dateInput={playbookDateInput}
+              onDateInputChange={setPlaybookDateInput}
+              validated={playbookValidated}
+              result={playbookResult}
+              runsResult={playbookRunsResult}
+              control={playbookControlProps}
+              selectedSignalKey={selectedPlaybookSignal}
+              onSelectSignal={setSelectedPlaybookSignal}
+            />
+          </Panel>
+        </section>
       </main>
     </div>
   );
