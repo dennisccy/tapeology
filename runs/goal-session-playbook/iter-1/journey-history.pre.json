@@ -3,11 +3,11 @@
     "J-01": {
       "id": "J-01",
       "name": "The signal contract — opening-range breaks end to end, lookahead-clean and pre-registered",
-      "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-1",
-      "last_passing_iter": "goal-playbook-iter-1",
+      "status": "failing",
+      "last_verified_iter": "goal-playbook-iter-0",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-1-qa.md#test-case-coverage-tc-1-through-tc-16",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-0-evidence/J-01-route-404.png",
       "spec_hash": "338cba3f562bbb5b9c4fc0736b6a6744f16cc67a6560373adeb93eaa50d9d3a5"
     },
     "J-02": {
@@ -101,21 +101,6 @@
       "spec_hash": "47f9a7c5f21a5d62c711ac8436d731206791d63d71eea86377d27366ad1f1242"
     }
   },
-  "anti_goal_violations": [
-    {
-      "iter": "goal-playbook-iter-1",
-      "anti_goal": "no fabricated data (Foundation invariants / Era-1-2 constitution) — and T-5 'Fail closed, disclose the absence'",
-      "severity": "critical",
-      "evidence": "apps/backend/app/research/desk_playbook_features.py:123 — the 5m opening-range fallback sliced session_5m[:3] positionally, so a session whose 09:30/09:35 bars are missing was served an 'opening range' built from 09:40/09:45/09:50 and disclosed as genuine (basis '5m'), plus a signal derived from it. Found and FIXED inside this iteration by the auditor (docs/handoffs/goal-playbook-iter-1-audit.md sections 2/B1 and 4); both bases now filter to the same 09:30..09:45 epoch window and a gapped session yields the honest absence row. Regression test apps/backend/tests/test_desk_playbook_features.py:117. Independently re-verified by the evaluator: fix line present, test present, 43/43 playbook tests pass, full suite 1969 pass / 8 skip.",
-      "resolved": true
-    },
-    {
-      "iter": "goal-playbook-iter-1",
-      "anti_goal": "No threshold exists outside the spec, and no code path sweeps one — 'Every detector rule and threshold exists in docs/playbook-detector-spec.md BEFORE the code that uses it'",
-      "severity": "minor",
-      "evidence": "apps/backend/app/research/desk_playbook_detect.py:276 — `principles = [\"P4\"] if spike_verdict == \"constructive\" else []`. Spec section 3.1 (docs/playbook-detector-spec.md:219) states only 'Principles: P4 when pre-break pullbacks were shallow and dry, else structural-only' with no mechanical definition; the code settles that rule by reusing section 0's `constructive` discriminator (docs/playbook-detector-spec.md:104). No new threshold is invented and no sweep exists (structural guard test passes), and the field gates nothing — it is a disclosure label only. Filed by the auditor as B4 (auditor recorded being unsure between GAP and IMPORTANT). Needs an owner ruling written into the spec before J-08 groups evidence by principle.",
-      "resolved": false
-    }
-  ],
-  "updated_at": "2026-08-10T11:05:00Z"
+  "anti_goal_violations": [],
+  "updated_at": "2026-08-10T07:12:37Z"
 }

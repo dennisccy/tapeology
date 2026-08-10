@@ -1,40 +1,40 @@
 # Iteration State — playbook
 
-**After iteration:** 0 · **Date:** 2026-08-10 · **Verdict:** CONTINUE
+**After iteration:** 1 · **Date:** 2026-08-10 · **Verdict:** CONTINUE
 
 ## Journeys
 
-0 passing · 9 failing (J-01..J-09, none started) · 1 partial (J-10 kept-product sentinel: kept
-half verified, its "MCP = 20 tools" clause needs J-09) — 10 total
+1 passing (J-01) · 8 failing (J-02..J-09, unstarted) · 1 partial (J-10 sentinel — its "MCP = 20 tools" clause needs J-09) — 10 total
 
 ## Active blockers
 
-- none human-owned. All dev work; J-01 unblocks J-02..J-09
-  (`apps/backend/app/research/desk_playbook*.py` — none of these files exist yet).
+- none human-owned. All dev work; J-02 (measurement) is the next link.
+- Evidence debt: J-10's golden replay (`journey-scripts/J-10.json`) was NOT run in iter-1 — the
+  browser lane self-skips on `Frontend Present: no`. Ask for it explicitly next iteration.
+- Housekeeping: iter-1's 7 product files are still UNCOMMITTED (HEAD = iter-0 showcase commit).
 
 ## Last 2 verdicts
 
-- iter 0: CONTINUE — verified-absent baseline; 9 journeys honestly failing, kept product intact.
-- iter -1: n/a — first evaluated iteration.
+- iter 1: CONTINUE — J-01 verified passing (43 new tests, suite 1969/8, route probed live); audit
+  found+fixed a fabricated-opening-range bug in-iteration; 8 journeys still unbuilt.
+- iter 0: CONTINUE — verified-absent baseline; 9 journeys failing, kept product intact.
 
 ## Do not redo
 
-- Baseline recorded; do NOT re-probe whether the playbook exists. Verified absent: no
-  `desk_playbook*.py` under `apps/backend/app/research/`, no `/research/desk/playbook*` route
-  (404), 0 "playbook" strings in `apps/frontend/app/desk/page.tsx` + `lib/api.ts`, no fixture.
-- Era-open floor recorded — do not re-derive: suite **1926 pass / 8 skip**, `config_fingerprint`
-  **`08e471b10130e1e2`**, era-open SHA **`ed87dcac4a76f801b3d2d31c382e7e6d667f4057`**,
-  MCP `EXPECTED_TOOLS` = 18, nav = 3 routes.
-- `runs/goal-session-playbook/state/blueprint.md` is drafted and accepted (3-route nav; 6 future
-  playbook Data-Contract rows, one owner + one endpoint each) — do not redraft it.
-- `runs/goal-session-playbook/journey-scripts/J-10.json` exists and lints clean — extend, never
-  rewrite.
-- J-10 is `partial` BY DESIGN until J-09 ships — do not plan an iteration to "fix" J-10. Caution:
-  a `partial` sentinel will NOT auto-trip the regression halt, so treat any break in the cockpit,
-  `/structure`, or a shipped `/desk` section as a stop-and-review regardless.
+- J-01 is DONE and verified — do not rebuild `desk_playbook_features.py` (8 primitives),
+  `desk_playbook_detect.py` (open_high/low_break), or `desk_playbook.py` (spec §1 constants,
+  parameters+signature, `PlaybookStore`, `compute_playbook`) + `GET /research/desk/playbook`.
+- Fixed, do not re-fix: `opening_range`'s 5m fallback now filters to the 09:30–09:45 window
+  (`desk_playbook_features.py:123`) + test at `tests/test_desk_playbook_features.py:117`.
+- Floors re-verified in iter-1 — do not re-derive: suite **1969 pass / 8 skip**, fingerprint
+  **`08e471b10130e1e2`**, MCP still **18** tools, nav = 3 routes, zero diff on `desk_forward.py`,
+  `desk_screen*.py`, `setups.py`, `bars.py`, `levels.py`, `config.py`, `mcp/__init__.py`, frontend.
+- J-10 is `partial` BY DESIGN until J-09 — never plan an iteration to "fix" it; a `partial`
+  sentinel will NOT auto-trip the regression halt: treat ANY kept-surface break as stop-and-review.
 
 ## Next target
 
-- J-01 only (`desk_playbook_features.py` + `desk_playbook_detect.py` + `desk_playbook.py` +
-  `PlaybookStore` + `GET /research/desk/playbook`), at **full** depth — new store format + the
-  era's first new research math. Required-still-passing: J-10.
+- J-02 only (imported-rail measurement: `_measure_from`, `invalidation_breached`, seeded anchors,
+  `desk_playbook_compute.py` trio + CLI, `desk_playbook_log.py`), **full** depth. Required-still-
+  passing: J-10 — its replay MUST run. Carry in: 3 audit test gaps (T1/T3) + owner rulings on spec
+  §1's `PLAYBOOK_OR_MIN_1M_BARS` row and §3.1's P4 rule (B3/B4).

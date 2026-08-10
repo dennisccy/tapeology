@@ -33,3 +33,35 @@ what the previous era's baseline did with its own sentinel journey.
 it creates a new permanent record format and the era's first new calculation rules. Keep J-10 and
 today's floor (1926 passing / 8 skipped, fingerprint `08e471b10130e1e2`, era-open commit
 `ed87dcac4a76f801b3d2d31c382e7e6d667f4057`) on the must-still-pass list every iteration.
+
+---
+
+## Iteration 1 — goal-playbook-iter-1
+
+**Date:** 2026-08-10T11:05:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-01 "The signal contract"
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-02..J-09 failing (not targeted); J-10 "The kept product stands" partial
+- Anti-goal violations: 1 critical, found AND fixed inside this iteration (fabricated opening
+  range on a gapped session — `desk_playbook_features.py:123`, resolved); 1 minor, still open
+  (a detector rule settled in code instead of in the spec — `desk_playbook_detect.py:276`)
+
+**Reasoning:** I checked the work myself instead of trusting the write-ups. I ran the 43 new tests
+(all pass), ran the whole suite (1969 passed, 8 skipped), asked the new data address four different
+ways and read every answer, and used git to confirm that none of the protected files and none of
+the website files changed. J-01 is genuinely done. The audit step caught one real honesty bug
+before it could spread: a session missing its first few bars was being given a made-up opening
+price range that looked exactly like a real one; it now says honestly that it cannot build one, and
+a test locks that in. I kept J-10 "The kept product stands" at partly-done rather than passing,
+because the browser check that was supposed to prove it was never run this time.
+
+**Next-step recommendation:** Build J-02 "Every signal measured" next, at full depth — it is the
+step that measures what price did after each signal, and it must reuse the desk's existing
+measuring rules rather than write a second copy. Ask it explicitly to also run the kept-product
+browser check that was skipped this time, to add the three missing tests the audit listed, and to
+get two wording decisions written into the detector spec. Also commit iteration 1's seven files
+before the next iteration starts.
