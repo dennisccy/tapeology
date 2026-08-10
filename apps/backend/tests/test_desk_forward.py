@@ -971,6 +971,119 @@ def test_recorded_file_round_trips_byte_identical(env):
     assert _canonical(records[0]["summary"]) == _canonical(result["summary"])
 
 
+# --- the targeted reads: only the files a screen's own date prefix names --------------------------
+# `newest_for_screen`/`find_by_key` opened and verified EVERY recorded record to hand back one of
+# them -- the read behind a `/desk` history click. They now open only the candidate files a screen's
+# own date prefix names; these pin the equivalence with the full scan they replaced.
+
+
+def test_newest_for_screen_and_find_by_key_match_the_full_scan_expressions(env):
+    """Both answers -- including the ``versions`` count -- are computed BOTH ways here: the
+    ``list()``-then-filter expression these two replaced, and the targeted read itself."""
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0), _above_band_bar("AAA", 1)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    result = compute_forward(screen, bar_store, CONFIG.config_fingerprint())
+    versions = [
+        forward_store.record(**{**result, "forward_input_signature": signature})
+        for signature in ("sig-1", "sig-2", "sig-3")
+    ]
+    # A SECOND screen carrying its own record under a signature one of the above also uses: "this
+    # screen's versions" must be a real narrowing, and the 2-pin key a real pair.
+    other_screen = screen_store.record(
+        screen_date=SCREEN_DATE, as_of=AS_OF, universe_snapshot_id="universe-test",
+        config_fingerprint=CONFIG.config_fingerprint(), bar_store_signature="sig-b",
+        rows=[_screen_row("AAA", "support")], skipped=[],
+    )
+    other = forward_store.record(
+        **{**result, "screen_id": other_screen["id"], "forward_input_signature": "sig-1"}
+    )
+
+    records, errors = forward_store.list()
+    assert errors == [] and len(records) == 4
+    matching = [record for record in records if record["screen_id"] == screen["id"]]
+
+    newest, count = forward_store.newest_for_screen(screen["id"])
+    assert _canonical(newest) == _canonical(matching[-1])
+    assert count == len(matching) == 3
+    assert newest["id"] == max(versions, key=lambda r: (r["created_utc"], r["id"]))["id"]
+
+    for record in versions + [other]:
+        key = (record["screen_id"], record["forward_input_signature"])
+        by_scan = next(
+            (r for r in records if (r["screen_id"], r["forward_input_signature"]) == key), None
+        )
+        assert _canonical(forward_store.find_by_key(*key)) == _canonical(by_scan)
+    assert forward_store.find_by_key(screen["id"], "sig-never-recorded") is None
+
+
+def test_a_malformed_or_unknown_screen_id_is_an_honest_absence(env):
+    """A screen id is an ADDRESS -- a version's filename inherits the date inside it -- so an id
+    carrying no parseable date can name no recordable screen at all. Both reads say so plainly,
+    ``(None, 0)`` / ``None``, rather than raising or walking the store to find out."""
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    forward_store.record(**compute_forward(screen, bar_store, CONFIG.config_fingerprint()))
+
+    assert forward_store.newest_for_screen("screen-nope") == (None, 0)
+    assert forward_store.newest_for_screen("screen-2026-13-99-000000000000") == (None, 0)
+    assert forward_store.newest_for_screen("screen-2026-06-23-000000000000") == (None, 0)
+    assert forward_store.find_by_key("screen-nope", "sig-a") is None
+    assert forward_store.find_by_key(screen["id"], "never-recorded") is None
+
+
+def test_record_refuses_a_screen_date_that_disagrees_with_its_screen_id(env):
+    """A version is ADDRESSED by the date its screen id carries -- that is what lets a screen's
+    versions be found without opening the whole store -- so a pair that does NOT agree would record
+    a file its own dedup lookup could never find again. Refused loudly, and nothing is written."""
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    result = compute_forward(screen, bar_store, CONFIG.config_fingerprint())
+
+    with pytest.raises(ValueError) as excinfo:
+        forward_store.record(**{**result, "screen_date": "2026-06-23"})
+    assert screen["id"] in str(excinfo.value)
+    assert list(forward_store.root.glob("*.json")) == []
+
+    with pytest.raises(ValueError):
+        forward_store.record(**{**result, "screen_id": "screen-nope"})
+    assert list(forward_store.root.glob("*.json")) == []
+
+    forward_store.record(**result)  # the agreeing pair still records normally
+    assert len(list(forward_store.root.glob("*.json"))) == 1
+
+
+def test_prune_for_screen_refuses_to_remove_a_corrupt_file_and_is_empty_for_an_unknown_screen(env):
+    """``prune_for_screen`` removes only REGISTERED records, and a file that failed its integrity
+    check is not one (``_records_for_screen`` withholds it exactly as ``list`` does). A damaged file
+    therefore keeps being surfaced honestly instead of being quietly swept away by a supersede; an
+    unknown screen id -- parseable or not -- is a plain empty list, never an error."""
+    bar_store, screen_store, forward_store = env
+    _plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0), _above_band_bar("AAA", 1)])
+    screen = _record_screen(screen_store, [_screen_row("AAA", "support")])
+    result = compute_forward(screen, bar_store, CONFIG.config_fingerprint())
+    healthy = forward_store.record(**{**result, "forward_input_signature": "sig-1"})
+    damaged = forward_store.record(**{**result, "forward_input_signature": "sig-2"})
+
+    path = forward_store.root / f"{damaged['id']}.json"
+    payload = json.loads(path.read_text())
+    payload["record"]["meta"]["screen_date"] = "1999-01-01"  # tamper -- the checksum now disagrees
+    path.write_text(json.dumps(payload))
+    damaged_bytes = path.read_bytes()
+
+    assert forward_store.prune_for_screen("screen-2026-06-22-notrecorded") == []
+    assert forward_store.prune_for_screen("screen-nope") == []
+
+    assert forward_store.prune_for_screen(screen["id"]) == [healthy["id"]]
+    assert not (forward_store.root / f"{healthy['id']}.json").exists()
+    assert path.read_bytes() == damaged_bytes, "the damaged file must be left exactly as found"
+    records, errors = forward_store.list()
+    assert records == []
+    assert [e["file"] for e in errors] == [path.name]
+
+
 # --- the durable run ledger (forward-test era) -------------------------------------------------------
 # The store's own discipline lives in test_desk_forward_log.py; these prove the SHARED WRITER
 # contract -- that `record_forward_run` is reached from inside `run_forward_and_record`, the ONE
@@ -1464,6 +1577,41 @@ def test_forward_pins_names_a_screen_date_past_the_last_recorded_daily_bar(tmp_p
     )
 
     assert pins["session"]["state"] == "after_recorded_evidence"
+
+
+def test_forward_pins_reads_one_snapshot_and_never_walks_the_screen_store(tmp_path, monkeypatch):
+    """The preflight resolves ONE named snapshot, so it opens that snapshot's own file -- never a
+    ``ScreenStore.list`` that verifies every recorded screen to hand back one of them (a read this
+    route paid for on every ``/desk`` page load). ``list`` is poisoned to prove that structurally,
+    and the served body is compared against the ``list()``-then-``next()`` expression it replaced."""
+    bar_store, screen_store, forward_store, bar_index = _pins_env(tmp_path)
+    bar_index.insert(_plant(bar_store, "AAA", "1m", [_in_band_bar("AAA", 0)]))
+    screen = _record_screen(
+        screen_store, [_screen_row("AAA", "support"), _screen_row("NOFINE", "support")]
+    )
+
+    records, _errors = screen_store.list()
+    by_scan = next((record for record in records if record["id"] == screen["id"]), None)
+    assert by_scan is not None
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("resolve_desk_forward_pins must never walk the screen store")
+
+    monkeypatch.setattr(ScreenStore, "list", _boom)
+
+    pins = resolve_desk_forward_pins(screen["id"], screen_store, bar_index, forward_store)
+
+    assert pins == {
+        "screen_id": screen["id"],
+        "screen_date": by_scan["screen_date"],
+        "as_of": by_scan["as_of"],
+        "touch_timeframes": ["1m", "5m"],
+        "members_total": len(by_scan["rows"]),
+        "members_with_fine_series": 1,
+        "versions": 0,
+        "recorded": None,
+        "session": {"state": "unknown", "evidence": None},
+    }
 
 
 # --- the routes ------------------------------------------------------------------------------------

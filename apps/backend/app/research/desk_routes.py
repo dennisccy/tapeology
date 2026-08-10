@@ -94,6 +94,7 @@ dependencies instead (the ``get_universe_fetcher`` seam), test-overridable via
 
 from __future__ import annotations
 
+import os
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
@@ -369,7 +370,34 @@ def get_screen_store() -> ScreenStore:
     ``Config`` field — see ``desk_screen.resolve_desk_screen_dir``) — the ``get_universe_store``
     pattern. A FastAPI dependency so tests can point it at a temp dir via the env var or override
     it outright."""
-    return ScreenStore(resolve_desk_screen_dir(CONFIG.desk_universe_dir_resolved()))
+    return ScreenStore(
+        resolve_desk_screen_dir(CONFIG.desk_universe_dir_resolved()),
+        meta_cache_db_path=screen_meta_cache_db_path(),
+    )
+
+
+def screen_meta_cache_db_path() -> str:
+    """The resolved durable screen meta-cache path — the ``bar_verify_cache_db_path`` resolver
+    verbatim: the ``TAPEOLOGY_SCREEN_META_CACHE_DB`` env var if set, else a file co-located as a
+    SIBLING of the screen directory (``.data/screen`` -> ``.data/screen_meta_cache.db``). A derived
+    path, never a ``Config`` field, so ``config_fingerprint`` stays frozen — and hermetic for every
+    existing test for free, since the default lands beside whatever screen dir a test points at."""
+    override = os.environ.get("TAPEOLOGY_SCREEN_META_CACHE_DB")
+    if override:
+        return override
+    screen_dir = resolve_desk_screen_dir(CONFIG.desk_universe_dir_resolved())
+    return os.path.join(os.path.dirname(screen_dir), "screen_meta_cache.db")
+
+
+def forward_meta_cache_db_path() -> str:
+    """The forward store's own durable meta-cache path — ``screen_meta_cache_db_path``'s contract,
+    a separate DB because the two store directories are independently relocatable
+    (``.data/forward`` -> ``.data/forward_meta_cache.db``)."""
+    override = os.environ.get("TAPEOLOGY_FORWARD_META_CACHE_DB")
+    if override:
+        return override
+    forward_dir = resolve_desk_forward_dir(CONFIG.desk_universe_dir_resolved())
+    return os.path.join(os.path.dirname(forward_dir), "forward_meta_cache.db")
 
 
 def get_screen_run_store() -> ScreenRunStore:
@@ -392,14 +420,21 @@ def get_forward_store() -> ForwardStore:
     superseded snapshot's forward records go with it), and a ``Depends(...)`` default is evaluated
     at function-DEFINITION time — a dependency declared further down the module would be an
     unresolved name at import."""
-    return ForwardStore(resolve_desk_forward_dir(CONFIG.desk_universe_dir_resolved()))
+    return ForwardStore(
+        resolve_desk_forward_dir(CONFIG.desk_universe_dir_resolved()),
+        meta_cache_db_path=forward_meta_cache_db_path(),
+    )
 
 
 def _screen_meta_only(record: dict) -> dict:
     """The lightweight projection ``GET /research/desk/screen``'s bulk list serves — id/pins/
     counts only, NEVER the full ``rows``/``skipped`` arrays (see ``desk_screen.py``'s module
     docstring: a screen snapshot is materially larger than a universe snapshot, so returning full
-    content for every historical snapshot in one list call risks the era-5C latency mistake)."""
+    content for every historical snapshot in one list call risks the era-5C latency mistake).
+
+    Takes a META projection (``ScreenStore.list_meta``), whose ``counts`` are the ``len()``s of the
+    very ``rows``/``skipped`` lists this projection exists to leave behind — so the served body is
+    unchanged while the arrays are never materialised for the list at all."""
     return {
         "id": record["id"],
         "screen_date": record["screen_date"],
@@ -408,7 +443,10 @@ def _screen_meta_only(record: dict) -> dict:
         "config_fingerprint": record["config_fingerprint"],
         "bar_store_signature": record["bar_store_signature"],
         "created_utc": record["created_utc"],
-        "counts": {"rows": len(record["rows"]), "skipped": len(record["skipped"])},
+        "counts": {
+            "rows": record["counts"]["rows"],
+            "skipped": record["counts"]["skipped"],
+        },
     }
 
 
@@ -435,26 +473,38 @@ def get_screen(
         raise HTTPException(
             status_code=422, detail="only one of `id` or `date` may be supplied, not both"
         )
-    records, errors = store.list()
+    # Both keyed shapes read only the files they serve (`ScreenStore.get`/`find_by_date`), never the
+    # whole store: this route is hit once per history click, and re-verifying every recorded
+    # snapshot to hand back one of them was the bulk of that click's ~14s.
     if id is not None:
-        found = next((r for r in records if r["id"] == id), None)
-        return {"screen": found}
+        return {"screen": store.get(id)}
     if date is not None:
-        matching = [r for r in records if r["screen_date"] == date]
-        return {"screen": matching[-1] if matching else None}
+        return {"screen": store.find_by_date(date)}
+    # The bulk list is a META read (`list_meta`): it serves counts and pins, never the `rows`/
+    # `skipped` arrays, so it leaves them on disk and is backed by the durable stat-keyed cache.
+    # `latest` is still read from ITS OWN file, freshly verified in full on every request — nothing
+    # a caller receives as snapshot CONTENT ever comes from a remembered row.
+    metas, errors = store.list_meta()
+    # The latest SCREEN, not the latest RECORDING: ordered by `screen_date` first, `created_utc`
+    # only as the tie-break. Recording order alone meant that re-running an OLD date made that old
+    # date the desk's default view — 2026-07-27 outranking a recorded 2026-08-04 purely because it
+    # was walked more recently. That was always latent, but one snapshot per date turns "re-run an
+    # incomplete older date" from a rarity into the routine act the refresh flow is built around
+    # (`desk_screen_decision`), so the wrong reading now surfaces constantly. The tie-break keeps
+    # two same-date copies (pre-cleanup, or a crash-interrupted supersede) resolving to the newer
+    # recording exactly as before. The walk down the ranking is for the one race the meta read
+    # opens: a file listed a moment ago can be gone (a cleanup) by the time it is opened, and the
+    # honest answer is then the next-latest screen, not a null.
+    latest = None
+    for meta in sorted(
+        metas, key=lambda r: (r["screen_date"], r.get("created_utc", ""), r["id"]), reverse=True
+    ):
+        latest = store.get(meta["id"])
+        if latest is not None:
+            break
     return {
-        "screens": [_screen_meta_only(r) for r in records],
-        # The latest SCREEN, not the latest RECORDING: ordered by `screen_date` first, `created_utc`
-        # only as the tie-break. `records[-1]` (recording order alone) meant that re-running an OLD
-        # date made that old date the desk's default view — 2026-07-27 outranking a recorded
-        # 2026-08-04 purely because it was walked more recently. That was always latent, but one
-        # snapshot per date turns "re-run an incomplete older date" from a rarity into the routine
-        # act the refresh flow is built around (`desk_screen_decision`), so the wrong reading now
-        # surfaces constantly. The tie-break keeps two same-date copies (pre-cleanup, or a
-        # crash-interrupted supersede) resolving to the newer recording exactly as before.
-        "latest": max(
-            records, key=lambda r: (r["screen_date"], r.get("created_utc", ""), r["id"])
-        ) if records else None,
+        "screens": [_screen_meta_only(r) for r in metas],
+        "latest": latest,
         "integrity_errors": errors,
     }
 
@@ -725,7 +775,7 @@ def _forward_meta_only(record: dict) -> dict:
         "parameters": record["parameters"],
         "created_utc": record["created_utc"],
         "counts": {
-            "rows": len(record["rows"]),
+            "rows": record["counts"]["rows"],
             "rows_with_touches": record["rows_with_touches"],
             "total_touches": record["total_touches"],
         },
@@ -750,10 +800,19 @@ def get_forward(
     if screen_id is not None:
         newest, versions = store.newest_for_screen(screen_id)
         return {"forward": newest, "versions": versions}
-    records, errors = store.list()
+    # `list_meta`, for `GET /screen`'s reasons verbatim. `latest` here is the newest RECORDING
+    # (`records[-1]`, i.e. `(created_utc, id)` order) rather than the screen route's date-first
+    # ordering — a deliberate difference, kept: a forward record is an ATTEMPT, and the latest one
+    # is the one most recently made. It is still read from its own file and verified in full.
+    metas, errors = store.list_meta()
+    latest = None
+    for meta in reversed(metas):
+        latest = store.get(meta["id"])
+        if latest is not None:
+            break
     return {
-        "forwards": [_forward_meta_only(r) for r in records],
-        "latest": records[-1] if records else None,
+        "forwards": [_forward_meta_only(r) for r in metas],
+        "latest": latest,
         "integrity_errors": errors,
     }
 
@@ -785,8 +844,11 @@ def trigger_desk_forward_compute(
     forward run over a nonexistent screen would fail anyway; refusing up front names the cause).
     A screen store whose FILES all failed their integrity check is named separately, mirroring
     that precedent's own two-cause honesty."""
-    records, errors = screen_store.list()
-    if not any(record["id"] == body.screen_id for record in records):
+    # The refusal's two-cause message needs the store's integrity errors, so it still walks -- but
+    # only when the id did NOT resolve. A trigger for a real snapshot (the only case that starts a
+    # job) now costs one file read; the walk is paid for exclusively by the branch that reports it.
+    if screen_store.get(body.screen_id) is None:
+        records, errors = screen_store.list()
         if errors and not records:
             raise HTTPException(
                 status_code=422,

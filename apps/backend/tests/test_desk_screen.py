@@ -508,11 +508,14 @@ def test_store_has_no_in_place_rewrite_and_exactly_two_removal_paths():
       it; its only caller is ``desk_screen_cleanup``'s dry-run-by-default ``--non-sessions`` mode.
 
     This pins the exact public surface: any NEW mutating method has to come here and justify
-    itself."""
+    itself. The READING surface has since grown by three (``get``, ``find_latest_before``,
+    ``list_meta`` -- the targeted reads that let a route open the snapshots it serves instead of
+    re-verifying all of them), which is why this test names the removal paths rather than counting
+    methods: none of the three can remove or rewrite anything."""
     public_methods = {name for name in dir(ScreenStore) if not name.startswith("_")}
     assert public_methods == {
-        "root", "list", "find_by_key", "find_by_date", "record",
-        "prune_superseded", "prune_dates",
+        "root", "list", "list_meta", "get", "find_by_key", "find_by_date", "find_latest_before",
+        "record", "prune_superseded", "prune_dates",
     }
 
 
@@ -621,6 +624,143 @@ def test_find_by_date_returns_the_newest_copy_of_that_date(tmp_path):
 
     assert store.find_by_date("2026-07-27")["id"] == later["id"]
     assert store.find_by_date("2026-01-01") is None
+
+
+# --- the targeted reads: `get`, `find_by_date`, `find_latest_before`, `find_by_key` ---------------
+# Each of these replaced a `list()`-then-filter expression at a caller that wanted ONE snapshot (the
+# `?id=` route, the forward compute, the pins, the comparison's default base) -- re-verifying every
+# recorded snapshot to hand back one of them was the bulk of a `/desk` history click's ~14s. The
+# tests below pin the EQUIVALENCE: each targeted read must answer exactly what the whole-store walk
+# answered, including its two routes to `None` and its treatment of a corrupt file.
+
+
+def test_get_returns_the_same_record_a_list_then_filter_by_id_returned(tmp_path):
+    """The straight equivalence, for EVERY planted record -- key order included, since the callers
+    this replaced serve the result straight back as JSON."""
+    store, _earlier, _later = _plant_same_date_pair(tmp_path / "screen")
+    _record(
+        store, screen_date="2026-07-28", as_of="2026-07-28T23:59:59Z",
+        bar_store_signature="c" * 16,
+    )
+
+    records, errors = store.list()
+    assert errors == [] and len(records) == 3
+    for record in records:
+        by_scan = next(r for r in records if r["id"] == record["id"])
+        assert json.dumps(store.get(record["id"])) == json.dumps(by_scan)
+
+
+def test_get_on_a_corrupt_file_is_none_leaves_the_bytes_untouched_and_list_still_reports_it(tmp_path):
+    """``list`` already WITHHELD a failing file from ``records``, so an id lookup over it has always
+    answered ``None`` for a corrupt snapshot -- ``get``'s silence about the damage is that SAME
+    silence, not a new one. The file itself is neither repaired nor swept away: its bytes are left
+    exactly as found, and the error keeps being surfaced through ``list``'s own error channel."""
+    screen_dir = tmp_path / "screen"
+    store = ScreenStore(screen_dir)
+    recorded = _record(store)
+    path = screen_dir / f"{recorded['id']}.json"
+    data = json.loads(path.read_text())
+    data["record"]["meta"]["screen_date"] = "2099-12-31"  # tamper -- file_checksum now disagrees
+    path.write_text(json.dumps(data))
+    tampered_bytes = path.read_bytes()
+
+    assert store.get(recorded["id"]) is None
+
+    assert path.read_bytes() == tampered_bytes, "the damaged file must be left exactly as found"
+    records, errors = store.list()
+    assert records == []
+    assert [e["file"] for e in errors] == [path.name]
+
+
+def test_get_is_none_for_an_unknown_id_and_for_a_file_whose_id_disagrees_with_its_name(tmp_path):
+    """A snapshot's path is a pure function of its id, so a file whose recorded ``id`` differs from
+    the name it is stored under is outside this store's own contract -- it is registered under
+    NEITHER, and ``get`` checks rather than trusting the name it was handed."""
+    screen_dir = tmp_path / "screen"
+    store = ScreenStore(screen_dir)
+    recorded = _record(store)
+    # A byte-for-byte COPY under a different name: the checksum covers the record, never the
+    # filename, so this file verifies cleanly and must still not answer to the name it now carries.
+    impostor = screen_dir / "screen-2026-06-22-abcdef123456.json"
+    impostor.write_bytes((screen_dir / f"{recorded['id']}.json").read_bytes())
+
+    assert store.get("screen-2026-06-22-notrecorded") is None
+    assert store.get("screen-2026-06-22-abcdef123456") is None
+    assert store.get(recorded["id"])["id"] == recorded["id"]
+
+
+def test_find_by_date_serves_the_older_healthy_copy_when_the_newer_one_is_corrupt(tmp_path):
+    """``find_by_date`` opens only that date's own files now, but decides membership exactly as the
+    full listing did -- a file failing verification is withheld. So a date whose NEWER copy is
+    corrupt resolves to its older healthy one: never the corrupt file, and never a null."""
+    store, earlier, later = _plant_same_date_pair(tmp_path / "screen")
+    path = store.root / f"{later['id']}.json"
+    data = json.loads(path.read_text())
+    data["record"]["meta"]["bar_store_signature"] = "tampered"
+    path.write_text(json.dumps(data))
+
+    assert store.find_by_date("2026-07-27")["id"] == earlier["id"]
+
+    records, errors = store.list()
+    assert [r["id"] for r in records] == [earlier["id"]]
+    assert [e["file"] for e in errors] == [path.name]
+
+
+def test_find_latest_before_skips_a_corrupt_only_date_and_is_none_when_nothing_is_earlier(tmp_path):
+    """Candidate dates are walked newest-first from the FILENAMES alone, but a date only answers if
+    one of its files actually verifies: a date whose single copy is corrupt yields nothing and the
+    walk falls through to the next earlier healthy date -- the same base the full-listing scan
+    picked, since a corrupt file was never in ``records`` to be chosen as one."""
+    store = ScreenStore(tmp_path / "screen")
+    healthy = _record(
+        store, screen_date="2026-07-24", as_of="2026-07-24T23:59:59Z", bar_store_signature="a" * 16,
+    )
+    damaged = _record(
+        store, screen_date="2026-07-25", as_of="2026-07-25T23:59:59Z", bar_store_signature="b" * 16,
+    )
+    _record(
+        store, screen_date="2026-07-26", as_of="2026-07-26T23:59:59Z", bar_store_signature="c" * 16,
+    )
+    path = store.root / f"{damaged['id']}.json"
+    data = json.loads(path.read_text())
+    data["record"]["meta"]["screen_date"] = "2099-12-31"
+    path.write_text(json.dumps(data))
+
+    assert store.find_latest_before("2026-07-26")["id"] == healthy["id"]
+    assert store.find_latest_before("2026-07-24") is None, "its own date is not STRICTLY earlier"
+    assert store.find_latest_before("2020-01-01") is None
+
+
+def test_find_latest_before_prefers_the_later_created_utc_within_a_date(tmp_path):
+    """A date still carrying pre-cleanup copies resolves to its NEWEST recording, exactly as
+    ``find_by_date`` does -- the two share one ``(created_utc, id)``-ascending ordering."""
+    store, _earlier, later = _plant_same_date_pair(tmp_path / "screen")
+    _record(
+        store, screen_date="2026-07-28", as_of="2026-07-28T23:59:59Z",
+        bar_store_signature="c" * 16,
+    )
+
+    assert store.find_latest_before("2026-07-28")["id"] == later["id"]
+
+
+def test_find_by_key_finds_the_healthy_record_and_is_none_when_any_one_pin_differs(tmp_path):
+    """``find_by_key`` now computes the id FROM the key and reads one file -- then compares all five
+    pins anyway, because a 12-hex-digit checksum is an address and not a proof of identity. Changing
+    any ONE of the five must still answer ``None``, exactly as the whole-store scan it replaced."""
+    store = ScreenStore(tmp_path / "screen")
+    recorded = _record(store)
+    key = (
+        "2026-06-22", "2026-06-22T23:59:59Z", "universe-2026-07-25-817cc184bbb3",
+        CONFIG.config_fingerprint(), "deadbeef00000000",
+    )
+    assert store.find_by_key(*key) == recorded
+
+    for position, other in enumerate(
+        ("2026-06-23", "2026-06-22T00:00:00Z", "universe-other", "fingerprint-other", "0" * 16)
+    ):
+        differing = list(key)
+        differing[position] = other
+        assert store.find_by_key(*differing) is None, f"pin {position} must not be ignored"
 
 
 # ==================================================================================================

@@ -440,6 +440,10 @@ _REQUIRED_DESK_TESTIDS = (
     "desk-history-year-label",
     "desk-history-prev-year",
     "desk-history-next-year",
+    # Selecting a history date is a fetch, and it used to be a SILENT one: the page kept rendering
+    # the previous snapshot with nothing indicating a click had registered. This note (plus the
+    # clicked cell's own pulse) is what says the read is in flight and for which date.
+    "desk-history-pending",
     "desk-provenance",
     "desk-title",
     "desk-run-screen-button",
@@ -570,6 +574,48 @@ def test_the_calendar_never_renders_a_day_its_month_does_not_have():
         "DeskHistoryCalendar must skip days its month does not have -- the 31-row grid otherwise "
         "renders 30/31 February as real dates"
     )
+
+
+def test_a_proven_non_session_day_is_never_selectable():
+    """The calendar used to offer every Saturday, Sunday and market holiday as an ordinary
+    tradable date, because it mirrored whatever the store held and the chain had recorded a screen
+    for each of them. A snapshot for a day the market was shut carries a wall map copied from the
+    PRIOR session and a forward measurement that is empty by construction, so opening one tells a
+    reader nothing true about that date.
+
+    The cell must therefore be `disabled` whenever `nonSession` -- in BOTH branches: the no-screen
+    branch (the normal state once the non-session snapshots are cleaned up) is already disabled,
+    and the recorded branch must become so. `data-session` marks it for the eye and for a test."""
+    body = _extract_function(_DESK_PAGE.read_text(), "DeskHistoryDayCell")
+    assert "disabled={nonSession}" in body, (
+        "DeskHistoryDayCell's recorded branch must refuse to open a snapshot recorded for a date "
+        "the daily bars prove did not trade -- otherwise a weekend is clickable again"
+    )
+    assert 'data-session={nonSession ? "false"' in body
+
+
+def test_a_non_session_is_only_ever_claimed_when_the_daily_bars_prove_it():
+    """The fail-open half of the same rule, and the more important one. A date is called closed
+    ONLY when the recorded daily bars bracket it and do not contain it; a failed read, a store with
+    no daily series, or a date outside the recorded span must all render exactly as they did before
+    any of this existed. No hardcoded holiday table, no weekday arithmetic -- `desk_sessions.py`'s
+    contract, mirrored client-side rather than re-invented."""
+    source = _DESK_PAGE.read_text()
+    window = _extract_function(source, "provenSessionWindow")
+    assert "if (result === null || !result.ok || result.data === null) return null;" in window
+    assert "if (evidence.anchor_symbols.length === 0) return null;" in window
+    assert "if (evidence.from === null || evidence.through === null) return null;" in window
+
+    proven = _extract_function(source, "isProvenNonSession")
+    assert "if (window === null) return false;" in proven
+    assert "if (isoDate < window.from || isoDate > window.through) return false;" in proven
+    assert "return !window.sessions.has(isoDate);" in proven
+
+    # No calendar arithmetic anywhere in the decision: a `getDay()`/`getUTCDay()` weekend test or a
+    # holiday list would answer where the bars are silent, which is precisely the claim this page
+    # must not make.
+    for banned in ("getDay()", "getUTCDay()", "HOLIDAY", "isWeekend"):
+        assert banned not in window and banned not in proven
 
 
 def test_the_calendar_guards_can_fail_on_a_seeded_violation():

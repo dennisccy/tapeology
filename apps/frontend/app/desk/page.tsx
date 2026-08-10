@@ -63,6 +63,7 @@ import type {
   DeskScreenRunsListResult,
   DeskScreenSkip,
   DeskScreenSnapshot,
+  DeskSessionsResult,
   DeskTopupComputeSnapshot,
   DeskTopupOutcome,
   DeskTopupRun,
@@ -918,6 +919,20 @@ const CALENDAR_CELL_RECORDED =
   "cursor-pointer border-emerald-700/60 bg-emerald-900/40 text-emerald-200 hover:bg-emerald-800/60";
 const CALENDAR_CELL_SELECTED =
   "cursor-pointer border-emerald-300 bg-emerald-500/80 font-semibold text-slate-950";
+// A date the recorded daily bars PROVE the market did not trade. Dimmer than an ordinary empty day
+// and marked `x` rather than `·`: "nothing was recorded here" and "nothing could be" are different
+// facts, and the calendar used to state the first about both.
+const CALENDAR_CELL_CLOSED = "border-transparent text-slate-600";
+// The same proof, over a date that nonetheless still carries a recorded snapshot — a legacy
+// artifact of the chain that enumerated raw calendar days. Struck through and not selectable: the
+// file exists (so it is not hidden), but it is not a screen of a session.
+const CALENDAR_CELL_CLOSED_RECORDED =
+  "cursor-not-allowed border-slate-800 bg-slate-900/60 text-slate-600 line-through";
+// A recorded screen for a date PAST the last recorded daily bar. Not "market closed" — the bars
+// cannot prove that yet, and saying so would be a claim this page does not hold. Still selectable
+// (the snapshot exists), but never dressed as an ordinary session.
+const CALENDAR_CELL_UNPROVEN =
+  "cursor-pointer border-amber-700/60 bg-amber-900/30 text-amber-200 hover:bg-amber-800/50";
 const CALENDAR_AXIS_LABEL = "font-mono text-[10px] text-slate-500";
 
 /** `yyyy-MM-dd` for a plain year/month/day triple — the same zero-padded shape every recorded
@@ -932,16 +947,59 @@ function isRealDayOfMonth(year: number, monthIndex: number, day: number): boolea
   return day <= new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
 }
 
+/** What the recorded daily bars prove about sessions, or `null` when they prove nothing — the
+ * client-side mirror of `desk_sessions.is_known_non_session`'s own bracketing rule. `null` on every
+ * unproven answer: a failed or unreachable read, no anchor member holding a daily series, or null
+ * bounds. There is deliberately no third "unknown" value for cells to handle; `null` and a date
+ * outside the span both fall through to exactly the rendering that shipped before this existed. */
+type SessionWindow = { sessions: Set<string>; from: string; through: string };
+
+function provenSessionWindow(
+  result: { ok: boolean; data: DeskSessionsResult | null } | null,
+): SessionWindow | null {
+  if (result === null || !result.ok || result.data === null) return null;
+  const { sessions, evidence } = result.data;
+  if (evidence.anchor_symbols.length === 0) return null;
+  if (evidence.from === null || evidence.through === null) return null;
+  return { sessions: new Set(sessions), from: evidence.from, through: evidence.through };
+}
+
+/** `true` only when `isoDate` is PROVABLY a day the market did not trade: inside the anchors' own
+ * recorded span, and absent from it. `false` for every unproven case — no evidence, or a date
+ * before the first / after the last recorded session, where "no bar was recorded" and "no session
+ * happened" are indistinguishable. Comparisons are lexical: `yyyy-MM-dd` sorts chronologically, so
+ * no `Date` is constructed and no timezone can shift a boundary (`isoDay`'s own rationale). */
+function isProvenNonSession(isoDate: string, window: SessionWindow | null): boolean {
+  if (window === null) return false;
+  if (isoDate < window.from || isoDate > window.through) return false;
+  return !window.sessions.has(isoDate);
+}
+
+/** `true` when `isoDate` lies past the last recorded daily bar — the third honest answer, and the
+ * reason `isProvenNonSession` says `false` for a date that plainly did not trade (this weekend, if
+ * no bar has been recorded since Friday). Distinguished so the calendar can decline to dress such a
+ * date as an ordinary session without claiming the market was shut. `false` when nothing is proven
+ * at all, so a page with no evidence still renders exactly as it always did. */
+function isBeyondSessionEvidence(isoDate: string, window: SessionWindow | null): boolean {
+  return window !== null && isoDate > window.through;
+}
+
 function DeskHistoryDayCell({
   isoDate,
   meta,
   onSelect,
   selected,
+  nonSession,
+  unprovenSession,
+  pending,
 }: {
   isoDate: string;
   meta: DeskScreenMeta | undefined;
   onSelect: (id: string) => void;
   selected: boolean;
+  nonSession: boolean;
+  unprovenSession: boolean;
+  pending: boolean;
 }) {
   const day = isoDate.slice(8);
   if (meta === undefined) {
@@ -951,17 +1009,29 @@ function DeskHistoryDayCell({
         data-testid="desk-history-day"
         data-screen-date={isoDate}
         data-has-screen="false"
+        data-session={nonSession ? "false" : undefined}
         disabled
-        title={`${isoDate} — no screen recorded`}
-        className={`${CALENDAR_CELL_BASE} ${CALENDAR_CELL_EMPTY}`}
+        title={
+          nonSession
+            ? `${isoDate} — market closed; the recorded daily bars show no session on this date`
+            : `${isoDate} — no screen recorded`
+        }
+        className={`${CALENDAR_CELL_BASE} ${nonSession ? CALENDAR_CELL_CLOSED : CALENDAR_CELL_EMPTY}`}
       >
-        ·
+        {nonSession ? "×" : "·"}
       </button>
     );
   }
-  const label =
-    `${isoDate} — ${meta.counts.rows} ranked, ${meta.counts.skipped} skipped, ` +
+  const counts =
+    `${meta.counts.rows} ranked, ${meta.counts.skipped} skipped, ` +
     `recorded ${formatDateTimeET(meta.created_utc)}`;
+  const label = nonSession
+    ? `${isoDate} — market closed; the recorded daily bars show no session on this date. The ` +
+      `snapshot recorded for it measures nothing forward and cannot be opened.`
+    : unprovenSession
+      ? `${isoDate} — no daily bar is recorded for this date yet, so whether it was a trading ` +
+        `session is not yet known. ${counts}`
+      : `${isoDate} — ${counts}`;
   return (
     <button
       type="button"
@@ -969,13 +1039,23 @@ function DeskHistoryDayCell({
       data-screen-id={meta.id}
       data-screen-date={isoDate}
       data-has-screen="true"
+      data-session={nonSession ? "false" : unprovenSession ? "unknown" : undefined}
       data-selected={selected}
+      data-pending={pending ? "true" : undefined}
+      aria-busy={pending || undefined}
+      disabled={nonSession}
       onClick={() => onSelect(meta.id)}
       title={label}
       aria-label={label}
       className={`${CALENDAR_CELL_BASE} ${
-        selected ? CALENDAR_CELL_SELECTED : CALENDAR_CELL_RECORDED
-      }`}
+        nonSession
+          ? CALENDAR_CELL_CLOSED_RECORDED
+          : selected
+            ? CALENDAR_CELL_SELECTED
+            : unprovenSession
+              ? CALENDAR_CELL_UNPROVEN
+              : CALENDAR_CELL_RECORDED
+      }${pending ? " animate-pulse" : ""}`}
     >
       {day}
     </button>
@@ -988,12 +1068,16 @@ function DeskHistoryCalendar({
   selectedId,
   shownYear,
   onShowYear,
+  sessionWindow,
+  pendingId,
 }: {
   screens: DeskScreenMeta[];
   onSelect: (id: string) => void;
   selectedId: string | null;
   shownYear: number;
   onShowYear: (year: number) => void;
+  sessionWindow: SessionWindow | null;
+  pendingId: string | null;
 }) {
   if (screens.length === 0) {
     return <EmptyState testid="desk-history-empty" title="No screens recorded yet." />;
@@ -1036,7 +1120,7 @@ function DeskHistoryCalendar({
         </span>
       </div>
       <div className="overflow-x-auto">
-        <div data-testid="desk-history-calendar" className="w-fit">
+        <div data-testid="desk-history-calendar" aria-busy={pendingId !== null} className="w-fit">
           <div className="grid grid-cols-[2.5rem_repeat(31,1.5rem)] gap-x-[2px] gap-y-[2px]">
             <span />
             {CALENDAR_DAYS.map((day) => (
@@ -1060,6 +1144,9 @@ function DeskHistoryCalendar({
                       meta={meta}
                       onSelect={onSelect}
                       selected={meta !== undefined && meta.id === selectedId}
+                      nonSession={isProvenNonSession(isoDate, sessionWindow)}
+                      unprovenSession={isBeyondSessionEvidence(isoDate, sessionWindow)}
+                      pending={meta !== undefined && meta.id === pendingId}
                     />
                   );
                 })}
@@ -4080,6 +4167,8 @@ function DeskPopulatedScreen({
   selectedHistoryId,
   shownYear,
   onShowYear,
+  sessionWindow,
+  pendingHistoryId,
   screenControlProps,
   topupControlProps,
   reconcileControlProps,
@@ -4102,6 +4191,8 @@ function DeskPopulatedScreen({
   selectedHistoryId: string | null;
   shownYear: number;
   onShowYear: (year: number) => void;
+  sessionWindow: SessionWindow | null;
+  pendingHistoryId: string | null;
   screenControlProps: ScreenControlProps;
   topupControlProps: TopupControlProps;
   reconcileControlProps: ReconcileControlProps;
@@ -4143,6 +4234,20 @@ function DeskPopulatedScreen({
           {historyFetchError}
         </p>
       )}
+      {/* Says the click was heard, and for which date, while the read is in flight. The briefing
+          above keeps showing the PREVIOUS snapshot until the new one lands — correct, since it is
+          still labelled by its own `screen_date` — so this note and the cell's own pulse are what
+          distinguish "working" from "ignored the click". */}
+      {pendingHistoryId !== null && (
+        <p data-testid="desk-history-pending" className="text-xs text-slate-400">
+          <span
+            aria-hidden="true"
+            className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle"
+          />
+          Loading the recorded screen for{" "}
+          {screens.find((meta) => meta.id === pendingHistoryId)?.screen_date ?? pendingHistoryId}…
+        </p>
+      )}
 
       <section aria-label="Screen history">
         <Panel title="Screen History">
@@ -4152,6 +4257,8 @@ function DeskPopulatedScreen({
             selectedId={selectedHistoryId}
             shownYear={shownYear}
             onShowYear={onShowYear}
+            sessionWindow={sessionWindow}
+            pendingId={pendingHistoryId}
           />
           <IntegrityErrorsNote
             errors={screenIntegrityErrors}
@@ -4311,6 +4418,26 @@ export default function DeskPage() {
   const [viewingSnapshot, setViewingSnapshot] = useState<DeskScreenSnapshot | null>(null);
   const [historyFetchError, setHistoryFetchError] = useState<string | null>(null);
 
+  // Which history entry is being fetched right now, or `null`. A click used to be silent: the
+  // request was awaited with nothing on screen changing, so the page sat showing the PREVIOUS
+  // snapshot with no sign it was working. This drives the clicked cell's own pulse, the calendar's
+  // `aria-busy`, and the note beneath the history panel.
+  const [pendingHistoryId, setPendingHistoryId] = useState<string | null>(null);
+  // A monotonic token so a later choice always wins: a second click (or the Latest button)
+  // supersedes an in-flight read rather than blocking it, and the slower response can never land on
+  // top of the newer selection. The handler-side twin of the fetch effects' own `alive` flag.
+  const historyFetchTokenRef = useRef(0);
+
+  // What the recorded daily bars prove about which dates traded (`GET /research/desk/sessions`,
+  // fetched once at mount over the anchors' whole span). Read ONLY through `provenSessionWindow`,
+  // so every unproven answer — a failed read, no daily series, a date outside the recorded span —
+  // renders exactly as it did before this existed.
+  const [sessionsResult, setSessionsResult] = useState<{
+    ok: boolean;
+    data: DeskSessionsResult | null;
+    error?: string;
+  } | null>(null);
+
   // The Screen History calendar's visible year. `null` means "follow whatever is displayed" — the
   // year is then DERIVED from the displayed snapshot's own `screen_date` below, so the grid lands on
   // the right year the moment the mount fetch resolves WITHOUT an effect of its own (the page's
@@ -4419,7 +4546,7 @@ export default function DeskPage() {
     [],
   );
 
-  // Mount: eight GETs, zero POSTs (TC-19/TC-8, extended era-desk-iter-14/goal-desk-iter-29/
+  // Mount: nine GETs, zero POSTs (TC-19/TC-8, extended era-desk-iter-14/goal-desk-iter-29/
   // goal-desk-iter-36/forward-test era) — the screen list/latest, ALL FOUR compute managers'
   // current/last snapshot (seeds a page load mid-job or post-terminal without a spurious extra
   // click — the /structure edge-report mount-seeding precedent), the top-up run log's list +
@@ -4428,10 +4555,18 @@ export default function DeskPage() {
   // (goal-desk-iter-29, J-18). The J-21 screen-pin GET moved OUT of this effect into its own
   // as-of-keyed effect immediately below (it must follow the operator's resolved To day, which
   // on a fresh mount is today — byte-identical behavior).
+  //
+  // The ninth is the recorded trading sessions over the anchors' WHOLE span, which the history
+  // calendar reads to tell a day the market was shut from a day nothing was screened. It belongs
+  // here rather than in an effect of its own: the answer cannot change while the page is open, and
+  // paging the calendar to another year must not cost a round trip.
   useEffect(() => {
     let alive = true;
     fetchDeskScreen().then((result) => {
       if (alive) setScreenResult(result);
+    });
+    fetchDeskSessions().then((result) => {
+      if (alive) setSessionsResult(result);
     });
     fetchDeskScreenCompute().then((result) => {
       if (alive && result.ok) setScreenCompute(result.data);
@@ -5178,22 +5313,35 @@ export default function DeskPage() {
   // unreachable backend both leave the currently-displayed snapshot exactly as it was — only the
   // error note changes.
   async function handleSelectHistoryScreen(id: string) {
+    const token = historyFetchTokenRef.current + 1;
+    historyFetchTokenRef.current = token;
     setHistoryFetchError(null);
-    const result = await fetchDeskScreenById(id);
-    if (result.ok && result.data !== null) {
-      setViewingSnapshot(result.data);
-      return;
+    setPendingHistoryId(id);
+    try {
+      const result = await fetchDeskScreenById(id);
+      // Superseded by a newer selection while this was in flight: that choice owns the view now,
+      // and landing this one on top of it would silently undo the operator's last click.
+      if (historyFetchTokenRef.current !== token) return;
+      if (result.ok && result.data !== null) {
+        setViewingSnapshot(result.data);
+        return;
+      }
+      setHistoryFetchError(
+        result.ok
+          ? "No recorded screen matches that entry — still showing the previously displayed screen."
+          : result.error ?? "That recorded screen could not be loaded.",
+      );
+    } finally {
+      if (historyFetchTokenRef.current === token) setPendingHistoryId(null);
     }
-    setHistoryFetchError(
-      result.ok
-        ? "No recorded screen matches that entry — still showing the previously displayed screen."
-        : result.error ?? "That recorded screen could not be loaded.",
-    );
   }
 
   // Revert to the top-level `latest` snapshot already held in `screenResult` state (TC-2) — no
-  // refetch, since the page already has it.
+  // refetch, since the page already has it. Bumping the token discards any history read still in
+  // flight, so a slow one cannot arrive afterwards and pull the view back off `latest`.
   function handleShowLatest() {
+    historyFetchTokenRef.current += 1;
+    setPendingHistoryId(null);
     setViewingSnapshot(null);
     setHistoryFetchError(null);
   }
@@ -5277,6 +5425,14 @@ export default function DeskPage() {
   // else today's. A pure derivation — never an effect, never a fetch.
   const shownYear =
     viewYear ?? Number((displayedSnapshot?.screen_date ?? todayEtDate()).slice(0, 4));
+  // What the daily bars prove about sessions, or `null` for "they prove nothing" — a pure
+  // derivation like `shownYear` above, never an effect.
+  const sessionWindow = provenSessionWindow(sessionsResult);
+  // The five reads below key on these PRIMITIVES rather than on `displayedSnapshot`'s object
+  // identity. A screen-list refetch that re-serves the SAME snapshot as a fresh object must not
+  // blank five populated panels and re-ask questions whose answers cannot have changed.
+  const displayedSnapshotId = displayedSnapshot?.id ?? null;
+  const displayedScreenDate = displayedSnapshot?.screen_date ?? null;
 
   // goal-desk-iter-35 (J-20): fetch the Screen Comparison payload for whichever screen is
   // currently DISPLAYED (`displayedSnapshot`'s own id, the SAME snapshot the Briefing/Provenance
@@ -5284,95 +5440,88 @@ export default function DeskPage() {
   // (no new control ships this iteration). Re-fetches whenever the displayed screen changes (a
   // history row selected, or reverting to Latest); `alive` guards against a stale response landing
   // after a fast second switch, mirroring every other mount-time fetch effect on this page.
+  //
+  // The result is cleared FIRST, on every change and not only when the id becomes null. It used to
+  // be left in place across a switch, so for the whole fetch this section kept rendering the
+  // PREVIOUS screen's comparison under the new screen's heading — stale numbers stated as current,
+  // and the loading skeleton it already ships (`result === null`) never appeared. The same
+  // correction is applied to the four reads below.
   useEffect(() => {
-    const id = displayedSnapshot?.id ?? null;
-    if (id === null) {
-      setScreenCompareResult(null);
-      return;
-    }
+    setScreenCompareResult(null);
+    if (displayedSnapshotId === null) return;
     let alive = true;
-    fetchDeskScreenCompare(id).then((result) => {
+    fetchDeskScreenCompare(displayedSnapshotId).then((result) => {
       if (alive) setScreenCompareResult(result);
     });
     return () => {
       alive = false;
     };
-  }, [displayedSnapshot]);
+  }, [displayedSnapshotId]);
 
   // goal-desk-iter-36 (J-21): fetch the screen-pin resolution for the DISPLAYED snapshot's own
   // `screen_date` — the SAME `displayedSnapshot` dependency the Screen Comparison effect above
   // uses, since `DeskProvenance` (which renders this) describes that same snapshot. A page-load/
   // selection-change GET only, never a timer or a click.
+  // Keyed on the DATE rather than the id: two recordings of one date resolve the same pins, so a
+  // switch between them needs no refetch and no blank.
   useEffect(() => {
-    const screenDate = displayedSnapshot?.screen_date ?? null;
-    if (screenDate === null) {
-      setDisplayedPinsResult(null);
-      return;
-    }
+    setDisplayedPinsResult(null);
+    if (displayedScreenDate === null) return;
     let alive = true;
-    fetchDeskScreenPins(screenDate).then((result) => {
+    fetchDeskScreenPins(displayedScreenDate).then((result) => {
       if (alive) setDisplayedPinsResult(result);
     });
     return () => {
       alive = false;
     };
-  }, [displayedSnapshot]);
+  }, [displayedScreenDate]);
 
   // Forward-test era: the displayed snapshot's newest recorded forward result — id-keyed, the
   // `screenCompareResult` effect's exact shape. A GET only, never a trigger. The drill-in
   // selection resets here too (plain state, no effect of its own): a different snapshot means a
   // different record, so a stale selection must not carry across.
   useEffect(() => {
-    const id = displayedSnapshot?.id ?? null;
     setSelectedForwardSymbol(null);
-    if (id === null) {
-      setForwardResult(null);
-      return;
-    }
+    setForwardResult(null);
+    if (displayedSnapshotId === null) return;
     let alive = true;
-    fetchDeskForward(id).then((result) => {
+    fetchDeskForward(displayedSnapshotId).then((result) => {
       if (alive) setForwardResult(result);
     });
     return () => {
       alive = false;
     };
-  }, [displayedSnapshot]);
+  }, [displayedSnapshotId]);
 
   // The displayed snapshot's forward COVERAGE — how much of it a measurement could reach at all.
   // Its own effect rather than a branch of the read above, because the two answer different
   // questions and a record's absence is exactly when this one matters most. A GET only.
   useEffect(() => {
-    const id = displayedSnapshot?.id ?? null;
-    if (id === null) {
-      setForwardPinsResult(null);
-      return;
-    }
+    setForwardPinsResult(null);
+    if (displayedSnapshotId === null) return;
     let alive = true;
-    fetchDeskForwardPins(id).then((result) => {
+    fetchDeskForwardPins(displayedSnapshotId).then((result) => {
       if (alive) setForwardPinsResult(result);
     });
     return () => {
       alive = false;
     };
-  }, [displayedSnapshot]);
+  }, [displayedSnapshotId]);
 
   // The displayed snapshot's durable measurement ATTEMPTS. Keyed identically; refetched on the
   // forward compute's terminal tick below, since a finished measurement is exactly what adds a row
   // here. A GET only.
   useEffect(() => {
-    const id = displayedSnapshot?.id ?? null;
-    if (id === null) {
-      setForwardRunsResult(null);
-      return;
-    }
+    setForwardRunsResult(null);
+    if (displayedSnapshotId === null) return;
     let alive = true;
-    fetchDeskForwardRuns(id).then((result) => {
+    fetchDeskForwardRuns(displayedSnapshotId).then((result) => {
       if (alive) setForwardRunsResult(result);
     });
     return () => {
       alive = false;
     };
-  }, [displayedSnapshot]);
+  }, [displayedSnapshotId]);
 
   // Poll the forward compute job while running — the fourth manager's poll, mirroring the
   // topup-poll shape with ONE terminal refetch: the displayed snapshot's own forward read
@@ -5501,6 +5650,8 @@ export default function DeskPage() {
             selectedHistoryId={selectedHistoryId}
             shownYear={shownYear}
             onShowYear={setViewYear}
+            sessionWindow={sessionWindow}
+            pendingHistoryId={pendingHistoryId}
             screenControlProps={screenControlProps}
             topupControlProps={topupControlProps}
             reconcileControlProps={reconcileControlProps}

@@ -135,6 +135,8 @@ import hashlib
 import json
 import multiprocessing
 import os
+import sqlite3
+import threading
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -145,6 +147,7 @@ from .bar_index import BarIndex
 from .bars import BarStore, release_row_caches
 from .datasets import DatasetStore
 from .desk_coverage import DESK_TOPUP_TIMEFRAMES, get_desk_coverage
+from .desk_meta_cache import SCREEN_TABLE, DeskMetaCache
 from .desk_universe import UniverseStore
 from .tradability import compute_tradability
 
@@ -808,8 +811,31 @@ class ScreenStore:
       the compute path calls it; its only caller is ``desk_screen_cleanup``'s explicit,
       dry-run-by-default CLI mode."""
 
-    def __init__(self, root: str | Path) -> None:
+    def __init__(self, root: str | Path, *, meta_cache_db_path: str | None = None) -> None:
         self._root = Path(root)
+        # Opt-in, exactly like ``BarStore``'s durable verify cache: a store constructed without a
+        # path behaves precisely as it did before the cache existed, so every test that builds a
+        # bare ``ScreenStore(tmp_path)`` keeps its from-scratch verification.
+        self._meta_cache_db_path = meta_cache_db_path
+        self._meta_cache: DeskMetaCache | None = None
+        self._meta_cache_lock = threading.Lock()
+
+    def _durable_meta_cache(self) -> DeskMetaCache | None:
+        if self._meta_cache_db_path is None:
+            return None
+        if self._meta_cache is None:
+            # Guarded because one store is shared across the threadpool serving these routes:
+            # without it two threads would open two connections and one would be silently dropped.
+            with self._meta_cache_lock:
+                if self._meta_cache is None and self._meta_cache_db_path is not None:
+                    try:
+                        self._meta_cache = DeskMetaCache(self._meta_cache_db_path, SCREEN_TABLE)
+                    except sqlite3.Error:
+                        # A derived cache that cannot be opened is a missing optimisation, never a
+                        # failed read: fall through to full verification, exactly as if no path had
+                        # been given (``BarStore._durable_verify_cache``'s rule verbatim).
+                        self._meta_cache_db_path = None
+        return self._meta_cache
 
     @property
     def root(self) -> Path:
@@ -847,6 +873,91 @@ class ScreenStore:
             )
         return meta
 
+    def _registered(self, meta: dict) -> dict:
+        """One verified ``meta`` in the shape every read of this store hands back: fresh copies of
+        the nested ``rows``/``skipped`` lists (the ``desk_universe.UniverseStore.list``
+        per-row-copy discipline), so a caller mutating a returned record can never poison a later
+        read. Factored out so the whole-store walk and the targeted reads below can never drift
+        into returning two different shapes for the same file."""
+        return {
+            **meta,
+            "rows": [dict(r) for r in meta["rows"]],
+            "skipped": [dict(s) for s in meta["skipped"]],
+        }
+
+    def get(self, screen_id: str) -> dict | None:
+        """The snapshot registered under ``screen_id``, or ``None`` -- a direct read of that id's
+        OWN deterministic path (``_path``), never a walk of the store.
+
+        Answers exactly what a ``list()``-then-filter-by-id answered, including both routes to
+        ``None``: no such file, and a file that fails its integrity check. The second is inherited,
+        not newly decided -- ``list`` already WITHHOLDS a failing file from ``records`` and surfaces
+        it in ``errors``, so an id lookup over ``list`` has always answered ``None`` for a corrupt
+        snapshot. The damage keeps being surfaced exactly where it always was (``list``/
+        ``list_meta``'s error channel, which the no-params ``GET`` serves); this method's silence
+        about it is the SAME silence the id-keyed route already had.
+
+        The id a file claims is checked against the name it is stored under rather than assumed.
+        ``record`` always writes to ``_path(meta["id"])``, so the two can only disagree if a file
+        was renamed or copied by hand -- and then the NAME is the thing that cannot be trusted,
+        since it is what selected the file. Such a file stays visible in ``list``/``list_meta``
+        (which key off content and are how a damaged or misplaced store gets noticed) but is not
+        served under the id its name claims: this is a deliberate narrowing of the whole-store scan
+        this replaced, which matched on the recorded id alone and would have served it.
+
+        An id that does not name a file directly INSIDE this store resolves to nothing. The scan
+        this replaced compared strings and touched no path at all, so it could not be steered by a
+        caller-supplied id; a direct read can be, and a route hands this whatever ``?id=`` carried.
+        A registered id is always a plain filename, so anything else is not one."""
+        path = self._path(screen_id)
+        if path.parent != self._root:
+            return None
+        try:
+            meta = self._load(path)
+        except ScreenIntegrityError:
+            return None
+        if meta.get("id") != screen_id:
+            return None
+        return self._registered(meta)
+
+    def _records_for_date(self, screen_date: str) -> list[dict]:
+        """Every registered snapshot for ONE ``screen_date``, in ``list()``'s own
+        ``(created_utc, id)`` ascending order -- so the last entry is the newest, exactly as it is
+        in a full listing.
+
+        Opens only that date's own files. A recorded id is ``screen-<screen_date>-<sha12>``
+        (``record`` below), so a date's snapshots are precisely the matches of its filename prefix.
+        The filename only narrows WHICH files are opened; membership is still decided by the
+        verified ``screen_date`` FIELD, so a file that somehow carries a name and a date that
+        disagree is not counted for either."""
+        if not self._root.exists():
+            return []
+        records: list[dict] = []
+        for path in sorted(self._root.glob(f"screen-{screen_date}-*.json")):
+            try:
+                meta = self._load(path)
+            except ScreenIntegrityError:
+                continue
+            if meta.get("screen_date") != screen_date:
+                continue
+            records.append(self._registered(meta))
+        records.sort(key=lambda meta: (meta.get("created_utc", ""), meta.get("id", "")))
+        return records
+
+    def _recorded_dates(self) -> list[str]:
+        """Every ``screen_date`` the store holds a file for, ascending -- read from the FILENAMES
+        alone, so it costs one directory listing and opens nothing. Only a candidate list: which of
+        those files are actually registered is still decided by opening and verifying them."""
+        if not self._root.exists():
+            return []
+        dates: set[str] = set()
+        prefix = "screen-"
+        for path in self._root.glob("screen-*.json"):
+            day = path.stem[len(prefix) : len(prefix) + 10]
+            if len(day) == 10:
+                dates.add(day)
+        return sorted(dates)
+
     def list(self) -> tuple[list[dict], list[dict]]:
         """Every registered screen's full content (each file verified), oldest first, plus an
         EXPLICIT error row per file that failed verification -- a corrupt file is surfaced, never
@@ -859,12 +970,84 @@ class ScreenStore:
         errors: list[dict] = []
         for path in sorted(self._root.glob("*.json")):
             try:
-                meta = self._load(path)
-                records.append(
-                    {**meta, "rows": [dict(r) for r in meta["rows"]], "skipped": [dict(s) for s in meta["skipped"]]}
-                )
+                records.append(self._registered(self._load(path)))
             except ScreenIntegrityError as exc:
                 errors.append({"file": path.name, "error": str(exc)})
+        records.sort(key=lambda meta: (meta.get("created_utc", ""), meta.get("id", "")))
+        return records, errors
+
+    @staticmethod
+    def _id_for_key(
+        screen_date: str, as_of: str, universe_snapshot_id: str | None,
+        config_fingerprint: str, bar_store_signature: str,
+    ) -> str:
+        """The id a snapshot with this 5-pin key is stored under -- a pure function of the key, so
+        the key IS an address. ``record`` and ``find_by_key`` both go through it precisely so the
+        two can never drift into disagreeing about where a key lives."""
+        checksum = _sha256(
+            _canonical([screen_date, as_of, universe_snapshot_id, config_fingerprint, bar_store_signature])
+        )[:12]
+        return f"screen-{screen_date}-{checksum}"
+
+    @staticmethod
+    def _meta_projection(meta: dict) -> dict:
+        """The meta-ONLY view of one verified snapshot: every recorded field except the two bulk
+        lists, which are replaced by their own lengths under ``counts``. This is exactly what the
+        no-params ``GET``'s list serves, so remembering it costs no fidelity -- and it is all that
+        is ever remembered, so no cache can put unverified snapshot CONTENT in front of a caller."""
+        return {
+            **{k: v for k, v in meta.items() if k not in ("rows", "skipped")},
+            "counts": {"rows": len(meta["rows"]), "skipped": len(meta["skipped"])},
+        }
+
+    def list_meta(self) -> tuple[list[dict], list[dict]]:
+        """Every registered screen's META projection (``_meta_projection``), oldest first, plus the
+        same EXPLICIT per-file error rows ``list`` returns -- the bulk-listing read, with the
+        ``rows``/``skipped`` arrays that dwarf it left on disk.
+
+        Backed by the durable stat-keyed ``DeskMetaCache`` when the store was constructed with one:
+        a file whose ``(path, size, mtime_ns)`` matches a remembered row is served from that row,
+        and ANY stat difference re-verifies it in full. An integrity error is never remembered, so a
+        corrupt file is re-verified and re-surfaced on every call -- same text, same position, cached
+        or not. Without a cache path this is a plain full walk, byte-identical and no slower than
+        ``list`` (it just carries less)."""
+        if not self._root.exists():
+            return [], []
+        paths = sorted(self._root.glob("*.json"))
+        cache = self._durable_meta_cache()
+        remembered = cache.lookup_all() if cache is not None else {}
+
+        records: list[dict] = []
+        errors: list[dict] = []
+        fresh: list[tuple[str, int, int, dict]] = []
+        for path in paths:
+            key = str(path)
+            try:
+                stat = path.stat()
+            except OSError:
+                # The file vanished between the listing and the stat (a concurrent cleanup). It is
+                # not registered and it is not an integrity failure either -- it is simply gone.
+                continue
+            row = remembered.get(key)
+            if row is not None and row[0] == stat.st_size and row[1] == stat.st_mtime_ns:
+                records.append(json.loads(row[2]))
+                continue
+            try:
+                projection = self._meta_projection(self._load(path))
+            except ScreenIntegrityError as exc:
+                errors.append({"file": path.name, "error": str(exc)})
+                continue
+            records.append(projection)
+            fresh.append((key, stat.st_size, stat.st_mtime_ns, projection))
+
+        if cache is not None and fresh:
+            cache.insert_many(fresh)
+        # Rows for files that are gone (an operator cleanup removed ~293 non-session snapshots in
+        # one go) are unreachable rather than wrong -- their paths are never looked up again -- but
+        # they would accumulate forever. The check is a length comparison over data already in hand,
+        # so the usual call pays nothing for it.
+        if cache is not None and len(remembered) > len(paths):
+            cache.prune_missing({str(path) for path in paths})
         records.sort(key=lambda meta: (meta.get("created_utc", ""), meta.get("id", "")))
         return records, errors
 
@@ -874,27 +1057,50 @@ class ScreenStore:
     ) -> dict | None:
         """The already-recorded snapshot matching this EXACT 5-pin key, or ``None`` -- the
         append-only dedup lookup ``record`` itself uses, also usable standalone by a caller that
-        wants to check before paying for a walk."""
-        records, _errors = self.list()
+        wants to check before paying for a walk.
+
+        Reads ONE file: the key determines the id (``_id_for_key``), which determines the path. The
+        five fields are then compared against the key anyway rather than trusted -- a 12-hex-digit
+        checksum is an address, not a proof of identity, and the whole-store scan this replaced
+        matched on the fields themselves. ``record``'s two branches are unchanged by construction:
+        a healthy file under this key still reports ``ScreenAlreadyRecorded``, and a CORRUPT one
+        still reaches ``record``'s own refuse-loudly ``exists()`` check (this returns ``None`` for
+        it, exactly as the scan did by withholding it)."""
         key = (screen_date, as_of, universe_snapshot_id, config_fingerprint, bar_store_signature)
-        for record in records:
-            record_key = (
-                record["screen_date"], record["as_of"], record["universe_snapshot_id"],
-                record["config_fingerprint"], record["bar_store_signature"],
-            )
-            if record_key == key:
-                return record
-        return None
+        record = self.get(self._id_for_key(*key))
+        if record is None:
+            return None
+        record_key = (
+            record["screen_date"], record["as_of"], record["universe_snapshot_id"],
+            record["config_fingerprint"], record["bar_store_signature"],
+        )
+        return record if record_key == key else None
 
     def find_by_date(self, screen_date: str) -> dict | None:
         """The NEWEST registered snapshot for one ``screen_date``, or ``None``. After
         ``prune_superseded`` there is at most one per date anyway; "newest" is the honest tie-break
-        while a date still carries pre-cleanup copies (``list`` is already ``created_utc``-ascending,
-        so the last match is the newest). This -- not ``find_by_key`` -- is what
-        ``desk_screen_decision`` asks "is this date already complete?" about."""
-        records, _errors = self.list()
-        matching = [record for record in records if record["screen_date"] == screen_date]
-        return matching[-1] if matching else None
+        while a date still carries pre-cleanup copies (``_records_for_date`` is
+        ``created_utc``-ascending, so the last match is the newest). This -- not ``find_by_key`` --
+        is what ``desk_screen_decision`` asks "is this date already complete?" about."""
+        records = self._records_for_date(screen_date)
+        return records[-1] if records else None
+
+    def find_latest_before(self, screen_date: str) -> dict | None:
+        """The newest registered snapshot whose ``screen_date`` is STRICTLY earlier than
+        ``screen_date``, or ``None`` -- the comparison's default base (``desk_screen_diff``).
+
+        Walks candidate dates newest-first from the filenames alone and stops at the first that
+        yields a registered snapshot, so the usual answer costs one directory listing plus one file
+        read. A date whose only file fails verification yields nothing and the walk continues to
+        the next earlier one -- the same answer the full-listing scan gave, since a corrupt file was
+        never in ``records`` to be chosen as a base."""
+        for day in reversed(self._recorded_dates()):
+            if day >= screen_date:
+                continue
+            newest = self.find_by_date(day)
+            if newest is not None:
+                return newest
+        return None
 
     def prune_superseded(self, screen_date: str, keep_id: str) -> list[str]:
         """Delete every OTHER registered snapshot for ``screen_date``, keeping ``keep_id``. Returns
@@ -982,10 +1188,9 @@ class ScreenStore:
         if existing is not None:
             raise ScreenAlreadyRecorded(existing["id"])
 
-        checksum = _sha256(
-            _canonical([screen_date, as_of, universe_snapshot_id, config_fingerprint, bar_store_signature])
-        )[:12]
-        screen_id = f"screen-{screen_date}-{checksum}"
+        screen_id = self._id_for_key(
+            screen_date, as_of, universe_snapshot_id, config_fingerprint, bar_store_signature
+        )
         # A file already at this key's own path, with `find_by_key` reporting no match, means
         # exactly one thing: that file failed its integrity check (`list` surfaces it in
         # `integrity_errors` and withholds it from `records`), because the path is a pure function

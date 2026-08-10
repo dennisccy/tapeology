@@ -115,17 +115,19 @@ def resolve_desk_screen_pins(
     pins = resolve_screen_pins(universe_store, bar_index, as_of)
     bar_store_signature = pins["bar_store_signature"]
 
+    # ONE `find_by_date`, reused below: both uses always resolved to the same record (the same
+    # store, the same date, within one request), so asking twice only paid for the lookup twice.
+    recorded_for_date = screen_store.find_by_date(screen_date)
+
     decision = resolve_screen_decision(
-        screen_store.find_by_date(screen_date), pins, screen_date=screen_date,
+        recorded_for_date, pins, screen_date=screen_date,
         universe_snapshot_id=universe_snapshot_id, config_fingerprint=config_fingerprint,
     )
 
     # `recorded` keeps its shipped meaning verbatim: the snapshot a run RIGHT NOW would reuse, and
     # an honest `None` whenever a run would walk instead. A snapshot a run would REPLACE is named by
     # `decision.screen_id`, never smuggled in here as if it were going to be served again.
-    existing = (
-        screen_store.find_by_date(screen_date) if decision["action"] == "reuse" else None
-    )
+    existing = recorded_for_date if decision["action"] == "reuse" else None
     recorded = None
     if existing is not None:
         recorded = {

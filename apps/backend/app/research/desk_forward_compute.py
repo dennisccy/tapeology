@@ -154,8 +154,7 @@ def run_forward_and_record(
             error=error,
         )
 
-    screen_records, _screen_errors = screen_store.list()
-    screen = next((record for record in screen_records if record["id"] == screen_id), None)
+    screen = screen_store.get(screen_id)
     if screen is None:
         message = (
             f"no recorded screen snapshot has id '{screen_id}' -- nothing to measure forward from"
@@ -287,10 +286,7 @@ class DeskForwardComputeManager:
             # rows_total resolved synchronously, before any background work starts (the
             # members_total/pairs_total precedent). An unknown id here yields 0 -- the worker's
             # own ForwardScreenNotFound resolves the job "failed" with the naming error.
-            screen_records, _errors = screen_store.list()
-            screen = next(
-                (record for record in screen_records if record["id"] == screen_id), None
-            )
+            screen = screen_store.get(screen_id)
             rows_total = len(screen["rows"]) if screen is not None else 0
 
             job_id = uuid.uuid4().hex

@@ -121,8 +121,7 @@ def resolve_desk_forward_pins(
     non-answer -- a caller that cannot supply one still gets every other pin, and never gets a
     fabricated session claim.
     """
-    records, _errors = screen_store.list()
-    screen = next((record for record in records if record["id"] == screen_id), None)
+    screen = screen_store.get(screen_id)
     if screen is None:
         return {
             "screen_id": screen_id,

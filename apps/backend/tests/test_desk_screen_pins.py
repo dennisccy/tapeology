@@ -321,6 +321,48 @@ def test_tc7_the_same_request_twice_in_succession_is_byte_identical(real_ctx):
 
 
 # ==================================================================================================
+# ONE ``find_by_date`` per resolve -- the decision and ``recorded`` are two readings of a single
+# lookup, never two lookups.
+# ==================================================================================================
+
+
+def test_the_resolve_asks_the_screen_store_for_the_date_exactly_once(real_ctx, monkeypatch):
+    """``decision`` and ``recorded`` both need the date's recorded snapshot, and the store is
+    immutable within a request -- so the two readings can only ever have agreed. Asking twice simply
+    verified that snapshot twice per page load. Instrumented by call count rather than reasoned
+    about (``test_desk_screen_diff.py``'s own instrumentation style), on BOTH branches: the ``reuse``
+    one (which did the double lookup) and a date holding nothing. The body is asserted byte-identical
+    to the one resolved before the instrumentation, so the saving costs no served value."""
+    universe_store, bar_store, bar_index, dataset_store, screen_store = real_ctx
+    run_screen_and_record(
+        universe_store, bar_store, bar_index, dataset_store, CONFIG, screen_store, SCREEN_DATE,
+    )
+    before = resolve_desk_screen_pins(SCREEN_DATE, universe_store, bar_index, CONFIG, screen_store)
+    assert before["recorded"] is not None, "the reuse branch -- the one that read the date twice"
+
+    calls: list[str] = []
+    original_find_by_date = ScreenStore.find_by_date
+
+    def _tracked_find_by_date(self, screen_date):
+        calls.append(screen_date)
+        return original_find_by_date(self, screen_date)
+
+    monkeypatch.setattr(ScreenStore, "find_by_date", _tracked_find_by_date)
+
+    after = resolve_desk_screen_pins(SCREEN_DATE, universe_store, bar_index, CONFIG, screen_store)
+
+    assert calls == [SCREEN_DATE]
+    assert json.dumps(after, sort_keys=True) == json.dumps(before, sort_keys=True)
+
+    calls.clear()
+    unrecorded = resolve_desk_screen_pins(
+        "2026-06-19", universe_store, bar_index, CONFIG, screen_store
+    )
+    assert calls == ["2026-06-19"]
+    assert unrecorded["recorded"] is None
+
+
+# ==================================================================================================
 # Route-level: TC-8 (422 on a missing ``screen_date``), honest empty at HTTP 200, basic wiring.
 # ==================================================================================================
 

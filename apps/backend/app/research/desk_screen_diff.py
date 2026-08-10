@@ -4,8 +4,10 @@ comparison" row's ONE owner, served by ``GET /research/desk/screen/compare``.
 
 THIS MODULE computes NOTHING new about tradable structure and reads NO store of any kind -- it is a
 pure, stateless read over exactly two ALREADY-RECORDED, immutable snapshots fetched through
-``desk_screen.ScreenStore.list()`` (the SAME ``(records, errors)`` read ``GET /research/desk/screen``
-already performs for its ``?id=``/``?date=``/no-param branches). Every per-symbol field in the
+``desk_screen.ScreenStore``'s targeted reads (``get``/``find_latest_before`` -- the SAME reads
+``GET /research/desk/screen?id=`` already serves, so the two routes can never resolve one id to two
+different records, and this route opens the two files it discloses rather than every recorded
+snapshot). Every per-symbol field in the
 response is copied VERBATIM from one of the two snapshots' own recorded rows; ``rank_change`` is a
 plain integer subtraction of two already-recorded 1-based positions (the ``basis_age_days``
 precedent, ``desk_screen.py:388`` -- arithmetic over recorded values, never a new measurement). No
@@ -18,8 +20,9 @@ receives a store reference of any kind, mirroring ``desk_screen._bar_store_signa
 snapshot with the greatest ``screen_date`` STRICTLY earlier than the compare snapshot's own
 ``screen_date``, ties (two recordings of one earlier date) broken by the later ``created_utc`` --
 exactly the record ``GET /research/desk/screen?date=<that earlier date>`` already serves
-(``matching[-1]``, ``desk_routes.py:381``), reusing ``ScreenStore.list()``'s own
-``(created_utc, id)``-ascending sort so the two reads can never disagree. An explicit ``base=<id>``
+(``matching[-1]``, ``desk_routes.py:381``) -- it IS that read, through the shared
+``ScreenStore.find_latest_before``, whose per-date ordering is ``list()``'s own
+``(created_utc, id)``-ascending one, so the two can never disagree. An explicit ``base=<id>``
 overrides it. No earlier ``screen_date`` exists -> an honest ``base: null`` / ``base_resolution:
 "none_earlier"`` -- and, since there is then nothing to compare against, ``rows`` is empty rather
 than reporting every compare row as "entered" against a nonexistent base (a comparison needs TWO
@@ -83,20 +86,6 @@ def _snapshot_meta(record: dict) -> dict:
         "ranked_count": len(record["rows"]),
         "skipped_count": len(record["skipped"]),
     }
-
-
-def _resolve_default_base(records: list[dict], compare_record: dict) -> dict | None:
-    """goal.md J-20 step 2: the recorded snapshot with the greatest `screen_date` STRICTLY earlier
-    than `compare_record`'s own `screen_date`, ties broken by the later `created_utc` -- exactly
-    `desk_routes.get_screen`'s own `?date=` branch's `matching[-1]` (`records` is already sorted
-    `(created_utc, id)` ascending by `ScreenStore.list()`, so the LAST of a same-date group is
-    always the latest-recorded one). `None` when no strictly-earlier `screen_date` exists at all."""
-    earlier = [r for r in records if r["screen_date"] < compare_record["screen_date"]]
-    if not earlier:
-        return None
-    newest_date = max(r["screen_date"] for r in earlier)
-    matching = [r for r in earlier if r["screen_date"] == newest_date]
-    return matching[-1]
 
 
 def _empty_counts() -> dict:
@@ -197,8 +186,8 @@ def _diff_rows(compare_record: dict, base_record: dict) -> tuple[list[dict], dic
 
 
 def compute_screen_diff(store: ScreenStore, compare_id: str, base_id: str | None = None) -> dict:
-    """The comparison's ONE computation (goal.md J-20): read exactly two recorded snapshots via
-    ``store.list()`` and return the Data Contract's ``{compare, base, base_resolution, rows,
+    """The comparison's ONE computation (goal.md J-20): read exactly two recorded snapshots -- the
+    two it discloses, no others -- and return the Data Contract's ``{compare, base, base_resolution, rows,
     identical, counts}`` shape. Raises ``ScreenDiffSelfCompareError`` when ``base_id == compare_id``
     (checked BEFORE any lookup, so a self-compare is refused even if the id happens not to resolve).
     ``compare_id`` unresolved -> ``_not_found_response()`` (honest, HTTP-200-shaped null). An
@@ -208,18 +197,15 @@ def compute_screen_diff(store: ScreenStore, compare_id: str, base_id: str | None
     if base_id is not None and base_id == compare_id:
         raise ScreenDiffSelfCompareError(compare_id)
 
-    records, _errors = store.list()
-    by_id = {r["id"]: r for r in records}
-
-    compare_record = by_id.get(compare_id)
+    compare_record = store.get(compare_id)
     if compare_record is None:
         return _not_found_response()
 
     if base_id is not None:
-        base_record = by_id.get(base_id)
+        base_record = store.get(base_id)
         base_resolution = "explicit"
     else:
-        base_record = _resolve_default_base(records, compare_record)
+        base_record = store.find_latest_before(compare_record["screen_date"])
         base_resolution = "default_prior_date" if base_record is not None else "none_earlier"
 
     compare_meta = _snapshot_meta(compare_record)

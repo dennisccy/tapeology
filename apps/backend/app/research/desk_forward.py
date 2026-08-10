@@ -93,7 +93,9 @@ import hashlib
 import json
 import os
 import random
+import sqlite3
 import statistics
+import threading
 from bisect import bisect_left, bisect_right
 from datetime import date, datetime, timezone
 from operator import attrgetter
@@ -101,6 +103,7 @@ from pathlib import Path
 from typing import Callable
 
 from .bars import BarStore
+from .desk_meta_cache import FORWARD_TABLE, DeskMetaCache
 
 # The four intraday horizons, in minutes past the touch -- converted to bar counts on the touch
 # series (1m: 1/5/60/240 bars; 5m: the "1m" label is an honest absence, then 1/12/48 bars). A
@@ -242,6 +245,23 @@ def _canonical(obj: object) -> bytes:
 
 def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def _screen_date_from_id(screen_id: str) -> str | None:
+    """The ``screen_date`` embedded in a screen id (``screen-<yyyy-MM-dd>-<sha12>``), or ``None``
+    for anything not carrying one. A screen id is an ADDRESS, and this is the part of it a forward
+    record's own filename inherits (``record`` names every version ``forward-<screen_date>-...``),
+    which is what lets a screen's versions be found without walking the whole store. Parsing only:
+    it proves nothing about whether such a screen exists."""
+    prefix = "screen-"
+    if not screen_id.startswith(prefix):
+        return None
+    day = screen_id[len(prefix) : len(prefix) + 10]
+    try:
+        date.fromisoformat(day)
+    except ValueError:
+        return None
+    return day if screen_id[len(prefix) + 10 : len(prefix) + 11] == "-" else None
 
 
 def _iso_utc_now() -> str:
@@ -787,8 +807,27 @@ class ForwardStore:
     update/delete function exists anywhere. New fine bars arriving later move the input
     signature, so a re-compute records a NEW version and every older one is kept."""
 
-    def __init__(self, root: str | Path) -> None:
+    def __init__(self, root: str | Path, *, meta_cache_db_path: str | None = None) -> None:
         self._root = Path(root)
+        # Opt-in, ``ScreenStore``'s durable meta cache verbatim: a store constructed without a path
+        # behaves exactly as it did before the cache existed.
+        self._meta_cache_db_path = meta_cache_db_path
+        self._meta_cache: DeskMetaCache | None = None
+        self._meta_cache_lock = threading.Lock()
+
+    def _durable_meta_cache(self) -> DeskMetaCache | None:
+        if self._meta_cache_db_path is None:
+            return None
+        if self._meta_cache is None:
+            with self._meta_cache_lock:
+                if self._meta_cache is None and self._meta_cache_db_path is not None:
+                    try:
+                        self._meta_cache = DeskMetaCache(self._meta_cache_db_path, FORWARD_TABLE)
+                    except sqlite3.Error:
+                        # A derived cache that cannot be opened is a missing optimisation, never a
+                        # failed read (``ScreenStore._durable_meta_cache``'s rule verbatim).
+                        self._meta_cache_db_path = None
+        return self._meta_cache
 
     @property
     def root(self) -> Path:
@@ -824,6 +863,24 @@ class ForwardStore:
             )
         return meta
 
+    @staticmethod
+    def _id_for_key(screen_id: str, forward_input_signature: str) -> str | None:
+        """The id a record with this 2-pin key is stored under -- a pure function of the key, so the
+        key IS an address. ``None`` when ``screen_id`` carries no parseable date, which no
+        recordable screen id can (see ``record``'s own agreement check). ``record`` and
+        ``find_by_key`` both go through it so the two can never disagree about where a key lives."""
+        screen_date = _screen_date_from_id(screen_id)
+        if screen_date is None:
+            return None
+        checksum = _sha256(_canonical([screen_id, forward_input_signature]))[:12]
+        return f"forward-{screen_date}-{checksum}"
+
+    def _registered(self, meta: dict) -> dict:
+        """One verified ``meta`` in the shape every read of this store hands back: a fresh copy of
+        the nested ``rows`` list (the ``ScreenStore.list`` per-row-copy discipline). Factored out so
+        the whole-store walk and the targeted reads below cannot drift apart."""
+        return {**meta, "rows": [dict(r) for r in meta["rows"]]}
+
     def list(self) -> tuple[list[dict], list[dict]]:
         """Every recorded forward record (each file verified), oldest first, plus an EXPLICIT
         error row per file that failed verification. Fresh copies of the nested ``rows`` list on
@@ -834,30 +891,128 @@ class ForwardStore:
         errors: list[dict] = []
         for path in sorted(self._root.glob("*.json")):
             try:
-                meta = self._load(path)
-                records.append({**meta, "rows": [dict(r) for r in meta["rows"]]})
+                records.append(self._registered(self._load(path)))
             except ForwardIntegrityError as exc:
                 errors.append({"file": path.name, "error": str(exc)})
         records.sort(key=lambda meta: (meta.get("created_utc", ""), meta.get("id", "")))
         return records, errors
 
+    @staticmethod
+    def _meta_projection(meta: dict) -> dict:
+        """The meta-ONLY view of one verified record: every recorded field except the bulk ``rows``
+        list, which is replaced by its own length under ``counts``. ``summary`` is kept -- it is a
+        handful of scalars the list route already serves, not a per-member array.
+        ``ScreenStore._meta_projection``'s contract, with this store's own bulk field."""
+        return {
+            **{k: v for k, v in meta.items() if k != "rows"},
+            "counts": {"rows": len(meta["rows"])},
+        }
+
+    def list_meta(self) -> tuple[list[dict], list[dict]]:
+        """Every recorded record's META projection, oldest first, plus the same EXPLICIT per-file
+        error rows ``list`` returns -- ``ScreenStore.list_meta``'s contract verbatim (durable
+        stat-keyed cache when constructed with one, any stat difference re-verifies in full, an
+        integrity error never remembered)."""
+        if not self._root.exists():
+            return [], []
+        paths = sorted(self._root.glob("*.json"))
+        cache = self._durable_meta_cache()
+        remembered = cache.lookup_all() if cache is not None else {}
+
+        records: list[dict] = []
+        errors: list[dict] = []
+        fresh: list[tuple[str, int, int, dict]] = []
+        for path in paths:
+            key = str(path)
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            row = remembered.get(key)
+            if row is not None and row[0] == stat.st_size and row[1] == stat.st_mtime_ns:
+                records.append(json.loads(row[2]))
+                continue
+            try:
+                projection = self._meta_projection(self._load(path))
+            except ForwardIntegrityError as exc:
+                errors.append({"file": path.name, "error": str(exc)})
+                continue
+            records.append(projection)
+            fresh.append((key, stat.st_size, stat.st_mtime_ns, projection))
+
+        if cache is not None and fresh:
+            cache.insert_many(fresh)
+        # Forget rows for files that are gone (``ScreenStore.list_meta``'s rationale verbatim).
+        if cache is not None and len(remembered) > len(paths):
+            cache.prune_missing({str(path) for path in paths})
+        records.sort(key=lambda meta: (meta.get("created_utc", ""), meta.get("id", "")))
+        return records, errors
+
+    def get(self, forward_id: str) -> dict | None:
+        """The record registered under ``forward_id``, or ``None`` -- a direct read of that id's own
+        deterministic path, never a walk. ``None`` both when no such file exists and when the file
+        fails its integrity check, which is what a ``list()``-then-filter-by-id already answered
+        (``list`` withholds a failing file and surfaces it in ``errors``); the damage keeps being
+        reported through that same error channel. ``ScreenStore.get``'s contract verbatim,
+        including its refusal of an id that does not name a file directly inside this store."""
+        path = self._path(forward_id)
+        if path.parent != self._root:
+            return None
+        try:
+            meta = self._load(path)
+        except ForwardIntegrityError:
+            return None
+        if meta.get("id") != forward_id:
+            return None
+        return self._registered(meta)
+
+    def _records_for_screen(self, screen_id: str) -> list[dict]:
+        """Every recorded version measured against ``screen_id``, ``(created_utc, id)`` ascending.
+
+        Opens only the candidate files: a forward id is ``forward-<screen_date>-<sha12>`` and the
+        ``screen_date`` in it is the SCREEN's own (``record`` below is handed both), so every
+        version of a screen shares that screen's date prefix. The filename narrows which files are
+        opened; membership is decided by the verified ``screen_id`` FIELD. A ``screen_id`` that
+        does not carry a parseable date is not a recordable one, so it matches nothing -- the same
+        honest empty answer the full scan gave."""
+        screen_date = _screen_date_from_id(screen_id)
+        if screen_date is None or not self._root.exists():
+            return []
+        records: list[dict] = []
+        for path in sorted(self._root.glob(f"forward-{screen_date}-*.json")):
+            try:
+                meta = self._load(path)
+            except ForwardIntegrityError:
+                continue
+            if meta.get("screen_id") != screen_id:
+                continue
+            records.append(self._registered(meta))
+        records.sort(key=lambda meta: (meta.get("created_utc", ""), meta.get("id", "")))
+        return records
+
     def find_by_key(self, screen_id: str, forward_input_signature: str) -> dict | None:
         """The already-recorded forward record matching this EXACT 2-pin key, or ``None`` -- the
         append-only dedup lookup ``record`` itself uses, also usable standalone by a caller that
-        wants to check before paying for a walk."""
-        records, _errors = self.list()
+        wants to check before paying for a walk.
+
+        Reads ONE file: the key determines the id (``_id_for_key``), which determines the path. Both
+        fields are compared anyway rather than trusted to a 12-hex-digit address, and ``record``'s
+        refuse-loudly branch for a corrupt file under this key is reached exactly as before
+        (``ScreenStore.find_by_key``'s rationale verbatim)."""
+        forward_id = self._id_for_key(screen_id, forward_input_signature)
+        if forward_id is None:
+            return None
+        record = self.get(forward_id)
+        if record is None:
+            return None
         key = (screen_id, forward_input_signature)
-        for record in records:
-            if (record["screen_id"], record["forward_input_signature"]) == key:
-                return record
-        return None
+        return record if (record["screen_id"], record["forward_input_signature"]) == key else None
 
     def newest_for_screen(self, screen_id: str) -> tuple[dict | None, int]:
         """The NEWEST recorded forward record for one screen, plus an honest count of every
-        version ever recorded for it (``list`` is already ``(created_utc, id)``-sorted, so the
-        last match is the newest)."""
-        records, _errors = self.list()
-        matching = [record for record in records if record["screen_id"] == screen_id]
+        version ever recorded for it (``_records_for_screen`` is ``(created_utc, id)``-sorted, so
+        the last match is the newest)."""
+        matching = self._records_for_screen(screen_id)
         if not matching:
             return None, 0
         return matching[-1], len(matching)
@@ -869,14 +1024,11 @@ class ForwardStore:
         otherwise strand its measurements pointing at an id nothing can resolve.
 
         Touches no other screen's records; a record whose file failed its integrity check is not
-        registered (``list`` withholds it and surfaces it in ``errors``) and so is never removed
-        either -- a damaged file keeps being surfaced honestly. An unknown ``screen_id`` is a plain
-        empty list, never an error."""
-        records, _errors = self.list()
+        registered (``_records_for_screen`` withholds it exactly as ``list`` does, and ``list``
+        keeps surfacing it in ``errors``) and so is never removed either -- a damaged file keeps
+        being surfaced honestly. An unknown ``screen_id`` is a plain empty list, never an error."""
         removed: list[str] = []
-        for record in records:
-            if record["screen_id"] != screen_id:
-                continue
+        for record in self._records_for_screen(screen_id):
             self._path(record["id"]).unlink()
             removed.append(record["id"])
         return removed
@@ -901,12 +1053,23 @@ class ForwardStore:
         ``ForwardAlreadyRecorded``; a file already at this key's own deterministic path but
         failing its integrity check raises ``ForwardIntegrityError`` -- never a silent overwrite
         (the ``ScreenStore.record`` refuse-loudly branch verbatim)."""
+        # A version is named after the SCREEN's date, and its screen id already carries that date --
+        # which is what lets `_records_for_screen` find a screen's versions without opening the
+        # whole store. Every real caller hands both off the same screen record, so they always
+        # agree; a pair that does NOT agree would record a file its own dedup lookup could never
+        # find again, so it is refused here rather than half-registered.
+        id_date = _screen_date_from_id(screen_id)
+        if id_date is None or id_date != screen_date:
+            raise ValueError(
+                f"refusing to record a forward result for screen {screen_id!r} under screen_date "
+                f"{screen_date!r}: a forward record is addressed by the date its screen id carries, "
+                f"so the two must agree -- pass the screen record's own id and screen_date."
+            )
         existing = self.find_by_key(screen_id, forward_input_signature)
         if existing is not None:
             raise ForwardAlreadyRecorded(existing["id"])
 
-        checksum = _sha256(_canonical([screen_id, forward_input_signature]))[:12]
-        forward_id = f"forward-{screen_date}-{checksum}"
+        forward_id = self._id_for_key(screen_id, forward_input_signature)
         if self._path(forward_id).exists():
             raise ForwardIntegrityError(
                 f"forward record file '{self._path(forward_id).name}' already exists on disk but "

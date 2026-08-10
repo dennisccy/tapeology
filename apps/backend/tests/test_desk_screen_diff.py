@@ -286,26 +286,38 @@ def test_module_imports_no_store_or_compute_dependency():
         )
 
 
-def test_compute_screen_diff_only_calls_screen_store_list(store, monkeypatch):
-    """A call-count instrumentation counterpart to the structural test above -- the ONE method this
-    module calls on its store argument is ``list()``, exactly once per ``compute_screen_diff``
-    invocation (mirrors ``test_bar_store_signature_issues_zero_bar_store_calls``'s instrumentation
-    style)."""
+def test_compute_screen_diff_reads_only_the_snapshots_it_discloses(store, monkeypatch):
+    """A call-count instrumentation counterpart to the structural test above (mirrors
+    ``test_bar_store_signature_issues_zero_bar_store_calls``'s style). This module reads its store
+    ONLY through the targeted reads, and never walks it: an explicit base is two ``get``s, and a
+    default base is one ``get`` plus one ``find_latest_before``. ``list()`` -- which verifies every
+    recorded snapshot to hand back two -- must not be called at all, since a comparison is a plain
+    read of the two snapshots it names in its own response."""
     base = _plant(store, screen_date="2026-01-01", rows=[_row("AAA")])
     compare = _plant(store, screen_date="2026-01-02", rows=[_row("AAA")])
 
     calls: list[str] = []
-    original_list = ScreenStore.list
+    originals = {
+        name: getattr(ScreenStore, name) for name in ("list", "get", "find_latest_before")
+    }
 
-    def _tracked_list(self):
-        calls.append("list")
-        return original_list(self)
+    def _track(name):
+        def _tracked(self, *args, **kwargs):
+            calls.append(name)
+            return originals[name](self, *args, **kwargs)
 
-    monkeypatch.setattr(ScreenStore, "list", _tracked_list)
+        return _tracked
+
+    for name in originals:
+        monkeypatch.setattr(ScreenStore, name, _track(name))
 
     compute_screen_diff(store, compare["id"], base["id"])
+    assert calls == ["get", "get"]
 
-    assert calls == ["list"]
+    calls.clear()
+    compute_screen_diff(store, compare["id"])
+    assert calls == ["get", "find_latest_before"]
+    assert "list" not in calls
 
 
 # ==================================================================================================

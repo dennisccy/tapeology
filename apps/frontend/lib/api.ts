@@ -1349,15 +1349,21 @@ export async function fetchDeskScreenPins(screenDate: string): Promise<{
 // caller that wants "days worth screening" must intersect with `sessions`, not merely subtract
 // `non_sessions`. An empty `evidence.anchor_symbols` is the honest-unknown state and every caller
 // falls back to whatever it did before this endpoint existed.
+//
+// Called with NO arguments it asks about the anchors' whole recorded span. That shape serves
+// `sessions` and `evidence` but an EMPTY `non_sessions` (the route enumerates proven non-sessions
+// only across an explicitly requested range), so a whole-span caller derives "provably closed" from
+// `sessions` plus the `evidence` bounds — exactly what `is_known_non_session` does server-side.
 export async function fetchDeskSessions(
-  fromDay: string,
-  toDay: string,
+  fromDay?: string,
+  toDay?: string,
 ): Promise<{ ok: boolean; data: DeskSessionsResult | null; error?: string }> {
   try {
-    const res = await fetch(
-      `${API_BASE}/research/desk/sessions?from_day=${encodeURIComponent(fromDay)}` +
-        `&to_day=${encodeURIComponent(toDay)}`,
-    );
+    const query =
+      fromDay !== undefined && toDay !== undefined
+        ? `?from_day=${encodeURIComponent(fromDay)}&to_day=${encodeURIComponent(toDay)}`
+        : "";
+    const res = await fetch(`${API_BASE}/research/desk/sessions${query}`);
     if (res.ok) {
       return { ok: true, data: (await res.json()) as DeskSessionsResult };
     }
