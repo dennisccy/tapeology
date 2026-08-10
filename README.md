@@ -7,7 +7,7 @@ Standalone real-time tape-reading system for US stocks — given one ticker, it 
 
 Tapeology watches a single US equity ticker and answers one question: what is the tape doing right now, and how confident are we? It distinguishes genuine directional control from absorption — high one-sided aggression with no corresponding price progress is absorption, not control. The engine is the single source of truth; REST, WebSocket, the UI, and a read-only machine-readable connection all read the same computed values. The app has three pages — a live Cockpit, a Structure view for technical analysis, and a Desk daily-screening briefing over ~100 universe symbols — linked by a persistent top navigation bar.
 
-Current capabilities (iter-22):
+Current capabilities:
 
 - **Watch a ticker in real time** — the cockpit shows live bid/ask/spread/last, a recent-trades list, the core feature readouts (buy/sell aggression ratios, price impact, absorption score, spread, trade speed, and more), the current tape state with a confidence score, plain-language observations, and a running event log — all streaming over WebSocket.
 - **Five tape states** — buyer_control, seller_control, bid_absorption, ask_absorption, and unclear — each with a confidence score and human-readable observations.

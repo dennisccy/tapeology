@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-playbook-iter-2",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "not_yet": false,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the desktop home",
+      "narration": "The desk displays the latest screen over the registered universe of tradable walls, ranked by entry quality. This view surfaces the kept product surface this iteration.",
+      "point_out": "The Desk navigation tab is active; the page shows Screen History (153 recorded screens in 2026) and Forward Returns sections below.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "SCREEN HISTORY"
+      }
+    },
+    {
+      "n": 2,
+      "title": "View the Screen History calendar",
+      "narration": "The calendar shows every recorded session date in the universe, color-coded by signal family. Dates with screens are marked; click any to navigate through the recorded signals.",
+      "point_out": "The year selector shows 2026, and the month/day grid displays 153 recorded screens with green highlights marking the registered screens.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "02"
+        }
+      },
+      "expect": {
+        "text": "screen-2026-08-10-ab"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Scroll down to see Forward Returns section",
+      "narration": "Below the calendar, the Forward Returns section measures every wall's entry quality by its forward price movement. The desk's own rail conventions ensure comparable metrics across every detected signal.",
+      "point_out": "The Forward Returns heading appears with the recorded snapshot timestamp and the first measurement row showing wall entry metrics.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "heading",
+          "name": "FORWARD RETURNS"
+        }
+      },
+      "expect": {
+        "text": "FORWARD RETURNS"
+      }
+    }
+  ]
+}

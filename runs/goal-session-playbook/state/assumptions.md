@@ -89,3 +89,21 @@ are the rail's, unchanged"), the number is imported rather than invented, it is 
 path iterates it against outcomes. Recorded as an observation only — if the owner disagrees, the fix
 is one spec row, not a code change.
 **Reversible:** yes
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** The iter-2 evaluator's next-step recommendation asked to "reuse the rail's own
+long/short helper instead of repeating it," naming `desk_forward.py`'s `_side_sign` as that helper.
+`docs/goal.md` never says whether a carried recommendation must be followed literally even when
+closer reading shows the named helper is semantically wrong for the target vocabulary.
+**We chose:** did NOT literally reuse `desk_forward._side_sign` — its body
+(`-1.0 if side == "resistance" else 1.0`) is built for the rail's own support/resistance wall
+vocabulary; called with playbook's `"short"` side it returns `+1.0` (since `"short" != "resistance"`),
+which would silently flip every short signal's forward return and MDD sign positive. `_measure_from`'s
+own docstring confirms `sign` is caller-supplied, not a mandated `_side_sign` call — the rail's own
+caller at `desk_forward.py:716` computes its own sign for its own vocabulary the same way. Instead,
+iter-3 consolidates the three duplicated `1.0 if side == "long" else -1.0` literals (two in
+`desk_playbook.py`, one in `desk_playbook_detect.py`) into one new playbook-owned `side_sign` helper
+in `desk_playbook_features.py`, satisfying the evaluator's actual concern (one owner, not three
+copies) without importing an incompatible helper or touching `desk_forward.py`.
+**Reversible:** yes
