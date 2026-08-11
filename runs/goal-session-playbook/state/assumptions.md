@@ -184,3 +184,22 @@ tabulation are new, which is the iter-2 B3/B4 spec catch-up pattern this session
 Nothing was invented, tuned, or swept. Flagged for owner visibility alongside the auditor's B1/B3
 constants questions.
 **Reversible:** yes
+
+## iter-5 — goal-decomposer
+
+**Ambiguity:** J-05's acceptance text says the euphoria/capitulation marker "sets `euphoria_recent:
+true` on any signal triggering within `PLAYBOOK_MARKER_DECAY_BARS`" (and symmetrically for
+`capitulation_recent`), without stating whether that window runs forward from the marker to a later
+signal, backward from a signal to a preceding marker, or bidirectionally, and without stating
+whether decoration ever crosses symbols.
+**We chose:** forward-only (a marker may decorate a LATER same-symbol-session signal; a signal is
+never decorated by a marker that fires after it) and same-symbol-session only. This is the only
+reading consistent with the era's critical "no lookahead" anti-goal — a signal's served fields must
+be a pure function of bars at or before its own trigger, so a later marker can never reach back into
+an earlier signal's own record. Same-symbol scope follows the spec's own per-member detection
+structure (capitulation/euphoria form on one symbol's own vertical move); nothing in the spec or
+`compute_playbook`'s existing per-symbol walk suggests cross-symbol decoration, and building it would
+be a materially larger, textually unsupported change. The iteration spec adds a dedicated structural
+guard test (a marker firing after a candidate signal must not decorate it) to make this reading
+machine-checked rather than merely documented.
+**Reversible:** yes
