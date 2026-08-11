@@ -1,4 +1,4 @@
-"""The Playbook (Era B2 "The Playbook", J-01/J-02) -- the book's intraday setups
+"""The Playbook (Era B2 "The Playbook", J-01/J-02/J-04) -- the book's intraday setups
 (Graifer & Schumacher, *Techniques of Tape Reading*, 2004), detected on the desk's own recorded
 5m/1m bars and measured with the desk forward rail's own conventions. This module owns the
 pre-registered constant table, the parameters/signature recipe, the append-only store, and the
@@ -14,11 +14,14 @@ break, a jump-base-explosion, ...) -- a third, unrelated sense of the word. This
 imports from ``setups.py`` or ``backtests.py``, and no field here is ever named ``stop_loss``
 (the field is ``invalidation_price`` -- a disclosed structural level, never an order concept).
 
-**Detection only, this iteration.** ``compute_playbook`` walks the desk universe's members and
-detects the opening-range-break family (spec §3.1-3.2); trigger-anchored measurement (forward
-returns, ``invalidation_breached``, the seeded baseline) is J-02 -- ``entry``/``entry_kind`` are
-computed now (spec §0's stop-through fill convention is part of a signal's own GEOMETRY, decided
-at the trigger bar, not part of measuring what happened afterward).
+**Detection then measurement, in one walk.** ``compute_playbook`` walks the desk universe's
+members and detects, per member, the opening-range-break pair (spec §3.1-3.2, J-01) beside the
+continuation family (``jbe``/``dbi``, spec §3.3-3.4, J-04) and ``cup_handle`` (spec §3.6, J-04),
+gated by the SAME "5m bars + sufficient baseline + a buildable opening range" absence checks J-01
+shipped -- every detected signal is measured in the same pass (forward returns,
+``invalidation_breached``, the seeded baseline, J-02) -- ``entry``/``entry_kind`` are decided at
+detection time (spec §0's stop-through fill convention is part of a signal's own GEOMETRY, not
+part of measuring what happened afterward).
 
 **Parameters discipline (the ``desk_forward.forward_parameters`` pattern, applied at birth).**
 ``playbook_parameters()`` reads every constant below at CALL TIME (so a test monkeypatching one
@@ -60,7 +63,7 @@ from .desk_forward import (
     _draw_anchor_indices,
     _measure_from,
 )
-from .desk_playbook_detect import detect_opening_range_breaks
+from .desk_playbook_detect import detect_cup_handle, detect_dbi, detect_jbe, detect_opening_range_breaks
 from .desk_playbook_features import baselines, opening_range, rth_session_slice, side_sign
 from .desk_sessions import refuse_if_not_a_session
 
@@ -129,12 +132,19 @@ PLAYBOOK_MKT_NEUTRAL_BAND_MBR: float = 1.0  # ADAPTATION -- neutral band, index-
 PLAYBOOK_MARKER_DECAY_BARS: int = 6  # ADAPTATION -- euphoria/capitulation marker decorates 30 min
 PLAYBOOK_APPROACH_BARS: int = 3  # ADAPTATION -- volume-into-trigger window
 PLAYBOOK_MAX_JBE_SIGNALS_PER_SESSION: int = 2  # ADAPTATION -- ladder steps
+# J-04: two more prose-only spec thresholds promoted to named constants, the
+# `PLAYBOOK_OR_MIN_1M_BARS` precedent (a value stated in the spec's OWN prose but not originally
+# given its own §1 row) -- both are now tabulated in docs/playbook-detector-spec.md §1 too, flagged
+# in the dev handoff for the same owner ruling on whether the promotion reads right.
+PLAYBOOK_BASE_FLATLINE_MAX_MBR: float = 1.0  # ADAPTATION -- spec §3.3 prose "base range <= 1.0 MBR"
+PLAYBOOK_HANDLE_DESIRABLE_DURATION_FRAC: float = 0.25  # BOOK -- spec §1's HANDLE_MAX_DURATION_FRAC row: "25% desirable"
 
 # Companion structural constants (shape, not thresholds).
-# This iteration implements ONLY the opening-range-break family; J-04/J-05/J-06 EXTEND this tuple
-# as they land their own detectors (a signature-moving, expected, visible change) -- declaring a
-# setup id here before its detector exists would claim a compute that does not happen.
-PLAYBOOK_SETUPS: tuple[str, ...] = ("open_high_break", "open_low_break")
+# J-01 shipped ONLY the opening-range-break family; J-04 (this iteration) EXTENDS this tuple with
+# the continuation family (jbe/dbi/cup_handle) -- J-05/J-06 will extend it further as they land
+# their own detectors (each extension is a signature-moving, expected, visible change) -- declaring
+# a setup id here before its detector exists would claim a compute that does not happen.
+PLAYBOOK_SETUPS: tuple[str, ...] = ("open_high_break", "open_low_break", "jbe", "dbi", "cup_handle")
 PLAYBOOK_MARKET_SYMBOL: str = "SPY"
 # The rail's own baseline seed, echoed (not re-derived) -- the seed discipline itself is J-02's;
 # embedding the CONSTANT now is what makes a future rail-seed change re-key playbook records too.
@@ -255,6 +265,8 @@ def playbook_parameters() -> dict:
         "marker_decay_bars": PLAYBOOK_MARKER_DECAY_BARS,
         "approach_bars": PLAYBOOK_APPROACH_BARS,
         "max_jbe_signals_per_session": PLAYBOOK_MAX_JBE_SIGNALS_PER_SESSION,
+        "base_flatline_max_mbr": PLAYBOOK_BASE_FLATLINE_MAX_MBR,
+        "handle_desirable_duration_frac": PLAYBOOK_HANDLE_DESIRABLE_DURATION_FRAC,
         # The measurement rail's own shape constants, echoed verbatim (embedded at birth, per the
         # module docstring) -- a FUTURE desk_forward.py change re-keys playbook records instead of
         # silently reinterpreting them, even though J-01 measures nothing itself.
@@ -447,19 +459,25 @@ def compute_playbook(
     progress: Callable[[dict], None] | None = None,
     should_abort: Callable[[], bool] | None = None,
 ) -> dict:
-    """Detect AND measure the opening-range-break family for EVERY member of the latest registered
-    universe snapshot, on ``session_date``'s own recorded bars, in the SAME walk -- returns
-    everything ``PlaybookStore.record`` needs minus the store-assigned ``id``/``recorded_at`` (the
-    ``compute_forward``/``compute_screen`` contract shape: a PURE compute, never itself a store
-    write).
+    """Detect AND measure every registered setup family (opening-range-break, J-01; the
+    continuation family ``jbe``/``dbi`` and ``cup_handle``, J-04) for EVERY member of the latest
+    registered universe snapshot, on ``session_date``'s own recorded bars, in the SAME walk --
+    returns everything ``PlaybookStore.record`` needs minus the store-assigned ``id``/
+    ``recorded_at`` (the ``compute_forward``/``compute_screen`` contract shape: a PURE compute,
+    never itself a store write).
 
     Session-honesty first: ``desk_sessions.refuse_if_not_a_session`` is checked before any bar is
-    read for detection (no separate compute-manager/route layer exists yet this iteration, so this
-    function plays that role) -- a non-session date raises ``PlaybookSessionRefused`` and NOTHING
-    is walked. Per member: no 5m bars for the session, a thin/zero baseline, or no buildable opening
-    range are each a disclosed ``absences`` row (never a crash, never a guess); everything else
-    reaches the detector, which may add a signal, an ``ambiguous_outside_bar`` diagnostic, or
-    neither (a legitimate "the setup did not form" outcome -- not an absence).
+    read for detection -- a non-session date raises ``PlaybookSessionRefused`` and NOTHING is
+    walked. Per member: no 5m bars for the session, a thin/zero baseline, or no buildable opening
+    range are each a disclosed ``absences`` row (never a crash, never a guess) -- ALL FOUR
+    detector families share this one gate (a deliberate J-04 simplification: spec §3.1 scopes "no
+    OR" absence to the OR-break family alone, but sharing the gate keeps J-01/J-02's own absence
+    contract byte-unchanged, at the cost of also skipping jbe/dbi/cup_handle on the rare session
+    with 5m coverage but no buildable opening range -- see the dev handoff). Everything else
+    reaches the detectors, each of which may add zero, one, or (jbe/dbi's own ladder) up to
+    ``PLAYBOOK_MAX_JBE_SIGNALS_PER_SESSION`` signals, plus (OR-break only) an
+    ``ambiguous_outside_bar`` diagnostic -- a formation that never forms or never triggers is a
+    legitimate "the setup did not form" outcome, not an absence.
 
     J-02: every detected signal is measured in the SAME pass -- ``_measure_signal`` attaches
     ``forward`` (the rail's own ``_measure_from`` shape, anchored on the finest series THIS
@@ -563,35 +581,57 @@ def compute_playbook(
             session_5m, or_result, baseline, symbol, session_date, index_bars, index_baseline,
             params, _prior_session_close(bars_5m, session_date),
         )
-        if signal is not None:
-            session_1m = rth_session_slice(bars_1m, session_date)
-            forward, breached, measure_bars, tf_minutes = _measure_signal(signal, session_5m, session_1m)
-            signal["forward"] = forward
-            signal["invalidation_breached"] = breached
-            signals.append(signal)
+        # J-04: the continuation family (jbe/dbi, each up to a 2-step ladder) and cup_handle (at
+        # most 1) detect on the SAME `session_5m`/baseline this symbol already resolved for the
+        # OR-break pair -- they run beside it, gated by the SAME "a valid opening range exists"
+        # branch (a deliberate, documented simplification: spec §3.1's "no OR" absence is scoped
+        # to the OR-break family alone, but sharing the gate here keeps the absence contract
+        # exactly as J-01/J-02 shipped it -- zero risk to their own behavior; see the dev handoff).
+        detected_signals: list[dict] = [signal] if signal is not None else []
+        detected_signals.extend(
+            detect_jbe(session_5m, baseline, symbol, session_date, index_bars, index_baseline, params)
+        )
+        detected_signals.extend(
+            detect_dbi(session_5m, baseline, symbol, session_date, index_bars, index_baseline, params)
+        )
+        cup_signal = detect_cup_handle(
+            session_5m, baseline, symbol, session_date, index_bars, index_baseline, params
+        )
+        if cup_signal is not None:
+            detected_signals.append(cup_signal)
 
-            pool_key = f"{signal['setup_id']}:{signal['side']}"
-            count_so_far = pool_counts.get(pool_key, 0)
-            pool_counts[pool_key] = count_so_far + 1
-            if count_so_far < DESK_FORWARD_MAX_TOUCHES_PER_ROW:
-                signal_pool.setdefault(pool_key, []).append(forward)
-                sign = side_sign(signal["side"])
-                firing_key = f"{symbol}:{signal['setup_id']}"
-                firing_index = firing_counts.get(firing_key, 0)
-                firing_counts[firing_key] = firing_index + 1
-                rng = random.Random(
-                    _baseline_seed(session_date, symbol, signal["setup_id"], firing_index)
+        if detected_signals:
+            session_1m = rth_session_slice(bars_1m, session_date)
+            for signal in detected_signals:
+                forward, breached, measure_bars, tf_minutes = _measure_signal(
+                    signal, session_5m, session_1m
                 )
-                k = min(1, len(measure_bars))  # this symbol's own capped signal count is <= 1
-                for anchor_idx in _draw_anchor_indices(rng, len(measure_bars), k):
-                    anchor_bar = measure_bars[anchor_idx]
-                    baseline_pool.setdefault(pool_key, []).append(
-                        _measure_from(
-                            measure_bars, anchor_idx, anchor_bar.close, "close", tf_minutes, sign
-                        )
+                signal["forward"] = forward
+                signal["invalidation_breached"] = breached
+                signals.append(signal)
+
+                pool_key = f"{signal['setup_id']}:{signal['side']}"
+                count_so_far = pool_counts.get(pool_key, 0)
+                pool_counts[pool_key] = count_so_far + 1
+                if count_so_far < DESK_FORWARD_MAX_TOUCHES_PER_ROW:
+                    signal_pool.setdefault(pool_key, []).append(forward)
+                    sign = side_sign(signal["side"])
+                    firing_key = f"{symbol}:{signal['setup_id']}"
+                    firing_index = firing_counts.get(firing_key, 0)
+                    firing_counts[firing_key] = firing_index + 1
+                    rng = random.Random(
+                        _baseline_seed(session_date, symbol, signal["setup_id"], firing_index)
                     )
-            else:
-                pool_beyond_cap[pool_key] = pool_beyond_cap.get(pool_key, 0) + 1
+                    k = min(1, len(measure_bars))  # every signal draws exactly one baseline anchor
+                    for anchor_idx in _draw_anchor_indices(rng, len(measure_bars), k):
+                        anchor_bar = measure_bars[anchor_idx]
+                        baseline_pool.setdefault(pool_key, []).append(
+                            _measure_from(
+                                measure_bars, anchor_idx, anchor_bar.close, "close", tf_minutes, sign
+                            )
+                        )
+                else:
+                    pool_beyond_cap[pool_key] = pool_beyond_cap.get(pool_key, 0) + 1
         if diagnostic is not None:
             diagnostics.append(diagnostic)
         if progress is not None:

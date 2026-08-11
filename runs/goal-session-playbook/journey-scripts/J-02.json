@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "journey": "J-02",
+  "name": "Every signal measured — the rail's own conventions, anchored at the trigger bar",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-02", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 2, "journey": "J-02", "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-08-07"}, "expect": {"text": "Open-Low Break"}},
+    {"n": 3, "journey": "J-02", "action": {"type": "click", "target": {"testid": "desk-playbook-signal-row"}}, "expect": {"text": "forward measurement"}}
+  ]
+}

@@ -147,3 +147,55 @@ future browser checks to their own scratch folder; settle in writing whether the
 signature counts as the "parameters hash" the goal names, before the back-scan and evidence pages
 reuse the same provenance line; and re-take pictures of the lower Desk sections, which are now too
 far down a very tall page for the headless browser to photograph.
+
+---
+
+## Iteration 4 — goal-playbook-iter-4
+
+**Date:** 2026-08-11T02:20:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-04 "The continuation family" (jump-base-explosion, drop-base-implosion,
+  cup-and-handle)
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-01 "The signal contract", J-02 "Every signal measured", J-03 "The Playbook
+  lands on /desk" all passing (re-verified this iteration by browser rows and by the evaluator's
+  own full test run); J-05..J-09 failing (not targeted); J-10 "The kept product stands" partial —
+  its browser walk and golden replay passed again, but its own wording still asks for 20 Claude
+  tools and there are 18 until J-09 ships
+- Anti-goal violations: iteration 3's open minor one (a made-up test record in the operator's own
+  store) is now RESOLVED — the file is gone and this iteration's browser checks ran against a
+  scratch folder. One minor one was found AND fixed inside this iteration (a short "drop-base"
+  signal was labelled "ascending base" when the code measured the opposite). One NEW minor one is
+  OPEN: the sentence the product prints beside every new record still says it only detects
+  opening-range breaks.
+
+**Reasoning:** I checked the work myself instead of trusting the write-ups. I opened the pictures
+for all three new setups and saw each one legible with its own numbers: a Jump-Base Explosion (long)
+and a Drop-Base Implosion (short) with base width, jump size and break slot; a Cup and Handle (long)
+with cup length, depth, handle retrace and the three volume medians; and a second Jump-Base row for
+the same symbol carrying "ladder step ratio 0.68", which is the first real proof of the repeat-firing
+fix made two iterations ago. I re-ran the whole backend test suite to completion: exit 0, 2061 passed
+and 8 skipped, above the 2036 floor. I asked the running code for the pin (08e471b10130e1e2), counted
+the Claude tools (18) and the menu items (three), and used git to prove the measuring rail and every
+other protected file have zero changes. In the owner's own records I found the old 2026-06-22 file
+sitting untouched beside a new one written under the new settings — the "write a new version, never
+rewrite the old" rule working on real data, with five real signals on real symbols. The one thing I
+found that nobody else did: the paragraph the product prints beside every record, and the heading on
+the page, still say the section holds "opening-range-break signals", while that new real record
+contains only jump-base and drop-base signals. Nothing is faked and every signal describes itself
+correctly, but the summary sentence now says less than the truth.
+
+**Next-step recommendation:** Build J-05 "The climax family" (capitulation entry and the euphoria
+marker) next, and run it as a deep iteration with the auditor again — the auditor was the only
+reader who caught two real problems this time. Carry three small items inside the same cycle:
+first, rewrite the sentence printed beside every record and the heading on the Desk page so they
+name all the setup families the product now records (this does not change any number and does not
+re-key any record); second, re-take one picture of the drop-base signal row, because the wording fix
+landed after the pictures were taken; third, put back the clean rebuild step before the browser
+checks, which was skipped this time. Two questions for the owner, written down and cheap to answer
+now, expensive after the back-scan: whether the book's 1.5x jump-to-base rule is meant to be
+unreachable under the current numbers, and whether the cup's rim test should use the rim constant
+the spec names rather than the near-high one the code uses.

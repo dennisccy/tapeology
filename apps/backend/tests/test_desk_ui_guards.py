@@ -157,6 +157,10 @@ def test_structure_prefill_guard_can_fail_on_a_seeded_violation():
 # values are already reached through the EXISTING `touchRow.*`/`touchValue.*`/`avgCell.*` bindings
 # this guard already covers -- see test_desk_page_price_arithmetic_guard_catches_playbook_field_
 # arithmetic below for the counter-test proving both the new and the reused bindings are caught.
+# goal-playbook-iter-4 (J-04): extended AGAIN for the continuation family (jbe/dbi) and cup_handle's
+# own NEW `signal.geometry.*` numerics -- `PlaybookSignalDetail`'s two new setup-branches render
+# every one of these verbatim (base/jump geometry + ladder-step-ratio; cup/handle geometry + the
+# three RVOL medians), never a client-recomputed spread or ratio.
 _PRICE_ARITHMETIC_FIELDS = (
     r"row\.(?:distance_bps|price_low|price_high|reference_close"
     r"|opposite_band\.(?:distance_bps|price_low|price_high|band_score)"
@@ -168,6 +172,9 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|avgCell\.(?:mean_pct|median_pct)"
     r"|summaryCell\.(?:mean_pct|median_pct)"
     r"|signal\.(?:trigger_price|invalidation_price)"
+    r"|geometry\.(?:jump_mbr|base_range_mbr|ladder_step_ratio|cup_depth_mbr|handle_retrace_frac"
+    r"|handle_duration_frac|cup_middle_third_rvol_median|cup_outer_third_rvol_median"
+    r"|handle_rvol_median)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -268,6 +275,68 @@ def test_desk_page_price_arithmetic_guard_catches_playbook_field_arithmetic():
 
     seeded_baseline = "const edge = avgCell.mean_pct - avgCell.median_pct;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_baseline) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_continuation_and_cup_handle_field_arithmetic():
+    """goal-playbook-iter-4 (J-04) counter-test: the extended guard catches arithmetic on the
+    continuation family's (jbe/dbi) and cup_handle's own NEW `geometry.*` bindings."""
+    seeded_jbe = "const net = geometry.jump_mbr - geometry.base_range_mbr;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_jbe) is not None
+
+    seeded_ladder = "const decay = geometry.ladder_step_ratio * 2;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_ladder) is not None
+
+    seeded_cup = "const drop = geometry.cup_depth_mbr - geometry.handle_retrace_frac;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_cup) is not None
+
+    seeded_rvol_contrast = (
+        "const contrast = geometry.cup_middle_third_rvol_median / geometry.cup_outer_third_rvol_median;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_rvol_contrast) is not None
+
+    seeded_handle_rvol = "const dry = geometry.handle_rvol_median - geometry.cup_outer_third_rvol_median;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_handle_rvol) is not None
+
+
+# goal-playbook-iter-4 audit (F1): `base_lows_ascending` is ONE served field name carrying the
+# direction-appropriate triangle check underneath (non-decreasing LOWS for `jbe`, non-increasing
+# HIGHS for `dbi` -- see `desk_playbook_detect._base_lows_ascending`). The continuation geometry
+# line must therefore label the shape the detector ACTUALLY measured for that side; a single
+# unconditional "ascending base" string described a dbi base as the opposite of what was measured.
+_CONTINUATION_GEOMETRY_LINE = re.compile(
+    r'data-testid="desk-playbook-signal-continuation-geometry".*?</p>', re.DOTALL
+)
+
+
+def test_desk_page_labels_the_dbi_base_shape_as_descending_not_ascending():
+    """The rendered base-shape label branches on `setup_id`: `jbe` reads "ascending base" (its
+    lows), `dbi` reads "descending base" (its highs) -- never one unconditional word for both."""
+    source = _DESK_PAGE.read_text()
+    match = _CONTINUATION_GEOMETRY_LINE.search(source)
+    assert match is not None, "the jbe/dbi geometry line is missing from apps/frontend/app/desk/page.tsx"
+    line = match.group(0)
+    assert "base_lows_ascending" in line
+    assert "ascending base" in line and "descending base" in line, (
+        "the continuation geometry line must render BOTH direction labels -- rendering only "
+        '"ascending base" describes a dbi (short) base as the opposite of the measured geometry'
+    )
+    assert 'signal.setup_id === "jbe"' in line, (
+        "the base-shape label must be selected by setup_id, so each side reads the shape its own "
+        "detector actually measured"
+    )
+
+
+def test_dbi_base_shape_label_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- the pre-audit shape (one unconditional "ascending base") is caught."""
+    seeded_line = (
+        '<p data-testid="desk-playbook-signal-continuation-geometry">'
+        '{geometry.base_flatline && " · flatline base"}'
+        '{geometry.base_lows_ascending && " · ascending base"}</p>'
+    )
+    match = _CONTINUATION_GEOMETRY_LINE.search(seeded_line)
+    assert match is not None
+    assert "descending base" not in match.group(0)
+    assert 'signal.setup_id === "jbe"' not in match.group(0)
 
 
 # goal-desk-iter-24 (J-16) TC-7 (a): the ranked table's own reflow adds a `rank` cell rendering

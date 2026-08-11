@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-playbook-iter-4",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk is your intraday setup scanner. It loads with the Playbook Signals section, ready to analyze recorded trading sessions.",
+      "point_out": "The Playbook Signals panel is visible with a date input field and a Run Playbook button.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Playbook Signals"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Enter a session date",
+      "narration": "The Playbook analyzes one trading session at a time. We'll examine a session from June 22, 2026, which fired all three new setup types.",
+      "point_out": "The date field now contains the session date.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": {
+          "testid": "desk-playbook-date-input"
+        },
+        "text": "2026-06-22"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Run the Playbook",
+      "narration": "Click to scan the session for signals. The Playbook detects setup patterns using the pre-registered rules in the specification.",
+      "point_out": "The button shows Computing… briefly, then returns to Run Playbook with a completion message.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Run Playbook"
+        }
+      },
+      "expect": {
+        "text": "Playbook run complete"
+      }
+    },
+    {
+      "n": 4,
+      "title": "View the signals table with new setup types",
+      "narration": "The table displays every setup detected in the session. You now see three new setup types — Jump-Base Explosion, Drop-Base Implosion, and Cup and Handle — each with its own chip label in the setup column.",
+      "point_out": "The signals table shows rows for LADDER (Jump-Base Explosion), DBI1 (Drop-Base Implosion), and CUP1 (Cup and Handle) with distinct setup chips.",
+      "journey": "J-04",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "desk-playbook-table"
+        }
+      },
+      "expect": {
+        "text": "Jump-Base Explosion"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Expand a Jump-Base Explosion signal",
+      "narration": "JBE shows a tight consolidation base followed by a sharp upside move. Click the row to see the base width in MBR, the jump size, and the bar where it broke.",
+      "point_out": "The detail panel expands, showing the JBE-specific geometry line: base width, bar count, jump size, breakout slot, and base quality notes.",
+      "journey": "J-04",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-playbook-signal-row']:has-text('Jump-Base Explosion')"
+        }
+      },
+      "expect": {
+        "text": "base"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Expand a Drop-Base Implosion signal",
+      "narration": "DBI is the short-side mirror of JBE. The same geometry fields show base and jump magnitudes, direction-flipped for a downside move.",
+      "point_out": "The detail panel shows the DBI geometry line with base width, bar count, jump size for the short side.",
+      "journey": "J-04",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-playbook-signal-row']:has-text('Drop-Base Implosion')"
+        }
+      },
+      "expect": {
+        "text": "base"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Expand a Cup and Handle signal",
+      "narration": "Cup and Handle shows a different geometry: a rounded cup pullback, then a smaller handle retrace, then a breakout. The disclosure includes cup bar count, depth in MBR, handle retrace and duration fractions, and three relative volume medians.",
+      "point_out": "The detail panel displays Cup and Handle geometry: cup bars and depth, handle retrace fraction, handle duration, and the three RVOL medians describing volume distribution.",
+      "journey": "J-04",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-playbook-signal-row']:has-text('Cup and Handle')"
+        }
+      },
+      "expect": {
+        "text": "cup"
+      }
+    }
+  ]
+}

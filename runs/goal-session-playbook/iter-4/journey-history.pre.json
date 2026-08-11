@@ -1,0 +1,135 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The signal contract — opening-range breaks end to end, lookahead-clean and pre-registered",
+      "status": "passing",
+      "last_verified_iter": "goal-playbook-iter-3",
+      "last_passing_iter": "goal-playbook-iter-3",
+      "first_seen_iter": "goal-playbook-iter-0",
+      "last_evidence_path": "apps/backend/tests/test_desk_playbook.py::test_seed_collision_fix_reproduces_byte_identical_output_for_recordable_data",
+      "spec_hash": "338cba3f562bbb5b9c4fc0736b6a6744f16cc67a6560373adeb93eaa50d9d3a5",
+      "note": "goal.md tags J-01 keyless/automated — the suite is its evidence; the browser lane's UT-J-01 regression row this iteration is DEFERRED-BUDGET (not run, prior status kept). Evaluator re-verified independently in iter-3: full suite run to completion, exit 0, 2044 collected = 2036 passed / 8 skipped / 0 failed (floor 2025/8). Detection behavior is unchanged by design — the only diffs to desk_playbook_detect.py/desk_playbook_features.py are the side_sign consolidation (identical arithmetic, ±1.0) and the new helper itself; the seed recipe is proven byte-identical at firing_index 0 (test_baseline_seed_at_firing_index_zero_matches_the_original_recipe_literal + test_seed_collision_fix_reproduces_byte_identical_output_for_recordable_data). Fingerprint 08e471b10130e1e2 verified live; desk_forward.py zero diff."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Every signal measured — the rail's own conventions, anchored at the trigger bar",
+      "status": "passing",
+      "last_verified_iter": "goal-playbook-iter-3",
+      "last_passing_iter": "goal-playbook-iter-3",
+      "first_seen_iter": "goal-playbook-iter-0",
+      "last_evidence_path": "apps/backend/tests/test_desk_playbook.py::test_measure_signal_and_measure_from_produce_byte_identical_leaves",
+      "spec_hash": "daf2c5226d5670fe31f545f446bbff18ae691c80945948aa6b39062313ad423d",
+      "note": "goal.md tags J-02 '(Keyless; automated.)' — no browser acceptance step; the browser lane's UT-J-02 row this iteration is DEFERRED-BUDGET (not run, prior status kept). Evaluator re-verified in iter-3: full suite exit 0, 2036 pass / 8 skip. Convention identity still proven (test_measure_signal_and_measure_from_produce_byte_identical_leaves); the sign multiplier moved from three inline literals to one owner (desk_playbook_features.side_sign) with the SAME values, guard-tested that no playbook module imports desk_forward._side_sign (which answers +1.0 for 'short' and would have flipped every short signal). Real-data confirmation as a bonus: the iter-3 browser pass rendered a genuine TXN open_low_break short measured across 1m/5m/1h/4h/close beside its seeded baseline (reports/qa/goal-playbook-iter-3-evidence/J-03-TC2-populated-table.png)."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The Playbook lands on /desk",
+      "status": "passing",
+      "last_verified_iter": "goal-playbook-iter-3",
+      "last_passing_iter": "goal-playbook-iter-3",
+      "first_seen_iter": "goal-playbook-iter-0",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-3-evidence/J-03-TC2-populated-table.png",
+      "spec_hash": "df6f87df5e792376a4b8bc4b6f7c17b10affd38e579fc65a74e00f1459245834",
+      "note": "Six screenshots opened by the evaluator, all showing the claimed end state: TC-1 'Playbook not computed for this session.' + ENABLED Run Playbook (J-03-TC1-empty-state.png); TC-2 populated table — record playbook-2026-08-07-fe29f0b6eb53, signature 5b70ba860b5efd47, fingerprint 08e471b10130e1e2, TXN Open-Low Break short @ 09:55:00 ET / 283.17, invalidation 286.48, full per-horizon forward + dual-MDD cells, signals-vs-baseline summary, honest 'market (SPY): unavailable' disclosure (J-03-TC2-populated-table.png); TC-3 'Refused — a playbook compute is already running...' beside a live 0/101 progress + Cancel (J-03-TC3-single-flight-refusal.png); TC-4 the backend's own non-session refusal sentence verbatim, no compute started (J-03-TC4-non-session-refusal.png); TC-5 a payload_version 1 record rendering the literal 'measurement not recorded in this record' in the forward, invalidation and baseline cells (J-03-TC5-legacy-record-absence.png); TC-6 the shipped sections rendering as shipped plus all 10 shipped headings enumerated live (J-03-TC6-shipped-sections-intact.png). Provenance renders record id + playbook_input_signature + config_fingerprint + a composition disclosure; no separate 'parameters hash' field exists on the backend — scored as satisfied, see assumptions.md (iter-3)."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The continuation family — JBE, DBI, cup-and-handle",
+      "status": "failing",
+      "last_verified_iter": "goal-playbook-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-playbook-iter-0",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-0-evidence/J-03-desk-no-playbook.png",
+      "spec_hash": "5fb304e920f2f3edb11dfb430cd6e4e0d5641dd2e069d14323cc01a25b79fe24",
+      "note": "Not targeted. Still absent: the iter-3 populated table shows only open_low_break (the J-01 family). The J-03 section renders whatever GET /research/desk/playbook serves, so this family lands into it with no UI rework."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The climax family — capitulation entry, euphoria marker",
+      "status": "failing",
+      "last_verified_iter": "goal-playbook-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-playbook-iter-0",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-0-evidence/J-03-desk-no-playbook.png",
+      "spec_hash": "93fee8f5f226e288d1c99275e5c6f85e9cae79251b4d415ff9afec5b80df9b5a"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "The range family — range trades, double top/bottom",
+      "status": "failing",
+      "last_verified_iter": "goal-playbook-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-playbook-iter-0",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-0-evidence/J-03-desk-no-playbook.png",
+      "spec_hash": "406f002e469059c8c929ba36489f76c072789e79e5b5f3a1777b1778252e8a97"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The back-scan — every recorded session, resumable and append-only",
+      "status": "failing",
+      "last_verified_iter": "goal-playbook-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-playbook-iter-0",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-0-evidence/J-07-route-404.png",
+      "spec_hash": "0b3c151c578cd88e152115e32c453e1a648748bf7e42d5bc81d2617670647468"
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The evidence view — distributions beside the null, min-n honest",
+      "status": "failing",
+      "last_verified_iter": "goal-playbook-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-playbook-iter-0",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-0-evidence/J-08-route-404.png",
+      "spec_hash": "10b95ac2e424c51cfa2eb39ea9c4d79843bdc9aa0b15b7ae5a11182f31a321c8"
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "MCP contract v4 — 20 read-only tools",
+      "status": "failing",
+      "last_verified_iter": "goal-playbook-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-playbook-iter-0",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-0-ui-test-results.md#UT-J-09",
+      "spec_hash": "614ddbd53a88195220e6b579ecc6889711d4773150f1e8b26c1e8b2a136adc3b",
+      "note": "Still 18 tools: the evaluator imported app.mcp._STATIC_PATHS live in iter-3 and counted 12 static entries (18 tools with the six parameterized), and git diff on app/mcp/__init__.py is empty — exactly as iter-3's OUT OF SCOPE requires."
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — regression sentinel",
+      "status": "partial",
+      "last_verified_iter": "goal-playbook-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-playbook-iter-0",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-3-evidence/J-10-verify.png",
+      "spec_hash": "47f9a7c5f21a5d62c711ac8436d731206791d63d71eea86377d27366ad1f1242",
+      "evidence_makeup": true,
+      "note": "Kept product verified again this iteration: stored golden replay (journey-scripts/J-10.json, git-unmodified) PASS 1/1 — cockpit SIM-BUYER watch, /structure AAPL Load expecting the 300.11 wall, /desk expecting Forward Returns (reports/phase-goal-playbook-iter-3-regression-replay-results.md + J-10-verify.png, opened by the evaluator). Full suite re-run by the evaluator: exit 0, 2036 pass / 8 skip. Fingerprint 08e471b10130e1e2 live. Zero diff verified against desk_forward.py, desk_screen*.py, setups.py, bars.py, levels.py, config.py, mcp/__init__.py, meta.py (UI_ROUTES), test_no_execution_path.py, test_copy_discipline.py. TC-6 enumerated all 10 shipped /desk headings live, unchanged, with Playbook Signals appended last. HELD AT partial for the SAME reason as iters 0/1/2: J-10's own text requires 'MCP = exactly 20 tools' and there are 18 until J-09 ships. evidence_makeup: the /desk page is now ~37,000px tall and headless Chrome paints blank past a deep scroll, so the shipped tail sections (Top-up Runs, Index Reconciliation, Screen Runs, Screen Comparison, Provenance) were evidenced by live heading enumeration rather than their own screenshots — a capture defect, not a behavior gap; re-capture as a passenger task using the section-collapse technique the browser-qa agent already documented."
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-playbook-iter-1",
+      "anti_goal": "no fabricated data (Foundation invariants / Era-1-2 constitution) — and T-5 'Fail closed, disclose the absence'",
+      "severity": "critical",
+      "evidence": "apps/backend/app/research/desk_playbook_features.py:123 — the 5m opening-range fallback sliced session_5m[:3] positionally, so a session whose 09:30/09:35 bars are missing was served an 'opening range' built from 09:40/09:45/09:50 and disclosed as genuine (basis '5m'), plus a signal derived from it. Found and FIXED inside iteration 1 by the auditor (docs/handoffs/goal-playbook-iter-1-audit.md sections 2/B1 and 4); both bases now filter to the same 09:30..09:45 epoch window and a gapped session yields the honest absence row. Regression test apps/backend/tests/test_desk_playbook_features.py:117. Re-confirmed still fixed in iter-2 and iter-3 (zero behavioral diff to that file; its tests pass).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-playbook-iter-1",
+      "anti_goal": "No threshold exists outside the spec, and no code path sweeps one — 'Every detector rule and threshold exists in docs/playbook-detector-spec.md BEFORE the code that uses it'",
+      "severity": "minor",
+      "evidence": "apps/backend/app/research/desk_playbook_detect.py:276 — `principles = [\"P4\"] if spike_verdict == \"constructive\" else []` settled a spec RULE in code (audit B4). RESOLVED in iter-2 by a documentation-only spec edit: docs/playbook-detector-spec.md section 3.1 now states the rule in prose, and TC-20 (tests/test_desk_playbook.py:682) asserts the described source line is byte-unchanged. The sibling audit item B3 (PLAYBOOK_OR_MIN_1M_BARS missing from section 1's table) was closed in the same edit.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-playbook-iter-3",
+      "anti_goal": "no fabricated data (Foundation invariants) — hygiene only: a synthetic, self-disclosing test record was written into the operator's own local playbook store by the verification lane",
+      "severity": "minor",
+      "evidence": "apps/backend/.data/playbook/playbook-2026-08-04-e0f249f57785.json — planted by the browser-qa lane to exercise TC-5 (the legacy payload_version 1 absence state). It is NOT committed (.gitignore:72 covers .data/), it declares itself in its own payload (playbook_input_signature 'bqa-legacy-fixture-signature', register 'a pre-measurement J-01-era register string (browser-qa TC-5 fixture)'), and the era's 'evidence pools ONE signature' rail structurally prevents it from ever entering a distribution. Scored minor, not critical: nothing was rewritten or perturbed (append only), nothing synthetic is presented as real, nothing left the machine. FIX: delete that one file from the local store (v1 correctly exposes no delete method, so this is a manual file removal outside the app), and point future browser-QA plants at a scoped TAPEOLOGY_DESK_PLAYBOOK_DIR instead of the operator's store.",
+      "resolved": false
+    }
+  ],
+  "updated_at": "2026-08-10T21:20:00Z"
+}

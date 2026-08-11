@@ -106,6 +106,17 @@ tolerance (index-MBR) of its session low — mirrored for shorts. No SPY bars fo
 - `neutral` — otherwise.
 Disclosure only, never a gate.
 
+**Provenance ("the parameters hash").** Every served playbook payload already carries
+`playbook_input_signature` (the sha256[:16] over the recorded series' `(symbol, timeframe, id,
+checksum)` tuples, `config_fingerprint`, and the canonical `parameters` blob — see §1's closing
+paragraph) beside `config_fingerprint` and the verbatim `parameters` object itself. Together these
+three already-served fields ARE the goal's own "parameters hash" line — the signature is a hash
+*of* the parameters (among other inputs), and the parameters themselves are served alongside it in
+full, so nothing is hidden and nothing is re-derivable-but-undisclosed. This is a documentation-only
+ruling, not a new field: no source constant moves and no payload key is added or renamed by it (J-04
+carries this ruling forward from the iteration that raised it, mirroring the `PLAYBOOK_OR_MIN_1M_BARS`
+prose-to-table promotion pattern below).
+
 **Shared disclosure block on every signal:** `rvol_trigger_bar` (post-hoc),
 `approach_rvol_max`, `spike_into_trigger_verdict` (the discriminator), `spiky_approach`
 (single-bar vertical into the level), the market block, `attempt_count` at `T` (pre-trigger
@@ -140,12 +151,14 @@ continuation, P5 decreasing-volume reversal, P6 passive accumulation/distributio
 | `PLAYBOOK_BASE_MIN_BARS` | 3 | ADAPTATION — book gives no consolidation duration |
 | `PLAYBOOK_BASE_MAX_BARS` | 12 | ADAPTATION — 60-min cap; beyond it the "base" is the day's range |
 | `PLAYBOOK_BASE_MAX_RANGE_MBR` | 2.0 | ADAPTATION — relative form of the ≤25c narrow base |
+| `PLAYBOOK_BASE_FLATLINE_MAX_MBR` | 1.0 | ADAPTATION — §3.3/§3.4's own prose ("base range ≤ 1.0 MBR — the flatline-at-the-high variation") named as a constant (J-04, the `PLAYBOOK_OR_MIN_1M_BARS` precedent) |
 | `PLAYBOOK_NEAR_EXTREME_MBR` | 1.0 | ADAPTATION — mechanical "near the high/low" |
 | `PLAYBOOK_PIVOT_LOOKBACK_BARS` | 3 | ADAPTATION — 5m intraday N for the strict-pivot rule |
 | `PLAYBOOK_CUP_MIN_BARS` | 6 | BOOK — cup ≥ 30 min |
 | `PLAYBOOK_CUP_OPTIMAL_BARS` | 12 | BOOK — ≥ 1 h optimal (disclosure only) |
 | `PLAYBOOK_HANDLE_MAX_RETRACE_FRAC` | 0.5 | BOOK — handle ≤ 50% of cup depth |
 | `PLAYBOOK_HANDLE_MAX_DURATION_FRAC` | 0.30 | BOOK — handle ≤ 30% of cup duration (25% desirable → disclosure) |
+| `PLAYBOOK_HANDLE_DESIRABLE_DURATION_FRAC` | 0.25 | BOOK — this row's own "25% desirable" parenthetical, named as a constant (J-04, the `PLAYBOOK_OR_MIN_1M_BARS` precedent) so `handle_duration_desirable` reads through `playbook_parameters()` like every other threshold |
 | `PLAYBOOK_RIM_MATCH_MBR` | 1.0 | ADAPTATION — "cup edges at the day's high" tolerance |
 | `PLAYBOOK_MIN_STRUCTURE_DEPTH_MBR` | 2.0 | ADAPTATION — min cup depth AND min valley depth |
 | `PLAYBOOK_VERTICAL_WINDOW_BARS` | 3 | ADAPTATION — "near-vertical" window (15 min) |

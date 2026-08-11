@@ -896,3 +896,137 @@ def test_compute_playbook_progress_and_should_abort_wiring(tmp_path, bar_store, 
         should_abort=lambda: True,
     )
     assert aborted["signals"] == [] and aborted["absences"] == []
+
+
+# === goal-playbook-iter-4 (J-04): the continuation family wired into the real compute walk ========
+
+
+def _plant_ladder_baseline_sessions(bar_store: BarStore, symbol: str) -> None:
+    """10 prior RTH 5m sessions, 22 bars each (matching the ladder fixture's OWN session length --
+    ``_plant_baseline_sessions``'s shared 6-bar-per-day helper would leave ``slot_volume_medians``
+    covering only slots 0-5, starving every base/trigger bar at slot >= 6 of an RVOL -- every
+    continuation-family volume gate is fail-closed on a missing median, so this iteration needs its
+    own, longer baseline planter rather than widening the shared one every other playbook test
+    already depends on)."""
+    bars = []
+    for day in _BASELINE_DATES:
+        day_open = E_OPEN - (22 - int(day[-2:])) * 86_400.0
+        for slot in range(22):
+            bars.append(_bar(symbol, "5m", day_open + slot * 300.0, 100.0, 100.5, 99.5, 100.0, 1000))
+    _plant(bar_store, symbol, "5m", bars)
+
+
+def _plant_ladder_jbe_session(bar_store: BarStore, symbol: str) -> None:
+    """A real ``BarStore``-backed session where the SAME ``(symbol, "jbe")`` pair fires TWICE --
+    the ``test_desk_playbook_detect.py`` ladder fixture, planted as 5m bars only (the opening
+    range degrades to its own 5m basis, honestly, per the shared absence gate this iteration's
+    continuation detectors ride on -- see ``compute_playbook``'s own docstring)."""
+    bars_5m = [
+        _bar(symbol, "5m", E_OPEN, 98.4, 98.5, 98.0, 98.3, 1200),
+        _bar(symbol, "5m", E_OPEN + 300.0, 98.3, 98.4, 98.1, 98.3, 1200),
+        _bar(symbol, "5m", E_OPEN + 600.0, 98.3, 98.4, 98.05, 98.3, 1200),
+        _bar(symbol, "5m", E_OPEN + 900.0, 98.3, 98.45, 98.2, 98.3, 1200),
+        _bar(symbol, "5m", E_OPEN + 1200.0, 98.3, 98.4, 98.15, 98.3, 1200),
+        _bar(symbol, "5m", E_OPEN + 1500.0, 98.3, 98.5, 98.3, 98.4, 3000),
+        _bar(symbol, "5m", E_OPEN + 1800.0, 103.5, 103.8, 103.2, 103.6, 400),
+        _bar(symbol, "5m", E_OPEN + 2100.0, 103.6, 104.0, 103.3, 103.7, 500),
+        _bar(symbol, "5m", E_OPEN + 2400.0, 103.7, 103.9, 103.4, 103.8, 450),
+        _bar(symbol, "5m", E_OPEN + 2700.0, 103.9, 104.8, 103.8, 104.5, 1500),  # step 1 trigger
+        _bar(symbol, "5m", E_OPEN + 3000.0, 104.5, 104.6, 104.3, 104.4, 1200),
+        _bar(symbol, "5m", E_OPEN + 3300.0, 104.4, 104.5, 104.2, 104.3, 1200),
+        _bar(symbol, "5m", E_OPEN + 3600.0, 104.3, 104.4, 104.1, 104.2, 1200),
+        _bar(symbol, "5m", E_OPEN + 3900.0, 104.2, 104.3, 104.0, 104.1, 1200),
+        _bar(symbol, "5m", E_OPEN + 4200.0, 104.1, 104.2, 103.9, 104.0, 1200),
+        _bar(symbol, "5m", E_OPEN + 4500.0, 104.0, 104.3, 103.9, 104.2, 3000),
+        _bar(symbol, "5m", E_OPEN + 4800.0, 107.5, 107.8, 107.2, 107.6, 400),
+        _bar(symbol, "5m", E_OPEN + 5100.0, 107.6, 108.0, 107.3, 107.7, 500),
+        _bar(symbol, "5m", E_OPEN + 5400.0, 107.7, 107.9, 107.4, 107.8, 450),
+        _bar(symbol, "5m", E_OPEN + 5700.0, 107.9, 108.8, 107.8, 108.5, 1500),  # step 2 trigger
+        _bar(symbol, "5m", E_OPEN + 6000.0, 108.5, 108.7, 108.3, 108.6, 900),
+        _bar(symbol, "5m", E_OPEN + 6300.0, 108.6, 108.8, 108.4, 108.7, 900),
+    ]
+    _plant(bar_store, symbol, "5m", bars_5m)
+
+
+def test_real_two_firing_jbe_fixture_draws_independent_baseline_anchors_via_compute_playbook(
+    tmp_path, bar_store,
+):
+    """TC-8: the FIRST real exercise of the iter-3 seed-collision fix on an actual multi-fire
+    signal (not just the synthetic fixture `test_two_firings_of_the_same_symbol_setup_pair_draw_
+    independent_non_colliding_anchors` already proves the machinery with) -- two `jbe` signals
+    fire for the SAME symbol in one session, and their baseline draws land on different anchor
+    bars because `firing_index` genuinely increments 0 -> 1 across them."""
+    universe_store = _register_universe(tmp_path, ["LADDER"])
+    _plant_ladder_baseline_sessions(bar_store, "LADDER")
+    _plant_ladder_jbe_session(bar_store, "LADDER")
+
+    result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+
+    jbe_signals = [s for s in result["signals"] if s["setup_id"] == "jbe"]
+    assert len(jbe_signals) == 2
+    assert jbe_signals[0]["geometry"]["slots_to_break"] < jbe_signals[1]["geometry"]["slots_to_break"]
+    assert jbe_signals[0]["geometry"]["ladder_step_ratio"] is None
+    assert jbe_signals[1]["geometry"]["ladder_step_ratio"] is not None
+
+    pool = result["baseline_anchors"]["jbe:long"]
+    assert len(pool) == 2  # both firings' own draws pooled -- neither one silently dropped
+    assert pool[0]["at_utc"] != pool[1]["at_utc"]  # independent, non-colliding anchor bars
+
+    # Determinism: a second, fresh compute over the identical inputs reproduces byte-identically.
+    second = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+    assert second["baseline_anchors"]["jbe:long"] == pool
+
+
+# --- TC-9 / TC-10: the new setups tuple re-keys, it never rewrites -----------------------------
+
+
+def test_j04_new_setups_tuple_moves_the_signature_and_mints_a_new_version_beside_the_old_file(
+    tmp_path, bar_store, universe_store, monkeypatch,
+):
+    """Simulates 'a file already recorded under the J-01/J-02/J-03-era, 2-setup parameters' by
+    monkeypatching `PLAYBOOK_SETUPS` down to its pre-J-04 value for ONE recording (the
+    `_record_aaa` fixture's own 6-bar session is too short for `jbe`/`dbi`/`cup_handle` to ever
+    fire regardless of which code computed it -- see `_find_one_continuation`'s own
+    `jump_lookback_bars` floor -- so this monkeypatch isolates exactly the ONE thing this
+    iteration actually changed for an already-recorded file's own inputs: the parameters blob's
+    `setups` list, and therefore the signature).
+
+    TC-9: the pre-J-04 file's own bytes on disk are UNCHANGED by a fresh, post-J-04 compute over
+    the identical inputs. TC-10: that fresh compute mints a genuinely NEW record (new signature,
+    new id) beside the old one -- re-keying, never rewriting -- and the OR-break signal's own
+    CONTENT (not its signature) is unaffected."""
+    monkeypatch.setattr(desk_playbook_module, "PLAYBOOK_SETUPS", ("open_high_break", "open_low_break"))
+    pre_j04_store, pre_j04_meta = _record_aaa(tmp_path, bar_store, universe_store)
+    pre_j04_path = pre_j04_store._path(pre_j04_meta["id"])
+    pre_j04_sha = _sha256_file(pre_j04_path)
+    assert pre_j04_meta["parameters"]["setups"] == ["open_high_break", "open_low_break"]
+
+    monkeypatch.undo()  # restore this iteration's real 5-setup PLAYBOOK_SETUPS
+
+    current_result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+    assert current_result["parameters"]["setups"] == [
+        "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle",
+    ]
+    assert current_result["playbook_input_signature"] != pre_j04_meta["playbook_input_signature"]
+
+    current_meta = pre_j04_store.record(**current_result)
+    assert current_meta["id"] != pre_j04_meta["id"]
+
+    # TC-9: the pre-J-04 file is byte-identical, untouched by the second, differently-keyed write.
+    assert _sha256_file(pre_j04_path) == pre_j04_sha
+    assert pre_j04_store.get(pre_j04_meta["id"]) == pre_j04_meta
+
+    # TC-10: both versions are now recorded for this date; newest is the current-code one.
+    newest, versions = pre_j04_store.newest_for_date(SESSION_DATE)
+    assert versions == 2
+    assert newest["id"] == current_meta["id"]
+
+    # The OR-break signal's own CONTENT is unaffected by the new setups tuple joining the
+    # parameters blob -- zero behavior change to the family J-01/J-02/J-03 already shipped.
+    pre_j04_or_signals = [
+        s for s in pre_j04_meta["signals"] if s["setup_id"] in ("open_high_break", "open_low_break")
+    ]
+    current_or_signals = [
+        s for s in current_meta["signals"] if s["setup_id"] in ("open_high_break", "open_low_break")
+    ]
+    assert pre_j04_or_signals == current_or_signals

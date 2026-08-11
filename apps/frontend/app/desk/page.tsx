@@ -4401,6 +4401,9 @@ const PLAYBOOK_LEGACY_ABSENCE = "measurement not recorded in this record";
 function playbookSetupLabel(setupId: string): string {
   if (setupId === "open_high_break") return "Open-High Break";
   if (setupId === "open_low_break") return "Open-Low Break";
+  if (setupId === "jbe") return "Jump-Base Explosion";
+  if (setupId === "dbi") return "Drop-Base Implosion";
+  if (setupId === "cup_handle") return "Cup and Handle";
   return setupId;
 }
 
@@ -4579,13 +4582,52 @@ function PlaybookSignalDetail({
           {fmt(signal.invalidation_price)}
         </span>
       </p>
-      <p className="mt-1 text-[11px] text-slate-500">
-        opening range {fmt(geometry.or_low)}–{fmt(geometry.or_high)} ({geometry.opening_range_basis}{" "}
-        basis, {geometry.or_bars_used} bars) · width {fmt(geometry.or_width_mbr)} MBR · broke at
-        slot {geometry.slots_to_break}
-        {geometry.open_vs_prior_close_pct !== null &&
-          ` · open vs prior close ${fmt(geometry.open_vs_prior_close_pct)}%`}
-      </p>
+      {/* goal-playbook-iter-4 (J-04): the ONE geometry object now varies its own fields by
+          setup_id -- open_high_break/open_low_break's own line (J-01, unchanged); jbe/dbi's own
+          line and cup_handle's own line are the two new branches below. Every value rendered
+          verbatim from the already-served payload, never derived client-side (T-9's own guard,
+          extended in test_desk_ui_guards.py). */}
+      {(signal.setup_id === "open_high_break" || signal.setup_id === "open_low_break") && (
+        <p className="mt-1 text-[11px] text-slate-500">
+          opening range {fmt(geometry.or_low)}–{fmt(geometry.or_high)} ({geometry.opening_range_basis}{" "}
+          basis, {geometry.or_bars_used} bars) · width {fmt(geometry.or_width_mbr)} MBR · broke at
+          slot {geometry.slots_to_break}
+          {geometry.open_vs_prior_close_pct !== null && geometry.open_vs_prior_close_pct !== undefined &&
+            ` · open vs prior close ${fmt(geometry.open_vs_prior_close_pct)}%`}
+        </p>
+      )}
+      {(signal.setup_id === "jbe" || signal.setup_id === "dbi") && (
+        <p data-testid="desk-playbook-signal-continuation-geometry" className="mt-1 text-[11px] text-slate-500">
+          base {fmt(geometry.base_range_mbr)} MBR wide ({geometry.base_bars} bars) · jump{" "}
+          {fmt(geometry.jump_mbr)} MBR · broke at slot {geometry.slots_to_break}
+          {geometry.base_flatline && " · flatline base"}
+          {/* audit(goal-playbook-iter-4): ONE served field (`base_lows_ascending`, the goal's own
+              data-contract name) carries the direction-appropriate triangle check underneath —
+              non-decreasing LOWS for jbe (ascending-triangle base), non-increasing HIGHS for dbi
+              (the mirrored descending-triangle base, see `_base_lows_ascending`'s docstring). The
+              label must say which of the two was actually measured; rendering "ascending base" on a
+              dbi row described the opposite of the measured geometry. */}
+          {geometry.base_lows_ascending &&
+            (signal.setup_id === "jbe" ? " · ascending base" : " · descending base")}
+          {geometry.ladder_step_ratio !== null && geometry.ladder_step_ratio !== undefined &&
+            ` · ladder step ratio ${fmt(geometry.ladder_step_ratio)}`}
+        </p>
+      )}
+      {signal.setup_id === "cup_handle" && (
+        <p data-testid="desk-playbook-signal-cup-handle-geometry" className="mt-1 text-[11px] text-slate-500">
+          cup {geometry.cup_bars} bars · depth {fmt(geometry.cup_depth_mbr)} MBR · handle retrace{" "}
+          {fmt(geometry.handle_retrace_frac)} · handle duration {fmt(geometry.handle_duration_frac)} of
+          cup · broke at slot {geometry.slots_to_break}
+          {geometry.cup_optimal && " · optimal cup length"}
+          {geometry.handle_duration_desirable && " · desirable handle length"}
+          {" · RVOL cup mid "}
+          {fmt(geometry.cup_middle_third_rvol_median)}
+          {" / cup outer "}
+          {fmt(geometry.cup_outer_third_rvol_median)}
+          {" / handle "}
+          {fmt(geometry.handle_rvol_median)}
+        </p>
+      )}
       <p className="mt-1 text-[11px] text-slate-500">
         volume: {volume.spike_into_trigger_verdict}
         {volume.rvol_trigger_bar !== null && ` · trigger RVOL ${fmt(volume.rvol_trigger_bar)}`}

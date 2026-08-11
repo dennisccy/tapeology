@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "journey": "J-01",
+  "name": "The signal contract — opening-range breaks end to end, lookahead-clean and pre-registered",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-01", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 2, "journey": "J-01", "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-06-13"}},
+    {"n": 3, "journey": "J-01", "action": {"type": "click", "target": {"testid": "desk-playbook-compute-button"}}, "expect": {"text": "is not a recorded trading session"}}
+  ]
+}

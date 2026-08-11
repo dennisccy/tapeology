@@ -140,3 +140,47 @@ critical "evidence pools ONE signature" rail structurally prevents it from ever 
 distribution. Recorded as an OPEN minor violation whose fix (delete the file; scope future plants
 to `TAPEOLOGY_DESK_PLAYBOOK_DIR`) is required before the era can be declared achieved.
 **Reversible:** yes
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** The auditor's F1 fix to `apps/frontend/app/desk/page.tsx` (the dbi base-shape label,
+"ascending base" -> "descending base") landed AFTER the browser pass, so the only screenshot for
+J-04's TC-2 (`reports/qa/goal-playbook-iter-4-evidence/UT-03-result.png`) shows the pre-fix wording.
+`docs/goal.md` never says whether a screenshot that predates an in-iteration fix still satisfies a
+browser acceptance line.
+**We chose:** J-04 `passing` with `evidence_makeup: true`. J-04's own acceptance asks that "at least
+one signal of each new setup [be] legible in the J-03 section on the fixture rig (screenshot)" — the
+DBI row IS legible with its chip, side and full geometry in that screenshot, and the fix changed one
+descriptive word to match the measurement already served (no field, number, or behavior moved; guarded
+by a new source-scan test plus its seeded counter-test). Treated as a capture defect (methodology A.7),
+so a one-row re-capture rides the next iteration as a passenger task rather than blocking the journey.
+**Reversible:** yes
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** The Copy-discipline constraint says the served `PLAYBOOK_REGISTER` "state[s] what was
+measured and what was NOT". After this iteration the register (`desk_playbook.py:159`) and the `/desk`
+blurb still name only the opening-range-break family, while new records carry `jbe`/`dbi`/`cup_handle`
+signals. The goal does not say whether an under-describing register is a J-04 acceptance failure or an
+era-level copy defect.
+**We chose:** era-level OPEN minor violation, not a J-04 failure. J-04's acceptance enumerates fixture
+goldens, silent near-misses, the lookahead property test, SHA-256 re-keying, browser legibility, suite
+green and pin unchanged — the register is not among them, and every per-signal disclosure is honest and
+complete. Recorded as an unresolved minor violation that must be fixed before the era can be declared
+achieved (and before J-05/J-06 widen the gap further).
+**Reversible:** yes
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** The critical anti-goal "No threshold exists outside the spec ... BEFORE the code that
+uses it" sits against two constants this iteration introduced — `PLAYBOOK_BASE_FLATLINE_MAX_MBR = 1.0`
+and `PLAYBOOK_HANDLE_DESIRABLE_DURATION_FRAC = 0.25` — whose spec table rows were added in the SAME
+commit as the code. The coherence auditor flagged both as needing "the same owner ruling" as the
+`PLAYBOOK_OR_MIN_1M_BARS` precedent.
+**We chose:** not a violation. The evaluator read the pre-iteration spec (`git show ac6e9ad:docs/playbook-detector-spec.md`)
+and both VALUES already existed there in prose — line 242's "base range <= 1.0 MBR — the
+flatline-at-the-high variation" and line 148's "(25% desirable -> disclosure)". Only the naming and
+tabulation are new, which is the iter-2 B3/B4 spec catch-up pattern this session already ratified.
+Nothing was invented, tuned, or swept. Flagged for owner visibility alongside the auditor's B1/B3
+constants questions.
+**Reversible:** yes

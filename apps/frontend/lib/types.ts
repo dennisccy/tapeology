@@ -1477,14 +1477,37 @@ export interface DeskForwardComputeSnapshot {
 // every playbook signal through the SAME `desk_forward._measure_from` the forward rail's own
 // touches/anchors are measured through, so the shape is byte-identical by construction. ------------
 
+// goal-playbook-iter-4 (J-04): `open_high_break`/`open_low_break`'s own geometry fields become
+// OPTIONAL here -- the JBE/DBI and cup_handle setups this iteration adds serve a DIFFERENT
+// geometry shape on the SAME `signal.geometry` object (one owner, `desk_playbook_detect.py`, per
+// setup). `slots_to_break` is the one field every setup serves (it is what `_measure_signal`
+// anchors on) -- it stays required.
 export interface DeskPlaybookGeometry {
-  or_high: number;
-  or_low: number;
-  or_width_mbr: number;
-  or_bars_used: number;
-  opening_range_basis: "1m" | "5m";
   slots_to_break: number;
-  open_vs_prior_close_pct: number | null;
+  // open_high_break / open_low_break only (J-01)
+  or_high?: number;
+  or_low?: number;
+  or_width_mbr?: number;
+  or_bars_used?: number;
+  opening_range_basis?: "1m" | "5m";
+  open_vs_prior_close_pct?: number | null;
+  // jbe / dbi only (J-04, spec §3.3-3.4)
+  jump_mbr?: number;
+  base_range_mbr?: number;
+  base_bars?: number;
+  base_flatline?: boolean;
+  base_lows_ascending?: boolean;
+  ladder_step_ratio?: number | null;
+  // cup_handle only (J-04, spec §3.6)
+  cup_bars?: number;
+  cup_depth_mbr?: number;
+  handle_retrace_frac?: number;
+  handle_duration_frac?: number;
+  cup_optimal?: boolean;
+  handle_duration_desirable?: boolean;
+  cup_middle_third_rvol_median?: number;
+  cup_outer_third_rvol_median?: number;
+  handle_rvol_median?: number;
 }
 
 export interface DeskPlaybookVolume {

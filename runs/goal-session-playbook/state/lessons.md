@@ -97,3 +97,31 @@ the fully-rendered DOM.
 **Applies to:** any iteration adding another `/desk` section (J-07 Backscan, J-08 Playbook
 Evidence) — plan the capture technique up front, and treat a blank deep-scroll screenshot as a
 capture defect to work around, never as evidence of a missing section.
+
+## iter-4 — 2026-08-11T02:20:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A "must not fire" fixture can pass for the wrong reason. Iter-4's TC-4/TC-5 near-miss
+tests asserted `results == []` and documented the jump gate as the cause, but the fixtures' lookback
+leg sat inside `base_max_range_mbr`, so `consolidation_range`'s MAXIMAL window swallowed it back to
+bar 0 and every candidate was rejected earlier at `start_idx - jump_lookback_bars < 0` — the audit
+proved it by zeroing BOTH jump gates and still getting zero signals. A silence test is only evidence
+if it also carries a gate-relaxed control showing exactly one signal fires when (and only when) the
+named gate is relaxed.
+**Applies to:** every future detector's near-miss fixture (J-05 capitulation/euphoria, J-06
+range/double-top) — pair each "silent" assertion with a relaxed-gate control asserting the intended
+gate is the decisive rejecter.
+
+## iter-4 — 2026-08-11T02:20:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** Extending the setup families silently invalidated the product's own summary copy, and the
+guard test made it worse rather than catching it: `PLAYBOOK_REGISTER` (`desk_playbook.py:159`) and the
+`/desk` section blurb (`page.tsx:5079`) both still say "opening-range-break signals", and that
+register is embedded verbatim into every new record — including the real `playbook-2026-06-22-b698c3871e62.json`
+whose five signals are all `jbe`/`dbi`. `test_copy_discipline.py` asserts the register is UNMODIFIED,
+so leaving it stale passes and widening it fails; no lane (review, QA, browser-QA, coherence, audit)
+flagged it.
+**Applies to:** any iteration that adds a setup family, a measure, or a served pool (J-05, J-06,
+J-08) — widen the register/blurb in the same commit and deliberately re-derive the
+register-unmodified assertion, exactly like the refresh-chain effect-count guard.

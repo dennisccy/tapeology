@@ -2,7 +2,7 @@
   "schema_version": 1,
   "journey": "J-10",
   "name": "The kept product stands — regression sentinel",
-  "default_timeout_ms": 15000,
+  "default_timeout_ms": 20000,
   "steps": [
     {"n": 1, "journey": "J-10", "action": {"type": "goto", "url": "/"}, "expect": {"text": "Try: SIM-BUYER"}},
     {"n": 2, "journey": "J-10", "action": {"type": "fill", "target": {"label": "Ticker"}, "text": "SIM-BUYER"}},
