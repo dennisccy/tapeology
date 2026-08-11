@@ -427,3 +427,22 @@ unchanged across seed versions. Keeping the flag would schedule a third capture 
 legible twice, which methodology A.7 explicitly does not want. Recorded as a non-blocking provenance
 note in eval.md instead.
 **Reversible:** yes
+
+## iter-9 — goal-decomposer
+
+**Ambiguity:** `docs/goal.md`'s Key Capabilities and Journeys describe only product surfaces
+(`desk_playbook*` modules, the two new MCP tools); the iter-6/iter-7/iter-8 store-scope-guard
+carry items this iteration is asked to close (abort-on-breach instead of disclose-only, the
+browser-qa agent's own ungated third lane, repo-wide fixture-forcing) all live in automation/
+framework code (`incredible_auto_dev/scripts/automation/store-scope/`,
+`project-extensions/store-scope/`), not in any product module the goal text names. The goal does
+not say whether framework-automation hygiene items belong inside a goal-mode iteration's scope or
+are session-infrastructure work outside it.
+**We chose:** carried them into this iteration as small passenger items riding alongside J-09/
+J-10, following the precedent this session already set three times (iter-6/iter-7/iter-8 each
+built or extended this exact guard as part of a goal-mode iteration) and because J-10's own step 2
+is the widest, riskiest browser walk of the whole era — the guard's protection matters most
+exactly when this iteration runs. The spec's own escape hatch applies if the framework-script
+edits prove out of a normal developer's reach: drop the specific item, record why, and carry it to
+iteration 10 rather than block J-09/J-10.
+**Reversible:** yes
