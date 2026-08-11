@@ -373,3 +373,18 @@ the end state the journey asserts is correct and screenshot-verified; the failur
 input-validation case on a brand-new endpoint, not a violation of any anti-goal or acceptance
 clause.
 **Reversible:** yes
+
+## iter-8 — goal-decomposer
+
+**Ambiguity:** The iter-7 evaluator recorded the back-scan plan's HTTP 500 on a malformed/partial
+date (`2026-06-2`) as a carry-item defect but did not specify what an honest response should look
+like. Neither `docs/goal.md` nor `docs/playbook-detector-spec.md` states a status code or body
+shape for a malformed (as opposed to merely inverted) date range on `GET .../backscan/plan`.
+**We chose:** the fix returns HTTP 200 with an empty/disclosed plan, mirroring the already-handled
+`from > to` case (TC-17, empty plan, HTTP 200) rather than introducing a new HTTP 4xx contract.
+This follows T-5 ("fail closed, disclose the absence — every absence is a served row/reason, never
+a silent skip and never a crash") and keeps the endpoint's error surface uniform (one honest-empty
+shape for any unusable range, whether inverted or malformed) instead of adding a second,
+unprecedented failure mode for the frontend to special-case. The per-keystroke refetch cadence
+itself is left untouched (out of scope) since no acceptance text asks for debouncing.
+**Reversible:** yes
