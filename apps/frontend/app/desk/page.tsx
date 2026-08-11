@@ -3923,6 +3923,9 @@ function PlaybookEvidenceSection({
   const hasAnySignal = data.cells.some((cell) => cell.signal.n > 0);
   return (
     <div data-testid="desk-evidence-section">
+      <p className="mb-1 text-xs text-slate-400" data-testid="desk-evidence-signature">
+        Built from signature: <span className="font-mono text-slate-300">{data.signature}</span>
+      </p>
       <p className="mb-3 text-xs text-slate-500">{data.register}</p>
       {hasAnySignal ? (
         <PlaybookEvidenceCellsTable cells={data.cells} />

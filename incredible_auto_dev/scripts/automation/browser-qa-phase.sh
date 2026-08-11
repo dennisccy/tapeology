@@ -480,9 +480,15 @@ fi
 # before the lanes ran. CLEAN writes the disclosure artifact a later reader can
 # cite instead of prose; a BREACH additionally lands a loud section IN the
 # authoritative results file, because that is the one artifact the evaluator and
-# the achievement gate are guaranteed to read. Deliberately NOT an exit: the
-# run's verdicts still have to be published and read — a silent pipeline abort
-# would hide the very thing this section exists to disclose.
+# the achievement gate are guaranteed to read — THEN aborts this script (goal-
+# playbook-iter-9 T-1: "a safe launcher nothing is obliged to use is not a
+# mechanism, only a gate is" — a BREACH means an automated lane already wrote
+# into the operator's real store, so this run's verdicts are not trustworthy
+# and must not be silently accepted as a normal pass/fail cycle). The
+# disclosure is written and published FIRST, so the abort never hides it; the
+# non-zero exit itself is what makes the calling chain (run-phase.sh's
+# `|| { ...; return $rc; }` branch, or the sequential branch's own warning +
+# continue) treat this as a failed step rather than a quiet success.
 if ! store_scope_verify "$STORE_SCOPE_MANIFEST" "$STORE_SCOPE_REPORT"; then
   echo "[browser-qa] STORE-SCOPE BREACH — a browser lane wrote into a protected store path this run. See $STORE_SCOPE_REPORT." >&2
   if [[ -f "$UI_TEST_RESULTS" ]]; then
@@ -500,6 +506,9 @@ if ! store_scope_verify "$STORE_SCOPE_MANIFEST" "$STORE_SCOPE_REPORT"; then
     record_telemetry_event "store_scope_breach" "$(jq -cn --arg n "$PHASE" --arg r "reports/qa/${PHASE}-store-scope-guard.md" \
         '{iter_name:$n, disclosure:$r}' 2>/dev/null || printf '{"iter_name":"%s"}' "$PHASE")"
   fi
+  rm -f "$STORE_SCOPE_MANIFEST" 2>/dev/null || true
+  echo "[browser-qa] ABORTING browser-qa-phase.sh: a store-scope breach makes this run's browser-qa verdicts untrustworthy. Investigate $STORE_SCOPE_REPORT before re-running." >&2
+  exit 1
 fi
 rm -f "$STORE_SCOPE_MANIFEST" 2>/dev/null || true
 

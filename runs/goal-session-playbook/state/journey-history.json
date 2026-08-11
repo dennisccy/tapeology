@@ -4,100 +4,100 @@
       "id": "J-01",
       "name": "The signal contract — opening-range breaks end to end, lookahead-clean and pre-registered",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-8",
-      "last_passing_iter": "goal-playbook-iter-8",
+      "last_verified_iter": "goal-playbook-iter-9",
+      "last_passing_iter": "goal-playbook-iter-9",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-01.png",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-9-ui-test-results.md (UT-J-01 replay row)",
       "spec_hash": "338cba3f562bbb5b9c4fc0736b6a6744f16cc67a6560373adeb93eaa50d9d3a5"
     },
     "J-02": {
       "id": "J-02",
       "name": "Every signal measured — the rail's own conventions, anchored at the trigger bar",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-8",
-      "last_passing_iter": "goal-playbook-iter-8",
+      "last_verified_iter": "goal-playbook-iter-9",
+      "last_passing_iter": "goal-playbook-iter-9",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-02.png",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-9-ui-test-results.md (UT-J-02 replay row)",
       "spec_hash": "daf2c5226d5670fe31f545f446bbff18ae691c80945948aa6b39062313ad423d"
     },
     "J-03": {
       "id": "J-03",
       "name": "The Playbook lands on /desk",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-8",
-      "last_passing_iter": "goal-playbook-iter-8",
+      "last_verified_iter": "goal-playbook-iter-9",
+      "last_passing_iter": "goal-playbook-iter-9",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-03.png",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-9-ui-test-results.md (UT-J-03 replay row)",
       "spec_hash": "df6f87df5e792376a4b8bc4b6f7c17b10affd38e579fc65a74e00f1459245834"
     },
     "J-04": {
       "id": "J-04",
       "name": "The continuation family — JBE, DBI, cup-and-handle",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-8",
-      "last_passing_iter": "goal-playbook-iter-8",
+      "last_verified_iter": "goal-playbook-iter-9",
+      "last_passing_iter": "goal-playbook-iter-9",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-04.png",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-9-ui-test-results.md (UT-J-04 replay row)",
       "spec_hash": "5fb304e920f2f3edb11dfb430cd6e4e0d5641dd2e069d14323cc01a25b79fe24"
     },
     "J-05": {
       "id": "J-05",
       "name": "The climax family — capitulation entry, euphoria marker",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-8",
-      "last_passing_iter": "goal-playbook-iter-8",
+      "last_verified_iter": "goal-playbook-iter-9",
+      "last_passing_iter": "goal-playbook-iter-9",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-05.png",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-9-ui-test-results.md (UT-J-05 replay row)",
       "spec_hash": "93fee8f5f226e288d1c99275e5c6f85e9cae79251b4d415ff9afec5b80df9b5a"
     },
     "J-06": {
       "id": "J-06",
       "name": "The range family — range trades, double top/bottom",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-8",
-      "last_passing_iter": "goal-playbook-iter-8",
+      "last_verified_iter": "goal-playbook-iter-9",
+      "last_passing_iter": "goal-playbook-iter-9",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/audit-TC-14-range-trade-geometry-preseed-rig.png",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-9-ui-test-results.md (UT-J-06 replay row)",
       "spec_hash": "406f002e469059c8c929ba36489f76c072789e79e5b5f3a1777b1778252e8a97"
     },
     "J-07": {
       "id": "J-07",
       "name": "The back-scan — every recorded session, resumable and append-only",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-8",
-      "last_passing_iter": "goal-playbook-iter-8",
+      "last_verified_iter": "goal-playbook-iter-9",
+      "last_passing_iter": "goal-playbook-iter-9",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-07.png",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-9-ui-test-results.md (UT-J-07 replay row)",
       "spec_hash": "0b3c151c578cd88e152115e32c453e1a648748bf7e42d5bc81d2617670647468"
     },
     "J-08": {
       "id": "J-08",
       "name": "The evidence view — distributions beside the null, min-n honest",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-8",
-      "last_passing_iter": "goal-playbook-iter-8",
+      "last_verified_iter": "goal-playbook-iter-9",
+      "last_passing_iter": "goal-playbook-iter-9",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/UT-02-result.png",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-9-ui-test-results.md (UT-J-08 replay row)",
       "spec_hash": "10b95ac2e424c51cfa2eb39ea9c4d79843bdc9aa0b15b7ae5a11182f31a321c8"
     },
     "J-09": {
       "id": "J-09",
       "name": "MCP contract v4 — 20 read-only tools",
-      "status": "failing",
-      "last_verified_iter": "goal-playbook-iter-8",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-playbook-iter-9",
+      "last_passing_iter": "goal-playbook-iter-9",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/phase-goal-playbook-iter-0-ui-test-results.md#UT-J-09",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-9-ui-test-results.md (UT-J-09 row; goal.md marks J-09 \"Keyless; automated\" — MCP tool surface, no page. Evaluator re-verified live: app.mcp exposes exactly 20 tools incl. desk_playbook/desk_playbook_evidence; EXPECTED_TOOLS has 20; byte-identity tests for empty+populated states and the ?date= get_endpoint proxy all green in the evaluator's own full-suite run)",
       "spec_hash": "614ddbd53a88195220e6b579ecc6889711d4773150f1e8b26c1e8b2a136adc3b"
     },
     "J-10": {
       "id": "J-10",
       "name": "The kept product stands — regression sentinel",
-      "status": "partial",
-      "last_verified_iter": "goal-playbook-iter-8",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-playbook-iter-9",
+      "last_passing_iter": "goal-playbook-iter-9",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-10.png",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-9-evidence/J-10-desk-runs-provenance-crop.png",
       "spec_hash": "47f9a7c5f21a5d62c711ac8436d731206791d63d71eea86377d27366ad1f1242"
     }
   },
@@ -190,8 +190,8 @@
       "iter": "goal-playbook-iter-8",
       "anti_goal": "Persistence stays scoped — residual: the store-scope obligation does not cover every automated lane, and a detected breach does not stop the run",
       "severity": "minor",
-      "evidence": "OPEN, narrow. Audit B3: store_scope_require is called by browser-qa-phase.sh:250 and goal-iter-lean.sh:350 only — the phase QA agent's own browser pass is ungated, and in this very iteration it drove /desk against the operator's real backend (reports/qa/goal-playbook-iter-8-qa.md:226; evaluator-confirmed read-only, no store writes after 15:00). Audit B4: browser-qa-phase.sh:486-503 discloses a breach and emits telemetry, then continues rather than aborting (deliberate, documented). Also carried: project-extensions/store-scope/store-scope.env:33 hardcodes STORE_SCOPE_PREPARE_CMD to the playbook fixture rig under a project-wide STORE_SCOPE_ENABLED=1, which would force-swap a FUTURE era's QA backend to playbook fixtures (reviewer MINOR + audit B2).",
-      "resolved": false
+      "evidence": "RESOLVED BY MECHANISM in iteration 9, evaluator-verified in source. (1) abort-on-breach: browser-qa-phase.sh:511 and goal-iter-lean.sh:947 now `exit 1` after writing the disclosure, and in goal-iter-lean.sh that exit precedes the `step_mark_done browser-qa` checkpoint at :958, so a breached run can never be checkpointed done. (2) third lane gated: qa-phase.sh:23 sources lib/replay-lane.sh and :156 calls store_scope_require (gated on FRONTEND_PRESENT) before dispatching the qa agent. (3) fixture-forcing scoped: project-extensions/store-scope/store-scope.env opens with a project-identity guard that declares nothing unless the resolved root's git remote names tapeology (or, with no remote, desk_playbook.py exists). This run's own guard artifact (reports/qa/goal-playbook-iter-9-store-scope-guard.md) is CLEAN across 9,841 protected files, and the evaluator's own `find apps/backend/.data -newermt '2026-08-11 18:13'` returned one derived sqlite sidecar (playbook_evidence_cache.db-shm) and nothing else.",
+      "resolved": true
     },
     {
       "iter": "goal-playbook-iter-8",
@@ -201,5 +201,5 @@
       "resolved": true
     }
   ],
-  "updated_at": "2026-08-11T18:40:00Z"
+  "updated_at": "2026-08-11T20:05:00Z"
 }

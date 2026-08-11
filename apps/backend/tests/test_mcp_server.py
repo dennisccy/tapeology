@@ -40,6 +40,7 @@ from app.mcp import (
 from app.providers.adapters.base import RawBar
 from app.research.bars import BarSeriesAlreadyRegistered, BarStore
 from app.research.desk_forward import FORWARD_REGISTER, ForwardStore, forward_parameters
+from app.research.desk_playbook import PLAYBOOK_REGISTER, PlaybookStore, playbook_parameters
 from app.research.desk_screen import ScreenStore
 from app.research.desk_universe import UniverseStore
 
@@ -48,9 +49,10 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 # Capability 6, verbatim — order and content are the advertised contract. ``bars`` (era-4 J-01),
 # ``levels`` (era-4 J-02), ``strategies`` (era-4 J-04), ``tradability`` (era-5B J-01), ``setups``
 # (era-5B J-02), ``desk_universe``/``desk_screen`` (era-desk J-06, MCP contract v3 -- 15 -> 17
-# tools), and ``desk_forward`` (forward-test era, MCP contract v4 -- 17 -> 18 tools) are the
-# newest additions, each positioned right after its dependency-order sibling (the same
-# store/registry+route+MCP shape, mirrored end to end).
+# tools), ``desk_forward`` (forward-test era, 17 -> 18 tools), and ``desk_playbook``/
+# ``desk_playbook_evidence`` (Era B2 "The Playbook" J-09, the era's own MCP contract v4 -- 18 -> 20
+# tools) are the newest additions, each positioned right after its dependency-order sibling (the
+# same store/registry+route+MCP shape, mirrored end to end).
 EXPECTED_TOOLS = (
     "tape_state",
     "tape_features",
@@ -66,6 +68,8 @@ EXPECTED_TOOLS = (
     "desk_universe",
     "desk_screen",
     "desk_forward",
+    "desk_playbook",
+    "desk_playbook_evidence",
     "pnl_ledger",
     "taxonomy",
     "ui_route_map",
@@ -118,6 +122,7 @@ def backend_paths(tmp_path_factory):
         "TAPEOLOGY_DESK_UNIVERSE_DIR": str(tmp_path_factory.mktemp("mcp-desk-universe")),
         "TAPEOLOGY_DESK_SCREEN_DIR": str(tmp_path_factory.mktemp("mcp-desk-screen")),
         "TAPEOLOGY_DESK_FORWARD_DIR": str(tmp_path_factory.mktemp("mcp-desk-forward")),
+        "TAPEOLOGY_DESK_PLAYBOOK_DIR": str(tmp_path_factory.mktemp("mcp-desk-playbook")),
     }
 
 
@@ -575,6 +580,169 @@ async def test_desk_forward_tool_byte_identical_on_a_populated_state(mcp_env, ba
     assert rest2.json()["versions"] == 1
     assert proxied.isError is False
     assert proxied.content[0].text.encode("utf-8") == rest2.content, "desk forward screen_id-query not byte-identical"
+
+
+# --- Era B2 "The Playbook" J-09: desk_playbook / desk_playbook_evidence (MCP contract v4, 18 -> 20
+# tools; empty + populated + ?date=/?signature= proxy) --------------------------------------------
+#
+# Both stores are rooted at their OWN env-scoped temp dirs (``backend_paths`` above) that nothing
+# else in this module ever touches, so the honest-empty states below are genuinely observed BEFORE
+# any playbook record is ever seeded -- file order matters here, same as every other store in this
+# module. The evidence tool folds over the SAME playbook store, so its own honest-empty test runs
+# FIRST too (before either desk_playbook test below writes anything), and its own populated-state
+# test runs LAST (after both desk_playbook tests have already recorded arbitrary-signature files) --
+# those records can never match the REAL current default signature this module never computes via
+# `compute_playbook` (no real bar-backed session is walked here), so they surface honestly under
+# `other_signatures`, never pooled into `cells` (the T-7 "one signature" discipline, proven exactly
+# as `test_desk_playbook_evidence.py`'s own TC-5 proves it -- this module only proves the MCP proxy
+# is byte-identical to the REST body, not the fold's own pooling math).
+
+DESK_PLAYBOOK_DATE = "2026-06-22"
+DESK_PLAYBOOK_ISOLATED_DATE = "2026-06-24"
+DESK_PLAYBOOK_NONMATCH_DATE = "2020-01-01"
+
+
+@pytest.mark.anyio
+async def test_desk_playbook_tool_byte_identical_on_the_honest_empty_state(mcp_env):
+    """Before any playbook has ever been computed, ``desk_playbook`` proxies
+    ``GET /research/desk/playbook``'s explicit HTTP 200 honest-empty payload -- never a 404 (the
+    ``desk_forward`` convention ``desk_playbook.py`` itself follows)."""
+    result = await call_tool("desk_playbook", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/playbook", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json() == {"playbooks": [], "latest": None, "integrity_errors": []}
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_playbook not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_playbook_evidence_tool_byte_identical_on_the_honest_empty_state(mcp_env):
+    """TC-4: before any playbook record has ever been recorded (this test runs BEFORE either
+    ``desk_playbook`` populated-state test below writes anything into the shared env-scoped
+    playbook dir), ``desk_playbook_evidence`` proxies ``GET /research/desk/playbook/evidence``'s
+    honest-empty fold -- the FULL declared setup x side x measure cross product still served, every
+    cell reading ``n: 0`` (never omitted, never a 404) -- byte-identical to curl."""
+    result = await call_tool("desk_playbook_evidence", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/playbook/evidence", timeout=5.0)
+    assert rest.status_code == 200
+    payload = rest.json()
+    assert set(payload) == {
+        "signature", "cells", "invalidation_breached", "other_signatures", "parameters", "register",
+    }
+    assert payload["other_signatures"] == []
+    assert payload["cells"], "the declared cross product must be non-empty even with no records"
+    assert all(cell["signal"]["n"] == 0 for cell in payload["cells"]), "no record yet -- every cell must read n: 0"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_playbook_evidence not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_playbook_tool_byte_identical_on_a_populated_state(mcp_env, backend_paths):
+    """The ``desk_forward`` populated-state precedent, applied to the playbook store: seed ONE real
+    record directly through ``PlaybookStore.record()`` -- the exact persistence call
+    ``compute_playbook`` itself makes -- into the live backend's env-scoped
+    ``TAPEOLOGY_DESK_PLAYBOOK_DIR``, carrying an actual signal, then prove the tool's JSON is
+    byte-identical to its curl equivalent on a NON-EMPTY result."""
+    playbook_dir = Path(backend_paths["TAPEOLOGY_DESK_PLAYBOOK_DIR"])
+    PlaybookStore(playbook_dir).record(
+        session_date=DESK_PLAYBOOK_DATE,
+        config_fingerprint=CONFIG.config_fingerprint(),
+        playbook_input_signature="mcp-test-playbook-signature",
+        payload_version=1,
+        parameters=playbook_parameters(),
+        register=PLAYBOOK_REGISTER,
+        signals=[
+            {
+                "symbol": "AAPL",
+                "setup_id": "open_high_break",
+                "side": "long",
+                "trigger": {"price": 300.5, "at_utc": "2026-06-22T13:45:00Z"},
+                "invalidation_price": 299.8,
+            }
+        ],
+        absences=[],
+        diagnostics=[],
+    )
+    result = await call_tool("desk_playbook", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/playbook", timeout=5.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert len(body["playbooks"]) >= 1, "the live list must be non-empty for this proof"
+    assert body["latest"] is not None
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_playbook not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_get_endpoint_desk_playbook_date_query_proxies_verbatim(mcp_env, backend_paths):
+    """TC-6: ``get_endpoint`` reaches the ``?date=`` lookup variant ``desk_playbook`` itself does
+    not expose -- byte-identical for a matching date (seeded HERE, under its own distinct date --
+    the ``desk_screen``/``desk_forward`` isolated-date precedent, so this test passes standalone),
+    and the honest ``{"playbook": null, "versions": 0}`` 200 for a non-matching one."""
+    playbook_dir = Path(backend_paths["TAPEOLOGY_DESK_PLAYBOOK_DIR"])
+    PlaybookStore(playbook_dir).record(
+        session_date=DESK_PLAYBOOK_ISOLATED_DATE,
+        config_fingerprint=CONFIG.config_fingerprint(),
+        playbook_input_signature="mcp-test-playbook-isolated-signature",
+        payload_version=1,
+        parameters=playbook_parameters(),
+        register=PLAYBOOK_REGISTER,
+        signals=[
+            {
+                "symbol": "MSFT",
+                "setup_id": "jump_base_explosion",
+                "side": "long",
+                "trigger": {"price": 410.0, "at_utc": "2026-06-24T14:00:00Z"},
+                "invalidation_price": 405.0,
+            }
+        ],
+        absences=[],
+        diagnostics=[],
+    )
+
+    matching_path = f"/research/desk/playbook?date={DESK_PLAYBOOK_ISOLATED_DATE}"
+    result = await call_tool("get_endpoint", {"path": matching_path})
+    rest = httpx.get(f"{mcp_env}{matching_path}", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json()["playbook"] is not None
+    assert rest.json()["versions"] == 1
+    assert result.isError is False
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk playbook date-match not byte-identical"
+
+    nonmatch_path = f"/research/desk/playbook?date={DESK_PLAYBOOK_NONMATCH_DATE}"
+    result = await call_tool("get_endpoint", {"path": nonmatch_path})
+    rest = httpx.get(f"{mcp_env}{nonmatch_path}", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json() == {"playbook": None, "versions": 0}
+    assert result.isError is False
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk playbook date-nonmatch not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_playbook_evidence_tool_byte_identical_on_a_populated_state(mcp_env):
+    """TC-5: after the two ``desk_playbook`` tests above have recorded two arbitrary-signature
+    files, ``desk_playbook_evidence`` still proxies byte-identical -- and now honestly lists both
+    recorded signatures under ``other_signatures`` (never pooled into ``cells``, since neither
+    arbitrary test signature can ever equal the REAL current default signature this module never
+    computes via ``compute_playbook``), proving the ``signature``/``cells``/``register`` fields the
+    acceptance names are all proxied verbatim."""
+    result = await call_tool("desk_playbook_evidence", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/playbook/evidence", timeout=5.0)
+    assert rest.status_code == 200
+    payload = rest.json()
+    assert set(payload) == {
+        "signature", "cells", "invalidation_breached", "other_signatures", "parameters", "register",
+    }
+    assert len(payload["other_signatures"]) >= 2, "both arbitrary-signature records must surface here"
+    assert all(cell["signal"]["n"] == 0 for cell in payload["cells"]), (
+        "arbitrary-signature records must never pool into cells"
+    )
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_playbook_evidence not byte-identical"
 
 
 @pytest.mark.anyio
@@ -1192,7 +1360,7 @@ async def test_get_endpoint_desk_topup_runs_byte_identical_with_no_new_tool(mcp_
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "topup/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
-    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 18
+    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 20
 
 
 @pytest.mark.anyio
@@ -1211,7 +1379,7 @@ async def test_get_endpoint_desk_screen_runs_byte_identical_with_no_new_tool(mcp
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "screen/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
-    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 18
+    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 20
 
 
 @pytest.mark.anyio

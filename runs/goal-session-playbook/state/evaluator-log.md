@@ -421,3 +421,54 @@ signature the evidence table is built from, since the page currently names every
 not that one. Two questions still wait for the owner, unchanged: ratify or reject the one sentence a
 developer added to the rule book about range trades, and settle the three places where the shipped
 code reads the rule book more narrowly than it is written.
+
+---
+
+## Iteration 9 — goal-playbook-iter-9
+
+**Date:** 2026-08-11T20:05:00Z
+**Verdict:** STALLED
+**Depth dispatched:** lean (the plan asked for a deep pass with the auditor; the engine turned it
+into a fast one again — the fourth time this session, and on the widest regression pass of the era)
+**Journey deltas:**
+- Newly passing: J-09 "MCP contract v4" (Claude can now read the playbook and its evidence table —
+  20 tools, up from 18) and J-10 "The kept product stands" (the whole shipped product re-walked in
+  a real browser)
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-01 "The signal contract", J-02 "Every signal measured", J-03 "The Playbook
+  lands on /desk", J-04 "The continuation family", J-05 "The climax family", J-06 "The range
+  family", J-07 "The back-scan", J-08 "The evidence view" — all eight re-run automatically on the
+  scoped test copy and all eight passed; J-08 also has its own stored replay script now
+- Anti-goal violations: none new. Iteration 8's open item (the safety guard covered only two of
+  three automatic lanes, a detected write only reported instead of stopping, and the guard forced
+  test data on the whole machine) is now RESOLVED — I read all three fixes in the source myself.
+  The two owner questions from iteration 6 are still OPEN and are the reason this run halts.
+
+**Reasoning:** I checked the work myself instead of trusting the write-ups. I re-ran the whole
+backend test suite to completion: exit 0, 2163 passed, 8 skipped, nothing failed, above the 2158
+floor. I asked the running code for the pin (08e471b10130e1e2) and counted the Claude tools live —
+exactly 20, with both new names pointing at the right addresses. I opened eight pictures: the
+Cockpit with its live tape and chart and a three-item menu; the Structure page with the pinned
+Apple wall; and six Desk pictures covering every shipped section, the new Playbook sections, and
+the new line reading "Built from signature: 9597251432bd9e75". The check nobody else did: the
+browser agent said in writing that it did NOT check whether every old page still answers exactly as
+before, and no auditor ran — so I proved it myself with git, showing that across the whole era not
+one of the sixteen kept program files was touched, and that the Structure page's wall numbers match
+the era-opening picture digit for digit. I also found two things worth naming. The automatic replay
+script for J-10 was rewritten during the run so that it now checks a data-dependent hash instead of
+any shipped section — and that hash already changed once inside this same iteration, so the script
+will fail for no product reason the next time the test data is rebuilt. And the eight pictures
+offered as proof for the older journeys are just end-of-run camera snaps: the one filed under the
+evidence journey shows the top of the page, not the evidence table.
+
+**Next-step recommendation:** Stop and answer two questions that have been waiting since iteration
+6, because no machine step can answer them. First: a developer, not the owner, wrote the rule that
+keeps the range-trade setup working in one odd corner — say yes to keep it, or no, which means
+removing range trades from the product. Second: three places where the shipped code reads the rule
+book more narrowly than it is written — accept the narrow reading in writing, or ask for the wider
+one. Then resume. The next pass should be a deep one with the auditor and should also: rewrite the
+J-10 replay script to check a fixed piece of a shipped Desk section instead of a changing hash;
+re-take one Structure picture on data that has price bars, since the chart drew nothing on the test
+copy; and put port 8301 back on the owner's real backend, which this run left pointing at the test
+copy.

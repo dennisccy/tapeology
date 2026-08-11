@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "journey": "J-08",
+  "name": "The evidence view — distributions beside the null, min-n honest",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-08", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Evidence"}},
+    {"n": 2, "journey": "J-08", "action": {"type": "wait_for", "target": {"testid": "desk-evidence-section"}}, "expect": {"target": {"css": "[data-testid=\"desk-evidence-cell-row\"]:has-text(\"open_high_break\"):has-text(\"long\"):has-text(\"to_close\")"}}},
+    {"n": 3, "journey": "J-08", "action": {"type": "wait_for", "target": {"testid": "desk-evidence-section"}}, "expect": {"target": {"css": "[data-testid=\"desk-evidence-cell-row\"]:has-text(\"open_high_break\"):has-text(\"long\"):has-text(\"1h\"):has([data-testid=\"desk-evidence-below-min-n\"])"}}}
+  ]
+}

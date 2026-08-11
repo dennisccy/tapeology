@@ -18,9 +18,9 @@ Result contract (locked by ``tests/test_mcp_server.py``):
     (era-3) J-02, ``backtests`` at J-03, ``pnl_ledger`` at J-04; ``/research/profiles`` — reached
     via ``get_endpoint`` — at J-05; ``bars`` at era-4 J-01; ``levels`` at era-4 J-02; ``strategies``
     at era-4 J-04; ``tradability`` at era-5B J-01; ``setups`` at era-5B J-02; ``edge_report`` at
-    era-5B J-04; ``desk_universe``/``desk_screen`` at era-desk J-06); an allowlisted-but-UNKNOWN
-    path (any unshipped ``/research/*``) still surfaces the backend's honest 404 this way — never
-    placeholder data.
+    era-5B J-04; ``desk_universe``/``desk_screen`` at era-desk J-06; ``desk_playbook``/
+    ``desk_playbook_evidence`` at Era B2 J-09); an allowlisted-but-UNKNOWN path (any unshipped
+    ``/research/*``) still surfaces the backend's honest 404 this way — never placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
     no offline snapshot exists anywhere in this module).
@@ -115,6 +115,18 @@ _STATIC_PATHS: dict[str, str] = {
     # (honest-empty 200 before any compute). The `?screen_id=` per-screen variant stays reachable
     # only through `get_endpoint`, exactly like `desk_screen`'s own `?date=`.
     "desk_forward": "/research/desk/forward",
+    # `desk_playbook` (Era B2 "The Playbook" J-09) is the IDENTICAL no-required-param shape as
+    # `desk_forward` directly above: the append-only playbook-signal ledger's own base read serves
+    # a meta-only list + the newest full record (honest-empty 200 before any compute). The
+    # `?date=`/`?id=` parameterized reads stay reachable only through `get_endpoint`, exactly like
+    # `desk_screen`'s own `?date=`.
+    "desk_playbook": "/research/desk/playbook",
+    # `desk_playbook_evidence` (Era B2 J-09) is the IDENTICAL no-required-param shape: the
+    # distribution fold over every recorded playbook signal at the CURRENT default signature takes
+    # no query params for its base read (an always-populated full setup x side x measure
+    # cross-product cell shape, honest `n: 0` before any playbook has ever been recorded -- never a
+    # 404). The `?signature=` inspect-mode variant stays reachable only through `get_endpoint`.
+    "desk_playbook_evidence": "/research/desk/playbook/evidence",
 }
 
 _TAPE_PATHS: dict[str, str] = {
@@ -325,6 +337,36 @@ TOOLS: tuple[types.Tool, ...] = (
             "of every record plus the newest full one -- `latest`, `null` before any compute, an "
             "explicit honest-empty 200, never a 404), JSON verbatim. Takes no arguments here; "
             "`get_endpoint` reaches the `?screen_id=` per-screen variant."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_playbook",
+        description=(
+            "Read-only proxy of GET /research/desk/playbook -- Era B2 \"The Playbook\"'s "
+            "append-only signal ledger: for a recorded trading session, every detected book-setup "
+            "signal (symbol, setup_id, side, trigger price/time, invalidation_price, geometry, "
+            "volume character, market context, principles) plus its trigger-anchored forward "
+            "measurement (the desk forward rail's own horizons/dual-MDD/seed conventions, imported "
+            "verbatim) and invalidation_breached disclosure, beside a seeded baseline and the "
+            "record's own descriptive register (a meta-only list of every record plus the newest "
+            "full one -- `latest`, `null` before any compute, an explicit honest-empty 200, never a "
+            "404), JSON verbatim. Takes no arguments here; `get_endpoint` reaches the `?date=`/"
+            "`?id=` per-record variants."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_playbook_evidence",
+        description=(
+            "Read-only proxy of GET /research/desk/playbook/evidence -- Era B2's distribution "
+            "view: every recorded playbook signal at the CURRENT default input signature, folded "
+            "into per (setup, side, measure) forward-return/MDD distribution cells (median/"
+            "quartiles/mean, n, n_truncated, below_min_n) beside the pooled seeded baseline and "
+            "invalidation-breach counts -- the FULL declared setup x side x measure cross product "
+            "is always served (a combination with zero recorded signals reads n: 0, never omitted); "
+            "other recorded signatures are listed, never pooled, JSON verbatim. Takes no arguments "
+            "here; `get_endpoint` reaches the `?signature=` inspect variant."
         ),
         inputSchema=_object_schema({}),
     ),

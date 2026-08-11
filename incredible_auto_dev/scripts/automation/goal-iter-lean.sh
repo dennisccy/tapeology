@@ -914,8 +914,20 @@ replay_lane_golden_coverage "$UI_TEST_RESULTS" "$ITER_NAME"
 # store paths and compare against the pre-lane baseline. CLEAN writes the
 # disclosure artifact a later reader cites instead of prose; a BREACH also lands
 # a loud section in the authoritative results file — the one artifact the
-# evaluator and the achievement gate always read. Never an exit: the verdicts
-# still have to be published, and a silent abort would hide the disclosure.
+# evaluator and the achievement gate always read — THEN aborts this script
+# (goal-playbook-iter-9 T-1: "a safe launcher nothing is obliged to use is not
+# a mechanism, only a gate is" — a BREACH means an automated lane already wrote
+# into the operator's real store, so this run's verdicts are not trustworthy).
+# The disclosure is written and published FIRST, so the abort never hides it.
+# Deliberately does NOT reach the checkpoint block below (step_mark_done
+# browser-qa): the browser-qa lane must NOT be recorded done on a breached run,
+# so a later resume of this iteration genuinely re-runs it rather than reusing
+# a checkpoint stamped over an untrustworthy result. run-goal.sh does not
+# special-case this script's non-zero exit beyond the DISPATCH_UNAVAILABLE_EXIT_CODE
+# (70) check right after the dispatch, so the outer loop falls through to the
+# coherence-auditor/evaluator as usual — they read the merged results file
+# (which now carries the loud disclosure section) and score accordingly,
+# exactly like any other unmarked/incomplete step.
 if ! store_scope_verify "${STORE_SCOPE_MANIFEST:-}" "$REPO_ROOT/reports/qa/${ITER_NAME}-store-scope-guard.md"; then
   echo "[goal-iter-lean] STORE-SCOPE BREACH — a browser lane wrote into a protected store path this run. See reports/qa/${ITER_NAME}-store-scope-guard.md" >&2
   if [[ -f "$UI_TEST_RESULTS" ]]; then
@@ -930,6 +942,9 @@ if ! store_scope_verify "${STORE_SCOPE_MANIFEST:-}" "$REPO_ROOT/reports/qa/${ITE
     } >> "$UI_TEST_RESULTS" 2>/dev/null || true
   fi
   record_telemetry_event "store_scope_breach" "$(jq -cn --arg n "$ITER_NAME" --arg r "reports/qa/${ITER_NAME}-store-scope-guard.md" '{iter_name:$n, disclosure:$r}' 2>/dev/null || printf '{"iter_name":"%s"}' "$ITER_NAME")"
+  rm -f "${STORE_SCOPE_MANIFEST:-/nonexistent}" 2>/dev/null || true
+  echo "[goal-iter-lean] ABORTING goal-iter-lean.sh: a store-scope breach makes this run's browser-qa verdicts untrustworthy. Investigate reports/qa/${ITER_NAME}-store-scope-guard.md before re-running." >&2
+  exit 1
 fi
 rm -f "${STORE_SCOPE_MANIFEST:-/nonexistent}" 2>/dev/null || true
 

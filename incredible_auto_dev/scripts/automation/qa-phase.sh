@@ -14,6 +14,13 @@ source "$SCRIPT_DIR/lib/common.sh"
 # Telemetry (no-op unless GOAL_SESSION_DIR is set, i.e. goal-mode full depth):
 # needed so the missing-evidence tripwire below can record its event.
 source "$SCRIPT_DIR/lib/telemetry.sh"
+# store_scope_require (no-op without project-extensions/store-scope/store-scope.env)
+# -- goal-playbook-iter-8 audit finding B3: this agent's own Chrome MCP browser
+# pass was the THIRD lane the guard did not cover (browser-qa-phase.sh's replay
+# + LLM lanes were the other two, gated at goal-playbook-iter-8). Only the
+# store_scope_require wrapper is used below; the rest of this file (demo/replay
+# lane machinery) does not apply to the qa agent's own dispatch.
+source "$SCRIPT_DIR/lib/replay-lane.sh"
 
 PHASE="${1:-}"
 require_phase_arg "$PHASE"
@@ -137,6 +144,21 @@ if [[ -f "$SCRIPT_DIR/host-guard/browser-confine.sh" ]]; then
   HOST_GUARD_ROOT="$REPO_ROOT" bash "$SCRIPT_DIR/host-guard/browser-confine.sh" || true
 fi
 
+# ── Store-scope gate (project-declared; automation/store-scope/) ─────────────
+# BEFORE the agent is told a browser check is required: prove the backend under
+# test is the project's scoped QA backend. A project without
+# project-extensions/store-scope/store-scope.env is unaffected (store_scope_require
+# no-ops). A refusal downgrades FRONTEND_PRESENT honestly (the non-browser QA
+# checks below still run) rather than blocking the whole qa-phase.sh dispatch --
+# the same REL-14-style graceful-skip shape browser-qa-phase.sh uses for its own
+# refusals.
+QA_STORE_SCOPE_SKIP_REASON=""
+if [[ "$FRONTEND_PRESENT" == "yes" ]] && ! store_scope_require; then
+  FRONTEND_PRESENT="no"
+  QA_STORE_SCOPE_SKIP_REASON="backend under test is not the project's scoped QA backend -- browser checks refused (store-scope guard)"
+  echo "[qa-phase] STORE-SCOPE REFUSAL: the backend serving $FRONTEND_URL is not the project's scoped QA backend -- Chrome MCP browser checks will be SKIPPED this run (non-browser QA checks still run)." >&2
+fi
+
 # ── Run QA agent ──────────────────────────────────────────────────────────
 cd "$REPO_ROOT"
 record_agent_invocation_start qa
@@ -158,6 +180,8 @@ Agent instructions: .claude/agents/qa.md  <-- read this first, follow MODE 2 ins
 Frontend Present for this phase: $FRONTEND_PRESENT
 $(if [[ "$FRONTEND_PRESENT" == "yes" ]]; then
   echo "Chrome MCP browser checks ARE required. The frontend should be accessible at $FRONTEND_URL."
+elif [[ -n "$QA_STORE_SCOPE_SKIP_REASON" ]]; then
+  echo "Frontend IS present, but browser checks are SKIPPED this run: $QA_STORE_SCOPE_SKIP_REASON. Do NOT open a browser. Mark every browser-dependent test case SKIPPED with this reason."
 else
   echo "No frontend in this phase -- skip browser checks entirely."
 fi)

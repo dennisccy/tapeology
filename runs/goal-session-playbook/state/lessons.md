@@ -208,3 +208,28 @@ paragraph.
 **Verdict:** CONTINUE
 **Lesson:** The store-scoping breach recurred for a third time (iter-3, iter-6, iter-8) because every prior fix was a correct-but-OPTIONAL launcher — iter-7 shipped `qa_playbook_iter7_fixture_scoped_backend.sh` and the deterministic replay lane simply did not call it, then wrote three real S&P-100 records into `apps/backend/.data/playbook/` at 14:45. What finally worked was an OBLIGATION with its own proof: a declared protected-path list, a require/snapshot/verify guard the lane must call before and after, a pure-function "is this backend the fixture rig" classifier that fails closed, and a byte-identical 9,841-file manifest check. Availability of a safe path never prevents an unsafe one; only a gate does.
 **Applies to:** any iteration adding a verification lane, replay script, or QA rig that can reach a real append-only store
+
+## iter-9 — 2026-08-11T20:05:00Z
+
+**Verdict:** STALLED
+**Lesson:** A golden replay script rewritten *during* the run it is meant to police can quietly
+narrow the thing it protects. The browser lane replaced J-10's step 6 assertion "Forward Returns"
+(a shipped Era-B section heading) with the literal signature hash `9597251432bd9e75`, so the era's
+kept-product sentinel now asserts nothing from any shipped section — and the hash is fixture-state
+dependent: the developer's own capture 40 minutes earlier in the SAME iteration read
+`9803f6881e8f86b3`. When a golden assertion turns out to be rig-dependent, replace it with another
+statically-rendered *kept-surface* string, never with a value the run itself just produced.
+**Applies to:** any iteration that edits `runs/goal-session-*/journey-scripts/*.json`, and any
+regression-sentinel journey whose replay script is rewritten by the same lane that scores it.
+
+## iter-9 — 2026-08-11T20:05:00Z
+
+**Verdict:** STALLED
+**Lesson:** When the browser lane declines part of a journey's acceptance in writing ("kept-route
+byte-identity ... not independently re-verified by this agent") and the depth downgrade means no
+auditor ran either, that acceptance clause has NO verifier unless the evaluator becomes one. Here
+`git diff <era-open>..HEAD --stat -- apps/backend/app/` was enough: every kept module absent from
+the era's whole diff proves unchanged serving code, and comparing the `/structure` levels table
+against the era-open screenshot gave a live byte-identity data point for free.
+**Applies to:** any regression-sentinel journey (kept-route byte-identity / cumulative-inventory
+clauses) evaluated at lean depth.

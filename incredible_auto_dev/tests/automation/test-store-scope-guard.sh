@@ -168,6 +168,109 @@ rc=0; run_wrapper 'store_scope_require' || rc=$?
 [[ "$rc" == "0" ]] && assert "wrappers no-op when the guard script is absent" pass || assert "wrappers no-op when the guard script is absent (rc=$rc)" fail
 mv "$WORK/store-scope-away" "$SBX/scripts/automation/store-scope"
 
+echo "== 9. goal-playbook-iter-9: a verify BREACH aborts the calling lane, not just discloses =="
+# Structural (source-scan), not functional: standing up the full callers
+# (browser-qa-phase.sh dispatches claude, goal-iter-lean.sh runs the whole lean
+# pipeline) would need a mock Claude CLI + backend/frontend, which no test in
+# this suite does for these two orchestration scripts. This proves the SHAPE
+# the iter-9 hardening requires: both call sites now `exit` non-zero inside
+# their own `store_scope_verify` failure branch (previously they fell through
+# to `rm -f ...manifest` and continued unconditionally), and in
+# goal-iter-lean.sh that exit appears BEFORE the `step_mark_done browser-qa`
+# checkpoint call in file order, so a breached run can never be checkpointed
+# done.
+BQA_PHASE="$ENGINE_ROOT/scripts/automation/browser-qa-phase.sh"
+LEAN_ITER="$ENGINE_ROOT/scripts/automation/goal-iter-lean.sh"
+
+# Each caller's abort line sits right after its own distinctive "ABORTING
+# <script>.sh:" log line -- grep -A2 catches it regardless of indentation,
+# without needing a fragile block-boundary extraction (the natural end-of-block
+# marker, `rm -f "..MANIFEST" ... || true`, also appears once BEFORE the abort,
+# inside the same branch, so a start/end awk scan finds that occurrence first
+# and never reaches the exit line).
+grep -A2 'ABORTING browser-qa-phase.sh:' "$BQA_PHASE" | grep -qE '^[[:space:]]*exit 1[[:space:]]*$' \
+  && assert "browser-qa-phase.sh: verify-BREACH branch exits 1" pass \
+  || assert "browser-qa-phase.sh: verify-BREACH branch exits 1" fail
+
+grep -A2 'ABORTING goal-iter-lean.sh:' "$LEAN_ITER" | grep -qE '^[[:space:]]*exit 1[[:space:]]*$' \
+  && assert "goal-iter-lean.sh: verify-BREACH branch exits 1" pass \
+  || assert "goal-iter-lean.sh: verify-BREACH branch exits 1" fail
+
+_lean_exit_line="$(grep -n 'ABORTING goal-iter-lean.sh:' "$LEAN_ITER" | head -1 | cut -d: -f1)"
+_lean_checkpoint_line="$(grep -n 'step_mark_done browser-qa --dir' "$LEAN_ITER" | tail -1 | cut -d: -f1)"
+[[ -n "$_lean_exit_line" && -n "$_lean_checkpoint_line" && "$_lean_exit_line" -lt "$_lean_checkpoint_line" ]] \
+  && assert "goal-iter-lean.sh: the breach abort precedes the browser-qa checkpoint" pass \
+  || assert "goal-iter-lean.sh: the breach abort precedes the browser-qa checkpoint" fail
+
+echo "== 10. goal-playbook-iter-9: qa-phase.sh's own browser pass is gated (audit B3) =="
+# goal-playbook-iter-8 audit finding B3: browser-qa-phase.sh's replay + LLM
+# lanes were gated at iter-8, but the plain `qa` agent's OWN Chrome MCP pass
+# (dispatched from qa-phase.sh whenever FRONTEND_PRESENT=yes) was a third,
+# ungated lane -- and it drove the operator's real backend during iter-8 itself
+# (read-only that time; the page it drove carries a "Run Backscan" button).
+# Structural, same rationale as section 9: qa-phase.sh also dispatches a real
+# `claude` call this suite cannot mock.
+QA_PHASE="$ENGINE_ROOT/scripts/automation/qa-phase.sh"
+
+grep -qE '^source "\$SCRIPT_DIR/lib/replay-lane\.sh"' "$QA_PHASE" \
+  && assert "qa-phase.sh sources lib/replay-lane.sh (for store_scope_require)" pass \
+  || assert "qa-phase.sh sources lib/replay-lane.sh (for store_scope_require)" fail
+
+grep -qF 'if [[ "$FRONTEND_PRESENT" == "yes" ]] && ! store_scope_require; then' "$QA_PHASE" \
+  && assert "qa-phase.sh calls store_scope_require, gated on FRONTEND_PRESENT" pass \
+  || assert "qa-phase.sh calls store_scope_require, gated on FRONTEND_PRESENT" fail
+
+_qa_gate_line="$(grep -n 'store_scope_require' "$QA_PHASE" | grep -v '^[0-9]*:#' | head -1 | cut -d: -f1)"
+_qa_dispatch_line="$(grep -n 'record_agent_invocation_start qa' "$QA_PHASE" | head -1 | cut -d: -f1)"
+[[ -n "$_qa_gate_line" && -n "$_qa_dispatch_line" && "$_qa_gate_line" -lt "$_qa_dispatch_line" ]] \
+  && assert "qa-phase.sh: the store-scope gate runs BEFORE the agent is dispatched" pass \
+  || assert "qa-phase.sh: the store-scope gate runs BEFORE the agent is dispatched" fail
+
+# Functional: the gate really does refuse a browser pass when the project
+# declares scope and the backend fails the assert -- reusing this file's own
+# sandbox fixture rather than re-deriving the refusal logic.
+write_env 'STORE_SCOPE_ASSERT_CMD="bash scripts-assert.sh"'
+: > "$SBX_STAMP"; rm -f "$SBX_SCOPED_MARKER"
+(
+  set -euo pipefail
+  source "$SBX/scripts/automation/lib/replay-lane.sh"
+  REPO_ROOT="$SBX"; STORE_SCOPE_ROOT="$SBX"
+  FRONTEND_PRESENT="yes"; QA_STORE_SCOPE_SKIP_REASON=""
+  # verbatim the qa-phase.sh gate line under test
+  if [[ "$FRONTEND_PRESENT" == "yes" ]] && ! store_scope_require; then
+    FRONTEND_PRESENT="no"
+    QA_STORE_SCOPE_SKIP_REASON="refused"
+  fi
+  echo "FRONTEND_PRESENT=$FRONTEND_PRESENT REASON=$QA_STORE_SCOPE_SKIP_REASON"
+) > "$WORK/qa-gate.out" 2>&1 || true
+grep -q "FRONTEND_PRESENT=no REASON=refused" "$WORK/qa-gate.out" \
+  && assert "qa-phase.sh gate: an unscoped backend flips FRONTEND_PRESENT to no" pass \
+  || assert "qa-phase.sh gate: an unscoped backend flips FRONTEND_PRESENT to no (got: $(cat "$WORK/qa-gate.out"))" fail
+
+echo "== 11. goal-playbook-iter-9: tapeology's own store-scope.env never forces playbook fixtures onto an unrelated project (TC-17) =="
+# This section reads tapeology's REAL project-extensions/store-scope/store-scope.env (the actual
+# project config, not the synthetic sandbox one `write_env` builds above) -- unlike every other
+# section, which proves the GENERIC framework mechanism, this proves tapeology's own identity guard
+# fires correctly. ENGINE_ROOT is this checkout's engine dir, so its PARENT is the real tapeology
+# project root.
+TAPEOLOGY_ROOT="$(cd "$ENGINE_ROOT/.." && pwd)"
+TAPEOLOGY_ENV="$TAPEOLOGY_ROOT/project-extensions/store-scope/store-scope.env"
+if [[ -f "$TAPEOLOGY_ENV" ]]; then
+  _out="$(bash -c "ROOT='$TAPEOLOGY_ROOT'; source '$TAPEOLOGY_ENV'; echo \"E=\${STORE_SCOPE_ENABLED:-unset}\"" 2>&1)"
+  [[ "$_out" == "E=1" ]] \
+    && assert "tapeology's store-scope.env enables scope for its OWN project root" pass \
+    || assert "tapeology's store-scope.env enables scope for its OWN project root (got: $_out)" fail
+
+  _fake="$WORK/unrelated-project"
+  mkdir -p "$_fake/apps/backend"
+  _out="$(bash -c "ROOT='$_fake'; source '$TAPEOLOGY_ENV'; echo \"E=\${STORE_SCOPE_ENABLED:-unset}\"" 2>&1)"
+  [[ "$_out" == "E=unset" ]] \
+    && assert "tapeology's store-scope.env no-ops for an unrelated project root (no remote, no playbook module)" pass \
+    || assert "tapeology's store-scope.env no-ops for an unrelated project root (got: $_out)" fail
+else
+  echo "  (skipped -- no project-extensions/store-scope/store-scope.env in this checkout)"
+fi
+
 echo ""
 echo "test-store-scope-guard: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

@@ -60,6 +60,18 @@ bash incredible_auto_dev/scripts/automation/store-scope/store-scope.sh verify /t
      reports/qa/<iter>-store-scope-guard.md
 ```
 
+## Project-identity guard (goal-playbook-iter-9)
+
+`store-scope.env`'s commands are tapeology-specific — `STORE_SCOPE_PREPARE_CMD` force-swaps the QA
+port to tapeology's own playbook fixture rig. `project-extensions/` is deliberately NOT part of the
+`incredible_auto_dev/` vendored subtree, so a project that pulls the framework the sanctioned way
+never sees this file. The residual risk is a project bootstrapped by copying this whole repo as a
+starting template, carrying `project-extensions/` along by accident. The file now opens with a
+guard: it declares nothing (leaves `STORE_SCOPE_ENABLED` unset, so `store-scope.sh`'s own
+no-config no-op applies) unless the resolved project root's git remote names `tapeology`, or — when
+there is no remote at all — `apps/backend/app/research/desk_playbook.py` exists. Either check absent
+⇒ this file never forces playbook fixture data onto an unrelated project's lanes.
+
 ## What is deliberately NOT protected
 
 The derived accelerator DBs (`bar_index.db`, `*_meta_cache.db`, `tradability_cache.db`,

@@ -446,3 +446,41 @@ exactly when this iteration runs. The spec's own escape hatch applies if the fra
 edits prove out of a normal developer's reach: drop the specific item, record why, and carry it to
 iteration 10 rather than block J-09/J-10.
 **Reversible:** yes
+
+## iter-9 — goal-evaluator
+
+**Ambiguity:** T-10 ("no screenshot ⇒ `unknown`, never `passing`") is an absolute rail, and my own
+rules forbid GOAL_ACHIEVED while any journey lacks positive evidence of passing. J-09 "MCP contract
+v4" has no browser surface at all: `docs/goal.md` marks it *(Keyless; automated.)* and the
+blueprint row reads "MCP tool surface only; no page". The browser lane filed it PASS with
+`Evidence: none`. Nothing in `docs/goal.md` says whether T-10's no-screenshot rail applies to a
+journey that has no browser acceptance line to begin with.
+**We chose:** J-09 `passing` on non-browser evidence. T-10's own second clause — "backend-only
+proof never satisfies a *browser acceptance line*" — scopes the rail to browser acceptances, and
+J-09's acceptance text names only tool count, byte-identity, proxy behaviour and suite greenness.
+I verified all four myself rather than accepting the report: `app.mcp` exposes exactly 20 tools
+live, both new names map to `/research/desk/playbook` and `/research/desk/playbook/evidence`,
+`EXPECTED_TOOLS` holds exactly 20, and the empty-state / populated-state / `?date=`-proxy
+byte-identity tests all passed inside my own full-suite run (2163 passed / 8 skipped / exit 0).
+**Reversible:** yes
+
+## iter-9 — goal-evaluator
+
+**Ambiguity:** Two minor anti-goal items have been recorded OPEN since iteration 6, both awaiting
+an OWNER ruling: the developer-authored `range_trade` "degenerate trigger reference" clause in
+`docs/playbook-detector-spec.md` §3.7, and three places where the shipped code reads the spec more
+narrowly than written. My agent rules say "Do NOT mark GOAL_ACHIEVED if any anti-goal violation is
+unresolved", while the decision tree's C.2 sends a purely human-owned blocker to STALLED. Neither
+`docs/goal.md` nor my rules say whether a *pending owner ratification* of a disclosed, fail-closed
+deviation counts as an unresolved violation that blocks era completion, or as a bookkeeping note
+that a GOAL_ACHIEVED halt could carry.
+**We chose:** blocking, and STALLED rather than GOAL_ACHIEVED — with all ten journeys `passing`.
+Three reasons. (1) The ledger records both as `resolved: false` against verbatim Constraint text;
+re-classifying them at the exact moment they became inconvenient is the rubber-stamp failure mode.
+(2) One sanctioned outcome of decision 1 is *dropping `range_trade` from `PLAYBOOK_SETUPS`* — an era
+cannot honestly be "achieved" while a pending decision may remove a detector family a Must-have
+journey (J-06) ships. (3) The decision tree is top-down and C.2 precedes C.3: every unblock path
+here (ratify, reject, or amend `docs/goal.md`) is owner-only, and three iterations have already
+deferred them by design. The Halt Justification lists each option explicitly so the ruling is cheap
+to give; a `--resume` after it should reach GOAL_ACHIEVED quickly if both are ratified as shipped.
+**Reversible:** yes — if the owner ratifies both, the items close with zero code change.

@@ -1,40 +1,40 @@
 # Iteration State — playbook
 
-**After iteration:** 8 · **Date:** 2026-08-11 · **Verdict:** CONTINUE
+**After iteration:** 9 · **Date:** 2026-08-11 · **Verdict:** STALLED
 
 ## Journeys
 
-8 passing (J-01..J-08) · 1 failing (J-09) · 1 partial (J-10) — 10 total
+10 passing (J-01..J-10) · 0 failing · 0 unknown — 10 total. Era build complete; the halt is for two
+owner rulings, not a product gap.
 
 ## Active blockers
 
-- J-09 not built (dev): MCP is 18 tools, evaluator-counted; needs `desk_playbook` +
-  `desk_playbook_evidence` in `_STATIC_PATHS` (`apps/backend/app/mcp/__init__.py:86`) → 20.
-- J-10 cannot close until J-09 lands (its acceptance names "exactly 20 tools"); it also still owes
-  the full kept-product browser walk (cockpit + /structure + every shipped /desk section).
-- Store-scope guard is partial (dev): covers `browser-qa-phase.sh:250` + `goal-iter-lean.sh:350`
-  only — the QA agent's own browser pass is ungated; a breach discloses but does not abort;
-  `project-extensions/store-scope/store-scope.env:33` hardcodes the playbook rig repo-wide.
-- Two owner rulings (human), untouched since iter-6: ratify/reject the §3.7 `range_trade`
-  degenerate-trigger clarification; settle the three narrower-than-spec disclosures.
+- **Owner ruling 1 (human):** ratify or reject the developer-authored `range_trade` "degenerate
+  trigger reference" clause — `docs/playbook-detector-spec.md` §3.7. Rejecting = drop `range_trade`
+  from `PLAYBOOK_SETUPS` (changes what J-06 ships).
+- **Owner ruling 2 (human):** settle three narrower-than-spec readings (crossed-midrange
+  disclosure, double-top pair choice, 1.5x jump-to-base gate + cup rim constant) — all disclosed,
+  all fail-closed.
+- **Test-asset defect (dev):** `runs/goal-session-playbook/journey-scripts/J-10.json` step 6 now
+  asserts the fixture-dependent hash `9597251432bd9e75` (was "Forward Returns"); the same value was
+  `9803f6881e8f86b3` earlier in this iteration. Re-point it at a static kept-surface string.
+- **Environment (dev):** `:8301` left on the scoped fixture rig, not the operator's real backend.
 
 ## Last 2 verdicts
 
-- iter 8: CONTINUE — J-08 evidence table shipped and screenshot-verified; suite 2158 pass/8 skip,
-  pin `08e471b10130e1e2`; the replay lane's real-store write was caught and closed by a real guard.
-- iter 7: ESCALATE — J-07 shipped in a lean pass, so no auditor read the first mass-writer code.
+- iter 9: STALLED — J-09 + J-10 landed (20 MCP tools; full kept-product walk); every unblock path
+  left is an owner-only ruling open since iter 6.
+- iter 8: CONTINUE — J-08 evidence view landed; store-scope guard built after a replay-lane breach.
 
 ## Do not redo
 
-- J-08 evidence view is DONE: `desk_playbook_evidence.py` + `GET /research/desk/playbook/evidence`
-  + the `/desk` Playbook Evidence section; pooling math hand-re-derived by the auditor (29 checks).
-- All five iter-6/7 carry items are CLOSED: back-scan plan returns HTTP 200 on a half-typed date
-  (write path refuses 422); `journey-scripts/J-05.json` asserts a real signal row;
-  `journey-scripts/J-06.json` exists and replays green; the Range Trade re-capture is delivered
-  (`evidence_makeup` cleared); the replay lane is scoped by the store-scope guard.
-- The `EVIDENCE_REGISTER` baseline-cap wording is FIXED (`desk_playbook_evidence.py:98-110`) with a
-  regression test the pre-fix text fails — do not reword it back.
-- The three real records written at 14:45 (`.data/playbook/playbook-2026-06-2{2,3,4}-*.json`) and
-  iter-6's `playbook-2026-08-07-84fcd116ebd7.json` STAY — deleting them breaches the append-only rail.
-- Zero diff is maintained and verified for `desk_forward.py`, `desk_playbook_detect.py`,
-  `desk_playbook.py`, `docs/playbook-detector-spec.md`, `docs/goal.md`, `config.py`, `meta.py`.
+- **J-09 MCP contract v4 — DONE.** 20 tools live, `desk_playbook`/`desk_playbook_evidence` in
+  `_STATIC_PATHS` (`apps/backend/app/mcp/__init__.py`); `EXPECTED_TOOLS`=20 + byte-identity tests
+  (empty/populated/`?date=`) in `apps/backend/tests/test_mcp_server.py`.
+- **J-10 kept-product walk — DONE.** 8 screenshots in `reports/qa/goal-playbook-iter-9-evidence/`;
+  evaluator re-derived kept-route byte-identity + inventory from `git diff ed87dca..HEAD`.
+- **Store-scope hardening — DONE (all 3):** abort-on-breach at both call sites, `qa-phase.sh` gated,
+  `store-scope.env` project-identity guard. Closes the iter-8 open item.
+- **Evidence signature line — DONE** (`app/desk/page.tsx`); **`J-08.json` golden — RECORDED**.
+- **Zero-diff files stay zero-diff:** `desk_forward.py`, `desk_playbook*.py`,
+  `docs/playbook-detector-spec.md`, `docs/goal.md`, `config.py`, `meta.py`. Pin `08e471b10130e1e2`.
