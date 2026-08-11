@@ -199,3 +199,51 @@ checks, which was skipped this time. Two questions for the owner, written down a
 now, expensive after the back-scan: whether the book's 1.5x jump-to-base rule is meant to be
 unreachable under the current numbers, and whether the cup's rim test should use the rim constant
 the spec names rather than the near-high one the code uses.
+
+---
+
+## Iteration 5 — goal-playbook-iter-5
+
+**Date:** 2026-08-11T07:50:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (the plan asked for a deep pass; the engine's own timing rule turned it
+into a fast one because iteration 4 ran over its time budget)
+**Journey deltas:**
+- Newly passing: J-05 "The climax family" (capitulation entry + euphoria marker)
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-01 "The signal contract", J-02 "Every signal measured", J-03 "The Playbook
+  lands on /desk", J-04 "The continuation family" all passing (re-verified this iteration by the
+  browser lane and by the evaluator's own full test run); J-04's owed re-take picture arrived, so
+  its make-up flag is cleared; J-06..J-09 failing (not targeted); J-10 "The kept product stands"
+  partial — its walk passed again, but its own wording still asks for 20 Claude tools and there are
+  18 until J-09 ships
+- Anti-goal violations: iteration 4's open one (the summary sentence naming only opening-range
+  breaks) is now RESOLVED, proven in two pictures and in the source. Two minor ones are OPEN: the
+  meaning of two new "decline" numbers and the re-anchoring rule were decided in code instead of in
+  the written spec; and two run-history rows in the owner's own folder point at record files that do
+  not exist anywhere (both written before this iteration started, so not caused by it).
+
+**Reasoning:** I checked the work myself instead of trusting the write-ups. I opened both new
+pictures: one shows a Capitulation signal for AAA with trigger 101.10 at 09:50 ET, invalidation
+98.76 and its four new numbers on screen; the other shows a signal whose disclosure line ends
+"euphoria recent" — the first time that tag has ever carried a real value — and in both pictures the
+table has exactly nine rows and none of them is a Euphoria row, which is what the goal demands. I
+also opened the re-taken drop-base picture and read "descending base", closing the item owed from
+last time, and I read the widened summary sentence in two separate pictures. I re-ran the whole
+backend test suite to completion: exit 0, 2079 passed and 8 skipped, above the 2061 floor. I asked
+the running code for the pin (08e471b10130e1e2), the setup list (six entries, with no euphoria
+entry) and the Claude tool count (18), and used git to prove the measuring rail and every other
+protected file have zero changes. I read the new decoration code myself and confirmed it only ever
+tags a signal that came AFTER the marker, so a later event can never reach back into an earlier
+record. The thing I would not sign off silently: this was planned as a deep pass and ran fast, so
+nobody with an auditor's brief read the new detection maths — and the developer had to invent two
+rules the written spec leaves open, which is exactly what a deep pass is for.
+
+**Next-step recommendation:** Build J-06 "The range family" (range trades and double top/bottom)
+next, as a deep iteration with the auditor. Carry three small items inside it: write the two
+"decline" definitions and the re-anchoring rule into the spec (no number changes); chase the two
+run-history rows that point at missing record files and make every test run write its run history to
+the same scratch folder as its records; and record a stored replay script for J-05 so the climax
+family is re-checked automatically from now on. Three questions now wait for the owner: the 1.5x
+jump-to-base rule, the cup's rim number, and whether "decline bars" should mean the whole fall.

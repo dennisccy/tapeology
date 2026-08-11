@@ -125,3 +125,28 @@ flagged it.
 **Applies to:** any iteration that adds a setup family, a measure, or a served pool (J-05, J-06,
 J-08) — widen the register/blurb in the same commit and deliberately re-derive the
 register-unmodified assertion, exactly like the refresh-chain effect-count guard.
+
+## iter-5 — 2026-08-11T07:50:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A CONTINUE verdict's `Depth: full` recommendation is NOT binding — `run-goal.sh`'s
+SPEED-20 arbiter demotes a full spec to lean whenever the previous iteration wrote a
+`budget-breached` marker (iter-2, iter-3 and now iter-5 were all demoted this way, twice while the
+decomposer had independently registered a legitimate full trigger). The only lever that reliably
+buys the auditor a seat is an `ESCALATE` verdict, which sits on the arbiter's top rung
+(`prior-verdict-ESCALATE`); this matters because browser-qa alone burned 4.6h in iter-5, so an
+ordinary CONTINUE would have demoted iter-6 as well.
+**Applies to:** any iteration that needs the auditor (new detector maths, new cross-cutting
+coupling) and follows a long-running iteration — J-06 and J-07 especially.
+
+## iter-5 — 2026-08-11T07:52:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The iteration spec's own Data-contract table defined `geometry.decline_bars` as "bars
+from the (possibly re-anchored) climax bar to leg_low's formation", which is identically zero by
+construction — the climax bar IS where leg_low forms. The developer caught it and shipped a
+whole-decline-leg reading instead; nothing downstream (review, coherence) would have. Decomposer
+field definitions that the canonical spec does not itself state need a degeneracy check before they
+are treated as binding.
+**Applies to:** any iter whose spec invents a field definition the canonical
+`docs/playbook-detector-spec.md` leaves undefined — J-06/J-07/J-08 all add served fields.

@@ -1,4 +1,4 @@
-"""The Playbook (Era B2 "The Playbook", J-01/J-02/J-04) -- the book's intraday setups
+"""The Playbook (Era B2 "The Playbook", J-01/J-02/J-04/J-05) -- the book's intraday setups
 (Graifer & Schumacher, *Techniques of Tape Reading*, 2004), detected on the desk's own recorded
 5m/1m bars and measured with the desk forward rail's own conventions. This module owns the
 pre-registered constant table, the parameters/signature recipe, the append-only store, and the
@@ -16,12 +16,13 @@ imports from ``setups.py`` or ``backtests.py``, and no field here is ever named 
 
 **Detection then measurement, in one walk.** ``compute_playbook`` walks the desk universe's
 members and detects, per member, the opening-range-break pair (spec §3.1-3.2, J-01) beside the
-continuation family (``jbe``/``dbi``, spec §3.3-3.4, J-04) and ``cup_handle`` (spec §3.6, J-04),
-gated by the SAME "5m bars + sufficient baseline + a buildable opening range" absence checks J-01
-shipped -- every detected signal is measured in the same pass (forward returns,
-``invalidation_breached``, the seeded baseline, J-02) -- ``entry``/``entry_kind`` are decided at
-detection time (spec §0's stop-through fill convention is part of a signal's own GEOMETRY, not
-part of measuring what happened afterward).
+continuation family (``jbe``/``dbi``, spec §3.3-3.4, J-04), ``cup_handle`` (spec §3.6, J-04), and
+``capitulation`` (spec §3.5, J-05), gated by the SAME "5m bars + sufficient baseline + a buildable
+opening range" absence checks J-01 shipped -- every detected signal is measured in the same pass
+(forward returns, ``invalidation_breached``, the seeded baseline, J-02) -- ``entry``/``entry_kind``
+are decided at detection time (spec §0's stop-through fill convention is part of a signal's own
+GEOMETRY, not part of measuring what happened afterward). ``detect_euphoria`` (spec §3.5's marker,
+J-05) runs in the SAME per-member walk but is never measured -- see ``_decorate_markers``.
 
 **Parameters discipline (the ``desk_forward.forward_parameters`` pattern, applied at birth).**
 ``playbook_parameters()`` reads every constant below at CALL TIME (so a test monkeypatching one
@@ -63,7 +64,14 @@ from .desk_forward import (
     _draw_anchor_indices,
     _measure_from,
 )
-from .desk_playbook_detect import detect_cup_handle, detect_dbi, detect_jbe, detect_opening_range_breaks
+from .desk_playbook_detect import (
+    detect_capitulation,
+    detect_cup_handle,
+    detect_dbi,
+    detect_euphoria,
+    detect_jbe,
+    detect_opening_range_breaks,
+)
 from .desk_playbook_features import baselines, opening_range, rth_session_slice, side_sign
 from .desk_sessions import refuse_if_not_a_session
 
@@ -140,11 +148,15 @@ PLAYBOOK_BASE_FLATLINE_MAX_MBR: float = 1.0  # ADAPTATION -- spec §3.3 prose "b
 PLAYBOOK_HANDLE_DESIRABLE_DURATION_FRAC: float = 0.25  # BOOK -- spec §1's HANDLE_MAX_DURATION_FRAC row: "25% desirable"
 
 # Companion structural constants (shape, not thresholds).
-# J-01 shipped ONLY the opening-range-break family; J-04 (this iteration) EXTENDS this tuple with
-# the continuation family (jbe/dbi/cup_handle) -- J-05/J-06 will extend it further as they land
-# their own detectors (each extension is a signature-moving, expected, visible change) -- declaring
-# a setup id here before its detector exists would claim a compute that does not happen.
-PLAYBOOK_SETUPS: tuple[str, ...] = ("open_high_break", "open_low_break", "jbe", "dbi", "cup_handle")
+# J-01 shipped ONLY the opening-range-break family; J-04 EXTENDED this tuple with the continuation
+# family (jbe/dbi/cup_handle); J-05 (this iteration) adds `capitulation` -- J-06 will extend it
+# further with the range family (each extension is a signature-moving, expected, visible change) --
+# declaring a setup id here before its detector exists would claim a compute that does not happen.
+# `"euphoria"` is DELIBERATELY never added here: spec §3.5 defines it as a marker only, never a
+# recorded setup -- see `_decorate_markers` below for what it does instead.
+PLAYBOOK_SETUPS: tuple[str, ...] = (
+    "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle", "capitulation",
+)
 PLAYBOOK_MARKET_SYMBOL: str = "SPY"
 # The rail's own baseline seed, echoed (not re-derived) -- the seed discipline itself is J-02's;
 # embedding the CONSTANT now is what makes a future rail-seed change re-key playbook records too.
@@ -157,8 +169,9 @@ PLAYBOOK_MIN_N_DISCLOSURE: int = 12  # evidence low-n tag (J-08) -- a disclosure
 # The visible honesty register carried by every playbook payload. Lint-checked via
 # test_copy_discipline.find_violations (the desk_forward.FORWARD_REGISTER precedent).
 PLAYBOOK_REGISTER = (
-    "pre-registered opening-range-break signals detected on the desk's own recorded 5m/1m bars — "
-    "every threshold is fixed in advance in docs/playbook-detector-spec.md, never fit to outcomes. "
+    "pre-registered opening-range-break, jump-base-explosion, drop-base-implosion, cup-and-handle, "
+    "and capitulation signals detected on the desk's own recorded 5m/1m bars — every threshold is "
+    "fixed in advance in docs/playbook-detector-spec.md, never fit to outcomes. "
     "A signal is a recorded observation, not advice: invalidation_price is the book's own "
     "structural level, disclosed as geometry, never a stop order, a size, or an account concept. "
     "Each signal's forward block is measured with the desk forward rail's own conventions — "
@@ -450,6 +463,38 @@ def _baseline_seed(session_date: str, symbol: str, setup_id: str, firing_index: 
     return f"{PLAYBOOK_BASELINE_SEED}:playbook-{session_date}:{symbol}:{setup_id}{discriminator}"
 
 
+def _decorate_markers(
+    detected_signals: list[dict], euphoria_trigger_indices: list[int], params: dict
+) -> None:
+    """spec §3.5's marker-decoration pass, in place, for ONE member's already-assembled
+    ``detected_signals`` (any setup, including ``capitulation`` itself) -- sets
+    ``disclosures.euphoria_recent``/``capitulation_recent`` on every signal whose own trigger bar
+    (``geometry.slots_to_break``, the one field every setup family serves) falls STRICTLY AFTER a
+    same-symbol-session marker's own trigger bar and within ``PLAYBOOK_MARKER_DECAY_BARS`` bars of
+    it -- forward-only by construction (a marker never reaches back to decorate a signal that
+    already triggered before it fired; the only lookahead-clean reading of "sets ... on any signal
+    triggering within the decay window" -- see ``runs/goal-session-playbook/state/assumptions.md``
+    for why). A ``capitulation`` SIGNAL is itself a capitulation marker for every OTHER later signal
+    in the SAME walk (spec §3.5: "capitulation events symmetrically set capitulation_recent") but
+    never self-decorates its own firing -- the strict-after comparison already makes that
+    impossible (a signal's own trigger bar index is never strictly after itself), so no
+    special-case exclusion is needed. Decoration is same-symbol-session only by construction: the
+    caller hands this ONE member's own ``detected_signals`` and euphoria markers, never another
+    member's."""
+    decay = params["marker_decay_bars"]
+    capitulation_trigger_indices = [
+        signal["geometry"]["slots_to_break"]
+        for signal in detected_signals
+        if signal["setup_id"] == "capitulation"
+    ]
+    for signal in detected_signals:
+        own_trigger = signal["geometry"]["slots_to_break"]
+        if any(0 < own_trigger - marker <= decay for marker in euphoria_trigger_indices):
+            signal["disclosures"]["euphoria_recent"] = True
+        if any(0 < own_trigger - marker <= decay for marker in capitulation_trigger_indices):
+            signal["disclosures"]["capitulation_recent"] = True
+
+
 def compute_playbook(
     universe_store,
     bar_store,
@@ -460,17 +505,19 @@ def compute_playbook(
     should_abort: Callable[[], bool] | None = None,
 ) -> dict:
     """Detect AND measure every registered setup family (opening-range-break, J-01; the
-    continuation family ``jbe``/``dbi`` and ``cup_handle``, J-04) for EVERY member of the latest
-    registered universe snapshot, on ``session_date``'s own recorded bars, in the SAME walk --
-    returns everything ``PlaybookStore.record`` needs minus the store-assigned ``id``/
-    ``recorded_at`` (the ``compute_forward``/``compute_screen`` contract shape: a PURE compute,
-    never itself a store write).
+    continuation family ``jbe``/``dbi`` and ``cup_handle``, J-04; ``capitulation``, J-05) for EVERY
+    member of the latest registered universe snapshot, on ``session_date``'s own recorded bars, in
+    the SAME walk -- the ``euphoria`` marker (J-05) also runs per-member but decorates rather than
+    joining this list (see ``_decorate_markers``). Returns everything ``PlaybookStore.record``
+    needs minus the store-assigned ``id``/``recorded_at`` (the ``compute_forward``/
+    ``compute_screen`` contract shape: a PURE compute, never itself a store write).
 
     Session-honesty first: ``desk_sessions.refuse_if_not_a_session`` is checked before any bar is
     read for detection -- a non-session date raises ``PlaybookSessionRefused`` and NOTHING is
     walked. Per member: no 5m bars for the session, a thin/zero baseline, or no buildable opening
-    range are each a disclosed ``absences`` row (never a crash, never a guess) -- ALL FOUR
-    detector families share this one gate (a deliberate J-04 simplification: spec §3.1 scopes "no
+    range are each a disclosed ``absences`` row (never a crash, never a guess) -- ALL FIVE
+    detector families (plus the ``euphoria`` marker) share this one gate (a deliberate J-04
+    simplification: spec §3.1 scopes "no
     OR" absence to the OR-break family alone, but sharing the gate keeps J-01/J-02's own absence
     contract byte-unchanged, at the cost of also skipping jbe/dbi/cup_handle on the rare session
     with 5m coverage but no buildable opening range -- see the dev handoff). Everything else
@@ -599,6 +646,23 @@ def compute_playbook(
         )
         if cup_signal is not None:
             detected_signals.append(cup_signal)
+
+        # J-05: capitulation joins the SAME per-member walk (spec §3.5), sharing the SAME "5m bars
+        # + sufficient baseline + a buildable opening range" absence gate as every other family.
+        # `euphoria` is a MARKER ONLY (§3.5's own "no side, no band, never measured" rule) -- its
+        # single trigger-bar index feeds `_decorate_markers` immediately below and is discarded
+        # afterward, never appended to `detected_signals`/`signals`/`signal_pool`/`baseline_pool`
+        # (TC-4's structural guarantee: there is no code path here that could).
+        capitulation_signal = detect_capitulation(
+            session_5m, baseline, symbol, session_date, index_bars, index_baseline, params
+        )
+        if capitulation_signal is not None:
+            detected_signals.append(capitulation_signal)
+        euphoria_marker = detect_euphoria(session_5m, baseline, params)
+        euphoria_trigger_indices = (
+            [euphoria_marker["trigger_idx"]] if euphoria_marker is not None else []
+        )
+        _decorate_markers(detected_signals, euphoria_trigger_indices, params)
 
         if detected_signals:
             session_1m = rth_session_slice(bars_1m, session_date)

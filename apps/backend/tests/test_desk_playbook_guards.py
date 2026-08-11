@@ -1,6 +1,10 @@
-"""goal-playbook-iter-4 (J-04) -- two new structural guards, source-introspection style (the
+"""goal-playbook-iter-4 (J-04) -- two structural guards, source-introspection style (the
 ``test_copy_discipline.py``/``test_desk_ui_guards.py`` pattern: read a module as TEXT, assert on
-substrings/regex; no runtime, no import-time side effects beyond reading the file).
+substrings/regex; no runtime, no import-time side effects beyond reading the file). Extended by
+goal-playbook-iter-5 (J-05) with two MORE guards -- this time behavioral rather than source-scan,
+since "does the euphoria marker ever leak into a served row" and "is marker decoration
+forward-only" are properties of DATA the decoration pass produces, not of code SHAPE a regex could
+usefully police.
 
 (a) TC-12 -- the no-threshold-sweep guard: no playbook module (``desk_playbook.py``,
     ``desk_playbook_detect.py``, ``desk_playbook_features.py``) contains a ``for``/comprehension
@@ -18,7 +22,11 @@ substrings/regex; no runtime, no import-time side effects beyond reading the fil
     single-source-of-truth discipline (the evidence view reads recorded playbook FILES, it must
     never let a detector reach into it).
 
-Both guards carry a seeded counter-test (the ``test_copy_discipline.py`` precedent: "a lint that
+(c) TC-5 -- the marker-decoration forward-only guard: ``desk_playbook._decorate_markers`` never
+    decorates a signal whose own trigger bar is AT OR BEFORE a marker's trigger bar, and a
+    ``capitulation`` signal never self-decorates its own firing.
+
+Every guard carries a seeded counter-test (the ``test_copy_discipline.py`` precedent: "a lint that
 can never fail proves nothing")."""
 
 from __future__ import annotations
@@ -29,6 +37,7 @@ import re
 from app.research import desk_playbook as desk_playbook_module
 from app.research import desk_playbook_detect as desk_playbook_detect_module
 from app.research import desk_playbook_features as desk_playbook_features_module
+from app.research.desk_playbook import _decorate_markers, playbook_parameters
 
 _PLAYBOOK_MODULES = (
     desk_playbook_module,
@@ -203,3 +212,93 @@ def test_desk_playbook_evidence_module_does_not_exist_yet():
         _repo_root() / "apps" / "backend" / "app" / "research" / "desk_playbook_evidence.py"
     )
     assert not evidence_path.exists()
+
+
+# --- (c) TC-5 -- the marker-decoration forward-only guard (goal-playbook-iter-5, J-05) -------------
+#
+# ``_decorate_markers`` operates on already-built signal dicts (``geometry.slots_to_break`` +
+# ``disclosures``), so this guard tests it DIRECTLY as a pure function -- no ``BarStore``, no real
+# detector firing needed to prove the property; ``test_desk_playbook.py``'s own
+# ``test_a_later_capitulation_signal_is_decorated_euphoria_recent_by_an_earlier_marker`` separately
+# proves the SAME property end to end through a real ``compute_playbook`` walk.
+
+_PARAMS = playbook_parameters()
+
+
+def _signal(setup_id: str, slots_to_break: int) -> dict:
+    return {
+        "setup_id": setup_id,
+        "geometry": {"slots_to_break": slots_to_break},
+        "disclosures": {"euphoria_recent": False, "capitulation_recent": False},
+    }
+
+
+def test_decorate_markers_sets_euphoria_recent_on_a_later_signal_within_the_decay_window():
+    """The baseline positive case: a marker at slot 7 decorates a signal triggering at slot 10 --
+    ``10 - 7 == 3 <= PLAYBOOK_MARKER_DECAY_BARS`` (6)."""
+    signals = [_signal("open_high_break", 10)]
+    _decorate_markers(signals, [7], _PARAMS)
+    assert signals[0]["disclosures"]["euphoria_recent"] is True
+    assert signals[0]["disclosures"]["capitulation_recent"] is False
+
+
+def test_decorate_markers_never_decorates_a_signal_that_triggered_at_or_before_the_marker():
+    """TC-5: the forward-only property, both edges -- a marker whose OWN trigger bar occurs AFTER
+    a candidate signal's trigger bar (in bar-index order) decorates NOTHING (the EARLIER signal
+    stays undecorated), and a marker at the EXACT same bar as a signal's own trigger (the
+    zero-distance edge) also does not decorate it -- ``euphoria_recent``/``capitulation_recent``
+    require the signal's trigger to be STRICTLY after the marker's, never merely at-or-after."""
+    earlier_signal = _signal("jbe", 5)
+    _decorate_markers([earlier_signal], [8], _PARAMS)  # marker AFTER the signal's own trigger
+    assert earlier_signal["disclosures"]["euphoria_recent"] is False
+
+    same_bar_signal = _signal("dbi", 6)
+    _decorate_markers([same_bar_signal], [6], _PARAMS)  # marker AT the signal's own trigger bar
+    assert same_bar_signal["disclosures"]["euphoria_recent"] is False
+
+
+def test_decorate_markers_beyond_the_decay_window_does_not_decorate():
+    """A marker more than ``PLAYBOOK_MARKER_DECAY_BARS`` bars before a later signal's trigger does
+    not decorate it either -- the window has a far edge, not just a near one. A signal exactly AT
+    the decay boundary (distance == decay) still IS decorated -- the window is inclusive on its
+    far edge, so this test also proves the boundary itself is not accidentally off-by-one."""
+    decay = _PARAMS["marker_decay_bars"]
+    marker = 10
+    at_boundary = _signal("cup_handle", marker + decay)
+    _decorate_markers([at_boundary], [marker], _PARAMS)
+    assert at_boundary["disclosures"]["euphoria_recent"] is True
+
+    beyond_boundary = _signal("cup_handle", marker + decay + 1)
+    _decorate_markers([beyond_boundary], [marker], _PARAMS)
+    assert beyond_boundary["disclosures"]["euphoria_recent"] is False
+
+
+def test_decorate_markers_capitulation_signal_decorates_later_signals_but_never_itself():
+    """spec §3.5: "capitulation events symmetrically set capitulation_recent" -- a recorded
+    ``capitulation`` signal is itself a marker for every OTHER later signal in the SAME walk, but
+    the strict-after comparison makes self-decoration structurally impossible (a signal's own
+    trigger bar index is never strictly after itself) -- no special-case exclusion needed, proven
+    here rather than merely asserted."""
+    capitulation_signal = _signal("capitulation", 4)
+    later_signal = _signal("jbe", 6)
+    signals = [capitulation_signal, later_signal]
+    _decorate_markers(signals, [], _PARAMS)  # no euphoria marker this walk
+    assert capitulation_signal["disclosures"]["capitulation_recent"] is False  # never self-decorates
+    assert later_signal["disclosures"]["capitulation_recent"] is True  # decorated by the earlier one
+
+
+def test_decorate_markers_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- a lint that cannot fail proves nothing. A deliberately WRONG
+    implementation (at-or-after instead of strictly-after) would decorate the same-bar case; this
+    test proves the counter-scenario itself is a real trigger for the assertion style above, not a
+    vacuous no-op."""
+    signal = _signal("open_low_break", 6)
+    # Manually simulate the WRONG (at-or-after) rule to confirm it WOULD decorate -- i.e. the
+    # correct, strict rule this module actually implements is doing real work, not passing by
+    # construction regardless of the comparison operator used.
+    marker = 6
+    wrongly_decorates = 0 <= signal["geometry"]["slots_to_break"] - marker <= _PARAMS["marker_decay_bars"]
+    assert wrongly_decorates is True
+    # ... yet the REAL function does not:
+    _decorate_markers([signal], [marker], _PARAMS)
+    assert signal["disclosures"]["euphoria_recent"] is False

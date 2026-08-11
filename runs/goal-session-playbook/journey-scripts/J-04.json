@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "journey": "J-04",
+  "name": "The continuation family — JBE, DBI, cup-and-handle",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {"n": 1, "journey": "J-04", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 2, "journey": "J-04", "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-06-22"}, "expect": {"text": "Jump-Base Explosion"}},
+    {"n": 3, "journey": "J-04", "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-06-22"}, "expect": {"text": "Drop-Base Implosion"}}
+  ]
+}

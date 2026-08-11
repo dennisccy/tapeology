@@ -1482,6 +1482,9 @@ export interface DeskForwardComputeSnapshot {
 // geometry shape on the SAME `signal.geometry` object (one owner, `desk_playbook_detect.py`, per
 // setup). `slots_to_break` is the one field every setup serves (it is what `_measure_signal`
 // anchors on) -- it stays required.
+// goal-playbook-iter-5 (J-05): `capitulation` adds its own four fields below the same way --
+// `euphoria` never appears here at all (it is a marker, never a served signal -- see
+// `DeskPlaybookDisclosures.euphoria_recent` for its only visible trace).
 export interface DeskPlaybookGeometry {
   slots_to_break: number;
   // open_high_break / open_low_break only (J-01)
@@ -1508,6 +1511,11 @@ export interface DeskPlaybookGeometry {
   cup_middle_third_rvol_median?: number;
   cup_outer_third_rvol_median?: number;
   handle_rvol_median?: number;
+  // capitulation only (J-05, spec §3.5)
+  decline_mbr?: number;
+  decline_bars?: number;
+  climax_rvol?: number;
+  bars_from_climax_to_trigger?: number;
 }
 
 export interface DeskPlaybookVolume {

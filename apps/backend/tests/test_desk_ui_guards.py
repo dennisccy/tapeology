@@ -161,6 +161,10 @@ def test_structure_prefill_guard_can_fail_on_a_seeded_violation():
 # own NEW `signal.geometry.*` numerics -- `PlaybookSignalDetail`'s two new setup-branches render
 # every one of these verbatim (base/jump geometry + ladder-step-ratio; cup/handle geometry + the
 # three RVOL medians), never a client-recomputed spread or ratio.
+# goal-playbook-iter-5 (J-05): extended AGAIN for capitulation's own NEW `signal.geometry.*`
+# numerics -- `PlaybookSignalDetail`'s capitulation branch renders `decline_mbr`/`climax_rvol`/
+# `bars_from_climax_to_trigger` verbatim (`decline_bars` is a plain bar count, like `base_bars`/
+# `cup_bars` before it, so it stays outside this price-arithmetic list by the same precedent).
 _PRICE_ARITHMETIC_FIELDS = (
     r"row\.(?:distance_bps|price_low|price_high|reference_close"
     r"|opposite_band\.(?:distance_bps|price_low|price_high|band_score)"
@@ -174,7 +178,7 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|signal\.(?:trigger_price|invalidation_price)"
     r"|geometry\.(?:jump_mbr|base_range_mbr|ladder_step_ratio|cup_depth_mbr|handle_retrace_frac"
     r"|handle_duration_frac|cup_middle_third_rvol_median|cup_outer_third_rvol_median"
-    r"|handle_rvol_median)"
+    r"|handle_rvol_median|decline_mbr|climax_rvol|bars_from_climax_to_trigger)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -296,6 +300,16 @@ def test_desk_page_price_arithmetic_guard_catches_continuation_and_cup_handle_fi
 
     seeded_handle_rvol = "const dry = geometry.handle_rvol_median - geometry.cup_outer_third_rvol_median;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_handle_rvol) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_capitulation_field_arithmetic():
+    """goal-playbook-iter-5 (J-05) counter-test: the extended guard catches arithmetic on
+    capitulation's own NEW `geometry.*` bindings."""
+    seeded_decline = "const net = geometry.decline_mbr - geometry.climax_rvol;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_decline) is not None
+
+    seeded_bars = "const pace = geometry.bars_from_climax_to_trigger * 5;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_bars) is not None
 
 
 # goal-playbook-iter-4 audit (F1): `base_lows_ascending` is ONE served field name carrying the

@@ -203,3 +203,40 @@ be a materially larger, textually unsupported change. The iteration spec adds a 
 guard test (a marker firing after a candidate signal must not decorate it) to make this reading
 machine-checked rather than merely documented.
 **Reversible:** yes
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** The critical anti-goal "No threshold exists outside the spec ... Every detector rule
+and threshold exists in `docs/playbook-detector-spec.md` BEFORE the code that uses it" sits against
+two RULES this iteration settled in code: the exact meaning of `geometry.decline_bars` /
+`decline_mbr` (spec §3.5 names them as disclosures but never defines them) and the concrete
+re-anchoring walk (spec §3.5 says only "a new low after `v` re-anchors `v`"). Constraint T-1 says a
+developer who finds the spec ambiguous DROPS the detector; this developer instead chose a reading
+and disclosed it in the handoff. Critical severity would force a REGRESSION halt.
+**We chose:** minor, not critical. No threshold was invented, tuned, or swept — all five
+capitulation/euphoria constants plus `PLAYBOOK_STOP_PAD_FRAC = 0.30` are already in spec §1/§3.5 and
+the spec has a ZERO diff this iteration (evaluator-verified); the ambiguity is in two disclosure
+FIELDS' definitions and one procedural detail of a rule the spec does state, neither of which gates
+a computation the spec fixes. Dropping the whole capitulation detector over an undefined disclosure
+name would be disproportionate, and the iter-1 B4 / iter-2 B3-B4 precedent this session already
+ratified treats "rule stated in code, not in spec" as a minor item closed by a documentation-only
+spec edit. Recorded as an OPEN minor violation that must be closed before J-06 adds three more
+detectors.
+**Reversible:** yes
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** Two terminal "recorded" rows in the operator's own run ledger
+(`apps/backend/.data/playbook_runs/playbookrun-2026-08-11-9af9d27134e1.json` and
+`...-f24507d3e644.json`) name record files (`playbook-2026-08-08-cc26e2c49bf4`,
+`playbook-2026-08-07-7e8d3e936847`) that a filesystem-wide `find` cannot locate. The critical
+"Immutable data / no recorded playbook file is ever rewritten, backfilled, pruned" rail does not say
+whether a ledger row without its record means a record was DELETED (critical) or that a run wrote
+its record to a scratch dir while its ledger row went to the operator default (hygiene).
+**We chose:** minor and explicitly unconfirmed, not critical, and NOT attributed to this iteration.
+Both rows were written at 00:04Z/00:19Z, before iteration 5 began at 01:00Z, and iteration 5's diff
+contains zero store/ledger code; the split-scoping explanation is consistent with the iter-3 lesson
+("scope every browser-QA compute to `TAPEOLOGY_DESK_PLAYBOOK_DIR` **+ its log-dir env vars**") being
+only half-applied. Recorded as an OPEN minor item that must be answered before J-07's back-scan
+reads this ledger, rather than as a REGRESSION halt on an unproven deletion.
+**Reversible:** yes

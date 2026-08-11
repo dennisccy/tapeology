@@ -4404,6 +4404,7 @@ function playbookSetupLabel(setupId: string): string {
   if (setupId === "jbe") return "Jump-Base Explosion";
   if (setupId === "dbi") return "Drop-Base Implosion";
   if (setupId === "cup_handle") return "Cup and Handle";
+  if (setupId === "capitulation") return "Capitulation";
   return setupId;
 }
 
@@ -4626,6 +4627,16 @@ function PlaybookSignalDetail({
           {fmt(geometry.cup_outer_third_rvol_median)}
           {" / handle "}
           {fmt(geometry.handle_rvol_median)}
+        </p>
+      )}
+      {/* goal-playbook-iter-5 (J-05): capitulation's own geometry line -- the vertical decline's
+          magnitude/duration, the (possibly re-anchored) climax bar's RVOL, and how many bars the
+          first-strength reversal came after it, all rendered verbatim from the served payload. */}
+      {signal.setup_id === "capitulation" && (
+        <p data-testid="desk-playbook-signal-capitulation-geometry" className="mt-1 text-[11px] text-slate-500">
+          decline {fmt(geometry.decline_mbr)} MBR over {geometry.decline_bars} bar(s) · climax RVOL{" "}
+          {fmt(geometry.climax_rvol)} · reversal {geometry.bars_from_climax_to_trigger} bar(s) after
+          climax · broke at slot {geometry.slots_to_break}
         </p>
       )}
       <p className="mt-1 text-[11px] text-slate-500">
@@ -4979,7 +4990,8 @@ function PlaybookRecordView({
       >
         <p className="text-sm font-medium text-amber-300">Playbook not computed for this session.</p>
         <p className="mt-1 text-xs text-amber-200/70">
-          Run Playbook detects and measures the opening-range-break family on{" "}
+          Run Playbook detects and measures the opening-range-break, jump-base-explosion,
+          drop-base-implosion, cup-and-handle, and capitulation families on{" "}
           {control.sessionDate}&apos;s own recorded bars — an explicit operator act, nothing runs on
           page load.
         </p>
@@ -5076,7 +5088,8 @@ function PlaybookSection({
   return (
     <div data-testid="desk-playbook-section" className="space-y-3">
       <p className="max-w-3xl text-sm text-slate-500">
-        The book&apos;s opening-range-break signals, detected on this session&apos;s own recorded
+        The book&apos;s opening-range-break, jump-base-explosion, drop-base-implosion,
+        cup-and-handle, and capitulation signals, detected on this session&apos;s own recorded
         5m/1m bars and measured with the desk forward rail&apos;s own conventions — read verbatim
         from GET /research/desk/playbook. Nothing here is recomputed in the browser.
       </p>

@@ -1001,11 +1001,17 @@ def test_j04_new_setups_tuple_moves_the_signature_and_mints_a_new_version_beside
     pre_j04_sha = _sha256_file(pre_j04_path)
     assert pre_j04_meta["parameters"]["setups"] == ["open_high_break", "open_low_break"]
 
-    monkeypatch.undo()  # restore this iteration's real 5-setup PLAYBOOK_SETUPS
+    # goal-playbook-iter-5 (J-05) maintenance note: this restores the CURRENT `PLAYBOOK_SETUPS`,
+    # which iter-5 legitimately grew to 6 entries (`capitulation` joined) -- the assertion below is
+    # updated to match, exactly as this same test updated it from 2 to 5 entries when it was
+    # J-04's own new content. This is a live "what does PLAYBOOK_SETUPS currently say" assertion,
+    # not a frozen discipline guard, so it tracks the tuple's real value every iteration that
+    # legitimately extends it.
+    monkeypatch.undo()  # restore this iteration's real 6-setup PLAYBOOK_SETUPS
 
     current_result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
     assert current_result["parameters"]["setups"] == [
-        "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle",
+        "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle", "capitulation",
     ]
     assert current_result["playbook_input_signature"] != pre_j04_meta["playbook_input_signature"]
 
@@ -1030,3 +1036,213 @@ def test_j04_new_setups_tuple_moves_the_signature_and_mints_a_new_version_beside
         s for s in current_meta["signals"] if s["setup_id"] in ("open_high_break", "open_low_break")
     ]
     assert pre_j04_or_signals == current_or_signals
+
+
+# === goal-playbook-iter-5 (J-05): the climax family wired into the real compute walk ==============
+
+
+def _plant_capitulation_session(bar_store: BarStore, symbol: str) -> None:
+    """The ``test_desk_playbook_detect.py`` canonical capitulation fixture, trimmed to 6 bars
+    (matching ``_plant_baseline_sessions``'s own 6-slot coverage) and planted through a real
+    ``BarStore``: a vertical decline into a climax bar (slot 3, RVOL surge) followed by a
+    first-strength reversal trigger at slot 4."""
+    bars_5m = [
+        _bar(symbol, "5m", E_OPEN, 104.1, 104.3, 103.9, 104.0, 1000),
+        _bar(symbol, "5m", E_OPEN + 300.0, 104.0, 104.1, 102.4, 102.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 600.0, 102.5, 102.6, 100.9, 101.0, 1200),
+        _bar(symbol, "5m", E_OPEN + 900.0, 101.0, 101.1, 99.3, 99.5, 2500),
+        _bar(symbol, "5m", E_OPEN + 1200.0, 99.6, 101.5, 99.4, 101.0, 1000),
+        _bar(symbol, "5m", E_OPEN + 1500.0, 101.0, 101.3, 100.8, 101.1, 900),
+    ]
+    _plant(bar_store, symbol, "5m", bars_5m)
+
+
+def test_capitulation_wired_into_compute_playbook_is_measured_like_every_other_setup(
+    tmp_path, bar_store, universe_store,
+):
+    """Capitulation joins the SAME per-member walk as every other family: `PLAYBOOK_SETUPS` now
+    names it, and the recorded signal carries `forward`/`invalidation_breached` exactly like an
+    opening-range-break/jbe/dbi/cup_handle signal does (J-02's measurement pass, unmodified)."""
+    _plant_baseline_sessions(bar_store, "AAA")
+    _plant_capitulation_session(bar_store, "AAA")
+    # THIN stays absent (thin baseline) -- reused from the fixture universe unmodified.
+
+    result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+
+    assert desk_playbook_module.PLAYBOOK_SETUPS[-1] == "capitulation"
+    assert result["parameters"]["setups"][-1] == "capitulation"
+    cap_signals = [s for s in result["signals"] if s["symbol"] == "AAA" and s["setup_id"] == "capitulation"]
+    assert len(cap_signals) == 1
+    signal = cap_signals[0]
+    assert "forward" in signal and signal["forward"] is not None
+    assert "invalidation_breached" in signal and signal["invalidation_breached"] is not None
+    assert result["summary"]["capitulation:long"]["to_close"]["signals"]["n"] == 1
+    assert result["baseline_anchors"]["capitulation:long"]
+
+
+def test_euphoria_marker_never_appears_in_any_signal_pool_or_summary_key(tmp_path, bar_store):
+    """TC-4: the structural guard, proven against a REAL firing (not just a source scan) -- a
+    session that fires ONLY the euphoria marker (the exact mirror-UP of the capitulation fixture
+    above) records zero signals for that symbol, and `"euphoria"` never appears anywhere in the
+    result: not as a `setup_id`, not as a `signal_pool`/`baseline_anchors`/`summary` key
+    component."""
+    universe_store = _register_universe(tmp_path, ["EUP1"])
+    _plant_baseline_sessions(bar_store, "EUP1")
+    bars_5m = [
+        _bar("EUP1", "5m", E_OPEN, 95.9, 96.1, 95.7, 96.0, 1000),
+        _bar("EUP1", "5m", E_OPEN + 300.0, 96.0, 97.6, 95.9, 97.5, 1000),
+        _bar("EUP1", "5m", E_OPEN + 600.0, 97.5, 99.1, 97.4, 99.0, 1200),
+        _bar("EUP1", "5m", E_OPEN + 900.0, 99.0, 100.7, 98.9, 100.5, 2500),
+        _bar("EUP1", "5m", E_OPEN + 1200.0, 100.4, 100.6, 98.5, 98.9, 1000),
+        _bar("EUP1", "5m", E_OPEN + 1500.0, 98.9, 99.1, 98.6, 99.0, 900),
+    ]
+    _plant(bar_store, "EUP1", "5m", bars_5m)
+
+    result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+
+    assert [s["symbol"] for s in result["signals"] if s["symbol"] == "EUP1"] == []
+    assert not any(s["setup_id"] == "euphoria" for s in result["signals"])
+    assert not any("euphoria" in key for key in result["summary"])
+    assert not any("euphoria" in key for key in result["baseline_anchors"])
+    assert not any(a.get("symbol") == "euphoria" for a in result["absences"])
+
+
+def _plant_decoration_baseline_sessions(bar_store: BarStore, symbol: str, slots: int = 9) -> None:
+    """9 slots (not the shared 6) -- the marker-decoration fixture below needs slots 0-8 for a
+    same-session euphoria marker (slot 4) followed by an independent, later capitulation firing
+    (slot 8), so it needs its own longer baseline planter (the `_plant_ladder_baseline_sessions`
+    precedent)."""
+    bars = []
+    for day in _BASELINE_DATES:
+        day_open = E_OPEN - (22 - int(day[-2:])) * 86_400.0
+        for slot in range(slots):
+            bars.append(_bar(symbol, "5m", day_open + slot * 300.0, 100.0, 100.5, 99.5, 100.0, 1000))
+    _plant(bar_store, symbol, "5m", bars)
+
+
+def test_a_later_capitulation_signal_is_decorated_euphoria_recent_by_an_earlier_marker(
+    tmp_path, bar_store,
+):
+    """TC-3: ONE session, real end-to-end -- an early euphoria mirror-formation (marker trigger at
+    slot 4) followed within `PLAYBOOK_MARKER_DECAY_BARS` (6) bars by an independent, LATER
+    capitulation formation (trigger at slot 8) -- the capitulation signal renders with
+    `disclosures.euphoria_recent == True`, and the signals table contains no `"euphoria"` row of
+    any kind."""
+    universe_store = _register_universe(tmp_path, ["DECOR"])
+    _plant_decoration_baseline_sessions(bar_store, "DECOR")
+    bars_5m = [
+        _bar("DECOR", "5m", E_OPEN, 95.9, 96.1, 95.7, 96.0, 1000),
+        _bar("DECOR", "5m", E_OPEN + 300.0, 96.0, 97.6, 95.9, 97.5, 1000),
+        _bar("DECOR", "5m", E_OPEN + 600.0, 97.5, 99.1, 97.4, 99.0, 1200),
+        _bar("DECOR", "5m", E_OPEN + 900.0, 99.0, 100.7, 98.9, 100.5, 2500),  # euphoria climax
+        _bar("DECOR", "5m", E_OPEN + 1200.0, 100.4, 100.6, 98.5, 98.9, 1000),  # euphoria trigger (slot 4)
+        _bar("DECOR", "5m", E_OPEN + 1500.0, 98.9, 99.0, 96.5, 97.0, 1000),
+        _bar("DECOR", "5m", E_OPEN + 1800.0, 97.0, 97.2, 95.0, 95.5, 1000),
+        _bar("DECOR", "5m", E_OPEN + 2100.0, 94.0, 94.2, 92.8, 93.5, 2600),  # capitulation climax
+        _bar("DECOR", "5m", E_OPEN + 2400.0, 93.0, 94.5, 93.0, 94.0, 1000),  # capitulation trigger (slot 8)
+    ]
+    _plant(bar_store, "DECOR", "5m", bars_5m)
+
+    result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+
+    assert not any(s["setup_id"] == "euphoria" for s in result["signals"])
+    cap_signals = [s for s in result["signals"] if s["setup_id"] == "capitulation"]
+    assert len(cap_signals) == 1
+    assert cap_signals[0]["geometry"]["slots_to_break"] == 8
+    assert cap_signals[0]["disclosures"]["euphoria_recent"] is True
+    assert cap_signals[0]["disclosures"]["capitulation_recent"] is False
+
+
+# --- TC-9 / TC-10: J-05's own setups-tuple re-key, mirroring the J-04 precedent above --------------
+
+
+def test_j05_new_setups_tuple_moves_the_signature_and_mints_a_new_version_beside_the_old_file(
+    tmp_path, bar_store, universe_store, monkeypatch,
+):
+    """Simulates 'a file already recorded under the pre-J-05, 5-setup parameters' by monkeypatching
+    `PLAYBOOK_SETUPS` down to its J-04-era value for ONE recording -- `_record_aaa`'s own 6-bar
+    session is too short for `capitulation` to ever fire regardless of which code computed it (its
+    own vertical-move window alone needs 4+ bars before any trigger), so this isolates exactly the
+    ONE thing this iteration changed for an already-recorded file's own inputs: the parameters
+    blob's `setups` list, and therefore the signature.
+
+    TC-9: the pre-J-05 file's own bytes on disk are UNCHANGED by a fresh, post-J-05 compute over
+    the identical inputs. TC-10: that fresh compute mints a genuinely NEW record (new signature,
+    new id) beside the old one -- re-keying, never rewriting -- and the OR-break signal's own
+    CONTENT (not its signature) is unaffected."""
+    monkeypatch.setattr(
+        desk_playbook_module, "PLAYBOOK_SETUPS",
+        ("open_high_break", "open_low_break", "jbe", "dbi", "cup_handle"),
+    )
+    pre_j05_store, pre_j05_meta = _record_aaa(tmp_path, bar_store, universe_store)
+    pre_j05_path = pre_j05_store._path(pre_j05_meta["id"])
+    pre_j05_sha = _sha256_file(pre_j05_path)
+    assert pre_j05_meta["parameters"]["setups"] == [
+        "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle",
+    ]
+
+    monkeypatch.undo()  # restore this iteration's real 6-setup PLAYBOOK_SETUPS
+
+    current_result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+    assert current_result["parameters"]["setups"] == [
+        "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle", "capitulation",
+    ]
+    assert current_result["playbook_input_signature"] != pre_j05_meta["playbook_input_signature"]
+
+    current_meta = pre_j05_store.record(**current_result)
+    assert current_meta["id"] != pre_j05_meta["id"]
+
+    # TC-9: the pre-J-05 file is byte-identical, untouched by the second, differently-keyed write.
+    assert _sha256_file(pre_j05_path) == pre_j05_sha
+    assert pre_j05_store.get(pre_j05_meta["id"]) == pre_j05_meta
+
+    # TC-10: both versions are now recorded for this date; newest is the current-code one.
+    newest, versions = pre_j05_store.newest_for_date(SESSION_DATE)
+    assert versions == 2
+    assert newest["id"] == current_meta["id"]
+
+    # The OR-break signal's own CONTENT is unaffected by the new setups tuple joining the
+    # parameters blob -- zero behavior change to the families J-01 through J-04 already shipped.
+    pre_j05_or_signals = [
+        s for s in pre_j05_meta["signals"] if s["setup_id"] in ("open_high_break", "open_low_break")
+    ]
+    current_or_signals = [
+        s for s in current_meta["signals"] if s["setup_id"] in ("open_high_break", "open_low_break")
+    ]
+    assert pre_j05_or_signals == current_or_signals
+
+
+# --- TC-8: the widened PLAYBOOK_REGISTER pinned exactly, with a mandatory rationale paragraph ------
+#
+# goal-playbook-iter-5 (J-05): PLAYBOOK_REGISTER's opening clause widens from "opening-range-break
+# signals" to name every shipped setup family (open-range breaks, jump-base-explosion,
+# drop-base-implosion, cup-and-handle, capitulation) -- closing the OPEN minor anti-goal violation
+# iter-4's own evaluator/audit carried forward (the register/blurb text had silently drifted out of
+# sync with J-04's own continuation-family launch). This is a PINNED, exact-string assertion so the
+# NEXT widening (J-06, adding range_trade/double_top/double_bottom) fails LOUDLY here rather than
+# silently leaving the served register out of date again -- whoever adds a family must deliberately
+# re-derive this constant (and this rationale paragraph), never just extend `PLAYBOOK_SETUPS` in
+# isolation.
+_EXPECTED_PLAYBOOK_REGISTER = (
+    "pre-registered opening-range-break, jump-base-explosion, drop-base-implosion, cup-and-handle, "
+    "and capitulation signals detected on the desk's own recorded 5m/1m bars — every threshold is "
+    "fixed in advance in docs/playbook-detector-spec.md, never fit to outcomes. "
+    "A signal is a recorded observation, not advice: invalidation_price is the book's own "
+    "structural level, disclosed as geometry, never a stop order, a size, or an account concept. "
+    "Each signal's forward block is measured with the desk forward rail's own conventions — "
+    "trading-bar horizons, dual max drawdown, truncation honesty — anchored at the entry already "
+    "decided at detection time, never recomputed a second way; invalidation_breached discloses "
+    "whether price ever traded through that structural level, never an exit model; baseline_anchors "
+    "and summary compare every signal against the SAME math anchored at seeded random minutes of "
+    "the same session. A record computed before this measurement pass existed carries an honest "
+    "absence instead — no fills, no costs, and no probability, expectancy, edge, or significance "
+    "claim are made anywhere on this payload"
+)
+
+
+def test_playbook_register_pinned_text_names_every_shipped_setup_family():
+    """TC-8: the widened PLAYBOOK_REGISTER matches EXACTLY (see the rationale paragraph above) --
+    zero tolerance for a family being added to PLAYBOOK_SETUPS without this string being
+    deliberately re-derived alongside it."""
+    assert PLAYBOOK_REGISTER == _EXPECTED_PLAYBOOK_REGISTER
+    assert find_violations(PLAYBOOK_REGISTER) == []

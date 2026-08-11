@@ -33,8 +33,10 @@ import pytest
 from app.providers.adapters.base import RawBar
 from app.research.desk_playbook import playbook_parameters
 from app.research.desk_playbook_detect import (
+    detect_capitulation,
     detect_cup_handle,
     detect_dbi,
+    detect_euphoria,
     detect_jbe,
     detect_opening_range_breaks,
 )
@@ -779,3 +781,236 @@ def test_cup_handle_mutating_a_bar_after_the_trigger_changes_nothing():
         mutated, _CUP_HANDLE_BASELINE, "CUP1", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
     )
     assert mutated_result == full
+
+
+# === J-05: the climax family -- capitulation (TC-1, TC-2, TC-6, TC-7) / euphoria marker (TC-3) ====
+#
+# A 4-bar reference-then-decline leg (slot 0 the pre-window close reference, slots 1-3 the
+# `PLAYBOOK_VERTICAL_WINDOW_BARS`-bar vertical decline itself, climax bar at slot 3 with the
+# volume surge `vertical_move`'s `require_volume` clause needs) followed by a trigger bar at slot 4
+# whose high exceeds slot 3's own high -- values hand-computed and cross-checked by direct
+# execution (this module's own convention, per the JBE/DBI/cup_handle fixtures above).
+
+_CAPITULATION_BASELINE = {
+    "mbr": 1.0, "sessions": 10, "slot_volume_medians": {i: 1000 for i in range(9)},
+}
+
+
+def _canonical_capitulation_bars(symbol: str = "CAP1") -> list[RawBar]:
+    """No re-anchoring: the climax bar (slot 3) already holds the session's lowest low, and slot
+    4's low never dips below it -- the re-anchoring fixture right below this one is the ONE that
+    exercises the "a new low after v re-anchors v" clause."""
+    return [
+        _bar(symbol, E_OPEN, 104.1, 104.3, 103.9, 104.0, 1000),
+        _bar(symbol, E_OPEN + 300.0, 104.0, 104.1, 102.4, 102.5, 1000),  # window start (slot 1)
+        _bar(symbol, E_OPEN + 600.0, 102.5, 102.6, 100.9, 101.0, 1200),
+        _bar(symbol, E_OPEN + 900.0, 101.0, 101.1, 99.3, 99.5, 2500),  # climax (slot 3), RVOL surge
+        _bar(symbol, E_OPEN + 1200.0, 99.6, 101.5, 99.4, 101.0, 1000),  # trigger: breaks high[3]=101.1
+        _bar(symbol, E_OPEN + 1500.0, 101.0, 101.3, 100.8, 101.1, 900),
+        _bar(symbol, E_OPEN + 1800.0, 101.1, 101.4, 100.9, 101.2, 900),
+    ]
+
+
+def test_canonical_capitulation_matches_the_hand_computed_signal():
+    """TC-1: the canonical capitulation firing -- setup chip, side, and every geometry field
+    hand-verified (values confirmed by direct execution against the fixture)."""
+    signal = detect_capitulation(
+        _canonical_capitulation_bars(), _CAPITULATION_BASELINE, "CAP1", SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert signal is not None
+    assert signal["setup_id"] == "capitulation"
+    assert signal["side"] == "long"
+    assert signal["trigger_price"] == pytest.approx(101.1)
+    assert signal["entry"] == pytest.approx(101.1)
+    assert signal["entry_kind"] == "level"
+    assert signal["price_low"] == pytest.approx(99.3)
+    assert signal["price_high"] == pytest.approx(101.1)
+    assert signal["invalidation_price"] == pytest.approx(98.76)
+    geometry = signal["geometry"]
+    assert geometry["slots_to_break"] == 4
+    assert geometry["decline_mbr"] == pytest.approx(4.7)
+    assert geometry["decline_bars"] == 3
+    assert geometry["climax_rvol"] == pytest.approx(2.5)
+    assert geometry["bars_from_climax_to_trigger"] == 1
+    assert signal["volume"]["rvol_trigger_bar"] == pytest.approx(1.0)
+    assert signal["volume"]["approach_rvol_max"] == pytest.approx(2.5)
+    assert signal["principles"] == ["P1"]
+    assert signal["disclosures"]["bars_to_close"] == 2
+    assert signal["disclosures"]["concurrent_signals"] == []
+    assert signal["disclosures"]["euphoria_recent"] is False
+    assert signal["disclosures"]["capitulation_recent"] is False
+
+
+def _reanchoring_capitulation_bars(symbol: str = "REANCH") -> list[RawBar]:
+    """TC-7: identical through the raw climax candidate at slot 3, but slot 4 makes a NEW, lower
+    low (98.5 < the raw climax's own 99.3) WITHOUT triggering -- the panic still running -- before
+    slot 5 finally triggers. `leg_low`/the disclosed `decline_*`/`climax_rvol` fields must reflect
+    the RE-ANCHORED slot-4 climax, never the original slot-3 one."""
+    return [
+        _bar(symbol, E_OPEN, 104.1, 104.3, 103.9, 104.0, 1000),
+        _bar(symbol, E_OPEN + 300.0, 104.0, 104.1, 102.4, 102.5, 1000),
+        _bar(symbol, E_OPEN + 600.0, 102.5, 102.6, 100.9, 101.0, 1200),
+        _bar(symbol, E_OPEN + 900.0, 101.0, 101.1, 99.3, 99.5, 2500),  # raw climax candidate
+        _bar(symbol, E_OPEN + 1200.0, 99.4, 100.0, 98.5, 98.8, 1500),  # NEW low, no trigger yet
+        _bar(symbol, E_OPEN + 1500.0, 98.9, 100.6, 98.6, 100.2, 1000),  # trigger: breaks high[4]=100.0
+        _bar(symbol, E_OPEN + 1800.0, 100.2, 100.5, 100.0, 100.3, 900),
+    ]
+
+
+def test_capitulation_re_anchors_the_climax_bar_when_a_new_low_forms_before_any_trigger():
+    """TC-7: the re-anchored climax (slot 4, low=98.5) drives `leg_low`/`decline_bars`/
+    `decline_mbr`/`climax_rvol`/`trigger_price`/`invalidation_price` -- NOT the original slot-3
+    candidate's own values (which the canonical fixture above already proves as a contrast)."""
+    signal = detect_capitulation(
+        _reanchoring_capitulation_bars(), _CAPITULATION_BASELINE, "REANCH", SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert signal is not None
+    geometry = signal["geometry"]
+    assert geometry["slots_to_break"] == 5  # trigger, not the (re-anchored) climax bar itself
+    assert signal["price_low"] == pytest.approx(98.5)  # re-anchored leg_low, not 99.3
+    assert geometry["decline_bars"] == 4  # extended by the re-anchoring, not the raw window's 3
+    assert geometry["decline_mbr"] == pytest.approx(5.5)
+    assert geometry["climax_rvol"] == pytest.approx(1.5)  # RVOL of the RE-ANCHORED bar (1500/1000)
+    assert geometry["bars_from_climax_to_trigger"] == 1
+    assert signal["trigger_price"] == pytest.approx(100.0)  # high[4], the re-anchored climax's high
+    assert signal["invalidation_price"] == pytest.approx(98.05)
+
+
+# --- TC-2: the near-miss fixture (meets the vertical-move/RVOL-surge gates, never reverses in the
+# window) paired with the gate-relaxed control -- proves the bounce-window gate SPECIFICALLY is
+# what rejects it (the iter-4 lesson: a "must not fire" fixture can pass for the wrong reason).
+
+
+def _capitulation_near_miss_bars(symbol: str = "NM1") -> list[RawBar]:
+    """The SAME climax formation as the canonical fixture (slots 0-3), but every subsequent bar's
+    high stays BELOW the immediately preceding bar's own high through slot 6 (`t - v > bounce_max`
+    at slot 7, so the walk expires before slot 7's own high -- which WOULD exceed slot 6's -- is
+    ever checked). Nothing else about the formation is disturbed."""
+    return [
+        _bar(symbol, E_OPEN, 104.1, 104.3, 103.9, 104.0, 1000),
+        _bar(symbol, E_OPEN + 300.0, 104.0, 104.1, 102.4, 102.5, 1000),
+        _bar(symbol, E_OPEN + 600.0, 102.5, 102.6, 100.9, 101.0, 1200),
+        _bar(symbol, E_OPEN + 900.0, 101.0, 101.1, 99.3, 99.5, 2500),  # climax (slot 3), high=101.1
+        _bar(symbol, E_OPEN + 1200.0, 99.4, 101.0, 99.35, 99.6, 1000),  # high 101.0, not > 101.1
+        _bar(symbol, E_OPEN + 1500.0, 99.5, 100.9, 99.4, 99.7, 1000),  # high 100.9, not > 101.0
+        _bar(symbol, E_OPEN + 1800.0, 99.6, 100.8, 99.5, 99.8, 1000),  # high 100.8, not > 100.9
+        # slot 7: high 101.0 WOULD exceed slot 6's 100.8 -- but t-v=4 > bounce_max=3 by then.
+        _bar(symbol, E_OPEN + 2100.0, 99.7, 101.0, 99.55, 100.8, 1000),
+    ]
+
+
+def test_capitulation_near_miss_no_reversal_within_the_bounce_window_fires_no_signal():
+    """TC-2: the formation expires silently -- no signal, regardless of what a later bar's high
+    does. The control below relaxes ONLY `bounce_max_bars` and proves that gate, specifically, is
+    what rejected it (every other gate -- the vertical move, the RVOL surge -- already passed)."""
+    bars = _capitulation_near_miss_bars()
+    baseline = {"mbr": 1.0, "sessions": 10, "slot_volume_medians": {i: 1000 for i in range(8)}}
+    signal = detect_capitulation(
+        bars, baseline, "NM1", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert signal is None
+
+    relaxed = {**_PARAMS, "bounce_max_bars": 10}
+    relaxed_signal = detect_capitulation(
+        bars, baseline, "NM1", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, relaxed,
+    )
+    assert relaxed_signal is not None
+    assert relaxed_signal["geometry"]["slots_to_break"] == 7
+    assert relaxed_signal["geometry"]["bars_from_climax_to_trigger"] == 4
+    assert relaxed_signal["geometry"]["bars_from_climax_to_trigger"] > _PARAMS["bounce_max_bars"]
+
+
+# --- TC-6 / TC-7: the truncate/mutate lookahead property test, for capitulation ------------------
+
+
+def test_capitulation_truncating_to_the_trigger_bar_reproduces_the_core_detection_fields():
+    """TC-6: extends the generic truncation-invariance property (own direct test, mirroring
+    ``detect_cup_handle``'s own truncate/mutate pair, since ``detect_capitulation`` is a
+    single-return detector like ``detect_cup_handle`` rather than a list-returning one)."""
+    bars = _canonical_capitulation_bars()
+    full = detect_capitulation(
+        bars, _CAPITULATION_BASELINE, "CAP1", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert full is not None
+    trigger_idx = full["geometry"]["slots_to_break"]
+
+    truncated = detect_capitulation(
+        bars[: trigger_idx + 1], _CAPITULATION_BASELINE, "CAP1", SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert truncated is not None
+    assert truncated["trigger_price"] == full["trigger_price"]
+    assert truncated["invalidation_price"] == full["invalidation_price"]
+    assert truncated["geometry"] == full["geometry"]
+
+
+def test_capitulation_mutating_a_bar_after_the_trigger_changes_nothing():
+    """TC-7: mutation-invariance for capitulation."""
+    bars = _canonical_capitulation_bars()
+    full = detect_capitulation(
+        bars, _CAPITULATION_BASELINE, "CAP1", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert full is not None
+    trigger_idx = full["geometry"]["slots_to_break"]
+    assert trigger_idx + 1 < len(bars), "fixture must carry at least one bar after the trigger"
+
+    mutated = list(bars)
+    victim = mutated[trigger_idx + 1]
+    mutated[trigger_idx + 1] = RawBar(
+        victim.symbol, victim.timeframe, victim.epoch,
+        victim.open * 3.0, victim.high * 5.0, victim.low * 0.2, victim.close * 4.0, victim.volume * 50,
+    )
+    mutated_result = detect_capitulation(
+        mutated, _CAPITULATION_BASELINE, "CAP1", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert mutated_result == full
+
+
+# --- TC-3: detect_euphoria -- a marker event only, never a served signal shape ---------------------
+
+
+def _canonical_euphoria_bars(symbol: str = "EUP1") -> list[RawBar]:
+    """The exact mirror UP of ``_canonical_capitulation_bars``: a vertical RALLY into a climax bar
+    (slot 3), then a first-strength reversal DOWN at slot 4 (``low < low[3]``) -- the euphoria
+    marker's own trigger."""
+    return [
+        _bar(symbol, E_OPEN, 95.9, 96.1, 95.7, 96.0, 1000),
+        _bar(symbol, E_OPEN + 300.0, 96.0, 97.6, 95.9, 97.5, 1000),
+        _bar(symbol, E_OPEN + 600.0, 97.5, 99.1, 97.4, 99.0, 1200),
+        _bar(symbol, E_OPEN + 900.0, 99.0, 100.7, 98.9, 100.5, 2500),  # climax (slot 3)
+        _bar(symbol, E_OPEN + 1200.0, 100.4, 100.6, 98.5, 98.9, 1000),  # trigger: low < low[3]=98.9
+        _bar(symbol, E_OPEN + 1500.0, 98.9, 99.1, 98.6, 99.0, 900),
+    ]
+
+
+_EUPHORIA_BASELINE = {
+    "mbr": 1.0, "sessions": 10, "slot_volume_medians": {i: 1000 for i in range(6)},
+}
+
+
+def test_canonical_euphoria_fires_a_marker_event_only():
+    """TC-3: the euphoria marker's only output is its own trigger-bar index -- no side, no entry,
+    no invalidation, no geometry, no setup_id (structurally incapable of becoming a served signal
+    row)."""
+    marker = detect_euphoria(_canonical_euphoria_bars(), _EUPHORIA_BASELINE, _PARAMS)
+    assert marker == {"trigger_idx": 4}
+    assert set(marker.keys()) == {"trigger_idx"}
+
+
+def test_euphoria_near_miss_no_reversal_within_the_bounce_window_fires_no_marker():
+    """The mirrored error case: a euphoric rally that meets the vertical-move/RVOL-surge gates but
+    never produces a downside reversal bar within ``PLAYBOOK_BOUNCE_MAX_BARS`` emits no marker."""
+    bars = [
+        _bar("EUPNM", E_OPEN, 95.9, 96.1, 95.7, 96.0, 1000),
+        _bar("EUPNM", E_OPEN + 300.0, 96.0, 97.6, 95.9, 97.5, 1000),
+        _bar("EUPNM", E_OPEN + 600.0, 97.5, 99.1, 97.4, 99.0, 1200),
+        _bar("EUPNM", E_OPEN + 900.0, 99.0, 100.7, 98.9, 100.5, 2500),  # climax
+        _bar("EUPNM", E_OPEN + 1200.0, 100.4, 100.6, 98.95, 100.5, 1000),  # low not < 98.9
+        _bar("EUPNM", E_OPEN + 1500.0, 100.4, 100.5, 99.0, 100.3, 1000),  # low not < prior
+        _bar("EUPNM", E_OPEN + 1800.0, 100.2, 100.4, 99.1, 100.2, 1000),  # low not < prior
+    ]
+    baseline = {"mbr": 1.0, "sessions": 10, "slot_volume_medians": {i: 1000 for i in range(7)}}
+    marker = detect_euphoria(bars, baseline, _PARAMS)
+    assert marker is None

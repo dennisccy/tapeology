@@ -1,9 +1,12 @@
 """The Playbook's detectors (Era B2). J-01 shipped the opening-range-break family
-(``docs/playbook-detector-spec.md`` §3.1-3.2); J-04 (this iteration) adds the continuation family
--- ``detect_jbe``/``detect_dbi`` (§3.3-3.4, one shared internal walk, direction-flipped) and
-``detect_cup_handle`` (§3.6). J-05/J-06 add the remaining four detectors here, each built purely
-out of ``desk_playbook_features.py``'s eight primitives plus the ``playbook_parameters()`` dict a
-caller hands in.
+(``docs/playbook-detector-spec.md`` §3.1-3.2); J-04 added the continuation family --
+``detect_jbe``/``detect_dbi`` (§3.3-3.4, one shared internal walk, direction-flipped) and
+``detect_cup_handle`` (§3.6). J-05 (this iteration) adds the climax family --
+``detect_capitulation`` (§3.5, entry) and ``detect_euphoria`` (§3.5, the exact mirror UP, a
+MARKER only -- never a served signal). J-06 adds the remaining three detectors
+(``range_trade``/``double_top``/``double_bottom``), each built purely out of
+``desk_playbook_features.py``'s eight primitives plus the ``playbook_parameters()`` dict a caller
+hands in.
 
 **J-04's own primitives are all reused, none added.** ``consolidation_range`` (JBE/DBI's base,
 shared with the module's own precedent of "shared geometry for JBE/DBI's base and cup-and-handle's
@@ -55,6 +58,8 @@ __all__ = [
     "detect_jbe",
     "detect_dbi",
     "detect_cup_handle",
+    "detect_capitulation",
+    "detect_euphoria",
 ]
 
 
@@ -791,3 +796,215 @@ def detect_cup_handle(
                 },
             }
     return None
+
+
+# --- J-05: the climax family -- capitulation (spec §3.5, entry) + euphoria (spec §3.5, the exact
+# mirror UP, a MARKER only) -------------------------------------------------------------------------
+#
+# ONE shared walk (``_find_climax_formation``), direction-parameterized by ``direction`` -- spec
+# §3.5 states euphoria IS capitulation's "exact mirror UP... same constants", so a second,
+# hand-flipped copy would be the second-implementation drift the module's own
+# ``_continuation_signals``/``side_sign`` precedent already avoids for jbe/dbi.
+
+
+def _rvol_series(session_bars: list[RawBar], slot_volume_medians: dict[int, float]) -> list[float | None]:
+    """Every bar's own RVOL against its baseline slot median, in session order -- the parallel
+    array ``vertical_move``'s ``require_volume`` clause needs (spec §0's ONE relative-volume
+    definition, computed once per session rather than re-derived per candidate climax bar)."""
+    return [_rvol(bar, idx, slot_volume_medians) for idx, bar in enumerate(session_bars)]
+
+
+def _find_climax_formation(
+    session_bars: list[RawBar],
+    rvols: list[float | None],
+    params: dict,
+    mbr: float,
+    direction: str,
+) -> tuple[int, int, int] | None:
+    """spec §3.5's shared vertical-move + reversal-bar grammar, direction-parameterized
+    (``direction="down"`` powers ``detect_capitulation``, ``"up"`` powers ``detect_euphoria``).
+    Returns ``(window_start, climax_idx, trigger_idx)`` for the FIRST candidate climax bar ``v``
+    (a ``vertical_move`` formation ending at ``v``, with the ``require_volume`` clause) whose
+    reversal-bar trigger fires within ``PLAYBOOK_BOUNCE_MAX_BARS`` of the bar's own (possibly
+    re-anchored) climax -- ``None`` if no candidate anywhere in the session both forms and triggers
+    (a later, independent formation may still succeed after an earlier one expires, mirroring
+    ``detect_cup_handle``'s own "first (left_rim, right_rim) pair whose full formation validates
+    AND triggers" search -- never just the first candidate encountered, whether or not it pans
+    out).
+
+    **Re-anchoring, made concrete.** ``leg_low``/``leg_high`` (``extreme`` below) is the running
+    minimum low (``direction="down"``) or maximum high (``"up"``) through the bar STRICTLY BEFORE
+    the candidate trigger bar ``t`` -- spec: "min low through ``t-1``". At every step, bar ``t-1``
+    is checked against the running extreme BEFORE bar ``t`` is evaluated as a trigger candidate: a
+    new extreme re-anchors the climax bar ``v`` to ``t-1`` itself (spec: "a new low after ``v``
+    re-anchors ``v`` -- the panic still running"), which also resets the bounce-window clock (the
+    window is measured from the CURRENT ``v``, not the original one) -- the panic continuing is
+    never mistaken for the window expiring. The trigger predicate itself (``high > high[t-1]`` /
+    the mirrored low check) always compares against the bar IMMEDIATELY before ``t``, never against
+    the climax bar's own high/low -- spec: "first-strength reversal bar", a purely local fact."""
+    window = params["vertical_window_bars"]
+    k = params["vertical_move_mbr"] * mbr
+    bounce_max = params["bounce_max_bars"]
+    rvol_surge = params["rvol_surge"]
+    n = len(session_bars)
+
+    for v0 in range(window, n):
+        if not vertical_move(
+            session_bars, v0, window, k, direction,
+            require_volume=True, rvol_surge=rvol_surge, rvols=rvols,
+        ):
+            continue
+        window_start = v0 - window + 1
+        extreme = session_bars[v0].low if direction == "down" else session_bars[v0].high
+        cur_v = v0
+        t = v0 + 1
+        while t < n:
+            prev = session_bars[t - 1]
+            if t - 1 > cur_v:
+                is_new_extreme = prev.low < extreme if direction == "down" else prev.high > extreme
+                if is_new_extreme:
+                    extreme = prev.low if direction == "down" else prev.high
+                    cur_v = t - 1
+            if (t - cur_v) > bounce_max:
+                break
+            bar = session_bars[t]
+            reverses = (
+                bar.high > session_bars[t - 1].high if direction == "down"
+                else bar.low < session_bars[t - 1].low
+            )
+            if reverses:
+                return window_start, cur_v, t
+            t += 1
+    return None
+
+
+def detect_capitulation(
+    session_bars: list[RawBar],
+    baseline: dict,
+    symbol: str,
+    session_date: str,
+    index_bars: list[RawBar],
+    index_baseline: dict,
+    params: dict,
+) -> dict | None:
+    """spec §3.5 -- capitulation entry, long only: a vertical decline (``vertical_move`` DOWN with
+    the ``require_volume`` clause this iteration is the first to exercise) followed by the first
+    bar within ``PLAYBOOK_BOUNCE_MAX_BARS`` of the (possibly re-anchored) climax bar whose high
+    exceeds the PRIOR bar's own high (``T = high[t-1]`` -- fully known at ``t-1``; the crossing at
+    ``t`` is the only bar-``t`` fact the trigger itself depends on). Capped at 1 per symbol-session
+    by construction (this function returns at most one signal, mirroring ``detect_cup_handle``'s
+    own single-return shape). Follows the SAME signal-assembly shape as
+    ``detect_opening_range_breaks``/the continuation family (entry/entry_kind via the shared
+    stop-through-fill convention, ``market`` via ``_market_block``, the shared volume/attempt-count
+    disclosures) so it flows through ``desk_playbook._measure_signal`` unmodified."""
+    mbr = baseline["mbr"]
+    if mbr == 0.0:
+        return None
+    slot_medians = baseline["slot_volume_medians"]
+    rvols = _rvol_series(session_bars, slot_medians)
+    found = _find_climax_formation(session_bars, rvols, params, mbr, "down")
+    if found is None:
+        return None
+    window_start, climax_idx, trigger_idx = found
+
+    leg_low = session_bars[climax_idx].low
+    trigger_price = session_bars[trigger_idx - 1].high
+    trigger_bar = session_bars[trigger_idx]
+    entry = max(trigger_bar.open, trigger_price)
+    entry_kind = "level" if trigger_bar.open < trigger_price else "gap_open"
+    gapped_beyond_chase = trigger_bar.open > trigger_price * (1.0 + params["max_chase_frac"])
+    invalidation_price = leg_low - params["stop_pad_frac"] * (trigger_price - leg_low)
+
+    # Disclosures spec §3.5 names by name -- `decline_bars` spans the WHOLE decline leg (the
+    # original vertical-move window's own start through the possibly-re-anchored climax bar), so a
+    # formation that re-anchors reports a LONGER decline than the raw `vertical_window_bars`
+    # constant, never a fixed value (see the re-anchoring fixture in
+    # test_desk_playbook_detect.py). `decline_mbr` is the net decline from the close right before
+    # the vertical move began through to the eventual (possibly re-anchored) leg low -- the same
+    # "how far did price actually fall" reading `vertical_move`'s own net-move check uses, extended
+    # through any re-anchoring.
+    decline_bars = climax_idx - window_start + 1
+    decline_mbr = (session_bars[window_start - 1].close - leg_low) / mbr
+    climax_rvol = rvols[climax_idx]
+    bars_from_climax_to_trigger = trigger_idx - climax_idx
+
+    approach_start = max(0, trigger_idx - params["approach_bars"])
+    approach_indices = list(range(approach_start, trigger_idx))
+    approach_rvols = [rvols[i] for i in approach_indices]
+    known_approach = [r for r in approach_rvols if r is not None]
+    approach_rvol_max = max(known_approach) if known_approach else None
+    rvol_trigger_bar = rvols[trigger_idx]
+    spike_verdict = _spike_into_trigger_verdict(
+        session_bars, approach_indices, approach_rvols, trigger_price, "long", mbr,
+        params["rvol_surge"], params["near_extreme_mbr"],
+    )
+    spiky_approach = False
+    if trigger_idx - 1 >= 0:
+        spiky_approach = vertical_move(
+            session_bars, trigger_idx - 1, 1, params["vertical_bar_mbr"] * mbr, "up",
+        )
+    zone_lo, zone_hi = trigger_price - params["near_extreme_mbr"] * mbr, trigger_price
+    attempt_count = len(zone_touches(session_bars[:trigger_idx], zone_lo, zone_hi))
+    market = _market_block(
+        session_bars, trigger_idx, index_bars, session_date, "long", mbr, index_baseline, params,
+    )
+
+    return {
+        "symbol": symbol,
+        "setup_id": "capitulation",
+        "side": "long",
+        "trigger_ts": _iso(trigger_bar.epoch),
+        "trigger_price": trigger_price,
+        "entry": entry,
+        "entry_kind": entry_kind,
+        "price_low": leg_low,
+        "price_high": trigger_price,
+        "invalidation_price": invalidation_price,
+        "geometry": {
+            "slots_to_break": trigger_idx,
+            "decline_mbr": decline_mbr,
+            "decline_bars": decline_bars,
+            "climax_rvol": climax_rvol,
+            "bars_from_climax_to_trigger": bars_from_climax_to_trigger,
+        },
+        "volume": {
+            "rvol_trigger_bar": rvol_trigger_bar,
+            "approach_rvol_max": approach_rvol_max,
+            "spike_into_trigger_verdict": spike_verdict,
+            "spiky_approach": spiky_approach,
+        },
+        "market": market,
+        "principles": ["P1"],
+        "disclosures": {
+            "gapped_beyond_chase": gapped_beyond_chase,
+            "session_bar_count": len(session_bars),
+            "attempt_count": attempt_count,
+            "bars_to_close": len(session_bars) - 1 - trigger_idx,
+            "concurrent_signals": [],
+            "euphoria_recent": False,
+            "capitulation_recent": False,
+        },
+    }
+
+
+def detect_euphoria(session_bars: list[RawBar], baseline: dict, params: dict) -> dict | None:
+    """spec §3.5's euphoria marker -- the exact mirror UP of ``detect_capitulation``'s own
+    vertical-move + reversal-bar grammar (``_find_climax_formation`` with ``direction="up"``: the
+    SAME shared walk, never a second hand-flipped copy), same constants, same cap of 1 per
+    symbol-session, but returning a MARKER event only: no side, no entry, no invalidation, no
+    geometry, no ``setup_id`` -- structurally incapable of becoming a served signal row (there is
+    no field here a caller could even append to ``signals``/``signal_pool``/``baseline_pool`` with).
+    BOOK: an exit/avoid signal -- the authors do not short strong stocks on euphoria; the book's own
+    instruction IS "do nothing but note it," which is exactly this function's return shape. Its
+    only output is the firing's own trigger-bar index, consumed exclusively by
+    ``desk_playbook._decorate_markers`` and discarded immediately afterward -- this function is
+    never called anywhere near ``signals``/``signal_pool``/``baseline_pool`` construction."""
+    mbr = baseline["mbr"]
+    if mbr == 0.0:
+        return None
+    rvols = _rvol_series(session_bars, baseline["slot_volume_medians"])
+    found = _find_climax_formation(session_bars, rvols, params, mbr, "up")
+    if found is None:
+        return None
+    _window_start, _climax_idx, trigger_idx = found
+    return {"trigger_idx": trigger_idx}
