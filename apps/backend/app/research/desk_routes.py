@@ -98,7 +98,7 @@ import os
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ..config import CONFIG
@@ -124,6 +124,12 @@ from .desk_forward_compute import DeskForwardComputeManager
 from .desk_forward_log import ForwardRunStore, resolve_desk_forward_log_dir
 from .desk_forward_pins import resolve_desk_forward_pins
 from .desk_playbook import PlaybookStore, resolve_desk_playbook_dir
+from .desk_playbook_backscan import (
+    BackscanRunStore,
+    DeskPlaybookBackscanComputeManager,
+    plan_backscan,
+    resolve_desk_playbook_backscan_log_dir,
+)
 from .desk_playbook_compute import DeskPlaybookComputeManager
 from .desk_playbook_log import PlaybookRunStore, resolve_desk_playbook_log_dir
 from .desk_screen import ScreenStore, resolve_desk_screen_dir
@@ -176,6 +182,10 @@ _desk_deep_backfill_manager = DeskDeepBackfillComputeManager()
 # The desk playbook compute manager (Era B2, J-02) — the SAME process-wide-singleton-behind-a-
 # dependency shape as its five siblings above.
 _desk_playbook_compute_manager = DeskPlaybookComputeManager()
+
+# The desk playbook back-scan compute manager (Era B2, J-07) — the SAME shape as its six siblings
+# above.
+_desk_playbook_backscan_manager = DeskPlaybookBackscanComputeManager()
 
 
 def get_universe_store() -> UniverseStore:
@@ -1139,6 +1149,114 @@ def get_playbook_runs(
     records, errors = store.list()
     if session_date is not None:
         records = [record for record in records if record.get("session_date") == session_date]
+    return {
+        "runs": records,
+        "latest": records[-1] if records else None,
+        "integrity_errors": errors,
+    }
+
+
+# --- The playbook back-scan (Era B2, J-07) — a plan-preview GET plus a trigger/poll/cancel trio
+# mirroring the deep-backfill trio exactly, plus ONE durable read mirroring
+# `GET /research/desk/backfill/runs`. See `desk_playbook_backscan.py` for the plan/walker/manager/
+# ledger mechanics this only wires up. ---------------------------------------------------------------
+
+
+def get_desk_playbook_backscan_manager() -> DeskPlaybookBackscanComputeManager:
+    """The desk playbook back-scan compute manager — a FastAPI dependency (the
+    ``get_desk_deep_backfill_manager`` pattern) so a test overrides it outright via
+    ``app.dependency_overrides`` for complete test-to-test isolation."""
+    return _desk_playbook_backscan_manager
+
+
+def get_backscan_run_store() -> BackscanRunStore:
+    """The back-scan run log store rooted at a bare env-var-or-sibling-of-the-universe-dir default
+    (zero new ``Config`` field — see ``desk_playbook_backscan.resolve_desk_playbook_backscan_log_
+    dir``) — the ``get_deep_backfill_run_store`` pattern."""
+    return BackscanRunStore(resolve_desk_playbook_backscan_log_dir(CONFIG.desk_universe_dir_resolved()))
+
+
+@router.get("/playbook/backscan/plan")
+def get_desk_playbook_backscan_plan(
+    from_: str = Query(..., alias="from"),
+    to: str = Query(...),
+    universe_store: UniverseStore = Depends(get_universe_store),
+    bar_store: BarStore = Depends(get_bar_store),
+    playbook_store: PlaybookStore = Depends(get_playbook_store),
+) -> dict:
+    """What a back-scan over ``[from, to]`` would find, said before anything is clicked: every
+    calendar day classified ``recorded_at_current_signature`` or ``missing_at_current_signature``
+    against the playbook store's OWN already-recorded files at the CURRENT
+    ``playbook_input_signature``. A plain read: writes nothing, triggers nothing, and performs zero
+    ``BarStore`` bar-content reads (``plan_backscan``'s own metadata-only contract — T-7)."""
+    records, _errors = universe_store.list()
+    members = list(records[-1]["members"]) if records else []
+    return plan_backscan(from_, to, bar_store, members, CONFIG.config_fingerprint(), playbook_store)
+
+
+class BackscanComputeRequest(BaseModel):
+    """Body for ``POST /research/desk/playbook/backscan/compute`` — both dates are REQUIRED, the
+    ``DeepBackfillComputeRequest`` convention: a back-scan's range is exactly the thing an operator
+    is deciding, never a wall-clock-derived default."""
+
+    from_day: str
+    to_day: str
+
+
+@router.post("/playbook/backscan/compute")
+def trigger_desk_playbook_backscan_compute(
+    body: BackscanComputeRequest,
+    universe_store: UniverseStore = Depends(get_universe_store),
+    bar_store: BarStore = Depends(get_bar_store),
+    playbook_store: PlaybookStore = Depends(get_playbook_store),
+    manager: DeskPlaybookBackscanComputeManager = Depends(get_desk_playbook_backscan_manager),
+    run_store: BackscanRunStore = Depends(get_backscan_run_store),
+) -> dict:
+    """Start the single-flight back-scan job over ``[body.from_day, body.to_day]``, or — if one is
+    already running — return it UNCHANGED (``started: False``, never a second concurrent job).
+    Returns ``{"started": bool, "compute": <snapshot>}``; the walk runs on a background worker
+    thread, off this request, so this route returns immediately however long the scan takes. Every
+    planned date is walked through the ONE shared ``run_playbook_and_record`` entry point — a date
+    already recorded reuses with zero detector calls, so re-triggering the SAME range resumes
+    rather than restarting."""
+    return manager.trigger(
+        body.from_day, body.to_day, universe_store, bar_store, CONFIG, playbook_store, run_store,
+    )
+
+
+@router.get("/playbook/backscan/compute")
+def get_desk_playbook_backscan_compute(
+    manager: DeskPlaybookBackscanComputeManager = Depends(get_desk_playbook_backscan_manager),
+) -> dict:
+    """The back-scan job's current/last snapshot, served VERBATIM — ALWAYS a body (``status ==
+    "idle"`` before any compute has ever run this process). A plain read: never triggers a compute
+    as a side effect (GET-never-computes)."""
+    return manager.snapshot()
+
+
+@router.post("/playbook/backscan/compute/cancel")
+def cancel_desk_playbook_backscan_compute(
+    manager: DeskPlaybookBackscanComputeManager = Depends(get_desk_playbook_backscan_manager),
+) -> dict:
+    """Cancel the in-flight back-scan (cooperative — observed on a date boundary). ``409`` when
+    idle — mirrors ``cancel_desk_deep_backfill_compute``'s own 409-when-not-running shape. A date
+    already in flight finishes and is recorded before the walk stops."""
+    snapshot = manager.snapshot()
+    if snapshot["status"] != "running":
+        raise HTTPException(status_code=409, detail="no desk playbook back-scan is currently running")
+    manager.cancel()
+    return {"cancelling": True}
+
+
+@router.get("/playbook/backscan/runs")
+def get_desk_playbook_backscan_runs(store: BackscanRunStore = Depends(get_backscan_run_store)) -> dict:
+    """``{"runs": [...], "latest": <record>|null, "integrity_errors": [...]}`` — the durable log of
+    what every back-scan attempted, surviving the compute manager's process-scoped snapshot. An
+    explicit HTTP 200 honest-empty payload before any back-scan has ever reached a LOGGED terminal
+    state, never a 404. A cancel that measured nothing never appears here at all (the module
+    docstring's own terminal-state-only rule) — its absence looks identical to a run that never
+    happened, by design."""
+    records, errors = store.list()
     return {
         "runs": records,
         "latest": records[-1] if records else None,

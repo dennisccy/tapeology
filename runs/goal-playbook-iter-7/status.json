@@ -1,0 +1,27 @@
+{
+  "phase": "goal-playbook-iter-7",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-08-11T12:40:00Z",
+  "cli": "claude",
+  "changed_files": [
+    "apps/backend/app/research/desk_playbook_backscan.py",
+    "apps/backend/app/research/desk_routes.py",
+    "apps/backend/tests/test_desk_playbook_backscan.py",
+    "apps/backend/tests/test_desk_playbook_detect.py",
+    "apps/backend/tests/test_desk_refresh_chain_guard.py",
+    "apps/backend/tests/test_desk_ui_guards.py",
+    "apps/backend/scripts/seed_playbook_iter7_backscan_fixture.py",
+    "apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh",
+    "apps/frontend/app/desk/page.tsx",
+    "apps/frontend/lib/api.ts",
+    "apps/frontend/lib/types.ts",
+    "docs/handoffs/goal-playbook-iter-7-dev.md",
+    "docs/handoffs/goal-playbook-iter-7-frontend.md"
+  ],
+  "tests_run": true,
+  "test_result": "2131 passed, 8 skipped, 0 failed (floor: 2105 passed / 8 skipped)",
+  "config_fingerprint": "08e471b10130e1e2",
+  "browser_checks_run": false,
+  "next_action": "review -> qa (browser-qa-agent must use apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh as the ONLY backend entry point for J-07 TC-11/TC-14 evidence; rm -rf apps/frontend/.next + rebuild before capture)"
+}

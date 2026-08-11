@@ -25,12 +25,17 @@ import {
   fetchDeskSessions,
   fetchDeskTopupCompute,
   fetchDeskTopupRuns,
+  cancelDeskPlaybookBackscanCompute,
   cancelDeskPlaybookCompute,
   fetchDeskPlaybook,
+  fetchDeskPlaybookBackscanCompute,
+  fetchDeskPlaybookBackscanPlan,
+  fetchDeskPlaybookBackscanRuns,
   fetchDeskPlaybookCompute,
   fetchDeskPlaybookRuns,
   triggerDeskDeepBackfillCompute,
   triggerDeskForwardCompute,
+  triggerDeskPlaybookBackscanCompute,
   triggerDeskPlaybookCompute,
   triggerDeskReconcileCompute,
   triggerDeskScreenCompute,
@@ -51,6 +56,11 @@ import type {
   DeskForwardRunsListResult,
   DeskForwardTouch,
   DeskPlaybookAbsence,
+  DeskPlaybookBackscanComputeSnapshot,
+  DeskPlaybookBackscanOutcomeCounts,
+  DeskPlaybookBackscanPlan,
+  DeskPlaybookBackscanRun,
+  DeskPlaybookBackscanRunsListResult,
   DeskPlaybookComputeSnapshot,
   DeskPlaybookReadResult,
   DeskPlaybookRecord,
@@ -3487,6 +3497,253 @@ function DeepBackfillControl({
   );
 }
 
+// --- The playbook back-scan (Era B2, J-07) ---------------------------------------------------------
+// A resumable, cancel-safe bulk compute over a From/To session-date range, walking every planned
+// date through the SAME "Run Playbook" entry point (`desk_playbook_compute.run_playbook_and_record`)
+// the Playbook Signals section above already drives one date at a time. Wired exactly like
+// `DeepBackfillControl` (plan preview + trigger + live progress + Cancel), plus a runs table (the
+// `TopupRunsTable` precedent) since a back-scan run's outcome mix is the whole point of the feature.
+
+function BackscanOutcomeCounts({ outcomes }: { outcomes: DeskPlaybookBackscanOutcomeCounts }) {
+  return (
+    <span data-testid="desk-backscan-outcome-counts">
+      {fmt(outcomes.reused, 0)} reused · {fmt(outcomes.recorded, 0)} recorded ·{" "}
+      {fmt(outcomes.refused_non_session, 0)} refused · {fmt(outcomes.failed, 0)} failed
+    </span>
+  );
+}
+
+function BackscanPlanPreview({
+  plan,
+}: {
+  plan: { ok: boolean; data: DeskPlaybookBackscanPlan | null; error?: string } | null;
+}) {
+  if (plan === null) return null;
+  if (!plan.ok || plan.data === null) {
+    return (
+      <p data-testid="desk-backscan-plan-error" className="text-xs text-red-300">
+        {plan.error ?? "The back-scan plan could not be loaded."}
+      </p>
+    );
+  }
+  const data = plan.data;
+  return (
+    <div data-testid="desk-backscan-plan" className="w-full max-w-md text-center text-[11px] text-slate-500">
+      <p>
+        {fmt(data.total, 0)} date{data.total === 1 ? "" : "s"} planned · {fmt(data.missing, 0)} missing
+        at the current signature.
+      </p>
+      {data.dates.length > 0 && (
+        <ul data-testid="desk-backscan-plan-dates" className="mt-1 flex flex-wrap justify-center gap-1">
+          {data.dates.map((entry) => (
+            <li
+              key={entry.session_date}
+              data-testid="desk-backscan-plan-date-row"
+              className={
+                entry.status === "recorded_at_current_signature"
+                  ? "rounded border border-emerald-800/60 bg-emerald-950/40 px-1.5 py-0.5 text-emerald-300"
+                  : "rounded border border-slate-700 bg-slate-900/60 px-1.5 py-0.5 text-slate-400"
+              }
+            >
+              {entry.session_date}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+interface BackscanControlProps {
+  compute: DeskPlaybookBackscanComputeSnapshot | null;
+  plan: { ok: boolean; data: DeskPlaybookBackscanPlan | null; error?: string } | null;
+  fromDay: string;
+  toDay: string;
+  onFromDayChange: (value: string) => void;
+  onToDayChange: (value: string) => void;
+  onTrigger: () => void;
+  triggering: boolean;
+  triggerError: string | null;
+  onCancel: () => void;
+  cancelRequested: boolean;
+  cancelError: string | null;
+}
+
+function BackscanControl({
+  compute,
+  plan,
+  fromDay,
+  toDay,
+  onFromDayChange,
+  onToDayChange,
+  onTrigger,
+  triggering,
+  triggerError,
+  onCancel,
+  cancelRequested,
+  cancelError,
+}: BackscanControlProps) {
+  const isRunning = compute?.status === "running";
+  const isError = compute?.status === "error";
+  const isCancelled = compute?.status === "cancelled";
+  const buttonLabel = isRunning ? "Back-scanning…" : isError ? "Retry Backscan" : "Run Backscan";
+  return (
+    <div data-testid="desk-backscan-control" className="flex flex-col items-center gap-1">
+      <div className="flex flex-wrap items-end justify-center gap-3">
+        <label className="flex flex-col items-center gap-1">
+          <span className="text-[11px] font-medium text-slate-500">Backscan from day</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            data-testid="desk-backscan-from-input"
+            value={fromDay}
+            onChange={(e) => onFromDayChange(e.target.value)}
+            placeholder="yyyy-MM-dd"
+            disabled={isRunning}
+            className={ASOF_INPUT_CLASS}
+          />
+        </label>
+        <label className="flex flex-col items-center gap-1">
+          <span className="text-[11px] font-medium text-slate-500">Backscan to day</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            data-testid="desk-backscan-to-input"
+            value={toDay}
+            onChange={(e) => onToDayChange(e.target.value)}
+            placeholder="yyyy-MM-dd"
+            disabled={isRunning}
+            className={ASOF_INPUT_CLASS}
+          />
+        </label>
+      </div>
+      <BackscanPlanPreview plan={plan} />
+      {isError && compute?.error && (
+        <p data-testid="desk-backscan-error" className="text-xs text-red-300">
+          {compute.error}
+        </p>
+      )}
+      {triggerError && (
+        <p data-testid="desk-backscan-trigger-error" className="text-xs text-red-300">
+          {triggerError}
+        </p>
+      )}
+      {isCancelled && (
+        <p data-testid="desk-backscan-cancelled" className="text-xs text-amber-200/70">
+          Backscan cancelled — dates already recorded before the cancel stay stored, and a later run
+          reads them from the store rather than walking them again.
+        </p>
+      )}
+      <button
+        type="button"
+        data-testid="desk-backscan-button"
+        onClick={onTrigger}
+        disabled={triggering || isRunning}
+        className={PRIMARY_BUTTON_CLASS}
+      >
+        {buttonLabel}
+      </button>
+      {isRunning && (
+        <div data-testid="desk-backscan-running" className="mt-1 flex flex-col items-center gap-1">
+          <p data-testid="desk-backscan-progress" className="text-xs text-amber-200/70">
+            <span
+              aria-hidden="true"
+              className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle"
+            />
+            {fmt(compute.completed, 0)} / {fmt(compute.planned_total, 0)} dates ·{" "}
+            <BackscanOutcomeCounts outcomes={compute.outcomes} />
+          </p>
+          {compute.current_date && (
+            <p data-testid="desk-backscan-current" className="text-xs text-amber-200/70">
+              current date: {compute.current_date}
+            </p>
+          )}
+          <button
+            type="button"
+            data-testid="desk-backscan-cancel"
+            onClick={onCancel}
+            disabled={cancelRequested}
+            className={CANCEL_BUTTON_CLASS}
+          >
+            {cancelRequested ? "Cancelling — finishing the current date…" : "Cancel"}
+          </button>
+          {cancelError && (
+            <p data-testid="desk-backscan-cancel-error" className="text-xs text-red-300">
+              {cancelError}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BackscanRunRow({ run }: { run: DeskPlaybookBackscanRun }) {
+  return (
+    <tr data-testid="desk-backscan-run-row" className="border-b border-slate-900">
+      <td className="px-2 py-1 text-left text-xs text-slate-300">
+        {run.from} → {run.to}
+      </td>
+      <td data-testid="desk-backscan-run-status" className="px-2 py-1 text-left text-xs text-slate-300">
+        {run.status}
+      </td>
+      <td className={HEADER_CELL}>
+        <BackscanOutcomeCounts outcomes={run.outcomes} />
+      </td>
+      <td className="px-2 py-1 text-left text-xs text-slate-500">{formatDateTimeET(run.started_at)}</td>
+    </tr>
+  );
+}
+
+function BackscanRunsTable({ runs }: { runs: DeskPlaybookBackscanRun[] }) {
+  if (runs.length === 0) {
+    return <EmptyState testid="desk-backscan-runs-empty" title="No back-scan runs recorded yet." />;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="desk-backscan-runs-table" className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-slate-800">
+            <th className={HEADER_CELL_LEFT}>range</th>
+            <th className={HEADER_CELL_LEFT}>status</th>
+            <th className={HEADER_CELL}>outcomes</th>
+            <th className={HEADER_CELL_LEFT}>started</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((run) => (
+            <BackscanRunRow key={run.run_id} run={run} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BackscanRunsSection({
+  result,
+}: {
+  result: { ok: boolean; data: DeskPlaybookBackscanRunsListResult | null; error?: string } | null;
+}) {
+  if (result === null) {
+    return <LoadingPanel testid="desk-backscan-runs-loading" />;
+  }
+  if (!result.ok || result.data === null) {
+    return (
+      <UnavailablePanel
+        testid="desk-backscan-runs-unavailable"
+        message={result.error ?? "The back-scan run history could not be loaded."}
+      />
+    );
+  }
+  return (
+    <div>
+      <BackscanRunsTable runs={result.data.runs} />
+      <IntegrityErrorsNote errors={result.data.integrity_errors} testid="desk-backscan-runs-integrity-errors" />
+    </div>
+  );
+}
+
 // era-desk-iter-14 (J-10): a third compute control, wired exactly like `TopupComputeControl` — the
 // operation has no per-pair counters (it is a single classify-repair-verify walk, not a walk over
 // many pairs), so the running indicator shows the compute's own `progress.phase` label instead of
@@ -5356,6 +5613,29 @@ export default function DeskPage() {
   const [selectedPlaybookSignal, setSelectedPlaybookSignal] = useState<string | null>(null);
   const playbookValidated = validatePlaybookSessionDay(playbookDateInput, sessionsResult);
 
+  // goal-playbook-iter-7 (J-07): the Backscan section's own state — entirely independent of the
+  // Playbook Signals section above (a back-scan is its own operator act over a From/To RANGE,
+  // never a variant of the single-date Run Playbook control). Blank From/To is a valid, honest
+  // state (the plan effect below simply does not fire) rather than a client-authored default —
+  // the operator names the range, exactly like the deep fine-bar backfill control above.
+  const [backscanFromDay, setBackscanFromDay] = useState("");
+  const [backscanToDay, setBackscanToDay] = useState("");
+  const [backscanPlan, setBackscanPlan] = useState<{
+    ok: boolean;
+    data: DeskPlaybookBackscanPlan | null;
+    error?: string;
+  } | null>(null);
+  const [backscanCompute, setBackscanCompute] = useState<DeskPlaybookBackscanComputeSnapshot | null>(null);
+  const [backscanRunsResult, setBackscanRunsResult] = useState<{
+    ok: boolean;
+    data: DeskPlaybookBackscanRunsListResult | null;
+    error?: string;
+  } | null>(null);
+  const [backscanTriggering, setBackscanTriggering] = useState(false);
+  const [backscanTriggerError, setBackscanTriggerError] = useState<string | null>(null);
+  const [backscanCancelRequested, setBackscanCancelRequested] = useState(false);
+  const [backscanCancelError, setBackscanCancelError] = useState<string | null>(null);
+
   // The chained refresh (see the REFRESH-CHAIN block above). `refreshChain` is plain state and is
   // deliberately NOT persisted: a reload clears it and nothing resumes, which is what keeps "every
   // run is an explicit operator act" true structurally rather than by convention. Whatever job was
@@ -5440,6 +5720,18 @@ export default function DeskPage() {
     // effect census is pinned; see test_desk_refresh_chain_guard.py).
     fetchDeskPlaybookCompute().then((result) => {
       if (alive && result.ok) setPlaybookCompute(result.data);
+    });
+    // goal-playbook-iter-7 (J-07): seeds the Backscan section's compute control mid-job or
+    // post-terminal, plus its durable run ledger — the SAME mount-seed precedent every other
+    // compute manager's snapshot above already follows, joined into this SAME effect (the page's
+    // effect census is pinned; see test_desk_refresh_chain_guard.py). The runs read joins here
+    // rather than opening its own effect because it answers a fixed, un-keyed question ("every
+    // back-scan run ever logged"), exactly like the top-up/reconcile/screen run-ledger reads above.
+    fetchDeskPlaybookBackscanCompute().then((result) => {
+      if (alive && result.ok) setBackscanCompute(result.data);
+    });
+    fetchDeskPlaybookBackscanRuns().then((result) => {
+      if (alive) setBackscanRunsResult(result);
     });
     return () => {
       alive = false;
@@ -6460,6 +6752,44 @@ export default function DeskPage() {
     return () => clearInterval(handle);
   }, [playbookCompute, playbookValidated.date]);
 
+  // goal-playbook-iter-7 (J-07): the Backscan section's own pre-click plan, re-read whenever its
+  // own From/To range changes — the `DeepBackfillControl` plan-effect precedent verbatim. A plain
+  // GET that performs zero BarStore bar-content reads and triggers nothing; a failed read leaves
+  // the last known plan untouched rather than blanking it.
+  useEffect(() => {
+    if (backscanFromDay === "" || backscanToDay === "") return;
+    let alive = true;
+    (async () => {
+      const result = await fetchDeskPlaybookBackscanPlan(backscanFromDay, backscanToDay);
+      if (alive) {
+        setBackscanPlan((previous) => (result.ok || previous === null || !previous.ok ? result : previous));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [backscanFromDay, backscanToDay]);
+
+  // Poll the back-scan job while running — the SEVENTH compute manager, wired exactly like the
+  // reconciliation poll above (on terminal, refresh the durable run ledger once — the SAME "keep
+  // the last known state, never fabricate one" discipline on a failed refetch). This is also what
+  // makes the runs table update the moment a triggered scan finishes, without a second poll or
+  // effect of its own.
+  useEffect(() => {
+    if (backscanCompute?.status !== "running") return;
+    const handle = setInterval(async () => {
+      const next = await fetchDeskPlaybookBackscanCompute();
+      if (next.ok) setBackscanCompute(next.data);
+      if (next.ok && next.data && next.data.status !== "running") {
+        const refreshed = await fetchDeskPlaybookBackscanRuns();
+        setBackscanRunsResult((previous) =>
+          refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
+        );
+      }
+    }, 700);
+    return () => clearInterval(handle);
+  }, [backscanCompute]);
+
   // Forward-test era: the compute trigger/cancel pair — exact mirrors of the screen pair above,
   // placed here (after `displayedSnapshot`) because the no-argument form submits the DISPLAYED
   // snapshot's own id. Reachable from the panel's buttons and from the refresh chain's fifth
@@ -6556,6 +6886,54 @@ export default function DeskPage() {
     cancelRequested: playbookCancelRequested,
     cancelError: playbookCancelError,
     sessionDate: playbookValidated.date,
+  };
+
+  // goal-playbook-iter-7 (J-07): the Backscan section's own trigger/cancel pair — the
+  // `DeepBackfillControl` pattern verbatim (both dates read straight from state; no derived
+  // validation the way the single-date Playbook Signals section needs, since an inverted or
+  // partial range is an honest empty plan/walk rather than a client-refused one — TC-17).
+  async function handleTriggerBackscan() {
+    setBackscanTriggering(true);
+    setBackscanTriggerError(null);
+    setBackscanCancelRequested(false);
+    setBackscanCancelError(null);
+    const result = await triggerDeskPlaybookBackscanCompute(backscanFromDay, backscanToDay);
+    setBackscanTriggering(false);
+    if (!result.ok || result.data === undefined) {
+      setBackscanTriggerError(result.error ?? "The back-scan could not be started.");
+      return;
+    }
+    setBackscanCompute(result.data.compute);
+    if (!result.data.started) {
+      setBackscanTriggerError(
+        "Refused — a back-scan is already running. Wait for it to finish, then try again.",
+      );
+    }
+  }
+
+  async function handleCancelBackscan() {
+    setBackscanCancelRequested(true);
+    setBackscanCancelError(null);
+    const result = await cancelDeskPlaybookBackscanCompute();
+    if (!result.ok) {
+      setBackscanCancelRequested(false);
+      setBackscanCancelError(result.error ?? "The back-scan could not be cancelled.");
+    }
+  }
+
+  const backscanControlProps: BackscanControlProps = {
+    compute: backscanCompute,
+    plan: backscanPlan,
+    fromDay: backscanFromDay,
+    toDay: backscanToDay,
+    onFromDayChange: setBackscanFromDay,
+    onToDayChange: setBackscanToDay,
+    onTrigger: handleTriggerBackscan,
+    triggering: backscanTriggering,
+    triggerError: backscanTriggerError,
+    onCancel: handleCancelBackscan,
+    cancelRequested: backscanCancelRequested,
+    cancelError: backscanCancelError,
   };
 
   const forwardControlProps: ForwardControlProps = {
@@ -6710,6 +7088,27 @@ export default function DeskPage() {
               selectedSignalKey={selectedPlaybookSignal}
               onSelectSignal={setSelectedPlaybookSignal}
             />
+          </Panel>
+        </section>
+
+        {/* goal-playbook-iter-7 (J-07): the Backscan section, rendered directly BELOW the shipped
+            Playbook Signals section above — Blueprint's own pre-planned "Backscan" slot in
+            runs/goal-session-playbook/state/blueprint.md's Information Architecture. Rendered
+            unconditionally, the SAME "always rendered" precedent every other runs/compute section
+            on this page already establishes. */}
+        <section aria-label="Backscan" className="mt-6">
+          <Panel title="Backscan">
+            <p className="mb-3 text-center text-xs text-slate-500">
+              Bulk-check and bulk-populate the playbook ledger across many recorded sessions in one
+              resumable act, instead of computing one date at a time via Run Playbook above.
+            </p>
+            <BackscanControl {...backscanControlProps} />
+            <div className="mt-4 border-t border-slate-800 pt-4">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Back-scan runs
+              </h3>
+              <BackscanRunsSection result={backscanRunsResult} />
+            </div>
           </Panel>
         </section>
       </main>

@@ -171,6 +171,14 @@ def test_structure_prefill_guard_can_fail_on_a_seeded_violation():
 # `nominal_risk_mbr`/`second_top_rvol_vs_first` verbatim. Bar-count/int-count fields
 # (`tops_separation_bars`, `low_zone_touches`, `high_zone_touches`) stay OUT of this list, following
 # the `base_bars`/`cup_bars`/`decline_bars` precedent -- a plain count is not a price.
+# goal-playbook-iter-7 (J-07): extended AGAIN for the new Backscan panel's own served numerics --
+# `BackscanPlanPreview` renders `plan.total`/`plan.missing` verbatim, `BackscanControl`'s running
+# indicator renders `compute.planned_total`/`compute.completed` verbatim, and
+# `BackscanOutcomeCounts` (shared by the live progress view AND every runs-table row) renders
+# `outcomes.reused`/`outcomes.recorded`/`outcomes.refused_non_session`/`outcomes.failed` verbatim --
+# none of these are prices, but the IN SCOPE contract for this panel is "no client-side arithmetic
+# on served numerics" full stop, so they are guarded here on the same footing as the price fields
+# above rather than left to convention.
 _PRICE_ARITHMETIC_FIELDS = (
     r"row\.(?:distance_bps|price_low|price_high|reference_close"
     r"|opposite_band\.(?:distance_bps|price_low|price_high|band_score)"
@@ -186,6 +194,9 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|handle_duration_frac|cup_middle_third_rvol_median|cup_outer_third_rvol_median"
     r"|handle_rvol_median|decline_mbr|climax_rvol|bars_from_climax_to_trigger"
     r"|range_width_mbr|tops_gap_mbr|valley_depth_mbr|nominal_risk_mbr|second_top_rvol_vs_first)"
+    r"|plan\.(?:total|missing)"
+    r"|compute\.(?:planned_total|completed)"
+    r"|outcomes\.(?:reused|recorded|refused_non_session|failed)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"

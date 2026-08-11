@@ -17,6 +17,9 @@ import type {
   DeskForwardPinsResult,
   DeskForwardReadResult,
   DeskForwardRunsListResult,
+  DeskPlaybookBackscanComputeSnapshot,
+  DeskPlaybookBackscanPlan,
+  DeskPlaybookBackscanRunsListResult,
   DeskPlaybookComputeSnapshot,
   DeskPlaybookReadResult,
   DeskPlaybookRunsListResult,
@@ -1841,6 +1844,127 @@ export async function fetchDeskPlaybookRuns(sessionDate?: string): Promise<{
       return { ok: true, data: (await res.json()) as DeskPlaybookRunsListResult };
     }
     let error = "The playbook run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// --- The playbook back-scan (Era B2, J-07) — a plan-preview GET plus a trigger/poll/cancel trio
+// mirroring the deep-backfill clients exactly, plus a durable runs read. --------------------------
+
+// GET /research/desk/playbook/backscan/plan?from=&to= — what a back-scan over the range WOULD
+// find, said before anything is clicked. Issues no compute and writes nothing.
+export async function fetchDeskPlaybookBackscanPlan(
+  fromDay: string,
+  toDay: string,
+): Promise<{ ok: boolean; data: DeskPlaybookBackscanPlan | null; error?: string }> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/desk/playbook/backscan/plan?from=${encodeURIComponent(fromDay)}` +
+        `&to=${encodeURIComponent(toDay)}`,
+    );
+    if (res.ok) return { ok: true, data: (await res.json()) as DeskPlaybookBackscanPlan };
+    let error = "The back-scan plan could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/playbook/backscan/compute — start the single-flight back-scan job.
+// `started: false` means one was already running and this call adopted it, never that anything
+// failed.
+export async function triggerDeskPlaybookBackscanCompute(
+  fromDay: string,
+  toDay: string,
+): Promise<{
+  ok: boolean;
+  data?: { started: boolean; compute: DeskPlaybookBackscanComputeSnapshot };
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/playbook/backscan/compute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from_day: fromDay, to_day: toDay }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data };
+    }
+    let error = "The back-scan could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+export async function fetchDeskPlaybookBackscanCompute(): Promise<{
+  ok: boolean;
+  data: DeskPlaybookBackscanComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/playbook/backscan/compute`);
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as DeskPlaybookBackscanComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+export async function cancelDeskPlaybookBackscanCompute(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/playbook/backscan/compute/cancel`, {
+      method: "POST",
+    });
+    if (res.ok) return { ok: true };
+    let error = "The back-scan could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/playbook/backscan/runs — the durable, append-only BACK-SCAN run log, served
+// VERBATIM. An honest-empty result is a valid `ok: true` outcome: a cancel that measured nothing
+// leaves no row at all (the module's own terminal-state-only rule).
+export async function fetchDeskPlaybookBackscanRuns(): Promise<{
+  ok: boolean;
+  data: DeskPlaybookBackscanRunsListResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/playbook/backscan/runs`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskPlaybookBackscanRunsListResult };
+    }
+    let error = "The back-scan run history could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

@@ -1273,6 +1273,52 @@ def test_range_trade_degenerate_trigger_reference_below_the_range_low_fails_clos
     assert control[0]["invalidation_price"] < control[0]["entry"]
 
 
+def _range_trade_degenerate_reference_bars_short(reference_low: float) -> list[RawBar]:
+    """The SHORT-side mirror of ``_range_trade_degenerate_reference_bars`` (goal-playbook-iter-7,
+    TC-12): the canonical short arming (slots 0-6, `SH` = 205.0) followed by a reference bar whose
+    high (205.3) stays within the 0.50 hold tolerance of `SH` (205.3 <= 205.5) without itself
+    resetting the arming, then a lower-low reversal bar. ``reference_low`` is the ONLY value that
+    differs between the degenerate fixture (205.1, at/above `SH`) and its control (204.5, below
+    `SH`) -- the ``reference_high``-only-varies precedent, mirrored onto the field the SHORT side's
+    own trigger reference (`prev_bar.low`) actually reads."""
+    bars = _canonical_range_trade_short_bars("RTDS")[:7]
+    bars.append(_bar("RTDS", E_OPEN + 7 * 300.0, 205.2, 205.3, reference_low, 205.2, 1000))
+    bars.append(_bar("RTDS", E_OPEN + 8 * 300.0, 205.0, 205.2, 204.0, 204.2, 2000))
+    bars.append(_bar("RTDS", E_OPEN + 9 * 300.0, 204.2, 204.4, 203.9, 204.1, 1000))
+    return bars
+
+
+def test_range_trade_degenerate_trigger_reference_at_or_above_the_range_high_fails_closed_short():
+    """TC-12 (goal-playbook-iter-7): the SHORT-side mirror of
+    ``test_range_trade_degenerate_trigger_reference_below_the_range_low_fails_closed`` -- spec
+    §3.7's Edge cases "degenerate trigger reference" clause is symmetric (module source: ``T <= SL``
+    long / ``T >= SH`` short): a short whose structural invalidation would land AT OR BELOW its own
+    entry, i.e. recorded born-invalidated, is voided fail-closed. Control: the SAME bars with the
+    reference bar's low lowered from 205.1 to 204.5 (just below `SH`) fire exactly one coherent
+    short signal, proving the degeneracy clause specifically -- not the arming or the reversal
+    predicate -- is the rejecter (the fixture is byte-identical between the two calls except for
+    that one field, the iter-6 lesson: a bare `results == []` alone proves nothing)."""
+    degenerate = _range_trade_degenerate_reference_bars_short(205.1)
+    assert detect_range_trade(
+        degenerate, _RANGE_TRADE_BASELINE, "RTDS", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    ) == []
+    # What the spec's formula WOULD have produced there, computed here from the fixture itself:
+    # T = low[7] = 205.1 >= SH = 205.0 -> invalidation 204.97, i.e. at/below the entry.
+    would_be_trigger, session_high = degenerate[7].low, max(bar.high for bar in degenerate[:7])
+    assert would_be_trigger >= session_high
+    assert session_high + _PARAMS["stop_pad_frac"] * (session_high - would_be_trigger) < would_be_trigger
+
+    control = detect_range_trade(
+        _range_trade_degenerate_reference_bars_short(204.5), _RANGE_TRADE_BASELINE, "RTDS",
+        SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert len(control) == 1
+    assert control[0]["side"] == "short"
+    assert control[0]["trigger_price"] == pytest.approx(204.5)
+    assert control[0]["invalidation_price"] == pytest.approx(205.15)
+    assert control[0]["invalidation_price"] > control[0]["entry"]
+
+
 # --- TC-3: a strict break beyond the low zone by more than PLAYBOOK_RANGE_HOLD_TOL_MBR dissolves
 # range-mode -- no signal, PAIRED with a gate-relaxed control (range_hold_tol_mbr widened) proving
 # the hold-tolerance gate specifically is the rejecter (the iter-4 lesson: `results == []` alone

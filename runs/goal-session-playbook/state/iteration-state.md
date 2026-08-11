@@ -1,40 +1,40 @@
 # Iteration State — playbook
 
-**After iteration:** 6 · **Date:** 2026-08-11 · **Verdict:** CONTINUE
+**After iteration:** 7 · **Date:** 2026-08-11 · **Verdict:** ESCALATE
 
 ## Journeys
 
-6 passing (J-01 J-02 J-03 J-04 J-05 J-06) · 3 failing (J-07 J-08 J-09) · 1 partial (J-10) — 10 total
+7 passing (J-01..J-07) · 2 failing (J-08 J-09) · 1 partial (J-10 — needs J-09's 20 MCP tools) — 10 total
 
 ## Active blockers
 
-- **Scoping, before J-07 (dev, urgent).** The QA lane ran an UNSCOPED Run Playbook into the real
-  store (`.data/playbook/playbook-2026-08-07-84fcd116ebd7.json`, 57 signals, 45 real members + ledger
-  row). Do NOT delete it (append-only). Make `apps/backend/scripts/qa_playbook_iter6_fixture_scoped_backend.sh`
-  the ONLY backend entry point for test/browser work — J-07's back-scan mass-writes real sessions.
-- **J-07 needs the auditor (full depth).** First mass writer into the operator's store; the auditor
-  caught 2 FAIL-level bugs in iter-6's own maths. Do not let a budget-breach demote it to lean.
-- Owner rulings (cheap now, expensive once J-07/J-08 pool real numbers): (a) ratify/reject the
-  developer-authored §3.7 "degenerate trigger reference" clause (fail-closed, no constant, signature
-  unmoved; rejecting = drop `range_trade`); (b) `crossed_midrange` serves only the approach half of
-  §3.7's disclosure; (c) `double_top` returns the first valid PAIR, not §3.8's first valley BREAK;
-  (d) carried: §3.3's 1.5x gate unreachable; cup rim reads `near_extreme_mbr` vs §3.6.
-- J-10 `partial` until J-09 ships (needs 20 MCP tools; there are 18). Passenger: short-side degenerate
-  mirror test (`test_desk_playbook_detect.py:1249`); `_assert_scoped` test; re-capture Range Trade row.
+- **Depth arbiter (engine):** spec asked `full`, engine ran `lean` — 3rd time this session; no
+  auditor read J-07, the first mass-writer into the operator's store. Next iteration MUST be `full`.
+- **Replay lane scoping (dev):** the golden-replay lane runs against the ambient unscoped `:8301`
+  backend (the operator's real `.data/`), and `journey-scripts/J-01.json` + `J-03.json` click Run
+  Playbook. Nothing was written this run (verified); the hole is structural.
+- **J-06 (dev):** no golden script → DEFERRED-BUDGET this run, will keep being skipped; also still
+  owes its Range Trade row re-capture (`evidence_makeup`).
+- **Owner rulings, 4 open (human):** the developer-authored §3.7 degenerate-trigger clause in
+  `docs/playbook-detector-spec.md`, plus 3 narrower-than-spec disclosures (`crossed_midrange`,
+  `double_top` pair choice, 1.5x jump-to-base / cup rim).
+- **Defect (dev):** `GET .../playbook/backscan/plan` 500s on a half-typed date (`_planned_dates`
+  raises `ValueError`); the panel refetches on every keystroke.
 
 ## Last 2 verdicts
 
-- iter 6: CONTINUE — J-06 newly passing on POST-FIX evidence only (pre-fix range-trade screenshots
-  voided by the auditor); suite 2105/8, pin held, coherence PASS; 3 open minor items.
-- iter 5: ESCALATE — J-05 newly passing; a full-planned iteration ran lean again with no auditor.
+- iter 7: ESCALATE — J-07 back-scan shipped + browser-verified, real store untouched, suite 2130/8
+  skip, pin `08e471b10130e1e2`; planned-full ran lean, so J-08's pooling math needs the auditor.
+- iter 6: CONTINUE — J-06 range family passed; three minor anti-goal items opened, two since closed.
 
 ## Do not redo
 
-- J-06 DONE: `detect_range_trade`/`_range_trade_side`/`_zone_held`, `detect_double_top`/`detect_double_bottom`/
-  `_find_double_extreme`, `PLAYBOOK_SETUPS` 9-id tuple, both geometry branches, zero-structural-calls guard.
-- CLOSED: register + both `/desk` copy spots name ALL EIGHT families (pinned guard re-derived); spec
-  §3.5 `decline_bars`/re-anchoring prose; orphan-ledger cause (audit B5 — log dir falls back off the
-  universe dir; nothing deleted); J-05 stored golden script exists.
-- Zero diff verified — do not touch `desk_forward.py`, `desk_playbook_features.py`, `mcp/__init__.py`,
-  `config.py`, `desk_routes.py`, `levels.py`, `bars.py`, `setups.py`. Pin `08e471b10130e1e2`; MCP stays
-  18. Behaviour-only detector fixes do NOT move `playbook_input_signature` — re-seed the rig FRESH.
+- J-07 is DONE: `apps/backend/app/research/desk_playbook_backscan.py` (plan/walker/manager/ledger +
+  `_assert_scoped`), 3 routes in `desk_routes.py`, the `/desk` Backscan panel, `J-07.json` golden.
+- Short-side `range_trade` mirror test (TC-12) DONE in `tests/test_desk_playbook_detect.py`, zero
+  diff to `desk_playbook_detect.py` — do not re-open the detector for it.
+- Backscan guard censuses re-derived: `_EXPECTED_EFFECT_COUNT = 19`, `_EXPECTED_INTERVAL_COUNT = 7`, `_TRIGGER_CALLS` +2, `_PRICE_ARITHMETIC_FIELDS` extended.
+- Scoped rig exists (extend, never rewrite): `scripts/qa_playbook_iter7_fixture_scoped_backend.sh`.
+- Keep the zero diff: `desk_forward.py`, `desk_playbook*.py` (except the new backscan module),
+  `config.py`, `levels.py`, `bars.py`, `setups.py`, `mcp/__init__.py`; pin `08e471b10130e1e2`.
+- Do NOT delete the iter-6 accidental record `.data/playbook/playbook-2026-08-07-84fcd116ebd7.json`.

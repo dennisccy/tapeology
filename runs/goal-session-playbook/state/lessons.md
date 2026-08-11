@@ -179,3 +179,20 @@ rows, with nothing ever deleted. Scoping is all-or-nothing: use
 for test/browser work.
 **Applies to:** every test, browser-QA or seeding run from here on, and J-07 above all — the
 back-scan is a mass writer over real recorded sessions.
+
+## iter-7 — 2026-08-11T13:35:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The deterministic golden-replay lane runs against whatever backend is already listening
+on `:8301` — this iteration that was the AMBIENT, unscoped backend pointed at the operator's real
+`.data/` store, and only the later LLM browser lane stopped it and swapped in
+`qa_playbook_iter7_fixture_scoped_backend.sh`. Two consequences, both real: (a) J-05's replay
+false-FAILED because its click target `DECOR` is a fixture-only symbol that exists solely on the
+scoped rig, and its step-2 assertion `"Capitulation"` passed anyway because that word also appears
+in the section's own static blurb — so a fixture-mismatched run looked like a product regression;
+(b) `J-01.json` and `J-03.json` both click the Run Playbook compute trigger, so a golden script with
+a real session date would have written into the operator's append-only store exactly as iter-6 did.
+Scope the replay lane's backend, and never assert on text that also lives in a static description
+paragraph.
+**Applies to:** any iteration that records or replays golden scripts for fixture-dependent
+`/desk` playbook journeys; any iteration whose scripts click a compute/trigger button.

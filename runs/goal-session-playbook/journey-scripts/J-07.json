@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "journey": "J-07",
+  "name": "The back-scan — every recorded session, resumable and append-only",
+  "default_timeout_ms": 15000,
+  "steps": [
+    {"n": 1, "journey": "J-07", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Backscan"}},
+    {"n": 2, "journey": "J-07", "action": {"type": "fill", "target": {"testid": "desk-backscan-from-input"}, "text": "2026-06-22"}},
+    {"n": 3, "journey": "J-07", "action": {"type": "fill", "target": {"testid": "desk-backscan-to-input"}, "text": "2026-06-24"}, "expect": {"text": "3 missing at the current signature"}},
+    {"n": 4, "journey": "J-07", "action": {"type": "click", "target": {"testid": "desk-backscan-button"}}, "expect": {"text": "3 recorded"}}
+  ]
+}

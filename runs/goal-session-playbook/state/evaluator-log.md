@@ -308,3 +308,58 @@ get more expensive after the back-scan pools real numbers: first, say yes or no 
 sentence the developer added to the rule book (saying no means dropping range trades for now);
 second, decide the two places where the code reads the book more narrowly than it is written (the
 "crossed midrange" disclosure and which double-top pair is chosen).
+
+---
+
+## Iteration 7 — goal-playbook-iter-7
+
+**Date:** 2026-08-11T13:35:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (the plan asked for a deep pass; the engine turned it into a fast one
+again — the third time this session)
+**Journey deltas:**
+- Newly passing: J-07 "The back-scan" (plan preview + a finished, resumable bulk run)
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-01 "The signal contract", J-02 "Every signal measured", J-03 "The Playbook
+  lands on /desk", J-04 "The continuation family", J-05 "The climax family" all passing
+  (re-verified this iteration by the stored-replay lane, with J-05's replay failure overturned by a
+  live browser run the evaluator checked by eye); J-06 "The range family" NOT tested this run — the
+  time budget cut it and it still has no stored replay script, so it keeps its earlier pass and its
+  owed re-take picture; J-08, J-09 failing (not targeted, and the evaluator confirmed by hand that
+  neither is built); J-10 "The kept product stands" partial — its walk passed again, but its own
+  wording still asks for 20 Claude tools and there are 18 until J-09 ships
+- Anti-goal violations: none new. Iteration 6's open scoping item is much narrower but still open:
+  nothing was written into the owner's own records this run (evaluator-verified), yet the automatic
+  replay checks still run against those real records and two of their scripts press a compute
+  button. The two open owner-ruling items are untouched by design.
+
+**Reasoning:** I checked the work myself instead of trusting the write-ups. I opened the back-scan
+picture: the Desk page's new Backscan panel reads "3 dates planned · 3 missing at the current
+signature" over 2026-06-22 to 2026-06-24, and the run table below shows one finished run,
+"0 reused · 3 recorded · 0 refused · 0 failed" — every count the journey asks for, legible in one
+image. I opened the Playbook picture too and read the capitulation row's own line ending "euphoria
+recent", which is what the replay lane had wrongly called a failure. I ran the whole backend test
+suite to completion myself: exit 0, 2138 tests, 8 skipped, nothing failed — above the 2105 floor
+(the developer's write-up said 2131 passed, the true number is 2130; harmless). I asked the running
+code for the pin (08e471b10130e1e2) and the Claude tool count (18), and used git to prove the
+measuring rail and every other protected file have zero changes and that the Desk page only gained
+lines and lost none. The big check this time was the owner's own records: I listed every file
+touched since the iteration began and found only database side-files — no playbook record, no run
+row, nothing. Three things I would not sign off silently: the automatic replay checks ran against
+the owner's real records rather than the test copy, and two of those scripts press a compute button
+(they used non-trading dates, so the honest refusal fired and nothing was written — but that is the
+calendar's doing, not a rule); J-06 was not tested at all and cannot be until someone records a
+replay script for it; and the plan preview asks the backend on every keystroke, so a half-typed date
+makes the backend fail with an error instead of answering honestly.
+
+**Next-step recommendation:** Build J-08 "The evidence view" next, as a deep iteration with the
+auditor — it pools every recorded signal into distributions beside the random-chance rows, and a
+dishonest pooling rule would not show up in any screenshot. Carry five cheap items inside the same
+cycle: point the automatic replay checks at the same scoped test backend the live browser check
+uses; record a replay script for J-06 so it stops being skipped; re-take the one owed picture of the
+Range Trade row opened; make the back-scan plan answer honestly on a half-typed date; and fix the
+J-05 replay script so it checks a real signal row instead of a word that also appears in the
+section's description. Four questions still wait for the owner: ratify or reject the one sentence a
+developer added to the rule book about range trades, and settle the three places where the shipped
+code reads the book more narrowly than it is written.

@@ -118,8 +118,27 @@ _UNIVERSE_FETCH_PATH = "/research/desk/universe/fetch"
 # precedent). The timeout is untouched -- the playbook section has no wait-tick of its own; it is
 # not part of the chain. Neither new effect can reach a trigger, which is the property the scan
 # below actually polices; the counts are here so that scan stays provably complete.
-_EXPECTED_EFFECT_COUNT = 17
-_EXPECTED_INTERVAL_COUNT = 6
+#
+# 17 -> 19 and 6 -> 7 for the Backscan section (goal-playbook-iter-7, J-07) -- the SEVENTH compute
+# manager (`desk_playbook_backscan.py`), entirely independent of the refresh chain (a back-scan is
+# its own operator act over a From/To RANGE, never a sixth/seventh chain step) and independent of
+# the Playbook Signals section beside it (its own From/To state, never the single session-date
+# input). +1 effect: the plan-preview read keyed on [backscanFromDay, backscanToDay] -- the
+# `DeepBackfillControl` plan-effect precedent verbatim (a plain GET, issues no compute, performs
+# zero BarStore bar-content reads). +1 effect, +1 interval: the back-scan compute poll, mirroring
+# the RECONCILIATION poll's shape exactly (registered only while `status === "running"` -- this
+# manager's own snapshot enum has no distinct "cancelling" state either, matching the deep-backfill
+# shape rather than the playbook-compute one) and, on the SAME terminal tick, refreshing the durable
+# run ledger once (the reconciliation poll's own "keep the last known state, never fabricate one on
+# a failed refetch" discipline) -- this is also why the runs table needs no THIRD effect of its own.
+# The mount-time seed for this SEVENTH compute snapshot AND its run-ledger read both joined the
+# EXISTING mount effect (no new effect for either, the `forwardComputeRef` mirror precedent extended
+# to an un-keyed durable-log read, exactly as the top-up/reconcile/screen run-ledger reads above
+# already do). The timeout is untouched -- the Backscan section has no wait-tick of its own; it is
+# not part of the chain. Neither new effect can reach a trigger, which is the property the scan
+# below actually polices; the counts are here so that scan stays provably complete.
+_EXPECTED_EFFECT_COUNT = 19
+_EXPECTED_INTERVAL_COUNT = 7
 _EXPECTED_TIMEOUT_COUNT = 1
 
 # Everything that could start real work. The chain's own driver is included: an effect that calls
@@ -140,6 +159,10 @@ _TRIGGER_CALLS = (
     # mirrors the handleTriggerForward(/triggerDeskForwardCompute( pair immediately above exactly.
     "handleTriggerPlaybook(",
     "triggerDeskPlaybookCompute(",
+    # goal-playbook-iter-7 (J-07): the Backscan section's own handler/client pair -- the SAME
+    # mirror, one level down.
+    "handleTriggerBackscan(",
+    "triggerDeskPlaybookBackscanCompute(",
 )
 
 # Machinery that can invoke a handler without a user click. None of it is used by this page today;
@@ -392,8 +415,8 @@ def test_the_chain_adds_no_extra_poll_and_one_sleep():
     assert intervals == _EXPECTED_INTERVAL_COUNT, (
         f"apps/frontend/app/desk/page.tsx has {intervals} setInterval calls, expected "
         f"{_EXPECTED_INTERVAL_COUNT} (one per compute manager: screen, top-up, reconcile, "
-        "forward) -- the refresh chain must not poll the backend itself; it observes the state "
-        "those effects already keep current"
+        "forward, deep backfill, playbook, back-scan) -- the refresh chain must not poll the "
+        "backend itself; it observes the state those effects already keep current"
     )
     assert timeouts == _EXPECTED_TIMEOUT_COUNT, (
         f"apps/frontend/app/desk/page.tsx has {timeouts} setTimeout calls, expected "

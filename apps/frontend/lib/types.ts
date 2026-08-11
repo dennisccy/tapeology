@@ -1679,6 +1679,67 @@ export interface DeskPlaybookRunsListResult {
   integrity_errors: { file: string; error: string }[];
 }
 
+// --- The playbook back-scan (Era B2, J-07) -- a plan preview + resumable/cancel-safe compute over
+// a From/To range, walking every planned date through the ONE existing shared playbook
+// detect+measure+record entry point. -------------------------------------------------------------
+
+/** `GET /research/desk/playbook/backscan/plan` -- what a back-scan over `[from, to]` would find,
+ * said before anything is clicked. Every calendar day in range, classified against the playbook
+ * store's own already-recorded files at the CURRENT `playbook_input_signature` -- pure and
+ * metadata-only, writes/triggers nothing. */
+export interface DeskPlaybookBackscanPlanDate {
+  session_date: string;
+  status: "recorded_at_current_signature" | "missing_at_current_signature";
+}
+
+export interface DeskPlaybookBackscanPlan {
+  from: string;
+  to: string;
+  playbook_input_signature: string;
+  dates: DeskPlaybookBackscanPlanDate[];
+  total: number;
+  missing: number;
+}
+
+export interface DeskPlaybookBackscanOutcomeCounts {
+  reused: number;
+  recorded: number;
+  refused_non_session: number;
+  failed: number;
+}
+
+/** The process-scoped snapshot of the single in-flight (or last-terminal) back-scan job. */
+export interface DeskPlaybookBackscanComputeSnapshot {
+  status: "idle" | "running" | "done" | "cancelled" | "error";
+  from: string | null;
+  to: string | null;
+  planned_total: number;
+  completed: number;
+  outcomes: DeskPlaybookBackscanOutcomeCounts;
+  current_date: string | null;
+  error: string | null;
+}
+
+// One terminal back-scan attempt, from the durable append-only run log -- survives the compute
+// manager's process-scoped snapshot. A cancel that measured nothing is never logged at all (the
+// module's own terminal-state-only rule; a partial cancel that recorded at least one date IS
+// logged, unlike the single-date playbook run log's own cancel-is-never-logged contract).
+export interface DeskPlaybookBackscanRun {
+  run_id: string;
+  from: string;
+  to: string;
+  started_at: string;
+  finished_at: string;
+  status: "done" | "cancelled" | "error";
+  outcomes: DeskPlaybookBackscanOutcomeCounts;
+}
+
+export interface DeskPlaybookBackscanRunsListResult {
+  runs: DeskPlaybookBackscanRun[];
+  latest: DeskPlaybookBackscanRun | null;
+  integrity_errors: { file: string; error: string }[];
+}
+
 // ONE registered universe membership snapshot's own served meta -- `UniverseStore.record`'s return
 // value verbatim (desk_universe.py's `meta` dict), which `POST /research/desk/universe/fetch`
 // serves under its `universe` key. Every field is the store's own; nothing here is derived. The

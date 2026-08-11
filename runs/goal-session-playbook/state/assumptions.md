@@ -340,3 +340,36 @@ real-data evidence). Deleting it would itself breach the critical append-only ra
 process, not removal. Same call shape as the iter-3 planted-fixture precedent this session already
 ratified — but flagged as URGENT because J-07's back-scan is a mass writer over real sessions.
 **Reversible:** no — the record is permanent by design; only the process is fixable.
+
+## iter-7 — goal-evaluator
+
+**Ambiguity:** The iteration spec's TC-13 asks for a guard that "refuses to let a playbook or
+back-scan compute proceed when any of the four scoping env vars is unset or points at the ambient
+default", while the same spec's IN SCOPE line allows "a `_assert_scoped()`-style helper (or
+equivalent test-lane check)". The developer built `_assert_scoped` as a TEST/RIG-ONLY helper,
+deliberately NOT wired into the HTTP routes (his rationale: a genuine operator compute legitimately
+runs unscoped against the real store, so route-level enforcement would refuse every real run).
+`docs/goal.md` does not say whether the scoping guard must be structural (route-level) or
+procedural (rig-level).
+**We chose:** the test-lane-only reading satisfies the Definition-of-Done item, so J-07 is not
+blocked by it. The spec's own wording sanctions "an equivalent test-lane check", the helper is
+exercised by a dedicated test, and the iteration's real-store hygiene was independently verified by
+the evaluator (`find apps/backend/.data -newermt "2026-08-11 11:40" -type f` = sqlite sidecars
+only). But the residual hole is recorded against the still-OPEN iter-6 scoping item, because a
+procedural guard only protects lanes that call it — and the deterministic replay lane does not.
+**Reversible:** yes
+
+## iter-7 — goal-evaluator
+
+**Ambiguity:** The new `GET .../backscan/plan` raises `ValueError: Invalid isoformat string` (HTTP
+500) on a malformed/partial date such as `2026-06-2`, and the panel's plan preview refetches on
+every keystroke, so this fires routinely while the operator types. J-07's acceptance text enumerates
+the plan preview, the resumable run, cancel/resume, the signature flip, the ledger, the zero-bar-read
+proof, and the browser screenshot — it never names malformed input, and the spec's only listed range
+error case (TC-17, `from > to`) IS handled honestly (empty plan, HTTP 200).
+**We chose:** J-07 `passing`, with the 500 recorded as a real defect in the evaluation and as a
+next-iteration carry item rather than an acceptance failure. Nothing is fabricated or mis-served;
+the end state the journey asserts is correct and screenshot-verified; the failure is an unhandled
+input-validation case on a brand-new endpoint, not a violation of any anti-goal or acceptance
+clause.
+**Reversible:** yes
