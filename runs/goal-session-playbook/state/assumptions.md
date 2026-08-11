@@ -240,3 +240,24 @@ contains zero store/ledger code; the split-scoping explanation is consistent wit
 only half-applied. Recorded as an OPEN minor item that must be answered before J-07's back-scan
 reads this ledger, rather than as a REGRESSION halt on an unproven deletion.
 **Reversible:** yes
+
+## iter-6 — goal-decomposer
+
+**Ambiguity:** Iter-5's OPEN minor anti-goal item says `decline_bars`/`decline_mbr` and the
+concrete re-anchoring walk were "settled in code instead of in the spec" (§3.5 defines the
+disclosures but not their exact meaning), and Constraint T-1 says a developer facing spec
+ambiguity DROPS the detector rather than improvising — yet the capitulation detector already
+shipped and is passing (J-05, whole-decline-leg reading per the iter-5 evaluator's own read of
+the code). `docs/goal.md` does not say whether documenting an ALREADY-SHIPPED, already-tested
+reading into the canonical spec (zero behavior/number change) needs a prior owner ruling first,
+or can proceed as a doc-only edit inside the next iteration.
+**We chose:** scoped it into iter-6 as a developer-executed, documentation-only edit to
+`docs/playbook-detector-spec.md` §3.5 — transcribing the whole-decline-leg reading
+`desk_playbook_detect.py`'s `_find_climax_formation`/`detect_capitulation` already implements and
+ships into spec prose, with a source-scan test proving those code lines did not move. This is the
+same B3/B4 (iter-1/iter-2) and `PLAYBOOK_OR_MIN_1M_BARS`/`PLAYBOOK_BASE_FLATLINE_MAX_MBR` (iter-4)
+pattern this session has already ratified three times for exactly this "rule stated in code, not
+yet in spec" shape — closing it invents, tunes, or changes no number. Fallback if the developer
+finds it is NOT actually zero-behavior-change on closer look: T-1's own escape hatch (drop the
+edit, record why, surface for the owner) rather than force it.
+**Reversible:** yes

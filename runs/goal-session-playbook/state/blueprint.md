@@ -15,13 +15,22 @@ every desk-owned Data Contract row through Era B's 21 journeys). This file regis
 Era B2 adds: three new `/desk` sections and six new desk-owned values, all taken near-verbatim
 from `docs/goal.md`'s own `## Product Shape` section plus the J-01..J-10 Must-have journeys.
 
-BASELINE STATE (iteration 0): none of the six new rows below exist in the codebase yet —
-confirmed by grep (no `desk_playbook*.py` module anywhere under `apps/backend/app/research/`, no
-`playbook` string in `desk_routes.py` or `app/mcp/__init__.py`, no `playbook` string in
-`apps/frontend/app/desk/page.tsx`/`apps/frontend/lib/api.ts`, no `*playbook*` fixture under
-`apps/backend/tests/fixtures/`). This file registers them as the TARGET contract each journey
-ships INTO, per the era's natural dependency order (J-01 → J-02 → J-03, then J-04/J-05/J-06, then
-J-07 → J-08 → J-09, with J-10 guarding continuously) — nothing here is computed or served today.
+STATUS AS OF ITERATION 6 (freshened from the iteration-0 baseline below — additive status-label
+update only, no IA/Data-Contract change): J-01 (signal contract), J-02 (measurement), J-03
+(Playbook Signals section), J-04 (continuation family), J-05 (climax family) are SHIPPED and
+passing (session `playbook`, iterations 1-5). J-06 (range family) is the TARGET of iteration 6.
+J-07/J-08/J-09 remain not yet built. The six-row Data Contract table below was drafted whole at
+iteration 0 as the TARGET shape every journey ships into — it already anticipated J-06 landing on
+the same "Playbook records" row (see its "Ships at" column), so no Data-Contract edit is needed
+for iteration 6.
+
+BASELINE STATE (iteration 0, kept verbatim for history): none of the six new rows below existed
+in the codebase yet — confirmed by grep (no `desk_playbook*.py` module anywhere under
+`apps/backend/app/research/`, no `playbook` string in `desk_routes.py` or `app/mcp/__init__.py`,
+no `playbook` string in `apps/frontend/app/desk/page.tsx`/`apps/frontend/lib/api.ts`, no
+`*playbook*` fixture under `apps/backend/tests/fixtures/`). This file registers them as the
+TARGET contract each journey ships INTO, per the era's natural dependency order (J-01 → J-02 →
+J-03, then J-04/J-05/J-06, then J-07 → J-08 → J-09, with J-10 guarding continuously).
 -->
 
 ## Information Architecture
@@ -43,31 +52,32 @@ Tapeology
                                 briefing + history calendar, forward returns, refresh chain +
                                 compute controls, runs/pins/compare/provenance) — UNCHANGED
                                 this era, kept byte-for-byte (R-1/R-2 in inventory). THIS ERA
-                                adds three NEW sections rendered BELOW all shipped ones — NOT
-                                YET BUILT at iteration 0:
+                                adds three NEW sections rendered BELOW all shipped ones:
                                   • Playbook Signals — per-session signal table + Run Playbook
                                     button + live progress/cancel + provenance line (J-03,
-                                    extended visibly by the detector families J-04/J-05/J-06)
+                                    SHIPPED; extended visibly by J-04/J-05, SHIPPED, and J-06,
+                                    TARGETED at iteration 6)
                                   • Backscan — plan preview (From/To range) + trigger + live
-                                    progress + cancel + runs table (J-07)
+                                    progress + cancel + runs table (J-07, not yet built)
                                   • Playbook Evidence — the per-(setup, side) distribution
-                                    table beside the pooled baseline, min-n tags (J-08)
+                                    table beside the pooled baseline, min-n tags (J-08, not
+                                    yet built)
 ```
 
 **Feature / journey homes** (each reachable in ≤2 clicks from the nav):
 
 | Feature / journey | Canonical home (route) | Nav section |
 |---|---|---|
-| J-01 Signal contract (opening-range detectors, pre-registered, lookahead-clean) — not yet built | *(backend module + store; `GET /research/desk/playbook` — no standalone UI until J-03)* | Desk |
-| J-02 Trigger-anchored measurement (rail conventions, seeded baseline anchors) — not yet built | *(backend extension, same module/endpoint as J-01, plus the compute-manager trio + run ledger)* | Desk |
-| J-03 Playbook Signals section — not yet built | `/desk` (new section) | Desk |
-| J-04 Continuation family (JBE, DBI, cup-and-handle) — not yet built | lands on J-03's section, `/desk` | Desk |
-| J-05 Climax family (capitulation entry, euphoria marker) — not yet built | lands on J-03's section, `/desk` | Desk |
-| J-06 Range family (range trades, double top/bottom) — not yet built | lands on J-03's section, `/desk` | Desk |
+| J-01 Signal contract (opening-range detectors, pre-registered, lookahead-clean) — SHIPPED | *(backend module + store; `GET /research/desk/playbook` — no standalone UI until J-03)* | Desk |
+| J-02 Trigger-anchored measurement (rail conventions, seeded baseline anchors) — SHIPPED | *(backend extension, same module/endpoint as J-01, plus the compute-manager trio + run ledger)* | Desk |
+| J-03 Playbook Signals section — SHIPPED | `/desk` (new section) | Desk |
+| J-04 Continuation family (JBE, DBI, cup-and-handle) — SHIPPED | lands on J-03's section, `/desk` | Desk |
+| J-05 Climax family (capitulation entry, euphoria marker) — SHIPPED | lands on J-03's section, `/desk` | Desk |
+| J-06 Range family (range trades, double top/bottom) — TARGETED iteration 6 | lands on J-03's section, `/desk` | Desk |
 | J-07 Back-scan (resumable, append-only, host-guard-confined) — not yet built | `/desk` (new Backscan panel) | Desk |
 | J-08 Evidence view (distributions beside the null, min-n honest) — not yet built | `/desk` (new Playbook Evidence section) | Desk |
 | J-09 MCP contract v4 (20 read-only tools) — not yet built | *(MCP tool surface only; no page — `desk_playbook`/`desk_playbook_evidence` proxy the rows below)* | — |
-| J-10 Kept-product regression sentinel — continuous, every iteration | `/`, `/structure`, `/desk` (every shipped section) | Cockpit, Structure, Desk |
+| J-10 Kept-product regression sentinel — continuous, every iteration (currently `partial`: text asks for 20 MCP tools, 18 exist until J-09) | `/`, `/structure`, `/desk` (every shipped section) | Cockpit, Structure, Desk |
 
 ## Data Contract
 
@@ -92,20 +102,24 @@ and every shipped `desk_screen*`/`desk_forward*`/`desk_topup*`/`desk_index_recon
 `desk_meta_cache` row) stays exactly as `runs/goal-session-desk/state/blueprint.md` lists — this
 file does not re-derive that inventory.
 
-**New rows this era (not yet built at iteration 0 — six new desk-owned values, exactly one owner
-each, taken verbatim from `docs/goal.md`'s Product Shape table):**
+**New rows this era (six new desk-owned values, exactly one owner each, taken verbatim from
+`docs/goal.md`'s Product Shape table; "Ships at" tracks actual delivery, not just the original
+target):**
 
 | Value / entity | Computed by (single module/function) | Served by (single endpoint) | Ships at |
 |---|---|---|---|
-| Playbook records (signals + measurements + baseline + summary) | new `app/research/desk_playbook.py` (+ primitives `desk_playbook_features.py` and detectors `desk_playbook_detect.py`) | `GET /research/desk/playbook` (`?date=`, `?id=`) | J-01 (detection-only records) → J-02 (adds the measurement block, same owner/endpoint) → J-04/J-05/J-06 (each adds a detector family to the same shared detect module — signature moves, endpoint/owner do not) |
-| Playbook compute progress | new playbook compute manager, `desk_playbook_compute.py` (single-flight, mirrors `DeskScreenComputeManager`) | `POST/GET/POST-cancel /research/desk/playbook/compute` | J-02 |
-| Playbook run ledger | new `app/research/desk_playbook_log.py` (terminal-state-only, mirrors `desk_topup_log.py`) | `GET /research/desk/playbook/runs` | J-02 |
-| Back-scan plan | new `app/research/desk_playbook_backscan.py` (pure, metadata-only) | `GET /research/desk/playbook/backscan/plan` | J-07 |
-| Back-scan progress + ledger | same back-scan module (mirrors `desk_deep_backfill.py`'s plan/walker/ledger/manager quartet, re-chunked to one session-date) | `POST/GET/POST-cancel .../backscan/compute`, `GET .../backscan/runs` | J-07 |
-| Evidence aggregates | new `app/research/desk_playbook_evidence.py` (stat-keyed derived projection cache, the `desk_meta_cache` contract — rebuildable, owns nothing) | `GET /research/desk/playbook/evidence` | J-08 |
+| Playbook records (signals + measurements + baseline + summary) | new `app/research/desk_playbook.py` (+ primitives `desk_playbook_features.py` and detectors `desk_playbook_detect.py`) | `GET /research/desk/playbook` (`?date=`, `?id=`) | J-01 (detection-only records, SHIPPED) → J-02 (adds the measurement block, same owner/endpoint, SHIPPED) → J-04/J-05 (continuation + climax families, same owner/endpoint, SHIPPED) → J-06 (range family — `range_trade`/`double_top`/`double_bottom` — TARGETED iteration 6, same owner/endpoint, signature moves) |
+| Playbook compute progress | new playbook compute manager, `desk_playbook_compute.py` (single-flight, mirrors `DeskScreenComputeManager`) | `POST/GET/POST-cancel /research/desk/playbook/compute` | J-02 (SHIPPED) |
+| Playbook run ledger | new `app/research/desk_playbook_log.py` (terminal-state-only, mirrors `desk_topup_log.py`) | `GET /research/desk/playbook/runs` | J-02 (SHIPPED) |
+| Back-scan plan | new `app/research/desk_playbook_backscan.py` (pure, metadata-only) | `GET /research/desk/playbook/backscan/plan` | J-07 (not yet built) |
+| Back-scan progress + ledger | same back-scan module (mirrors `desk_deep_backfill.py`'s plan/walker/ledger/manager quartet, re-chunked to one session-date) | `POST/GET/POST-cancel .../backscan/compute`, `GET .../backscan/runs` | J-07 (not yet built) |
+| Evidence aggregates | new `app/research/desk_playbook_evidence.py` (stat-keyed derived projection cache, the `desk_meta_cache` contract — rebuildable, owns nothing) | `GET /research/desk/playbook/evidence` | J-08 (not yet built) |
 
 No shared value from the unchanged-owners list above is recomputed a second way by any of these
 six rows — each reads bars/sessions/measurement-helpers/universe-membership verbatim from its
-single existing owner (the "no second implementation of the measurement rail" anti-goal). MCP
-exposure (`desk_playbook`, `desk_playbook_evidence`) is a byte-identical GET proxy of the first
-and last rows above, added at J-09 — it introduces no new value and no new owner.
+single existing owner (the "no second implementation of the measurement rail" anti-goal). J-06
+ADDS setup ids (`range_trade`, `double_top`, `double_bottom`) and their own geometry/disclosure
+fields to the ALREADY-registered "Playbook records" row — no new module, no new endpoint, no new
+owner; the row's owner and endpoint stay exactly as J-01 registered them. MCP exposure
+(`desk_playbook`, `desk_playbook_evidence`) is a byte-identical GET proxy of the first and last
+rows above, added at J-09 — it introduces no new value and no new owner.
