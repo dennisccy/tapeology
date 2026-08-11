@@ -179,6 +179,12 @@ def test_structure_prefill_guard_can_fail_on_a_seeded_violation():
 # none of these are prices, but the IN SCOPE contract for this panel is "no client-side arithmetic
 # on served numerics" full stop, so they are guarded here on the same footing as the price fields
 # above rather than left to convention.
+# goal-playbook-iter-8 (J-08): extended AGAIN for the new Playbook Evidence section's own served
+# numerics -- the evidence table renders `cell.signal.*`/`cell.baseline.*` (n/n_truncated/
+# n_baseline/median_pct/p25_pct/p75_pct/mean_pct) verbatim per (setup_id, side, measure) row, and
+# the invalidation-breach line renders `breach.breached_count`/`breach.total_count` verbatim --
+# every one of these is a straight pass-through of `GET /research/desk/playbook/evidence`, never a
+# client-recomputed spread, ratio, or rate.
 _PRICE_ARITHMETIC_FIELDS = (
     r"row\.(?:distance_bps|price_low|price_high|reference_close"
     r"|opposite_band\.(?:distance_bps|price_low|price_high|band_score)"
@@ -197,6 +203,9 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|plan\.(?:total|missing)"
     r"|compute\.(?:planned_total|completed)"
     r"|outcomes\.(?:reused|recorded|refused_non_session|failed)"
+    r"|cell\.signal\.(?:n|n_truncated|median_pct|p25_pct|p75_pct|mean_pct)"
+    r"|cell\.baseline\.(?:n_baseline|median_pct|p25_pct|p75_pct|mean_pct)"
+    r"|breach\.(?:breached_count|total_count)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -346,6 +355,22 @@ def test_desk_page_price_arithmetic_guard_catches_range_family_field_arithmetic(
 
     seeded_rvol_ratio = "const inverse = 1 / geometry.second_top_rvol_vs_first;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_rvol_ratio) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_evidence_field_arithmetic():
+    """goal-playbook-iter-8 (J-08) counter-test: the extended guard catches arithmetic on the new
+    Playbook Evidence section's own `cell.signal.*`/`cell.baseline.*`/`breach.*` bindings."""
+    seeded_spread = "const spread = cell.signal.p75_pct - cell.signal.p25_pct;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_spread) is not None
+
+    seeded_skew = "const skew = cell.signal.mean_pct - cell.baseline.mean_pct;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_skew) is not None
+
+    seeded_count = "const observed = cell.signal.n - cell.signal.n_truncated;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_count) is not None
+
+    seeded_rate = "const rate = breach.breached_count / breach.total_count;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_rate) is not None
 
 
 # goal-playbook-iter-4 audit (F1): `base_lows_ascending` is ONE served field name carrying the

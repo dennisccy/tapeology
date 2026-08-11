@@ -172,6 +172,43 @@ bqa_browser_confine() {
   return 0
 }
 
+# ── STORE-SCOPE guard (project-declared; see automation/store-scope/) ─────────
+# Three thin wrappers around store-scope/store-scope.sh so both callers
+# (browser-qa-phase.sh at full depth, goal-iter-lean.sh at lean) stay
+# one-liners, exactly like bqa_browser_confine above. Every wrapper is a no-op
+# returning 0 when the engine has no store-scope script or the project declares
+# no store-scope.env — the framework stays project-neutral.
+#
+#   store_scope_require            0 = the backend under test is provably the
+#                                  project's scoped QA backend (or the project
+#                                  declares no scope) → browser lanes may run.
+#                                  1 = REFUSE: running a lane now would let an
+#                                  automated pass write into the operator's real
+#                                  store. Callers treat it like the REL-14 infra
+#                                  case: write the token, skip the dispatch.
+#   store_scope_snapshot <file>    baseline the protected store paths.
+#   store_scope_verify <file> [md] 1 = a lane wrote into a protected path
+#                                  (disclosure artifact written either way).
+_store_scope_script() { echo "$_REPLAY_LANE_LIB_DIR/../store-scope/store-scope.sh"; }
+
+store_scope_require() {
+  local s; s="$(_store_scope_script)"
+  [[ -f "$s" ]] || return 0
+  STORE_SCOPE_ROOT="${STORE_SCOPE_ROOT:-${REPO_ROOT:-$PWD}}" bash "$s" require
+}
+
+store_scope_snapshot() {
+  local s; s="$(_store_scope_script)"
+  [[ -f "$s" && -n "${1:-}" ]] || return 0
+  STORE_SCOPE_ROOT="${STORE_SCOPE_ROOT:-${REPO_ROOT:-$PWD}}" bash "$s" snapshot "$1"
+}
+
+store_scope_verify() {
+  local s; s="$(_store_scope_script)"
+  [[ -f "$s" && -n "${1:-}" ]] || return 0
+  STORE_SCOPE_ROOT="${STORE_SCOPE_ROOT:-${REPO_ROOT:-$PWD}}" bash "$s" verify "$1" "${2:-}"
+}
+
 # bqa_preflight — probe → one re-check via ensure_services_running (idempotent:
 # it returns immediately when services already answer) → probe again. Mirrors
 # the REL-5 rc-6 retry shape above. Returns 0 = the dispatch may proceed;

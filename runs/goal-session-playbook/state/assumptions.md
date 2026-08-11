@@ -388,3 +388,42 @@ shape for any unusable range, whether inverted or malformed) instead of adding a
 unprecedented failure mode for the frontend to special-case. The per-keystroke refetch cadence
 itself is left untouched (out of scope) since no acceptance text asks for debouncing.
 **Reversible:** yes
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** The critical rails "Persistence stays scoped" and "Immutable data" do not say whether
+an unasked-for but GENUINE, ledgered, append-only compute by an automated verification lane is a
+critical violation or a process breach. At 14:45 this iteration the deterministic golden-replay lane
+pressed J-07's Run Backscan against the ambient real `:8301` backend and permanently wrote three real
+S&P-100 playbook records (`apps/backend/.data/playbook/playbook-2026-06-2{2,3,4}-*.json`, signature
+`16a2734d10c91ea7`) plus one back-scan ledger row — the exact act the iteration spec put OUT OF SCOPE.
+Critical severity would force a REGRESSION halt.
+**We chose:** minor, and resolved-by-mechanism, not critical. Nothing was fabricated, rewritten,
+backfilled or pruned; the three records are genuine output of the shipped code under the unchanged
+fingerprint `08e471b10130e1e2`, correctly ledgered (`outcomes: recorded=3`), and evaluator-verified on
+disk with every pre-existing record's mtime untouched. Deleting them would itself breach the critical
+append-only rail. This is the same call shape as the iter-6 planted-record precedent this session
+already ratified twice. It differs from iter-6 in one way that mattered to the verdict: the remedy is
+no longer a promise but a mechanism (the store-scope guard, proven to refuse and then to run clean
+across 9,841 protected files), so the iter-6 OPEN item is marked resolved while a narrower residual
+item (the QA agent's own lane is still ungated; a breach discloses but does not abort) is opened.
+**Reversible:** no — the records are permanent by design; only the process was fixable.
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** J-06's owed `evidence_makeup` re-capture (carried since iter-6, spec TC-14) asks for
+the Range Trade row "opened/expanded, full geometry line legible ... on a freshly rebuilt scoped rig".
+The delivered capture (`audit-TC-14-range-trade-geometry-preseed-rig.png`) was taken on a rebuilt rig
+seeded by an EARLIER version of `seed_playbook_iter8_replay_rig.py` — the reviewer's second MINOR note
+says no screenshot exists against the literal final rig. `docs/goal.md` says nothing about which seed
+build a capture must come from.
+**We chose:** clear the `evidence_makeup` flag. The substance the flag asks for is delivered and I
+opened it: RTAAA Range Trade, long, trigger 102.60 at 10:05:00 ET, invalidation 99.22, geometry line
+"range 5.00 MBR wide · low zone touches 2 · high zone touches 2 · broke at slot 7 · crossed midrange",
+fully legible in an expanded row. The post-fix final-rig replay capture
+(`fix-scoped-replay-J-06.png`) shows the same RTAAA row with identical trigger/invalidation prices in
+the same table, so the two captures agree on every number and the fixture bars are demonstrably
+unchanged across seed versions. Keeping the flag would schedule a third capture of something already
+legible twice, which methodology A.7 explicitly does not want. Recorded as a non-blocking provenance
+note in eval.md instead.
+**Reversible:** yes

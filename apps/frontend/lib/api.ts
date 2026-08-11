@@ -21,6 +21,7 @@ import type {
   DeskPlaybookBackscanPlan,
   DeskPlaybookBackscanRunsListResult,
   DeskPlaybookComputeSnapshot,
+  DeskPlaybookEvidence,
   DeskPlaybookReadResult,
   DeskPlaybookRunsListResult,
   DeskScreenPinsResult,
@@ -1965,6 +1966,33 @@ export async function fetchDeskPlaybookBackscanRuns(): Promise<{
       return { ok: true, data: (await res.json()) as DeskPlaybookBackscanRunsListResult };
     }
     let error = "The back-scan run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/playbook/evidence (Era B2, J-08) — the pooled evidence fold at the current
+// default signature, served VERBATIM (no client-side arithmetic anywhere downstream — every
+// number the Playbook Evidence section renders is a straight pass-through of this body). A plain
+// read (T-7: GETs never compute) — no compute manager, no trigger, no poll.
+export async function fetchDeskPlaybookEvidence(): Promise<{
+  ok: boolean;
+  data: DeskPlaybookEvidence | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/playbook/evidence`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskPlaybookEvidence };
+    }
+    let error = "The playbook evidence view could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

@@ -196,3 +196,15 @@ Scope the replay lane's backend, and never assert on text that also lives in a s
 paragraph.
 **Applies to:** any iteration that records or replays golden scripts for fixture-dependent
 `/desk` playbook journeys; any iteration whose scripts click a compute/trigger button.
+
+## iter-8 — 2026-08-11T18:40:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A screenshot's FILENAME is a claim, not evidence. `reports/qa/goal-playbook-iter-8-evidence/TC-08-playbook-evidence-table.png` is cited by the QA report's UI Evolution Audit as showing "all elements rendered" of the new Playbook Evidence section — it actually shows the Screen History calendar and Forward Returns panel, a completely different part of `/desk`. The real acceptance evidence lived in two other files (`UT-02-result.png`, `fix-scoped-rig-J-08-evidence-cells.png`). The same report also certified carry items it never executed (audit T2), so treat a QA report's ✓ marks as pointers to open, never as verification.
+**Applies to:** any evaluator or auditor scoring a journey from a named screenshot; any iteration whose acceptance is "legible in a single screenshot"
+
+## iter-8 — 2026-08-11T18:40:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** The store-scoping breach recurred for a third time (iter-3, iter-6, iter-8) because every prior fix was a correct-but-OPTIONAL launcher — iter-7 shipped `qa_playbook_iter7_fixture_scoped_backend.sh` and the deterministic replay lane simply did not call it, then wrote three real S&P-100 records into `apps/backend/.data/playbook/` at 14:45. What finally worked was an OBLIGATION with its own proof: a declared protected-path list, a require/snapshot/verify guard the lane must call before and after, a pure-function "is this backend the fixture rig" classifier that fails closed, and a byte-identical 9,841-file manifest check. Availability of a safe path never prevents an unsafe one; only a gate does.
+**Applies to:** any iteration adding a verification lane, replay script, or QA rig that can reach a real append-only store

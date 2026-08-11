@@ -95,6 +95,7 @@ dependencies instead (the ``get_universe_fetcher`` seam), test-overridable via
 from __future__ import annotations
 
 import os
+import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
@@ -127,10 +128,12 @@ from .desk_playbook import PlaybookStore, resolve_desk_playbook_dir
 from .desk_playbook_backscan import (
     BackscanRunStore,
     DeskPlaybookBackscanComputeManager,
+    malformed_days,
     plan_backscan,
     resolve_desk_playbook_backscan_log_dir,
 )
 from .desk_playbook_compute import DeskPlaybookComputeManager
+from .desk_playbook_evidence import PlaybookEvidenceCache, fold_evidence, inspect_signature
 from .desk_playbook_log import PlaybookRunStore, resolve_desk_playbook_log_dir
 from .desk_screen import ScreenStore, resolve_desk_screen_dir
 from .desk_screen_compute import DeskScreenComputeManager
@@ -1218,7 +1221,26 @@ def trigger_desk_playbook_backscan_compute(
     thread, off this request, so this route returns immediately however long the scan takes. Every
     planned date is walked through the ONE shared ``run_playbook_and_record`` entry point — a date
     already recorded reuses with zero detector calls, so re-triggering the SAME range resumes
-    rather than restarting."""
+    rather than restarting.
+
+    Refuses — 422, naming the malformed boundary, never starting a job or writing a ledger row —
+    when either date is not a parseable calendar day (``malformed_days``), the
+    ``trigger_desk_playbook_compute`` pre-check precedent verbatim. The PLAN read stays tolerant of
+    a half-typed date (an honest empty plan, iter-8's own TC-9), but STARTING a scan over a string
+    nothing could interpret is a different act: it would walk zero dates and then append a
+    permanently un-prunable ``"done"`` ledger row claiming a completed run over an unparseable
+    range (goal-playbook-iter-8 audit, B1). An INVERTED range is not malformed — both boundaries
+    are real days — and still starts an honestly-empty walk (TC-17)."""
+    malformed = malformed_days(body.from_day, body.to_day)
+    if malformed:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "back-scan refused — not a calendar date: "
+                + ", ".join(repr(day) for day in malformed)
+                + ". No job was started and no run-ledger row was written."
+            ),
+        )
     return manager.trigger(
         body.from_day, body.to_day, universe_store, bar_store, CONFIG, playbook_store, run_store,
     )
@@ -1262,6 +1284,69 @@ def get_desk_playbook_backscan_runs(store: BackscanRunStore = Depends(get_backsc
         "latest": records[-1] if records else None,
         "integrity_errors": errors,
     }
+
+
+# --- The Playbook Evidence view (Era B2, J-08) — a read-only fold of every recorded playbook file
+# at ONE signature into per-(setup_id, side, measure) distribution cells beside the pooled
+# baseline. See `desk_playbook_evidence.py` for the fold/cache mechanics this route only wires up.
+# ------------------------------------------------------------------------------------------------
+
+
+def playbook_evidence_cache_db_path() -> str:
+    """The resolved durable playbook-evidence projection-cache path — the
+    ``screen_meta_cache_db_path``/``forward_meta_cache_db_path`` resolver verbatim: the
+    ``TAPEOLOGY_PLAYBOOK_EVIDENCE_CACHE_DB`` env var if set, else a file co-located as a SIBLING of
+    the playbook directory (``.data/playbook`` -> ``.data/playbook_evidence_cache.db``). A derived
+    path, never a ``Config`` field, so ``config_fingerprint`` stays frozen."""
+    override = os.environ.get("TAPEOLOGY_PLAYBOOK_EVIDENCE_CACHE_DB")
+    if override:
+        return override
+    playbook_dir = resolve_desk_playbook_dir(CONFIG.desk_universe_dir_resolved())
+    return os.path.join(os.path.dirname(playbook_dir), "playbook_evidence_cache.db")
+
+
+def get_playbook_evidence_cache() -> PlaybookEvidenceCache | None:
+    """The evidence projection cache — a FastAPI dependency so a test overrides it outright via
+    ``app.dependency_overrides``. An unopenable DB (a bad path, a locked/corrupt file) is a missing
+    optimisation, never a failed read (the ``ForwardStore._durable_meta_cache`` rule, applied here
+    since ``fold_evidence`` takes the cache as a plain optional argument rather than owning a store
+    instance itself)."""
+    try:
+        return PlaybookEvidenceCache(playbook_evidence_cache_db_path())
+    except sqlite3.Error:
+        return None
+
+
+@router.get("/playbook/evidence")
+def get_desk_playbook_evidence(
+    signature: str | None = None,
+    universe_store: UniverseStore = Depends(get_universe_store),
+    bar_store: BarStore = Depends(get_bar_store),
+    playbook_store: PlaybookStore = Depends(get_playbook_store),
+    cache: PlaybookEvidenceCache | None = Depends(get_playbook_evidence_cache),
+) -> dict:
+    """Two shapes, selected by ``?signature=`` (the ``GET /research/desk/playbook`` ``?date=``/
+    ``?id=`` convention):
+
+      * ``signature`` absent: the full pooled fold at the CURRENT default signature —
+        ``{"signature", "cells", "invalidation_breached", "other_signatures", "parameters",
+        "register"}``. Only the default signature's own recorded signals ever enter ``cells``; a
+        cell with zero recorded signals is still served (``n: 0``), never omitted.
+      * ``signature=<value>``: that ONE named signature's own ``{"signature", "dates",
+        "created_span"}`` — inspects any recorded signature (default or not) WITHOUT pooling it
+        into any cell (T-7/the "one signature" anti-goal — this branch never even resolves the
+        current default).
+
+    A plain read: writes nothing, triggers nothing, recomputes nothing (GET-never-computes) — the
+    only bar-content-adjacent call anywhere in this path is ``compute_playbook_input_signature``'s
+    own ``list(include_bars=False)`` metadata scan, the SAME cost the back-scan plan already pays."""
+    if signature is not None:
+        return inspect_signature(playbook_store, signature)
+    records, _errors = universe_store.list()
+    members = list(records[-1]["members"]) if records else []
+    return fold_evidence(
+        playbook_store, bar_store, members, CONFIG.config_fingerprint(), cache=cache
+    )
 
 
 # --- Coverage-index reconciliation (J-10, goal-desk-iter-14) — a trigger/poll/cancel trio mirroring

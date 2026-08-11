@@ -27,6 +27,7 @@ from app.research.desk_playbook_backscan import (
     DeskPlaybookBackscanComputeManager,
     PlaybookNotScopedError,
     _assert_scoped,
+    malformed_days,
     plan_backscan,
     resolve_desk_playbook_backscan_log_dir,
     run_backscan,
@@ -138,6 +139,101 @@ def test_tc17_an_inverted_range_is_an_honest_empty_plan(tmp_path, env):
         "playbook_input_signature": compute_playbook_input_signature(bar_store, [], CONFIG.config_fingerprint()),
         "dates": [], "total": 0, "missing": 0,
     }
+
+
+# --- goal-playbook-iter-8 TC-9: a malformed/partial date is an honest empty plan, never a 500 ------
+
+
+def test_iter8_tc9_a_malformed_from_date_is_an_honest_empty_plan_not_a_500(tmp_path, env):
+    """A half-typed From box (``2026-06-2``, mid-keystroke) used to raise ``ValueError`` straight
+    out of ``date.fromisoformat`` -- the SAME empty-plan shape the already-handled inverted-range
+    case (TC-17) returns, never an exception."""
+    bar_store, universe_store, playbook_store = env
+    result = plan_backscan("2026-06-2", D2, bar_store, [], CONFIG.config_fingerprint(), playbook_store)
+    assert result == {
+        "from": "2026-06-2", "to": D2,
+        "playbook_input_signature": compute_playbook_input_signature(bar_store, [], CONFIG.config_fingerprint()),
+        "dates": [], "total": 0, "missing": 0,
+    }
+
+
+def test_iter8_tc9_a_malformed_to_date_is_also_an_honest_empty_plan(tmp_path, env):
+    bar_store, universe_store, playbook_store = env
+    result = plan_backscan(D0, "not-a-date", bar_store, [], CONFIG.config_fingerprint(), playbook_store)
+    assert result["dates"] == [] and result["total"] == 0 and result["missing"] == 0
+
+
+def test_iter8_tc9_route_level_malformed_date_returns_http_200_never_500(tmp_path, monkeypatch):
+    """Route-level companion (mirrors ``test_tc9_route_level_stub_barstore_returns_http_200_...``
+    above): ``GET .../backscan/plan?from=2026-06-2&to=...`` returns an honest HTTP 200 empty plan,
+    never the HTTP 500 the uncaught ``ValueError`` used to produce."""
+    monkeypatch.setenv("TAPEOLOGY_DESK_UNIVERSE_DIR", str(tmp_path / "universe"))
+    monkeypatch.setenv("TAPEOLOGY_DESK_PLAYBOOK_DIR", str(tmp_path / "playbook"))
+    monkeypatch.setenv("TAPEOLOGY_BAR_DIR", str(tmp_path / "bars"))
+    monkeypatch.setenv("TAPEOLOGY_JOURNAL_DB", str(tmp_path / "journal.db"))
+    store = JournalStore(str(tmp_path / "journal.db"), CONFIG)
+    registry = ResearchRegistry(store, CONFIG)
+    set_registry(registry)
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/research/desk/playbook/backscan/plan", params={"from": "2026-06-2", "to": D2}
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dates"] == [] and body["total"] == 0 and body["missing"] == 0
+
+    set_registry(None)
+    store.close()
+
+
+# --- goal-playbook-iter-8 AUDIT (B1): the plan READ tolerates a malformed date; the TRIGGER must
+# refuse it outright, never start a phantom job that appends an un-prunable "done" ledger row -------
+
+
+def test_audit_b1_malformed_days_names_only_the_unparseable_boundaries():
+    """The ONE shared parse rule: an inverted range is NOT malformed (both boundaries are real
+    days, it simply names an empty span -- TC-17's honestly-empty walk stays legitimate)."""
+    assert malformed_days(D0, D2) == []
+    assert malformed_days(D2, D0) == []  # inverted, but both are real calendar days
+    assert malformed_days("2026-06-2", D2) == ["2026-06-2"]
+    assert malformed_days(D0, "not-a-date") == ["not-a-date"]
+    assert malformed_days("2026-06-2", "") == ["2026-06-2", ""]
+
+
+def test_audit_b1_trigger_refuses_a_malformed_date_and_writes_no_ledger_row(route_ctx):
+    """Before this fix the iter-8 ``_planned_dates`` try/except turned a half-typed From box into
+    an HTTP 200 ``started: true`` job over ZERO dates, which then finalized ``"done"`` and appended
+    a permanent ``{"from": "2026-06-2", ..., "status": "done", "planned_total": 0}`` row to the
+    append-only run ledger -- a false success over a string nothing could parse, in a store the
+    immutable-data rail forbids ever pruning. The trigger now refuses (422) BEFORE any job exists,
+    the ``trigger_desk_playbook_compute`` non-session pre-check precedent verbatim."""
+    client, manager, _tmp = route_ctx
+
+    response = client.post(
+        "/research/desk/playbook/backscan/compute",
+        json={"from_day": "2026-06-2", "to_day": D2},
+    )
+    assert response.status_code == 422
+    assert "2026-06-2" in response.json()["detail"]
+
+    assert manager.snapshot()["status"] == "idle"  # no job was ever created
+    runs = client.get("/research/desk/playbook/backscan/runs").json()
+    assert runs["runs"] == [] and runs["latest"] is None  # and no ledger row was written
+
+
+def test_audit_b1_an_inverted_range_still_starts_an_honestly_empty_walk(route_ctx):
+    """The refusal is scoped to UNPARSEABLE boundaries only -- TC-17's inverted-but-real range
+    keeps its established behavior (a started job that walks zero dates and records its own honest
+    ledger row), so this fix narrows nothing the spec already decided."""
+    client, manager, _tmp = route_ctx
+    response = client.post(
+        "/research/desk/playbook/backscan/compute", json={"from_day": D2, "to_day": D0}
+    )
+    assert response.status_code == 200
+    assert response.json()["started"] is True
+    snap = _wait_for_terminal(manager)
+    assert snap["status"] == "done" and snap["planned_total"] == 0
 
 
 class _RaisingBarStore:

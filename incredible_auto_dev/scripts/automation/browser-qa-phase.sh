@@ -230,6 +230,31 @@ else
   [[ -n "$_fe_tail" ]] && { echo "[browser-qa] Frontend start log tail (${QA_FRONTEND_LOG:-?}):" >&2; echo "$_fe_tail" >&2; }
 fi
 
+# ── Store-scope gate (project-declared; automation/store-scope/) ─────────────
+# BEFORE any lane touches a browser: prove the backend under test is the
+# project's scoped QA backend, and baseline its protected store paths. A project
+# without project-extensions/store-scope/store-scope.env is unaffected — both
+# calls no-op and every variable below keeps its default.
+#
+# WHY it gates here and not inside the replay lane alone: BOTH lanes drive the
+# same browser at the same frontend, so a golden replay and an LLM dispatch have
+# exactly the same power to make the app write into the operator's real store
+# (tapeology goal-playbook-iter-8: a replayed "Run Backscan" click computed three
+# real records and appended an un-prunable ledger row). Refusing here is the only
+# place that covers both. A refusal reuses the REL-14 shape — no dispatch, an
+# out-of-band token, journeys scored pending-infra — because an unscopeable
+# backend is an environment fault, not a product regression.
+STORE_SCOPE_BLOCKED="no"
+STORE_SCOPE_MANIFEST="${CHAIN_TMPDIR:-${TMPDIR:-/tmp}}/store-scope-$PHASE.$$.manifest"
+STORE_SCOPE_REPORT="$REPO_ROOT/reports/qa/${PHASE}-store-scope-guard.md"
+if ! store_scope_require; then
+  STORE_SCOPE_BLOCKED="yes"
+  FRONTEND_AVAILABLE="no"
+  FRONTEND_SKIP_REASON="backend under test is not the project's scoped QA backend — browser lanes refused (store-scope guard)"
+  echo "[browser-qa] STORE-SCOPE REFUSAL: the backend serving this frontend is not the project's scoped QA backend. Neither the replay lane nor the browser-qa dispatch will run — an automated pass against the operator's real store is exactly the defect this guard prevents." >&2
+fi
+store_scope_snapshot "$STORE_SCOPE_MANIFEST" || true
+
 # ── Goal-mode deterministic regression replay (replay-gap fix) ───────────────
 # For goal-session iterations (phase name `goal-<sid>-iter-<N>` — the same
 # regex run-phase.sh keys its evaluator-log pre-trim on) this step runs the
@@ -345,6 +370,16 @@ if [[ "$GOAL_REPLAY_ACTIVE" == "yes" ]]; then
   _bqa_tok_set="$(echo "$_bqa_tok_set" | tr ' ' '\n' | grep -E '^J-[0-9]+$' | sort -u | tr '\n' ' ' || true)"
   _bqa_tok_set="${_bqa_tok_set% }"
 fi
+if [[ "$STORE_SCOPE_BLOCKED" == "yes" ]]; then
+  # Refused above: skip the dispatch outright and record WHY out of band, the
+  # same way a dead browser is recorded — the journeys were not verified, and
+  # nothing may report them as if they had been.
+  _bqa_infra_blocked="yes"
+  if [[ "$GOAL_REPLAY_ACTIVE" == "yes" && -n "${GOAL_SESSION_DIR:-}" && -n "${GOAL_ITER_INDEX:-}" ]]; then
+    bqa_write_infra_token "$GOAL_SESSION_DIR/iter-$GOAL_ITER_INDEX" "$_bqa_tok_set" \
+      "store-scope guard refused the browser lanes: the backend under test is not the project's scoped QA backend" "store-scope"
+  fi
+fi
 if [[ "${CHAIN_BQA_PREFLIGHT:-false}" == "true" && "$FRONTEND_AVAILABLE" == "yes" ]]; then
   if ! bqa_preflight; then
     _bqa_infra_blocked="yes"
@@ -439,6 +474,34 @@ if [[ "$GOAL_REPLAY_ACTIVE" == "yes" ]]; then
   fi
   replay_lane_golden_coverage "$UI_TEST_RESULTS" "$PHASE"
 fi
+
+# ── Store-scope verification (the other half of the gate) ───────────────────
+# Re-read the protected store paths and compare against the baseline taken
+# before the lanes ran. CLEAN writes the disclosure artifact a later reader can
+# cite instead of prose; a BREACH additionally lands a loud section IN the
+# authoritative results file, because that is the one artifact the evaluator and
+# the achievement gate are guaranteed to read. Deliberately NOT an exit: the
+# run's verdicts still have to be published and read — a silent pipeline abort
+# would hide the very thing this section exists to disclose.
+if ! store_scope_verify "$STORE_SCOPE_MANIFEST" "$STORE_SCOPE_REPORT"; then
+  echo "[browser-qa] STORE-SCOPE BREACH — a browser lane wrote into a protected store path this run. See $STORE_SCOPE_REPORT." >&2
+  if [[ -f "$UI_TEST_RESULTS" ]]; then
+    {
+      echo ""
+      echo "## Store-scope breach (automated guard)"
+      echo ""
+      echo "_A browser lane in THIS run wrote into a path the project declares protected"
+      echo "(append-only records/ledgers of the operator's real store). The affected files are"
+      echo "listed in \`reports/qa/${PHASE}-store-scope-guard.md\`. Any claim in this report that"
+      echo "the operator's store was untouched is contradicted by that artifact._"
+    } >> "$UI_TEST_RESULTS" 2>/dev/null || true
+  fi
+  if declare -F record_telemetry_event >/dev/null 2>&1; then
+    record_telemetry_event "store_scope_breach" "$(jq -cn --arg n "$PHASE" --arg r "reports/qa/${PHASE}-store-scope-guard.md" \
+        '{iter_name:$n, disclosure:$r}' 2>/dev/null || printf '{"iter_name":"%s"}' "$PHASE")"
+  fi
+fi
+rm -f "$STORE_SCOPE_MANIFEST" 2>/dev/null || true
 
 # REL-14 post-scan (same knob): a dispatch that returned but left no results
 # file (mid-run browser death; quota pauses excluded) or an all-SKIP results

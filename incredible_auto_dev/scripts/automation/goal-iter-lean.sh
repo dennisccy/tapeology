@@ -337,6 +337,24 @@ cd "$REPO_ROOT"
 
 replay_lane_paths "$ITER_NAME"
 
+# Store-scope gate (project-declared; automation/store-scope/ — no-op without
+# project-extensions/store-scope/store-scope.env). Prove the backend under test
+# is the project's scoped QA backend and baseline its protected store paths
+# BEFORE either lane drives a browser: a golden replay and an LLM dispatch have
+# identical power to make the app write into the operator's real store. A
+# refusal rides the existing FRONTEND_AVAILABLE=no + REL-14 token path (see the
+# parent's dispatch gate below), so no journey is ever reported as verified by a
+# lane that did not run.
+STORE_SCOPE_BLOCKED="no"
+STORE_SCOPE_MANIFEST="${CHAIN_TMPDIR:-${TMPDIR:-/tmp}}/store-scope-${ITER_NAME}.manifest"
+if ! store_scope_require; then
+  STORE_SCOPE_BLOCKED="yes"
+  FRONTEND_AVAILABLE="no"
+  FRONTEND_SKIP_REASON="backend under test is not the project's scoped QA backend — browser lanes refused (store-scope guard)"
+  echo "[goal-iter-lean] STORE-SCOPE REFUSAL: the backend serving $FRONTEND_URL is not the project's scoped QA backend — neither the replay lane nor the LLM dispatch will run." >&2
+fi
+store_scope_snapshot "$STORE_SCOPE_MANIFEST" || true
+
 # Golden partition + lane 1 (deterministic replay) — shared implementation in
 # lib/replay-lane.sh: stale-artifact hygiene, lint-quarantine of invalid
 # goldens, rc=5 → REPLAY_FAILED re-confirm via the LLM lane, rc=6 → service
@@ -366,6 +384,8 @@ _bqa_state_save() {
     printf 'REPLAY_SKIPPED_INFRA=%q\n' "${REPLAY_SKIPPED_INFRA:-}"
     printf 'REPLAY_MASS_FAIL=%q\n'     "${REPLAY_MASS_FAIL:-}"
     printf 'REPLAY_CANARIES=%q\n'      "${REPLAY_CANARIES:-}"
+    printf 'STORE_SCOPE_BLOCKED=%q\n'  "${STORE_SCOPE_BLOCKED:-no}"
+    printf 'STORE_SCOPE_MANIFEST=%q\n' "${STORE_SCOPE_MANIFEST:-}"
     printf 'export QA_BACKEND_HEALTH_URL=%q\n'       "${QA_BACKEND_HEALTH_URL:-}"
     printf 'export QA_BACKEND_START_CMD=%q\n'        "${QA_BACKEND_START_CMD:-}"
     printf 'export QA_BACKEND_LOG=%q\n'              "${QA_BACKEND_LOG:-}"
@@ -819,6 +839,14 @@ bqa_browser_confine
 # the SKIPPED-stub block below keeps the evaluator fed and the merged verdict
 # enum untouched. FRONTEND_AVAILABLE=no paths (single-service projects, REL-12)
 # keep today's honest agent-side SKIP and are never tokenized here.
+if [[ "${STORE_SCOPE_BLOCKED:-no}" == "yes" ]]; then
+  # The store-scope guard refused above: skip the dispatch and record WHY out of
+  # band, exactly like a dead browser — these journeys were NOT verified.
+  _bqa_infra_blocked="yes"
+  echo "[goal-iter-lean] Store-scope guard refused the browser lanes — skipping the LLM browser-qa dispatch for: ${LLM_JOURNEYS:-(none)}" >&2
+  bqa_write_infra_token "$ITER_DIR" "$LLM_JOURNEYS" \
+    "store-scope guard refused the browser lanes: the backend under test is not the project's scoped QA backend" "store-scope"
+fi
 if [[ "${CHAIN_BQA_PREFLIGHT:-false}" == "true" && "$FRONTEND_AVAILABLE" == "yes" \
       && ( -n "$_llm_csv" || "$_use_replay" != "yes" ) ]]; then
   if ! bqa_preflight; then
@@ -881,6 +909,29 @@ fi
 # so the replay lane keeps growing (browser-qa LLM time decays iteration over
 # iteration) — gaps simply return to the LLM lane next iteration.
 replay_lane_golden_coverage "$UI_TEST_RESULTS" "$ITER_NAME"
+
+# Store-scope verification (the other half of the gate): re-read the protected
+# store paths and compare against the pre-lane baseline. CLEAN writes the
+# disclosure artifact a later reader cites instead of prose; a BREACH also lands
+# a loud section in the authoritative results file — the one artifact the
+# evaluator and the achievement gate always read. Never an exit: the verdicts
+# still have to be published, and a silent abort would hide the disclosure.
+if ! store_scope_verify "${STORE_SCOPE_MANIFEST:-}" "$REPO_ROOT/reports/qa/${ITER_NAME}-store-scope-guard.md"; then
+  echo "[goal-iter-lean] STORE-SCOPE BREACH — a browser lane wrote into a protected store path this run. See reports/qa/${ITER_NAME}-store-scope-guard.md" >&2
+  if [[ -f "$UI_TEST_RESULTS" ]]; then
+    {
+      echo ""
+      echo "## Store-scope breach (automated guard)"
+      echo ""
+      echo "_A browser lane in THIS run wrote into a path the project declares protected"
+      echo "(append-only records/ledgers of the operator's real store). The affected files are"
+      echo "listed in \`reports/qa/${ITER_NAME}-store-scope-guard.md\`. Any claim in this report"
+      echo "that the operator's store was untouched is contradicted by that artifact._"
+    } >> "$UI_TEST_RESULTS" 2>/dev/null || true
+  fi
+  record_telemetry_event "store_scope_breach" "$(jq -cn --arg n "$ITER_NAME" --arg r "reports/qa/${ITER_NAME}-store-scope-guard.md" '{iter_name:$n, disclosure:$r}' 2>/dev/null || printf '{"iter_name":"%s"}' "$ITER_NAME")"
+fi
+rm -f "${STORE_SCOPE_MANIFEST:-/nonexistent}" 2>/dev/null || true
 
 # Checkpoint: reusable on resume only with a real PASS/FAIL verdict (never a
 # SKIPPED stub) and the journey signature this run actually covered.

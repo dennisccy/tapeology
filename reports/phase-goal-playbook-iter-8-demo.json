@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-playbook-iter-8",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk page is where traders can see their playbook signals, scan history, and now the evidence view. Let's start there.",
+      "point_out": "The page loads without errors and shows the Desk section with trading setup signals at the top.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Playbook Signals" }
+    },
+    {
+      "n": 2,
+      "title": "Scroll to the Playbook Evidence section",
+      "narration": "Below the Backscan panel, a new Playbook Evidence section shows the statistical outcomes of every recorded signal. Scroll down to see it.",
+      "point_out": "The Playbook Evidence panel appears below Backscan with a clear heading and disclosure text about what was measured.",
+      "journey": "J-08",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='desk-evidence-cells-table']" } },
+      "expect": { "text": "Playbook Evidence" }
+    },
+    {
+      "n": 3,
+      "title": "View a well-populated signal cell",
+      "narration": "The main table shows setup families (like open-high break and jump-base explosion), their long and short sides, and measurement timeframes. Each cell shows how many signals fired and their median, percentile, and mean returns.",
+      "point_out": "A row with setup 'jbe', side 'long', and measure '5m' shows n=14 signals with real return statistics: median -4%, p25 -7%, p75 6%, mean 2%.",
+      "journey": "J-08",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='desk-evidence-cells-table'] tbody tr" } },
+      "expect": { "text": "14" }
+    },
+    {
+      "n": 4,
+      "title": "Find a low-n tagged cell",
+      "narration": "Some setups have very few recorded signals. These cells are still shown with their numbers, but tagged with an amber badge so you know the sample size is small.",
+      "point_out": "A row for 'jbe', side 'long', measure '1m' shows n=3 with an amber 'low n' badge beside it, yet the median, p25, p75, and mean values remain visible, not hidden.",
+      "journey": "J-08",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='desk-evidence-cells-table'] tbody tr:has([data-testid*='low'])" } },
+      "expect": { "text": "low n" }
+    },
+    {
+      "n": 5,
+      "title": "Check the invalidation breaches table",
+      "narration": "Below the cells table is a second table showing how many recorded signals breached their invalidation level for each setup, side, and timeframe. This helps you see which setups held their boundaries.",
+      "point_out": "The Invalidation breaches table lists rows like 'capitulation / long / 1h' with Breached and Total counts, for example Breached=14, Total=29.",
+      "journey": "J-08",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='desk-evidence-breach-table'] tbody tr" } },
+      "expect": { "text": "Breached" }
+    },
+    {
+      "n": 6,
+      "title": "Scroll up to Playbook Signals and view a capitulation signal",
+      "narration": "Above the Playbook Evidence section, the Playbook Signals area shows individual setups that fired on a given day. Let's look at the capitulation signal for a recorded trading day.",
+      "point_out": "The Capitulation row for symbol DECOR is visible. When expanded, it shows 'euphoria recent' — a marker that signals high emotion in the price action at that moment.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "fill", "target": { "css": "[data-testid='desk-playbook-date-input']" }, "text": "2026-06-22" },
+      "expect": { "text": "Capitulation" }
+    },
+    {
+      "n": 7,
+      "title": "Expand the Capitulation row to see the euphoria marker",
+      "narration": "Click on the Capitulation row to expand its detail. The expanded view shows the signal's geometry and context.",
+      "point_out": "The expanded detail shows '67 bar(s) to close' and 'euphoria recent' in the geometry disclosure line, confirming the signal's full characteristics are captured.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "DECOR" } },
+      "expect": { "text": "euphoria recent" }
+    },
+    {
+      "n": 8,
+      "title": "Refresh the page and confirm the evidence data persists",
+      "narration": "The Playbook Evidence numbers come from stored records. Refreshing the page shows the same numbers, proving they are read from disk, not regenerated.",
+      "point_out": "After refreshing, the same low-n tagged cell from step 4 appears with identical values, and the Invalidation breaches table is unchanged.",
+      "journey": "J-08",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Playbook Evidence" }
+    }
+  ]
+}

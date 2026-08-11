@@ -10,6 +10,13 @@ one call-COUNTING instrumentation (a stub/counting double patched onto the real
 desk's own structural-wall computations" is a property of RUNTIME CALLS a source-scan regex could
 not usefully police either (the playbook module imports neither function today, but a future
 refactor could introduce an indirect call path a regex would miss; instrumentation survives that).
+goal-playbook-iter-8 (J-08) retires guard (b)'s own "does not exist yet" companion fact (the
+evidence module now exists) and adds two of its own, kept beside the class/behavior they guard
+rather than duplicated here: ``PlaybookEvidenceCache`` has no ``update``/``delete`` method
+(``test_desk_playbook_evidence.py::test_playbook_evidence_cache_has_no_update_or_delete_method`` --
+the ``test_playbook_store_has_no_update_or_delete_method`` per-file precedent), and the pooling
+code never merges two signatures into one cell (``test_desk_playbook_evidence.py``'s own TC-5 --
+another property of DATA a fixture proves directly, not code SHAPE a regex would usefully police).
 
 (a) TC-12 -- the no-threshold-sweep guard: no playbook module (``desk_playbook.py``,
     ``desk_playbook_detect.py``, ``desk_playbook_features.py``) contains a ``for``/comprehension
@@ -222,14 +229,19 @@ def _repo_root() -> pathlib.Path:
     return pathlib.Path(__file__).resolve().parents[3]
 
 
-def test_desk_playbook_evidence_module_does_not_exist_yet():
-    """A companion structural fact this guard's own docstring leans on: ``desk_playbook_evidence.py``
-    genuinely does not exist yet this iteration (J-08) -- the import-graph guard above is a forward
-    guard, not (yet) an enforcement of an existing exclusion."""
+def test_desk_playbook_evidence_module_now_exists_and_still_imports_nothing_from_detect():
+    """goal-playbook-iter-8 (J-08) UPDATE: ``desk_playbook_evidence.py`` now exists (replacing the
+    iter-4-era ``test_desk_playbook_evidence_module_does_not_exist_yet`` forward guard, which this
+    iteration is exactly what makes obsolete). The import-graph guard above is now a LIVE
+    enforcement rather than a forward one: the required direction is detect -> (never evidence),
+    proven both ways -- the evidence module exists, and it is STILL never imported by detect."""
     evidence_path = (
         _repo_root() / "apps" / "backend" / "app" / "research" / "desk_playbook_evidence.py"
     )
-    assert not evidence_path.exists()
+    assert evidence_path.exists()
+    source = open(desk_playbook_detect_module.__file__, encoding="utf-8").read()
+    hits = [line for line in _import_lines(source) if "evidence" in line.lower()]
+    assert not hits
 
 
 # --- (c) TC-5 -- the marker-decoration forward-only guard (goal-playbook-iter-5, J-05) -------------

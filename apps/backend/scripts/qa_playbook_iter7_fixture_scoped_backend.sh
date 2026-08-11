@@ -1,40 +1,54 @@
 #!/usr/bin/env bash
 # qa_playbook_iter7_fixture_scoped_backend.sh — Stand up a FIXTURE-SCOPED backend carrying the
-# iter-6 J-04/J-05/J-06 playbook rig PLUS two additional recorded session dates for the Backscan
-# panel (Era B2, J-07), for a browser-QA / golden-replay pass. Never touches the ambient
-# apps/backend/.data/ store: every bar/universe/playbook/run-ledger directory this backend reads or
-# writes lives under a fresh root, so a "Run Backscan" click in the browser can never land in the
-# operator's real store (the iter-3 lesson, restated by this session's own iter-6 audit findings for
-# the run-ledger siblings specifically — all FOUR playbook env vars are exported here, including
-# TAPEOLOGY_DESK_PLAYBOOK_BACKSCAN_LOG_DIR).
+# iter-6 J-04/J-05/J-06 playbook rig PLUS the Backscan (J-07) and Evidence (J-08) fixture layers,
+# for a browser-QA / golden-replay pass. Never touches the ambient apps/backend/.data/ store: every
+# bar/universe/playbook/run-ledger/evidence-cache directory this backend reads or writes lives
+# under a fresh root, so a "Run Backscan" click (or ANY playbook-touching golden replay) in the
+# browser can never land in the operator's real store (the iter-3 lesson, restated by the iter-6
+# audit for the run-ledger siblings, and made MANDATORY for every playbook journey's replay lane by
+# the iter-7 evaluator's own carry-item: this script -- extended forward, never rewritten -- is now
+# the ONE launcher every playbook golden-replay run (J-01..J-08, and J-10's playbook-touching
+# steps) MUST use; a replay script that instead reaches whatever is already listening on :8301 is
+# the exact hole that carry item closed).
 #
-# This is an iter-7 VARIANT of qa_playbook_iter6_fixture_scoped_backend.sh, not an edit of it —
-# both scripts stay usable; this one is the ONLY backend entry point for this iteration's test/
-# browser work (per the phase spec's own instruction). It reuses
-# seed_playbook_iter7_backscan_fixture.py, which itself reuses seed_playbook_fixture_rig.py's own
-# main() verbatim (never a second implementation of the DECOR/RTAAA/DTAAA fixtures).
+# goal-playbook-iter-8 (J-08) EXTENDS this iter-7 file in place (per this iteration's own
+# instruction: extend the launcher forward, never rewrite it) rather than spawning an iter-8
+# variant — the launcher stays SINGULAR precisely so "the mandatory launcher" never becomes
+# ambiguous between iterations. It adds:
+#   - the evidence projection cache's own scoping var (TAPEOLOGY_PLAYBOOK_EVIDENCE_CACHE_DB),
+#     kept under $ROOT exactly like every other playbook store/log dir;
+#   - seed_playbook_iter8_evidence_fixture.py (reusing seed_playbook_iter7_backscan_fixture.py's
+#     own main() verbatim, in turn reusing seed_playbook_fixture_rig.py's — never a second
+#     implementation of the DECOR/RTAAA/DTAAA/BSCAN fixtures), which on top of everything iter-7
+#     already seeded ALSO plants twelve OHB01..OHB12 members firing the SAME canonical
+#     open_high_break session as BSCAN, on 2026-06-25 (a FRESH date — deliberately NOT 2026-06-22,
+#     which would re-record the date J-07's own golden asserts is still missing) — giving the
+#     evidence fold's (open_high_break, long, *) cells n >= PLAYBOOK_MIN_N_DISCLOSURE at the short
+#     horizons beside its OWN 1h/4h cells at n = 0, which are below_min_n for free.
 #
-# What it seeds, on top of the iter-6 rig's own 2026-06-22 (DECOR/RTAAA/DTAAA, one playbook record
-# already computed):
-#   - BSCAN — a plain canonical open_high_break firing session, planted on TWO new dates
-#     (2026-06-23, 2026-06-24), each with its own 10 prior baseline sessions, LEFT UNRECORDED in
-#     the playbook store.
-#   - a fourth, NEW universe snapshot naming all four members (universe registration is
-#     append-only — this never edits iter-6's own three-member snapshot). Registering BSCAN
-#     changes playbook_input_signature (it hashes members ∪ {SPY}), so 2026-06-22's own
-#     three-member record no longer matches the CURRENT signature either — a plan preview over
-#     [2026-06-22, 2026-06-24] honestly reports all THREE dates missing, and a real "Run Backscan"
-#     click has genuine, non-trivial work to do on all three (the old three-member record stays on
-#     disk, untouched — append-only, a new version is minted beside it, never over it).
+# goal-playbook-iter-8 FIX PASS (audit finding B2) extends it once more, again in place: the seed
+# entry point becomes seed_playbook_iter8_replay_rig.py, which reuses the evidence seeder's main()
+# verbatim and then adds what the REMAINING required goldens need, so all EIGHT required-still-
+# passing journeys (J-01..J-07, J-10) replay green against THIS one backend instead of five of them
+# silently requiring the operator's real store: a weekday-only daily-bar calendar (CALDR) that makes
+# J-01's and J-03's non-session refusals reachable, the canonical open_low_break / JBE / DBI
+# sessions on 2026-08-07 (J-02, J-04), and every AAPL bar series copied verbatim from the real store
+# (read-only) so J-10's /structure step measures the kept product, not a fixture. See that script's
+# own docstring for the nineteen-member universe and the two computes it records.
+#
+# The default root name changes to playbook-iter8-replay-fixture-qa (a genuinely FRESH root, never
+# an earlier one reused) — the universe/signature composition is wider again, and the script's own
+# long-standing rule ("use a fresh root whenever the seeded composition changed") applies to this
+# extension exactly as it would to detector logic.
 #
 # Usage:
 #   bash apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh [root_dir] [port]
 #
-#   root_dir  Fresh root to seed (default: ${TMPDIR:-/tmp}/playbook-iter7-fixture-qa). Use a
-#             FRESH one whenever detector logic OR the back-scan module changed: playbook records
-#             are append-only and keyed (session_date, playbook_input_signature), so a root seeded
-#             by an older build would keep serving that build's recorded signals at the same
-#             signature.
+#   root_dir  Fresh root to seed (default: ${TMPDIR:-/tmp}/playbook-iter8-replay-fixture-qa). Use a
+#             FRESH one whenever detector logic, the back-scan module, OR the seeded fixture
+#             composition changed: playbook records are append-only and keyed
+#             (session_date, playbook_input_signature), so a root seeded by an older build would
+#             keep serving that build's recorded signals at the same signature.
 #   port      Backend port (default: 8301, the era's browser-QA rig convention — pair with
 #             `CHAIN_BACKEND_PORT=8301 CHAIN_FRONTEND_PORT=3301 bash scripts/start-frontend.sh`).
 set -euo pipefail
@@ -43,7 +57,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$BACKEND_DIR/../.." && pwd)"
 
-ROOT="${1:-${TMPDIR:-/tmp}/playbook-iter7-fixture-qa}"
+ROOT="${1:-${TMPDIR:-/tmp}/playbook-iter8-replay-fixture-qa}"
 PORT="${2:-8301}"
 
 BAR_DIR="$ROOT/bars"
@@ -51,6 +65,7 @@ UNIVERSE_DIR="$ROOT/universe"
 PLAYBOOK_DIR="$ROOT/playbook"
 PLAYBOOK_LOG_DIR="$ROOT/playbook_runs"
 PLAYBOOK_BACKSCAN_LOG_DIR="$ROOT/playbook_backscan_runs"
+PLAYBOOK_EVIDENCE_CACHE_DB="$ROOT/playbook_evidence_cache.db"
 SCREEN_DIR="$ROOT/screen"
 DATASET_DIR="$ROOT/datasets"
 BAR_INDEX_DB="$ROOT/bar_index.db"
@@ -65,20 +80,22 @@ export TAPEOLOGY_DESK_UNIVERSE_DIR="$UNIVERSE_DIR"
 export TAPEOLOGY_DESK_PLAYBOOK_DIR="$PLAYBOOK_DIR"
 export TAPEOLOGY_DESK_PLAYBOOK_LOG_DIR="$PLAYBOOK_LOG_DIR"
 export TAPEOLOGY_DESK_PLAYBOOK_BACKSCAN_LOG_DIR="$PLAYBOOK_BACKSCAN_LOG_DIR"
+export TAPEOLOGY_PLAYBOOK_EVIDENCE_CACHE_DB="$PLAYBOOK_EVIDENCE_CACHE_DB"
 export TAPEOLOGY_DESK_SCREEN_DIR="$SCREEN_DIR"
 export TAPEOLOGY_DATASET_DIR="$DATASET_DIR"
 export TAPEOLOGY_BAR_INDEX_DB="$BAR_INDEX_DB"
 export TAPEOLOGY_DATASET_INDEX_DB="$DATASET_INDEX_DB"
 export TAPEOLOGY_JOURNAL_DB="$JOURNAL_DB"
 
-"$BACKEND_DIR/.venv/bin/python" "$SCRIPT_DIR/seed_playbook_iter7_backscan_fixture.py" "$ROOT"
+"$BACKEND_DIR/.venv/bin/python" "$SCRIPT_DIR/seed_playbook_iter8_replay_rig.py" "$ROOT"
 
-echo "[playbook-iter7-fixture-scoped-backend] root=$ROOT port=$PORT" >&2
+echo "[playbook-iter8-replay-fixture-scoped-backend] root=$ROOT port=$PORT" >&2
 for var in TAPEOLOGY_BAR_DIR TAPEOLOGY_DESK_UNIVERSE_DIR TAPEOLOGY_DESK_PLAYBOOK_DIR \
            TAPEOLOGY_DESK_PLAYBOOK_LOG_DIR TAPEOLOGY_DESK_PLAYBOOK_BACKSCAN_LOG_DIR \
+           TAPEOLOGY_PLAYBOOK_EVIDENCE_CACHE_DB \
            TAPEOLOGY_DESK_SCREEN_DIR TAPEOLOGY_DATASET_DIR TAPEOLOGY_BAR_INDEX_DB \
            TAPEOLOGY_DATASET_INDEX_DB TAPEOLOGY_JOURNAL_DB; do
-  echo "[playbook-iter7-fixture-scoped-backend] $var=${!var}" >&2
+  echo "[playbook-iter8-replay-fixture-scoped-backend] $var=${!var}" >&2
 done
 
 exec env CHAIN_BACKEND_PORT="$PORT" bash "$REPO_ROOT/scripts/start-backend.sh"

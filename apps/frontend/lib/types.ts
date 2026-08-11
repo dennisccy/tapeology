@@ -1740,6 +1740,60 @@ export interface DeskPlaybookBackscanRunsListResult {
   integrity_errors: { file: string; error: string }[];
 }
 
+// The Playbook Evidence view (Era B2, J-08) -- GET /research/desk/playbook/evidence's own served
+// shapes. `DeskPlaybookEvidenceCellStats` deliberately does NOT reuse `DeskForwardAvgCell`: the
+// evidence fold serves p25_pct/p75_pct the rail's own avg cell never had (desk_playbook_evidence.py
+// pools them with its own new quartile math -- see that module's docstring for why this is NOT a
+// second implementation of the rail).
+export interface DeskPlaybookEvidenceCellStats {
+  n: number;
+  n_truncated: number;
+  median_pct: number | null;
+  p25_pct: number | null;
+  p75_pct: number | null;
+  mean_pct: number | null;
+}
+
+export interface DeskPlaybookEvidenceBaselineStats {
+  n_baseline: number;
+  median_pct: number | null;
+  p25_pct: number | null;
+  p75_pct: number | null;
+  mean_pct: number | null;
+}
+
+export interface DeskPlaybookEvidenceCell {
+  setup_id: string;
+  side: "long" | "short";
+  measure: string;
+  signal: DeskPlaybookEvidenceCellStats;
+  baseline: DeskPlaybookEvidenceBaselineStats;
+  below_min_n: boolean;
+}
+
+export interface DeskPlaybookEvidenceBreach {
+  setup_id: string;
+  side: "long" | "short";
+  horizon: string;
+  breached_count: number;
+  total_count: number;
+}
+
+export interface DeskPlaybookEvidenceOtherSignature {
+  signature: string;
+  dates: string[];
+  created_span: { from: string; to: string };
+}
+
+export interface DeskPlaybookEvidence {
+  signature: string;
+  cells: DeskPlaybookEvidenceCell[];
+  invalidation_breached: DeskPlaybookEvidenceBreach[];
+  other_signatures: DeskPlaybookEvidenceOtherSignature[];
+  parameters: DeskPlaybookParameters;
+  register: string;
+}
+
 // ONE registered universe membership snapshot's own served meta -- `UniverseStore.record`'s return
 // value verbatim (desk_universe.py's `meta` dict), which `POST /research/desk/universe/fetch`
 // serves under its `universe` key. Every field is the store's own; nothing here is derived. The

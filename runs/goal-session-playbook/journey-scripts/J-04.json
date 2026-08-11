@@ -5,7 +5,7 @@
   "default_timeout_ms": 8000,
   "steps": [
     {"n": 1, "journey": "J-04", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
-    {"n": 2, "journey": "J-04", "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-06-22"}, "expect": {"text": "Jump-Base Explosion"}},
-    {"n": 3, "journey": "J-04", "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-06-22"}, "expect": {"text": "Drop-Base Implosion"}}
+    {"n": 2, "journey": "J-04", "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-08-07"}, "expect": {"target": {"css": "[data-testid=\"desk-playbook-signal-setup\"]:has-text(\"Jump-Base Explosion\")"}}},
+    {"n": 3, "journey": "J-04", "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-08-07"}, "expect": {"target": {"css": "[data-testid=\"desk-playbook-signal-setup\"]:has-text(\"Drop-Base Implosion\")"}}}
   ]
 }

@@ -86,6 +86,7 @@ __all__ = [
     "BackscanRunStore",
     "DeskPlaybookBackscanComputeManager",
     "PlaybookNotScopedError",
+    "malformed_days",
     "plan_backscan",
     "record_backscan_run",
     "resolve_desk_playbook_backscan_log_dir",
@@ -195,10 +196,44 @@ def _assert_scoped(root: str | Path) -> None:
 # --- the plan (pure, metadata-only) ----------------------------------------------------------------
 
 
+def _is_calendar_day(value: str) -> bool:
+    """Whether ``value`` parses as a real ``yyyy-MM-dd`` calendar day -- the ONE parse rule both the
+    tolerant plan read (``_planned_dates``) and the trigger's own refusal (``malformed_days``)
+    share, so "what counts as a real date" is never defined a second way."""
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def malformed_days(from_day: str, to_day: str) -> list[str]:
+    """Which of the two boundary strings is NOT a parseable calendar day -- ``[]`` when both are.
+
+    The WRITE-side companion to ``_planned_dates``' read-side tolerance (goal-playbook-iter-8 audit,
+    B1). Reading a plan for a half-typed date is an honest empty plan; STARTING a back-scan over one
+    is not the same act: a job planned from an uninterpretable string walks zero dates and then
+    finalizes ``"done"``, appending a permanently un-prunable ledger row that claims a completed run
+    over a range nothing could parse. An INVERTED range is deliberately NOT malformed -- both of its
+    boundaries are real days, it simply names an empty span (TC-17), and that stays a legitimate,
+    honestly-empty walk."""
+    return [value for value in (from_day, to_day) if not _is_calendar_day(value)]
+
+
 def _planned_dates(from_day: str, to_day: str) -> list[str]:
     """Every calendar day in ``[from_day, to_day]`` inclusive, ``yyyy-MM-dd`` ascending -- pure date
     arithmetic, no store touched at all (the ``plan_deep_windows`` precedent). An inverted range
-    (``from_day > to_day``) is an honest empty list, never an error (TC-17)."""
+    (``from_day > to_day``) is an honest empty list, never an error (TC-17). A malformed/partial
+    date (e.g. a half-typed ``2026-06-2``, mid-keystroke in the Backscan panel's own From/To boxes)
+    is the SAME honest empty list rather than a raised ``ValueError`` -- T-5 ("fail closed, disclose
+    the absence") is the governing rail here, since a not-yet-a-real-date string describes no
+    calendar range at all, exactly like an inverted one (iter-8's own carried defect fix: this used
+    to propagate the ``ValueError`` straight into an HTTP 500 at the route). NOTE this tolerance is
+    a READ-side rule only: the TRIGGER route refuses a malformed boundary outright (see
+    ``malformed_days``) rather than starting a phantom zero-date job over a string nothing could
+    interpret."""
+    if not _is_calendar_day(from_day) or not _is_calendar_day(to_day):
+        return []
     start = date.fromisoformat(from_day)
     end = date.fromisoformat(to_day)
     if start > end:

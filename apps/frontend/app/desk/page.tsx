@@ -32,6 +32,7 @@ import {
   fetchDeskPlaybookBackscanPlan,
   fetchDeskPlaybookBackscanRuns,
   fetchDeskPlaybookCompute,
+  fetchDeskPlaybookEvidence,
   fetchDeskPlaybookRuns,
   triggerDeskDeepBackfillCompute,
   triggerDeskForwardCompute,
@@ -62,6 +63,10 @@ import type {
   DeskPlaybookBackscanRun,
   DeskPlaybookBackscanRunsListResult,
   DeskPlaybookComputeSnapshot,
+  DeskPlaybookEvidence,
+  DeskPlaybookEvidenceBreach,
+  DeskPlaybookEvidenceCell,
+  DeskPlaybookEvidenceOtherSignature,
   DeskPlaybookReadResult,
   DeskPlaybookRecord,
   DeskPlaybookRun,
@@ -3744,6 +3749,192 @@ function BackscanRunsSection({
   );
 }
 
+// --- Playbook Evidence (Era B2, J-08) -- goal-playbook-iter-8: a read-only fold of every recorded
+// playbook signal at ONE signature into per-(setup_id, side, measure) distribution cells beside
+// the pooled seeded baseline, rendered BELOW the shipped Backscan panel (the blueprint's own
+// reserved "Playbook Evidence" IA slot). No client-side arithmetic anywhere in this section --
+// every number below is a straight pass-through of GET /research/desk/playbook/evidence
+// (test_desk_ui_guards.py's own `cell.signal.*`/`cell.baseline.*`/`breach.*` guard). No new user
+// action beyond scrolling (T-7: GETs never compute) -- this section carries no refresh/compute
+// control of its own, unlike every OTHER section on this page.
+
+function PlaybookEvidenceCellRow({ cell }: { cell: DeskPlaybookEvidenceCell }) {
+  return (
+    <tr data-testid="desk-evidence-cell-row" className="border-t border-slate-800/60">
+      <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-300">{cell.setup_id}</td>
+      <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-400">{cell.side}</td>
+      <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-400">{cell.measure}</td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-signal-n">
+        {fmt(cell.signal.n, 0)}
+      </td>
+      <td className={ROW_NUMERIC_CELL}>{fmt(cell.signal.n_truncated, 0)}</td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-signal-median">
+        {fmt(cell.signal.median_pct)}
+      </td>
+      <td className={ROW_NUMERIC_CELL}>{fmt(cell.signal.p25_pct)}</td>
+      <td className={ROW_NUMERIC_CELL}>{fmt(cell.signal.p75_pct)}</td>
+      <td className={ROW_NUMERIC_CELL}>{fmt(cell.signal.mean_pct)}</td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-baseline-n">
+        {fmt(cell.baseline.n_baseline, 0)}
+      </td>
+      <td className={ROW_NUMERIC_CELL}>{fmt(cell.baseline.median_pct)}</td>
+      <td className={ROW_NUMERIC_CELL}>{fmt(cell.baseline.p25_pct)}</td>
+      <td className={ROW_NUMERIC_CELL}>{fmt(cell.baseline.p75_pct)}</td>
+      <td className={ROW_NUMERIC_CELL}>{fmt(cell.baseline.mean_pct)}</td>
+      <td className="px-1.5 py-1 text-center">
+        {cell.below_min_n ? (
+          <span
+            data-testid="desk-evidence-below-min-n"
+            className="rounded border border-amber-800/60 bg-amber-950/40 px-1.5 py-0.5 text-[10px] text-amber-300"
+          >
+            low n
+          </span>
+        ) : (
+          <span className="text-[10px] text-slate-600">—</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function PlaybookEvidenceCellsTable({ cells }: { cells: DeskPlaybookEvidenceCell[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="desk-evidence-cells-table" className="w-full min-w-[900px] border-collapse text-xs">
+        <thead>
+          <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
+            <th className="px-1.5 py-1 text-left" rowSpan={2}>
+              Setup
+            </th>
+            <th className="px-1.5 py-1 text-left" rowSpan={2}>
+              Side
+            </th>
+            <th className="px-1.5 py-1 text-left" rowSpan={2}>
+              Measure
+            </th>
+            <th className="px-1.5 py-1 text-center" colSpan={6}>
+              Signal
+            </th>
+            <th className="px-1.5 py-1 text-center" colSpan={5}>
+              Baseline
+            </th>
+            <th className="px-1.5 py-1 text-center" rowSpan={2}>
+              Flag
+            </th>
+          </tr>
+          <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
+            <th className="px-1.5 py-1 text-right">n</th>
+            <th className="px-1.5 py-1 text-right">trunc</th>
+            <th className="px-1.5 py-1 text-right">median</th>
+            <th className="px-1.5 py-1 text-right">p25</th>
+            <th className="px-1.5 py-1 text-right">p75</th>
+            <th className="px-1.5 py-1 text-right">mean</th>
+            <th className="px-1.5 py-1 text-right">n</th>
+            <th className="px-1.5 py-1 text-right">median</th>
+            <th className="px-1.5 py-1 text-right">p25</th>
+            <th className="px-1.5 py-1 text-right">p75</th>
+            <th className="px-1.5 py-1 text-right">mean</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cells.map((cell) => (
+            <PlaybookEvidenceCellRow key={`${cell.setup_id}:${cell.side}:${cell.measure}`} cell={cell} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PlaybookEvidenceBreachRow({ breach }: { breach: DeskPlaybookEvidenceBreach }) {
+  return (
+    <tr data-testid="desk-evidence-breach-row" className="border-t border-slate-800/60">
+      <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-300">{breach.setup_id}</td>
+      <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-400">{breach.side}</td>
+      <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-400">{breach.horizon}</td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-breach-count">
+        {fmt(breach.breached_count, 0)}
+      </td>
+      <td className={ROW_NUMERIC_CELL}>{fmt(breach.total_count, 0)}</td>
+    </tr>
+  );
+}
+
+function PlaybookEvidenceBreachTable({ breaches }: { breaches: DeskPlaybookEvidenceBreach[] }) {
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Invalidation breaches</h3>
+      <table data-testid="desk-evidence-breach-table" className="w-full border-collapse text-xs">
+        <thead>
+          <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
+            <th className="px-1.5 py-1 text-left">Setup</th>
+            <th className="px-1.5 py-1 text-left">Side</th>
+            <th className="px-1.5 py-1 text-left">Horizon</th>
+            <th className="px-1.5 py-1 text-right">Breached</th>
+            <th className="px-1.5 py-1 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {breaches.map((breach) => (
+            <PlaybookEvidenceBreachRow key={`${breach.setup_id}:${breach.side}:${breach.horizon}`} breach={breach} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PlaybookEvidenceOtherSignatures({ entries }: { entries: DeskPlaybookEvidenceOtherSignature[] }) {
+  if (entries.length === 0) return null;
+  return (
+    <div className="mt-4" data-testid="desk-evidence-other-signatures">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        Other signatures (listed, never pooled)
+      </h3>
+      <ul className="space-y-1 text-xs text-slate-400">
+        {entries.map((entry) => (
+          <li key={entry.signature} data-testid="desk-evidence-other-signature-row">
+            <span className="font-mono text-slate-300">{entry.signature}</span> — {entry.dates.length} date
+            {entry.dates.length === 1 ? "" : "s"} ({entry.created_span.from} .. {entry.created_span.to})
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PlaybookEvidenceSection({
+  result,
+}: {
+  result: { ok: boolean; data: DeskPlaybookEvidence | null; error?: string } | null;
+}) {
+  if (result === null) {
+    return <LoadingPanel testid="desk-evidence-loading" />;
+  }
+  if (!result.ok || result.data === null) {
+    return (
+      <UnavailablePanel
+        testid="desk-evidence-unavailable"
+        message={result.error ?? "The playbook evidence view could not be loaded."}
+      />
+    );
+  }
+  const data = result.data;
+  const hasAnySignal = data.cells.some((cell) => cell.signal.n > 0);
+  return (
+    <div data-testid="desk-evidence-section">
+      <p className="mb-3 text-xs text-slate-500">{data.register}</p>
+      {hasAnySignal ? (
+        <PlaybookEvidenceCellsTable cells={data.cells} />
+      ) : (
+        <EmptyState testid="desk-evidence-empty" title="No playbook signals recorded at the current signature yet." />
+      )}
+      <PlaybookEvidenceBreachTable breaches={data.invalidation_breached} />
+      <PlaybookEvidenceOtherSignatures entries={data.other_signatures} />
+    </div>
+  );
+}
+
 // era-desk-iter-14 (J-10): a third compute control, wired exactly like `TopupComputeControl` — the
 // operation has no per-pair counters (it is a single classify-repair-verify walk, not a walk over
 // many pairs), so the running indicator shows the compute's own `progress.phase` label instead of
@@ -5636,6 +5827,15 @@ export default function DeskPage() {
   const [backscanCancelRequested, setBackscanCancelRequested] = useState(false);
   const [backscanCancelError, setBackscanCancelError] = useState<string | null>(null);
 
+  // goal-playbook-iter-8 (J-08): the Playbook Evidence section's own state — a single mount-time
+  // read (T-7: GETs never compute), no compute manager, no From/To, no trigger/cancel of any kind
+  // — the simplest state shape on this whole page.
+  const [evidenceResult, setEvidenceResult] = useState<{
+    ok: boolean;
+    data: DeskPlaybookEvidence | null;
+    error?: string;
+  } | null>(null);
+
   // The chained refresh (see the REFRESH-CHAIN block above). `refreshChain` is plain state and is
   // deliberately NOT persisted: a reload clears it and nothing resumes, which is what keeps "every
   // run is an explicit operator act" true structurally rather than by convention. Whatever job was
@@ -5732,6 +5932,13 @@ export default function DeskPage() {
     });
     fetchDeskPlaybookBackscanRuns().then((result) => {
       if (alive) setBackscanRunsResult(result);
+    });
+    // goal-playbook-iter-8 (J-08): seeds the Playbook Evidence section — a single mount-time read,
+    // joined into this SAME effect rather than opening a new one (the page's effect census is
+    // pinned; see test_desk_refresh_chain_guard.py). No poll, no re-fire on any input: T-7 ("GETs
+    // never compute") means there is nothing to re-trigger this section's own read.
+    fetchDeskPlaybookEvidence().then((result) => {
+      if (alive) setEvidenceResult(result);
     });
     return () => {
       alive = false;
@@ -7109,6 +7316,18 @@ export default function DeskPage() {
               </h3>
               <BackscanRunsSection result={backscanRunsResult} />
             </div>
+          </Panel>
+        </section>
+
+        {/* goal-playbook-iter-8 (J-08): the Playbook Evidence section, rendered directly BELOW the
+            shipped Backscan panel above — Blueprint's own pre-reserved "Playbook Evidence" slot in
+            runs/goal-session-playbook/state/blueprint.md's Information Architecture. Rendered
+            unconditionally, the SAME "always rendered" precedent every other section on this page
+            already establishes. No compute/refresh control here at all (T-7) — a pure read-only
+            fold of what the playbook store already recorded. */}
+        <section aria-label="Playbook Evidence" className="mt-6">
+          <Panel title="Playbook Evidence">
+            <PlaybookEvidenceSection result={evidenceResult} />
           </Panel>
         </section>
       </main>

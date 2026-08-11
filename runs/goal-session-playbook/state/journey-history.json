@@ -4,88 +4,87 @@
       "id": "J-01",
       "name": "The signal contract — opening-range breaks end to end, lookahead-clean and pre-registered",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-7",
-      "last_passing_iter": "goal-playbook-iter-7",
+      "last_verified_iter": "goal-playbook-iter-8",
+      "last_passing_iter": "goal-playbook-iter-8",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-7-evidence/J-01-verify.png",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-01.png",
       "spec_hash": "338cba3f562bbb5b9c4fc0736b6a6744f16cc67a6560373adeb93eaa50d9d3a5"
     },
     "J-02": {
       "id": "J-02",
       "name": "Every signal measured — the rail's own conventions, anchored at the trigger bar",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-7",
-      "last_passing_iter": "goal-playbook-iter-7",
+      "last_verified_iter": "goal-playbook-iter-8",
+      "last_passing_iter": "goal-playbook-iter-8",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-7-evidence/J-02-verify.png",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-02.png",
       "spec_hash": "daf2c5226d5670fe31f545f446bbff18ae691c80945948aa6b39062313ad423d"
     },
     "J-03": {
       "id": "J-03",
       "name": "The Playbook lands on /desk",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-7",
-      "last_passing_iter": "goal-playbook-iter-7",
+      "last_verified_iter": "goal-playbook-iter-8",
+      "last_passing_iter": "goal-playbook-iter-8",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-7-evidence/J-03-verify.png",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-03.png",
       "spec_hash": "df6f87df5e792376a4b8bc4b6f7c17b10affd38e579fc65a74e00f1459245834"
     },
     "J-04": {
       "id": "J-04",
       "name": "The continuation family — JBE, DBI, cup-and-handle",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-7",
-      "last_passing_iter": "goal-playbook-iter-7",
+      "last_verified_iter": "goal-playbook-iter-8",
+      "last_passing_iter": "goal-playbook-iter-8",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-7-evidence/J-04-verify.png",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-04.png",
       "spec_hash": "5fb304e920f2f3edb11dfb430cd6e4e0d5641dd2e069d14323cc01a25b79fe24"
     },
     "J-05": {
       "id": "J-05",
       "name": "The climax family — capitulation entry, euphoria marker",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-7",
-      "last_passing_iter": "goal-playbook-iter-7",
+      "last_verified_iter": "goal-playbook-iter-8",
+      "last_passing_iter": "goal-playbook-iter-8",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-7-evidence/UT-J-05-result.png",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-05.png",
       "spec_hash": "93fee8f5f226e288d1c99275e5c6f85e9cae79251b4d415ff9afec5b80df9b5a"
     },
     "J-06": {
       "id": "J-06",
       "name": "The range family — range trades, double top/bottom",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-6",
-      "last_passing_iter": "goal-playbook-iter-6",
+      "last_verified_iter": "goal-playbook-iter-8",
+      "last_passing_iter": "goal-playbook-iter-8",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-6-evidence/audit-J-06-postfix-double-top-geometry.png",
-      "spec_hash": "406f002e469059c8c929ba36489f76c072789e79e5b5f3a1777b1778252e8a97",
-      "evidence_makeup": true
+      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/audit-TC-14-range-trade-geometry-preseed-rig.png",
+      "spec_hash": "406f002e469059c8c929ba36489f76c072789e79e5b5f3a1777b1778252e8a97"
     },
     "J-07": {
       "id": "J-07",
       "name": "The back-scan — every recorded session, resumable and append-only",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-7",
-      "last_passing_iter": "goal-playbook-iter-7",
+      "last_verified_iter": "goal-playbook-iter-8",
+      "last_passing_iter": "goal-playbook-iter-8",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-7-evidence/UT-J-07-result.png",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-07.png",
       "spec_hash": "0b3c151c578cd88e152115e32c453e1a648748bf7e42d5bc81d2617670647468"
     },
     "J-08": {
       "id": "J-08",
       "name": "The evidence view — distributions beside the null, min-n honest",
-      "status": "failing",
-      "last_verified_iter": "goal-playbook-iter-7",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-playbook-iter-8",
+      "last_passing_iter": "goal-playbook-iter-8",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-0-evidence/J-08-route-404.png",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/UT-02-result.png",
       "spec_hash": "10b95ac2e424c51cfa2eb39ea9c4d79843bdc9aa0b15b7ae5a11182f31a321c8"
     },
     "J-09": {
       "id": "J-09",
       "name": "MCP contract v4 — 20 read-only tools",
       "status": "failing",
-      "last_verified_iter": "goal-playbook-iter-7",
+      "last_verified_iter": "goal-playbook-iter-8",
       "last_passing_iter": null,
       "first_seen_iter": "goal-playbook-iter-0",
       "last_evidence_path": "reports/phase-goal-playbook-iter-0-ui-test-results.md#UT-J-09",
@@ -95,10 +94,10 @@
       "id": "J-10",
       "name": "The kept product stands — regression sentinel",
       "status": "partial",
-      "last_verified_iter": "goal-playbook-iter-7",
+      "last_verified_iter": "goal-playbook-iter-8",
       "last_passing_iter": null,
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-7-evidence/J-10-verify.png",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-8-evidence/fix-scoped-replay-J-10.png",
       "spec_hash": "47f9a7c5f21a5d62c711ac8436d731206791d63d71eea86377d27366ad1f1242"
     }
   },
@@ -156,8 +155,8 @@
       "iter": "goal-playbook-iter-6",
       "anti_goal": "Persistence stays scoped / the iteration's own 'Real (non-fixture) computes are OUT OF SCOPE' rule — no verification lane may write into the operator's real store unasked",
       "severity": "minor",
-      "evidence": "STILL OPEN, but materially narrowed by iteration 7. The permanent iter-6 record apps/backend/.data/playbook/playbook-2026-08-07-84fcd116ebd7.json (57 signals) stays by design (deleting it would breach the append-only rail). Iteration 7 shipped the process remedy for the LLM browser lane: apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh exports all four playbook env vars, desk_playbook_backscan._assert_scoped refuses an unscoped rig, and the browser-qa agent detected and replaced an unscoped ambient :8301 backend before testing. Evaluator-verified: `find apps/backend/.data -newermt '2026-08-11 11:40' -type f` returns only sqlite WAL/SHM sidecars — zero playbook writes this iteration. REMAINING HOLE: the deterministic golden-replay lane ran at 12:40 against that same unscoped ambient backend, and two golden scripts (J-01.json, J-03.json) click the Run Playbook compute trigger; both used non-session dates so the honest refusal fired and nothing was written, but the lane is still not pinned to the scoped rig.",
-      "resolved": false
+      "evidence": "RESOLVED in iteration 8 by mechanism. The remaining hole iteration 7 named (the deterministic golden-replay lane was never pinned to the scoped rig) fired once more at 14:45 this iteration (see the iter-8 entry below) and is now closed by a project-neutral store-scope guard: project-extensions/store-scope/store-scope.env declares the protected append-only paths, incredible_auto_dev/scripts/automation/store-scope/store-scope.sh does require/snapshot/verify, and both goal-mode browser lanes call it (browser-qa-phase.sh:250, goal-iter-lean.sh:350) with a pure-function scoped-backend classifier (apps/backend/scripts/assert_scoped_qa_backend.py, 5 unit tests). Proven: 8/8 goldens replayed green on the scoped rig with all 9,841 protected files byte-identical (reports/qa/goal-playbook-iter-8-store-scope-guard.md, evaluator-re-read). The permanent iter-6 record playbook-2026-08-07-84fcd116ebd7.json stays by design.",
+      "resolved": true
     },
     {
       "iter": "goal-playbook-iter-6",
@@ -170,16 +169,37 @@
       "iter": "goal-playbook-iter-6",
       "anti_goal": "The spec is canonical (Constraints) — 'a developer who finds the spec ambiguous or unimplementable DROPS that detector and surfaces it, never improvises a rule'",
       "severity": "minor",
-      "evidence": "OPEN — owner ratification pending. Closing audit finding B2 (a long could be served with invalidation above its own entry), the developer wrote the dated 'degenerate trigger reference' clarification into docs/playbook-detector-spec.md §3.7 and only then made _range_trade_side void T <= SL (long) / T >= SH (short). Iteration 7 added the short-side mirror test (tests/test_desk_playbook_detect.py, TC-12) with zero diff to desk_playbook_detect.py, which strengthens the evidence but does NOT ratify the rule. Rejecting it means dropping range_trade from PLAYBOOK_SETUPS.",
+      "evidence": "OPEN — owner ratification pending, untouched by iterations 7 and 8 by design (explicitly OUT OF SCOPE both times). Closing the iter-6 audit finding B2 (a long could be served with invalidation above its own entry), the developer wrote the dated 'degenerate trigger reference' clarification into docs/playbook-detector-spec.md §3.7 and only then made _range_trade_side void T <= SL (long) / T >= SH (short). Rejecting it means dropping range_trade from PLAYBOOK_SETUPS. Evaluator-verified this iteration: docs/playbook-detector-spec.md has a ZERO diff since the iter-8 snapshot.",
       "resolved": false
     },
     {
       "iter": "goal-playbook-iter-6",
       "anti_goal": "The spec is canonical (Constraints) — served detector behaviour must match the canonical spec",
       "severity": "minor",
-      "evidence": "OPEN — three disclosed, fail-closed divergences between the shipped code and the canonical spec (the crossed_midrange partial disclosure, double_top's first-pair-vs-first-break choice, and the 1.5x jump-to-base gate / cup rim constant questions). Each can only produce FEWER signals, never invented ones. Untouched by iteration 7 by design (explicitly OUT OF SCOPE); awaiting owner rulings.",
+      "evidence": "OPEN — three disclosed, fail-closed divergences between the shipped code and the canonical spec (the crossed_midrange partial disclosure, double_top's first-pair-vs-first-break choice, and the 1.5x jump-to-base gate / cup rim constant questions). Each can only produce FEWER signals, never invented ones. Untouched by iterations 7 and 8 by design; awaiting owner rulings.",
       "resolved": false
+    },
+    {
+      "iter": "goal-playbook-iter-8",
+      "anti_goal": "Persistence stays scoped / the iteration spec's own 'Any real, unscoped back-scan or playbook compute against the operator's live universe' OUT OF SCOPE rule",
+      "severity": "minor",
+      "evidence": "RESOLVED BY MECHANISM inside this iteration. At 14:45:30-14:45:47 the deterministic golden-replay lane ran J-07's Run Backscan click against the ambient real :8301 backend and permanently appended three real S&P-100 playbook records (apps/backend/.data/playbook/playbook-2026-06-22-fc4182ae9bb8.json, -2026-06-23-e496c53902bc.json, -2026-06-24-e5f41a0c720e.json, signature 16a2734d10c91ea7, fingerprint 08e471b10130e1e2) plus one ledger row (apps/backend/.data/playbook_backscan_runs/backscanrun-2026-08-11-4ac8af57ce71.json, outcomes recorded=3). Evaluator-verified on disk. Nothing was fabricated, rewritten, backfilled or pruned — genuine append-only output of the shipped code, correctly ledgered — so this is the same minor/process shape as the ratified iter-6 precedent; deleting the records would itself breach the append-only rail. The audit caught it and the fix pass shipped the store-scope guard that closes the lane (see the iter-6 entry above).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-playbook-iter-8",
+      "anti_goal": "Persistence stays scoped — residual: the store-scope obligation does not cover every automated lane, and a detected breach does not stop the run",
+      "severity": "minor",
+      "evidence": "OPEN, narrow. Audit B3: store_scope_require is called by browser-qa-phase.sh:250 and goal-iter-lean.sh:350 only — the phase QA agent's own browser pass is ungated, and in this very iteration it drove /desk against the operator's real backend (reports/qa/goal-playbook-iter-8-qa.md:226; evaluator-confirmed read-only, no store writes after 15:00). Audit B4: browser-qa-phase.sh:486-503 discloses a breach and emits telemetry, then continues rather than aborting (deliberate, documented). Also carried: project-extensions/store-scope/store-scope.env:33 hardcodes STORE_SCOPE_PREPARE_CMD to the playbook fixture rig under a project-wide STORE_SCOPE_ENABLED=1, which would force-swap a FUTURE era's QA backend to playbook fixtures (reviewer MINOR + audit B2).",
+      "resolved": false
+    },
+    {
+      "iter": "goal-playbook-iter-8",
+      "anti_goal": "A signal is an observation, not a call — 'the served registers state what was NOT measured'",
+      "severity": "minor",
+      "evidence": "FOUND AND FIXED inside this iteration by the audit (B1). EVIDENCE_REGISTER claimed the baseline column covered 'every signal', which is false whenever a session's per-(setup,side) anchor cap bites — on the operator's own corpus double_top/short/to_close serves signal n=90 against baseline n=32. apps/backend/app/research/desk_playbook_evidence.py:98-110 now names the cap and says the two columns do not cover the same set of signals; evaluator re-read the live string from the running module. Covered by a new regression test (tests/test_desk_playbook_evidence.py:341) that the pre-fix wording fails.",
+      "resolved": true
     }
   ],
-  "updated_at": "2026-08-11T13:35:00Z"
+  "updated_at": "2026-08-11T18:40:00Z"
 }

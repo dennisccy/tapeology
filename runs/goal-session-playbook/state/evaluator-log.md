@@ -363,3 +363,61 @@ J-05 replay script so it checks a real signal row instead of a word that also ap
 section's description. Four questions still wait for the owner: ratify or reject the one sentence a
 developer added to the rule book about range trades, and settle the three places where the shipped
 code reads the book more narrowly than it is written.
+
+---
+
+## Iteration 8 — goal-playbook-iter-8
+
+**Date:** 2026-08-11T18:40:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-08 "The evidence view" (the distribution table beside the random-chance rows)
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-01 "The signal contract", J-02 "Every signal measured", J-03 "The Playbook
+  lands on /desk", J-04 "The continuation family", J-05 "The climax family", J-06 "The range
+  family", J-07 "The back-scan" all passing — all eight required journeys were re-run
+  automatically on a clean test copy after the fix pass and all eight passed; J-06's owed picture
+  finally arrived and it now has its own stored replay script, so its make-up flag is cleared;
+  J-09 "MCP contract v4" still failing (not targeted; the evaluator counted the Claude tools by
+  hand and found 18, not 20); J-10 "The kept product stands" still partial for the same reason
+- Anti-goal violations: iteration 6's open scoping item is now RESOLVED by a real mechanism (a
+  store-scope guard the automatic lanes must call, proven to refuse and then to run clean with all
+  9,841 protected files unchanged). One NEW minor one happened and was closed inside the same
+  iteration: at 14:45 the automatic replay lane pressed Run Backscan against the operator's real
+  backend and permanently wrote three real records plus one run row — genuine, correctly recorded,
+  nothing invented, which is why it is minor. One NEW minor one is OPEN: the guard covers only two
+  of the three automatic lanes, a detected write reports but does not stop the run, and the guard
+  forces the playbook test data on the whole repository. One more was found AND fixed by the
+  auditor: the sentence printed above the new table claimed the random-chance column covered every
+  signal, which is false on the owner's own data (one cell has 90 signals against 32 anchors).
+  The two owner questions from iteration 6 are untouched by design.
+
+**Reasoning:** I checked the work myself instead of trusting the write-ups. I opened the pictures:
+one screen shows a thin cell (3 signals, marked "low n", values -0.01/-0.04/0.04/0.01) sitting
+directly beside a full cell (14 signals, no mark, -0.04/-0.07/0.06/0.02), which is exactly what the
+journey asks for; another shows the whole new section with its heading, its disclosure paragraph and
+the signal-versus-random-chance columns. I re-ran the whole backend test suite to completion myself:
+exit 0, 2166 tests collected, 8 skipped, nothing failed — 2158 passed, above the 2130 floor. I asked
+the running code for the pin (08e471b10130e1e2), read the corrected disclosure sentence live, and
+counted the Claude tools (18). I used git to prove the measuring rail, the detector code, the rule
+book and the goal file all have zero changes. Two things I found that nobody else did. First, the
+picture the QA write-up offers as proof of the new table shows the calendar and forward-returns part
+of the page instead — the real proof is in two other pictures, so the journey still passes, but that
+write-up cannot be trusted on which picture shows what. Second, I listed every file written into the
+owner's own store since this iteration began and found the three real records and the run row the
+audit describes, at 14:45 — so the breach it reports really happened, and the guard it built really
+does close it.
+
+**Next-step recommendation:** Build J-09 "MCP contract v4" next — add the two read-only Claude tools
+for the playbook and its evidence table so the count goes from 18 to 20 — and then close J-10 "The
+kept product stands" by walking the whole product in a real browser with a picture of every shipped
+section. This is the last piece of the era, so run it as a deep iteration with the auditor. Carry
+four cheap items inside it: extend the store-scope guard to the QA agent's own browser pass; decide
+whether a detected write into the owner's store should stop the run rather than only report it; stop
+the guard from forcing playbook test data onto a future unrelated project; and show on screen the
+signature the evidence table is built from, since the page currently names every other signature but
+not that one. Two questions still wait for the owner, unchanged: ratify or reject the one sentence a
+developer added to the rule book about range trades, and settle the three places where the shipped
+code reads the rule book more narrowly than it is written.

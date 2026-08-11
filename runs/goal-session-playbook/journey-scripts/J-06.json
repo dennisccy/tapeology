@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "journey": "J-06",
+  "name": "The range family — range trades, double top/bottom",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-06", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 2, "journey": "J-06", "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-06-22"}, "expect": {"target": {"css": "[data-testid=\"desk-playbook-signal-setup\"]:has-text(\"Range Trade\")"}}},
+    {"n": 3, "journey": "J-06", "action": {"type": "click", "target": {"text": "RTAAA"}}, "expect": {"target": {"testid": "desk-playbook-signal-range-trade-geometry"}}},
+    {"n": 4, "journey": "J-06", "action": {"type": "click", "target": {"text": "Double Top"}}, "expect": {"target": {"testid": "desk-playbook-signal-double-extreme-geometry"}}}
+  ]
+}
