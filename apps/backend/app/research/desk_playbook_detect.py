@@ -1,12 +1,27 @@
 """The Playbook's detectors (Era B2). J-01 shipped the opening-range-break family
 (``docs/playbook-detector-spec.md`` §3.1-3.2); J-04 added the continuation family --
 ``detect_jbe``/``detect_dbi`` (§3.3-3.4, one shared internal walk, direction-flipped) and
-``detect_cup_handle`` (§3.6). J-05 (this iteration) adds the climax family --
-``detect_capitulation`` (§3.5, entry) and ``detect_euphoria`` (§3.5, the exact mirror UP, a
-MARKER only -- never a served signal). J-06 adds the remaining three detectors
-(``range_trade``/``double_top``/``double_bottom``), each built purely out of
-``desk_playbook_features.py``'s eight primitives plus the ``playbook_parameters()`` dict a caller
-hands in.
+``detect_cup_handle`` (§3.6). J-05 added the climax family -- ``detect_capitulation`` (§3.5,
+entry) and ``detect_euphoria`` (§3.5, the exact mirror UP, a MARKER only -- never a served
+signal). J-06 (this iteration) adds the remaining three detectors -- ``detect_range_trade``
+(§3.7, PROVISIONAL tier) and ``detect_double_top``/``detect_double_bottom`` (§3.8-3.9, the exact
+mirror) -- each built purely out of ``desk_playbook_features.py``'s eight primitives plus the
+``playbook_parameters()`` dict a caller hands in.
+
+**J-06 design note -- range_trade's trigger grammar.** Spec §3.7 (and the iteration's own framing)
+describes range_trade's bounce trigger as "the SAME reversal-bar grammar the capitulation bounce
+already implements... one shared mechanism, not a second vague one". This module honors that at
+the GRAMMAR level -- the identical local predicate (`bar.high > session_bars[t-1].high` / the
+mirrored low check), scanned within `PLAYBOOK_BOUNCE_MAX_BARS` of an anchor, `T = high[t-1]` --
+but does NOT literally route range_trade's trigger through `_find_climax_formation`: that
+function's own arming precondition is a `vertical_move` formation with re-anchoring (a DIFFERENT
+formation range_trade does not share -- range_trade arms via `zone_touches` of a tested-and-held
+zone, never a vertical move), so forcing a shared call site would either bend
+`_find_climax_formation` to a formation it was never built for or silently disable its own
+re-anchoring for capitulation/euphoria. The reversal-bar predicate itself is small enough (one
+comparison) that duplicating exactly that one line, under a shared name and cross-referenced
+docstring, is the honest reading of "the same grammar" without risking J-05's own byte-identical
+behavior for a J-06 formation it does not need.
 
 **J-04's own primitives are all reused, none added.** ``consolidation_range`` (JBE/DBI's base,
 shared with the module's own precedent of "shared geometry for JBE/DBI's base and cup-and-handle's
@@ -60,6 +75,9 @@ __all__ = [
     "detect_cup_handle",
     "detect_capitulation",
     "detect_euphoria",
+    "detect_range_trade",
+    "detect_double_top",
+    "detect_double_bottom",
 ]
 
 
@@ -1008,3 +1026,501 @@ def detect_euphoria(session_bars: list[RawBar], baseline: dict, params: dict) ->
         return None
     _window_start, _climax_idx, trigger_idx = found
     return {"trigger_idx": trigger_idx}
+
+
+# === J-06: the range family -- range_trade (spec §3.7, PROVISIONAL) + double_top/double_bottom
+# (spec §3.8-3.9, exact mirror; double_top described) ===============================================
+
+
+def _zone_held(bars: list[RawBar], touches: list[int], extreme: str, hold_tol: float) -> bool:
+    """spec §3.7's arming clause "each later touch extending the extreme by <=
+    ``PLAYBOOK_RANGE_HOLD_TOL_MBR * MBR``" (the BOOK's "and hold"), read per-touch exactly as
+    written: for every touch AFTER the first, the amount by which that touch pushes the running
+    extreme further out must not exceed ``hold_tol``. ``touches`` are ``zone_touches`` indices
+    (the FIRST bar of each touch group, full-exit re-arm semantics), so a touch's own extension is
+    measured over its whole group -- the prefix extreme through the bar before the NEXT touch
+    group starts (or the end of ``bars``) minus the prefix extreme established strictly before
+    this group. Bars between two touch groups cannot set a new extreme: a bar extending the low
+    below the running low necessarily overlaps the low zone ``[SL, SL + NEAR_EXTREME*MBR]`` (its
+    low is <= the zone's own floor) and is therefore itself inside a touch group -- so the group
+    boundaries account for every extension. A single touch never "holds" (the caller's >= 2 gate
+    rejects it first); returns ``False`` for fewer than two touches. ``extreme`` names WHICH
+    running extreme this zone owns (``"low"`` for the low zone, ``"high"`` for the high zone) --
+    deliberately not a side, since spec §3.7 requires BOTH zones to hold before EITHER side arms."""
+    if len(touches) < 2:
+        return False
+    for k in range(1, len(touches)):
+        start = touches[k]
+        end = touches[k + 1] if k + 1 < len(touches) else len(bars)
+        if extreme == "low":
+            before = min(bar.low for bar in bars[:start])
+            through = min(bar.low for bar in bars[:end])
+            extension = before - through
+        else:
+            before = max(bar.high for bar in bars[:start])
+            through = max(bar.high for bar in bars[:end])
+            extension = through - before
+        if extension > hold_tol:
+            return False
+    return True
+
+
+def _range_trade_side(
+    session_bars: list[RawBar],
+    baseline: dict,
+    symbol: str,
+    session_date: str,
+    index_bars: list[RawBar],
+    index_baseline: dict,
+    params: dict,
+    side: str,
+) -> dict | None:
+    """ONE side of spec §3.7 -- support-bounce (``side="long"``) or resistance-fade
+    (``side="short"``, the exact mirror). Walks candidate arming-completion bars ``t`` forward
+    through the session; at each, the session range so far (``SH``/``SL`` over
+    ``session_bars[:t]``, prefix extremes -- entry-time legal by construction, the same "recompute
+    at every candidate" shape ``_find_one_continuation``'s own ``near_extreme_ok`` check uses) must
+    be ``>= PLAYBOOK_RANGE_MIN_WIDTH_MBR`` wide, and BOTH zones (``[SL, SL + NEAR_EXTREME*MBR]``
+    low and ``[SH - NEAR_EXTREME*MBR, SH]`` high) must show ``>= 2`` touches EACH, each later touch
+    holding its own extreme within ``RANGE_HOLD_TOL_MBR * MBR`` (``_zone_held``) -- spec §3.7's
+    arming clause in full, the BOOK's "test the low AND high twice and hold"; a session that tests
+    one extreme twice while touching the other once is the breakout-only case Ch 13 excludes and
+    arms nothing. The armed side's own zone additionally supplies the COMPLETING touch: an arming
+    attempt is evaluated only at the first ``t`` at which that side's most recent touch is ``t - 1``
+    itself (so the same touch pair is never re-attempted on later, untouched bars). A formation
+    whose trigger reference is degenerate (``T <= SL`` long / ``T >= SH`` short, where the spec's
+    own invalidation arithmetic inverts) is voided fail-closed, per spec §3.7's Edge cases. From
+    the completing touch ``b``, scans forward up to
+    ``PLAYBOOK_BOUNCE_MAX_BARS`` for the reversal-bar grammar (module docstring: the SAME predicate
+    ``_find_climax_formation``'s own bounce trigger uses, ``high > high[t-1]`` long / ``low <
+    low[t-1]`` short), gated at every candidate bar by the arming description's own hold tolerance
+    (``min(low[b..t-1]) >= SL - HOLD_TOL*MBR`` long, mirrored short) -- the FIRST bar where the
+    hold check fails ends the scan for this arming attempt (spec's own edge case: a strict break
+    beyond the zone by more than the tolerance dissolves range-mode), and the outer loop then tries
+    the NEXT arming completion. Capped at 1 by construction (single return, first (arm, trigger)
+    pair found chronologically -- the ``detect_cup_handle`` rim-pair-search precedent)."""
+    mbr = baseline["mbr"]
+    if mbr == 0.0:
+        return None
+    slot_medians = baseline["slot_volume_medians"]
+    n = len(session_bars)
+    min_width = params["range_min_width_mbr"] * mbr
+    near_extreme = params["near_extreme_mbr"] * mbr
+    hold_tol = params["range_hold_tol_mbr"] * mbr
+    bounce_max = params["bounce_max_bars"]
+
+    for t in range(2, n):
+        bars_so_far = session_bars[:t]
+        session_high = max(bar.high for bar in bars_so_far)
+        session_low = min(bar.low for bar in bars_so_far)
+        if session_high - session_low < min_width:
+            continue
+        low_touches = zone_touches(bars_so_far, session_low, session_low + near_extreme)
+        high_touches = zone_touches(bars_so_far, session_high - near_extreme, session_high)
+        # spec §3.7's arming gate, in full: the high zone AND the low zone EACH with >= 2 touches,
+        # EACH later touch holding its extreme within `RANGE_HOLD_TOL_MBR * MBR`. Both zones, not
+        # just the armed side's own: the BOOK rule is "test the low AND high twice and hold" -- a
+        # session that tests one extreme twice while touching the other once is the breakout-only
+        # case Ch 13 excludes, and never arms a range trade on either side.
+        if len(low_touches) < 2 or len(high_touches) < 2:
+            continue
+        if not _zone_held(bars_so_far, low_touches, "low", hold_tol):
+            continue
+        if not _zone_held(bars_so_far, high_touches, "high", hold_tol):
+            continue
+        armed_touches = low_touches if side == "long" else high_touches
+        b = armed_touches[-1]
+        if b != t - 1:
+            continue  # this exact touch pair already armed at an earlier `t` -- do not re-attempt
+
+        floor_or_ceiling = session_low - hold_tol if side == "long" else session_high + hold_tol
+        trigger_idx: int | None = None
+        for t2 in range(b + 1, min(n, b + bounce_max + 1)):
+            window = session_bars[b:t2]
+            holds = (
+                min(bar.low for bar in window) >= floor_or_ceiling if side == "long"
+                else max(bar.high for bar in window) <= floor_or_ceiling
+            )
+            if not holds:
+                break  # dissolved -- no later t2 in this window can hold either
+            prev_bar, bar_t2 = session_bars[t2 - 1], session_bars[t2]
+            reverses = bar_t2.high > prev_bar.high if side == "long" else bar_t2.low < prev_bar.low
+            if reverses:
+                trigger_idx = t2
+                break
+        if trigger_idx is None:
+            continue
+
+        # --- armed AND triggered -- build the signal ---------------------------------------------
+        prev_bar = session_bars[trigger_idx - 1]
+        trigger_bar = session_bars[trigger_idx]
+        trigger_price = prev_bar.high if side == "long" else prev_bar.low
+        # spec §3.7 Edge cases, "degenerate trigger reference" (the 2026-08-11 clarification): the
+        # invalidation clause is arithmetic on `T - SL`, so it presupposes `T > SL` long / `T < SH`
+        # short. The trigger scan tolerates the pre-trigger bars dipping to `SL - HOLD_TOL*MBR`, so
+        # a reversal bar whose reference `high[t-1]` sits entirely BELOW the arming-time `SL` is
+        # reachable -- and there the formula inverts (a long's invalidation lands above its own
+        # entry, i.e. born-invalidated). Voided fail-closed; the walk continues to a later arming.
+        degenerate = (
+            trigger_price <= session_low if side == "long" else trigger_price >= session_high
+        )
+        if degenerate:
+            continue
+        if side == "long":
+            entry = max(trigger_bar.open, trigger_price)
+            entry_kind = "level" if trigger_bar.open < trigger_price else "gap_open"
+            gapped_beyond_chase = trigger_bar.open > trigger_price * (1.0 + params["max_chase_frac"])
+            invalidation_price = session_low - params["stop_pad_frac"] * (trigger_price - session_low)
+        else:
+            entry = min(trigger_bar.open, trigger_price)
+            entry_kind = "level" if trigger_bar.open > trigger_price else "gap_open"
+            gapped_beyond_chase = trigger_bar.open < trigger_price * (1.0 - params["max_chase_frac"])
+            invalidation_price = session_high + params["stop_pad_frac"] * (session_high - trigger_price)
+
+        # `crossed_midrange` (disclosure only, spec §3.7's own vague "BOOK midrange rule" --
+        # this iteration's own named reading, per the goal's degeneracy-check requirement): did
+        # price, ANYWHERE between the zone's first touch and the completing (armed) touch, cross to
+        # the OPPOSITE side of the range midpoint -- a swing that visited the middle of the range,
+        # not one that stayed compressed near one edge.
+        midrange = (session_high + session_low) / 2.0
+        between = session_bars[armed_touches[0] : b + 1]
+        crossed_midrange = (
+            any(bar.high >= midrange for bar in between) if side == "long"
+            else any(bar.low <= midrange for bar in between)
+        )
+        # `absorption_bar_present` (spec §3.7): a zone TOUCH bar with RVOL >= RVOL_ELEVATED and its
+        # own range <= RANGE_HOLD_TOL*MBR (P6 passive accumulation/distribution).
+        absorption_bar_present = False
+        for idx in armed_touches:
+            candidate = session_bars[idx]
+            rvol = _rvol(candidate, idx, slot_medians)
+            if rvol is not None and rvol >= params["rvol_elevated"] and (candidate.high - candidate.low) <= hold_tol:
+                absorption_bar_present = True
+                break
+
+        approach_start = max(0, trigger_idx - params["approach_bars"])
+        approach_indices = list(range(approach_start, trigger_idx))
+        approach_rvols = [_rvol(session_bars[i], i, slot_medians) for i in approach_indices]
+        known_approach = [r for r in approach_rvols if r is not None]
+        approach_rvol_max = max(known_approach) if known_approach else None
+        rvol_trigger_bar = _rvol(trigger_bar, trigger_idx, slot_medians)
+        spike_verdict = _spike_into_trigger_verdict(
+            session_bars, approach_indices, approach_rvols, trigger_price, side, mbr,
+            params["rvol_surge"], params["near_extreme_mbr"],
+        )
+        spiky_approach = False
+        if trigger_idx - 1 >= 0:
+            spiky_approach = vertical_move(
+                session_bars, trigger_idx - 1, 1, params["vertical_bar_mbr"] * mbr,
+                "up" if side == "long" else "down",
+            )
+        if side == "long":
+            zone_lo, zone_hi = trigger_price - near_extreme, trigger_price
+        else:
+            zone_lo, zone_hi = trigger_price, trigger_price + near_extreme
+        attempt_count = len(zone_touches(session_bars[:trigger_idx], zone_lo, zone_hi))
+        market = _market_block(
+            session_bars, trigger_idx, index_bars, session_date, side, mbr, index_baseline, params,
+        )
+        # Principles (spec §3.7): P6 when the passive-accumulation/distribution absorption bar is
+        # present; P5 ("decreasing-volume reversal") "at the high side" -- read literally as the
+        # resistance-fade (short) side, the range's own high side.
+        principles = (["P6"] if absorption_bar_present else []) + (["P5"] if side == "short" else [])
+
+        return {
+            "symbol": symbol,
+            "setup_id": "range_trade",
+            "side": side,
+            "trigger_ts": _iso(trigger_bar.epoch),
+            "trigger_price": trigger_price,
+            "entry": entry,
+            "entry_kind": entry_kind,
+            "price_low": session_low,
+            "price_high": session_high,
+            "invalidation_price": invalidation_price,
+            "geometry": {
+                "slots_to_break": trigger_idx,
+                "range_width_mbr": (session_high - session_low) / mbr,
+                "low_zone_touches": len(low_touches),
+                "high_zone_touches": len(high_touches),
+                "crossed_midrange": crossed_midrange,
+                "absorption_bar_present": absorption_bar_present,
+            },
+            "volume": {
+                "rvol_trigger_bar": rvol_trigger_bar,
+                "approach_rvol_max": approach_rvol_max,
+                "spike_into_trigger_verdict": spike_verdict,
+                "spiky_approach": spiky_approach,
+            },
+            "market": market,
+            "principles": principles,
+            "disclosures": {
+                "gapped_beyond_chase": gapped_beyond_chase,
+                "session_bar_count": len(session_bars),
+                "attempt_count": attempt_count,
+                "bars_to_close": len(session_bars) - 1 - trigger_idx,
+                "concurrent_signals": [],
+                "euphoria_recent": False,
+                "capitulation_recent": False,
+            },
+        }
+    return None
+
+
+def detect_range_trade(
+    session_bars: list[RawBar],
+    baseline: dict,
+    symbol: str,
+    session_date: str,
+    index_bars: list[RawBar],
+    index_baseline: dict,
+    params: dict,
+) -> list[dict]:
+    """spec §3.7 -- support-bounce long + resistance-fade short, checked INDEPENDENTLY (cap 1 per
+    side per symbol-session, spec's own cap); returns 0, 1, or 2 signals, chronological order not
+    guaranteed between sides (mirrors ``detect_jbe``/``detect_dbi`` being two independent calls,
+    collapsed into one function here since both sides share ONE ``setup_id``)."""
+    signals: list[dict] = []
+    long_signal = _range_trade_side(
+        session_bars, baseline, symbol, session_date, index_bars, index_baseline, params, "long",
+    )
+    if long_signal is not None:
+        signals.append(long_signal)
+    short_signal = _range_trade_side(
+        session_bars, baseline, symbol, session_date, index_bars, index_baseline, params, "short",
+    )
+    if short_signal is not None:
+        signals.append(short_signal)
+    return signals
+
+
+# --- J-06: double_top (spec §3.8) / double_bottom (spec §3.9, exact mirror; double_top described) -
+
+
+def _find_double_extreme(
+    session_bars: list[RawBar],
+    baseline: dict,
+    symbol: str,
+    session_date: str,
+    index_bars: list[RawBar],
+    index_baseline: dict,
+    params: dict,
+    side: str,
+) -> dict | None:
+    """ONE shared walk for both mirrors: ``side="short"`` (``double_top``, two confirmed swing
+    HIGHS, the valley break shorts) and ``side="long"`` (``double_bottom``, two confirmed swing
+    LOWS, the peak break longs) -- spec §3.9: "mirror; double_top described". Searches every
+    confirmed-pivot pair ``(p1, p2)`` in chronological order (the ``detect_cup_handle`` rim-pair-
+    search precedent) and returns the FIRST pair whose full formation validates AND triggers --
+    capped at 1 by construction. ``p2`` must be pivot-confirmed STRICTLY BEFORE the trigger bar
+    (spec's pivot-confirmation-delay rule): a bar breaking the valley/peak BEFORE
+    ``p2["confirmed_at"]`` fails this ENTIRE pair closed (never delays the trigger to search only
+    after confirmation, which would silently misrepresent when the break actually happened -- TC-10)."""
+    mbr = baseline["mbr"]
+    if mbr == 0.0:
+        return None
+    slot_medians = baseline["slot_volume_medians"]
+    pivot_kind = "high" if side == "short" else "low"
+    pivots = swing_pivots(session_bars, params["pivot_lookback_bars"])
+    candidates = sorted((p for p in pivots if p["kind"] == pivot_kind), key=lambda p: p["index"])
+    n = len(session_bars)
+
+    for i, p1 in enumerate(candidates):
+        for p2 in candidates[i + 1 :]:
+            if p2["index"] - p1["index"] < params["tops_min_separation_bars"]:
+                continue
+            if abs(p2["price"] - p1["price"]) > params["tops_match_mbr"] * mbr:
+                continue
+
+            # Both pivots near the session extreme AT THEIR OWN (already-confirmed) times -- the
+            # `detect_cup_handle` "near_extreme_ok" pattern, direction-mirrored.
+            p1_session_extreme = (
+                max(bar.high for bar in session_bars[: p1["confirmed_at"] + 1]) if side == "short"
+                else min(bar.low for bar in session_bars[: p1["confirmed_at"] + 1])
+            )
+            p2_session_extreme = (
+                max(bar.high for bar in session_bars[: p2["confirmed_at"] + 1]) if side == "short"
+                else min(bar.low for bar in session_bars[: p2["confirmed_at"] + 1])
+            )
+            if side == "short":
+                if p1["price"] < p1_session_extreme - params["near_extreme_mbr"] * mbr:
+                    continue
+                if p2["price"] < p2_session_extreme - params["near_extreme_mbr"] * mbr:
+                    continue
+            else:
+                if p1["price"] > p1_session_extreme + params["near_extreme_mbr"] * mbr:
+                    continue
+                if p2["price"] > p2_session_extreme + params["near_extreme_mbr"] * mbr:
+                    continue
+
+            between = session_bars[p1["index"] + 1 : p2["index"]]
+            if not between:
+                continue
+            structure_price = (
+                min(bar.low for bar in between) if side == "short"
+                else max(bar.high for bar in between)
+            )
+            # Depth gated against the SHALLOWER of the two pivots (the conservative reading -- the
+            # formation must clear the min-depth floor even in the worst case).
+            shallower_pivot = min(p1["price"], p2["price"]) if side == "short" else max(p1["price"], p2["price"])
+            depth = (shallower_pivot - structure_price) if side == "short" else (structure_price - shallower_pivot)
+            if depth < params["min_structure_depth_mbr"] * mbr:
+                continue
+
+            # Fail-closed (TC-10): a bar between p2 itself and p2's OWN confirmation already
+            # crossing the valley/peak means this pair is invalid -- never delay the trigger scan
+            # past confirmation and silently claim a LATER bar as "the" break.
+            collapse_window = session_bars[p2["index"] : p2["confirmed_at"] + 1]
+            collapsed_before_confirmation = (
+                any(bar.low < structure_price for bar in collapse_window) if side == "short"
+                else any(bar.high > structure_price for bar in collapse_window)
+            )
+            if collapsed_before_confirmation:
+                continue
+
+            search_start = p2["confirmed_at"] + 1
+            trigger_idx: int | None = None
+            for t in range(search_start, n):
+                crosses = (
+                    session_bars[t].low < structure_price if side == "short"
+                    else session_bars[t].high > structure_price
+                )
+                if crosses:
+                    trigger_idx = t
+                    break
+            if trigger_idx is None:
+                continue  # never breaks -- formation still open at session close
+
+            # --- armed AND triggered -- build the signal ----------------------------------------
+            # S = the FARTHER (worse-case) pivot -- max top for double_top, min bottom for
+            # double_bottom -- so invalidation/nominal_risk use the FULL pattern height, "never
+            # shrunk" (spec §3.9), never the shallower pivot the depth GATE above used.
+            far_pivot = max(p1["price"], p2["price"]) if side == "short" else min(p1["price"], p2["price"])
+            trigger_price = structure_price
+            trigger_bar = session_bars[trigger_idx]
+            if side == "short":
+                entry = min(trigger_bar.open, trigger_price)
+                entry_kind = "level" if trigger_bar.open > trigger_price else "gap_open"
+                gapped_beyond_chase = trigger_bar.open < trigger_price * (1.0 - params["max_chase_frac"])
+                invalidation_price = far_pivot + params["stop_pad_frac"] * (far_pivot - trigger_price)
+            else:
+                entry = max(trigger_bar.open, trigger_price)
+                entry_kind = "level" if trigger_bar.open < trigger_price else "gap_open"
+                gapped_beyond_chase = trigger_bar.open > trigger_price * (1.0 + params["max_chase_frac"])
+                invalidation_price = far_pivot - params["stop_pad_frac"] * (trigger_price - far_pivot)
+
+            p1_window = [idx for idx in (p1["index"] - 1, p1["index"], p1["index"] + 1) if 0 <= idx < n]
+            p2_window = [idx for idx in (p2["index"] - 1, p2["index"], p2["index"] + 1) if 0 <= idx < n]
+            p1_rvols = [
+                r for r in (_rvol(session_bars[idx], idx, slot_medians) for idx in p1_window) if r is not None
+            ]
+            p2_rvols = [
+                r for r in (_rvol(session_bars[idx], idx, slot_medians) for idx in p2_window) if r is not None
+            ]
+            p1_median_rvol = statistics.median(p1_rvols) if p1_rvols else None
+            p2_median_rvol = statistics.median(p2_rvols) if p2_rvols else None
+            second_top_rvol_vs_first = (
+                p2_median_rvol / p1_median_rvol
+                if p1_median_rvol is not None and p2_median_rvol is not None and p1_median_rvol != 0.0
+                else None
+            )
+
+            approach_start = max(0, trigger_idx - params["approach_bars"])
+            approach_indices = list(range(approach_start, trigger_idx))
+            approach_rvols = [_rvol(session_bars[i], i, slot_medians) for i in approach_indices]
+            known_approach = [r for r in approach_rvols if r is not None]
+            approach_rvol_max = max(known_approach) if known_approach else None
+            rvol_trigger_bar = _rvol(trigger_bar, trigger_idx, slot_medians)
+            spike_verdict = _spike_into_trigger_verdict(
+                session_bars, approach_indices, approach_rvols, trigger_price, side, mbr,
+                params["rvol_surge"], params["near_extreme_mbr"],
+            )
+            spiky_approach = False
+            if trigger_idx - 1 >= 0:
+                spiky_approach = vertical_move(
+                    session_bars, trigger_idx - 1, 1, params["vertical_bar_mbr"] * mbr,
+                    "down" if side == "short" else "up",
+                )
+            if side == "short":
+                zone_lo, zone_hi = trigger_price, trigger_price + params["near_extreme_mbr"] * mbr
+            else:
+                zone_lo, zone_hi = trigger_price - params["near_extreme_mbr"] * mbr, trigger_price
+            attempt_count = len(zone_touches(session_bars[:trigger_idx], zone_lo, zone_hi))
+            market = _market_block(
+                session_bars, trigger_idx, index_bars, session_date, side, mbr, index_baseline, params,
+            )
+
+            return {
+                "symbol": symbol,
+                "setup_id": "double_top" if side == "short" else "double_bottom",
+                "side": side,
+                "trigger_ts": _iso(trigger_bar.epoch),
+                "trigger_price": trigger_price,
+                "entry": entry,
+                "entry_kind": entry_kind,
+                "price_low": structure_price if side == "short" else far_pivot,
+                "price_high": far_pivot if side == "short" else structure_price,
+                "invalidation_price": invalidation_price,
+                "geometry": {
+                    "slots_to_break": trigger_idx,
+                    "tops_gap_mbr": abs(p2["price"] - p1["price"]) / mbr,
+                    "tops_separation_bars": p2["index"] - p1["index"],
+                    "valley_depth_mbr": depth / mbr,
+                    "nominal_risk_mbr": (
+                        (far_pivot - trigger_price) / mbr if side == "short"
+                        else (trigger_price - far_pivot) / mbr
+                    ),
+                    "second_top_rvol_vs_first": second_top_rvol_vs_first,
+                },
+                "volume": {
+                    "rvol_trigger_bar": rvol_trigger_bar,
+                    "approach_rvol_max": approach_rvol_max,
+                    "spike_into_trigger_verdict": spike_verdict,
+                    "spiky_approach": spiky_approach,
+                },
+                "market": market,
+                "principles": ["P5"],
+                "disclosures": {
+                    "gapped_beyond_chase": gapped_beyond_chase,
+                    "session_bar_count": len(session_bars),
+                    "attempt_count": attempt_count,
+                    "bars_to_close": len(session_bars) - 1 - trigger_idx,
+                    "concurrent_signals": [],
+                    "euphoria_recent": False,
+                    "capitulation_recent": False,
+                },
+            }
+    return None
+
+
+def detect_double_top(
+    session_bars: list[RawBar],
+    baseline: dict,
+    symbol: str,
+    session_date: str,
+    index_bars: list[RawBar],
+    index_baseline: dict,
+    params: dict,
+) -> dict | None:
+    """spec §3.8 -- two confirmed swing-high pivots at (roughly) the same level, the valley break
+    shorts. Capped at 1 per symbol-session by construction (single return, first validating-and-
+    triggering pivot pair)."""
+    return _find_double_extreme(
+        session_bars, baseline, symbol, session_date, index_bars, index_baseline, params, "short",
+    )
+
+
+def detect_double_bottom(
+    session_bars: list[RawBar],
+    baseline: dict,
+    symbol: str,
+    session_date: str,
+    index_bars: list[RawBar],
+    index_baseline: dict,
+    params: dict,
+) -> dict | None:
+    """spec §3.9 -- the exact mirror of ``detect_double_top``: two confirmed swing-low pivots, the
+    peak break longs."""
+    return _find_double_extreme(
+        session_bars, baseline, symbol, session_date, index_bars, index_baseline, params, "long",
+    )

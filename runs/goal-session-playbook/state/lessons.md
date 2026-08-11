@@ -150,3 +150,32 @@ field definitions that the canonical spec does not itself state need a degenerac
 are treated as binding.
 **Applies to:** any iter whose spec invents a field definition the canonical
 `docs/playbook-detector-spec.md` leaves undefined — J-06/J-07/J-08 all add served fields.
+
+## iter-6 — 2026-08-11T11:45:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** An audit-fix pass changed `range_trade`'s arming RULE without changing any constant, so
+`playbook_input_signature` did not move — and because playbook records are keyed
+`(session_date, signature)`, the already-seeded browser rig kept serving its pre-fix record and
+every 09:44 screenshot silently described a build that no longer existed. Behaviour-only fixes are
+invisible to the signature by design; after any of them the browser rig must be re-seeded at a
+FRESH root, and pre-fix evidence must be voided in writing (the auditor's correction banner in
+`reports/phase-goal-playbook-iter-6-ui-test-results.md` is the pattern to copy).
+**Applies to:** any iteration whose fix-mode pass edits detector logic in
+`apps/backend/app/research/desk_playbook_detect.py` after browser evidence was captured.
+
+## iter-6 — 2026-08-11T11:46:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** Store scoping fails in two silent ways that both put fixture work into the operator's
+real `.data/`: (1) only the `*_resolved()` accessors read the `TAPEOLOGY_*` overrides — reading
+`config.bar_dir` / `config.desk_universe_dir` directly ignores every scoping env var (this wrote 3
+synthetic bar files and a today-dated fake universe snapshot before it was caught); (2)
+`resolve_desk_playbook_log_dir` (`app/research/desk_playbook_log.py:74`) falls back off the
+*universe* dir, so scoping `TAPEOLOGY_DESK_PLAYBOOK_DIR` alone sends the record to scratch and its
+ledger row to the real store — orphaned on first write, which is exactly the iter-4/iter-5 mystery
+rows, with nothing ever deleted. Scoping is all-or-nothing: use
+`apps/backend/scripts/qa_playbook_iter6_fixture_scoped_backend.sh` as the only backend entry point
+for test/browser work.
+**Applies to:** every test, browser-QA or seeding run from here on, and J-07 above all — the
+back-scan is a mass writer over real recorded sessions.

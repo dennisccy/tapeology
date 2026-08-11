@@ -272,6 +272,20 @@ cases. Side/band/entry/measurement always follow §0.
 - **Caps.** 1 per symbol-session (first).
 - **Disclosures.** `decline_mbr`, `decline_bars`, `climax_rvol`,
   `bars_from_climax_to_trigger`. Principle: P1.
+  **`decline_bars`/`decline_mbr`, precisely (goal-playbook-iter-6 doc-only closure of the OPEN
+  minor anti-goal item iter-5 carried — zero constant/behavior change, transcribing the reading
+  `desk_playbook_detect.py`'s `_find_climax_formation`/`detect_capitulation` already ship).**
+  Re-anchoring (above) means the climax bar `v` used for these two disclosures is not always the
+  RAW candidate the `vertical_move` window first found — a new low forming after `v` (before any
+  trigger) re-anchors `v` to that later bar, since the panic is still running. `decline_bars`
+  spans the WHOLE decline leg: from the ORIGINAL `vertical_move` window's own start bar through
+  the (possibly re-anchored) climax bar `v` — a formation that re-anchors therefore reports a
+  LONGER decline than the raw `PLAYBOOK_VERTICAL_WINDOW_BARS` constant, never a fixed value.
+  `decline_mbr` is the net decline, in MBR units, from the close of the bar immediately BEFORE the
+  vertical-move window began through to the eventual (possibly re-anchored) `leg_low` — the same
+  "how far did price actually fall" reading `vertical_move`'s own net-move check uses internally,
+  extended through whatever re-anchoring occurred. Both disclosures always describe the FINAL,
+  re-anchored leg, never the raw candidate's own (possibly shorter/shallower) window.
 - **`euphoria`** — exact mirror UP with the same constants, emitted as a **marker, not a
   signal**: no side, no band, never measured (BOOK: an exit/avoid signal; the authors do not
   short strong stocks on euphoria). It sets `euphoria_recent: true` on any signal triggering
@@ -324,6 +338,18 @@ cases. Side/band/entry/measurement always follow §0.
   Principles: P6 when absorption present; P5 at the high side.
 - **Edge cases.** A strict break beyond a zone by > `HOLD_TOL` dissolves range-mode (re-arms
   only on a new twice-tested range).
+  **Degenerate trigger reference (clarification, 2026-08-11 — ADAPTATION, narrowing only, no
+  new constant).** The Invalidation clause above is arithmetic on `T − SL`: it pads the range
+  bound by 30% of the distance from the range low to the trigger reference, and therefore
+  presupposes `T > SL` (long; `T < SH` short). That premise is not automatic — the Trigger
+  clause tolerates the pre-trigger bars dipping to `SL − RANGE_HOLD_TOL·MBR`, so a reversal bar
+  whose reference `high[t−1]` sits entirely below the arming-time `SL` is reachable, and there
+  `SL − 0.30·(T − SL)` INVERTS: a long's invalidation lands ABOVE its own entry and the signal
+  is recorded born-invalidated. That is a degenerate formation, not a signal: following §4's
+  own class of degenerate/edge rules ("formation open at session end ⇒ nothing emitted"; thin
+  data ⇒ silent, never a guess), the formation is **voided, fail-closed** — `T ≤ SL` (long) /
+  `T ≥ SH` (short) emits nothing, and the detector continues its walk for a later arming.
+  No threshold is involved; the clause can only remove signals, never create one.
 - **Provisional status.** First candidate for removal in a named revision if its forward
   distributions do not separate from the random-anchor baseline.
 

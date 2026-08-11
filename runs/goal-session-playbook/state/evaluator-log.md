@@ -247,3 +247,64 @@ run-history rows that point at missing record files and make every test run writ
 the same scratch folder as its records; and record a stored replay script for J-05 so the climax
 family is re-checked automatically from now on. Three questions now wait for the owner: the 1.5x
 jump-to-base rule, the cup's rim number, and whether "decline bars" should mean the whole fall.
+
+---
+
+## Iteration 6 — goal-playbook-iter-6
+
+**Date:** 2026-08-11T11:45:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-06 "The range family" (range trades + double top/bottom)
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-01 "The signal contract", J-02 "Every signal measured", J-03 "The Playbook
+  lands on /desk", J-04 "The continuation family", J-05 "The climax family" all passing
+  (re-verified this iteration by the stored-replay lane, by the auditor's own re-run, and by the
+  evaluator's own full test run); J-05 finally has its own stored replay script; J-07, J-08, J-09
+  failing (not targeted); J-10 "The kept product stands" partial — its walk passed again, but its
+  own wording still asks for 20 Claude tools and there are 18 until J-09 ships
+- Anti-goal violations: both of iteration 5's open items are now RESOLVED (the missing written
+  definitions were added to the spec with no number changed; the two run-history rows pointing at
+  missing files got a confirmed, mechanical cause — nothing was ever deleted). One new one was
+  found AND fixed inside this iteration (a developer wrote three made-up price files and a fake
+  today-dated member list into the owner's real store, then removed them and archived copies).
+  Three are OPEN, all minor: the test lane ran a REAL playbook over the owner's live universe and
+  wrote a permanent 57-signal record into his own store; the developer wrote one new sentence into
+  the rule book himself to close a real bug and needs the owner to say yes or no; and three places
+  where the shipped code is narrower than the rule book, each disclosed and each only ever
+  producing fewer signals, never invented ones.
+
+**Reasoning:** I checked the work myself instead of trusting the write-ups, and this time the
+pipeline's own pictures were partly worthless: the range-trade pictures taken at 09:44 show a
+build that was replaced later the same morning, and the auditor voided them in writing. So I
+scored the new work only from pictures taken AFTER the fix. I opened both: one shows the RTAAA
+Range Trade row, long, entering at 102.60 with its invalidation at 99.22 and the line "range 5.00
+MBR wide · low zone touches 2 · high zone touches 2 · broke at slot 7 · crossed midrange"; the
+other, taken on a freshly rebuilt page, shows the DTAAA Double Top row, short, entering at 97.00
+with the line "gap 0.30 MBR · separation 10 bar(s) · depth 13.00 MBR · nominal risk 13.30 MBR ·
+broke at slot 18 · second RVOL vs first 1.00", with the Range Trade row sitting in the same table.
+Every number in the two pictures agrees. I re-ran the whole backend test suite to completion: exit
+0, 2105 passed and 8 skipped, above the 2079 floor. I asked the running code for the pin
+(08e471b10130e1e2), the setup list (now nine entries ending range-trade, double-top,
+double-bottom), the menu (three items) and the Claude tool count (18), and used git to prove the
+measuring rail and every other protected file have zero changes and that the rule-book edit only
+ADDED 26 lines and changed no number. Two things I would not sign off silently: the test lane ran
+a real playbook over the owner's live universe and left a permanent record in his own store, which
+the iteration had explicitly forbidden — and the very next journey is the one that walks every
+recorded session, so that habit must be fixed first; and one new rule in the book was written by a
+developer, not by the owner.
+
+**Next-step recommendation:** Build J-07 "The back-scan" next — the one operator act that walks
+every recorded session — and run it as a deep iteration with the auditor, because it is the first
+piece of work that writes many records into the owner's own store at once, and this iteration
+showed the test lane can write there by accident. Before any test or browser run in that
+iteration, make the scoped start-up script the only way the lane starts a backend, so nothing
+lands in the real store unasked. Carry two cheap items inside the same cycle: add the missing
+short-side test for the new fail-closed rule, and re-take one picture with the Range Trade row
+opened so both new setups are legible in a single pass. Two questions now wait for the owner and
+get more expensive after the back-scan pools real numbers: first, say yes or no to the one new
+sentence the developer added to the rule book (saying no means dropping range trades for now);
+second, decide the two places where the code reads the book more narrowly than it is written (the
+"crossed midrange" disclosure and which double-top pair is chosen).

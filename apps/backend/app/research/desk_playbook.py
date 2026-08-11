@@ -16,13 +16,15 @@ imports from ``setups.py`` or ``backtests.py``, and no field here is ever named 
 
 **Detection then measurement, in one walk.** ``compute_playbook`` walks the desk universe's
 members and detects, per member, the opening-range-break pair (spec §3.1-3.2, J-01) beside the
-continuation family (``jbe``/``dbi``, spec §3.3-3.4, J-04), ``cup_handle`` (spec §3.6, J-04), and
-``capitulation`` (spec §3.5, J-05), gated by the SAME "5m bars + sufficient baseline + a buildable
-opening range" absence checks J-01 shipped -- every detected signal is measured in the same pass
-(forward returns, ``invalidation_breached``, the seeded baseline, J-02) -- ``entry``/``entry_kind``
-are decided at detection time (spec §0's stop-through fill convention is part of a signal's own
-GEOMETRY, not part of measuring what happened afterward). ``detect_euphoria`` (spec §3.5's marker,
-J-05) runs in the SAME per-member walk but is never measured -- see ``_decorate_markers``.
+continuation family (``jbe``/``dbi``, spec §3.3-3.4, J-04), ``cup_handle`` (spec §3.6, J-04),
+``capitulation`` (spec §3.5, J-05), and the range family -- ``range_trade`` (spec §3.7, PROVISIONAL
+tier, J-06) and ``double_top``/``double_bottom`` (spec §3.8-3.9, J-06) -- gated by the SAME "5m
+bars + sufficient baseline + a buildable opening range" absence checks J-01 shipped -- every
+detected signal is measured in the same pass (forward returns, ``invalidation_breached``, the
+seeded baseline, J-02) -- ``entry``/``entry_kind`` are decided at detection time (spec §0's
+stop-through fill convention is part of a signal's own GEOMETRY, not part of measuring what
+happened afterward). ``detect_euphoria`` (spec §3.5's marker, J-05) runs in the SAME per-member
+walk but is never measured -- see ``_decorate_markers``.
 
 **Parameters discipline (the ``desk_forward.forward_parameters`` pattern, applied at birth).**
 ``playbook_parameters()`` reads every constant below at CALL TIME (so a test monkeypatching one
@@ -68,9 +70,12 @@ from .desk_playbook_detect import (
     detect_capitulation,
     detect_cup_handle,
     detect_dbi,
+    detect_double_bottom,
+    detect_double_top,
     detect_euphoria,
     detect_jbe,
     detect_opening_range_breaks,
+    detect_range_trade,
 )
 from .desk_playbook_features import baselines, opening_range, rth_session_slice, side_sign
 from .desk_sessions import refuse_if_not_a_session
@@ -149,13 +154,15 @@ PLAYBOOK_HANDLE_DESIRABLE_DURATION_FRAC: float = 0.25  # BOOK -- spec §1's HAND
 
 # Companion structural constants (shape, not thresholds).
 # J-01 shipped ONLY the opening-range-break family; J-04 EXTENDED this tuple with the continuation
-# family (jbe/dbi/cup_handle); J-05 (this iteration) adds `capitulation` -- J-06 will extend it
-# further with the range family (each extension is a signature-moving, expected, visible change) --
+# family (jbe/dbi/cup_handle); J-05 added `capitulation`; J-06 (this iteration) adds the range
+# family -- `range_trade`, `double_top`, `double_bottom` -- completing the full nine-detector-plus-
+# marker set the era promised (each extension is a signature-moving, expected, visible change) --
 # declaring a setup id here before its detector exists would claim a compute that does not happen.
 # `"euphoria"` is DELIBERATELY never added here: spec §3.5 defines it as a marker only, never a
 # recorded setup -- see `_decorate_markers` below for what it does instead.
 PLAYBOOK_SETUPS: tuple[str, ...] = (
     "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle", "capitulation",
+    "range_trade", "double_top", "double_bottom",
 )
 PLAYBOOK_MARKET_SYMBOL: str = "SPY"
 # The rail's own baseline seed, echoed (not re-derived) -- the seed discipline itself is J-02's;
@@ -170,7 +177,8 @@ PLAYBOOK_MIN_N_DISCLOSURE: int = 12  # evidence low-n tag (J-08) -- a disclosure
 # test_copy_discipline.find_violations (the desk_forward.FORWARD_REGISTER precedent).
 PLAYBOOK_REGISTER = (
     "pre-registered opening-range-break, jump-base-explosion, drop-base-implosion, cup-and-handle, "
-    "and capitulation signals detected on the desk's own recorded 5m/1m bars — every threshold is "
+    "capitulation, range-trade, double-top, and double-bottom signals detected on the desk's own "
+    "recorded 5m/1m bars — every threshold is "
     "fixed in advance in docs/playbook-detector-spec.md, never fit to outcomes. "
     "A signal is a recorded observation, not advice: invalidation_price is the book's own "
     "structural level, disclosed as geometry, never a stop order, a size, or an account concept. "
@@ -658,6 +666,28 @@ def compute_playbook(
         )
         if capitulation_signal is not None:
             detected_signals.append(capitulation_signal)
+
+        # J-06: the range family -- range_trade (both sides, one setup_id), double_top,
+        # double_bottom -- joins the SAME per-member walk, sharing the SAME absence gate as every
+        # other family. Reads bars/baselines only (zero `compute_tradability`/`compute_levels`
+        # calls anywhere in this module -- see test_desk_playbook_guards.py's own call-counting
+        # guard): the book's intraday ranges and the desk's structural walls are different owners.
+        detected_signals.extend(
+            detect_range_trade(
+                session_5m, baseline, symbol, session_date, index_bars, index_baseline, params
+            )
+        )
+        double_top_signal = detect_double_top(
+            session_5m, baseline, symbol, session_date, index_bars, index_baseline, params
+        )
+        if double_top_signal is not None:
+            detected_signals.append(double_top_signal)
+        double_bottom_signal = detect_double_bottom(
+            session_5m, baseline, symbol, session_date, index_bars, index_baseline, params
+        )
+        if double_bottom_signal is not None:
+            detected_signals.append(double_bottom_signal)
+
         euphoria_marker = detect_euphoria(session_5m, baseline, params)
         euphoria_trigger_indices = (
             [euphoria_marker["trigger_idx"]] if euphoria_marker is not None else []

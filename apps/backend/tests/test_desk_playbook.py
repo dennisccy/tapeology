@@ -1007,11 +1007,12 @@ def test_j04_new_setups_tuple_moves_the_signature_and_mints_a_new_version_beside
     # J-04's own new content. This is a live "what does PLAYBOOK_SETUPS currently say" assertion,
     # not a frozen discipline guard, so it tracks the tuple's real value every iteration that
     # legitimately extends it.
-    monkeypatch.undo()  # restore this iteration's real 6-setup PLAYBOOK_SETUPS
+    monkeypatch.undo()  # restore this iteration's real 9-setup PLAYBOOK_SETUPS
 
     current_result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
     assert current_result["parameters"]["setups"] == [
         "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle", "capitulation",
+        "range_trade", "double_top", "double_bottom",
     ]
     assert current_result["playbook_input_signature"] != pre_j04_meta["playbook_input_signature"]
 
@@ -1069,8 +1070,12 @@ def test_capitulation_wired_into_compute_playbook_is_measured_like_every_other_s
 
     result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
 
-    assert desk_playbook_module.PLAYBOOK_SETUPS[-1] == "capitulation"
-    assert result["parameters"]["setups"][-1] == "capitulation"
+    # goal-playbook-iter-6 (J-06) maintenance note: `PLAYBOOK_SETUPS` no longer ENDS with
+    # "capitulation" (three more setup ids joined after it) -- a live "is it present" check, not a
+    # frozen discipline guard, so it tracks the tuple's real membership every iteration that
+    # legitimately extends it (the same maintenance the J-04/J-05 setups-tuple tests already do).
+    assert "capitulation" in desk_playbook_module.PLAYBOOK_SETUPS
+    assert "capitulation" in result["parameters"]["setups"]
     cap_signals = [s for s in result["signals"] if s["symbol"] == "AAA" and s["setup_id"] == "capitulation"]
     assert len(cap_signals) == 1
     signal = cap_signals[0]
@@ -1181,11 +1186,12 @@ def test_j05_new_setups_tuple_moves_the_signature_and_mints_a_new_version_beside
         "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle",
     ]
 
-    monkeypatch.undo()  # restore this iteration's real 6-setup PLAYBOOK_SETUPS
+    monkeypatch.undo()  # restore this iteration's real 9-setup PLAYBOOK_SETUPS
 
     current_result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
     assert current_result["parameters"]["setups"] == [
         "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle", "capitulation",
+        "range_trade", "double_top", "double_bottom",
     ]
     assert current_result["playbook_input_signature"] != pre_j05_meta["playbook_input_signature"]
 
@@ -1212,20 +1218,170 @@ def test_j05_new_setups_tuple_moves_the_signature_and_mints_a_new_version_beside
     assert pre_j05_or_signals == current_or_signals
 
 
+# === goal-playbook-iter-6 (J-06): the range family wired into the real compute walk ===============
+
+
+def _plant_range_trade_session(bar_store: BarStore, symbol: str) -> None:
+    """The ``test_desk_playbook_detect.py`` canonical range_trade (support-bounce long) fixture,
+    planted through a real ``BarStore`` -- a genuinely TWO-SIDED range (both zones tested twice and
+    held), the only formation spec §3.7's arming clause admits."""
+    bars_5m = [
+        _bar(symbol, "5m", E_OPEN + 0 * 300.0, 104.0, 105.0, 103.5, 104.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 1 * 300.0, 103.9, 103.9, 101.5, 101.8, 1000),
+        _bar(symbol, "5m", E_OPEN + 2 * 300.0, 101.8, 102.0, 100.0, 100.4, 1000),
+        _bar(symbol, "5m", E_OPEN + 3 * 300.0, 101.6, 103.0, 101.5, 102.8, 1000),
+        _bar(symbol, "5m", E_OPEN + 4 * 300.0, 102.8, 104.8, 102.5, 104.4, 1000),
+        _bar(symbol, "5m", E_OPEN + 5 * 300.0, 103.4, 103.5, 102.0, 102.4, 1000),
+        _bar(symbol, "5m", E_OPEN + 6 * 300.0, 102.4, 102.6, 100.4, 100.7, 1000),
+        _bar(symbol, "5m", E_OPEN + 7 * 300.0, 101.0, 103.5, 100.6, 103.2, 2000),
+        _bar(symbol, "5m", E_OPEN + 8 * 300.0, 103.2, 103.4, 102.9, 103.1, 1000),
+        _bar(symbol, "5m", E_OPEN + 9 * 300.0, 103.1, 103.3, 102.8, 103.0, 1000),
+    ]
+    _plant(bar_store, symbol, "5m", bars_5m)
+
+
+def test_range_trade_wired_into_compute_playbook_is_measured_like_every_other_setup(
+    tmp_path, bar_store,
+):
+    """Range_trade joins the SAME per-member walk as every other family: `PLAYBOOK_SETUPS` now
+    names it, and the recorded signal carries `forward`/`invalidation_breached` exactly like an
+    opening-range-break/jbe/dbi/cup_handle/capitulation signal does (J-02's measurement pass,
+    unmodified)."""
+    universe_store = _register_universe(tmp_path, ["RTAAA"])
+    _plant_decoration_baseline_sessions(bar_store, "RTAAA", slots=10)
+    _plant_range_trade_session(bar_store, "RTAAA")
+
+    result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+
+    assert "range_trade" in result["parameters"]["setups"]
+    rt_signals = [s for s in result["signals"] if s["symbol"] == "RTAAA" and s["setup_id"] == "range_trade"]
+    assert len(rt_signals) == 1
+    signal = rt_signals[0]
+    assert "forward" in signal and signal["forward"] is not None
+    assert "invalidation_breached" in signal and signal["invalidation_breached"] is not None
+    assert result["summary"]["range_trade:long"]["to_close"]["signals"]["n"] == 1
+    assert result["baseline_anchors"]["range_trade:long"]
+
+
+def _plant_double_top_session(bar_store: BarStore, symbol: str) -> None:
+    """The ``test_desk_playbook_detect.py`` canonical double_top fixture, planted through a real
+    ``BarStore``."""
+    bars_5m = [
+        _bar(symbol, "5m", E_OPEN + 0 * 300.0, 104, 105, 104, 104.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 1 * 300.0, 104.5, 106, 104, 105.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 2 * 300.0, 105.5, 107, 105, 106.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 3 * 300.0, 106.5, 110, 106, 109, 1000),
+        _bar(symbol, "5m", E_OPEN + 4 * 300.0, 109, 108, 107, 107.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 5 * 300.0, 107.5, 105, 104, 104.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 6 * 300.0, 104.5, 102, 101, 101.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 7 * 300.0, 101.5, 100, 99, 99.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 8 * 300.0, 99.5, 98, 97, 97.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 9 * 300.0, 97.5, 99, 97.2, 98.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 10 * 300.0, 98.5, 101, 98, 100.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 11 * 300.0, 100.5, 104, 100, 103.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 12 * 300.0, 103.5, 107, 103, 106.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 13 * 300.0, 106.5, 110.3, 106, 109.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 14 * 300.0, 109.5, 108, 107, 107.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 15 * 300.0, 107.5, 106, 105, 105.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 16 * 300.0, 105.5, 104, 103, 103.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 17 * 300.0, 103.5, 103.8, 102, 102.5, 1000),
+        _bar(symbol, "5m", E_OPEN + 18 * 300.0, 102.5, 103, 96.0, 96.5, 2000),
+        _bar(symbol, "5m", E_OPEN + 19 * 300.0, 96.5, 97, 96, 96.8, 1000),
+    ]
+    _plant(bar_store, symbol, "5m", bars_5m)
+
+
+def test_double_top_and_double_bottom_wired_into_compute_playbook_is_measured_like_every_other_setup(
+    tmp_path, bar_store,
+):
+    """double_top (and, by the exact-mirror construction, double_bottom) join the SAME per-member
+    walk as every other family."""
+    universe_store = _register_universe(tmp_path, ["DTAAA"])
+    _plant_decoration_baseline_sessions(bar_store, "DTAAA", slots=20)
+    _plant_double_top_session(bar_store, "DTAAA")
+
+    result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+
+    assert "double_top" in result["parameters"]["setups"]
+    assert "double_bottom" in result["parameters"]["setups"]
+    dt_signals = [s for s in result["signals"] if s["symbol"] == "DTAAA" and s["setup_id"] == "double_top"]
+    assert len(dt_signals) == 1
+    signal = dt_signals[0]
+    assert "forward" in signal and signal["forward"] is not None
+    assert "invalidation_breached" in signal and signal["invalidation_breached"] is not None
+    assert result["summary"]["double_top:short"]["to_close"]["signals"]["n"] == 1
+    assert result["baseline_anchors"]["double_top:short"]
+
+
+def test_j06_new_setups_tuple_moves_the_signature_and_mints_a_new_version_beside_the_old_file(
+    tmp_path, bar_store, universe_store, monkeypatch,
+):
+    """TC-13/TC-14: the SAME re-key-never-rewrite precedent as the J-04/J-05 tests above, this time
+    for J-06's own three new setup ids. `_record_aaa`'s own 6-bar session is too short for
+    `range_trade`/`double_top`/`double_bottom` to ever fire (each needs >= 2 zone touches or 2
+    confirmed, separated pivots -- neither is reachable in 6 bars), so this isolates exactly the
+    ONE thing this iteration changed for an already-recorded file's own inputs: the parameters
+    blob's `setups` list, and therefore the signature."""
+    monkeypatch.setattr(
+        desk_playbook_module, "PLAYBOOK_SETUPS",
+        ("open_high_break", "open_low_break", "jbe", "dbi", "cup_handle", "capitulation"),
+    )
+    pre_j06_store, pre_j06_meta = _record_aaa(tmp_path, bar_store, universe_store)
+    pre_j06_path = pre_j06_store._path(pre_j06_meta["id"])
+    pre_j06_sha = _sha256_file(pre_j06_path)
+    assert pre_j06_meta["parameters"]["setups"] == [
+        "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle", "capitulation",
+    ]
+
+    monkeypatch.undo()  # restore this iteration's real 9-setup PLAYBOOK_SETUPS
+
+    current_result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+    assert current_result["parameters"]["setups"] == [
+        "open_high_break", "open_low_break", "jbe", "dbi", "cup_handle", "capitulation",
+        "range_trade", "double_top", "double_bottom",
+    ]
+    assert current_result["playbook_input_signature"] != pre_j06_meta["playbook_input_signature"]
+
+    current_meta = pre_j06_store.record(**current_result)
+    assert current_meta["id"] != pre_j06_meta["id"]
+
+    # TC-13: the pre-J-06 file is byte-identical, untouched by the second, differently-keyed write.
+    assert _sha256_file(pre_j06_path) == pre_j06_sha
+    assert pre_j06_store.get(pre_j06_meta["id"]) == pre_j06_meta
+
+    # TC-14: both versions are now recorded for this date; newest is the current-code one.
+    newest, versions = pre_j06_store.newest_for_date(SESSION_DATE)
+    assert versions == 2
+    assert newest["id"] == current_meta["id"]
+
+    # The OR-break signal's own CONTENT is unaffected by the new setups tuple joining the
+    # parameters blob -- zero behavior change to the families J-01 through J-05 already shipped.
+    pre_j06_or_signals = [
+        s for s in pre_j06_meta["signals"] if s["setup_id"] in ("open_high_break", "open_low_break")
+    ]
+    current_or_signals = [
+        s for s in current_meta["signals"] if s["setup_id"] in ("open_high_break", "open_low_break")
+    ]
+    assert pre_j06_or_signals == current_or_signals
+
+
 # --- TC-8: the widened PLAYBOOK_REGISTER pinned exactly, with a mandatory rationale paragraph ------
 #
-# goal-playbook-iter-5 (J-05): PLAYBOOK_REGISTER's opening clause widens from "opening-range-break
-# signals" to name every shipped setup family (open-range breaks, jump-base-explosion,
-# drop-base-implosion, cup-and-handle, capitulation) -- closing the OPEN minor anti-goal violation
-# iter-4's own evaluator/audit carried forward (the register/blurb text had silently drifted out of
-# sync with J-04's own continuation-family launch). This is a PINNED, exact-string assertion so the
-# NEXT widening (J-06, adding range_trade/double_top/double_bottom) fails LOUDLY here rather than
-# silently leaving the served register out of date again -- whoever adds a family must deliberately
-# re-derive this constant (and this rationale paragraph), never just extend `PLAYBOOK_SETUPS` in
-# isolation.
+# goal-playbook-iter-6 (J-06): PLAYBOOK_REGISTER's opening clause widens AGAIN -- this is the THIRD
+# occurrence of this pattern (J-04, J-05, now J-06), so it is deliberately not deferred. It now
+# names all EIGHT shipped setup families: opening-range-break (one family covering both
+# open_high_break/open_low_break, the same grouping the register has used since J-01),
+# jump-base-explosion, drop-base-implosion, cup-and-handle, capitulation, range-trade, double-top,
+# and double-bottom -- range_trade's own PROVISIONAL tier is a code-comment/spec disclosure, not a
+# reason to omit it from the register (it is a genuinely shipped, detected, measured family this
+# iteration). This is a PINNED, exact-string assertion so the NEXT widening (whenever it lands)
+# fails LOUDLY here rather than silently leaving the served register out of date again -- whoever
+# adds a family must deliberately re-derive this constant (and this rationale paragraph), never
+# just extend `PLAYBOOK_SETUPS` in isolation.
 _EXPECTED_PLAYBOOK_REGISTER = (
     "pre-registered opening-range-break, jump-base-explosion, drop-base-implosion, cup-and-handle, "
-    "and capitulation signals detected on the desk's own recorded 5m/1m bars — every threshold is "
+    "capitulation, range-trade, double-top, and double-bottom signals detected on the desk's own "
+    "recorded 5m/1m bars — every threshold is "
     "fixed in advance in docs/playbook-detector-spec.md, never fit to outcomes. "
     "A signal is a recorded observation, not advice: invalidation_price is the book's own "
     "structural level, disclosed as geometry, never a stop order, a size, or an account concept. "

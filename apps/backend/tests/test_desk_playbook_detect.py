@@ -32,13 +32,17 @@ import pytest
 
 from app.providers.adapters.base import RawBar
 from app.research.desk_playbook import playbook_parameters
+from app.research.desk_playbook_features import zone_touches
 from app.research.desk_playbook_detect import (
     detect_capitulation,
     detect_cup_handle,
     detect_dbi,
+    detect_double_bottom,
+    detect_double_top,
     detect_euphoria,
     detect_jbe,
     detect_opening_range_breaks,
+    detect_range_trade,
 )
 
 SESSION_DATE = "2026-06-22"
@@ -1014,3 +1018,546 @@ def test_euphoria_near_miss_no_reversal_within_the_bounce_window_fires_no_marker
     baseline = {"mbr": 1.0, "sessions": 10, "slot_volume_medians": {i: 1000 for i in range(7)}}
     marker = detect_euphoria(bars, baseline, _PARAMS)
     assert marker is None
+
+
+# === J-06: the range family -- range_trade (TC-1, TC-2, TC-3) / double_top+double_bottom
+# (TC-4, TC-5, TC-10) ===============================================================================
+#
+# range_trade: a session-wide high/low (`SH`/`SL`, prefix extremes) wide enough
+# (>= PLAYBOOK_RANGE_MIN_WIDTH_MBR) with BOTH the low zone AND the high zone showing >= 2 touches
+# each, each later touch holding its own extreme within PLAYBOOK_RANGE_HOLD_TOL_MBR (spec §3.7's
+# full arming clause -- the BOOK's "test the low AND high twice and hold"), then a reversal-bar
+# trigger within PLAYBOOK_BOUNCE_MAX_BARS of the arming-completing touch, gated by
+# PLAYBOOK_RANGE_HOLD_TOL_MBR throughout the scan, and voided fail-closed when the trigger
+# reference is degenerate (`T <= SL` long / `T >= SH` short -- spec §3.7's Edge cases). Values
+# hand-computed and cross-checked by direct execution (this module's own convention); every
+# fixture bar is physically valid (`low <= min(open, close)`, `high >= max(open, close)`).
+
+_RANGE_TRADE_BASELINE = {
+    "mbr": 1.0, "sessions": 10, "slot_volume_medians": {i: 1000 for i in range(12)},
+}
+
+
+def _canonical_range_trade_long_bars(symbol: str = "RT1") -> list[RawBar]:
+    """A genuinely TWO-SIDED range (spec §3.7 arms on both zones, never one). MBR = 1.0, so the
+    zones are 1.00 wide and the hold tolerance is 0.50.
+    Slot 0: HIGH TOUCH 1 -- sets `SH` = 105.0, so the high zone is [104.0, 105.0].
+    Slot 1: leaves both zones (103.9 high / 101.5 low).
+    Slot 2: LOW TOUCH 1 -- sets `SL` = 100.0, so the low zone is [100.0, 101.0].
+    Slot 3: leaves the low zone (low 101.5), re-arming it; its high 103.0 crosses the 102.5
+      midrange, which is what makes `crossed_midrange` True here.
+    Slot 4: HIGH TOUCH 2 (high 104.8, inside the high zone; extends `SH` by 0.0 -- "held").
+    Slot 5: leaves the high zone (high 103.5), re-arming it.
+    Slot 6: LOW TOUCH 2 (low 100.4; extends `SL` by 0.0 -- "held") -- the arming-completing
+      touch `b = 6`, so the arming attempt is evaluated at `t = 7`.
+    Slot 7: the reversal-bar trigger (`high 103.5 > high[6] = 102.6`), volume surge; the hold
+      check passes (`min(low[6..6]) = 100.4 >= SL - 0.5 = 99.5`). `T = high[6] = 102.6`.
+    Slots 8-9: session tail (also the post-trigger bars the lookahead property test mutates)."""
+    return [
+        _bar(symbol, E_OPEN + 0 * 300.0, 104.0, 105.0, 103.5, 104.5, 1000),
+        _bar(symbol, E_OPEN + 1 * 300.0, 103.9, 103.9, 101.5, 101.8, 1000),
+        _bar(symbol, E_OPEN + 2 * 300.0, 101.8, 102.0, 100.0, 100.4, 1000),
+        _bar(symbol, E_OPEN + 3 * 300.0, 101.6, 103.0, 101.5, 102.8, 1000),
+        _bar(symbol, E_OPEN + 4 * 300.0, 102.8, 104.8, 102.5, 104.4, 1000),
+        _bar(symbol, E_OPEN + 5 * 300.0, 103.4, 103.5, 102.0, 102.4, 1000),
+        _bar(symbol, E_OPEN + 6 * 300.0, 102.4, 102.6, 100.4, 100.7, 1000),
+        _bar(symbol, E_OPEN + 7 * 300.0, 101.0, 103.5, 100.6, 103.2, 2000),
+        _bar(symbol, E_OPEN + 8 * 300.0, 103.2, 103.4, 102.9, 103.1, 1000),
+        _bar(symbol, E_OPEN + 9 * 300.0, 103.1, 103.3, 102.8, 103.0, 1000),
+    ]
+
+
+def _canonical_range_trade_short_bars(symbol: str = "RT2") -> list[RawBar]:
+    """The resistance-fade mirror, hand-built INDEPENDENTLY (different price scale, different
+    range width, and the two zones tested in the opposite ORDER -- low/low then high/high -- so it
+    is a genuine second computation, not the long fixture's values negated).
+    `SL` = 198.0 (slot 0), `SH` = 205.0 (slot 4) -> range 7.00 MBR; low zone [198.0, 199.0],
+    high zone [204.0, 205.0]; midrange 201.5.
+    Slot 0: LOW TOUCH 1. Slot 1: leaves it. Slot 2: LOW TOUCH 2 (low 198.3 -- held).
+    Slot 3: leaves it. Slot 4: HIGH TOUCH 1 (sets `SH`). Slot 5: leaves the high zone, its low
+      202.0 staying ABOVE the 201.5 midrange -- which is what makes `crossed_midrange` False on
+      this fixture (the True/False pair that proves the field is not constant by construction).
+    Slot 6: HIGH TOUCH 2 (high 204.7 -- held), the arming-completing touch `b = 6`.
+    Slot 7: the reversal-bar trigger (`low 201.0 < low[6] = 202.6`); `T = low[6] = 202.6`.
+    Slots 8-9: session tail."""
+    return [
+        _bar(symbol, E_OPEN + 0 * 300.0, 199.0, 200.4, 198.0, 198.5, 1000),
+        _bar(symbol, E_OPEN + 1 * 300.0, 199.5, 201.0, 199.4, 200.8, 1000),
+        _bar(symbol, E_OPEN + 2 * 300.0, 200.1, 200.2, 198.3, 198.7, 1000),
+        _bar(symbol, E_OPEN + 3 * 300.0, 199.7, 202.5, 199.6, 202.3, 1000),
+        _bar(symbol, E_OPEN + 4 * 300.0, 202.5, 205.0, 202.3, 204.5, 1000),
+        _bar(symbol, E_OPEN + 5 * 300.0, 203.7, 203.8, 202.0, 202.4, 1000),
+        _bar(symbol, E_OPEN + 6 * 300.0, 203.0, 204.7, 202.6, 204.5, 1000),
+        _bar(symbol, E_OPEN + 7 * 300.0, 204.0, 204.2, 201.0, 201.3, 2000),
+        _bar(symbol, E_OPEN + 8 * 300.0, 201.3, 201.8, 200.8, 201.0, 1000),
+        _bar(symbol, E_OPEN + 9 * 300.0, 201.0, 201.5, 200.6, 201.2, 1000),
+    ]
+
+
+def _one_sided_range_trade_bars(symbol: str = "RT1S") -> list[RawBar]:
+    """The both-zones near-miss: the low zone is tested TWICE (slots 1 and 3) while the high zone
+    is touched ONCE (slot 0) -- a plain support test inside a one-way session, the "breakout-only"
+    case spec §3.7's own Ch 13 note excludes. Every other gate this fixture meets (range 5.00 MBR
+    wide, both low touches held, a reversal bar at slot 4 within the bounce window), so the
+    both-zones clause specifically is what silences it; its control is the canonical two-sided
+    fixture above, which differs by exactly one thing -- a genuine second high-zone test."""
+    return [
+        _bar(symbol, E_OPEN + 0 * 300.0, 103.0, 105.0, 103.0, 104.0, 1000),
+        _bar(symbol, E_OPEN + 1 * 300.0, 104.0, 104.2, 100.0, 100.3, 1000),
+        _bar(symbol, E_OPEN + 2 * 300.0, 100.3, 103.0, 102.0, 102.5, 1000),
+        _bar(symbol, E_OPEN + 3 * 300.0, 102.5, 102.8, 100.4, 100.6, 1000),
+        _bar(symbol, E_OPEN + 4 * 300.0, 100.6, 103.5, 100.2, 103.0, 2000),
+        _bar(symbol, E_OPEN + 5 * 300.0, 103.0, 103.2, 102.8, 103.0, 1000),
+        _bar(symbol, E_OPEN + 6 * 300.0, 103.0, 103.1, 102.9, 103.0, 1000),
+    ]
+
+
+def test_canonical_range_trade_long_matches_the_hand_computed_signal():
+    """TC-1: the canonical support-bounce firing -- setup chip, side, and every geometry field
+    hand-verified (values confirmed by direct execution against the fixture). The range is
+    two-sided as spec §3.7 requires: BOTH zone touch counts are 2, and the invalidation
+    (`SL - 0.30*(T - SL)` = 100.0 - 0.30*2.6 = 99.22) sits BELOW the long's own entry."""
+    results = detect_range_trade(
+        _canonical_range_trade_long_bars(), _RANGE_TRADE_BASELINE, "RT1", SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert len(results) == 1
+    signal = results[0]
+    assert signal["setup_id"] == "range_trade"
+    assert signal["side"] == "long"
+    assert signal["trigger_price"] == pytest.approx(102.6)
+    assert signal["entry"] == pytest.approx(102.6)
+    assert signal["entry_kind"] == "level"
+    assert signal["price_low"] == pytest.approx(100.0)
+    assert signal["price_high"] == pytest.approx(105.0)
+    assert signal["invalidation_price"] == pytest.approx(99.22)
+    assert signal["invalidation_price"] < signal["entry"]
+    geometry = signal["geometry"]
+    assert geometry["slots_to_break"] == 7
+    assert geometry["range_width_mbr"] == pytest.approx(5.0)
+    assert geometry["low_zone_touches"] == 2
+    assert geometry["high_zone_touches"] == 2
+    assert geometry["crossed_midrange"] is True
+    assert geometry["absorption_bar_present"] is False
+    assert signal["volume"]["rvol_trigger_bar"] == pytest.approx(2.0)
+    assert signal["principles"] == []
+    assert signal["disclosures"]["attempt_count"] == 1
+    assert signal["disclosures"]["bars_to_close"] == 2
+
+
+def test_canonical_range_trade_short_mirrors_the_long_fixture():
+    """TC-2: the exact mirror -- resistance-fade short, invalidation ABOVE the range, geometry
+    magnitudes an independent (not merely negated) hand-computation of the mirrored fixture."""
+    results = detect_range_trade(
+        _canonical_range_trade_short_bars(), _RANGE_TRADE_BASELINE, "RT2", SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert len(results) == 1
+    signal = results[0]
+    assert signal["setup_id"] == "range_trade"
+    assert signal["side"] == "short"
+    assert signal["trigger_price"] == pytest.approx(202.6)
+    assert signal["entry"] == pytest.approx(202.6)
+    assert signal["entry_kind"] == "level"
+    assert signal["price_low"] == pytest.approx(198.0)
+    assert signal["price_high"] == pytest.approx(205.0)
+    # `SH + 0.30*(SH - T)` = 205.0 + 0.30*2.4 = 205.72 -- ABOVE the short's own entry.
+    assert signal["invalidation_price"] == pytest.approx(205.72)
+    assert signal["invalidation_price"] > signal["entry"]
+    geometry = signal["geometry"]
+    assert geometry["slots_to_break"] == 7
+    assert geometry["range_width_mbr"] == pytest.approx(7.0)
+    assert geometry["low_zone_touches"] == 2
+    assert geometry["high_zone_touches"] == 2
+    assert geometry["crossed_midrange"] is False
+    assert geometry["absorption_bar_present"] is False
+    assert signal["volume"]["rvol_trigger_bar"] == pytest.approx(2.0)
+    assert signal["principles"] == ["P5"]  # "P5 at the high side" -- the resistance-fade short
+    assert signal["disclosures"]["attempt_count"] == 1
+
+
+def test_range_trade_one_sided_range_never_arms_and_its_two_sided_control_fires_once():
+    """Spec §3.7's arming clause is "test the low AND high twice and hold": a session that tests
+    one extreme twice while touching the other once -- the breakout-only case Ch 13 excludes --
+    arms nothing on EITHER side. Paired with its control (the iter-4 lesson: `results == []` alone
+    proves nothing): the canonical fixture, which differs by exactly one added high-zone test,
+    fires exactly one signal. This is the formation the pre-audit implementation fired on."""
+    one_sided = _one_sided_range_trade_bars()
+    assert detect_range_trade(
+        one_sided, _RANGE_TRADE_BASELINE, "RT1S", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    ) == []
+    # The one-sided fixture's own touch counts, read directly: the low zone IS tested twice, so
+    # the rejecter is the high zone's single touch, not the low side or the range width.
+    session_low = min(bar.low for bar in one_sided[:4])
+    session_high = max(bar.high for bar in one_sided[:4])
+    near = _PARAMS["near_extreme_mbr"] * _RANGE_TRADE_BASELINE["mbr"]
+    assert (session_high - session_low) >= _PARAMS["range_min_width_mbr"]
+    assert len(zone_touches(one_sided[:4], session_low, session_low + near)) == 2
+    assert len(zone_touches(one_sided[:4], session_high - near, session_high)) == 1
+
+    control = detect_range_trade(
+        _canonical_range_trade_long_bars(), _RANGE_TRADE_BASELINE, "RT1", SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert len(control) == 1
+    assert control[0]["geometry"]["high_zone_touches"] == 2
+
+
+def _range_trade_unheld_bars() -> list[RawBar]:
+    """Both zones tested twice, but the SECOND low touch (slot 6, low 99.1) extends the running
+    low by 0.90 MBR against the 0.50 `PLAYBOOK_RANGE_HOLD_TOL_MBR` tolerance -- the range did not
+    "hold", so spec §3.7's arming clause rejects it even though every count is satisfied."""
+    bars = _canonical_range_trade_long_bars("RTH")
+    bars[6] = _bar("RTH", E_OPEN + 6 * 300.0, 102.4, 102.6, 99.1, 99.4, 1000)
+    bars[7] = _bar("RTH", E_OPEN + 7 * 300.0, 99.6, 103.5, 99.3, 103.2, 2000)
+    return bars
+
+
+def test_range_trade_a_touch_that_does_not_hold_the_extreme_never_arms():
+    """The "held" half of spec §3.7's arming clause, with its gate-relaxed control: the ONLY
+    parameter the control changes is `range_hold_tol_mbr` (0.50 -> 2.00, which covers the 0.90
+    extension), and the same bars then fire exactly one signal -- proving that named tolerance
+    specifically is the rejecter."""
+    bars = _range_trade_unheld_bars()
+    assert detect_range_trade(
+        bars, _RANGE_TRADE_BASELINE, "RTH", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    ) == []
+
+    relaxed = {**_PARAMS, "range_hold_tol_mbr": 2.0}
+    relaxed_results = detect_range_trade(
+        bars, _RANGE_TRADE_BASELINE, "RTH", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, relaxed,
+    )
+    assert len(relaxed_results) == 1
+    assert relaxed_results[0]["side"] == "long"
+    assert relaxed_results[0]["trigger_price"] == pytest.approx(102.6)
+    assert relaxed_results[0]["geometry"]["low_zone_touches"] == 2
+    assert relaxed_results[0]["geometry"]["high_zone_touches"] == 2
+
+
+def _range_trade_degenerate_reference_bars(reference_high: float) -> list[RawBar]:
+    """The canonical arming (slots 0-6) followed by a bar whose whole range sits at/below the
+    arming-time `SL` = 100.0 while staying inside the 0.50 hold tolerance (low 99.6 >= 99.5), then
+    a higher-high reversal bar. `reference_high` is the ONLY value that differs between the
+    degenerate fixture (99.9, below `SL`) and its control (100.2, above `SL`)."""
+    bars = _canonical_range_trade_long_bars("RTD")[:7]
+    bars.append(_bar("RTD", E_OPEN + 7 * 300.0, 99.8, reference_high, 99.6, 99.7, 1000))
+    bars.append(_bar("RTD", E_OPEN + 8 * 300.0, 99.7, 100.5, 99.6, 100.4, 2000))
+    bars.append(_bar("RTD", E_OPEN + 9 * 300.0, 100.4, 100.6, 100.1, 100.5, 1000))
+    return bars
+
+
+def test_range_trade_degenerate_trigger_reference_below_the_range_low_fails_closed():
+    """Spec §3.7's Edge cases, "degenerate trigger reference": the invalidation clause is
+    arithmetic on `T - SL`, so `T <= SL` inverts it -- a long whose structural invalidation lands
+    ABOVE its own entry, i.e. recorded born-invalidated. Voided fail-closed. Control: the SAME
+    bars with the reversal bar's reference high lifted from 99.9 to 100.2 (just above `SL`) fire
+    exactly one coherent signal, so the degeneracy clause specifically is the rejecter."""
+    degenerate = _range_trade_degenerate_reference_bars(99.9)
+    assert detect_range_trade(
+        degenerate, _RANGE_TRADE_BASELINE, "RTD", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    ) == []
+    # What the spec's formula WOULD have produced there, computed here from the fixture itself:
+    # T = high[7] = 99.9 < SL = 100.0 -> invalidation 100.03, i.e. above the entry.
+    would_be_trigger, session_low = degenerate[7].high, min(bar.low for bar in degenerate[:7])
+    assert would_be_trigger < session_low
+    assert session_low - _PARAMS["stop_pad_frac"] * (would_be_trigger - session_low) > would_be_trigger
+
+    control = detect_range_trade(
+        _range_trade_degenerate_reference_bars(100.2), _RANGE_TRADE_BASELINE, "RTD", SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert len(control) == 1
+    assert control[0]["side"] == "long"
+    assert control[0]["trigger_price"] == pytest.approx(100.2)
+    assert control[0]["invalidation_price"] == pytest.approx(99.94)
+    assert control[0]["invalidation_price"] < control[0]["entry"]
+
+
+# --- TC-3: a strict break beyond the low zone by more than PLAYBOOK_RANGE_HOLD_TOL_MBR dissolves
+# range-mode -- no signal, PAIRED with a gate-relaxed control (range_hold_tol_mbr widened) proving
+# the hold-tolerance gate specifically is the rejecter (the iter-4 lesson: `results == []` alone
+# proves nothing).
+
+
+def _range_trade_near_miss_bars() -> list[RawBar]:
+    """The SAME two-sided arming as the canonical long fixture (slots 0-6), but slot 7 breaks well
+    beyond the hold floor (`SL - RANGE_HOLD_TOL_MBR*MBR = 99.5`) without itself reversing -- the
+    scan's hold check fails at slot 8 (`min(low[6..7]) == 97.0 < 99.5`), ending the scan before the
+    would-be-reversal bar at slot 8 is ever reached under the default tolerance."""
+    bars = _canonical_range_trade_long_bars("RTNM")[:7]
+    bars.append(_bar("RTNM", E_OPEN + 7 * 300.0, 100.7, 100.8, 97.0, 97.2, 1000))  # breaks hold tol
+    bars.append(_bar("RTNM", E_OPEN + 8 * 300.0, 97.2, 103.5, 97.0, 103.0, 2000))  # unreachable
+    bars.append(_bar("RTNM", E_OPEN + 9 * 300.0, 103.0, 103.2, 102.8, 103.0, 1000))
+    return bars
+
+
+def test_range_trade_near_miss_break_beyond_hold_tolerance_fires_no_signal():
+    """TC-3: the formation dissolves silently -- no signal, regardless of the later reversal bar.
+    The control below relaxes ONLY `range_hold_tol_mbr` and proves that gate, specifically, is what
+    rejected it (the arming itself -- range width, both zones tested twice and held -- passed)."""
+    bars = _range_trade_near_miss_bars()
+    results = detect_range_trade(
+        bars, _RANGE_TRADE_BASELINE, "RTNM", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert results == []
+
+    relaxed = {**_PARAMS, "range_hold_tol_mbr": 10.0}
+    relaxed_results = detect_range_trade(
+        bars, _RANGE_TRADE_BASELINE, "RTNM", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, relaxed,
+    )
+    assert len(relaxed_results) == 1
+    assert relaxed_results[0]["side"] == "long"
+    assert relaxed_results[0]["geometry"]["slots_to_break"] == 8
+    assert relaxed_results[0]["trigger_price"] == pytest.approx(100.8)
+
+
+# --- range_trade's own truncate/mutate lookahead property test (TC-8) -----------------------------
+# BOTH sides are parametrized (the J-04 `_CONTINUATION_LOOKAHEAD_FIXTURES` precedent): the long and
+# short walks share one code path, but a shared walk is exactly where a mirror-only lookahead bug
+# would hide, so the mirror is truncate/mutate-tested in its own right.
+
+_RANGE_TRADE_LOOKAHEAD_FIXTURES = [
+    (detect_range_trade, _canonical_range_trade_long_bars(), "RT1"),
+    (detect_range_trade, _canonical_range_trade_short_bars(), "RT2"),
+]
+
+
+@pytest.mark.parametrize("detect_fn, bars, symbol", _RANGE_TRADE_LOOKAHEAD_FIXTURES)
+def test_range_trade_truncating_to_the_trigger_bar_reproduces_the_core_detection_fields(
+    detect_fn, bars, symbol
+):
+    full = detect_fn(bars, _RANGE_TRADE_BASELINE, symbol, SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS)
+    assert len(full) == 1
+    trigger_idx = full[0]["geometry"]["slots_to_break"]
+
+    truncated = detect_fn(
+        bars[: trigger_idx + 1], _RANGE_TRADE_BASELINE, symbol, SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert len(truncated) == 1
+    assert truncated[0]["trigger_price"] == full[0]["trigger_price"]
+    assert truncated[0]["invalidation_price"] == full[0]["invalidation_price"]
+    assert truncated[0]["geometry"] == full[0]["geometry"]
+
+
+@pytest.mark.parametrize("detect_fn, bars, symbol", _RANGE_TRADE_LOOKAHEAD_FIXTURES)
+def test_range_trade_mutating_a_bar_after_the_trigger_changes_nothing(detect_fn, bars, symbol):
+    full = detect_fn(bars, _RANGE_TRADE_BASELINE, symbol, SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS)
+    assert len(full) == 1
+    trigger_idx = full[0]["geometry"]["slots_to_break"]
+    assert trigger_idx + 1 < len(bars), "fixture must carry at least one bar after the trigger"
+
+    mutated = list(bars)
+    victim = mutated[trigger_idx + 1]
+    mutated[trigger_idx + 1] = RawBar(
+        victim.symbol, victim.timeframe, victim.epoch,
+        victim.open * 3.0, victim.high * 5.0, victim.low * 0.2, victim.close * 4.0, victim.volume * 50,
+    )
+    mutated_result = detect_fn(
+        mutated, _RANGE_TRADE_BASELINE, symbol, SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert mutated_result == full
+
+
+# === J-06: double_top (TC-4, TC-5, TC-10) / double_bottom (mirror) =================================
+
+_DOUBLE_TOP_BASELINE = {
+    "mbr": 1.0, "sessions": 10, "slot_volume_medians": {i: 1000 for i in range(20)},
+}
+
+
+def _canonical_double_top_bars(symbol: str = "DT1", p2_high: float = 110.3, idx14_low: float = 107.0) -> list[RawBar]:
+    """Two confirmed swing-high pivots -- P1 at slot 3 (high=110, confirmed_at=6), P2 at slot 13
+    (high=`p2_high`, confirmed_at=16), separated by 10 bars (>= `TOPS_MIN_SEPARATION_BARS`=4) and
+    `TOPS_MATCH_MBR`-close (110.3-110=0.3 <= 1.0 by default). A valley (min low strictly between
+    them, at slot 8, low=97.0) with depth 13.0 MBR (>= `MIN_STRUCTURE_DEPTH_MBR`=2.0). Slot 18: the
+    valley-break trigger (low=96.0 < 97.0). `idx14_low` is parameterized so the fail-closed fixture
+    below can reuse this exact shape with only that one bar's low changed."""
+    return [
+        _bar(symbol, E_OPEN + 0 * 300.0, 104, 105, 104, 104.5, 1000),
+        _bar(symbol, E_OPEN + 1 * 300.0, 104.5, 106, 104, 105.5, 1000),
+        _bar(symbol, E_OPEN + 2 * 300.0, 105.5, 107, 105, 106.5, 1000),
+        _bar(symbol, E_OPEN + 3 * 300.0, 106.5, 110, 106, 109, 1000),  # P1
+        _bar(symbol, E_OPEN + 4 * 300.0, 109, 108, 107, 107.5, 1000),
+        _bar(symbol, E_OPEN + 5 * 300.0, 107.5, 105, 104, 104.5, 1000),
+        _bar(symbol, E_OPEN + 6 * 300.0, 104.5, 102, 101, 101.5, 1000),
+        _bar(symbol, E_OPEN + 7 * 300.0, 101.5, 100, 99, 99.5, 1000),
+        _bar(symbol, E_OPEN + 8 * 300.0, 99.5, 98, 97, 97.5, 1000),  # valley low=97
+        _bar(symbol, E_OPEN + 9 * 300.0, 97.5, 99, 97.2, 98.5, 1000),
+        _bar(symbol, E_OPEN + 10 * 300.0, 98.5, 101, 98, 100.5, 1000),
+        _bar(symbol, E_OPEN + 11 * 300.0, 100.5, 104, 100, 103.5, 1000),
+        _bar(symbol, E_OPEN + 12 * 300.0, 103.5, 107, 103, 106.5, 1000),
+        _bar(symbol, E_OPEN + 13 * 300.0, 106.5, p2_high, 106, p2_high - 0.8, 1000),  # P2
+        _bar(symbol, E_OPEN + 14 * 300.0, p2_high - 0.8, 108, idx14_low, 107.5, 1000),
+        _bar(symbol, E_OPEN + 15 * 300.0, 107.5, 106, 105, 105.5, 1000),
+        _bar(symbol, E_OPEN + 16 * 300.0, 105.5, 104, 103, 103.5, 1000),  # P2 confirmed_at
+        _bar(symbol, E_OPEN + 17 * 300.0, 103.5, 103.8, 102, 102.5, 1000),
+        _bar(symbol, E_OPEN + 18 * 300.0, 102.5, 103, 96.0, 96.5, 2000),  # TRIGGER: breaks the valley
+        _bar(symbol, E_OPEN + 19 * 300.0, 96.5, 97, 96, 96.8, 1000),
+    ]
+
+
+def test_canonical_double_top_matches_the_hand_computed_signal():
+    """TC-4: the canonical double-top firing -- triggered at the valley break (never at the second
+    top's own bar), with `nominal_risk_mbr` the FULL pattern height (never shrunk)."""
+    signal = detect_double_top(
+        _canonical_double_top_bars(), _DOUBLE_TOP_BASELINE, "DT1", SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert signal is not None
+    assert signal["setup_id"] == "double_top"
+    assert signal["side"] == "short"
+    assert signal["trigger_price"] == pytest.approx(97.0)
+    assert signal["entry"] == pytest.approx(97.0)
+    assert signal["entry_kind"] == "level"
+    assert signal["price_low"] == pytest.approx(97.0)
+    assert signal["price_high"] == pytest.approx(110.3)
+    assert signal["invalidation_price"] == pytest.approx(114.29)
+    geometry = signal["geometry"]
+    assert geometry["slots_to_break"] == 18
+    assert geometry["tops_gap_mbr"] == pytest.approx(0.3)
+    assert geometry["tops_separation_bars"] == 10
+    assert geometry["valley_depth_mbr"] == pytest.approx(13.0)
+    assert geometry["nominal_risk_mbr"] == pytest.approx(13.3)
+    assert geometry["second_top_rvol_vs_first"] == pytest.approx(1.0)
+    assert signal["principles"] == ["P5"]
+    assert signal["disclosures"]["bars_to_close"] == 1
+
+
+def _canonical_double_bottom_bars(symbol: str = "DB1") -> list[RawBar]:
+    """The double_top fixture's exact mirror, hand-computed independently (P1 low 90.0 at slot 3,
+    P2 low 89.7 at slot 13, peak high 103.0 at slot 8, peak-break trigger at slot 18). Extracted
+    from the canonical test so the truncate/mutate lookahead property test can parametrize the
+    MIRROR as well as `double_top` -- byte-identical values, no re-derivation."""
+    return [
+        _bar(symbol, E_OPEN + 0 * 300.0, 96, 97, 96, 96.5, 1000),
+        _bar(symbol, E_OPEN + 1 * 300.0, 96.5, 97, 95, 95.5, 1000),
+        _bar(symbol, E_OPEN + 2 * 300.0, 95.5, 96, 94, 94.5, 1000),
+        _bar(symbol, E_OPEN + 3 * 300.0, 94.5, 95, 90, 91, 1000),  # P1, low=90
+        _bar(symbol, E_OPEN + 4 * 300.0, 91, 93, 92, 92.5, 1000),
+        _bar(symbol, E_OPEN + 5 * 300.0, 92.5, 96, 95, 95.5, 1000),
+        _bar(symbol, E_OPEN + 6 * 300.0, 95.5, 99, 98, 98.5, 1000),
+        _bar(symbol, E_OPEN + 7 * 300.0, 98.5, 101, 100, 100.5, 1000),
+        _bar(symbol, E_OPEN + 8 * 300.0, 100.5, 103, 102, 102.5, 1000),  # peak high=103
+        _bar(symbol, E_OPEN + 9 * 300.0, 102.5, 101, 100.8, 101, 1000),
+        _bar(symbol, E_OPEN + 10 * 300.0, 101, 99, 98, 98.5, 1000),
+        _bar(symbol, E_OPEN + 11 * 300.0, 98.5, 96, 95, 95.5, 1000),
+        _bar(symbol, E_OPEN + 12 * 300.0, 95.5, 93, 92, 92.5, 1000),
+        _bar(symbol, E_OPEN + 13 * 300.0, 92.5, 91, 89.7, 90.2, 1000),  # P2, low=89.7
+        _bar(symbol, E_OPEN + 14 * 300.0, 90.2, 92, 91, 91.5, 1000),
+        _bar(symbol, E_OPEN + 15 * 300.0, 91.5, 94, 93, 93.5, 1000),
+        _bar(symbol, E_OPEN + 16 * 300.0, 93.5, 96, 95, 95.5, 1000),
+        _bar(symbol, E_OPEN + 17 * 300.0, 95.5, 95.8, 94, 94.5, 1000),
+        _bar(symbol, E_OPEN + 18 * 300.0, 94.5, 104.0, 95, 103.5, 2000),  # TRIGGER: breaks the peak
+        _bar(symbol, E_OPEN + 19 * 300.0, 103.5, 104, 103, 103.8, 1000),
+    ]
+
+
+def test_canonical_double_bottom_mirrors_the_double_top_fixture():
+    """The exact mirror: two confirmed swing-LOW pivots, a PEAK between them, the peak-break
+    trigger longs."""
+    bars = _canonical_double_bottom_bars()
+    signal = detect_double_bottom(
+        bars, _DOUBLE_TOP_BASELINE, "DB1", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert signal is not None
+    assert signal["setup_id"] == "double_bottom"
+    assert signal["side"] == "long"
+    assert signal["trigger_price"] == pytest.approx(103.0)
+    assert signal["entry"] == pytest.approx(103.0)
+    assert signal["entry_kind"] == "level"
+    assert signal["price_low"] == pytest.approx(89.7)
+    assert signal["price_high"] == pytest.approx(103.0)
+    assert signal["invalidation_price"] == pytest.approx(85.71)
+    geometry = signal["geometry"]
+    assert geometry["slots_to_break"] == 18
+    assert geometry["tops_gap_mbr"] == pytest.approx(0.3)
+    assert geometry["tops_separation_bars"] == 10
+    assert geometry["valley_depth_mbr"] == pytest.approx(13.0)
+    assert geometry["nominal_risk_mbr"] == pytest.approx(13.3)
+    assert signal["principles"] == ["P5"]
+
+
+# --- TC-5: p2 exceeding p1 by more than PLAYBOOK_TOPS_MATCH_MBR -- no double_top, PAIRED with a
+# gate-relaxed control (tops_match_mbr widened) proving that gate specifically is the rejecter.
+
+
+def test_double_top_near_miss_p2_exceeds_p1_beyond_tolerance_fires_no_signal():
+    """TC-5: the SAME formation as the canonical fixture, but P2's own high (113.0) sits 3.0 MBR
+    above P1's (110.0) -- well beyond `PLAYBOOK_TOPS_MATCH_MBR` (1.0). No signal by default; the
+    control (tops_match_mbr widened to 5.0) fires exactly one, at the same gap, proving the match
+    tolerance specifically is what rejected it."""
+    bars = _canonical_double_top_bars("DTNM", p2_high=113.0)
+    signal = detect_double_top(
+        bars, _DOUBLE_TOP_BASELINE, "DTNM", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert signal is None
+
+    relaxed = {**_PARAMS, "tops_match_mbr": 5.0}
+    relaxed_signal = detect_double_top(
+        bars, _DOUBLE_TOP_BASELINE, "DTNM", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, relaxed,
+    )
+    assert relaxed_signal is not None
+    assert relaxed_signal["geometry"]["tops_gap_mbr"] == pytest.approx(3.0)
+    assert relaxed_signal["geometry"]["tops_gap_mbr"] > _PARAMS["tops_match_mbr"]
+
+
+# --- TC-10: price collapsing through the valley INSIDE p2's own pivot-confirmation window fails
+# closed -- the pivot-confirmation-delay rule, applied to double_top for the first time.
+
+
+def test_double_top_fails_closed_when_price_collapses_inside_p2_confirmation_window():
+    """TC-10: the SAME formation as the canonical fixture, but slot 14 (strictly inside P2's own
+    confirmation window, slots 14-16) already breaks below the valley (low=96.5 < 97.0) -- this
+    pair fails closed. No signal fires (there is no other candidate pivot pair in this fixture for
+    the search to fall back to)."""
+    bars = _canonical_double_top_bars("DTFC", idx14_low=96.5)
+    signal = detect_double_top(
+        bars, _DOUBLE_TOP_BASELINE, "DTFC", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert signal is None
+
+
+# --- double_top/double_bottom's own truncate/mutate lookahead property test (TC-8) -----------------
+
+_DOUBLE_EXTREME_LOOKAHEAD_FIXTURES = [
+    (detect_double_top, _canonical_double_top_bars(), "DT1"),
+    (detect_double_bottom, _canonical_double_bottom_bars(), "DB1"),
+]
+
+
+@pytest.mark.parametrize("detect_fn, bars, symbol", _DOUBLE_EXTREME_LOOKAHEAD_FIXTURES)
+def test_double_extreme_truncating_to_the_trigger_bar_reproduces_the_core_detection_fields(
+    detect_fn, bars, symbol
+):
+    full = detect_fn(bars, _DOUBLE_TOP_BASELINE, symbol, SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS)
+    assert full is not None
+    trigger_idx = full["geometry"]["slots_to_break"]
+
+    truncated = detect_fn(
+        bars[: trigger_idx + 1], _DOUBLE_TOP_BASELINE, symbol, SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert truncated is not None
+    assert truncated["trigger_price"] == full["trigger_price"]
+    assert truncated["invalidation_price"] == full["invalidation_price"]
+    assert truncated["geometry"] == full["geometry"]
+
+
+@pytest.mark.parametrize("detect_fn, bars, symbol", _DOUBLE_EXTREME_LOOKAHEAD_FIXTURES)
+def test_double_extreme_mutating_a_bar_after_the_trigger_changes_nothing(detect_fn, bars, symbol):
+    full = detect_fn(bars, _DOUBLE_TOP_BASELINE, symbol, SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS)
+    assert full is not None
+    trigger_idx = full["geometry"]["slots_to_break"]
+    assert trigger_idx + 1 < len(bars), "fixture must carry at least one bar after the trigger"
+
+    mutated = list(bars)
+    victim = mutated[trigger_idx + 1]
+    mutated[trigger_idx + 1] = RawBar(
+        victim.symbol, victim.timeframe, victim.epoch,
+        victim.open * 3.0, victim.high * 5.0, victim.low * 0.2, victim.close * 4.0, victim.volume * 50,
+    )
+    mutated_result = detect_fn(
+        mutated, _DOUBLE_TOP_BASELINE, symbol, SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert mutated_result == full

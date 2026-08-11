@@ -165,6 +165,12 @@ def test_structure_prefill_guard_can_fail_on_a_seeded_violation():
 # numerics -- `PlaybookSignalDetail`'s capitulation branch renders `decline_mbr`/`climax_rvol`/
 # `bars_from_climax_to_trigger` verbatim (`decline_bars` is a plain bar count, like `base_bars`/
 # `cup_bars` before it, so it stays outside this price-arithmetic list by the same precedent).
+# goal-playbook-iter-6 (J-06): extended AGAIN for the range family's own NEW `signal.geometry.*`
+# numerics -- `PlaybookSignalDetail`'s range_trade branch renders `range_width_mbr` verbatim, and
+# its double_top/double_bottom branch renders `tops_gap_mbr`/`valley_depth_mbr`/
+# `nominal_risk_mbr`/`second_top_rvol_vs_first` verbatim. Bar-count/int-count fields
+# (`tops_separation_bars`, `low_zone_touches`, `high_zone_touches`) stay OUT of this list, following
+# the `base_bars`/`cup_bars`/`decline_bars` precedent -- a plain count is not a price.
 _PRICE_ARITHMETIC_FIELDS = (
     r"row\.(?:distance_bps|price_low|price_high|reference_close"
     r"|opposite_band\.(?:distance_bps|price_low|price_high|band_score)"
@@ -178,7 +184,8 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|signal\.(?:trigger_price|invalidation_price)"
     r"|geometry\.(?:jump_mbr|base_range_mbr|ladder_step_ratio|cup_depth_mbr|handle_retrace_frac"
     r"|handle_duration_frac|cup_middle_third_rvol_median|cup_outer_third_rvol_median"
-    r"|handle_rvol_median|decline_mbr|climax_rvol|bars_from_climax_to_trigger)"
+    r"|handle_rvol_median|decline_mbr|climax_rvol|bars_from_climax_to_trigger"
+    r"|range_width_mbr|tops_gap_mbr|valley_depth_mbr|nominal_risk_mbr|second_top_rvol_vs_first)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -310,6 +317,24 @@ def test_desk_page_price_arithmetic_guard_catches_capitulation_field_arithmetic(
 
     seeded_bars = "const pace = geometry.bars_from_climax_to_trigger * 5;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_bars) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_range_family_field_arithmetic():
+    """goal-playbook-iter-6 (J-06) counter-test: the extended guard catches arithmetic on the range
+    family's own NEW `geometry.*` bindings (range_trade's `range_width_mbr`; double_top/
+    double_bottom's `tops_gap_mbr`/`valley_depth_mbr`/`nominal_risk_mbr`/
+    `second_top_rvol_vs_first`)."""
+    seeded_range_width = "const half = geometry.range_width_mbr / 2;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_range_width) is not None
+
+    seeded_tops = "const net = geometry.tops_gap_mbr - geometry.valley_depth_mbr;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_tops) is not None
+
+    seeded_risk = "const scaled = geometry.nominal_risk_mbr * 2;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_risk) is not None
+
+    seeded_rvol_ratio = "const inverse = 1 / geometry.second_top_rvol_vs_first;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_rvol_ratio) is not None
 
 
 # goal-playbook-iter-4 audit (F1): `base_lows_ascending` is ONE served field name carrying the

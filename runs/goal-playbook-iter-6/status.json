@@ -1,0 +1,33 @@
+{
+  "phase": "goal-playbook-iter-6",
+  "status": "complete",
+  "current_step": "closure_passed",
+  "updated_at": "2026-08-11T10:25:57.981012Z",
+  "started_at": "2026-08-11T06:59:37.121523Z",
+  "cli": "claude",
+  "blockers": [
+    "OWNER RULING REQUESTED: ratify or reject the docs/playbook-detector-spec.md \u00a73.7 'degenerate trigger reference' clarification the developer wrote spec-first to close audit finding B2 (fail-closed T > SL long / T < SH short; narrowing only, no new constant, signature unmoved). Rejecting it means dropping range_trade from PLAYBOOK_SETUPS -- the spec-sanctioned partial outcome -- instead of serving born-invalidated longs. Logged in runs/goal-session-playbook/state/assumptions.md and iteration-state.md.",
+    "J-06 browser evidence from the pre-fix pass is INVALID: the range_trade signal in UT-02/UT-11 (high zone touches 1) is one the corrected spec-conformant detector never produces. Re-record on a FRESH rig via apps/backend/scripts/qa_playbook_iter6_fixture_scoped_backend.sh <fresh-root> 8301 (fresh root is required: this fix changes detector behaviour without moving the input signature, so a pre-fix rig would keep serving pre-fix signals)."
+  ],
+  "changed_files": [
+    "apps/backend/app/research/desk_playbook.py",
+    "apps/backend/app/research/desk_playbook_detect.py",
+    "apps/backend/tests/test_desk_playbook.py",
+    "apps/backend/tests/test_desk_playbook_detect.py",
+    "apps/backend/tests/test_desk_playbook_guards.py",
+    "apps/backend/tests/test_desk_ui_guards.py",
+    "apps/backend/scripts/seed_playbook_fixture_rig.py",
+    "apps/backend/scripts/qa_playbook_iter6_fixture_scoped_backend.sh",
+    "apps/frontend/app/desk/page.tsx",
+    "apps/frontend/lib/types.ts",
+    "docs/playbook-detector-spec.md",
+    "runs/goal-session-playbook/journey-scripts/J-05.json",
+    "runs/goal-session-playbook/state/assumptions.md",
+    "runs/goal-session-playbook/state/iteration-state.md",
+    "docs/handoffs/goal-playbook-iter-6-dev.md",
+    "reports/phase-goal-playbook-iter-6-implementation-summary.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": true,
+  "next_action": "owner: rule on the \u00a73.7 clarification; browser-qa: re-record J-06 evidence on a fresh scoped rig"
+}

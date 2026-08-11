@@ -1516,6 +1516,18 @@ export interface DeskPlaybookGeometry {
   decline_bars?: number;
   climax_rvol?: number;
   bars_from_climax_to_trigger?: number;
+  // range_trade only (J-06, spec §3.7)
+  range_width_mbr?: number;
+  low_zone_touches?: number;
+  high_zone_touches?: number;
+  crossed_midrange?: boolean;
+  absorption_bar_present?: boolean;
+  // double_top / double_bottom only (J-06, spec §3.8-3.9)
+  tops_gap_mbr?: number;
+  tops_separation_bars?: number;
+  valley_depth_mbr?: number;
+  nominal_risk_mbr?: number;
+  second_top_rvol_vs_first?: number | null;
 }
 
 export interface DeskPlaybookVolume {

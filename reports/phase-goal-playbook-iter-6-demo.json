@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-playbook-iter-6",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk page brings together session analysis, briefing, runs, and playbook signals in one view. Let's explore the new Range Trade and Double Top detectors that landed this iteration.",
+      "point_out": "The page loads without error, showing the Screen History calendar and Forward Returns. Scroll down to find the Playbook Signals section with the date input and Run Playbook button.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Playbook Signals" }
+    },
+    {
+      "n": 2,
+      "title": "Enter the session date",
+      "narration": "The Playbook intro now lists all eight setup families — the five that shipped earlier plus the three new ones: range-trade, double-top, and double-bottom. We'll use the fixture date 2026-06-22, which contains both a Range Trade signal and a Double Top signal.",
+      "point_out": "The amber panel reads: 'Run Playbook detects and measures the opening-range-break, …, capitulation, range-trade, double-top, and double-bottom families…' The date input is filled with '2026-06-22'.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "data-testid": "desk-playbook-date-input" }, "text": "2026-06-22" }
+    },
+    {
+      "n": 3,
+      "title": "Run the Playbook",
+      "narration": "Click 'Run Playbook' to detect and measure all nine setup families on this session's recorded bars. This is a fully explicit operator act — nothing runs automatically.",
+      "point_out": "The button briefly shows 'Computing…' and then returns to 'Run Playbook'. A confirmation message appears: 'Playbook run complete for 2026-06-22.' The signals table populates below with detected setups.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "data-testid": "desk-playbook-compute-button" } },
+      "expect": { "text": "Playbook run complete for 2026-06-22" }
+    },
+    {
+      "n": 4,
+      "title": "Expand and view the Range Trade signal",
+      "narration": "Range Trade is a new detector that finds where price tested and held a support zone twice and then reversed up. The RTAAA row displays this pattern with side 'long' and reveals its geometry when clicked.",
+      "point_out": "The RTAAA row in the signals table shows the chip 'Range Trade' with side 'long'. When expanded, it displays the trigger price, invalidation level, and a new geometry line: 'range <N> MBR wide · low zone touches <N> · high zone touches <N> · broke at slot <N>'.",
+      "journey": "J-06",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "text": "RTAAA" } },
+      "expect": { "text": "MBR wide" }
+    },
+    {
+      "n": 5,
+      "title": "Expand and view the Double Top signal",
+      "narration": "Double Top detects reversals where price forms two roughly-equal swing highs and breaks through the valley between them. The DTAAA row displays this pattern with side 'short' and its own geometry metrics.",
+      "point_out": "The DTAAA row shows the chip 'Double Top' with side 'short' in the same signals table. When expanded, it reveals: 'gap <N> MBR · separation <N> bar(s) · depth <N> MBR · nominal risk <N> MBR · broke at slot <N>'. These fields are unique to the double-extreme family and did not exist before this iteration.",
+      "journey": "J-06",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "text": "DTAAA" } },
+      "expect": { "text": "nominal risk" }
+    },
+    {
+      "n": 6,
+      "title": "Verify the five prior setup families unchanged",
+      "narration": "The five setups from earlier iterations — opening-range-break, jump-base-explosion, drop-base-implosion, cup-and-handle, and capitulation — continue to render with identical wording and values. No regression.",
+      "point_out": "Earlier rows in the same signals table show the original five setup chips with their pre-existing geometry lines. Each prior detector's wording, layout, and metrics are pixel-for-pixel identical to before this iteration.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Playbook Signals" }
+    },
+    {
+      "n": 7,
+      "title": "Confirm all other Desk sections are intact",
+      "narration": "Every other section on Desk — Screen History, Forward Returns, Briefing, Runs, Pins, Compare, and Provenance — continues to work with no layout shifts or missing content. The new detectors integrate seamlessly.",
+      "point_out": "Scrolling the page reveals all sections render correctly with unchanged spacing and structure. The only visible change is the three new setup chips (Range Trade, Double Top, Double Bottom) in the signals table.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Screen History" }
+    },
+    {
+      "n": 8,
+      "title": "Playbook now detects all nine setups",
+      "narration": "The Playbook now detects and displays all nine setup families in one cohesive Playbook Signals section. Range Trade, Double Top, and Double Bottom join the five that shipped in earlier iterations, completing the book's full detector set.",
+      "point_out": "The Playbook Signals table can now show up to nine setup types. All new detectors use the exact same chip styling, table layout, and row-expansion interaction pattern as the five existing families. Zero new navigation, zero new buttons, zero breaking changes.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Playbook Signals" }
+    }
+  ]
+}

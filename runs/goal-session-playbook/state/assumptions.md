@@ -261,3 +261,82 @@ yet in spec" shape — closing it invents, tunes, or changes no number. Fallback
 finds it is NOT actually zero-behavior-change on closer look: T-1's own escape hatch (drop the
 edit, record why, surface for the owner) rather than force it.
 **Reversible:** yes
+
+## iter-6 (audit-fix pass) — developer
+
+**Ambiguity:** The iter-6 hard audit found `range_trade`'s invalidation clause (spec §3.7,
+`SL − 0.30·(T − SL)`) INVERTS in a reachable corner: the trigger clause tolerates pre-trigger bars
+dipping to `SL − RANGE_HOLD_TOL·MBR`, so a reversal bar whose reference `high[t−1]` sits entirely
+below the arming-time `SL` yields `T < SL` and a LONG whose invalidation lands ABOVE its own entry
+(recorded born-invalidated, `_invalidation_breached` true at the anchor bar). The canonical spec
+does not state what happens there; `docs/goal.md`'s Constraints say a developer who finds a
+detector unimplementable as written DROPS it and surfaces it, never improvises. The audit named
+two honest resolutions: write a `T > SL` fail-closed precondition into the spec FIRST
+(spec-then-code), or surface it for an owner ruling.
+**We chose:** both — spec first, then code, and surfaced anyway. `docs/playbook-detector-spec.md`
+§3.7's Edge cases gained a dated "degenerate trigger reference" clarification (ADAPTATION,
+narrowing-only, NO new constant, so `playbook_parameters()` and the signature do not move), and
+`_range_trade_side` now voids `T <= SL` (long) / `T >= SH` (short) fail-closed and continues its
+walk. Rationale for not dropping the detector: the clause does not invent a rule, it makes the
+spec's OWN arithmetic well-posed (the invalidation formula presupposes `T > SL`; the pad is 30% of
+the `SL`-to-`T` distance and is described as "just outside the range bounds"), it follows §4's
+existing class of degenerate/edge rules, it can only REMOVE signals and never create one, and it
+cannot reinterpret any recorded data — no recorded playbook file in the operator's store contains
+a `range_trade` signal (verified by grep over `apps/backend/.data/playbook/*.json`; the family is
+first shipped by this iteration).
+**Owner ruling requested:** ratify or reject the §3.7 clarification. Rejecting it means dropping
+`range_trade` from `PLAYBOOK_SETUPS` (the spec-sanctioned partial outcome) rather than serving
+born-invalidated longs.
+**Reversible:** yes — one `continue` in `_range_trade_side` plus the spec paragraph.
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** The critical anti-goal "No threshold exists outside the spec ... Every detector rule
+and threshold exists in `docs/playbook-detector-spec.md` BEFORE the code that uses it" sits against
+a rule the DEVELOPER authored: to close audit finding B2 (a long served with `invalidation_price`
+above its own entry), he wrote a dated "degenerate trigger reference" clarification into spec §3.7
+and only then made `_range_trade_side` void `T <= SL` (long) / `T >= SH` (short). Constraints say a
+developer who finds a detector unimplementable as written DROPS it and surfaces it, never
+improvises. Critical severity would force a REGRESSION halt.
+**We chose:** minor and OPEN (owner ratification pending), not critical. The literal anti-goal is
+satisfied — the rule was in the spec before the code — and the evaluator verified the spec diff is
++26 / -0 lines with no `PLAYBOOK_*` constant value changed, `playbook_parameters()`/the signature
+unmoved, the clause fail-closed (it can only remove signals), no recorded file containing a pre-fix
+`range_trade` signal, and the whole thing reversible in one `continue`. The developer also DID
+surface it (status.json blocker + assumption ledger + iteration-state owner-rulings), which is the
+Constraint's own escape route. Recorded as OPEN so the owner ratifies or rejects it; rejecting means
+dropping `range_trade` from `PLAYBOOK_SETUPS`, the spec-sanctioned partial outcome.
+**Reversible:** yes
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** J-06's acceptance asks for "one range signal and one double-top signal legible on the
+fixture rig (screenshot)", and the iteration spec's DoD adds "in the same clean-rebuilt pass". The
+browser lane's own range-trade captures (09:44) were voided by the auditor as pre-fix. The two
+post-fix captures that DO exist come from two different post-fix passes: the developer's corrected
+rig (range-trade geometry legible) and the auditor's fresh clean-`.next` rig (double-top geometry
+legible, with the range-trade ROW visible in the same table but not expanded). `docs/goal.md` does
+not say whether both signals must be legible in ONE image.
+**We chose:** J-06 `passing` with `evidence_makeup: true`. Both required geometry lines are legible
+in post-fix screenshots the evaluator opened; every number agrees across the two captures and with
+the auditor's independent live DOM and API reads on the fresh rig; and the auditor's own screenshot
+shows both rows in one `desk-playbook-record` table with matching trigger/invalidation prices. The
+gap is presentation, not behaviour (methodology A.7), so a one-row re-capture rides the next
+iteration as a passenger task rather than blocking the journey.
+**Reversible:** yes
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** The QA lane clicked Run Playbook against an UNSCOPED backend and permanently recorded
+`apps/backend/.data/playbook/playbook-2026-08-07-84fcd116ebd7.json` (57 signals over 45 real
+universe members) plus its ledger row in the operator's own append-only store. The iteration spec
+put real-universe computes explicitly OUT OF SCOPE, and `docs/goal.md`'s critical rails ("Immutable
+data", "Persistence stays scoped") do not say whether an unasked-for but genuine, ledgered,
+append-only compute by the verification lane is a critical violation or a process breach.
+**We chose:** minor and OPEN, not critical. Nothing was fabricated, rewritten, backfilled or pruned;
+the record is real output of the shipped code under the shipped fingerprint, correctly ledgered, and
+the auditor's 57-signal invariant sweep found zero violations (it became the iteration's strongest
+real-data evidence). Deleting it would itself breach the critical append-only rail, so the remedy is
+process, not removal. Same call shape as the iter-3 planted-fixture precedent this session already
+ratified — but flagged as URGENT because J-07's back-scan is a mass writer over real sessions.
+**Reversible:** no — the record is permanent by design; only the process is fixable.

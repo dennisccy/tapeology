@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "journey": "J-05",
+  "name": "The climax family — capitulation entry, euphoria marker",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-05", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 2, "journey": "J-05", "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-06-22"}, "expect": {"text": "Capitulation"}},
+    {"n": 3, "journey": "J-05", "action": {"type": "click", "target": {"text": "DECOR"}}, "expect": {"text": "euphoria recent"}}
+  ]
+}

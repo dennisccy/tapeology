@@ -4405,6 +4405,9 @@ function playbookSetupLabel(setupId: string): string {
   if (setupId === "dbi") return "Drop-Base Implosion";
   if (setupId === "cup_handle") return "Cup and Handle";
   if (setupId === "capitulation") return "Capitulation";
+  if (setupId === "range_trade") return "Range Trade";
+  if (setupId === "double_top") return "Double Top";
+  if (setupId === "double_bottom") return "Double Bottom";
   return setupId;
 }
 
@@ -4637,6 +4640,30 @@ function PlaybookSignalDetail({
           decline {fmt(geometry.decline_mbr)} MBR over {geometry.decline_bars} bar(s) · climax RVOL{" "}
           {fmt(geometry.climax_rvol)} · reversal {geometry.bars_from_climax_to_trigger} bar(s) after
           climax · broke at slot {geometry.slots_to_break}
+        </p>
+      )}
+      {/* goal-playbook-iter-6 (J-06): range_trade's own geometry line -- the tested-and-held
+          range's width, each zone's own touch count, and the two disclosure flags, all rendered
+          verbatim from the served payload. */}
+      {signal.setup_id === "range_trade" && (
+        <p data-testid="desk-playbook-signal-range-trade-geometry" className="mt-1 text-[11px] text-slate-500">
+          range {fmt(geometry.range_width_mbr)} MBR wide · low zone touches{" "}
+          {geometry.low_zone_touches} · high zone touches {geometry.high_zone_touches} · broke at
+          slot {geometry.slots_to_break}
+          {geometry.crossed_midrange && " · crossed midrange"}
+          {geometry.absorption_bar_present && " · absorption bar present"}
+        </p>
+      )}
+      {/* goal-playbook-iter-6 (J-06): double_top/double_bottom's own geometry line -- the two
+          tops'/bottoms' gap and separation, the valley/peak depth, the full (never-shrunk)
+          pattern-height nominal risk, and the second-top/bottom RVOL ratio, all rendered verbatim. */}
+      {(signal.setup_id === "double_top" || signal.setup_id === "double_bottom") && (
+        <p data-testid="desk-playbook-signal-double-extreme-geometry" className="mt-1 text-[11px] text-slate-500">
+          gap {fmt(geometry.tops_gap_mbr)} MBR · separation {geometry.tops_separation_bars} bar(s)
+          · depth {fmt(geometry.valley_depth_mbr)} MBR · nominal risk {fmt(geometry.nominal_risk_mbr)}{" "}
+          MBR · broke at slot {geometry.slots_to_break}
+          {geometry.second_top_rvol_vs_first !== null && geometry.second_top_rvol_vs_first !== undefined &&
+            ` · second RVOL vs first ${fmt(geometry.second_top_rvol_vs_first)}`}
         </p>
       )}
       <p className="mt-1 text-[11px] text-slate-500">
@@ -4991,9 +5018,9 @@ function PlaybookRecordView({
         <p className="text-sm font-medium text-amber-300">Playbook not computed for this session.</p>
         <p className="mt-1 text-xs text-amber-200/70">
           Run Playbook detects and measures the opening-range-break, jump-base-explosion,
-          drop-base-implosion, cup-and-handle, and capitulation families on{" "}
-          {control.sessionDate}&apos;s own recorded bars — an explicit operator act, nothing runs on
-          page load.
+          drop-base-implosion, cup-and-handle, capitulation, range-trade, double-top, and
+          double-bottom families on {control.sessionDate}&apos;s own recorded bars — an explicit
+          operator act, nothing runs on page load.
         </p>
         <div className="mt-3 space-y-1 text-left">
           <PlaybookRunsNote result={runsResult} />
@@ -5089,9 +5116,10 @@ function PlaybookSection({
     <div data-testid="desk-playbook-section" className="space-y-3">
       <p className="max-w-3xl text-sm text-slate-500">
         The book&apos;s opening-range-break, jump-base-explosion, drop-base-implosion,
-        cup-and-handle, and capitulation signals, detected on this session&apos;s own recorded
-        5m/1m bars and measured with the desk forward rail&apos;s own conventions — read verbatim
-        from GET /research/desk/playbook. Nothing here is recomputed in the browser.
+        cup-and-handle, capitulation, range-trade, double-top, and double-bottom signals, detected
+        on this session&apos;s own recorded 5m/1m bars and measured with the desk forward
+        rail&apos;s own conventions — read verbatim from GET /research/desk/playbook. Nothing here
+        is recomputed in the browser.
       </p>
       <div className="flex flex-col items-center gap-1">
         <label className="flex flex-col items-center gap-1">
