@@ -369,3 +369,41 @@ audit keeps meaning what it says. The live check is recorded in the evidence fie
 evaluator observation, explicitly not a lane verdict. Fail-closed: "I spot-checked it" must not be
 able to launder a journey that no verification lane ran.
 **Reversible:** yes
+
+## iter-11 — goal-decomposer
+
+**Ambiguity:** The iteration-10 evaluator asked J-09 "MCP contract v4" to get a "saved replay
+script" because it is the only journey with none. But `demo_runner.py` (the engine behind every
+`journey-scripts/*.json` golden in this repo) supports exactly five browser action types —
+`goto`/`click`/`fill`/`wait_for`/`expect` — and no API/MCP-call action type exists anywhere in this
+codebase's history. J-09's own acceptance text (ratified at iter-9, "Do not redo" this iteration)
+names only tool count, byte-identity, proxy behaviour, and suite greenness — none of which any
+browser page renders (the blueprint itself records J-09 as "MCP tool surface only; no page").
+Neither `docs/goal.md` nor the evaluator's note says what a browser-replay golden for a page-less
+journey should assert.
+**We chose:** author a golden that opens `/desk` and asserts a static, already-shipped shell string
+distinct from J-01.json's/J-08.json's own assertions (the `desk-evidence-signature` label text is
+offered as a candidate) — honestly scoped as coverage of the DATA the MCP tools proxy
+byte-identically, not of MCP transport/registration itself. That half of J-09's acceptance stays
+covered by the already-existing, already-pinned `test_mcp_server.py::EXPECTED_TOOLS`/`TOOL_NAMES`
+test plus a live, same-iteration browser-qa confirmation (mirroring the iter-9 evaluator's own
+manual check), not by a new framework action type. The alternative — teaching `demo_runner.py` an
+API/MCP-call step — was rejected as unrequested, cross-cutting framework risk for a three-item
+mechanical iteration.
+**Reversible:** yes — the golden script is additive test infrastructure; nothing it asserts is
+load-bearing on any served field or record shape.
+
+## iter-11 — goal-decomposer
+
+**Ambiguity:** UT-05 (the invalid-date Playbook Signals input's border staying grey instead of
+turning amber) was left open by the iteration-10 evaluator with two sanctioned outcomes: fix the
+CSS class, or drop the expectation, since `docs/goal.md` never mentions a border color and the
+evaluator noted the owner could decline the extra pass entirely. No owner input on this specific
+point has been communicated for this iteration.
+**We chose:** fix, scoped to the one flagged input only (`page.tsx:5583-5592`), not the shared
+`ASOF_INPUT_CLASS` constant (which also styles two KEPT, frozen Era-B/R-2 surfaces carrying the
+identical latent collision) and not the Backscan panel's own From/To inputs (which never had this
+affordance and were never named by UT-05). This is the cheaper, more honest default absent a
+contrary owner signal — it makes an already-disclosed state (`aria-invalid` + visible error text)
+also visible on the input's own edge, at minimal, well-isolated blast radius.
+**Reversible:** yes — a one-input CSS override with no data, schema, or signature implications.

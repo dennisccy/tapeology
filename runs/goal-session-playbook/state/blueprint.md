@@ -42,6 +42,21 @@ test/fixture-infrastructure defects (`J-10.json`'s golden replay step 6; the sco
 `/structure` chart evidence gap) that carry no Data-Contract or IA implication at all. No journey
 changes canonical home this iteration; no nav-skeleton edit.
 
+STATUS AS OF ITERATION 11 (freshened from the iteration-10 status above — additive status-label
+update only, no IA/Data-Contract structural change): all ten journeys remain SHIPPED and passing.
+Iteration 10 closed both owner rulings but withheld GOAL_ACHIEVED on two small mechanical gate
+items plus one latent hazard, all three named explicitly by that iteration's own evaluator;
+iteration 11 closes them, and none of the three touches an IA home or a Data-Contract row: (1) J-09
+(MCP contract v4) gets a genuine same-run re-verification plus a durable golden replay script (it
+was the one journey with none, which is why a wall-clock trim silently deferred it at iteration 10)
+— the golden reads the ALREADY-registered "Playbook records"/"Evidence aggregates" rows verbatim
+through the existing `/desk` page, adding no second computation or fetch path; (2) the Playbook
+Signals session-date input's invalid-state border (a pre-existing cosmetic CSS-specificity defect,
+not a Data-Contract or IA item) is fixed in place, scoped to that one input only; (3) the back-scan
+module's `_assert_scoped` positive test/fixture guard gains a fifth required env var
+(`TAPEOLOGY_BAR_INDEX_DB`), closing a latent operational hazard iteration 10's audit found and left
+open. No new page, no new nav entry, no new owner/endpoint, no new served field.
+
 BASELINE STATE (iteration 0, kept verbatim for history): none of the six new rows below existed
 in the codebase yet — confirmed by grep (no `desk_playbook*.py` module anywhere under
 `apps/backend/app/research/`, no `playbook` string in `desk_routes.py` or `app/mcp/__init__.py`,
@@ -94,7 +109,7 @@ Tapeology
 | J-06 Range family (range trades, double top/bottom) — SHIPPED; iteration 10 adds an optional `turned_at_midrange` disclosure on `range_trade` signals only (Data Contract row below) | lands on J-03's section, `/desk` | Desk |
 | J-07 Back-scan (resumable, append-only, host-guard-confined) — SHIPPED | `/desk` (new Backscan panel) | Desk |
 | J-08 Evidence view (distributions beside the null, min-n honest) — SHIPPED | `/desk` (new Playbook Evidence section) | Desk |
-| J-09 MCP contract v4 (20 read-only tools) — SHIPPED (iteration 9) | *(MCP tool surface only; no page — `desk_playbook`/`desk_playbook_evidence` proxy the rows below)* | — |
+| J-09 MCP contract v4 (20 read-only tools) — SHIPPED (iteration 9); iteration 11 adds a golden replay script + same-run re-verification (test coverage only, no owner/endpoint change) | *(MCP tool surface only; no page — `desk_playbook`/`desk_playbook_evidence` proxy the rows below)* | — |
 | J-10 Kept-product regression sentinel — SHIPPED (closing, iteration 9); iteration 10 re-verifies it at full depth (era-closing regression sweep) and fixes its `J-10.json` golden-replay step 6 + the scoped rig's `/structure` chart evidence gap (both test/fixture infrastructure, no product surface change) | `/`, `/structure`, `/desk` (every shipped section) | Cockpit, Structure, Desk |
 
 ## Data Contract
@@ -130,7 +145,7 @@ target):**
 | Playbook compute progress | new playbook compute manager, `desk_playbook_compute.py` (single-flight, mirrors `DeskScreenComputeManager`) | `POST/GET/POST-cancel /research/desk/playbook/compute` | J-02 (SHIPPED) |
 | Playbook run ledger | new `app/research/desk_playbook_log.py` (terminal-state-only, mirrors `desk_topup_log.py`) | `GET /research/desk/playbook/runs` | J-02 (SHIPPED) |
 | Back-scan plan | new `app/research/desk_playbook_backscan.py` (pure, metadata-only) | `GET /research/desk/playbook/backscan/plan` | J-07 (SHIPPED) |
-| Back-scan progress + ledger | same back-scan module (mirrors `desk_deep_backfill.py`'s plan/walker/ledger/manager quartet, re-chunked to one session-date) | `POST/GET/POST-cancel .../backscan/compute`, `GET .../backscan/runs` | J-07 (SHIPPED) |
+| Back-scan progress + ledger | same back-scan module (mirrors `desk_deep_backfill.py`'s plan/walker/ledger/manager quartet, re-chunked to one session-date) | `POST/GET/POST-cancel .../backscan/compute`, `GET .../backscan/runs` | J-07 (SHIPPED). Iteration 11 extends this module's TEST/FIXTURE-ONLY `_assert_scoped` positive guard with a fifth required env var (`TAPEOLOGY_BAR_INDEX_DB`) — no route, no served field, no owner/endpoint change; the guard is never called from the live HTTP routes. |
 | Evidence aggregates | new `app/research/desk_playbook_evidence.py` (stat-keyed derived projection cache, the `desk_meta_cache` contract — rebuildable, owns nothing) | `GET /research/desk/playbook/evidence` | J-08 (SHIPPED — response shape fixed in `docs/phases/goal-playbook-iter-8.md`'s Data-contract additions) → J-09 (byte-identical MCP proxy `desk_playbook_evidence`, SHIPPED iteration 9, no new owner/endpoint) → iteration 9 also displays this row's already-served `signature` field in the `/desk` Playbook Evidence section for the first time (no new field, no new owner/endpoint — a rendering change only) |
 
 No shared value from the unchanged-owners list above is recomputed a second way by any of these
