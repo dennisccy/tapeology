@@ -453,6 +453,7 @@ def record_backscan_run(store: BackscanRunStore, **fields) -> dict:
 # --- the compute manager -------------------------------------------------------------------------
 
 _IDLE_SNAPSHOT: dict = {
+    "id": None,
     "status": "idle",
     "from": None,
     "to": None,
@@ -486,8 +487,13 @@ class DeskPlaybookBackscanComputeManager:
 
     def snapshot(self) -> dict:
         """The current/last job's snapshot, ALWAYS a real dict (never ``None``) -- ``status ==
-        "idle"`` before any job has ever run this process. A caller-safe copy, never a shared
-        mutable reference."""
+        "idle"`` and ``id is None`` before any job has ever run this process. A caller-safe copy,
+        never a shared mutable reference.
+
+        2026-08-12: ``id`` is the job's own ephemeral, process-scoped uuid, published so an
+        external waiter (the refresh chain's seventh step) can tell THIS job's terminal snapshot
+        from a later job's -- the ``DeskScreenComputeManager``/``DeskForwardComputeManager`` shape
+        those steps already wait on. It names no recorded value and reaches no store."""
         current = self._snapshot
         return _copy_snapshot(current) if current is not None else dict(_IDLE_SNAPSHOT)
 
@@ -518,6 +524,7 @@ class DeskPlaybookBackscanComputeManager:
             self._cancel_event = cancel_event
             self._job_id = job_id
             snapshot = {
+                "id": job_id,
                 "status": "running",
                 "from": from_day,
                 "to": to_day,

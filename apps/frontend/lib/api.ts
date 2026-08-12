@@ -1762,10 +1762,16 @@ export async function fetchDeskPlaybook(params: {
 // single-flight playbook compute job for one session date. Mirrors `triggerDeskForwardCompute`'s
 // exact shape; the backend's own 422 (a non-session date) `detail` is surfaced VERBATIM, never a
 // client-fabricated message.
+//
+// `status` carries the HTTP status on the failure branch — the `triggerDeskUniverseFetch` pattern,
+// added 2026-08-12 for the refresh chain's sixth step. The chain walks a calendar range, so it
+// reaches days the route honestly refuses as non-sessions (422); that is a normal outcome for a
+// day, not a failed step, and only the status distinguishes it from a real failure.
 export async function triggerDeskPlaybookCompute(sessionDate: string): Promise<{
   ok: boolean;
   data?: { started: boolean; compute: DeskPlaybookComputeSnapshot };
   error?: string;
+  status?: number;
 }> {
   try {
     const res = await fetch(`${API_BASE}/research/desk/playbook/compute`, {
@@ -1775,7 +1781,7 @@ export async function triggerDeskPlaybookCompute(sessionDate: string): Promise<{
     });
     if (res.ok) {
       const data = await res.json();
-      return { ok: true, data };
+      return { ok: true, data, status: res.status };
     }
     let error = "The playbook compute could not be started.";
     try {
@@ -1784,7 +1790,7 @@ export async function triggerDeskPlaybookCompute(sessionDate: string): Promise<{
     } catch {
       /* keep default */
     }
-    return { ok: false, error };
+    return { ok: false, error, status: res.status };
   } catch {
     return { ok: false, error: "Backend unreachable — is the API running?" };
   }
@@ -1895,6 +1901,7 @@ export async function triggerDeskPlaybookBackscanCompute(
   ok: boolean;
   data?: { started: boolean; compute: DeskPlaybookBackscanComputeSnapshot };
   error?: string;
+  status?: number;
 }> {
   try {
     const res = await fetch(`${API_BASE}/research/desk/playbook/backscan/compute`, {
@@ -1904,7 +1911,7 @@ export async function triggerDeskPlaybookBackscanCompute(
     });
     if (res.ok) {
       const data = await res.json();
-      return { ok: true, data };
+      return { ok: true, data, status: res.status };
     }
     let error = "The back-scan could not be started.";
     try {
@@ -1913,7 +1920,7 @@ export async function triggerDeskPlaybookBackscanCompute(
     } catch {
       /* keep default */
     }
-    return { ok: false, error };
+    return { ok: false, error, status: res.status };
   } catch {
     return { ok: false, error: "Backend unreachable — is the API running?" };
   }

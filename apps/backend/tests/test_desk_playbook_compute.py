@@ -196,11 +196,16 @@ def test_manager_single_flight_second_trigger_returns_the_same_job(env, monkeypa
     second = manager.trigger(SESSION_DATE, universe_store, bar_store, CONFIG, playbook_store)
     assert second["started"] is False
     assert second["compute"]["session_date"] == first["compute"]["session_date"] == SESSION_DATE
+    # The adopted job is the SAME job, and says so by id -- what an external waiter matches on to
+    # know the snapshot it is watching is the one it was handed (the refresh chain's sixth step).
+    assert first["compute"]["id"] is not None
+    assert second["compute"]["id"] == first["compute"]["id"]
 
     release.set()
     snap = _wait_for_terminal(manager)
     assert snap["status"] == "done"
     assert snap["signals_total"] == 1  # one universe member
+    assert snap["id"] == first["compute"]["id"]  # the id survives to the terminal snapshot
     manager.join_all(timeout=5)
 
 
@@ -223,7 +228,9 @@ def test_manager_cancel_mid_walk_records_nothing_and_reverts_to_idle(env, monkey
 
     monkeypatch.setattr(desk_playbook_compute, "compute_playbook", _pausing_compute)
     manager = DeskPlaybookComputeManager()
-    manager.trigger(SESSION_DATE, universe_store, bar_store, CONFIG, playbook_store)
+    started = manager.trigger(SESSION_DATE, universe_store, bar_store, CONFIG, playbook_store)
+    job_id = started["compute"]["id"]
+    assert job_id is not None
     assert entered.wait(timeout=5)
 
     manager.cancel()
@@ -232,9 +239,13 @@ def test_manager_cancel_mid_walk_records_nothing_and_reverts_to_idle(env, monkey
 
     release.set()
     snap = _wait_for_terminal(manager)
-    # a completed cancel leaves NO distinct terminal marker -- it reverts to the idle shape
+    # A completed cancel leaves NO distinct terminal marker -- it reverts to the idle shape. The one
+    # field that survives the revert is the cancelled job's own `id`: an external waiter (the
+    # refresh chain's sixth step) reads it to tell THIS cancel completing from a backend restart,
+    # which is the other way an idle snapshot appears. Everything describing the RUN still reverts.
     assert snap == {
-        "status": "idle", "session_date": None, "signals_done": 0, "signals_total": 0, "error": None,
+        "id": job_id, "status": "idle", "session_date": None,
+        "signals_done": 0, "signals_total": 0, "error": None,
     }
     assert playbook_store.list() == ([], [])
     manager.join_all(timeout=5)
@@ -243,7 +254,8 @@ def test_manager_cancel_mid_walk_records_nothing_and_reverts_to_idle(env, monkey
 def test_manager_snapshot_is_idle_before_any_job_has_ever_run():
     manager = DeskPlaybookComputeManager()
     assert manager.snapshot() == {
-        "status": "idle", "session_date": None, "signals_done": 0, "signals_total": 0, "error": None,
+        "id": None, "status": "idle", "session_date": None,
+        "signals_done": 0, "signals_total": 0, "error": None,
     }
 
 
@@ -275,7 +287,8 @@ def test_routes_honest_idle_and_idle_cancel_409(route_ctx):
     idle = client.get("/research/desk/playbook/compute")
     assert idle.status_code == 200
     assert idle.json() == {
-        "status": "idle", "session_date": None, "signals_done": 0, "signals_total": 0, "error": None,
+        "id": None, "status": "idle", "session_date": None,
+        "signals_done": 0, "signals_total": 0, "error": None,
     }
 
     idle_cancel = client.post("/research/desk/playbook/compute/cancel")

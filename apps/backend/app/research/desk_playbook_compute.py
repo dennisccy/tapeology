@@ -32,7 +32,10 @@ sixth value for a completed cancel: once the walk observes the cancel and stops,
 reverts to the SAME idle shape it started from, and ``desk_playbook_log.py``'s writer is never
 called for it either (see that module's docstring). A cancelled playbook run is treated as though
 it never happened, everywhere it is visible -- not merely absent from the durable store (true of
-every compute path in this codebase) but absent from the ephemeral progress view too.
+every compute path in this codebase) but absent from the ephemeral progress view too. The ONE
+exception, added 2026-08-12 for the refresh chain's sixth step: the reverted snapshot keeps the
+cancelled job's own ``id``, so a waiter can tell a completed cancel apart from a backend restart
+(``_resolve_cancelled`` states the full reasoning). Every value describing the RUN still reverts.
 
 **Store-only.** The compute reads the frozen ``BarStore``/``UniverseStore`` exactly as they stand
 -- it never issues a vendor fetch, never triggers a universe refresh. The CLI below resolves the
@@ -79,7 +82,8 @@ from .routes import get_bar_store
 __all__ = ["DeskPlaybookComputeManager", "run_playbook_and_record"]
 
 _IDLE_SNAPSHOT: dict = {
-    "status": "idle", "session_date": None, "signals_done": 0, "signals_total": 0, "error": None,
+    "id": None, "status": "idle", "session_date": None,
+    "signals_done": 0, "signals_total": 0, "error": None,
 }
 
 
@@ -223,10 +227,10 @@ class DeskPlaybookComputeManager:
         self._thread: threading.Thread | None = None
 
     def snapshot(self) -> dict:
-        """The current/last job's snapshot -- ``{"status", "session_date", "signals_done",
+        """The current/last job's snapshot -- ``{"id", "status", "session_date", "signals_done",
         "signals_total", "error"}``, ALWAYS a real dict (never ``None``): before any job has ever
-        run this process, ``status == "idle"``. A caller-safe copy, never a shared mutable
-        reference."""
+        run this process, ``status == "idle"`` and ``id is None``. A caller-safe copy, never a
+        shared mutable reference."""
         current = self._snapshot
         return dict(current) if current is not None else dict(_IDLE_SNAPSHOT)
 
@@ -262,7 +266,7 @@ class DeskPlaybookComputeManager:
             cancel_event = threading.Event()
             self._cancel_event = cancel_event
             snapshot = {
-                "status": "running", "session_date": session_date,
+                "id": job_id, "status": "running", "session_date": session_date,
                 "signals_done": 0, "signals_total": signals_total, "error": None,
             }
             self._snapshot = snapshot
@@ -314,11 +318,20 @@ class DeskPlaybookComputeManager:
     def _resolve_cancelled(self, job_id: str) -> None:
         """A completed cancel leaves NO trace (module docstring): the snapshot reverts to the same
         idle shape it started from, rather than a distinct terminal state nothing was recorded
-        under."""
+        under.
+
+        2026-08-12 (refresh-chain steps 6-7, operator decision): the reverted snapshot KEEPS the
+        cancelled job's own ``id``. Everything the walk produced is still erased -- the status, the
+        session date and both counters revert, and the ledger writer is still never called -- so
+        "leaves no trace" holds for every value that describes the RUN. The id is not one of those:
+        it is ephemeral, process-scoped bookkeeping that names WHICH job the revert belongs to, and
+        an external waiter needs exactly that to tell "the cancel I asked for completed" (idle, my
+        id) from "the backend restarted under me" (idle, ``id is None``). Without it the refresh
+        chain's id-keyed waiter cannot distinguish the two and reports a cancel as a lost job."""
         with self._lock:
             if self._job_id != job_id:
                 return
-            self._snapshot = dict(_IDLE_SNAPSHOT)
+            self._snapshot = {**_IDLE_SNAPSHOT, "id": job_id}
 
     def cancel(self) -> None:
         """Signal cooperative cancellation for the in-flight job -- flips the visible ``status`` to

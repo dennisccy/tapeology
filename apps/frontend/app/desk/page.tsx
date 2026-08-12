@@ -4057,17 +4057,26 @@ function ReconcileIndexControl({
 
 // REFRESH-CHAIN-START
 // One control that runs the refresh acts in the order the data actually depends on: the universe
-// membership, the bar top-up, the bar index repair, and then — per day of the as-of range — that
-// day's screen followed by that day's own forward measurement.
+// membership, the bar top-up, the bar index repair, then — per day of the as-of range — that day's
+// screen, that day's own forward measurement and that day's playbook detection, and finally one
+// playbook back-scan across the whole range.
 //
 // The order is not cosmetic. A screen's `bar_store_signature` pin is derived from `bar_index`
 // coverage and is resolved ONCE, before the member walk starts (desk_screen_compute.py) — so a
 // screen run that precedes the top-up and the index repair records a snapshot pinned to bars it
 // did not actually read. The forward measurement follows its own day's screen for the same class
-// of reason: it measures a recorded snapshot, so the snapshot has to exist first.
+// of reason: it measures a recorded snapshot, so the snapshot has to exist first. The playbook
+// detection follows both for a third instance of it: it reads the day's 5m/1m bars, so it must
+// come after the top-up that landed them, and its own input signature hashes those bars' series
+// ids — a walk before the top-up would pin a signature the store no longer has.
 //
-// The last two are INTERLEAVED rather than run as two passes, and that is a durability property,
-// not a stylistic one — see the driver's own comment at the loop for the 2026-08-06 run this cost.
+// The per-day three are INTERLEAVED rather than run as three passes, and that is a durability
+// property, not a stylistic one — see the driver's own comment at the loop for the 2026-08-06 run
+// this cost.
+//
+// The back-scan runs LAST and once, over the same [From, To]: by then every day in the range has
+// been walked at the current signature, so it resolves as reuses and its real job is disclosure —
+// it names, per date, what is recorded, what was reused, and which days are not sessions at all.
 //
 // This is a CLIENT-side sequence over the endpoints each existing control already calls. It
 // deliberately does NOT add a backend orchestrator: reaching the real compute managers from a
@@ -4077,10 +4086,11 @@ function ReconcileIndexControl({
 // same BarStore at once. Driving the real endpoints gets single-flight for free: a POST against a
 // running job returns that job unchanged (`started: false`), which this chain ADOPTS.
 //
-// It also adds ZERO polling. The three per-compute poll effects inside DeskPage already keep
-// `topupCompute`/`reconcileCompute`/`screenCompute` current and already do their own terminal-tick
-// ledger refreshes; this chain only WAITS on the state they maintain, read through a ref mirror so
-// a plain async driver can see the newest value.
+// It also adds ZERO polling. The per-compute poll effects inside DeskPage already keep
+// `topupCompute`/`reconcileCompute`/`screenCompute`/`forwardCompute`/`playbookCompute`/
+// `backscanCompute` current and already do their own terminal-tick ledger refreshes; this chain
+// only WAITS on the state they maintain, read through a ref mirror so a plain async driver can see
+// the newest value.
 //
 // Every step is an explicit operator act: the driver is reachable from the button's onClick and
 // nothing else. It is never called from an effect, never resumed after a reload, and never
@@ -4088,15 +4098,26 @@ function ReconcileIndexControl({
 // answers 409, the top-up is store-first, and a screen under identical pins short-circuits to a
 // reuse.
 
-const REFRESH_CHAIN_STEP_KEYS = ["universe", "topup", "reconcile", "screen", "forward"] as const;
+const REFRESH_CHAIN_STEP_KEYS = [
+  "universe", "topup", "reconcile", "screen", "forward", "playbook", "rangescan",
+] as const;
 type RefreshChainStepKey = (typeof REFRESH_CHAIN_STEP_KEYS)[number];
 
+// Every literal here is scanned against the shipped goldens' pinned substrings (both journey-script
+// dirs) by test_desk_refresh_chain_guard.py, in BOTH containment directions. That is why the sixth
+// step says "detection" rather than reusing the section's own pinned "Run Playbook", why the
+// seventh hyphenates "back-scan", and why the seventh's KEY is `rangescan`: the Backscan section's
+// bare name is a pinned needle, and that scan reads every string literal in this block rather than
+// only the ones that reach the DOM as text. Renaming the key rather than teaching the scan to skip
+// keys keeps it maximally conservative — the cheaper side of that trade.
 const REFRESH_CHAIN_STEP_LABELS: Record<RefreshChainStepKey, string> = {
   universe: "Universe membership",
   topup: "Bar top-up",
   reconcile: "Bar index",
   screen: "Screen for today",
   forward: "Forward returns",
+  playbook: "Playbook detection",
+  rangescan: "Playbook back-scan",
 };
 
 // --- the as-of day range (forward-test era) -------------------------------------------------------
@@ -4280,16 +4301,26 @@ const REFRESH_CHAIN_CANCELLED: Record<RefreshChainStepKey, string> = {
   // the forward ledger is append-only per snapshot — so whatever finished before the cancel is
   // genuinely on disk. Only the partial walk is discarded.
   forward: "cancelled — results already recorded before the cancel stay stored",
+  // The playbook section ships NO completed-cancel wording to reuse: its control reverts to idle,
+  // because a cancelled playbook walk is erased everywhere it is visible (the manager's own
+  // contract). So this states that contract instead of borrowing a sibling's phrasing.
+  playbook: "cancelled — a cancelled playbook walk records nothing at all",
+  rangescan: "cancelled — days already recorded before the cancel stay stored",
 };
 
-// What each compute trigger hands back. Identical across all three managers.
+// What each compute trigger hands back. Identical across every chained manager. `status` is the
+// HTTP status, surfaced only by the clients whose route has a refusal branch the chain must tell
+// apart from a failure (the membership 409, the playbook's non-session 422).
 type ChainTriggerResult<T> = {
   ok: boolean;
   data?: { started: boolean; compute: T };
   error?: string;
+  status?: number;
 };
 
-// The three snapshot shapes agree on exactly these fields, which is all the waiter needs.
+// The snapshot shapes agree on exactly these fields, which is all the waiter needs. The playbook
+// and back-scan managers publish `status` rather than `state` and use their own terminal words, so
+// they reach the waiter through the two adapters below rather than natively.
 type ChainJobSnapshot = { id: string; state: string; error: string | null };
 
 const REFRESH_CHAIN_WAIT_TICK_MS = 250;
@@ -4393,6 +4424,58 @@ function describeForwardDone(snapshot: DeskForwardComputeSnapshot): string {
     : `recorded a new result — ${snapshot.forward_id}`;
 }
 
+// --- the sixth and seventh steps' snapshot adapters (2026-08-12) ---------------------------------
+// The playbook and back-scan managers were built as their own operator acts, so they publish
+// `status` (with their own terminal vocabularies) where the four older managers publish `state`.
+// Rather than widen the waiter — which every chain guard is written against — each is mapped into
+// the `ChainJobSnapshot` shape the waiter already understands. The mapping is the whole seam.
+//
+// Both return null when the manager has never run in this backend process (`id === null`), which
+// the waiter already treats as "not observable yet" and eventually calls a lost job.
+type PlaybookChainSnapshot = DeskPlaybookComputeSnapshot & ChainJobSnapshot;
+type BackscanChainSnapshot = DeskPlaybookBackscanComputeSnapshot & ChainJobSnapshot;
+
+function adaptPlaybookChainSnapshot(
+  snapshot: DeskPlaybookComputeSnapshot | null,
+): PlaybookChainSnapshot | null {
+  if (snapshot === null || snapshot.id === null) return null;
+  // `cancelling` is still in flight — the walk has not observed the request yet. `idle` HERE means
+  // a cancel completed: this manager erases a cancelled run by reverting to the idle shape, and it
+  // keeps the job's own id through that revert precisely so this line can tell that apart from a
+  // backend restart (which yields `id === null`, filtered above).
+  const state =
+    snapshot.status === "running" || snapshot.status === "cancelling"
+      ? "running"
+      : snapshot.status === "error"
+        ? "failed"
+        : snapshot.status === "idle"
+          ? "cancelled"
+          : "done";
+  return { ...snapshot, id: snapshot.id, state };
+}
+
+function adaptBackscanChainSnapshot(
+  snapshot: DeskPlaybookBackscanComputeSnapshot | null,
+): BackscanChainSnapshot | null {
+  // This manager has a real `cancelled` terminal and never reverts to idle, so an `idle` reading is
+  // only ever "no job" — never a finished cancel.
+  if (snapshot === null || snapshot.id === null || snapshot.status === "idle") return null;
+  return {
+    ...snapshot,
+    id: snapshot.id,
+    state: snapshot.status === "error" ? "failed" : snapshot.status,
+  };
+}
+
+function describeBackscanDone(snapshot: BackscanChainSnapshot): string {
+  const outcomes = snapshot.outcomes;
+  return (
+    `${snapshot.completed} of ${snapshot.planned_total} days — ` +
+    `${outcomes.recorded} recorded · ${outcomes.reused} reused · ` +
+    `${outcomes.refused_non_session} not a session · ${outcomes.failed} failed`
+  );
+}
+
 interface RefreshChainControlProps {
   run: RefreshChainRun | null;
   onRefreshAll: () => void;
@@ -4480,16 +4563,19 @@ function DeskRefreshChainControl({
         {buttonLabel}
       </button>
       <p data-testid="desk-refresh-note" className="max-w-md text-center text-[11px] text-slate-600">
-        One click runs five steps in order: the universe membership, the bar top-up, the bar index,
-        then — for {rangeCopy}, one day at a time — that day&apos;s screen followed by its own
-        forward returns. Only the days a recorded daily bar says actually traded are screened, so
-        weekends, market holidays and days that have not happened yet are skipped and counted
-        rather than recorded. Each step calls the same endpoint its own control here already calls;
-        nothing runs without this click. A day whose bars already reach it is reused rather than
-        re-walked, so a range over ground already covered is quick; every genuinely missing day is
-        a full walk, so a wide range takes a while. Stop ends it between days, and every day
-        finished before that keeps both its screen and its measurement. Run Screen below runs the
-        To day only.
+        One click runs seven steps in order: the universe membership, the bar top-up, the bar
+        index, then — for {rangeCopy}, one day at a time — that day&apos;s screen, its own forward
+        returns and its playbook detection, and finally one playbook back-scan across the whole
+        range. Only the days a recorded daily bar says actually traded are screened, so weekends,
+        market holidays and days that have not happened yet are skipped and counted rather than
+        recorded. Each step calls the same endpoint its own control here already calls; nothing
+        runs without this click. A day whose bars already reach it is reused rather than re-walked,
+        so a range over ground already covered is quick; every genuinely missing day is a full
+        walk, so a wide range takes a while. A top-up that landed new fine bars re-keys what the
+        playbook pins its records to, so after one each day is detected afresh rather than reused —
+        seconds per day, and the back-scan that follows then finds them all present. Stop ends it
+        between days, and every day finished before that keeps its screen, its measurement and its
+        detection. Run Screen below runs the To day only.
       </p>
       {run !== null && (
         <>
@@ -4537,7 +4623,7 @@ function refreshChainSummary(run: RefreshChainRun): string {
   if (run.outcome === "running" && activeIndex >= 0) {
     return `Step ${activeIndex + 1} of ${REFRESH_CHAIN_STEP_KEYS.length} — ${refreshChainStepLabel(run.steps[activeIndex].key, run)}.`;
   }
-  if (run.outcome === "done") return "All five steps finished.";
+  if (run.outcome === "done") return "All seven steps finished.";
   if (run.outcome === "cancelled") return "Stopped on request — the later steps did not run.";
   const stoppedAt = run.steps.find(
     (step) => step.state === "failed" || step.state === "cancelled",
@@ -5898,21 +5984,35 @@ export default function DeskPage() {
   const refreshChainStopRef = useRef(false);
   const refreshChainActiveRef = useRef(false);
 
-  // Mirrors of the four compute snapshots, so the plain async driver below can read the newest
+  // Mirrors of the six compute snapshots, so the plain async driver below can read the newest
   // value (a closure cannot). NOT a second source of truth: each holds exactly what its own
   // useState already holds, and nothing ever writes to these except this one effect. The forward
   // mirror joins THIS effect deliberately rather than opening its own — the page's effect census
-  // is pinned at eleven, and a fifth chain step is not a reason to spend the twelfth.
+  // is pinned at eleven, and a fifth chain step is not a reason to spend the twelfth. The playbook
+  // and back-scan mirrors (2026-08-12, the sixth and seventh steps) join it for the same reason:
+  // both steps spend ZERO new effects, ZERO new intervals and no second wait tick — their polls
+  // already existed for their own sections, and the census stays 19/7/1 across this change.
   const topupComputeRef = useRef(topupCompute);
   const reconcileComputeRef = useRef(reconcileCompute);
   const screenComputeRef = useRef(screenCompute);
   const forwardComputeRef = useRef(forwardCompute);
+  const playbookComputeRef = useRef(playbookCompute);
+  const backscanComputeRef = useRef(backscanCompute);
   useEffect(() => {
     topupComputeRef.current = topupCompute;
     reconcileComputeRef.current = reconcileCompute;
     screenComputeRef.current = screenCompute;
     forwardComputeRef.current = forwardCompute;
-  }, [topupCompute, reconcileCompute, screenCompute, forwardCompute]);
+    playbookComputeRef.current = playbookCompute;
+    backscanComputeRef.current = backscanCompute;
+  }, [
+    topupCompute,
+    reconcileCompute,
+    screenCompute,
+    forwardCompute,
+    playbookCompute,
+    backscanCompute,
+  ]);
 
   // Unmounting (a nav away mid-chain) stops the driver at its next check — no POST after the page
   // is gone, no setState on an unmounted component, no orphaned wait loop.
@@ -6457,6 +6557,7 @@ export default function DeskPage() {
     // measuring it twice would be a second walk over one input.
     const screenIndex = 3;
     const forwardIndex = 4;
+    const playbookIndex = 5;
     // Non-sessions are dropped BEFORE the loop, from one awaited read (never a per-day call). What
     // survives is what the daily bars on file say actually traded; `skippedDays` is disclosed in
     // the step's own message so a range that shrank never looks like a range that was short.
@@ -6481,6 +6582,8 @@ export default function DeskPage() {
     let newForwardCount = 0;
     let reusedForwardCount = 0;
     let lastForward: DeskForwardComputeSnapshot | null = null;
+    let detectedCount = 0;
+    let refusedPlaybookCount = 0;
 
     // Both steps' own terminal messages, written from whatever the loop actually got through. Used
     // on the normal ending AND before any mid-loop halt: `halt` marks only the steps AFTER the one
@@ -6527,6 +6630,27 @@ export default function DeskPage() {
           measuredCount === 1 && lastForward !== null
             ? describeForwardDone(lastForward)
             : `${measuredCount} snapshots — ${newForwardCount} recorded · ${reusedForwardCount} reused`,
+      };
+    };
+    // The sixth step's own terminal line, written from whatever the loop got through — same
+    // contract as the two above, and called before any mid-loop halt for the same reason. It
+    // counts DAYS walked rather than signals found: how many signals a day holds is the record's
+    // own answer, served by the Playbook Signals section below, never re-derived here.
+    const settlePlaybookStep = () => {
+      if (detectedCount === 0 && refusedPlaybookCount === 0) {
+        steps[playbookIndex] = {
+          key: "playbook",
+          state: "noop",
+          message: "nothing to detect — no day in this range was walked",
+        };
+        return;
+      }
+      const refusedNote =
+        refusedPlaybookCount === 0 ? "" : ` · ${refusedPlaybookCount} day(s) refused — not a session`;
+      steps[playbookIndex] = {
+        key: "playbook",
+        state: "done",
+        message: `${detectedCount} of ${dayCount} days detected${refusedNote}`,
       };
     };
 
@@ -6589,102 +6713,249 @@ export default function DeskPage() {
       // This day's own snapshot, measured now — never whichever snapshot the history panel happens
       // to be displaying. An id already measured earlier in this run (an adoption crossing days)
       // is skipped rather than walked twice.
+      //
+      // 2026-08-12: this was an early `continue`, which now would also skip the day's playbook
+      // detection below — so it is a block instead. Nothing about the measurement changed; the
+      // day simply no longer ends here.
       const screenId = settled.snapshot.screen_id;
-      if (screenId === null || seenScreenIds.has(screenId)) continue;
-      seenScreenIds.add(screenId);
+      if (screenId !== null && !seenScreenIds.has(screenId)) {
+        seenScreenIds.add(screenId);
 
-      const head = `measuring ${measuredCount + 1} of ${dayCount} — ${screenId}`;
-      let measured: DeskForwardComputeSnapshot | null = null;
+        const head = `measuring ${measuredCount + 1} of ${dayCount} — ${screenId}`;
+        let measured: DeskForwardComputeSnapshot | null = null;
 
-      // At most TWO attempts, through ONE call site. This manager's single-flight slot is
-      // process-wide rather than per-snapshot — its trigger hands back whatever job is running
-      // whatever id was asked for — so an adopted job may be measuring a DIFFERENT snapshot.
-      // Waiting on it is still right (never start a second walk), but it did not measure THIS id,
-      // so the chain asks once more now that the slot is free. A second mismatch is reported,
-      // never looped on.
+        // At most TWO attempts, through ONE call site. This manager's single-flight slot is
+        // process-wide rather than per-snapshot — its trigger hands back whatever job is running
+        // whatever id was asked for — so an adopted job may be measuring a DIFFERENT snapshot.
+        // Waiting on it is still right (never start a second walk), but it did not measure THIS
+        // id, so the chain asks once more now that the slot is free. A second mismatch is
+        // reported, never looped on.
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          if (refreshChainStopRef.current) {
+            settleScreenStep();
+            halt(forwardIndex, "cancelled", REFRESH_CHAIN_CANCELLED.forward);
+            return;
+          }
+          steps[forwardIndex] = { key: "forward", state: "running", message: head };
+          publish("running");
+
+          const startedForward = await handleTriggerForward(screenId);
+          if (!startedForward.ok || !startedForward.data) {
+            settleScreenStep();
+            halt(
+              forwardIndex,
+              "failed",
+              `${screenId}: ${startedForward.error ?? "this snapshot could not be measured"}`,
+            );
+            return;
+          }
+          const adoptedForward = startedForward.data.started === false;
+          const base = adoptedForward ? `${head} · joined a job already running` : head;
+          let ticked = "";
+
+          const job = await awaitRefreshChainJob(
+            () => forwardComputeRef.current,
+            startedForward.data.compute.id,
+            () => refreshChainStopRef.current,
+            (tick) => {
+              // "of", never a slash: a rendered "101 of 101" is inert, where "101 / 101" is a
+              // string a shipped golden pins against a table this control renders above.
+              const message = `${base} · ${tick.progress.rows_done} of ${tick.progress.rows_total} rows`;
+              if (message === ticked) return;
+              ticked = message;
+              steps[forwardIndex] = { key: "forward", state: "running", message };
+              publish("running");
+            },
+          );
+          if (job.outcome === "stopped") {
+            settleScreenStep();
+            halt(forwardIndex, "cancelled", `${screenId}: ${REFRESH_CHAIN_CANCELLED.forward}`);
+            return;
+          }
+          if (job.outcome === "lost") {
+            settleScreenStep();
+            halt(forwardIndex, "failed", `${screenId}: ${REFRESH_CHAIN_LOST_JOB_MESSAGE}`);
+            return;
+          }
+          if (job.snapshot.state === "cancelled") {
+            settleScreenStep();
+            halt(forwardIndex, "cancelled", `${screenId}: ${REFRESH_CHAIN_CANCELLED.forward}`);
+            return;
+          }
+          if (job.snapshot.state !== "done") {
+            settleScreenStep();
+            halt(
+              forwardIndex,
+              "failed",
+              `${screenId}: ${job.snapshot.error ?? "this snapshot could not be measured"}`,
+            );
+            return;
+          }
+          if (job.snapshot.screen_id === screenId) {
+            measured = job.snapshot;
+            break;
+          }
+        }
+
+        if (measured === null) {
+          settleScreenStep();
+          halt(
+            forwardIndex,
+            "failed",
+            `${screenId}: a job already running measured another snapshot`,
+          );
+          return;
+        }
+        lastForward = measured;
+        measuredCount += 1;
+        if (measured.reused) {
+          reusedForwardCount += 1;
+        } else {
+          newForwardCount += 1;
+        }
+      }
+
+      // This day's playbook detection — the third per-day act, interleaved for the same durability
+      // reason as the measurement above: a range stopped half way leaves every finished day whole.
+      // It reads the day's own recorded 5m/1m bars rather than a snapshot, so it depends on the
+      // top-up, not on the screen — which is why a day whose forward measurement was skipped above
+      // is still detected here.
+      //
+      // At most TWO attempts through ONE call site, the forward step's own pattern for the same
+      // cause: this manager's single-flight slot is process-wide rather than per-date, so an
+      // adopted job may be walking a DIFFERENT day. Waiting on it is still right; the chain then
+      // asks once more for THIS day now the slot is free.
+      let detected = false;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         if (refreshChainStopRef.current) {
           settleScreenStep();
-          halt(forwardIndex, "cancelled", REFRESH_CHAIN_CANCELLED.forward);
+          settleForwardStep();
+          halt(playbookIndex, "cancelled", REFRESH_CHAIN_CANCELLED.playbook);
           return;
         }
-        steps[forwardIndex] = { key: "forward", state: "running", message: head };
+        const playbookHead = `${dayHead} · detecting`;
+        steps[playbookIndex] = { key: "playbook", state: "running", message: playbookHead };
         publish("running");
 
-        const startedForward = await handleTriggerForward(screenId);
-        if (!startedForward.ok || !startedForward.data) {
+        const startedPlaybook = await handleTriggerPlaybook(day);
+        if (!startedPlaybook.ok || !startedPlaybook.data) {
+          // The route refuses a day the store holds no session for with a 422. The session filter
+          // above already dropped those, so this is the rare disagreement between the two reads —
+          // a normal outcome for one day, counted and stepped over, never a failed step.
+          if (startedPlaybook.status === 422) {
+            refusedPlaybookCount += 1;
+            break;
+          }
           settleScreenStep();
+          settleForwardStep();
           halt(
-            forwardIndex,
+            playbookIndex,
             "failed",
-            `${screenId}: ${startedForward.error ?? "this snapshot could not be measured"}`,
+            `${day}: ${startedPlaybook.error ?? "this day could not be detected"}`,
           );
           return;
         }
-        const adoptedForward = startedForward.data.started === false;
-        const base = adoptedForward ? `${head} · joined a job already running` : head;
-        let ticked = "";
+        const playbookJobId = startedPlaybook.data.compute.id;
+        if (playbookJobId === null) {
+          settleScreenStep();
+          settleForwardStep();
+          halt(playbookIndex, "failed", `${day}: the detection reported no job to wait on`);
+          return;
+        }
+        const adoptedPlaybook = startedPlaybook.data.started === false;
+        const playbookBase = adoptedPlaybook
+          ? `${playbookHead} · joined a job already running`
+          : playbookHead;
+        let playbookTicked = "";
 
-        const job = await awaitRefreshChainJob(
-          () => forwardComputeRef.current,
-          startedForward.data.compute.id,
+        const playbookJob = await awaitRefreshChainJob(
+          () => adaptPlaybookChainSnapshot(playbookComputeRef.current),
+          playbookJobId,
           () => refreshChainStopRef.current,
           (tick) => {
-            // "of", never a slash: a rendered "101 of 101" is inert, where "101 / 101" is a
-            // string a shipped golden pins against a table this control renders above.
-            const message = `${base} · ${tick.progress.rows_done} of ${tick.progress.rows_total} rows`;
-            if (message === ticked) return;
-            ticked = message;
-            steps[forwardIndex] = { key: "forward", state: "running", message };
+            const message = `${playbookBase} · ${tick.signals_done} of ${tick.signals_total} members`;
+            if (message === playbookTicked) return;
+            playbookTicked = message;
+            steps[playbookIndex] = { key: "playbook", state: "running", message };
             publish("running");
           },
         );
-        if (job.outcome === "stopped") {
+        if (playbookJob.outcome === "stopped") {
           settleScreenStep();
-          halt(forwardIndex, "cancelled", `${screenId}: ${REFRESH_CHAIN_CANCELLED.forward}`);
+          settleForwardStep();
+          halt(playbookIndex, "cancelled", `${day}: ${REFRESH_CHAIN_CANCELLED.playbook}`);
           return;
         }
-        if (job.outcome === "lost") {
+        if (playbookJob.outcome === "lost") {
           settleScreenStep();
-          halt(forwardIndex, "failed", `${screenId}: ${REFRESH_CHAIN_LOST_JOB_MESSAGE}`);
+          settleForwardStep();
+          halt(playbookIndex, "failed", `${day}: ${REFRESH_CHAIN_LOST_JOB_MESSAGE}`);
           return;
         }
-        if (job.snapshot.state === "cancelled") {
+        if (playbookJob.snapshot.state === "cancelled") {
           settleScreenStep();
-          halt(forwardIndex, "cancelled", `${screenId}: ${REFRESH_CHAIN_CANCELLED.forward}`);
+          settleForwardStep();
+          halt(playbookIndex, "cancelled", `${day}: ${REFRESH_CHAIN_CANCELLED.playbook}`);
           return;
         }
-        if (job.snapshot.state !== "done") {
+        if (playbookJob.snapshot.state !== "done") {
           settleScreenStep();
+          settleForwardStep();
           halt(
-            forwardIndex,
+            playbookIndex,
             "failed",
-            `${screenId}: ${job.snapshot.error ?? "this snapshot could not be measured"}`,
+            `${day}: ${playbookJob.snapshot.error ?? "this day could not be detected"}`,
           );
           return;
         }
-        if (job.snapshot.screen_id === screenId) {
-          measured = job.snapshot;
+        if (playbookJob.snapshot.session_date === day) {
+          detected = true;
           break;
         }
       }
-
-      if (measured === null) {
-        settleScreenStep();
-        halt(forwardIndex, "failed", `${screenId}: a job already running measured another snapshot`);
-        return;
-      }
-      lastForward = measured;
-      measuredCount += 1;
-      if (measured.reused) {
-        reusedForwardCount += 1;
-      } else {
-        newForwardCount += 1;
-      }
+      if (detected) detectedCount += 1;
     }
 
     settleScreenStep();
     settleForwardStep();
+    settlePlaybookStep();
+
+    // Step 7 — one back-scan across the whole range, after every day in it has been walked. By now
+    // it is a disclosure pass rather than a compute: each day resolves as a reuse at the signature
+    // the walk above just recorded under, and what it adds is the per-date account (recorded,
+    // reused, refused as a non-session, failed) and a durable ledger row for the range as a whole.
+    const backscanIndex = 6;
+    if (dayCount === 0) {
+      // Nothing was walked, so there is nothing for a scan to account for — a genuine no-op rather
+      // than a `done` (the forward step's own precedent).
+      steps[backscanIndex] = {
+        key: "rangescan",
+        state: "noop",
+        message: "nothing to scan — no day in this range is a recorded session",
+      };
+      publish("running");
+    } else if (
+      !(await runJob(
+        backscanIndex,
+        async () => {
+          // The range the RUN was clicked with, never the Backscan section's own two inputs.
+          const started = await handleTriggerBackscan(range.from, range.to);
+          if (!started.ok || started.data === undefined) {
+            return { ok: false, error: started.error, status: started.status };
+          }
+          const compute = adaptBackscanChainSnapshot(started.data.compute);
+          if (compute === null) {
+            return { ok: false, error: "the back-scan reported no job to wait on" };
+          }
+          return { ok: true, data: { started: started.data.started, compute } };
+        },
+        () => adaptBackscanChainSnapshot(backscanComputeRef.current),
+        describeBackscanDone,
+      ))
+    ) {
+      return;
+    }
+
     publish("done");
     refreshChainActiveRef.current = false;
   }
@@ -6706,6 +6977,11 @@ export default function DeskPage() {
     else if (active.key === "reconcile") await handleCancelReconcile();
     else if (active.key === "screen") await handleCancelScreen();
     else if (active.key === "forward") await handleCancelForward();
+    // The playbook manager erases a cancelled walk by reverting to its idle shape, keeping only
+    // the job's own id — which is exactly what `adaptPlaybookChainSnapshot` reads to report this
+    // step as cancelled rather than as a job that vanished.
+    else if (active.key === "playbook") await handleCancelPlaybook();
+    else if (active.key === "rangescan") await handleCancelBackscan();
   }
 
   // era-desk-iter-6 (J-05): select a past history row — fetch-and-swap, no POST, no recompute
@@ -7091,32 +7367,52 @@ export default function DeskPage() {
 
   // goal-playbook-iter-3 (J-03): trigger/cancel — mirrors handleTriggerForward/handleCancelForward
   // in shape, submitting the RESOLVED playbook date rather than a screen id. Single-flight is
-  // PROCESS-WIDE here (`desk_playbook_compute.py`'s own manager, never per-session-date): a second
-  // click while ANY playbook compute is running is REFUSED and the refusal is surfaced, never
-  // silently adopted as though it had started a run for THIS date (unlike the refresh chain's own
-  // "joined a job already running" adoption elsewhere on this page — TC-3 asks for a refusal here,
-  // not a join). Takes no argument (unlike `handleTriggerForward(screenId?)`, which is also called
-  // from the refresh chain with an explicit id) — the playbook section has no such second caller.
-  async function handleTriggerPlaybook() {
-    if (playbookValidated.date === null) {
-      setPlaybookTriggerError(
+  // PROCESS-WIDE here (`desk_playbook_compute.py`'s own manager, never per-session-date).
+  //
+  // 2026-08-12 — this took no argument, on the reasoning that "the playbook section has no such
+  // second caller". The refresh chain's sixth step IS that second caller now, so it takes the day
+  // explicitly, exactly as `handleTriggerForward(screenId?)` does: a chained step must submit the
+  // day the RUN is on, never whatever the section's own input happens to hold.
+  //
+  // What moved with it: the `started: false` REFUSAL. TC-3 asks the section's button to refuse a
+  // second click rather than silently join, but the chain's contract is the opposite — it adopts a
+  // running job and waits on it. Those cannot both live in one function, so the refusal moved out
+  // to `handleRunPlaybookClick` below, which is what the button binds. This core now reports the
+  // trigger result and lets its caller decide; the section's wording is unchanged.
+  //
+  // The `typeof` test is load-bearing for the same reason it is on the forward handler: the button
+  // binds its wrapper to `onClick`, so React would otherwise hand a MouseEvent in as a date.
+  async function handleTriggerPlaybook(
+    sessionDate?: string,
+  ): Promise<ChainTriggerResult<DeskPlaybookComputeSnapshot>> {
+    const date = typeof sessionDate === "string" ? sessionDate : playbookValidated.date;
+    if (date === null) {
+      const error =
         playbookValidated.error ??
-          "Enter a session date, or leave it blank once a session is recorded.",
-      );
-      return;
+        "Enter a session date, or leave it blank once a session is recorded.";
+      setPlaybookTriggerError(error);
+      return { ok: false, error };
     }
-    const date = playbookValidated.date;
     setPlaybookTriggering(true);
     setPlaybookTriggerError(null);
     const result = await triggerDeskPlaybookCompute(date);
     setPlaybookTriggering(false);
     if (!result.ok || result.data === undefined) {
       setPlaybookTriggerError(result.error ?? "The playbook compute could not be started.");
-      return;
+      return result;
     }
     setPlaybookCompute(result.data.compute);
+    return result;
+  }
+
+  // The section button's own click path: the refusal TC-3 asks for, kept verbatim, wrapped around
+  // the shared core above so the chain can adopt where this refuses.
+  async function handleRunPlaybookClick() {
+    const result = await handleTriggerPlaybook();
+    if (!result.ok || result.data === undefined) return;
     if (!result.data.started) {
       const runningDate = result.data.compute.session_date;
+      const date = playbookValidated.date;
       setPlaybookTriggerError(
         runningDate !== null && runningDate !== date
           ? `Refused — a playbook compute is already running for ${runningDate}. Wait for it to ` +
@@ -7138,7 +7434,7 @@ export default function DeskPage() {
 
   const playbookControlProps: PlaybookControlProps = {
     compute: playbookCompute,
-    onTrigger: handleTriggerPlaybook,
+    onTrigger: handleRunPlaybookClick,
     triggering: playbookTriggering,
     triggerError: playbookTriggerError,
     onCancel: handleCancelPlaybook,
@@ -7151,18 +7447,34 @@ export default function DeskPage() {
   // `DeepBackfillControl` pattern verbatim (both dates read straight from state; no derived
   // validation the way the single-date Playbook Signals section needs, since an inverted or
   // partial range is an honest empty plan/walk rather than a client-refused one — TC-17).
-  async function handleTriggerBackscan() {
+  //
+  // 2026-08-12: takes both days explicitly for the refresh chain's seventh step, which must scan
+  // the range the RUN was clicked with rather than the section's own two inputs. The refusal moved
+  // to `handleRunBackscanClick` for the same reason the playbook one did — see that handler.
+  async function handleTriggerBackscan(
+    fromDay?: string,
+    toDay?: string,
+  ): Promise<ChainTriggerResult<DeskPlaybookBackscanComputeSnapshot>> {
+    const from = typeof fromDay === "string" ? fromDay : backscanFromDay;
+    const to = typeof toDay === "string" ? toDay : backscanToDay;
     setBackscanTriggering(true);
     setBackscanTriggerError(null);
     setBackscanCancelRequested(false);
     setBackscanCancelError(null);
-    const result = await triggerDeskPlaybookBackscanCompute(backscanFromDay, backscanToDay);
+    const result = await triggerDeskPlaybookBackscanCompute(from, to);
     setBackscanTriggering(false);
     if (!result.ok || result.data === undefined) {
       setBackscanTriggerError(result.error ?? "The back-scan could not be started.");
-      return;
+      return result;
     }
     setBackscanCompute(result.data.compute);
+    return result;
+  }
+
+  // The section button's own click path — the refusal, kept verbatim, outside the shared core.
+  async function handleRunBackscanClick() {
+    const result = await handleTriggerBackscan();
+    if (!result.ok || result.data === undefined) return;
     if (!result.data.started) {
       setBackscanTriggerError(
         "Refused — a back-scan is already running. Wait for it to finish, then try again.",
@@ -7187,7 +7499,7 @@ export default function DeskPage() {
     toDay: backscanToDay,
     onFromDayChange: setBackscanFromDay,
     onToDayChange: setBackscanToDay,
-    onTrigger: handleTriggerBackscan,
+    onTrigger: handleRunBackscanClick,
     triggering: backscanTriggering,
     triggerError: backscanTriggerError,
     onCancel: handleCancelBackscan,

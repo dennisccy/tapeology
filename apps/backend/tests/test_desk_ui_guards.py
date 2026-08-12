@@ -192,6 +192,11 @@ def test_structure_prefill_guard_can_fail_on_a_seeded_violation():
 # `plan.*`/`compute.*`/`outcomes.*` top-level-binding precedent). No client-side arithmetic on any
 # of these is ever legitimate: they are exclusion/record COUNTS, not prices, but this panel's own
 # IN SCOPE contract is "no client-side arithmetic on served numerics" full stop, the J-07 precedent.
+# 2026-08-12 (the refresh chain's sixth and seventh steps): extended for the playbook compute
+# snapshot's own progress pair, `signals_done`/`signals_total`. This closes a PRE-EXISTING gap
+# rather than covering only new code -- the Playbook Signals section has rendered both verbatim
+# since J-03 and neither was ever in this alternation; the chain's per-day tick line now renders
+# them too, through the `tick.` binding its own waiter hands it. Same contract as the counts above.
 _PRICE_ARITHMETIC_FIELDS = (
     r"row\.(?:distance_bps|price_low|price_high|reference_close"
     r"|opposite_band\.(?:distance_bps|price_low|price_high|band_score)"
@@ -215,6 +220,7 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|mean_pct)"
     r"|breach\.(?:breached_count|total_count)"
     r"|basis\.(?:n_records)"
+    r"|(?:compute|tick|snapshot)\.(?:signals_done|signals_total)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -241,6 +247,11 @@ def test_desk_page_price_arithmetic_guard_can_fail_on_a_seeded_violation():
     """The lint CAN fail -- a lint that cannot fail proves nothing."""
     seeded_source = "const implied = row.price_high - row.reference_close;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_source) is not None
+    # 2026-08-12: the playbook progress pair the refresh chain's per-day tick line also renders. A
+    # "members left to walk" readout is the obvious thing to reach for and the obvious thing to get
+    # wrong -- the served pair is the only honest account of that walk.
+    seeded_remaining = "const remaining = tick.signals_total - tick.signals_done;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_remaining) is not None
 
 
 def test_desk_page_price_arithmetic_guard_catches_opposite_band_and_bands_by_class_arithmetic():

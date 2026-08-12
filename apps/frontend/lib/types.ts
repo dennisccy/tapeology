@@ -1654,6 +1654,10 @@ export interface DeskPlaybookReadResult {
 }
 
 export interface DeskPlaybookComputeSnapshot {
+  // The job's own ephemeral, process-scoped id -- `null` before any compute has ever run this
+  // process. A completed cancel reverts every OTHER field to the idle shape but keeps this id, so
+  // a waiter can tell "my cancel finished" from "the backend restarted" (`_resolve_cancelled`).
+  id: string | null;
   status: "idle" | "running" | "cancelling" | "done" | "error";
   session_date: string | null;
   signals_done: number;
@@ -1715,6 +1719,8 @@ export interface DeskPlaybookBackscanOutcomeCounts {
 
 /** The process-scoped snapshot of the single in-flight (or last-terminal) back-scan job. */
 export interface DeskPlaybookBackscanComputeSnapshot {
+  /** The job's own ephemeral, process-scoped id -- `null` before any back-scan has ever run. */
+  id: string | null;
   status: "idle" | "running" | "done" | "cancelled" | "error";
   from: string | null;
   to: string | null;

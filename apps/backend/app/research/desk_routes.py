@@ -1112,9 +1112,9 @@ def get_desk_playbook_compute(
     manager: DeskPlaybookComputeManager = Depends(get_desk_playbook_compute_manager),
 ) -> dict:
     """The playbook compute job's current/last snapshot, served VERBATIM —
-    ``{"status", "session_date", "signals_done", "signals_total", "error"}``, ALWAYS a body (never
-    ``null``: ``status == "idle"`` before any compute has ever run this process). A plain read:
-    never triggers a compute as a side effect (GET-never-computes)."""
+    ``{"id", "status", "session_date", "signals_done", "signals_total", "error"}``, ALWAYS a body
+    (never ``null``: ``status == "idle"`` and ``id is None`` before any compute has ever run this
+    process). A plain read: never triggers a compute as a side effect (GET-never-computes)."""
     return manager.snapshot()
 
 

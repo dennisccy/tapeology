@@ -2,10 +2,11 @@
 ``test_desk_ui_guards.py`` pattern (read the frontend .tsx as TEXT, assert on structure; no
 browser, no runtime).
 
-The control runs five refresh acts in order -- the universe membership fetch, the bar top-up, the
-bar index reconciliation, the screen for each day of the as-of range, then the forward returns for
-every snapshot that run recorded -- by driving the SAME five endpoints the page's existing controls
-already drive. These guards pin the four properties that make that safe:
+The control runs seven refresh acts in order -- the universe membership fetch, the bar top-up, the
+bar index reconciliation, then per day of the as-of range the screen, the forward returns for every
+snapshot that run recorded and that day's playbook detection, and finally one playbook back-scan
+across the whole range -- by driving the SAME seven endpoints the page's existing controls already
+drive. These guards pin the four properties that make that safe:
 
   (a) **No mount path.** No ``useEffect`` argument list anywhere in the page references the chain
       driver or any compute trigger. This is the era's own critical anti-goal ("Every run is an
@@ -14,15 +15,17 @@ already drive. These guards pin the four properties that make that safe:
   (b) **The entry point is click-only.** ``handleRefreshAll`` appears in exactly two syntactic
       shapes -- its own declaration, and the single props binding -- and the button carries a
       plain ``onClick`` with no focus/ref auto-invocation.
-  (c) **No second trigger path.** The driver calls the four EXISTING ``handleTrigger*`` handlers,
+  (c) **No second trigger path.** The driver calls the six EXISTING ``handleTrigger*`` handlers,
       never the raw ``lib/api`` clients and never a bare ``fetch(`` -- the
       ``test_structure_prefill_reuses_the_existing_load_function`` precedent applied to this
       block. It also owns no poll of its own: the page has exactly one ``setInterval(`` per
-      compute manager (four, forward-test era), because the chain WAITS on the state the existing
-      poll effects already maintain.
-  (d) **Honest step semantics.** The five steps appear once each, in order; the chain advances on
+      compute manager, because the chain WAITS on the state the existing poll effects already
+      maintain.
+  (d) **Honest step semantics.** The seven steps appear once each, in order; the chain advances on
       ``"done"`` and halts on ``"failed"``/``"cancelled"``; and ``started`` is never used as a
       halt condition, because ``started: false`` means a job was already running and was adopted.
+      The two range-driven steps submit the run's OWN frozen range, never the section inputs
+      beside them.
 
 The backend contracts these depend on are already pinned hermetically elsewhere and are NOT
 duplicated here: single-flight re-POST returning ``started is False``
@@ -44,10 +47,10 @@ trusted past them:
   * They prove source structure, never behaviour. Nothing here executes a line of TSX.
 
 The only real proof of "fires only on click" is the runtime one: load the page repeatedly with no
-click and observe that all four compute snapshots keep their ``id`` and ``started_utc``, and every
-durable run ledger keeps its length -- a fifth STEP must not add a mount POST. That check and every
-other runtime claim here is an operator-run verification, reported run-or-not-run, never a CI
-gate.
+click and observe that every compute snapshot keeps its ``id`` and ``started_utc``, and every
+durable run ledger keeps its length -- a sixth or seventh STEP must not add a mount POST. That
+check and every other runtime claim here is an operator-run verification, reported run-or-not-run,
+never a CI gate.
 
 Every guard carries a seeded counter-test proving the detection logic actually catches a
 violation (the ``test_copy_discipline.py`` seeded-violation precedent)."""
@@ -62,7 +65,16 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 _FRONTEND_ROOT = pathlib.Path(__file__).resolve().parents[2] / "frontend"
 _DESK_PAGE = _FRONTEND_ROOT / "app" / "desk" / "page.tsx"
 _API_CLIENT = _FRONTEND_ROOT / "lib" / "api.ts"
-_JOURNEY_SCRIPTS = _REPO_ROOT / "runs" / "goal-session-desk" / "journey-scripts"
+# EVERY goal session whose goldens replay against this page, not just the one that shipped the
+# chain. Widened 2026-08-12 with the sixth and seventh steps: the playbook session's own scripts pin
+# "Backscan", "Run Playbook", "Playbook Signals" and "Playbook Evidence", all of which the chain now
+# has reason to render. Scanning only the desk session would have let a step labelled "Backscan"
+# intercept the playbook J-07 golden page-wide while this guard stayed green -- the exact failure it
+# exists to prevent, one directory over.
+_JOURNEY_SCRIPT_DIRS = (
+    _REPO_ROOT / "runs" / "goal-session-desk" / "journey-scripts",
+    _REPO_ROOT / "runs" / "goal-session-playbook" / "journey-scripts",
+)
 
 _MARKER_START = "// REFRESH-CHAIN-START"
 _MARKER_END = "// REFRESH-CHAIN-END"
@@ -137,6 +149,14 @@ _UNIVERSE_FETCH_PATH = "/research/desk/universe/fetch"
 # already do). The timeout is untouched -- the Backscan section has no wait-tick of its own; it is
 # not part of the chain. Neither new effect can reach a trigger, which is the property the scan
 # below actually polices; the counts are here so that scan stays provably complete.
+#
+# 19/7/1 UNCHANGED for the sixth and seventh chain steps (2026-08-12). Re-derived rather than
+# assumed, because this is the first change to add STEPS without adding managers: both steps drive
+# managers whose polls, plan reads and mount seeds already existed for their own sections, so there
+# is nothing new to register. Their two ref mirrors joined the EXISTING mirror effect (the
+# `forwardComputeRef` precedent, which that effect's own comment already anticipated), they start
+# no interval, and they wait on the chain's one existing sleep. A future step that cannot say the
+# same must re-derive these three numbers here rather than loosen them.
 _EXPECTED_EFFECT_COUNT = 19
 _EXPECTED_INTERVAL_COUNT = 7
 _EXPECTED_TIMEOUT_COUNT = 1
@@ -163,6 +183,11 @@ _TRIGGER_CALLS = (
     # mirror, one level down.
     "handleTriggerBackscan(",
     "triggerDeskPlaybookBackscanCompute(",
+    # 2026-08-12: the two section BUTTONS' own click wrappers. The refusal each section shows on a
+    # `started: false` moved into these when the cores above became chain-callable, so a wrapper is
+    # now a path to a trigger and must be as unreachable from an effect as the core it wraps.
+    "handleRunPlaybookClick(",
+    "handleRunBackscanClick(",
 )
 
 # Machinery that can invoke a handler without a user click. None of it is used by this page today;
@@ -209,6 +234,30 @@ _FORBIDDEN_DRIVER_CALLS = (
     # stays in _TRIGGER_CALLS, so no useEffect may reach it: the era anti-goal holds unbroken, a
     # page load still computes nothing, and the fifth step runs only because someone clicked.
     "triggerDeskForwardCompute(",
+    # 2026-08-12, REVERSED by operator decision -- the same reversal, for the same class of reason,
+    # applied to the playbook pair. The census comments above still read "a playbook run is never a
+    # sixth chain step" and "a back-scan is ... never a sixth/seventh chain step"; both were true of
+    # the shape those sections shipped in and are now superseded by this decision. They are left in
+    # place as the record of what was believed when those managers were built.
+    #
+    # What changed, and why: a refresh finished with the desk's own screens and measurements
+    # current and the playbook -- which reads the very bars the top-up had just landed -- still
+    # un-walked. Closing that gap by hand meant two more sections and one click per day. The chain
+    # now detects each day it screened, and back-scans the whole range once at the end.
+    #
+    # What was given up, stated plainly: a Refresh Data click now also runs one playbook walk per
+    # screened day plus a range back-scan. A top-up that lands new fine bars re-keys
+    # `playbook_input_signature`, so those walks are genuine recomputes rather than reuses --
+    # seconds per day, and the click's wall-clock grows with the range. It is serialized like every
+    # other step, stoppable between days, and a re-click over ground already covered is cheap.
+    #
+    # What did NOT change, and is still guarded here: the raw clients stay banned, so the chain
+    # drives each section's own handler and that section stays the single owner of its state. Both
+    # handlers stay in _TRIGGER_CALLS, so no useEffect may reach them; a page load still computes
+    # nothing. And the two steps submit the run's OWN frozen range rather than the section inputs
+    # beside them -- pinned by its own guard below, the forward step's precedent.
+    "triggerDeskPlaybookCompute(",
+    "triggerDeskPlaybookBackscanCompute(",
 )
 
 _LINE_COMMENT = re.compile(r"//[^\n]*")
@@ -441,16 +490,19 @@ def test_the_universe_fetch_path_literal_lives_only_in_the_api_client():
 # --- (d) honest step semantics --------------------------------------------------------------------
 
 
-def test_the_chain_runs_the_five_steps_in_order():
-    """Membership, then top-up, then index, then screen, then the forward returns -- each named
-    exactly once, in that order. The screen runs after the bars and the index because its bar-store
-    pin is resolved before its walk and would otherwise pin stale bars; the forward measurement
-    follows the screen because it measures a snapshot that has to exist first.
+def test_the_chain_runs_the_seven_steps_in_order():
+    """Membership, then top-up, then index, then screen, the forward returns and the playbook
+    detection, then the back-scan -- each named exactly once, in that order. The screen runs after
+    the bars and the index because its bar-store pin is resolved before its walk and would
+    otherwise pin stale bars; the forward measurement follows the screen because it measures a
+    snapshot that has to exist first; the playbook detection follows the top-up because it reads
+    the very bars that landed and pins their series ids into its own signature; and the back-scan
+    runs last because its job is to account for days the walk above has already recorded.
 
-    The last two are INTERLEAVED per day rather than run as two passes (see
+    Steps four to six are INTERLEAVED per day rather than run as three passes (see
     ``test_the_forward_measurement_runs_inside_the_day_loop`` below), which this ordering assertion
-    is deliberately compatible with: the forward trigger still appears exactly once, and still
-    after the screen trigger, because it sits directly beneath it inside the one loop."""
+    is deliberately compatible with: each trigger still appears exactly once, and still in this
+    order, because they sit one beneath another inside the one loop."""
     body = _extract_function(_strip_comments(_DESK_PAGE.read_text()), _DRIVER)
     expected = (
         "triggerDeskUniverseFetch(",
@@ -458,6 +510,8 @@ def test_the_chain_runs_the_five_steps_in_order():
         "handleTriggerReconcile",
         "handleTriggerScreen",
         "handleTriggerForward",
+        "handleTriggerPlaybook",
+        "handleTriggerBackscan",
     )
     positions = []
     for needle in expected:
@@ -467,8 +521,8 @@ def test_the_chain_runs_the_five_steps_in_order():
         positions.append(body.index(needle))
     assert positions == sorted(positions), (
         f"{_DRIVER} runs its steps out of order -- found at offsets {positions}; the screen must "
-        "run after the bars and the index it pins, and the forward step after the screens it "
-        "measures"
+        "run after the bars and the index it pins, the forward step after the screens it "
+        "measures, the detection after the bars it reads, and the back-scan after them all"
     )
 
 
@@ -497,6 +551,51 @@ def test_the_forward_step_guard_can_fail_on_seeded_violations():
     assert re.search(r"handleTriggerForward\(\s*\w+\s*\)", seeded_no_arg) is None
     seeded_displayed = "const started = await handleTriggerForward(displayedSnapshot.id);"
     assert "displayedSnapshot" in seeded_displayed
+
+
+def test_the_playbook_and_backscan_steps_use_this_runs_own_range():
+    """Steps 6 and 7 submit the day and the range THIS run was clicked with -- never the two
+    sections' own inputs sitting beside them on the page.
+
+    Both handlers keep a no-argument form for their own section buttons (the
+    ``handleTriggerForward(screenId?)`` shape), and that form reads the section's state: the
+    Playbook Signals date box and the Backscan From/To boxes. Reaching for it here would detect
+    whatever day someone last typed into a different section rather than the day the chain is on --
+    the same defect class ``test_the_forward_step_measures_the_ids_this_run_recorded`` prevents for
+    the fifth step, and it would be invisible: the step would still go green, for the wrong day."""
+    body = _extract_function(_strip_comments(_DESK_PAGE.read_text()), _DRIVER)
+    assert re.search(r"handleTriggerPlaybook\(\s*[\w$.]+\s*\)", body) is not None, (
+        f"{_DRIVER} calls handleTriggerPlaybook with no explicit day -- the no-argument form "
+        "detects the Playbook Signals section's own date, not the day this run is on"
+    )
+    assert re.search(r"handleTriggerBackscan\(\s*[\w$.]+\s*,\s*[\w$.]+\s*\)", body) is not None, (
+        f"{_DRIVER} calls handleTriggerBackscan without an explicit range -- the no-argument form "
+        "scans the Backscan section's own From/To boxes, not the range this run was clicked with"
+    )
+    for state in ("playbookValidated", "backscanFromDay", "backscanToDay"):
+        assert state not in body, (
+            f"{_DRIVER} reads {state} -- the chained steps must submit this run's OWN frozen "
+            "range, never another section's input state"
+        )
+    for needle in ("await handleTriggerPlaybook(", "await handleTriggerBackscan("):
+        assert needle in body, (
+            f"{_DRIVER} does not await {needle!r} -- both managers are single-flight, so an "
+            "un-awaited trigger would adopt whatever job is already running instead of its own"
+        )
+
+
+def test_the_playbook_and_backscan_step_guard_can_fail_on_seeded_violations():
+    seeded_no_arg = "const started = await handleTriggerPlaybook();"
+    assert re.search(r"handleTriggerPlaybook\(\s*[\w$.]+\s*\)", seeded_no_arg) is None
+    seeded_one_arg = "const started = await handleTriggerBackscan(range.from);"
+    assert (
+        re.search(r"handleTriggerBackscan\(\s*[\w$.]+\s*,\s*[\w$.]+\s*\)", seeded_one_arg) is None
+    )
+    # The anti-needle bites even when the argument regex is satisfied: passing the SECTION's own
+    # resolved date is syntactically an explicit argument and semantically the exact bug.
+    seeded_section_state = "const started = await handleTriggerPlaybook(playbookValidated.date);"
+    assert re.search(r"handleTriggerPlaybook\(\s*[\w$.]+\s*\)", seeded_section_state) is not None
+    assert "playbookValidated" in seeded_section_state
 
 
 def _day_loop_body(driver_body: str) -> str:
@@ -536,6 +635,19 @@ def test_the_forward_measurement_runs_inside_the_day_loop():
         f"{_DRIVER} triggers the forward measurement OUTSIDE its per-day loop -- an interrupted "
         "range then loses every measurement it had not reached, which is exactly the 2026-08-06 "
         "loss this interleaving exists to prevent"
+    )
+    # 2026-08-12: the detection joins the same loop for the same reason. Run as a sixth PASS it
+    # would hold every day's playbook hostage to the whole range finishing -- the same shape as the
+    # 2026-08-06 loss, one step further down.
+    assert "handleTriggerPlaybook" in loop, (
+        f"{_DRIVER} triggers the playbook detection OUTSIDE its per-day loop -- an interrupted "
+        "range then loses the detection for every day it had already screened and measured"
+    )
+    # The back-scan is deliberately NOT in the loop: it is one act over the whole range, and
+    # running it per day would re-scan the same span N times.
+    assert "handleTriggerBackscan" not in loop, (
+        f"{_DRIVER} triggers the back-scan INSIDE its per-day loop -- it scans the whole range, so "
+        "a per-day call would repeat the same scan once per day"
     )
 
 
@@ -698,8 +810,9 @@ def _golden_pinned_texts() -> set[str]:
             for item in node:
                 walk(item)
 
-    for path in sorted(_JOURNEY_SCRIPTS.glob("*.json")):
-        walk(json.loads(path.read_text()).get("steps", []))
+    for directory in _JOURNEY_SCRIPT_DIRS:
+        for path in sorted(directory.glob("*.json")):
+            walk(json.loads(path.read_text()).get("steps", []))
     return texts
 
 
@@ -753,6 +866,12 @@ def test_the_interception_guard_is_not_vacuous_and_can_fail():
     pinned = _golden_pinned_texts()
     assert len(pinned) > 20, f"only {len(pinned)} pinned golden texts parsed -- the scan is broken"
     assert "Top-up Runs" in pinned and "coverage" in pinned
+    # One needle from EACH scanned directory, so a dropped/renamed dir fails loudly here rather
+    # than silently shrinking the scan back to the desk session's own goldens.
+    assert "Backscan" in pinned and "Run Playbook" in pinned, (
+        "the playbook session's goldens are not being parsed -- the sixth and seventh steps' copy "
+        "would then be scanned against the desk goldens only"
+    )
     literals = _rendered_literals(_DESK_PAGE.read_text())
     assert len(literals) > 10, f"only {len(literals)} rendered literals found -- the scan is broken"
     seeded = "Index Reconciliation finished"

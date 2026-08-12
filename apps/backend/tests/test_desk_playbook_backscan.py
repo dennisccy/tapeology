@@ -414,6 +414,7 @@ def _wait_for_terminal(manager: DeskPlaybookBackscanComputeManager, timeout: flo
 def test_manager_snapshot_is_idle_before_any_job_has_ever_run():
     manager = DeskPlaybookBackscanComputeManager()
     assert manager.snapshot() == {
+        "id": None,
         "status": "idle", "from": None, "to": None, "planned_total": 0, "completed": 0,
         "outcomes": {"reused": 0, "recorded": 0, "refused_non_session": 0, "failed": 0},
         "current_date": None, "error": None,
@@ -448,7 +449,8 @@ def test_tc5_cancel_after_one_date_completes_logs_a_partial_row_and_the_next_pla
     monkeypatch.setattr(desk_playbook_backscan, "run_playbook_and_record", _pausing_run_and_record)
 
     manager = DeskPlaybookBackscanComputeManager()
-    manager.trigger(D0, D2, universe_store, bar_store, CONFIG, playbook_store, run_store)
+    started = manager.trigger(D0, D2, universe_store, bar_store, CONFIG, playbook_store, run_store)
+    assert started["compute"]["id"] is not None
     assert entered_first.wait(timeout=5)
     manager.cancel()
     release.set()
@@ -456,6 +458,9 @@ def test_tc5_cancel_after_one_date_completes_logs_a_partial_row_and_the_next_pla
     snap = _wait_for_terminal(manager)
     assert snap["status"] == "cancelled"
     assert snap["completed"] == 1
+    # The job's own id reaches its terminal snapshot -- what the refresh chain's seventh step
+    # matches on to know the scan it is watching is the one it started.
+    assert snap["id"] == started["compute"]["id"]
     manager.join_all(timeout=5)
 
     rows, errors = run_store.list()
