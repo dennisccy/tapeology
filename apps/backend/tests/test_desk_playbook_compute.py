@@ -425,7 +425,7 @@ def test_cli_records_a_real_signature_matched_record_and_a_non_session_date_exit
     records, errors = playbook_store.list()
     assert errors == [] and len(records) == 1
     assert records[0]["playbook_input_signature"] == expected_signature
-    assert records[0]["payload_version"] == 2
+    assert records[0]["payload_version"] == 3
     assert len(records[0]["signals"]) == 1
     assert records[0]["signals"][0]["forward"] is not None
     run_store = PlaybookRunStore(resolve_desk_playbook_log_dir(str(tmp_path / "universe")))

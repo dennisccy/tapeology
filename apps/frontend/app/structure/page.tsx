@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   cancelEdgeReportCompute,
@@ -9,6 +9,7 @@ import {
   fetchDatasets,
   fetchEdgeReport,
   fetchEdgeReportCompute,
+  fetchDeskPlaybook,
   fetchLevels,
   fetchPnlLedger,
   fetchProfiles,
@@ -39,11 +40,14 @@ import type {
   Strategy,
   StrategiesPayload,
   TradabilityBand,
+  DeskPlaybookReadResult,
 } from "@/lib/types";
 import { MAX_LOADED_BARS, useBarWindow } from "@/lib/useBarWindow";
 import { useRecordedSeries } from "@/lib/useRecordedSeries";
 import { useTradability } from "@/lib/useTradability";
 import { boundaryTs, pickRepresentativeSeries, timeframesInOrder } from "@/lib/timeframes";
+import { playbookSignalKey } from "@/lib/playbook";
+import { playbookSignalShapes } from "@/lib/playbookShapes";
 import {
   formatDateET,
   formatDateTimeET,
@@ -1420,6 +1424,20 @@ function StructurePageContent() {
   // never changes the as-of levels/bands (multi-timeframe backend aggregates).
   const [chartTimeframe, setChartTimeframe] = useState("1d");
 
+  // The drilled-in playbook occurrence, when this page was reached from a /desk occurrence row.
+  // `playbookRef` is what the URL named; `playbookState` is the record that reference resolved to.
+  // Both stay null on every other visit, and every state derived from them below then reads as
+  // "no setup drawn" -- so the page renders exactly as it did before this existed.
+  const [playbookRef, setPlaybookRef] = useState<{
+    playbookId: string;
+    signalKey: string;
+    timeframe: string;
+  } | null>(null);
+  const [playbookState, setPlaybookState] = useState<LoadState<DeskPlaybookReadResult>>({
+    phase: "idle",
+  });
+  const playbookRequestedForRef = useRef<string | null>(null);
+
   // era-5B J-02/J-03 Case Studies state — the FULL, unfiltered registry is fetched ONCE on mount
   // (the `strategiesResult`/`datasetsResult` null-then-resolved pattern below); the symbol/reaction
   // filters are applied CLIENT-SIDE over the already-served rows (a display filter of served rows,
@@ -1722,8 +1740,43 @@ function StructurePageContent() {
     // market clock, the one format this product displays.
     setAsOfInput(formatDateTimeET(asOf, { zone: false }));
     handleLoad(symbol, asOf);
+    // Three ADDITIVE, optional params carried by a /desk PLAYBOOK OCCURRENCE row (the ranked-row
+    // link above sends neither). Each is read only AFTER the two-param early return above, so a
+    // link carrying just `symbol`+`asof` behaves byte-identically to before. This block still
+    // issues no read of its own -- it only publishes state; the by-id playbook read lives in its
+    // own effect below the PREFILL-END marker (the deferred raw-levels read's own precedent).
+    const timeframe = searchParams.get("tf")?.trim() ?? "";
+    if (timeframe) setChartTimeframe(timeframe);
+    const playbookId = searchParams.get("playbook")?.trim() ?? "";
+    const signalKey = searchParams.get("signal")?.trim() ?? "";
+    if (playbookId && signalKey) setPlaybookRef({ playbookId, signalKey, timeframe });
   }, [searchParams]);
   // J-05-PREFILL-END
+
+  // The drilled-in playbook signal, read BY RECORD ID. Deliberately not by `?date=`: that read
+  // returns the NEWEST version for a date, so a re-compute landing between the /desk render and
+  // the click would silently draw a different record's signal under the same key. A record id is
+  // immutable and never rewritten, so it resolves to exactly the bytes /desk showed. The geometry
+  // itself is never carried in the URL -- a link must not hold a client-authored copy of a
+  // recorded fact. Modelled on the deferred raw-levels read above (`requestedFor` ref + `alive`).
+  useEffect(() => {
+    if (!playbookRef) return;
+    if (playbookRequestedForRef.current === playbookRef.playbookId) return;
+    playbookRequestedForRef.current = playbookRef.playbookId;
+    let alive = true;
+    setPlaybookState({ phase: "loading" });
+    fetchDeskPlaybook({ id: playbookRef.playbookId }).then((result) => {
+      if (!alive) return;
+      setPlaybookState(
+        result.ok && result.data
+          ? { phase: "ready", data: result.data }
+          : { phase: "error", message: result.error ?? "The playbook record could not be loaded." },
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, [playbookRef]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -2017,6 +2070,49 @@ function StructurePageContent() {
   const tradabilityChartBars = tradabilityWindow.bars;
   const tradabilityAsOfBoundaryTs = boundaryTs(tradabilityChartBars, tradabilityAsOfEpochMs);
 
+  // --- The drilled-in playbook occurrence's shape ------------------------------------------------
+  // All derived, no extra state. Every failure below leaves `playbookShapes` empty, so the chart
+  // renders exactly as a plain `?symbol=&asof=` drill-in does — nothing fabricated, nothing hidden,
+  // and each case says in text which one it was.
+  const playbookSignal =
+    playbookState.phase === "ready" && playbookRef
+      ? (playbookState.data.playbook?.signals.find(
+          (signal) => playbookSignalKey(signal) === playbookRef.signalKey,
+        ) ?? null)
+      : null;
+  const playbookSignalMissing =
+    playbookState.phase === "ready" && playbookRef !== null && playbookSignal === null;
+  // A hand-edited URL can name a signal for one symbol while loading another's chart; drawing that
+  // outline over the wrong instrument's candles would look entirely plausible.
+  const playbookSymbolMismatch =
+    playbookSignal !== null &&
+    loadedQuery !== null &&
+    playbookSignal.symbol !== loadedQuery.symbol;
+  const playbookShapeResult = useMemo(
+    () =>
+      playbookSignal !== null && !playbookSymbolMismatch
+        ? playbookSignalShapes(playbookSignal)
+        : null,
+    [playbookSignal, playbookSymbolMismatch],
+  );
+  // MEMOIZED because StructureChart's overlay effect keys on this array's identity — a fresh array
+  // each render would re-attach the primitive on every render.
+  const playbookShapes = useMemo(
+    () => playbookShapeResult?.shapes ?? [],
+    [playbookShapeResult],
+  );
+  const playbookFocusRange = playbookShapeResult?.span ?? undefined;
+  // The detector ran on `tf`; this chart may be drawing something else, because the symbol has no
+  // series at that timeframe. The outline is still geometrically CORRECT (its anchors are absolute
+  // instants, not bar indices) — just drawn against coarser candles — so it is still drawn, and
+  // the discrepancy is stated rather than hidden.
+  const playbookTimeframeFallback =
+    playbookShapeResult !== null &&
+    playbookRef !== null &&
+    playbookRef.timeframe !== "" &&
+    effectiveTimeframe !== "" &&
+    effectiveTimeframe !== playbookRef.timeframe;
+
   // era-5B J-02/J-03 (THIS iteration) Case Studies derived values. `filteredSetupsEvents` is a
   // CLIENT-SIDE display filter of the already-served, unfiltered registry (never a recomputation
   // or a second fetch) — the SAME `bar_series.filter` precedent this page already established.
@@ -2267,7 +2363,15 @@ function StructurePageContent() {
                   ) : (
                     <>
                       <StructureChart
-                        key={`tradability|${tradability.symbol}|${tradability.as_of}`}
+                        // `effectiveTimeframe` is part of the key because a timeframe change
+                        // swaps the drawn series for a DIFFERENT one whose bar timestamps do not
+                        // line up with the old one's. Without a remount the chart treats the swap
+                        // as a continuation, tries to re-anchor its scroll position on a bar that
+                        // no longer exists, and leaves the viewport wherever it happened to be --
+                        // which then re-fires the lazy-load subscription and marches the window
+                        // away from the as-of entirely. Remounting re-runs the first-window
+                        // framing, so switching timeframe keeps showing the same as-of region.
+                        key={`tradability|${tradability.symbol}|${tradability.as_of}|${effectiveTimeframe}`}
                         bars={tradabilityChartBars}
                         levels={[]}
                         bands={tradability.bands}
@@ -2275,7 +2379,70 @@ function StructurePageContent() {
                         onNeedOlder={tradabilityWindow.loadOlder}
                         onNeedNewer={tradabilityWindow.loadNewer}
                         loadingMore={tradabilityWindow.loading}
+                        shapes={playbookShapes}
+                        shapeCaption={playbookShapeResult?.caption}
+                        focusRange={playbookFocusRange}
                       />
+                      {playbookShapeResult !== null && playbookShapeResult.legend.length > 0 && (
+                        <p
+                          data-testid="structure-playbook-shape-legend"
+                          className="mt-1 text-[11px] text-slate-600"
+                        >
+                          {playbookShapeResult.legend.map((item) => (
+                            <span key={item.label} className="mr-3 whitespace-nowrap">
+                              <span aria-hidden="true" style={{ color: item.swatch }}>
+                                ■
+                              </span>{" "}
+                              {item.label}
+                            </span>
+                          ))}
+                        </p>
+                      )}
+                      {playbookShapeResult?.note && (
+                        <p
+                          data-testid="structure-playbook-shape-partial"
+                          className="mt-1 text-[11px] text-amber-300/80"
+                        >
+                          {playbookShapeResult.note}
+                        </p>
+                      )}
+                      {playbookTimeframeFallback && playbookRef && (
+                        <p
+                          data-testid="structure-playbook-timeframe-fallback"
+                          className="mt-1 text-[11px] text-amber-300/80"
+                        >
+                          This setup was detected on {playbookRef.timeframe} bars, but no{" "}
+                          {playbookRef.timeframe} series is recorded for this symbol — the chart is
+                          drawn on {effectiveTimeframe} bars, so the outline spans fewer candles
+                          than it did at detection.
+                        </p>
+                      )}
+                      {playbookState.phase === "error" && (
+                        <p
+                          data-testid="structure-playbook-unavailable"
+                          className="mt-1 text-[11px] text-rose-700"
+                        >
+                          {playbookState.message}
+                        </p>
+                      )}
+                      {playbookSignalMissing && (
+                        <p
+                          data-testid="structure-playbook-signal-not-found"
+                          className="mt-1 text-[11px] text-amber-300/80"
+                        >
+                          That playbook record does not contain the referenced signal — no setup
+                          outline is drawn.
+                        </p>
+                      )}
+                      {playbookSymbolMismatch && playbookSignal && loadedQuery && (
+                        <p
+                          data-testid="structure-playbook-symbol-mismatch"
+                          className="mt-1 text-[11px] text-amber-300/80"
+                        >
+                          The referenced signal is for {playbookSignal.symbol}, but{" "}
+                          {loadedQuery.symbol} is loaded — no setup outline is drawn.
+                        </p>
+                      )}
                       <p
                         data-testid="tradable-map-chart-caption"
                         className="mt-2 text-[11px] text-slate-600"
@@ -2371,7 +2538,9 @@ function StructurePageContent() {
                             </div>
                           )}
                           <StructureChart
-                            key={`${levels.symbol}|${levels.as_of}`}
+                            // Keyed on the drawn timeframe for the same reason as the Tradable Map
+                            // chart above -- one timeframe select governs both charts.
+                            key={`${levels.symbol}|${levels.as_of}|${effectiveTimeframe}`}
                             bars={chartBars}
                             levels={levels.levels}
                             asOfTs={asOfBoundaryTs}

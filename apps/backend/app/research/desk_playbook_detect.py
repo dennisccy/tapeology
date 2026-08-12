@@ -89,6 +89,60 @@ def _iso(epoch: float) -> str:
     )
 
 
+def _pt(bar: RawBar, price: float) -> dict:
+    """ONE shape anchor: this bar's OWN epoch in BOTH renderings a consumer needs, plus an absolute
+    price. ``ts`` is epoch seconds -- deliberately the byte-identical key ``GET /research/candles``
+    serves its own rows under (``bars.py``'s ``{"ts": bar.epoch}``), and ``merged_bars`` (what a
+    detector reads) and ``merged_candles`` (what a chart reads) are the SAME fold, so a consumer
+    joins an anchor to a candle by equality and never reconstructs the RTH 5m session grid the
+    ``slots_to_break``-style indices are relative to. ``ts_utc`` is this module's own ``_iso``
+    rendering, the human/MCP form ``trigger_ts`` already uses. ONE source (``bar.epoch``), two
+    renderings -- never a second time source, never a conversion left to the reader."""
+    return {"ts": bar.epoch, "ts_utc": _iso(bar.epoch), "price": price}
+
+
+def _span(from_epoch: float, to_epoch: float) -> dict:
+    """A shape anchor's TIME-only bound pair (a formation window: an opening range, a base, a
+    handle, a trading range). Takes epochs rather than bars because the opening range's own window
+    is a WALL-CLOCK fact (ET 09:30 .. 09:30+or_minutes, from ``opening_range``) rather than any
+    bar's epoch; every other caller passes ``bar.epoch``. Same two renderings as ``_pt``."""
+    return {
+        "from_ts": from_epoch, "from_ts_utc": _iso(from_epoch),
+        "to_ts": to_epoch, "to_ts_utc": _iso(to_epoch),
+    }
+
+
+def _extreme_bar(bars: list[RawBar], extreme: str) -> RawBar:
+    """The FIRST bar of ``bars`` attaining that window's own extreme (``"low"`` -> min low,
+    ``"high"`` -> max high) -- the bar IDENTITY behind an extreme a detector already computed as a
+    bare ``min()``/``max()`` over prices. FIRST on a tie, stated here rather than inherited silently
+    from ``min``'s own rule, so the served anchor is deterministic."""
+    if extreme == "low":
+        return min(bars, key=lambda bar: bar.low)
+    return max(bars, key=lambda bar: bar.high)
+
+
+def _anchors(params: dict, setup_id: str, **parts: object) -> dict:
+    """One signal's drawable shape-anchor block: the recorded bars and prices its own formation was
+    read from, so a chart draws the DETECTOR's reading rather than a second, re-derived one. Every
+    price here is a value the detector already computed; the anchors add the bar identities (and,
+    for a handful of formations, the one price that previously survived only as an MBR RATIO --
+    unrecoverable, since MBR is a per-symbol baseline).
+
+    ``schema`` is read out of ``params`` rather than a module constant (this module owns none, per
+    the module docstring), so the string served on every signal is provably the SAME one hashed
+    into ``playbook_input_signature``. ``setup_id`` is echoed so a consumer can refuse a mismatched
+    (signal, anchors) pair rather than mis-draw one setup's outline as another's.
+
+    LAW: every timestamp in ``parts`` lies at or before the signal's own TRIGGER bar. That is what
+    keeps this block truncation- and mutation-invariant like the rest of ``geometry`` (the generic
+    lookahead property test compares whole ``geometry`` dicts), and it is why ``entry`` and
+    ``invalidation_price`` are NOT anchored here: their natural right edge is the session close,
+    which depends on bars after the trigger. Both are already served flat, and drawing a line at a
+    served price is formatting, not a recomputation."""
+    return {"schema": params["shape_anchor_schema"], "setup_id": setup_id, **parts}
+
+
 def _rvol(bar: RawBar, slot: int, slot_volume_medians: dict[int, float]) -> float | None:
     """One bar's RVOL against its own baseline slot median -- spec §0's ONE relative-volume
     definition; null (never a guess) when the slot has no median (too few baseline sessions)."""
@@ -339,6 +393,19 @@ def detect_opening_range_breaks(
             "opening_range_basis": or_result["basis"],
             "slots_to_break": trigger_idx,
             "open_vs_prior_close_pct": open_vs_prior_close_pct,
+            # The opening range's own clock window comes from `opening_range` itself rather than
+            # being re-derived here: it is a wall-clock fact (ET 09:30 .. 09:30+or_minutes) that
+            # holds even for a session whose 09:30 bar is missing, and re-deriving it anywhere
+            # else would mean a second, DST-correct copy of `_et_epoch`. Its two prices are
+            # already served above as `or_low`/`or_high`.
+            "anchors": _anchors(
+                params, "open_high_break" if side == "long" else "open_low_break",
+                formation=_span(or_result["window_start_epoch"], trigger_bar.epoch),
+                trigger=_pt(trigger_bar, trigger_price),
+                opening_range=_span(
+                    or_result["window_start_epoch"], or_result["window_end_epoch"]
+                ),
+            ),
         },
         "volume": {
             "rvol_trigger_bar": rvol_trigger_bar,
@@ -487,6 +554,19 @@ def _find_one_continuation(
         jump_mbr = jump / mbr
         ladder_step_ratio = jump_mbr / previous_jump_mbr if previous_jump_mbr else None
 
+        # The jump leg's own two ends, named and anchored to their bars. `jump` above is measured
+        # from exactly these two prices; without them the leg survives only as the `jump_mbr`
+        # RATIO, which no consumer can turn back into a price (MBR is a per-symbol baseline). Same
+        # windows, same extremes, one computation -- `_extreme_bar` picks the BAR that
+        # `min()`/`max()` already picked the price from. Note the FAR end anchors to the base's own
+        # extreme bar, not to the base's first bar: `u`/`l` is the extreme over the WHOLE base
+        # window, which the first bar need not attain, and an anchor must name a price its own bar
+        # actually traded.
+        jump_bar = _extreme_bar(lookback_bars, "low" if side == "long" else "high")
+        jump_extreme = jump_bar.low if side == "long" else jump_bar.high
+        base_start_bar = session_bars[start_idx]
+        base_edge_bar = _extreme_bar(base_bars, "high" if side == "long" else "low")
+
         approach_start = max(0, t - params["approach_bars"])
         approach_indices = list(range(approach_start, t))
         approach_rvols = [_rvol(session_bars[i], i, slot_medians) for i in approach_indices]
@@ -531,6 +611,16 @@ def _find_one_continuation(
                 "base_flatline": (base_range / mbr) <= params["base_flatline_max_mbr"],
                 "base_lows_ascending": _base_lows_ascending(base_bars, side),
                 "ladder_step_ratio": ladder_step_ratio,
+                # The base box's two prices are already served above as `price_low`/`price_high`;
+                # the anchors add its time bounds and the jump leg the base sits on top of.
+                "anchors": _anchors(
+                    params, setup_id,
+                    formation=_span(jump_bar.epoch, bar_t.epoch),
+                    trigger=_pt(bar_t, trigger_price),
+                    base=_span(base_start_bar.epoch, session_bars[t - 1].epoch),
+                    jump_start=_pt(jump_bar, jump_extreme),
+                    jump_end=_pt(base_edge_bar, trigger_price),
+                ),
             },
             "volume": {
                 "rvol_trigger_bar": rvol_trigger_bar,
@@ -772,6 +862,15 @@ def detect_cup_handle(
             )
             handle_duration_frac = handle_duration / cup_bars_span
 
+            # The three bars the cup's own outline runs through. Both rims are pivots this walk
+            # already selected BY index, and the cup bottom is the bar `cup_bottom_low` was read
+            # from -- previously only `cup_bars` (a SPAN) survived, which places nothing on a
+            # chart. The handle bottom's bar likewise names where `handle_bottom` was read.
+            left_rim_bar = session_bars[left["index"]]
+            right_rim_bar = session_bars[right["index"]]
+            cup_bottom_bar = _extreme_bar(cup_window, "low")
+            handle_bottom_bar = _extreme_bar(handle_bars, "low")
+
             return {
                 "symbol": symbol,
                 "setup_id": "cup_handle",
@@ -794,6 +893,16 @@ def detect_cup_handle(
                     "cup_middle_third_rvol_median": middle_median,
                     "cup_outer_third_rvol_median": outer_median,
                     "handle_rvol_median": handle_median,
+                    "anchors": _anchors(
+                        params, "cup_handle",
+                        formation=_span(left_rim_bar.epoch, trigger_bar.epoch),
+                        trigger=_pt(trigger_bar, trigger_price),
+                        left_rim=_pt(left_rim_bar, left["price"]),
+                        cup_bottom=_pt(cup_bottom_bar, cup_bottom_low),
+                        right_rim=_pt(right_rim_bar, right["price"]),
+                        handle=_span(session_bars[handle_start].epoch, session_bars[trigger_idx - 1].epoch),
+                        handle_bottom=_pt(handle_bottom_bar, handle_bottom),
+                    ),
                 },
                 "volume": {
                     "rvol_trigger_bar": rvol_trigger_bar,
@@ -984,6 +1093,19 @@ def detect_capitulation(
             "decline_bars": decline_bars,
             "climax_rvol": climax_rvol,
             "bars_from_climax_to_trigger": bars_from_climax_to_trigger,
+            # The decline leg's two ends. Its far end is the close `decline_mbr` is measured FROM
+            # -- a price that previously survived only as that MBR ratio, unrecoverable without the
+            # per-symbol baseline. Its near end is the climax bar itself, which also names the bar
+            # `climax_rvol` is about (previously only reachable by arithmetic on two spans).
+            "anchors": _anchors(
+                params, "capitulation",
+                formation=_span(session_bars[window_start - 1].epoch, trigger_bar.epoch),
+                trigger=_pt(trigger_bar, trigger_price),
+                decline_start=_pt(
+                    session_bars[window_start - 1], session_bars[window_start - 1].close
+                ),
+                climax=_pt(session_bars[climax_idx], leg_low),
+            ),
         },
         "volume": {
             "rvol_trigger_bar": rvol_trigger_bar,
@@ -1258,6 +1380,22 @@ def _range_trade_side(
                 "crossed_midrange": crossed_midrange,
                 "turned_at_midrange": turned_at_midrange,
                 "absorption_bar_present": absorption_bar_present,
+                # The range box's two prices are already served above as `price_low`/`price_high`;
+                # the anchors add its time bounds and -- the part that previously collapsed to a
+                # COUNT -- which bars the arming touches actually landed on, at the extreme each
+                # touch was read at. `zone_touches` returns those indices; only `len()` survived.
+                "anchors": _anchors(
+                    params, "range_trade",
+                    formation=_span(session_bars[0].epoch, trigger_bar.epoch),
+                    trigger=_pt(trigger_bar, trigger_price),
+                    range=_span(session_bars[0].epoch, prev_bar.epoch),
+                    low_zone_touches=[
+                        _pt(session_bars[idx], session_bars[idx].low) for idx in low_touches
+                    ],
+                    high_zone_touches=[
+                        _pt(session_bars[idx], session_bars[idx].high) for idx in high_touches
+                    ],
+                ),
             },
             "volume": {
                 "rvol_trigger_bar": rvol_trigger_bar,
@@ -1463,6 +1601,15 @@ def _find_double_extreme(
                 session_bars, trigger_idx, index_bars, session_date, side, mbr, index_baseline, params,
             )
 
+            # Both pivots' own bars AND both prices. Previously `tops_separation_bars` (a
+            # DIFFERENCE) and `tops_gap_mbr` (a RATIO) were all that survived, so neither pivot's
+            # position and only the FARTHER pivot's price (as `price_low`/`price_high`) could be
+            # placed on a chart -- of the two tops the pattern is named for, zero were drawable.
+            # `structure_bar` names the valley/peak bar `structure_price` was read from.
+            p1_bar = session_bars[p1["index"]]
+            p2_bar = session_bars[p2["index"]]
+            structure_bar = _extreme_bar(between, "low" if side == "short" else "high")
+
             return {
                 "symbol": symbol,
                 "setup_id": "double_top" if side == "short" else "double_bottom",
@@ -1484,6 +1631,14 @@ def _find_double_extreme(
                         else (trigger_price - far_pivot) / mbr
                     ),
                     "second_top_rvol_vs_first": second_top_rvol_vs_first,
+                    "anchors": _anchors(
+                        params, "double_top" if side == "short" else "double_bottom",
+                        formation=_span(p1_bar.epoch, trigger_bar.epoch),
+                        trigger=_pt(trigger_bar, trigger_price),
+                        first_pivot=_pt(p1_bar, p1["price"]),
+                        second_pivot=_pt(p2_bar, p2["price"]),
+                        structure_pivot=_pt(structure_bar, structure_price),
+                    ),
                 },
                 "volume": {
                     "rvol_trigger_bar": rvol_trigger_bar,

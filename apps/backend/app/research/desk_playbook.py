@@ -172,6 +172,15 @@ PLAYBOOK_RETURN_SIGN_CONVENTION: str = "side_relative"
 # The rail's own measure-key shape, echoed verbatim (J-02 measures playbook signals through it).
 PLAYBOOK_SIGNAL_MEASURES: tuple[str, ...] = DESK_FORWARD_MEASURE_KEYS
 PLAYBOOK_MIN_N_DISCLOSURE: int = 12  # evidence low-n tag (J-08) -- a disclosure floor, never a gate
+# The drawable shape-anchor vocabulary every signal's own `geometry.anchors` is written in. A
+# structural constant (the shape of the payload), never a tunable -- moving this string is how a
+# future v2 of the vocabulary RE-KEYS records instead of reinterpreting v1 records under v2 rules.
+PLAYBOOK_SHAPE_ANCHOR_SCHEMA: str = "playbook-anchors-v1"
+# The bar timeframe every detector's own session series is sliced at (`compute_playbook` below
+# slices `merged_bars(symbol, "5m")`; `opening_range` additionally reads 1m). Served on the record
+# so a chart drilling in from a signal asks for the SAME series the detector saw, rather than
+# hardcoding "5m" a second time in the frontend where the two could silently drift apart.
+PLAYBOOK_DETECT_TIMEFRAME: str = "5m"
 
 # The visible honesty register carried by every playbook payload. Lint-checked via
 # test_copy_discipline.find_violations (the desk_forward.FORWARD_REGISTER precedent).
@@ -182,6 +191,9 @@ PLAYBOOK_REGISTER = (
     "fixed in advance in docs/playbook-detector-spec.md, never fit to outcomes. "
     "A signal is a recorded observation, not advice: invalidation_price is the book's own "
     "structural level, disclosed as geometry, never a stop order, a size, or an account concept. "
+    "A signal's geometry.anchors block names the recorded bars and prices its own formation was "
+    "read from, so the shape drawn on a chart is the detector's own reading rather than a second, "
+    "re-derived one; a record computed before that block existed carries an honest absence. "
     "Each signal's forward block is measured with the desk forward rail's own conventions — "
     "trading-bar horizons, dual max drawdown, truncation honesty — anchored at the entry already "
     "decided at detection time, never recomputed a second way; invalidation_breached discloses "
@@ -302,6 +314,17 @@ def playbook_parameters() -> dict:
         # session_date and bar content under J-02's code now hashes a DIFFERENT parameters blob, so
         # a fresh compute mints a genuinely NEW version instead of matching the old, unmeasured one.
         "rail_max_touches_per_row": DESK_FORWARD_MAX_TOUCHES_PER_ROW,
+        # The drawable shape-anchor vocabulary (`geometry.anchors`) and the timeframe every
+        # detector's session series is sliced at. Embedded here for exactly the reason
+        # `rail_max_touches_per_row` above is: the SAME session_date and bar content under this
+        # code now hashes a DIFFERENT parameters blob, so a fresh compute mints a genuinely NEW
+        # version that CARRIES the anchors instead of matching the old, anchorless one -- which,
+        # being append-only, is never rewritten and stays honestly anchorless forever. It is also
+        # what routes the schema string to the detectors through `params`, keeping
+        # `desk_playbook_detect.py` constant-free: "every signal's anchors.schema equals the
+        # record's parameters.shape_anchor_schema" then holds by construction, not by assertion.
+        "shape_anchor_schema": PLAYBOOK_SHAPE_ANCHOR_SCHEMA,
+        "detect_timeframe": PLAYBOOK_DETECT_TIMEFRAME,
     }
 
 
@@ -567,6 +590,21 @@ def compute_playbook(
     signals: list[dict] = []
     absences: list[dict] = []
     diagnostics: list[dict] = []
+    # The per-symbol MBR every `*_mbr` ratio on this record is normalized by, recorded where it is
+    # RESOLVED (once per symbol, above/below) rather than re-served on all ~90 of a busy session's
+    # signals. Without it a reader can see "2.0 MBR" and have no way to know what that is in the
+    # instrument's own units -- the ratio is not invertible from anything else on the payload. It
+    # exists so an MBR figure is READABLE, never so a consumer can multiply it back into a price:
+    # every price this record draws is served absolutely, as its own field or as an anchor.
+    # Deliberately NOT named `baselines` -- `baseline_anchors` below is an unrelated thing (the
+    # seeded random-minute measurements), and two look-alike names would invite a mis-read.
+    symbol_scales: dict[str, dict] = {
+        # SPY's own MBR, the one `market.market_move_mbr` is normalized by on EVERY signal -- no
+        # per-signal block could honestly carry it, since it is not the signal's own symbol's scale.
+        PLAYBOOK_MARKET_SYMBOL: {
+            "mbr": index_baseline["mbr"], "baseline_sessions": index_baseline["sessions"],
+        },
+    }
     # Cross-symbol pools keyed "<setup_id>:<side>" -- the ONLY pooling boundary that makes sense
     # this iteration, since a single symbol-session can carry at most ONE opening-range-break
     # signal (the detector's own mutual-exclusion rule); a future multi-signal-per-session detector
@@ -613,6 +651,12 @@ def compute_playbook(
             if progress is not None:
                 progress({"symbol": symbol})
             continue
+
+        # Past the baseline gate, so this symbol has a usable scale -- recorded for every symbol
+        # the walk actually detects against, whether or not it goes on to fire a signal.
+        symbol_scales[symbol] = {
+            "mbr": baseline["mbr"], "baseline_sessions": baseline["sessions"],
+        }
 
         bars_1m = bar_store.merged_bars(symbol, "1m")
         or_result = opening_range(
@@ -755,12 +799,16 @@ def compute_playbook(
         # J-01-era record's own signature is untouched (its file is never rewritten), but a fresh
         # compute over the SAME session_date/bar content now hashes a DIFFERENT parameters blob and
         # so mints a genuinely new version rather than matching the old, unmeasured one.
-        "payload_version": 2,
+        # 3: every signal's `geometry` now carries an `anchors` block (the recorded bars and prices
+        # its own formation was read from), and the record gains `symbol_scales`. Re-keyed the same
+        # way, by the new `shape_anchor_schema`/`detect_timeframe` keys inside `parameters`.
+        "payload_version": 3,
         "parameters": params,
         "register": PLAYBOOK_REGISTER,
         "signals": signals,
         "absences": absences,
         "diagnostics": diagnostics,
+        "symbol_scales": symbol_scales,
         "baseline_anchors": dict(baseline_pool),
         "summary": summary,
         "signals_beyond_cap": pool_beyond_cap,
@@ -841,6 +889,9 @@ class PlaybookStore:
             },
             "summary": {key: dict(value) for key, value in meta.get("summary", {}).items()},
             "signals_beyond_cap": dict(meta.get("signals_beyond_cap", {})),
+            "symbol_scales": {
+                key: dict(value) for key, value in meta.get("symbol_scales", {}).items()
+            },
         }
 
     def list(self) -> tuple[list[dict], list[dict]]:
@@ -925,6 +976,7 @@ class PlaybookStore:
         baseline_anchors: dict[str, list[dict]] | None = None,
         summary: dict[str, dict] | None = None,
         signals_beyond_cap: dict[str, int] | None = None,
+        symbol_scales: dict[str, dict] | None = None,
     ) -> dict:
         """Persist ONE new playbook record (append-only). An identical 2-pin key raises
         ``PlaybookAlreadyRecorded``; a file already at this key's own deterministic path but
@@ -932,7 +984,8 @@ class PlaybookStore:
         (the ``ForwardStore.record`` refuse-loudly branch verbatim). ``baseline_anchors``/
         ``summary``/``signals_beyond_cap`` default to empty (J-02's measurement fields; a caller
         planting a J-01-shaped, pre-measurement record -- e.g. a fixture for the "measurement not
-        recorded in this record" absence contract -- simply omits them)."""
+        recorded in this record" absence contract -- simply omits them), and ``symbol_scales``
+        defaults the same way for a record planted at a pre-anchors shape."""
         existing = self.find_by_key(session_date, playbook_input_signature)
         if existing is not None:
             raise PlaybookAlreadyRecorded(existing["id"])
@@ -962,6 +1015,7 @@ class PlaybookStore:
             },
             "summary": {key: dict(value) for key, value in (summary or {}).items()},
             "signals_beyond_cap": dict(signals_beyond_cap or {}),
+            "symbol_scales": {key: dict(value) for key, value in (symbol_scales or {}).items()},
         }
         record = {"meta": meta}
         payload = {"file_checksum": _sha256(_canonical(record)), "record": record}

@@ -1485,6 +1485,70 @@ export interface DeskForwardComputeSnapshot {
 // goal-playbook-iter-5 (J-05): `capitulation` adds its own four fields below the same way --
 // `euphoria` never appears here at all (it is a marker, never a served signal -- see
 // `DeskPlaybookDisclosures.euphoria_recent` for its only visible trace).
+// ONE shape anchor: a bar the detector actually read, in the two renderings it serves, plus an
+// absolute price. `ts` is epoch SECONDS -- deliberately the byte-identical key `GET
+// /research/candles` serves its own rows under, so a chart joins an anchor to a candle by equality
+// and never reconstructs the RTH 5m session grid `slots_to_break` indexes into (that route applies
+// no RTH filter, so matching by timestamp is the only safe join). `ts_utc` is the same instant in
+// the ISO form `trigger_ts` already uses.
+export interface DeskPlaybookAnchorPoint {
+  ts: number;
+  ts_utc: string;
+  price: number;
+}
+
+// A formation WINDOW's time-only bounds (an opening range, a base, a handle, a trading range).
+// Time-only because a window's own boundary need not be a bar at all: the opening range's bounds
+// are the wall-clock ET 09:30 .. 09:30+or_minutes instants.
+export interface DeskPlaybookAnchorSpan {
+  from_ts: number;
+  from_ts_utc: string;
+  to_ts: number;
+  to_ts_utc: string;
+}
+
+// The drawable outline of ONE signal's formation: the recorded bars and prices the detector read
+// it from, so a chart shows the detector's own reading rather than a second, re-derived one.
+// Which subset of the optional fields is populated is decided by `setup_id`, exactly as the rest
+// of `geometry` already varies by family.
+//
+// `entry` and `invalidation_price` are deliberately NOT here. Their natural right edge is the
+// session close, which depends on bars AFTER the trigger -- anchoring them would break the
+// truncation-invariance the whole `geometry` object is held to. Both are served flat on the
+// signal, and drawing a line at a served price is formatting, not a recomputation.
+export interface DeskPlaybookAnchors {
+  // The vocabulary these anchors are written in, and an echo of the signal's own setup_id so a
+  // consumer can refuse a mismatched pair rather than draw one setup's outline as another's.
+  schema: string;
+  setup_id: string;
+  // Every family: the whole formation's extent (earliest anchor .. trigger bar) and the trigger.
+  formation: DeskPlaybookAnchorSpan;
+  trigger: DeskPlaybookAnchorPoint;
+  // open_high_break / open_low_break (its two prices are `or_low`/`or_high` above)
+  opening_range?: DeskPlaybookAnchorSpan;
+  // jbe / dbi (the base's two prices are the signal's own `price_low`/`price_high`)
+  base?: DeskPlaybookAnchorSpan;
+  jump_start?: DeskPlaybookAnchorPoint;
+  jump_end?: DeskPlaybookAnchorPoint;
+  // capitulation (the leg low is the signal's own `price_low`)
+  decline_start?: DeskPlaybookAnchorPoint;
+  climax?: DeskPlaybookAnchorPoint;
+  // cup_handle
+  left_rim?: DeskPlaybookAnchorPoint;
+  cup_bottom?: DeskPlaybookAnchorPoint;
+  right_rim?: DeskPlaybookAnchorPoint;
+  handle?: DeskPlaybookAnchorSpan;
+  handle_bottom?: DeskPlaybookAnchorPoint;
+  // range_trade (the range's two prices are the signal's own `price_low`/`price_high`)
+  range?: DeskPlaybookAnchorSpan;
+  low_zone_touches?: DeskPlaybookAnchorPoint[];
+  high_zone_touches?: DeskPlaybookAnchorPoint[];
+  // double_top / double_bottom -- `structure_pivot` is the valley/peak the neckline sits at
+  first_pivot?: DeskPlaybookAnchorPoint;
+  second_pivot?: DeskPlaybookAnchorPoint;
+  structure_pivot?: DeskPlaybookAnchorPoint;
+}
+
 export interface DeskPlaybookGeometry {
   slots_to_break: number;
   // open_high_break / open_low_break only (J-01)
@@ -1533,6 +1597,12 @@ export interface DeskPlaybookGeometry {
   valley_depth_mbr?: number;
   nominal_risk_mbr?: number;
   second_top_rvol_vs_first?: number | null;
+  // The drawable outline's own anchors. Optional like every other geometry field: absent (never
+  // `null`) on every record recorded before anchors shipped -- and THAT absence is the per-signal
+  // legacy check the chart keys on, the same way `signal.forward === undefined` already works.
+  // Never key this off `payload_version`: a version is a whole-record fact, while whether a shape
+  // can be drawn is a per-signal, per-family one.
+  anchors?: DeskPlaybookAnchors;
 }
 
 export interface DeskPlaybookVolume {
@@ -1625,6 +1695,14 @@ export interface DeskPlaybookParameters {
   // client-side from `rail_horizons_minutes` (the `forwardMeasureKeys` precedent this section
   // deliberately does NOT repeat, since the backend already serves the exact list it used).
   signal_measures: string[];
+  // The rail's own per-row touch cap, reused as the per-(setup_id, side) POOLING cap. Read it to
+  // say honestly which occurrences fed a pool's means: `record.signals` carries every detected
+  // signal, including the ones past this cap, which the summary above them never pooled.
+  rail_max_touches_per_row?: number;
+  // The bar timeframe every detector's own session series is sliced at -- served so a chart
+  // drilling in from a signal asks for the SAME series the detector saw, rather than a second
+  // hardcoded copy of "5m" in the frontend that could silently drift from the backend.
+  detect_timeframe?: string;
   [key: string]: unknown;
 }
 
@@ -1643,6 +1721,16 @@ export interface DeskPlaybookRecord {
   baseline_anchors: Record<string, DeskForwardTouch[]>;
   summary: Record<string, Record<string, DeskPlaybookSummaryCell>>;
   signals_beyond_cap: Record<string, number>;
+  // The per-symbol MBR every `*_mbr` ratio on this record is normalized by (plus the market
+  // symbol's own, which `market.market_move_mbr` uses). Present so an MBR figure is READABLE --
+  // never so a consumer can multiply a ratio back into a price; every price drawn is served
+  // absolutely, as its own field or as a shape anchor. `{}` on a record recorded before it shipped.
+  symbol_scales: Record<string, DeskPlaybookSymbolScale>;
+}
+
+export interface DeskPlaybookSymbolScale {
+  mbr: number;
+  baseline_sessions: number;
 }
 
 // `GET /research/desk/playbook?date=` -- mirrors `DeskForwardReadResult`'s shape. `versions` is

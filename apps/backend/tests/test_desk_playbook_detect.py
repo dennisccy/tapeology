@@ -81,7 +81,27 @@ def _canonical_session_bars(symbol: str) -> list[RawBar]:
     ]
 
 
-_CANONICAL_OR = {"high": 101.0, "low": 100.0, "width": 1.0, "basis": "1m", "bars_used": 15}
+# The opening range's own clock window, as `opening_range` itself now returns it: ET 09:30 (==
+# E_OPEN for this session date) through 09:30 + `or_minutes`. Spread into every hand-built
+# `or_result` fixture below so each one carries the SAME shape the real primitive hands the
+# detector -- the OR box's shape anchor reads these two epochs rather than re-deriving 09:30.
+def _mirrored_low_break_bars(symbol: str = "OLB1") -> list[RawBar]:
+    """The exact mirror of ``_canonical_session_bars``: a session whose 5m bars only ever break
+    DOWN through or_low=100.0, triggering at slot 3."""
+    return [
+        _bar(symbol, E_OPEN, 100.5, 100.9, 100.1, 100.4, 500),
+        _bar(symbol, E_OPEN + 300.0, 100.4, 100.9, 100.1, 100.4, 500),
+        _bar(symbol, E_OPEN + 600.0, 100.4, 100.9, 100.1, 100.4, 500),
+        _bar(symbol, E_OPEN + 900.0, 100.2, 100.3, 99.5, 99.8, 1000),  # trigger: breaks 100.0 low
+        _bar(symbol, E_OPEN + 1200.0, 99.8, 99.9, 99.6, 99.7, 800),
+    ]
+
+
+_OR_WINDOW = {"window_start_epoch": E_OPEN, "window_end_epoch": E_OPEN + 900.0}
+
+_CANONICAL_OR = {
+    "high": 101.0, "low": 100.0, "width": 1.0, "basis": "1m", "bars_used": 15, **_OR_WINDOW,
+}
 _CANONICAL_BASELINE = {
     "mbr": 1.0, "sessions": 10,
     "slot_volume_medians": {0: 1000, 1: 1000, 2: 1000, 3: 1000, 4: 1000, 5: 1000},
@@ -122,6 +142,24 @@ def test_canonical_open_high_break_matches_the_hand_computed_signal():
             "opening_range_basis": "1m",
             "slots_to_break": 3,
             "open_vs_prior_close_pct": pytest.approx(0.5),
+            # Hand-computed like every other field here: the formation runs from the opening
+            # range's own 09:30 window start through the slot-3 trigger bar; the OR box is that
+            # window's full 15 minutes. Both epochs come from `or_result`, never re-derived.
+            "anchors": {
+                "schema": _PARAMS["shape_anchor_schema"],
+                "setup_id": "open_high_break",
+                "formation": {
+                    "from_ts": E_OPEN, "from_ts_utc": _iso(E_OPEN),
+                    "to_ts": E_OPEN + 900.0, "to_ts_utc": _iso(E_OPEN + 900.0),
+                },
+                "trigger": {
+                    "ts": E_OPEN + 900.0, "ts_utc": _iso(E_OPEN + 900.0), "price": 101.0,
+                },
+                "opening_range": {
+                    "from_ts": E_OPEN, "from_ts_utc": _iso(E_OPEN),
+                    "to_ts": E_OPEN + 900.0, "to_ts_utc": _iso(E_OPEN + 900.0),
+                },
+            },
         },
         "volume": {
             "rvol_trigger_bar": pytest.approx(1.0),
@@ -146,13 +184,7 @@ def test_canonical_open_high_break_matches_the_hand_computed_signal():
 def test_open_low_break_mirrors_the_high_side():
     """The mirror side: a session whose 5m bars only ever break DOWN through or_low, entry/
     invalidation/side all mirrored per spec §0."""
-    bars = [
-        _bar("OLB1", E_OPEN, 100.5, 100.9, 100.1, 100.4, 500),
-        _bar("OLB1", E_OPEN + 300.0, 100.4, 100.9, 100.1, 100.4, 500),
-        _bar("OLB1", E_OPEN + 600.0, 100.4, 100.9, 100.1, 100.4, 500),
-        _bar("OLB1", E_OPEN + 900.0, 100.2, 100.3, 99.5, 99.8, 1000),  # trigger: breaks 100.0 low
-        _bar("OLB1", E_OPEN + 1200.0, 99.8, 99.9, 99.6, 99.7, 800),
-    ]
+    bars = _mirrored_low_break_bars()
     signal, diagnostic = detect_opening_range_breaks(
         bars, _CANONICAL_OR, _CANONICAL_BASELINE, "OLB1", SESSION_DATE,
         [], _EMPTY_INDEX_BASELINE, _PARAMS, None,
@@ -173,7 +205,9 @@ def test_open_low_break_mirrors_the_high_side():
 
 
 def test_wide_opening_range_fires_no_signal():
-    wide_or = {"high": 105.0, "low": 100.0, "width": 5.0, "basis": "1m", "bars_used": 15}
+    wide_or = {
+        "high": 105.0, "low": 100.0, "width": 5.0, "basis": "1m", "bars_used": 15, **_OR_WINDOW,
+    }
     bars = [
         _bar("WIDE", E_OPEN, 100.5, 100.9, 100.1, 100.6, 500),
         _bar("WIDE", E_OPEN + 300.0, 100.6, 100.9, 100.1, 100.6, 500),
@@ -192,7 +226,9 @@ def test_wide_opening_range_fires_no_signal():
 
 
 def test_5m_basis_opening_range_still_fires_with_the_basis_disclosed():
-    five_min_or = {"high": 101.0, "low": 100.0, "width": 1.0, "basis": "5m", "bars_used": 3}
+    five_min_or = {
+        "high": 101.0, "low": 100.0, "width": 1.0, "basis": "5m", "bars_used": 3, **_OR_WINDOW,
+    }
     signal, diagnostic = detect_opening_range_breaks(
         _canonical_session_bars("OR5M"), five_min_or, _CANONICAL_BASELINE, "OR5M", SESSION_DATE,
         [], _EMPTY_INDEX_BASELINE, _PARAMS, None,
@@ -258,7 +294,9 @@ def test_market_context_populated_spy_reports_a_supportive_direction():
         )
         for i in range(10)
     ]
-    or_result = {"high": 100.3, "low": 100.0, "width": 0.3, "basis": "1m", "bars_used": 15}
+    or_result = {
+        "high": 100.3, "low": 100.0, "width": 0.3, "basis": "1m", "bars_used": 15, **_OR_WINDOW,
+    }
     baseline = {"mbr": 1.0, "sessions": 10, "slot_volume_medians": {i: 500 for i in range(11)}}
     index_baseline = {"mbr": 1.0, "sessions": 10, "slot_volume_medians": {}}
 
@@ -287,7 +325,9 @@ def test_market_context_relative_strength_strong_when_stock_high_and_spy_low():
     ]
     spy_bars.append(_bar("SPY", E_OPEN + 9 * 300.0, 399.4, 399.6, 399.0, 399.05, 500))  # near its own low
 
-    or_result = {"high": 100.3, "low": 100.0, "width": 0.3, "basis": "1m", "bars_used": 15}
+    or_result = {
+        "high": 100.3, "low": 100.0, "width": 0.3, "basis": "1m", "bars_used": 15, **_OR_WINDOW,
+    }
     baseline = {"mbr": 1.0, "sessions": 10, "slot_volume_medians": {i: 500 for i in range(11)}}
     index_baseline = {"mbr": 1.0, "sessions": 10, "slot_volume_medians": {}}
 
@@ -1694,3 +1734,270 @@ def test_double_extreme_mutating_a_bar_after_the_trigger_changes_nothing(detect_
         mutated, _DOUBLE_TOP_BASELINE, symbol, SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
     )
     assert mutated_result == full
+
+
+# === geometry.anchors -- the drawable shape anchors, every detector ================================
+#
+# Each detector now serves a `geometry.anchors` block: the recorded bars and prices its own
+# formation was read from, so a chart draws the DETECTOR's reading rather than a second, re-derived
+# one. Three families of assertion below, on top of the SIX existing
+# `assert truncated["geometry"] == full["geometry"]` comparisons, which already cover the anchors
+# for free (they are inside `geometry`) and are what enforce Law A -- see `_anchors`' own docstring.
+#
+#   1. Every detector emits exactly the anchor keys its own family is drawable from (a missing key
+#      means a piece of the outline silently cannot be drawn).
+#   2. Law B -- formation anchors land on REAL bars, at prices inside those bars.
+#   3. The anchors genuinely RECOVER the values that previously survived only as an MBR ratio or a
+#      bar-count span -- the whole point of the change, asserted against the same hand-computed
+#      fixtures the canonical tests use.
+
+
+def _one_anchored_signal(setup_id: str) -> tuple[dict, list[RawBar]]:
+    """One canonical firing per setup id, with the exact session bars it was detected against --
+    reusing each family's OWN canonical fixture rather than a second set built for this section."""
+    if setup_id in ("open_high_break", "open_low_break"):
+        bars = _canonical_session_bars("ANC")
+        if setup_id == "open_low_break":
+            bars = _mirrored_low_break_bars("ANC")
+        signal, _ = detect_opening_range_breaks(
+            bars, _CANONICAL_OR, _CANONICAL_BASELINE, "ANC", SESSION_DATE,
+            [], _EMPTY_INDEX_BASELINE, _PARAMS, 100.0,
+        )
+        return signal, bars
+    if setup_id in ("jbe", "dbi"):
+        bars = _canonical_jbe_bars() if setup_id == "jbe" else _canonical_dbi_bars()
+        detect_fn = detect_jbe if setup_id == "jbe" else detect_dbi
+        found = detect_fn(
+            bars, _CONTINUATION_BASELINE, bars[0].symbol, SESSION_DATE,
+            [], _EMPTY_INDEX_BASELINE, _PARAMS,
+        )
+        return found[0], bars
+    if setup_id == "cup_handle":
+        bars = _canonical_cup_handle_bars()
+        return detect_cup_handle(
+            bars, _CUP_HANDLE_BASELINE, "CUP1", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+        ), bars
+    if setup_id == "capitulation":
+        bars = _canonical_capitulation_bars()
+        return detect_capitulation(
+            bars, _CAPITULATION_BASELINE, "CAP1", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+        ), bars
+    if setup_id == "range_trade":
+        bars = _canonical_range_trade_long_bars()
+        found = detect_range_trade(
+            bars, _RANGE_TRADE_BASELINE, "RT1", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+        )
+        return found[0], bars
+    bars = (
+        _canonical_double_top_bars() if setup_id == "double_top" else _canonical_double_bottom_bars()
+    )
+    detect_fn = detect_double_top if setup_id == "double_top" else detect_double_bottom
+    return detect_fn(
+        bars, _DOUBLE_TOP_BASELINE, bars[0].symbol, SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    ), bars
+
+
+# Written out longhand, per family, rather than derived from the code under test -- a key set
+# computed FROM the detector would pass no matter what the detector dropped.
+_EXPECTED_ANCHOR_KEYS = {
+    "open_high_break": {"formation", "trigger", "opening_range"},
+    "open_low_break": {"formation", "trigger", "opening_range"},
+    "jbe": {"formation", "trigger", "base", "jump_start", "jump_end"},
+    "dbi": {"formation", "trigger", "base", "jump_start", "jump_end"},
+    "cup_handle": {
+        "formation", "trigger", "left_rim", "cup_bottom", "right_rim", "handle", "handle_bottom",
+    },
+    "capitulation": {"formation", "trigger", "decline_start", "climax"},
+    "range_trade": {
+        "formation", "trigger", "range", "low_zone_touches", "high_zone_touches",
+    },
+    "double_top": {"formation", "trigger", "first_pivot", "second_pivot", "structure_pivot"},
+    "double_bottom": {"formation", "trigger", "first_pivot", "second_pivot", "structure_pivot"},
+}
+
+
+@pytest.mark.parametrize("setup_id", sorted(_EXPECTED_ANCHOR_KEYS))
+def test_every_detector_serves_its_own_families_full_anchor_key_set(setup_id):
+    """Every shipped setup id emits an `anchors` block carrying EXACTLY the keys its own outline is
+    drawn from -- plus the two every family shares (`formation`, `trigger`) and the two
+    self-describing ones (`schema`, `setup_id`). A family silently dropping one of its own keys
+    means part of its shape cannot be drawn at all, which is what this pins."""
+    signal, _bars = _one_anchored_signal(setup_id)
+    assert signal is not None, f"{setup_id}'s canonical fixture must fire"
+    anchors = signal["geometry"]["anchors"]
+    assert anchors["schema"] == _PARAMS["shape_anchor_schema"]
+    assert anchors["setup_id"] == signal["setup_id"] == setup_id
+    assert set(anchors) - {"schema", "setup_id"} == _EXPECTED_ANCHOR_KEYS[setup_id]
+
+
+def _anchor_points(anchors: dict) -> list[tuple[str, dict]]:
+    """Every (role, point) pair in an anchor block -- the single points and the lists alike. Spans
+    are deliberately excluded: they are time-only bounds, and a window's own boundary need not be a
+    bar (the opening range's is a wall-clock instant)."""
+    points: list[tuple[str, dict]] = []
+    for role, part in anchors.items():
+        if role in ("schema", "setup_id"):
+            continue
+        if isinstance(part, list):
+            points.extend((role, point) for point in part)
+        elif "ts" in part:
+            points.append((role, part))
+    return points
+
+
+@pytest.mark.parametrize("setup_id", sorted(_EXPECTED_ANCHOR_KEYS))
+def test_anchor_points_land_on_real_bars_at_prices_inside_them(setup_id):
+    """Law B: every formation anchor names a bar that genuinely exists in the detected session, at
+    a price inside that bar's own [low, high].
+
+    ONE exemption, written out rather than left implicit: the `trigger` role's price is the
+    formation's own reference level (`T`), which on a `gap_open` entry legitimately sits OUTSIDE
+    the trigger bar's range -- that gap IS what `entry_kind == "gap_open"` records. Its TIMESTAMP
+    is still checked."""
+    signal, bars = _one_anchored_signal(setup_id)
+    assert signal is not None
+    by_epoch = {bar.epoch: bar for bar in bars}
+    points = _anchor_points(signal["geometry"]["anchors"])
+    assert points, f"{setup_id} must anchor at least one point"
+
+    for role, point in points:
+        bar = by_epoch.get(point["ts"])
+        assert bar is not None, f"{setup_id}'s {role} anchor is not on any bar of the session"
+        assert point["ts_utc"] == _iso(point["ts"]), "one time source, two renderings"
+        if role == "trigger" and signal["entry_kind"] == "gap_open":
+            continue
+        assert bar.low <= point["price"] <= bar.high, (
+            f"{setup_id}'s {role} anchor price {point['price']} is outside its own bar"
+        )
+
+
+@pytest.mark.parametrize("setup_id", sorted(_EXPECTED_ANCHOR_KEYS))
+def test_no_anchor_reaches_past_the_signals_own_trigger_bar(setup_id):
+    """Law A, asserted directly rather than left implied by the six truncation comparisons: no
+    anchor timestamp -- point or span bound -- is later than the trigger bar itself. This is what
+    keeps `anchors` truncation- and mutation-invariant like the rest of `geometry`, and it is why
+    `entry`/`invalidation_price` are served flat instead of anchored (their natural right edge is
+    the session close, which depends on bars AFTER the trigger)."""
+    signal, bars = _one_anchored_signal(setup_id)
+    assert signal is not None
+    trigger_epoch = bars[signal["geometry"]["slots_to_break"]].epoch
+    anchors = signal["geometry"]["anchors"]
+
+    stamps: list[float] = [point["ts"] for _role, point in _anchor_points(anchors)]
+    for role, part in anchors.items():
+        if role in ("schema", "setup_id") or isinstance(part, list) or "from_ts" not in part:
+            continue
+        assert part["from_ts_utc"] == _iso(part["from_ts"])
+        assert part["to_ts_utc"] == _iso(part["to_ts"])
+        assert part["from_ts"] <= part["to_ts"], f"{setup_id}'s {role} span runs backwards"
+        stamps.extend((part["from_ts"], part["to_ts"]))
+
+    assert max(stamps) <= trigger_epoch, (
+        f"{setup_id} anchors a point after its own trigger bar -- that would make `geometry` "
+        f"depend on bars the detection never saw"
+    )
+
+
+# --- the anchors RECOVER what previously survived only as a ratio or a span ------------------------
+#
+# Each of these asserts the anchor reproduces a value the OLD geometry could only express
+# relatively. Every fixture below uses MBR = 1.0, so an `*_mbr` ratio and its price are numerically
+# equal -- which is exactly why the ratio alone was useless to a consumer: MBR is a per-symbol
+# baseline that was never served, so the multiplication back to a price was impossible.
+
+
+def test_jbe_jump_leg_anchor_recovers_the_price_behind_jump_mbr():
+    signal, _bars = _one_anchored_signal("jbe")
+    anchors = signal["geometry"]["anchors"]
+    rise = anchors["jump_end"]["price"] - anchors["jump_start"]["price"]
+    assert rise == pytest.approx(signal["geometry"]["jump_mbr"] * _CONTINUATION_BASELINE["mbr"])
+
+
+def test_capitulation_decline_leg_anchor_recovers_the_price_behind_decline_mbr():
+    signal, _bars = _one_anchored_signal("capitulation")
+    anchors = signal["geometry"]["anchors"]
+    fall = anchors["decline_start"]["price"] - anchors["climax"]["price"]
+    assert fall == pytest.approx(signal["geometry"]["decline_mbr"] * _CAPITULATION_BASELINE["mbr"])
+
+
+def test_capitulation_anchors_follow_the_RE_ANCHORED_climax_not_the_original_one():
+    """The re-anchoring fixture: a new low after the first candidate climax moves `v` forward. The
+    climax anchor must name the RE-ANCHORED bar -- an anchor pinned to the original candidate would
+    draw the decline leg ending in the wrong place while every served number stayed correct."""
+    bars = _reanchoring_capitulation_bars()
+    signal = detect_capitulation(
+        bars, _CAPITULATION_BASELINE, "REANCH", SESSION_DATE, [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert signal is not None
+    anchors = signal["geometry"]["anchors"]
+    climax_idx = signal["geometry"]["slots_to_break"] - signal["geometry"]["bars_from_climax_to_trigger"]
+    assert anchors["climax"]["ts"] == bars[climax_idx].epoch
+    assert anchors["climax"]["price"] == signal["price_low"]
+    fall = anchors["decline_start"]["price"] - anchors["climax"]["price"]
+    assert fall == pytest.approx(signal["geometry"]["decline_mbr"] * _CAPITULATION_BASELINE["mbr"])
+
+
+def test_double_top_pivot_anchors_recover_both_peaks_position_and_price():
+    """The sharpest case: of the two tops a double top is NAMED for, the old geometry kept neither
+    peak's bar and only the farther peak's price. Both are now recoverable, and both agree with the
+    ratio/span the record already served."""
+    signal, bars = _one_anchored_signal("double_top")
+    anchors = signal["geometry"]["anchors"]
+    gap = abs(anchors["second_pivot"]["price"] - anchors["first_pivot"]["price"])
+    assert gap == pytest.approx(signal["geometry"]["tops_gap_mbr"] * _DOUBLE_TOP_BASELINE["mbr"])
+
+    epochs = [bar.epoch for bar in bars]
+    separation = (
+        epochs.index(anchors["second_pivot"]["ts"]) - epochs.index(anchors["first_pivot"]["ts"])
+    )
+    assert separation == signal["geometry"]["tops_separation_bars"]
+    # The neckline the pattern breaks: the valley between the two peaks, which IS trigger_price.
+    assert anchors["structure_pivot"]["price"] == signal["trigger_price"]
+
+
+def test_range_trade_touch_anchors_recover_the_bars_behind_the_touch_COUNTS():
+    signal, bars = _one_anchored_signal("range_trade")
+    anchors = signal["geometry"]["anchors"]
+    assert len(anchors["low_zone_touches"]) == signal["geometry"]["low_zone_touches"]
+    assert len(anchors["high_zone_touches"]) == signal["geometry"]["high_zone_touches"]
+    # Each touch is anchored at the extreme its own zone was tested at, not at an arbitrary price.
+    by_epoch = {bar.epoch: bar for bar in bars}
+    for point in anchors["low_zone_touches"]:
+        assert point["price"] == by_epoch[point["ts"]].low
+    for point in anchors["high_zone_touches"]:
+        assert point["price"] == by_epoch[point["ts"]].high
+
+
+def test_cup_handle_rim_anchors_recover_the_bars_behind_cup_bars():
+    signal, bars = _one_anchored_signal("cup_handle")
+    anchors = signal["geometry"]["anchors"]
+    epochs = [bar.epoch for bar in bars]
+    span = epochs.index(anchors["right_rim"]["ts"]) - epochs.index(anchors["left_rim"]["ts"])
+    assert span == signal["geometry"]["cup_bars"]
+    # The cup bottom -- a bar position the old geometry had no field for at all, at the price
+    # already served as `price_low`.
+    assert anchors["cup_bottom"]["price"] == signal["price_low"]
+    assert epochs.index(anchors["left_rim"]["ts"]) < epochs.index(anchors["cup_bottom"]["ts"])
+    assert epochs.index(anchors["cup_bottom"]["ts"]) < epochs.index(anchors["right_rim"]["ts"])
+
+
+def test_opening_range_anchor_is_the_clock_window_not_the_first_bars():
+    """The OR box's bounds come from `opening_range`'s own returned window (ET 09:30 ..
+    09:30+or_minutes), so they hold even for a session whose 09:30 bar is missing -- and are never
+    re-derived from whichever bar the series happens to start with."""
+    signal, _bars = _one_anchored_signal("open_high_break")
+    opening_range_anchor = signal["geometry"]["anchors"]["opening_range"]
+    assert opening_range_anchor["from_ts"] == _OR_WINDOW["window_start_epoch"]
+    assert opening_range_anchor["to_ts"] == _OR_WINDOW["window_end_epoch"]
+    assert opening_range_anchor["to_ts"] - opening_range_anchor["from_ts"] == (
+        _PARAMS["or_minutes"] * 60.0
+    )
+
+
+def test_euphoria_stays_structurally_incapable_of_carrying_a_shape():
+    """spec §3.5: euphoria is a MARKER, never a served signal -- it has no side, entry,
+    invalidation, or geometry, so there is nothing to draw and deliberately no anchors to draw it
+    from. Pinned here so the anchors work never quietly promotes it into a signal shape."""
+    marker = detect_euphoria(_canonical_euphoria_bars(), _EUPHORIA_BASELINE, _PARAMS)
+    assert marker == {"trigger_idx": marker["trigger_idx"]}
+    assert "geometry" not in marker and "anchors" not in marker

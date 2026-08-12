@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BarRow, SrLevel, TradabilityBand } from "@/lib/types";
+import type { ChartShapeSpec } from "@/lib/chartShapes";
+import { chartShapeTimeSpan } from "@/lib/chartShapes";
 import { formatDateET, formatDateTimeET, formatTimeET } from "@/lib/datetime";
+import { ChartShapePrimitive } from "./chartShapePrimitive";
 import { EmptyHint } from "./Panel";
 
 // The /structure page's price chart (J-01): candles from ONE representative recorded bar series
@@ -55,6 +58,9 @@ const INITIAL_VIEWPORT_BARS = 300;
 // Where the as-of bar sits in the first visible window: 80% across, leaving the later price action
 // visible to its right (matching how the page's first window is fetched).
 const AS_OF_VIEWPORT_SHARE = 0.8;
+// A drilled-in setup's own framing: the breathing room left to the left of a formation whose start
+// would otherwise sit hard against the edge of the window, as a share of the current viewport.
+const FOCUS_MARGIN_SHARE = 0.1;
 // Beyond this many raw levels the per-line price-scale labels stop being readable as a scale and
 // start being a wall of overlapping text — the lines themselves are all still drawn.
 const MAX_LEVEL_AXIS_LABELS = 12;
@@ -147,6 +153,9 @@ export function StructureChart({
   extraMarkers = [],
   extraPriceLines = [],
   secondsVisible = false,
+  shapes = [],
+  shapeCaption,
+  focusRange,
 }: {
   bars: BarRow[];
   levels: SrLevel[];
@@ -161,6 +170,14 @@ export function StructureChart({
   extraMarkers?: ChartMarkerSpec[];
   extraPriceLines?: ChartPriceLineSpec[];
   secondsVisible?: boolean;
+  // Playbook-shape-overlay additive props (absent at every pre-existing call site -> byte-identical
+  // there). `shapes` are ready-to-draw display specs the PAGE built from a served playbook record;
+  // this component draws them verbatim and decides nothing about them. MEMOIZE them in the caller:
+  // a fresh array each render would re-run the attach/update effect on every render.
+  shapes?: ChartShapeSpec[];
+  shapeCaption?: string;
+  // Widens the FIRST viewport so a whole formation fits, never narrows it (see the effect below).
+  focusRange?: { fromTs: number; toTs: number };
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Only drawable rows reach the library (see isDrawableCandle). Everything downstream — the
@@ -169,6 +186,16 @@ export function StructureChart({
   const drawableBars = useMemo(() => bars.filter(isDrawableCandle), [bars]);
   const drawableLiveBars = useMemo(() => liveBars.filter(isDrawableCandle), [liveBars]);
   const undrawableCount = bars.length - drawableBars.length + (liveBars.length - drawableLiveBars.length);
+  // Whether a drawn setup extends past the candles currently loaded. Checked here on the DATA, not
+  // in the canvas: the renderer's own coordinate fallback SNAPS an off-window anchor to the nearest
+  // loaded bar, which would draw a box that appears to end where the data ends — a plausible
+  // looking lie. Saying so in the DOM is what keeps that honest (and gives a browser pass something
+  // to read; canvas pixels are not assertable).
+  const shapeSpan = useMemo(() => chartShapeTimeSpan(shapes), [shapes]);
+  const shapeClipped =
+    shapeSpan !== null &&
+    drawableBars.length > 0 &&
+    (shapeSpan.from < drawableBars[0].ts || shapeSpan.to > drawableBars[drawableBars.length - 1].ts);
   // `chartReady` flips once the dynamically imported chart library has built the chart+series. It
   // is STATE (not just a ref) on purpose: the candle window resolves in a few milliseconds and can
   // easily land BEFORE the dynamic import does, and a ref would leave the draw effects with nothing
@@ -184,6 +211,9 @@ export function StructureChart({
   const libRef = useRef<any>(null);
   const markersRef = useRef<any>(null);
   const priceLinesRef = useRef<any[]>([]);
+  const shapePrimitiveRef = useRef<ChartShapePrimitive | null>(null);
+  // The setup framing is applied at most once per mount — see the focus effect below.
+  const focusAppliedRef = useRef(false);
   // The SECOND candlestick series holding the tape's live moving bars (cockpit only). Kept distinct
   // from the recorded-store series so the no-lookahead boundary is structural: store bars strictly
   // left of the replay start, live bars from it onward, disjoint by `ts`.
@@ -240,6 +270,20 @@ export function StructureChart({
           borderColor: "#1e293b",
           timeVisible: true,
           secondsVisible: false,
+          // A lazily-loaded page must NEVER move the operator's view. The library's default is to
+          // shift the visible range when a bar is appended, which is right for a LIVE feed and
+          // wrong for a paged history: with the view sitting at the right edge (which the first
+          // window's own framing can produce), every appended page scrolls the chart right, which
+          // re-fires the lazy-load subscription, which appends another page -- a fill loop that
+          // walks the window from the as-of all the way to the end of the recorded series, one
+          // page at a time. Observed as a chain of ~30 forward requests when a /desk drill-in
+          // opened a 5m chart six weeks before the end of the series.
+          //
+          // `onNeedNewer` is exactly the right discriminator, not a proxy for one: a chart that
+          // can page FORWARD is the only kind that can enter that loop, and a chart that cannot
+          // (the cockpit, whose right edge is the live tape) genuinely wants to follow its own
+          // newest bar. Read once, at creation -- both are fixed per call site.
+          shiftVisibleRangeOnNewBar: onNeedNewer === undefined,
           // Every candle's real UTC-epoch `time` is read on the MARKET clock through the ONE shared
           // formatter — the same clock the rest of the product shows, so an axis reading can be
           // compared against a table cell without converting anything. lightweight-charts passes
@@ -333,6 +377,11 @@ export function StructureChart({
         liveMarkersRef.current = null;
         priceLinesRef.current = [];
         extraPriceLinesRef.current = [];
+        // The primitive dies with the series it was attached to -- no detach call here, since
+        // `chart.remove()` has already disposed it; dropping the handle is what stops the next
+        // mount from reusing a primitive bound to a destroyed series.
+        shapePrimitiveRef.current = null;
+        focusAppliedRef.current = false;
         drawnRef.current = false;
         drawnBarsRef.current = [];
         drawnLiveRef.current = [];
@@ -461,6 +510,60 @@ export function StructureChart({
     // chart converge on a full viewport instead of loading exactly one page per operator gesture.
     requestMissingBars(chart.timeScale().getVisibleLogicalRange(), { fill: true });
   }, [drawableBars, asOfTs, chartReady]);
+
+  // --- Extend the first viewport LEFT to fit a drilled-in setup (playbook drill-in only) --------
+  // Its OWN effect rather than a branch of the data effect above, because `focusRange` is derived
+  // from a record the page fetches SEPARATELY from the candles: it routinely arrives after the
+  // first draw has already happened, at which point that effect's `!alreadyDrawn` branch is closed
+  // forever. Applied at most ONCE per mount, so it frames the setup on arrival and then never
+  // fights the operator's own scrolling.
+  //
+  // It moves the LEFT edge only, and only leftward. A formation can begin well before the as-of
+  // bar the first window is framed around (an opening range anchored at the session open, with a
+  // trigger hours later) and would otherwise be cut off at the left. The right edge is never
+  // touched, which is not merely conservative: a visible range extending past the last loaded bar
+  // makes the library hold the right edge, which re-fires the lazy-load subscription, which loads
+  // another page whose end the range still overruns -- a fill loop that marches the chart all the
+  // way to the end of the recorded series, far from the setup it was asked to show.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !focusRange || focusAppliedRef.current || drawableBars.length === 0) return;
+    const fromIndex = drawableBars.findIndex((b) => b.ts >= focusRange.fromTs);
+    if (fromIndex < 0) return;
+    const visible = chart.timeScale().getVisibleLogicalRange();
+    if (!visible) return;
+    focusAppliedRef.current = true;
+    const margin = Math.ceil((visible.to - visible.from) * FOCUS_MARGIN_SHARE);
+    const wanted = fromIndex - margin;
+    if (wanted >= visible.from) return; // the whole formation is already on screen
+    chart.timeScale().setVisibleLogicalRange({ from: wanted, to: visible.to });
+  }, [focusRange, drawableBars, chartReady]);
+
+  // --- Attach / update the setup-shape overlay (its own ISeriesPrimitive) -----------------------
+  // Its OWN effect and its OWN handle, so redrawing a shape never disturbs the level/band price
+  // lines and vice versa (the `extraPriceLines` precedent). `chartReady` is a dependency because
+  // the primitive can only attach once the dynamically imported series exists.
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+    if (shapes.length === 0) {
+      if (shapePrimitiveRef.current) {
+        try {
+          series.detachPrimitive(shapePrimitiveRef.current);
+        } catch {
+          // The series may already be disposed — the same tolerance `removePriceLine` needs.
+        }
+        shapePrimitiveRef.current = null;
+      }
+      return;
+    }
+    if (shapePrimitiveRef.current === null) {
+      shapePrimitiveRef.current = new ChartShapePrimitive(shapes);
+      series.attachPrimitive(shapePrimitiveRef.current);
+    } else {
+      shapePrimitiveRef.current.setShapes(shapes);
+    }
+  }, [shapes, chartReady]);
 
   // --- Feed the live tape bars into the second series (cockpit only) ----------------------------
   // Updated in place so the last bar animates as trades arrive: when the new array is an append-only
@@ -702,6 +805,19 @@ export function StructureChart({
         >
           Loading bars…
         </div>
+      )}
+      {shapeCaption && (
+        <div
+          data-testid="structure-chart-shape-caption"
+          className="pointer-events-none absolute left-2 top-9 z-10 rounded bg-slate-900/80 px-2 py-1 text-[11px] text-amber-200"
+        >
+          {shapeCaption}
+        </div>
+      )}
+      {shapeClipped && (
+        <p data-testid="structure-chart-shape-clipped" className="mt-1 text-[11px] text-amber-300/80">
+          Part of this setup falls outside the loaded candle window — scroll left to load more bars.
+        </p>
       )}
     </div>
   );

@@ -332,10 +332,24 @@ def test_the_volume_pane_rides_the_two_existing_data_effects():
     assert "liveVolume?.setData(drawableLiveBars.map(volumePoint));" in source, (
         "the live path's wholesale-redraw branch no longer feeds the volume pane"
     )
-    # The effect inventory is unchanged: the pane was threaded through what was already there.
-    assert len(re.findall(r"\buseEffect\(", source)) == 8, (
-        "the number of effects in StructureChart changed -- the volume pane must ride the two "
-        "EXISTING data effects (store bars, live bars), never add a third of its own"
+    # The rule this test exists for, stated DIRECTLY rather than by proxy: the volume pane is fed
+    # from exactly the two data effects that were already there, and owns no effect of its own.
+    volume_effects = [
+        body
+        for body in re.split(r"\buseEffect\(", source)[1:]
+        if re.search(r"\bvolumePoint\b", body)
+    ]
+    assert len(volume_effects) == 2, (
+        "the volume pane must ride the two EXISTING data effects (store bars, live bars), never "
+        f"add one of its own -- found {len(volume_effects)} effects touching volumePoint"
+    )
+    # The effect inventory is also pinned exactly, so ANY new effect is a deliberate decision
+    # someone has to come here and justify. 8 through the volume pane's own iteration; 10 since the
+    # setup-shape overlay added two of its own -- the focus-range framing and the primitive's
+    # attach/update -- neither of which touches the volume pane or the data effects above.
+    assert len(re.findall(r"\buseEffect\(", source)) == 10, (
+        "the number of effects in StructureChart changed -- re-derive this count deliberately, "
+        "and only after checking the new effect does not duplicate what an existing one does"
     )
 
 

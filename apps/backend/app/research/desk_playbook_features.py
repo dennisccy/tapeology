@@ -95,7 +95,8 @@ def opening_range(
     or_minutes: int,
     min_1m_bars: int,
 ) -> dict | None:
-    """``{"high", "low", "width", "basis": "1m"|"5m", "bars_used"}`` over ET
+    """``{"high", "low", "width", "basis": "1m"|"5m", "bars_used", "window_start_epoch",
+    "window_end_epoch"}`` over ET
     ``09:30 .. 09:30+or_minutes``. At least ``min_1m_bars`` of the (up to) ``or_minutes`` one-minute
     bars on file -> the 1m basis, built from whichever of those bars actually exist; fewer -> the
     5m basis, the first ``or_minutes // 5`` five-minute bars (spec §2 primitive 2: "fall back to
@@ -108,8 +109,16 @@ def opening_range(
     would hand a session starting at 09:40 an "opening range" built from its 09:40/09:45/09:50
     bars, disclosed as ``basis: "5m"`` exactly like a genuine one -- a fabricated value where the
     honest answer is an absence (spec §0's fail-closed discipline; §3.1's "No 1m and no 5m OR =>
-    silent symbol-session (disclosed absence)")."""
-    window_end = _et_epoch(session_date, _RTH_START) + or_minutes * 60.0
+    silent symbol-session (disclosed absence)").
+
+    ``window_start_epoch``/``window_end_epoch`` are that ET ``09:30 .. 09:30+or_minutes`` window
+    itself, RETURNED rather than recomputed by anyone downstream. Both bases already read it (it is
+    ``window_end`` below); handing it back is what lets a caller anchor the opening range's drawable
+    box in time without a second, DST-correct copy of ``_et_epoch`` living outside this module. It
+    is the one playbook window whose bounds are a WALL-CLOCK fact rather than a bar's own epoch --
+    a session missing its 09:30 bar still has this window."""
+    window_start = _et_epoch(session_date, _RTH_START)
+    window_end = window_start + or_minutes * 60.0
 
     session_1m = rth_session_slice(bars_1m, session_date)
     one_min_window = [bar for bar in session_1m if bar.epoch < window_end]
@@ -117,7 +126,11 @@ def opening_range(
         highs = [bar.high for bar in one_min_window]
         lows = [bar.low for bar in one_min_window]
         high, low = max(highs), min(lows)
-        return {"high": high, "low": low, "width": high - low, "basis": "1m", "bars_used": len(one_min_window)}
+        return {
+            "high": high, "low": low, "width": high - low, "basis": "1m",
+            "bars_used": len(one_min_window),
+            "window_start_epoch": window_start, "window_end_epoch": window_end,
+        }
 
     five_min_bars_needed = or_minutes // 5
     session_5m = rth_session_slice(bars_5m, session_date)
@@ -129,6 +142,7 @@ def opening_range(
         return {
             "high": high, "low": low, "width": high - low, "basis": "5m",
             "bars_used": len(first_bars),
+            "window_start_epoch": window_start, "window_end_epoch": window_end,
         }
     return None
 

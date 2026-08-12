@@ -177,6 +177,13 @@ def test_lint_full_taxonomy_payload_is_clean(client):
 
 
 # --- (b) the FRONTEND source literals ------------------------------------------------------------
+#
+# The scan roots below cover `components/`, `app/` AND `lib/`. `lib/` was added when
+# `lib/playbookShapes.ts` became the first module there to carry genuinely user-facing copy (a
+# chart caption, legend labels, and the sentence shown when a record predates its shape anchors) --
+# until then every user-visible string lived in a component or a page, and the lint would simply
+# never have seen these. A pure helper module is exactly where an unlinted string is easiest to
+# miss, so the roots follow the copy rather than the file type.
 
 _FRONTEND_ROOT = pathlib.Path(__file__).resolve().parents[2] / "frontend"
 # JSX text content + quoted string literals. We extract candidate user-facing strings and lint them.
@@ -219,8 +226,10 @@ def _frontend_candidate_strings(source: str):
 
 def test_lint_frontend_source_literals_are_clean():
     files = sorted(_FRONTEND_ROOT.glob("components/**/*.tsx")) + \
+        sorted(_FRONTEND_ROOT.glob("components/**/*.ts")) + \
         sorted(_FRONTEND_ROOT.glob("app/**/*.tsx")) + \
-        sorted(_FRONTEND_ROOT.glob("app/**/*.ts"))
+        sorted(_FRONTEND_ROOT.glob("app/**/*.ts")) + \
+        sorted(_FRONTEND_ROOT.glob("lib/**/*.ts"))
     assert files, "no frontend source files found — the frontend-scan leg cannot be vacuous"
     offenders: list[str] = []
     for path in files:

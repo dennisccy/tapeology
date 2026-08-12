@@ -108,6 +108,7 @@ import {
   todayEtDate,
 } from "@/lib/datetime";
 import { fmt } from "@/lib/format";
+import { playbookPoolKey, playbookSetupLabel, playbookSignalKey } from "@/lib/playbook";
 
 // The /desk page (Era B "The Desk" J-04) — the third top-nav page, reached from the persistent
 // NavBar (data-driven from GET /meta/ui-routes; no client hardcoding, see apps/backend/app/meta.py
@@ -4972,32 +4973,12 @@ function DeskPopulatedScreen({
 
 const PLAYBOOK_LEGACY_ABSENCE = "measurement not recorded in this record";
 
-function playbookSetupLabel(setupId: string): string {
-  if (setupId === "open_high_break") return "Open-High Break";
-  if (setupId === "open_low_break") return "Open-Low Break";
-  if (setupId === "jbe") return "Jump-Base Explosion";
-  if (setupId === "dbi") return "Drop-Base Implosion";
-  if (setupId === "cup_handle") return "Cup and Handle";
-  if (setupId === "capitulation") return "Capitulation";
-  if (setupId === "range_trade") return "Range Trade";
-  if (setupId === "double_top") return "Double Top";
-  if (setupId === "double_bottom") return "Double Bottom";
-  return setupId;
-}
+// `playbookSetupLabel` / `playbookPoolKey` / `playbookSignalKey` now live in @/lib/playbook so the
+// /structure drill-in shares ONE copy of this section's row identity (imported at the top of this
+// file). `playbookHorizonLabels` stays here: it is read only by this section's own tables.
 
 function playbookHorizonLabels(record: DeskPlaybookRecord): string[] {
   return record.parameters.rail_horizons_minutes.map(([label]) => label);
-}
-
-function playbookPoolKey(signal: DeskPlaybookSignal): string {
-  return `${signal.setup_id}:${signal.side}`;
-}
-
-// The signals table's own row identity -- (trigger_ts, symbol, setup_id) is unique within one
-// record even once a future detector (J-04) can fire more than once for the same symbol in a
-// session, since each firing has its own trigger_ts.
-function playbookSignalKey(signal: DeskPlaybookSignal): string {
-  return `${signal.trigger_ts}:${signal.symbol}:${signal.setup_id}`;
 }
 
 type PlaybookControlProps = {
@@ -5431,16 +5412,145 @@ function PlaybookSummaryCells({
   );
 }
 
+// One occurrence of a setup, inside its own pool's expanded row. The whole row is a drill-in to
+// /structure via the SAME stretched-link pattern `DeskRow` uses (one real `next/link` anchor
+// absolutely positioned over a `position: relative` `<tr>`), carrying — beyond the symbol and
+// as-of the ranked rows already send — the detect timeframe and an immutable (record id, signal
+// key) pair, so the chart draws THIS occurrence's own recorded outline. `beyondCap` is the honest
+// half: `record.signals` holds every detected signal, but the pool means shown above are computed
+// over the first `rail_max_touches_per_row` only, so an occurrence past that never fed them.
+function PlaybookOccurrenceRow({
+  signal,
+  recordId,
+  detectTimeframe,
+  beyondCap,
+}: {
+  signal: DeskPlaybookSignal;
+  recordId: string;
+  detectTimeframe: string;
+  beyondCap: boolean;
+}) {
+  const href =
+    `/structure?symbol=${encodeURIComponent(signal.symbol)}` +
+    `&asof=${encodeURIComponent(signal.trigger_ts)}` +
+    (detectTimeframe ? `&tf=${encodeURIComponent(detectTimeframe)}` : "") +
+    `&playbook=${encodeURIComponent(recordId)}` +
+    `&signal=${encodeURIComponent(playbookSignalKey(signal))}`;
+  return (
+    <tr
+      data-testid="desk-playbook-occurrence-row"
+      data-symbol={signal.symbol}
+      data-signal-key={playbookSignalKey(signal)}
+      className="relative border-t border-slate-800/60 hover:bg-slate-800/40"
+    >
+      <td className={ROW_LABEL_CELL}>
+        <Link
+          href={href}
+          data-testid="desk-playbook-occurrence-drill-in"
+          aria-label={`Open ${signal.symbol}'s ${playbookSetupLabel(signal.setup_id)} at ${formatTimeET(signal.trigger_ts)} ET in Structure`}
+          className="absolute inset-0"
+        />
+        <span className="font-mono text-xs text-slate-200">{signal.symbol}</span>
+      </td>
+      <td className={ROW_LABEL_CELL} title={`${signal.trigger_ts} (raw UTC record)`}>
+        {formatTimeET(signal.trigger_ts)}
+      </td>
+      <td className={ROW_NUMERIC_CELL} title={String(signal.trigger_price)}>
+        {fmt(signal.trigger_price)}
+      </td>
+      <td className={ROW_NUMERIC_CELL} title={String(signal.entry)}>
+        {fmt(signal.entry)}
+      </td>
+      <td className={ROW_NUMERIC_CELL} title={String(signal.invalidation_price)}>
+        {fmt(signal.invalidation_price)}
+      </td>
+      <td className={ROW_LABEL_CELL}>
+        {beyondCap && (
+          <span
+            data-testid="desk-playbook-occurrence-beyond-cap"
+            className="text-[10px] text-amber-200/70"
+          >
+            beyond cap
+          </span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+// The occurrences behind ONE summary pool. Filtered out of the record's own `signals` by the SAME
+// `<setup_id>:<side>` key `compute_playbook` pools by, and rendered in the record's OWN served
+// order — never sorted, reversed, or re-sliced client-side.
+function PlaybookOccurrenceList({
+  record,
+  poolKey,
+  id,
+}: {
+  record: DeskPlaybookRecord;
+  poolKey: string;
+  id: string;
+}) {
+  const occurrences = record.signals.filter((signal) => playbookPoolKey(signal) === poolKey);
+  const cap = record.parameters.rail_max_touches_per_row ?? null;
+  const detectTimeframe = record.parameters.detect_timeframe ?? "";
+  return (
+    <div id={id} data-testid="desk-playbook-occurrences">
+      <p data-testid="desk-playbook-occurrences-count" className="mb-1 text-[11px] text-slate-500">
+        {occurrences.length} occurrence(s) of {poolKey} in this session
+        {cap !== null && occurrences.length > cap
+          ? ` — the first ${cap} are pooled into the means above; the rest are recorded but outside the pool.`
+          : ". Click one to open its chart in Structure."}
+      </p>
+      <table data-testid="desk-playbook-occurrences-table" className="w-full border-collapse">
+        <thead>
+          <tr>
+            <th className={ROW_HEADER_CELL_LEFT}>symbol</th>
+            <th className={ROW_HEADER_CELL_LEFT}>trigger (ET)</th>
+            <th className={ROW_HEADER_CELL}>trigger price</th>
+            <th className={ROW_HEADER_CELL}>entry</th>
+            <th className={ROW_HEADER_CELL}>invalidation price</th>
+            <th className={ROW_HEADER_CELL_LEFT}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {occurrences.map((signal, index) => (
+            <PlaybookOccurrenceRow
+              key={playbookSignalKey(signal)}
+              signal={signal}
+              recordId={record.id}
+              detectTimeframe={detectTimeframe}
+              beyondCap={cap !== null && index >= cap}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function PlaybookSummaryView({ record }: { record: DeskPlaybookRecord }) {
   const measureKeys = record.parameters.signal_measures;
   const poolKeys = Object.keys(record.summary);
+  // Which pools are expanded to show their own occurrences. Local to this component (unlike
+  // `selectedSignalKey`, which has to be hoisted because it drives a panel rendered by a SIBLING
+  // of the signals table) — nothing outside this view reads it. The call site's `key={record.id}`
+  // collapses everything when the session date resolves to a different record.
+  const [expandedPools, setExpandedPools] = useState<ReadonlySet<string>>(() => new Set());
+  function togglePool(poolKey: string) {
+    setExpandedPools((previous) => {
+      const next = new Set(previous);
+      if (next.has(poolKey)) next.delete(poolKey);
+      else next.add(poolKey);
+      return next;
+    });
+  }
   if (poolKeys.length === 0) return null;
   return (
     <div data-testid="desk-playbook-summary" className="overflow-x-auto">
       <p className="mb-1 text-[11px] text-slate-500">
         signals vs the seeded random-minute baseline — mean (%), untruncated pools only. Both lines
         carry the same sign (long positive, short negative), so a signal row above its baseline row
-        beat a random minute of the same session.
+        beat a random minute of the same session. Click a setup to list the occurrences behind it.
       </p>
       <table className="w-full border-collapse text-xs">
         <thead>
@@ -5459,7 +5569,22 @@ function PlaybookSummaryView({ record }: { record: DeskPlaybookRecord }) {
             <Fragment key={poolKey}>
               <tr data-testid="desk-playbook-summary-signals" className="border-t border-slate-800/60">
                 <td className={ROW_BADGE_CELL} rowSpan={2}>
-                  <span className={CHIP_CLASS}>{poolKey}</span>
+                  {/* A real <button>, not an onClick on the <tr>: it gets focus, Enter and Space
+                      for free, and `aria-expanded`/`aria-controls` make the relationship
+                      announceable (and give a browser pass a static attribute to read). */}
+                  <button
+                    type="button"
+                    data-testid="desk-playbook-summary-expand"
+                    aria-expanded={expandedPools.has(poolKey)}
+                    aria-controls={`playbook-occurrences-${poolKey.replace(":", "-")}`}
+                    onClick={() => togglePool(poolKey)}
+                    className="flex items-center gap-1 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <span aria-hidden="true" className="text-[10px] text-slate-500">
+                      {expandedPools.has(poolKey) ? "▾" : "▸"}
+                    </span>
+                    <span className={CHIP_CLASS}>{poolKey}</span>
+                  </button>
                   {(record.signals_beyond_cap[poolKey] ?? 0) > 0 && (
                     <span className="ml-1 text-[10px] text-amber-200/70">
                       +{record.signals_beyond_cap[poolKey]} beyond cap
@@ -5481,6 +5606,25 @@ function PlaybookSummaryView({ record }: { record: DeskPlaybookRecord }) {
                   measureKeys={measureKeys}
                 />
               </tr>
+              {/* A sibling BELOW the two rows the pool-key cell's rowSpan={2} already covers — so
+                  that span needs no change. The occurrences get their own nested table rather
+                  than trying to occupy this one's measure columns: reshaping a single signal's
+                  `forward` block into the 15 pooled measure keys would be re-running the
+                  backend's own pooling client-side. */}
+              {expandedPools.has(poolKey) && (
+                <tr
+                  data-testid="desk-playbook-summary-occurrences"
+                  className="border-t border-slate-800/40"
+                >
+                  <td colSpan={2 + measureKeys.length} className="px-1.5 py-2">
+                    <PlaybookOccurrenceList
+                      record={record}
+                      poolKey={poolKey}
+                      id={`playbook-occurrences-${poolKey.replace(":", "-")}`}
+                    />
+                  </td>
+                </tr>
+              )}
             </Fragment>
           ))}
         </tbody>
@@ -5642,10 +5786,13 @@ function PlaybookRecordView({
         </p>
       )}
       <p data-testid="desk-playbook-counts" className="text-[11px] text-slate-500">
-        {record.signals.length} signal(s) · {record.absences.length} absence(s) · click a row for
-        its full disclosures and forward measurement
+        {record.signals.length} signal(s) · {record.absences.length} absence(s) · expand a setup
+        above to list its occurrences and open one on the chart, or click a row below for its full
+        disclosures and forward measurement
       </p>
-      <PlaybookSummaryView record={record} />
+      {/* `key` collapses every expanded pool when the session date resolves to a DIFFERENT record
+          — an expansion belongs to the record it was opened against. */}
+      <PlaybookSummaryView key={record.id} record={record} />
       <PlaybookSignalsTable
         record={record}
         labels={labels}

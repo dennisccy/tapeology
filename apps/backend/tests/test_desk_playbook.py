@@ -45,6 +45,7 @@ from app.research.desk_playbook import (
     compute_playbook_input_signature,
     playbook_parameters,
 )
+from app.research.desk_playbook_features import baselines
 from app.research.desk_sessions import non_session_refusal, session_evidence
 from app.research.desk_universe import UniverseStore
 from test_copy_discipline import find_violations
@@ -1447,6 +1448,12 @@ def test_j06_new_setups_tuple_moves_the_signature_and_mints_a_new_version_beside
 # fails LOUDLY here rather than silently leaving the served register out of date again -- whoever
 # adds a family must deliberately re-derive this constant (and this rationale paragraph), never
 # just extend `PLAYBOOK_SETUPS` in isolation.
+#
+# The shape-anchors iteration adds ONE clause rather than a family: `geometry.anchors` names the
+# recorded bars and prices each formation was read from, so a chart drawing a setup's outline shows
+# the DETECTOR's own reading rather than a second, re-derived one. It is registered because it is a
+# new kind of served claim about the record -- and because a record written before it existed has
+# no anchors at all, which the clause states rather than leaves for a reader to discover.
 _EXPECTED_PLAYBOOK_REGISTER = (
     "pre-registered opening-range-break, jump-base-explosion, drop-base-implosion, cup-and-handle, "
     "capitulation, range-trade, double-top, and double-bottom signals detected on the desk's own "
@@ -1454,6 +1461,9 @@ _EXPECTED_PLAYBOOK_REGISTER = (
     "fixed in advance in docs/playbook-detector-spec.md, never fit to outcomes. "
     "A signal is a recorded observation, not advice: invalidation_price is the book's own "
     "structural level, disclosed as geometry, never a stop order, a size, or an account concept. "
+    "A signal's geometry.anchors block names the recorded bars and prices its own formation was "
+    "read from, so the shape drawn on a chart is the detector's own reading rather than a second, "
+    "re-derived one; a record computed before that block existed carries an honest absence. "
     "Each signal's forward block is measured with the desk forward rail's own conventions — "
     "trading-bar horizons, dual max drawdown, truncation honesty — anchored at the entry already "
     "decided at detection time, never recomputed a second way; invalidation_breached discloses "
@@ -1471,3 +1481,112 @@ def test_playbook_register_pinned_text_names_every_shipped_setup_family():
     deliberately re-derived alongside it."""
     assert PLAYBOOK_REGISTER == _EXPECTED_PLAYBOOK_REGISTER
     assert find_violations(PLAYBOOK_REGISTER) == []
+
+
+# === geometry.anchors + symbol_scales -- re-key, honest absence, and the served scale =============
+
+
+def test_shape_anchor_schema_moves_the_signature_and_mints_a_new_version_beside_the_old_file(
+    tmp_path, bar_store, universe_store, monkeypatch,
+):
+    """The re-key that makes an already-recorded date REFRESHABLE with anchors. Cloned from the
+    J-06 `setups`-tuple test above with one constant swapped -- `PLAYBOOK_SHAPE_ANCHOR_SCHEMA` is
+    hashed into the parameters blob for exactly this reason: without it, re-running an
+    already-recorded session would match the old key and hand back the old, anchorless record
+    forever, since the store never rewrites a file. With it, a fresh compute over IDENTICAL bars
+    mints a genuinely new version carrying the anchors, and the anchorless original stays on disk,
+    byte-identical and honestly anchorless."""
+    monkeypatch.setattr(desk_playbook_module, "PLAYBOOK_SHAPE_ANCHOR_SCHEMA", "playbook-anchors-v0")
+    pre_store, pre_meta = _record_aaa(tmp_path, bar_store, universe_store)
+    pre_path = pre_store._path(pre_meta["id"])
+    pre_sha = _sha256_file(pre_path)
+    assert pre_meta["parameters"]["shape_anchor_schema"] == "playbook-anchors-v0"
+
+    monkeypatch.undo()  # restore the real schema string
+
+    current = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+    assert current["parameters"]["shape_anchor_schema"] == "playbook-anchors-v1"
+    assert current["playbook_input_signature"] != pre_meta["playbook_input_signature"]
+
+    current_meta = pre_store.record(**current)
+    assert current_meta["id"] != pre_meta["id"]
+
+    # The older file is untouched by the second, differently-keyed write.
+    assert _sha256_file(pre_path) == pre_sha
+    assert pre_store.get(pre_meta["id"]) == pre_meta
+
+    newest, versions = pre_store.newest_for_date(SESSION_DATE)
+    assert versions == 2
+    assert newest["id"] == current_meta["id"]
+    # Every signal on the new version states the SAME schema its own record's parameters do --
+    # true by construction (the detectors read it out of `params`), pinned here anyway.
+    assert current["signals"]
+    for signal in current["signals"]:
+        assert signal["geometry"]["anchors"]["schema"] == current["parameters"]["shape_anchor_schema"]
+
+
+def test_a_pre_anchors_record_serves_geometry_without_the_anchors_key(
+    tmp_path, bar_store, universe_store, monkeypatch,
+):
+    """The honest-absence contract for anchors, the `turned_at_midrange` test above verbatim with
+    one key swapped: a record written before anchors existed reads back WITHOUT the key -- absent,
+    never `null`, never backfilled -- and still serves HTTP 200. The sanity check first proves this
+    code DOES add the key on a fresh compute, so the absence on the stripped copy is provably the
+    store's own fidelity rather than a detector that quietly never wrote it. This absence is what
+    the frontend keys on to render "the outline is not on file" instead of a guessed shape."""
+    _plant_baseline_sessions(bar_store, "AAA")
+    _plant_firing_session(bar_store, "AAA")
+    result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+    assert result["signals"]
+    assert "anchors" in result["signals"][0]["geometry"]  # this code adds it fresh
+
+    for signal in result["signals"]:  # simulate an on-disk pre-anchors file
+        del signal["geometry"]["anchors"]
+    del result["symbol_scales"]
+
+    monkeypatch.setenv("TAPEOLOGY_DESK_PLAYBOOK_DIR", str(tmp_path / "playbook"))
+    store = PlaybookStore(tmp_path / "playbook")
+    meta = store.record(**result)
+
+    reloaded = store.get(meta["id"])
+    assert "anchors" not in reloaded["signals"][0]["geometry"]
+    assert reloaded["symbol_scales"] == {}  # the omitted kwarg reads back empty, never missing
+
+    client = TestClient(app)
+    response = client.get("/research/desk/playbook", params={"id": meta["id"]})
+    assert response.status_code == 200
+    assert "anchors" not in response.json()["playbook"]["signals"][0]["geometry"]
+
+
+def test_symbol_scales_serves_the_mbr_every_ratio_on_the_record_is_normalized_by(
+    tmp_path, bar_store, universe_store,
+):
+    """`symbol_scales` makes the record's own `*_mbr` ratios READABLE: MBR is a per-symbol baseline
+    that was never served, so "2.0 MBR" named no quantity a reader could size. Asserted as an
+    IDENTITY against the `baselines` primitive itself rather than a hand-copied number -- a second
+    computation here would prove only that two copies of the same arithmetic agree.
+
+    Note what this does NOT license: a consumer must never multiply a served ratio by this MBR to
+    reconstruct a price. Every price the record draws is served absolutely, as its own field or as
+    a shape anchor."""
+    _plant_baseline_sessions(bar_store, "AAA")
+    _plant_firing_session(bar_store, "AAA")
+    result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+
+    expected = baselines(
+        bar_store, "AAA", SESSION_DATE,
+        desk_playbook_module.PLAYBOOK_BASELINE_SESSIONS,
+        desk_playbook_module.PLAYBOOK_MIN_BASELINE_SESSIONS,
+    )
+    assert result["symbol_scales"]["AAA"]["mbr"] == expected["mbr"]
+    assert result["symbol_scales"]["AAA"]["baseline_sessions"] == expected["sessions"]
+    # SPY is always present: `market.market_move_mbr` on every signal is normalized by the INDEX's
+    # own MBR, which no per-signal block could honestly carry.
+    assert desk_playbook_module.PLAYBOOK_MARKET_SYMBOL in result["symbol_scales"]
+    # Every symbol the walk actually detected against carries a scale.
+    for signal in result["signals"]:
+        assert signal["symbol"] in result["symbol_scales"]
+
+    store = PlaybookStore(tmp_path / "playbook")
+    meta = store.record(**result)
+    assert store.get(meta["id"])["symbol_scales"] == result["symbol_scales"]

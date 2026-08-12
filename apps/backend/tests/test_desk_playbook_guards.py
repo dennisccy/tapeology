@@ -622,15 +622,25 @@ def test_zero_structural_calls_guard_can_fail_on_a_seeded_violation():
 import hashlib
 import inspect
 
+#
+# The shape-anchors iteration MOVED one of these two pins, deliberately and for the first time.
+# `detect_capitulation` gained a `geometry.anchors` block (the decline leg's own two ends, named
+# and anchored to their bars), so its hash is re-derived below. `_find_climax_formation`'s is NOT
+# re-derived, and that is the part now worth guarding: the DETECTION grammar -- the vertical-move
+# scan, the re-anchoring rule, the reversal-bar trigger -- is byte-for-byte the code that shipped
+# before the anchors existed, so the anchors provably describe the formation this walk already
+# found rather than a second, re-derived one. Re-pin the capitulation hash only alongside a
+# deliberate change to what that function SERVES; re-pinning the climax hash means the grammar
+# itself moved, which is a much larger claim and needs its own justification here.
 _FIND_CLIMAX_FORMATION_SHA256 = "1a6b880d320072ad1a79b8d262accb7352fefae61ab85017c5d44a070b62e585"
-_DETECT_CAPITULATION_SHA256 = "ffff5f2b4a3298ee48f4194e2f0de634a4a6fec37ba0512670b5b1dadc1240ca"
+_DETECT_CAPITULATION_SHA256 = "04065321fddcf73199c0e463637f413b60127791c6bc724c53edfa828a6a8431"
 
 
 def test_decline_disclosure_doc_edit_left_the_capitulation_code_byte_unchanged():
     """TC-18: `_find_climax_formation`'s and `detect_capitulation`'s own source (extracted live via
-    ``inspect.getsource``) still hashes to the EXACT value pinned before this iteration's doc-only
-    spec edit landed -- proving the spec §3.5 prose addition is genuinely zero-behavior-change, not
-    a disguised code edit."""
+    ``inspect.getsource``) still hashes to its EXACT pinned value -- originally proving the spec
+    §3.5 prose addition was zero-behavior-change, and now additionally proving that the climax
+    formation walk itself did not move when `detect_capitulation` gained its shape anchors."""
     from app.research.desk_playbook_detect import _find_climax_formation, detect_capitulation
 
     assert hashlib.sha256(inspect.getsource(_find_climax_formation).encode()).hexdigest() == (

@@ -92,7 +92,13 @@ def test_opening_range_1m_basis_uses_all_available_1m_bars_in_the_window(bar_sto
     ]
     _plant(bar_store, "OR1M", "1m", bars_1m)
     result = opening_range(bar_store.merged_bars("OR1M", "1m"), [], SESSION_DATE, 15, 10)
-    assert result == {"high": 101.0, "low": 100.0, "width": 1.0, "basis": "1m", "bars_used": 12}
+    # `window_start_epoch`/`window_end_epoch` are the ET 09:30 .. 09:30+15m window BOTH bases read
+    # (E_OPEN is that 09:30 for this session date) -- returned rather than discarded, so a caller
+    # can anchor the opening range in time without a second, DST-correct copy of `_et_epoch`.
+    assert result == {
+        "high": 101.0, "low": 100.0, "width": 1.0, "basis": "1m", "bars_used": 12,
+        "window_start_epoch": E_OPEN, "window_end_epoch": E_OPEN + 900.0,
+    }
 
 
 def test_opening_range_degrades_to_5m_basis_below_the_1m_floor(bar_store):
