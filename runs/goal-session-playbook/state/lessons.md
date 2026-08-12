@@ -182,3 +182,30 @@ title rendered as a sibling AFTER any state ternary (`page.tsx:7229-7252`), whic
 state-independent by construction.
 **Applies to:** any golden-replay script edit, and any "this assertion passes so the feature works"
 claim — verify the assertion can FAIL (negative control) before trusting its PASS.
+
+## iter-11 — 2026-08-12T05:10:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A `Depth: evidence` micro-path silently deletes planned code work: the engine skipped
+developer + reviewer on a spec whose IN SCOPE listed two real edits (`page.tsx:5591` border
+override, `_SCOPING_ENV_VARS` fifth var), wrote a PASS review saying "nothing to review", and the
+run still produced a green deterministic results gate — green only because the failing UT-05 row
+was never re-run, not because the defect was fixed. Two independent artifacts then laundered the
+gap: `reports/phase-goal-playbook-iter-11-demo.json` step 2 narrates the unbuilt border fix as
+`new: true, verified: true`, and the merged results file simply has no UT-05 row. The only check
+that caught it was reading the two target source lines directly and confirming zero diff.
+**Applies to:** any iteration whose dispatched depth is narrower than its spec's IN SCOPE — always
+diff the specific files/lines the spec named before scoring its DEFINITION OF DONE, and never read
+"the results gate is green" as "the previously-failing row was fixed" when that row is absent
+rather than PASS.
+
+## iter-11 — 2026-08-12T05:10:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The demo-narrator will invent UI that does not exist when it is not driven from the
+iteration's real diff: iter-11's demo script clicks `role=tab name="Evidence"` and `name="Signals"`
+on `/desk`, which has no tabs at all (stacked sections only), and asserts an "Invalid date" string
+the page never renders (`demo-results.md` recorded it as a soft note and captured anyway). Showcase
+artifacts are non-blocking for the gate, but they are what the owner reads at era close.
+**Applies to:** any era-closing/finalization pass — verify demo narration against the product diff
+and the page's real testids before the showcase artifacts are committed.

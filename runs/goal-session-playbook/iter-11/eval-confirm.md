@@ -1,0 +1,14 @@
+**Verdict:** CONFIRM_ACHIEVED
+
+## Reasoning
+
+I tried to break the first evaluator's claims and could not. What I checked myself:
+
+- **Every "passing" claim has a real row.** `reports/phase-goal-playbook-iter-11-ui-test-results.md` has 10 PASS rows, 0 FAIL, 0 skipped — nine replay rows plus a detailed UT-J-09 row (live `list_tools()` = 20 tools, both new tools present, browser visit to `/desk`).
+- **I opened the J-09 screenshot.** `reports/qa/goal-playbook-iter-11-evidence/UT-J-09-result.png` really shows `/desk` on the scoped rig with "Built from signature: 9ba29d8e3aaaa643", the honest "Playbook not computed for this session." state with an enabled Run Playbook button, and the back-scan run row (0 reused · 3 recorded · 0 refused · 0 failed). It matches what the eval says it shows.
+- **J-09's acceptance is fully covered, not renegotiated.** The goal asks for 20 tools, byte-identity to curl in empty AND populated states, and a verbatim `?date=` proxy. All four live in `apps/backend/tests/test_mcp_server.py` (lines 606, 620, 642, 680, 725; 20-tool assertions at 1363/1382), and the suite ran green.
+- **The one dropped check is not a goal criterion.** I read J-03's acceptance text in `docs/goal.md` verbatim. It asks for the empty state, the signals table, a refused second trigger, the non-session refusal copy, and green guards — it never asks for an orange input border. UT-05 was a test-designer P2 expectation; its real assertions (error message, no fabricated data) passed at iteration 10. So the missing UT-05 re-run does not weaken any goal criterion. The evaluator said so out loud instead of hiding it.
+- **The three open items are accurately reported, not laundered.** I confirmed each: the border code at `apps/frontend/app/desk/page.tsx:5591` is genuinely unchanged; `_SCOPING_ENV_VARS` in `desk_playbook_backscan.py:111` genuinely still lists only four names; and `reports/phase-goal-playbook-iter-11-demo.json` step 2 genuinely claims the border repair as new and verified when it never happened.
+- **No contradictions.** Gate report, journey digest, and eval all say 10/10 passing. All ten recorded spec hashes match the ones I recomputed from today's `docs/goal.md`, so nobody edited the goal under a passing journey. Coherence is PASS, the diff scan is CLEAN, the product diff is empty, and the owner's own data store was untouched (guard report: 9,841 files, CLEAN). Zero open anti-goal entries in the ledger.
+
+The demo file's false sentence is the one real defect I found, and it is a wrong sentence in a showcase file, not a broken product feature or an anti-goal breach — the first evaluator already put it in front of the owner and told them not to publish it as is. Fixing it is a re-recording task, which is never grounds to hold an era open. **One condition for the owner: correct or re-record `reports/phase-goal-playbook-iter-11-demo.json` before the era's story is published, because it claims a repair that did not ship.**

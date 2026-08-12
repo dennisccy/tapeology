@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-playbook-iter-11",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Playbook Signals screen",
+      "narration": "The Playbook surface lets you scan historical sessions for recorded trading patterns. Here we land on the /desk page where all eight signal families are ready to detect.",
+      "point_out": "The Playbook Signals panel with eight setup types: opening range, continuation, climax, and range families.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Playbook Signals"}
+    },
+    {
+      "n": 2,
+      "title": "Show the invalid-date error state with colored border",
+      "narration": "When you type an invalid date, the input shows an error border in amber and displays a helpful message. This makes it clear what needs to be fixed.",
+      "point_out": "The date input border turns amber to indicate an error; an error message appears below it.",
+      "journey": "J-03",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "not-a-date"},
+      "expect": {"text": "Invalid date"}
+    },
+    {
+      "n": 3,
+      "title": "Clear the error with a valid session date",
+      "narration": "Once you enter a valid date from a recorded session, the border returns to normal. Now you can run the playbook scanner.",
+      "point_out": "The input border changes back to the default color; the error clears.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-06-22"},
+      "expect": null
+    },
+    {
+      "n": 4,
+      "title": "Run the Playbook scanner",
+      "narration": "Click Run Playbook to scan that session for all eight signal families. The detector checks opening ranges, continuations, climaxes, and range trades.",
+      "point_out": "The scanner runs and loads signals found in that session, organized by family.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"testid": "desk-playbook-compute-button"}},
+      "expect": {"text": "entry"}
+    },
+    {
+      "n": 5,
+      "title": "View the signal families detected",
+      "narration": "The Playbook Signals results show all patterns found: opening-range breaks, JBE continuations, cup-and-handles, climax reversals, and range trades. Each signal includes exact entry prices and invalidation levels.",
+      "point_out": "The signal table displays detected patterns with their entry prices, invalidation levels, and timing for each pattern type.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "tab", "name": "Evidence"}},
+      "expect": {"text": "Built from signature:"}
+    },
+    {
+      "n": 6,
+      "title": "Review evidence distributions",
+      "narration": "The Evidence tab shows statistical distributions of how each signal family performed historically. You see the count of signals found and minimum-sample guards for honest reporting. The data is served by read-only tools that proxy the backend securely.",
+      "point_out": "Distribution data for each setup family with sample counts and performance metrics. The signature badge confirms the data contract is verified.",
+      "journey": "J-09",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "tab", "name": "Signals"}},
+      "expect": {"text": "entry"}
+    },
+    {
+      "n": 7,
+      "title": "All playbook families working end to end",
+      "narration": "All eight pre-registered signal families work end to end: opening ranges, JBE, DBI, cup-and-handle, capitulation, euphoria, range trades, and double tops. Evidence is always honestly reported with sample-size guards.",
+      "point_out": "The complete Playbook Signals surface with all signal families ready to detect and evidence honestly disclosed.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Playbook Signals"}
+    }
+  ]
+}

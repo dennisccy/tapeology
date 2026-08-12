@@ -1,40 +1,40 @@
 # Iteration State — playbook
 
-**After iteration:** 10 · **Date:** 2026-08-12 · **Verdict:** CONTINUE
+**After iteration:** 11 · **Date:** 2026-08-12 · **Verdict:** GOAL_ACHIEVED
 
 ## Journeys
 
-10 passing (J-01..J-10) — 10 total · 0 failing · 0 regressed · J-09 NOT re-tested this run
-(`DEFERRED-BUDGET`, keeps its earlier pass)
+10 passing (J-01..J-10) — 0 failing · 0 regressed · all ten verified THIS run (9 by deterministic
+replay + J-09 live browser/tool-registry). Every journey now has a golden; `state/golden-gaps` absent.
 
 ## Active blockers
 
-- **J-09 has no golden replay script** (dev) — the only journey without one, so the wall-clock trim
-  dropped it; `runs/goal-session-playbook/state/golden-gaps` was auto-deleted as a side effect and
-  must be restored with the single line `J-09`. Blocks the achievement gate until a lane re-tests it.
-- **One `FAIL` row: UT-05** (dev) — `apps/frontend/app/desk/page.tsx:5591` appends `border-amber-500`
-  beside `ASOF_INPUT_CLASS`'s `border-slate-700`; equal specificity, slate wins, so the invalid-date
-  border never turns amber. Cosmetic, pre-existing, not named in `docs/goal.md` — fix the class or
-  drop the expectation. Blocks the results gate either way.
-- **Latent (not breached, verified untouched):** `TAPEOLOGY_BAR_INDEX_DB` is not in
-  `_assert_scoped`'s four vars (`desk_playbook_backscan.py:111-116`) and `.data/bar_index.db` is
-  outside all 12 protected dirs — `seed_playbook_iter8_replay_rig.py`'s `run_reconcile` could wipe it.
+- **none blocking.** Three carried, disclosed, machine-fixable items, none named by `docs/goal.md`:
+  1. **UT-05 open, NOT fixed** (dev) — `apps/frontend/app/desk/page.tsx:5591` still appends
+     `border-amber-500` beside `ASOF_INPUT_CLASS`'s `border-slate-700` (`:298`); slate wins. The
+     iter-11 results gate is green only because UT-05 was not re-run, not because it was repaired.
+     Fix the one call site or drop the expectation.
+  2. **`TAPEOLOGY_BAR_INDEX_DB` still missing** (dev) — `desk_playbook_backscan.py`
+     `_SCOPING_ENV_VARS` still has four vars. Latent only: every scoped launcher already exports it
+     (`qa_playbook_iter7_fixture_scoped_backend.sh:86`); `.data/bar_index.db` mtime 2026-08-10.
+  3. **False showcase claim** (dev) — `reports/phase-goal-playbook-iter-11-demo.json` step 2 tags
+     the unbuilt border fix `new/verified: true`, and clicks `/desk` tabs that do not exist.
+     Correct or re-record before the era's artifacts are committed.
 
 ## Last 2 verdicts
 
-- iter 10: CONTINUE — owner ruling R-3 verified, both carried spec items discharged; all 10 journeys
-  pass; held open only by the untested J-09 and the one cosmetic FAIL row.
-- iter 9: STALLED — two owner-only spec questions open since iteration 6.
+- iter 11: GOAL_ACHIEVED — all 10 re-verified this run (J-09's gap closed), suite exit 0 / 2168
+  passed / 8 skipped, pin `08e471b10130e1e2`, store untouched, zero open anti-goals.
+- iter 10: CONTINUE — R-3 discharged, all 10 passing, held open by the untested J-09 + one FAIL row.
 
 ## Do not redo
 
-- **R-3.2(a)/(c)/(d)/(e) spec catch-up** — landed in `docs/playbook-detector-spec.md` (+44/-16),
-  git-proved zero detector change. Do not re-open the ratified readings.
-- **`geometry.turned_at_midrange`** — shipped inside every R-3.2(b) constraint (disclosure-only,
-  reuses `PLAYBOOK_RANGE_HOLD_TOL_MBR`, optional, never backfilled). Report it as *shipped and
-  proven to render, never yet observed*: 0 of 89 recorded range signals are `true`.
-- **`J-10.json` steps 6-8** — off the fixture-dependent hash onto static `<Panel>` titles; the old
-  assertion passed vacuously. Do not revert.
-- **`/structure` blank chart** CLOSED (index repair; real candles, pinned 300.10/302.20 band) ·
-  **store-scope hardening** closed at iters 8-9 (guard CLEAN, 9,841) · **pin** `08e471b10130e1e2`
-  unmoved, suite 2168 passed / 8 skipped / exit 0 (floor 2163).
+- **J-09 verification + `journey-scripts/J-09.json`** — landed; the golden asserts the static label
+  "Built from signature:" only. Do not re-point it at the hash value.
+- **R-3.1 / R-3.2(a)-(e) spec catch-up + `geometry.turned_at_midrange`** — ratified and shipped at
+  iter-10. Do not re-open; report the chip as *shipped and proven to render, never yet observed*.
+- **`J-10.json` steps 6-8** on static panel titles (not the fixture hash) — do not revert.
+- **Store-scope guard hardening** (iters 8-9), 9,841 files CLEAN · **`/structure` blank chart**
+  CLOSED at iter-10.
+- **Depth trap:** `Depth: evidence` skips developer+reviewer — iter-11 lost 2 of its 3 planned code
+  items that way. Never plan code work under it.

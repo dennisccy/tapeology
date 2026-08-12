@@ -529,3 +529,57 @@ but stays grey, because two colour rules of equal strength collide; the goal fil
 orange box, so either fix the one class or stop asserting it. Add the bar-index setting to the list
 the test rigs must have scoped, so a future rig run cannot wipe the operator's real index. None of
 this changes what any signal means or how any number is computed.
+
+---
+
+## Iteration 11 — goal-playbook-iter-11
+
+**Date:** 2026-08-12T05:10:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** evidence (the plan asked for a fast pass with three small code items; the
+engine turned it into an evidence-only pass and skipped the developer entirely — the sixth time
+this session a spec's depth was overridden, and the first time it silently dropped planned work)
+**Journey deltas:**
+- Newly passing: none — all ten were already passing
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-01 "The signal contract", J-02 "Every signal measured", J-03 "The Playbook
+  lands on /desk", J-04 "The continuation family", J-05 "The climax family", J-06 "The range
+  family", J-07 "The back-scan", J-08 "The evidence view", J-10 "The kept product stands" — all
+  nine re-run automatically on the scoped test copy this run, 9 of 9 passed. J-09 "Claude can read
+  the playbook" was this run's one target: it was NOT tested at all last time, and this time it was
+  properly re-tested and given its own saved replay script, so every journey now has one.
+- Anti-goal violations: none new, none open. J-06's owed re-take flag is cleared (a fresh picture
+  landed). Three items stay OPEN as recorded, disclosed defects that no journey and no anti-goal
+  asks for: the orange box on a wrongly typed session date was NOT fixed; the bar-index safety
+  entry was NOT added; and this run's showcase file tells the owner the orange box was fixed, which
+  is untrue.
+
+**Reasoning:** I checked the work myself instead of trusting the write-ups, and the most important
+check was the one nobody else did: I read the two files this run was supposed to change and proved
+neither was touched. The box around a wrongly typed date still carries both colour rules side by
+side, so grey still wins; and the safety list still names four settings, not five. So two of the
+three planned items simply did not happen — the engine skipped the developer. I opened the target
+picture: the whole Desk page on the test copy, with the evidence heading and the line "Built from
+signature: 9ba29d8e3aaaa643" clearly readable, which is exactly what the new saved script checks —
+and it checks only the fixed words, never the changing number, which is the trap this session hit
+twice before. I asked the running code for the Claude tool list myself: exactly 20, with both
+playbook tools present. I asked it for the pin: 08e471b10130e1e2. I re-ran the whole backend test
+suite to completion: exit 0, 2168 passed, 8 skipped, none failed. I listed every file written into
+the owner's own store since this run began and found nothing at all; the bar index has not been
+touched since 10 August. Two things I will not sign off silently. The automatic pass/fail gate is
+green this run only because the failing orange-box check was not run at all — not because it was
+fixed, and I say so plainly rather than let the green gate stand for a repair. And the showcase
+file for this run narrates that repair as newly shipped; it is false, and it must not be published
+to the owner in that form.
+
+**Next-step recommendation:** Halt — the era is achieved. All ten journeys of the Playbook era pass
+with fresh checks from this run, nothing kept has regressed, and no anti-goal is open. Three small
+items are recorded and carried, not fixed: the box around a wrongly typed session date should turn
+orange and stays grey (the goal file never asks for an orange box, and the honest error message and
+the empty table are both still there); one settings name is missing from a test-rig safety list,
+which changed nothing this run because every test rig already sets it; and this run's showcase file
+must be corrected or re-recorded before anyone reads it, because it claims the orange box was
+fixed. The one sentence for the owner: accept the era as finished and let these three small items
+ride into the next chapter, or ask for one short pass that fixes the box, adds the missing settings
+name, and re-records the showcase honestly.

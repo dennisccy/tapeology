@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "journey": "J-09",
+  "name": "MCP contract v4 — 20 read-only tools",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-09", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Built from signature:"}}
+  ]
+}

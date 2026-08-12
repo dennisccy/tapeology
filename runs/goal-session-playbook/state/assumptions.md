@@ -407,3 +407,40 @@ affordance and were never named by UT-05). This is the cheaper, more honest defa
 contrary owner signal — it makes an already-disclosed state (`aria-invalid` + visible error text)
 also visible on the input's own edge, at minimal, well-isolated blast radius.
 **Reversible:** yes — a one-input CSS override with no data, schema, or signature implications.
+
+## iter-11 — goal-evaluator
+
+**Ambiguity:** `reports/phase-goal-playbook-iter-11-demo.json` step 2 narrates the UT-05 amber-border
+fix as shipped (`"new": true, "verified": true`) when I proved in source it was never built
+(`page.tsx:5591` unchanged). My rules say a MINOR anti-goal violation forces CONTINUE and that
+GOAL_ACHIEVED is barred while any anti-goal violation is unresolved. Nothing in `docs/goal.md` says
+whether a false claim in a non-product showcase artifact is one of ITS anti-goals.
+**We chose:** not an anti-goal violation of `docs/goal.md`, so it does not bar GOAL_ACHIEVED — but
+recorded loudly, in four durable places (eval.md Halt Justification, evaluator-log, iteration-state
+blockers, lessons.md), as an open honesty defect that must be corrected before the era's showcase
+artifacts are published. I walked all ten immutable rails plus the Era-B and playbook-era anti-goals
+individually: the demo narration is not a signal/chip/evidence cell (so the copy-discipline rail does
+not reach it), carries no $ figure or prediction, touches no record, and moved no data. It offends
+`.claude/core.md`'s "every claim cites evidence", which is framework law, not a goal.md anti-goal.
+Fail-closed reasoning applied to the OTHER direction too: I did not let the green results gate stand
+as evidence of a repair, since UT-05 is absent from this run's table rather than PASS.
+**Reversible:** yes — correcting or re-recording the demo closes it with zero product change.
+
+## iter-11 — goal-evaluator
+
+**Ambiguity:** Two of this iteration's three planned items (the UT-05 border fix, the
+`TAPEOLOGY_BAR_INDEX_DB` scoping entry) were never built, so its own DEFINITION OF DONE is unmet
+(TC-4/TC-5/TC-7/TC-8/TC-9/TC-10). My decision tree scores the ERA (journeys + anti-goals + coherence
++ drift), not an iteration's checklist; nothing states which wins when an iteration under-delivers
+while the era's own bar is fully met.
+**We chose:** the era's bar wins — GOAL_ACHIEVED. Neither unbuilt item is a Must-have journey
+acceptance or an anti-goal: I read J-03's acceptance text verbatim in `docs/goal.md` and it names no
+border colour (UT-05 is a test-designer P2 expectation, already ruled non-downgrading at iter-10),
+and the iteration spec itself classifies the scoping entry as "a latent hazard, not a violation" — I
+verified every scoped launcher (`qa_playbook_iter7_fixture_scoped_backend.sh:86`,
+`qa_desk_iter5...:81`, `qa_playbook_iter6...:63`) already exports that var, that
+`apps/backend/.data/bar_index.db` mtime is still 2026-08-10 07:58, and that the store-scope guard
+reports all 9,841 protected files unchanged. Holding CONTINUE would spend another iteration on work
+`docs/goal.md` never asks for — and this iteration just demonstrated the engine may not build it
+anyway. Both items are carried into the halt justification so the owner can overrule cheaply.
+**Reversible:** yes — `--resume` after a one-line owner instruction reopens the session.
