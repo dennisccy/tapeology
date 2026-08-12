@@ -323,6 +323,33 @@ def test_monkeypatched_constant_moves_parameters_and_signature_and_mints_a_new_v
     # The original file is untouched by the second, differently-keyed write.
     assert store.get(first_meta["id"]) == first_meta
 
+    monkeypatch.undo()  # back to PLAYBOOK_NARROW_OR_MAX_MBR's real value
+
+    # goal-playbook-iter-10 (TC-9): the SAME proof, for the constant THIS iteration's new
+    # `geometry.turned_at_midrange` disclosure reuses (`PLAYBOOK_RANGE_HOLD_TOL_MBR`, spec §3.7,
+    # R-3.2(b)) -- proving the field's own binding constraint (reuse an existing constant, never
+    # mint one) is honestly wired into the signature, not merely asserted in a docstring.
+    monkeypatch.setattr(desk_playbook_module, "PLAYBOOK_RANGE_HOLD_TOL_MBR", 5.0)
+    hold_tol_moved_params = playbook_parameters()
+    hold_tol_moved_signature = compute_playbook_input_signature(
+        bar_store, ["AAA"], CONFIG.config_fingerprint()
+    )
+    assert hold_tol_moved_params != original_params
+    assert hold_tol_moved_params["range_hold_tol_mbr"] == 5.0
+    assert hold_tol_moved_signature != original_signature
+    monkeypatch.undo()
+
+    # And the reverse (TC-9's second half): with EVERY constant back to its real value -- this
+    # iteration's own new code (the turned_at_midrange disclosure) changed no constant -- both
+    # `playbook_parameters()` and the signature reproduce the EXACT pre-monkeypatch value on the
+    # same bar/member inputs, byte for byte, and the fingerprint pin is unmoved. A disclosure is
+    # not a threshold (T-1).
+    reverted_params = playbook_parameters()
+    reverted_signature = compute_playbook_input_signature(bar_store, ["AAA"], CONFIG.config_fingerprint())
+    assert reverted_params == original_params
+    assert reverted_signature == original_signature
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
+
 
 def test_compute_playbook_input_signature_is_deterministic(bar_store):
     _plant_baseline_sessions(bar_store, "AAA")
@@ -1261,6 +1288,48 @@ def test_range_trade_wired_into_compute_playbook_is_measured_like_every_other_se
     assert "invalidation_breached" in signal and signal["invalidation_breached"] is not None
     assert result["summary"]["range_trade:long"]["to_close"]["signals"]["n"] == 1
     assert result["baseline_anchors"]["range_trade:long"]
+
+
+def test_a_pre_iteration_10_style_range_trade_record_serves_geometry_without_the_new_key(
+    tmp_path, bar_store, monkeypatch,
+):
+    """TC-8 (goal-playbook-iter-10): `geometry.turned_at_midrange` is optional and NEVER
+    backfilled -- `PlaybookStore`'s append-only discipline means a record's on-disk shape is
+    exactly what was written, never reshaped on read. Simulated the way this file already
+    simulates a pre-J-06 record (strip what the newer code adds, write the result back under the
+    CURRENT signature-computing code, confirm the served geometry still lacks the key -- absent,
+    never `null` -- and the read is still HTTP 200). The sanity check below proves this
+    iteration's OWN code does add the key on a fresh compute, so the absence on the
+    "pre-iteration-10" copy is provably the store's own fidelity, not a detector that silently
+    never wrote the field."""
+    universe_store = _register_universe(tmp_path, ["RTAAA"])
+    _plant_decoration_baseline_sessions(bar_store, "RTAAA", slots=10)
+    _plant_range_trade_session(bar_store, "RTAAA")
+
+    result = compute_playbook(universe_store, bar_store, CONFIG.config_fingerprint(), SESSION_DATE)
+    rt_signals = [s for s in result["signals"] if s["symbol"] == "RTAAA" and s["setup_id"] == "range_trade"]
+    assert len(rt_signals) == 1
+    assert "turned_at_midrange" in rt_signals[0]["geometry"]  # this iteration's code adds it fresh
+
+    del rt_signals[0]["geometry"]["turned_at_midrange"]  # simulate an on-disk pre-iteration-10 file
+    monkeypatch.setenv("TAPEOLOGY_DESK_PLAYBOOK_DIR", str(tmp_path / "playbook"))
+    store = PlaybookStore(tmp_path / "playbook")
+    meta = store.record(**result)
+
+    reloaded = store.get(meta["id"])
+    reloaded_rt = [
+        s for s in reloaded["signals"] if s["symbol"] == "RTAAA" and s["setup_id"] == "range_trade"
+    ][0]
+    assert "turned_at_midrange" not in reloaded_rt["geometry"]
+
+    client = TestClient(app)
+    response = client.get("/research/desk/playbook", params={"id": meta["id"]})
+    assert response.status_code == 200
+    served_rt = [
+        s for s in response.json()["playbook"]["signals"]
+        if s["symbol"] == "RTAAA" and s["setup_id"] == "range_trade"
+    ][0]
+    assert "turned_at_midrange" not in served_rt["geometry"]
 
 
 def _plant_double_top_session(bar_store: BarStore, symbol: str) -> None:

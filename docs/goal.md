@@ -137,6 +137,84 @@ files + `desk_meta_cache.py`/`test_desk_meta_cache.py`; iteration 0 records the 
 Where clauses below say "untouched", "byte-unmodified", or "out-of-inventory", they are read
 subject to **R-1** and **R-2**.
 
+**R-3 (2026-08-11, the playbook spec rulings) — ratified.** Iterations 6–9 surfaced two open
+"The spec is canonical" items and halted the session STALLED awaiting them. Both are ruled here.
+This block is the ruling; the spec edits it directs are iteration-10 developer work (the same
+shape as iteration 6's §3.5 doc-only closure), not a licence to change detector behavior beyond
+what is named below.
+
+**R-3.1 — the `range_trade` "degenerate trigger reference" clause is RATIFIED as written.**
+The dated clarification in `docs/playbook-detector-spec.md` §3.7 Edge cases, and the matching
+fail-closed void in `_range_trade_side` (`T ≤ SL` long / `T ≥ SH` short emits nothing and the walk
+continues), stand as canonical. It is ratified on its merits: narrowing-only, no new constant,
+`playbook_input_signature` unmoved, pinned by long- and short-side tests whose controls differ in
+exactly one number, and it prevents a real defect — a long recorded with its own invalidation
+ABOVE its entry. Two corrections to the record it was justified on: the "no recorded record
+contains a `range_trade` signal" premise is now stale (87 real `range_trade` signals sit in four
+append-only records under signature `16a2734d10c91ea7`, all written after the void was in force,
+so none is born-invalidated), and dropping the setup would therefore also move the signature and
+orphan them. `range_trade` stays in `PLAYBOOK_SETUPS`; J-06 ships unchanged.
+The Constraints clause below is NOT relaxed: a developer who finds the spec ambiguous still drops
+and surfaces rather than improvising. This ruling is a decision on one instance, not a standing
+permission — the next such clause needs its own ratification.
+
+**R-3.2 — the shipped narrower-than-spec readings are ACCEPTED as canonical, with one
+completion.** Each was disclosed by an audit, each is deterministic, and iteration 10 writes each
+into the spec so code and rulebook agree. Where the spec and the shipped code differ, the spec
+is edited to match the code — no detector logic changes — EXCEPT R-3.2(b), which adds a
+disclosure:
+
+- **(a) `double_top`/`double_bottom` pair selection.** §3.8's Caps line ("the first valid valley
+  break") is rewritten to the shipped reading: the first pivot pair, in chronological
+  `(p1, p2)` order, whose full formation validates AND triggers; mirrored in §3.9. This is a
+  choice among valid formations, not a wrong one, and 155 recorded signals ride it. Recorded
+  under this reading, they remain canonical. If the back-scan's forward distributions later give
+  cause to prefer the earliest valley break, that is a NAMED revision — it adds a discipline key
+  to `playbook_parameters()` so the signature re-keys and old records are kept beside the new,
+  never a silent logic swap under the same key.
+- **(b) `crossed_midrange` — accepted AND completed.** The shipped boolean answers only §3.7's
+  first half (did price cross the range midpoint on the approach). §3.7 is split so that half is
+  named exactly, and the missing half — whether the prior swing TURNED at midrange (the BOOK
+  midrange rule) — ships as a SECOND served disclosure field on `range_trade` geometry, with its
+  `/desk` chip. Binding constraints: spec-first (the mechanical definition is written into §3.7
+  before any code); disclosure-only (it may never gate, suppress, or create a signal); and it
+  MUST reuse an already pre-registered constant for any tolerance it needs — minting a new
+  constant would move `playbook_input_signature` for a disclosure, which this ruling does not
+  authorize. The field is optional in the served payload and in `types.ts`, so the 87 already
+  recorded `range_trade` signals stay honest by lacking it rather than being backfilled. If the
+  second half genuinely cannot be defined without a new constant, DROP it and surface that —
+  do not mint one.
+- **(c) the BOOK 1.5× jump-to-base ratio is inert, and the spec must say so.** Both §3.3 gates
+  are implemented verbatim, but `PLAYBOOK_JUMP_MIN_MULT · PLAYBOOK_BASE_MAX_RANGE_MBR`
+  (1.5 × 2.0) equals `PLAYBOOK_JUMP_MIN_MOVE_MBR` (3.0), so the ADAPTATION floor always binds
+  first and the BOOK ratio can never reject a formation on its own (min observed ratio across the
+  32 recorded `jbe`/`dbi` signals: 1.735). No number moves — moving one to "activate" the gate
+  would be threshold fitting, which stays barred. §3.3 and the `PLAYBOOK_JUMP_MIN_MULT` row of
+  the constants table record the inertness plainly so the back-scan never credits a gate that has
+  never bound.
+- **(d) the cup rim constant.** §3.6 names `PLAYBOOK_RIM_MATCH_MBR` for the left rim's
+  "within X of session-high-so-far" test, while the code reads `PLAYBOOK_NEAR_EXTREME_MBR` there
+  (the rim-to-rim test correctly uses `RIM_MATCH_MBR`). Both are 1.0, so there is no behavioral
+  difference on any input and `cup_handle` has never fired. §3.6 is edited to name
+  `PLAYBOOK_NEAR_EXTREME_MBR` for the session-high test; the detector is NOT touched. This closes
+  the latent trap where a future revision of `RIM_MATCH_MBR` would silently miss that gate.
+- **(e) the `range_trade` trigger anchor — folded in here because it was never tracked.** The
+  iteration-6 audit's finding B4 (§3.7 anchors the bounce scan on "a bar `b` touches the low
+  zone", while `_range_trade_side` anchors only on the arming-completing touch) is the same
+  species as (a)–(d) but never reached the owner-rulings list. It is ruled with them: §3.7's
+  Trigger clause is narrowed to the arming-completing touch, matching the shipped code. It is
+  fail-closed (fewer signals, never invented ones). It is named here so it cannot resurface after
+  these items close.
+
+**R-3.3 — iteration 10 is the era-closing pass.** Its scope is R-3.2's spec catch-up edits, the
+R-3.2(b) disclosure field, and the iteration-9 evaluator's carried clean-up items: rewrite
+`J-10.json`'s step 6 to assert a stable piece of shipped page furniture instead of a signature
+hash that changes whenever the fixture rig is rebuilt; re-take one `/structure` capture on data
+that actually has price bars; and run the pass at FULL depth with the auditor, which four
+iteration specs asked for and the depth arbiter demoted each time. The operator restored `:8301`
+to the real store before this resume. `Config().config_fingerprint()` stays `08e471b10130e1e2`
+and `playbook_input_signature` does not move.
+
 ## Success Criteria
 
 In priority order — kept-value integrity outranks new-surface completeness outranks convenience:

@@ -1138,6 +1138,10 @@ def test_canonical_range_trade_long_matches_the_hand_computed_signal():
     assert geometry["low_zone_touches"] == 2
     assert geometry["high_zone_touches"] == 2
     assert geometry["crossed_midrange"] is True
+    # goal-playbook-iter-10 (R-3.2(b)): the approach swing's own peak is bar 4's high (104.8),
+    # 2.3 away from the 102.5 midpoint -- well beyond the 0.50 `PLAYBOOK_RANGE_HOLD_TOL_MBR`
+    # tolerance, so the swing did NOT turn at midrange even though it crossed it.
+    assert geometry["turned_at_midrange"] is False
     assert geometry["absorption_bar_present"] is False
     assert signal["volume"]["rvol_trigger_bar"] == pytest.approx(2.0)
     assert signal["principles"] == []
@@ -1170,10 +1174,93 @@ def test_canonical_range_trade_short_mirrors_the_long_fixture():
     assert geometry["low_zone_touches"] == 2
     assert geometry["high_zone_touches"] == 2
     assert geometry["crossed_midrange"] is False
+    # goal-playbook-iter-10 (R-3.2(b)): the approach swing's own trough is bar 5's low (202.0),
+    # exactly 0.50 away from the 201.5 midpoint -- AT the `PLAYBOOK_RANGE_HOLD_TOL_MBR` boundary
+    # (the `_zone_held`-style inclusive "<=" reading), so the swing DID turn at midrange even
+    # though it never crossed it -- proof the two disclosures are genuinely independent facts.
+    assert geometry["turned_at_midrange"] is True
     assert geometry["absorption_bar_present"] is False
     assert signal["volume"]["rvol_trigger_bar"] == pytest.approx(2.0)
     assert signal["principles"] == ["P5"]  # "P5 at the high side" -- the resistance-fade short
     assert signal["disclosures"]["attempt_count"] == 1
+
+
+def _turned_at_midrange_bars(symbol: str, peak_high: float) -> list[RawBar]:
+    """A range_trade LONG arming whose approach swing (the window between the low zone's first
+    touch at slot 4 and its arming-completing touch at slot 6 -- the SAME window `crossed_midrange`
+    reads) peaks at a CONTROLLED level, `peak_high`: the ONLY value that differs between the
+    `turned_at_midrange` True fixture (`peak_high=105.2`, 0.20 from the 105.0 midpoint -- inside
+    the 0.50 `PLAYBOOK_RANGE_HOLD_TOL_MBR` tolerance) and its near-miss control (`peak_high=106.0`,
+    1.00 away -- outside it). The high zone (`SH=110.0`) is touched and held ENTIRELY before the
+    window opens (slots 0 and 2), so it never contributes a bar to the window this disclosure
+    reads -- the swing's own extreme genuinely comes from the approach bar (slot 5), not from a
+    zone-touch bar the arming gate would have forced near an edge anyway. Values cross-checked by
+    direct execution (this module's own convention): the SAME signal fires regardless of
+    `peak_high` (`trigger_price=101.3`, `entry=101.3`, `entry_kind="level"`,
+    `invalidation_price=99.61`), since only slot 5's high ever changes."""
+    return [
+        _bar(symbol, E_OPEN + 0 * 300.0, 108.5, 110.0, 108.3, 109.5, 1000),  # HIGH TOUCH 1 (SH=110.0)
+        _bar(symbol, E_OPEN + 1 * 300.0, 108.8, 108.9, 106.5, 107.0, 1000),  # exits the high zone
+        _bar(symbol, E_OPEN + 2 * 300.0, 107.0, 109.6, 106.8, 109.0, 1000),  # HIGH TOUCH 2 (held, ext 0)
+        _bar(symbol, E_OPEN + 3 * 300.0, 108.0, 108.3, 104.0, 104.5, 1000),  # transition, exits high zone
+        _bar(symbol, E_OPEN + 4 * 300.0, 104.0, 104.2, 100.0, 100.5, 1000),  # LOW TOUCH 1 (SL=100.0)
+        _bar(symbol, E_OPEN + 5 * 300.0, 101.5, peak_high, 101.2, 102.0, 1000),  # the controlled swing peak
+        _bar(symbol, E_OPEN + 6 * 300.0, 101.0, 101.3, 100.2, 100.5, 1000),  # LOW TOUCH 2 (held) -- b=6
+        _bar(symbol, E_OPEN + 7 * 300.0, 100.8, 103.0, 100.5, 102.5, 1000),  # reversal trigger
+        _bar(symbol, E_OPEN + 8 * 300.0, 102.5, 102.8, 102.3, 102.6, 1000),
+        _bar(symbol, E_OPEN + 9 * 300.0, 102.6, 102.9, 102.4, 102.7, 1000),
+    ]
+
+
+def test_range_trade_turned_at_midrange_true_and_its_near_miss_control():
+    """TC-6/TC-7: spec §3.7's R-3.2(b) disclosure. The approach swing's own extreme sits within
+    `PLAYBOOK_RANGE_HOLD_TOL_MBR * MBR` (0.50) of the range midpoint (105.0: `SH=110.0`,
+    `SL=100.0`) in the True fixture (peak 105.2, 0.20 away) and just beyond it in the near-miss
+    control (peak 106.0, 1.00 away) -- the ONLY value that changes between the two calls (the
+    file's own near-miss-pairing convention: a bare change in outcome alone proves nothing without
+    isolating the one mechanism that caused it). Every pre-existing field the signal carries
+    (`trigger_price`, `entry`, `entry_kind`, `invalidation_price`, `crossed_midrange`,
+    `absorption_bar_present`, `range_width_mbr`, the touch counts) is asserted identical between
+    the two, proving this field's own presence changes nothing else."""
+    true_results = detect_range_trade(
+        _turned_at_midrange_bars("RTTM", 105.2), _RANGE_TRADE_BASELINE, "RTTM", SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert len(true_results) == 1
+    true_signal = true_results[0]
+    assert true_signal["side"] == "long"
+    assert true_signal["trigger_price"] == pytest.approx(101.3)
+    assert true_signal["entry"] == pytest.approx(101.3)
+    assert true_signal["entry_kind"] == "level"
+    assert true_signal["invalidation_price"] == pytest.approx(99.61)
+    true_geometry = true_signal["geometry"]
+    assert true_geometry["turned_at_midrange"] is True
+    assert true_geometry["crossed_midrange"] is True
+    assert true_geometry["absorption_bar_present"] is False
+    assert true_geometry["range_width_mbr"] == pytest.approx(10.0)
+    assert true_geometry["low_zone_touches"] == 2
+    assert true_geometry["high_zone_touches"] == 2
+
+    false_results = detect_range_trade(
+        _turned_at_midrange_bars("RTTM", 106.0), _RANGE_TRADE_BASELINE, "RTTM", SESSION_DATE,
+        [], _EMPTY_INDEX_BASELINE, _PARAMS,
+    )
+    assert len(false_results) == 1
+    false_signal = false_results[0]
+    false_geometry = false_signal["geometry"]
+    assert false_geometry["turned_at_midrange"] is False
+
+    # Every OTHER field is byte-identical to the True fixture's own signal -- the near-miss control
+    # changes nothing but the one mechanism this test targets.
+    assert false_signal["trigger_price"] == true_signal["trigger_price"]
+    assert false_signal["entry"] == true_signal["entry"]
+    assert false_signal["entry_kind"] == true_signal["entry_kind"]
+    assert false_signal["invalidation_price"] == true_signal["invalidation_price"]
+    assert false_geometry["crossed_midrange"] == true_geometry["crossed_midrange"]
+    assert false_geometry["absorption_bar_present"] == true_geometry["absorption_bar_present"]
+    assert false_geometry["range_width_mbr"] == true_geometry["range_width_mbr"]
+    assert false_geometry["low_zone_touches"] == true_geometry["low_zone_touches"]
+    assert false_geometry["high_zone_touches"] == true_geometry["high_zone_touches"]
 
 
 def test_range_trade_one_sided_range_never_arms_and_its_two_sided_control_fires_once():

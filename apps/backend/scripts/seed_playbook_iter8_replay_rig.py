@@ -73,11 +73,14 @@ import seed_playbook_iter8_evidence_fixture as iter8_seed  # noqa: E402
 
 from app.config import Config  # noqa: E402
 from app.providers.adapters.base import RawBar  # noqa: E402
+from app.research.bar_index import BarIndex  # noqa: E402
 from app.research.bars import BarStore  # noqa: E402
+from app.research.desk_index_reconcile import run_reconcile  # noqa: E402
 from app.research.desk_playbook import PlaybookStore, resolve_desk_playbook_dir  # noqa: E402
 from app.research.desk_playbook_backscan import _assert_scoped  # noqa: E402
 from app.research.desk_playbook_compute import run_playbook_and_record  # noqa: E402
 from app.research.desk_universe import UniverseStore  # noqa: E402
+from app.research.routes import get_bar_index  # noqa: E402
 
 # The detector showcase date: a Friday, OUTSIDE J-07's [2026-06-22, 2026-06-24] back-scan window and
 # outside the evidence date (2026-06-25), and already the date J-02's stored golden types in.
@@ -238,6 +241,27 @@ def _copy_kept_symbol_series(scoped_bar_dir: Path, real_bar_dir: Path) -> int:
     return copied
 
 
+def _reindex_copied_series(bar_store: BarStore, bar_index: BarIndex) -> dict:
+    """goal-playbook-iter-10: repair the scoped rig's own ``bar_index.db`` after
+    ``_copy_kept_symbol_series`` -- through the SOLE repair path (``desk_index_reconcile.
+    run_reconcile``, never a second one), never mutating bar content.
+
+    Root cause this closes (the iter-9 blank-``/structure``-chart evidence gap): a raw
+    ``shutil.copy2`` never updates the index, and ``GET /research/bars?symbol=...`` -- what
+    ``/structure``'s chart fetches -- resolves a ``symbol=`` filter through ``BarIndex.list()``
+    (``app/research/routes.py``), so an unindexed copy stayed invisible to that filtered read even
+    though the levels/tradability table (a separate cache path) already showed real numbers, which
+    is why the gap was missed before."""
+    result = run_reconcile(bar_store, bar_index)
+    print(
+        f"[seed-playbook-iter8-replay] reconciled bar_index.db: "
+        f"{result['rows_indexed_before']} -> {result['rows_indexed_after']} rows indexed "
+        f"({result['series_on_disk']} series on disk)",
+        file=sys.stderr,
+    )
+    return result
+
+
 def main(root: Path) -> int:
     # Reuse the iter-8 evidence rig VERBATIM first (which reuses iter-7, which reuses iter-6):
     # DECOR/RTAAA/DTAAA on 2026-06-22, BSCAN on 2026-06-23/24 (unrecorded), OHB01..OHB12 on
@@ -279,8 +303,13 @@ def main(root: Path) -> int:
         )
         print(f"[seed-playbook-iter8-replay] planted {symbol}: {len(bars)} 5m bars", file=sys.stderr)
 
-    # 3. Kept-product bars for J-10's /structure step (verbatim copies, real store read-only).
-    _copy_kept_symbol_series(Path(bar_dir), Path(config.bar_dir))
+    # 3. Kept-product bars for J-10's /structure step (verbatim copies, real store read-only), then
+    #    indexed via the SOLE repair path (goal-playbook-iter-10) -- a raw copy alone never updated
+    #    bar_index.db, so GET /research/bars?symbol=... (what /structure's chart fetches) resolved
+    #    through BarIndex.list() and saw nothing even though the file was physically present.
+    copied = _copy_kept_symbol_series(Path(bar_dir), Path(config.bar_dir))
+    if copied:
+        _reindex_copied_series(bar_store, get_bar_index())
 
     # 4. ONE new snapshot naming every member, then the two computes it re-keys.
     members = [

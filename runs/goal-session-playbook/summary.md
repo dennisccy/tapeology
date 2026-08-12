@@ -1,40 +1,51 @@
 # Goal Session Summary — playbook
 
-**Final verdict:** AWAITING_PUMP
-**Total iterations:** 4
-**Wall time (seconds):** 20
+**Final verdict:** STALLED
+**Total iterations:** 10
+**Wall time (seconds):** 71720
 **Quota pauses:** 0
 **Started:** 2026-08-10T04:38:06.640143Z
-**Finished:** 2026-08-10T23:08:40.354784Z
+**Finished:** 2026-08-11T19:04:40.998954Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/playbook`. Open a PR with:
 
     gh pr create --base main --head goal/playbook \
-      --title "feat: playbook — AWAITING_PUMP" \
+      --title "feat: playbook — STALLED" \
       --body-file runs/goal-session-playbook/summary.md
 
 ## Final journey state
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-playbook-iter-3 |
-| J-02 | passing | goal-playbook-iter-3 |
-| J-03 | passing | goal-playbook-iter-3 |
-| J-04 | failing | - |
-| J-05 | failing | - |
-| J-06 | failing | - |
-| J-07 | failing | - |
-| J-08 | failing | - |
-| J-09 | failing | - |
-| J-10 | partial | - |
+| J-01 | passing | goal-playbook-iter-9 |
+| J-02 | passing | goal-playbook-iter-9 |
+| J-03 | passing | goal-playbook-iter-9 |
+| J-04 | passing | goal-playbook-iter-9 |
+| J-05 | passing | goal-playbook-iter-9 |
+| J-06 | passing | goal-playbook-iter-9 |
+| J-07 | passing | goal-playbook-iter-9 |
+| J-08 | passing | goal-playbook-iter-9 |
+| J-09 | passing | goal-playbook-iter-9 |
+| J-10 | passing | goal-playbook-iter-9 |
 
 ## Anti-goal violations
 
-- [critical] no fabricated data (Foundation invariants / Era-1-2 constitution) — and T-5 'Fail closed, disclose the absence' (iter goal-playbook-iter-1)
+- [critical] no fabricated data (Foundation invariants / Era-1-2 constitution) — an absence must be disclosed, never filled with a synthesised value (iter goal-playbook-iter-1)
 - [minor] No threshold exists outside the spec, and no code path sweeps one — 'Every detector rule and threshold exists in docs/playbook-detector-spec.md BEFORE the code that uses it' (iter goal-playbook-iter-1)
-- [minor] no fabricated data (Foundation invariants) — hygiene only: a synthetic, self-disclosing test record was written into the operator's own local playbook store by the verification lane (iter goal-playbook-iter-3)
+- [minor] no fabricated data (Foundation invariants) — hygiene: a synthetic, self-labelled fixture record was written into the operator's own store by the browser-QA lane (iter goal-playbook-iter-3)
+- [minor] A signal is an observation, not a call — the served disclosure must name what was actually measured (iter goal-playbook-iter-4)
+- [minor] Copy discipline (Constraints) — 'the served PLAYBOOK_REGISTER and EVIDENCE_REGISTER sentences state what was measured and what was NOT' (iter goal-playbook-iter-4)
+- [minor] No threshold exists outside the spec, and no code path sweeps one — 'Every detector rule and threshold exists in docs/playbook-detector-spec.md BEFORE the code that uses it' (iter goal-playbook-iter-5)
+- [minor] Record integrity / immutable data — every recorded run's ledger row must point at a record that exists (iter goal-playbook-iter-4)
+- [minor] Persistence stays scoped / the iteration's own 'Real (non-fixture) computes are OUT OF SCOPE' rule — no verification lane may write into the operator's real store unasked (iter goal-playbook-iter-6)
+- [minor] Immutable data / no recorded file rewritten, backfilled or pruned — a developer wrote synthetic price files and a fabricated today-dated universe snapshot into the operator's real store (iter goal-playbook-iter-6)
+- [minor] The spec is canonical (Constraints) — 'a developer who finds the spec ambiguous or unimplementable DROPS that detector and surfaces it, never improvises a rule' (iter goal-playbook-iter-6)
+- [minor] The spec is canonical (Constraints) — served detector behaviour must match the canonical spec (iter goal-playbook-iter-6)
+- [minor] Persistence stays scoped / the iteration spec's own 'Any real, unscoped back-scan or playbook compute against the operator's live universe' OUT OF SCOPE rule (iter goal-playbook-iter-8)
+- [minor] Persistence stays scoped — residual: the store-scope obligation does not cover every automated lane, and a detected breach does not stop the run (iter goal-playbook-iter-8)
+- [minor] A signal is an observation, not a call — 'the served registers state what was NOT measured' (iter goal-playbook-iter-8)
 
 ## Telemetry
 
@@ -129,20 +140,119 @@ See `runs/goal-session-playbook/telemetry.jsonl` for the structured event log.
       [engine] showcase-join       0.0m  (contains agent time above)
       (resume-skipped: goal-decomposer)
       pump-wait                  0.2m
-  session: 4 completed iteration(s), mean wall 94.0m
-      total developer                  248.9m
-      total reviewer                    69.5m
-      total goal-decomposer             57.0m
-      total browser-qa-agent            44.9m
-      total goal-evaluator              44.3m
-      total iteration-summarizer        40.8m
-      total auditor                     18.3m
-      total coherence-auditor           12.3m
-      total demo-narrator               10.4m
-      total orchestrator                 8.1m
-      total qa                           7.6m
+  goal-playbook-iter-4  depth=full  verdict=CONTINUE  wall=111.0m
+      browser-qa-agent            51.9m  calls=1
+      auditor                     18.2m  calls=1
+      qa                          15.6m  calls=1
+      reviewer                    13.4m  calls=1
+      goal-evaluator              11.7m  calls=1
+      ui-impact-analyst            7.7m  calls=1
+      demo-narrator                4.2m  calls=1
+      coherence-auditor            2.6m  calls=1
+      [engine] full-pipeline      96.8m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer, ui-test-design, ux-regression)
+      pump-wait                 16.0m
+      OVER BUDGET at qa-loop: 4714s > 3600s (mode=trim)
+      overlap saved             14.2m  (parallel steps)
+  goal-playbook-iter-5  depth=lean  verdict=ESCALATE  wall=348.1m
+      browser-qa-agent           277.7m  calls=1
+      developer                   35.8m  calls=1
+      goal-decomposer             14.4m  calls=1
+      goal-evaluator              12.6m  calls=1
+      reviewer                     7.4m  calls=1
+      iteration-summarizer         4.8m  calls=1
+      coherence-auditor            3.0m  calls=1
+      browser-qa-replay            0.8m  calls=1
+      [engine] lean-pipeline     321.1m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  8.2m
+      OVER BUDGET at coherence-auditor: 20132s > 3600s (mode=trim)
+      overlap saved              8.4m  (parallel steps)
+  goal-playbook-iter-6  depth=full  verdict=CONTINUE  wall=234.2m
+      developer                   83.8m  calls=2
+      auditor                     37.9m  calls=2
+      browser-qa-agent            37.2m  calls=1
+      reviewer                    23.8m  calls=2
+      qa                          23.3m  calls=2
+      goal-evaluator              14.5m  calls=1
+      iteration-summarizer        10.8m  calls=1
+      goal-decomposer             10.8m  calls=1
+      ui-impact-analyst            6.9m  calls=1
+      demo-narrator                4.4m  calls=1
+      coherence-auditor            2.5m  calls=1
+      orchestrator                 2.2m  calls=1
+      [engine] full-pipeline     206.3m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: ui-test-design, ux-regression)
+      pump-wait                 15.3m
+      OVER BUDGET at post-dev-fanout: 4660s > 3600s (mode=trim)
+      overlap saved             23.9m  (parallel steps)
+  goal-playbook-iter-7  depth=lean  verdict=ESCALATE  wall=97.5m
+      developer                   49.2m  calls=1
+      reviewer                    18.0m  calls=1
+      goal-evaluator              12.6m  calls=1
+      coherence-auditor            9.6m  calls=1
+      browser-qa-agent             9.5m  calls=1
+      iteration-summarizer         8.0m  calls=1
+      goal-decomposer              8.0m  calls=1
+      browser-qa-replay            1.0m  calls=1
+      [engine] lean-pipeline      76.8m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  0.5m
+      OVER BUDGET at browser-qa: 4520s > 3600s (mode=trim)
+      overlap saved             18.4m  (parallel steps)
+  goal-playbook-iter-8  depth=full  verdict=CONTINUE  wall=292.6m
+      developer                  118.1m  calls=2
+      auditor                     62.4m  calls=2
+      browser-qa-agent            43.0m  calls=1
+      reviewer                    23.8m  calls=2
+      qa                          23.0m  calls=2
+      goal-evaluator              12.0m  calls=1
+      goal-decomposer             10.1m  calls=1
+      ui-impact-analyst            5.7m  calls=1
+      iteration-summarizer         4.5m  calls=1
+      orchestrator                 3.2m  calls=1
+      coherence-auditor            3.0m  calls=1
+      demo-narrator                1.7m  calls=1
+      [engine] full-pipeline     267.4m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: ui-test-design, ux-regression)
+      pump-wait                 20.2m
+      OVER BUDGET at post-dev-fanout: 4689s > 3600s (mode=trim)
+      overlap saved             17.8m  (parallel steps)
+  goal-playbook-iter-9  depth=lean  verdict=STALLED  wall=111.2m
+      developer                   43.6m  calls=1
+      browser-qa-agent            22.7m  calls=1
+      goal-decomposer             14.6m  calls=1
+      goal-evaluator              14.0m  calls=1
+      reviewer                    11.7m  calls=1
+      iteration-summarizer         9.8m  calls=2
+      coherence-auditor            2.5m  calls=1
+      browser-qa-replay            1.0m  calls=1
+      [engine] lean-pipeline      78.1m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  8.9m
+      OVER BUDGET at browser-qa: 4198s > 3600s (mode=trim)
+      overlap saved              8.6m  (parallel steps)
+  session: 10 completed iteration(s), mean wall 157.1m
+      total developer                  579.5m
+      total browser-qa-agent           486.8m
+      total reviewer                   167.6m
+      total auditor                    136.8m
+      total goal-evaluator             121.6m
+      total goal-decomposer            114.8m
+      total iteration-summarizer        78.7m
+      total qa                          69.4m
+      total coherence-auditor           35.6m
+      total demo-narrator               20.7m
+      total ui-impact-analyst           20.3m
+      total orchestrator                13.5m
+      total browser-qa-replay            4.9m
       total readme-maintainer            3.3m
-      total browser-qa-replay            2.1m
-      total AWAITING_PUMP paused gaps: 1.9m
-      halts: AWAITING_HOST_GUARD, AWAITING_PUMP, machine_reset, AWAITING_PUMP, machine_reset, AWAITING_PUMP
+      total AWAITING_PUMP paused gaps: 2.5m
+      halts: AWAITING_HOST_GUARD, AWAITING_PUMP, machine_reset, AWAITING_PUMP, machine_reset, AWAITING_PUMP, STALLED
 ```

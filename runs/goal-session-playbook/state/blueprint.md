@@ -29,6 +29,19 @@ already registered below. Iteration 9 also surfaces the "Evidence aggregates" ro
 already-served `signature` field in the `/desk` UI for the first time (same owner/endpoint, no
 structural change — see the "Ships at" column note below).
 
+STATUS AS OF ITERATION 10 (freshened from the iteration-9 status above — additive status-label
+update only, no IA/Data-Contract structural change beyond one new OPTIONAL field): J-09 (MCP
+contract v4) and J-10 (kept-product regression sentinel) landed at iteration 9 and are now SHIPPED
+and passing — all ten journeys are passing as of iteration 9. Iteration 10 is the era-closing
+consolidation pass directed by `docs/goal.md`'s R-3.3 (the two owner rulings R-3.1/R-3.2 that had
+STALLED the session at iteration 9): it transcribes the R-3.2(a)/(c)/(d)/(e) owner-ratified
+readings into `docs/playbook-detector-spec.md` with ZERO code diff (no Data-Contract effect), adds
+ONE new optional disclosure field (R-3.2(b)) to the ALREADY-registered "Playbook records" row below
+(no new row, no new owner, no new endpoint — see that row's "Ships at" column), and fixes two
+test/fixture-infrastructure defects (`J-10.json`'s golden replay step 6; the scoped rig's
+`/structure` chart evidence gap) that carry no Data-Contract or IA implication at all. No journey
+changes canonical home this iteration; no nav-skeleton edit.
+
 BASELINE STATE (iteration 0, kept verbatim for history): none of the six new rows below existed
 in the codebase yet — confirmed by grep (no `desk_playbook*.py` module anywhere under
 `apps/backend/app/research/`, no `playbook` string in `desk_routes.py` or `app/mcp/__init__.py`,
@@ -78,11 +91,11 @@ Tapeology
 | J-03 Playbook Signals section — SHIPPED | `/desk` (new section) | Desk |
 | J-04 Continuation family (JBE, DBI, cup-and-handle) — SHIPPED | lands on J-03's section, `/desk` | Desk |
 | J-05 Climax family (capitulation entry, euphoria marker) — SHIPPED | lands on J-03's section, `/desk` | Desk |
-| J-06 Range family (range trades, double top/bottom) — SHIPPED | lands on J-03's section, `/desk` | Desk |
+| J-06 Range family (range trades, double top/bottom) — SHIPPED; iteration 10 adds an optional `turned_at_midrange` disclosure on `range_trade` signals only (Data Contract row below) | lands on J-03's section, `/desk` | Desk |
 | J-07 Back-scan (resumable, append-only, host-guard-confined) — SHIPPED | `/desk` (new Backscan panel) | Desk |
 | J-08 Evidence view (distributions beside the null, min-n honest) — SHIPPED | `/desk` (new Playbook Evidence section) | Desk |
-| J-09 MCP contract v4 (20 read-only tools) — TARGETED iteration 9 | *(MCP tool surface only; no page — `desk_playbook`/`desk_playbook_evidence` proxy the rows below)* | — |
-| J-10 Kept-product regression sentinel — TARGETED (closing) iteration 9; continuous guard every iteration before that (currently `partial`: text asks for 20 MCP tools, 18 exist until J-09) | `/`, `/structure`, `/desk` (every shipped section) | Cockpit, Structure, Desk |
+| J-09 MCP contract v4 (20 read-only tools) — SHIPPED (iteration 9) | *(MCP tool surface only; no page — `desk_playbook`/`desk_playbook_evidence` proxy the rows below)* | — |
+| J-10 Kept-product regression sentinel — SHIPPED (closing, iteration 9); iteration 10 re-verifies it at full depth (era-closing regression sweep) and fixes its `J-10.json` golden-replay step 6 + the scoped rig's `/structure` chart evidence gap (both test/fixture infrastructure, no product surface change) | `/`, `/structure`, `/desk` (every shipped section) | Cockpit, Structure, Desk |
 
 ## Data Contract
 
@@ -113,12 +126,12 @@ target):**
 
 | Value / entity | Computed by (single module/function) | Served by (single endpoint) | Ships at |
 |---|---|---|---|
-| Playbook records (signals + measurements + baseline + summary) | new `app/research/desk_playbook.py` (+ primitives `desk_playbook_features.py` and detectors `desk_playbook_detect.py`) | `GET /research/desk/playbook` (`?date=`, `?id=`) | J-01 (detection-only records, SHIPPED) → J-02 (adds the measurement block, same owner/endpoint, SHIPPED) → J-04/J-05/J-06 (continuation + climax + range families, same owner/endpoint, all SHIPPED) → J-09 (byte-identical MCP proxy `desk_playbook`, TARGETED iteration 9, no new owner/endpoint) |
+| Playbook records (signals + measurements + baseline + summary) | new `app/research/desk_playbook.py` (+ primitives `desk_playbook_features.py` and detectors `desk_playbook_detect.py`) | `GET /research/desk/playbook` (`?date=`, `?id=`) | J-01 (detection-only records, SHIPPED) → J-02 (adds the measurement block, same owner/endpoint, SHIPPED) → J-04/J-05/J-06 (continuation + climax + range families, same owner/endpoint, all SHIPPED) → J-09 (byte-identical MCP proxy `desk_playbook`, SHIPPED iteration 9, no new owner/endpoint) → **iteration 10 (R-3.2(b), J-06)** adds an OPTIONAL `geometry.turned_at_midrange: boolean` field on `range_trade` signals only — same owner/endpoint, no structural change; the key is ABSENT (never `null`) on every record recorded before iteration 10, present (`true`/`false`) on every `range_trade` signal recorded after it; rides the existing `desk_playbook` MCP proxy automatically (no MCP code diff). If iteration 10 finds the field cannot be defined without minting a new `PLAYBOOK_*` constant, it is DROPPED and surfaced instead (R-3.2(b)'s own escape hatch) and this row's shape is unchanged. |
 | Playbook compute progress | new playbook compute manager, `desk_playbook_compute.py` (single-flight, mirrors `DeskScreenComputeManager`) | `POST/GET/POST-cancel /research/desk/playbook/compute` | J-02 (SHIPPED) |
 | Playbook run ledger | new `app/research/desk_playbook_log.py` (terminal-state-only, mirrors `desk_topup_log.py`) | `GET /research/desk/playbook/runs` | J-02 (SHIPPED) |
 | Back-scan plan | new `app/research/desk_playbook_backscan.py` (pure, metadata-only) | `GET /research/desk/playbook/backscan/plan` | J-07 (SHIPPED) |
 | Back-scan progress + ledger | same back-scan module (mirrors `desk_deep_backfill.py`'s plan/walker/ledger/manager quartet, re-chunked to one session-date) | `POST/GET/POST-cancel .../backscan/compute`, `GET .../backscan/runs` | J-07 (SHIPPED) |
-| Evidence aggregates | new `app/research/desk_playbook_evidence.py` (stat-keyed derived projection cache, the `desk_meta_cache` contract — rebuildable, owns nothing) | `GET /research/desk/playbook/evidence` | J-08 (SHIPPED — response shape fixed in `docs/phases/goal-playbook-iter-8.md`'s Data-contract additions) → J-09 (byte-identical MCP proxy `desk_playbook_evidence`, TARGETED iteration 9, no new owner/endpoint) → iteration 9 also displays this row's already-served `signature` field in the `/desk` Playbook Evidence section for the first time (no new field, no new owner/endpoint — a rendering change only) |
+| Evidence aggregates | new `app/research/desk_playbook_evidence.py` (stat-keyed derived projection cache, the `desk_meta_cache` contract — rebuildable, owns nothing) | `GET /research/desk/playbook/evidence` | J-08 (SHIPPED — response shape fixed in `docs/phases/goal-playbook-iter-8.md`'s Data-contract additions) → J-09 (byte-identical MCP proxy `desk_playbook_evidence`, SHIPPED iteration 9, no new owner/endpoint) → iteration 9 also displays this row's already-served `signature` field in the `/desk` Playbook Evidence section for the first time (no new field, no new owner/endpoint — a rendering change only) |
 
 No shared value from the unchanged-owners list above is recomputed a second way by any of these
 six rows — each reads bars/sessions/measurement-helpers/universe-membership verbatim from its
@@ -127,4 +140,5 @@ back-scan rows read the ALREADY-registered "Playbook records" row's own store/si
 via the ONE shared `run_playbook_and_record` entry point (`desk_playbook_compute.py:90`) — no new
 detection or measurement path, no second store. MCP exposure (`desk_playbook`,
 `desk_playbook_evidence`) is a byte-identical GET proxy of the first and last rows above, added at
-J-09 — it introduces no new value and no new owner.
+J-09 — it introduces no new value and no new owner. Iteration 10's `turned_at_midrange` addition
+(above) is likewise a field on the first row's EXISTING owner/endpoint, never a second one.

@@ -472,3 +472,60 @@ J-10 replay script to check a fixed piece of a shipped Desk section instead of a
 re-take one Structure picture on data that has price bars, since the chart drew nothing on the test
 copy; and put port 8301 back on the owner's real backend, which this run left pointing at the test
 copy.
+
+---
+
+## Iteration 10 — goal-playbook-iter-10
+
+**Date:** 2026-08-12T03:05:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full (the operator overrode the depth arbiter so the era's closing work would
+finally be audited — the fifth time a spec asked for it)
+**Journey deltas:**
+- Newly passing: none — all ten were already passing
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-01 "The signal contract", J-02 "Every signal measured", J-03 "The Playbook
+  lands on /desk", J-04 "The continuation family", J-05 "The climax family", J-07 "The back-scan",
+  J-08 "The evidence view" all re-run automatically on the scoped test copy, 7 of 7 passed; J-06
+  "The range family" and J-10 "The kept product stands" were this run's two targets and both were
+  re-driven live in a real browser AND by the stored-replay checker; J-09 "MCP contract v4" was NOT
+  tested at all — the clock ran out and it is the only journey with no stored replay script, so it
+  keeps its earlier pass and is marked deferred
+- Anti-goal violations: none new. Both items that stopped the session at iteration 9 are now
+  CLOSED — the owner ruled on them (R-3 in his own goal file) and this run wrote the five matching
+  corrections into the rule book, which I checked line by line. One latent hazard is carried, not
+  counted as a violation: a test-rig helper can write to the operator's bar index through a setting
+  the safety check does not cover; nothing was touched this run.
+
+**Reasoning:** I checked the work myself instead of trusting the write-ups. The first thing I
+tested was the ruling itself: the owner's decision was already inside the saved snapshot the run
+started from, so no developer wrote his own permission, and against the current tree it adds 78
+lines and deletes nothing — no rule was weakened to make this easier. Then I read the rule book's
+own changes and confirmed all five landed, and proved with git that the shipped detector code moved
+by exactly thirteen added lines, all inside one function, while the file that owns every threshold,
+the measuring rail, the evidence maths, the Claude tool list, the settings file and the routes each
+show zero changed lines. I read the new thirteen lines and confirmed the new label only ever gets
+written into the description of a signal, never used to decide whether one exists, and that it
+looks only at bars up to the moment before the trigger. I opened five pictures: the range-trade row
+with every number identical to the ones recorded four iterations ago; the double-top row likewise;
+the new label actually printing on screen; and — the fix this run owed — the Structure page finally
+drawing a real price chart, months of candles with the pinned Apple wall at 300.10/302.20 on it,
+where iteration 9 had shown a blank box. I re-ran the whole backend suite to completion: exit 0,
+2176 tests, 8 skipped, none failed. I asked the running code for the pin (08e471b10130e1e2) and
+counted the Claude tools live (20). I listed every file written into the owner's own store since
+the run began and found only database side-files. Two things I would not sign off silently. J-09
+was not tested by anybody this run, and calling that a pass would be a lie — the engine's own
+automatic check refuses it too, and I ran that check to be sure. And the new label has never once
+been true on real data: 0 of 89 recorded range signals produce it, so it is shipped and proven to
+draw, but never yet observed.
+
+**Next-step recommendation:** Run one more short pass, a fast one without the auditor, with three
+small items. Re-test J-09 "Claude can read the playbook" and give it a saved replay script — it is
+the only journey without one, which is exactly why it was dropped when the clock ran out, and the
+file that tracked this gap was deleted automatically as a side effect, so put the single line back.
+Fix or drop the one failing check: the box around a wrongly-typed session date should turn orange
+but stays grey, because two colour rules of equal strength collide; the goal file never asks for an
+orange box, so either fix the one class or stop asserting it. Add the bar-index setting to the list
+the test rigs must have scoped, so a future rig run cannot wipe the operator's real index. None of
+this changes what any signal means or how any number is computed.

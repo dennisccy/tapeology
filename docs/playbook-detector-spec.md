@@ -145,7 +145,7 @@ continuation, P5 decreasing-volume reversal, P6 passive accumulation/distributio
 | `PLAYBOOK_OR_MINUTES` | 15 | BOOK — opening range = first 15–20 min; lower endpoint |
 | `PLAYBOOK_OR_MIN_1M_BARS` | 10 | ADAPTATION — §2 primitive 2's own floor: fewer than 10 of the 15 one-minute bars on file degrades the opening range to the 5m basis (J-01 audit B3: named in code from birth, tabulated here) |
 | `PLAYBOOK_NARROW_OR_MAX_MBR` | 3.0 | ADAPTATION — relative form of the ≤25c narrow range |
-| `PLAYBOOK_JUMP_MIN_MULT` | 1.5 | BOOK — jump ≥ 1.5–2× base; stated minimum |
+| `PLAYBOOK_JUMP_MIN_MULT` | 1.5 | BOOK — jump ≥ 1.5–2× base; stated minimum. **Inert** (2026-08-11, R-3.2(c)): dominated by `PLAYBOOK_JUMP_MIN_MOVE_MBR`/`PLAYBOOK_BASE_MAX_RANGE_MBR` (§3.3) — has never independently rejected a `jbe`/`dbi` formation |
 | `PLAYBOOK_JUMP_MIN_MOVE_MBR` | 3.0 | ADAPTATION — floor so tiny/tiny can't satisfy the ratio |
 | `PLAYBOOK_JUMP_LOOKBACK_BARS` | 6 | ADAPTATION — jump low read from the 30 min before the base |
 | `PLAYBOOK_BASE_MIN_BARS` | 3 | ADAPTATION — book gives no consolidation duration |
@@ -166,7 +166,7 @@ continuation, P5 decreasing-volume reversal, P6 passive accumulation/distributio
 | `PLAYBOOK_VERTICAL_BAR_MBR` | 2.5 | ADAPTATION — single-bar spike (spiky-approach flag) |
 | `PLAYBOOK_BOUNCE_MAX_BARS` | 3 | ADAPTATION — reversal confirmation must come fast |
 | `PLAYBOOK_RANGE_MIN_WIDTH_MBR` | 4.0 | ADAPTATION — narrower = breakout-only per Ch 13 |
-| `PLAYBOOK_RANGE_HOLD_TOL_MBR` | 0.5 | ADAPTATION — "held" tolerance; also the absorption-bar max range |
+| `PLAYBOOK_RANGE_HOLD_TOL_MBR` | 0.5 | ADAPTATION — "held" tolerance; also the absorption-bar max range and (2026-08-11, R-3.2(b)) the `turned_at_midrange` "at the midpoint" tolerance |
 | `PLAYBOOK_TOPS_MATCH_MBR` | 1.0 | ADAPTATION — two tops "at the same level" |
 | `PLAYBOOK_TOPS_MIN_SEPARATION_BARS` | 4 | ADAPTATION — tops ≥ 20 min apart |
 | `PLAYBOOK_LADDER_HEALTHY_LOW` / `_HIGH` | 0.50 / 0.75 | BOOK — ladder step 50–75% of prior step (disclosure only) |
@@ -244,7 +244,14 @@ cases. Side/band/entry/measurement always follow §0.
   `base_range = U − L ≤ PLAYBOOK_BASE_MAX_RANGE_MBR · MBR` (ADAPTATION). Jump: `jump_low` =
   min low of the `PLAYBOOK_JUMP_LOOKBACK_BARS` bars before base start; `jump = U − jump_low`;
   gates `jump ≥ PLAYBOOK_JUMP_MIN_MULT · base_range` (BOOK ≥1.5×) AND
-  `jump ≥ PLAYBOOK_JUMP_MIN_MOVE_MBR · MBR` (ADAPTATION floor). Near the high:
+  `jump ≥ PLAYBOOK_JUMP_MIN_MOVE_MBR · MBR` (ADAPTATION floor). **The BOOK ratio gate is inert**
+  (2026-08-11 annotation, R-3.2(c) — doc text only, no code or constant VALUE changed): `base_range`
+  is itself capped at `PLAYBOOK_BASE_MAX_RANGE_MBR · MBR` (2.0) by the base-formation gate above, so
+  `PLAYBOOK_JUMP_MIN_MULT · base_range` (1.5×) can never exceed `1.5 × 2.0 = 3.0` MBR — exactly
+  `PLAYBOOK_JUMP_MIN_MOVE_MBR` — meaning the ADAPTATION floor always binds at least as tightly. The
+  BOOK ratio has never independently rejected a formation (min observed ratio across the 32 recorded
+  `jbe`/`dbi` signals: 1.735). Both gates stay implemented verbatim; the back-scan must not credit
+  the BOOK ratio with a rejection it structurally cannot make. Near the high:
   `U ≥ session_high_so_far − PLAYBOOK_NEAR_EXTREME_MBR · MBR` at `t−1`. Volume: median
   RVOL(jump bars) ≥ 1.0 with max ≥ `PLAYBOOK_RVOL_ELEVATED` (P3), and median RVOL(base bars)
   ≤ `PLAYBOOK_VOL_CONTRAST_RATIO` × median RVOL(jump bars) (P4 dry base; ADAPTATION ratio).
@@ -293,8 +300,10 @@ cases. Side/band/entry/measurement always follow §0.
   `capitulation_recent`.
 
 ### 3.6 `cup_handle` (long only in v1 — the book presents the long form)
-- **Formation.** Left rim = confirmed swing-high pivot within `PLAYBOOK_RIM_MATCH_MBR · MBR`
-  of session-high-so-far. Cup bottom = min low after it; depth ≥
+- **Formation.** Left rim = confirmed swing-high pivot within `PLAYBOOK_NEAR_EXTREME_MBR · MBR`
+  of session-high-so-far (2026-08-11, R-3.2(d): named to match the shipped code — this
+  session-high-so-far test has never read `RIM_MATCH_MBR`; doc text only, `cup_handle` unchanged).
+  Cup bottom = min low after it; depth ≥
   `PLAYBOOK_MIN_STRUCTURE_DEPTH_MBR · MBR` (ADAPTATION). Right rim = later confirmed
   swing-high pivot within `RIM_MATCH` of the left rim, itself near the session high. Cup
   duration ≥ `PLAYBOOK_CUP_MIN_BARS` (BOOK ≥ 30 min; ≥ `PLAYBOOK_CUP_OPTIMAL_BARS` disclosed
@@ -323,18 +332,33 @@ cases. Side/band/entry/measurement always follow §0.
   each with `zone_touches ≥ 2` (re-arm semantics), each later touch extending the extreme by
   ≤ `PLAYBOOK_RANGE_HOLD_TOL_MBR · MBR` ("held").
 - **Trigger — the mechanical reading of "first sign of strength" (the book's vaguest
-  instruction; this reading is the pre-registered choice):** a bar `b` touches the low zone;
-  the first bar `t` with `b < t ≤ b + PLAYBOOK_BOUNCE_MAX_BARS`, `high > high[t−1]`, and
-  `min(low[b..t−1]) ≥ SL − RANGE_HOLD_TOL·MBR`. `T = high[t−1]` — the same reversal-bar
-  grammar as the capitulation bounce (one shared mechanism, not a second vague one).
-  Resistance-fade mirrored.
+  instruction; this reading is the pre-registered choice):** `b` = the arming-completing touch of
+  the low zone specifically — the LAST of the `≥ 2` touches the Arming clause above requires, not
+  any earlier touch in that same sequence (2026-08-11, R-3.2(e): narrowed to name the shipped
+  anchor exactly, `_range_trade_side`, `desk_playbook_detect.py:1068-1153`; doc text only, zero
+  code change). From `b`: the first bar `t` with `b < t ≤ b + PLAYBOOK_BOUNCE_MAX_BARS`,
+  `high > high[t−1]`, and `min(low[b..t−1]) ≥ SL − RANGE_HOLD_TOL·MBR`. `T = high[t−1]` — the same
+  reversal-bar grammar as the capitulation bounce (one shared mechanism, not a second vague one).
+  Resistance-fade mirrored (`b` = the high zone's own arming-completing touch).
 - **Invalidation.** Long `S = SL`, `SL − 0.30·(T − SL)` (BOOK: just outside the range
   bounds). Short mirrored.
 - **Caps.** 1 per side per symbol-session.
-- **Disclosures.** `range_width_mbr`, per-zone touch counts, `crossed_midrange` on the
-  approach + whether the prior swing turned at midrange (BOOK midrange rule),
-  `absorption_bar_present` — a zone bar with `RVOL ≥ PLAYBOOK_RVOL_ELEVATED` and range ≤
-  `RANGE_HOLD_TOL·MBR` (P6 passive accumulation/distribution, mechanical ADAPTATION).
+- **Disclosures.** `range_width_mbr`, per-zone touch counts, `absorption_bar_present` — a zone
+  bar with `RVOL ≥ PLAYBOOK_RVOL_ELEVATED` and range ≤ `RANGE_HOLD_TOL·MBR` (P6 passive
+  accumulation/distribution, mechanical ADAPTATION) — plus two named midrange disclosures
+  (2026-08-11, R-3.2(b): split spec-first, BEFORE any code change, into the two fields below; the
+  shipped boolean answered only the first). Both read over the SAME approach window
+  `session_bars[b0..b]` (`b0` = the armed zone's own FIRST touch, `b` = the Trigger clause's
+  arming-completing touch above) — entry-time legal by construction, since neither reads past `b`:
+  - `crossed_midrange` — did price cross the range midpoint on the approach: any bar's high
+    (long) / low (short) within the window reaches `(SH + SL)/2` or beyond.
+  - `turned_at_midrange` — whether the prior swing turned at midrange (the BOOK midrange rule):
+    the swing's OWN extreme within the SAME window (`max(high)` long / `min(low)` short — the
+    furthest point price reached before returning to complete the arming touch `b`) lies within
+    `PLAYBOOK_RANGE_HOLD_TOL_MBR · MBR` of `(SH + SL)/2` — this detector's own already-registered
+    "held" tolerance, reused verbatim for an "at the midpoint" reading; no new constant. Optional
+    key (absent on every record recorded before this field shipped); disclosure-only — it never
+    gates, suppresses, or creates a signal.
   Principles: P6 when absorption present; P5 at the high side.
 - **Edge cases.** A strict break beyond a zone by > `HOLD_TOL` dissolves range-mode (re-arms
   only on a new twice-tested range).
@@ -365,8 +389,12 @@ cases. Side/band/entry/measurement always follow §0.
   valley break, never the retest.
 - **Invalidation.** `S = max(high(p1), high(p2))`; `S + 0.30·(S − T)` (BOOK: above the top).
   Nominal risk is the full pattern height — disclosed as `nominal_risk_mbr`, never shrunk.
-- **Caps.** 1 per detector per symbol-session (the first valid valley break; a triple top
-  cannot re-fire the same valley).
+- **Caps.** 1 per detector per symbol-session (2026-08-11, R-3.2(a) — rewritten to the shipped
+  reading; doc text only, zero change to `_find_double_extreme`/`desk_playbook_detect.py`): every
+  confirmed-pivot pair `(p1, p2)` is searched in chronological order, and the FIRST pair whose full
+  formation validates AND triggers wins — never the earliest valley break scanned in isolation from
+  which pair produced it. A triple top cannot re-fire the same valley once its own pair has already
+  triggered.
 - **Disclosures.** `tops_gap_mbr`, `tops_separation_bars`, `valley_depth_mbr`,
   `second_top_rvol_vs_first` (median RVOL of p2±1 / p1±1 — P5's drying retest, disclosed not
   gated), `attempt_count` (≥ 3 attempts before the valley break is the book's

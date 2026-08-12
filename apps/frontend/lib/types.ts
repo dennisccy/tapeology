@@ -1521,6 +1521,11 @@ export interface DeskPlaybookGeometry {
   low_zone_touches?: number;
   high_zone_touches?: number;
   crossed_midrange?: boolean;
+  // goal-playbook-iter-10 (R-3.2(b)): the BOOK midrange rule's second half -- whether the
+  // approach swing turned at the range's midpoint, beside the existing `crossed_midrange`. Optional
+  // like every other geometry field: absent (never `null`) on every record recorded before this
+  // field shipped.
+  turned_at_midrange?: boolean;
   absorption_bar_present?: boolean;
   // double_top / double_bottom only (J-06, spec §3.8-3.9)
   tops_gap_mbr?: number;

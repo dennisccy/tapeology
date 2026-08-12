@@ -5094,14 +5094,17 @@ function PlaybookSignalDetail({
         </p>
       )}
       {/* goal-playbook-iter-6 (J-06): range_trade's own geometry line -- the tested-and-held
-          range's width, each zone's own touch count, and the two disclosure flags, all rendered
-          verbatim from the served payload. */}
+          range's width, each zone's own touch count, and the disclosure flags, all rendered
+          verbatim from the served payload. goal-playbook-iter-10 (R-3.2(b)) adds one more
+          conditional chip, `turned_at_midrange`, beside the existing `crossed_midrange` --
+          optional like the others, so it renders nothing on a record recorded before it shipped. */}
       {signal.setup_id === "range_trade" && (
         <p data-testid="desk-playbook-signal-range-trade-geometry" className="mt-1 text-[11px] text-slate-500">
           range {fmt(geometry.range_width_mbr)} MBR wide · low zone touches{" "}
           {geometry.low_zone_touches} · high zone touches {geometry.high_zone_touches} · broke at
           slot {geometry.slots_to_break}
           {geometry.crossed_midrange && " · crossed midrange"}
+          {geometry.turned_at_midrange && " · turned at midrange"}
           {geometry.absorption_bar_present && " · absorption bar present"}
         </p>
       )}

@@ -9,6 +9,8 @@
     {"n": 3, "journey": "J-10", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Watching"}},
     {"n": 4, "journey": "J-10", "action": {"type": "goto", "url": "/structure?symbol=AAPL&asof=2026-06-22T23%3A59%3A59Z"}, "expect": {"text": "Structure"}},
     {"n": 5, "journey": "J-10", "action": {"type": "click", "target": {"testid": "structure-load-button"}}, "expect": {"text": "300.11"}},
-    {"n": 6, "journey": "J-10", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "9597251432bd9e75"}}
+    {"n": 6, "journey": "J-10", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Top-up Runs"}},
+    {"n": 7, "journey": "J-10", "action": {"type": "wait_for", "target": {"text": "Index Reconciliation"}}, "expect": {"text": "Index Reconciliation"}},
+    {"n": 8, "journey": "J-10", "action": {"type": "wait_for", "target": {"text": "Screen Runs"}}, "expect": {"text": "Screen Runs"}}
   ]
 }

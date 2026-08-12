@@ -1,0 +1,29 @@
+{
+  "phase": "goal-playbook-iter-10",
+  "status": "complete",
+  "current_step": "closure_passed",
+  "updated_at": "2026-08-12T01:41:18.916115Z",
+  "started_at": "2026-08-11T22:40:44.334354Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "docs/playbook-detector-spec.md",
+    "apps/backend/app/research/desk_playbook_detect.py",
+    "apps/backend/tests/test_desk_playbook_detect.py",
+    "apps/backend/tests/test_desk_playbook.py",
+    "apps/backend/scripts/seed_playbook_iter8_replay_rig.py",
+    "apps/backend/tests/test_seed_playbook_iter8_replay_rig.py",
+    "apps/frontend/lib/types.ts",
+    "apps/frontend/app/desk/page.tsx",
+    "runs/goal-session-playbook/journey-scripts/J-10.json"
+  ],
+  "tests_run": true,
+  "test_result": "2168 passed, 8 skipped, 0 failed",
+  "config_fingerprint": "08e471b10130e1e2",
+  "browser_checks_run": true,
+  "fix_pass": 1,
+  "fix_pass_source": "reports/reviews/goal-playbook-iter-10-review.md",
+  "fix_pass_scope": "runs/goal-session-playbook/journey-scripts/J-10.json step 6 (the review's only issue); steps 7-8 added so the sentinel covers all three always-rendered kept Era-B /desk sections",
+  "fix_pass_verification": "demo_runner --mode lint 9/9 ok; demo_runner --mode verify J-10 PASS rc=0 against a freshly-seeded scoped rig; DOM negative control (removing the three sections drops all three assertions to zero matches); read-only real-store page load proves the same three strings render in the populated desk state; store-scope verified CLEAN twice (zero delta)",
+  "next_action": "reviewer"
+}

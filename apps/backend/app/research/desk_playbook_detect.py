@@ -1188,6 +1188,18 @@ def _range_trade_side(
             any(bar.high >= midrange for bar in between) if side == "long"
             else any(bar.low <= midrange for bar in between)
         )
+        # `turned_at_midrange` (spec §3.7 Disclosures, R-3.2(b) -- disclosure only, reuses `hold_tol`
+        # already computed above, no new constant): the SAME approach window's own extreme -- the
+        # furthest point price reached before returning to complete the arming touch `b` -- lies
+        # within `PLAYBOOK_RANGE_HOLD_TOL_MBR * MBR` of the midpoint. Long reads the window's own
+        # highest high (the swing up off the low zone's first touch, before it turned back down to
+        # re-touch); short mirrors on the window's own lowest low. Never gates, suppresses, or
+        # creates a signal -- a served fact about where the prior swing turned, nothing else.
+        swing_extreme = (
+            max(bar.high for bar in between) if side == "long"
+            else min(bar.low for bar in between)
+        )
+        turned_at_midrange = abs(swing_extreme - midrange) <= hold_tol
         # `absorption_bar_present` (spec §3.7): a zone TOUCH bar with RVOL >= RVOL_ELEVATED and its
         # own range <= RANGE_HOLD_TOL*MBR (P6 passive accumulation/distribution).
         absorption_bar_present = False
@@ -1244,6 +1256,7 @@ def _range_trade_side(
                 "low_zone_touches": len(low_touches),
                 "high_zone_touches": len(high_touches),
                 "crossed_midrange": crossed_midrange,
+                "turned_at_midrange": turned_at_midrange,
                 "absorption_bar_present": absorption_bar_present,
             },
             "volume": {
