@@ -444,3 +444,59 @@ reports all 9,841 protected files unchanged. Holding CONTINUE would spend anothe
 `docs/goal.md` never asks for — and this iteration just demonstrated the engine may not build it
 anyway. Both items are carried into the halt justification so the owner can overrule cheaply.
 **Reversible:** yes — `--resume` after a one-line owner instruction reopens the session.
+
+## iter-12 — goal-decomposer
+
+**Ambiguity:** The dispatch prompt names three carried, disclosed-not-fixed items (the UT-05
+amber-border CSS collision, the `TAPEOLOGY_BAR_INDEX_DB` scoping-guard gap, and a false
+`new`/`verified` claim plus nonexistent `role=tab` clicks in
+`reports/phase-goal-playbook-iter-11-demo.json`) and asks the decomposer to decide whether any
+belongs as a cheap passenger item in this iteration. `docs/goal.md` names none of the three — J-11
+touches only the evidence fold — so nothing in the goal text says whether disclosed-but-unfixed
+carried defects from a prior iteration belong inside the NEXT iteration's scope, or ride
+indefinitely until a dedicated pass.
+**We chose:** fold the first two in as cheap, isolated passengers (both are single-call-site or
+single-tuple-entry fixes, one CSS class and one test-only guard string, with zero risk to J-11's
+own diff), following this session's own iter-9 precedent for carrying small disclosed hygiene items
+alongside a journey's own work. We excluded the third: correcting a historical showcase JSON file
+is not source code and produces no journey/anti-goal effect — it is showcase-artifact bookkeeping,
+out of a developer/reviewer's normal scope, so it is named in this iteration spec's NOTES as a
+carried flag for whoever next regenerates or publishes the era's showcase materials, not built here.
+**Reversible:** yes — both passenger fixes are isolated, single-file, low-blast-radius changes with
+no schema, signature, or record effect; dropping either back to "carried, not fixed" costs nothing.
+
+## iter-12 — goal-evaluator
+
+**Ambiguity:** J-11's Acceptance requires a browser capture of "at least one cell whose
+`n_unmeasured` is greater than zero beside its own `n`". The captured cell
+(`open_high_break/long/1m`) shows `n_unmeasured: 15` beside `n: 0` — literally satisfying the
+sentence, but the journey's own stated PURPOSE is that "a thin-looking `n` ... is legible as
+'59 of 90 signals were unmeasurable there,' never mistaken for a small sample", whose paradigm case
+is a NON-ZERO `n` beside a large `n_unmeasured` (`double_top:short@1m`, `n: 31` beside
+`n_unmeasured: 59`). On the scoped fixture rig no visible row carries both `n > 0` and
+`n_unmeasured > 0`; that pairing exists only on the operator's real corpus, where the developer
+confirmed it over REST, not on screen.
+**We chose:** J-11 `passing`. The acceptance sentence is the binding text and it is met literally
+and visibly (both numbers rendered side by side in one row); the mechanism is proven identical for
+every cell by TC-2 (`n + n_truncated + n_unmeasured` sums to the pool, and the mdd siblings share
+one count) and by the browser lane's byte-for-byte cross-check of the rendered row against a direct
+`curl` of the same endpoint. I did NOT quietly upgrade the demonstration either: the strongest
+real-corpus pairing (31 beside 59) was verified over REST only, and that limit is recorded here and
+in the eval rather than narrated as if it had been photographed.
+**Reversible:** yes — one capture on the real corpus closes it with zero product change.
+
+## iter-12 — goal-evaluator
+
+**Ambiguity:** The amber-border passenger fix is present and scoped in source and pinned by a
+source-scan guard test, but no browser row exercised it this run (UT-05 is absent from
+`reports/phase-goal-playbook-iter-12-ui-test-results.md`). My rules bar GOAL_ACHIEVED while an
+anti-goal is open and demand a screenshot for any BROWSER acceptance; nothing states how to score a
+visual fix that is not any journey's acceptance line and not an anti-goal.
+**We chose:** it does not gate GOAL_ACHIEVED, and it is not scored as verified either. `docs/goal.md`
+never mentions a border colour (ruled non-downgrading at iter-10 and iter-11), so the fix-or-drop
+item's completion is hygiene, not journey evidence. I read the source myself
+(`page.tsx:5637`, `!border-amber-500`, Tailwind v3's important modifier — the correct mechanism for
+this equal-specificity collision) and recorded it as fixed-in-source, unverified-on-screen, in
+plain words. The symmetry rail from iter-11 is preserved: a green results table that never ran the
+failing check is not evidence of a repair, in either direction.
+**Reversible:** yes — one browser row re-added next pass closes it.

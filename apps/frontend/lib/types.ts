@@ -1750,9 +1750,14 @@ export interface DeskPlaybookBackscanRunsListResult {
 // evidence fold serves p25_pct/p75_pct the rail's own avg cell never had (desk_playbook_evidence.py
 // pools them with its own new quartile math -- see that module's docstring for why this is NOT a
 // second implementation of the rail).
+// goal-playbook-iter-12 (J-11): both stats shapes gain n_unmeasured/n_sessions (baseline also
+// gains n_truncated -- already computed server-side, previously discarded) -- every new count a
+// straight pass-through of GET /research/desk/playbook/evidence's enriched body, no client math.
 export interface DeskPlaybookEvidenceCellStats {
   n: number;
   n_truncated: number;
+  n_unmeasured: number;
+  n_sessions: number;
   median_pct: number | null;
   p25_pct: number | null;
   p75_pct: number | null;
@@ -1761,6 +1766,9 @@ export interface DeskPlaybookEvidenceCellStats {
 
 export interface DeskPlaybookEvidenceBaselineStats {
   n_baseline: number;
+  n_truncated: number;
+  n_unmeasured: number;
+  n_sessions: number;
   median_pct: number | null;
   p25_pct: number | null;
   p75_pct: number | null;
@@ -1787,7 +1795,18 @@ export interface DeskPlaybookEvidenceBreach {
 export interface DeskPlaybookEvidenceOtherSignature {
   signature: string;
   dates: string[];
+  n_records: number;
   created_span: { from: string; to: string };
+}
+
+// goal-playbook-iter-12 (J-11): the pooled/default signature's OWN basis disclosure -- built by the
+// same per-signature summarizer `other_signatures[]` above already uses. `created_span` is `null`
+// iff `n_records` is `0` (an entirely empty store) -- the ONE case `other_signatures[]` entries
+// never hit (a signature only appears there once it has recorded >= 1 file).
+export interface DeskPlaybookEvidenceBasis {
+  dates: string[];
+  n_records: number;
+  created_span: { from: string; to: string } | null;
 }
 
 export interface DeskPlaybookEvidence {
@@ -1795,6 +1814,7 @@ export interface DeskPlaybookEvidence {
   cells: DeskPlaybookEvidenceCell[];
   invalidation_breached: DeskPlaybookEvidenceBreach[];
   other_signatures: DeskPlaybookEvidenceOtherSignature[];
+  basis: DeskPlaybookEvidenceBasis;
   parameters: DeskPlaybookParameters;
   register: string;
 }

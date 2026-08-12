@@ -649,15 +649,31 @@ def test_resolve_desk_playbook_backscan_log_dir_defaults_to_a_universe_sibling(m
 
 
 # --- TC-13: the positive scoping guard ----------------------------------------------------------------
+# goal-playbook-iter-12 (J-11 passenger, TC-15): extended from four to five vars --
+# TAPEOLOGY_BAR_INDEX_DB joins the other four. The three tests below are widened so "all env vars
+# unset"/"all env vars properly scoped" keep meaning what they say; a NEW dedicated negative
+# counter-test (below) isolates the fifth var alone, and a source-scan test pins that this guard
+# still has no caller under desk_routes.py (never wired into a live route).
+
+_ALL_SCOPED_ENV_VARS = (
+    "TAPEOLOGY_DESK_PLAYBOOK_DIR",
+    "TAPEOLOGY_DESK_PLAYBOOK_LOG_DIR",
+    "TAPEOLOGY_DESK_PLAYBOOK_BACKSCAN_LOG_DIR",
+    "TAPEOLOGY_DESK_UNIVERSE_DIR",
+    "TAPEOLOGY_BAR_INDEX_DB",
+)
 
 
-def test_tc13_assert_scoped_raises_when_all_four_env_vars_are_unset(tmp_path, monkeypatch):
-    for name in (
-        "TAPEOLOGY_DESK_PLAYBOOK_DIR",
-        "TAPEOLOGY_DESK_PLAYBOOK_LOG_DIR",
-        "TAPEOLOGY_DESK_PLAYBOOK_BACKSCAN_LOG_DIR",
-        "TAPEOLOGY_DESK_UNIVERSE_DIR",
-    ):
+def _set_all_scoped(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TAPEOLOGY_DESK_PLAYBOOK_DIR", str(tmp_path / "playbook"))
+    monkeypatch.setenv("TAPEOLOGY_DESK_PLAYBOOK_LOG_DIR", str(tmp_path / "playbook_runs"))
+    monkeypatch.setenv("TAPEOLOGY_DESK_PLAYBOOK_BACKSCAN_LOG_DIR", str(tmp_path / "playbook_backscan_runs"))
+    monkeypatch.setenv("TAPEOLOGY_DESK_UNIVERSE_DIR", str(tmp_path / "universe"))
+    monkeypatch.setenv("TAPEOLOGY_BAR_INDEX_DB", str(tmp_path / "bar_index.db"))
+
+
+def test_tc13_assert_scoped_raises_when_all_five_env_vars_are_unset(tmp_path, monkeypatch):
+    for name in _ALL_SCOPED_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
 
     with pytest.raises(PlaybookNotScopedError):
@@ -669,15 +685,44 @@ def test_tc13_assert_scoped_raises_when_a_var_points_at_a_dot_data_store(tmp_pat
     monkeypatch.setenv("TAPEOLOGY_DESK_PLAYBOOK_LOG_DIR", str(tmp_path / "playbook_runs"))
     monkeypatch.setenv("TAPEOLOGY_DESK_PLAYBOOK_BACKSCAN_LOG_DIR", str(tmp_path / "playbook_backscan_runs"))
     monkeypatch.setenv("TAPEOLOGY_DESK_UNIVERSE_DIR", "/some/repo/apps/backend/.data/desk_universe")
+    monkeypatch.setenv("TAPEOLOGY_BAR_INDEX_DB", str(tmp_path / "bar_index.db"))
 
     with pytest.raises(PlaybookNotScopedError):
         _assert_scoped(tmp_path)
 
 
-def test_tc13_assert_scoped_passes_when_all_four_are_properly_scoped(tmp_path, monkeypatch):
-    monkeypatch.setenv("TAPEOLOGY_DESK_PLAYBOOK_DIR", str(tmp_path / "playbook"))
-    monkeypatch.setenv("TAPEOLOGY_DESK_PLAYBOOK_LOG_DIR", str(tmp_path / "playbook_runs"))
-    monkeypatch.setenv("TAPEOLOGY_DESK_PLAYBOOK_BACKSCAN_LOG_DIR", str(tmp_path / "playbook_backscan_runs"))
-    monkeypatch.setenv("TAPEOLOGY_DESK_UNIVERSE_DIR", str(tmp_path / "universe"))
+def test_tc13_assert_scoped_passes_when_all_five_are_properly_scoped(tmp_path, monkeypatch):
+    _set_all_scoped(tmp_path, monkeypatch)
 
     _assert_scoped(tmp_path)  # does not raise
+
+
+def test_tc15_assert_scoped_raises_when_only_the_fifth_var_is_unset_and_names_it(tmp_path, monkeypatch):
+    """TC-15's own negative counter-test: the other four properly scoped, ONLY
+    ``TAPEOLOGY_BAR_INDEX_DB`` unset -- still refused, and the raised message names that exact var
+    (not a generic "something is wrong")."""
+    _set_all_scoped(tmp_path, monkeypatch)
+    monkeypatch.delenv("TAPEOLOGY_BAR_INDEX_DB", raising=False)
+
+    with pytest.raises(PlaybookNotScopedError) as excinfo:
+        _assert_scoped(tmp_path)
+    assert "TAPEOLOGY_BAR_INDEX_DB" in str(excinfo.value)
+    # And it is the ONLY problem named -- the other four were genuinely fine.
+    for name in _ALL_SCOPED_ENV_VARS[:-1]:
+        assert f"{name} is unset" not in str(excinfo.value)
+        assert f"{name}=" not in str(excinfo.value)
+
+
+def test_tc15_assert_scoped_has_no_caller_under_desk_routes():
+    """TC-15: a source-scan confirms ``_assert_scoped`` is still never wired into a live HTTP route
+    -- it stays a test/browser-QA-rig-only positive guard, exactly as its own docstring claims."""
+    import pathlib
+
+    import app.research.desk_routes as desk_routes_module
+
+    routes_source = pathlib.Path(desk_routes_module.__file__).read_text()
+    assert "_assert_scoped" not in routes_source, (
+        "desk_routes.py must never call _assert_scoped -- an operator's REAL compute legitimately "
+        "runs with none of the five scoping env vars set, and wiring the guard into a route would "
+        "wrongly refuse every genuine production compute"
+    )

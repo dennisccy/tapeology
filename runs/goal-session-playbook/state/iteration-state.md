@@ -1,40 +1,40 @@
 # Iteration State — playbook
 
-**After iteration:** 11 · **Date:** 2026-08-12 · **Verdict:** GOAL_ACHIEVED
+**After iteration:** 12 · **Date:** 2026-08-12 · **Verdict:** GOAL_ACHIEVED
 
 ## Journeys
 
-10 passing (J-01..J-10) — 0 failing · 0 regressed · all ten verified THIS run (9 by deterministic
-replay + J-09 live browser/tool-registry). Every journey now has a golden; `state/golden-gaps` absent.
+11 passing (J-01..J-11) · 0 failing · 0 unknown — 11 total (J-04/J-05/J-06 carried unverified: outside this iteration's required set, detector code zero diff)
 
 ## Active blockers
 
-- **none blocking.** Three carried, disclosed, machine-fixable items, none named by `docs/goal.md`:
-  1. **UT-05 open, NOT fixed** (dev) — `apps/frontend/app/desk/page.tsx:5591` still appends
-     `border-amber-500` beside `ASOF_INPUT_CLASS`'s `border-slate-700` (`:298`); slate wins. The
-     iter-11 results gate is green only because UT-05 was not re-run, not because it was repaired.
-     Fix the one call site or drop the expectation.
-  2. **`TAPEOLOGY_BAR_INDEX_DB` still missing** (dev) — `desk_playbook_backscan.py`
-     `_SCOPING_ENV_VARS` still has four vars. Latent only: every scoped launcher already exports it
-     (`qa_playbook_iter7_fixture_scoped_backend.sh:86`); `.data/bar_index.db` mtime 2026-08-10.
-  3. **False showcase claim** (dev) — `reports/phase-goal-playbook-iter-11-demo.json` step 2 tags
-     the unbuilt border fix `new/verified: true`, and clicks `/desk` tabs that do not exist.
-     Correct or re-record before the era's artifacts are committed.
+- none. Three carried write-up items, none a product fault, none blocking:
+  (a) `reports/phase-goal-playbook-iter-11-demo.json` is still untrue — step 2 marks the amber
+  border new+verified for iteration 11 (it shipped only in 12), steps 5/6 click `role=tab`
+  targets `/desk` lacks; showcase step, not developer work.
+  (b) the amber border fix is proven in source (`page.tsx:5637`) but never photographed — no
+  UT-05 row ran this iteration.
+  (c) iteration 12's own walkthrough (closing step) may mark a step new/verified only if really
+  built AND captured; `/desk` has no tabs.
 
 ## Last 2 verdicts
 
-- iter 11: GOAL_ACHIEVED — all 10 re-verified this run (J-09's gap closed), suite exit 0 / 2168
-  passed / 8 skipped, pin `08e471b10130e1e2`, store untouched, zero open anti-goals.
-- iter 10: CONTINUE — R-3 discharged, all 10 passing, held open by the untested J-09 + one FAIL row.
+- iter 12: GOAL_ACHIEVED — J-11 built and seen on screen (basis line + per-cell exclusion
+  counts); 7 required journeys re-verified; suite 2182 pass / 8 skip; coherence PASS.
+- iter 11: GOAL_ACHIEVED — all ten re-verified, but the engine ran it evidence-only and silently
+  skipped two planned code fixes.
 
 ## Do not redo
 
-- **J-09 verification + `journey-scripts/J-09.json`** — landed; the golden asserts the static label
-  "Built from signature:" only. Do not re-point it at the hash value.
-- **R-3.1 / R-3.2(a)-(e) spec catch-up + `geometry.turned_at_midrange`** — ratified and shipped at
-  iter-10. Do not re-open; report the chip as *shipped and proven to render, never yet observed*.
-- **`J-10.json` steps 6-8** on static panel titles (not the fixture hash) — do not revert.
-- **Store-scope guard hardening** (iters 8-9), 9,841 files CLEAN · **`/structure` blank chart**
-  CLOSED at iter-10.
-- **Depth trap:** `Depth: evidence` skips developer+reviewer — iter-11 lost 2 of its 3 planned code
-  items that way. Never plan code work under it.
+- J-11's evidence enrichment is DONE, served by the one registered owner
+  (`desk_playbook_evidence.py` → `GET /research/desk/playbook/evidence`): `signal.n_unmeasured`/
+  `n_sessions`, `baseline.n_truncated`/`n_unmeasured`/`n_sessions`, `other_signatures[].n_records`,
+  payload-level `basis`. No second fold or endpoint.
+- `TAPEOLOGY_BAR_INDEX_DB` IS the fifth `_SCOPING_ENV_VARS` entry
+  (`desk_playbook_backscan.py:117-123`) with a negative counter-test. Done.
+- The Playbook Signals date input's amber border IS fixed (`page.tsx:5637`, `!border-amber-500`,
+  that one input only). Do not re-fix; only photograph. The Refresh Data From/To inputs
+  (`page.tsx:4448/4464`) carry the SAME collision deliberately UNFIXED and guard-test-pinned.
+- Owner rulings R-3.1/R-3.2 settled (spec edits landed at iteration 10). Zero-diff invariants
+  hold and are guard-tested: `desk_forward.py`, the playbook detectors, `config.py`,
+  `app/mcp/__init__.py`, the detector spec, pin `08e471b10130e1e2`, MCP 20 tools.

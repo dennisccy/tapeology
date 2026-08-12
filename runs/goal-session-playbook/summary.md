@@ -1,34 +1,35 @@
 # Goal Session Summary — playbook
 
-**Final verdict:** STALLED
-**Total iterations:** 10
-**Wall time (seconds):** 71720
+**Final verdict:** ABORTED
+**Total iterations:** 13
+**Wall time (seconds):** 30593
 **Quota pauses:** 0
 **Started:** 2026-08-10T04:38:06.640143Z
-**Finished:** 2026-08-11T19:04:40.998954Z
+**Finished:** 2026-08-12T06:40:53.417943Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/playbook`. Open a PR with:
 
     gh pr create --base main --head goal/playbook \
-      --title "feat: playbook — STALLED" \
+      --title "feat: playbook — ABORTED" \
       --body-file runs/goal-session-playbook/summary.md
 
 ## Final journey state
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-playbook-iter-9 |
-| J-02 | passing | goal-playbook-iter-9 |
-| J-03 | passing | goal-playbook-iter-9 |
-| J-04 | passing | goal-playbook-iter-9 |
-| J-05 | passing | goal-playbook-iter-9 |
-| J-06 | passing | goal-playbook-iter-9 |
-| J-07 | passing | goal-playbook-iter-9 |
-| J-08 | passing | goal-playbook-iter-9 |
-| J-09 | passing | goal-playbook-iter-9 |
-| J-10 | passing | goal-playbook-iter-9 |
+| J-01 | passing | goal-playbook-iter-12 |
+| J-02 | passing | goal-playbook-iter-12 |
+| J-03 | passing | goal-playbook-iter-12 |
+| J-04 | passing | goal-playbook-iter-11 |
+| J-05 | passing | goal-playbook-iter-11 |
+| J-06 | passing | goal-playbook-iter-11 |
+| J-07 | passing | goal-playbook-iter-12 |
+| J-08 | passing | goal-playbook-iter-12 |
+| J-09 | passing | goal-playbook-iter-12 |
+| J-10 | passing | goal-playbook-iter-12 |
+| J-11 | passing | goal-playbook-iter-12 |
 
 ## Anti-goal violations
 
@@ -39,8 +40,8 @@ This session pushed iteration commits to `goal/playbook`. Open a PR with:
 - [minor] Copy discipline (Constraints) — 'the served PLAYBOOK_REGISTER and EVIDENCE_REGISTER sentences state what was measured and what was NOT' (iter goal-playbook-iter-4)
 - [minor] No threshold exists outside the spec, and no code path sweeps one — 'Every detector rule and threshold exists in docs/playbook-detector-spec.md BEFORE the code that uses it' (iter goal-playbook-iter-5)
 - [minor] Record integrity / immutable data — every recorded run's ledger row must point at a record that exists (iter goal-playbook-iter-4)
-- [minor] Persistence stays scoped / the iteration's own 'Real (non-fixture) computes are OUT OF SCOPE' rule — no verification lane may write into the operator's real store unasked (iter goal-playbook-iter-6)
-- [minor] Immutable data / no recorded file rewritten, backfilled or pruned — a developer wrote synthetic price files and a fabricated today-dated universe snapshot into the operator's real store (iter goal-playbook-iter-6)
+- [minor] Persistence stays scoped / the iteration's own 'Real (non-fixture) computes are OUT OF SCOPE' rule — no verification lane may write into the operator's real store (iter goal-playbook-iter-6)
+- [minor] Immutable data / no recorded file rewritten, backfilled or pruned — a developer wrote synthetic price files and a fabricated today-dated universe snapshot into the operator's store (iter goal-playbook-iter-6)
 - [minor] The spec is canonical (Constraints) — 'a developer who finds the spec ambiguous or unimplementable DROPS that detector and surfaces it, never improvises a rule' (iter goal-playbook-iter-6)
 - [minor] The spec is canonical (Constraints) — served detector behaviour must match the canonical spec (iter goal-playbook-iter-6)
 - [minor] Persistence stays scoped / the iteration spec's own 'Any real, unscoped back-scan or playbook compute against the operator's live universe' OUT OF SCOPE rule (iter goal-playbook-iter-8)
@@ -238,20 +239,69 @@ See `runs/goal-session-playbook/telemetry.jsonl` for the structured event log.
       pump-wait                  8.9m
       OVER BUDGET at browser-qa: 4198s > 3600s (mode=trim)
       overlap saved              8.6m  (parallel steps)
-  session: 10 completed iteration(s), mean wall 157.1m
-      total developer                  579.5m
-      total browser-qa-agent           486.8m
-      total reviewer                   167.6m
-      total auditor                    136.8m
-      total goal-evaluator             121.6m
-      total goal-decomposer            114.8m
-      total iteration-summarizer        78.7m
-      total qa                          69.4m
-      total coherence-auditor           35.6m
-      total demo-narrator               20.7m
-      total ui-impact-analyst           20.3m
-      total orchestrator                13.5m
-      total browser-qa-replay            4.9m
+  goal-playbook-iter-10  depth=full  verdict=CONTINUE  wall=231.2m
+      developer                   57.7m  calls=2
+      browser-qa-agent            43.5m  calls=1
+      qa                          36.1m  calls=1
+      reviewer                    29.9m  calls=2
+      goal-decomposer             29.6m  calls=1
+      auditor                     18.4m  calls=1
+      ui-impact-analyst           18.3m  calls=1
+      goal-evaluator              15.1m  calls=1
+      orchestrator                10.0m  calls=1
+      coherence-auditor            5.9m  calls=1
+      demo-narrator                1.6m  calls=1
+      [engine] full-pipeline     180.6m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: ui-test-design, ux-regression)
+      pump-wait                 36.5m
+      OVER BUDGET at post-dev-fanout: 7636s > 3600s (mode=trim)
+      overlap saved             34.8m  (parallel steps)
+  goal-playbook-iter-11  depth=lean  verdict=GOAL_ACHIEVED  wall=78.9m
+      goal-decomposer             27.7m  calls=1
+      goal-evaluator              22.4m  calls=1
+      iteration-summarizer        16.8m  calls=2
+      browser-qa-agent            11.2m  calls=1
+      goal-evaluator-confirm       3.8m  calls=1
+      demo-narrator                2.9m  calls=1
+      [engine] evidence-pipeline    15.7m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                  7.9m
+      OVER BUDGET at showcase-tail: 4182s > 3600s (mode=trim)
+      overlap saved              5.8m  (parallel steps)
+  goal-playbook-iter-12  depth=lean  verdict=GOAL_ACHIEVED  wall=120.0m
+      developer                   44.2m  calls=1
+      goal-decomposer             24.9m  calls=1
+      reviewer                    14.2m  calls=1
+      goal-evaluator              12.2m  calls=1
+      coherence-auditor           10.2m  calls=1
+      browser-qa-agent            10.1m  calls=1
+      iteration-summarizer         7.6m  calls=1
+      goal-evaluator-confirm       6.7m  calls=1
+      browser-qa-replay            1.2m  calls=1
+      [engine] lean-pipeline      68.7m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  0.6m
+      OVER BUDGET at browser-qa: 5000s > 3600s (mode=trim)
+      overlap saved             11.2m  (parallel steps)
+  goal-playbook-iter-13  depth=?  verdict=?  wall=?  (incomplete/interrupted attempt)
+  session: 13 completed iteration(s), mean wall 153.9m
+      total developer                  681.4m
+      total browser-qa-agent           551.5m
+      total reviewer                   211.7m
+      total goal-decomposer            197.0m
+      total goal-evaluator             171.3m
+      total auditor                    155.2m
+      total qa                         105.5m
+      total iteration-summarizer       103.0m
+      total coherence-auditor           51.8m
+      total ui-impact-analyst           38.6m
+      total demo-narrator               25.2m
+      total orchestrator                23.5m
+      total goal-evaluator-confirm      10.5m
+      total browser-qa-replay            6.1m
       total readme-maintainer            3.3m
       total AWAITING_PUMP paused gaps: 2.5m
       halts: AWAITING_HOST_GUARD, AWAITING_PUMP, machine_reset, AWAITING_PUMP, machine_reset, AWAITING_PUMP, STALLED

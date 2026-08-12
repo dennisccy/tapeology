@@ -1329,9 +1329,11 @@ def get_desk_playbook_evidence(
     ``?id=`` convention):
 
       * ``signature`` absent: the full pooled fold at the CURRENT default signature —
-        ``{"signature", "cells", "invalidation_breached", "other_signatures", "parameters",
-        "register"}``. Only the default signature's own recorded signals ever enter ``cells``; a
-        cell with zero recorded signals is still served (``n: 0``), never omitted.
+        ``{"signature", "cells", "invalidation_breached", "other_signatures", "basis",
+        "parameters", "register"}`` (``basis``: J-11's own ``{dates, n_records, created_span}``
+        disclosure for the pooled/default signature). Only the default signature's own recorded
+        signals ever enter ``cells``; a cell with zero recorded signals is still served (``n: 0``),
+        never omitted.
       * ``signature=<value>``: that ONE named signature's own ``{"signature", "dates",
         "created_span"}`` — inspects any recorded signature (default or not) WITHOUT pooling it
         into any cell (T-7/the "one signature" anti-goal — this branch never even resolves the

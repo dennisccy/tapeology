@@ -11,11 +11,16 @@ baseline anchor's own forward-shaped measurement were ALREADY produced by
 module never touches a bar, never calls ``_measure_from``, and reuses
 ``desk_forward._collect_measures`` (imported verbatim, zero diff) to pool the ALREADY-MEASURED
 per-signal/per-anchor leaves into per-measure value lists with their truncation-exclusion already
-applied. The ONLY genuinely new math here is the quartile fold (``_quartile_stats``) --
-``_collect_measures``/``_avg_cell`` (the rail's own pooling helpers) produce ``n``/``mean_pct``/
-``median_pct``/``n_truncated`` but carry no p25/p75 at all; J-08 needs its own evidence-only fold
-for those two, which is new EVIDENCE math, not a second implementation of anything the rail
-already had.
+applied. The genuinely new math here is EVIDENCE-only, never a second implementation of anything
+the rail already had: the quartile fold (``_quartile_stats``) -- ``_collect_measures``/
+``_avg_cell`` (the rail's own pooling helpers) produce ``n``/``mean_pct``/``median_pct``/
+``n_truncated`` but carry no p25/p75 at all, so J-08 folds those two itself -- and (J-11) the
+exclusion-count fold (``_n_unmeasured_by_label``), which COUNTS, never re-derives, how many pooled
+events carry a null ``return_pct`` at each horizon label: the exact fact
+``_collect_measures``'s own ``if measure["return_pct"] is None: continue`` already reads per event
+and then lets evaporate uncounted. This module also folds ``n_sessions`` -- the number of distinct
+recorded ``session_date``s behind a pool -- straight off the per-file projection's own
+``session_date``, again zero re-derivation of anything the rail or the store computes.
 
 **The evidence pools exactly ONE signature (a hard anti-goal).** ``fold_evidence`` resolves the
 CURRENT default signature via ``compute_playbook_input_signature`` (the exact function
@@ -106,8 +111,14 @@ EVIDENCE_REGISTER = (
     "A cell tagged below_min_n has fewer than the disclosure floor's worth of recorded signals — "
     "a disclosure, never a filter: its numbers are still served, never hidden, never nulled out "
     "for being thin. Truncated values are excluded from every median/mean pool with the exclusion "
-    "counted, never silently dropped. A signature other than the current one is listed by its own "
-    "dates and created span, never folded into these cells. No fills and no costs are modeled "
+    "counted, never silently dropped — and a signal whose own horizon leaf was recorded "
+    "unmeasurable at that window (finer than the session's own recorded touch series) is excluded "
+    "the same way, counted as n_unmeasured instead of n_truncated, on the signal side and, "
+    "identically, on the baseline side (n_truncated, n_unmeasured), beside n_sessions, the number "
+    "of distinct recorded dates each pool draws from. A signature other than the current one is "
+    "listed by its own dates, record count, and created span, never folded into these cells, and "
+    "the pooled signature's own record count, dates, and created span are named the same way, up "
+    "front, in this payload's own basis block. No fills and no costs are modeled "
     "anywhere on this payload, which describes measurements of what already happened and nothing "
     "about what happens next"
 )
@@ -268,11 +279,13 @@ def _quartile_stats(values: list[float]) -> tuple[float | None, float | None, fl
     return statistics.median(values), p25, p75, statistics.mean(values)
 
 
-def _signal_cell(values: list[float], n_truncated: int) -> dict:
+def _signal_cell(values: list[float], n_truncated: int, n_unmeasured: int, n_sessions: int) -> dict:
     median, p25, p75, mean = _quartile_stats(values)
     return {
         "n": len(values),
         "n_truncated": n_truncated,
+        "n_unmeasured": n_unmeasured,
+        "n_sessions": n_sessions,
         "median_pct": median,
         "p25_pct": p25,
         "p75_pct": p75,
@@ -280,15 +293,71 @@ def _signal_cell(values: list[float], n_truncated: int) -> dict:
     }
 
 
-def _baseline_cell(values: list[float]) -> dict:
+def _baseline_cell(values: list[float], n_truncated: int, n_unmeasured: int, n_sessions: int) -> dict:
     median, p25, p75, mean = _quartile_stats(values)
     return {
         "n_baseline": len(values),
+        "n_truncated": n_truncated,
+        "n_unmeasured": n_unmeasured,
+        "n_sessions": n_sessions,
         "median_pct": median,
         "p25_pct": p25,
         "p75_pct": p75,
         "mean_pct": mean,
     }
+
+
+# --- exclusion counting (J-11, new evidence-only math -- pure counts, never a re-measurement) -------
+
+# The four rail horizon LABELS, in the rail's own declared order -- NOT re-derived from
+# PLAYBOOK_SIGNAL_MEASURES/DESK_FORWARD_MEASURE_KEYS, whose own order interleaves them with the
+# session-level trio and the mdd siblings.
+_HORIZON_LABELS: tuple[str, ...] = tuple(label for label, _minutes in DESK_FORWARD_HORIZONS_MINUTES)
+
+
+def _measure_horizon_label(measure: str) -> str | None:
+    """Which of the four horizon LABELS governs ``measure``'s own unmeasurability -- a horizon's
+    own return key (e.g. ``"1h"``) and its two ``mdd_long_1h``/``mdd_short_1h`` siblings all read
+    the EXACT SAME ``event["horizons"]["1h"]["return_pct"]`` fact (``_measure_from`` writes a
+    horizon leaf as one all-null shape or one all-populated shape, never a mix), so all three
+    measure keys share one label and therefore one shared count (TC-2). ``None`` for the
+    session-level trio (``to_close``/``mdd_long``/``mdd_short``), which reads the session-end
+    fields ``_measure_from`` always populates -- never unmeasurable."""
+    if measure in _HORIZON_LABELS:
+        return measure
+    for prefix in ("mdd_long_", "mdd_short_"):
+        if measure.startswith(prefix) and measure[len(prefix) :] in _HORIZON_LABELS:
+            return measure[len(prefix) :]
+    return None
+
+
+def _n_unmeasured_by_label(events: list[dict]) -> dict[str, int]:
+    """Per horizon LABEL, how many of ``events`` carry ``return_pct: None`` there -- the exact fact
+    ``desk_forward._collect_measures`` silently ``continue``s past with no counter. Read directly
+    off each event's own leaf, never derived by subtracting pool lengths (the module NOTES this
+    iteration carries: an MDD sibling's own value list can in principle be shorter than its return
+    sibling's for a reason UNRELATED to unmeasurability -- a pre-per-horizon-MDD legacy leaf missing
+    ``mdd_long_pct``/``mdd_short_pct`` while ``return_pct`` is populated; never observed in playbook
+    data today, not provably impossible, and a subtraction-only reading would silently get it wrong
+    the day it is). Every label is always a key, even at ``0`` -- an empty ``events`` list (an empty
+    pool) reads every label ``0``, never an omitted key, mirroring the existing zero-signals
+    precedent the rest of this module already follows."""
+    counts = {label: 0 for label in _HORIZON_LABELS}
+    for event in events:
+        horizons = event.get("horizons") or {}
+        for label in _HORIZON_LABELS:
+            leaf = horizons.get(label)
+            if leaf is not None and leaf.get("return_pct") is None:
+                counts[label] += 1
+    return counts
+
+
+def _n_unmeasured_for(measure: str, unmeasured_by_label: dict[str, int]) -> int:
+    """``0`` for the session-level trio (never unmeasurable); otherwise the SAME count its own
+    horizon label's return key and its two mdd siblings all share -- never independently
+    recomputed per measure key (TC-2)."""
+    label = _measure_horizon_label(measure)
+    return unmeasured_by_label[label] if label is not None else 0
 
 
 def _fold_cells(default_projections: list[dict]) -> list[dict]:
@@ -298,29 +367,60 @@ def _fold_cells(default_projections: list[dict]) -> list[dict]:
     the ENTIRE truncation-exclusion/grouping-by-measure-key job; this function only pools the raw
     per-file event lists across every default-signature file first, so a signal recorded in one
     session-date's file and a signal recorded in another's pool into the SAME cell exactly as if
-    they had been measured in one walk."""
+    they had been measured in one walk.
+
+    ``n_unmeasured`` and ``n_sessions`` (J-11) are each computed ONCE per ``(setup_id, side)`` pool
+    -- not independently per measure -- then applied identically to every one of that pool's
+    ``PLAYBOOK_SIGNAL_MEASURES`` cells: ``n_unmeasured`` shares one count per horizon LABEL across a
+    return key and its two mdd siblings (``_n_unmeasured_for``), and ``n_sessions`` counts distinct
+    recorded dates behind the WHOLE pool of raw signal events, not behind any one measure's own
+    filtered sub-pool (a session contributed ``>= 1`` signal, full stop -- which horizons that
+    signal happened to measure at is a separate, per-measure fact already carried by ``n``/
+    ``n_truncated``/``n_unmeasured``)."""
     cells: list[dict] = []
     for setup_id in PLAYBOOK_SETUPS:
         for side in _SIDES:
             pool_key = f"{setup_id}:{side}"
             signal_events: list[dict] = []
             baseline_events: list[dict] = []
+            signal_dates: set[str] = set()
+            baseline_dates: set[str] = set()
             for projection in default_projections:
-                signal_events.extend(projection["signal_events"].get(pool_key, []))
-                baseline_events.extend(projection["baseline_events"].get(pool_key, []))
+                pool_signals = projection["signal_events"].get(pool_key, [])
+                pool_baseline = projection["baseline_events"].get(pool_key, [])
+                signal_events.extend(pool_signals)
+                baseline_events.extend(pool_baseline)
+                if pool_signals:
+                    signal_dates.add(projection["session_date"])
+                if pool_baseline:
+                    baseline_dates.add(projection["session_date"])
             signal_pools = _collect_measures(signal_events)
             baseline_pools = _collect_measures(baseline_events)
+            signal_unmeasured = _n_unmeasured_by_label(signal_events)
+            baseline_unmeasured = _n_unmeasured_by_label(baseline_events)
+            n_sessions_signal = len(signal_dates)
+            n_sessions_baseline = len(baseline_dates)
             for measure in PLAYBOOK_SIGNAL_MEASURES:
                 signal_values, n_truncated = signal_pools[measure]
-                baseline_values, _baseline_truncated = baseline_pools[measure]
-                signal_block = _signal_cell(signal_values, n_truncated)
+                baseline_values, baseline_truncated = baseline_pools[measure]
+                signal_block = _signal_cell(
+                    signal_values,
+                    n_truncated,
+                    _n_unmeasured_for(measure, signal_unmeasured),
+                    n_sessions_signal,
+                )
                 cells.append(
                     {
                         "setup_id": setup_id,
                         "side": side,
                         "measure": measure,
                         "signal": signal_block,
-                        "baseline": _baseline_cell(baseline_values),
+                        "baseline": _baseline_cell(
+                            baseline_values,
+                            baseline_truncated,
+                            _n_unmeasured_for(measure, baseline_unmeasured),
+                            n_sessions_baseline,
+                        ),
                         "below_min_n": signal_block["n"] < PLAYBOOK_MIN_N_DISCLOSURE,
                     }
                 )
@@ -356,27 +456,35 @@ def _fold_invalidation_breached(default_projections: list[dict]) -> list[dict]:
     return entries
 
 
+def _signature_basis(projections: list[dict]) -> dict:
+    """The ``dates``/``n_records``/``created_span`` ONE signature's own recorded projections
+    disclose -- extracted so ``_fold_other_signatures`` (below) and ``fold_evidence``'s new
+    payload-level ``basis`` block (J-11) both call the SAME summarizer instead of each growing its
+    own copy. ``dates`` deduplicated and sorted (a signature can record at most ONE file per date --
+    ``PlaybookStore``'s own 2-pin key refuses a duplicate -- so dedup here is defensive, not
+    load-bearing); ``n_records`` is the plain count of ``projections`` (by that same 2-pin-key
+    invariant, always equal to ``len(dates)`` for a fixed signature -- served as its own field
+    anyway so a reader is never asked to derive it). ``created_span`` is ``None`` iff ``projections``
+    is empty, matching ``inspect_signature``'s own ``min``/``max`` convention byte-for-byte (both
+    read the identical ``session_date``/``recorded_at`` fields off the identical records -- one via
+    a projection, the other via a fresh ``store.get`` -- so the two are provably the same computation
+    under two different callers, not two independent ones; TC-5)."""
+    dates = sorted({p["session_date"] for p in projections})
+    recorded_ats = sorted(p["recorded_at"] for p in projections)
+    created_span = {"from": recorded_ats[0], "to": recorded_ats[-1]} if recorded_ats else None
+    return {"dates": dates, "n_records": len(projections), "created_span": created_span}
+
+
 def _fold_other_signatures(other_projections: list[dict]) -> list[dict]:
-    """Every NON-default signature present, its own ``dates``/``created_span`` only -- listed,
-    never pooled (the hard anti-goal: "the evidence pools one signature"). Signatures sorted for a
-    deterministic served order; ``dates`` deduplicated and sorted (a signature can record at most
-    ONE file per date -- ``PlaybookStore``'s own 2-pin key refuses a duplicate -- so dedup here is
-    defensive, not load-bearing)."""
+    """Every NON-default signature present, its own ``dates``/``n_records``/``created_span`` only --
+    listed, never pooled (the hard anti-goal: "the evidence pools one signature"). Signatures sorted
+    for a deterministic served order."""
     by_signature: dict[str, list[dict]] = {}
     for projection in other_projections:
         by_signature.setdefault(projection["playbook_input_signature"], []).append(projection)
     result: list[dict] = []
     for signature in sorted(by_signature):
-        entries = by_signature[signature]
-        dates = sorted({entry["session_date"] for entry in entries})
-        recorded_ats = sorted(entry["recorded_at"] for entry in entries)
-        result.append(
-            {
-                "signature": signature,
-                "dates": dates,
-                "created_span": {"from": recorded_ats[0], "to": recorded_ats[-1]},
-            }
-        )
+        result.append({"signature": signature, **_signature_basis(by_signature[signature])})
     return result
 
 
@@ -408,6 +516,7 @@ def fold_evidence(
         "cells": _fold_cells(default_projections),
         "invalidation_breached": _fold_invalidation_breached(default_projections),
         "other_signatures": _fold_other_signatures(other_projections),
+        "basis": _signature_basis(default_projections),
         "parameters": playbook_parameters(),
         "register": EVIDENCE_REGISTER,
     }

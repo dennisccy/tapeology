@@ -583,3 +583,63 @@ must be corrected or re-recorded before anyone reads it, because it claims the o
 fixed. The one sentence for the owner: accept the era as finished and let these three small items
 ride into the next chapter, or ask for one short pass that fixes the box, adds the missing settings
 name, and re-records the showcase honestly.
+
+---
+
+## Iteration 12 — goal-playbook-iter-12
+
+**Date:** 2026-08-12T06:40:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean (matching the spec for once — developer and reviewer both really ran,
+unlike the previous run, which the engine turned into an evidence-only pass and which silently
+dropped two planned code items)
+**Journey deltas:**
+- Newly passing: J-11 "Every evidence cell states the basis of its own n" — the Playbook Evidence
+  panel now states, for every row, how many recorded signals could not be measured at that time
+  window and how many days the row draws on, and the panel names the days the whole table is
+  pooled from
+- Newly failing: none
+- Regressed: none
+- Carried unchanged: J-01 "The signal contract", J-02 "Every signal measured", J-03 "The Playbook
+  lands on /desk", J-07 "The back-scan", J-08 "The evidence view", J-09 "Claude can read the
+  playbook", J-10 "The kept product stands" — all seven re-run automatically on the scoped test
+  copy this run, 7 of 7 passed. J-04 "The continuation family", J-05 "The climax family" and
+  J-06 "The range family" were NOT re-run: the plan did not list them, so they keep their earlier
+  pass; the code behind them has a git-proved zero change this run and I opened one older picture
+  from two of them as a spot-check
+- Anti-goal violations: none new, none open. The record of fourteen earlier items stays closed.
+
+**Reasoning:** I checked the work myself instead of trusting the write-ups. I opened this run's
+target picture and read it: the Desk page's evidence panel carries the new line "Basis: 5 records
+pooled from 2026-06-22, 2026-06-23, 2026-06-24, 2026-06-25, 2026-08-07" under the signature line,
+and the first table row reads 0 measured beside 15 unmeasurable on the signal side and 0 beside 11
+on the baseline side — the same numbers the browser lane says the live data served. The check that
+mattered most, because last time it failed: I read both promised small fixes in the source rather
+than believing the report. The safety list now really names five settings including the bar index
+(desk_playbook_backscan.py:117-123), and the date box really does force its amber colour with the
+important marker, scoped to that one box while the two boxes with the identical fault elsewhere on
+the page stay untouched on purpose. I re-ran the whole backend suite to completion: 2,182 passed, 8
+skipped, none failed, above the 2,168 floor; I re-ran the six changed test files alone and got exit
+0. I asked the running code for the pin (08e471b10130e1e2) and the Claude tool count (exactly 20).
+I used git to prove the measuring rail, the detector code, the rule book, the settings file, the
+tool list and the navigation all have zero changed lines, and — the check nobody else did — that
+the new journey text was inserted only inside the box the rules reserve for it, with the anti-goals
+section unchanged character for character, and that it was written before this run began, so no
+developer authorised his own work. Nothing was written into the owner's records: the guard that
+watches 9,841 protected files reports every one unchanged. Three things I would not sign off
+silently: the previous run's showcase file still tells the owner an amber border was built and
+checked then, which is untrue (it shipped only now); two of this run's proof pictures — the ones
+filed under the evidence view and the Claude-tools journey — are the same image byte for byte and
+show the top of the page rather than either journey's own subject, so those two stand on their
+replayed checks, not on those frames; and the amber border itself was never photographed this run,
+because the old failing check was not re-run, so it is proven in the source only.
+
+**Next-step recommendation:** Halt — the era is achieved. Three small write-up items are carried,
+not fixed, and none is a product fault: the previous run's showcase file must be corrected or
+re-recorded before anyone reads it, because it claims a repair that had not happened yet; the
+amber border needs one photograph to close the loop; and this run's own walkthrough recording,
+which is made at the closing step, must only mark a step as new and checked when it was really
+built and really captured, and must never click a tab on the Desk page, which has none. The one
+sentence for the owner: accept the era as finished and let these three write-up items ride into
+the next chapter, or ask for one short pass that re-records the two showcase files honestly and
+photographs the amber border once.

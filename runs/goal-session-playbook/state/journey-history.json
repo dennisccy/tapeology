@@ -4,30 +4,30 @@
       "id": "J-01",
       "name": "The signal contract — opening-range breaks end to end, lookahead-clean and pre-registered",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-11",
-      "last_passing_iter": "goal-playbook-iter-11",
+      "last_verified_iter": "goal-playbook-iter-12",
+      "last_passing_iter": "goal-playbook-iter-12",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-01 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-01-verify.png ; assertions executed: /desk 'Playbook Signals' -> fill desk-playbook-date-input -> click compute -> honest refusal copy 'is not a recorded trading session'. Richer acceptance capture carried: reports/qa/goal-playbook-iter-8-evidence/ (iter-8 fix-pass set).",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-12-ui-test-results.md UT-J-01 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-12-evidence/J-01-verify.png ; assertions executed: /desk 'Playbook Signals' -> fill desk-playbook-date-input -> compute -> honest refusal copy. Richer acceptance carried: reports/qa/goal-playbook-iter-8-evidence/.",
       "spec_hash": "338cba3f562bbb5b9c4fc0736b6a6744f16cc67a6560373adeb93eaa50d9d3a5"
     },
     "J-02": {
       "id": "J-02",
       "name": "Every signal measured — the rail's own conventions, anchored at the trigger bar",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-11",
-      "last_passing_iter": "goal-playbook-iter-11",
+      "last_verified_iter": "goal-playbook-iter-12",
+      "last_passing_iter": "goal-playbook-iter-12",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-02 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-02-verify.png ; measurement-convention acceptance carried from reports/qa/goal-playbook-iter-8-evidence/.",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-12-ui-test-results.md UT-J-02 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-12-evidence/J-02-verify.png ; measurement-convention acceptance carried from reports/qa/goal-playbook-iter-8-evidence/ (fix-scoped-rig-J-02-J-04-signals-2026-08-07.png opened by the evaluator this run: per-signal forward table with 1m/5m/1h/4h/to_close columns and the seeded-baseline rows).",
       "spec_hash": "daf2c5226d5670fe31f545f446bbff18ae691c80945948aa6b39062313ad423d"
     },
     "J-03": {
       "id": "J-03",
       "name": "The Playbook lands on /desk",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-11",
-      "last_passing_iter": "goal-playbook-iter-11",
+      "last_verified_iter": "goal-playbook-iter-12",
+      "last_passing_iter": "goal-playbook-iter-12",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-03 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-03-verify.png ; section-level acceptance carried from reports/qa/goal-playbook-iter-8-evidence/; empty-state copy 'Playbook not computed for this session.' also legible in reports/qa/goal-playbook-iter-11-evidence/UT-J-09-result.png (full-page /desk capture this run).",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-12-ui-test-results.md UT-J-03 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-12-evidence/J-03-verify.png ; the shipped /desk furniture above the playbook sections (Refresh Data, Run Screen, Top-up, Reconcile Index, Deep Backfill) is legible in this run's J-08-verify.png, which the evaluator opened.",
       "spec_hash": "df6f87df5e792376a4b8bc4b6f7c17b10affd38e579fc65a74e00f1459245834"
     },
     "J-04": {
@@ -37,7 +37,7 @@
       "last_verified_iter": "goal-playbook-iter-11",
       "last_passing_iter": "goal-playbook-iter-11",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-04 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-04-verify.png ; continuation-family acceptance carried from reports/qa/goal-playbook-iter-8-evidence/.",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-04 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-04-verify.png ; continuation-family acceptance carried from reports/qa/goal-playbook-iter-8-evidence/. CARRIED at iter-12 (evidence durability, methodology A.6): outside this iteration's Required-still-passing set, so no lane re-ran it; the detector/measurement code behind it has a git-verified ZERO diff this iteration (desk_playbook.py, desk_playbook_detect.py, desk_playbook_features.py, desk_forward.py) and the /desk Playbook Signals table markup is untouched. Evaluator spot-check this run: opened reports/qa/goal-playbook-iter-8-evidence/fix-scoped-rig-J-02-J-04-signals-2026-08-07.png — JBEXP 'Jump-Base Explosion' long and DBIMP 'Drop-Base Implosion' short rows plus the jbe:long / dbi:short pooled summary rows are legible; does not contradict the recorded status.",
       "spec_hash": "5fb304e920f2f3edb11dfb430cd6e4e0d5641dd2e069d14323cc01a25b79fe24"
     },
     "J-05": {
@@ -47,7 +47,7 @@
       "last_verified_iter": "goal-playbook-iter-11",
       "last_passing_iter": "goal-playbook-iter-11",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-05 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-05-verify.png ; climax-family acceptance carried from reports/qa/goal-playbook-iter-8-evidence/.",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-05 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-05-verify.png ; climax-family acceptance carried from reports/qa/goal-playbook-iter-8-evidence/. CARRIED at iter-12 (evidence durability, methodology A.6): outside this iteration's Required-still-passing set, so no lane re-ran it; the detector/measurement code behind it has a git-verified ZERO diff this iteration (desk_playbook.py, desk_playbook_detect.py, desk_playbook_features.py, desk_forward.py) and the /desk Playbook Signals table markup is untouched.",
       "spec_hash": "93fee8f5f226e288d1c99275e5c6f85e9cae79251b4d415ff9afec5b80df9b5a"
     },
     "J-06": {
@@ -57,48 +57,58 @@
       "last_verified_iter": "goal-playbook-iter-11",
       "last_passing_iter": "goal-playbook-iter-11",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-06 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-06-verify.png ; richer acceptance carried from reports/qa/goal-playbook-iter-10-evidence/UT-02-range-trade-geometry.png (RTAAA long, trigger 102.60 @10:05 ET, invalidation 99.22) + UT-J06-double-top-geometry.png + AUDIT-turned-at-midrange-true-chip.png. evidence_makeup cleared: fresh capture landed this run.",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-06 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-06-verify.png ; richer acceptance carried from reports/qa/goal-playbook-iter-10-evidence/UT-02-range-trade-geometry.png (RTAAA long, trigger 102.60 @10:05 ET, invalidation 99.22) + UT-J06-double-top-geometry.png + AUDIT-turned-at-midrange-true-chip.png. evidence_makeup cleared: fresh capture landed this run. CARRIED at iter-12 (evidence durability, methodology A.6): outside this iteration's Required-still-passing set, so no lane re-ran it; the detector/measurement code behind it has a git-verified ZERO diff this iteration (desk_playbook.py, desk_playbook_detect.py, desk_playbook_features.py, desk_forward.py) and the /desk Playbook Signals table markup is untouched. Evaluator spot-check this run: opened reports/qa/goal-playbook-iter-10-evidence/UT-02-range-trade-geometry.png — RTAAA Range Trade long (trigger 102.60 @10:05 ET, invalidation 99.22) and DTAAA Double Top short rows legible; does not contradict the recorded status.",
       "spec_hash": "406f002e469059c8c929ba36489f76c072789e79e5b5f3a1777b1778252e8a97"
     },
     "J-07": {
       "id": "J-07",
       "name": "The back-scan — every recorded session, resumable and append-only",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-11",
-      "last_passing_iter": "goal-playbook-iter-11",
+      "last_verified_iter": "goal-playbook-iter-12",
+      "last_passing_iter": "goal-playbook-iter-12",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-07 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-07-verify.png ; back-scan acceptance carried from iter-7/iter-8 evidence; the scoped rig's Back-scan Runs row (2026-06-22 -> 2026-06-24, done, 0 reused / 3 recorded / 0 refused / 0 failed) is also legible in reports/qa/goal-playbook-iter-11-evidence/UT-J-09-result.png.",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-12-ui-test-results.md UT-J-07 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-12-evidence/J-07-verify.png ; back-scan acceptance carried from iter-7/iter-8 evidence.",
       "spec_hash": "0b3c151c578cd88e152115e32c453e1a648748bf7e42d5bc81d2617670647468"
     },
     "J-08": {
       "id": "J-08",
       "name": "The evidence view — distributions beside the null, min-n honest",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-11",
-      "last_passing_iter": "goal-playbook-iter-11",
+      "last_verified_iter": "goal-playbook-iter-12",
+      "last_passing_iter": "goal-playbook-iter-12",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-08 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-08-verify.png ; replay assertions are substantive (evidence-cell row open_high_break/long/to_close, plus a below-min-n tagged 1h cell), not a shell string; 'Built from signature: 9ba29d8e3aaaa643' legible in reports/qa/goal-playbook-iter-11-evidence/UT-J-09-result.png.",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-12-ui-test-results.md UT-J-08 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-12-evidence/J-08-verify.png ; NOTE: J-08-verify.png and J-09-verify.png are byte-identical end-of-run frames of the TOP of /desk (sha256 125bda7e...), not the evidence table; the substantive re-verification is the replay's own assertions (desk-evidence-cell-row open_high_break/long/to_close, and a below-min-n tagged 1h cell) resolving unmodified against the WIDENED table (TC-13), plus this run's reports/qa/goal-playbook-iter-12-evidence/UT-J-11-result.png, which the evaluator opened and which shows the shipped columns (n/trunc/median/p25/p75/mean, baseline n, 'low n' flags) intact beside the new ones.",
       "spec_hash": "10b95ac2e424c51cfa2eb39ea9c4d79843bdc9aa0b15b7ae5a11182f31a321c8"
     },
     "J-09": {
       "id": "J-09",
       "name": "MCP contract v4 — 20 read-only tools",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-11",
-      "last_passing_iter": "goal-playbook-iter-11",
+      "last_verified_iter": "goal-playbook-iter-12",
+      "last_passing_iter": "goal-playbook-iter-12",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/qa/goal-playbook-iter-11-evidence/UT-J-09-result.png (full-page /desk on the scoped fixture rig 'fixture-rig-iter8-replay', 20 members; the Playbook Evidence section's static label 'Built from signature: 9ba29d8e3aaaa643' is legible — evaluator opened the image and read it). Results row: reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-09 PASS (browser-QA lane, live await list_tools() = 20 tools with desk_playbook/desk_playbook_evidence at positions 15/16). No longer DEFERRED-BUDGET: a lane re-verified it this run. New golden runs/goal-session-playbook/journey-scripts/J-09.json (goto /desk, expect 'Built from signature:') lints clean; state/golden-gaps is absent (zero gaps). Evaluator's own independent re-checks this run: app.mcp list_tools() = 20 live with both new tools present; full backend suite exit 0, 2168 passed / 8 skipped.",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-12-ui-test-results.md UT-J-09 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-12-evidence/J-09-verify.png ; golden asserts the static '/desk Built from signature:' shell string (byte-unchanged this iteration). Evaluator's own independent live re-check this run: await app.mcp.list_tools() = exactly 20 tools with desk_playbook + desk_playbook_evidence present; both byte-identical-proxy tests green against the ENRICHED body (subset run exit 0).",
       "spec_hash": "614ddbd53a88195220e6b579ecc6889711d4773150f1e8b26c1e8b2a136adc3b"
     },
     "J-10": {
       "id": "J-10",
       "name": "The kept product stands — regression sentinel",
       "status": "passing",
-      "last_verified_iter": "goal-playbook-iter-11",
-      "last_passing_iter": "goal-playbook-iter-11",
+      "last_verified_iter": "goal-playbook-iter-12",
+      "last_passing_iter": "goal-playbook-iter-12",
       "first_seen_iter": "goal-playbook-iter-0",
-      "last_evidence_path": "reports/phase-goal-playbook-iter-11-ui-test-results.md UT-J-10 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-11-evidence/J-10-verify.png ; replay assertions executed: cockpit 'Try: SIM-BUYER' -> Watch -> 'Watching'; /structure load asserts the pinned AAPL wall value 300.11; /desk 'Top-up Runs' / 'Index Reconciliation' / 'Screen Runs' (iter-10's static-furniture fix, not the old fixture hash).",
+      "last_evidence_path": "reports/phase-goal-playbook-iter-12-ui-test-results.md UT-J-10 PASS (deterministic golden replay, demo_runner --mode verify, scoped fixture rig :3301/:8301) + reports/qa/goal-playbook-iter-12-evidence/J-10-verify.png ; replay assertions: cockpit 'Try: SIM-BUYER' -> Watch -> 'Watching'; /structure pinned AAPL wall 300.11; /desk 'Top-up Runs' / 'Index Reconciliation' / 'Screen Runs'. Evaluator-verified zero diff this iteration to desk_forward.py, desk_playbook.py, desk_playbook_detect.py, desk_playbook_features.py, config.py, app/mcp/__init__.py, app/meta.py, lib/api.ts, docs/playbook-detector-spec.md; fingerprint 08e471b10130e1e2 read live.",
       "spec_hash": "47f9a7c5f21a5d62c711ac8436d731206791d63d71eea86377d27366ad1f1242"
+    },
+    "J-11": {
+      "id": "J-11",
+      "name": "Every evidence cell states the basis of its own n",
+      "status": "passing",
+      "last_verified_iter": "goal-playbook-iter-12",
+      "last_passing_iter": "goal-playbook-iter-12",
+      "first_seen_iter": "goal-playbook-iter-12",
+      "last_evidence_path": "reports/qa/goal-playbook-iter-12-evidence/UT-J-11-result.png (evaluator opened it: 'Built from signature: 486619a733a8aa92' with the NEW line 'Basis: 5 records pooled from 2026-06-22, 2026-06-23, 2026-06-24, 2026-06-25, 2026-08-07 (created 2026-08-12T04:43:10.381419Z .. 2026-08-12T04:43:28.553773Z)' directly beneath it; the widened cells table SIGNAL n/trunc/unmeas/sess/median/p25/p75/mean and BASELINE mirror; row open_high_break|long|1m reads signal n=0 unmeas=15 sess=4 and baseline n=0 unmeas=11 sess=4). Results row: reports/phase-goal-playbook-iter-12-ui-test-results.md UT-J-11 PASS (live Chrome MCP, scoped fixture rig, basis line cross-checked byte-for-byte against a direct curl of GET /research/desk/playbook/evidence). New golden runs/goal-session-playbook/journey-scripts/J-11.json asserts only static shell text ('Playbook Evidence', 'Basis:') plus the desk-evidence-signal-n-unmeasured testid — no data-dependent hash (T-11). Evaluator's own re-checks: full backend suite 2182 passed / 8 skipped / 0 failed (100%, above the 2168 floor); the six changed test files re-run to exit 0 (179 tests); fingerprint 08e471b10130e1e2; MCP exactly 20 tools; coherence.md COHERENCE-PASS.",
+      "spec_hash": "a2b8b4d421e584fa0914345a093e217946ce4a4779d95969ca81e2a794efbc51"
     }
   },
   "anti_goal_violations": [
@@ -201,5 +211,5 @@
       "resolved": true
     }
   ],
-  "updated_at": "2026-08-12T05:10:00Z"
+  "updated_at": "2026-08-12T06:40:00Z"
 }

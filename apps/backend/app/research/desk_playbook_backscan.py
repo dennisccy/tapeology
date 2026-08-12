@@ -105,14 +105,21 @@ _TERMINAL_STATES = ("done", "cancelled", "error")
 # exactly (never a fifth value).
 _OUTCOME_KEYS = ("reused", "recorded", "refused_non_session", "failed")
 
-# TC-13's positive scoping guard: the FOUR env vars every playbook/back-scan test or browser-QA rig
+# TC-13's positive scoping guard: the FIVE env vars every playbook/back-scan test or browser-QA rig
 # must scope together (the session ledger's own lesson -- reading a raw ``config.*_dir`` field or
 # scoping the store dir without its log-dir siblings silently orphans writes into the real store).
+# goal-playbook-iter-12 (J-11 passenger): ``TAPEOLOGY_BAR_INDEX_DB`` joins the other four -- the
+# derived bar-lookup index (``routes.py.get_bar_index``) lives under ``.data/`` by default too, so a
+# rig that scopes every OTHER store but leaves this one ambient would still touch the real
+# ``bar_index.db`` on any compute path that reads it. Every real scoped-rig launcher already exports
+# it (``qa_playbook_iter7_fixture_scoped_backend.sh`` and its siblings); this closes the gap between
+# what those scripts already DO and what this guard actually CHECKS.
 _SCOPING_ENV_VARS = (
     "TAPEOLOGY_DESK_PLAYBOOK_DIR",
     "TAPEOLOGY_DESK_PLAYBOOK_LOG_DIR",
     "TAPEOLOGY_DESK_PLAYBOOK_BACKSCAN_LOG_DIR",
     "TAPEOLOGY_DESK_UNIVERSE_DIR",
+    "TAPEOLOGY_BAR_INDEX_DB",
 )
 
 
@@ -159,13 +166,13 @@ def _empty_outcomes() -> dict:
 
 def _assert_scoped(root: str | Path) -> None:
     """A TEST/BROWSER-QA-LANE-ONLY positive guard -- NEVER called from the live HTTP routes below.
-    An operator's REAL compute legitimately runs with none of the four ``_SCOPING_ENV_VARS`` set,
+    An operator's REAL compute legitimately runs with none of the five ``_SCOPING_ENV_VARS`` set,
     resolving to the ambient ``.data/`` store; wiring this into the route would wrongly refuse every
     genuine production compute. Instead, a test fixture or browser-QA rig calls this BEFORE
     triggering any playbook or back-scan compute against a scoped root, so a scoping mistake is
     refused loudly, in the rig itself, before it ever reaches ``run_playbook_and_record``.
 
-    Raises ``PlaybookNotScopedError`` unless EVERY one of the four scoping env vars is set AND
+    Raises ``PlaybookNotScopedError`` unless EVERY one of the five scoping env vars is set AND
     resolves to a path rooted under ``root`` and outside any ``.data/`` directory. Mirrors
     ``scripts/seed_playbook_fixture_rig.py``'s own ``_assert_scoped`` helper (that script's own,
     narrower three-directory version predates this one and is left as-is); this module's version is
@@ -188,8 +195,8 @@ def _assert_scoped(root: str | Path) -> None:
             "playbook/back-scan compute REFUSED -- store directories are not scoped:\n  "
             + "\n  ".join(problems)
             + "\nExport TAPEOLOGY_DESK_PLAYBOOK_DIR / TAPEOLOGY_DESK_PLAYBOOK_LOG_DIR / "
-              "TAPEOLOGY_DESK_PLAYBOOK_BACKSCAN_LOG_DIR / TAPEOLOGY_DESK_UNIVERSE_DIR (all four) "
-              "at the scoped root first."
+              "TAPEOLOGY_DESK_PLAYBOOK_BACKSCAN_LOG_DIR / TAPEOLOGY_DESK_UNIVERSE_DIR / "
+              "TAPEOLOGY_BAR_INDEX_DB (all five) at the scoped root first."
         )
 
 

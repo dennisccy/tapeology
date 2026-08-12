@@ -1,7 +1,7 @@
 {
   "session_id": "playbook",
   "started_at": "2026-08-10T04:38:06.640143Z",
-  "current_iter": 12,
+  "current_iter": 13,
   "cli": "claude",
   "agent_backend": "interactive",
   "halt_config": {
@@ -9,16 +9,16 @@
     "stall_window": 3,
     "regression_halt": true
   },
-  "status": "in_progress",
+  "status": "ABORTED",
   "last_verdict": "GOAL_ACHIEVED",
   "next_depth": "lean",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/playbook",
-  "updated_at": "2026-08-12T03:21:25.928479Z",
-  "finished_at": "2026-08-11T19:04:40.998954Z",
-  "total_iterations": 10,
-  "wall_time_seconds": 71720,
+  "updated_at": "2026-08-12T05:33:35.095850Z",
+  "finished_at": "2026-08-12T06:40:53.417943Z",
+  "total_iterations": 13,
+  "wall_time_seconds": 30593,
   "quota_pause_count": 0,
   "parked_wip_sha": "05bf160"
 }

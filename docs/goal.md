@@ -701,6 +701,158 @@ J-03 section), then J-07 → J-08 → J-09, with J-10 guarding continuously.
 
 <!-- AUTO:journeys -->
 
+- **J-11: Every evidence cell states the basis of its own n**
+  - Steps:
+    1. Extend the fold in `app/research/desk_playbook_evidence.py` — the ALREADY-registered
+       "Evidence aggregates" Data Contract row, same owner, same serving endpoint
+       `GET /research/desk/playbook/evidence`, no new row and no new endpoint — so every served
+       cell carries the exclusions it already computes and then discards: `signal.n_unmeasured`
+       (pooled events whose horizon leaf carries `return_pct: null`, which
+       `desk_forward._collect_measures` skips with no counter — today 234 of the real corpus's
+       300 recorded signals carry exactly that at `1m` under the recorded reason "the 1m horizon
+       is finer than the 5m touch series", so `double_top:short` at `1m` serves `n: 31`,
+       `n_truncated: 0` while 59 of its 90 signals were never measurable there);
+       `baseline.n_truncated` + `baseline.n_unmeasured` (the baseline pool's own exclusion counts,
+       computed today as `_baseline_truncated` and thrown away — `capitulation:long` at `4h`
+       serves `n_baseline: 8` beside a signal cell that honestly says `n: 25, n_truncated: 4`);
+       and `signal.n_sessions` / `baseline.n_sessions`, the number of distinct recorded session
+       dates that contributed to the pool.
+    2. Add a payload-level `basis` block for the POOLED signature — `{dates, n_records,
+       created_span}` — built by the SAME helper that already builds each `other_signatures`
+       entry (extract it once and call it twice; never a second implementation), so the pooled
+       signature discloses exactly what every non-pooled signature already does. Today the table
+       pools 4 session dates (2026-06-22, 2026-06-23, 2026-06-24, 2026-08-07) and says so nowhere.
+    3. Every new value folds from the per-file projections `PlaybookEvidenceCache` ALREADY stores
+       (each carries `session_date`, `recorded_at`, and the full `forward` leaves): no cache
+       schema change and no cache migration, no bar read, no re-measurement, and no call into
+       `desk_forward._measure_from` — the counts read absences that were recorded at compute time.
+    4. Update `EVIDENCE_REGISTER` so its "the exclusion counted, never silently dropped" sentence
+       covers the unmeasurable class and the baseline column too, and names the basis; the copy
+       stays descriptive with no probability, expectancy, edge, or significance word, and states
+       nothing about the excluded observations beyond their count and the recorded reason.
+    5. Render them on the `/desk` Playbook Evidence section as served: the basis line beside the
+       existing "Built from signature:" line, and the new counts in the cells table — no client
+       arithmetic; extend `tests/test_desk_ui_guards.py`'s `_PRICE_ARITHMETIC_FIELDS` with each
+       new served numeric plus a seeded counter-test; `lib/types.ts` + `lib/api.ts` in the
+       established style; new `data-testid`s only, statically swept against the stored replay
+       scripts (T-11).
+  - Acceptance: `GET /research/desk/playbook/evidence` remains the single owner and single
+    serving endpoint of every value here (the blueprint's already-registered "Evidence
+    aggregates" row — no new row, no new owner, no second computation path), and its
+    `basis.dates` / `basis.created_span` are byte-identical to what the shipped
+    `?signature=<that same signature>` inspect branch serves for the same signature, asserted by
+    test — one implementation, two views. The GET stays a pure function of the recorded record
+    set: identical files in, byte-identical body out, asserted with the projection cache cold AND
+    warm and again after deleting the cache DB, with no cache-schema migration anywhere. A
+    hand-computed fixture over at least two recorded session dates — one of them a 5m-basis
+    session whose `1m` leaves carry the recorded null reason — reproduces `n`, `n_truncated`,
+    `n_unmeasured`, `n_sessions`, `n_baseline`, and `basis` exactly, and every already-served
+    number (`n`, `median_pct`, `p25_pct`, `p75_pct`, `mean_pct`, `below_min_n`, the breach
+    counts) is unchanged for the identical record set. No playbook record file is written,
+    rewritten, backfilled, or re-keyed: the new fields are served-only, never parameters, so
+    `playbook_parameters()` and `playbook_input_signature` do not move and every previously
+    recorded file stays byte-identical on disk (SHA-256 listing). The `default` profile, `v1`,
+    and the engine's equivalence output stay byte-identical, `Config().config_fingerprint()`
+    still prints `08e471b10130e1e2`, and zero new `Config` fields are added. MCP stays exactly 20
+    tools with `desk_playbook_evidence` still a byte-identical proxy of the enriched body. In a
+    real browser after the T-9 clean rebuild, on the scoped fixture rig, the Playbook Evidence
+    section shows the basis line and at least one cell whose `n_unmeasured` is greater than zero
+    beside its own `n` (screenshot; DOM-content reveals only — no screenshot ⇒ `unknown`), and
+    every shipped `/desk` section still renders as shipped in the same pass; the extended guard
+    tests (including the seeded counter-test on each new served numeric), the copy lint, and the
+    full backend suite are green under the unchanged pin. A `[NEW]`-flagged demo-narrator
+    walkthrough step walks the enriched Playbook Evidence section and is recorded against a state
+    that actually renders those fields — no step may claim `new`/`verified` for anything not
+    built. No PnL-ledger row is written and no R, $, or return figure is produced anywhere: the
+    playbook measures no PnL (a signal is a recorded observation, never a trade, and this era's
+    anti-goals keep the promotion ledger and the champion pointer untouched), so the
+    operator-visible before/after of this enhancement is the evidence table's own n shown with
+    its basis, not a promotion record. *(Keyless core; browser-verifiable.)*
+
+- **J-12: Every other signature says which of its own inputs made it other**
+  - Steps:
+    1. Extend `_fold_other_signatures` in `app/research/desk_playbook_evidence.py` — the
+       ALREADY-registered "Evidence aggregates" Data Contract row, same owner, same serving
+       endpoint `GET /research/desk/playbook/evidence`, no new row, no new endpoint, no new MCP
+       tool — so every signature it lists also states WHICH hashed input made it differ from the
+       pooled one. `compute_playbook_input_signature` (`desk_playbook.py:322`) hashes exactly
+       three things — the sorted `(symbol, timeframe, series_id, checksum)` tuples of
+       members ∪ {SPY} at `1m`/`5m`, the `config_fingerprint`, and the canonical
+       `playbook_parameters()` blob — and every recorded file already carries TWO of the three
+       verbatim (`parameters`, `config_fingerprint`), so each listed entry gains
+       `parameters_match`, `changed_parameter_keys` (sorted key NAMES only, never their values),
+       `config_fingerprint_match`, and `differs_in`: the list of hashed inputs proven to differ.
+       Today's real store makes the distinction concrete — its two non-pooled signatures differ
+       from the pooled one in `setups` alone (plus two constants that did not exist yet), i.e. the
+       detector rules changed; a bar top-up would instead leave both recorded pins identical.
+    2. Keep `bar_inputs` HONEST, because it is the one input no record stores: it may appear in
+       `differs_in` ONLY when both recorded pins match the current ones, where it is a proof by
+       elimination (nothing else is hashed). When a recorded pin differs, the bar listing's own
+       state is not recorded anywhere, so it is neither claimed nor denied — the served shape says
+       what is proven and stays silent on what is not (a missing claim, never a guessed one).
+    3. Bound the cost and change no cache: every record at ONE signature necessarily carries the
+       identical `parameters` and `config_fingerprint` (both are hashed INTO that signature), so
+       the fold resolves each other signature's pins from ONE representative file per distinct
+       signature through `PlaybookStore.get` — the `inspect_signature` non-hot-path precedent —
+       never once per file, never a bar read, never a call into `_measure_from`. If instead the
+       pins are carried in the per-file projection, the cached projection must carry its own
+       version marker so an already-cached old-shape row is an honest MISS rather than a wrong or
+       crashing read; either way there is no cache-schema migration and no re-measurement.
+    4. Update `EVIDENCE_REGISTER` so its "listed, never pooled" sentence also names what a listing
+       now discloses AND its boundary: another signature's own thresholds, distributions, and
+       cells are never served beside these — a signature is identified, never compared, and no
+       parameter value is ever shown next to an outcome number (the era's no-threshold-fitting
+       rail, restated where a reader could otherwise expect a comparison). Copy stays descriptive:
+       no probability, expectancy, edge, or significance word; `tests/test_copy_discipline.py`
+       green unmodified.
+    5. Render it verbatim on the `/desk` Playbook Evidence section's existing "Other signatures
+       (listed, never pooled)" list — one served phrase per entry, no client-side classification —
+       and read the ALREADY-served `n_records` for each entry's record count instead of the
+       `entry.dates.length` the section derives client-side today (the count is the server's;
+       `PlaybookEvidenceOtherSignatures`, `page.tsx:3908`). Extend
+       `tests/test_desk_ui_guards.py`'s `_PRICE_ARITHMETIC_FIELDS` with `entry.n_records` plus a
+       seeded counter-test; `lib/types.ts` + `lib/api.ts` in the established style; new
+       `data-testid`s only, statically swept against the stored replay scripts (T-11).
+  - Acceptance: `GET /research/desk/playbook/evidence` remains the single owner and single serving
+    endpoint of every value here — no new Data Contract row, no new owner, no second computation
+    path, and no client-side derivation of any of it (the `/desk` section renders the served
+    fields verbatim, including the record count it derives itself today). The evidence still pools
+    exactly ONE signature: `cells`, `invalidation_breached`, and `basis` are byte-identical to
+    what they serve today for the identical record set, no non-pooled signature's signals,
+    distributions, thresholds, or cells appear anywhere in the payload or on the page, and the
+    attribution is proven by three keyless fixture states asserted separately — a monkeypatched
+    detector constant (`parameters`, with `changed_parameter_keys` naming exactly the moved keys),
+    a different `config_fingerprint` argument passed to `fold_evidence` (`config_fingerprint`; the
+    real pin is never touched and no `Config` field is added), and an added bar series with both
+    recorded pins unchanged (`bar_inputs`, the elimination case) — plus a fourth asserting that
+    when a recorded pin differs, `bar_inputs` is absent from `differs_in` rather than guessed. The
+    GET stays a pure function of the recorded record set: identical files in, byte-identical body
+    out, asserted with the projection cache cold AND warm and again after deleting the cache DB,
+    with no cache-schema migration; the fold performs at most one additional record read per
+    DISTINCT other signature (asserted by call count, so a store with many files at few signatures
+    cannot become O(files)), and reads no bars at all (stub-store-that-raises test). No playbook
+    record file is written, rewritten, backfilled, or re-keyed: the new fields are served-only and
+    never parameters, so `playbook_parameters()` and `playbook_input_signature` do not move and
+    every previously recorded file stays byte-identical on disk (SHA-256 listing). The `default`
+    profile, `v1`, and the engine's equivalence output stay byte-identical,
+    `Config().config_fingerprint()` still prints `08e471b10130e1e2`, zero new `Config` fields, and
+    MCP stays exactly 20 tools with `desk_playbook_evidence` still a byte-identical proxy of the
+    enriched body. In a real browser after the T-9 clean rebuild, on the scoped fixture rig, ONE
+    screenshot shows a state where the pooled signature holds zero records — the shipped empty
+    cells state — and, in the same frame, at least one other signature carrying its own record
+    count and its served attribution phrase (DOM-content reveals only; no screenshot ⇒ `unknown`,
+    never `passing`), and every shipped `/desk` section still renders as shipped in the same pass;
+    the extended guard test with its seeded counter-test, the copy lint, and the full backend
+    suite are green under the unchanged pin. A `[NEW]`-flagged demo-narrator walkthrough step
+    walks the Other signatures list in the state it was actually captured in: a step may mark
+    `new`/`verified` only for what this iteration actually built AND photographed, and no step may
+    click an affordance `/desk` does not have. No PnL-ledger row is written and no R, $, or return
+    figure is produced anywhere — the playbook measures no PnL (a signal is a recorded
+    observation, never a trade, and this era's anti-goals keep the promotion ledger and the
+    champion pointer untouched) — so the operator-visible before/after of this enhancement is an
+    evidence table that, when its own pool is empty or thin, names which of its three hashed
+    inputs moved instead of leaving the operator to guess. *(Keyless core; browser-verifiable.)*
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "journey": "J-11",
+  "name": "Every evidence cell states the basis of its own n",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-11", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Evidence"}},
+    {"n": 2, "journey": "J-11", "action": {"type": "wait_for", "target": {"testid": "desk-evidence-section"}}, "expect": {"text": "Basis:"}},
+    {"n": 3, "journey": "J-11", "action": {"type": "wait_for", "target": {"testid": "desk-evidence-section"}}, "expect": {"target": {"testid": "desk-evidence-signal-n-unmeasured"}}}
+  ]
+}

@@ -64,6 +64,7 @@ import type {
   DeskPlaybookBackscanRunsListResult,
   DeskPlaybookComputeSnapshot,
   DeskPlaybookEvidence,
+  DeskPlaybookEvidenceBasis,
   DeskPlaybookEvidenceBreach,
   DeskPlaybookEvidenceCell,
   DeskPlaybookEvidenceOtherSignature,
@@ -3768,6 +3769,12 @@ function PlaybookEvidenceCellRow({ cell }: { cell: DeskPlaybookEvidenceCell }) {
         {fmt(cell.signal.n, 0)}
       </td>
       <td className={ROW_NUMERIC_CELL}>{fmt(cell.signal.n_truncated, 0)}</td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-signal-n-unmeasured">
+        {fmt(cell.signal.n_unmeasured, 0)}
+      </td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-signal-n-sessions">
+        {fmt(cell.signal.n_sessions, 0)}
+      </td>
       <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-signal-median">
         {fmt(cell.signal.median_pct)}
       </td>
@@ -3776,6 +3783,15 @@ function PlaybookEvidenceCellRow({ cell }: { cell: DeskPlaybookEvidenceCell }) {
       <td className={ROW_NUMERIC_CELL}>{fmt(cell.signal.mean_pct)}</td>
       <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-baseline-n">
         {fmt(cell.baseline.n_baseline, 0)}
+      </td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-baseline-n-truncated">
+        {fmt(cell.baseline.n_truncated, 0)}
+      </td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-baseline-n-unmeasured">
+        {fmt(cell.baseline.n_unmeasured, 0)}
+      </td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-baseline-n-sessions">
+        {fmt(cell.baseline.n_sessions, 0)}
       </td>
       <td className={ROW_NUMERIC_CELL}>{fmt(cell.baseline.median_pct)}</td>
       <td className={ROW_NUMERIC_CELL}>{fmt(cell.baseline.p25_pct)}</td>
@@ -3800,7 +3816,7 @@ function PlaybookEvidenceCellRow({ cell }: { cell: DeskPlaybookEvidenceCell }) {
 function PlaybookEvidenceCellsTable({ cells }: { cells: DeskPlaybookEvidenceCell[] }) {
   return (
     <div className="overflow-x-auto">
-      <table data-testid="desk-evidence-cells-table" className="w-full min-w-[900px] border-collapse text-xs">
+      <table data-testid="desk-evidence-cells-table" className="w-full min-w-[1180px] border-collapse text-xs">
         <thead>
           <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
             <th className="px-1.5 py-1 text-left" rowSpan={2}>
@@ -3812,10 +3828,10 @@ function PlaybookEvidenceCellsTable({ cells }: { cells: DeskPlaybookEvidenceCell
             <th className="px-1.5 py-1 text-left" rowSpan={2}>
               Measure
             </th>
-            <th className="px-1.5 py-1 text-center" colSpan={6}>
+            <th className="px-1.5 py-1 text-center" colSpan={8}>
               Signal
             </th>
-            <th className="px-1.5 py-1 text-center" colSpan={5}>
+            <th className="px-1.5 py-1 text-center" colSpan={8}>
               Baseline
             </th>
             <th className="px-1.5 py-1 text-center" rowSpan={2}>
@@ -3825,11 +3841,16 @@ function PlaybookEvidenceCellsTable({ cells }: { cells: DeskPlaybookEvidenceCell
           <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
             <th className="px-1.5 py-1 text-right">n</th>
             <th className="px-1.5 py-1 text-right">trunc</th>
+            <th className="px-1.5 py-1 text-right">unmeas</th>
+            <th className="px-1.5 py-1 text-right">sess</th>
             <th className="px-1.5 py-1 text-right">median</th>
             <th className="px-1.5 py-1 text-right">p25</th>
             <th className="px-1.5 py-1 text-right">p75</th>
             <th className="px-1.5 py-1 text-right">mean</th>
             <th className="px-1.5 py-1 text-right">n</th>
+            <th className="px-1.5 py-1 text-right">trunc</th>
+            <th className="px-1.5 py-1 text-right">unmeas</th>
+            <th className="px-1.5 py-1 text-right">sess</th>
             <th className="px-1.5 py-1 text-right">median</th>
             <th className="px-1.5 py-1 text-right">p25</th>
             <th className="px-1.5 py-1 text-right">p75</th>
@@ -3903,6 +3924,21 @@ function PlaybookEvidenceOtherSignatures({ entries }: { entries: DeskPlaybookEvi
   );
 }
 
+// goal-playbook-iter-12 (J-11): the pooled/default signature's own basis disclosure -- a NEW line
+// beside the existing "Built from signature:" line above it, never replacing or altering that
+// line's own text. Own component (own `basis` binding) so the price-arithmetic guard's naming
+// convention (`basis.n_records`, matching `plan.*`/`compute.*`/`outcomes.*` before it) reaches this
+// served numeric the same way it reaches every other served block on this page.
+function PlaybookEvidenceBasisLine({ basis }: { basis: DeskPlaybookEvidenceBasis }) {
+  return (
+    <p className="mb-3 text-xs text-slate-500" data-testid="desk-evidence-basis">
+      Basis: {basis.n_records} record{basis.n_records === 1 ? "" : "s"} pooled from{" "}
+      {basis.dates.length === 0 ? "no recorded dates" : basis.dates.join(", ")}
+      {basis.created_span ? ` (created ${basis.created_span.from} .. ${basis.created_span.to})` : ""}
+    </p>
+  );
+}
+
 function PlaybookEvidenceSection({
   result,
 }: {
@@ -3926,6 +3962,7 @@ function PlaybookEvidenceSection({
       <p className="mb-1 text-xs text-slate-400" data-testid="desk-evidence-signature">
         Built from signature: <span className="font-mono text-slate-300">{data.signature}</span>
       </p>
+      <PlaybookEvidenceBasisLine basis={data.basis} />
       <p className="mb-3 text-xs text-slate-500">{data.register}</p>
       {hasAnySignal ? (
         <PlaybookEvidenceCellsTable cells={data.cells} />
@@ -5588,7 +5625,16 @@ function PlaybookSection({
             onChange={(e) => onDateInputChange(e.target.value)}
             placeholder="yyyy-MM-dd"
             aria-invalid={validated.error !== null}
-            className={`${ASOF_INPUT_CLASS} ${validated.error !== null ? "border-amber-500" : ""}`}
+            // goal-playbook-iter-12 passenger fix: ASOF_INPUT_CLASS's own `border-slate-700` and a
+            // plain `border-amber-500` are an equal-CSS-specificity Tailwind collision (both
+            // single-class border-color utilities), so the compiled stylesheet's own utility order
+            // silently decides the tie regardless of this class list's order -- and it is
+            // border-slate-700 that wins, leaving the border grey on an invalid value. Tailwind's
+            // `!` important modifier forces the error color to win, scoped to this ONE input only;
+            // ASOF_INPUT_CLASS itself and every other call site are untouched (still plain
+            // "border-amber-500", still losing the tie -- carried, not fixed, per this iteration's
+            // own scoping decision).
+            className={`${ASOF_INPUT_CLASS} ${validated.error !== null ? "!border-amber-500" : ""}`}
           />
         </label>
         {validated.error !== null && (

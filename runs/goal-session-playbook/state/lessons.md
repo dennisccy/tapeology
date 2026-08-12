@@ -209,3 +209,31 @@ the page never renders (`demo-results.md` recorded it as a soft note and capture
 artifacts are non-blocking for the gate, but they are what the owner reads at era close.
 **Applies to:** any era-closing/finalization pass — verify demo narration against the product diff
 and the page's real testids before the showcase artifacts are committed.
+
+## iter-12 — 2026-08-12T06:40:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The iter-11 amber-border defect was never a JSX bug — `ASOF_INPUT_CLASS`'s
+`border-slate-700` and a conditionally appended `border-amber-500` are two single-class Tailwind
+border-color utilities of EQUAL specificity, so the compiled stylesheet's own declaration order,
+not the class list's order, silently decides the winner. The fix is Tailwind v3's `!` important
+modifier (`!border-amber-500`). Its guard test (`test_desk_ui_guards.py`
+`test_desk_playbook_date_input_amber_border_fix_is_scoped_to_itself_only`) is a SOURCE scan: it
+proves the class is present and scoped, never that the rendered pixel is amber — so a class-name
+guard is not a substitute for the one browser row that was dropped from the plan.
+**Applies to:** any iteration appending a conditional Tailwind utility that collides with a shared
+base-class constant (the same unfixed collision still sits on the Refresh Data From/To inputs at
+`page.tsx:4448/4464`), and any iteration whose only proof of a visual fix is a source-scan test.
+
+## iter-12 — 2026-08-12T06:40:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The deterministic replay lane's `J-<id>-verify.png` frames are end-of-run viewport
+snaps, not acceptance captures — this run's J-08 and J-09 frames are byte-identical to each other
+(sha256 `125bda7e...`) and both show the top of `/desk`, nowhere near either journey's subject.
+The replay's real evidence is its assertion list, so a journey whose golden asserts substantive
+content (J-08's two `desk-evidence-cell-row` selectors) is genuinely re-verified while its
+screenshot proves nothing; a journey whose golden asserts only a shell string is not. Read the
+golden JSON before crediting a replay PASS.
+**Applies to:** every evaluator scoring a lean iteration off `regression-replay-results.md`, and
+any iteration adding or rewriting a `journey-scripts/*.json` golden.

@@ -185,6 +185,13 @@ def test_structure_prefill_guard_can_fail_on_a_seeded_violation():
 # the invalidation-breach line renders `breach.breached_count`/`breach.total_count` verbatim --
 # every one of these is a straight pass-through of `GET /research/desk/playbook/evidence`, never a
 # client-recomputed spread, ratio, or rate.
+# goal-playbook-iter-12 (J-11): extended AGAIN for the Playbook Evidence section's five NEW served
+# exclusion counts -- `cell.signal.*` gains `n_unmeasured`/`n_sessions` and `cell.baseline.*` gains
+# `n_truncated`/`n_unmeasured`/`n_sessions` (already-declared bindings widened, never a new one),
+# plus the new basis line's own `basis.n_records` (`PlaybookEvidenceBasisLine`'s own prop, the
+# `plan.*`/`compute.*`/`outcomes.*` top-level-binding precedent). No client-side arithmetic on any
+# of these is ever legitimate: they are exclusion/record COUNTS, not prices, but this panel's own
+# IN SCOPE contract is "no client-side arithmetic on served numerics" full stop, the J-07 precedent.
 _PRICE_ARITHMETIC_FIELDS = (
     r"row\.(?:distance_bps|price_low|price_high|reference_close"
     r"|opposite_band\.(?:distance_bps|price_low|price_high|band_score)"
@@ -203,9 +210,11 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|plan\.(?:total|missing)"
     r"|compute\.(?:planned_total|completed)"
     r"|outcomes\.(?:reused|recorded|refused_non_session|failed)"
-    r"|cell\.signal\.(?:n|n_truncated|median_pct|p25_pct|p75_pct|mean_pct)"
-    r"|cell\.baseline\.(?:n_baseline|median_pct|p25_pct|p75_pct|mean_pct)"
+    r"|cell\.signal\.(?:n|n_truncated|n_unmeasured|n_sessions|median_pct|p25_pct|p75_pct|mean_pct)"
+    r"|cell\.baseline\.(?:n_baseline|n_truncated|n_unmeasured|n_sessions|median_pct|p25_pct|p75_pct"
+    r"|mean_pct)"
     r"|breach\.(?:breached_count|total_count)"
+    r"|basis\.(?:n_records)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -371,6 +380,36 @@ def test_desk_page_price_arithmetic_guard_catches_evidence_field_arithmetic():
 
     seeded_rate = "const rate = breach.breached_count / breach.total_count;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_rate) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_evidence_basis_field_arithmetic():
+    """goal-playbook-iter-12 (J-11) counter-test: the extended guard catches arithmetic on the five
+    NEW exclusion-count bindings (`cell.signal.n_unmeasured`/`n_sessions`,
+    `cell.baseline.n_truncated`/`n_unmeasured`/`n_sessions`) and the new basis line's own
+    `basis.n_records` -- proving the widened `cell.signal.*`/`cell.baseline.*` groups and the new
+    `basis.*` group actually catch a violation, the "a lint that cannot fail proves nothing"
+    precedent applied to each new field individually."""
+    seeded_signal_unmeasured = "const measured = cell.signal.n - cell.signal.n_unmeasured;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_signal_unmeasured) is not None
+
+    seeded_signal_sessions = "const perSession = cell.signal.n / cell.signal.n_sessions;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_signal_sessions) is not None
+
+    seeded_baseline_truncated = "const clean = cell.baseline.n_baseline - cell.baseline.n_truncated;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_baseline_truncated) is not None
+
+    seeded_baseline_unmeasured = "const total = cell.baseline.n_baseline + cell.baseline.n_unmeasured;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_baseline_unmeasured) is not None
+
+    seeded_baseline_sessions = "const perSession = cell.baseline.n_baseline / cell.baseline.n_sessions;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_baseline_sessions) is not None
+
+    seeded_basis = "const perDate = basis.n_records / basis.dates.length;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_basis) is not None
+
+    # And the pattern does NOT over-match: the real page's own guard test below still finds zero
+    # hits, so this new coverage does not accidentally flag legitimate, non-arithmetic JSX.
+    assert _PRICE_ARITHMETIC_PATTERN.search("const label = `${basis.n_records} records`;") is None
 
 
 # goal-playbook-iter-4 audit (F1): `base_lows_ascending` is ONE served field name carrying the
@@ -884,3 +923,97 @@ def test_desk_row_label_prefix_guard_can_fail_on_a_seeded_violation():
     # and the pin itself is non-vacuous: J-13/J-14 really do assert those literal texts today
     assert any(t.startswith("band ") for t in _golden_expected_texts("J-13.json"))
     assert any(t.startswith("opposite ") for t in _golden_expected_texts("J-14.json"))
+
+
+# --- goal-playbook-iter-12 (J-11 passenger, TC-14): the Playbook Signals date input's amber border -
+# ASOF_INPUT_CLASS's own `border-slate-700` and a plain, conditionally-appended `border-amber-500`
+# are an equal-CSS-specificity Tailwind collision (both single-class border-color utilities), so the
+# COMPILED stylesheet's own utility order silently decides the tie regardless of this class list's
+# order in the JSX -- and it is `border-slate-700` that wins live, leaving the input grey on an
+# invalid value. The fix (Tailwind's `!` important modifier) is scoped to `desk-playbook-date-input`
+# alone: `ASOF_INPUT_CLASS` itself and its other four call sites (Refresh Data From/To -- the SAME
+# collision, deliberately carried; Backscan/Deep-backfill From/To -- never had the amber affordance
+# at all) must stay byte-unchanged.
+
+
+def _asof_input_class_expr(source: str, testid: str) -> str:
+    """The `className={...}` JSX expression immediately following one
+    `data-testid="<testid>"` input -- found by a brace-walk from the FIRST `className={` after the
+    testid (this page's own consistent attribute order: data-testid precedes className on every
+    ASOF-styled input), mirroring `_extract_function`'s own walk-from-a-known-anchor style."""
+    start = source.index(f'data-testid="{testid}"')
+    class_start = source.index("className={", start)
+    open_brace = class_start + len("className=")
+    depth = 0
+    for index in range(open_brace, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[class_start : index + 1]
+    raise AssertionError(f"{testid}'s className expression never closes")
+
+
+def test_desk_playbook_date_input_amber_border_fix_is_scoped_to_itself_only():
+    """TC-14: `desk-playbook-date-input`'s own className now forces the amber border to win on an
+    invalid value; `ASOF_INPUT_CLASS`'s own definition, the Refresh Data From/To inputs sharing the
+    IDENTICAL (still unfixed) collision, and the Backscan/Deep-backfill From/To inputs (which never
+    had the amber affordance) all stay byte-unchanged."""
+    source = _DESK_PAGE.read_text()
+
+    playbook_input_class = _asof_input_class_expr(source, "desk-playbook-date-input")
+    assert '"!border-amber-500"' in playbook_input_class, (
+        "desk-playbook-date-input's className must force the amber border with Tailwind's `!` "
+        "important modifier -- a bare `border-amber-500` loses the equal-specificity tie against "
+        "ASOF_INPUT_CLASS's own border-slate-700 and the input stays grey on an invalid value"
+    )
+
+    # ASOF_INPUT_CLASS's own definition is untouched: still carries border-slate-700, never amber.
+    class_def_start = source.index("const ASOF_INPUT_CLASS =")
+    class_def_end = source.index(";", class_def_start)
+    class_def = source[class_def_start:class_def_end]
+    assert "border-slate-700" in class_def
+    assert "amber" not in class_def
+
+    # The Refresh Data From/To inputs share the IDENTICAL, still-UNFIXED collision (carried,
+    # per this iteration's own scoping decision) -- neither gained the `!` fix.
+    unfixed_pattern = '${ASOF_INPUT_CLASS} ${dayRangeError !== null ? "border-amber-500" : ""}`'
+    assert source.count(unfixed_pattern) == 2, (
+        "the Refresh Data From/To inputs' own border collision must stay byte-unchanged and "
+        "unforced -- only desk-playbook-date-input is fixed this iteration"
+    )
+    assert "!border-amber-500" not in unfixed_pattern
+
+    # The Backscan/Deep-backfill From/To inputs never had the amber affordance at all -- still four
+    # bare `className={ASOF_INPUT_CLASS}` call sites, none of them this one.
+    assert source.count("className={ASOF_INPUT_CLASS}") == 4
+
+
+def test_desk_playbook_date_input_amber_border_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- a lint that cannot fail proves nothing."""
+    seeded = (
+        'data-testid="desk-playbook-date-input"\n'
+        "          value={dateInput}\n"
+        "          className={`${ASOF_INPUT_CLASS} "
+        '${validated.error !== null ? "border-amber-500" : ""}`}\n'
+    )
+    extracted = _asof_input_class_expr(seeded, "desk-playbook-date-input")
+    assert "!border-amber-500" not in extracted
+    assert "border-amber-500" in extracted  # the pre-fix shape really is present to catch
+
+
+def test_the_asof_class_expr_extractor_returns_the_right_inputs_own_expression():
+    """A counter-test for the helper itself: it must not accidentally return a DIFFERENT input's
+    className (e.g. the first one it happens to find in the file) -- each of the five ASOF-styled
+    inputs must extract its OWN expression."""
+    seeded = (
+        'data-testid="alpha"\n'
+        '          className={ASOF_INPUT_CLASS}\n'
+        'data-testid="beta"\n'
+        "          className={`${ASOF_INPUT_CLASS} "
+        '${cond ? "border-amber-500" : ""}`}\n'
+    )
+    assert _asof_input_class_expr(seeded, "alpha") == "className={ASOF_INPUT_CLASS}"
+    beta = _asof_input_class_expr(seeded, "beta")
+    assert "border-amber-500" in beta and "ASOF_INPUT_CLASS" in beta

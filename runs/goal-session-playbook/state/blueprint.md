@@ -57,6 +57,24 @@ module's `_assert_scoped` positive test/fixture guard gains a fifth required env
 (`TAPEOLOGY_BAR_INDEX_DB`), closing a latent operational hazard iteration 10's audit found and left
 open. No new page, no new nav entry, no new owner/endpoint, no new served field.
 
+STATUS AS OF ITERATION 12 (freshened from the iteration-11 status above — additive status-label
+update only, no IA/Data-Contract structural change): iteration 11 ran as an evidence-only pass, so
+items (2) and (3) named in the iteration-11 status above were in fact NOT built (only the J-09
+golden landed) — GOAL_ACHIEVED was still granted (era's own bar was fully met; neither unbuilt item
+is a Must-have acceptance line or an anti-goal) and both were carried forward as disclosed, open
+defects. All ten Must-have journeys remain SHIPPED and passing. The goal-proposer then appended an
+eleventh journey inside `docs/goal.md`'s `AUTO:journeys` marker: **J-11 "Every evidence cell states
+the basis of its own n."** Iteration 12 targets J-11 — it adds SEVEN new served fields to the
+ALREADY-registered "Evidence aggregates" row below (`cells[].signal.n_unmeasured`,
+`cells[].signal.n_sessions`, `cells[].baseline.n_truncated`, `cells[].baseline.n_unmeasured`,
+`cells[].baseline.n_sessions`, a payload-level `basis: {dates, n_records, created_span}` for the
+pooled/default signature, and `other_signatures[].n_records`) — same owner
+(`desk_playbook_evidence.py`), same endpoint (`GET /research/desk/playbook/evidence`), no new row,
+no new owner, no new endpoint, no cache-schema change, no new `Config` field. It also finally
+carries the still-open UT-05 border-color fix and the `TAPEOLOGY_BAR_INDEX_DB` scoping-guard entry
+as cheap passengers (both test/CSS-only, neither touching the Data Contract or the IA). No new
+page, no new nav entry, no owner/endpoint change beyond the seven additive fields named above.
+
 BASELINE STATE (iteration 0, kept verbatim for history): none of the six new rows below existed
 in the codebase yet — confirmed by grep (no `desk_playbook*.py` module anywhere under
 `apps/backend/app/research/`, no `playbook` string in `desk_routes.py` or `app/mcp/__init__.py`,
@@ -94,7 +112,10 @@ Tapeology
                                   • Playbook Evidence — the per-(setup, side) distribution
                                     table beside the pooled baseline, min-n tags, PLUS (iteration
                                     9) a visible built-from-signature line (J-08, SHIPPED;
-                                    signature display TARGETED iteration 9)
+                                    signature display TARGETED iteration 9), PLUS (iteration 12,
+                                    TARGET) a basis line (dates/n_records/created_span for the
+                                    pooled signature) and unmeasured/session-count disclosures
+                                    beside n on each cell (J-11)
 ```
 
 **Feature / journey homes** (each reachable in ≤2 clicks from the nav):
@@ -111,6 +132,7 @@ Tapeology
 | J-08 Evidence view (distributions beside the null, min-n honest) — SHIPPED | `/desk` (new Playbook Evidence section) | Desk |
 | J-09 MCP contract v4 (20 read-only tools) — SHIPPED (iteration 9); iteration 11 adds a golden replay script + same-run re-verification (test coverage only, no owner/endpoint change) | *(MCP tool surface only; no page — `desk_playbook`/`desk_playbook_evidence` proxy the rows below)* | — |
 | J-10 Kept-product regression sentinel — SHIPPED (closing, iteration 9); iteration 10 re-verifies it at full depth (era-closing regression sweep) and fixes its `J-10.json` golden-replay step 6 + the scoped rig's `/structure` chart evidence gap (both test/fixture infrastructure, no product surface change) | `/`, `/structure`, `/desk` (every shipped section) | Cockpit, Structure, Desk |
+| J-11 Evidence cells state the basis of their own n (per-cell exclusion counts + pooled-signature basis) — TARGET iteration 12 | same as J-08: `/desk` (Playbook Evidence section) — no new home | Desk |
 
 ## Data Contract
 
@@ -123,12 +145,14 @@ a second way; per `docs/goal.md`'s Product Shape section):** bars/candles → `b
 (`merged_bars`, `apps/backend/app/research/bars.py:883`) + `bar_index`; session honesty →
 `desk_sessions.py` (`recorded_session_dates` :129, `refuse_if_not_a_session` :180); measurement
 helpers → `desk_forward.py` (imported, zero diff — `_session_slice` :295, `_draw_anchor_indices`
-:428, `_measure_from` :451, `forward_parameters()` :225, `compute_forward_input_signature` :362);
-universe membership → `desk_universe.py`; pivot-rule reference → `levels.py` `_swing_pivots`
-(:325 — mirrored by the playbook's own pivot primitive, never called directly, since the
-playbook's series is the desk's own 5m/1m bars, not `levels.py`'s multi-timeframe input); the
-`desk_playbook` walk performs ZERO `compute_tradability`/`compute_levels` calls (J-06's own
-guard) — the book's intraday ranges and the desk's structural walls stay different owners.
+:428, `_measure_from` :451, `forward_parameters()` :225, `compute_forward_input_signature` :362,
+`_collect_measures` :579 — iteration 12 reuses this verbatim too, deriving its two new exclusion
+counts from its ALREADY-returned `(values, n_truncated)` tuple rather than adding a diff to this
+file); universe membership → `desk_universe.py`; pivot-rule reference → `levels.py`
+`_swing_pivots` (:325 — mirrored by the playbook's own pivot primitive, never called directly,
+since the playbook's series is the desk's own 5m/1m bars, not `levels.py`'s multi-timeframe
+input); the `desk_playbook` walk performs ZERO `compute_tradability`/`compute_levels` calls (J-06's
+own guard) — the book's intraday ranges and the desk's structural walls stay different owners.
 Everything else (tradability, the levels endpoint itself, datasets, setups, edge_report, the PnL
 ledger, the strategy registry, profiles, taxonomy, the route/nav inventory, `config_fingerprint`,
 and every shipped `desk_screen*`/`desk_forward*`/`desk_topup*`/`desk_index_reconcile*`/
@@ -145,8 +169,8 @@ target):**
 | Playbook compute progress | new playbook compute manager, `desk_playbook_compute.py` (single-flight, mirrors `DeskScreenComputeManager`) | `POST/GET/POST-cancel /research/desk/playbook/compute` | J-02 (SHIPPED) |
 | Playbook run ledger | new `app/research/desk_playbook_log.py` (terminal-state-only, mirrors `desk_topup_log.py`) | `GET /research/desk/playbook/runs` | J-02 (SHIPPED) |
 | Back-scan plan | new `app/research/desk_playbook_backscan.py` (pure, metadata-only) | `GET /research/desk/playbook/backscan/plan` | J-07 (SHIPPED) |
-| Back-scan progress + ledger | same back-scan module (mirrors `desk_deep_backfill.py`'s plan/walker/ledger/manager quartet, re-chunked to one session-date) | `POST/GET/POST-cancel .../backscan/compute`, `GET .../backscan/runs` | J-07 (SHIPPED). Iteration 11 extends this module's TEST/FIXTURE-ONLY `_assert_scoped` positive guard with a fifth required env var (`TAPEOLOGY_BAR_INDEX_DB`) — no route, no served field, no owner/endpoint change; the guard is never called from the live HTTP routes. |
-| Evidence aggregates | new `app/research/desk_playbook_evidence.py` (stat-keyed derived projection cache, the `desk_meta_cache` contract — rebuildable, owns nothing) | `GET /research/desk/playbook/evidence` | J-08 (SHIPPED — response shape fixed in `docs/phases/goal-playbook-iter-8.md`'s Data-contract additions) → J-09 (byte-identical MCP proxy `desk_playbook_evidence`, SHIPPED iteration 9, no new owner/endpoint) → iteration 9 also displays this row's already-served `signature` field in the `/desk` Playbook Evidence section for the first time (no new field, no new owner/endpoint — a rendering change only) |
+| Back-scan progress + ledger | same back-scan module (mirrors `desk_deep_backfill.py`'s plan/walker/ledger/manager quartet, re-chunked to one session-date) | `POST/GET/POST-cancel .../backscan/compute`, `GET .../backscan/runs` | J-07 (SHIPPED). Iteration 11 extends this module's TEST/FIXTURE-ONLY `_assert_scoped` positive guard with a fifth required env var (`TAPEOLOGY_BAR_INDEX_DB`) — no route, no served field, no owner/endpoint change; the guard is never called from the live HTTP routes. **Iteration 11 did not actually build this (evidence-only pass); iteration 12 (TARGET) carries it forward as a passenger.** |
+| Evidence aggregates | new `app/research/desk_playbook_evidence.py` (stat-keyed derived projection cache, the `desk_meta_cache` contract — rebuildable, owns nothing) | `GET /research/desk/playbook/evidence` | J-08 (SHIPPED — response shape fixed in `docs/phases/goal-playbook-iter-8.md`'s Data-contract additions) → J-09 (byte-identical MCP proxy `desk_playbook_evidence`, SHIPPED iteration 9, no new owner/endpoint) → iteration 9 also displays this row's already-served `signature` field in the `/desk` Playbook Evidence section for the first time (no new field, no new owner/endpoint — a rendering change only) → **iteration 12 (J-11, TARGET)** adds, per cell in `cells[]`: `signal.n_unmeasured` (pooled events whose relevant horizon leaf carries `return_pct: null`, e.g. a 1m measure on a 5m-basis session), `signal.n_sessions` (distinct recorded session dates that contributed ≥1 event to that cell's signal pool), `baseline.n_truncated` (wired from the already-computed, previously-discarded `_baseline_truncated`), `baseline.n_unmeasured`, `baseline.n_sessions` — plus, at the payload's top level, `basis: {dates, n_records, created_span}` for the pooled/default signature (built by the SAME per-signature summarizer helper `other_signatures` already uses — extracted once, called twice), and `other_signatures[].n_records`. All fold from projections `PlaybookEvidenceCache` already stores (`session_date`, `recorded_at`, full `forward` leaves) — no cache-schema change, no bar read, no re-measurement, no call into `_measure_from`, no new owner/endpoint, no new `Config` field, no playbook record written/rewritten. |
 
 No shared value from the unchanged-owners list above is recomputed a second way by any of these
 six rows — each reads bars/sessions/measurement-helpers/universe-membership verbatim from its
@@ -157,3 +181,7 @@ detection or measurement path, no second store. MCP exposure (`desk_playbook`,
 `desk_playbook_evidence`) is a byte-identical GET proxy of the first and last rows above, added at
 J-09 — it introduces no new value and no new owner. Iteration 10's `turned_at_midrange` addition
 (above) is likewise a field on the first row's EXISTING owner/endpoint, never a second one.
+Iteration 12's seven new evidence fields (above) are likewise served-only fields on the LAST row's
+EXISTING owner/endpoint, computed by reusing `desk_forward._collect_measures`'s already-returned
+tuple and the evidence cache's already-stored per-file projections — never a second measurement
+implementation, never a cache-schema change.

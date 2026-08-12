@@ -628,7 +628,8 @@ async def test_desk_playbook_evidence_tool_byte_identical_on_the_honest_empty_st
     assert rest.status_code == 200
     payload = rest.json()
     assert set(payload) == {
-        "signature", "cells", "invalidation_breached", "other_signatures", "parameters", "register",
+        "signature", "cells", "invalidation_breached", "other_signatures", "basis", "parameters",
+        "register",
     }
     assert payload["other_signatures"] == []
     assert payload["cells"], "the declared cross product must be non-empty even with no records"
@@ -734,7 +735,8 @@ async def test_desk_playbook_evidence_tool_byte_identical_on_a_populated_state(m
     assert rest.status_code == 200
     payload = rest.json()
     assert set(payload) == {
-        "signature", "cells", "invalidation_breached", "other_signatures", "parameters", "register",
+        "signature", "cells", "invalidation_breached", "other_signatures", "basis", "parameters",
+        "register",
     }
     assert len(payload["other_signatures"]) >= 2, "both arbitrary-signature records must surface here"
     assert all(cell["signal"]["n"] == 0 for cell in payload["cells"]), (
