@@ -1519,3 +1519,24 @@ def test_the_signals_row_drill_in_does_not_swallow_the_rows_own_click():
     assert "onClick={(event) => event.stopPropagation()}" in page
     # The panel it protects is still wired.
     assert 'data-testid="desk-playbook-signal-detail"' in page
+
+
+def test_both_playbook_drill_ins_open_a_new_tab_safely():
+    """The desk is the working surface an operator returns to — a session's whole signal list, its
+    filters, its expanded pools. Navigating away in place to look at one chart would discard all of
+    it, so both drill-ins open a new tab, and each carries `noopener noreferrer` (the standard
+    pairing for a `_blank` target, denying the opened page any handle on this one)."""
+    page = _DESK_PAGE.read_text()
+    for testid in ("desk-playbook-signal-drill-in", "desk-playbook-occurrence-drill-in"):
+        anchor = page.index(f'data-testid="{testid}"')
+        # The element's own attribute block, bounded by the JSX tag it sits in.
+        element = page[anchor : page.index(">", anchor)]
+        assert 'target="_blank"' in element, f"{testid} must open a new tab"
+        assert 'rel="noopener noreferrer"' in element, f"{testid} must not hand over window.opener"
+
+
+def test_the_new_tab_is_announced_to_assistive_tech():
+    """A link that opens elsewhere says so — otherwise a screen-reader user loses their place with
+    no warning."""
+    page = _DESK_PAGE.read_text()
+    assert page.count("ET in Structure, in a new tab`}") == 2

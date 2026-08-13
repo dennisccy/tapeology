@@ -5985,9 +5985,11 @@ function PlaybookSignalRow({
         <Link
           href={playbookDrillInHref(signal, recordId, detectTimeframe)}
           data-testid="desk-playbook-signal-drill-in"
+          target="_blank"
+          rel="noopener noreferrer"
           onClick={(event) => event.stopPropagation()}
-          title={`Open ${signal.symbol}'s ${playbookSetupLabel(signal.setup_id)} at ${formatTimeET(signal.trigger_ts)} ET on the chart`}
-          aria-label={`Open ${signal.symbol}'s ${playbookSetupLabel(signal.setup_id)} at ${formatTimeET(signal.trigger_ts)} ET in Structure`}
+          title={`Open ${signal.symbol}'s ${playbookSetupLabel(signal.setup_id)} at ${formatTimeET(signal.trigger_ts)} ET on the chart, in a new tab`}
+          aria-label={`Open ${signal.symbol}'s ${playbookSetupLabel(signal.setup_id)} at ${formatTimeET(signal.trigger_ts)} ET in Structure, in a new tab`}
           className="font-mono text-xs text-slate-200 underline decoration-slate-600 underline-offset-2 hover:text-sky-300 hover:decoration-sky-400"
         >
           {signal.symbol}
@@ -6462,11 +6464,17 @@ function PlaybookOccurrenceRow({
       className="relative border-t border-slate-800/60 hover:bg-slate-800/40"
     >
       <td className={ROW_LABEL_CELL}>
+        {/* Opens in a NEW tab: the desk is the working surface an operator returns to — a session's
+            whole signal list, its filters and its expanded pools — and navigating away in place
+            would discard all of it to look at one chart. `noopener noreferrer` is the standard
+            pairing for a `_blank` target, denying the opened page any handle on this one. */}
         <Link
           href={href}
           data-testid="desk-playbook-occurrence-drill-in"
+          target="_blank"
+          rel="noopener noreferrer"
           title={playbookOccurrenceDrillInTitle(signal, labels)}
-          aria-label={`Open ${signal.symbol}'s ${playbookSetupLabel(signal.setup_id)} at ${formatTimeET(signal.trigger_ts)} ET in Structure`}
+          aria-label={`Open ${signal.symbol}'s ${playbookSetupLabel(signal.setup_id)} at ${formatTimeET(signal.trigger_ts)} ET in Structure, in a new tab`}
           className="absolute inset-0"
         />
         <span className="font-mono text-xs text-slate-200">{signal.symbol}</span>
