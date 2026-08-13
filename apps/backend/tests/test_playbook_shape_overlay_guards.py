@@ -300,7 +300,11 @@ def test_prefill_ordering_guard_can_fail_on_a_seeded_violation():
 
 
 def test_the_drill_in_link_carries_the_record_and_signal_identity():
-    source = _code(DESK_PAGE)
+    # Reads `lib/playbook.ts`, not the page: the URL moved into the ONE shared builder
+    # (`playbookDrillInHref`) when the flat signals table gained the same drill-in, so that both
+    # tables are mechanically incapable of sending an operator to two different charts for one
+    # signal. The terms this guard protects are unchanged -- only their home moved.
+    source = _code(PLAYBOOK_HELPERS)
     for term in (
         "playbook=${encodeURIComponent(recordId)}",
         "signal=${encodeURIComponent(playbookSignalKey(signal))}",

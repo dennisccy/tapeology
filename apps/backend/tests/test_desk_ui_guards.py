@@ -1477,3 +1477,45 @@ def test_the_linkage_guard_can_fail_on_a_seeded_violation():
     seeded = 'function handleShowLatest() {\n    setViewingSnapshot(null);\n  }\n'
     body = seeded[: seeded.index("\n  }")]
     assert 'setPlaybookDateInput("")' not in body
+
+
+# --- Both playbook tables drill in to the SAME chart -------------------------------------------------
+# The flat signals table and the per-setup occurrence list list the same recorded signals. If each
+# built its own URL they could silently diverge — one carrying the record id and one not, say — and
+# the same signal would open two different charts.
+
+_PLAYBOOK_LIB = _FRONTEND_ROOT / "lib" / "playbook.ts"
+
+
+def test_the_drill_in_url_is_built_in_exactly_one_place():
+    """One builder, imported by both tables — never two URL literals to drift apart."""
+    lib = _PLAYBOOK_LIB.read_text()
+    assert "export function playbookDrillInHref(" in lib
+    page = _DESK_PAGE.read_text()
+    # No PLAYBOOK drill-in URL is composed on the page itself. (The ranked screen rows have their
+    # own, unrelated `?symbol=&asof=` link — this is about the playbook's record/signal identity.)
+    assert "playbook=${encodeURIComponent" not in page
+    assert page.count("playbookDrillInHref(signal, recordId, detectTimeframe)") == 2, (
+        "both the signals table and the occurrence list must drill in through the ONE builder"
+    )
+
+
+def test_the_url_builder_carries_every_term_structure_needs_to_draw_the_setup():
+    """`asof` positions the chart and the band map; `tf` names the detect timeframe; the (record id,
+    signal key) pair is what makes /structure draw THIS occurrence's own recorded outline."""
+    lib = _PLAYBOOK_LIB.read_text()
+    builder = lib[lib.index("export function playbookDrillInHref(") :]
+    for term in ("symbol=", "&asof=", "&tf=", "&playbook=", "&signal="):
+        assert term in builder, f"the drill-in URL must carry {term}"
+    assert "playbookSignalKey(signal)" in builder
+
+
+def test_the_signals_row_drill_in_does_not_swallow_the_rows_own_click():
+    """This table's row click owns the disclosures panel, so the drill-in is the SYMBOL cell and
+    stops propagation — a stretched link (the occurrence list's pattern, where no panel exists)
+    would make the panel unreachable."""
+    page = _DESK_PAGE.read_text()
+    assert 'data-testid="desk-playbook-signal-drill-in"' in page
+    assert "onClick={(event) => event.stopPropagation()}" in page
+    # The panel it protects is still wired.
+    assert 'data-testid="desk-playbook-signal-detail"' in page

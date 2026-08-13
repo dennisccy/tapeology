@@ -118,6 +118,7 @@ import { fmt } from "@/lib/format";
 import {
   playbookWallLabel,
   playbookContextIndex,
+  playbookDrillInHref,
   playbookPoolKey,
   playbookSetupLabel,
   playbookSignalContextKey,
@@ -5954,12 +5955,16 @@ function PlaybookSignalRow({
   signal,
   labels,
   bandContext,
+  recordId,
+  detectTimeframe,
   selected,
   onSelect,
 }: {
   signal: DeskPlaybookSignal;
   labels: string[];
   bandContext: DeskPlaybookBandContext | undefined;
+  recordId: string;
+  detectTimeframe: string;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -5973,7 +5978,20 @@ function PlaybookSignalRow({
       }`}
     >
       <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-symbol">
-        <span className="font-mono text-xs text-slate-200">{signal.symbol}</span>
+        {/* The symbol is the drill-in, NOT the whole row: this table's row click already owns
+            opening the signal's own disclosures panel below, and a stretched link (the occurrence
+            list's pattern, where no such panel exists) would swallow it. `stopPropagation` keeps
+            the two gestures separate — the link navigates, everything else in the row selects. */}
+        <Link
+          href={playbookDrillInHref(signal, recordId, detectTimeframe)}
+          data-testid="desk-playbook-signal-drill-in"
+          onClick={(event) => event.stopPropagation()}
+          title={`Open ${signal.symbol}'s ${playbookSetupLabel(signal.setup_id)} at ${formatTimeET(signal.trigger_ts)} ET on the chart`}
+          aria-label={`Open ${signal.symbol}'s ${playbookSetupLabel(signal.setup_id)} at ${formatTimeET(signal.trigger_ts)} ET in Structure`}
+          className="font-mono text-xs text-slate-200 underline decoration-slate-600 underline-offset-2 hover:text-sky-300 hover:decoration-sky-400"
+        >
+          {signal.symbol}
+        </Link>
       </td>
       <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-setup">
         <span className={CHIP_CLASS}>{playbookSetupLabel(signal.setup_id)}</span>
@@ -6191,6 +6209,8 @@ function PlaybookSignalsTable({
                   signal={signal}
                   labels={labels}
                   bandContext={contextIndex.get(playbookSignalContextKey(signal))}
+                  recordId={record.id}
+                  detectTimeframe={record.parameters.detect_timeframe ?? ""}
                   selected={key === selectedSignalKey}
                   onSelect={() => onSelectSignal(key === selectedSignalKey ? null : key)}
                 />
@@ -6433,12 +6453,7 @@ function PlaybookOccurrenceRow({
   detectTimeframe: string;
   beyondCap: boolean;
 }) {
-  const href =
-    `/structure?symbol=${encodeURIComponent(signal.symbol)}` +
-    `&asof=${encodeURIComponent(signal.trigger_ts)}` +
-    (detectTimeframe ? `&tf=${encodeURIComponent(detectTimeframe)}` : "") +
-    `&playbook=${encodeURIComponent(recordId)}` +
-    `&signal=${encodeURIComponent(playbookSignalKey(signal))}`;
+  const href = playbookDrillInHref(signal, recordId, detectTimeframe);
   return (
     <tr
       data-testid="desk-playbook-occurrence-row"

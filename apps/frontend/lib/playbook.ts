@@ -91,3 +91,22 @@ export function playbookWallLabel(
   if (wall === null) return containing !== null && side === "above" ? "inside" : "—";
   return `${wall.price_low.toFixed(2)}–${wall.price_high.toFixed(2)} ${wall.class ?? "—"} · ${wall.distance_bps.toFixed(0)} bps`;
 }
+
+// The ONE drill-in URL both playbook tables build. Extracted so the flat signals table and the
+// per-setup occurrence list can never send an operator to two different charts for one signal:
+// `asof` positions the chart and the band map, `tf` names the timeframe the setup was detected on,
+// and the immutable (record id, signal key) pair is what makes /structure draw THIS occurrence's
+// own recorded outline rather than re-deriving one.
+export function playbookDrillInHref(
+  signal: DeskPlaybookSignal,
+  recordId: string,
+  detectTimeframe: string,
+): string {
+  return (
+    `/structure?symbol=${encodeURIComponent(signal.symbol)}` +
+    `&asof=${encodeURIComponent(signal.trigger_ts)}` +
+    (detectTimeframe ? `&tf=${encodeURIComponent(detectTimeframe)}` : "") +
+    `&playbook=${encodeURIComponent(recordId)}` +
+    `&signal=${encodeURIComponent(playbookSignalKey(signal))}`
+  );
+}
