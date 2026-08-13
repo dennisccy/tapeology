@@ -31,20 +31,29 @@ from app.config import CONFIG
 from app.main import app
 from app.research.desk_playbook import PlaybookStore
 from app.research.desk_playbook_context import (
-    AT_BAND,
-    AWAY_FROM_BAND,
+    AT_WALL,
     CONTEXT_REGISTER,
+    LOCATED,
     NO_BAND_CONTEXT,
     NOT_COMPUTED,
-    PLAYBOOK_CONTEXT_COMPARISON_BUCKETS,
+    NO_WALL_AHEAD,
+    NO_WALL_BEHIND,
+    OFF_WALL,
+    PLAYBOOK_CONTEXT_BACKING_BUCKETS,
     PLAYBOOK_CONTEXT_NEAR_BAND_BPS,
+    PLAYBOOK_CONTEXT_ROOM_BUCKETS,
+    PLAYBOOK_CONTEXT_ROOM_R_EDGES,
+    ROOM_1R_2R,
+    ROOM_GE_2R,
+    ROOM_LT_1R,
+    ROOM_UNMEASURED,
     PlaybookContextCache,
     _attribute_anchors,
+    _backing_bucket,
     _band_distance_bps,
-    _bucket,
-    _nearest_band,
-    _position,
-    _side_relation,
+    _bracket,
+    _risk_bps,
+    _room_bucket,
     band_context_block,
     context_for_record,
     playbook_context_cache_key,
@@ -155,67 +164,117 @@ def _record(signals, anchors=None, *, record_id="playbook-2026-08-07-testrecord"
 # --- the geometry ---------------------------------------------------------------------------------
 
 
-def test_a_price_inside_a_band_is_zero_bps_and_position_inside():
-    """Inside is a REAL measured zero, not an absence and not a negative number — the distance is
-    served unsigned beside a separate ``position`` fact."""
+def test_a_price_inside_a_band_is_zero_bps_at_both_edges_inclusive():
+    """Inside is a REAL measured zero, not an absence — and an entry sitting exactly ON an edge is
+    inside, never a wall a hair's breadth away."""
     band = _band("support", 100.0, 102.0)
     for price in (100.0, 101.0, 102.0):  # both edges inclusive
         assert _band_distance_bps(band, price) == 0.0
-        assert _position(band, price) == "inside"
 
 
 def test_distance_is_measured_to_the_nearest_edge_in_bps_of_the_price():
     band = _band("resistance", 110.0, 112.0)
     # 100 -> nearest edge 110: (110-100)/100 * 10_000 = 1000 bps.
     assert _band_distance_bps(band, 100.0) == pytest.approx(1000.0)
-    assert _position(band, 100.0) == "below_band"
     # 112.56 -> nearest edge 112: (0.56/112.56)*10_000 ~= 49.75 bps.
     assert _band_distance_bps(band, 112.56) == pytest.approx(0.56 / 112.56 * 10_000)
-    assert _position(band, 112.56) == "above_band"
 
 
-def test_the_near_band_threshold_is_inclusive_at_exactly_the_registered_value():
-    """The boundary is pinned so it can never drift silently: EXACTLY 70.0 bps is ``at_band``."""
+def test_the_backing_threshold_is_inclusive_at_exactly_the_registered_value():
+    """The boundary is pinned so it can never drift silently: EXACTLY 70.0 bps is ``at_wall``."""
     assert PLAYBOOK_CONTEXT_NEAR_BAND_BPS == 70.0
-    assert _bucket(0.0) == AT_BAND
-    assert _bucket(69.999) == AT_BAND
-    assert _bucket(70.0) == AT_BAND
-    assert _bucket(70.001) == AWAY_FROM_BAND
-    assert _bucket(10_000.0) == AWAY_FROM_BAND
+    assert _backing_bucket(0.0) == AT_WALL
+    assert _backing_bucket(69.999) == AT_WALL
+    assert _backing_bucket(70.0) == AT_WALL
+    assert _backing_bucket(70.001) == OFF_WALL
+    assert _backing_bucket(10_000.0) == OFF_WALL
+    assert _backing_bucket(None) == NO_WALL_BEHIND
 
 
-def test_nearest_band_prefers_distance_then_class_then_quality_then_price():
-    """Distance decides first; ties break on class, then quality, then price — never on the order
-    the bands happen to arrive in (a seeded reversal must not change the answer)."""
-    near_c = _band("support", 99.0, 99.5, klass="C", quality=9.0)
-    far_a = _band("resistance", 130.0, 131.0, klass="A", quality=9.0)
-    bands = [far_a, near_c]
-    assert _nearest_band(bands, 100.0) is near_c
-    assert _nearest_band(list(reversed(bands)), 100.0) is near_c
+def test_the_room_axis_boundaries_are_lower_inclusive_at_exactly_1r_and_2r():
+    """Exactly 1.0 reads ``room_1r_2r`` and exactly 2.0 reads ``room_ge_2r`` — the two edges a
+    guard pins so the book's own reward-to-risk vocabulary cannot drift."""
+    assert PLAYBOOK_CONTEXT_ROOM_R_EDGES == (1.0, 2.0)
+    assert _room_bucket(100.0, 0.999) == ROOM_LT_1R
+    assert _room_bucket(100.0, 1.0) == ROOM_1R_2R
+    assert _room_bucket(100.0, 1.999) == ROOM_1R_2R
+    assert _room_bucket(100.0, 2.0) == ROOM_GE_2R
+    assert _room_bucket(100.0, 30.0) == ROOM_GE_2R
+    # A measured fact about the map, versus "headroom known, no risk to divide by".
+    assert _room_bucket(None, None) == NO_WALL_AHEAD
+    assert _room_bucket(100.0, None) == ROOM_UNMEASURED
 
-    # Exact distance tie (both 100 bps away, opposite directions) -> class A wins.
+
+def test_the_bracket_partitions_a_map_into_containing_below_and_above():
+    """The three slots are a TOTAL, exclusive partition of the map around the entry — and the
+    nearest wall on each side wins its slot regardless of arrival order."""
+    inside = _band("support", 99.5, 100.5)
+    near_below = _band("support", 98.0, 99.0)
+    far_below = _band("support", 90.0, 91.0)
+    near_above = _band("resistance", 101.0, 102.0)
+    far_above = _band("resistance", 130.0, 131.0)
+    bands = [far_above, near_below, inside, far_below, near_above]
+
+    containing, below, above = _bracket(bands, 100.0)
+    assert containing is inside
+    assert below[0] is near_below
+    assert above[0] is near_above
+    # Distances are to the facing EDGE: 99.0 -> 100.0 is 100 bps; 100.0 -> 101.0 is 100 bps.
+    assert below[1] == pytest.approx(100.0)
+    assert above[1] == pytest.approx(100.0)
+    # Arrival order cannot change any slot.
+    assert _bracket(list(reversed(bands)), 100.0)[0] is inside
+
+
+def test_a_wall_tie_breaks_on_class_then_quality_then_price():
+    """Two walls at the SAME distance on the same side: class first, then quality, then the lower
+    price — never dict order."""
     tie_b = _band("support", 98.0, 99.0, klass="B", quality=50.0)
-    tie_a = _band("resistance", 101.0, 102.0, klass="A", quality=1.0)
-    assert _nearest_band([tie_b, tie_a], 100.0) is tie_a
-    assert _nearest_band([tie_a, tie_b], 100.0) is tie_a
+    tie_a = _band("support", 98.0, 99.0, klass="A", quality=1.0)
+    assert _bracket([tie_b, tie_a], 100.0)[1][0] is tie_a
+    assert _bracket([tie_a, tie_b], 100.0)[1][0] is tie_a
+
+
+def test_an_edge_touching_entry_is_containing_never_a_wall():
+    """The edge is a real level: an entry exactly on it is INSIDE, and calling it a wall a hair
+    away would invent a gap the map does not have."""
+    band = _band("support", 99.0, 100.0)
+    for price in (99.0, 100.0):
+        containing, below, above = _bracket([band], price)
+        assert containing is band
+        assert below is None and above is None
+    # A hair beyond the edge IS a wall.
+    containing, below, above = _bracket([band], 100.01)
+    assert containing is None and below[0] is band and above is None
+
+
+def test_multi_containing_is_deterministic_even_though_a_real_map_cannot_produce_one():
+    """Unreachable on a real map (same-side bands are disjoint; the two sides split around prior
+    close) — pinned anyway so a hand-built map or a future band engine cannot make this depend on
+    dict order."""
+    weak = _band("support", 99.0, 101.0, klass="C", quality=99.0)
+    strong = _band("support", 99.5, 100.5, klass="A", quality=1.0)
+    assert _bracket([weak, strong], 100.0)[0] is strong
+    assert _bracket([strong, weak], 100.0)[0] is strong
 
 
 def test_a_class_null_band_is_still_a_band():
     """Class is a quality projection inherited from the zone engine, never a test of whether a band
     exists — an unclassified band still locates a signal."""
     unclassified = _band("support", 99.9, 100.0, klass=None)
-    assert _nearest_band([unclassified], 100.0) is unclassified
+    assert _bracket([unclassified], 100.0)[0] is unclassified
     block = band_context_block(_map([unclassified]), 100.0, "long")
-    assert block["bucket"] == AT_BAND
-    assert block["band"]["class"] is None
+    assert block["backing_bucket"] == AT_WALL
+    assert block["containing_band"]["class"] is None
 
 
-def test_side_relation_truth_table():
-    assert _side_relation("long", "support") == "aligned"
-    assert _side_relation("short", "resistance") == "aligned"
-    assert _side_relation("long", "resistance") == "opposed"
-    assert _side_relation("short", "support") == "opposed"
-    assert _side_relation(None, "support") is None
+def test_an_event_with_no_side_is_an_honest_absence_not_a_half_frame():
+    """The frame is trade-relative — which wall is behind and which is ahead is decided by the
+    side. Without one there is no honest frame, only a pair of raw directions."""
+    block = band_context_block(_map([_band("support", 99.0, 100.0)]), 100.0, None)
+    assert block["status"] == NO_BAND_CONTEXT
+    assert block["backing_bucket"] is None and block["room_bucket"] is None
+    assert "no side" in block["caption"]
 
 
 # --- the three states, kept distinct ---------------------------------------------------------------
@@ -226,43 +285,165 @@ def test_not_computed_and_no_band_context_are_distinct_states():
     and "we computed the map and no band is near this price" are DIFFERENT facts, and conflating
     them would let an un-warmed cache masquerade as a measured absence of structure."""
     not_computed = band_context_block(None, 100.0, "long")
-    assert not_computed["bucket"] == NOT_COMPUTED
-    assert not_computed["distance_bps"] is None
+    assert not_computed["status"] == NOT_COMPUTED
+    assert not_computed["backing_bps"] is None and not_computed["room_bucket"] is None
     assert "has not been computed" in not_computed["caption"]
 
     empty_map = band_context_block(_map([]), 100.0, "long")
-    assert empty_map["bucket"] == NO_BAND_CONTEXT
-    assert empty_map["distance_bps"] is None
+    assert empty_map["status"] == NO_BAND_CONTEXT
+    assert empty_map["backing_bps"] is None
     assert "honest absence" in empty_map["caption"]
 
     assert not_computed["caption"] != empty_map["caption"]
 
 
 def test_a_located_signal_serves_every_disclosure_field():
-    band = _band("support", 99.5, 100.2, klass="A", quality=4.25)
-    block = band_context_block(_map([band]), 100.0, "long")
-    assert block["bucket"] == AT_BAND
-    assert block["distance_bps"] == 0.0
-    assert block["position"] == "inside"
-    assert block["side_relation"] == "aligned"
-    assert block["band"] == {
+    """The whole frame, verbatim: three slots, four readings, two buckets — every value a copy of
+    something served, nothing derived twice."""
+    containing = _band("support", 99.5, 100.2, klass="A", quality=4.25)
+    floor = _band("support", 97.0, 98.0, klass="B")
+    ceiling = _band("resistance", 102.0, 103.0, klass="A")
+    block = band_context_block(
+        _map([containing, floor, ceiling]), 100.0, "long", risk_bps=100.0, risk_source="own"
+    )
+    assert block["status"] == LOCATED
+    assert block["containing_band"] == {
         "side": "support", "class": "A", "price_low": 99.5, "price_high": 100.2,
         "quality_score": 4.25, "round_number": False, "member_count": 2,
     }
+    assert block["wall_below"]["price_high"] == 98.0
+    assert block["wall_below"]["distance_bps"] == pytest.approx(200.0)
+    assert block["wall_above"]["price_low"] == 102.0
+    assert block["wall_above"]["distance_bps"] == pytest.approx(200.0)
+    # Inside a band => backed at zero; ahead is ABOVE for a long; room is headroom over risk.
+    assert block["backing_bps"] == 0.0
+    assert block["headroom_bps"] == pytest.approx(200.0)
+    assert block["risk_bps"] == 100.0
+    assert block["risk_source"] == "own"
+    assert block["room_r"] == pytest.approx(2.0)
+    assert block["backing_bucket"] == AT_WALL
+    assert block["room_bucket"] == ROOM_GE_2R
     assert block["basis_as_of"] == "2026-08-06T04:00:00.000000Z"
-    # The band's full member list stays with the tradable-map endpoint that owns it.
-    assert "members" not in block["band"]
+    # Each band's full member list stays with the tradable-map endpoint that owns it.
+    assert "members" not in block["containing_band"]
+    assert "members" not in block["wall_below"]
+
+
+def test_the_cof_case_the_v1_lens_could_not_express():
+    """The real 2026-08-07 COF long that motivated this frame. v1 said "support A · 0.00 · aligned"
+    — true, but it never named the band and said nothing about what was overhead. The frame a
+    trader actually needs: inside a class-A support, the next floor ~93 bps under it, the first
+    ceiling ~110 bps over it, which is ~1.6x the trade's own 67.8 bps invalidation distance."""
+    entry, invalidation = 217.635, 216.16
+    bands = [
+        _band("support", 217.13, 218.635, klass="A", quality=513.0),
+        _band("support", 214.11, 215.60, klass="A", quality=458.9),
+        _band("resistance", 220.02, 221.56, klass="A", quality=359.0),
+        _band("resistance", 221.57, 223.11, klass="A", quality=273.0),
+    ]
+    risk = _risk_bps(entry, invalidation)
+    block = band_context_block(_map(bands), entry, "long", risk_bps=risk, risk_source="own")
+
+    assert block["containing_band"]["price_low"] == 217.13
+    assert block["wall_below"]["price_high"] == 215.60
+    # ~93.5 here vs ~93.4 on the live map: the fixture rounds the band edges to two decimals.
+    assert block["wall_below"]["distance_bps"] == pytest.approx(93.5, abs=0.1)
+    assert block["wall_above"]["price_low"] == 220.02
+    assert block["wall_above"]["distance_bps"] == pytest.approx(109.6, abs=0.1)
+    assert block["backing_bps"] == 0.0
+    assert block["backing_bucket"] == AT_WALL
+    assert risk == pytest.approx(67.8, abs=0.1)
+    assert block["room_r"] == pytest.approx(1.62, abs=0.01)
+    assert block["room_bucket"] == ROOM_1R_2R
+    # The caption names the band, both walls, and the room -- everything v1 left unsaid.
+    assert "from inside the support band 217.13–218.63" in block["caption"]
+    assert "next floor 214.11–215.60" in block["caption"]
+    assert "first ceiling 220.02–221.56" in block["caption"]
+    assert "1.6× the 67.8 bps invalidation distance" in block["caption"]
+
+
+def test_the_crm_case_where_v1_claimed_a_relationship_that_did_not_exist():
+    """The real 2026-08-07 CRM long. v1 reported "support A · 288.19 · aligned" — but the nearest
+    band in ANY direction was 288 bps away and the nearest resistance thousands of bps away. v2
+    says plainly that the entry is inside no band, and puts the trade off_wall."""
+    entry, invalidation = 192.23, 190.25
+    bands = [
+        _band("support", 185.40, 186.69, klass="A", quality=189.0),
+        _band("support", 180.27, 181.53, klass="A", quality=216.9),
+        _band("resistance", 251.70, 253.46, klass="A", quality=665.8),
+    ]
+    risk = _risk_bps(entry, invalidation)
+    block = band_context_block(_map(bands), entry, "long", risk_bps=risk, risk_source="own")
+
+    assert block["containing_band"] is None
+    assert block["wall_below"]["price_high"] == 186.69
+    assert block["backing_bps"] == pytest.approx(288.2, abs=0.1)
+    assert block["backing_bucket"] == OFF_WALL          # not "aligned" with anything
+    assert block["room_bucket"] == ROOM_GE_2R
+    assert "inside no band on this map" in block["caption"]
+
+
+def test_the_frame_mirrors_for_a_short():
+    """A short leans on what is ABOVE and runs into what is BELOW — the same map read the other
+    way round, with no client-side inversion anywhere."""
+    containing = _band("resistance", 99.8, 100.2, klass="A")
+    below = _band("support", 97.0, 98.0, klass="A")
+    block = band_context_block(
+        _map([containing, below]), 100.0, "short", risk_bps=100.0, risk_source="own"
+    )
+    assert block["backing_bps"] == 0.0
+    assert block["headroom_bps"] == pytest.approx(200.0)
+    assert block["room_bucket"] == ROOM_GE_2R
+    above = _band("resistance", 100.5, 101.0, klass="A")
+    plain = band_context_block(
+        _map([above, below]), 100.0, "short", risk_bps=100.0, risk_source="own"
+    )
+    assert plain["backing_bps"] == pytest.approx(50.0)
+    assert plain["backing_bucket"] == AT_WALL
+    assert plain["headroom_bps"] == pytest.approx(200.0)
+
+
+def test_risk_is_read_off_the_trades_own_recorded_invalidation():
+    assert _risk_bps(100.0, 99.0) == pytest.approx(100.0)
+    assert _risk_bps(100.0, 101.0) == pytest.approx(100.0)  # unsigned
+    assert _risk_bps(100.0, None) is None
+    assert _risk_bps(None, 99.0) is None
+
+
+def test_headroom_without_a_derivable_risk_is_room_unmeasured_never_a_guess():
+    block = band_context_block(
+        _map([_band("resistance", 102.0, 103.0)]), 100.0, "long", risk_bps=None
+    )
+    assert block["status"] == LOCATED
+    assert block["headroom_bps"] == pytest.approx(200.0)
+    assert block["room_r"] is None
+    assert block["risk_source"] is None
+    assert block["room_bucket"] == ROOM_UNMEASURED
+    assert "no invalidation distance is derivable" in block["caption"]
+
+
+def test_a_map_with_nothing_on_one_side_reads_the_axis_absence():
+    only_below = band_context_block(
+        _map([_band("support", 90.0, 91.0)]), 100.0, "long", risk_bps=100.0, risk_source="own"
+    )
+    assert only_below["room_bucket"] == NO_WALL_AHEAD
+    assert only_below["headroom_bps"] is None
+    only_above = band_context_block(
+        _map([_band("resistance", 110.0, 111.0)]), 100.0, "long", risk_bps=100.0, risk_source="own"
+    )
+    assert only_above["backing_bucket"] == NO_WALL_BEHIND
+    assert only_above["backing_bps"] is None
 
 
 def test_an_event_without_a_price_or_instant_is_an_honest_absence_never_a_crash():
     """The tolerance ``_file_projection`` already applies to older/partial records: excluded from
     what it cannot support, never fabricated, never an exception."""
-    assert band_context_block(_map([_band("support", 99.0, 100.0)]), None, "long")["bucket"] == (
+    assert band_context_block(_map([_band("support", 99.0, 100.0)]), None, "long")["status"] == (
         NO_BAND_CONTEXT
     )
     record = _record([{"symbol": "SYN", "setup_id": "jbe", "side": "long", "forward": _forward_leaf(1.0)}])
     context = record_band_context(record, _StubResolver({}))
-    assert context["signals"][0]["band_context"]["bucket"] == NO_BAND_CONTEXT
+    assert context["signals"][0]["band_context"]["status"] == NO_BAND_CONTEXT
     assert record_map_requests(record) == []
 
 
@@ -303,7 +484,7 @@ def test_a_close_price_disagreement_refuses_the_whole_pool_rather_than_guessing(
     rows = context["baseline_anchors"]["jbe:long"]
     assert [r["symbol"] for r in rows] == [None, None]
     assert {r["attribution"] for r in rows} == {"unattributable"}
-    assert {r["band_context"]["bucket"] for r in rows} == {NO_BAND_CONTEXT}
+    assert {r["band_context"]["status"] for r in rows} == {NO_BAND_CONTEXT}
     assert context["basis"]["n_anchors_unattributable"] == 2
 
 
@@ -318,11 +499,17 @@ def test_an_anchor_carries_its_pools_own_side_so_both_columns_read_the_same_way(
     same side, so ``side_relation`` is populated on both halves of the comparison."""
     signals = [_signal("AAA", "double_top", "short", 100.0, close_price=111.0)]
     anchors = {"double_top:short": [_anchor(100.0, 111.0)]}
-    resolver = _StubResolver({"AAA": _map([_band("resistance", 99.9, 100.1)])})
-    context = record_band_context(_record(signals, anchors), resolver)
-    assert context["baseline_anchors"]["double_top:short"][0]["band_context"]["side_relation"] == (
-        "aligned"
+    resolver = _StubResolver(
+        {"AAA": _map([_band("resistance", 99.9, 100.1), _band("support", 97.0, 98.0)])}
     )
+    context = record_band_context(_record(signals, anchors), resolver)
+    anchor = context["baseline_anchors"]["double_top:short"][0]["band_context"]
+    # Read as a SHORT (the pool's own side): backed by the resistance band it sits in, with room
+    # down to the support band -- and the risk borrowed from its paired signal, disclosed.
+    assert anchor["backing_bps"] == 0.0
+    assert anchor["backing_bucket"] == AT_WALL
+    assert anchor["headroom_bps"] is not None
+    assert anchor["risk_source"] == "paired_signal"
 
 
 # --- serving paths never compute, never write ------------------------------------------------------
@@ -421,7 +608,7 @@ def test_the_detection_modules_never_import_the_context_lens():
 
 
 def test_the_import_direction_guard_can_fail_on_a_seeded_violation():
-    seeded = "from __future__ import annotations\nfrom .desk_playbook_context import AT_BAND\n"
+    seeded = "from __future__ import annotations\nfrom .desk_playbook_context import AT_WALL\n"
     assert _CONTEXT_IMPORT.search(seeded)
 
 
@@ -499,10 +686,10 @@ def test_a_changed_tradability_key_serves_a_fresh_context_not_a_stale_one(tmp_pa
         record, 10, 20, _Shifting({"AAA": _map([_band("support", 99.9, 100.1)])}, "v1"), cache
     )
     second = context_for_record(
-        record, 10, 20, _Shifting({"AAA": _map([_band("support", 50.0, 51.0)])}, "v2"), cache
+        record, 10, 20, _Shifting({"AAA": _map([_band("resistance", 110.0, 111.0)])}, "v2"), cache
     )
-    assert first["signals"][0]["band_context"]["bucket"] == AT_BAND
-    assert second["signals"][0]["band_context"]["bucket"] == AWAY_FROM_BAND
+    assert first["signals"][0]["band_context"]["backing_bucket"] == AT_WALL
+    assert second["signals"][0]["band_context"]["backing_bucket"] == NO_WALL_BEHIND
 
 
 def test_the_context_cache_carries_no_update_or_delete_method():
@@ -605,7 +792,7 @@ def test_route_serves_not_computed_rather_than_computing_a_cold_map(context_clie
     assert response.status_code == 200
     context = response.json()["context"]
     assert context is not None
-    assert context["signals"][0]["band_context"]["bucket"] == NOT_COMPUTED
+    assert context["signals"][0]["band_context"]["status"] == NOT_COMPUTED
     assert context["basis"]["n_signals_not_computed"] == 1
     assert "has not been computed" in context["signals"][0]["band_context"]["caption"]
 
@@ -613,12 +800,14 @@ def test_route_serves_not_computed_rather_than_computing_a_cold_map(context_clie
 # --- the declared comparison axis --------------------------------------------------------------------
 
 
-def test_the_comparison_axis_is_exactly_the_two_located_buckets():
-    """The split compares locations; the two absence states are EXCLUSIONS counted in the basis,
-    never distribution cells of their own."""
-    assert PLAYBOOK_CONTEXT_COMPARISON_BUCKETS == (AT_BAND, AWAY_FROM_BAND)
-    assert NOT_COMPUTED not in PLAYBOOK_CONTEXT_COMPARISON_BUCKETS
-    assert NO_BAND_CONTEXT not in PLAYBOOK_CONTEXT_COMPARISON_BUCKETS
+def test_the_two_axes_are_exactly_the_declared_buckets_and_absences_are_on_neither():
+    """The split compares locations on two axes; the absence states are EXCLUSIONS counted in the
+    basis, never distribution cells of their own."""
+    assert PLAYBOOK_CONTEXT_BACKING_BUCKETS == (AT_WALL, OFF_WALL, NO_WALL_BEHIND)
+    assert PLAYBOOK_CONTEXT_ROOM_BUCKETS == (ROOM_LT_1R, ROOM_1R_2R, ROOM_GE_2R, NO_WALL_AHEAD)
+    for absence in (NOT_COMPUTED, NO_BAND_CONTEXT, ROOM_UNMEASURED):
+        assert absence not in PLAYBOOK_CONTEXT_BACKING_BUCKETS
+        assert absence not in PLAYBOOK_CONTEXT_ROOM_BUCKETS
 
 
 # --- the evidence split (n_positive + the at-band/away comparison) -----------------------------------
@@ -679,19 +868,26 @@ def _projection(pool_key, events, *, playbook_id="rec-1", session_date="2026-08-
     }
 
 
-def _context(pool_key, buckets, *, playbook_id="rec-1", anchor_buckets=None):
+def _bc(coordinate):
+    """A served band_context stub from a test coordinate: either a ``(backing, room)`` pair or one
+    of the states that is not a cell (an absence, or room_unmeasured)."""
+    if isinstance(coordinate, tuple):
+        backing, room = coordinate
+        return {"status": LOCATED, "backing_bucket": backing, "room_bucket": room}
+    if coordinate == ROOM_UNMEASURED:
+        return {"status": LOCATED, "backing_bucket": AT_WALL, "room_bucket": ROOM_UNMEASURED}
+    return {"status": coordinate, "backing_bucket": None, "room_bucket": None}
+
+
+def _context(pool_key, coordinates, *, playbook_id="rec-1", anchor_coordinates=None):
     return {
         "playbook_id": playbook_id,
         "signals": [
-            {
-                "pool_key": pool_key,
-                "measured": True,
-                "band_context": {"bucket": bucket},
-            }
-            for bucket in buckets
+            {"pool_key": pool_key, "measured": True, "band_context": _bc(c)}
+            for c in coordinates
         ],
         "baseline_anchors": {
-            pool_key: [{"band_context": {"bucket": b}} for b in (anchor_buckets or [])]
+            pool_key: [{"band_context": _bc(c)} for c in (anchor_coordinates or [])]
         },
         "basis": {"n_anchors_unattributable": 0},
     }
@@ -715,102 +911,137 @@ def _event(return_pct):
     return _measure_from(bars, 0, entry, "level", 5, 1.0)
 
 
-def _cell(body, setup_id, side, measure, bucket):
+def _cell(body, setup_id, side, measure, backing, room):
     return next(
         c for c in body["cells"]
-        if c["setup_id"] == setup_id and c["side"] == side
-        and c["measure"] == measure and c["bucket"] == bucket
+        if c["setup_id"] == setup_id and c["side"] == side and c["measure"] == measure
+        and c["backing_bucket"] == backing and c["room_bucket"] == room
     )
 
 
 def test_the_split_serves_the_full_declared_cross_product_including_empty_cells():
     body = fold_band_context([], {})
     assert len(body["cells"]) == (
-        len(PLAYBOOK_SETUPS) * 2 * len(PLAYBOOK_SIGNAL_MEASURES)
-        * len(PLAYBOOK_CONTEXT_COMPARISON_BUCKETS)
+        len(PLAYBOOK_SETUPS) * 2
+        * len(PLAYBOOK_CONTEXT_BACKING_BUCKETS)
+        * len(PLAYBOOK_CONTEXT_ROOM_BUCKETS)
+        * 5  # the five DIRECTIONAL measures only
     )
-    empty = _cell(body, "jbe", "long", "1h", AT_BAND)
+    empty = _cell(body, "jbe", "long", "1h", AT_WALL, ROOM_GE_2R)
     assert empty["signal"]["n"] == 0
     assert empty["below_min_n"] is True  # a tag, served, never a filter
 
 
-def test_events_route_to_the_bucket_their_own_context_names():
+def test_the_split_folds_only_the_five_directional_measures():
+    """A drawdown is clamped <= 0 by construction, so splitting it by location would multiply rows
+    without adding a reading — the UNSPLIT table still serves all fifteen."""
+    measures = {c["measure"] for c in fold_band_context([], {})["cells"]}
+    assert measures == {"1m", "5m", "1h", "4h", "to_close"}
+    assert not any(m.startswith("mdd_") for m in measures)
+
+
+def test_events_route_to_the_joint_cohort_their_own_context_names():
     projection = _projection("jbe:long", [_event(2.0), _event(-3.0), _event(4.0)])
-    context = _context("jbe:long", [AT_BAND, AWAY_FROM_BAND, AT_BAND])
+    context = _context(
+        "jbe:long",
+        [(AT_WALL, ROOM_GE_2R), (OFF_WALL, ROOM_LT_1R), (AT_WALL, ROOM_GE_2R)],
+    )
     body = fold_band_context([projection], {"rec-1": context})
 
-    at = _cell(body, "jbe", "long", "1h", AT_BAND)["signal"]
-    away = _cell(body, "jbe", "long", "1h", AWAY_FROM_BAND)["signal"]
-    assert at["n"] == 2 and at["n_positive"] == 2 and at["median_pct"] == 3.0
-    assert away["n"] == 1 and away["n_positive"] == 0 and away["median_pct"] == -3.0
-    assert body["basis"]["n_signals_at_band"] == 2
-    assert body["basis"]["n_signals_away_from_band"] == 1
+    backed = _cell(body, "jbe", "long", "1h", AT_WALL, ROOM_GE_2R)["signal"]
+    naked = _cell(body, "jbe", "long", "1h", OFF_WALL, ROOM_LT_1R)["signal"]
+    assert backed["n"] == 2 and backed["n_positive"] == 2 and backed["median_pct"] == 3.0
+    assert naked["n"] == 1 and naked["n_positive"] == 0 and naked["median_pct"] == -3.0
+    # Each axis independently sums to the located total -- a reader can check the disclosure adds up.
+    assert body["basis"]["n_signals_at_wall"] == 2
+    assert body["basis"]["n_signals_off_wall"] == 1
+    assert body["basis"]["n_signals_room_ge_2r"] == 2
+    assert body["basis"]["n_signals_room_lt_1r"] == 1
 
 
-def test_absent_context_is_counted_in_the_basis_and_never_enters_a_comparison_cell():
-    """The exclusion discipline: what is not known is counted, and it never silently pads either
-    side of the comparison."""
+def test_absent_context_is_counted_in_the_basis_and_never_enters_a_cohort():
+    """The exclusion discipline: what is not known is counted, and it never silently pads any
+    cohort."""
     projection = _projection("jbe:long", [_event(2.0), _event(9.0)])
-    context = _context("jbe:long", [AT_BAND, NOT_COMPUTED])
+    context = _context("jbe:long", [(AT_WALL, ROOM_GE_2R), NOT_COMPUTED])
     body = fold_band_context([projection], {"rec-1": context})
-    at = _cell(body, "jbe", "long", "1h", AT_BAND)["signal"]
-    away = _cell(body, "jbe", "long", "1h", AWAY_FROM_BAND)["signal"]
-    assert at["n"] == 1 and away["n"] == 0
+    assert _cell(body, "jbe", "long", "1h", AT_WALL, ROOM_GE_2R)["signal"]["n"] == 1
     assert body["basis"]["n_signals_not_computed"] == 1
-    assert body["basis"]["n_signals_at_band"] == 1
+    assert body["basis"]["n_signals_at_wall"] == 1
+    # The excluded event is in NO backing bucket and NO room bucket.
+    assert body["basis"]["n_signals_off_wall"] == 0
+    assert body["basis"]["n_signals_no_wall_behind"] == 0
 
 
-def test_a_record_with_no_context_at_all_buckets_as_absent_never_as_a_location():
+def test_room_unmeasured_is_counted_and_never_placed_in_a_cohort():
+    """Headroom known but no invalidation distance to divide by: a real state, counted, never a
+    cell keyed on a coordinate the event does not have."""
+    projection = _projection("jbe:long", [_event(2.0), _event(5.0)])
+    context = _context("jbe:long", [(AT_WALL, ROOM_1R_2R), ROOM_UNMEASURED])
+    body = fold_band_context([projection], {"rec-1": context})
+    assert _cell(body, "jbe", "long", "1h", AT_WALL, ROOM_1R_2R)["signal"]["n"] == 1
+    assert body["basis"]["n_signals_room_unmeasured"] == 1
+    assert sum(
+        _cell(body, "jbe", "long", "1h", AT_WALL, room)["signal"]["n"]
+        for room in PLAYBOOK_CONTEXT_ROOM_BUCKETS
+    ) == 1
+
+
+def test_a_record_with_no_context_at_all_is_absent_never_a_location():
     """A fold running before any warm must not invent locations — every event is an honest
-    absence, and both comparison cells stay empty."""
+    absence, and every cohort stays empty."""
     body = fold_band_context([_projection("jbe:long", [_event(2.0)])], {})
-    assert _cell(body, "jbe", "long", "1h", AT_BAND)["signal"]["n"] == 0
-    assert _cell(body, "jbe", "long", "1h", AWAY_FROM_BAND)["signal"]["n"] == 0
+    assert all(c["signal"]["n"] == 0 for c in body["cells"])
     assert body["basis"]["n_signals_no_band_context"] == 1
 
 
-def test_a_length_disagreement_refuses_the_pool_rather_than_mispairing_buckets():
+def test_a_length_disagreement_refuses_the_pool_rather_than_mispairing_cohorts():
     """The alignment between a projection's events and a context's signals is CHECKED, not
     trusted: a disagreement degrades to absent context instead of pairing an event with another
     event's location."""
     projection = _projection("jbe:long", [_event(2.0), _event(3.0), _event(4.0)])
-    context = _context("jbe:long", [AT_BAND])  # one context for three events
+    context = _context("jbe:long", [(AT_WALL, ROOM_GE_2R)])  # one context for three events
     body = fold_band_context([projection], {"rec-1": context})
-    assert _cell(body, "jbe", "long", "1h", AT_BAND)["signal"]["n"] == 0
+    assert all(c["signal"]["n"] == 0 for c in body["cells"])
     assert body["basis"]["n_signals_no_band_context"] == 3
 
 
 def test_baseline_anchors_split_by_the_same_lens_as_the_signals():
-    """The comparison is location-matched: at-band signals are compared against at-band anchors,
-    so the null answers "did a random minute at a wall do this?" rather than "did any random
-    minute anywhere do this?"."""
-    projection = _projection(
-        "jbe:long", [_event(2.0)], anchors=[_event(0.5), _event(-0.5)]
+    """The comparison is location-matched: a backed-with-room signal is compared against anchors
+    that also sat backed with room, so the null answers "did a random minute in the SAME structural
+    position do this?" rather than "did any random minute anywhere do this?"."""
+    projection = _projection("jbe:long", [_event(2.0)], anchors=[_event(0.5), _event(-0.5)])
+    context = _context(
+        "jbe:long",
+        [(AT_WALL, ROOM_GE_2R)],
+        anchor_coordinates=[(AT_WALL, ROOM_GE_2R), (OFF_WALL, ROOM_LT_1R)],
     )
-    context = _context("jbe:long", [AT_BAND], anchor_buckets=[AT_BAND, AWAY_FROM_BAND])
     body = fold_band_context([projection], {"rec-1": context})
-    assert _cell(body, "jbe", "long", "1h", AT_BAND)["baseline"]["n_baseline"] == 1
-    assert _cell(body, "jbe", "long", "1h", AWAY_FROM_BAND)["baseline"]["n_baseline"] == 1
-    assert body["basis"]["n_anchors_at_band"] == 1
-    assert body["basis"]["n_anchors_away_from_band"] == 1
+    assert _cell(body, "jbe", "long", "1h", AT_WALL, ROOM_GE_2R)["baseline"]["n_baseline"] == 1
+    assert _cell(body, "jbe", "long", "1h", OFF_WALL, ROOM_LT_1R)["baseline"]["n_baseline"] == 1
+    assert body["basis"]["n_anchors_at_wall"] == 1
+    assert body["basis"]["n_anchors_off_wall"] == 1
 
 
 def test_the_split_pools_across_records_and_counts_distinct_sessions():
     first = _projection("jbe:long", [_event(2.0)], playbook_id="rec-1", session_date="2026-08-06")
     second = _projection("jbe:long", [_event(4.0)], playbook_id="rec-2", session_date="2026-08-07")
     contexts = {
-        "rec-1": _context("jbe:long", [AT_BAND], playbook_id="rec-1"),
-        "rec-2": _context("jbe:long", [AT_BAND], playbook_id="rec-2"),
+        "rec-1": _context("jbe:long", [(AT_WALL, ROOM_GE_2R)], playbook_id="rec-1"),
+        "rec-2": _context("jbe:long", [(AT_WALL, ROOM_GE_2R)], playbook_id="rec-2"),
     }
     body = fold_band_context([first, second], contexts)
-    cell = _cell(body, "jbe", "long", "1h", AT_BAND)["signal"]
+    cell = _cell(body, "jbe", "long", "1h", AT_WALL, ROOM_GE_2R)["signal"]
     assert cell["n"] == 2 and cell["n_sessions"] == 2 and cell["median_pct"] == 3.0
 
 
 def test_the_split_carries_its_own_parameters_and_register():
     body = fold_band_context([], {})
     assert body["parameters"]["near_band_bps"] == PLAYBOOK_CONTEXT_NEAR_BAND_BPS
+    assert body["parameters"]["room_r_edges"] == [1.0, 2.0]
     assert body["parameters"]["distance_from"] == "entry"
+    assert body["parameters"]["backing_buckets"] == list(PLAYBOOK_CONTEXT_BACKING_BUCKETS)
+    assert body["parameters"]["room_buckets"] == list(PLAYBOOK_CONTEXT_ROOM_BUCKETS)
     assert body["register"] == CONTEXT_REGISTER
     assert find_violations(body["register"]) == []
 
@@ -830,18 +1061,18 @@ def test_an_incomplete_context_is_never_persisted_and_never_trusted(tmp_path):
 
     # A serving-shaped resolver knows no maps: every event reads not_computed.
     cold_serve = context_for_record(record, 10, 20, _StubResolver({}), cache)
-    assert cold_serve["signals"][0]["band_context"]["bucket"] == NOT_COMPUTED
+    assert cold_serve["signals"][0]["band_context"]["status"] == NOT_COMPUTED
     assert cold_serve["basis"]["n_signals_not_computed"] == 1
 
     # ...and nothing was written, so the warmer that follows is not shadowed by it.
     warmed = context_for_record(
         record, 10, 20, _StubResolver({"AAA": _map([_band("support", 99.9, 100.1)])}), cache
     )
-    assert warmed["signals"][0]["band_context"]["bucket"] == AT_BAND
+    assert warmed["signals"][0]["band_context"]["backing_bucket"] == AT_WALL
 
     # The complete context IS persisted: a later serving-shaped read gets the real location.
     served = context_for_record(record, 10, 20, _StubResolver({}), cache)
-    assert served["signals"][0]["band_context"]["bucket"] == AT_BAND
+    assert served["signals"][0]["band_context"]["backing_bucket"] == AT_WALL
 
 
 def test_a_pre_existing_incomplete_row_is_ignored_rather_than_served(tmp_path):
@@ -866,4 +1097,4 @@ def test_a_pre_existing_incomplete_row_is_ignored_rather_than_served(tmp_path):
     assert cache.lookup(key) is not None  # the row really is there
 
     served = context_for_record(record, 10, 20, resolver, cache)
-    assert served["signals"][0]["band_context"]["bucket"] == AT_BAND
+    assert served["signals"][0]["band_context"]["backing_bucket"] == AT_WALL

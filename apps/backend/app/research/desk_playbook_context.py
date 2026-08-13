@@ -32,14 +32,28 @@ no band anywhere near this price"). An explicit operator act fills the cache:
 Warming is resumable and idempotent (each pair is published independently through the ONE
 canonical ``compute_tradability`` path, and an already-cached pair is a ~2ms read).
 
-**The distance definition** (spec §6, pre-registered): from the signal's own recorded ``entry``
-(an anchor's ``entry_price``) — the price every forward measurement starts from, and the one field
-signals and anchors both carry, so the lens is IDENTICAL on both sides of the comparison — to the
-nearest EDGE of the nearest band, in bps. A price inside a band is 0.0 bps, not a negative number:
-distance is served unsigned beside ``position`` (``inside``/``above_band``/``below_band``), two
-plain facts rather than one encoded one. The nearest band is chosen across BOTH sides and ALL
-classes (a ``class: null`` band is still a band; class is a quality projection, not an existence
-test), tie-broken ``(distance, class rank, quality_score, price_low)``.
+**The frame** (spec §6, pre-registered) is the one a trader actually reads off a chart: not "how
+far is the nearest band", but "what is under me, what is over me, and how much room does that leave
+against my own stop". From the signal's own recorded ``entry`` (an anchor's ``entry_price``) — the
+price every forward measurement starts from, and the one field signals and anchors both carry, so
+the lens is IDENTICAL on both sides of the comparison — three slots are read in one pass:
+``containing_band`` (the band holding the entry, edges inclusive), ``wall_below``, ``wall_above``,
+each wall carrying its own distance in bps.
+
+Those become side-relative readings: ``backing_bps`` (the wall BEHIND the trade — below a long,
+above a short; ``0.0`` when the entry sits inside a band), ``headroom_bps`` (the wall AHEAD),
+``risk_bps`` (the trade's own recorded invalidation distance), and ``room_r = headroom / risk``.
+Two pre-registered axes bucket them: backing at ``PLAYBOOK_CONTEXT_NEAR_BAND_BPS``
+(``at_wall``/``off_wall``/``no_wall_behind``) and room at ``PLAYBOOK_CONTEXT_ROOM_R_EDGES``
+(``room_lt_1r``/``room_1r_2r``/``room_ge_2r``/``no_wall_ahead``). Room is expressed in R rather
+than raw bps deliberately: 100 bps of headroom means one thing to a setup risking 30 bps and quite
+another to one risking 100.
+
+This SUPERSEDES the v1 lens (nearest band across both sides + an ``aligned``/``opposed`` label),
+which could describe a trade with no structure within 300 bps as "aligned" with a wall it had no
+relationship to, and never named which band it meant. Side labels are still disclosed on every
+slot but never gate one: side is assigned by splitting levels around the prior session's close, a
+daily-basis fact that says where a band came from rather than what price is doing to it intraday.
 
 **The map as-of** is the event's own recorded instant. ``basis_day_key`` collapses every instant of
 one UTC session date onto the identical prior-completed-daily basis, so this is byte-the-same map
@@ -79,17 +93,26 @@ from .tradability_cache import (
 )
 
 __all__ = [
-    "AT_BAND",
-    "AWAY_FROM_BAND",
+    "AT_WALL",
     "BandMapResolver",
     "CONTEXT_REGISTER",
+    "LOCATED",
     "NOT_COMPUTED",
     "NO_BAND_CONTEXT",
+    "NO_WALL_AHEAD",
+    "NO_WALL_BEHIND",
+    "OFF_WALL",
     "PLAYBOOK_CONTEXT_ALGORITHM_VERSION",
-    "PLAYBOOK_CONTEXT_BUCKETS",
-    "PLAYBOOK_CONTEXT_COMPARISON_BUCKETS",
+    "PLAYBOOK_CONTEXT_BACKING_BUCKETS",
     "PLAYBOOK_CONTEXT_DISTANCE_FROM",
     "PLAYBOOK_CONTEXT_NEAR_BAND_BPS",
+    "PLAYBOOK_CONTEXT_ROOM_BUCKETS",
+    "PLAYBOOK_CONTEXT_ROOM_R_EDGES",
+    "PLAYBOOK_CONTEXT_STATUSES",
+    "ROOM_1R_2R",
+    "ROOM_GE_2R",
+    "ROOM_LT_1R",
+    "ROOM_UNMEASURED",
     "PlaybookContextCache",
     "band_context_block",
     "cached_context",
@@ -105,51 +128,84 @@ __all__ = [
 # --- Pre-registered constants (docs/playbook-detector-spec.md §6) --------------------------------
 # Versioned so a change to the LENS invalidates every cached context row without touching one
 # recorded byte -- the record's own `playbook_input_signature` is a different, untouched key.
-PLAYBOOK_CONTEXT_ALGORITHM_VERSION = "playbook-band-context-v1"
+PLAYBOOK_CONTEXT_ALGORITHM_VERSION = "playbook-band-context-v2"
 
 # ADAPTATION (spec §6): one band-width. The desk already calls `tradability_band_width_bps` (70.0)
-# "one wall" when it CLUSTERS levels into a band, so "within one band-width of a band's edge" is
-# that same tolerance read outward. Echoed here as a pre-registered module constant and NEVER read
-# from `Config`: a config tweak must not silently re-bucket already-served evidence, and this
-# feature adds zero `Config` fields (the era's frozen-fingerprint anti-goal).
+# "one wall" when it CLUSTERS levels into a band, so "within one band-width of the wall behind the
+# trade" is that same tolerance read outward. Echoed here as a pre-registered module constant and
+# NEVER read from `Config`: a config tweak must not silently re-bucket already-served evidence, and
+# this feature adds zero `Config` fields (the era's frozen-fingerprint anti-goal).
 PLAYBOOK_CONTEXT_NEAR_BAND_BPS = 70.0
 
-# Structural (shape, not a threshold): where distance is measured FROM.
+# ADAPTATION (spec §6): the room axis's edges, in multiples of the trade's OWN recorded invalidation
+# distance. 1R and 2R are the book's own reward-to-risk vocabulary, not values fitted to any
+# outcome -- and expressing room in R rather than raw bps is the whole point: 100 bps of headroom
+# means something different to a setup risking 30 bps than to one risking 100.
+PLAYBOOK_CONTEXT_ROOM_R_EDGES: tuple[float, float] = (1.0, 2.0)
+
+# Structural (shape, not a threshold): where every distance is measured FROM.
 PLAYBOOK_CONTEXT_DISTANCE_FROM = "entry"
 
-AT_BAND = "at_band"
-AWAY_FROM_BAND = "away_from_band"
+LOCATED = "located"
 NO_BAND_CONTEXT = "no_band_context"
 NOT_COMPUTED = "not_computed"
 
-# The complete per-event vocabulary: two measured locations plus two honest absences.
-PLAYBOOK_CONTEXT_BUCKETS: tuple[str, ...] = (AT_BAND, AWAY_FROM_BAND, NO_BAND_CONTEXT, NOT_COMPUTED)
+# What this lens could resolve about ONE event: a real location, or one of the two honest absences.
+PLAYBOOK_CONTEXT_STATUSES: tuple[str, ...] = (LOCATED, NO_BAND_CONTEXT, NOT_COMPUTED)
 
-# The DECLARED comparison axis of the evidence split -- exactly the two buckets that name a
-# measured location. The two absence states are EXCLUSIONS, counted in the split's own basis block
-# the way `n_truncated`/`n_unmeasured` are already counted beside every cell, never served as
-# distribution cells of their own (a distribution over "this is not known" describes nothing).
-PLAYBOOK_CONTEXT_COMPARISON_BUCKETS: tuple[str, ...] = (AT_BAND, AWAY_FROM_BAND)
+AT_WALL = "at_wall"
+OFF_WALL = "off_wall"
+NO_WALL_BEHIND = "no_wall_behind"
 
-# Class rank for the nearest-band tie-break only -- never a re-grading (class stays `levels.py`'s).
+# The BACKING axis: is there structure behind this trade, and is the trade at it? "Behind" is
+# side-relative -- below a long, above a short -- because that is the wall the trade leans on.
+PLAYBOOK_CONTEXT_BACKING_BUCKETS: tuple[str, ...] = (AT_WALL, OFF_WALL, NO_WALL_BEHIND)
+
+ROOM_LT_1R = "room_lt_1r"
+ROOM_1R_2R = "room_1r_2r"
+ROOM_GE_2R = "room_ge_2r"
+NO_WALL_AHEAD = "no_wall_ahead"
+
+# The ROOM axis: how far the next wall AHEAD is, in multiples of this trade's own invalidation
+# distance. `no_wall_ahead` is a measured fact (the map has nothing in front), not an absence.
+PLAYBOOK_CONTEXT_ROOM_BUCKETS: tuple[str, ...] = (
+    ROOM_LT_1R,
+    ROOM_1R_2R,
+    ROOM_GE_2R,
+    NO_WALL_AHEAD,
+)
+
+# A fifth, honest room state that is deliberately NOT on the axis: headroom was measured but no
+# invalidation distance is derivable, so a room MULTIPLE cannot be formed. Counted as an exclusion
+# the way `n_truncated`/`n_unmeasured` already are; never a distribution cell, because a cell keyed
+# on a coordinate this event does not have would be a fabrication.
+ROOM_UNMEASURED = "room_unmeasured"
+
+# Class rank for the wall tie-breaks only -- never a re-grading (class stays `levels.py`'s).
 _CLASS_RANK = {"A": 3, "B": 2, "C": 1}
 
 CONTEXT_REGISTER = (
-    "each already-recorded playbook signal joined, at serve time only, to the desk's own tradable "
-    "band map for that symbol at that session's basis — the same map the structure chart draws. "
-    "Distance is measured from the signal's own recorded entry price to the nearest edge of the "
-    "nearest band, in bps, unsigned, with a price inside a band recorded as 0.0 and its side named "
-    "separately; a signal within the pre-registered 70 bps of a band edge is bucketed at_band, "
-    "which is a description of where the signal happened, not a filter, not a score, and not a "
-    "claim that one location works better than another. Nothing here is re-detected, re-measured, "
-    "or written back: no recorded file is modified by reading this. A map that has not been "
-    "computed yet is bucketed not_computed and is never conflated with a computed map that puts no "
-    "band near the price, which is bucketed no_band_context. A baseline anchor records no symbol "
-    "of its own; it is attributed to the signal it was drawn beside, by recorded position, and "
-    "that attribution is checked against the anchor's own recorded closing price before it is "
-    "used — an anchor that cannot be attributed is counted, never guessed. This payload describes "
-    "measurements of what already happened and carries no probability, no expectancy, and no "
-    "forecast about what happens next"
+    "each already-recorded playbook signal framed, at serve time only, against the desk's own "
+    "tradable band map for that symbol at that session's basis — the same map the structure chart "
+    "draws. The frame is three slots read from the signal's own recorded entry price: the band "
+    "containing it, if any; the nearest band below it; and the nearest band above it, each with "
+    "its own distance in bps. From those, side-relative readings: the wall BEHIND the trade "
+    "(below a long, above a short) with its distance, the wall AHEAD with its distance, the "
+    "trade's own invalidation distance, and room — the distance ahead divided by that invalidation "
+    "distance. A trade within the pre-registered 70 bps of the wall behind it is bucketed at_wall, "
+    "and room is bucketed at 1 and 2 multiples; both describe where a signal happened, not a "
+    "filter, not a score, and not a claim that one location works better than another. Nothing "
+    "here is re-detected, re-measured, or written back: no recorded file is modified by reading "
+    "this. A map that has not been computed yet is bucketed not_computed and is never conflated "
+    "with a computed map that puts no band anywhere around the price, which is bucketed "
+    "no_band_context; headroom measured without a derivable invalidation distance is bucketed "
+    "room_unmeasured and is counted rather than placed. A baseline anchor records no symbol of its "
+    "own; it is attributed to the signal it was drawn beside, by recorded position, that "
+    "attribution is checked against the anchor's own recorded closing price before it is used, and "
+    "it borrows that same signal's invalidation distance, which is disclosed — an anchor that "
+    "cannot be attributed is counted, never guessed. This payload describes measurements of what "
+    "already happened and carries no probability, no expectancy, and no forecast about what "
+    "happens next"
 )
 
 
@@ -160,9 +216,11 @@ def context_parameters() -> dict:
     return {
         "algorithm": PLAYBOOK_CONTEXT_ALGORITHM_VERSION,
         "near_band_bps": PLAYBOOK_CONTEXT_NEAR_BAND_BPS,
+        "room_r_edges": list(PLAYBOOK_CONTEXT_ROOM_R_EDGES),
         "distance_from": PLAYBOOK_CONTEXT_DISTANCE_FROM,
-        "buckets": list(PLAYBOOK_CONTEXT_BUCKETS),
-        "comparison_buckets": list(PLAYBOOK_CONTEXT_COMPARISON_BUCKETS),
+        "statuses": list(PLAYBOOK_CONTEXT_STATUSES),
+        "backing_buckets": list(PLAYBOOK_CONTEXT_BACKING_BUCKETS),
+        "room_buckets": list(PLAYBOOK_CONTEXT_ROOM_BUCKETS),
     }
 
 
@@ -182,50 +240,95 @@ def _band_distance_bps(band: dict, price: float) -> float:
     return abs(gap) / price * 10_000.0
 
 
-def _position(band: dict, price: float) -> str:
-    """Where ``price`` sits relative to ``band`` — the plain fact that replaces a signed distance."""
-    if band["price_low"] <= price <= band["price_high"]:
-        return "inside"
-    return "below_band" if price < band["price_low"] else "above_band"
-
-
-def _nearest_band(bands: list[dict], price: float) -> dict | None:
-    """The nearest band to ``price`` across BOTH sides and ALL classes (``class: null`` included —
-    class is a quality projection inherited from the zone engine, never a test of whether a band
-    exists). Ties break ``(distance asc, class rank desc, quality_score desc, price_low asc)`` —
-    the distance-first shape ``desk_screen._select_opposite_band`` already uses, so a tie can never
-    resolve on dict ordering. ``None`` only when there are no bands at all."""
-    if not bands:
-        return None
-    return min(
-        bands,
-        key=lambda band: (
-            _band_distance_bps(band, price),
-            -_CLASS_RANK.get(band.get("class") or "", 0),
-            -(band.get("quality_score") or 0.0),
-            band["price_low"],
-        ),
+def _quality_key(band: dict) -> tuple:
+    """The tie-break ordering shared by both wall scans: better class first, then higher quality,
+    then the lower price — deterministic, so a tie can never resolve on dict ordering."""
+    return (
+        -_CLASS_RANK.get(band.get("class") or "", 0),
+        -(band.get("quality_score") or 0.0),
+        band["price_low"],
     )
 
 
-def _bucket(distance_bps: float) -> str:
-    """``at_band`` iff within the pre-registered threshold INCLUSIVE — exactly 70.0 bps is at the
-    band, the boundary a guard test pins so it can never drift silently."""
-    return AT_BAND if distance_bps <= PLAYBOOK_CONTEXT_NEAR_BAND_BPS else AWAY_FROM_BAND
+def _bracket(bands: list[dict], price: float) -> tuple:
+    """The three geometric slots this lens is built on, in ONE pass over the map:
+
+        ``(containing_band | None, (below_band, distance) | None, (above_band, distance) | None)``
+
+    The partition is total, exhaustive, and exclusive:
+
+      * **containing** — ``price_low <= price <= price_high``, both edges INCLUSIVE. A price sitting
+        exactly on an edge is INSIDE the band, never a wall a hair's breadth away: the edge is a
+        real level, and calling it "0.1 bps below" would invent a gap the map does not have.
+      * **wall below** — ``price_high < price`` strictly; distance to its TOP edge.
+      * **wall above** — ``price_low > price`` strictly; distance to its BOTTOM edge.
+
+    Both sides and all classes participate (a ``class: null`` band is still a band — class is a
+    quality projection inherited from the zone engine, never a test of whether structure exists).
+    The side LABEL is disclosed but never gates a slot: side is assigned by splitting levels around
+    the prior session's close (``tradability.py``), which is a daily-basis fact, so intraday it says
+    where a band came from rather than what price is doing to it now.
+
+    Two containing bands cannot happen on a real map — same-side bands are disjoint by the
+    anchor-fixed cluster scan, and the two sides' level pools are split strictly around prior close
+    — but the tie-break is pinned anyway (best class, then quality, then lower price) so a
+    hand-built map or a future band engine can never make this answer depend on dict order."""
+    containing: list[dict] = []
+    below: list[tuple[dict, float]] = []
+    above: list[tuple[dict, float]] = []
+    for band in bands:
+        low = band["price_low"]
+        high = band["price_high"]
+        if low <= price <= high:
+            containing.append(band)
+        elif high < price:
+            below.append((band, _band_distance_bps(band, price)))
+        else:
+            above.append((band, _band_distance_bps(band, price)))
+    best_containing = min(containing, key=_quality_key) if containing else None
+    nearest_below = min(below, key=lambda item: (item[1], *_quality_key(item[0]))) if below else None
+    nearest_above = min(above, key=lambda item: (item[1], *_quality_key(item[0]))) if above else None
+    return best_containing, nearest_below, nearest_above
 
 
-def _side_relation(side: str | None, band_side: str) -> str | None:
-    """``aligned`` when the event's own side and the band's side agree in thesis (a long at a
-    support wall, a short at a resistance wall), ``opposed`` otherwise. ``None`` when no side is
-    known. A baseline anchor is given its POOL's side — the very side its own recorded measurement
-    sign already used (``compute_playbook`` signs an anchor with its signal's side), so the two
-    columns of the comparison are read the same way rather than one being blank."""
-    if side is None:
+def _wall_slot(band: dict, distance_bps: float) -> dict:
+    """One wall as served: the band's own disclosed fields plus this event's distance to it, so the
+    UI renders a wall without inverting or re-deriving anything."""
+    return {**_band_summary(band), "distance_bps": distance_bps}
+
+
+def _risk_bps(entry, invalidation) -> float | None:
+    """The trade's OWN recorded invalidation distance, in bps of entry — read off the two fields
+    ``compute_playbook`` already wrote, never a stop this lens invents. ``None`` when either is
+    missing or non-numeric (an older/partial record), so room is refused rather than guessed."""
+    if not isinstance(entry, (int, float)) or not isinstance(invalidation, (int, float)):
         return None
-    aligned = (side == "long" and band_side == "support") or (
-        side == "short" and band_side == "resistance"
-    )
-    return "aligned" if aligned else "opposed"
+    if entry == 0:
+        return None
+    return abs(entry - invalidation) / entry * 10_000.0
+
+
+def _backing_bucket(backing_bps: float | None) -> str:
+    """``at_wall`` iff within the pre-registered threshold INCLUSIVE — exactly 70.0 bps is at the
+    wall, the boundary a guard test pins so it can never drift silently."""
+    if backing_bps is None:
+        return NO_WALL_BEHIND
+    return AT_WALL if backing_bps <= PLAYBOOK_CONTEXT_NEAR_BAND_BPS else OFF_WALL
+
+
+def _room_bucket(headroom_bps: float | None, room_r: float | None) -> str:
+    """The room axis, lower edge INCLUSIVE at both boundaries: exactly 1.0 reads ``room_1r_2r`` and
+    exactly 2.0 reads ``room_ge_2r``. ``no_wall_ahead`` is a measured fact about the map;
+    ``room_unmeasured`` is the honest "headroom is known but this event has no invalidation
+    distance to divide by" state, which never becomes a distribution cell."""
+    if headroom_bps is None:
+        return NO_WALL_AHEAD
+    if room_r is None:
+        return ROOM_UNMEASURED
+    one_r, two_r = PLAYBOOK_CONTEXT_ROOM_R_EDGES
+    if room_r < one_r:
+        return ROOM_LT_1R
+    return ROOM_1R_2R if room_r < two_r else ROOM_GE_2R
 
 
 def _band_summary(band: dict) -> dict:
@@ -252,53 +355,92 @@ def _basis_phrase(basis_as_of: str | None) -> str:
     )
 
 
-def _caption(bucket: str, price: float, band: dict | None, basis_as_of: str | None) -> str:
-    """The one served sentence describing this event's location — rendered VERBATIM by the desk
-    tables and the structure drill-in, so the two surfaces can never phrase the same fact two ways
-    (the UI-recomputes-nothing rule applies to prose as much as to numbers)."""
-    if bucket == NOT_COMPUTED:
-        return (
-            "the tradable band map for this symbol at this session's basis has not been computed "
-            "yet, so no location is claimed for this signal"
-        )
-    if bucket == NO_BAND_CONTEXT or band is None:
-        return (
-            "no tradable band map is derivable for this symbol at this session's basis — recorded "
-            f"as an honest absence, never a guess ({_basis_phrase(basis_as_of)})"
-        )
-    distance = _band_distance_bps(band, price)
-    position = _position(band, price)
+_NOT_COMPUTED_CAPTION = (
+    "the tradable band map for this symbol at this session's basis has not been computed "
+    "yet, so no location is claimed for this signal"
+)
+
+
+def _band_phrase(band: dict) -> str:
+    """One band named the way every caption names it: its range and its inherited class."""
     klass = f"class {band['class']}" if band["class"] else "no inherited class"
-    where = (
-        f"sits inside the {band['side']} band"
-        if position == "inside"
-        else f"sits {distance:.1f} bps {'below' if position == 'below_band' else 'above'} the {band['side']} band"
-    )
-    threshold = (
-        f"within the pre-registered {PLAYBOOK_CONTEXT_NEAR_BAND_BPS:.0f} bps disclosure threshold"
-        if bucket == AT_BAND
-        else f"beyond the pre-registered {PLAYBOOK_CONTEXT_NEAR_BAND_BPS:.0f} bps disclosure threshold"
-    )
-    return (
-        f"entry {price:.2f} {where} {band['price_low']:.2f}–{band['price_high']:.2f} "
-        f"({klass}) — {bucket}, {threshold}; {_basis_phrase(basis_as_of)}"
-    )
+    return f"{band['price_low']:.2f}–{band['price_high']:.2f} ({klass})"
+
+
+def _caption(
+    *,
+    side: str,
+    price: float,
+    containing: dict | None,
+    below: tuple | None,
+    above: tuple | None,
+    risk_bps: float | None,
+    room_r: float | None,
+    basis_as_of: str | None,
+) -> str:
+    """The one served sentence framing this event — rendered VERBATIM by the desk tables and the
+    structure drill-in, so the two surfaces can never phrase the same fact two ways (the
+    UI-recomputes-nothing rule applies to prose as much as to numbers).
+
+    It reads the way a trader frames a position: where the entry sits, what is under it, what is
+    over it, and how much room that leaves relative to the trade's own invalidation distance. The
+    room clause rides whichever side is AHEAD of the trade, so the sentence is true for shorts
+    without the reader having to invert anything."""
+    if containing is not None:
+        head = f"{side} {price:.2f} from inside the {containing['side']} band {_band_phrase(containing)}"
+    else:
+        head = f"{side} {price:.2f} inside no band on this map"
+
+    ahead_is_above = side == "long"
+    clauses = []
+    for slot, word, is_ahead in (
+        (below, "next floor", not ahead_is_above),
+        (above, "first ceiling", ahead_is_above),
+    ):
+        direction = "below" if word == "next floor" else "above"
+        if slot is None:
+            clauses.append(f"no band {direction} on this map")
+            continue
+        band, distance = slot
+        clause = f"{word} {_band_phrase(band)}, {distance:.1f} bps {direction}"
+        if is_ahead:
+            if room_r is not None and risk_bps is not None:
+                clause += f" = {room_r:.1f}× the {risk_bps:.1f} bps invalidation distance"
+            else:
+                clause += " (no invalidation distance is derivable for this event)"
+        clauses.append(clause)
+
+    return f"{head}; {'; '.join(clauses)}; {_basis_phrase(basis_as_of)}"
+
+
+def _null_context(status: str, caption: str, basis_as_of: str | None = None) -> dict:
+    """The served shape for an event with no frame — every slot and reading explicitly null, so a
+    reader never has to distinguish "absent" from "zero", and the two absence STATUSES stay
+    distinguishable from each other."""
+    return {
+        "status": status,
+        "containing_band": None,
+        "wall_below": None,
+        "wall_above": None,
+        "backing_bps": None,
+        "headroom_bps": None,
+        "risk_bps": None,
+        "risk_source": None,
+        "room_r": None,
+        "backing_bucket": None,
+        "room_bucket": None,
+        "basis_as_of": basis_as_of,
+        "caption": caption,
+    }
 
 
 def _unlocatable(reason: str) -> dict:
-    """An event this lens cannot place at all — no recorded price, no recorded instant, or an
-    unparseable one. An honest ``no_band_context``, never a ``not_computed`` (no amount of warming
-    would help) and never a fabricated location. The tolerance mirrors ``_file_projection``'s own:
-    an older or partial record is excluded from what it cannot support, never a crash."""
-    return {
-        "bucket": NO_BAND_CONTEXT,
-        "distance_bps": None,
-        "position": None,
-        "side_relation": None,
-        "band": None,
-        "basis_as_of": None,
-        "caption": reason,
-    }
+    """An event this lens cannot place at all — no recorded price, no recorded instant, an
+    unparseable one, or no side to read the frame from. An honest ``no_band_context``, never a
+    ``not_computed`` (no amount of warming would help) and never a fabricated location. The
+    tolerance mirrors ``_file_projection``'s own: an older or partial record is excluded from what
+    it cannot support, never a crash."""
+    return _null_context(NO_BAND_CONTEXT, reason)
 
 
 def _safe_epoch(value) -> float | None:
@@ -312,46 +454,78 @@ def _safe_epoch(value) -> float | None:
         return None
 
 
-def band_context_block(map_result: dict | None, price: float, side: str | None) -> dict:
-    """One event's whole served ``band_context`` block. ``map_result is None`` means the map was
-    never computed (lookup-only miss) — a DIFFERENT fact from a computed map with no bands, and the
-    two are bucketed differently on purpose (module docstring)."""
+def band_context_block(
+    map_result: dict | None,
+    price: float,
+    side: str | None,
+    *,
+    risk_bps: float | None = None,
+    risk_source: str | None = None,
+) -> dict:
+    """One event's whole served ``band_context`` block — the bracket frame plus its side-relative
+    readings. ``map_result is None`` means the map was never computed (lookup-only miss), a
+    DIFFERENT fact from a computed map with no bands anywhere near the price; the two get different
+    statuses on purpose (module docstring).
+
+    ``risk_bps``/``risk_source`` are passed IN rather than derived here: a signal owns its own
+    invalidation distance, while an anchor borrows the signal it was drawn beside, and only the
+    caller knows which case it is holding."""
     if not isinstance(price, (int, float)):
         return _unlocatable(
             "this event records no entry price, so no location relative to any band is derived"
         )
+    if side not in ("long", "short"):
+        # The frame is trade-relative: which wall is "behind" and which is "ahead" is decided by
+        # the side. Without one there is no honest frame to serve, only a pair of raw directions.
+        return _unlocatable(
+            "this event records no side, so no wall can be read as behind or ahead of it and no "
+            "frame is claimed"
+        )
     if map_result is None:
-        return {
-            "bucket": NOT_COMPUTED,
-            "distance_bps": None,
-            "position": None,
-            "side_relation": None,
-            "band": None,
-            "basis_as_of": None,
-            "caption": _caption(NOT_COMPUTED, price, None, None),
-        }
+        return _null_context(NOT_COMPUTED, _NOT_COMPUTED_CAPTION)
+
     basis_as_of = map_result.get("basis_as_of")
-    band = _nearest_band(map_result.get("bands") or [], price)
-    if band is None:
-        return {
-            "bucket": NO_BAND_CONTEXT,
-            "distance_bps": None,
-            "position": None,
-            "side_relation": None,
-            "band": None,
-            "basis_as_of": basis_as_of,
-            "caption": _caption(NO_BAND_CONTEXT, price, None, basis_as_of),
-        }
-    distance = _band_distance_bps(band, price)
-    bucket = _bucket(distance)
+    containing, below, above = _bracket(map_result.get("bands") or [], price)
+    if containing is None and below is None and above is None:
+        return _null_context(
+            NO_BAND_CONTEXT,
+            "no tradable band map is derivable for this symbol at this session's basis — recorded "
+            f"as an honest absence, never a guess ({_basis_phrase(basis_as_of)})",
+            basis_as_of,
+        )
+
+    # Behind / ahead are side-relative: a long leans on what is below and runs into what is above.
+    behind, ahead = (below, above) if side == "long" else (above, below)
+    backing_bps = 0.0 if containing is not None else (behind[1] if behind is not None else None)
+    headroom_bps = ahead[1] if ahead is not None else None
+    room_r = (
+        headroom_bps / risk_bps
+        if headroom_bps is not None and risk_bps is not None and risk_bps != 0.0
+        else None
+    )
     return {
-        "bucket": bucket,
-        "distance_bps": distance,
-        "position": _position(band, price),
-        "side_relation": _side_relation(side, band["side"]),
-        "band": _band_summary(band),
+        "status": LOCATED,
+        "containing_band": _band_summary(containing) if containing is not None else None,
+        "wall_below": _wall_slot(*below) if below is not None else None,
+        "wall_above": _wall_slot(*above) if above is not None else None,
+        "backing_bps": backing_bps,
+        "headroom_bps": headroom_bps,
+        "risk_bps": risk_bps,
+        "risk_source": risk_source if risk_bps is not None else None,
+        "room_r": room_r,
+        "backing_bucket": _backing_bucket(backing_bps),
+        "room_bucket": _room_bucket(headroom_bps, room_r),
         "basis_as_of": basis_as_of,
-        "caption": _caption(bucket, price, band, basis_as_of),
+        "caption": _caption(
+            side=side,
+            price=price,
+            containing=containing,
+            below=below,
+            above=above,
+            risk_bps=risk_bps,
+            room_r=room_r,
+            basis_as_of=basis_as_of,
+        ),
     }
 
 
@@ -495,6 +669,38 @@ def record_map_requests(record: dict) -> list[list[str]]:
     return [list(pair) for pair in sorted(pairs)]
 
 
+def _new_counts() -> dict[str, int]:
+    """One tally per served state: the two absences, plus BOTH axes' buckets and the off-axis
+    ``room_unmeasured``. Every located event increments exactly one backing bucket and exactly one
+    room state, so each axis independently sums to the located total — a reader can check the
+    disclosure adds up without reconciling a joint grid."""
+    keys = (
+        (NO_BAND_CONTEXT, NOT_COMPUTED)
+        + PLAYBOOK_CONTEXT_BACKING_BUCKETS
+        + PLAYBOOK_CONTEXT_ROOM_BUCKETS
+        + (ROOM_UNMEASURED,)
+    )
+    return {key: 0 for key in keys}
+
+
+def _tally(counts: dict[str, int], context: dict) -> None:
+    if context["status"] != LOCATED:
+        counts[context["status"]] += 1
+        return
+    counts[context["backing_bucket"]] += 1
+    counts[context["room_bucket"]] += 1
+
+
+def _basis_block(counts: dict[str, int], prefix: str, total: int) -> dict:
+    """The counts, prefixed for the half of the comparison they describe (``signals``/``anchors``).
+    Absence keys keep their v1 names so an existing reader of the payload's own disclosure — and
+    the completeness guard that keys on ``not_computed`` — is unaffected by the frame change."""
+    block = {f"n_{prefix}": total}
+    for key, value in counts.items():
+        block[f"n_{prefix}_{key}"] = value
+    return block
+
+
 def record_band_context(record: dict, resolver: BandMapResolver) -> dict:
     """The whole served band-context payload for ONE recorded playbook record.
 
@@ -504,7 +710,7 @@ def record_band_context(record: dict, resolver: BandMapResolver) -> dict:
     about. ``baseline_anchors`` mirrors the record's own per-pool lists, index-aligned."""
     attributed = _attribute_anchors(record)
     signals: list[dict] = []
-    counts = {bucket: 0 for bucket in PLAYBOOK_CONTEXT_BUCKETS}
+    counts = _new_counts()
     for signal in record.get("signals") or []:
         price = signal.get("entry")
         symbol = signal.get("symbol")
@@ -515,8 +721,16 @@ def record_band_context(record: dict, resolver: BandMapResolver) -> dict:
                 "resolved for it and no location is claimed"
             )
         else:
-            context = band_context_block(resolver.resolve(symbol, epoch), price, signal.get("side"))
-        counts[context["bucket"]] += 1
+            context = band_context_block(
+                resolver.resolve(symbol, epoch),
+                price,
+                signal.get("side"),
+                # A signal owns its invalidation distance: `compute_playbook` recorded it beside
+                # the entry this frame is read from.
+                risk_bps=_risk_bps(price, signal.get("invalidation_price")),
+                risk_source="own",
+            )
+        _tally(counts, context)
         signals.append(
             {
                 "symbol": symbol,
@@ -530,7 +744,7 @@ def record_band_context(record: dict, resolver: BandMapResolver) -> dict:
             }
         )
 
-    anchor_counts = {bucket: 0 for bucket in PLAYBOOK_CONTEXT_BUCKETS}
+    anchor_counts = _new_counts()
     n_unattributable = 0
     anchors_out: dict[str, list[dict]] = {}
     for pool_key, anchors in (record.get("baseline_anchors") or {}).items():
@@ -556,8 +770,18 @@ def record_band_context(record: dict, resolver: BandMapResolver) -> dict:
                     "resolved for it and no location is claimed"
                 )
             else:
-                context = band_context_block(resolver.resolve(symbol, epoch), price, pool_side)
-            anchor_counts[context["bucket"]] += 1
+                context = band_context_block(
+                    resolver.resolve(symbol, epoch),
+                    price,
+                    pool_side,
+                    # An anchor records no invalidation of its own. It borrows the one from the
+                    # signal it was drawn beside -- already attributed and close-price-verified
+                    # above -- so the two halves of the comparison are measured in the same R
+                    # units. The borrowing is disclosed rather than silent.
+                    risk_bps=_risk_bps(owner.get("entry"), owner.get("invalidation_price")),
+                    risk_source="paired_signal",
+                )
+            _tally(anchor_counts, context)
             rows.append(
                 {
                     "index": index,
@@ -578,16 +802,10 @@ def record_band_context(record: dict, resolver: BandMapResolver) -> dict:
         "signals": signals,
         "baseline_anchors": anchors_out,
         "basis": {
-            "n_signals": len(signals),
-            "n_signals_at_band": counts[AT_BAND],
-            "n_signals_away_from_band": counts[AWAY_FROM_BAND],
-            "n_signals_no_band_context": counts[NO_BAND_CONTEXT],
-            "n_signals_not_computed": counts[NOT_COMPUTED],
-            "n_anchors": sum(len(rows) for rows in anchors_out.values()),
-            "n_anchors_at_band": anchor_counts[AT_BAND],
-            "n_anchors_away_from_band": anchor_counts[AWAY_FROM_BAND],
-            "n_anchors_no_band_context": anchor_counts[NO_BAND_CONTEXT],
-            "n_anchors_not_computed": anchor_counts[NOT_COMPUTED],
+            **_basis_block(counts, "signals", len(signals)),
+            **_basis_block(
+                anchor_counts, "anchors", sum(len(rows) for rows in anchors_out.values())
+            ),
             "n_anchors_unattributable": n_unattributable,
         },
         "register": CONTEXT_REGISTER,
@@ -822,7 +1040,10 @@ def warm_contexts(store, bar_store, config, *, date: str | None = None, log=prin
         log(
             f"[{warmed}/{len(paths)}] {record['session_date']} {record['id']} — "
             f"signals {basis['n_signals']} "
-            f"(at_band {basis['n_signals_at_band']}, away {basis['n_signals_away_from_band']}, "
+            f"(at_wall {basis['n_signals_at_wall']}, off_wall {basis['n_signals_off_wall']}, "
+            f"no_wall_behind {basis['n_signals_no_wall_behind']}; "
+            f"room<1R {basis['n_signals_room_lt_1r']}, 1-2R {basis['n_signals_room_1r_2r']}, "
+            f">=2R {basis['n_signals_room_ge_2r']}, no_wall_ahead {basis['n_signals_no_wall_ahead']}; "
             f"no_band {basis['n_signals_no_band_context']}, "
             f"not_computed {basis['n_signals_not_computed']})"
         )

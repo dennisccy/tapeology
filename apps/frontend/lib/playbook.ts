@@ -70,9 +70,24 @@ export function playbookContextIndex(
   return index;
 }
 
-// The band cell's own short label -- "support B" / "resistance —". Rendered from served fields
-// only; this derives no price and no distance.
-export function playbookBandLabel(context: DeskPlaybookBandContext | undefined): string {
-  if (!context || context.band === null) return "—";
-  return `${context.band.side} ${context.band.class ?? "—"}`;
+// One wall cell's short label, rendered from SERVED fields only -- this derives no price, no
+// distance, and no class. "inside 217.13–218.63 A" when the entry sits within a band on that side
+// of the frame, "214.11–215.60 A · 93 bps" for a wall standing off it, an em-dash for nothing
+// there. The containing band is shown on the side it sits on relative to its own edges, so one
+// band never appears in both cells.
+export function playbookWallLabel(
+  context: DeskPlaybookBandContext | undefined,
+  side: "below" | "above",
+): string {
+  if (!context) return "—";
+  const containing = context.containing_band;
+  if (containing !== null) {
+    // An entry inside a band is bracketed by that band's own edges: it is the nearest structure in
+    // BOTH directions, so it is named once, on the side the reader is looking at.
+    const label = `inside ${containing.price_low.toFixed(2)}–${containing.price_high.toFixed(2)} ${containing.class ?? "—"}`;
+    if (side === "below") return label;
+  }
+  const wall = side === "below" ? context.wall_below : context.wall_above;
+  if (wall === null) return containing !== null && side === "above" ? "inside" : "—";
+  return `${wall.price_low.toFixed(2)}–${wall.price_high.toFixed(2)} ${wall.class ?? "—"} · ${wall.distance_bps.toFixed(0)} bps`;
 }

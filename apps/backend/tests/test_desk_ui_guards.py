@@ -230,15 +230,16 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|plan\.(?:total|missing)"
     r"|compute\.(?:planned_total|completed)"
     r"|outcomes\.(?:reused|recorded|refused_non_session|failed)"
-    r"|cell\.signal\.(?:n|n_positive|n_truncated|n_unmeasured|n_sessions|median_pct|p25_pct|p75_pct"
+    r"|cell\.signal\.(?:n|n_positive|positive_share|n_truncated|n_unmeasured|n_sessions|median_pct|p25_pct|p75_pct"
     r"|mean_pct)"
     # The band-context lens (spec §6): a location is SERVED, never re-derived on the client -- the
     # distance, the band edges, and the threshold comparison all belong to the backend.
-    r"|context\.(?:distance_bps|near_band_bps)"
-    r"|context\.band\.(?:price_low|price_high|quality_score|member_count)"
-    r"|bandContext\.(?:distance_bps)"
-    r"|band\.parameters\.near_band_bps"
-    r"|cell\.baseline\.(?:n_baseline|n_positive|n_truncated|n_unmeasured|n_sessions|median_pct"
+    r"|context\.(?:backing_bps|headroom_bps|risk_bps|room_r)"
+    r"|context\.(?:containing_band|wall_below|wall_above)"
+    r"\.(?:distance_bps|price_low|price_high|quality_score|member_count)"
+    r"|bandContext\.(?:backing_bps|headroom_bps|risk_bps|room_r)"
+    r"|band\.parameters\.(?:near_band_bps|room_r_edges)"
+    r"|cell\.baseline\.(?:n_baseline|n_positive|positive_share|n_truncated|n_unmeasured|n_sessions|median_pct"
     r"|p25_pct|p75_pct"
     r"|mean_pct)"
     r"|breach\.(?:breached_count|total_count)"
@@ -1370,17 +1371,18 @@ def test_the_asof_class_expr_extractor_returns_the_right_inputs_own_expression()
 # that could quietly turn a description of where a signal happened into a claim about what it means.
 
 _BAND_CONTEXT_TESTIDS = (
-    "desk-playbook-signal-band",
-    "desk-playbook-signal-band-dist",
-    "desk-playbook-signal-band-relation",
-    "desk-playbook-near-band-filter",
-    "desk-playbook-near-band-filter-count",
+    "desk-playbook-signal-wall-below",
+    "desk-playbook-signal-wall-above",
+    "desk-playbook-signal-room",
+    "desk-playbook-band-filter",
+    "desk-playbook-band-filter-count",
     "desk-evidence-signal-n-positive",
     "desk-evidence-baseline-n-positive",
     "desk-evidence-band-context",
     "desk-evidence-band-context-basis",
     "desk-evidence-band-context-table",
-    "desk-evidence-cell-bucket",
+    "desk-evidence-cell-backing",
+    "desk-evidence-cell-room",
 )
 
 
@@ -1393,12 +1395,12 @@ def test_desk_page_ships_every_band_context_testid():
 
 
 def test_the_band_context_testid_guard_can_fail_on_a_seeded_violation():
-    seeded = '<div data-testid="desk-playbook-signal-band" />'
+    seeded = '<div data-testid="desk-playbook-signal-wall-below" />'
     missing = [testid for testid in _BAND_CONTEXT_TESTIDS if f'data-testid="{testid}"' not in seeded]
     assert missing, "a source shipping only ONE of the testids must still be reported as missing"
 
 
-def test_the_near_band_filter_calls_itself_a_display_filter():
+def test_the_band_filter_calls_itself_a_display_filter():
     """The filter hides ROWS, never records — and it must say so where an operator reads it. A
     filter that looked like it narrowed the evidence would misrepresent what the payload still
     serves and still counts."""
@@ -1407,11 +1409,14 @@ def test_the_near_band_filter_calls_itself_a_display_filter():
     assert "recorded signals, none hidden" in source
 
 
-def test_the_near_band_filter_defaults_to_off():
-    """Nothing is hidden until an operator asks for it."""
+def test_the_band_filter_defaults_to_all_recorded():
+    """Nothing is hidden until an operator asks for it — pinned on the exact declaration so a
+    future edit cannot quietly start the page in a filtered state."""
     source = _DESK_PAGE.read_text()
-    assert "useState(false);" in source
-    assert "const [playbookNearBandOnly, setPlaybookNearBandOnly] = useState(false);" in source
+    assert (
+        'const [playbookBandFilter, setPlaybookBandFilter] = useState<PlaybookBandFilter>("all");'
+        in source
+    )
 
 
 def test_band_context_copy_carries_no_advice_forecast_or_edge_claim():
@@ -1419,12 +1424,18 @@ def test_band_context_copy_carries_no_advice_forecast_or_edge_claim():
     than eyeballed."""
     source = _DESK_PAGE.read_text()
     phrases = [
-        "show only signals at a band",
+        "all recorded signals",
+        "at a wall behind",
+        "at a wall behind with room ≥ 1×",
         "a display filter; every signal stays recorded and served",
+        "recorded signals, none hidden",
         "By location relative to the tradable band map",
-        "signal(s) at a band",
-        "whose band map has not been computed yet",
+        # Source-wrapped in the basis line, so the guard pins the fragment that survives the wrap.
+        "band map has not been computed yet",
         "recorded measurements greater than zero",
+        "with no derivable",
+        "off one, ",
+        "with nothing\n        behind",
     ]
     for phrase in phrases:
         assert phrase in source, f"expected band-context copy missing: {phrase!r}"

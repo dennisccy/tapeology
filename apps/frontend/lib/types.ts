@@ -1856,6 +1856,8 @@ export interface DeskPlaybookBackscanRunsListResult {
 export interface DeskPlaybookEvidenceCellStats {
   n: number;
   n_positive: number | null;
+  // `n_positive / n`, served so no surface divides two served numbers of its own.
+  positive_share: number | null;
   n_truncated: number;
   n_unmeasured: number;
   n_sessions: number;
@@ -1868,6 +1870,7 @@ export interface DeskPlaybookEvidenceCellStats {
 export interface DeskPlaybookEvidenceBaselineStats {
   n_baseline: number;
   n_positive: number | null;
+  positive_share: number | null;
   n_truncated: number;
   n_unmeasured: number;
   n_sessions: number;
@@ -1915,11 +1918,16 @@ export interface DeskPlaybookEvidenceBasis {
 // Where a recorded signal sits relative to the desk's own tradable band map at that session's
 // basis. EVERY field here is served; this UI computes no distance, no bucket, and no caption.
 
-export type DeskPlaybookBandBucket =
-  | "at_band"
-  | "away_from_band"
-  | "no_band_context"
-  | "not_computed";
+export type DeskPlaybookBandStatus = "located" | "no_band_context" | "not_computed";
+export type DeskPlaybookBackingBucket = "at_wall" | "off_wall" | "no_wall_behind";
+export type DeskPlaybookRoomBucket =
+  | "room_lt_1r"
+  | "room_1r_2r"
+  | "room_ge_2r"
+  | "no_wall_ahead"
+  // Headroom measured but no invalidation distance to divide by -- an honest state, counted in the
+  // split's basis, never one of its cells.
+  | "room_unmeasured";
 
 export interface DeskPlaybookBandSummary {
   side: "support" | "resistance";
@@ -1931,13 +1939,29 @@ export interface DeskPlaybookBandSummary {
   member_count: number;
 }
 
+// A wall is a band plus THIS event's distance to its facing edge -- served together so no surface
+// has to pair them or invert a sign.
+export interface DeskPlaybookWall extends DeskPlaybookBandSummary {
+  distance_bps: number;
+}
+
+// The bracket frame (docs/playbook-detector-spec.md §6 v2): what is under the entry, what is over
+// it, and how much room that leaves against the trade's own invalidation distance. Every reading is
+// served; nothing here is computed in the browser.
 export interface DeskPlaybookBandContext {
-  bucket: DeskPlaybookBandBucket;
-  // `null` on both absence buckets -- an honest missing location, never a fabricated 0.
-  distance_bps: number | null;
-  position: "inside" | "above_band" | "below_band" | null;
-  side_relation: "aligned" | "opposed" | null;
-  band: DeskPlaybookBandSummary | null;
+  status: DeskPlaybookBandStatus;
+  containing_band: DeskPlaybookBandSummary | null;
+  wall_below: DeskPlaybookWall | null;
+  wall_above: DeskPlaybookWall | null;
+  // Side-relative: "behind" is below a long and above a short. `0.0` when the entry sits inside a
+  // band; `null` when nothing is behind it at all.
+  backing_bps: number | null;
+  headroom_bps: number | null;
+  risk_bps: number | null;
+  risk_source: "own" | "paired_signal" | null;
+  room_r: number | null;
+  backing_bucket: DeskPlaybookBackingBucket | null;
+  room_bucket: DeskPlaybookRoomBucket | null;
   basis_as_of: string | null;
   caption: string;
 }
@@ -1965,9 +1989,11 @@ export interface DeskPlaybookContextAnchor {
 export interface DeskPlaybookContextParameters {
   algorithm: string;
   near_band_bps: number;
+  room_r_edges: number[];
   distance_from: string;
-  buckets: string[];
-  comparison_buckets: string[];
+  statuses: string[];
+  backing_buckets: string[];
+  room_buckets: string[];
 }
 
 export interface DeskPlaybookContext {
@@ -1984,7 +2010,8 @@ export interface DeskPlaybookContext {
 // One split cell -- the SAME stat blocks as an unsplit cell, plus the bucket that names which
 // comparison half it belongs to.
 export interface DeskPlaybookEvidenceBandContextCell extends DeskPlaybookEvidenceCell {
-  bucket: "at_band" | "away_from_band";
+  backing_bucket: DeskPlaybookBackingBucket;
+  room_bucket: Exclude<DeskPlaybookRoomBucket, "room_unmeasured">;
 }
 
 export interface DeskPlaybookEvidenceBandContext {

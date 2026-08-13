@@ -78,9 +78,12 @@ from .desk_playbook import (
 # module (no cycle), and neither is reachable from `compute_playbook`'s own walk.
 from .desk_playbook_context import (
     CONTEXT_REGISTER,
+    LOCATED,
     NO_BAND_CONTEXT,
-    PLAYBOOK_CONTEXT_BUCKETS,
-    PLAYBOOK_CONTEXT_COMPARISON_BUCKETS,
+    NOT_COMPUTED,
+    PLAYBOOK_CONTEXT_BACKING_BUCKETS,
+    PLAYBOOK_CONTEXT_ROOM_BUCKETS,
+    ROOM_UNMEASURED,
     BandMapResolver,
     PlaybookContextCache,
     cached_context,
@@ -98,8 +101,20 @@ __all__ = [
 ]
 
 # The projection shape version -- bumped when a projection gains FIELDS a fold needs. A cached row
-# at an older version is a miss (see `_projections_by_signature`), never a partial hit.
+# at an older version is a miss (see `_projections_by_signature`), never a partial hit. The v2
+# band-context frame did NOT bump it: buckets live on the context, not the projection, so the
+# projection cache stays warm across a lens revision.
 _PROJECTION_VERSION = 2
+
+# The five DIRECTIONAL measures -- the four rail horizons plus `to_close`. Only these are split by
+# location: a drawdown is clamped <= 0 by construction, so splitting it by where the trade sat would
+# multiply rows without adding a reading. The UNSPLIT table still serves all 15 measures.
+# Derived from the rail's own horizon declaration rather than spelled out; deliberately a SECOND
+# name from `_BREACH_HORIZONS` (same values today, different meaning -- one is "which windows can be
+# measured", the other is "which windows carry a breach flag").
+_DIRECTIONAL_MEASURES: tuple[str, ...] = tuple(
+    label for label, _minutes in DESK_FORWARD_HORIZONS_MINUTES
+) + ("to_close",)
 
 # Every side a signal can carry (``desk_playbook_detect.py``'s own complete vocabulary) -- a fixed,
 # declared pair, never discovered from data (see the module docstring: cells are the full cross
@@ -343,6 +358,15 @@ def _n_positive_for(measure: str, values: list[float]) -> int | None:
     return sum(1 for value in values if value > 0.0)
 
 
+def _positive_share(n_positive: int | None, n: int) -> float | None:
+    """``n_positive / n`` -- a share of the SAME pooled values, computed once server-side so no
+    surface divides served numbers of its own. ``None`` wherever the count itself is meaningless
+    (every ``mdd_*`` measure) or the pool is empty (a share of nothing is not 0.0)."""
+    if n_positive is None or n == 0:
+        return None
+    return n_positive / n
+
+
 def _signal_cell(
     measure: str, values: list[float], n_truncated: int, n_unmeasured: int, n_sessions: int
 ) -> dict:
@@ -350,6 +374,10 @@ def _signal_cell(
     return {
         "n": len(values),
         "n_positive": _n_positive_for(measure, values),
+        # The same count restated against the same pool -- served so a reader (and a sorted column)
+        # never has to divide two served numbers to compare cohorts of different sizes. `None`
+        # exactly where `n_positive` is: at n == 0, and on every drawdown measure.
+        "positive_share": _positive_share(_n_positive_for(measure, values), len(values)),
         "n_truncated": n_truncated,
         "n_unmeasured": n_unmeasured,
         "n_sessions": n_sessions,
@@ -367,6 +395,10 @@ def _baseline_cell(
     return {
         "n_baseline": len(values),
         "n_positive": _n_positive_for(measure, values),
+        # The same count restated against the same pool -- served so a reader (and a sorted column)
+        # never has to divide two served numbers to compare cohorts of different sizes. `None`
+        # exactly where `n_positive` is: at n == 0, and on every drawdown measure.
+        "positive_share": _positive_share(_n_positive_for(measure, values), len(values)),
         "n_truncated": n_truncated,
         "n_unmeasured": n_unmeasured,
         "n_sessions": n_sessions,
@@ -499,46 +531,82 @@ def _fold_cells(default_projections: list[dict]) -> list[dict]:
     return cells
 
 
+def _event_coordinates(context: dict | None) -> tuple[dict, dict]:
+    """Per pool, the ordered (backing, room) coordinate of each measured signal and each anchor —
+    or ``None`` where the event carries no location. Reads ONLY served context fields; this module
+    never re-derives a bucket."""
+    signal_coords: dict[str, list] = {}
+    anchor_coords: dict[str, list] = {}
+    if not context:
+        return signal_coords, anchor_coords
+    for signal in context.get("signals", []):
+        if signal.get("measured"):
+            signal_coords.setdefault(signal["pool_key"], []).append(_coordinate(signal))
+    for pool_key, rows in (context.get("baseline_anchors") or {}).items():
+        anchor_coords[pool_key] = [_coordinate(row) for row in rows]
+    return signal_coords, anchor_coords
+
+
+def _coordinate(event: dict):
+    """One event's split coordinate: ``(backing_bucket, room_bucket)`` when it is placeable, else
+    the single state naming WHY it is not (an absence status, or a measured headroom with no
+    invalidation distance to divide by)."""
+    band_context = event["band_context"]
+    if band_context["status"] != LOCATED:
+        return band_context["status"]
+    room = band_context["room_bucket"]
+    if room == ROOM_UNMEASURED:
+        return ROOM_UNMEASURED
+    return (band_context["backing_bucket"], room)
+
+
+def _tally_coordinate(counts: dict[str, int], coordinate) -> None:
+    """Every event increments exactly one backing state and one room state, so each axis
+    independently sums to the record's own event total."""
+    if isinstance(coordinate, tuple):
+        counts[coordinate[0]] += 1
+        counts[coordinate[1]] += 1
+    else:
+        counts[coordinate] += 1
+
+
+def _new_split_counts() -> dict[str, int]:
+    keys = (
+        (NO_BAND_CONTEXT, NOT_COMPUTED, ROOM_UNMEASURED)
+        + PLAYBOOK_CONTEXT_BACKING_BUCKETS
+        + PLAYBOOK_CONTEXT_ROOM_BUCKETS
+    )
+    return {key: 0 for key in keys}
+
+
 def _bucketed_events(projection: dict, context: dict | None) -> tuple[dict, dict, dict]:
-    """This record's own signal and baseline events REGROUPED by band-context bucket, plus the
-    bucket counts behind that regrouping.
+    """This record's own signal and baseline events REGROUPED by their (backing, room) coordinate,
+    plus the counts behind that regrouping.
 
     Alignment: ``_file_projection`` appends a pool's events in record order (skipping a signal with
     no ``forward``), and ``record_band_context`` walks the same record in the same order tagging
     each signal ``measured`` — so filtering the context's signals to ``measured`` and grouping by
     ``pool_key`` reproduces exactly the projection's own per-pool ordering. That correspondence is
     checked, not trusted: any pool whose two lengths disagree contributes its events as
-    ``no_band_context`` rather than risking a mispaired bucket."""
-    signal_out: dict[tuple[str, str], list[dict]] = {}
-    baseline_out: dict[tuple[str, str], list[dict]] = {}
-    counts = {bucket: 0 for bucket in PLAYBOOK_CONTEXT_BUCKETS}
-    anchor_counts = {bucket: 0 for bucket in PLAYBOOK_CONTEXT_BUCKETS}
+    ``no_band_context`` rather than risking a mispaired coordinate."""
+    signal_out: dict[tuple, list[dict]] = {}
+    baseline_out: dict[tuple, list[dict]] = {}
+    counts = _new_split_counts()
+    anchor_counts = _new_split_counts()
+    signal_coords, anchor_coords = _event_coordinates(context)
 
-    context_buckets: dict[str, list[str]] = {}
-    anchor_buckets: dict[str, list[str]] = {}
-    if context:
-        for signal in context.get("signals", []):
-            if signal.get("measured"):
-                context_buckets.setdefault(signal["pool_key"], []).append(
-                    signal["band_context"]["bucket"]
-                )
-        for pool_key, rows in (context.get("baseline_anchors") or {}).items():
-            anchor_buckets[pool_key] = [row["band_context"]["bucket"] for row in rows]
-
-    for pool_key, events in projection["signal_events"].items():
-        buckets = context_buckets.get(pool_key)
-        if buckets is None or len(buckets) != len(events):
-            buckets = [NO_BAND_CONTEXT] * len(events)
-        for event, bucket in zip(events, buckets):
-            counts[bucket] += 1
-            signal_out.setdefault((pool_key, bucket), []).append(event)
-    for pool_key, events in projection["baseline_events"].items():
-        buckets = anchor_buckets.get(pool_key)
-        if buckets is None or len(buckets) != len(events):
-            buckets = [NO_BAND_CONTEXT] * len(events)
-        for event, bucket in zip(events, buckets):
-            anchor_counts[bucket] += 1
-            baseline_out.setdefault((pool_key, bucket), []).append(event)
+    for source, coords, out, tally in (
+        (projection["signal_events"], signal_coords, signal_out, counts),
+        (projection["baseline_events"], anchor_coords, baseline_out, anchor_counts),
+    ):
+        for pool_key, events in source.items():
+            pool_coords = coords.get(pool_key)
+            if pool_coords is None or len(pool_coords) != len(events):
+                pool_coords = [NO_BAND_CONTEXT] * len(events)
+            for event, coordinate in zip(events, pool_coords):
+                _tally_coordinate(tally, coordinate)
+                if isinstance(coordinate, tuple):
+                    out.setdefault((pool_key, *coordinate), []).append(event)
     return signal_out, baseline_out, {"signals": counts, "anchors": anchor_counts}
 
 
@@ -546,32 +614,43 @@ def fold_band_context(
     default_projections: list[dict],
     contexts_by_id: dict[str, dict],
 ) -> dict:
-    """The at-band vs away-from-band split: the SAME cells, the SAME builders, the SAME pooling
-    rules as the unsplit table, computed once more per declared comparison bucket.
+    """The structural split: the SAME cells, the SAME builders, the SAME pooling rules as the
+    unsplit table, computed once more per declared (backing, room) cohort.
 
-    The comparison axis is the DECLARED pair ``PLAYBOOK_CONTEXT_COMPARISON_BUCKETS`` — the two
-    buckets that name a measured location — as the full cross product setups x sides x measures x
-    buckets, every cell served even at ``n: 0``. The two absence states (a map that puts no band
-    near the price; a map not computed yet) are EXCLUSIONS, counted in this block's own ``basis``
-    exactly the way ``n_truncated``/``n_unmeasured`` are counted beside every cell: a distribution
-    over "this is not known" would describe nothing, but how much is not known must be visible.
+    The two DECLARED axes are ``PLAYBOOK_CONTEXT_BACKING_BUCKETS`` (is there a wall behind this
+    trade, and is the trade at it?) x ``PLAYBOOK_CONTEXT_ROOM_BUCKETS`` (how far is the wall ahead,
+    in multiples of this trade's own invalidation distance?), served as the full cross product
+    setups x sides x backing x room x the five DIRECTIONAL measures, every cell present even at
+    ``n: 0``. The joint grid is the point: "backed by structure" and "with room to travel" are two
+    different questions, and a trade is taken on both at once.
+
+    Only the five return measures are split (``_DIRECTIONAL_MEASURES``) — a drawdown is clamped
+    ``<= 0`` by construction, so splitting it by location would multiply rows without adding a
+    reading; the unsplit table above still serves all fifteen.
+
+    Three states are EXCLUSIONS, counted in this block's own ``basis`` exactly the way
+    ``n_truncated``/``n_unmeasured`` are counted beside every cell, never served as distribution
+    cells: a map not computed yet, a computed map with no band anywhere around the price, and a
+    measured headroom with no invalidation distance to divide by. A distribution over "this is not
+    known" would describe nothing, but how much is not known must be visible.
 
     ``below_min_n`` tags a thin cell and NEVER filters it — the same floor, the same disclosure
     rule, applied to a split whose cells are thinner than the unsplit table's by construction."""
-    signal_pools: dict[tuple[str, str], list[dict]] = {}
-    baseline_pools: dict[tuple[str, str], list[dict]] = {}
-    signal_dates: dict[tuple[str, str], set[str]] = {}
-    baseline_dates: dict[tuple[str, str], set[str]] = {}
-    basis_counts = {f"n_signals_{bucket}": 0 for bucket in PLAYBOOK_CONTEXT_BUCKETS}
-    basis_counts.update({f"n_anchors_{bucket}": 0 for bucket in PLAYBOOK_CONTEXT_BUCKETS})
+    signal_pools: dict[tuple, list[dict]] = {}
+    baseline_pools: dict[tuple, list[dict]] = {}
+    signal_dates: dict[tuple, set[str]] = {}
+    baseline_dates: dict[tuple, set[str]] = {}
+    template = _new_split_counts()
+    basis_counts = {f"n_signals_{state}": 0 for state in template}
+    basis_counts.update({f"n_anchors_{state}": 0 for state in template})
     n_unattributable = 0
 
     for projection in default_projections:
         context = contexts_by_id.get(projection.get("playbook_id"))
         signal_out, baseline_out, counts = _bucketed_events(projection, context)
-        for bucket in PLAYBOOK_CONTEXT_BUCKETS:
-            basis_counts[f"n_signals_{bucket}"] += counts["signals"][bucket]
-            basis_counts[f"n_anchors_{bucket}"] += counts["anchors"][bucket]
+        for state in template:
+            basis_counts[f"n_signals_{state}"] += counts["signals"][state]
+            basis_counts[f"n_anchors_{state}"] += counts["anchors"][state]
         if context:
             n_unattributable += context.get("basis", {}).get("n_anchors_unattributable", 0)
         for key, events in signal_out.items():
@@ -585,43 +664,45 @@ def fold_band_context(
     for setup_id in PLAYBOOK_SETUPS:
         for side in _SIDES:
             pool_key = f"{setup_id}:{side}"
-            for bucket in PLAYBOOK_CONTEXT_COMPARISON_BUCKETS:
-                key = (pool_key, bucket)
-                signal_events = signal_pools.get(key, [])
-                baseline_events = baseline_pools.get(key, [])
-                signal_measures = _collect_measures(signal_events)
-                baseline_measures = _collect_measures(baseline_events)
-                signal_unmeasured = _n_unmeasured_by_label(signal_events)
-                baseline_unmeasured = _n_unmeasured_by_label(baseline_events)
-                n_sessions_signal = len(signal_dates.get(key, set()))
-                n_sessions_baseline = len(baseline_dates.get(key, set()))
-                for measure in PLAYBOOK_SIGNAL_MEASURES:
-                    signal_values, signal_truncated = signal_measures[measure]
-                    baseline_values, baseline_truncated = baseline_measures[measure]
-                    signal_block = _signal_cell(
-                        measure,
-                        signal_values,
-                        signal_truncated,
-                        _n_unmeasured_for(measure, signal_unmeasured),
-                        n_sessions_signal,
-                    )
-                    cells.append(
-                        {
-                            "setup_id": setup_id,
-                            "side": side,
-                            "measure": measure,
-                            "bucket": bucket,
-                            "signal": signal_block,
-                            "baseline": _baseline_cell(
-                                measure,
-                                baseline_values,
-                                baseline_truncated,
-                                _n_unmeasured_for(measure, baseline_unmeasured),
-                                n_sessions_baseline,
-                            ),
-                            "below_min_n": signal_block["n"] < PLAYBOOK_MIN_N_DISCLOSURE,
-                        }
-                    )
+            for backing in PLAYBOOK_CONTEXT_BACKING_BUCKETS:
+                for room in PLAYBOOK_CONTEXT_ROOM_BUCKETS:
+                    key = (pool_key, backing, room)
+                    signal_events = signal_pools.get(key, [])
+                    baseline_events = baseline_pools.get(key, [])
+                    signal_measures = _collect_measures(signal_events)
+                    baseline_measures = _collect_measures(baseline_events)
+                    signal_unmeasured = _n_unmeasured_by_label(signal_events)
+                    baseline_unmeasured = _n_unmeasured_by_label(baseline_events)
+                    n_sessions_signal = len(signal_dates.get(key, set()))
+                    n_sessions_baseline = len(baseline_dates.get(key, set()))
+                    for measure in _DIRECTIONAL_MEASURES:
+                        signal_values, signal_truncated = signal_measures[measure]
+                        baseline_values, baseline_truncated = baseline_measures[measure]
+                        signal_block = _signal_cell(
+                            measure,
+                            signal_values,
+                            signal_truncated,
+                            _n_unmeasured_for(measure, signal_unmeasured),
+                            n_sessions_signal,
+                        )
+                        cells.append(
+                            {
+                                "setup_id": setup_id,
+                                "side": side,
+                                "measure": measure,
+                                "backing_bucket": backing,
+                                "room_bucket": room,
+                                "signal": signal_block,
+                                "baseline": _baseline_cell(
+                                    measure,
+                                    baseline_values,
+                                    baseline_truncated,
+                                    _n_unmeasured_for(measure, baseline_unmeasured),
+                                    n_sessions_baseline,
+                                ),
+                                "below_min_n": signal_block["n"] < PLAYBOOK_MIN_N_DISCLOSURE,
+                            }
+                        )
     return {
         "parameters": context_parameters(),
         "cells": cells,

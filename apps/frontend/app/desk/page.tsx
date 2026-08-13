@@ -116,7 +116,7 @@ import {
 } from "@/lib/datetime";
 import { fmt } from "@/lib/format";
 import {
-  playbookBandLabel,
+  playbookWallLabel,
   playbookContextIndex,
   playbookPoolKey,
   playbookSetupLabel,
@@ -4184,23 +4184,36 @@ function BackscanRunsSection({
 
 function PlaybookEvidenceCellRow({
   cell,
-  bucket,
+  backing,
+  room,
 }: {
   cell: DeskPlaybookEvidenceCell;
-  // Present only in the band-context split, where it names which comparison half this row is.
-  bucket?: string;
+  // Present only in the band-context split, where the pair names which structural cohort this row
+  // is: was there a wall behind the trade, and how much room to the one ahead.
+  backing?: string;
+  room?: string;
 }) {
   return (
     <tr data-testid="desk-evidence-cell-row" className="border-t border-slate-800/60">
       <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-300">{cell.setup_id}</td>
       <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-400">{cell.side}</td>
       <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-400">{cell.measure}</td>
-      {bucket !== undefined && (
+      {backing !== undefined && (
         <td
           className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs"
-          data-testid="desk-evidence-cell-bucket"
+          data-testid="desk-evidence-cell-backing"
         >
-          <span className={bucket === "at_band" ? "text-amber-300" : "text-slate-400"}>{bucket}</span>
+          <span className={backing === "at_wall" ? "text-amber-300" : "text-slate-400"}>
+            {backing}
+          </span>
+        </td>
+      )}
+      {room !== undefined && (
+        <td
+          className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-400"
+          data-testid="desk-evidence-cell-room"
+        >
+          {room}
         </td>
       )}
       <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-signal-n">
@@ -4210,7 +4223,7 @@ function PlaybookEvidenceCellRow({
         {cell.signal.n_positive === null ? (
           <span className="text-slate-600">—</span>
         ) : (
-          <span title={`positive: ${cell.signal.n_positive} of ${cell.signal.n} recorded measurements greater than zero`}>
+          <span title={`positive: ${cell.signal.n_positive} of ${cell.signal.n} recorded measurements greater than zero (share ${cell.signal.positive_share})`}>
             {fmt(cell.signal.n_positive, 0)}
           </span>
         )}
@@ -4235,7 +4248,7 @@ function PlaybookEvidenceCellRow({
         {cell.baseline.n_positive === null ? (
           <span className="text-slate-600">—</span>
         ) : (
-          <span title={`positive: ${cell.baseline.n_positive} of ${cell.baseline.n_baseline} recorded measurements greater than zero`}>
+          <span title={`positive: ${cell.baseline.n_positive} of ${cell.baseline.n_baseline} recorded measurements greater than zero (share ${cell.baseline.positive_share})`}>
             {fmt(cell.baseline.n_positive, 0)}
           </span>
         )}
@@ -4490,7 +4503,8 @@ const EVIDENCE_BAND_COLUMNS: readonly SortableColumn<DeskPlaybookEvidenceBandCon
   { id: "setup", label: "Setup", kind: "text", value: (cell) => cell.setup_id },
   { id: "side", label: "Side", kind: "text", value: (cell) => cell.side },
   { id: "measure", label: "Measure", kind: "text", value: (cell) => cell.measure },
-  { id: "bucket", label: "Location", kind: "text", value: (cell) => cell.bucket },
+  { id: "backing", label: "Backing", kind: "text", value: (cell) => cell.backing_bucket },
+  { id: "room", label: "Room", kind: "text", value: (cell) => cell.room_bucket },
   ...EVIDENCE_STAT_LABELS.map<SortableColumn<DeskPlaybookEvidenceBandContextCell>>((label) => ({
     id: `signal:${label}`,
     label,
@@ -4523,7 +4537,7 @@ function PlaybookEvidenceBandContextTable({
     [band.cells],
   );
   const sort = useTableSort(populated, EVIDENCE_BAND_COLUMNS);
-  const leaves = EVIDENCE_BAND_COLUMNS.slice(4, EVIDENCE_BAND_COLUMNS.length - 1);
+  const leaves = EVIDENCE_BAND_COLUMNS.slice(5, EVIDENCE_BAND_COLUMNS.length - 1);
   const basis = band.basis;
   return (
     <div className="mt-5" data-testid="desk-evidence-band-context">
@@ -4531,11 +4545,16 @@ function PlaybookEvidenceBandContextTable({
         By location relative to the tradable band map
       </h3>
       <p className="mb-2 text-xs text-slate-500" data-testid="desk-evidence-band-context-basis">
-        {basis.n_signals_at_band} signal(s) at a band, {basis.n_signals_away_from_band} away from
-        one, at the pre-registered {band.parameters.near_band_bps} bps threshold measured from each
-        signal&apos;s own {band.parameters.distance_from}. Excluded from both columns:{" "}
-        {basis.n_signals_no_band_context} with no band context and {basis.n_signals_not_computed}{" "}
-        whose band map has not been computed yet
+        Backing, at the pre-registered {band.parameters.near_band_bps} bps threshold measured from
+        each signal&apos;s own {band.parameters.distance_from}: {basis.n_signals_at_wall} at a wall
+        behind, {basis.n_signals_off_wall} off one, {basis.n_signals_no_wall_behind} with nothing
+        behind. Room to the wall ahead, in multiples of each signal&apos;s own invalidation distance
+        (edges {band.parameters.room_r_edges.join(" and ")}): {basis.n_signals_room_lt_1r} under 1×,{" "}
+        {basis.n_signals_room_1r_2r} between, {basis.n_signals_room_ge_2r} at 2× or more,{" "}
+        {basis.n_signals_no_wall_ahead} with nothing ahead. Excluded from every cohort:{" "}
+        {basis.n_signals_no_band_context} with no band context, {basis.n_signals_not_computed} whose
+        band map has not been computed yet, and {basis.n_signals_room_unmeasured} with no derivable
+        invalidation distance
         {basis.n_anchors_unattributable > 0
           ? `, plus ${basis.n_anchors_unattributable} baseline anchor(s) that could not be attributed`
           : ""}
@@ -4552,11 +4571,11 @@ function PlaybookEvidenceBandContextTable({
           <TableSortNote sort={sort} />
           <table
             data-testid="desk-evidence-band-context-table"
-            className="w-full min-w-[1240px] border-collapse text-xs"
+            className="w-full min-w-[1360px] border-collapse text-xs"
           >
             <thead>
               <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
-                {EVIDENCE_BAND_COLUMNS.slice(0, 4).map((column) => (
+                {EVIDENCE_BAND_COLUMNS.slice(0, 5).map((column) => (
                   <SortableHeader
                     key={column.id}
                     column={column}
@@ -4592,9 +4611,10 @@ function PlaybookEvidenceBandContextTable({
             <tbody>
               {sort.entries.map(({ item: cell }) => (
                 <PlaybookEvidenceCellRow
-                  key={`${cell.setup_id}:${cell.side}:${cell.measure}:${cell.bucket}`}
+                  key={`${cell.setup_id}:${cell.side}:${cell.measure}:${cell.backing_bucket}:${cell.room_bucket}`}
                   cell={cell}
-                  bucket={cell.bucket}
+                  backing={cell.backing_bucket}
+                  room={cell.room_bucket}
                 />
               ))}
             </tbody>
@@ -5977,67 +5997,67 @@ function PlaybookSignalRow({
   );
 }
 
+// The desk's own display-filter vocabulary. Each option maps to SERVED buckets, never to a
+// threshold applied in the browser.
+type PlaybookBandFilter = "all" | "at_wall" | "at_wall_room_ge_1r";
+
 // The three served band-context cells, shared by the signals table and the occurrence list so the
-// two can never render one signal's location two ways. Every value is a served field: this
-// computes no distance, no bucket, and no label.
+// two can never render one signal's location two ways. Columns are named geometrically (below /
+// above) rather than floor/ceiling: this table mixes long and short rows, and a header must mean
+// one thing per column -- "floor" and "ceiling" swap protective roles between sides, while below
+// and above are true for every row. The side-relative reading (which wall is backing, which is
+// headroom) lives in the room cell and the served caption. Every value is a served field.
 function PlaybookBandCells({ context }: { context: DeskPlaybookBandContext | undefined }) {
-  const located = context !== undefined && context.band !== null;
+  const title = context?.caption ?? "no band context served";
+  const backed = context?.backing_bucket === "at_wall";
   return (
     <>
-      <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-band">
-        {located ? (
-          <span className={CHIP_CLASS} title={context.caption}>
-            {playbookBandLabel(context)}
-          </span>
-        ) : (
-          <span className="text-slate-600" title={context?.caption ?? "no band context served"}>
+      <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-wall-below">
+        <span className={backed ? "text-amber-300" : undefined} title={title}>
+          {playbookWallLabel(context, "below")}
+        </span>
+      </td>
+      <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-wall-above">
+        <span title={title}>{playbookWallLabel(context, "above")}</span>
+      </td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-playbook-signal-room">
+        {context?.room_r === null || context?.room_r === undefined ? (
+          <span className="text-slate-600" title={title}>
             —
           </span>
-        )}
-      </td>
-      <td className={ROW_NUMERIC_CELL} data-testid="desk-playbook-signal-band-dist">
-        {context?.distance_bps === null || context?.distance_bps === undefined ? (
-          <span className="text-slate-600">—</span>
         ) : (
-          <span
-            className={context.bucket === "at_band" ? "text-amber-300" : undefined}
-            title={context.caption}
-          >
-            {fmt(context.distance_bps)}
-          </span>
+          <span title={title}>{fmt(context.room_r, 1)}×</span>
         )}
-      </td>
-      <td className={ROW_LABEL_CELL} data-testid="desk-playbook-signal-band-relation">
-        {context?.side_relation ?? <span className="text-slate-600">—</span>}
       </td>
     </>
   );
 }
 
-// The three band columns, declared once for both tables. Sorting reads the SAME served fields the
-// cells render; a missing location sorts as an absent value rather than as a zero distance.
+// The three band columns, declared once for both tables. Sort values read the SAME served fields
+// the cells render; a missing wall sorts as an absent value rather than as a zero distance.
 function playbookBandColumns<T>(
   contextFor: (item: T) => DeskPlaybookBandContext | undefined,
 ): SortableColumn<T>[] {
   return [
     {
-      id: "band",
-      label: "band",
+      id: "wallBelow",
+      label: "below",
       kind: "text",
-      value: (item) => playbookBandLabel(contextFor(item)),
+      value: (item) => playbookWallLabel(contextFor(item), "below"),
     },
     {
-      id: "bandDistance",
-      label: "dist (bps)",
+      id: "wallAbove",
+      label: "above",
+      kind: "text",
+      value: (item) => playbookWallLabel(contextFor(item), "above"),
+    },
+    {
+      id: "room",
+      label: "room",
       kind: "number",
       align: "right",
-      value: (item) => contextFor(item)?.distance_bps ?? null,
-    },
-    {
-      id: "bandRelation",
-      label: "relation",
-      kind: "text",
-      value: (item) => contextFor(item)?.side_relation ?? "",
+      note: "the wall ahead, in multiples of this signal's own invalidation distance",
+      value: (item) => contextFor(item)?.room_r ?? null,
     },
   ];
 }
@@ -6046,16 +6066,16 @@ function PlaybookSignalsTable({
   record,
   labels,
   contextIndex,
-  nearBandOnly,
-  onToggleNearBand,
+  bandFilter,
+  onBandFilterChange,
   selectedSignalKey,
   onSelectSignal,
 }: {
   record: DeskPlaybookRecord;
   labels: string[];
   contextIndex: Map<string, DeskPlaybookBandContext>;
-  nearBandOnly: boolean;
-  onToggleNearBand: (next: boolean) => void;
+  bandFilter: PlaybookBandFilter;
+  onBandFilterChange: (next: PlaybookBandFilter) => void;
   selectedSignalKey: string | null;
   onSelectSignal: (key: string | null) => void;
 }) {
@@ -6100,15 +6120,18 @@ function PlaybookSignalsTable({
   // A DISPLAY filter over the served rows — it hides nothing from the record, which still serves
   // and still counts every signal (the count line below says so). Never a filter on the evidence
   // below, whose own min-n floor is likewise a tag and never a filter.
+  // Both predicates read SERVED buckets; no threshold is applied in the browser.
   const visibleSignals = useMemo(
     () =>
-      nearBandOnly
-        ? record.signals.filter(
-            (signal) =>
-              contextIndex.get(playbookSignalContextKey(signal))?.bucket === "at_band",
-          )
-        : record.signals,
-    [record.signals, contextIndex, nearBandOnly],
+      bandFilter === "all"
+        ? record.signals
+        : record.signals.filter((signal) => {
+            const context = contextIndex.get(playbookSignalContextKey(signal));
+            if (context?.backing_bucket !== "at_wall") return false;
+            if (bandFilter === "at_wall") return true;
+            return context.room_bucket === "room_1r_2r" || context.room_bucket === "room_ge_2r";
+          }),
+    [record.signals, contextIndex, bandFilter],
   );
   const sort = useTableSort(visibleSignals, columns);
   if (record.signals.length === 0) {
@@ -6119,25 +6142,23 @@ function PlaybookSignalsTable({
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <label
-          className="flex cursor-pointer items-center gap-2 text-xs text-slate-300"
-          data-testid="desk-playbook-near-band-filter"
-        >
-          <input
-            type="checkbox"
-            checked={nearBandOnly}
-            onChange={(event) => onToggleNearBand(event.target.checked)}
-            className="h-3 w-3 accent-amber-400"
-          />
-          show only signals at a band
+        <label className="flex items-center gap-2 text-xs text-slate-300">
+          show
+          <select
+            data-testid="desk-playbook-band-filter"
+            value={bandFilter}
+            onChange={(event) => onBandFilterChange(event.target.value as PlaybookBandFilter)}
+            className="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200"
+          >
+            <option value="all">all recorded signals</option>
+            <option value="at_wall">at a wall behind</option>
+            <option value="at_wall_room_ge_1r">at a wall behind with room ≥ 1×</option>
+          </select>
         </label>
-        <span
-          className="text-[11px] text-slate-500"
-          data-testid="desk-playbook-near-band-filter-count"
-        >
-          {nearBandOnly
-            ? `showing ${visibleSignals.length} of ${record.signals.length} recorded signals — a display filter; every signal stays recorded and served`
-            : `${record.signals.length} recorded signals, none hidden`}
+        <span className="text-[11px] text-slate-500" data-testid="desk-playbook-band-filter-count">
+          {bandFilter === "all"
+            ? `${record.signals.length} recorded signals, none hidden`
+            : `showing ${visibleSignals.length} of ${record.signals.length} recorded signals — a display filter; every signal stays recorded and served`}
         </span>
       </div>
       <TableSortNote sort={sort} />
@@ -6795,8 +6816,8 @@ function PlaybookRecordView({
   runsResult,
   control,
   context,
-  nearBandOnly,
-  onToggleNearBand,
+  bandFilter,
+  onBandFilterChange,
   selectedSignalKey,
   onSelectSignal,
 }: {
@@ -6804,8 +6825,8 @@ function PlaybookRecordView({
   runsResult: { ok: boolean; data: DeskPlaybookRunsListResult | null; error?: string } | null;
   control: PlaybookControlProps;
   context: DeskPlaybookContext | null;
-  nearBandOnly: boolean;
-  onToggleNearBand: (next: boolean) => void;
+  bandFilter: PlaybookBandFilter;
+  onBandFilterChange: (next: PlaybookBandFilter) => void;
   selectedSignalKey: string | null;
   onSelectSignal: (key: string | null) => void;
 }) {
@@ -6913,8 +6934,8 @@ function PlaybookRecordView({
         record={record}
         labels={labels}
         contextIndex={contextIndex}
-        nearBandOnly={nearBandOnly}
-        onToggleNearBand={onToggleNearBand}
+        bandFilter={bandFilter}
+        onBandFilterChange={onBandFilterChange}
         selectedSignalKey={selectedSignalKey}
         onSelectSignal={onSelectSignal}
       />
@@ -6944,8 +6965,8 @@ function PlaybookSection({
   runsResult,
   control,
   context,
-  nearBandOnly,
-  onToggleNearBand,
+  bandFilter,
+  onBandFilterChange,
   selectedSignalKey,
   onSelectSignal,
 }: {
@@ -6956,8 +6977,8 @@ function PlaybookSection({
   runsResult: { ok: boolean; data: DeskPlaybookRunsListResult | null; error?: string } | null;
   control: PlaybookControlProps;
   context: DeskPlaybookContext | null;
-  nearBandOnly: boolean;
-  onToggleNearBand: (next: boolean) => void;
+  bandFilter: PlaybookBandFilter;
+  onBandFilterChange: (next: PlaybookBandFilter) => void;
   selectedSignalKey: string | null;
   onSelectSignal: (key: string | null) => void;
 }) {
@@ -7006,8 +7027,8 @@ function PlaybookSection({
         runsResult={runsResult}
         control={control}
         context={context}
-        nearBandOnly={nearBandOnly}
-        onToggleNearBand={onToggleNearBand}
+        bandFilter={bandFilter}
+        onBandFilterChange={onBandFilterChange}
         selectedSignalKey={selectedSignalKey}
         onSelectSignal={onSelectSignal}
       />
@@ -7219,8 +7240,8 @@ export default function DeskPage() {
   // honest "no context read yet / none served" — the tables simply show an em-dash, never a
   // fabricated location.
   const [playbookContext, setPlaybookContext] = useState<DeskPlaybookContext | null>(null);
-  // The near-band DISPLAY filter, default off — nothing is hidden until an operator asks.
-  const [playbookNearBandOnly, setPlaybookNearBandOnly] = useState(false);
+  // The band DISPLAY filter, default "all" — nothing is hidden until an operator asks.
+  const [playbookBandFilter, setPlaybookBandFilter] = useState<PlaybookBandFilter>("all");
   const playbookValidated = validatePlaybookSessionDay(playbookDateInput, sessionsResult);
 
   // goal-playbook-iter-7 (J-07): the Backscan section's own state — entirely independent of the
@@ -9023,8 +9044,8 @@ export default function DeskPage() {
               runsResult={playbookRunsResult}
               control={playbookControlProps}
               context={playbookContext}
-              nearBandOnly={playbookNearBandOnly}
-              onToggleNearBand={setPlaybookNearBandOnly}
+              bandFilter={playbookBandFilter}
+              onBandFilterChange={setPlaybookBandFilter}
               selectedSignalKey={selectedPlaybookSignal}
               onSelectSignal={setSelectedPlaybookSignal}
             />
