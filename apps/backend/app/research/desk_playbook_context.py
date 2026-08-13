@@ -128,7 +128,7 @@ __all__ = [
 # --- Pre-registered constants (docs/playbook-detector-spec.md §6) --------------------------------
 # Versioned so a change to the LENS invalidates every cached context row without touching one
 # recorded byte -- the record's own `playbook_input_signature` is a different, untouched key.
-PLAYBOOK_CONTEXT_ALGORITHM_VERSION = "playbook-band-context-v2"
+PLAYBOOK_CONTEXT_ALGORITHM_VERSION = "playbook-band-context-v3"
 
 # ADAPTATION (spec §6): one band-width. The desk already calls `tradability_band_width_bps` (70.0)
 # "one wall" when it CLUSTERS levels into a band, so "within one band-width of the wall behind the
@@ -592,12 +592,53 @@ class BandMapResolver:
         self._records = records
         self._config_hash = _config_content_hash(config)
         self._signatures: dict[str, tuple] = {}
+        self._basis_signatures: dict[tuple[str, str], tuple] = {}
         self._maps: dict[tuple[str, str], dict | None] = {}
 
     def _signature(self, symbol: str) -> tuple:
         if symbol not in self._signatures:
             self._signatures[symbol] = symbol_store_signature(self._records, symbol)
         return self._signatures[symbol]
+
+    def _basis_signature(self, symbol: str, basis_day: str) -> tuple:
+        """The symbol's store signature NARROWED to the recordings that can actually reach a map at
+        ``basis_day`` — the whole reason a daily bar top-up no longer invalidates historical band
+        context.
+
+        Why it is sound: ``_resolve_basis`` picks a prior daily bar whose own session date is
+        STRICTLY BEFORE ``basis_day``, and ``_PriorSessionBarView`` then bounds every timeframe to
+        ``epoch <= that bar``. So every bar the map can see lies strictly before ``basis_day``
+        00:00Z, and a recording whose coverage STARTS at or after that instant contributes nothing
+        to it. Excluding such a recording from the key therefore cannot hide a change in the answer.
+
+        Conservative in both directions that matter: a recording that merely OVERLAPS the cutoff
+        still participates (a genuine backfill of older bars re-keys correctly), and a recording
+        that does not disclose its coverage is kept rather than assumed irrelevant."""
+        memo_key = (symbol, basis_day)
+        if memo_key not in self._basis_signatures:
+            cutoff = f"{basis_day}T00:00:00"
+            self._basis_signatures[memo_key] = tuple(
+                sorted(
+                    (record["timeframe"], record["id"], record["checksum"])
+                    for record in self._records
+                    if record["symbol"] == symbol
+                    and str(record.get("covered_start_utc") or "") < cutoff
+                )
+            )
+        return self._basis_signatures[memo_key]
+
+    def context_key_for_basis_day(self, symbol: str, basis_day: str) -> str:
+        """The key component the CONTEXT cache names a map by — the SAME four-part recipe the
+        tradability cache uses, over the basis-bounded signature instead of the symbol's whole
+        store. The tradability cache's own key is untouched (it is shared with
+        ``GET /research/tradability`` and stays frozen); this only changes what a CONTEXT row is
+        keyed on, and a context hit never consults the map at all."""
+        return tradability_cache_key(
+            symbol=symbol,
+            basis_day=basis_day,
+            store_signature=self._basis_signature(symbol, basis_day),
+            config_content_hash=self._config_hash,
+        )
 
     def map_key(self, symbol: str, as_of_epoch: float) -> str:
         """The tradability cache key for one ``(symbol, basis session)`` — the route's own four-part
@@ -844,9 +885,13 @@ def playbook_context_cache_key(
         keys already fold in this symbol's store content, the whole config content, and
         ``LEVELS_ALGORITHM_VERSION``, so any change that could move a band moves this key too.
 
-    Conservative by inheritance: a new recording of a symbol busts its map keys even when the new
-    bars are dated AFTER the historical basis and therefore cannot change that basis's answer — a
-    re-warm that recomputes an identical map, never a wrong one."""
+    Basis-bounded (v3): the third part is ``BandMapResolver.context_key_for_basis_day``, which
+    narrows each symbol's store signature to the recordings that can actually reach that basis (see
+    that method). Before v3 it inherited the tradability key's whole-symbol signature, so every
+    daily bar top-up re-keyed every historical context and the band columns fell back to
+    "not computed yet" after each desk refresh — recomputing identical maps to reach identical
+    answers. New bars dated after a setup's own session now cannot invalidate that setup's
+    context at all, while a backfill of OLDER bars still does."""
     payload = {
         "algorithm": PLAYBOOK_CONTEXT_ALGORITHM_VERSION,
         "playbook_id": playbook_id,
@@ -977,7 +1022,7 @@ def cached_context(
         file_mtime_ns=stat_mtime_ns,
         map_keys=sorted(
             {
-                (symbol, basis_day, resolver.map_key_for_basis_day(symbol, basis_day))
+                (symbol, basis_day, resolver.context_key_for_basis_day(symbol, basis_day))
                 for symbol, basis_day in map_requests
             }
         ),

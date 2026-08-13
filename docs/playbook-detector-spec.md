@@ -455,6 +455,19 @@ Three separations make that safe, and all three are guard-tested:
 3. **Serving never computes.** Every read path is lookup-only against the durable tradability cache;
    `python -m app.research.desk_playbook_context --warm` is the explicit operator act.
 
+**Cache invalidation is basis-bounded (v3).** A context row is keyed on the recordings that can
+actually reach its own basis: `_resolve_basis` picks a prior daily bar whose session date is
+strictly before the basis day, and `_PriorSessionBarView` then bounds every timeframe to that bar,
+so a recording whose coverage STARTS at or after the basis day contributes nothing to the map and
+is excluded from the key. Bars recorded after a setup's own session therefore cannot invalidate
+that setup's context, while a backfill of OLDER bars still does, and a recording that does not
+disclose its coverage is kept rather than assumed irrelevant. Before v3 the key inherited the
+tradability cache's whole-symbol store signature, so every daily top-up re-keyed the entire corpus
+and the desk's band columns fell back to "not computed yet" after each refresh — recomputing
+identical maps to reach identical answers. The tradability cache's own key is unchanged (it is
+shared with `GET /research/tradability` and stays frozen); only what a CONTEXT row is keyed on
+narrowed, and a context hit never consults the map at all.
+
 ### Pre-registered constants
 
 | Constant | Value | Class | Source |

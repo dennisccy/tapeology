@@ -2061,6 +2061,11 @@ function StructurePageContent() {
     showRawLevels ? (levels?.symbol ?? null) : null,
     effectiveTimeframe || null,
     asOfEpochMs,
+    // Page forward to the newest recorded bar. The as-of only frames the FIRST viewport and locates
+    // the marker; the series itself is meant to reach the end of what is stored, so later price
+    // action is always there to scroll to rather than depending on when a recording happened to
+    // land. (The cockpit's `beforeOnly` clamp is the opposite rule and is never set here.)
+    { forwardToEnd: true },
   );
   const chartBars = levelsWindow.bars;
   const asOfBoundaryTs = boundaryTs(chartBars, asOfEpochMs);
@@ -2083,6 +2088,7 @@ function StructurePageContent() {
     tradability?.symbol ?? null,
     effectiveTimeframe || null,
     tradabilityAsOfEpochMs,
+    { forwardToEnd: true },
   );
   const tradabilityChartBars = tradabilityWindow.bars;
   const tradabilityAsOfBoundaryTs = boundaryTs(tradabilityChartBars, tradabilityAsOfEpochMs);

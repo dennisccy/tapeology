@@ -102,6 +102,10 @@ class _StubResolver:
     def map_key_for_basis_day(self, symbol, basis_day):
         return f"stub:{symbol}:{basis_day}"
 
+    # The CONTEXT cache names maps by this narrower, basis-bounded component (v3).
+    def context_key_for_basis_day(self, symbol, basis_day):
+        return f"stub-ctx:{symbol}:{basis_day}"
+
     def map_key(self, symbol, epoch):
         return f"stub:{symbol}"
 
@@ -679,8 +683,8 @@ def test_a_changed_tradability_key_serves_a_fresh_context_not_a_stale_one(tmp_pa
             super().__init__(maps)
             self.key_suffix = key_suffix
 
-        def map_key_for_basis_day(self, symbol, basis_day):
-            return f"stub:{symbol}:{basis_day}:{self.key_suffix}"
+        def context_key_for_basis_day(self, symbol, basis_day):
+            return f"stub-ctx:{symbol}:{basis_day}:{self.key_suffix}"
 
     first = context_for_record(
         record, 10, 20, _Shifting({"AAA": _map([_band("support", 99.9, 100.1)])}, "v1"), cache
@@ -1087,7 +1091,7 @@ def test_a_pre_existing_incomplete_row_is_ignored_rather_than_served(tmp_path):
         file_mtime_ns=20,
         map_keys=sorted(
             {
-                (symbol, basis_day, resolver.map_key_for_basis_day(symbol, basis_day))
+                (symbol, basis_day, resolver.context_key_for_basis_day(symbol, basis_day))
                 for symbol, basis_day in record_map_requests(record)
             }
         ),
@@ -1098,3 +1102,110 @@ def test_a_pre_existing_incomplete_row_is_ignored_rather_than_served(tmp_path):
 
     served = context_for_record(record, 10, 20, resolver, cache)
     assert served["signals"][0]["band_context"]["backing_bucket"] == AT_WALL
+
+
+# --- the basis-bounded context key (v3) ------------------------------------------------------------
+# The invalidation that stopped band context going stale after every desk refresh. Before v3 the
+# context key inherited the tradability key's whole-symbol store signature, so a daily bar top-up
+# re-keyed EVERY historical context and the desk's band columns fell back to "not computed yet"
+# until a ~40-minute re-warm. These pin the narrowing AND its limits.
+
+
+class _StoreStub:
+    """A bar store that answers `list()` and nothing else — `BandMapResolver` reads only that."""
+
+    def __init__(self, records, root="/tmp/does-not-exist"):
+        self._records = records
+        self.root = root
+
+    def list(self):
+        return self._records, []
+
+
+def _series(series_id, covered_start, *, symbol="AAA", timeframe="5m", checksum=None):
+    return {
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "id": series_id,
+        "checksum": checksum or f"sum-{series_id}",
+        "covered_start_utc": covered_start,
+    }
+
+
+def _resolver_over(records, tmp_path):
+    from app.research.desk_playbook_context import BandMapResolver
+    from app.research.tradability_cache import TradabilityCache
+
+    return BandMapResolver(
+        _StoreStub(records), CONFIG, cache=TradabilityCache(str(tmp_path / "trad.db"))
+    )
+
+
+def test_a_recording_dated_after_the_basis_cannot_change_that_basis_context_key(tmp_path):
+    """The whole point of v3: bars recorded AFTER a setup's own session are provably invisible to
+    that session's map (`_resolve_basis` picks a prior daily bar; `_PriorSessionBarView` bounds
+    every timeframe to it), so they must not re-key its context."""
+    old = _series("s1", "2026-06-05T13:30:00.000000Z")
+    before = _resolver_over([old], tmp_path).context_key_for_basis_day("AAA", "2026-08-07")
+    # A top-up whose coverage starts AFTER the basis day begins.
+    topup = _series("s2", "2026-08-10T13:30:00.000000Z")
+    after = _resolver_over([old, topup], tmp_path).context_key_for_basis_day("AAA", "2026-08-07")
+    assert before == after
+
+    # ...and the un-narrowed tradability key DOES move — proving the narrowing is what changed the
+    # answer, not some accident of the fixture.
+    assert _resolver_over([old], tmp_path).map_key_for_basis_day(
+        "AAA", "2026-08-07"
+    ) != _resolver_over([old, topup], tmp_path).map_key_for_basis_day("AAA", "2026-08-07")
+
+
+def test_a_backfill_of_older_bars_still_re_keys_the_context(tmp_path):
+    """The narrowing must not become blindness: a recording that can actually reach the basis still
+    invalidates."""
+    old = _series("s1", "2026-06-05T13:30:00.000000Z")
+    before = _resolver_over([old], tmp_path).context_key_for_basis_day("AAA", "2026-08-07")
+    backfill = _series("s2", "2026-05-01T13:30:00.000000Z")
+    assert _resolver_over([old, backfill], tmp_path).context_key_for_basis_day(
+        "AAA", "2026-08-07"
+    ) != before
+
+
+def test_a_recording_overlapping_the_cutoff_participates(tmp_path):
+    """Coverage STARTING before the basis day still contributes bars the map can see, even though
+    it also extends past it — so it stays in the key."""
+    old = _series("s1", "2026-06-05T13:30:00.000000Z")
+    overlapping = _series("s2", "2026-08-06T13:30:00.000000Z")  # starts the day before the basis
+    assert _resolver_over([old, overlapping], tmp_path).context_key_for_basis_day(
+        "AAA", "2026-08-07"
+    ) != _resolver_over([old], tmp_path).context_key_for_basis_day("AAA", "2026-08-07")
+
+
+def test_a_recording_that_hides_its_coverage_is_kept_rather_than_assumed_irrelevant(tmp_path):
+    """Conservative on missing data: an undisclosed coverage window participates."""
+    old = _series("s1", "2026-06-05T13:30:00.000000Z")
+    undisclosed = {**_series("s2", ""), "covered_start_utc": None}
+    assert _resolver_over([old, undisclosed], tmp_path).context_key_for_basis_day(
+        "AAA", "2026-08-07"
+    ) != _resolver_over([old], tmp_path).context_key_for_basis_day("AAA", "2026-08-07")
+
+
+def test_the_basis_narrowing_is_per_basis_day_not_per_symbol(tmp_path):
+    """Two basis days see different recordings, so they must key differently — otherwise one
+    session's context could be served for another's."""
+    records = [
+        _series("s1", "2026-06-05T13:30:00.000000Z"),
+        _series("s2", "2026-08-08T13:30:00.000000Z"),
+    ]
+    resolver = _resolver_over(records, tmp_path)
+    assert resolver.context_key_for_basis_day("AAA", "2026-08-07") != (
+        resolver.context_key_for_basis_day("AAA", "2026-08-12")
+    )
+
+
+def test_the_tradability_cache_key_recipe_is_reused_not_reimplemented(tmp_path):
+    """The context key is the SAME four-part recipe over a narrower signature — one key function in
+    the codebase, so the two caches can never drift apart in how they hash their inputs."""
+    source = (RESEARCH_DIR / "desk_playbook_context.py").read_text()
+    assert "def context_key_for_basis_day" in source
+    assert source.count("hashlib.sha256") == 1  # only playbook_context_cache_key hashes here
+    assert "tradability_cache_key(" in source

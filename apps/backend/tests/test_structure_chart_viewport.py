@@ -386,3 +386,65 @@ def test_the_volume_pane_guards_can_fail_on_seeded_violations():
         "color: (bar.close >= bar.open ? UP_COLOR : DOWN_COLOR) + VOLUME_ALPHA,"
         not in seeded_flat_color
     )
+
+
+# --- forwardToEnd: the loaded window reaches the newest recorded bar --------------------------------
+# Why this exists: the first window is 300 bars split ~80/20 around the as-of, so only ~60 bars land
+# to its right — on a 5m chart almost exactly one session. Nothing truncated the series (the candles
+# endpoint has no as-of bound at all), but the window stopped there until the operator scrolled,
+# which reads as "the chart stops at the day's close". `forwardToEnd` pages the rest in on load.
+
+PRICE_CHART = FRONTEND_DIR / "components" / "PriceChart.tsx"
+
+
+def test_the_structure_windows_opt_into_forward_fill_and_the_cockpit_does_not():
+    """Both /structure charts reach the newest bar; the cockpit must NOT — its `beforeOnly` clamp
+    is a real no-lookahead rule (the live tape owns everything right of the replay start)."""
+    page = _read(STRUCTURE_PAGE)
+    assert page.count("forwardToEnd: true") == 2, (
+        "both /structure bar windows (raw levels + tradable map) must page forward to the newest bar"
+    )
+    assert "forwardToEnd" not in _read(PRICE_CHART), (
+        "the cockpit chart must never page past its replay start"
+    )
+
+
+def test_forward_fill_is_refused_under_the_no_lookahead_clamp():
+    """Belt and braces: even if a call site passed both, the clamp wins — `extend('newer')` returns
+    early under `beforeOnly`, so the fill can issue nothing."""
+    source = _read(BAR_WINDOW)
+    assert 'direction === "newer" && beforeOnlyRef.current' in source
+    # The fill records its owed generation only when the clamp is OFF.
+    assert "forwardToEndRef.current && !beforeOnly" in source
+
+
+def test_forward_fill_pages_through_the_same_extend_path_and_is_cap_bounded():
+    """The fill reuses `extend` (one fetch path, one in-flight guard, one generation drop) and marks
+    every page `fill`, which is what makes the cap REFUSE it. That matters: at the cap a forward
+    load trims from the LEFT, so an unbounded fill would walk the drilled-in setup out of the loaded
+    window — the opposite of what the chart was asked to show."""
+    source = _read(BAR_WINDOW)
+    assert "loadNewer(Math.min(MAX_PAGE, remaining), { fill: true })" in source
+    assert "const remaining = MAX_LOADED_BARS - barsRef.current.length;" in source
+    assert "if (opts?.fill && barsRef.current.length >= MAX_LOADED_BARS) return;" in source
+    # The left-trim this bounding protects against is real and still there.
+    assert "merged.slice(merged.length - MAX_LOADED_BARS)" in source
+
+
+def test_forward_fill_runs_once_per_anchor_so_it_never_fights_the_operator():
+    """Bounded to ONE pass per anchor generation: a cap trim re-opens `hasMoreAfter`, and without
+    this a later pan would silently drag the window forward again under the operator's hands."""
+    source = _read(BAR_WINDOW)
+    assert "forwardFillGenRef" in source
+    assert "if (forwardFillGenRef.current !== generationRef.current) return;" in source
+    # It stops on the endpoint's own honest "that was the newest bar".
+    assert "if (!hasMoreAfter) forwardFillGenRef.current = -1;" in source
+
+
+def test_the_viewport_still_never_auto_advances_onto_a_filled_page():
+    """The fill changes WHICH rows are loaded, never where the chart looks: the setup stays framed,
+    and the documented fill-loop guards are untouched."""
+    chart = _read(STRUCTURE_CHART)
+    assert "shiftVisibleRangeOnNewBar: onNeedNewer === undefined," in chart
+    # focusRange still moves the LEFT edge only.
+    assert "The right edge is never" in chart

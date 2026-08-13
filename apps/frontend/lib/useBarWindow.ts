@@ -84,17 +84,29 @@ function mergeRows(older: BarRow[], newer: BarRow[]): BarRow[] {
  *   forward (`loadNewer` no-ops, `hasMoreAfter` stays false). The recorded store then only ever
  *   fills the space LEFT of the replay start; the live tape's own moving bars own everything to its
  *   right. Omitted (both /structure call sites) => the byte-identical straddle-the-anchor behavior.
+ * @param opts.forwardToEnd  keep paging FORWARD after the first window until the loaded series
+ *   reaches the newest recorded bar (or the cap refuses). Without it the window holds only the
+ *   ~20% forward share of the first request — on a 5m chart almost exactly one session, which
+ *   reads as "the chart stops at the day's close" even though nothing truncated it. Mutually
+ *   exclusive with `beforeOnly` by construction: the clamp is checked first and wins.
  */
 export function useBarWindow(
   symbol: string | null,
   timeframe: string | null,
   asOfEpochMs: number,
-  opts?: { beforeOnly?: boolean },
+  opts?: { beforeOnly?: boolean; forwardToEnd?: boolean },
 ): BarWindow {
   // Read through a ref so the memoized extend()/effect keep stable identities (beforeOnly is
   // constant per call site — the cockpit always true, /structure never set).
   const beforeOnlyRef = useRef(opts?.beforeOnly ?? false);
   beforeOnlyRef.current = opts?.beforeOnly ?? false;
+  const forwardToEndRef = useRef(opts?.forwardToEnd ?? false);
+  forwardToEndRef.current = opts?.forwardToEnd ?? false;
+  // The anchor generation whose forward fill is still owed, or -1 when none is. Bounding the fill
+  // to ONE pass per anchor is what keeps it from fighting the operator: once the window has reached
+  // the newest bar (or the cap), a later pan that re-opens `hasMoreAfter` — a cap trim does exactly
+  // that — must not silently drag the window forward again under their hands.
+  const forwardFillGenRef = useRef(-1);
   const [bars, setBars] = useState<BarRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMoreBefore, setHasMoreBefore] = useState(false);
@@ -185,6 +197,10 @@ export function useBarWindow(
       barsRef.current = merged;
       moreBeforeRef.current = before.data.has_more_before;
       moreAfterRef.current = moreAfter;
+      // Owe this anchor a forward fill (see `forwardFillGenRef`). Recorded here rather than in the
+      // fill effect so it is tied to the generation whose window just landed.
+      forwardFillGenRef.current =
+        forwardToEndRef.current && !beforeOnly && moreAfter ? generation : -1;
       setBars(merged);
       setHasMoreBefore(before.data.has_more_before);
       setHasMoreAfter(moreAfter);
@@ -294,6 +310,30 @@ export function useBarWindow(
     (count: number, opts?: { fill?: boolean }) => extend("newer", count, opts),
     [extend],
   );
+
+  // --- forwardToEnd: page forward until the window reaches the newest recorded bar -------------
+  // Re-fires as each page lands (`hasMoreAfter`/`loading` change), so it walks to the end without a
+  // loop of its own — every page still goes through `extend`, keeping ONE fetch path, the in-flight
+  // guard, and the generation drop for a superseded anchor.
+  //
+  // Requests are marked `fill`, which is load-bearing rather than cosmetic: at `MAX_LOADED_BARS` a
+  // forward load TRIMS FROM THE LEFT, so an unbounded fill would eventually walk the setup the
+  // chart was asked to show out of the loaded window. `extend` refuses a `fill` at the cap, so the
+  // fill stops there instead, `capped` flips, and the page's existing caption says so.
+  useEffect(() => {
+    if (forwardFillGenRef.current !== generationRef.current) return;
+    if (!hasMoreAfter || loading) {
+      // `hasMoreAfter` false is the endpoint's own "that was the newest bar" — the fill is done.
+      if (!hasMoreAfter) forwardFillGenRef.current = -1;
+      return;
+    }
+    const remaining = MAX_LOADED_BARS - barsRef.current.length;
+    if (remaining <= 0) {
+      forwardFillGenRef.current = -1;
+      return;
+    }
+    loadNewer(Math.min(MAX_PAGE, remaining), { fill: true });
+  }, [hasMoreAfter, loading, bars, loadNewer]);
 
   return {
     bars,
