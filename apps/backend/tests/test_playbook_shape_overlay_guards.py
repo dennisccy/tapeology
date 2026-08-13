@@ -331,7 +331,29 @@ def test_the_detect_timeframe_is_read_from_the_record_never_hardcoded():
 # --- 6. served order, one identity function ------------------------------------------------------
 
 
-def test_occurrence_rows_render_in_the_records_own_served_order():
+def test_occurrence_rows_default_to_the_records_own_served_order():
+    """A deliberate, PAID-FOR narrowing, recorded rather than hidden.
+
+    This guard's property was never "no `.sort(` appears in this function". It was: the occurrences
+    render in the order the record serves them, nothing is truncated, and the one value derived from
+    an occurrence's POSITION -- the amber beyond-cap chip -- means its position in the record.
+
+    Occurrences are now sortable by clicking a column header. The dishonest way to permit that was
+    available and is refused: `useTableSort(occurrences, ...)` contains no `.sort(`, so all three
+    bans below would have gone on passing while the ordering shipped underneath them.
+
+    What is given up: the list can display occurrences in an order the record did not serve. What
+    pays for it:
+
+      (a) The three bans stay -- this function still owns no comparator and still caps nothing.
+      (b) The pool filter is still the ONLY narrowing of `record.signals`.
+      (c) Reordering goes through the shared hook, whose mapping is total (nothing dropped),
+          guarded in apps/backend/tests/test_table_sort_guards.py.
+      (d) THE CAP CHIP READS `servedIndex`, never the map index. The pool means above are computed
+          over the first `rail_max_touches_per_row` occurrences AS SERVED, so under any other
+          display order a map index would move the chip onto occurrences that did feed the means
+          and off the ones that did not -- the chip would be precisely inverted on a reversed sort.
+    """
     source = _code(DESK_PAGE)
     start = source.index("function PlaybookOccurrenceList")
     body = source[start : source.index("function PlaybookSummaryView")]
@@ -341,6 +363,281 @@ def test_occurrence_rows_render_in_the_records_own_served_order():
             f"PlaybookOccurrenceList calls {banned} -- occurrences must render in the order the "
             "record itself serves them, never re-ordered or truncated client-side"
         )
+    assert "useTableSort(occurrences" in body, (
+        "PlaybookOccurrenceList no longer reaches its display order through the shared sort hook"
+    )
+    assert "beyondCap={cap !== null && entry.servedIndex >= cap}" in body, (
+        "the beyond-cap chip no longer follows the occurrence's SERVED position -- under a sort it "
+        "would mark the wrong occurrences as outside the pool"
+    )
+    assert "index >= cap" not in body, (
+        "the beyond-cap chip reads a map index -- that is the DISPLAY position once the list can "
+        "be sorted, not the position the pool means were computed over"
+    )
+
+
+def test_the_beyond_cap_served_index_guard_can_fail_on_a_seeded_violation():
+    """The pre-sort expression is exactly what this guard now has to reject."""
+    seeded = "beyondCap={cap !== null && index >= cap}"
+    assert "beyondCap={cap !== null && entry.servedIndex >= cap}" not in seeded
+    assert "index >= cap" in seeded
+
+
+# --- 7. what happened next, per occurrence -------------------------------------------------------
+#
+# Both playbook tables now carry the occurrence's OWN forward returns and its side-matched max
+# drawdown, rendered by one shared cell block so the two cannot drift.
+
+
+def _forward_cells_body(source: str) -> str:
+    start = source.index("function PlaybookForwardCells")
+    return source[start : source.index("function playbookForwardColumns")]
+
+
+def test_the_forward_cells_read_the_records_own_horizon_labels():
+    """The same rule `detect_timeframe` already follows: the record serves its horizons, so a
+    literal "1m"/"5m" here would be a second copy that drifts the moment a record is measured under
+    a different set."""
+    source = _code(DESK_PAGE)
+    start = source.index("function PlaybookForwardCells")
+    body = source[start : source.index("function PlaybookRecordView")]
+    for literal in ('"1m"', '"5m"', '"1h"', '"4h"', "'1m'", "'5m'"):
+        assert literal not in body, (
+            f"the playbook forward columns hardcode {literal} -- read the labels off "
+            "`parameters.rail_horizons_minutes` via playbookHorizonLabels, which is what the "
+            "detectors actually measured"
+        )
+    assert "playbookHorizonLabels(record)" in body, (
+        "PlaybookOccurrenceList no longer derives its horizon labels from the record"
+    )
+
+
+def test_the_forward_cells_reach_their_values_through_the_guarded_bindings():
+    """The desk arithmetic lint (`test_desk_ui_guards.py::_PRICE_ARITHMETIC_FIELDS`) can only see
+    what is written as `touchRow.<served field>` / `touchValue.<served field>`. Writing these cells
+    against those bindings puts them under that lint with zero new regex; a local rename would route
+    six new numeric columns around the one check proving this page derives nothing."""
+    body = _forward_cells_body(_code(DESK_PAGE))
+    assert "const touchRow = signal.forward;" in body, (
+        "the forward block is no longer bound as `touchRow` -- the arithmetic lint cannot see it"
+    )
+    assert "touchRow?.horizons[label] ?? FORWARD_UNMEASURED_HORIZON" in body, (
+        "the per-horizon leaf is no longer bound as `touchValue` off the guarded row"
+    )
+    for field in (
+        "touchValue.return_pct",
+        "touchRow.to_close_pct",
+        "touchRow.mdd_long_pct",
+        "touchRow.mdd_short_pct",
+    ):
+        assert field in body, (
+            f"{field} is not read under its guarded binding name in PlaybookForwardCells"
+        )
+
+
+def test_an_absent_measurement_renders_as_an_absence_and_never_as_a_zero():
+    """Three distinct absences, each read as itself: no `forward` block at all (a record predating
+    measurement), a horizon present-and-null with the backend's own reason, and a horizon this
+    record never measured. A zero in any of those positions would be a fabricated result -- and 0.00
+    on a return column reads as "this setup did nothing", which is a claim."""
+    body = _forward_cells_body(_code(DESK_PAGE))
+    assert "PLAYBOOK_LEGACY_ABSENCE" in body, (
+        "a record with no forward block does not name why its cells are empty"
+    )
+    assert "touchRow === undefined" in body, "the legacy-absence branch is gone"
+    assert "touchValue.return_pct === null" in body, "the per-horizon null branch is gone"
+    assert "FORWARD_UNMEASURED_HORIZON" in body, (
+        "a horizon this record never measured falls through to something other than the shipped "
+        "honest-absence constant"
+    )
+    assert "touchValue.reason" in body, (
+        "the backend's own reason for a null horizon is not surfaced -- the reader would see an em "
+        "dash with no way to learn why"
+    )
+    assert 'touchValue.truncated ? "†"' in body, "the truncation marker is gone"
+    for fabricated in ("?? 0", "|| 0", "?? 0.0"):
+        assert fabricated not in body, (
+            f"the forward cells fall back to {fabricated!r} -- an absence must never be rendered as "
+            "a measured zero"
+        )
+
+
+def test_the_absence_lint_can_fail_on_a_seeded_violation():
+    seeded = "{fmt(touchValue.return_pct ?? 0)}"
+    assert "?? 0" in seeded
+    assert "touchValue.return_pct === null" not in seeded
+
+
+def test_the_drawdown_column_is_side_matched_and_discloses_both_served_numbers():
+    """One drawdown column, not two: the section's shipped sign note already states that a row's
+    adverse excursion is the one on its own side. Nothing is hidden -- both served numbers ride the
+    cell's title, so the other side stays checkable. A ternary is a selection, not arithmetic."""
+    body = _forward_cells_body(_code(DESK_PAGE))
+    assert 'signal.side === "long" ? touchRow.mdd_long_pct : touchRow.mdd_short_pct' in body, (
+        "the drawdown cell no longer selects the excursion matching the row's own side"
+    )
+    assert "mdd long ${String(touchRow.mdd_long_pct)} · mdd short ${String(touchRow.mdd_short_pct)}" in body, (
+        "the drawdown cell no longer discloses BOTH served numbers -- showing one side without the "
+        "other, unchecked, is the reason the single column needed paying for"
+    )
+
+
+def test_the_occurrence_disclosure_survives_the_stretched_drill_in_link():
+    """The whole occurrence row is covered by one absolutely-positioned anchor, so a `title` on an
+    individual `<td>` is occluded and never surfaces. The forward columns' absence and truncation
+    reasons would be unreachable in this table alone -- so they ride the ANCHOR's own title, the
+    same fix `DeskRow` already uses via `deskRowDrillInTitle`."""
+    source = _code(DESK_PAGE)
+    assert "function playbookOccurrenceDrillInTitle(" in source, (
+        "the occurrence anchor has no composite disclosure -- every per-cell title in that row is "
+        "covered by the stretched link"
+    )
+    # The helper is declared directly above the row it serves, so the row body runs from its own
+    # marker to the list that renders it.
+    helper_at = source.index("function playbookOccurrenceDrillInTitle")
+    row_at = source.index("function PlaybookOccurrenceRow")
+    assert helper_at < row_at, "the anchor-title helper is no longer declared above its row"
+    row = source[row_at : source.index("function PlaybookOccurrenceList")]
+    assert "title={playbookOccurrenceDrillInTitle(signal, labels)}" in row, (
+        "the drill-in anchor does not carry the row's own forward disclosure"
+    )
+    helper = source[helper_at:row_at]
+    assert "PLAYBOOK_LEGACY_ABSENCE" in helper and "touchValue.reason" in helper, (
+        "the anchor title drops the absence reasons it exists to carry"
+    )
+    assert "†" in helper, "the anchor title drops the truncation disclosure"
+
+
+# --- 8. the entry time, named on the chart ------------------------------------------------------
+
+
+def test_the_trigger_mark_carries_the_entry_time():
+    """The chart drew WHERE a setup fired but never WHEN — the reader had to hold the desk row's own
+    "trigger (ET)" cell in their head while looking at the candles.
+
+    The time comes off the trigger anchor (`anchors.trigger.ts`), which is the instant the chart is
+    already framed on, the instant the drill-in link's `asof` carries, and the instant the amber dot
+    already sits at. It is NOT `forward.at_utc`: that is a measurement anchor, often a 1m sub-bar of
+    the drawn 5m candle, and absent on legacy records — so labelling with it would print a time no
+    candle on screen is at."""
+    source = _code(SHAPE_MAPPER)
+    assert "formatTimeET(triggerTs * 1000)" in source, (
+        "the trigger mark's label no longer formats the trigger instant through the shared ET "
+        "formatter -- the chart's own axis and crosshair use it, so a second formatter here could "
+        "disagree with the ticks beneath the label"
+    )
+    assert "forward" not in source, (
+        "the shape mapper reads the forward block -- the entry time must come from the trigger "
+        "anchor the chart is drawn on, not from the measurement anchor"
+    )
+
+
+def test_the_shape_mapper_stays_pure_after_gaining_a_formatter():
+    """`lib/datetime.ts` is import-free, so depending on it cannot pull React, a fetch or the chart
+    library into a module whose purity is pinned. Asserted here rather than assumed."""
+    datetime_lib = (FRONTEND_DIR / "lib" / "datetime.ts").read_text()
+    assert "import " not in datetime_lib, (
+        "lib/datetime.ts gained an import -- the shape mapper depends on it and is guarded pure"
+    )
+    assert "export function formatTimeET(" in datetime_lib
+
+
+def test_a_dot_renders_the_label_it_declares():
+    """`ChartShapeDot` has declared `label?` since the overlay shipped, and the primitive silently
+    dropped it -- so the trigger dot's own label never drew. Rendering it is what puts the entry
+    time on the canvas at all.
+
+    Unlike a box or a segment, a dot gets no minimum-width test: that test asks whether the text is
+    wider than the mark it names, and a dot has no width to compare against."""
+    source = _code(SHAPE_PRIMITIVE)
+    start = source.index('case "dot"')
+    # Sliced to the case's own closing brace, NOT to its first `break;`: the case opens with an
+    # early `if (at === null) break;`, so a break-bounded slice would end before any drawing
+    # happened and every assertion below would pass on an empty haystack.
+    body = source[start : source.index("\n          }", start)]
+    assert "context.arc(" in body, "the dot-case slice missed the drawing itself"
+    assert "this._label(" in body, (
+        "a dot still drops the label it declares -- ChartShapeDot.label would be dead in the type"
+    )
+    assert "MIN_LABEL_WIDTH" not in body, (
+        "the dot label is gated on a width test -- a dot has no width, so the gate would silently "
+        "never pass"
+    )
+
+
+def test_the_dot_label_guard_can_fail_on_a_seeded_violation():
+    seeded = 'case "dot": {\n  context.fill();\n  context.stroke();\n  break;'
+    body = seeded[: seeded.index("break;")]
+    assert "this._label(" not in body
+
+
+def test_the_entry_time_reaches_the_readable_legend_too():
+    """Canvas text cannot be asserted by a browser pass and cannot be selected by a reader. The
+    trigger dot's legend entry therefore renders the SAME `shape.label`, so one string feeds both
+    surfaces and they cannot come to disagree about when the setup fired."""
+    source = _code(SHAPE_MAPPER)
+    start = source.index("function legendFor")
+    body = source[start : source.index("export function playbookSignalShapes")]
+    assert "add(shape.color, shape.label ?? " in body, (
+        "the legend no longer renders the trigger mark's own label -- the entry time would exist "
+        "only as canvas pixels, unreadable to a test and unselectable by a reader"
+    )
+
+
+def test_the_two_record_scoped_views_do_not_share_a_sibling_key():
+    """A real defect this guard exists because of, caught live in the browser.
+
+    `PlaybookSummaryView` and `PlaybookSignalsTable` are SIBLINGS inside `PlaybookRecordView`, and
+    both are keyed on the record so that switching session dates drops the previous record's
+    expanded pools and chosen sort. Keyed on a BARE `record.id`, they are two siblings with the
+    same key: React's reconciliation breaks, and every subsequent re-render (clicking a signal row
+    is enough) APPENDS another copy of the summary instead of updating the one already there --
+    observed going 1 -> 2 -> 3 copies on consecutive clicks, each showing the same numbers, which
+    reads as three different pools' results stacked.
+
+    Keys must therefore be distinct AND still record-scoped: dropping the record id to dodge the
+    collision would silently carry one session's expansions and sort into the next."""
+    source = _code(DESK_PAGE)
+    start = source.index("function PlaybookRecordView")
+    body = source[start:]
+    summary_key = "key={`playbook-summary-${record.id}`}"
+    signals_key = "key={`playbook-signals-${record.id}`}"
+    assert summary_key in body, "PlaybookSummaryView's call site lost its prefixed record key"
+    assert signals_key in body, "PlaybookSignalsTable's call site lost its prefixed record key"
+    assert body.count("key={record.id}") == 0, (
+        "a record-scoped sibling is keyed on a BARE record.id -- if two of them are, React appends "
+        "duplicate views instead of updating them"
+    )
+    # Both still scoped to the record, so a date switch really does reset them.
+    for key in (summary_key, signals_key):
+        assert "${record.id}" in key
+
+
+def test_the_sibling_key_guard_can_fail_on_a_seeded_violation():
+    """The exact shape that shipped and duplicated the summary in the browser."""
+    seeded = (
+        "function PlaybookRecordView() {\n"
+        "  <PlaybookSummaryView key={record.id} record={record} />\n"
+        "  <PlaybookSignalsTable key={record.id} record={record} />\n"
+        "}"
+    )
+    assert seeded.count("key={record.id}") == 2
+    assert "key={`playbook-summary-${record.id}`}" not in seeded
+
+
+def test_both_playbook_tables_render_the_same_forward_cells():
+    """One renderer, two call sites -- so the drill-in table and the all-symbols table cannot come
+    to disagree about what happened after a signal."""
+    source = _code(DESK_PAGE)
+    assert source.count("<PlaybookForwardCells signal={signal} labels={labels} />") == 2, (
+        "the two playbook tables no longer share ONE forward-cell renderer"
+    )
+    assert source.count("...playbookForwardColumns(labels)") == 2, (
+        "the two playbook tables no longer share ONE forward-column definition"
+    )
+    assert source.count("<PlaybookForwardLegend />") == 2, (
+        "a table carrying the truncation dagger ships without its legend"
+    )
 
 
 def test_the_beyond_cap_disclosure_reads_the_served_cap():

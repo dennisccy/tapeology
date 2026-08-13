@@ -245,6 +245,21 @@ export class ChartShapePrimitive implements ISeriesPrimitive<Time> {
             context.setLineDash([]);
             context.strokeStyle = "#020617";
             context.stroke();
+            // A dot's label is drawn unconditionally: the width test the box and segment labels use
+            // asks whether the text is wider than the mark it names, and a dot has no width to
+            // compare against. This branch used to be missing entirely, so a dot could carry a
+            // label that silently never drew.
+            //
+            // BELOW the dot, and that side is measured rather than chosen. Above it, live, three
+            // things converged on one point and read as a single run-on string: the chart's own
+            // `as-of` series marker (which draws above this very bar, since a playbook drill-in's
+            // `asof` IS the trigger instant), a segment label right-aligned into the same corner,
+            // and this one. Below the dot is the only side with nothing already on it.
+            if (shape.label) {
+              const fontHeight = Math.round(10 * vy);
+              const below = at.y + radius + fontHeight + LABEL_PADDING * vy;
+              this._label(context, shape.label, at.x, below, shape.color, vy);
+            }
             break;
           }
         }

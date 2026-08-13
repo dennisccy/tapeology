@@ -1,11 +1,61 @@
 {
   "schema_version": 1,
   "journey": "J-01",
-  "name": "Universe ingestion — fetched, registered, honest",
+  "name": "Universe ingestion \u2014 fetched, registered, honest",
   "default_timeout_ms": 15000,
   "steps": [
-    {"n": 1, "journey": "J-01", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}},
-    {"n": 2, "journey": "J-01", "action": {"type": "expect", "target": {"testid": "desk-provenance"}}, "expect": {"text": "Universe snapshot"}, "timeout_ms": 15000},
-    {"n": 3, "journey": "J-01", "action": {"type": "expect", "target": {"testid": "desk-provenance"}}, "expect": {"text": "08e471b10130e1e2"}, "timeout_ms": 10000}
+    {
+      "n": 1,
+      "journey": "J-01",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    },
+    {
+      "n": 2,
+      "journey": "J-01",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "desk-section-expand-provenance"
+        }
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 3,
+      "journey": "J-01",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-provenance"
+        }
+      },
+      "expect": {
+        "text": "Universe snapshot"
+      },
+      "timeout_ms": 15000
+    },
+    {
+      "n": 4,
+      "journey": "J-01",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-provenance"
+        }
+      },
+      "expect": {
+        "text": "08e471b10130e1e2"
+      },
+      "timeout_ms": 10000
+    }
+  ],
+  "notes": [
+    "UPDATED (desk section collapse) by developer: six /desk sections now render COLLAPSED -- Screen Runs, Screen Comparison, Provenance, Index Reconciliation, Top-up Runs and Playbook Evidence are on the page and named, but closed by default, and each one's own GET is deferred until its first expand. Their headings stay VISIBLE while closed, so a step that pins a section TITLE still resolves untouched; only a step reading a section's CONTENTS needs the expand click inserted before it, because the replay runner resolves every target with state=\"visible\". This is a deliberate product-shape change, not a regression."
   ]
 }

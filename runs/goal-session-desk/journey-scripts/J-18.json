@@ -1,19 +1,77 @@
 {
   "schema_version": 1,
   "journey": "J-18",
-  "name": "Every screen run leaves an append-only record of what it attempted — and a re-run under identical pins says so before it walks",
+  "name": "Every screen run leaves an append-only record of what it attempted \u2014 and a re-run under identical pins says so before it walks",
   "default_timeout_ms": 15000,
   "notes": [
     "Re-verified goal-desk-iter-30 by browser-qa-agent. TC-1 (the honest empty 'No screen runs recorded yet.' state) was captured this iteration on a FRESH scoped rig -- a second backend (127.0.0.1:8302) with TAPEOLOGY_DESK_UNIVERSE_DIR pointed at a brand-new, never-populated directory, and a second frontend (127.0.0.1:3302, NEXT_PUBLIC_API_URL=http://127.0.0.1:8302, NEXT_DIST_DIR scoped) -- as the FIRST browser action against that rig, before any Run Screen click: GET /research/desk/screen/runs on that backend returned {\"runs\":[],\"latest\":null,\"integrity_errors\":[]}, and /desk rendered data-testid=\"desk-screen-runs-empty\" with text 'No screen runs recorded yet.' (screenshot reports/qa/goal-desk-iter-30-evidence/J-18-empty-state.png). The rig was torn down at the end of the same dispatch and is NOT referenced by this replay script -- this script targets the ambient store only.",
     "This replay script is DELIBERATELY READ-ONLY (goto only, no click on 'Run Screen'), mirroring the J-09 precedent: the button triggers a real ~101-symbol walk against cached bar data whenever the day's five pins are new, which would make every regression replay pay for (and depend on the timing of) a real compute. Instead this script re-reads the ambient store's own screen_runs log, populated by real 'Run Screen' clicks in prior iterations (goal-desk-iter-29).",
     "goal-desk-iter-30 fix (iteration-summarizer/audit note): iter-29's audit (finding T1) flagged the PRIOR version of this script for pinning steps 2-3 to a specific run/screen id embedded in the expected text (e.g. 'reused screen-2026-07-31-c169546856c7 -- no walk was performed' and the 'latest run' detail block's exact zeroed counts) -- both change identity on every real ambient Run Screen click, so the very next real run anywhere in the pipeline would report a false regression. This version instead asserts STABLE substrings against the append-only desk-screen-runs-table testid's own rows, which never disappear once written: '101 / 101' (a completed full-walk row's attempted/total cell) and 'no walk was performed' (any reused row's outcome cell). Neither substring embeds a date, run id, or screen id, so this script survives every future real run on the ambient store.",
     "Not applied here: iter-30's IN SCOPE also proposed suppressing the 'latest run' detail block's amber 'N members not reached' note and zeroed-counts line when the latest run is a reused done run (closing audit finding F1). Verified live against the ambient rig this iteration (2026-07-31): apps/frontend/app/desk/page.tsx's LatestScreenRunDetail still renders both data-testid=\"desk-screen-run-latest-unreached\" ('101 members not reached') and data-testid=\"desk-screen-run-latest-counts\" ('0 ranked ...') unconditionally for the latest reused run -- the frontend code was NOT changed this iteration (dev handoff: 'no code changes were planned or made'). This script therefore does not assert on the 'latest run' detail block at all (steps 2/3 target the append-only table, which is unaffected by F1's framing gap either way), so it stays valid regardless of whether/when F1 is fixed.",
-    "Step 4 is a post-match liveness check (the iter-4/iter-5 lesson this project's other golden scripts also apply): a further /desk navigation AFTER the key text match, proving the page is still alive and rendering correctly, not merely that the match happened a moment before a crash."
+    "Step 4 is a post-match liveness check (the iter-4/iter-5 lesson this project's other golden scripts also apply): a further /desk navigation AFTER the key text match, proving the page is still alive and rendering correctly, not merely that the match happened a moment before a crash.",
+    "UPDATED (desk section collapse) by developer: six /desk sections now render COLLAPSED -- Screen Runs, Screen Comparison, Provenance, Index Reconciliation, Top-up Runs and Playbook Evidence are on the page and named, but closed by default, and each one's own GET is deferred until its first expand. Their headings stay VISIBLE while closed, so a step that pins a section TITLE still resolves untouched; only a step reading a section's CONTENTS needs the expand click inserted before it, because the replay runner resolves every target with state=\"visible\". This is a deliberate product-shape change, not a regression."
   ],
   "steps": [
-    {"n": 1, "journey": "J-18", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Screen Runs"}},
-    {"n": 2, "journey": "J-18", "action": {"type": "expect", "target": {"testid": "desk-screen-runs-table"}}, "expect": {"text": "101 / 101"}, "timeout_ms": 15000},
-    {"n": 3, "journey": "J-18", "action": {"type": "expect", "target": {"testid": "desk-screen-runs-table"}}, "expect": {"text": "no walk was performed"}, "timeout_ms": 10000},
-    {"n": 4, "journey": "J-18", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}}
+    {
+      "n": 1,
+      "journey": "J-18",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Screen Runs"
+      }
+    },
+    {
+      "n": 2,
+      "journey": "J-18",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "desk-section-expand-screenRuns"
+        }
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 3,
+      "journey": "J-18",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-screen-runs-table"
+        }
+      },
+      "expect": {
+        "text": "101 / 101"
+      },
+      "timeout_ms": 15000
+    },
+    {
+      "n": 4,
+      "journey": "J-18",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-screen-runs-table"
+        }
+      },
+      "expect": {
+        "text": "no walk was performed"
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 5,
+      "journey": "J-18",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    }
   ]
 }

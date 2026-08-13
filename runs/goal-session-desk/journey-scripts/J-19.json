@@ -8,14 +8,92 @@
     "This replay script is DELIBERATELY READ-ONLY (goto + expect only, no click) so it never triggers a new top-up run -- the shipped Top-up button walks a real ~100-symbol universe against the live Yahoo adapter, which this era's own NOTES/anti-goals reserve for an explicit, separately-reported operator act, never an automated regression lane (the same J-09/J-17/J-18 precedent).",
     "Step 2 asserts the stable tail '... reach it' every reach line renders regardless of the actual date/count. Step 3 asserts the stable heading substring 'Pairs recorded earlier' (the parenthesized true-total count is not part of the asserted substring, so it drifts freely). Step 4 asserts only that at least one `desk-topup-run-latest-reach-earlier-row` element renders (existence, no text pinned) -- proving the earlier list has genuine row-level markup without asserting any row's own symbol/timeframe/date, which is exactly the content the OLD step 4 wrongly enshrined as correct.",
     "Step 5 asserts only that the new `desk-topup-run-latest-reach-earlier-cap` disclosure element renders (existence, no text pinned) -- true against the CURRENT ambient run because its true earlier-pairs total (101) exceeds the 20-row display cap this iteration adds. This is an honestly environment-dependent assertion, the same class J-09.json's/J-17.json's/J-18.json's own notes document for their asserted run stats: if a future real ambient top-up run ever reduces the true earlier-total to 20 or fewer (e.g. because most pairs converge onto one recent day), this step will need removing or updating -- an honest environmental change, not a product regression.",
-    "Step 6 is a post-match liveness re-check (the J-09/J-17/J-18 precedent): a further /desk navigation after the key assertions, proving the page is still alive and rendering correctly, not merely that the earlier matches happened a moment before a crash."
+    "Step 6 is a post-match liveness re-check (the J-09/J-17/J-18 precedent): a further /desk navigation after the key assertions, proving the page is still alive and rendering correctly, not merely that the earlier matches happened a moment before a crash.",
+    "UPDATED (desk section collapse) by developer: six /desk sections now render COLLAPSED -- Screen Runs, Screen Comparison, Provenance, Index Reconciliation, Top-up Runs and Playbook Evidence are on the page and named, but closed by default, and each one's own GET is deferred until its first expand. Their headings stay VISIBLE while closed, so a step that pins a section TITLE still resolves untouched; only a step reading a section's CONTENTS needs the expand click inserted before it, because the replay runner resolves every target with state=\"visible\". This is a deliberate product-shape change, not a regression."
   ],
   "steps": [
-    {"n": 1, "journey": "J-19", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Top-up Runs"}},
-    {"n": 2, "journey": "J-19", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-reach"}}, "expect": {"text": "reach it"}, "timeout_ms": 15000},
-    {"n": 3, "journey": "J-19", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-reach-earlier"}}, "expect": {"text": "Pairs recorded earlier"}, "timeout_ms": 10000},
-    {"n": 4, "journey": "J-19", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-reach-earlier-row"}}, "timeout_ms": 10000},
-    {"n": 5, "journey": "J-19", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-reach-earlier-cap"}}, "timeout_ms": 10000},
-    {"n": 6, "journey": "J-19", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}}
+    {
+      "n": 1,
+      "journey": "J-19",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Top-up Runs"
+      }
+    },
+    {
+      "n": 2,
+      "journey": "J-19",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "desk-section-expand-topupRuns"
+        }
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 3,
+      "journey": "J-19",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-topup-run-latest-reach"
+        }
+      },
+      "expect": {
+        "text": "reach it"
+      },
+      "timeout_ms": 15000
+    },
+    {
+      "n": 4,
+      "journey": "J-19",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-topup-run-latest-reach-earlier"
+        }
+      },
+      "expect": {
+        "text": "Pairs recorded earlier"
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 5,
+      "journey": "J-19",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-topup-run-latest-reach-earlier-row"
+        }
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 6,
+      "journey": "J-19",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-topup-run-latest-reach-earlier-cap"
+        }
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 7,
+      "journey": "J-19",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    }
   ]
 }

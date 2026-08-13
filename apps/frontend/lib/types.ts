@@ -877,7 +877,9 @@ export interface DeskScreenSkip {
 // One full, persisted screen snapshot -- frozen JSON, append-only, keyed on five pins
 // (`screen_date`, `as_of`, `universe_snapshot_id`, `config_fingerprint`, `bar_store_signature`).
 // `rows` is already in the snapshot's OWN served rank order (class desc, distance asc, score
-// desc, symbol asc) -- never re-sorted client-side.
+// desc, symbol asc). That order is what the page renders by DEFAULT and the only order it chooses
+// on its own; an operator can click a column header for another, which is disclosed above the table
+// and reversible from it. Each row's `rank` cell always names its position in THIS array.
 export interface DeskScreenSnapshot {
   id: string;
   screen_date: string;
@@ -1847,8 +1849,13 @@ export interface DeskPlaybookBackscanRunsListResult {
 // goal-playbook-iter-12 (J-11): both stats shapes gain n_unmeasured/n_sessions (baseline also
 // gains n_truncated -- already computed server-side, previously discarded) -- every new count a
 // straight pass-through of GET /research/desk/playbook/evidence's enriched body, no client math.
+// `n_positive` counts this cell's OWN pooled values strictly greater than zero -- the same
+// untruncated list its median and mean come from. `null` on every `mdd_*` measure, which is clamped
+// <= 0 by construction so "greater than zero" is not a fact it can carry. A recorded count, never a
+// probability: the served register says so, and this UI only renders what is served.
 export interface DeskPlaybookEvidenceCellStats {
   n: number;
+  n_positive: number | null;
   n_truncated: number;
   n_unmeasured: number;
   n_sessions: number;
@@ -1860,6 +1867,7 @@ export interface DeskPlaybookEvidenceCellStats {
 
 export interface DeskPlaybookEvidenceBaselineStats {
   n_baseline: number;
+  n_positive: number | null;
   n_truncated: number;
   n_unmeasured: number;
   n_sessions: number;
@@ -1903,6 +1911,89 @@ export interface DeskPlaybookEvidenceBasis {
   created_span: { from: string; to: string } | null;
 }
 
+// --- The read-side band-context lens (docs/playbook-detector-spec.md §6) -------------------------
+// Where a recorded signal sits relative to the desk's own tradable band map at that session's
+// basis. EVERY field here is served; this UI computes no distance, no bucket, and no caption.
+
+export type DeskPlaybookBandBucket =
+  | "at_band"
+  | "away_from_band"
+  | "no_band_context"
+  | "not_computed";
+
+export interface DeskPlaybookBandSummary {
+  side: "support" | "resistance";
+  class: "A" | "B" | "C" | null;
+  price_low: number;
+  price_high: number;
+  quality_score: number;
+  round_number: boolean;
+  member_count: number;
+}
+
+export interface DeskPlaybookBandContext {
+  bucket: DeskPlaybookBandBucket;
+  // `null` on both absence buckets -- an honest missing location, never a fabricated 0.
+  distance_bps: number | null;
+  position: "inside" | "above_band" | "below_band" | null;
+  side_relation: "aligned" | "opposed" | null;
+  band: DeskPlaybookBandSummary | null;
+  basis_as_of: string | null;
+  caption: string;
+}
+
+export interface DeskPlaybookContextSignal {
+  symbol: string | null;
+  setup_id: string | null;
+  side: string | null;
+  pool_key: string;
+  trigger_ts: string | null;
+  entry: number | null;
+  measured: boolean;
+  band_context: DeskPlaybookBandContext;
+}
+
+export interface DeskPlaybookContextAnchor {
+  index: number;
+  at_utc: string | null;
+  entry_price: number | null;
+  symbol: string | null;
+  attribution: "positional_verified" | "unattributable";
+  band_context: DeskPlaybookBandContext;
+}
+
+export interface DeskPlaybookContextParameters {
+  algorithm: string;
+  near_band_bps: number;
+  distance_from: string;
+  buckets: string[];
+  comparison_buckets: string[];
+}
+
+export interface DeskPlaybookContext {
+  playbook_id: string;
+  session_date: string;
+  playbook_input_signature: string;
+  parameters: DeskPlaybookContextParameters;
+  signals: DeskPlaybookContextSignal[];
+  baseline_anchors: Record<string, DeskPlaybookContextAnchor[]>;
+  basis: Record<string, number>;
+  register: string;
+}
+
+// One split cell -- the SAME stat blocks as an unsplit cell, plus the bucket that names which
+// comparison half it belongs to.
+export interface DeskPlaybookEvidenceBandContextCell extends DeskPlaybookEvidenceCell {
+  bucket: "at_band" | "away_from_band";
+}
+
+export interface DeskPlaybookEvidenceBandContext {
+  parameters: DeskPlaybookContextParameters;
+  cells: DeskPlaybookEvidenceBandContextCell[];
+  basis: Record<string, number>;
+  register: string;
+}
+
 export interface DeskPlaybookEvidence {
   signature: string;
   cells: DeskPlaybookEvidenceCell[];
@@ -1910,6 +2001,7 @@ export interface DeskPlaybookEvidence {
   other_signatures: DeskPlaybookEvidenceOtherSignature[];
   basis: DeskPlaybookEvidenceBasis;
   parameters: DeskPlaybookParameters;
+  band_context: DeskPlaybookEvidenceBandContext;
   register: string;
 }
 

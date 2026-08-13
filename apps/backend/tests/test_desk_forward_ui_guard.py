@@ -263,6 +263,221 @@ def test_the_forward_block_never_reorders_or_caps_what_it_renders():
     )
 
 
+# The Forward Returns block's four tables, each of which must reach any non-served display order
+# through the ONE shared hook rather than a comparator of its own.
+_FORWARD_BLOCK_TABLES = (
+    "ForwardRunsNote",
+    "ForwardTouchTable",
+    "DeskForwardSummaryView",
+    "DeskForwardTable",
+)
+
+
+def test_the_forward_block_deliberately_permits_an_operator_chosen_sort():
+    """A deliberate, PAID-FOR narrowing, recorded rather than hidden.
+
+    The guard above bans the call syntax; its PROPERTY was that the block never chooses an order or
+    a cap on the operator's behalf. All four of the block's tables are now sortable by clicking a
+    column header, which leaves that property intact -- a header the operator clicks is the operator
+    choosing.
+
+    The dishonest way to permit this was available and is refused: `useTableSort(...)` contains no
+    `.sort(`, so `_REORDER_RE` would have gone on finding nothing while ordering shipped underneath
+    it. The permission is written down here instead.
+
+    What is given up: these four tables can display rows in an order the record did not serve. What
+    pays for it:
+
+      (a) Every one of them reorders ONLY through the shared hook -- no comparator lives in this
+          block, which is what the ban above still enforces.
+      (b) Every one of them ships the disclosure note, so a non-served order always says so.
+      (c) UNCAPPED SURVIVES UNCHANGED: the block still contains no `.slice(`, and each table maps
+          `sort.entries`, whose length the hook's own guard pins equal to its input
+          (test_table_sort_guards.py::test_the_hook_is_a_total_mapping_of_its_input). The scroll
+          container is still the size rail, never a slice.
+
+    NOTE for future edits to this block: `_forward_block` does NOT strip comments, so a comment
+    between the block markers that quotes `.sort(`, `.slice(` or `.reverse(` call syntax will trip
+    the guard above. Write "sorted" or "a slice", never the call form."""
+    source = _DESK_PAGE.read_text()
+    block = _forward_block(source)
+
+    for name in _FORWARD_BLOCK_TABLES:
+        body = _extract_function(source, name)
+        assert "useTableSort(" in body, (
+            f"{name} does not reach its display order through the shared sort hook -- a table in "
+            "this block that orders rows any other way is an unguarded second comparator"
+        )
+        assert "sort.entries" in body, (
+            f"{name} maps something other than the hook's own total projection -- `sort.entries` "
+            "is one entry per served row, which is what keeps this block uncapped"
+        )
+
+    assert "<TableSortNote" in block, (
+        "the Forward Returns block no longer discloses a non-served order"
+    )
+    assert ".slice(" not in block, (
+        "the Forward Returns block slices what it renders -- it must stay uncapped"
+    )
+
+
+def test_the_forward_block_sort_narrowing_can_fail_on_a_seeded_violation():
+    """A lint that cannot fail proves nothing."""
+    seeded_hand_rolled = "function DeskForwardTable() { const r = [...record.rows].sort(cmp); }"
+    body = _extract_function(seeded_hand_rolled, "DeskForwardTable")
+    assert "useTableSort(" not in body
+    assert _REORDER_RE.findall(body), "a hand-rolled comparator must still trip the ban above"
+
+
+# Six sections render COLLAPSED, with their own read deferred until the first expand. Each entry
+# pairs a section with the fetch that fills it.
+#
+# Four own a single, un-keyed read ("every run ever logged"), so "already fetched" is a one-shot
+# fact and the read is issued from the expand handler.
+_EXPAND_READ_SECTIONS = (
+    ("screenRuns", "fetchDeskScreenRuns("),
+    ("topupRuns", "fetchDeskTopupRuns("),
+    ("indexReconciliation", "fetchDeskReconcileRuns("),
+    ("playbookEvidence", "fetchDeskPlaybookEvidence("),
+)
+
+# The other two are keyed on the DISPLAYED snapshot, so their answer changes as the operator moves
+# through history and "already fetched" is not a one-shot fact. Those keep their own effect, gated
+# on the section being open -- expanding re-runs it, and a history selection while open refetches.
+_KEYED_READ_SECTIONS = (
+    ("screenComparison", "setScreenCompareResult(null);"),
+    ("provenance", "setDisplayedPinsResult(null);"),
+)
+
+_ALL_COLLAPSED_SECTIONS = tuple(s for s, _ in _EXPAND_READ_SECTIONS) + tuple(
+    s for s, _ in _KEYED_READ_SECTIONS
+)
+
+# Reads that must NEVER be deferred: they feed the compute controls, which are not collapsed.
+# Deferring one would silently blank a shipped disclosure while its section went on rendering.
+_UNDEFERRED_READS = (
+    "fetchDeskScreenCompute(",
+    "fetchDeskTopupCompute(",
+    "fetchDeskReconcileCompute(",
+    "fetchDeskForwardCompute(",
+)
+
+
+def _mount_effect(source: str) -> str:
+    """The one mount effect's body -- the `useEffect(() => {...}, [])` that issues the page's
+    un-keyed GETs. Bounded by its own empty dependency array."""
+    start = source.index("let alive = true;\n    fetchDeskScreen()")
+    return source[start : source.index("}, []);", start)]
+
+
+def test_the_mount_effect_extractor_finds_a_real_effect():
+    """A counter-test for the helper: every assertion over it is only as honest as this slice."""
+    body = _mount_effect(_DESK_PAGE.read_text())
+    assert "fetchDeskScreen()" in body and "fetchDeskSessions()" in body
+    assert len(body) > 400, "the mount-effect slice is implausibly short"
+
+
+def test_every_collapsed_section_starts_collapsed():
+    """Collapsed is the DEFAULT, not a state the page can be left in. An initial value seeded with
+    any section open would quietly undo the decluttering the collapse exists for."""
+    source = _DESK_PAGE.read_text()
+    assert "useState<ReadonlySet<DeskCollapsibleSection>>(\n    () => new Set(),\n  )" in source, (
+        "the expanded-sections state no longer starts as an empty set -- some section would open "
+        "on load"
+    )
+
+
+def test_a_collapsed_sections_heading_stays_outside_its_collapsed_body():
+    """The heading must render whether or not the section is open.
+
+    Not cosmetic: a shipped golden resolves every assertion with `state="visible"`, so a section
+    whose own title disappeared when collapsed would read as GONE rather than closed -- and the
+    operator would have nothing to click."""
+    header = (_FRONTEND_ROOT / "components" / "CollapsibleSection.tsx").read_text()
+    title_at = header.index("{title}")
+    body_at = header.index("{open && (")
+    assert title_at < body_at, (
+        "the section title is rendered inside the conditional body -- a collapsed section would "
+        "lose its own name and its expand control with it"
+    )
+    assert "aria-expanded={open}" in header and "aria-controls=" in header
+    assert 'type="button"' in header, (
+        "the expand control is not a real button -- a click handler on a non-interactive element "
+        "is unreachable by keyboard and announces nothing"
+    )
+
+
+def test_a_collapsed_section_defers_its_own_read_until_expanded():
+    """The property: a section and the GET that fills it are deferred TOGETHER.
+
+    Render it lazily but fetch eagerly and the page keeps paying for answers nothing displays;
+    fetch lazily but render eagerly and an expanded section stares at a loading skeleton nothing
+    ever fills. So each section's read must be reachable only from its own expand path."""
+    source = _DESK_PAGE.read_text()
+    mount = _mount_effect(source)
+
+    for section in _ALL_COLLAPSED_SECTIONS:
+        assert f'id="{section}"' in source, f"{section} has no CollapsibleSection of its own"
+        assert f'expandedSections.has("{section}")' in source, (
+            f"{section}'s open state is not read from the expanded-sections set"
+        )
+
+    # (a) the four one-shot reads: issued from the expand handler, and ABSENT from the mount effect
+    handler_at = source.index("function toggleSection(")
+    handler = source[handler_at : source.index("\n  }", handler_at)]
+    for section, fetch in _EXPAND_READ_SECTIONS:
+        assert fetch in handler, (
+            f"{fetch} is not issued from the expand handler -- a collapsed section's read must "
+            "happen when it opens, not on load"
+        )
+        assert fetch not in mount, (
+            f"{fetch} still fires from the mount effect -- the section is collapsed, so nothing "
+            "renders what it fetches"
+        )
+    assert "sectionReadIssuedRef.current.has(section)" in handler, (
+        "the expand handler does not remember which sections it has already read -- collapsing "
+        "and re-expanding would refetch every time"
+    )
+
+    # (b) the two keyed reads: still their own effect, gated on the section, cleared BEFORE the
+    # return so a stale answer never survives under a new heading
+    for section, clear in _KEYED_READ_SECTIONS:
+        pair = f'{clear}\n'
+        assert pair in source
+        gate = f'if (!expandedSections.has("{section}")) return;'
+        assert gate in source, f"{section}'s keyed read is not gated on its own open state"
+        assert source.index(clear) < source.index(gate), (
+            f"{section} returns BEFORE clearing its own state -- the previous snapshot's answer "
+            "would stay on screen under the new one's heading"
+        )
+
+    # (c) reads that feed the still-open controls are deferred by nothing
+    for undeferred in _UNDEFERRED_READS:
+        assert undeferred in mount, (
+            f"{undeferred} no longer fires on mount -- it feeds a control that is not collapsed, "
+            "so deferring it blanks a shipped disclosure"
+        )
+
+
+def test_the_deferred_read_guard_can_fail_on_a_seeded_violation():
+    """A lint that cannot fail proves nothing. Three seeds, one per way the pairing can break."""
+    # Rendered lazily but fetched eagerly: the read is still in the mount effect.
+    eager = "let alive = true;\n    fetchDeskScreen()\n    fetchDeskScreenRuns();\n  }, []);"
+    assert "fetchDeskScreenRuns(" in _mount_effect(eager)
+
+    # Fetched lazily but never remembered: every expand refetches.
+    forgetful = 'function toggleSection(s) {\n    fetchDeskScreenRuns().then(set);\n  }'
+    assert "sectionReadIssuedRef.current.has(section)" not in forgetful
+
+    # Returning BEFORE the clear leaves the previous snapshot's answer on screen.
+    clear_after_return = (
+        'if (!expandedSections.has("screenComparison")) return;\n'
+        "    setScreenCompareResult(null);"
+    )
+    gate_at = clear_after_return.index('if (!expandedSections.has("screenComparison")) return;')
+    assert clear_after_return.index("setScreenCompareResult(null);") > gate_at
+
+
 def test_the_sign_convention_line_reads_the_record_and_never_assumes_one():
     """The panel must branch on the record's OWN served `return_sign_convention`, with an explicit
     fallback for records written before the convention existed -- a hardcoded 'signed to side'

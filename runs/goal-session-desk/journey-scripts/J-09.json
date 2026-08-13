@@ -8,11 +8,56 @@
     "UPDATED goal-desk-iter-23 by browser-qa-agent: the previous version of this script asserted the honest-empty 'No top-up runs recorded yet.' text at step 2. That text is no longer true against the ambient apps/backend/.data/ store -- a real top-up run (id topup-2026-07-29-5de907c83fc4, state done, 404/404 pairs attempted, 0 reused / 390 fetched / 14 failed) landed on the ambient store between iter-11 and iter-23, exactly the honest environmental drift the original script's own notes predicted ('If a future operator-run top-up ever lands a real record on the ambient store, this step will fail for an honest environmental reason ... rather than a product regression -- update the expected text'). Re-verified live in goal-desk-iter-23: /desk's Top-up Runs section and LATEST RUN detail render this real record correctly (table row, state/attempted-of-total stats, per-outcome counts, and all 14 failed pairs' verbatim detail legible) -- confirmed via DOM text extraction AND a real screenshot (reports/qa/goal-desk-iter-23-evidence/UT-J-09-topup-runs.png + crops). This is a stale-golden repair, not a regression fix.",
     "This replay script is DELIBERATELY READ-ONLY (goto only, no click) so it never mutates whichever backend/.data store is live at replay time -- J-09 ships no new interactive control (OUT OF SCOPE: 'no new button or control ships this iteration'), and the one pre-existing control that could produce a NEW recorded run (the J-02 'Top-up' button) triggers a real ~100-symbol walk against the vendor adapter, which this era's own NOTES/anti-goals reserve for an explicit, separately-reported operator act -- never an automated regression lane (the iter-4/iter-5 write-triggering-golden lesson).",
     "Step 2's expected text '404 of 404 pairs attempted' is the CURRENT ambient store's real latest-run stat line (GET /research/desk/topup/runs's own payload rendered verbatim), not decorative chrome. Like J-08's dated history rows, this value is itself environment-dependent -- if a further real top-up run is ever recorded on the ambient store, this step will again need updating to that run's own stats (an honest environmental change, not a regression), the same class of environment-dependency the previous version of this note documented for the empty state.",
-    "Step 3 is a post-match liveness check (this era's iter-4/iter-5 lesson): a further /desk navigation AFTER the key text match, proving the page is still alive and rendering correctly, not merely that the match happened a moment before a crash."
+    "Step 3 is a post-match liveness check (this era's iter-4/iter-5 lesson): a further /desk navigation AFTER the key text match, proving the page is still alive and rendering correctly, not merely that the match happened a moment before a crash.",
+    "UPDATED (desk section collapse) by developer: six /desk sections now render COLLAPSED -- Screen Runs, Screen Comparison, Provenance, Index Reconciliation, Top-up Runs and Playbook Evidence are on the page and named, but closed by default, and each one's own GET is deferred until its first expand. Their headings stay VISIBLE while closed, so a step that pins a section TITLE still resolves untouched; only a step reading a section's CONTENTS needs the expand click inserted before it, because the replay runner resolves every target with state=\"visible\". This is a deliberate product-shape change, not a regression."
   ],
   "steps": [
-    {"n": 1, "journey": "J-09", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Top-up Runs"}},
-    {"n": 2, "journey": "J-09", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "606 of 606 pairs attempted"}},
-    {"n": 3, "journey": "J-09", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}}
+    {
+      "n": 1,
+      "journey": "J-09",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Top-up Runs"
+      }
+    },
+    {
+      "n": 2,
+      "journey": "J-09",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "desk-section-expand-topupRuns"
+        }
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 3,
+      "journey": "J-09",
+      "action": {
+        "type": "wait_for",
+        "target": {
+          "text": "606 of 606 pairs attempted"
+        }
+      },
+      "expect": {
+        "text": "606 of 606 pairs attempted"
+      },
+      "timeout_ms": 15000
+    },
+    {
+      "n": 4,
+      "journey": "J-09",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    }
   ]
 }

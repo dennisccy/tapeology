@@ -21,6 +21,7 @@ import type {
   DeskPlaybookBackscanPlan,
   DeskPlaybookBackscanRunsListResult,
   DeskPlaybookComputeSnapshot,
+  DeskPlaybookContext,
   DeskPlaybookEvidence,
   DeskPlaybookReadResult,
   DeskPlaybookRunsListResult,
@@ -1989,6 +1990,33 @@ export async function fetchDeskPlaybookBackscanRuns(): Promise<{
 // default signature, served VERBATIM (no client-side arithmetic anywhere downstream — every
 // number the Playbook Evidence section renders is a straight pass-through of this body). A plain
 // read (T-7: GETs never compute) — no compute manager, no trigger, no poll.
+// The read-side band-context lens for ONE recorded record (spec §6). A separate endpoint from the
+// record read on purpose: `GET /research/desk/playbook` is pinned byte-verbatim by its own backend
+// test, so context is served BESIDE it rather than decorated onto it.
+export async function fetchDeskPlaybookContext(params: {
+  id: string;
+}): Promise<{ ok: boolean; data: DeskPlaybookContext | null; error?: string }> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/desk/playbook/context?id=${encodeURIComponent(params.id)}`,
+    );
+    if (res.ok) {
+      const body = (await res.json()) as { context: DeskPlaybookContext | null };
+      return { ok: true, data: body.context };
+    }
+    let error = "The band context could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
 export async function fetchDeskPlaybookEvidence(): Promise<{
   ok: boolean;
   data: DeskPlaybookEvidence | null;

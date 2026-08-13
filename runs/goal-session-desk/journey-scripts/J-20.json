@@ -4,16 +4,98 @@
   "name": "Every recorded screen states how it differs from the screen recorded before it",
   "default_timeout_ms": 15000,
   "notes": [
-    "Verified goal-desk-iter-35 by browser-qa-agent (2026-07-31), live against the running ambient rig (backend :8301 / frontend :3301). All three acceptance states were captured this iteration: (1) the DEFAULT view (latest = screen-2026-07-31-c169546856c7, base = screen-2026-07-30-bad6387963ef) rendered the identical state -- 'rows compared 100 · rank changed 0 · side changed 0 · entered 0 · left 0' + 'The compared snapshots' ranked rows are identical.'; (2) selecting screen-2026-07-25-bd0b37ebc426 (default base resolves to screen-2026-07-20-ca185294a384) rendered the churned state -- 95/100 rank changed, 12 side changed, e.g. PEP rank 2 vs 64 (-62), UPS side support vs resistance; (3) selecting the ledger's oldest row screen-2026-06-22-3ecd45c062c7 rendered the honest 'No earlier recorded screen exists to compare against.' state. Screenshots: reports/qa/goal-desk-iter-35-evidence/J-20-identical-state.png / J-20-churned-state.png / J-20-no-earlier-state.png (all cropped from full-page captures -- a direct viewport screenshot at this scroll depth came back solid black, the same known browser-tool rendering quirk documented in goal-desk-iter-34-dev.md; full-page capture + crop is the workaround).",
+    "Verified goal-desk-iter-35 by browser-qa-agent (2026-07-31), live against the running ambient rig (backend :8301 / frontend :3301). All three acceptance states were captured this iteration: (1) the DEFAULT view (latest = screen-2026-07-31-c169546856c7, base = screen-2026-07-30-bad6387963ef) rendered the identical state -- 'rows compared 100 \u00b7 rank changed 0 \u00b7 side changed 0 \u00b7 entered 0 \u00b7 left 0' + 'The compared snapshots' ranked rows are identical.'; (2) selecting screen-2026-07-25-bd0b37ebc426 (default base resolves to screen-2026-07-20-ca185294a384) rendered the churned state -- 95/100 rank changed, 12 side changed, e.g. PEP rank 2 vs 64 (-62), UPS side support vs resistance; (3) selecting the ledger's oldest row screen-2026-06-22-3ecd45c062c7 rendered the honest 'No earlier recorded screen exists to compare against.' state. Screenshots: reports/qa/goal-desk-iter-35-evidence/J-20-identical-state.png / J-20-churned-state.png / J-20-no-earlier-state.png (all cropped from full-page captures -- a direct viewport screenshot at this scroll depth came back solid black, the same known browser-tool rendering quirk documented in goal-desk-iter-34-dev.md; full-page capture + crop is the workaround).",
     "This script DELIBERATELY tests only the no-earlier-screen branch plus the section's structural presence, per this iteration's own NOTES/lessons ('journey-scripts/*.json must assert stable substrings, never a specific run's exact counts/dates -- J-20's own golden script must follow this from the start'). The identical/churned pair named in goal.md (2026-07-31 vs 2026-07-30, 2026-07-25 vs 2026-07-20) will stop being 'the default view' the moment a new real screen run is recorded, so pinning those ids/counts here would make the very next ambient Run Screen click a false regression -- the same trap iter-30's audit caught in J-18's script. The oldest-snapshot id (screen-2026-06-22-3ecd45c062c7) and its 'no earlier recorded screen' state are structurally permanent instead: screen snapshots are append-only (never backfilled, never re-dated), so nothing can ever be recorded with an EARLIER screen_date than this one without an explicit, never-planned backfill -- this is the same permanence argument J-12/J-13/J-14's own pinned historical ids already rest on.",
     "Step 2 proves the Screen Comparison section renders on the DEFAULT (whatever-is-latest) view without asserting which of the three states it shows -- structurally true regardless of ledger growth, since the section always renders once any screen exists (gated on latest !== null).",
-    "Step 5 is a post-match liveness check (this era's iter-4/iter-5 lesson): a further /desk navigation AFTER the key assertions match, proving the page is still alive and rendering correctly, not merely that the match happened a moment before a crash."
+    "Step 5 is a post-match liveness check (this era's iter-4/iter-5 lesson): a further /desk navigation AFTER the key assertions match, proving the page is still alive and rendering correctly, not merely that the match happened a moment before a crash.",
+    "UPDATED (desk section collapse) by developer: six /desk sections now render COLLAPSED -- Screen Runs, Screen Comparison, Provenance, Index Reconciliation, Top-up Runs and Playbook Evidence are on the page and named, but closed by default, and each one's own GET is deferred until its first expand. Their headings stay VISIBLE while closed, so a step that pins a section TITLE still resolves untouched; only a step reading a section's CONTENTS needs the expand click inserted before it, because the replay runner resolves every target with state=\"visible\". This is a deliberate product-shape change, not a regression."
   ],
   "steps": [
-    {"n": 1, "journey": "J-20", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Screen Comparison"}},
-    {"n": 2, "journey": "J-20", "action": {"type": "expect", "target": {"testid": "desk-screen-compare-section"}}, "expect": {"text": "This screen"}, "timeout_ms": 10000},
-    {"n": 3, "journey": "J-20", "action": {"type": "click", "target": {"css": "tr[data-screen-id=\"screen-2026-06-22-3ecd45c062c7\"]"}}, "expect": {"text": "screen-2026-06-22-3ecd45c062c7"}, "timeout_ms": 10000},
-    {"n": 4, "journey": "J-20", "action": {"type": "expect", "target": {"testid": "desk-screen-compare-no-earlier"}}, "expect": {"text": "No earlier recorded screen exists to compare against."}, "timeout_ms": 10000},
-    {"n": 5, "journey": "J-20", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}}
+    {
+      "n": 1,
+      "journey": "J-20",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Screen Comparison"
+      }
+    },
+    {
+      "n": 2,
+      "journey": "J-20",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "desk-section-expand-screenComparison"
+        }
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 3,
+      "journey": "J-20",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-screen-compare-section"
+        }
+      },
+      "expect": {
+        "text": "This screen"
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 4,
+      "journey": "J-20",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "desk-section-expand-provenance"
+        }
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 5,
+      "journey": "J-20",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "tr[data-screen-id=\"screen-2026-06-22-3ecd45c062c7\"]"
+        }
+      },
+      "expect": {
+        "text": "screen-2026-06-22-3ecd45c062c7"
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 6,
+      "journey": "J-20",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-screen-compare-no-earlier"
+        }
+      },
+      "expect": {
+        "text": "No earlier recorded screen exists to compare against."
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 7,
+      "journey": "J-20",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    }
   ]
 }

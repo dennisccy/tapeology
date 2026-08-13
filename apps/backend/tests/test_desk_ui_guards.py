@@ -36,9 +36,24 @@ from __future__ import annotations
 
 import pathlib
 import re
+from test_copy_discipline import find_violations
 
 _FRONTEND_ROOT = pathlib.Path(__file__).resolve().parents[2] / "frontend"
 _DESK_PAGE = _FRONTEND_ROOT / "app" / "desk" / "page.tsx"
+_SORTABLE_HEADER = _FRONTEND_ROOT / "components" / "SortableHeader.tsx"
+
+# Comment strippers, matching `test_playbook_shape_overlay_guards.py`'s own `_code` convention: a
+# guard must never pass or fail on prose that merely DESCRIBES the thing it forbids. This page's
+# comments quote `.sort(`/`.reverse(` call syntax while explaining why the page does not use it.
+_JSX_COMMENT = re.compile(r"\{/\*.*?\*/\}", re.DOTALL)
+_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+_LINE_COMMENT = re.compile(r"//[^\n]*")
+
+
+def _code(source: str) -> str:
+    source = _JSX_COMMENT.sub(" ", source)
+    source = _BLOCK_COMMENT.sub(" ", source)
+    return _LINE_COMMENT.sub(" ", source)
 _STRUCTURE_PAGE = _FRONTEND_ROOT / "app" / "structure" / "page.tsx"
 
 _FORBIDDEN_DESK_REFERENCES = (
@@ -215,8 +230,16 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|plan\.(?:total|missing)"
     r"|compute\.(?:planned_total|completed)"
     r"|outcomes\.(?:reused|recorded|refused_non_session|failed)"
-    r"|cell\.signal\.(?:n|n_truncated|n_unmeasured|n_sessions|median_pct|p25_pct|p75_pct|mean_pct)"
-    r"|cell\.baseline\.(?:n_baseline|n_truncated|n_unmeasured|n_sessions|median_pct|p25_pct|p75_pct"
+    r"|cell\.signal\.(?:n|n_positive|n_truncated|n_unmeasured|n_sessions|median_pct|p25_pct|p75_pct"
+    r"|mean_pct)"
+    # The band-context lens (spec §6): a location is SERVED, never re-derived on the client -- the
+    # distance, the band edges, and the threshold comparison all belong to the backend.
+    r"|context\.(?:distance_bps|near_band_bps)"
+    r"|context\.band\.(?:price_low|price_high|quality_score|member_count)"
+    r"|bandContext\.(?:distance_bps)"
+    r"|band\.parameters\.near_band_bps"
+    r"|cell\.baseline\.(?:n_baseline|n_positive|n_truncated|n_unmeasured|n_sessions|median_pct"
+    r"|p25_pct|p75_pct"
     r"|mean_pct)"
     r"|breach\.(?:breached_count|total_count)"
     r"|basis\.(?:n_records)"
@@ -481,7 +504,29 @@ _ROWS_REORDER_PATTERN = re.compile(
 _ROWS_SLICE_PATTERN = re.compile(
     r"(?:\[\s*\.\.\.\s*rows\s*\]|\brows\b)\s*(?:\.\s*\w+\([^()]*\)\s*)*\.\s*slice\s*\("
 )
-_RANKED_PAGE_WINDOW = "rows.slice(pageStart, pageStart + RANKED_ROWS_PAGE_SIZE)"
+
+# The ranked table's page window now slices the DISPLAYED order rather than `rows` itself, because
+# the operator can choose an order other than the served one. `sort.entries` is the shared hook's
+# own total, one-per-served-row projection, so a window over it still preserves every property the
+# `rows` window had.
+_ORDERED_SLICE_PATTERN = re.compile(r"\bsort\.entries\b\s*\.\s*slice\s*\(")
+
+# The TWO sanctioned slices of a displayed order on this page, each pinned by its exact expression.
+# They are different acts and stay named separately: a WINDOW pages through everything (every row
+# stays reachable), a CAP truncates (rows past it are not shown at all) -- which is why the cap
+# ships its own "showing N of M" disclosure and the window ships a pager.
+_RANKED_PAGE_WINDOW = "sort.entries.slice(pageStart, pageStart + RANKED_ROWS_PAGE_SIZE)"
+_SCREEN_COMPARE_CAP = "sort.entries.slice(0, SCREEN_COMPARE_ROWS_DISPLAY_CAP)"
+
+# The ONE sanctioned way any table on this page may render an order other than the served one: the
+# shared, separately-guarded hook. A hand-rolled comparator would be a second, untested source of
+# display order -- exactly what the reorder guard's narrowing below refuses to permit.
+_SORT_HOOK_CALL = "useTableSort("
+
+# The one `.sort(` this page is allowed to contain: picking the MAXIMUM of a set of session dates.
+# It orders a date set to select one value, never a set of rows for display, so it is not a display
+# order in any sense the reorder guard means.
+_SANCTIONED_PAGE_SORT = "[...window.sessions].sort()"
 
 
 def _extract_function(source: str, name: str) -> str:
@@ -568,48 +613,337 @@ def test_the_reorder_guard_deliberately_no_longer_treats_a_window_slice_as_a_reo
     assert _ROWS_REORDER_PATTERN.search("const r = [...rows].sort(cmp);") is not None
 
 
-def test_desk_page_slices_rows_only_for_the_ranked_page_window():
-    """The page window is the ONLY `rows` slice on the page, and it is the exact contiguous
-    expression -- any other slice could drop, overlap or re-origin rows without the rank cell
-    noticing."""
+def test_the_reorder_guard_deliberately_permits_an_operator_chosen_sort():
+    """A second deliberate, PAID-FOR narrowing, recorded rather than hidden.
+
+    TC-7's property was never "no `.sort(` appears in this file". It was: THE PAGE NEVER CHOOSES A
+    DISPLAY ORDER ON THE OPERATOR'S BEHALF, and every value derived from a row's position means its
+    position in the record. Every table on /desk is now sortable by clicking a column header, which
+    does not touch that property -- a header the operator clicks is the operator choosing, not the
+    page choosing.
+
+    The dishonest way to permit this was available and is refused: `useTableSort(rows, ...)` sails
+    straight past `_ROWS_REORDER_PATTERN` (no `.sort(` is chained off `rows`), so this guard would
+    have gone on passing while the thing it was written to prevent shipped underneath it. That is
+    exactly the "sail past `\\brows\\b`" loophole this module's sibling narrowing above warns
+    against, so the permission is written down here instead.
+
+    What is given up: the ranked table can now display its rows in an order the snapshot did not
+    serve. What pays for it, all four pinned below:
+
+      (a) There is exactly ONE reordering path in the product -- the shared hook, whose own
+          contract (served order is the untouched default, the mapping is total, nothing is
+          dropped) is guarded in test_table_sort_guards.py. The page owns no comparator.
+      (b) The page contains no `.sort(`/`.reverse(` of its own beyond one sanctioned max-of-a-set.
+      (c) A non-served order is always DISCLOSED, in words, by a note above the table.
+      (d) A non-served order is always REVERSIBLE, by a control inside that note.
+
+    Delete any one of these and the narrowing is no longer paid for."""
     source = _DESK_PAGE.read_text()
     table = _extract_function(source, "DeskRowsTable")
-    file_hits = _ROWS_SLICE_PATTERN.findall(source)
-    assert len(file_hits) == 1, (
-        f"`rows` is sliced {len(file_hits)} time(s) in apps/frontend/app/desk/page.tsx -- the ONE "
-        "sanctioned slice is DeskRowsTable's own page window"
+
+    # (a) the one sanctioned reordering path, and it is the shared, separately-tested one
+    assert f"{_SORT_HOOK_CALL}rows, DESK_ROW_COLUMNS)" in table, (
+        "DeskRowsTable no longer reaches its display order through the shared sort hook"
     )
-    assert len(_ROWS_SLICE_PATTERN.findall(table)) == 1, (
-        "the one `rows` slice is not inside DeskRowsTable"
+
+    # (b) the page still owns no comparator of its own. Counted over the CODE, never the prose:
+    # this page's own comments quote the call syntax while explaining why it is not used.
+    code = _code(source)
+    stray_sorts = re.findall(r"\.\s*(?:sort|reverse)\s*\([^\n]{0,60}", code)
+    assert len(re.findall(r"\.\s*(?:sort|reverse)\s*\(", code)) == 1, (
+        f"apps/frontend/app/desk/page.tsx contains a hand-rolled comparator ({stray_sorts!r}) -- "
+        "every display order must go through the shared hook"
+    )
+    assert _SANCTIONED_PAGE_SORT in code, (
+        f"the one sanctioned page sort ({_SANCTIONED_PAGE_SORT!r}) is gone -- if it was removed on "
+        "purpose, tighten the count above to 0 rather than leaving this guard vacuous"
+    )
+
+    # (c) + (d) disclosed and reversible
+    assert 'data-testid="desk-sort-active-note"' in _SORTABLE_HEADER.read_text(), (
+        "the sort disclosure note is gone -- a table in a non-served order would be "
+        "indistinguishable from the record's own ranking"
+    )
+    assert 'data-testid="desk-sort-reset"' in _SORTABLE_HEADER.read_text(), (
+        "the reset-to-served-order control is gone -- an operator could not get back to what the "
+        "record actually said"
+    )
+
+
+def test_the_operator_sort_narrowing_can_fail_on_a_seeded_violation():
+    """Each of the four bounds above is a real check, not a restatement."""
+    # (a) a filtered input would silently drop rows from the pager
+    seeded_filtered = "function DeskRowsTable() { useTableSort(rows.filter(f), DESK_ROW_COLUMNS) }"
+    assert f"{_SORT_HOOK_CALL}rows, DESK_ROW_COLUMNS)" not in seeded_filtered
+
+    # (b) a hand-rolled comparator beside the sanctioned one is two hits, not one
+    seeded_two = f"const a = {_SANCTIONED_PAGE_SORT};\nconst b = [...entries].sort(cmp);"
+    assert len(re.findall(r"\.\s*(?:sort|reverse)\s*\(", _code(seeded_two))) == 2
+
+    # ...and the stripper really does hide prose, so the count above cannot be satisfied (or
+    # tripped) by a comment that merely names the syntax.
+    assert re.findall(r"\.\s*sort\s*\(", _code("// never call .sort( here\nconst a = 1;")) == []
+    assert re.findall(r"\.\s*sort\s*\(", _code("{/* not a .sort( either */}\nconst a = 1;")) == []
+
+
+def test_desk_page_slices_rows_only_for_the_ranked_page_window():
+    """The page window is the ONLY slice of the ranked rows on the page, and it is the exact
+    contiguous expression -- any other slice could drop, overlap or re-origin rows without the rank
+    cell noticing.
+
+    A deliberate, PAID-FOR re-pointing, recorded rather than hidden. The window used to be pinned
+    against `rows` because `rows` WAS the only order this table could render. The operator can now
+    choose another (see the narrowing note on the reorder guard above), so the window is pinned
+    against the DISPLAYED order instead -- `sort.entries`, which is `rows` verbatim by default.
+
+    What that gives up: `_ROWS_SLICE_PATTERN` no longer has a live hit to count, so the assertion
+    that `rows` itself is never sliced becomes a `== []` rather than a `== 1`. What pays for it: the
+    absolute-position property `pageStart` used to carry is now carried EXPLICITLY by `servedIndex`
+    (pinned by the rank guard below), which is strictly stronger -- `pageStart` could only describe
+    a position under the served order, while `servedIndex` survives any order at all. The window
+    remaining total is pinned separately, in
+    apps/backend/tests/test_table_sort_guards.py::test_the_hook_is_a_total_mapping_of_its_input."""
+    source = _DESK_PAGE.read_text()
+    table = _extract_function(source, "DeskRowsTable")
+    assert _ROWS_SLICE_PATTERN.findall(source) == [], (
+        "`rows` is sliced directly in apps/frontend/app/desk/page.tsx -- the ranked table windows "
+        "the DISPLAYED order (`sort.entries`), so a raw `rows` slice would bypass the sort and "
+        "render a page of the served order under a sorted table's headers"
+    )
+    file_hits = _ORDERED_SLICE_PATTERN.findall(source)
+    assert len(file_hits) == 2, (
+        f"the displayed order is sliced {len(file_hits)} time(s) in "
+        "apps/frontend/app/desk/page.tsx -- the only sanctioned slices are DeskRowsTable's page "
+        "window and ScreenCompareTable's display cap, both pinned below"
+    )
+    assert len(_ORDERED_SLICE_PATTERN.findall(table)) == 1, (
+        "the one page-window slice is not inside DeskRowsTable"
     )
     assert _RANKED_PAGE_WINDOW in table, (
         f"DeskRowsTable no longer windows via {_RANKED_PAGE_WINDOW!r}"
     )
-    assert "pageRows.map((row, index) =>" in table, (
+    assert "pageEntries.map((entry) =>" in table, (
         "DeskRowsTable maps something other than its own page window"
     )
 
+    # The second sanctioned slice: a shipped display cap that predates sorting. It now caps the
+    # DISPLAYED order rather than the served one, and that ordering is load-bearing -- capping
+    # first would sort a window the operator never chose, so "the top 50 by rank change" would
+    # quietly mean "whichever of the first 50 SERVED rows rank highest".
+    compare = _extract_function(source, "ScreenCompareTable")
+    assert _SCREEN_COMPARE_CAP in compare, (
+        f"ScreenCompareTable no longer caps via {_SCREEN_COMPARE_CAP!r}"
+    )
+    assert compare.index("useTableSort(") < compare.index(_SCREEN_COMPARE_CAP), (
+        "ScreenCompareTable caps BEFORE it sorts -- the cap must be a window over the chosen "
+        "order, not a pre-selection the sort is then applied inside"
+    )
+    assert 'data-testid="desk-screen-compare-cap-note"' in compare, (
+        "the cap lost its own disclosure -- a truncated table that does not say so is the one "
+        "thing a cap may never be"
+    )
+
+
+def test_the_page_window_guard_can_fail_on_a_seeded_violation():
+    """A lint that cannot fail proves nothing -- both halves of the swap above are checked."""
+    assert _ROWS_SLICE_PATTERN.findall("const p = rows.slice(0, 10);") != []
+    assert _ORDERED_SLICE_PATTERN.findall("const p = rows.slice(0, 10);") == []
+    assert len(_ORDERED_SLICE_PATTERN.findall(_RANKED_PAGE_WINDOW)) == 1
+    assert len(_ORDERED_SLICE_PATTERN.findall(_SCREEN_COMPARE_CAP)) == 1
+    # A THIRD slice of a displayed order anywhere on the page must fail the count above.
+    seeded_third = f"{_RANKED_PAGE_WINDOW}\n{_SCREEN_COMPARE_CAP}\nsort.entries.slice(0, 5)"
+    assert len(_ORDERED_SLICE_PATTERN.findall(seeded_third)) == 3
+
 
 def test_desk_ranked_rows_render_an_absolute_rank_across_pages():
-    """Row 11 reads 11, never 1: the rank cell is the row's position in the SERVED array, which
-    under a page window means the window offset plus the map index."""
+    """Row 11 reads 11, never 1: the rank cell is the row's position in the SERVED array.
+
+    This used to mean "the window offset plus the map index", which was only correct while the
+    served order was the ONLY order. Under an operator-chosen sort that expression names where a row
+    happens to sit on screen, so a row served 11th could render as 1. The cell now reads the row's
+    own `servedIndex`, which is the position the snapshot recorded it at under every display order.
+
+    Both superseded forms are asserted ABSENT, not merely the old one: `index + 1` is page-relative
+    (page 2 would restart at 1) and `pageStart + index + 1` is display-relative (a sorted page 1
+    would restart at 1). Either would silently contradict the snapshot's own recorded order."""
     table = _extract_function(_DESK_PAGE.read_text(), "DeskRowsTable")
-    assert "rank={pageStart + index + 1}" in table, (
-        "the ranked table does not render an absolute rank"
+    assert "rank={entry.servedIndex + 1}" in table, (
+        "the ranked table does not render the row's SERVED position as its rank"
     )
     assert "rank={index + 1}" not in table, (
         "the ranked table passes a PAGE-relative rank -- page 2 would restart the briefing at 1 "
         "and silently contradict the snapshot's own recorded order"
     )
+    assert "rank={pageStart + index + 1}" not in table, (
+        "the ranked table passes a DISPLAY-relative rank -- correct only while the served order is "
+        "the only order, and this table can now be sorted"
+    )
 
 
 def test_the_absolute_rank_guard_can_fail_on_a_seeded_violation():
-    seeded = (
-        "function DeskRowsTable() { pageRows.map((row, index) => <DeskRow rank={index + 1} />) }"
+    page_relative = (
+        "function DeskRowsTable() { pageEntries.map((row, index) => <DeskRow rank={index + 1} />) }"
     )
-    body = _extract_function(seeded, "DeskRowsTable")
-    assert "rank={pageStart + index + 1}" not in body
+    body = _extract_function(page_relative, "DeskRowsTable")
+    assert "rank={entry.servedIndex + 1}" not in body
     assert "rank={index + 1}" in body
+
+    display_relative = (
+        "function DeskRowsTable() { pageEntries.map((row, index) => "
+        "<DeskRow rank={pageStart + index + 1} />) }"
+    )
+    body = _extract_function(display_relative, "DeskRowsTable")
+    assert "rank={entry.servedIndex + 1}" not in body
+    assert "rank={pageStart + index + 1}" in body
+
+
+# EVERY table on /desk. Each must reach any non-served display order through the one shared hook --
+# a hand-rolled comparator would be a second, untested source of display order, and the whole
+# reorder narrowing above is written on the premise that there is exactly one.
+#
+# The last six belong to sections that render COLLAPSED. They were briefly excluded, while those
+# sections were suppressed outright and wiring a control into them would have been dead code; the
+# sections are back behind an expand control, so the exclusion is gone and this tuple is once again
+# the whole page.
+_SORTABLE_DESK_TABLES = (
+    "DeskRowsTable",
+    "DeskSkipTable",
+    "ForwardRunsNote",
+    "ForwardTouchTable",
+    "DeskForwardSummaryView",
+    "DeskForwardTable",
+    "BackscanRunsTable",
+    "PlaybookSignalsTable",
+    "PlaybookAbsencesTable",
+    "PlaybookOccurrenceList",
+    "PlaybookSummaryView",
+    "PlaybookRunsNote",
+    "TopupRunsTable",
+    "IndexReconciliationTable",
+    "ScreenRunsTable",
+    "ScreenCompareTable",
+    "PlaybookEvidenceCellsTable",
+    "PlaybookEvidenceBreachTable",
+)
+
+
+def test_every_rendered_desk_table_sorts_through_the_one_shared_primitive():
+    source = _DESK_PAGE.read_text()
+    for name in _SORTABLE_DESK_TABLES:
+        body = _extract_function(source, name)
+        assert _SORT_HOOK_CALL in body, (
+            f"{name} does not use the shared sort hook -- either it is unsortable (and the user "
+            "asked for every column of every table to sort) or it hand-rolled a second comparator"
+        )
+        assert "<SortableHeader" in body, (
+            f"{name} renders its own header cells instead of the shared, accessibility-guarded "
+            "SortableHeader"
+        )
+        assert "<TableSortNote" in body, (
+            f"{name} can be sorted without disclosing it -- a non-served order must always say so "
+            "and always be reversible"
+        )
+
+
+# The two summary views whose rows come in PAIRS: a measured line and its baseline, joined by a
+# `rowSpan={2}` label cell. (The playbook one adds a third, conditional occurrences row.)
+_PAIRED_ROW_SUMMARIES = (
+    ("DeskForwardSummaryView", "useTableSort(sides", "PlaybookSummaryCells"),
+    ("PlaybookSummaryView", "useTableSort(poolKeys", "ForwardSummaryCells"),
+)
+
+
+def test_the_paired_row_summaries_sort_groups_and_never_individual_rows():
+    """A correctness guard, not a taste one.
+
+    Each pool/side owns two `<tr>`s joined by a `rowSpan={2}` chip that labels BOTH. Ordering the
+    rows independently would slide a baseline line out from under its own label and place it under
+    a different pool's -- a wrong number stated confidently, which is the worst failure this page
+    can have. Ordering the GROUPS moves each pair as a unit by construction.
+
+    The hook is therefore handed the group keys (`sides` / `poolKeys`), never the rendered rows."""
+    source = _DESK_PAGE.read_text()
+    for name, group_call, foreign_cells in _PAIRED_ROW_SUMMARIES:
+        body = _extract_function(source, name)
+        assert group_call in body, (
+            f"{name} no longer sorts its GROUP keys -- sorting its rows would separate a baseline "
+            "line from the rowSpan label that names it"
+        )
+        assert "rowSpan={2}" in body, (
+            f"{name} lost the rowSpan that joins each pair -- the group-sorting rationale above "
+            "depends on the pair being one labelled unit"
+        )
+        assert foreign_cells not in body, (
+            f"{name} renders the OTHER summary's cells -- the two were extracted separately and "
+            "must not drift into one another"
+        )
+        # The hook must not be pointed at the served summary map itself: that is a record of
+        # measured values, not a list of rows, and sorting it would be meaningless.
+        assert f"{_SORT_HOOK_CALL}record.summary" not in body
+
+
+def test_the_group_sorting_guard_can_fail_on_a_seeded_violation():
+    seeded = (
+        "function PlaybookSummaryView() { const s = useTableSort(rowsForEveryLine, C); "
+        "return <tr rowSpan={2} />; }"
+    )
+    body = _extract_function(seeded, "PlaybookSummaryView")
+    assert "useTableSort(poolKeys" not in body
+
+
+def test_a_column_with_no_single_served_value_opts_out_rather_than_ordering_arbitrarily():
+    """`source` labels which of two paired lines a row is; `outcomes` renders several served
+    counters side by side. Ordering on either would silently pick a winner among equals, and summing
+    the counters would be a number no run ever recorded."""
+    source = _DESK_PAGE.read_text()
+    for name in ("DeskForwardSummaryView", "PlaybookSummaryView"):
+        body = _extract_function(source, name)
+        assert 'id: "source", label: "source", kind: "text", sortable: false' in body, (
+            f"{name}'s `source` column is sortable -- it names which line of a pair a row is, not a "
+            "value the record served"
+        )
+    # Read off the module-level column declaration, not the component body -- these columns are
+    # hoisted so the hook's memo sees a stable identity.
+    start = source.index("const BACKSCAN_RUN_COLUMNS")
+    backscan_columns = source[start : source.index("function BackscanRunsTable")]
+    assert 'id: "outcomes"' in backscan_columns and "sortable: false" in backscan_columns, (
+        "the back-scan `outcomes` column is sortable -- it renders several counters, so ordering "
+        "would pick one arbitrarily and summing them would invent a number"
+    )
+
+
+def test_sorting_the_ranked_table_rewinds_its_pager():
+    """Re-ordering the whole table while parked on page 4 strands the operator in the middle of an
+    order they have not seen the start of. The rewind is plain state in the event handler, never a
+    twelfth effect -- the page's effect census is pinned."""
+    table = _extract_function(_DESK_PAGE.read_text(), "DeskRowsTable")
+    assert "sort.toggle(columnId);\n    setPage(1);" in table, (
+        "toggling a sort no longer rewinds the ranked table's pager"
+    )
+    assert "sort.reset();\n    setPage(1);" in table, (
+        "resetting to the served order no longer rewinds the ranked table's pager"
+    )
+    assert "useEffect" not in table, (
+        "DeskRowsTable introduced an effect -- the pager rewind must stay in the event handler"
+    )
+
+
+def test_the_ranked_tables_measured_column_widths_survive_the_sortable_headers():
+    """The thirteen `<colgroup>` widths are MEASURED values summing to the 1214px container, which
+    is what keeps `scrollWidth === clientWidth` at 1440px. Adding a control inside each header must
+    not have moved any of them."""
+    table = _extract_function(_DESK_PAGE.read_text(), "DeskRowsTable")
+    widths = re.findall(r'<col className="w-\[(\d+)px\]" />', table)
+    assert len(widths) == 13, f"the ranked table no longer declares 13 column widths ({widths})"
+    assert sum(int(width) for width in widths) == 1214, (
+        f"the measured column widths no longer sum to 1214px (got {sum(int(w) for w in widths)}) -- "
+        "the ranked table would scroll horizontally inside its own container"
+    )
+    assert "revealOnHover" in table, (
+        "the ranked table's headers show their sort glyph permanently -- on a `table-fixed` layout "
+        "with measured widths that widens the idle header row"
+    )
 
 
 def test_the_ranked_table_resets_to_page_one_when_the_displayed_snapshot_changes():
@@ -1028,3 +1362,78 @@ def test_the_asof_class_expr_extractor_returns_the_right_inputs_own_expression()
     assert _asof_input_class_expr(seeded, "alpha") == "className={ASOF_INPUT_CLASS}"
     beta = _asof_input_class_expr(seeded, "beta")
     assert "border-amber-500" in beta and "ASOF_INPUT_CLASS" in beta
+
+
+# --- Band context on /desk (docs/playbook-detector-spec.md §6) -------------------------------------
+# The location columns, the near-band display filter, and the evidence split are all pass-throughs of
+# served fields. These guards pin what the page must SAY about them, because the copy is the part
+# that could quietly turn a description of where a signal happened into a claim about what it means.
+
+_BAND_CONTEXT_TESTIDS = (
+    "desk-playbook-signal-band",
+    "desk-playbook-signal-band-dist",
+    "desk-playbook-signal-band-relation",
+    "desk-playbook-near-band-filter",
+    "desk-playbook-near-band-filter-count",
+    "desk-evidence-signal-n-positive",
+    "desk-evidence-baseline-n-positive",
+    "desk-evidence-band-context",
+    "desk-evidence-band-context-basis",
+    "desk-evidence-band-context-table",
+    "desk-evidence-cell-bucket",
+)
+
+
+def test_desk_page_ships_every_band_context_testid():
+    source = _DESK_PAGE.read_text()
+    missing = [
+        testid for testid in _BAND_CONTEXT_TESTIDS if f'data-testid="{testid}"' not in source
+    ]
+    assert not missing, f"apps/frontend/app/desk/page.tsx is missing band-context testid(s) {missing}"
+
+
+def test_the_band_context_testid_guard_can_fail_on_a_seeded_violation():
+    seeded = '<div data-testid="desk-playbook-signal-band" />'
+    missing = [testid for testid in _BAND_CONTEXT_TESTIDS if f'data-testid="{testid}"' not in seeded]
+    assert missing, "a source shipping only ONE of the testids must still be reported as missing"
+
+
+def test_the_near_band_filter_calls_itself_a_display_filter():
+    """The filter hides ROWS, never records — and it must say so where an operator reads it. A
+    filter that looked like it narrowed the evidence would misrepresent what the payload still
+    serves and still counts."""
+    source = _DESK_PAGE.read_text()
+    assert "a display filter; every signal stays recorded and served" in source
+    assert "recorded signals, none hidden" in source
+
+
+def test_the_near_band_filter_defaults_to_off():
+    """Nothing is hidden until an operator asks for it."""
+    source = _DESK_PAGE.read_text()
+    assert "useState(false);" in source
+    assert "const [playbookNearBandOnly, setPlaybookNearBandOnly] = useState(false);" in source
+
+
+def test_band_context_copy_carries_no_advice_forecast_or_edge_claim():
+    """Every band-context string the page ships is run through the project's own copy lint rather
+    than eyeballed."""
+    source = _DESK_PAGE.read_text()
+    phrases = [
+        "show only signals at a band",
+        "a display filter; every signal stays recorded and served",
+        "By location relative to the tradable band map",
+        "signal(s) at a band",
+        "whose band map has not been computed yet",
+        "recorded measurements greater than zero",
+    ]
+    for phrase in phrases:
+        assert phrase in source, f"expected band-context copy missing: {phrase!r}"
+        assert find_violations(phrase) == [], phrase
+
+
+def test_the_structure_drill_in_captions_the_served_band_context():
+    """The caption is the SERVED sentence, rendered verbatim: the /structure page must not compose
+    its own from the band's parts, or the caption and the bands the chart draws could disagree."""
+    source = (_FRONTEND_ROOT / "app" / "structure" / "page.tsx").read_text()
+    assert 'data-testid="structure-playbook-band-context"' in source
+    assert "{playbookBandContext.caption}" in source

@@ -8,12 +8,70 @@
     "This replay script is DELIBERATELY READ-ONLY (goto/expect only, no click on 'Top-up') so it never triggers a new ~100-symbol walk against the live Yahoo adapter -- the J-09/J-18 precedent: that button is reserved for an explicit, separately-reported operator act, never an automated regression lane.",
     "Step 2 asserts the stable STRUCTURE of the four-outcome counts line ('fetched', the literal word, which every run -- real or fixture -- renders) rather than pinning the exact numbers, which drift on every real ambient run.",
     "Step 3 asserts the window-basis line renders a REAL recorded value ('asked for a tail window') rather than the WINDOW_BASIS_NOT_RECORDED fallback -- proving window_basis is present on this run, without pinning the exact tail/full-lookback split.",
-    "Step 4 is a post-match liveness re-check (the J-09.json/J-18.json precedent), replacing the old 'Failed pairs (14)' assertion that cannot mount against a run with zero failures: a further /desk navigation after the key text match, proving the page is still alive and rendering correctly."
+    "Step 4 is a post-match liveness re-check (the J-09.json/J-18.json precedent), replacing the old 'Failed pairs (14)' assertion that cannot mount against a run with zero failures: a further /desk navigation after the key text match, proving the page is still alive and rendering correctly.",
+    "UPDATED (desk section collapse) by developer: six /desk sections now render COLLAPSED -- Screen Runs, Screen Comparison, Provenance, Index Reconciliation, Top-up Runs and Playbook Evidence are on the page and named, but closed by default, and each one's own GET is deferred until its first expand. Their headings stay VISIBLE while closed, so a step that pins a section TITLE still resolves untouched; only a step reading a section's CONTENTS needs the expand click inserted before it, because the replay runner resolves every target with state=\"visible\". This is a deliberate product-shape change, not a regression."
   ],
   "steps": [
-    {"n": 1, "journey": "J-17", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Top-up Runs"}},
-    {"n": 2, "journey": "J-17", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-counts"}}, "expect": {"text": "fetched"}, "timeout_ms": 15000},
-    {"n": 3, "journey": "J-17", "action": {"type": "expect", "target": {"testid": "desk-topup-run-latest-window-basis"}}, "expect": {"text": "asked for a tail window"}, "timeout_ms": 10000},
-    {"n": 4, "journey": "J-17", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}}
+    {
+      "n": 1,
+      "journey": "J-17",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Top-up Runs"
+      }
+    },
+    {
+      "n": 2,
+      "journey": "J-17",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "desk-section-expand-topupRuns"
+        }
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 3,
+      "journey": "J-17",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-topup-run-latest-counts"
+        }
+      },
+      "expect": {
+        "text": "fetched"
+      },
+      "timeout_ms": 15000
+    },
+    {
+      "n": 4,
+      "journey": "J-17",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-topup-run-latest-window-basis"
+        }
+      },
+      "expect": {
+        "text": "asked for a tail window"
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 5,
+      "journey": "J-17",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    }
   ]
 }

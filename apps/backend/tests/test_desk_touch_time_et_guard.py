@@ -159,12 +159,40 @@ def test_the_conversion_goes_through_the_one_shared_et_formatter():
 
 
 def test_the_column_names_the_clock_it_is_on():
-    """(c) An unlabelled converted time is indistinguishable from the UTC value it replaced."""
+    """(c) An unlabelled converted time is indistinguishable from the UTC value it replaced.
+
+    A deliberate, PAID-FOR re-expression, recorded rather than hidden. This used to pin the literal
+    markup ``<th className={FORWARD_TOUCH_HEAD}>time (ET)</th>``. The touch table's leaf headers are
+    now rendered by the shared `SortableHeader`, so that exact element no longer exists -- but the
+    PROPERTY it protected is unchanged and is asserted directly instead: the touch table has a
+    column whose header text names the clock, and it is the column that reads the touch instant.
+
+    The header text itself is byte-identical; only the element wrapping it moved. What bounds the
+    move is `SortableHeader` rendering `column.label` VERBATIM, pinned by
+    apps/backend/tests/test_table_sort_guards.py::test_the_header_renders_the_columns_own_label --
+    without that, a shared component could quietly re-word every header on the page."""
     source = _DESK_PAGE.read_text()
-    assert f"<th className={{FORWARD_TOUCH_HEAD}}>{_HEADER}</th>" in source, (
+    start = source.index("function forwardTouchColumns(")
+    body = source[start : source.index("function ForwardTouchTable(")]
+    assert f'label: "{_HEADER}"' in body, (
         "the touch table's time column no longer names the clock it renders on"
     )
+    # ...and it is the column reading the touch's own instant, not some other column that happens
+    # to carry the label.
+    time_column = body[body.index(f'label: "{_HEADER}"') :]
+    time_column = time_column[: time_column.index("},")]
+    assert "touch.at_utc" in time_column, (
+        f"the {_HEADER!r} column no longer reads the touch instant -- the label would be naming a "
+        "clock some other value is on"
+    )
     assert find_violations(_HEADER) == []
+
+
+def test_the_clock_column_guard_can_fail_on_a_seeded_violation():
+    """A lint that cannot fail proves nothing: an unlabelled or mis-bound time column is caught."""
+    seeded = 'function forwardTouchColumns() { { id: "at", label: "time", value: (touch) => touch.at_utc }, }function ForwardTouchTable('
+    body = seeded[: seeded.index("function ForwardTouchTable(")]
+    assert f'label: "{_HEADER}"' not in body
 
 
 def test_the_touch_time_header_cannot_intercept_a_shipped_golden():

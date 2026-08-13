@@ -4,8 +4,58 @@
   "name": "Every evidence cell states the basis of its own n",
   "default_timeout_ms": 10000,
   "steps": [
-    {"n": 1, "journey": "J-11", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Evidence"}},
-    {"n": 2, "journey": "J-11", "action": {"type": "wait_for", "target": {"testid": "desk-evidence-section"}}, "expect": {"text": "Basis:"}},
-    {"n": 3, "journey": "J-11", "action": {"type": "wait_for", "target": {"testid": "desk-evidence-section"}}, "expect": {"target": {"testid": "desk-evidence-signal-n-unmeasured"}}}
+    {
+      "n": 1,
+      "journey": "J-11",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Playbook Evidence"
+      }
+    },
+    {
+      "n": 2,
+      "journey": "J-11",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "desk-section-expand-playbookEvidence"
+        }
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 3,
+      "journey": "J-11",
+      "action": {
+        "type": "wait_for",
+        "target": {
+          "testid": "desk-evidence-section"
+        }
+      },
+      "expect": {
+        "text": "Basis:"
+      }
+    },
+    {
+      "n": 4,
+      "journey": "J-11",
+      "action": {
+        "type": "wait_for",
+        "target": {
+          "testid": "desk-evidence-section"
+        }
+      },
+      "expect": {
+        "target": {
+          "testid": "desk-evidence-signal-n-unmeasured"
+        }
+      }
+    }
+  ],
+  "notes": [
+    "UPDATED (desk section collapse) by developer: six /desk sections now render COLLAPSED -- Screen Runs, Screen Comparison, Provenance, Index Reconciliation, Top-up Runs and Playbook Evidence are on the page and named, but closed by default, and each one's own GET is deferred until its first expand. Their headings stay VISIBLE while closed, so a step that pins a section TITLE still resolves untouched; only a step reading a section's CONTENTS needs the expand click inserted before it, because the replay runner resolves every target with state=\"visible\". This is a deliberate product-shape change, not a regression."
   ]
 }

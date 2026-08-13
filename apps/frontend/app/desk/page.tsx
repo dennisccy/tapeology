@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   cancelDeskForwardCompute,
   cancelDeskReconcileCompute,
@@ -28,6 +28,7 @@ import {
   cancelDeskPlaybookBackscanCompute,
   cancelDeskPlaybookCompute,
   fetchDeskPlaybook,
+  fetchDeskPlaybookContext,
   fetchDeskPlaybookBackscanCompute,
   fetchDeskPlaybookBackscanPlan,
   fetchDeskPlaybookBackscanRuns,
@@ -65,8 +66,14 @@ import type {
   DeskPlaybookComputeSnapshot,
   DeskPlaybookEvidence,
   DeskPlaybookEvidenceBasis,
+  DeskPlaybookEvidenceBaselineStats,
   DeskPlaybookEvidenceBreach,
+  DeskPlaybookBandContext,
+  DeskPlaybookContext,
+  DeskPlaybookEvidenceBandContext,
+  DeskPlaybookEvidenceBandContextCell,
   DeskPlaybookEvidenceCell,
+  DeskPlaybookEvidenceCellStats,
   DeskPlaybookEvidenceOtherSignature,
   DeskPlaybookReadResult,
   DeskPlaybookRecord,
@@ -108,7 +115,18 @@ import {
   todayEtDate,
 } from "@/lib/datetime";
 import { fmt } from "@/lib/format";
-import { playbookPoolKey, playbookSetupLabel, playbookSignalKey } from "@/lib/playbook";
+import {
+  playbookBandLabel,
+  playbookContextIndex,
+  playbookPoolKey,
+  playbookSetupLabel,
+  playbookSignalContextKey,
+  playbookSignalKey,
+} from "@/lib/playbook";
+import { useTableSort } from "@/lib/useTableSort";
+import type { SortableColumn } from "@/lib/useTableSort";
+import { SortableHeader, TableSortNote } from "@/components/SortableHeader";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 
 // The /desk page (Era B "The Desk" J-04) — the third top-nav page, reached from the persistent
 // NavBar (data-driven from GET /meta/ui-routes; no client hardcoding, see apps/backend/app/meta.py
@@ -211,8 +229,9 @@ import { playbookPoolKey, playbookSetupLabel, playbookSignalKey } from "@/lib/pl
 // Iter-23's own `UT-07` measured the table at `scrollWidth` 1795px inside a 1214px container (the
 // `levels`/`opposite` columns fell entirely off-screen) and each row at ~115px tall (the coverage
 // badges wrapped into four lines). This iteration renders the SAME twelve disclosures, plus one
-// new `rank` cell (the row's own 1-based position in the served `rows` array -- rendered from the
-// `.map` index, never a client-side sort/reorder), inside a `table-fixed` + `<colgroup>` layout
+// new `rank` cell (the row's own 1-based position in the served `rows` array -- rendered from that
+// row's `servedIndex`, so it names where the SNAPSHOT put the row and not where the table is
+// currently displaying it), inside a `table-fixed` + `<colgroup>` layout
 // sized to the page's own `mx-auto max-w-7xl` container: the coverage badges lose their
 // `flex-wrap` (one line, not four), the class/distance cells gain the page's own existing chip
 // style (`CHIP_CLASS` above), and the five widest disclosure cells (basis/history/band/opposite/
@@ -287,6 +306,33 @@ const ROW_HEADER_CELL = "px-1.5 py-1 text-right text-[11px] font-medium text-sla
 const ROW_HEADER_CELL_LEFT = "px-1.5 py-1 text-left text-[11px] font-medium text-slate-500";
 const CHIP_CLASS =
   "inline-block whitespace-nowrap rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[11px] text-slate-300";
+
+// One frozen empty array, shared. React hooks cannot be called conditionally, so a component whose
+// rows arrive inside a result envelope must call `useTableSort` ABOVE its own early returns -- and
+// handing it a fresh `[]` each render would rebuild the sorted entries on every pass for nothing.
+const NO_SORTABLE_ROWS: readonly never[] = [];
+
+// DESK-COLLAPSED-START
+// Six run-ledger / provenance / reconciliation sections render COLLAPSED. They answer questions the
+// desk asks occasionally rather than every session, and open they pushed the two surfaces that ARE
+// read every session -- the briefing and the playbook signals -- below the fold.
+//
+// Collapsed, not hidden and not deleted: each one is still on the page, still named by its own
+// heading, and one click away (see `CollapsibleSection`).
+//
+// Each section's own GET is DEFERRED WITH IT. A collapsed section issues no request; the first
+// expand fetches once and the answer is kept, so collapsing and re-expanding costs nothing. That
+// pairing is the point -- deferring the render without deferring the read would keep paying for
+// answers nothing displays, and deferring the read without deferring the render would leave an
+// expanded section staring at a loading skeleton nothing ever fills.
+type DeskCollapsibleSection =
+  | "topupRuns"
+  | "indexReconciliation"
+  | "screenRuns"
+  | "screenComparison"
+  | "provenance"
+  | "playbookEvidence";
+// DESK-COLLAPSED-END
 
 const PRIMARY_BUTTON_CLASS =
   "rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 active:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-600 disabled:hover:bg-slate-800";
@@ -700,21 +746,88 @@ function DeskRow({ row, asOf, rank }: { row: DeskScreenRow; asOf: string; rank: 
   );
 }
 
-// The ranked table renders one contiguous WINDOW of the served order at a time. This is not a
-// cap and not a reorder: every served row stays reachable through the pager, the order and
-// direction are the snapshot's own, and each rendered rank stays the row's ABSOLUTE position in
-// the served array (`pageStart + index + 1`) — so row 11 reads 11, never 1. The two shipped
-// display caps on this page (EARLIER_PAIRS_DISPLAY_CAP, SCREEN_COMPARE_ROWS_DISPLAY_CAP) TRUNCATE
-// with a disclosure; this one PAGES with a disclosure. Page state lives inside this component and
-// is reset by a `key={snapshot.id}` at the call site — a remount, never a twelfth effect.
+// The ranked table renders one contiguous WINDOW of the displayed order at a time. This is not a
+// cap: every row stays reachable through the pager, and each rendered rank is the row's ABSOLUTE
+// position in the SERVED array (its own `servedIndex + 1`) — so row 11 reads 11, never 1, in every
+// display order. The two shipped display caps on this page (EARLIER_PAIRS_DISPLAY_CAP,
+// SCREEN_COMPARE_ROWS_DISPLAY_CAP) TRUNCATE with a disclosure; this one PAGES with a disclosure.
+//
+// The window used to be taken over `rows` directly, because the served order was the only order the
+// table could render. An operator can now click a header for another, so the window is taken over
+// the DISPLAYED order (`sort.entries`, which is `rows` verbatim until a header is clicked) and any
+// order change rewinds to page 1 — re-sorting while parked on page 4 would otherwise strand the
+// reader in the middle of an order they have not seen the start of.
+//
+// Page state lives inside this component and is reset by a `key={snapshot.id}` at the call site —
+// a remount, never a twelfth effect. That same remount clears any chosen sort.
 const RANKED_ROWS_PAGE_SIZE = 10;
+
+// Every column reads ONE served field. `coverage` is the exception that proves the rule: it orders
+// on the SAME `hasNoCoverageAtAll` predicate the divergence note above the table already counts
+// with, never on a per-row tally of covered timeframes -- a tally would be a number this snapshot
+// never served.
+const DESK_ROW_COLUMNS: readonly SortableColumn<DeskScreenRow>[] = [
+  // Ordering by rank returns the table to the served order by construction -- `servedIndex` IS that
+  // order -- so this column doubles as a second, discoverable way back.
+  {
+    id: "rank",
+    label: "rank",
+    kind: "number",
+    align: "right",
+    value: (_row, servedIndex) => servedIndex,
+  },
+  { id: "symbol", label: "symbol", kind: "text", value: (row) => row.symbol },
+  { id: "side", label: "side", kind: "text", value: (row) => row.side },
+  { id: "class", label: "class", kind: "text", value: (row) => row.band_class },
+  {
+    id: "distance",
+    label: "distance",
+    kind: "number",
+    align: "right",
+    value: (row) => row.distance_bps,
+  },
+  { id: "score", label: "score", kind: "number", align: "right", value: (row) => row.band_score },
+  {
+    id: "coverage",
+    label: "coverage",
+    kind: "flag",
+    note: "rows with every timeframe badge dark sort last ascending",
+    value: (row) => hasNoCoverageAtAll(row.coverage),
+  },
+  { id: "tickEvidence", label: "tick evidence", kind: "flag", value: (row) => row.tick_evidence },
+  { id: "basis", label: "basis", kind: "instant", value: (row) => row.basis_as_of },
+  { id: "history", label: "history", kind: "number", value: (row) => row.history_sessions },
+  { id: "band", label: "band", kind: "number", value: (row) => row.price_low },
+  {
+    id: "opposite",
+    label: "opposite",
+    kind: "number",
+    value: (row) => row.opposite_band?.distance_bps ?? null,
+  },
+  { id: "levels", label: "levels", kind: "number", value: (row) => row.band_member_count ?? null },
+];
 
 function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) {
   const uncoveredRanked = rows.filter((row) => hasNoCoverageAtAll(row.coverage)).length;
   const [page, setPage] = useState(1);
+  const sort = useTableSort(rows, DESK_ROW_COLUMNS);
+  // Re-ordering the whole table while parked on page 4 would strand the operator in the middle of
+  // an order they have not seen the start of. Plain state in the event handler -- never an effect
+  // (this page pins an exact effect census).
+  function toggleAndRewind(columnId: string) {
+    sort.toggle(columnId);
+    setPage(1);
+  }
+  function resetAndRewind() {
+    sort.reset();
+    setPage(1);
+  }
+  // What the header buttons and the disclosure note actually receive: the hook's own state, with
+  // the two entry points wrapped so every order change rewinds the pager.
+  const pagedSort = { ...sort, toggle: toggleAndRewind, reset: resetAndRewind };
   const pageCount = Math.ceil(rows.length / RANKED_ROWS_PAGE_SIZE);
   const pageStart = (page - 1) * RANKED_ROWS_PAGE_SIZE;
-  const pageRows = rows.slice(pageStart, pageStart + RANKED_ROWS_PAGE_SIZE);
+  const pageEntries = sort.entries.slice(pageStart, pageStart + RANKED_ROWS_PAGE_SIZE);
   return (
     <div className="overflow-x-auto">
       {uncoveredRanked > 0 && (
@@ -727,6 +840,7 @@ function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) 
           ranked a symbol whose bars it never read.
         </p>
       )}
+      <TableSortNote sort={pagedSort} />
       {/* The pager appears only when the snapshot has more rows than one page holds, so every
           snapshot small enough to fit renders exactly as it did before the window existed. */}
       {pageCount > 1 && (
@@ -741,7 +855,7 @@ function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) 
             Previous
           </button>
           <p data-testid="desk-rows-page-note" className="text-[11px] text-slate-500">
-            showing {pageStart + 1}–{pageStart + pageRows.length} of {rows.length} ranked rows ·
+            showing {pageStart + 1}–{pageStart + pageEntries.length} of {rows.length} ranked rows ·
             page {page} of {pageCount}
           </p>
           <button
@@ -792,24 +906,31 @@ function DeskRowsTable({ rows, asOf }: { rows: DeskScreenRow[]; asOf: string }) 
         </colgroup>
         <thead>
           <tr className="border-b border-slate-800">
-            <th className={ROW_HEADER_CELL}>rank</th>
-            <th className={ROW_HEADER_CELL_LEFT}>symbol</th>
-            <th className={ROW_HEADER_CELL_LEFT}>side</th>
-            <th className={ROW_HEADER_CELL_LEFT}>class</th>
-            <th className={ROW_HEADER_CELL}>distance</th>
-            <th className={ROW_HEADER_CELL}>score</th>
-            <th className={ROW_HEADER_CELL_LEFT}>coverage</th>
-            <th className={ROW_HEADER_CELL_LEFT}>tick evidence</th>
-            <th className={ROW_HEADER_CELL_LEFT}>basis</th>
-            <th className={ROW_HEADER_CELL_LEFT}>history</th>
-            <th className={ROW_HEADER_CELL_LEFT}>band</th>
-            <th className={ROW_HEADER_CELL_LEFT}>opposite</th>
-            <th className={ROW_HEADER_CELL_LEFT}>levels</th>
+            {/* `revealOnHover` on this table alone: its column widths are the MEASURED values
+                pinned above, so an always-visible sort glyph would widen the idle headers and
+                break the 1214px contract. */}
+            {DESK_ROW_COLUMNS.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={pagedSort}
+                revealOnHover
+                className={column.align === "right" ? ROW_HEADER_CELL : ROW_HEADER_CELL_LEFT}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {pageRows.map((row, index) => (
-            <DeskRow key={row.symbol} row={row} asOf={asOf} rank={pageStart + index + 1} />
+          {/* `rank` is the row's position in the array the snapshot SERVED (`servedIndex + 1`),
+              never where it happens to render. Under the served order this is identical to the
+              `pageStart + index + 1` it replaces; under a sort it is the only honest answer. */}
+          {pageEntries.map((entry) => (
+            <DeskRow
+              key={entry.item.symbol}
+              row={entry.item}
+              asOf={asOf}
+              rank={entry.servedIndex + 1}
+            />
           ))}
         </tbody>
       </table>
@@ -854,21 +975,39 @@ function DeskSkipRow({ skip, asOf }: { skip: DeskScreenSkip; asOf: string }) {
   );
 }
 
+const DESK_SKIP_COLUMNS: readonly SortableColumn<DeskScreenSkip>[] = [
+  { id: "symbol", label: "symbol", kind: "text", value: (s) => s.symbol },
+  { id: "reason", label: "reason", kind: "text", value: (s) => s.reason },
+  {
+    id: "coverage",
+    label: "coverage",
+    kind: "flag",
+    value: (s) => hasNoCoverageAtAll(s.coverage),
+  },
+  { id: "tickEvidence", label: "tick evidence", kind: "flag", value: (s) => s.tick_evidence },
+];
+
 function DeskSkipTable({ rows, asOf }: { rows: DeskScreenSkip[]; asOf: string }) {
+  const sort = useTableSort(rows, DESK_SKIP_COLUMNS);
   return (
     <div className="overflow-x-auto">
+      <TableSortNote sort={sort} />
       <table className="w-full border-collapse">
         <thead>
           <tr className="border-b border-slate-800">
-            <th className={HEADER_CELL_LEFT}>symbol</th>
-            <th className={HEADER_CELL_LEFT}>reason</th>
-            <th className={HEADER_CELL_LEFT}>coverage</th>
-            <th className={HEADER_CELL_LEFT}>tick evidence</th>
+            {DESK_SKIP_COLUMNS.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={HEADER_CELL_LEFT}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((skip) => (
-            <DeskSkipRow key={skip.symbol} skip={skip} asOf={asOf} />
+          {sort.entries.map((entry) => (
+            <DeskSkipRow key={entry.item.symbol} skip={entry.item} asOf={asOf} />
           ))}
         </tbody>
       </table>
@@ -1331,24 +1470,49 @@ function TopupRunRow({ meta }: { meta: DeskTopupRunMeta }) {
   );
 }
 
+const TOPUP_RUN_COLUMNS: readonly SortableColumn<DeskTopupRunMeta>[] = [
+  { id: "date", label: "date", kind: "instant", value: (meta) => meta.started_utc },
+  { id: "run", label: "run", kind: "text", value: (meta) => meta.id },
+  { id: "state", label: "state", kind: "text", value: (meta) => meta.state },
+  {
+    id: "attempted",
+    label: "attempted / total",
+    kind: "number",
+    align: "right",
+    note: "sorts on the attempted count",
+    value: (meta) => meta.pairs_attempted,
+  },
+  {
+    id: "universe",
+    label: "universe snapshot",
+    kind: "text",
+    value: (meta) => meta.universe_snapshot_id,
+  },
+];
+
 function TopupRunsTable({ runs }: { runs: DeskTopupRunMeta[] }) {
+  const sort = useTableSort(runs, TOPUP_RUN_COLUMNS);
   if (runs.length === 0) {
     return <EmptyState testid="desk-topup-runs-empty" title="No top-up runs recorded yet." />;
   }
   return (
     <div className="overflow-x-auto">
+      <TableSortNote sort={sort} />
       <table data-testid="desk-topup-runs-table" className="w-full border-collapse">
         <thead>
           <tr className="border-b border-slate-800">
-            <th className={HEADER_CELL_LEFT}>date</th>
-            <th className={HEADER_CELL_LEFT}>run</th>
-            <th className={HEADER_CELL_LEFT}>state</th>
-            <th className={HEADER_CELL}>attempted / total</th>
-            <th className={HEADER_CELL_LEFT}>universe snapshot</th>
+            {TOPUP_RUN_COLUMNS.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={column.align === "right" ? HEADER_CELL : HEADER_CELL_LEFT}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {runs.map((meta) => (
+          {sort.entries.map(({ item: meta }) => (
             <TopupRunRow key={meta.id} meta={meta} />
           ))}
         </tbody>
@@ -1598,24 +1762,50 @@ function IndexReconciliationRunRow({ meta }: { meta: DeskReconcileRunMeta }) {
   );
 }
 
+const RECONCILE_RUN_COLUMNS: readonly SortableColumn<DeskReconcileRunMeta>[] = [
+  { id: "date", label: "date", kind: "instant", value: (meta) => meta.started_utc },
+  { id: "run", label: "run", kind: "text", value: (meta) => meta.id },
+  { id: "state", label: "state", kind: "text", value: (meta) => meta.state },
+  {
+    id: "series",
+    label: "series on disk",
+    kind: "number",
+    align: "right",
+    value: (meta) => meta.series_on_disk,
+  },
+  {
+    id: "rowsIndexed",
+    label: "rows indexed (before → after)",
+    kind: "number",
+    align: "right",
+    note: "sorts on the after count",
+    value: (meta) => meta.rows_indexed_after,
+  },
+];
+
 function IndexReconciliationTable({ runs }: { runs: DeskReconcileRunMeta[] }) {
+  const sort = useTableSort(runs, RECONCILE_RUN_COLUMNS);
   if (runs.length === 0) {
     return <EmptyState testid="desk-reconcile-runs-empty" title="No reconciliation run recorded yet." />;
   }
   return (
     <div className="overflow-x-auto">
+      <TableSortNote sort={sort} />
       <table data-testid="desk-reconcile-runs-table" className="w-full border-collapse">
         <thead>
           <tr className="border-b border-slate-800">
-            <th className={HEADER_CELL_LEFT}>date</th>
-            <th className={HEADER_CELL_LEFT}>run</th>
-            <th className={HEADER_CELL_LEFT}>state</th>
-            <th className={HEADER_CELL}>series on disk</th>
-            <th className={HEADER_CELL}>rows indexed (before {"→"} after)</th>
+            {RECONCILE_RUN_COLUMNS.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={column.align === "right" ? HEADER_CELL : HEADER_CELL_LEFT}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {runs.map((meta) => (
+          {sort.entries.map(({ item: meta }) => (
             <IndexReconciliationRunRow key={meta.id} meta={meta} />
           ))}
         </tbody>
@@ -1766,24 +1956,44 @@ function ScreenRunRow({ meta }: { meta: DeskScreenRunMeta }) {
   );
 }
 
+const SCREEN_RUN_COLUMNS: readonly SortableColumn<DeskScreenRunMeta>[] = [
+  { id: "date", label: "date", kind: "text", value: (meta) => meta.screen_date },
+  { id: "run", label: "run", kind: "text", value: (meta) => meta.id },
+  { id: "state", label: "state", kind: "text", value: (meta) => meta.state },
+  {
+    id: "attempted",
+    label: "attempted / total",
+    kind: "number",
+    align: "right",
+    note: "sorts on the attempted count",
+    value: (meta) => meta.members_attempted,
+  },
+  { id: "produced", label: "produced", kind: "text", value: (meta) => screenRunOutcomeText(meta) },
+];
+
 function ScreenRunsTable({ runs }: { runs: DeskScreenRunMeta[] }) {
+  const sort = useTableSort(runs, SCREEN_RUN_COLUMNS);
   if (runs.length === 0) {
     return <EmptyState testid="desk-screen-runs-empty" title="No screen runs recorded yet." />;
   }
   return (
     <div className="overflow-x-auto">
+      <TableSortNote sort={sort} />
       <table data-testid="desk-screen-runs-table" className="w-full border-collapse">
         <thead>
           <tr className="border-b border-slate-800">
-            <th className={HEADER_CELL_LEFT}>date</th>
-            <th className={HEADER_CELL_LEFT}>run</th>
-            <th className={HEADER_CELL_LEFT}>state</th>
-            <th className={HEADER_CELL}>attempted / total</th>
-            <th className={HEADER_CELL_LEFT}>produced</th>
+            {SCREEN_RUN_COLUMNS.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={column.align === "right" ? HEADER_CELL : HEADER_CELL_LEFT}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {runs.map((meta) => (
+          {sort.entries.map(({ item: meta }) => (
             <ScreenRunRow key={meta.id} meta={meta} />
           ))}
         </tbody>
@@ -1881,8 +2091,9 @@ function ScreenRunsSection({
 // means the wall worked), with the two max drawdowns left unsigned — and server-computed per-row
 // averages (untruncated-only pools, truncation counted), a per-side summary of touches BESIDE the
 // seeded random-minute baseline (drawn on the SAME sign, so the null is like-for-like),
-// and the record's register rendered VERBATIM. Every value is the served payload's own; nothing
-// is derived, capped, sorted, or sliced client-side. Clicking a row opens a detail panel BELOW
+// and the record's register rendered VERBATIM. Every value is the served payload's own; nothing is
+// derived, capped or sliced client-side, and the served order is the DEFAULT order -- any other is
+// an explicit header click, disclosed above the table and reversible from it. Clicking a row opens a detail panel BELOW
 // the table (the /structure SetupDrillIn separate-panel precedent) rendered from the ALREADY
 // loaded record — plain selection state, zero new effects, no fetch. Rendered THIRD on the page,
 // directly above the ranked briefing (it originally rendered dead last, for interception safety
@@ -2003,13 +2214,43 @@ function forwardRunOutcomeText(run: DeskForwardRun): string {
   return run.reused ? `reused ${run.forward_id}` : `recorded ${run.forward_id}`;
 }
 
+const FORWARD_RUN_COLUMNS: readonly SortableColumn<DeskForwardRun>[] = [
+  { id: "started", label: "started", kind: "instant", value: (r) => r.started_utc },
+  { id: "state", label: "state", kind: "text", value: (r) => r.state },
+  {
+    id: "measured",
+    label: "measured",
+    kind: "number",
+    align: "right",
+    note: "sorts on the measured count",
+    value: (r) => r.rows_measured,
+  },
+  {
+    id: "absent",
+    label: "absent (no fine bars)",
+    kind: "number",
+    align: "right",
+    value: (r) => r.rows_absent_no_fine_bars,
+  },
+  {
+    id: "touches",
+    label: "touches",
+    kind: "number",
+    align: "right",
+    value: (r) => r.total_touches,
+  },
+  { id: "produced", label: "produced", kind: "text", value: (r) => forwardRunOutcomeText(r) },
+];
+
 function ForwardRunsNote({
   result,
 }: {
   result: { ok: boolean; data: DeskForwardRunsListResult | null; error?: string } | null;
 }) {
+  const runs: readonly DeskForwardRun[] =
+    result !== null && result.ok && result.data !== null ? result.data.runs : NO_SORTABLE_ROWS;
+  const sort = useTableSort(runs, FORWARD_RUN_COLUMNS);
   if (result === null || !result.ok || result.data === null) return null;
-  const runs = result.data.runs;
   if (runs.length === 0) {
     return (
       <p data-testid="desk-forward-runs-empty" className="text-[11px] text-slate-500">
@@ -2024,19 +2265,22 @@ function ForwardRunsNote({
         {runs.length} recorded measurement attempt{runs.length === 1 ? "" : "s"} for this snapshot
       </summary>
       <div className="mt-1 overflow-x-auto">
+        <TableSortNote sort={sort} />
         <table data-testid="desk-forward-runs-table" className="w-full border-collapse">
           <thead>
             <tr className="border-b border-slate-800">
-              <th className={HEADER_CELL_LEFT}>started</th>
-              <th className={HEADER_CELL_LEFT}>state</th>
-              <th className={HEADER_CELL}>measured</th>
-              <th className={HEADER_CELL}>absent (no fine bars)</th>
-              <th className={HEADER_CELL}>touches</th>
-              <th className={HEADER_CELL_LEFT}>produced</th>
+              {FORWARD_RUN_COLUMNS.map((column) => (
+                <SortableHeader
+                  key={column.id}
+                  column={column}
+                  sort={sort}
+                  className={column.align === "right" ? HEADER_CELL : HEADER_CELL_LEFT}
+                />
+              ))}
             </tr>
           </thead>
           <tbody>
-            {runs.map((run) => (
+            {sort.entries.map(({ item: run }) => (
               <tr key={run.id} data-testid="desk-forward-run-row" className="border-t border-slate-800/60">
                 <td className={LABEL_CELL} title={`${run.started_utc} (raw UTC record)`}>
                   {formatDateTimeET(run.started_utc)}
@@ -2455,6 +2699,66 @@ function ForwardTouchRow({ touch, labels }: { touch: DeskForwardTouch; labels: s
   );
 }
 
+// The leaf columns of the touch table, in the exact order the two header rows already render them.
+// The horizon groups read their own served leaf; the closing group reads the touch's OWN session-end
+// fields directly rather than going through `forwardCloseMeasure`, which stays a pure re-key.
+function forwardTouchColumns(labels: string[]): SortableColumn<DeskForwardTouch>[] {
+  const leading: SortableColumn<DeskForwardTouch>[] = [
+    { id: "at", label: "time (ET)", kind: "instant", value: (touch) => touch.at_utc },
+    { id: "fill", label: "fill", kind: "text", value: (touch) => touch.entry_kind },
+    {
+      id: "entry",
+      label: "entry",
+      kind: "number",
+      align: "right",
+      value: (touch) => touch.entry_price,
+    },
+  ];
+  const groups = [...labels, "close"].flatMap<SortableColumn<DeskForwardTouch>>((label) => {
+    const closing = label === "close";
+    const note = `${closing ? "the session end" : label} group`;
+    return [
+      {
+        id: `${label}:exit`,
+        label: "exit",
+        kind: "number",
+        align: "right",
+        note,
+        value: (touch) =>
+          closing ? (touch.close_price ?? null) : (touch.horizons[label]?.exit_price ?? null),
+      },
+      {
+        id: `${label}:return`,
+        label: "ret %",
+        kind: "number",
+        align: "right",
+        note,
+        value: (touch) =>
+          closing ? touch.to_close_pct : (touch.horizons[label]?.return_pct ?? null),
+      },
+      {
+        id: `${label}:mddLong`,
+        label: "MDD L %",
+        kind: "number",
+        align: "right",
+        note,
+        value: (touch) =>
+          closing ? touch.mdd_long_pct : (touch.horizons[label]?.mdd_long_pct ?? null),
+      },
+      {
+        id: `${label}:mddShort`,
+        label: "MDD S %",
+        kind: "number",
+        align: "right",
+        note,
+        value: (touch) =>
+          closing ? touch.mdd_short_pct : (touch.horizons[label]?.mdd_short_pct ?? null),
+      },
+    ];
+  });
+  return [...leading, ...groups];
+}
+
 // The touch/anchor table. Two header rows: one group per horizon (plus the session end), each
 // spanning its own four columns. ~23 columns fit no viewport, so it scrolls in its OWN container
 // — never the page body.
@@ -2467,10 +2771,16 @@ function ForwardTouchTable({
   labels: string[];
   testid: string;
 }) {
+  const columns = useMemo(() => forwardTouchColumns(labels), [labels]);
+  const sort = useTableSort(touches, columns);
   return (
     <div className="mt-1 overflow-x-auto">
+      <TableSortNote sort={sort} />
       <table data-testid={testid} className="w-full border-collapse">
         <thead>
+          {/* The GROUP row stays plain: a cell spanning four columns labels a group, not a column,
+              and an `aria-sort` on it would announce a state no single column is in. Only the leaf
+              row below is sortable. */}
           <tr>
             <th className={FORWARD_TOUCH_HEAD} colSpan={3} />
             {[...labels, "close"].map((label) => (
@@ -2480,23 +2790,20 @@ function ForwardTouchTable({
             ))}
           </tr>
           <tr className="border-b border-slate-800">
-            <th className={FORWARD_TOUCH_HEAD}>time (ET)</th>
-            <th className={FORWARD_TOUCH_HEAD}>fill</th>
-            <th className={`${FORWARD_TOUCH_HEAD} text-right`}>entry</th>
-            {[...labels, "close"].map((label) => (
-              <Fragment key={label}>
-                <th className={`${FORWARD_TOUCH_HEAD} border-l border-slate-800 text-right`}>
-                  exit
-                </th>
-                <th className={`${FORWARD_TOUCH_HEAD} text-right`}>ret %</th>
-                <th className={`${FORWARD_TOUCH_HEAD} text-right`}>MDD L %</th>
-                <th className={`${FORWARD_TOUCH_HEAD} text-right`}>MDD S %</th>
-              </Fragment>
+            {columns.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={`${FORWARD_TOUCH_HEAD}${
+                  column.id.endsWith(":exit") ? " border-l border-slate-800" : ""
+                }${column.align === "right" ? " text-right" : ""}`}
+              />
             ))}
           </tr>
         </thead>
         <tbody>
-          {touches.map((touch) => (
+          {sort.entries.map(({ item: touch }) => (
             <ForwardTouchRow key={touch.at_utc} touch={touch} labels={labels} />
           ))}
         </tbody>
@@ -2602,9 +2909,31 @@ function ForwardSummaryCells({
   );
 }
 
+const FORWARD_SUMMARY_SIDES: Array<"support" | "resistance"> = ["support", "resistance"];
+
 function DeskForwardSummaryView({ record }: { record: DeskForwardRecord }) {
   const measureKeys = forwardMeasureKeys(record);
-  const sides: Array<"support" | "resistance"> = ["support", "resistance"];
+  const sides = FORWARD_SUMMARY_SIDES;
+  // Sorting acts on the SIDE GROUPS, never on the individual rows. Each side owns two rows joined
+  // by a `rowSpan={2}` chip, so re-ordering rows independently could put a baseline line under a
+  // different side's label — a wrong number stated confidently. Ordering the groups moves each pair
+  // as a unit by construction.
+  const columns = useMemo<SortableColumn<"support" | "resistance">[]>(
+    () => [
+      { id: "side", label: "side", kind: "text", value: (side) => side },
+      { id: "source", label: "source", kind: "text", sortable: false, value: () => null },
+      ...measureKeys.map<SortableColumn<"support" | "resistance">>((measureKey) => ({
+        id: measureKey,
+        label: forwardMeasureShortHeader(measureKey),
+        kind: "number" as const,
+        align: "right" as const,
+        note: "sorts by the touches line",
+        value: (side) => record.summary[side]?.[measureKey]?.touches?.mean_pct ?? null,
+      })),
+    ],
+    [measureKeys, record],
+  );
+  const sort = useTableSort(sides, columns);
   return (
     <div data-testid="desk-forward-summary" className="overflow-x-auto">
       <p className="mb-1 text-[11px] text-slate-500">
@@ -2612,20 +2941,22 @@ function DeskForwardSummaryView({ record }: { record: DeskForwardRecord }) {
         lines carry the same sign as their side, so a touch row above its baseline row beat a
         random minute of the same session.
       </p>
+      <TableSortNote sort={sort} />
       <table className="w-full border-collapse text-xs">
         <thead>
           <tr>
-            <th className={ROW_HEADER_CELL_LEFT}>side</th>
-            <th className={ROW_HEADER_CELL_LEFT}>source</th>
-            {measureKeys.map((measureKey) => (
-              <th key={measureKey} className={ROW_HEADER_CELL}>
-                {forwardMeasureShortHeader(measureKey)}
-              </th>
+            {columns.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={column.align === "right" ? ROW_HEADER_CELL : ROW_HEADER_CELL_LEFT}
+              />
             ))}
           </tr>
         </thead>
         <tbody>
-          {sides.map((side) => (
+          {sort.entries.map(({ item: side }) => (
             <Fragment key={side}>
               <tr data-testid="desk-forward-summary-touches" className="border-t border-slate-800/60">
                 <td className={ROW_BADGE_CELL} rowSpan={2}>
@@ -2656,6 +2987,29 @@ function DeskForwardTable({
   onSelectSymbol: (symbol: string) => void;
 }) {
   const measureKeys = forwardMeasureKeys(record);
+  const columns = useMemo<SortableColumn<DeskForwardRow>[]>(
+    () => [
+      { id: "member", label: "member", kind: "text", value: (row) => row.symbol },
+      { id: "side", label: "side", kind: "text", value: (row) => row.side },
+      { id: "class", label: "class", kind: "text", value: (row) => row.band_class },
+      {
+        id: "touches",
+        label: "touches",
+        kind: "number",
+        align: "right",
+        value: (row) => row.touch_count,
+      },
+      ...measureKeys.map<SortableColumn<DeskForwardRow>>((measureKey) => ({
+        id: measureKey,
+        label: forwardMeasureHeader(measureKey),
+        kind: "number" as const,
+        align: "right" as const,
+        value: (row) => row.averages[measureKey]?.mean_pct ?? null,
+      })),
+    ],
+    [measureKeys],
+  );
+  const sort = useTableSort(record.rows, columns);
   if (record.rows.length === 0) {
     return (
       <EmptyState
@@ -2669,22 +3023,22 @@ function DeskForwardTable({
       data-testid="desk-forward-table-scroll"
       className="max-h-[26rem] overflow-x-auto overflow-y-auto rounded border border-slate-800"
     >
+      <TableSortNote sort={sort} />
       <table data-testid="desk-forward-table" className="w-full border-collapse">
         <thead className="sticky top-0 z-10 bg-slate-900">
           <tr>
-            <th className={ROW_HEADER_CELL_LEFT}>member</th>
-            <th className={ROW_HEADER_CELL_LEFT}>side</th>
-            <th className={ROW_HEADER_CELL_LEFT}>class</th>
-            <th className={ROW_HEADER_CELL}>touches</th>
-            {measureKeys.map((measureKey) => (
-              <th key={measureKey} className={ROW_HEADER_CELL}>
-                {forwardMeasureHeader(measureKey)}
-              </th>
+            {columns.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={column.align === "right" ? ROW_HEADER_CELL : ROW_HEADER_CELL_LEFT}
+              />
             ))}
           </tr>
         </thead>
         <tbody>
-          {record.rows.map((row) => (
+          {sort.entries.map(({ item: row }) => (
             <DeskForwardRowView
               key={row.symbol}
               row={row}
@@ -2898,8 +3252,56 @@ function ScreenCompareRowView({ row }: { row: DeskScreenCompareRow }) {
 // snapshot's own served rank order) — no `.sort(`/`.reverse(` of any kind, only a `.slice(` for the
 // cap (never applied to a variable literally named `rows`, so this table's own cap can never be
 // mistaken for a client-side reorder of the ranked briefing table above).
+const SCREEN_COMPARE_COLUMNS: readonly SortableColumn<DeskScreenCompareRow>[] = [
+  { id: "symbol", label: "symbol", kind: "text", value: (row) => row.symbol },
+  { id: "status", label: "status", kind: "text", value: (row) => row.status },
+  {
+    id: "rankThis",
+    label: "rank (this)",
+    kind: "number",
+    align: "right",
+    value: (row) => row.compare_rank,
+  },
+  {
+    id: "rankBase",
+    label: "rank (base)",
+    kind: "number",
+    align: "right",
+    value: (row) => row.base_rank,
+  },
+  {
+    id: "rankChange",
+    label: "rank change",
+    kind: "number",
+    align: "right",
+    value: (row) => row.rank_change,
+  },
+  { id: "sideThis", label: "side (this)", kind: "text", value: (row) => row.compare_side },
+  { id: "sideBase", label: "side (base)", kind: "text", value: (row) => row.base_side },
+  {
+    id: "distanceThis",
+    label: "distance (this)",
+    kind: "number",
+    align: "right",
+    value: (row) => row.compare_distance_bps,
+  },
+  {
+    id: "distanceBase",
+    label: "distance (base)",
+    kind: "number",
+    align: "right",
+    value: (row) => row.base_distance_bps,
+  },
+];
+
 function ScreenCompareTable({ rows }: { rows: DeskScreenCompareRow[] }) {
-  const compareOrdered = rows.filter((entry) => entry.status !== "left");
+  const compareOrdered = useMemo(() => rows.filter((entry) => entry.status !== "left"), [rows]);
+  const sort = useTableSort(compareOrdered, SCREEN_COMPARE_COLUMNS);
+  // The shipped display cap, applied to the DISPLAYED order rather than the served one. Sorting
+  // before capping is the only honest ordering of the two: capping first would sort a window the
+  // operator never chose, so "the top 50 by rank change" would silently mean "whichever of the
+  // first 50 served rows happen to rank highest".
+  const shown = sort.entries.slice(0, SCREEN_COMPARE_ROWS_DISPLAY_CAP);
   if (compareOrdered.length === 0) {
     return (
       <EmptyState
@@ -2908,7 +3310,6 @@ function ScreenCompareTable({ rows }: { rows: DeskScreenCompareRow[] }) {
       />
     );
   }
-  const shown = compareOrdered.slice(0, SCREEN_COMPARE_ROWS_DISPLAY_CAP);
   return (
     <div>
       {compareOrdered.length > SCREEN_COMPARE_ROWS_DISPLAY_CAP && (
@@ -2916,22 +3317,22 @@ function ScreenCompareTable({ rows }: { rows: DeskScreenCompareRow[] }) {
           showing {shown.length} of {compareOrdered.length} rows
         </p>
       )}
+      <TableSortNote sort={sort} />
       <table data-testid="desk-screen-compare-table" className="w-full border-collapse">
         <thead>
           <tr>
-            <th className={HEADER_CELL_LEFT}>symbol</th>
-            <th className={HEADER_CELL_LEFT}>status</th>
-            <th className={HEADER_CELL}>rank (this)</th>
-            <th className={HEADER_CELL}>rank (base)</th>
-            <th className={HEADER_CELL}>rank change</th>
-            <th className={HEADER_CELL_LEFT}>side (this)</th>
-            <th className={HEADER_CELL_LEFT}>side (base)</th>
-            <th className={HEADER_CELL}>distance (this)</th>
-            <th className={HEADER_CELL}>distance (base)</th>
+            {SCREEN_COMPARE_COLUMNS.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={column.align === "right" ? HEADER_CELL : HEADER_CELL_LEFT}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {shown.map((row) => (
+          {shown.map(({ item: row }) => (
             <ScreenCompareRowView key={row.symbol} row={row} />
           ))}
         </tbody>
@@ -3702,23 +4103,44 @@ function BackscanRunRow({ run }: { run: DeskPlaybookBackscanRun }) {
   );
 }
 
+const BACKSCAN_RUN_COLUMNS: readonly SortableColumn<DeskPlaybookBackscanRun>[] = [
+  {
+    id: "range",
+    label: "range",
+    kind: "text",
+    note: "sorts on the range's from day",
+    value: (run) => run.from,
+  },
+  { id: "status", label: "status", kind: "text", value: (run) => run.status },
+  // The outcomes cell renders several served counters side by side; ordering on one of them would
+  // silently pick a winner among equals, and summing them would be a number no run recorded.
+  { id: "outcomes", label: "outcomes", kind: "text", sortable: false, value: () => null },
+  { id: "started", label: "started", kind: "instant", value: (run) => run.started_at },
+];
+
 function BackscanRunsTable({ runs }: { runs: DeskPlaybookBackscanRun[] }) {
+  const sort = useTableSort(runs, BACKSCAN_RUN_COLUMNS);
   if (runs.length === 0) {
     return <EmptyState testid="desk-backscan-runs-empty" title="No back-scan runs recorded yet." />;
   }
   return (
     <div className="overflow-x-auto">
+      <TableSortNote sort={sort} />
       <table data-testid="desk-backscan-runs-table" className="w-full border-collapse">
         <thead>
           <tr className="border-b border-slate-800">
-            <th className={HEADER_CELL_LEFT}>range</th>
-            <th className={HEADER_CELL_LEFT}>status</th>
-            <th className={HEADER_CELL}>outcomes</th>
-            <th className={HEADER_CELL_LEFT}>started</th>
+            {BACKSCAN_RUN_COLUMNS.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={column.id === "outcomes" ? HEADER_CELL : HEADER_CELL_LEFT}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {runs.map((run) => (
+          {sort.entries.map(({ item: run }) => (
             <BackscanRunRow key={run.run_id} run={run} />
           ))}
         </tbody>
@@ -3760,14 +4182,38 @@ function BackscanRunsSection({
 // action beyond scrolling (T-7: GETs never compute) -- this section carries no refresh/compute
 // control of its own, unlike every OTHER section on this page.
 
-function PlaybookEvidenceCellRow({ cell }: { cell: DeskPlaybookEvidenceCell }) {
+function PlaybookEvidenceCellRow({
+  cell,
+  bucket,
+}: {
+  cell: DeskPlaybookEvidenceCell;
+  // Present only in the band-context split, where it names which comparison half this row is.
+  bucket?: string;
+}) {
   return (
     <tr data-testid="desk-evidence-cell-row" className="border-t border-slate-800/60">
       <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-300">{cell.setup_id}</td>
       <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-400">{cell.side}</td>
       <td className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs text-slate-400">{cell.measure}</td>
+      {bucket !== undefined && (
+        <td
+          className="whitespace-nowrap px-1.5 py-1 text-left font-mono text-xs"
+          data-testid="desk-evidence-cell-bucket"
+        >
+          <span className={bucket === "at_band" ? "text-amber-300" : "text-slate-400"}>{bucket}</span>
+        </td>
+      )}
       <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-signal-n">
         {fmt(cell.signal.n, 0)}
+      </td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-signal-n-positive">
+        {cell.signal.n_positive === null ? (
+          <span className="text-slate-600">—</span>
+        ) : (
+          <span title={`positive: ${cell.signal.n_positive} of ${cell.signal.n} recorded measurements greater than zero`}>
+            {fmt(cell.signal.n_positive, 0)}
+          </span>
+        )}
       </td>
       <td className={ROW_NUMERIC_CELL}>{fmt(cell.signal.n_truncated, 0)}</td>
       <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-signal-n-unmeasured">
@@ -3784,6 +4230,15 @@ function PlaybookEvidenceCellRow({ cell }: { cell: DeskPlaybookEvidenceCell }) {
       <td className={ROW_NUMERIC_CELL}>{fmt(cell.signal.mean_pct)}</td>
       <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-baseline-n">
         {fmt(cell.baseline.n_baseline, 0)}
+      </td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-baseline-n-positive">
+        {cell.baseline.n_positive === null ? (
+          <span className="text-slate-600">—</span>
+        ) : (
+          <span title={`positive: ${cell.baseline.n_positive} of ${cell.baseline.n_baseline} recorded measurements greater than zero`}>
+            {fmt(cell.baseline.n_positive, 0)}
+          </span>
+        )}
       </td>
       <td className={ROW_NUMERIC_CELL} data-testid="desk-evidence-baseline-n-truncated">
         {fmt(cell.baseline.n_truncated, 0)}
@@ -3814,52 +4269,111 @@ function PlaybookEvidenceCellRow({ cell }: { cell: DeskPlaybookEvidenceCell }) {
   );
 }
 
+// The leaf columns of the evidence table, in the exact order its two header rows already render
+// them. The `signal:`/`baseline:` id prefixes are what keep the two eight-column groups distinct --
+// both groups carry a column called `n`, and one sort state cannot tell them apart by label.
+const EVIDENCE_STAT_LABELS = [
+  "n",
+  // The count of this cell's own pooled values strictly greater than zero -- served, never derived
+  // here, and `null` on every mdd measure (a drawdown is clamped <= 0, so "positive" is not a fact
+  // it can carry). A count of recorded outcomes; the payload's own register says what it is not.
+  "pos",
+  "trunc",
+  "unmeas",
+  "sess",
+  "median",
+  "p25",
+  "p75",
+  "mean",
+] as const;
+
+const EVIDENCE_CELL_HEAD = "px-1.5 py-1 text-right";
+
+function evidenceStatValue(
+  stats: DeskPlaybookEvidenceCellStats | DeskPlaybookEvidenceBaselineStats,
+  label: (typeof EVIDENCE_STAT_LABELS)[number],
+): number | null {
+  if (label === "n") return "n" in stats ? stats.n : stats.n_baseline;
+  if (label === "pos") return stats.n_positive;
+  if (label === "trunc") return stats.n_truncated;
+  if (label === "unmeas") return stats.n_unmeasured;
+  if (label === "sess") return stats.n_sessions;
+  if (label === "median") return stats.median_pct;
+  if (label === "p25") return stats.p25_pct;
+  if (label === "p75") return stats.p75_pct;
+  return stats.mean_pct;
+}
+
+const EVIDENCE_CELL_COLUMNS: readonly SortableColumn<DeskPlaybookEvidenceCell>[] = [
+  { id: "setup", label: "Setup", kind: "text", value: (cell) => cell.setup_id },
+  { id: "side", label: "Side", kind: "text", value: (cell) => cell.side },
+  { id: "measure", label: "Measure", kind: "text", value: (cell) => cell.measure },
+  ...EVIDENCE_STAT_LABELS.map<SortableColumn<DeskPlaybookEvidenceCell>>((label) => ({
+    id: `signal:${label}`,
+    label,
+    kind: "number" as const,
+    align: "right" as const,
+    note: "the Signal group",
+    value: (cell) => evidenceStatValue(cell.signal, label),
+  })),
+  ...EVIDENCE_STAT_LABELS.map<SortableColumn<DeskPlaybookEvidenceCell>>((label) => ({
+    id: `baseline:${label}`,
+    label,
+    kind: "number" as const,
+    align: "right" as const,
+    note: "the Baseline group",
+    value: (cell) => evidenceStatValue(cell.baseline, label),
+  })),
+  { id: "flag", label: "Flag", kind: "flag", value: (cell) => cell.below_min_n },
+];
+
 function PlaybookEvidenceCellsTable({ cells }: { cells: DeskPlaybookEvidenceCell[] }) {
+  const sort = useTableSort(cells, EVIDENCE_CELL_COLUMNS);
+  const leaves = EVIDENCE_CELL_COLUMNS.slice(3, EVIDENCE_CELL_COLUMNS.length - 1);
   return (
     <div className="overflow-x-auto">
+      <TableSortNote sort={sort} />
       <table data-testid="desk-evidence-cells-table" className="w-full min-w-[1180px] border-collapse text-xs">
         <thead>
+          {/* The GROUP row stays plain: `Signal`/`Baseline` each span eight columns, so an
+              `aria-sort` on either would announce a state no single column is in. The three
+              `rowSpan={2}` identity cells ARE single columns, so they sort from this row. */}
           <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
-            <th className="px-1.5 py-1 text-left" rowSpan={2}>
-              Setup
-            </th>
-            <th className="px-1.5 py-1 text-left" rowSpan={2}>
-              Side
-            </th>
-            <th className="px-1.5 py-1 text-left" rowSpan={2}>
-              Measure
-            </th>
-            <th className="px-1.5 py-1 text-center" colSpan={8}>
+            {EVIDENCE_CELL_COLUMNS.slice(0, 3).map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                rowSpan={2}
+                className="px-1.5 py-1 text-left"
+              />
+            ))}
+            <th className="px-1.5 py-1 text-center" colSpan={EVIDENCE_STAT_LABELS.length}>
               Signal
             </th>
-            <th className="px-1.5 py-1 text-center" colSpan={8}>
+            <th className="px-1.5 py-1 text-center" colSpan={EVIDENCE_STAT_LABELS.length}>
               Baseline
             </th>
-            <th className="px-1.5 py-1 text-center" rowSpan={2}>
-              Flag
-            </th>
+            <SortableHeader
+              column={EVIDENCE_CELL_COLUMNS[EVIDENCE_CELL_COLUMNS.length - 1]}
+              sort={sort}
+              rowSpan={2}
+              className="px-1.5 py-1 text-center"
+            />
           </tr>
           <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
-            <th className="px-1.5 py-1 text-right">n</th>
-            <th className="px-1.5 py-1 text-right">trunc</th>
-            <th className="px-1.5 py-1 text-right">unmeas</th>
-            <th className="px-1.5 py-1 text-right">sess</th>
-            <th className="px-1.5 py-1 text-right">median</th>
-            <th className="px-1.5 py-1 text-right">p25</th>
-            <th className="px-1.5 py-1 text-right">p75</th>
-            <th className="px-1.5 py-1 text-right">mean</th>
-            <th className="px-1.5 py-1 text-right">n</th>
-            <th className="px-1.5 py-1 text-right">trunc</th>
-            <th className="px-1.5 py-1 text-right">unmeas</th>
-            <th className="px-1.5 py-1 text-right">sess</th>
-            <th className="px-1.5 py-1 text-right">median</th>
-            <th className="px-1.5 py-1 text-right">p25</th>
-            <th className="px-1.5 py-1 text-right">p75</th>
-            <th className="px-1.5 py-1 text-right">mean</th>
+            {leaves.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={EVIDENCE_CELL_HEAD}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {cells.map((cell) => (
+          {sort.entries.map(({ item: cell }) => (
             <PlaybookEvidenceCellRow key={`${cell.setup_id}:${cell.side}:${cell.measure}`} cell={cell} />
           ))}
         </tbody>
@@ -3882,22 +4396,49 @@ function PlaybookEvidenceBreachRow({ breach }: { breach: DeskPlaybookEvidenceBre
   );
 }
 
+const EVIDENCE_BREACH_COLUMNS: readonly SortableColumn<DeskPlaybookEvidenceBreach>[] = [
+  { id: "setup", label: "Setup", kind: "text", value: (breach) => breach.setup_id },
+  { id: "side", label: "Side", kind: "text", value: (breach) => breach.side },
+  { id: "horizon", label: "Horizon", kind: "text", value: (breach) => breach.horizon },
+  {
+    id: "breached",
+    label: "Breached",
+    kind: "number",
+    align: "right",
+    value: (breach) => breach.breached_count,
+  },
+  {
+    id: "total",
+    label: "Total",
+    kind: "number",
+    align: "right",
+    value: (breach) => breach.total_count,
+  },
+];
+
 function PlaybookEvidenceBreachTable({ breaches }: { breaches: DeskPlaybookEvidenceBreach[] }) {
+  const sort = useTableSort(breaches, EVIDENCE_BREACH_COLUMNS);
   return (
     <div className="mt-4 overflow-x-auto">
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Invalidation breaches</h3>
+      <TableSortNote sort={sort} />
       <table data-testid="desk-evidence-breach-table" className="w-full border-collapse text-xs">
         <thead>
           <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
-            <th className="px-1.5 py-1 text-left">Setup</th>
-            <th className="px-1.5 py-1 text-left">Side</th>
-            <th className="px-1.5 py-1 text-left">Horizon</th>
-            <th className="px-1.5 py-1 text-right">Breached</th>
-            <th className="px-1.5 py-1 text-right">Total</th>
+            {EVIDENCE_BREACH_COLUMNS.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={
+                  column.align === "right" ? "px-1.5 py-1 text-right" : "px-1.5 py-1 text-left"
+                }
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {breaches.map((breach) => (
+          {sort.entries.map(({ item: breach }) => (
             <PlaybookEvidenceBreachRow key={`${breach.setup_id}:${breach.side}:${breach.horizon}`} breach={breach} />
           ))}
         </tbody>
@@ -3940,6 +4481,130 @@ function PlaybookEvidenceBasisLine({ basis }: { basis: DeskPlaybookEvidenceBasis
   );
 }
 
+// --- The band-context split (docs/playbook-detector-spec.md §6) -----------------------------------
+// The SAME cells as the table above, computed once more per comparison bucket, so the two halves of
+// "did this setup fire at one of the desk's own walls, or in open space?" sit side by side. Purely a
+// pass-through: every number, bucket, and count below is served.
+
+const EVIDENCE_BAND_COLUMNS: readonly SortableColumn<DeskPlaybookEvidenceBandContextCell>[] = [
+  { id: "setup", label: "Setup", kind: "text", value: (cell) => cell.setup_id },
+  { id: "side", label: "Side", kind: "text", value: (cell) => cell.side },
+  { id: "measure", label: "Measure", kind: "text", value: (cell) => cell.measure },
+  { id: "bucket", label: "Location", kind: "text", value: (cell) => cell.bucket },
+  ...EVIDENCE_STAT_LABELS.map<SortableColumn<DeskPlaybookEvidenceBandContextCell>>((label) => ({
+    id: `signal:${label}`,
+    label,
+    kind: "number" as const,
+    align: "right" as const,
+    note: "the Signal group",
+    value: (cell) => evidenceStatValue(cell.signal, label),
+  })),
+  ...EVIDENCE_STAT_LABELS.map<SortableColumn<DeskPlaybookEvidenceBandContextCell>>((label) => ({
+    id: `baseline:${label}`,
+    label,
+    kind: "number" as const,
+    align: "right" as const,
+    note: "the Baseline group",
+    value: (cell) => evidenceStatValue(cell.baseline, label),
+  })),
+  { id: "flag", label: "Flag", kind: "flag", value: (cell) => cell.below_min_n },
+];
+
+function PlaybookEvidenceBandContextTable({
+  band,
+}: {
+  band: DeskPlaybookEvidenceBandContext;
+}) {
+  // Only pools that actually recorded something are listed: an all-zero pool would add two rows per
+  // measure of pure absence to an already dense table. The cross product is still SERVED in full --
+  // this hides nothing the payload does not also disclose in its basis counts below.
+  const populated = useMemo(
+    () => band.cells.filter((cell) => cell.signal.n > 0 || cell.baseline.n_baseline > 0),
+    [band.cells],
+  );
+  const sort = useTableSort(populated, EVIDENCE_BAND_COLUMNS);
+  const leaves = EVIDENCE_BAND_COLUMNS.slice(4, EVIDENCE_BAND_COLUMNS.length - 1);
+  const basis = band.basis;
+  return (
+    <div className="mt-5" data-testid="desk-evidence-band-context">
+      <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+        By location relative to the tradable band map
+      </h3>
+      <p className="mb-2 text-xs text-slate-500" data-testid="desk-evidence-band-context-basis">
+        {basis.n_signals_at_band} signal(s) at a band, {basis.n_signals_away_from_band} away from
+        one, at the pre-registered {band.parameters.near_band_bps} bps threshold measured from each
+        signal&apos;s own {band.parameters.distance_from}. Excluded from both columns:{" "}
+        {basis.n_signals_no_band_context} with no band context and {basis.n_signals_not_computed}{" "}
+        whose band map has not been computed yet
+        {basis.n_anchors_unattributable > 0
+          ? `, plus ${basis.n_anchors_unattributable} baseline anchor(s) that could not be attributed`
+          : ""}
+        .
+      </p>
+      <p className="mb-3 text-xs text-slate-500">{band.register}</p>
+      {populated.length === 0 ? (
+        <EmptyState
+          testid="desk-evidence-band-context-empty"
+          title="No recorded signal carries a band location yet."
+        />
+      ) : (
+        <div className="overflow-x-auto">
+          <TableSortNote sort={sort} />
+          <table
+            data-testid="desk-evidence-band-context-table"
+            className="w-full min-w-[1240px] border-collapse text-xs"
+          >
+            <thead>
+              <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
+                {EVIDENCE_BAND_COLUMNS.slice(0, 4).map((column) => (
+                  <SortableHeader
+                    key={column.id}
+                    column={column}
+                    sort={sort}
+                    rowSpan={2}
+                    className="px-1.5 py-1 text-left"
+                  />
+                ))}
+                <th className="px-1.5 py-1 text-center" colSpan={EVIDENCE_STAT_LABELS.length}>
+                  Signal
+                </th>
+                <th className="px-1.5 py-1 text-center" colSpan={EVIDENCE_STAT_LABELS.length}>
+                  Baseline
+                </th>
+                <SortableHeader
+                  column={EVIDENCE_BAND_COLUMNS[EVIDENCE_BAND_COLUMNS.length - 1]}
+                  sort={sort}
+                  rowSpan={2}
+                  className="px-1.5 py-1 text-center"
+                />
+              </tr>
+              <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
+                {leaves.map((column) => (
+                  <SortableHeader
+                    key={column.id}
+                    column={column}
+                    sort={sort}
+                    className={EVIDENCE_CELL_HEAD}
+                  />
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sort.entries.map(({ item: cell }) => (
+                <PlaybookEvidenceCellRow
+                  key={`${cell.setup_id}:${cell.side}:${cell.measure}:${cell.bucket}`}
+                  cell={cell}
+                  bucket={cell.bucket}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PlaybookEvidenceSection({
   result,
 }: {
@@ -3970,6 +4635,7 @@ function PlaybookEvidenceSection({
       ) : (
         <EmptyState testid="desk-evidence-empty" title="No playbook signals recorded at the current signature yet." />
       )}
+      <PlaybookEvidenceBandContextTable band={data.band_context} />
       <PlaybookEvidenceBreachTable breaches={data.invalidation_breached} />
       <PlaybookEvidenceOtherSignatures entries={data.other_signatures} />
     </div>
@@ -5266,10 +5932,14 @@ function PlaybookSignalDetail({
 
 function PlaybookSignalRow({
   signal,
+  labels,
+  bandContext,
   selected,
   onSelect,
 }: {
   signal: DeskPlaybookSignal;
+  labels: string[];
+  bandContext: DeskPlaybookBandContext | undefined;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -5301,78 +5971,246 @@ function PlaybookSignalRow({
         {fmt(signal.invalidation_price)}
       </td>
       <td className={ROW_LABEL_CELL}>{signal.entry_kind}</td>
+      <PlaybookBandCells context={bandContext} />
+      <PlaybookForwardCells signal={signal} labels={labels} />
     </tr>
   );
+}
+
+// The three served band-context cells, shared by the signals table and the occurrence list so the
+// two can never render one signal's location two ways. Every value is a served field: this
+// computes no distance, no bucket, and no label.
+function PlaybookBandCells({ context }: { context: DeskPlaybookBandContext | undefined }) {
+  const located = context !== undefined && context.band !== null;
+  return (
+    <>
+      <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-band">
+        {located ? (
+          <span className={CHIP_CLASS} title={context.caption}>
+            {playbookBandLabel(context)}
+          </span>
+        ) : (
+          <span className="text-slate-600" title={context?.caption ?? "no band context served"}>
+            —
+          </span>
+        )}
+      </td>
+      <td className={ROW_NUMERIC_CELL} data-testid="desk-playbook-signal-band-dist">
+        {context?.distance_bps === null || context?.distance_bps === undefined ? (
+          <span className="text-slate-600">—</span>
+        ) : (
+          <span
+            className={context.bucket === "at_band" ? "text-amber-300" : undefined}
+            title={context.caption}
+          >
+            {fmt(context.distance_bps)}
+          </span>
+        )}
+      </td>
+      <td className={ROW_LABEL_CELL} data-testid="desk-playbook-signal-band-relation">
+        {context?.side_relation ?? <span className="text-slate-600">—</span>}
+      </td>
+    </>
+  );
+}
+
+// The three band columns, declared once for both tables. Sorting reads the SAME served fields the
+// cells render; a missing location sorts as an absent value rather than as a zero distance.
+function playbookBandColumns<T>(
+  contextFor: (item: T) => DeskPlaybookBandContext | undefined,
+): SortableColumn<T>[] {
+  return [
+    {
+      id: "band",
+      label: "band",
+      kind: "text",
+      value: (item) => playbookBandLabel(contextFor(item)),
+    },
+    {
+      id: "bandDistance",
+      label: "dist (bps)",
+      kind: "number",
+      align: "right",
+      value: (item) => contextFor(item)?.distance_bps ?? null,
+    },
+    {
+      id: "bandRelation",
+      label: "relation",
+      kind: "text",
+      value: (item) => contextFor(item)?.side_relation ?? "",
+    },
+  ];
 }
 
 function PlaybookSignalsTable({
   record,
   labels,
+  contextIndex,
+  nearBandOnly,
+  onToggleNearBand,
   selectedSignalKey,
   onSelectSignal,
 }: {
   record: DeskPlaybookRecord;
   labels: string[];
+  contextIndex: Map<string, DeskPlaybookBandContext>;
+  nearBandOnly: boolean;
+  onToggleNearBand: (next: boolean) => void;
   selectedSignalKey: string | null;
   onSelectSignal: (key: string | null) => void;
 }) {
+  const columns = useMemo<SortableColumn<DeskPlaybookSignal>[]>(
+    () => [
+      { id: "symbol", label: "symbol", kind: "text", value: (signal) => signal.symbol },
+      {
+        id: "setup",
+        label: "setup",
+        kind: "text",
+        value: (signal) => playbookSetupLabel(signal.setup_id),
+      },
+      { id: "side", label: "side", kind: "text", value: (signal) => signal.side },
+      {
+        id: "trigger",
+        label: "trigger (ET)",
+        kind: "instant",
+        value: (signal) => signal.trigger_ts,
+      },
+      {
+        id: "triggerPrice",
+        label: "trigger price",
+        kind: "number",
+        align: "right",
+        value: (signal) => signal.trigger_price,
+      },
+      {
+        id: "invalidationPrice",
+        label: "invalidation price",
+        kind: "number",
+        align: "right",
+        value: (signal) => signal.invalidation_price,
+      },
+      { id: "entryKind", label: "entry", kind: "text", value: (signal) => signal.entry_kind },
+      ...playbookBandColumns<DeskPlaybookSignal>((signal) =>
+        contextIndex.get(playbookSignalContextKey(signal)),
+      ),
+      ...playbookForwardColumns(labels),
+    ],
+    [labels, contextIndex],
+  );
+  // A DISPLAY filter over the served rows — it hides nothing from the record, which still serves
+  // and still counts every signal (the count line below says so). Never a filter on the evidence
+  // below, whose own min-n floor is likewise a tag and never a filter.
+  const visibleSignals = useMemo(
+    () =>
+      nearBandOnly
+        ? record.signals.filter(
+            (signal) =>
+              contextIndex.get(playbookSignalContextKey(signal))?.bucket === "at_band",
+          )
+        : record.signals,
+    [record.signals, contextIndex, nearBandOnly],
+  );
+  const sort = useTableSort(visibleSignals, columns);
   if (record.signals.length === 0) {
     return (
       <EmptyState testid="desk-playbook-signals-empty" title="No signals fired in this session." />
     );
   }
   return (
-    <div
-      data-testid="desk-playbook-table-scroll"
-      className="max-h-[26rem] overflow-x-auto overflow-y-auto rounded border border-slate-800"
-    >
-      <table data-testid="desk-playbook-table" className="w-full border-collapse">
-        <thead className="sticky top-0 z-10 bg-slate-900">
-          <tr>
-            <th className={ROW_HEADER_CELL_LEFT}>symbol</th>
-            <th className={ROW_HEADER_CELL_LEFT}>setup</th>
-            <th className={ROW_HEADER_CELL_LEFT}>side</th>
-            <th className={ROW_HEADER_CELL_LEFT}>trigger (ET)</th>
-            <th className={ROW_HEADER_CELL}>trigger price</th>
-            <th className={ROW_HEADER_CELL}>invalidation price</th>
-            <th className={ROW_HEADER_CELL_LEFT}>entry</th>
-          </tr>
-        </thead>
-        <tbody>
-          {/* rows render in the SAME order the record itself serves them (trigger ts, symbol) —
-              never sorted, reversed, or re-sliced client-side. */}
-          {record.signals.map((signal) => {
-            const key = playbookSignalKey(signal);
-            return (
-              <PlaybookSignalRow
-                key={key}
-                signal={signal}
-                selected={key === selectedSignalKey}
-                onSelect={() => onSelectSignal(key === selectedSignalKey ? null : key)}
-              />
-            );
-          })}
-        </tbody>
-      </table>
+    <div>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <label
+          className="flex cursor-pointer items-center gap-2 text-xs text-slate-300"
+          data-testid="desk-playbook-near-band-filter"
+        >
+          <input
+            type="checkbox"
+            checked={nearBandOnly}
+            onChange={(event) => onToggleNearBand(event.target.checked)}
+            className="h-3 w-3 accent-amber-400"
+          />
+          show only signals at a band
+        </label>
+        <span
+          className="text-[11px] text-slate-500"
+          data-testid="desk-playbook-near-band-filter-count"
+        >
+          {nearBandOnly
+            ? `showing ${visibleSignals.length} of ${record.signals.length} recorded signals — a display filter; every signal stays recorded and served`
+            : `${record.signals.length} recorded signals, none hidden`}
+        </span>
+      </div>
+      <TableSortNote sort={sort} />
+      <div
+        data-testid="desk-playbook-table-scroll"
+        className="max-h-[26rem] overflow-x-auto overflow-y-auto rounded border border-slate-800"
+      >
+        <table data-testid="desk-playbook-table" className="w-full border-collapse">
+          <thead className="sticky top-0 z-10 bg-slate-900">
+            <tr>
+              {columns.map((column) => (
+                <SortableHeader
+                  key={column.id}
+                  column={column}
+                  sort={sort}
+                  className={column.align === "right" ? ROW_HEADER_CELL : ROW_HEADER_CELL_LEFT}
+                />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {/* Rows default to the SAME order the record itself serves them (trigger ts, symbol).
+                A different order is an explicit header click, disclosed by the note above and
+                reversible from it. */}
+            {sort.entries.map(({ item: signal }) => {
+              const key = playbookSignalKey(signal);
+              return (
+                <PlaybookSignalRow
+                  key={key}
+                  signal={signal}
+                  labels={labels}
+                  bandContext={contextIndex.get(playbookSignalContextKey(signal))}
+                  selected={key === selectedSignalKey}
+                  onSelect={() => onSelectSignal(key === selectedSignalKey ? null : key)}
+                />
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <PlaybookForwardLegend />
     </div>
   );
 }
 
+const PLAYBOOK_ABSENCE_COLUMNS: readonly SortableColumn<DeskPlaybookAbsence>[] = [
+  { id: "symbol", label: "symbol", kind: "text", value: (absence) => absence.symbol },
+  { id: "reason", label: "reason", kind: "text", value: (absence) => absence.reason },
+];
+
 function PlaybookAbsencesTable({ absences }: { absences: DeskPlaybookAbsence[] }) {
+  const sort = useTableSort(absences, PLAYBOOK_ABSENCE_COLUMNS);
   return (
     <div data-testid="desk-playbook-absences" className="overflow-x-auto">
       <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
         Absences ({absences.length})
       </h3>
+      <TableSortNote sort={sort} />
       <table className="w-full border-collapse">
         <thead>
           <tr className="border-b border-slate-800">
-            <th className={HEADER_CELL_LEFT}>symbol</th>
-            <th className={HEADER_CELL_LEFT}>reason</th>
+            {PLAYBOOK_ABSENCE_COLUMNS.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={HEADER_CELL_LEFT}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {absences.map((absence) => (
+          {sort.entries.map(({ item: absence }) => (
             <tr
               key={absence.symbol}
               data-testid="desk-playbook-absence-row"
@@ -5412,6 +6250,125 @@ function PlaybookSummaryCells({
   );
 }
 
+// --- what happened next, per occurrence ---------------------------------------------------------
+// Both playbook tables answer WHERE a setup fired. These cells answer what the tape did afterwards,
+// for that one occurrence — the same measurement the pooled means above are computed from, before
+// it is pooled. Nothing here is computed: every number is a verbatim read of a field the record
+// already serves on the signal's own `forward` block.
+//
+// Every value is reached through `touchRow.<field>` / `touchValue.<field>` — deliberately, not
+// stylistically. Those two binding names are exactly what the desk price-arithmetic guard scans
+// for, so reading the served numbers under them puts these cells under that lint for free; a local
+// rename would route the whole block around the one check proving this page derives nothing.
+//
+// Absence is never a zero. Three distinct absences, each read as itself:
+//   * the whole `forward` block missing -- a record written before measurement existed
+//   * a horizon present but null -- e.g. a 1m horizon finer than the 5m series it was measured on,
+//     which carries the backend's own `reason` string
+//   * a horizon this record never measured at all -- FORWARD_UNMEASURED_HORIZON
+function PlaybookForwardCells({
+  signal,
+  labels,
+}: {
+  signal: DeskPlaybookSignal;
+  labels: string[];
+}) {
+  const touchRow = signal.forward;
+  return (
+    <>
+      {labels.map((label) => {
+        const touchValue = touchRow?.horizons[label] ?? FORWARD_UNMEASURED_HORIZON;
+        const absent = touchValue.return_pct === null;
+        return (
+          <td
+            key={label}
+            data-testid="desk-playbook-forward-cell"
+            className={absent ? FORWARD_TOUCH_CELL_ABSENT : ROW_NUMERIC_CELL}
+            title={
+              touchRow === undefined
+                ? PLAYBOOK_LEGACY_ABSENCE
+                : (touchValue.reason ??
+                  `${String(touchValue.return_pct)} · effective ${String(touchValue.effective_minutes)} min`)
+            }
+          >
+            {touchValue.return_pct === null ? "—" : fmt(touchValue.return_pct)}
+            {touchValue.truncated ? "†" : ""}
+          </td>
+        );
+      })}
+      <td
+        data-testid="desk-playbook-forward-cell"
+        className={touchRow === undefined ? FORWARD_TOUCH_CELL_ABSENT : ROW_NUMERIC_CELL}
+        title={
+          touchRow === undefined
+            ? PLAYBOOK_LEGACY_ABSENCE
+            : `${String(touchRow.to_close_pct)} · ${touchRow.minutes_to_close} min to the session end`
+        }
+      >
+        {touchRow === undefined ? "—" : fmt(touchRow.to_close_pct)}
+      </td>
+      {/* ONE drawdown column, matching this row's own side -- the section's shipped sign note
+          already states that a row's adverse excursion is the one on its side. Both served numbers
+          ride the title, so the other side is checkable rather than hidden. */}
+      <td
+        data-testid="desk-playbook-forward-cell"
+        className={touchRow === undefined ? FORWARD_TOUCH_CELL_ABSENT : ROW_NUMERIC_CELL}
+        title={
+          touchRow === undefined
+            ? PLAYBOOK_LEGACY_ABSENCE
+            : `mdd long ${String(touchRow.mdd_long_pct)} · mdd short ${String(touchRow.mdd_short_pct)}`
+        }
+      >
+        {touchRow === undefined
+          ? "—"
+          : fmt(signal.side === "long" ? touchRow.mdd_long_pct : touchRow.mdd_short_pct)}
+      </td>
+    </>
+  );
+}
+
+// The forward columns both playbook tables append, built from the record's OWN horizon labels so a
+// record measured under a different set of horizons keeps describing itself honestly.
+function playbookForwardColumns(labels: string[]): SortableColumn<DeskPlaybookSignal>[] {
+  return [
+    ...labels.map<SortableColumn<DeskPlaybookSignal>>((label) => ({
+      id: `fwd:${label}`,
+      label: forwardMeasureShortHeader(label),
+      kind: "number" as const,
+      align: "right" as const,
+      value: (signal) => signal.forward?.horizons[label]?.return_pct ?? null,
+    })),
+    {
+      id: "fwd:to_close",
+      label: forwardMeasureShortHeader("to_close"),
+      kind: "number",
+      align: "right",
+      value: (signal) => signal.forward?.to_close_pct ?? null,
+    },
+    {
+      id: "fwd:mdd",
+      label: "mdd",
+      kind: "number",
+      align: "right",
+      note: "the max drawdown to the session close, on this row's own side",
+      value: (signal) =>
+        signal.side === "long"
+          ? (signal.forward?.mdd_long_pct ?? null)
+          : (signal.forward?.mdd_short_pct ?? null),
+    },
+  ];
+}
+
+// Rendered once beneath each table carrying the columns above. The dagger already shipped in the
+// per-signal detail panel with no legend anywhere near these tables.
+function PlaybookForwardLegend() {
+  return (
+    <p data-testid="desk-playbook-forward-legend" className="mt-1 text-[10px] text-slate-600">
+      † measured to the session end before the full horizon elapsed.
+    </p>
+  );
+}
+
 // One occurrence of a setup, inside its own pool's expanded row. The whole row is a drill-in to
 // /structure via the SAME stretched-link pattern `DeskRow` uses (one real `next/link` anchor
 // absolutely positioned over a `position: relative` `<tr>`), carrying — beyond the symbol and
@@ -5419,13 +6376,38 @@ function PlaybookSummaryCells({
 // key) pair, so the chart draws THIS occurrence's own recorded outline. `beyondCap` is the honest
 // half: `record.signals` holds every detected signal, but the pool means shown above are computed
 // over the first `rail_max_touches_per_row` only, so an occurrence past that never fed them.
+// The drill-in anchor's own composite disclosure. The stretched link covers every cell in this row,
+// so a `title` on an individual `<td>` is occluded and never surfaces -- the same problem `DeskRow`
+// solved with `deskRowDrillInTitle`, solved the same way here. Without this the forward columns'
+// absence/truncation reasons would be unreachable in this table alone.
+function playbookOccurrenceDrillInTitle(signal: DeskPlaybookSignal, labels: string[]): string {
+  const touchRow = signal.forward;
+  if (touchRow === undefined) return PLAYBOOK_LEGACY_ABSENCE;
+  const lines = labels
+    .map((label) => {
+      const touchValue = touchRow.horizons[label];
+      if (touchValue === undefined) return "";
+      if (touchValue.return_pct === null) return `${label}: ${touchValue.reason ?? "not measured"}`;
+      return touchValue.truncated ? `${label}: measured to the session end (†)` : "";
+    })
+    .filter((line) => line !== "");
+  lines.push(
+    `mdd long ${String(touchRow.mdd_long_pct)} · mdd short ${String(touchRow.mdd_short_pct)}`,
+  );
+  return lines.join(" · ");
+}
+
 function PlaybookOccurrenceRow({
   signal,
+  labels,
+  bandContext,
   recordId,
   detectTimeframe,
   beyondCap,
 }: {
   signal: DeskPlaybookSignal;
+  labels: string[];
+  bandContext: DeskPlaybookBandContext | undefined;
   recordId: string;
   detectTimeframe: string;
   beyondCap: boolean;
@@ -5447,6 +6429,7 @@ function PlaybookOccurrenceRow({
         <Link
           href={href}
           data-testid="desk-playbook-occurrence-drill-in"
+          title={playbookOccurrenceDrillInTitle(signal, labels)}
           aria-label={`Open ${signal.symbol}'s ${playbookSetupLabel(signal.setup_id)} at ${formatTimeET(signal.trigger_ts)} ET in Structure`}
           className="absolute inset-0"
         />
@@ -5464,6 +6447,8 @@ function PlaybookOccurrenceRow({
       <td className={ROW_NUMERIC_CELL} title={String(signal.invalidation_price)}>
         {fmt(signal.invalidation_price)}
       </td>
+      <PlaybookBandCells context={bandContext} />
+      <PlaybookForwardCells signal={signal} labels={labels} />
       <td className={ROW_LABEL_CELL}>
         {beyondCap && (
           <span
@@ -5480,19 +6465,68 @@ function PlaybookOccurrenceRow({
 
 // The occurrences behind ONE summary pool. Filtered out of the record's own `signals` by the SAME
 // `<setup_id>:<side>` key `compute_playbook` pools by, and rendered in the record's OWN served
-// order — never sorted, reversed, or re-sliced client-side.
+// order by default — a different order is an explicit header click, disclosed and reversible.
+//
+// The cap chip reads the occurrence's SERVED position, never where it renders. The pool means above
+// are computed over the first `rail_max_touches_per_row` occurrences as the record served them, so
+// under any other display order a map index would move the amber chip onto occurrences that did
+// feed the means and off the ones that did not.
 function PlaybookOccurrenceList({
   record,
   poolKey,
   id,
+  contextIndex,
 }: {
   record: DeskPlaybookRecord;
   poolKey: string;
   id: string;
+  contextIndex: Map<string, DeskPlaybookBandContext>;
 }) {
   const occurrences = record.signals.filter((signal) => playbookPoolKey(signal) === poolKey);
   const cap = record.parameters.rail_max_touches_per_row ?? null;
   const detectTimeframe = record.parameters.detect_timeframe ?? "";
+  const labels = playbookHorizonLabels(record);
+  const columns = useMemo<SortableColumn<DeskPlaybookSignal>[]>(
+    () => [
+      { id: "symbol", label: "symbol", kind: "text", value: (signal) => signal.symbol },
+      {
+        id: "trigger",
+        label: "trigger (ET)",
+        kind: "instant",
+        value: (signal) => signal.trigger_ts,
+      },
+      {
+        id: "triggerPrice",
+        label: "trigger price",
+        kind: "number",
+        align: "right",
+        value: (signal) => signal.trigger_price,
+      },
+      {
+        id: "entry",
+        label: "entry",
+        kind: "number",
+        align: "right",
+        value: (signal) => signal.entry,
+      },
+      {
+        id: "invalidationPrice",
+        label: "invalidation price",
+        kind: "number",
+        align: "right",
+        value: (signal) => signal.invalidation_price,
+      },
+      ...playbookBandColumns<DeskPlaybookSignal>((signal) =>
+        contextIndex.get(playbookSignalContextKey(signal)),
+      ),
+      ...playbookForwardColumns(labels),
+      // The cap chip's column: it discloses a POSITION in the served order, so ordering by it would
+      // be circular.
+      { id: "cap", label: "", kind: "text", sortable: false, value: () => null },
+    ],
+    [labels, contextIndex],
+  );
+  const sort = useTableSort(occurrences, columns);
   return (
     <div id={id} data-testid="desk-playbook-occurrences">
       <p data-testid="desk-playbook-occurrences-count" className="mb-1 text-[11px] text-slate-500">
@@ -5501,36 +6535,51 @@ function PlaybookOccurrenceList({
           ? ` — the first ${cap} are pooled into the means above; the rest are recorded but outside the pool.`
           : ". Click one to open its chart in Structure."}
       </p>
-      <table data-testid="desk-playbook-occurrences-table" className="w-full border-collapse">
-        <thead>
-          <tr>
-            <th className={ROW_HEADER_CELL_LEFT}>symbol</th>
-            <th className={ROW_HEADER_CELL_LEFT}>trigger (ET)</th>
-            <th className={ROW_HEADER_CELL}>trigger price</th>
-            <th className={ROW_HEADER_CELL}>entry</th>
-            <th className={ROW_HEADER_CELL}>invalidation price</th>
-            <th className={ROW_HEADER_CELL_LEFT}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {occurrences.map((signal, index) => (
-            <PlaybookOccurrenceRow
-              key={playbookSignalKey(signal)}
-              signal={signal}
-              recordId={record.id}
-              detectTimeframe={detectTimeframe}
-              beyondCap={cap !== null && index >= cap}
-            />
-          ))}
-        </tbody>
-      </table>
+      <TableSortNote sort={sort} />
+      <div className="overflow-x-auto">
+        <table data-testid="desk-playbook-occurrences-table" className="w-full border-collapse">
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <SortableHeader
+                  key={column.id}
+                  column={column}
+                  sort={sort}
+                  className={column.align === "right" ? ROW_HEADER_CELL : ROW_HEADER_CELL_LEFT}
+                />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sort.entries.map((entry) => (
+              <PlaybookOccurrenceRow
+                key={playbookSignalKey(entry.item)}
+                signal={entry.item}
+                labels={labels}
+                bandContext={contextIndex.get(playbookSignalContextKey(entry.item))}
+                recordId={record.id}
+                detectTimeframe={detectTimeframe}
+                beyondCap={cap !== null && entry.servedIndex >= cap}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <PlaybookForwardLegend />
     </div>
   );
 }
 
-function PlaybookSummaryView({ record }: { record: DeskPlaybookRecord }) {
+function PlaybookSummaryView({
+  record,
+  contextIndex,
+}: {
+  record: DeskPlaybookRecord;
+  contextIndex: Map<string, DeskPlaybookBandContext>;
+}) {
   const measureKeys = record.parameters.signal_measures;
-  const poolKeys = Object.keys(record.summary);
+  // Memoised so the sorted entries are not rebuilt on every render by a fresh key array.
+  const poolKeys = useMemo(() => Object.keys(record.summary), [record]);
   // Which pools are expanded to show their own occurrences. Local to this component (unlike
   // `selectedSignalKey`, which has to be hoisted because it drives a panel rendered by a SIBLING
   // of the signals table) — nothing outside this view reads it. The call site's `key={record.id}`
@@ -5544,6 +6593,27 @@ function PlaybookSummaryView({ record }: { record: DeskPlaybookRecord }) {
       return next;
     });
   }
+  // Sorting acts on the POOL GROUPS, never on the individual rows. Each pool owns a signals row, a
+  // baseline row joined to it by a `rowSpan={2}` chip, and (when expanded) its own occurrences row —
+  // all three inside one Fragment. Ordering the pools moves each group whole; ordering rows would
+  // put a baseline line under a different setup's label. `expandedPools` is keyed by pool, not by
+  // position, so an open expansion survives a re-order.
+  const columns = useMemo<SortableColumn<string>[]>(
+    () => [
+      { id: "pool", label: "setup : side", kind: "text", value: (poolKey) => poolKey },
+      { id: "source", label: "source", kind: "text", sortable: false, value: () => null },
+      ...measureKeys.map<SortableColumn<string>>((measureKey) => ({
+        id: measureKey,
+        label: forwardMeasureShortHeader(measureKey),
+        kind: "number" as const,
+        align: "right" as const,
+        note: "sorts by the signals line",
+        value: (poolKey) => record.summary[poolKey]?.[measureKey]?.signals?.mean_pct ?? null,
+      })),
+    ],
+    [measureKeys, record],
+  );
+  const sort = useTableSort(poolKeys, columns);
   if (poolKeys.length === 0) return null;
   return (
     <div data-testid="desk-playbook-summary" className="overflow-x-auto">
@@ -5552,20 +6622,22 @@ function PlaybookSummaryView({ record }: { record: DeskPlaybookRecord }) {
         carry the same sign (long positive, short negative), so a signal row above its baseline row
         beat a random minute of the same session. Click a setup to list the occurrences behind it.
       </p>
+      <TableSortNote sort={sort} />
       <table className="w-full border-collapse text-xs">
         <thead>
           <tr>
-            <th className={ROW_HEADER_CELL_LEFT}>setup : side</th>
-            <th className={ROW_HEADER_CELL_LEFT}>source</th>
-            {measureKeys.map((measureKey) => (
-              <th key={measureKey} className={ROW_HEADER_CELL}>
-                {forwardMeasureShortHeader(measureKey)}
-              </th>
+            {columns.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={column.align === "right" ? ROW_HEADER_CELL : ROW_HEADER_CELL_LEFT}
+              />
             ))}
           </tr>
         </thead>
         <tbody>
-          {poolKeys.map((poolKey) => (
+          {sort.entries.map(({ item: poolKey }) => (
             <Fragment key={poolKey}>
               <tr data-testid="desk-playbook-summary-signals" className="border-t border-slate-800/60">
                 <td className={ROW_BADGE_CELL} rowSpan={2}>
@@ -5621,7 +6693,8 @@ function PlaybookSummaryView({ record }: { record: DeskPlaybookRecord }) {
                       record={record}
                       poolKey={poolKey}
                       id={`playbook-occurrences-${poolKey.replace(":", "-")}`}
-                    />
+                    contextIndex={contextIndex}
+                      />
                   </td>
                 </tr>
               )}
@@ -5641,13 +6714,28 @@ function playbookRunOutcomeText(run: DeskPlaybookRun): string {
 
 // Mirrors `ForwardRunsNote` — the durable run log surviving the compute manager's process-scoped
 // snapshot (a cancelled run leaves no row at all here — `desk_playbook_log.py`'s own contract).
+const PLAYBOOK_RUN_COLUMNS: readonly SortableColumn<DeskPlaybookRun>[] = [
+  { id: "started", label: "started", kind: "instant", value: (run) => run.started_at },
+  { id: "outcome", label: "outcome", kind: "text", value: (run) => run.outcome },
+  {
+    id: "signals",
+    label: "signals",
+    kind: "number",
+    align: "right",
+    value: (run) => run.signals_recorded,
+  },
+  { id: "produced", label: "produced", kind: "text", value: (run) => playbookRunOutcomeText(run) },
+];
+
 function PlaybookRunsNote({
   result,
 }: {
   result: { ok: boolean; data: DeskPlaybookRunsListResult | null; error?: string } | null;
 }) {
+  const runs: readonly DeskPlaybookRun[] =
+    result !== null && result.ok && result.data !== null ? result.data.runs : NO_SORTABLE_ROWS;
+  const sort = useTableSort(runs, PLAYBOOK_RUN_COLUMNS);
   if (result === null || !result.ok || result.data === null) return null;
-  const runs = result.data.runs;
   if (runs.length === 0) {
     return (
       <p data-testid="desk-playbook-runs-empty" className="text-[11px] text-slate-500">
@@ -5662,17 +6750,22 @@ function PlaybookRunsNote({
         {runs.length} recorded compute attempt{runs.length === 1 ? "" : "s"} for this session
       </summary>
       <div className="mt-1 overflow-x-auto">
+        <TableSortNote sort={sort} />
         <table data-testid="desk-playbook-runs-table" className="w-full border-collapse">
           <thead>
             <tr className="border-b border-slate-800">
-              <th className={HEADER_CELL_LEFT}>started</th>
-              <th className={HEADER_CELL_LEFT}>outcome</th>
-              <th className={HEADER_CELL}>signals</th>
-              <th className={HEADER_CELL_LEFT}>produced</th>
+              {PLAYBOOK_RUN_COLUMNS.map((column) => (
+                <SortableHeader
+                  key={column.id}
+                  column={column}
+                  sort={sort}
+                  className={column.align === "right" ? HEADER_CELL : HEADER_CELL_LEFT}
+                />
+              ))}
             </tr>
           </thead>
           <tbody>
-            {runs.map((run) => (
+            {sort.entries.map(({ item: run }) => (
               <tr
                 key={run.run_id}
                 data-testid="desk-playbook-run-row"
@@ -5701,12 +6794,18 @@ function PlaybookRecordView({
   result,
   runsResult,
   control,
+  context,
+  nearBandOnly,
+  onToggleNearBand,
   selectedSignalKey,
   onSelectSignal,
 }: {
   result: { ok: boolean; data: DeskPlaybookReadResult | null; error?: string } | null;
   runsResult: { ok: boolean; data: DeskPlaybookRunsListResult | null; error?: string } | null;
   control: PlaybookControlProps;
+  context: DeskPlaybookContext | null;
+  nearBandOnly: boolean;
+  onToggleNearBand: (next: boolean) => void;
   selectedSignalKey: string | null;
   onSelectSignal: (key: string | null) => void;
 }) {
@@ -5753,6 +6852,12 @@ function PlaybookRecordView({
     );
   }
   const labels = playbookHorizonLabels(record);
+  // Paired by identity, so the served location always follows its own signal through any sort or
+  // filter. An unread/absent context yields an empty index: every row shows an em-dash rather than
+  // borrowing a neighbour's wall.
+  const contextIndex = playbookContextIndex(
+    context !== null && context.playbook_id === record.id ? context : null,
+  );
   const selectedSignal =
     selectedSignalKey === null
       ? null
@@ -5790,12 +6895,26 @@ function PlaybookRecordView({
         above to list its occurrences and open one on the chart, or click a row below for its full
         disclosures and forward measurement
       </p>
-      {/* `key` collapses every expanded pool when the session date resolves to a DIFFERENT record
-          — an expansion belongs to the record it was opened against. */}
-      <PlaybookSummaryView key={record.id} record={record} />
+      {/* Both keys remount their component when the session date resolves to a DIFFERENT record:
+          the summary drops every expanded pool, and the signals table drops any chosen sort — each
+          belongs to the record it was opened against.
+
+          The keys are PREFIXED, and that is load-bearing rather than decorative. These two are
+          SIBLINGS in one parent, so a bare `record.id` on both would be a duplicate key among
+          siblings: React's reconciliation breaks and re-renders APPEND a second summary instead of
+          updating the first (live-verified — one extra copy per click of a signal row below). */}
+      <PlaybookSummaryView
+        key={`playbook-summary-${record.id}`}
+        record={record}
+        contextIndex={contextIndex}
+      />
       <PlaybookSignalsTable
+        key={`playbook-signals-${record.id}`}
         record={record}
         labels={labels}
+        contextIndex={contextIndex}
+        nearBandOnly={nearBandOnly}
+        onToggleNearBand={onToggleNearBand}
         selectedSignalKey={selectedSignalKey}
         onSelectSignal={onSelectSignal}
       />
@@ -5824,6 +6943,9 @@ function PlaybookSection({
   result,
   runsResult,
   control,
+  context,
+  nearBandOnly,
+  onToggleNearBand,
   selectedSignalKey,
   onSelectSignal,
 }: {
@@ -5833,6 +6955,9 @@ function PlaybookSection({
   result: { ok: boolean; data: DeskPlaybookReadResult | null; error?: string } | null;
   runsResult: { ok: boolean; data: DeskPlaybookRunsListResult | null; error?: string } | null;
   control: PlaybookControlProps;
+  context: DeskPlaybookContext | null;
+  nearBandOnly: boolean;
+  onToggleNearBand: (next: boolean) => void;
   selectedSignalKey: string | null;
   onSelectSignal: (key: string | null) => void;
 }) {
@@ -5880,6 +7005,9 @@ function PlaybookSection({
         result={result}
         runsResult={runsResult}
         control={control}
+        context={context}
+        nearBandOnly={nearBandOnly}
+        onToggleNearBand={onToggleNearBand}
         selectedSignalKey={selectedSignalKey}
         onSelectSignal={onSelectSignal}
       />
@@ -6087,6 +7215,12 @@ export default function DeskPage() {
   const [playbookCancelRequested, setPlaybookCancelRequested] = useState(false);
   const [playbookCancelError, setPlaybookCancelError] = useState<string | null>(null);
   const [selectedPlaybookSignal, setSelectedPlaybookSignal] = useState<string | null>(null);
+  // The record's own band context (spec §6), resolved beside the record itself. `null` is an
+  // honest "no context read yet / none served" — the tables simply show an em-dash, never a
+  // fabricated location.
+  const [playbookContext, setPlaybookContext] = useState<DeskPlaybookContext | null>(null);
+  // The near-band DISPLAY filter, default off — nothing is hidden until an operator asks.
+  const [playbookNearBandOnly, setPlaybookNearBandOnly] = useState(false);
   const playbookValidated = validatePlaybookSessionDay(playbookDateInput, sessionsResult);
 
   // goal-playbook-iter-7 (J-07): the Backscan section's own state — entirely independent of the
@@ -6120,6 +7254,44 @@ export default function DeskPage() {
     data: DeskPlaybookEvidence | null;
     error?: string;
   } | null>(null);
+
+  // --- the six collapsed sections (see the DESK-COLLAPSED block at the top of this file) ---------
+  // Which are currently open. A Set keyed by section, mirroring `PlaybookSummaryView`'s own
+  // `expandedPools` — nothing outside this component reads it, and it is deliberately NOT
+  // persisted: every reload starts from the decluttered page.
+  const [expandedSections, setExpandedSections] = useState<ReadonlySet<DeskCollapsibleSection>>(
+    () => new Set(),
+  );
+  // Which sections have already ISSUED their read. A ref, not state: it must not trigger a render,
+  // and it is what makes collapse -> re-expand free (the `playbookRequestedForRef` precedent on
+  // /structure). The two id-keyed sections below are absent from this set on purpose — their reads
+  // are keyed on the displayed snapshot, so "already fetched" is not a one-shot fact for them.
+  const sectionReadIssuedRef = useRef<Set<DeskCollapsibleSection>>(new Set());
+
+  // Expanding is where a deferred read actually happens: a plain event handler, never an effect
+  // (this page pins an exact effect census — see test_desk_refresh_chain_guard.py). The two
+  // id-keyed sections issue nothing here; their own effects re-run when `expandedSections` changes.
+  function toggleSection(section: DeskCollapsibleSection) {
+    const opening = !expandedSections.has(section);
+    setExpandedSections((previous) => {
+      const next = new Set(previous);
+      if (next.has(section)) next.delete(section);
+      else next.add(section);
+      return next;
+    });
+    if (!opening) return;
+    if (sectionReadIssuedRef.current.has(section)) return;
+    sectionReadIssuedRef.current.add(section);
+    if (section === "screenRuns") {
+      fetchDeskScreenRuns().then(setScreenRunsResult);
+    } else if (section === "topupRuns") {
+      fetchDeskTopupRuns().then(setTopupRunsResult);
+    } else if (section === "indexReconciliation") {
+      fetchDeskReconcileRuns().then(setReconcileRunsResult);
+    } else if (section === "playbookEvidence") {
+      fetchDeskPlaybookEvidence().then(setEvidenceResult);
+    }
+  }
 
   // The chained refresh (see the REFRESH-CHAIN block above). `refreshChain` is plain state and is
   // deliberately NOT persisted: a reload clears it and nothing resumes, which is what keeps "every
@@ -6195,20 +7367,15 @@ export default function DeskPage() {
     fetchDeskScreenCompute().then((result) => {
       if (alive && result.ok) setScreenCompute(result.data);
     });
-    fetchDeskScreenRuns().then((result) => {
-      if (alive) setScreenRunsResult(result);
-    });
+    // The screen/top-up/reconcile RUN LEDGERS are deliberately absent from this effect: each one
+    // belongs to a collapsed section and is read on its first expand instead (`toggleSection`).
+    // The compute-manager seeds below stay -- those feed the Run Screen / Top-up / Reconcile Index
+    // controls, which are still on the page and still open.
     fetchDeskTopupCompute().then((result) => {
       if (alive && result.ok) setTopupCompute(result.data);
     });
-    fetchDeskTopupRuns().then((result) => {
-      if (alive) setTopupRunsResult(result);
-    });
     fetchDeskReconcileCompute().then((result) => {
       if (alive && result.ok) setReconcileCompute(result.data);
-    });
-    fetchDeskReconcileRuns().then((result) => {
-      if (alive) setReconcileRunsResult(result);
     });
     fetchDeskForwardCompute().then((result) => {
       if (alive && result.ok) setForwardCompute(result.data);
@@ -6236,9 +7403,8 @@ export default function DeskPage() {
     // joined into this SAME effect rather than opening a new one (the page's effect census is
     // pinned; see test_desk_refresh_chain_guard.py). No poll, no re-fire on any input: T-7 ("GETs
     // never compute") means there is nothing to re-trigger this section's own read.
-    fetchDeskPlaybookEvidence().then((result) => {
-      if (alive) setEvidenceResult(result);
-    });
+    // (The Playbook Evidence read used to sit here. It belongs to a collapsed section, so it is
+    // issued on that section's first expand instead — see `toggleSection`.)
     return () => {
       alive = false;
     };
@@ -6285,10 +7451,15 @@ export default function DeskPage() {
         setScreenResult((previous) =>
           refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
         );
-        const refreshedRuns = await fetchDeskScreenRuns();
-        setScreenRunsResult((previous) =>
-          refreshedRuns.ok || previous === null || !previous.ok ? refreshedRuns : previous,
-        );
+        // Only if this ledger has actually been read: a section still collapsed has nothing on
+        // screen to keep fresh, and its first expand will fetch the finished run anyway. Read off
+        // the ref rather than `expandedSections` so this closure cannot see a stale value.
+        if (sectionReadIssuedRef.current.has("screenRuns")) {
+          const refreshedRuns = await fetchDeskScreenRuns();
+          setScreenRunsResult((previous) =>
+            refreshedRuns.ok || previous === null || !previous.ok ? refreshedRuns : previous,
+          );
+        }
         // goal-desk-iter-36 (J-21): a just-finished run changes whether the RESOLVED To day's
         // pins would now reuse or walk — the SAME "on terminal, refresh once" precedent the two
         // refetches above already establish (never a timer/poll of its own). Skipped while the
@@ -6320,10 +7491,12 @@ export default function DeskPage() {
       const next = await fetchDeskTopupCompute();
       if (next.ok) setTopupCompute(next.data);
       if (next.ok && next.data && next.data.state !== "running") {
-        const refreshed = await fetchDeskTopupRuns();
-        setTopupRunsResult((previous) =>
-          refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
-        );
+        if (sectionReadIssuedRef.current.has("topupRuns")) {
+          const refreshed = await fetchDeskTopupRuns();
+          setTopupRunsResult((previous) =>
+            refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
+          );
+        }
       }
     }, 700);
     return () => clearInterval(handle);
@@ -6371,10 +7544,12 @@ export default function DeskPage() {
       const next = await fetchDeskReconcileCompute();
       if (next.ok) setReconcileCompute(next.data);
       if (next.ok && next.data && next.data.state !== "running") {
-        const refreshed = await fetchDeskReconcileRuns();
-        setReconcileRunsResult((previous) =>
-          refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
-        );
+        if (sectionReadIssuedRef.current.has("indexReconciliation")) {
+          const refreshed = await fetchDeskReconcileRuns();
+          setReconcileRunsResult((previous) =>
+            refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
+          );
+        }
       }
     }, 700);
     return () => clearInterval(handle);
@@ -7274,6 +8449,10 @@ export default function DeskPage() {
   // correction is applied to the four reads below.
   useEffect(() => {
     setScreenCompareResult(null);
+    // Deferred with its own section: keyed on the DISPLAYED snapshot, so unlike the run ledgers
+    // above this is not a one-shot read and cannot live in the expand handler. Gating the effect
+    // instead means expanding re-runs it, and a history selection while expanded still refetches.
+    if (!expandedSections.has("screenComparison")) return;
     if (displayedSnapshotId === null) return;
     let alive = true;
     fetchDeskScreenCompare(displayedSnapshotId).then((result) => {
@@ -7282,7 +8461,7 @@ export default function DeskPage() {
     return () => {
       alive = false;
     };
-  }, [displayedSnapshotId]);
+  }, [displayedSnapshotId, expandedSections]);
 
   // goal-desk-iter-36 (J-21): fetch the screen-pin resolution for the DISPLAYED snapshot's own
   // `screen_date` — the SAME `displayedSnapshot` dependency the Screen Comparison effect above
@@ -7292,6 +8471,9 @@ export default function DeskPage() {
   // switch between them needs no refetch and no blank.
   useEffect(() => {
     setDisplayedPinsResult(null);
+    // Deferred with its own section, for the same reason as the comparison effect above: this read
+    // is keyed on the displayed snapshot's date, not a one-shot fact.
+    if (!expandedSections.has("provenance")) return;
     if (displayedScreenDate === null) return;
     let alive = true;
     fetchDeskScreenPins(displayedScreenDate).then((result) => {
@@ -7300,7 +8482,7 @@ export default function DeskPage() {
     return () => {
       alive = false;
     };
-  }, [displayedScreenDate]);
+  }, [displayedScreenDate, expandedSections]);
 
   // Forward-test era: the displayed snapshot's newest recorded forward result — id-keyed, the
   // `screenCompareResult` effect's exact shape. A GET only, never a trigger. The drill-in
@@ -7389,12 +8571,24 @@ export default function DeskPage() {
     if (playbookValidated.date === null) {
       setPlaybookResult(null);
       setPlaybookRunsResult(null);
+      setPlaybookContext(null);
       return;
     }
     let alive = true;
     const date = playbookValidated.date;
-    fetchDeskPlaybook({ date }).then((result) => {
-      if (alive) setPlaybookResult(result);
+    // The band context (spec §6) is CHAINED onto this same read rather than given an effect of its
+    // own: it is keyed by the record this effect just resolved, and the section's own "one effect
+    // per resolved date" shape is what `test_desk_refresh_chain_guard.py`'s effect census pins.
+    fetchDeskPlaybook({ date }).then(async (result) => {
+      if (!alive) return;
+      setPlaybookResult(result);
+      const recordId = result.ok ? (result.data?.playbook?.id ?? null) : null;
+      if (recordId === null) {
+        setPlaybookContext(null);
+        return;
+      }
+      const context = await fetchDeskPlaybookContext({ id: recordId });
+      if (alive) setPlaybookContext(context.ok ? context.data : null);
     });
     fetchDeskPlaybookRuns(date).then((result) => {
       if (alive) setPlaybookRunsResult(result);
@@ -7732,18 +8926,28 @@ export default function DeskPage() {
             placement deliberately differs from the plan's "immediately after Screen History"
             suggestion. */}
         <section aria-label="Top-up runs" className="mt-6">
-          <Panel title="Top-up Runs">
+          <CollapsibleSection
+            id="topupRuns"
+            title="Top-up Runs"
+            open={expandedSections.has("topupRuns")}
+            onToggle={() => toggleSection("topupRuns")}
+          >
             <TopupRunsSection result={topupRunsResult} />
-          </Panel>
+          </CollapsibleSection>
         </section>
 
         {/* era-desk-iter-14 (J-10): the SAME "always rendered, independent of screen state"
             placement precedent immediately above, applied to the reconciliation history —
             reconciliation touches only the bar store/index, never a screen. */}
         <section aria-label="Index Reconciliation" className="mt-6">
-          <Panel title="Index Reconciliation">
+          <CollapsibleSection
+            id="indexReconciliation"
+            title="Index Reconciliation"
+            open={expandedSections.has("indexReconciliation")}
+            onToggle={() => toggleSection("indexReconciliation")}
+          >
             <ReconciliationSection result={reconcileRunsResult} />
-          </Panel>
+          </CollapsibleSection>
         </section>
 
         {/* goal-desk-iter-29 (J-18): a fourth ledger section, the SAME "always rendered,
@@ -7751,9 +8955,14 @@ export default function DeskPage() {
             run's durable history (including reused/cancelled/failed runs) exists, or honestly
             doesn't, regardless of whether the ranked briefing above is currently populated. */}
         <section aria-label="Screen Runs" className="mt-6">
-          <Panel title="Screen Runs">
+          <CollapsibleSection
+            id="screenRuns"
+            title="Screen Runs"
+            open={expandedSections.has("screenRuns")}
+            onToggle={() => toggleSection("screenRuns")}
+          >
             <ScreenRunsSection result={screenRunsResult} />
-          </Panel>
+          </CollapsibleSection>
         </section>
 
         {/* goal-desk-iter-35 (J-20): rendered after the ranked briefing table (inside
@@ -7764,9 +8973,14 @@ export default function DeskPage() {
             of those three's "always rendered" one. */}
         {latest !== null && (
           <section aria-label="Screen Comparison" className="mt-6">
-            <Panel title="Screen Comparison">
+            <CollapsibleSection
+              id="screenComparison"
+              title="Screen Comparison"
+              open={expandedSections.has("screenComparison")}
+              onToggle={() => toggleSection("screenComparison")}
+            >
               <ScreenComparisonSection result={screenCompareResult} />
-            </Panel>
+            </CollapsibleSection>
           </section>
         )}
 
@@ -7778,13 +8992,18 @@ export default function DeskPage() {
             BACKWARDS up the page now: "opened from Screen History above". */}
         {latest !== null && (
           <section aria-label="Provenance" className="mt-6">
-            <Panel title="Provenance">
+            <CollapsibleSection
+              id="provenance"
+              title="Provenance"
+              open={expandedSections.has("provenance")}
+              onToggle={() => toggleSection("provenance")}
+            >
               <DeskProvenance
                 snapshot={displayedSnapshot ?? latest}
                 isViewingLatest={isViewingLatest}
                 pins={displayedPinsResult}
               />
-            </Panel>
+            </CollapsibleSection>
           </section>
         )}
 
@@ -7803,6 +9022,9 @@ export default function DeskPage() {
               result={playbookResult}
               runsResult={playbookRunsResult}
               control={playbookControlProps}
+              context={playbookContext}
+              nearBandOnly={playbookNearBandOnly}
+              onToggleNearBand={setPlaybookNearBandOnly}
               selectedSignalKey={selectedPlaybookSignal}
               onSelectSignal={setSelectedPlaybookSignal}
             />
@@ -7837,9 +9059,14 @@ export default function DeskPage() {
             already establishes. No compute/refresh control here at all (T-7) — a pure read-only
             fold of what the playbook store already recorded. */}
         <section aria-label="Playbook Evidence" className="mt-6">
-          <Panel title="Playbook Evidence">
+          <CollapsibleSection
+            id="playbookEvidence"
+            title="Playbook Evidence"
+            open={expandedSections.has("playbookEvidence")}
+            onToggle={() => toggleSection("playbookEvidence")}
+          >
             <PlaybookEvidenceSection result={evidenceResult} />
-          </Panel>
+          </CollapsibleSection>
         </section>
       </main>
     </div>

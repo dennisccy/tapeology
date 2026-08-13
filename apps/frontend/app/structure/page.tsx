@@ -10,6 +10,7 @@ import {
   fetchEdgeReport,
   fetchEdgeReportCompute,
   fetchDeskPlaybook,
+  fetchDeskPlaybookContext,
   fetchLevels,
   fetchPnlLedger,
   fetchProfiles,
@@ -40,13 +41,18 @@ import type {
   Strategy,
   StrategiesPayload,
   TradabilityBand,
+  DeskPlaybookContext,
   DeskPlaybookReadResult,
 } from "@/lib/types";
 import { MAX_LOADED_BARS, useBarWindow } from "@/lib/useBarWindow";
 import { useRecordedSeries } from "@/lib/useRecordedSeries";
 import { useTradability } from "@/lib/useTradability";
 import { boundaryTs, pickRepresentativeSeries, timeframesInOrder } from "@/lib/timeframes";
-import { playbookSignalKey } from "@/lib/playbook";
+import {
+  playbookContextIndex,
+  playbookSignalContextKey,
+  playbookSignalKey,
+} from "@/lib/playbook";
 import { playbookSignalShapes } from "@/lib/playbookShapes";
 import {
   formatDateET,
@@ -1433,6 +1439,9 @@ function StructurePageContent() {
     signalKey: string;
     timeframe: string;
   } | null>(null);
+  // The drilled-in record's served band context (spec §6) — the caption under the shape names the
+  // very band this chart already draws, because both come from the same map at the same basis.
+  const [playbookContext, setPlaybookContext] = useState<DeskPlaybookContext | null>(null);
   const [playbookState, setPlaybookState] = useState<LoadState<DeskPlaybookReadResult>>({
     phase: "idle",
   });
@@ -1765,13 +1774,21 @@ function StructurePageContent() {
     playbookRequestedForRef.current = playbookRef.playbookId;
     let alive = true;
     setPlaybookState({ phase: "loading" });
-    fetchDeskPlaybook({ id: playbookRef.playbookId }).then((result) => {
+    // The band context (docs/playbook-detector-spec.md §6) rides this SAME by-id read, chained
+    // rather than given an effect of its own: it is keyed by the record just resolved, and the
+    // chart below already draws that session's bands, so the caption and the bands it describes
+    // arrive together or not at all.
+    setPlaybookContext(null);
+    fetchDeskPlaybook({ id: playbookRef.playbookId }).then(async (result) => {
       if (!alive) return;
       setPlaybookState(
         result.ok && result.data
           ? { phase: "ready", data: result.data }
           : { phase: "error", message: result.error ?? "The playbook record could not be loaded." },
       );
+      if (!result.ok || !result.data) return;
+      const context = await fetchDeskPlaybookContext({ id: playbookRef.playbookId });
+      if (alive) setPlaybookContext(context.ok ? context.data : null);
     });
     return () => {
       alive = false;
@@ -2102,6 +2119,14 @@ function StructurePageContent() {
     [playbookShapeResult],
   );
   const playbookFocusRange = playbookShapeResult?.span ?? undefined;
+  // Paired by the signal's own identity, never by position. Suppressed on a symbol mismatch for the
+  // same reason the outline is: a location belonging to another instrument would look plausible.
+  const playbookBandContext =
+    playbookSignal !== null && !playbookSymbolMismatch
+      ? (playbookContextIndex(playbookContext).get(
+          playbookSignalContextKey(playbookSignal),
+        ) ?? null)
+      : null;
   // The detector ran on `tf`; this chart may be drawing something else, because the symbol has no
   // series at that timeframe. The outline is still geometrically CORRECT (its anchors are absolute
   // instants, not bar indices) — just drawn against coarser candles — so it is still drawn, and
@@ -2396,6 +2421,14 @@ function StructurePageContent() {
                               {item.label}
                             </span>
                           ))}
+                        </p>
+                      )}
+                      {playbookBandContext !== null && (
+                        <p
+                          data-testid="structure-playbook-band-context"
+                          className="mt-1 text-[11px] text-slate-400"
+                        >
+                          {playbookBandContext.caption}
                         </p>
                       )}
                       {playbookShapeResult?.note && (

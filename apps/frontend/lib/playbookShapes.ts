@@ -7,6 +7,7 @@ import type {
 import type { ChartShapeSpec } from "./chartShapes";
 import { chartShapeTimeSpan } from "./chartShapes";
 import { playbookSetupLabel } from "./playbook";
+import { formatTimeET } from "./datetime";
 
 // One served playbook signal in, ready-to-draw display specs out.
 //
@@ -132,7 +133,15 @@ function commonMarks(signal: DeskPlaybookSignal, triggerTs: number | null): Char
   if (triggerTs !== null && triggerPrice !== null) {
     marks.push({
       kind: "dot", time: triggerTs, price: triggerPrice, color: SHAPE_TRIGGER, radius: 5,
-      label: "trigger",
+      // The entry MOMENT, named on the chart itself. Until this carried a time the chart said
+      // where a setup fired but never when -- the reader had to hold the desk row's own
+      // "trigger (ET)" cell in their head while looking at the candles.
+      //
+      // `triggerTs` is epoch SECONDS (it is `anchors.trigger.ts`, the same key the candle rows are
+      // served under); `formatTimeET` takes milliseconds. The chart's own axis and crosshair are
+      // already on this exact formatter, so the label cannot disagree with the ticks beneath it.
+      // Time only, no date: the whole chart is one session and the date is already on screen.
+      label: `entry ${formatTimeET(triggerTs * 1000)} ET`,
     });
   }
   const entry = finite(signal.entry);
@@ -266,7 +275,12 @@ function legendFor(shapes: readonly ChartShapeSpec[]): PlaybookShapeLegendItem[]
     if (shape.kind === "box" || shape.kind === "polyline") add(SHAPE_OUTLINE, "formation");
     else if (shape.kind === "segment") add(SHAPE_OUTLINE, shape.label ?? "formation");
     else if (shape.kind === "dot") {
-      add(shape.color, shape.color === SHAPE_TRIGGER ? "trigger" : "pivot / touch");
+      // The trigger dot renders its OWN label here, so the entry time appears in the legend's
+      // readable HTML as well as on the canvas. Canvas text cannot be asserted by a browser pass
+      // and cannot be selected by a reader; one source feeding both is what keeps the two from
+      // ever disagreeing about when the setup fired.
+      if (shape.color === SHAPE_TRIGGER) add(shape.color, shape.label ?? "trigger");
+      else add(shape.color, "pivot / touch");
     } else if (shape.kind === "level") add(shape.color, shape.label ?? "level");
   }
   return items;

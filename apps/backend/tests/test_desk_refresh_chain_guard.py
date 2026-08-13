@@ -865,7 +865,11 @@ def test_the_interception_guard_is_not_vacuous_and_can_fail():
     """It found real pinned texts and real rendered literals, and it catches a seeded collision."""
     pinned = _golden_pinned_texts()
     assert len(pinned) > 20, f"only {len(pinned)} pinned golden texts parsed -- the scan is broken"
-    assert "Top-up Runs" in pinned and "coverage" in pinned
+    # Sample needles from the desk session. These were "Top-up Runs" and "Index Reconciliation"
+    # until those sections were suppressed and no golden pinned them any more -- so the samples
+    # moved to section headings that still render. Only the SAMPLES changed; the guard above still
+    # scans every pinned text there is.
+    assert "Screen History" in pinned and "coverage" in pinned
     # One needle from EACH scanned directory, so a dropped/renamed dir fails loudly here rather
     # than silently shrinking the scan back to the desk session's own goldens.
     assert "Backscan" in pinned and "Run Playbook" in pinned, (
@@ -874,5 +878,5 @@ def test_the_interception_guard_is_not_vacuous_and_can_fail():
     )
     literals = _rendered_literals(_DESK_PAGE.read_text())
     assert len(literals) > 10, f"only {len(literals)} rendered literals found -- the scan is broken"
-    seeded = "Index Reconciliation finished"
+    seeded = "Screen History refreshed"
     assert any(needle.lower() in seeded.lower() for needle in pinned)

@@ -9,12 +9,70 @@
     "This script stays DELIBERATELY READ-ONLY (goto + expect only, no click) per the iter-4 lessons.md 'a golden script can be a write path' entry: it never clicks 'Reconcile Index' or 'Run Screen', so replay never mutates whichever backend/.data store is live at replay time. It asserts only structural/label text (the section heading, a fixed column header, a fixed detail label) that stays true regardless of how many further reconcile runs happen on whatever rig replay targets -- never an exact run id, count, or drift number, all of which are expected to keep changing.",
     "Step 1's expected text 'Index Reconciliation' is the section's own Panel title -- a structural heading that renders unconditionally regardless of run state (apps/frontend/app/desk/page.tsx's ReconciliationSection three-state wrapper always renders inside this Panel).",
     "Steps 2/3 assert fixed labels ('state' column header, 'series on disk' label) that are present once at least one run is recorded -- true on this specific rig from this dispatch onward, and structurally true on any other rig once its own first run lands.",
-    "Step 4 is a post-match liveness check (this era's iter-4/iter-5 lesson): a further /desk navigation AFTER the key text matches, proving the page is still alive and rendering correctly, not merely that the match happened a moment before a crash."
+    "Step 4 is a post-match liveness check (this era's iter-4/iter-5 lesson): a further /desk navigation AFTER the key text matches, proving the page is still alive and rendering correctly, not merely that the match happened a moment before a crash.",
+    "UPDATED (desk section collapse) by developer: six /desk sections now render COLLAPSED -- Screen Runs, Screen Comparison, Provenance, Index Reconciliation, Top-up Runs and Playbook Evidence are on the page and named, but closed by default, and each one's own GET is deferred until its first expand. Their headings stay VISIBLE while closed, so a step that pins a section TITLE still resolves untouched; only a step reading a section's CONTENTS needs the expand click inserted before it, because the replay runner resolves every target with state=\"visible\". This is a deliberate product-shape change, not a regression."
   ],
   "steps": [
-    {"n": 1, "journey": "J-10", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Index Reconciliation"}},
-    {"n": 2, "journey": "J-10", "action": {"type": "expect", "target": {"testid": "desk-reconcile-runs-table"}}, "expect": {"text": "state"}, "timeout_ms": 10000},
-    {"n": 3, "journey": "J-10", "action": {"type": "expect", "target": {"testid": "desk-reconcile-run-latest-detail"}}, "expect": {"text": "series on disk"}, "timeout_ms": 10000},
-    {"n": 4, "journey": "J-10", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}}
+    {
+      "n": 1,
+      "journey": "J-10",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Index Reconciliation"
+      }
+    },
+    {
+      "n": 2,
+      "journey": "J-10",
+      "action": {
+        "type": "click",
+        "target": {
+          "testid": "desk-section-expand-indexReconciliation"
+        }
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 3,
+      "journey": "J-10",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-reconcile-runs-table"
+        }
+      },
+      "expect": {
+        "text": "state"
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 4,
+      "journey": "J-10",
+      "action": {
+        "type": "expect",
+        "target": {
+          "testid": "desk-reconcile-run-latest-detail"
+        }
+      },
+      "expect": {
+        "text": "series on disk"
+      },
+      "timeout_ms": 10000
+    },
+    {
+      "n": 5,
+      "journey": "J-10",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    }
   ]
 }
