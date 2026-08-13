@@ -8346,6 +8346,11 @@ export default function DeskPage() {
       if (historyFetchTokenRef.current !== token) return;
       if (result.ok && result.data !== null) {
         setViewingSnapshot(result.data);
+        // Move the Playbook section to the SAME session. Clicking a day on the calendar is a
+        // statement about which session the desk is looking at, and leaving the playbook on a
+        // different date would put two sessions on one page under one date heading. The screen's
+        // own served `screen_date` is used verbatim — the page derives no date of its own.
+        setPlaybookDateInput(result.data.screen_date);
         return;
       }
       setHistoryFetchError(
@@ -8366,6 +8371,10 @@ export default function DeskPage() {
     setPendingHistoryId(null);
     setViewingSnapshot(null);
     setHistoryFetchError(null);
+    // The inverse of the calendar click above: reverting the screen to Latest releases the Playbook
+    // back to its own blank default (the most recent recorded session) rather than stranding it on
+    // whichever historical day was last clicked.
+    setPlaybookDateInput("");
   }
 
   const screenControlProps: ScreenControlProps = {

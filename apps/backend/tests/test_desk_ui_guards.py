@@ -1448,3 +1448,32 @@ def test_the_structure_drill_in_captions_the_served_band_context():
     source = (_FRONTEND_ROOT / "app" / "structure" / "page.tsx").read_text()
     assert 'data-testid="structure-playbook-band-context"' in source
     assert "{playbookBandContext.caption}" in source
+
+
+# --- Screen History <-> Playbook Signals session linkage --------------------------------------------
+# Clicking a day on the calendar is a statement about which session the desk is looking at. If the
+# Playbook section kept its own date, the page would show two different sessions at once under one
+# heading -- the kind of quiet incoherence that makes a reader trust the wrong numbers.
+
+
+def test_selecting_a_history_day_moves_the_playbook_to_that_session():
+    """The calendar click sets the Playbook's session date from the screen's OWN served
+    `screen_date` -- never a date the page derived for itself."""
+    source = _DESK_PAGE.read_text()
+    assert "setPlaybookDateInput(result.data.screen_date);" in source
+
+
+def test_reverting_to_the_latest_screen_releases_the_playbook_date():
+    """The inverse: going back to Latest must not strand the Playbook on whichever historical day
+    was last clicked. Blank is the section's own honest default (the newest recorded session)."""
+    source = _DESK_PAGE.read_text()
+    show_latest = source[source.index("function handleShowLatest()") :]
+    show_latest = show_latest[: show_latest.index("\n  }")]
+    assert 'setPlaybookDateInput("")' in show_latest
+
+
+def test_the_linkage_guard_can_fail_on_a_seeded_violation():
+    """Non-vacuous: a `handleShowLatest` that only reverts the snapshot is caught."""
+    seeded = 'function handleShowLatest() {\n    setViewingSnapshot(null);\n  }\n'
+    body = seeded[: seeded.index("\n  }")]
+    assert 'setPlaybookDateInput("")' not in body
