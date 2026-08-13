@@ -629,6 +629,9 @@ async def test_desk_playbook_evidence_tool_byte_identical_on_the_honest_empty_st
     payload = rest.json()
     assert set(payload) == {
         "signature", "cells", "invalidation_breached", "other_signatures", "basis", "parameters",
+        # The read-side band-context split (at_band vs away_from_band) rides the SAME payload and
+        # therefore the same byte-identity contract -- an additive key, never a new tool.
+        "band_context",
         "register",
     }
     assert payload["other_signatures"] == []
@@ -736,6 +739,9 @@ async def test_desk_playbook_evidence_tool_byte_identical_on_a_populated_state(m
     payload = rest.json()
     assert set(payload) == {
         "signature", "cells", "invalidation_breached", "other_signatures", "basis", "parameters",
+        # The read-side band-context split (at_band vs away_from_band) rides the SAME payload and
+        # therefore the same byte-identity contract -- an additive key, never a new tool.
+        "band_context",
         "register",
     }
     assert len(payload["other_signatures"]) >= 2, "both arbitrary-signature records must surface here"

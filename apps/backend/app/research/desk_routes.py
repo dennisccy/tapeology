@@ -133,6 +133,12 @@ from .desk_playbook_backscan import (
     resolve_desk_playbook_backscan_log_dir,
 )
 from .desk_playbook_compute import DeskPlaybookComputeManager
+from .desk_playbook_context import (
+    BandMapResolver,
+    PlaybookContextCache,
+    context_for_record,
+    resolve_playbook_context_cache_db_path,
+)
 from .desk_playbook_evidence import PlaybookEvidenceCache, fold_evidence, inspect_signature
 from .desk_playbook_log import PlaybookRunStore, resolve_desk_playbook_log_dir
 from .desk_screen import ScreenStore, resolve_desk_screen_dir
@@ -1305,6 +1311,17 @@ def playbook_evidence_cache_db_path() -> str:
     return os.path.join(os.path.dirname(playbook_dir), "playbook_evidence_cache.db")
 
 
+def get_playbook_context_cache() -> PlaybookContextCache | None:
+    """The durable per-record band-context cache — the ``get_playbook_evidence_cache`` dependency
+    shape verbatim, including its "an unopenable DB is a missing optimisation, never a failed read"
+    rule. A derived path, never a ``Config`` field, so ``config_fingerprint`` stays frozen."""
+    try:
+        playbook_dir = resolve_desk_playbook_dir(CONFIG.desk_universe_dir_resolved())
+        return PlaybookContextCache(resolve_playbook_context_cache_db_path(playbook_dir))
+    except sqlite3.Error:
+        return None
+
+
 def get_playbook_evidence_cache() -> PlaybookEvidenceCache | None:
     """The evidence projection cache — a FastAPI dependency so a test overrides it outright via
     ``app.dependency_overrides``. An unopenable DB (a bad path, a locked/corrupt file) is a missing
@@ -1324,6 +1341,7 @@ def get_desk_playbook_evidence(
     bar_store: BarStore = Depends(get_bar_store),
     playbook_store: PlaybookStore = Depends(get_playbook_store),
     cache: PlaybookEvidenceCache | None = Depends(get_playbook_evidence_cache),
+    context_cache: PlaybookContextCache | None = Depends(get_playbook_context_cache),
 ) -> dict:
     """Two shapes, selected by ``?signature=`` (the ``GET /research/desk/playbook`` ``?date=``/
     ``?id=`` convention):
@@ -1347,8 +1365,56 @@ def get_desk_playbook_evidence(
     records, _errors = universe_store.list()
     members = list(records[-1]["members"]) if records else []
     return fold_evidence(
-        playbook_store, bar_store, members, CONFIG.config_fingerprint(), cache=cache
+        playbook_store,
+        bar_store,
+        members,
+        CONFIG.config_fingerprint(),
+        cache=cache,
+        context_cache=context_cache,
+        config=CONFIG,
     )
+
+
+# --- The Playbook band-context lens — every recorded signal's location relative to the desk's own
+# tradable band map, joined READ-SIDE at serve time (the recorded file is never rewritten, and
+# `compute_playbook` still makes zero structural calls). See desk_playbook_context.py for the
+# geometry/attribution/cache mechanics this route only wires up. -------------------------------------
+
+
+@router.get("/playbook/context")
+def get_desk_playbook_context(
+    id: str = Query(...),
+    bar_store: BarStore = Depends(get_bar_store),
+    playbook_store: PlaybookStore = Depends(get_playbook_store),
+    cache: PlaybookContextCache | None = Depends(get_playbook_context_cache),
+) -> dict:
+    """One recorded playbook record's signals and baseline anchors, each joined to the desk's own
+    tradable band map at that event's own session basis — ``{"context": {...}}``, or
+    ``{"context": null}`` for an id nothing recorded (the ``?id=`` honest-null convention this
+    module's sibling reads already use, never a 404).
+
+    A plain read that DERIVES, never records: no playbook file is written, read back differently,
+    or superseded by this call, and the record's own ``GET /research/desk/playbook`` body stays
+    byte-identical (that route is pinned verbatim by its own test — which is exactly why band
+    context is served here, beside it, rather than decorated onto it).
+
+    GET-never-computes, and here that rule is load-bearing rather than ceremonial: a tradable map
+    absent from the durable cache is served as the honest ``not_computed`` bucket instead of being
+    computed inline, because computing one costs ~0.1-2.6s and a page that silently paid that per
+    symbol would hang a kept surface. ``python -m app.research.desk_playbook_context --warm`` is
+    the explicit operator act that fills the cache."""
+    record = playbook_store.get(id)
+    if record is None:
+        return {"context": None}
+    path = playbook_store.root / f"{id}.json"
+    try:
+        stat = path.stat()
+    except OSError:
+        return {"context": None}
+    resolver = BandMapResolver(bar_store, CONFIG)
+    return {
+        "context": context_for_record(record, stat.st_size, stat.st_mtime_ns, resolver, cache)
+    }
 
 
 # --- Coverage-index reconciliation (J-10, goal-desk-iter-14) — a trigger/poll/cancel trio mirroring

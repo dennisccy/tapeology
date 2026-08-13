@@ -251,11 +251,11 @@ def test_a_cell_with_zero_recorded_signals_is_served_as_n0_not_omitted(store, ba
         if c["setup_id"] == "open_high_break" and c["side"] == "long" and c["measure"] == "1h"
     )
     assert cell["signal"] == {
-        "n": 0, "n_truncated": 0, "n_unmeasured": 0, "n_sessions": 0,
+        "n": 0, "n_positive": 0, "n_truncated": 0, "n_unmeasured": 0, "n_sessions": 0,
         "median_pct": None, "p25_pct": None, "p75_pct": None, "mean_pct": None,
     }
     assert cell["baseline"] == {
-        "n_baseline": 0, "n_truncated": 0, "n_unmeasured": 0, "n_sessions": 0,
+        "n_baseline": 0, "n_positive": 0, "n_truncated": 0, "n_unmeasured": 0, "n_sessions": 0,
         "median_pct": None, "p25_pct": None, "p75_pct": None, "mean_pct": None,
     }
     assert cell["below_min_n"] is True

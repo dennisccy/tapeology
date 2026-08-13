@@ -429,3 +429,109 @@ back-scan — validation may DEMOTE a detector in a named revision, never tune c
 | `capitulation` | 0–3 | Rare on calm S&P100 5m; clusters on news days — low n expected, disclosed |
 | `euphoria` (marker) | 0–3 | Marker only, never measured |
 | `cup_handle` | 0–2 | Rarest; exercises every primitive |
+
+---
+
+## 6. Band context — the read-side location lens (never part of a record or its signature)
+
+Joins every ALREADY-RECORDED signal (and every baseline anchor drawn beside one) to the desk's own
+tradable band map (`tradability.compute_tradability`, frozen) at that event's own session basis, at
+**serve time only**. Nothing here re-detects, re-measures, or writes back: no recorded file is
+modified by reading it, and every signal recorded before this lens existed carries band context the
+moment it ships.
+
+Three separations make that safe, and all three are guard-tested:
+
+1. **`compute_playbook` still makes zero `compute_tradability`/`compute_levels` calls.** The lens is
+   a different module the walk never reaches (`test_desk_playbook_guards.py`'s TC-7 stays green
+   unchanged; `test_desk_playbook_context.py` adds the structural import-direction companion).
+2. **These constants are deliberately NOT in `playbook_parameters()`.** Adding them would move
+   `playbook_input_signature` and orphan the whole recorded corpus from its own evidence pool. They
+   are versioned separately and served in the payload's own `parameters` block.
+3. **Serving never computes.** One map costs ~0.1–2.6s and the corpus spans ~1,800 distinct
+   (symbol, basis session) pairs, so every read path is lookup-only against the durable tradability
+   cache; `python -m app.research.desk_playbook_context --warm` is the explicit operator act.
+
+### Pre-registered constants
+
+| Constant | Value | Class | Source |
+|---|---|---|---|
+| `PLAYBOOK_CONTEXT_NEAR_BAND_BPS` | 70.0 | **ADAPTATION** | One band-width. The desk already calls `tradability_band_width_bps` (default 70.0) "one wall" when it CLUSTERS levels into a band; this is that same tolerance read outward. Echoed as a module constant and never read from `Config` — a config tweak must not silently re-bucket already-served evidence, and this lens adds zero `Config` fields. |
+
+Structural (shape, not thresholds): `PLAYBOOK_CONTEXT_ALGORITHM_VERSION = "playbook-band-context-v1"`,
+`PLAYBOOK_CONTEXT_DISTANCE_FROM = "entry"`,
+`PLAYBOOK_CONTEXT_BUCKETS = (at_band, away_from_band, no_band_context, not_computed)`,
+`PLAYBOOK_CONTEXT_COMPARISON_BUCKETS = (at_band, away_from_band)`.
+
+**No sweep exists here.** The one tunable is the single row above; changing it is a named revision
+that re-keys every cached context (the algorithm version moves with it) and never rewrites a record.
+
+### Distance
+
+From the signal's own recorded **`entry`** (an anchor's `entry_price`) — the price every forward
+measurement starts from, and the one field signals and anchors both carry, so the lens is identical
+on both sides of the comparison — to the **nearest edge of the nearest band**, in bps of that price.
+
+* A price **inside** a band is **0.0 bps**, a real measured zero. Distance is served **unsigned**
+  beside `position` (`inside` / `above_band` / `below_band`): two plain facts rather than one
+  encoded one.
+* The nearest band is chosen across **both sides** and **all classes, `null` included** — class is a
+  quality projection inherited from the zone engine, never a test of whether a band exists.
+  Ties break `(distance asc, class rank desc, quality_score desc, price_low asc)`.
+* `side_relation` is `aligned` when the event's side and the band's side agree in thesis (long at
+  support, short at resistance), else `opposed`. An anchor is given its **pool's** side — the side
+  its own recorded measurement sign already used — so both columns of the comparison read the same
+  way.
+
+### The map's as-of
+
+The event's own recorded instant (`trigger_ts` for a signal, `at_utc` for an anchor). `basis_day_key`
+collapses every instant of one UTC session date onto the identical prior-completed-daily basis, so
+this is byte-the-same map the `/structure` drill-in chart already draws under the setup's shape —
+the caption and the chart are mechanically incapable of disagreeing.
+
+### The four buckets, and why two of them are separate
+
+| Bucket | Meaning |
+|---|---|
+| `at_band` | distance ≤ 70.0 bps (**inclusive**) of a band edge |
+| `away_from_band` | distance > 70.0 bps |
+| `no_band_context` | a map WAS resolved and puts no band near this price — or the event cannot be located at all (no recorded price/instant, or an anchor that could not be attributed) |
+| `not_computed` | the map for this (symbol, basis session) has not been computed yet |
+
+`no_band_context` and `not_computed` are never conflated: the first is a measured absence of
+structure, the second is an absence of work. Conflating them would let an un-warmed cache
+masquerade as evidence that setups fire away from walls.
+
+### Baseline-anchor attribution — positional, then verified
+
+A recorded anchor carries no symbol of its own. `compute_playbook` appends exactly one anchor per
+in-cap signal, in walk order, into that signal's own pool, so `baseline_anchors[pool][i]` belongs to
+the i-th in-cap signal of that pool. The lens does not merely assume this: it attributes positionally
+and then **checks the anchor's own recorded `close_price` against that signal's
+`forward.close_price`** — both were measured on the same symbol's same session series, so they must
+agree. Any pool whose counts or close prices disagree attributes **every** one of its anchors `None`
+(a partial attribution inside one pool is the one shape that could pair an anchor with the wrong
+symbol's wall) and is counted as `n_anchors_unattributable`. Verified across the whole recorded
+corpus at authoring time: 234 pools, 1,790 anchors, zero disagreements.
+
+### `n_positive` (evidence cells)
+
+The count of pooled **untruncated** side-relative returns **strictly greater than zero**, over the
+same value list the cell's own median and mean are computed from — so "positive: k of n" and
+"median of n" always describe one pool. The five directional measures only (`1m`, `5m`, `1h`, `4h`,
+`to_close`); **`null`** on the ten `mdd_*` measures, which are clamped ≤ 0 by construction so
+"greater than zero" is not a fact they can carry. A recorded `0.0` is a real measured "went nowhere"
+and is not counted in either direction.
+
+It is a **count of recorded outcomes**, not a probability, an expectancy, or a claim about any
+future signal.
+
+### The evidence split
+
+The comparison axis is the declared pair `at_band` / `away_from_band`, served as the full cross
+product setups × sides × measures × buckets, every cell present even at `n: 0`, `below_min_n`
+tagging a thin cell and never filtering it. The two absence buckets are **exclusions**, counted in
+the split's own `basis` block exactly the way `n_truncated`/`n_unmeasured` are counted beside every
+cell — a distribution over "this is not known" would describe nothing, but how much is not known
+must be visible.

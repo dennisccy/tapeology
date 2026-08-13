@@ -74,14 +74,32 @@ from .desk_playbook import (
     compute_playbook_input_signature,
     playbook_parameters,
 )
+# Read-side -> read-side only. This module reads the band-context LENS; the lens never reads this
+# module (no cycle), and neither is reachable from `compute_playbook`'s own walk.
+from .desk_playbook_context import (
+    CONTEXT_REGISTER,
+    NO_BAND_CONTEXT,
+    PLAYBOOK_CONTEXT_BUCKETS,
+    PLAYBOOK_CONTEXT_COMPARISON_BUCKETS,
+    BandMapResolver,
+    PlaybookContextCache,
+    cached_context,
+    context_parameters,
+    record_map_requests,
+)
 
 __all__ = [
     "EVIDENCE_REGISTER",
     "EVIDENCE_TABLE",
     "PlaybookEvidenceCache",
+    "fold_band_context",
     "fold_evidence",
     "inspect_signature",
 ]
+
+# The projection shape version -- bumped when a projection gains FIELDS a fold needs. A cached row
+# at an older version is a miss (see `_projections_by_signature`), never a partial hit.
+_PROJECTION_VERSION = 2
 
 # Every side a signal can carry (``desk_playbook_detect.py``'s own complete vocabulary) -- a fixed,
 # declared pair, never discovered from data (see the module docstring: cells are the full cross
@@ -214,9 +232,16 @@ def _file_projection(record: dict) -> dict:
             if breached[horizon]:
                 cell["breached"] += 1
     return {
+        # v2 (band context): adds `playbook_id` + `map_requests` — the key material the band-context
+        # cache needs to answer WITHOUT re-reading this file. A row cached at v1 lacks both and is
+        # treated as a miss by `_projections_by_signature`, then re-extracted and replaced under the
+        # same stat key; nothing is served from a v1 row and nothing about the v1 numbers changes.
+        "projection_version": 2,
+        "playbook_id": record["id"],
         "playbook_input_signature": record["playbook_input_signature"],
         "session_date": record["session_date"],
         "recorded_at": record["recorded_at"],
+        "map_requests": record_map_requests(record),
         "signal_events": signal_events,
         "baseline_events": {
             key: list(events) for key, events in record.get("baseline_anchors", {}).items()
@@ -246,7 +271,10 @@ def _projections_by_signature(
             continue
         key = str(path)
         cached = cache.lookup(key, stat.st_size, stat.st_mtime_ns) if cache is not None else None
-        if cached is not None:
+        # A row written before the projection grew its band-context key material is an honest MISS,
+        # never a partial hit: re-extraction is cheap, and serving a v1 row would leave the split
+        # unable to name the maps it was built from.
+        if cached is not None and cached.get("projection_version") == _PROJECTION_VERSION:
             projections.append(cached)
             continue
         record = store.get(path.stem)
@@ -257,6 +285,23 @@ def _projections_by_signature(
             cache.insert(key, stat.st_size, stat.st_mtime_ns, projection)
         projections.append(projection)
     return projections
+
+
+def _path_stats(store: PlaybookStore) -> dict[str, tuple[int, int]]:
+    """``{playbook_id: (size, mtime_ns)}`` for every recorded file — a ``glob`` plus one ``stat``
+    each, zero file CONTENT read. The band-context cache keys each record's context on its file
+    identity, and this is how a fold names that identity without undoing the projection cache's own
+    reason for existing."""
+    if not store.root.exists():
+        return {}
+    stats: dict[str, tuple[int, int]] = {}
+    for path in sorted(store.root.glob("*.json")):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        stats[path.stem] = (stat.st_size, stat.st_mtime_ns)
+    return stats
 
 
 # --- the quartile fold (new evidence-only math -- see the module docstring) -------------------------
@@ -279,10 +324,32 @@ def _quartile_stats(values: list[float]) -> tuple[float | None, float | None, fl
     return statistics.median(values), p25, p75, statistics.mean(values)
 
 
-def _signal_cell(values: list[float], n_truncated: int, n_unmeasured: int, n_sessions: int) -> dict:
+def _n_positive_for(measure: str, values: list[float]) -> int | None:
+    """How many of this cell's OWN pooled values are strictly greater than zero — counted over the
+    exact same untruncated list ``_quartile_stats`` medians and means, so "positive: 14 of 20" and
+    "median of 20" always describe one pool, never two.
+
+    Only the five DIRECTIONAL measures carry it (the four horizon returns and ``to_close``). A
+    return is side-relative — ``desk_forward``'s own sign convention makes a positive number mean
+    price moved the way the setup's own side implied — so this is a plain count of recorded moves
+    in that direction, arithmetic over values already on disk.
+
+    ``None`` for the ten ``mdd_*`` measures: a drawdown is clamped ``<= 0`` by construction, so
+    "greater than zero" is not a fact those measures can carry, and serving ``0`` there would read
+    as a measured absence of something rather than the category error it is. Strictly ``> 0``: a
+    recorded ``0.0`` (a real measured "went nowhere") is not counted as a move in either direction."""
+    if measure.startswith("mdd_"):
+        return None
+    return sum(1 for value in values if value > 0.0)
+
+
+def _signal_cell(
+    measure: str, values: list[float], n_truncated: int, n_unmeasured: int, n_sessions: int
+) -> dict:
     median, p25, p75, mean = _quartile_stats(values)
     return {
         "n": len(values),
+        "n_positive": _n_positive_for(measure, values),
         "n_truncated": n_truncated,
         "n_unmeasured": n_unmeasured,
         "n_sessions": n_sessions,
@@ -293,10 +360,13 @@ def _signal_cell(values: list[float], n_truncated: int, n_unmeasured: int, n_ses
     }
 
 
-def _baseline_cell(values: list[float], n_truncated: int, n_unmeasured: int, n_sessions: int) -> dict:
+def _baseline_cell(
+    measure: str, values: list[float], n_truncated: int, n_unmeasured: int, n_sessions: int
+) -> dict:
     median, p25, p75, mean = _quartile_stats(values)
     return {
         "n_baseline": len(values),
+        "n_positive": _n_positive_for(measure, values),
         "n_truncated": n_truncated,
         "n_unmeasured": n_unmeasured,
         "n_sessions": n_sessions,
@@ -404,6 +474,7 @@ def _fold_cells(default_projections: list[dict]) -> list[dict]:
                 signal_values, n_truncated = signal_pools[measure]
                 baseline_values, baseline_truncated = baseline_pools[measure]
                 signal_block = _signal_cell(
+                    measure,
                     signal_values,
                     n_truncated,
                     _n_unmeasured_for(measure, signal_unmeasured),
@@ -416,6 +487,7 @@ def _fold_cells(default_projections: list[dict]) -> list[dict]:
                         "measure": measure,
                         "signal": signal_block,
                         "baseline": _baseline_cell(
+                            measure,
                             baseline_values,
                             baseline_truncated,
                             _n_unmeasured_for(measure, baseline_unmeasured),
@@ -425,6 +497,137 @@ def _fold_cells(default_projections: list[dict]) -> list[dict]:
                     }
                 )
     return cells
+
+
+def _bucketed_events(projection: dict, context: dict | None) -> tuple[dict, dict, dict]:
+    """This record's own signal and baseline events REGROUPED by band-context bucket, plus the
+    bucket counts behind that regrouping.
+
+    Alignment: ``_file_projection`` appends a pool's events in record order (skipping a signal with
+    no ``forward``), and ``record_band_context`` walks the same record in the same order tagging
+    each signal ``measured`` — so filtering the context's signals to ``measured`` and grouping by
+    ``pool_key`` reproduces exactly the projection's own per-pool ordering. That correspondence is
+    checked, not trusted: any pool whose two lengths disagree contributes its events as
+    ``no_band_context`` rather than risking a mispaired bucket."""
+    signal_out: dict[tuple[str, str], list[dict]] = {}
+    baseline_out: dict[tuple[str, str], list[dict]] = {}
+    counts = {bucket: 0 for bucket in PLAYBOOK_CONTEXT_BUCKETS}
+    anchor_counts = {bucket: 0 for bucket in PLAYBOOK_CONTEXT_BUCKETS}
+
+    context_buckets: dict[str, list[str]] = {}
+    anchor_buckets: dict[str, list[str]] = {}
+    if context:
+        for signal in context.get("signals", []):
+            if signal.get("measured"):
+                context_buckets.setdefault(signal["pool_key"], []).append(
+                    signal["band_context"]["bucket"]
+                )
+        for pool_key, rows in (context.get("baseline_anchors") or {}).items():
+            anchor_buckets[pool_key] = [row["band_context"]["bucket"] for row in rows]
+
+    for pool_key, events in projection["signal_events"].items():
+        buckets = context_buckets.get(pool_key)
+        if buckets is None or len(buckets) != len(events):
+            buckets = [NO_BAND_CONTEXT] * len(events)
+        for event, bucket in zip(events, buckets):
+            counts[bucket] += 1
+            signal_out.setdefault((pool_key, bucket), []).append(event)
+    for pool_key, events in projection["baseline_events"].items():
+        buckets = anchor_buckets.get(pool_key)
+        if buckets is None or len(buckets) != len(events):
+            buckets = [NO_BAND_CONTEXT] * len(events)
+        for event, bucket in zip(events, buckets):
+            anchor_counts[bucket] += 1
+            baseline_out.setdefault((pool_key, bucket), []).append(event)
+    return signal_out, baseline_out, {"signals": counts, "anchors": anchor_counts}
+
+
+def fold_band_context(
+    default_projections: list[dict],
+    contexts_by_id: dict[str, dict],
+) -> dict:
+    """The at-band vs away-from-band split: the SAME cells, the SAME builders, the SAME pooling
+    rules as the unsplit table, computed once more per declared comparison bucket.
+
+    The comparison axis is the DECLARED pair ``PLAYBOOK_CONTEXT_COMPARISON_BUCKETS`` — the two
+    buckets that name a measured location — as the full cross product setups x sides x measures x
+    buckets, every cell served even at ``n: 0``. The two absence states (a map that puts no band
+    near the price; a map not computed yet) are EXCLUSIONS, counted in this block's own ``basis``
+    exactly the way ``n_truncated``/``n_unmeasured`` are counted beside every cell: a distribution
+    over "this is not known" would describe nothing, but how much is not known must be visible.
+
+    ``below_min_n`` tags a thin cell and NEVER filters it — the same floor, the same disclosure
+    rule, applied to a split whose cells are thinner than the unsplit table's by construction."""
+    signal_pools: dict[tuple[str, str], list[dict]] = {}
+    baseline_pools: dict[tuple[str, str], list[dict]] = {}
+    signal_dates: dict[tuple[str, str], set[str]] = {}
+    baseline_dates: dict[tuple[str, str], set[str]] = {}
+    basis_counts = {f"n_signals_{bucket}": 0 for bucket in PLAYBOOK_CONTEXT_BUCKETS}
+    basis_counts.update({f"n_anchors_{bucket}": 0 for bucket in PLAYBOOK_CONTEXT_BUCKETS})
+    n_unattributable = 0
+
+    for projection in default_projections:
+        context = contexts_by_id.get(projection.get("playbook_id"))
+        signal_out, baseline_out, counts = _bucketed_events(projection, context)
+        for bucket in PLAYBOOK_CONTEXT_BUCKETS:
+            basis_counts[f"n_signals_{bucket}"] += counts["signals"][bucket]
+            basis_counts[f"n_anchors_{bucket}"] += counts["anchors"][bucket]
+        if context:
+            n_unattributable += context.get("basis", {}).get("n_anchors_unattributable", 0)
+        for key, events in signal_out.items():
+            signal_pools.setdefault(key, []).extend(events)
+            signal_dates.setdefault(key, set()).add(projection["session_date"])
+        for key, events in baseline_out.items():
+            baseline_pools.setdefault(key, []).extend(events)
+            baseline_dates.setdefault(key, set()).add(projection["session_date"])
+
+    cells: list[dict] = []
+    for setup_id in PLAYBOOK_SETUPS:
+        for side in _SIDES:
+            pool_key = f"{setup_id}:{side}"
+            for bucket in PLAYBOOK_CONTEXT_COMPARISON_BUCKETS:
+                key = (pool_key, bucket)
+                signal_events = signal_pools.get(key, [])
+                baseline_events = baseline_pools.get(key, [])
+                signal_measures = _collect_measures(signal_events)
+                baseline_measures = _collect_measures(baseline_events)
+                signal_unmeasured = _n_unmeasured_by_label(signal_events)
+                baseline_unmeasured = _n_unmeasured_by_label(baseline_events)
+                n_sessions_signal = len(signal_dates.get(key, set()))
+                n_sessions_baseline = len(baseline_dates.get(key, set()))
+                for measure in PLAYBOOK_SIGNAL_MEASURES:
+                    signal_values, signal_truncated = signal_measures[measure]
+                    baseline_values, baseline_truncated = baseline_measures[measure]
+                    signal_block = _signal_cell(
+                        measure,
+                        signal_values,
+                        signal_truncated,
+                        _n_unmeasured_for(measure, signal_unmeasured),
+                        n_sessions_signal,
+                    )
+                    cells.append(
+                        {
+                            "setup_id": setup_id,
+                            "side": side,
+                            "measure": measure,
+                            "bucket": bucket,
+                            "signal": signal_block,
+                            "baseline": _baseline_cell(
+                                measure,
+                                baseline_values,
+                                baseline_truncated,
+                                _n_unmeasured_for(measure, baseline_unmeasured),
+                                n_sessions_baseline,
+                            ),
+                            "below_min_n": signal_block["n"] < PLAYBOOK_MIN_N_DISCLOSURE,
+                        }
+                    )
+    return {
+        "parameters": context_parameters(),
+        "cells": cells,
+        "basis": {**basis_counts, "n_anchors_unattributable": n_unattributable},
+        "register": CONTEXT_REGISTER,
+    }
 
 
 def _fold_invalidation_breached(default_projections: list[dict]) -> list[dict]:
@@ -488,6 +691,48 @@ def _fold_other_signatures(other_projections: list[dict]) -> list[dict]:
     return result
 
 
+def _contexts_for(
+    store: PlaybookStore,
+    default_projections: list[dict],
+    bar_store,
+    config,
+    context_cache: PlaybookContextCache | None,
+) -> dict[str, dict]:
+    """Every pooled record's band context, keyed by playbook id — served from the durable context
+    cache, and LOOKUP-ONLY throughout (``BandMapResolver`` defaults to ``compute=False``): a fold is
+    a GET path, and a GET never pays a ~1,800-map computation. A record whose context has not been
+    warmed simply contributes ``not_computed`` events, counted honestly in the split's basis.
+
+    Returns ``{}`` — an empty split rather than a broken one — if the resolver cannot even be built
+    (no bar store, an unreadable store listing): band context is an ADDITIVE disclosure, and its
+    absence must never take the evidence table down with it."""
+    if not default_projections:
+        return {}
+    try:
+        resolver = BandMapResolver(bar_store, config)
+    except Exception:  # pragma: no cover - defensive: an accelerator never breaks the read
+        return {}
+    stats = _path_stats(store)
+    contexts: dict[str, dict] = {}
+    for projection in default_projections:
+        playbook_id = projection.get("playbook_id")
+        if playbook_id is None or playbook_id not in stats:
+            continue
+        size, mtime_ns = stats[playbook_id]
+        context = cached_context(
+            playbook_id=playbook_id,
+            stat_size=size,
+            stat_mtime_ns=mtime_ns,
+            map_requests=projection.get("map_requests") or [],
+            load_record=lambda pid=playbook_id: store.get(pid),
+            resolver=resolver,
+            cache=context_cache,
+        )
+        if context:
+            contexts[playbook_id] = context
+    return contexts
+
+
 def fold_evidence(
     store: PlaybookStore,
     bar_store,
@@ -495,6 +740,8 @@ def fold_evidence(
     config_fingerprint: str,
     *,
     cache: PlaybookEvidenceCache | None = None,
+    context_cache: PlaybookContextCache | None = None,
+    config=None,
 ) -> dict:
     """The whole ``GET /research/desk/playbook/evidence`` body -- a pure fold over every recorded
     playbook file (via ``PlaybookStore``'s own verified reader, zero re-implementation), split by
@@ -511,6 +758,11 @@ def fold_evidence(
     other_projections = [
         p for p in projections if p["playbook_input_signature"] != default_signature
     ]
+    contexts = (
+        _contexts_for(store, default_projections, bar_store, config, context_cache)
+        if config is not None
+        else {}
+    )
     return {
         "signature": default_signature,
         "cells": _fold_cells(default_projections),
@@ -518,6 +770,7 @@ def fold_evidence(
         "other_signatures": _fold_other_signatures(other_projections),
         "basis": _signature_basis(default_projections),
         "parameters": playbook_parameters(),
+        "band_context": fold_band_context(default_projections, contexts),
         "register": EVIDENCE_REGISTER,
     }
 

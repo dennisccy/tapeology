@@ -1,6 +1,8 @@
 """``TradabilityCache`` — a durable, rebuildable SQLite cache of ONE row per
 (symbol x basis session x symbol store content x config content) ``compute_tradability`` result,
-read and written ONLY by the ``GET /research/tradability`` route.
+read and written by the ``GET /research/tradability`` route and by the playbook band-context lens
+(``desk_playbook_context.py``), which reuses the SAME four-part key recipe verbatim so a map warmed
+by either caller serves the other.
 
 Why: the tradable map is the /structure page's DEFAULT view, recomputed from scratch on every
 Load click. The computation itself is now ~1-2s (the vectorized ``levels.py``/``tradability.py``
@@ -14,9 +16,11 @@ THIS MODULE stores a REBUILDABLE RESULT ONLY and OWNS NOTHING — the identical
 (see those modules' own docstrings): ``tradability.compute_tradability`` stays the SOLE computer
 of a map, a cache miss always recomputes byte-identically through that ONE function, and deleting
 the persisted DB file loses nothing and fabricates nothing — the very next request simply
-recomputes and republishes. The ROUTE is the only caller: ``compute_tradability`` itself stays a
-pure function, so the backtest/setups/arm-memo paths (which have their own memo discipline) are
-structurally unaffected.
+recomputes and republishes. Both callers go through this cache rather than around it, and
+``compute_tradability`` itself stays a pure function that knows nothing about caching, so the
+backtest/setups/arm-memo paths (which have their own memo discipline) are structurally unaffected.
+The band-context lens additionally reads LOOKUP-ONLY on every serving path — a miss there is served
+as an honest "not computed yet" rather than an inline computation (see that module's docstring).
 
 **Key — four parts, sha256 of canonical JSON** (``scan_cache_key``'s explicit-literals shape —
 each component independently controllable and testable, never derived internally from an opaque
