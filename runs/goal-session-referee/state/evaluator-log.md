@@ -63,3 +63,43 @@ and strategy trades), with the small rebuildable cache the goal describes. While
 open, also write the two extra `integrity_errors` fields into the written-down response shape,
 because they are served today but not documented — the reviewer and the coherence check both
 raised this. Approve building J-02 next; nothing needs a human unblock.
+
+## Iteration 2 — goal-referee-iter-2
+
+**Date:** 2026-08-14T19:20:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-02 "The evidence contract — two families, one observation shape"
+- Newly failing: none
+- Partial: J-10 "The kept product stands" (kept-product half re-verified green by golden
+  replay with a genuinely fresh screenshot; its era-end clauses — three Referee sections and
+  22 MCP tools — still wait on J-09)
+- Regressed: none
+- Anti-goal violations: none. One out-of-scope host action recorded as a NOTE, not a
+  violation: the developer's pattern-based `pkill` also stopped an unrelated project's
+  backend (trendora, port 8255); it is still stopped and needs a person to restart it.
+
+**Reasoning:** The new work really does what it says. Every recorded trading signal and every
+recorded test trade can now be read as one shared kind of record with the same fields, so the
+later Referee parts have one foundation instead of two. I did not trust the report: I ran the
+28 new-and-existing tests for this area myself, then ran the whole suite myself (2,454
+collected, 2,446 passed, 8 skipped, none failed), and I read the new test file line by line to
+check that its expected numbers are typed by hand rather than taken from the code being tested
+— they are, including a full record-by-record comparison, a check that unmeasurable readings
+are dropped instead of filled in with a made-up value, and a before-and-after fingerprint of
+every saved file proving nothing was written. I also printed the settings pin and the detector
+name from the live code myself: both match the saved picture of the web answer exactly, so
+that picture belongs to this version of the code. The old product replayed green with a fresh
+screenshot, and the guard over the owner's saved data reports all 11,274 files unchanged. Only
+three files changed, all additions.
+
+**Next-step recommendation:** Build J-03 "The statistics core" next, alone, at full depth —
+this is the part that decides whether a pattern is real or noise, and a wrong sum there would
+pass its own tests while quietly spoiling every later verdict. Carry three small leftovers
+along with it rather than making an iteration of them: add tests for the "was this trading day
+complete" helper (currently untested and a rough estimate that cannot see gaps in the price
+data), add a test for the written-but-never-called cache path helper, and get an owner ruling
+on one spec wording — the spec says every record carries a detector name, but a strategy trade
+has none, so the code leaves it empty. Separately, outside this project: please restart
+trendora's backend on port 8255 using the command recorded in the dev handoff.

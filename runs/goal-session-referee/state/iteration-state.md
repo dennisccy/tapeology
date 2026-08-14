@@ -1,26 +1,28 @@
 # Iteration State — referee
 
-**After iteration:** 1 · **Date:** 2026-08-14 · **Verdict:** CONTINUE
+**After iteration:** 2 · **Date:** 2026-08-14 · **Verdict:** CONTINUE
 
 ## Journeys
 
-1 passing (J-01) · 8 failing (J-02..J-09 — Referee machinery still unbuilt) · 1 partial (J-10 sentinel: kept product green; its "3 Referee sections + 22 MCP tools" clauses wait on J-09) — 10 total
+2 passing (J-01, J-02) · 7 failing (J-03..J-09 — Referee machinery still unbuilt) · 1 partial (J-10 sentinel: kept product green; its "3 Referee sections + 22 MCP tools" clauses wait on J-09) — 10 total
 
 ## Active blockers
 
-- none — no credential, network, or human-owned blocker. J-02 is buildable today: keyless, backend-only, no new dependency.
+- none inside this project — J-03 is buildable today: keyless, backend-only, no new dependency.
+- OUTSIDE this project, human-owned: trendora's backend on `:8255` was killed by iter-2's pattern-based `pkill` and is still down; restart command is in `docs/handoffs/goal-referee-iter-2-dev.md`. Does not block tapeology.
 
 ## Last 2 verdicts
 
-- iter 1: CONTINUE — J-01 passes: `GET /research/desk/referee/evidence` serves honest per-family readiness (screenshot `reports/qa/goal-referee-iter-1-evidence/UT-J-01-result.png`; evaluator re-ran the 15 new tests + 156 guard tests itself); kept product replayed green. Next target: J-02 alone, lean.
-- iter 0: CONTINUE — honest baseline: 9 journeys fail (referee routes 404, no `referee_*.py`, MCP 20 tools); kept product walked green in a real browser.
+- iter 2: CONTINUE — J-02 passes: one typed observation record for both evidence families in `referee_evidence.py` + a rebuildable cache; evaluator ran the 28 referee tests and the full suite itself (2,446 pass / 8 skip) and read the hand-computed goldens line by line; kept product replayed green. Next target: J-03 alone, FULL depth.
+- iter 1: CONTINUE — J-01 passes: `GET /research/desk/referee/evidence` serves honest per-family readiness (screenshot + 15 tests re-run by the evaluator); kept product replayed green.
 
 ## Do not redo
 
-- J-01 is DONE and verified: `app/research/referee_evidence.py` + `referee_routes.py` + the route mounted in `main.py`; `tests/test_referee_evidence.py` (7) + `tests/test_referee_guards.py` (8) green. Extend it — never rebuild it; `REFEREE_FORMING_BAR_BASIS_CAVEAT` is the one caveat string J-06/J-08 must import verbatim.
-- Suite floor: era-open 2,418 pass / 8 skip; now 2,433 pass / 8 skip — never fall below.
-- Re-verified live in iter-1: fingerprint `08e471b10130e1e2`, MCP `EXPECTED_TOOLS` == 20, nav == 3 routes, store-scope guard CLEAN (11,274 files), zero diff to `desk_playbook*.py`/`desk_forward.py`/`levels.py`/`tradability.py`/`setups.py`/`pnl_scan.py`/`config.py`.
-- `state/blueprint.md` is drafted and correct (3-route IA + the 7 Era-6 Data Contract rows) — build into it, do not re-draft.
-- No golden replay script can exist for a backend-only journey (`demo_runner.py` is single-base-url); J-01 sits in `state/golden-gaps` by design — do not chase it, and expect the same for J-02..J-06/J-08.
-- Do NOT plan an iteration whose goal is J-10; it rides every iteration as the required-still-passing sentinel and closes together with J-09.
-- Open rider for whoever next touches the evidence endpoint (J-02): fold its two served `integrity_errors` keys into the documented response shape — served today, undocumented (reviewer NOTE + coherence advisory).
+- J-01 and J-02 are DONE and verified in `app/research/referee_evidence.py`: the readiness fold, `current_playbook_detector_basis()`, `_newest_per_session_date()`, the typed observation contract (`_observation`, `playbook_observations`, `strategy_observations`), `RefereeObservationCache`, `REFEREE_SESSION_COMPLETE_ET`. EXTEND, never rebuild; import these — J-03..J-09 must not re-derive the observation shape. `REFEREE_FORMING_BAR_BASIS_CAVEAT` stays the one caveat string J-06/J-08 read verbatim.
+- Both iter-1 riders are CLOSED: `integrity_errors` is documented in the pinned response shape, and the strategy adapter reuses the caveat constant by identity. Do not re-open.
+- Suite floor: now 2,446 pass / 8 skip (era-open 2,418) — never fall below.
+- Re-verified in iter-2: fingerprint `08e471b10130e1e2`, MCP `EXPECTED_TOOLS` == 20, nav == 3 routes, store-scope guard CLEAN (11,274 files), zero diff to `desk_playbook*.py`/`desk_forward.py`/`levels.py`/`tradability.py`/`setups.py`/`pnl_scan.py`/`config.py`/`main.py`.
+- Backend-only journeys get a `not_yet` golden stub (see `journey-scripts/J-01.json`, `J-02.json`) — replay SKIPs them safely. `state/golden-gaps` is gone by design; do not chase replay coverage for J-03..J-06/J-08, and do NOT plan an iteration whose goal is J-10 (it rides along every iteration and closes with J-09).
+- `state/blueprint.md` is drafted and correct — build into it, do not re-draft.
+- Three riders for whoever builds J-03 (carry along; none is an iteration of its own): test `session_completeness` (zero assertions today, a gap-blind estimate J-06 will lean on); test `resolve_referee_obs_cache_db_path` (exported, never called); get an owner ruling or a spec revision for `detector_basis: None` on strategy observations before J-06 assumes the field is populated.
+- Dev-server cleanup MUST use exact-PID process-tree kills only — never `pkill -f`; iter-2 killed an unrelated project's backend that way.

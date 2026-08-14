@@ -31,3 +31,35 @@ deferral (screenshot `reports/qa/goal-referee-iter-1-evidence/UT-J-01-result.png
 single source of truth J-06 and J-08 must import rather than re-word. The owner may want to read
 that sentence once and edit it now, while only one caller exists.
 **Reversible:** yes
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** J-02's Steps require the playbook adapter to carry a "completeness predicate
+(finest-series reach of the RTH close window)" per record, but J-02's own Acceptance list never
+names it — the Acceptance names only the two-family goldens, cache parity, pooling/split,
+dedup+coverage disclosure, and the SHA-256 no-write listing. The shipped
+`session_completeness` is a best-effort estimate derived from `forward.at_utc +
+minutes_to_close` (blind to intra-session bar gaps), has zero test assertions, and is not used
+as a gate this iteration.
+**We chose:** Scored J-02 `passing` against its written Acceptance list, which is fully met and
+which I verified myself, rather than withholding the pass for an unlisted Step sub-clause.
+Consequence: an untested, admittedly imprecise completeness estimate now exists in the shared
+contract, and J-06's confirmatory eligibility (the exploratory/confirmatory separation, a
+critical rail) is the first thing that would lean on it. Recorded as a binding rider on the
+next iteration instead of a blocker.
+**Reversible:** yes
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** `docs/referee-statistical-spec.md` §2's pseudocode types
+`provenance.detector_basis` as a plain string, but a strategy trade has no detector, so the
+field has no meaning for that family. goal.md's own Constraints say a developer who finds the
+spec unimplementable "DROPS that procedure from the iteration, records the drop, and surfaces
+it for an owner ruling — never improvises" (trap T-1).
+**We chose:** Accepted the developer's disclosed improvisation — `detector_basis: None` for
+every strategy observation, by analogy with `context_algorithm_version`'s explicit
+"None when inapplicable" pattern — rather than treating the T-1 deviation as a failure, because
+it was surfaced honestly in the handoff and the reviewer's NOTE, it is reversible, and no
+consumer exists yet. The owner should either rule on it or codify the exception in the spec
+before J-06 builds logic that assumes the field is always populated.
+**Reversible:** yes

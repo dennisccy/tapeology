@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "journey": "J-02",
+  "name": "The evidence contract — two families, one observation shape",
+  "not_yet": true,
+  "reason": "J-02 is tagged '(Keyless; automated.)' in docs/goal.md and its own iteration spec (goal-referee-iter-2.md) states plainly: 'Frontend: (none — J-02 is backend-only)' and 'browser-qa-agent confirms no live-endpoint regression (J-02 adds no new route to smoke)'. Its Acceptance is entirely hermetic pytest fixture-golden tests (byte-identical observation sets, cache cold/warm/deleted parity, pooling/dedup/exclusion/paired-null fixtures) — no REST route or UI surface of its own. Per the blueprint IA row this journey fulfills: 'library modules, no page of their own' / 'n/a — consumed by J-04-J-09'. Same structural reasoning as J-01 (see journey-scripts/J-01.json's reason field): demo_runner.py's single-base-url normalize_url rewrite makes a goto-based golden impossible for any journey with no frontend surface, and this one has none by design, permanently — J-02 is an internal adapter/cache layer other journeys import, never a served page. Marked not_yet so replay_lane_golden_coverage's file-existence gap check (scripts/automation/lib/replay-lane.sh:522-541) does not re-flag this permanently-backend-only journey as a golden-coverage gap every time it passes; run_verify (demo_runner.py:1146) treats not_yet as a safe SKIP, never a false FAIL. Verified instead via real browser navigation confirming no regression on the J-01-built live endpoint it shares a module with (see reports/phase-goal-referee-iter-2-ui-test-results.llm.md, UT-J-02) plus the hermetic pytest suite (developer/reviewer's lane, tests/test_referee_evidence.py).",
+  "steps": []
+}

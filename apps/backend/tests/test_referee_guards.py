@@ -26,6 +26,7 @@ playbook_guards.py`` precedent: "a lint that cannot fail proves nothing")."""
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import inspect
 import pathlib
@@ -36,6 +37,7 @@ from app.research.desk_playbook_context import PLAYBOOK_CONTEXT_ALGORITHM_VERSIO
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 _SPEC_PATH = REPO_ROOT / "docs" / "playbook-detector-spec.md"
 _CATALOG_PATH = REPO_ROOT / "docs" / "research-directions.md"
+_RESEARCH_DIR = pathlib.Path(__file__).resolve().parents[1] / "app" / "research"
 
 
 # --- (a) the playbook-band-context-v3 spec-drift pin (TC-6, TC-7) ----------------------------------
@@ -129,3 +131,82 @@ def test_catalog_reconciliation_guard_can_fail_on_a_seeded_removal():
     """The lint CAN fail: a string genuinely absent from the doc is rejected."""
     text = _CATALOG_PATH.read_text()
     assert "this exact sentence was never written to the catalog, ever" not in text
+
+
+# --- (c) goal-referee-iter-2 TC-10: the bidirectional import-ban -------------------------------------
+#
+# goal.md's "the Referee never feeds back" anti-goal (critical): no referee_*.py module may import
+# the live detection/context machinery (it reads already-recorded records only), and neither
+# desk_playbook_detect.py nor desk_playbook_context.py may import any referee_* module (the frozen
+# detection/context layer stays wholly unaware the Referee exists). AST-structural
+# (``test_bar_store_projection_guard.py``'s precedent), not a regex over source text, which a
+# comment or a string literal could false-positive.
+
+
+def _imported_module_names(path: pathlib.Path) -> set[str]:
+    """Every dotted name this file's ``import``/``from ... import ...`` statements mention --
+    both the bare module (``import a.b`` -> ``a.b``; ``from a.b import c`` -> ``a.b``) and each
+    imported name alone AND module-qualified (``from a.b import c`` also adds ``c`` and
+    ``a.b.c``), so ``from . import referee_evidence``, ``from .referee_evidence import X``, and
+    ``from app.research import referee_evidence`` are all caught the same way."""
+    tree = ast.parse(path.read_text())
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                names.add(node.module)
+            for alias in node.names:
+                names.add(alias.name)
+                if node.module:
+                    names.add(f"{node.module}.{alias.name}")
+    return names
+
+
+def _mentioning(names: set[str], target: str) -> set[str]:
+    """Every name in ``names`` whose own LAST dotted component equals ``target`` exactly --
+    ``app.research.desk_playbook_context`` matches ``desk_playbook_context``;
+    ``desk_playbook_context_module`` (a local alias' own bound name, never an import target) does
+    not."""
+    return {name for name in names if name.split(".")[-1] == target}
+
+
+def _referee_modules() -> list[pathlib.Path]:
+    return sorted(_RESEARCH_DIR.glob("referee_*.py"))
+
+
+def test_no_referee_module_imports_the_detect_or_context_modules():
+    """TC-10 (first direction): zero imports of ``desk_playbook_detect`` or
+    ``desk_playbook_context`` inside any ``referee_*.py`` module."""
+    referee_modules = _referee_modules()
+    assert referee_modules, "no referee_*.py module found -- has the glob/location changed?"
+    for path in referee_modules:
+        imported = _imported_module_names(path)
+        hit = _mentioning(imported, "desk_playbook_detect") | _mentioning(imported, "desk_playbook_context")
+        assert not hit, f"{path.name} imports the banned module(s) {hit}"
+
+
+def test_the_detect_and_context_modules_import_no_referee_module():
+    """TC-10 (second direction): zero imports of any ``referee_*`` module inside
+    ``desk_playbook_detect.py`` or ``desk_playbook_context.py``."""
+    for filename in ("desk_playbook_detect.py", "desk_playbook_context.py"):
+        path = _RESEARCH_DIR / filename
+        assert path.exists(), f"{filename} not found at the expected location -- has it moved?"
+        imported = _imported_module_names(path)
+        hits = {name for name in imported if name.split(".")[-1].startswith("referee_")}
+        assert not hits, f"{filename} imports referee module(s) {hits}"
+
+
+def test_import_ban_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- a lint that cannot fail proves nothing (this file's own established
+    per-guard precedent, e.g. ``test_desk_playbook_context_zero_diff_guard_can_fail_on_a_seeded_
+    violation`` above)."""
+    seeded_imports = {"app.research.desk_playbook_detect", "app.research.other"}
+    assert _mentioning(seeded_imports, "desk_playbook_detect") == {
+        "app.research.desk_playbook_detect"
+    }
+    seeded_referee_imports = {"app.research.referee_evidence", "app.research.other"}
+    hits = {name for name in seeded_referee_imports if name.split(".")[-1].startswith("referee_")}
+    assert hits == {"app.research.referee_evidence"}

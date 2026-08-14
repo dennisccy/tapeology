@@ -34,3 +34,19 @@ live-endpoint smoke pass, never as replay coverage — and expect `golden-gaps` 
 without that being a defect.
 **Applies to:** any iteration targeting a backend-only Referee journey (J-02, J-03, J-04, J-05,
 J-06, J-08) or reading `runs/goal-session-referee/state/golden-gaps`.
+
+## iter-2 — 2026-08-14T19:20:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A pattern-based `pkill -f "uvicorn main:app"` used to clean up this project's dev
+backend also killed an unrelated project's backend on the same host (trendora, port 8255,
+still down at evaluation time) — the pattern is not project-specific, and the restore attempt
+was correctly blocked as out-of-scope. Only exact-PID process-tree kills, captured before the
+kill, are safe on this shared host. Related: this iteration's `UT-J-01-result.png` is
+byte-identical to iteration 1's (a deterministic re-render of an unchanged static JSON body
+looks exactly like a copied file), so a screenshot of a fully static payload cannot by itself
+prove a fresh navigation — anchor such journeys on a live-code check instead (I printed
+`current_playbook_detector_basis()` and the fingerprint and matched them to the pixels).
+**Applies to:** any iteration whose developer starts/stops `scripts/dev.sh` or any local
+server; and any journey whose only evidence is a screenshot of a static JSON endpoint
+(J-01–J-06, J-08 in this era).
