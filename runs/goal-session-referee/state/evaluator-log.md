@@ -103,3 +103,54 @@ data), add a test for the written-but-never-called cache path helper, and get an
 on one spec wording — the spec says every record carries a detector name, but a strategy trade
 has none, so the code leaves it empty. Separately, outside this project: please restart
 trendora's backend on port 8255 using the command recorded in the dev handoff.
+
+## Iteration 3 — goal-referee-iter-3
+
+**Date:** 2026-08-14T22:05:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (the spec asked for full; the engine demoted it — telemetry
+`depth_demoted`, `reason: budget-breach`)
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Partial: J-03 "The statistics core" (moved failing -> partial: the engine and its proof suite
+  are real and verified, but one of its two p-value routes is provably over-confident);
+  J-10 "The kept product stands" (kept half re-verified green by replay with a fresh screenshot;
+  its era-end clauses still wait on J-09)
+- Not re-tested this run: J-01 "The era transition stands" and J-02 "The evidence contract" —
+  both marked DEFERRED-BUDGET in the results file, so both keep their recorded passing status
+- Regressed: none
+- Anti-goal violations: none
+
+**Reasoning:** I did not take the report's word for anything. I re-ran the new proof suite myself
+(77 tests green in 81 seconds, inside its own 120-second limit), re-ran the whole test suite
+myself (2,503 collected, 2,495 passed, 8 skipped, nothing failed), printed the settings pin
+myself (`08e471b10130e1e2`), counted the Claude connector's tools myself (still 20), and executed
+all four tamper cases against the stored proof record — every one correctly refused, including a
+record whose own "passed" flag still claimed success. All of that is real and good. Then I found
+a fault nobody else did. The engine has two ways to compute the "how surprising is this?" number.
+In the exact way — used when the number of possible re-shufflings is small — it works out one
+group's total by subtraction while the figure it compares against was built by direct addition.
+Those disagree in the last decimal place, so the real observed result narrowly fails its own
+extremeness test and is not counted, and the answer comes out at half the smallest value that
+method can legitimately produce. I reproduced this on 60,000 fresh cases: 1.72% of small
+two-versus-two cases, 0.86% of one-versus-four, always on the most extreme results. No proof case
+ever exercises that exact route, and the single test that does uses round numbers a computer
+stores perfectly, so it cannot fail this way. Nothing is served to any user yet — the engine is
+imported by nothing — so no one is being misled today, but four later journeys plan to use it for
+their real numbers.
+
+**Next-step recommendation:** Iteration 4 should fix the exact-mode number and prove the fix, at
+full depth, before building anything on top. Three parts: add the second group up directly so the
+observed result always counts (guaranteeing the answer can never fall below its own floor); add a
+proof case that actually runs the exact route with awkward decimal values, plus a deliberately
+broken variant that errs in the over-confident direction, since today's broken-on-purpose test can
+only catch the over-cautious kind; and re-pin the stored proof record while bumping the engine's
+version label, which is free today because nothing has been recorded yet. Two small leftovers ride
+along: the unused draw helper and the untested single-anchor shortcut the reviewer flagged, plus a
+check of two leads in older unchanged code that I could not settle in this pass (a date whose
+newest record sits at a different detector version can silently blank that date's evidence; a
+dataset with no time anchor becomes a 1969 date and lumps unrelated trades into one group). For a
+person: approve "fix and prove the p-value floor in the statistics engine, at full depth, then
+continue to matched nulls". Still outstanding for a human, from iteration 2: the unrelated trendora
+backend on port 8255 has not been restarted.

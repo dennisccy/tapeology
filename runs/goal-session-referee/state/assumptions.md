@@ -83,3 +83,23 @@ rule, or test procedure moves).
 **Reversible:** yes — a future explicit owner ruling can still override this by editing that one
 sentence; if it ever changes the actually-served value (not just its documentation), that edit
 becomes a named spec revision per the spec's own rule, re-keying results beside the old ones.
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** J-03's Acceptance sentence says "the oracle suite is green and IS the acceptance",
+and every clause it literally names is met (suite green, mutation fixture fails calibration,
+identical seeds reproduce byte-identical p/CI, the attestation round-trips and a corrupted one is
+detected, pin unchanged, zero new deps) — all re-verified by me. But I reproduced an
+anti-conservative defect in `permutation_test`'s exact-enumeration branch (p below the exact
+test's own 2/(N+1) floor on 1.7% of 2v2 fixtures) that the oracle suite structurally cannot see,
+because no oracle generator ever enters that branch. The goal text does not say whether "the
+oracle suite is green" is the WHOLE test or a proxy for "the statistics are calibrated".
+**We chose:** Read the acceptance as a proxy, not as the whole test, and scored J-03 `partial`
+rather than `passing` — the journey's own title is "calibrated ... oracle-proven", and the era's
+stated purpose is statistics trustworthy enough to disprove the desk's own evidence, which a
+p-value below its own mathematical floor defeats. Consequence: J-03 does not close this iteration
+even though its written acceptance clauses all pass, and iteration 4 spends a full-depth pass on
+a two-line arithmetic fix plus the missing enumeration-branch oracle coverage. If the owner
+disagrees and wants the literal reading, J-03 can be marked passing and the fix carried as a
+rider into J-04 — but J-06 must not wire the module into real verdict math before it lands.
+**Reversible:** yes

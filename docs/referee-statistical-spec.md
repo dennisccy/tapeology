@@ -98,6 +98,14 @@ genuine detector revision moves `detector_basis` and honestly splits the pool. C
 honesty: each pooled record carries its per-symbol coverage; when a newest record covers
 fewer symbols than a superseded one for the same date, a served disclosure names it.
 
+**`provenance.detector_basis` is `None` for every strategy-family observation, by design.** A
+strategy trade has no detector: `detector_basis` is populated only for
+`evidence_family: "playbook_occurrence"` (the pooling identity above) and is honestly `None` on
+every `strategy_trade` observation — the same "`None` when inapplicable" convention
+`context_algorithm_version` already uses. Standing for this era per the assumption ledger
+(`state/assumptions.md`, iter-2/iter-3): a documentation clarification of the contract as
+implemented, not a new field or a redefinition of any existing one.
+
 **Completed-session rule:** a record is confirmatory-eligible for a symbol only if that
 symbol's finest measurement series reaches `REFEREE_SESSION_COMPLETE_ET` (partial mid-day
 records are exploratory-only; the session guard fails open by design, so this predicate is

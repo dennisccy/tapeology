@@ -24,15 +24,23 @@ from app.providers.base import Side, TradeEvent
 from app.research import desk_playbook as desk_playbook_module
 from app.research import referee_evidence as referee_evidence_module
 from app.research.datasets import SPLIT_HOLDOUT, SPLIT_TRAIN, DatasetStore
-from app.research.desk_playbook import PLAYBOOK_REGISTER, PlaybookStore, playbook_parameters
+from app.research.desk_playbook import (
+    PLAYBOOK_REGISTER,
+    PlaybookStore,
+    playbook_parameters,
+    resolve_desk_playbook_dir,
+)
 from app.research.desk_routes import get_playbook_store
 from app.research.referee_evidence import (
     REFEREE_FORMING_BAR_BASIS_CAVEAT,
+    REFEREE_SESSION_COMPLETE_ET,
     REFEREE_TICK_GATE_SYMBOL_DAYS,
     RefereeObservationCache,
+    _signal_reaches_session_complete,
     _tick_gate_state,
     current_playbook_detector_basis,
     playbook_observations,
+    resolve_referee_obs_cache_db_path,
     strategy_observations,
 )
 from app.research.routes import ResearchRegistry, get_dataset_store, set_registry
@@ -741,3 +749,100 @@ def test_adapters_write_nothing_to_any_pre_existing_store(client):
 
     assert after == before
     assert after_journal == before_journal
+
+
+# === goal-referee-iter-3 carried rider 1 -- TC-20: _signal_reaches_session_complete ==================
+#
+# Zero assertions existed for this function before this iteration (a gap-blind estimate J-06's
+# confirmatory-eligibility fold will lean on). ``REFEREE_SESSION_COMPLETE_ET`` = "15:55" ET.
+
+
+def _forward_signal(at_utc: str, minutes_to_close: float) -> dict:
+    """The minimal shape ``_signal_reaches_session_complete`` reads -- only
+    ``forward["at_utc"]``/``forward["minutes_to_close"]``, exactly as it is read off a real
+    already-measured signal's own ``forward`` block."""
+    return {"forward": {"at_utc": at_utc, "minutes_to_close": minutes_to_close}}
+
+
+def test_signal_reaches_session_complete_at_and_around_the_boundary():
+    """TC-20: a fixture signal engineered so its computed ``last_bar_epoch`` lands exactly at, one
+    second before, and one second after ``_session_complete_epoch(session_date)`` -- True at and
+    after the boundary, False strictly before it. The anchor (``at_utc``) is held FIXED across all
+    three cases; only ``minutes_to_close`` varies, isolating the boundary comparison from any other
+    variable."""
+    session_date = "2026-06-08"
+    boundary_epoch = referee_evidence_module._session_complete_epoch(session_date)
+    anchor_epoch = boundary_epoch - 600.0  # 10 minutes before the boundary
+    at_utc = referee_evidence_module._iso(anchor_epoch)
+
+    at_boundary = _forward_signal(at_utc, 10.0)
+    one_second_before = _forward_signal(at_utc, 10.0 - 1.0 / 60.0)
+    one_second_after = _forward_signal(at_utc, 10.0 + 1.0 / 60.0)
+
+    assert _signal_reaches_session_complete(at_boundary, session_date) is True
+    assert _signal_reaches_session_complete(one_second_before, session_date) is False
+    assert _signal_reaches_session_complete(one_second_after, session_date) is True
+
+
+def test_signal_reaches_session_complete_is_false_with_no_forward_block():
+    """A signal recorded before the (era-B2) forward-measurement pass existed carries no ``forward``
+    block at all -- an honest False, never a crash and never a fabricated True."""
+    assert _signal_reaches_session_complete({"symbol": "AAPL"}, "2026-06-08") is False
+
+
+def test_signal_reaches_session_complete_reads_bar_count_minutes_not_wall_clock_and_says_so():
+    """The disclosed bar-gap-blind limitation (module docstring), asserted as a real behavior
+    rather than left to pass silently: ``minutes_to_close`` is a BAR-COUNT-equivalent figure, not
+    measured wall-clock time, so this function is blind to any intra-session gap in the finest
+    measurement series. Two signals whose ``(anchor_epoch, minutes_to_close)`` PRODUCT is identical
+    are treated identically regardless of how much real wall-clock time actually elapsed on either
+    side of a gap -- exercised here by anchoring EARLIER in the session (23 minutes before the
+    boundary) with a bar-count-equivalent ``minutes_to_close`` that under-counts a gapped series and
+    still lands exactly one second short of the boundary: the same honest False as a gap-free
+    signal in the direct boundary test above, never a "corrected" True."""
+    session_date = "2026-06-08"
+    boundary_epoch = referee_evidence_module._session_complete_epoch(session_date)
+    anchor_epoch = boundary_epoch - 1380.0  # 23 minutes before the boundary (a gappier series)
+    at_utc = referee_evidence_module._iso(anchor_epoch)
+    gap_blind_minutes_to_close = (1380.0 - 1.0) / 60.0  # bar-count-equivalent, one second short
+
+    signal = _forward_signal(at_utc, gap_blind_minutes_to_close)
+
+    assert _signal_reaches_session_complete(signal, session_date) is False
+
+
+def test_referee_session_complete_et_is_the_pinned_1555_boundary():
+    """The boundary constant itself, pinned (spec Sec1): 15:55 ET."""
+    assert REFEREE_SESSION_COMPLETE_ET == "15:55"
+
+
+# === goal-referee-iter-3 carried rider 2 -- TC-21: resolve_referee_obs_cache_db_path =================
+#
+# Exported, never called, before this iteration.
+
+
+def test_resolve_referee_obs_cache_db_path_env_override_returns_verbatim(monkeypatch):
+    """TC-21 (env-var-override half): ``TAPEOLOGY_REFEREE_OBS_CACHE_DB`` set returns that EXACT
+    path, verbatim -- never joined, never normalized."""
+    monkeypatch.setenv("TAPEOLOGY_REFEREE_OBS_CACHE_DB", "/explicit/override/path/obs.db")
+
+    result = resolve_referee_obs_cache_db_path("/anything/universe/dir")
+
+    assert result == "/explicit/override/path/obs.db"
+
+
+def test_resolve_referee_obs_cache_db_path_defaults_to_a_sibling_of_the_playbook_dir(monkeypatch):
+    """TC-21 (sibling-of-playbook-dir default half): with the env var unset, the resolved path is
+    ``referee_obs_cache.db`` co-located as a SIBLING of ``resolve_desk_playbook_dir``'s own
+    resolved directory -- the ``playbook_evidence_cache_db_path`` resolver pattern verbatim, one
+    level up (this module has no dependency on ``desk_routes.py``)."""
+    monkeypatch.delenv("TAPEOLOGY_REFEREE_OBS_CACHE_DB", raising=False)
+    universe_dir = "/some/resolved/desk/universe"
+    playbook_dir = resolve_desk_playbook_dir(universe_dir)
+    expected = os.path.join(os.path.dirname(playbook_dir), "referee_obs_cache.db")
+
+    result = resolve_referee_obs_cache_db_path(universe_dir)
+
+    assert result == expected
+    assert os.path.basename(result) == "referee_obs_cache.db"
+    assert os.path.dirname(result) == os.path.dirname(playbook_dir)

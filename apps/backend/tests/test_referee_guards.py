@@ -210,3 +210,45 @@ def test_import_ban_guard_can_fail_on_a_seeded_violation():
     seeded_referee_imports = {"app.research.referee_evidence", "app.research.other"}
     hits = {name for name in seeded_referee_imports if name.split(".")[-1].startswith("referee_")}
     assert hits == {"app.research.referee_evidence"}
+
+
+# --- goal-referee-iter-3 TC-23: the referee_stats.py-scoped import ban -----------------------------
+#
+# IN SCOPE: "referee_stats.py imports none of desk_playbook_detect, desk_playbook_context,
+# desk_forward, levels, tradability (the stats core is estimand-agnostic -- it consumes plain
+# numeric/session arrays a future caller passes in, never rail/detector/context data directly)".
+# The bidirectional guard above already proves the first two (desk_playbook_detect/
+# desk_playbook_context) for EVERY referee_*.py module via `_referee_modules()`'s glob; this guard
+# is `referee_stats.py`-SCOPED and names all five banned modules explicitly, matching the iter
+# spec's own AST-structural pattern verbatim.
+
+_REFEREE_STATS_BANNED_MODULES = (
+    "desk_playbook_detect",
+    "desk_playbook_context",
+    "desk_forward",
+    "levels",
+    "tradability",
+)
+
+
+def test_referee_stats_module_imports_none_of_the_banned_rail_detector_context_modules():
+    """TC-23: zero imports of desk_playbook_detect/desk_playbook_context/desk_forward/levels/
+    tradability inside referee_stats.py -- the stats core is estimand-agnostic (it consumes plain
+    numeric/session arrays a caller passes in, never rail/detector/context data directly)."""
+    path = _RESEARCH_DIR / "referee_stats.py"
+    assert path.exists(), "referee_stats.py not found at the expected location -- has it moved?"
+    imported = _imported_module_names(path)
+    hits: set[str] = set()
+    for banned in _REFEREE_STATS_BANNED_MODULES:
+        hits |= _mentioning(imported, banned)
+    assert not hits, f"referee_stats.py imports the banned module(s) {hits}"
+
+
+def test_referee_stats_import_ban_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- a lint that cannot fail proves nothing (TC-23's own can-fail
+    counter-test)."""
+    seeded_imports = {"app.research.desk_forward", "app.research.levels", "app.research.other"}
+    hits: set[str] = set()
+    for banned in _REFEREE_STATS_BANNED_MODULES:
+        hits |= _mentioning(seeded_imports, banned)
+    assert hits == {"app.research.desk_forward", "app.research.levels"}

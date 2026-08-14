@@ -50,3 +50,26 @@ prove a fresh navigation — anchor such journeys on a live-code check instead (
 **Applies to:** any iteration whose developer starts/stops `scripts/dev.sh` or any local
 server; and any journey whose only evidence is a screenshot of a static JSON endpoint
 (J-01–J-06, J-08 in this era).
+
+## iter-3 — 2026-08-14T22:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A statistical procedure can be exactly-enumerated, fully deterministic, oracle-suite
+green, and still anti-conservative: in `referee_stats.permutation_test`'s enumeration branch,
+`g2_sum = total - g1_sum` (:424) differs by ~1 ULP from `_t_statistic`'s own `math.fsum(group2)`
+(:454), so the OBSERVED grouping fails `_is_extreme` (:430) and p drops to 1/(N+1) — below the
+exact test's own 2/(N+1) floor — on 1.7% of 2v2 fixtures, concentrated on the most extreme
+results. Two structural blind spots hid it: every oracle generator uses S>=10 sessions so the
+permutation space always exceeds `REFEREE_ENUMERATION_THRESHOLD` and the enumeration branch is
+NEVER exercised by the suite that "IS the acceptance"; and the one enumeration unit test
+(`test_referee_stats.py:258`) uses 5.0/1.0/2.0 — binary-exact values that cannot expose a
+float-accumulation asymmetry.
+**Applies to:** any iteration touching `apps/backend/app/research/referee_stats.py` or adding a
+statistical procedure with two computation branches. Three rules: (1) whenever a quantity is
+computed two ways in the same function (fsum vs subtraction, general path vs fast path), assert
+the OBSERVED/identity case is bit-identical between them, not just "close"; (2) an oracle suite
+must exercise EVERY branch it claims to prove — check the branch predicate against the
+generators' own shapes before trusting a green suite; (3) a mutation fixture whose mutant is
+conservative by construction (here: every mutant p == 1.0, rejection rate exactly 0.0) proves the
+suite catches over-cautious bugs only — pair it with an ANTI-conservative mutant, since that is
+the direction that manufactures false findings.
