@@ -1371,8 +1371,8 @@ def test_the_asof_class_expr_extractor_returns_the_right_inputs_own_expression()
 # that could quietly turn a description of where a signal happened into a claim about what it means.
 
 _BAND_CONTEXT_TESTIDS = (
-    "desk-playbook-signal-wall-below",
-    "desk-playbook-signal-wall-above",
+    "desk-playbook-signal-wall-behind",
+    "desk-playbook-signal-wall-ahead",
     "desk-playbook-signal-room",
     "desk-playbook-band-filter",
     "desk-playbook-band-filter-count",
@@ -1395,7 +1395,7 @@ def test_desk_page_ships_every_band_context_testid():
 
 
 def test_the_band_context_testid_guard_can_fail_on_a_seeded_violation():
-    seeded = '<div data-testid="desk-playbook-signal-wall-below" />'
+    seeded = '<div data-testid="desk-playbook-signal-wall-behind" />'
     missing = [testid for testid in _BAND_CONTEXT_TESTIDS if f'data-testid="{testid}"' not in seeded]
     assert missing, "a source shipping only ONE of the testids must still be reported as missing"
 
@@ -1540,3 +1540,48 @@ def test_the_new_tab_is_announced_to_assistive_tech():
     no warning."""
     page = _DESK_PAGE.read_text()
     assert page.count("ET in Structure, in a new tab`}") == 2
+
+
+def test_the_wall_cells_are_trade_relative_not_geometric():
+    """The Playbook tables mix longs and shorts, so a wall column must mean one thing per ROW. The
+    behind/ahead slots are resolved from each row's OWN served `side` — selecting between two
+    served wall objects, the same move the side-matched drawdown column already makes.
+
+    Geometric below/above columns read wrong for shorts: an entry INSIDE a band is the nearest
+    structure in both directions, so naming it once had to pick a column, and picking "below"
+    assumed every row was a long — a short fading a band it sat inside found that band in neither
+    cell."""
+    lib = _PLAYBOOK_LIB.read_text()
+    assert 'side === "long" ? context.wall_below : context.wall_above' in lib, (
+        "the BEHIND wall must be chosen by the row's own served side"
+    )
+    assert 'side === "long" ? context.wall_above : context.wall_below' in lib, (
+        "the AHEAD wall must be chosen by the row's own served side"
+    )
+    page = _DESK_PAGE.read_text()
+    assert 'playbookWallLabel(context, side, "behind")' in page
+    assert 'playbookWallLabel(context, side, "ahead")' in page
+
+
+def test_the_trade_relative_guard_can_fail_on_a_seeded_violation():
+    """Non-vacuous: the long-biased form this replaced is not accepted."""
+    seeded = 'const wall = slot === "behind" ? context.wall_below : context.wall_above;'
+    assert 'side === "long" ? context.wall_below : context.wall_above' not in seeded
+
+
+def test_the_at_wall_tint_marks_the_wall_the_trade_is_actually_at():
+    """`backing_bucket` is side-resolved by the backend, so the tint must sit on the BEHIND cell —
+    on a geometric column it lit the wrong cell for every short."""
+    page = _DESK_PAGE.read_text()
+    behind = page.index('data-testid="desk-playbook-signal-wall-behind"')
+    ahead = page.index('data-testid="desk-playbook-signal-wall-ahead"')
+    tint = page.index('backed ? "text-amber-300" : undefined')
+    assert behind < tint < ahead, "the at-wall tint belongs to the behind cell"
+
+
+def test_the_wall_columns_sort_on_served_bps_not_label_text():
+    """One ordering that is right for both sides, and an entry inside a band sorts first on its own
+    served 0.0 rather than on where "i" falls in the alphabet."""
+    page = _DESK_PAGE.read_text()
+    assert "value: (item) => contextFor(item)?.backing_bps ?? null," in page
+    assert "value: (item) => contextFor(item)?.headroom_bps ?? null," in page

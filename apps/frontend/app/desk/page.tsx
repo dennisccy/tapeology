@@ -6011,7 +6011,7 @@ function PlaybookSignalRow({
         {fmt(signal.invalidation_price)}
       </td>
       <td className={ROW_LABEL_CELL}>{signal.entry_kind}</td>
-      <PlaybookBandCells context={bandContext} />
+      <PlaybookBandCells context={bandContext} side={signal.side} />
       <PlaybookForwardCells signal={signal} labels={labels} />
     </tr>
   );
@@ -6027,18 +6027,28 @@ type PlaybookBandFilter = "all" | "at_wall" | "at_wall_room_ge_1r";
 // one thing per column -- "floor" and "ceiling" swap protective roles between sides, while below
 // and above are true for every row. The side-relative reading (which wall is backing, which is
 // headroom) lives in the room cell and the served caption. Every value is a served field.
-function PlaybookBandCells({ context }: { context: DeskPlaybookBandContext | undefined }) {
+function PlaybookBandCells({
+  context,
+  side,
+}: {
+  context: DeskPlaybookBandContext | undefined;
+  // The row's OWN served side. It decides which served wall is behind the trade and which is
+  // ahead, so one header means one thing on a table that mixes longs and shorts.
+  side: string;
+}) {
   const title = context?.caption ?? "no band context served";
   const backed = context?.backing_bucket === "at_wall";
   return (
     <>
-      <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-wall-below">
+      <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-wall-behind">
+        {/* The amber tint belongs on the wall the trade is AT, which for a short is the wall above
+            it -- anchoring the tint to a geometric column lit the wrong cell for every short. */}
         <span className={backed ? "text-amber-300" : undefined} title={title}>
-          {playbookWallLabel(context, "below")}
+          {playbookWallLabel(context, side, "behind")}
         </span>
       </td>
-      <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-wall-above">
-        <span title={title}>{playbookWallLabel(context, "above")}</span>
+      <td className={ROW_BADGE_CELL} data-testid="desk-playbook-signal-wall-ahead">
+        <span title={title}>{playbookWallLabel(context, side, "ahead")}</span>
       </td>
       <td className={ROW_NUMERIC_CELL} data-testid="desk-playbook-signal-room">
         {context?.room_r === null || context?.room_r === undefined ? (
@@ -6055,21 +6065,27 @@ function PlaybookBandCells({ context }: { context: DeskPlaybookBandContext | und
 
 // The three band columns, declared once for both tables. Sort values read the SAME served fields
 // the cells render; a missing wall sorts as an absent value rather than as a zero distance.
-function playbookBandColumns<T>(
+function playbookBandColumns<T extends { side: string }>(
   contextFor: (item: T) => DeskPlaybookBandContext | undefined,
 ): SortableColumn<T>[] {
   return [
+    // Sorted on the SERVED bps rather than the label text: `backing_bps`/`headroom_bps` are already
+    // side-resolved by the backend, so one ordering is right for longs and shorts at once, and an
+    // entry inside a band sorts first on its own served 0.0 rather than on where "i" falls in the
+    // alphabet.
     {
-      id: "wallBelow",
-      label: "below",
-      kind: "text",
-      value: (item) => playbookWallLabel(contextFor(item), "below"),
+      id: "wallBehind",
+      label: "behind",
+      kind: "number",
+      note: "the wall the trade leans on — below a long, above a short",
+      value: (item) => contextFor(item)?.backing_bps ?? null,
     },
     {
-      id: "wallAbove",
-      label: "above",
-      kind: "text",
-      value: (item) => playbookWallLabel(contextFor(item), "above"),
+      id: "wallAhead",
+      label: "ahead",
+      kind: "number",
+      note: "the wall the room is measured to",
+      value: (item) => contextFor(item)?.headroom_bps ?? null,
     },
     {
       id: "room",
@@ -6491,7 +6507,7 @@ function PlaybookOccurrenceRow({
       <td className={ROW_NUMERIC_CELL} title={String(signal.invalidation_price)}>
         {fmt(signal.invalidation_price)}
       </td>
-      <PlaybookBandCells context={bandContext} />
+      <PlaybookBandCells context={bandContext} side={signal.side} />
       <PlaybookForwardCells signal={signal} labels={labels} />
       <td className={ROW_LABEL_CELL}>
         {beyondCap && (

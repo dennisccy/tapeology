@@ -1,4 +1,9 @@
-import type { DeskPlaybookBandContext, DeskPlaybookContext, DeskPlaybookSignal } from "./types";
+import type {
+  DeskPlaybookBandContext,
+  DeskPlaybookContext,
+  DeskPlaybookSignal,
+  DeskPlaybookWall,
+} from "./types";
 
 // Shared playbook-signal identity and labelling helpers, used by BOTH the /desk Playbook section
 // and the /structure page's playbook drill-in. Pure reads over an already-served signal — they
@@ -70,26 +75,41 @@ export function playbookContextIndex(
   return index;
 }
 
+function wallText(wall: DeskPlaybookWall | null): string {
+  if (wall === null) return "—";
+  return `${wall.price_low.toFixed(2)}–${wall.price_high.toFixed(2)} ${wall.class ?? "—"} · ${wall.distance_bps.toFixed(0)} bps`;
+}
+
 // One wall cell's short label, rendered from SERVED fields only -- this derives no price, no
-// distance, and no class. "inside 217.13–218.63 A" when the entry sits within a band on that side
-// of the frame, "214.11–215.60 A · 93 bps" for a wall standing off it, an em-dash for nothing
-// there. The containing band is shown on the side it sits on relative to its own edges, so one
-// band never appears in both cells.
+// distance, and no class.
+//
+// The slot is TRADE-RELATIVE, not geometric: `behind` is the wall the trade leans on (below a long,
+// above a short) and `ahead` is the one its room is measured to. Selecting between the two served
+// wall objects by the row's own served `side` is the same move the side-matched drawdown column
+// already makes -- a choice between served values, never arithmetic.
+//
+// Geometric below/above headers were tried first and read wrong for shorts: an entry INSIDE a band
+// is the nearest structure in BOTH directions, so naming it once (to avoid printing one band in two
+// cells) had to pick a column, and picking "below" silently assumed every row was a long. A short
+// fading a resistance band it sits inside then found that band in neither cell. Behind/ahead has one
+// meaning per row for both sides, and matches the frame's own served readings (`backing_bps`,
+// `headroom_bps`, `room_r`), the caption, and the filter's "at a wall behind".
 export function playbookWallLabel(
   context: DeskPlaybookBandContext | undefined,
-  side: "below" | "above",
+  side: string,
+  slot: "behind" | "ahead",
 ): string {
   if (!context) return "—";
+  const behind = side === "long" ? context.wall_below : context.wall_above;
+  const ahead = side === "long" ? context.wall_above : context.wall_below;
+  if (slot === "ahead") return wallText(ahead);
   const containing = context.containing_band;
   if (containing !== null) {
-    // An entry inside a band is bracketed by that band's own edges: it is the nearest structure in
-    // BOTH directions, so it is named once, on the side the reader is looking at.
-    const label = `inside ${containing.price_low.toFixed(2)}–${containing.price_high.toFixed(2)} ${containing.class ?? "—"}`;
-    if (side === "below") return label;
+    // Inside a band the trade is backed AT it -- the served `backing_bps` is 0.0 -- so the band
+    // itself is what stands behind the trade, whichever way the trade faces.
+    return `inside ${containing.price_low.toFixed(2)}–${containing.price_high.toFixed(2)} ${containing.class ?? "—"}`;
   }
-  const wall = side === "below" ? context.wall_below : context.wall_above;
-  if (wall === null) return containing !== null && side === "above" ? "inside" : "—";
-  return `${wall.price_low.toFixed(2)}–${wall.price_high.toFixed(2)} ${wall.class ?? "—"} · ${wall.distance_bps.toFixed(0)} bps`;
+  return wallText(behind);
 }
 
 // The ONE drill-in URL both playbook tables build. Extracted so the flat signals table and the
