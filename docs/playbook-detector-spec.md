@@ -432,14 +432,21 @@ back-scan — validation may DEMOTE a detector in a named revision, never tune c
 
 ---
 
-## 6. Band context (v2 — the bracket frame; read-side lens, never part of a record or its signature)
+## 6. Band context (v3 — the bracket frame; read-side lens, never part of a record or its signature)
 
-> **Supersession.** §6 v2 (`playbook-band-context-v2`) replaces the v1 nearest-band lens shipped
-> 2026-08-12, which reported the nearest band in ANY direction plus an `aligned`/`opposed` label.
-> That frame could call a trade with no structure within 300 bps "aligned" with a wall it had no
-> relationship to, and never named which band it meant. v1's full text remains in git history; the
-> algorithm-version constant is the version pointer. No recorded byte, no `playbook_input_signature`,
-> and no detector changed in either direction.
+> **Supersession.** §6's frame (the bracket) is v2's; the shipped constant is
+> `playbook-band-context-v3`. v2 (`playbook-band-context-v2`) replaced the v1 nearest-band lens
+> shipped 2026-08-12, which reported the nearest band in ANY direction plus an `aligned`/`opposed`
+> label — a frame that could call a trade with no structure within 300 bps "aligned" with a wall it
+> had no relationship to, and never named which band it meant. **v3 (commit `62db2ad`) changed ONLY
+> the cache keying** — basis-bounded invalidation (see "Cache invalidation is basis-bounded (v3)"
+> below) — so a daily top-up no longer invalidates the whole corpus; every distance, bucket, and
+> caption rule in this section is unchanged from v2. Full prior texts remain in git history; the
+> algorithm-version constant is the version pointer. No recorded byte, no
+> `playbook_input_signature`, and no detector changed in any of these revisions. *(Version string
+> reconciled to the shipped code at the era-6 opening, 2026-08-14 — doc catch-up only; the guard
+> test in `tests/test_referee_guards.py` pins this heading and the constant line to
+> `PLAYBOOK_CONTEXT_ALGORITHM_VERSION`.)*
 
 Frames every ALREADY-RECORDED signal (and every baseline anchor drawn beside one) against the desk's
 own tradable band map (`tradability.compute_tradability`, frozen) at that event's own session basis,
@@ -475,7 +482,7 @@ narrowed, and a context hit never consults the map at all.
 | `PLAYBOOK_CONTEXT_NEAR_BAND_BPS` | 70.0 | **ADAPTATION** | One band-width — the tolerance the desk already uses to CLUSTER levels into one wall (`tradability_band_width_bps`), read outward as "the trade is at the wall behind it". Echoed as a module constant, never read from `Config`. |
 | `PLAYBOOK_CONTEXT_ROOM_R_EDGES` | (1.0, 2.0) | **ADAPTATION** | The book's own reward-to-risk vocabulary, in multiples of the trade's OWN recorded invalidation distance — not values fitted to any outcome. |
 
-Structural (shape, not thresholds): `PLAYBOOK_CONTEXT_ALGORITHM_VERSION = "playbook-band-context-v2"`,
+Structural (shape, not thresholds): `PLAYBOOK_CONTEXT_ALGORITHM_VERSION = "playbook-band-context-v3"`,
 `PLAYBOOK_CONTEXT_DISTANCE_FROM = "entry"`, `PLAYBOOK_CONTEXT_STATUSES`,
 `PLAYBOOK_CONTEXT_BACKING_BUCKETS`, `PLAYBOOK_CONTEXT_ROOM_BUCKETS`.
 

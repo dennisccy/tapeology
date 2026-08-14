@@ -125,7 +125,10 @@ extends it to per-regime cells under a documented rail amendment), and the intra
 `Config.config_fingerprint()` hashes the entire config minus an explicit exclusion set
 (`apps/backend/app/config.py`), and the founding fingerprint `4d665603569b9dbf` is pinned by a
 literal assertion (`apps/backend/tests/test_profile_equivalence.py`) and stamped on the founding
-PnL-ledger row. **Almost every era below adds Config fields.** There are exactly two lawful moves;
+PnL-ledger row. *(Epoch note 2026-08-14: the founding pin was retired by the era-5D "Clean
+Slate" Path B bump — the CURRENT pinned epoch is `08e471b10130e1e2`, and
+`tests/test_fingerprint_epoch_retirement.py` guards the retired literal out of `apps/`. The
+protocol below is unchanged.)* **Almost every era below adds Config fields.** There are exactly two lawful moves;
 a weak model that improvises a third will corrupt the honesty machinery:
 
 - **Path A — exclusion (the default)**: when a new field is read ONLY by new code paths (a new
@@ -510,6 +513,24 @@ candidates; it will not survive twenty. Build the referee BEFORE the signal fact
 **Why now**: eras 7–14 generate dozens of pre-registered candidates. Multiple-testing correction,
 CIs, cost sensitivity, and the atlas must exist first, or every later "survivor" is suspect.
 
+> **ERA-6 OPENING NOTE (2026-08-14, session `referee`, under §5.6 "goal.md wins").** The era
+> opens against a repository this chapter did not foresee: the Desk (Era B) and the Playbook
+> (Era B2, plus the R-4 band-context interlude) built a SECOND evidence family — bar-measured
+> Playbook occurrences (210 append-only records / 156 sessions; 3,222 signals at the current
+> detector basis) — while the tick library this era's gate names was never built (Card 5.2:
+> ~12 partial 2.5-hour windows on disk vs the "≥ ~150 symbol-days" gate). The gate is therefore
+> re-scoped PER EVIDENCE FAMILY, honestly: the Referee core (6.2-as-amended, 6.3-as-amended,
+> the 6.6 matched-null concept) opens NOW against the Playbook family + a strategy-family
+> adapter (expected honest verdict at today's tick corpus: `insufficient_sample`); the
+> tick-dependent lenses (6.7 costs, 6.9 atlas, 6.10 loser mining) and the strategy-sweep cards
+> (6.1 metrics, 6.4 Part 2 walk-forward, 6.5, 6.8, 6.11) stay gated on their own data and are
+> NOT smuggled in. **Card 6.4 Part 1 (the forming-bar as-of fix) is explicitly DEFERRED by
+> operator decision 2026-08-14**: the defect is real and still live (`levels._bars_as_of` keeps
+> `epoch ≤ as_of`), it is disclosed as a served `basis_caveats` entry on strategy-family
+> evidence, and the fix remains this card — the opening gate of the next structure-measurement
+> era. The era's constitution is [`docs/goal.md`](goal.md); its statistical rulebook is
+> [`docs/referee-statistical-spec.md`](referee-statistical-spec.md).
+
 **[SPLIT-POINT after 6.6]** — session A = gates (6.1–6.6), session B = lenses (6.7–6.11).
 
 ---
@@ -532,33 +553,65 @@ CIs, cost sensitivity, and the atlas must exist first, or every later "survivor"
   division everywhere; keys sorted for byte-identical renders.
 
 #### Card 6.2 — Seeded bootstrap CIs + promotion gate v2 `[stats] [F1→F2] [M]`
+
+> **AMENDED 2026-08-14 (era-6 opening; statistical correction — the original procedure below is
+> preserved for the record but is superseded where it conflicts).** Two corrections, canonical in
+> [`docs/referee-statistical-spec.md`](referee-statistical-spec.md):
+> 1. **The bootstrap p-value is retracted.** `p = (1 + #{resample_mean ≤ 0})/(B + 1)` over
+>    ordinary resamples is a CI-inversion probability centered at the OBSERVED mean — not the
+>    probability of the observed statistic under H0. Its size under a true null is uncontrolled
+>    for skewed, heavy-tailed, clustered data at modest n, and BH's FDR guarantee assumes valid
+>    (super-uniform) p-values. Bootstrap machinery is CI-ONLY; every p that feeds BH comes from a
+>    null-calibrated randomization test (within-cluster group-label permutation; spec §3), proven
+>    by seeded oracles. "Resample trades, not days" is likewise superseded for the Playbook
+>    family: cluster-level (session) resampling and cluster-aware testing are first-class, not a
+>    future variant.
+> 2. **The seed is not a Config field.** `bootstrap_seed` via Path A is superseded by the
+>    era-B2/desk pattern: a module-constant seed (`REFEREE_SEED`) embedded in the procedure's own
+>    parameters blob and hashed into its result identity — zero Config fields, fingerprint
+>    untouched by construction. Path A remains the fallback if a Config field ever becomes
+>    genuinely necessary.
+> Gate v2's SHAPE stands (survivor gate AND interval AND BH membership) and is implemented in
+> era 6 as the fail-closed promotion certificate interlock (spec §8): promotion requires a valid
+> candidate-specific Referee certificate; sweep computation and survivor labelling keep working
+> without one; no bypass exists.
+
 - **Hypothesis**: point-estimate positivity at small n is noise; interval-based gating changes
   which candidates survive.
-- **Procedure (exact)**: B = 10,000 resamples, seed = new config `bootstrap_seed` (Path A
-  exclusion + counter-test per 0.4). Each resample: draw n trades with replacement, record
-  `mean(net R)`. `CI95 = [P2.5, P97.5]` of the resample means;
-  one-sided `p = (1 + #{resample_mean ≤ 0}) / (B + 1)`. Report CI and p beside every aggregate.
+- **Procedure (original text, superseded per the amendment above)**: B = 10,000 resamples,
+  seed = new config `bootstrap_seed` (Path A exclusion + counter-test per 0.4). Each resample:
+  draw n trades with replacement, record `mean(net R)`. `CI95 = [P2.5, P97.5]` of the resample
+  means; one-sided `p = (1 + #{resample_mean ≤ 0}) / (B + 1)`. Report CI and p beside every
+  aggregate.
 - **Gate v2**: survivor requires (pooled 5.4 gate) AND `CI95_low > 0` AND the 6.3 BH pass.
   Expect a long no-promotion period — **that is the system working** (do not loosen; T2).
 - **Build**: one bootstrap module with one owner (e.g. `research/statistics.py`), consumed by
-  `pnl_scan.py`, `edge_report.py`, and the forward ledger job.
+  `pnl_scan.py`, `edge_report.py`, and the forward ledger job. *(Era 6 ships this as
+  `research/referee_stats.py`.)*
 - **Evaluate (oracle, trap T7)**: seeded synthetic populations with KNOWN answers — all-+1R
   (CI excludes 0), zero-mean (CI spans 0 ≈ 95% of seeds), known-mean-0.2R at n=100 (CI covers
-  0.2). The oracle test is the acceptance; fixture-only tests prove nothing at n<5.
+  0.2). The oracle test is the acceptance; fixture-only tests prove nothing at n<5. *(Era 6
+  extends the oracle set with null-calibration, clustered-failure, and mis-sizing
+  demonstrations; spec §6.)*
 - **Kill**: n/a (referee machinery; its kill is failing its own oracle — then it must not ship).
-- **Traps**: T7; resample trades, not days (document the choice; per-day block bootstrap is a
-  registered future variant, not a silent switch); seed from config, never wall-clock.
+- **Traps**: T7; seeds recorded and streamed per row, never wall-clock; CI-inversion is never a
+  p-value (the amendment's correction #1).
 
 #### Card 6.3 — Experiment registry (multiple-testing ledger) + edge dashboard `[stats+infra] [F1] [M]`
 - **Hypothesis**: without a trial ledger, the year's true candidate count is unknowable and
   every later "discovery" is statistically uninterpretable.
-- **Build**: new append-only table `experiments` (schema migration in
-  `apps/backend/app/research/store.py`, next version, following the `pnl_ledger` single-writer
-  pattern): row = `{sweep_id, registered_wall_ts, candidate_id, family, params_hash,
-  split_basis, status(planned|evaluated), result_summary(JSON), p_value}`. **Pre-registration
-  protocol (T6)**: a sweep writes ALL its planned candidate rows BEFORE the first backtest
-  runs; results update rows in place to `evaluated`; the BH denominator is the count of
-  planned rows of that sweep — "evaluated", never "reported".
+- **Build** *(AMENDED 2026-08-14, era-6 opening: the store design below is superseded — era 6
+  ships the registry as append-only sibling JSON stores on the desk store pattern
+  (`referee_registry.py`: immutable family + hypothesis + withdrawal + certificate records,
+  appended evaluation records, adjudication snapshots; status DERIVED by fold, never updated in
+  place — strictly more auditable than update-to-evaluated rows; spec §5). The pre-registration
+  protocol and denominator rule below stand verbatim.)*: new append-only table `experiments`
+  (schema migration in `apps/backend/app/research/store.py`, next version, following the
+  `pnl_ledger` single-writer pattern): row = `{sweep_id, registered_wall_ts, candidate_id,
+  family, params_hash, split_basis, status(planned|evaluated), result_summary(JSON), p_value}`.
+  **Pre-registration protocol (T6)**: a sweep writes ALL its planned candidate rows BEFORE the
+  first backtest runs; the BH denominator is the count of planned rows of that sweep —
+  "evaluated", never "reported".
 - **BH procedure (exact)**: sort the sweep's one-sided p-values ascending `p_(1)…p_(m)`;
   `k* = max{k : p_(k) ≤ (k/m)·q}` with `q = 0.10` (config, fixed BEFORE the sweep);
   BH-survivors = candidates 1…k*. Promotion additionally requires membership here.
@@ -572,6 +625,11 @@ CIs, cost sensitivity, and the atlas must exist first, or every later "survivor"
   (append/update-to-evaluated only, no deletes).
 
 #### Card 6.4 — Walk-forward robustness + the forming-bar as-of fix `[stats+fix] [F2] [M]`
+
+> *(Status note 2026-08-14: Part 1 verified still live on `main` and DEFERRED out of era 6 by
+> operator decision — see the era-6 opening note. Until the fix lands, strategy-family referee
+> evidence carries the forming-bar `basis_caveats` disclosure.)*
+
 - **Part 1 — the fix (do this FIRST; everything in eras 7–12 stacks on it)**:
   `_bars_as_of` in `apps/backend/app/research/levels.py` keeps every bar with
   `epoch ≤ as_of` — for INTRADAY timeframes this admits the still-forming bar, whose stored
@@ -614,6 +672,13 @@ CIs, cost sensitivity, and the atlas must exist first, or every later "survivor"
   silently become an entry filter — that is a NEW candidate for a pre-registered sweep (T6).
 
 #### Card 6.6 — Null-baseline upgrades `[stats] [F2] [M]`
+
+> *(Scope note 2026-08-14: era 6 ships this card's CONCEPT for the Playbook family — the
+> ToD-matched null `referee-null-tod-v1` and the context-matched null `referee-null-context-v1`,
+> spec §4, measured through the desk forward rail's own conventions. The strategy-side builds
+> below — the `_null_trades` time-matched and random-levels variants — remain future work gated
+> on the tick library and are unchanged here.)*
+
 - **Hypothesis**: the current uniform-random-entry null is too weak; matched nulls isolate
   WHAT the strategy adds.
 - **Build** (both beside `_null_trades()` in `apps/backend/app/research/backtests.py`, both
@@ -1749,10 +1814,17 @@ credibility is the sum of its honest negatives; the C4 whitepaper is assembled F
 
 ## 3.3 Determinism & seeds recap
 
-Config-owned seeds per procedure (`bootstrap_seed`, null seeds, shuffle seeds, k-means seed, noise
-seed); every new seed follows fingerprint Path A with counter-test; no wall-clock in any research
-payload; every served list explicitly sorted; EWMA/stateful features document their initial
-state. If a procedure cannot be made deterministic, it does not ship.
+*(AMENDED 2026-08-14, era-6 opening: the PRIMARY seed pattern is now the desk/playbook one —
+a module-constant seed embedded in the procedure's own `*_parameters()` blob and hashed into
+its result identity via per-row streams (`DESK_FORWARD_BASELINE_SEED`/`PLAYBOOK_BASELINE_SEED`
+= 1729 and `REFEREE_SEED` = 271828 are the worked examples): zero Config fields, the
+fingerprint untouched by construction, and the seed's provenance embedded verbatim in every
+payload it shaped. Config-owned seeds via fingerprint Path A remain the FALLBACK for a seed a
+frozen path must read.)* Config-owned seeds per procedure (`bootstrap_seed`, null seeds,
+shuffle seeds, k-means seed, noise seed); every new Config-field seed follows fingerprint
+Path A with counter-test; no wall-clock in any research payload; every served list explicitly
+sorted; EWMA/stateful features document their initial state. If a procedure cannot be made
+deterministic, it does not ship.
 
 ## 3.4 Escalation guidance for weaker models
 
@@ -1835,6 +1907,13 @@ Columns: `date · era/workstream · session id · verdict (done | killed | split
 |------|-----|---------|---------|-------------|-------------|
 | 2026-07-05 | 3 (tape_to_profit) | `tape_to_profit` | done | Honest measurement machine complete; `v1` loses money on real tape; edge report correctly finds "no positive-edge dataset". | none |
 | 2026-07-06 | 4 (structure-and-tape) | `tape_to_profit_support_resistence` | done | All 7 journeys shipped; `structure_tape` honestly unevaluable on committed data (n=1 < 5) — the founding question remains empirically open pending the library. | none |
+| 2026-07-12 | 5 (The Library) — REDEFINED in execution | `yahoo_fetch` | done | The era pivoted to a keyless Yahoo Finance BAR library (6 journeys; 4h honestly resampled from 1h; derived SQLite index); the Card-5.2 tick-recorder library (≥150 symbol-days of trade/quote windows) was NOT built — bars and tick datasets are different data families. | Era-6 gate re-scoped per evidence family (era-6 opening note, 2026-08-14). |
+| 2026-07-16 | interlude (outside catalog) — "Tradable Wall" | `tradable_wall` | done | Tradable ≤10-band map + 12-symbol scan registry + 3-way edge report; 11 durable feed=sip tick windows / 10 symbols recorded into the persistent dataset store — the REAL tick corpus to date (~12 partial 2.5h windows). | none |
+| 2026-07-17 | interlude (outside catalog) — "Fast Wall" | `fast_wall` | done | Store stat-caches + durable dataset index, operator-run edge-report compute (GETs never compute), resumable parallel sweep, setups scan cache. | none |
+| 2026-07-24 | interlude (outside catalog) — "Clean Slate" demolition | `clean_slate` | done | Journal era deleted (14 routes, 3 pages → two-page product); the one product move = fingerprint epoch bump `4d665603569b9dbf` → `08e471b10130e1e2` (§0.4 Path B). | §0.4 epoch note added (2026-08-14). |
+| 2026-07-31 | B (operator pivot, outside catalog) — "The Desk" | `desk` | done | `/desk`: fetched S&P100 universe, append-only screen ledger + ranked briefing, touch-anchored forward-return rail v2, deep fine-bar backfill; 21 journeys. | none |
+| 2026-08-11 | B2 (operator pivot, outside catalog) — "The Playbook" | `playbook` | done | Nine pre-registered Graifer/Schumacher intraday detectors on the desk's own 5m/1m bars; append-only playbook corpus + back-scan + descriptive evidence view with seeded same-session anchors; zero statistics gates (deliberately era-6's). | none |
+| 2026-08-13 | operator interlude (outside catalog) — band context | main `9e65bb0`…`83c24a8` | done | Read-side band-context lens v1→v2 (bracket frame)→v3 (basis-bounded cache) + the 9-key cohort vocabulary + refresh-chain steps 6–7 + `/desk` context columns/filters/drill-ins; ratified as R-4 in the era-6 goal. | `docs/playbook-detector-spec.md` §6 version string reconciled v2→v3 (2026-08-14). |
 | _(next session appends here)_ | | | | | |
 
 Protocol: the row is written by the human operator or the session's closing agent AT session
