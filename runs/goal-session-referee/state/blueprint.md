@@ -69,3 +69,13 @@ modules exist yet in app/research/, and EXPECTED_TOOLS has exactly 20 entries wi
 tools. Every row above is a J-01-J-09 build target for future iterations, not an
 already-shipped value. No shared numeric/derived value outside this table is introduced by
 this era. -->
+
+<!-- iter-4 note: the "Referee evidence coverage + per-family readiness" row (owner
+referee_evidence.py, GET /research/desk/referee/evidence) gains one additive field this
+iteration — stale_basis_dates: list[{session_date: str, record_detector_basis: str}] — served
+on BOTH playbook_occurrence_readiness()'s response (live at the endpoint above, J-01) and
+playbook_observations()'s response (unconsumed by any route this iteration, J-02), computed by
+one shared helper both call. Discloses a date whose newest Playbook record's own
+(detector_basis, config_fingerprint) does not match the live values, instead of that record
+silently contributing zero. No existing field's value changes; the row's owner/endpoint stay
+exactly as above — this is a field addition, not a new value or a new canonical source. -->

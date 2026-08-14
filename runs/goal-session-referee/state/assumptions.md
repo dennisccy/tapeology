@@ -103,3 +103,36 @@ a two-line arithmetic fix plus the missing enumeration-branch oracle coverage. I
 disagrees and wants the literal reading, J-03 can be marked passing and the fix carried as a
 rider into J-04 — but J-06 must not wire the module into real verdict math before it lands.
 **Reversible:** yes
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** Iteration 3's evaluator next-step recommendation names two same-file
+reviewer-flagged riders that should "ride along" plus, separately, "a check of two leads in
+older unchanged code that I could not settle in this pass" — the evaluator's own report says it
+could not settle these, and it is unclear whether "ride along... rather than becoming their own
+iteration" was meant to cover investigate-only or investigate-and-fix, and for both leads or just
+the two same-file ones.
+**We chose:** Investigated both leads to a concrete root cause rather than deferring the
+investigation a second time, then split them on their own merits. Lead 1 — a date whose newest
+Playbook record sits at a stale `detector_basis` silently contributes zero to J-01's readiness
+counts and J-02's observation adapter, with no disclosure of which date or why — is a small,
+purely additive fix (a `stale_basis_dates` disclosure, built once and shared by both call sites)
+and IS included this iteration. Lead 2 — `_strategy_observation()`'s
+`epoch_anchor = dataset.get("epoch_anchor") or 0.0`, which conflates a genuinely-missing/`None`
+anchor with an explicitly-present `0.0` one — is DROPPED per this project's own T-1 discipline
+("an ambiguous or unimplementable clause is DROPPED and surfaced for an owner ruling, never
+improvised"): the identical `or 0.0` pattern is already-shipped, FROZEN behavior in
+`edge_report.py:489` (this era must not touch it), and the widely-reused test fixture
+`_plant_dataset` deliberately sets `epoch_anchor=0.0` as a real, hand-verified value
+(`test_strategy_observations_emits_net_r_with_the_forming_bar_caveat`'s own comment proves the
+resulting `"1969-12-31"` `session_date` is an intentional, checked assertion — proof of correct
+ET day-boundary conversion — not a bug demonstration). A correct fix must therefore distinguish
+"genuinely missing/`None`" from "explicitly `0.0`" (the current truthy `or` cannot), and should
+also decide whether `referee_evidence.py`'s convention should match or intentionally diverge from
+`edge_report.py`'s own — a project-wide consistency question. That is more than a same-iteration
+"small check" belongs in an iteration whose primary job is a critical statistics fix, so it is
+recorded here (and in the iteration-4 spec's NOTES, with the full investigation) rather than
+improvised.
+**Reversible:** yes — Lead 1's disclosure field has no consumer yet and can be renamed or removed
+freely before J-09 (its first UI reader); Lead 2 is untouched, unchanged from today's shipped
+behavior, so nothing here forecloses any future fix or owner ruling.
