@@ -63,3 +63,23 @@ it was surfaced honestly in the handoff and the reviewer's NOTE, it is reversibl
 consumer exists yet. The owner should either rule on it or codify the exception in the spec
 before J-06 builds logic that assumes the field is always populated.
 **Reversible:** yes
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** `docs/referee-statistical-spec.md` §2 types `provenance.detector_basis` as a plain
+string with no explicit ruling for the strategy family (which has no detector at all). Iteration
+2 already accepted the developer's `detector_basis: None` improvisation as reversible, and its
+own next-step recommendation asked for "an owner ruling ... before J-06 assumes the field is
+populated" — but goal mode is headless this iteration and no human ruling is available before
+J-03 (this iteration) closes out that carried rider.
+**We chose:** Ratify iter-2's already-accepted convention as the standing rule for this era
+rather than block on an unavailable human ruling: `detector_basis` stays `None` for every
+strategy-family observation (mirroring `context_algorithm_version`'s existing "None when
+inapplicable" pattern), formalized by adding ONE clarifying sentence to
+`docs/referee-statistical-spec.md` §2 stating this explicitly. Zero `.py` behavior changes — this
+is a documentation-only closure of the rider, not a statistical redefinition, so it is not a
+"named revision" under the spec's own change-control rule (no constant, weight, eligibility
+rule, or test procedure moves).
+**Reversible:** yes — a future explicit owner ruling can still override this by editing that one
+sentence; if it ever changes the actually-served value (not just its documentation), that edit
+becomes a named spec revision per the spec's own rule, re-keying results beside the old ones.
