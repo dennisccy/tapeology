@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "journey": "J-10",
+  "name": "The kept product stands — regression sentinel",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {"n": 1, "journey": "J-10", "action": {"type": "goto", "url": "/"}, "expect": {"text": "No ticker watched"}},
+    {"n": 2, "journey": "J-10", "action": {"type": "fill", "target": {"label": "Ticker"}, "text": "SIM-BUYER"}},
+    {"n": 3, "journey": "J-10", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Buyer Control"}},
+    {"n": 4, "journey": "J-10", "action": {"type": "goto", "url": "/structure"}, "expect": {"text": "Structure"}},
+    {"n": 5, "journey": "J-10", "action": {"type": "fill", "target": {"label": "Structure symbol"}, "text": "AAPL"}},
+    {"n": 6, "journey": "J-10", "action": {"type": "fill", "target": {"testid": "structure-as-of-input"}, "text": "2026-06-22 12:00:00"}},
+    {"n": 7, "journey": "J-10", "action": {"type": "click", "target": {"testid": "structure-load-button"}}, "expect": {"text": "2026-06-18"}},
+    {"n": 8, "journey": "J-10", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 9, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-playbookEvidence"}}, "expect": {"text": "Built from signature"}}
+  ]
+}

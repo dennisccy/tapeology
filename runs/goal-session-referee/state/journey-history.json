@@ -1,0 +1,107 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The era transition stands — reconciliation made testable",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-01",
+      "spec_hash": "9fe67344e7c7ae71546d205bbd134263e172265ee542963f4b483f564c0e228e"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The evidence contract — two families, one observation shape",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-02",
+      "spec_hash": "853e7be61a1ba27f0c8baf57dff1914d3aa54c01f82471f990133afab378850a"
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The statistics core — calibrated, seeded, oracle-proven, fail-closed",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-03",
+      "spec_hash": "f00b804c40b2b60e1b9bf6209033d53796c98d86c14248ea079ef3a507291ae0"
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Matched nulls — comparable times, identical measurement",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-04",
+      "spec_hash": "c16455f3b0356910d9d0e1062edea7531b45b5ee68f58df527ba8d182516e611"
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The registry — pre-registration with an immutable boundary",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-05",
+      "spec_hash": "2af99b40b3062ff02f0d57470dbb3085479c4232b5f509e4361bbf3e8562aa5e"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Estimand engines + adjudication — one checkpoint, recorded forever",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-06",
+      "spec_hash": "f0a370fab0515b423625b8fbe8694180875d0839d8ca105230bcc0179b8ca2e8"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The starter family — historical exploration becomes registered questions",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-07-fail.png",
+      "spec_hash": "473e2966a4c3fc78ec62b1ce97a0a6ada59891a625c9c88daf0964e8ec1c9f66"
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The strategy family + the promotion interlock — fail closed, no bypass",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-08",
+      "spec_hash": "04cecc16df051077401e5a4c694d6d81422554e3d45fccfcf3615b2722de9808"
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The Referee on /desk + MCP contract v5 — 22 read-only tools",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-09-fail.png",
+      "spec_hash": "26f414b65f170424797c6c23ab3c013a3648e2db090af16db72c52d2b781bf9d"
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — regression sentinel",
+      "status": "partial",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-10-result.png",
+      "spec_hash": "d14682891de7794bb3728ade717e6a1ed805f44384087a9bf18d75d09348fd9a",
+      "notes": "Kept-product half VERIFIED at baseline: cockpit sim tape + chart (J-10-result.png), /structure pinned-AAPL Load with the era-5B 300.11-302.2 wall (J-10-structure.png), /desk shipped sections + honest empty states on the fixture rig (J-07-fail.png), nav = 3 routes, suite 2,418 pass / 8 skip (era-open floor), fingerprint 08e471b10130e1e2, store-scope guard CLEAN (11,274 protected files unchanged). Era-completion clauses NOT met and structurally unmeetable until J-09 lands: the three Referee /desk sections do not exist and MCP advertises 20 tools, not 22."
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-08-14T15:37:59Z"
+}
