@@ -2007,6 +2007,73 @@ export interface DeskPlaybookContext {
   register: string;
 }
 
+// --- Cohorts of the band context (docs/playbook-detector-spec.md §7) ------------------------------
+// The record's OWN recorded pooled means, re-pooled per declared location cohort by the backend, so
+// the desk's per-setup summary can follow its display filters without the browser re-pooling a
+// served aggregate. `cohorts["all:all"].summary` is byte-identical to `record.summary`.
+
+export type DeskPlaybookBackingValue = "all" | "at_wall" | "at_wall_room_ge_1r";
+export type DeskPlaybookInsideValue = "all" | "inside" | "not_inside";
+
+// Why a signal joins no NARROWED cohort. Counted, never dropped: "nothing was at a wall" and "no
+// map has been computed yet" both produce an n: 0 cell, and only these separate them.
+export interface DeskPlaybookCohortPoolBasis {
+  n_eligible: number;
+  n_signals: number;
+  n_anchors: number;
+  n_anchors_unattributable: number;
+  n_excluded_not_computed: number;
+  n_excluded_no_band_context: number;
+  n_excluded_room_unmeasured: number;
+  n_excluded_other_location: number;
+  n_excluded_no_context: number;
+  context_aligned: boolean;
+}
+
+export interface DeskPlaybookCohort {
+  backing: DeskPlaybookBackingValue;
+  inside: DeskPlaybookInsideValue;
+  // EXACTLY `record.summary`'s shape, so the summary cells render unchanged.
+  summary: Record<string, Record<string, DeskPlaybookSummaryCell>>;
+  pools: Record<string, DeskPlaybookCohortPoolBasis>;
+  basis: Record<string, number>;
+}
+
+export interface DeskPlaybookCohortSignal {
+  symbol: string;
+  setup_id: string;
+  side: string;
+  pool_key: string;
+  trigger_ts: string;
+  measured: boolean;
+  // Whether this signal fed the pooled means. The "beyond cap" chip must read THIS rather than a
+  // row's position, which a display filter re-origins.
+  in_cap: boolean;
+  cohorts: string[];
+}
+
+export interface DeskPlaybookCohortSummaries {
+  playbook_id: string;
+  session_date: string;
+  parameters: {
+    algorithm: string;
+    context_algorithm: string;
+    backing_values: DeskPlaybookBackingValue[];
+    inside_values: DeskPlaybookInsideValue[];
+    cohort_keys: string[];
+    unfiltered_cohort: string;
+    pooling: string;
+    baseline_pairing: string;
+    room_ge_1r_buckets: string[];
+    pool_keys: string[];
+    measures: string[];
+  };
+  cohorts: Record<string, DeskPlaybookCohort>;
+  signals: DeskPlaybookCohortSignal[];
+  basis: Record<string, number | string>;
+  register: string;
+}
+
 // One split cell -- the SAME stat blocks as an unsplit cell, plus the bucket that names which
 // comparison half it belongs to.
 export interface DeskPlaybookEvidenceBandContextCell extends DeskPlaybookEvidenceCell {

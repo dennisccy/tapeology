@@ -133,6 +133,7 @@ from .desk_playbook_backscan import (
     resolve_desk_playbook_backscan_log_dir,
 )
 from .desk_playbook_compute import DeskPlaybookComputeManager
+from .desk_playbook_cohort import fold_cohorts
 from .desk_playbook_context import (
     BandMapResolver,
     PlaybookContextCache,
@@ -1384,6 +1385,7 @@ def get_desk_playbook_evidence(
 @router.get("/playbook/context")
 def get_desk_playbook_context(
     id: str = Query(...),
+    cohorts: bool = False,
     bar_store: BarStore = Depends(get_bar_store),
     playbook_store: PlaybookStore = Depends(get_playbook_store),
     cache: PlaybookContextCache | None = Depends(get_playbook_context_cache),
@@ -1402,19 +1404,29 @@ def get_desk_playbook_context(
     absent from the durable cache is served as the honest ``not_computed`` bucket instead of being
     computed inline, because computing one costs ~0.1-2.6s and a page that silently paid that per
     symbol would hang a kept surface. ``python -m app.research.desk_playbook_context --warm`` is
-    the explicit operator act that fills the cache."""
+    the explicit operator act that fills the cache.
+
+    ``?cohorts=true`` adds a SIBLING ``cohort_summaries`` block: the record's own recorded pooled
+    means re-pooled per declared location cohort (see ``desk_playbook_cohort``), which is what lets
+    the desk's per-setup summary table follow its display filters without the browser re-pooling a
+    served aggregate. Default FALSE, and that default is load-bearing: the body without the flag is
+    byte-identical to what it has always served, so the ``/structure`` drill-in — which reads this
+    route for one caption — never pays for a block it does not render. The fold itself computes
+    nothing: it takes no store, no resolver and no cache, and reads only the record and the context
+    already resolved above."""
     record = playbook_store.get(id)
     if record is None:
-        return {"context": None}
+        return {"context": None, "cohort_summaries": None} if cohorts else {"context": None}
     path = playbook_store.root / f"{id}.json"
     try:
         stat = path.stat()
     except OSError:
-        return {"context": None}
+        return {"context": None, "cohort_summaries": None} if cohorts else {"context": None}
     resolver = BandMapResolver(bar_store, CONFIG)
-    return {
-        "context": context_for_record(record, stat.st_size, stat.st_mtime_ns, resolver, cache)
-    }
+    context = context_for_record(record, stat.st_size, stat.st_mtime_ns, resolver, cache)
+    if not cohorts:
+        return {"context": context}
+    return {"context": context, "cohort_summaries": fold_cohorts(record, context)}
 
 
 # --- Coverage-index reconciliation (J-10, goal-desk-iter-14) — a trigger/poll/cancel trio mirroring

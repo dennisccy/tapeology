@@ -1376,6 +1376,7 @@ _BAND_CONTEXT_TESTIDS = (
     "desk-playbook-signal-room",
     "desk-playbook-band-filter",
     "desk-playbook-band-filter-count",
+    "desk-playbook-inside-filter",
     "desk-evidence-signal-n-positive",
     "desk-evidence-baseline-n-positive",
     "desk-evidence-band-context",
@@ -1585,3 +1586,68 @@ def test_the_wall_columns_sort_on_served_bps_not_label_text():
     page = _DESK_PAGE.read_text()
     assert "value: (item) => contextFor(item)?.backing_bps ?? null," in page
     assert "value: (item) => contextFor(item)?.headroom_bps ?? null," in page
+
+
+# --- the composed cohort: one filter selection, one meaning everywhere -------------------------------
+# The section's two filters compose into a cohort the BACKEND pooled. That is the whole point: the
+# per-setup summary renders pooled means, and a browser re-pooling them over a filtered subset would
+# make the section's headline numbers browser-derived.
+
+
+def test_the_summary_renders_the_backend_pooled_cohort_not_a_browser_reduction():
+    """The pooled means come from the served cohort block. If this ever became a client-side
+    reduction over `record.signals`, the numbers a reader trusts most would stop being the
+    backend's."""
+    source = _DESK_PAGE.read_text()
+    assert "const cohort = cohorts?.cohorts?.[cohortKey] ?? null;" in source
+    assert "const activeSummary = cohort?.summary ?? record.summary;" in source
+    # The cells still read a served pool object, never a recomputed one.
+    assert "pool={activeSummary[poolKey]}" in source
+    for banned in (".reduce(", "sum +="):
+        section = source[source.index("function PlaybookSummaryView") : source.index("function PlaybookEvidenceBandContextTable")]
+        assert banned not in section, f"the summary must not {banned} its way to a mean"
+
+
+def test_cohort_membership_is_read_from_the_served_list_never_re_derived():
+    """Especially for "not inside": the lens serves a null containing band for every ABSENCE too,
+    so a browser-side `containing_band === null` test would file every un-warmed signal as "not
+    inside a band" — claiming a location for an event that has none. The backend owns it."""
+    source = _DESK_PAGE.read_text()
+    assert "row.cohorts.includes(cohortKey)" in source
+    assert "containing_band === null" not in source
+    assert "containing_band !== null" not in source
+
+
+def test_the_two_filters_compose_into_the_backends_own_cohort_key():
+    source = _DESK_PAGE.read_text()
+    assert "function playbookCohortKey(band: PlaybookBandFilter, inside: PlaybookInsideFilter)" in source
+    assert 'return `${band}:${inside}`;' in source
+    assert 'const UNFILTERED_COHORT = "all:all";' in source
+
+
+def test_the_inside_filter_defaults_to_showing_everything():
+    source = _DESK_PAGE.read_text()
+    assert (
+        'const [playbookInsideFilter, setPlaybookInsideFilter] = useState<PlaybookInsideFilter>("all");'
+        in source
+    )
+
+
+def test_the_beyond_cap_chip_reads_the_served_flag_not_a_row_position():
+    """Under a filter the row's position is no longer its position in the record's pool."""
+    source = _DESK_PAGE.read_text()
+    assert "return row === undefined ? false : !row.in_cap;" in source
+    assert "entry.servedIndex >= cap" not in source
+
+
+def test_the_cohort_filter_copy_is_clean():
+    source = _DESK_PAGE.read_text()
+    phrases = [
+        "inside or not",
+        "inside a band",
+        "not inside a band",
+        "and the pooled means above are this cohort's own",
+    ]
+    for phrase in phrases:
+        assert phrase in source, f"expected cohort copy missing: {phrase!r}"
+        assert find_violations(phrase) == [], phrase

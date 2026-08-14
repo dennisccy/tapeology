@@ -21,6 +21,7 @@ import type {
   DeskPlaybookBackscanPlan,
   DeskPlaybookBackscanRunsListResult,
   DeskPlaybookComputeSnapshot,
+  DeskPlaybookCohortSummaries,
   DeskPlaybookContext,
   DeskPlaybookEvidence,
   DeskPlaybookReadResult,
@@ -1995,14 +1996,25 @@ export async function fetchDeskPlaybookBackscanRuns(): Promise<{
 // test, so context is served BESIDE it rather than decorated onto it.
 export async function fetchDeskPlaybookContext(params: {
   id: string;
-}): Promise<{ ok: boolean; data: DeskPlaybookContext | null; error?: string }> {
+  // Ask for the per-cohort pooled summaries too. Off by default and deliberately so: /structure
+  // reads this route for one caption and must not pay for a block it never renders.
+  cohorts?: boolean;
+}): Promise<{
+  ok: boolean;
+  data: DeskPlaybookContext | null;
+  cohortSummaries?: DeskPlaybookCohortSummaries | null;
+  error?: string;
+}> {
   try {
-    const res = await fetch(
-      `${API_BASE}/research/desk/playbook/context?id=${encodeURIComponent(params.id)}`,
-    );
+    const query = new URLSearchParams({ id: params.id });
+    if (params.cohorts) query.set("cohorts", "true");
+    const res = await fetch(`${API_BASE}/research/desk/playbook/context?${query}`);
     if (res.ok) {
-      const body = (await res.json()) as { context: DeskPlaybookContext | null };
-      return { ok: true, data: body.context };
+      const body = (await res.json()) as {
+        context: DeskPlaybookContext | null;
+        cohort_summaries?: DeskPlaybookCohortSummaries | null;
+      };
+      return { ok: true, data: body.context, cohortSummaries: body.cohort_summaries ?? null };
     }
     let error = "The band context could not be loaded.";
     try {

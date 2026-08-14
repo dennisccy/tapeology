@@ -590,3 +590,82 @@ different questions, and a trade is taken on both at once. Drawdown measures sta
 table (splitting a clamped-≤0 quantity by location multiplies rows without adding a reading).
 Baseline anchors are split by the SAME lens at their own instants, so each cohort is compared
 against a location-matched null.
+
+---
+
+## 7. Cohorts of the band context (read-side, per record)
+
+The desk's Playbook section carries two composed display filters. Narrowing a row list is trivial;
+narrowing the per-setup **summary** is not, because those are pooled means and a browser may not
+re-pool a served aggregate. So the pooling for a narrowed cohort happens read-side, at serve time
+(`desk_playbook_cohort.py`), through the measurement rail's own helpers.
+
+**No new threshold exists here.** The cohorts compose buckets §6 already registered. This section
+pre-registers a *vocabulary* — which compositions the product offers — not a tunable.
+`PLAYBOOK_COHORT_ALGORITHM_VERSION` is a shape pointer for the same reason.
+
+### The two axes
+
+| Axis | Values |
+|---|---|
+| backing | `all` · `at_wall` · `at_wall_room_ge_1r` |
+| inside | `all` · `inside` · `not_inside` |
+
+Composed as `"<backing>:<inside>"` → **9 declared cohorts**, declared order, with
+`all:all` the **unfiltered** cohort.
+
+| Membership | Rule (reads served §6 fields only) |
+|---|---|
+| `backing: at_wall` | `status == located` and `backing_bucket == at_wall` |
+| `backing: at_wall_room_ge_1r` | the above **and** `room_bucket ∈ {room_1r_2r, room_ge_2r}` |
+| `inside: inside` | `status == located` and a containing band |
+| `inside: not_inside` | `status == located` and **no** containing band |
+| either axis `all` | every eligible signal, including ones with no location |
+
+Two rules that are load-bearing rather than incidental:
+
+1. **`not_inside` requires `status == located`.** §6 serves `containing_band: null` for *every*
+   absence too, so a bare "no containing band" test would file every un-warmed signal under "not
+   inside a band" — claiming a location for an event that has none. The backend owns this predicate
+   so no reader can restate it that way.
+2. **`at_wall_room_ge_1r` excludes `no_wall_ahead` and `room_unmeasured`.** Room is a statement
+   about a wall ahead; neither state has one. Both are counted, never folded in.
+
+### The pooling rule — in-cap only, paired anchors
+
+A cohort pools the record's **own in-cap prefix** (`rail_max_touches_per_row`, cross-checked against
+`signals_beyond_cap`) — exactly the signals `compute_playbook` pooled — and each pooled signal
+brings the one seeded anchor drawn beside it (via §6's close-price-verified attribution). Therefore:
+
+- narrowing can only *reduce* how many signals a cell covers, never add one;
+- both lines of a pool describe the same signals, so `n_baseline < n` here means an anchor was
+  missing or its attribution refused — **not** the pooling cap. (This reads differently from §6's
+  evidence table, where a smaller baseline count discloses exactly that cap.)
+- the anchor rule is deliberately **paired**, not location-matched as in §6's split: this table's
+  baseline line is a per-signal null drawn beside that signal, and location-matching here would let
+  the two lines describe disjoint sets.
+
+**The unfiltered cohort never consults the band context at all** — it is the record's own in-cap
+prefix pooled by the record's own rule. It is therefore **byte-identical to the record's recorded
+`summary`**, verified across the whole corpus (198 of 198 records that carry one; the other 12 are
+zero-signal sessions), and stays so even when the context is missing, un-warmed, or refused. An
+operator switching a filter back to "all" cannot be shown numbers that differ from the record's.
+
+Signals recorded **beyond** the cap never fed the recorded summary and never feed a cohort of it;
+§6's cross-session evidence fold is where every recorded signal is pooled.
+
+### Exclusions — counted, never dropped
+
+`n_excluded_not_computed` · `n_excluded_no_band_context` · `n_excluded_room_unmeasured` ·
+`n_excluded_other_location` · `n_excluded_no_context`, per pool, with
+`n_eligible == n_signals + Σ excluded` guard-tested. This is what separates *"no signal was at a
+wall"* from *"no map has been computed yet"* — both produce an `n: 0` cell and nothing else
+distinguishes them.
+
+### Serving
+
+`GET /research/desk/playbook/context?id=<id>&cohorts=true` adds a sibling `cohort_summaries` block.
+**Default false**, so the body without the flag is byte-identical to what it has always served —
+the `/structure` drill-in reads this route for one caption and must not pay for a block it never
+renders. The fold takes no store, resolver, cache or config: it is structurally incapable of
+computing a map, reading a bar, or writing a record.

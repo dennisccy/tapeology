@@ -69,6 +69,7 @@ import type {
   DeskPlaybookEvidenceBaselineStats,
   DeskPlaybookEvidenceBreach,
   DeskPlaybookBandContext,
+  DeskPlaybookCohortSummaries,
   DeskPlaybookContext,
   DeskPlaybookEvidenceBandContext,
   DeskPlaybookEvidenceBandContextCell,
@@ -6020,6 +6021,51 @@ function PlaybookSignalRow({
 // The desk's own display-filter vocabulary. Each option maps to SERVED buckets, never to a
 // threshold applied in the browser.
 type PlaybookBandFilter = "all" | "at_wall" | "at_wall_room_ge_1r";
+type PlaybookInsideFilter = "all" | "inside" | "not_inside";
+
+// The cohort that asks nothing about location — the backend's own name for it, and the one whose
+// pooled means are the record's own summary value for value.
+const UNFILTERED_COHORT = "all:all";
+
+// The composed cohort the backend pooled for — the SAME `"<backing>:<inside>"` key it declares, so
+// the row filter and the pooled means can never disagree about what is being shown.
+function playbookCohortKey(band: PlaybookBandFilter, inside: PlaybookInsideFilter): string {
+  return `${band}:${inside}`;
+}
+
+// Whether a signal fed the pooled means, read off the SERVED `in_cap` flag rather than the row's
+// position. Position was correct only while the list was the record's whole pool: a display filter
+// re-origins the index, which would move the "beyond cap" chip onto occurrences that DID feed the
+// means and off ones that did not. Falls back to "not beyond" when nothing is served, so the chip
+// is never claimed without evidence.
+function playbookBeyondCap(
+  cohorts: DeskPlaybookCohortSummaries | null,
+  signal: DeskPlaybookSignal,
+  cap: number | null,
+): boolean {
+  if (cohorts === null || cap === null) return false;
+  const row = cohorts.signals.find(
+    (entry) => entry.trigger_ts === signal.trigger_ts && entry.symbol === signal.symbol
+      && entry.setup_id === signal.setup_id && entry.side === signal.side,
+  );
+  return row === undefined ? false : !row.in_cap;
+}
+
+// Membership is read off the SERVED per-signal cohort list — never re-derived here. That matters
+// most for "not inside": the lens serves a null containing band for every absence too, so a
+// browser-side test would file every un-warmed signal as "not inside a band".
+function playbookInCohort(
+  cohorts: DeskPlaybookCohortSummaries | null,
+  signal: DeskPlaybookSignal,
+  cohortKey: string,
+): boolean {
+  if (cohorts === null) return true; // nothing served yet — hide nothing
+  const row = cohorts.signals.find(
+    (entry) => entry.trigger_ts === signal.trigger_ts && entry.symbol === signal.symbol
+      && entry.setup_id === signal.setup_id && entry.side === signal.side,
+  );
+  return row === undefined ? false : row.cohorts.includes(cohortKey);
+}
 
 // The three served band-context cells, shared by the signals table and the occurrence list so the
 // two can never render one signal's location two ways. Columns are named geometrically (below /
@@ -6104,6 +6150,9 @@ function PlaybookSignalsTable({
   contextIndex,
   bandFilter,
   onBandFilterChange,
+  insideFilter,
+  onInsideFilterChange,
+  cohorts,
   selectedSignalKey,
   onSelectSignal,
 }: {
@@ -6112,6 +6161,9 @@ function PlaybookSignalsTable({
   contextIndex: Map<string, DeskPlaybookBandContext>;
   bandFilter: PlaybookBandFilter;
   onBandFilterChange: (next: PlaybookBandFilter) => void;
+  insideFilter: PlaybookInsideFilter;
+  onInsideFilterChange: (next: PlaybookInsideFilter) => void;
+  cohorts: DeskPlaybookCohortSummaries | null;
   selectedSignalKey: string | null;
   onSelectSignal: (key: string | null) => void;
 }) {
@@ -6156,18 +6208,15 @@ function PlaybookSignalsTable({
   // A DISPLAY filter over the served rows — it hides nothing from the record, which still serves
   // and still counts every signal (the count line below says so). Never a filter on the evidence
   // below, whose own min-n floor is likewise a tag and never a filter.
-  // Both predicates read SERVED buckets; no threshold is applied in the browser.
+  const cohortKey = playbookCohortKey(bandFilter, insideFilter);
+  // Membership comes from the SERVED per-signal cohort list — the same list the backend pooled the
+  // summary above by, so a row and a mean can never disagree about what the filter selected.
   const visibleSignals = useMemo(
     () =>
-      bandFilter === "all"
+      cohortKey === UNFILTERED_COHORT
         ? record.signals
-        : record.signals.filter((signal) => {
-            const context = contextIndex.get(playbookSignalContextKey(signal));
-            if (context?.backing_bucket !== "at_wall") return false;
-            if (bandFilter === "at_wall") return true;
-            return context.room_bucket === "room_1r_2r" || context.room_bucket === "room_ge_2r";
-          }),
-    [record.signals, contextIndex, bandFilter],
+        : record.signals.filter((signal) => playbookInCohort(cohorts, signal, cohortKey)),
+    [record.signals, cohorts, cohortKey],
   );
   const sort = useTableSort(visibleSignals, columns);
   if (record.signals.length === 0) {
@@ -6191,10 +6240,23 @@ function PlaybookSignalsTable({
             <option value="at_wall_room_ge_1r">at a wall behind with room ≥ 1×</option>
           </select>
         </label>
+        <label className="flex items-center gap-2 text-xs text-slate-300">
+          and
+          <select
+            data-testid="desk-playbook-inside-filter"
+            value={insideFilter}
+            onChange={(event) => onInsideFilterChange(event.target.value as PlaybookInsideFilter)}
+            className="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200"
+          >
+            <option value="all">inside or not</option>
+            <option value="inside">inside a band</option>
+            <option value="not_inside">not inside a band</option>
+          </select>
+        </label>
         <span className="text-[11px] text-slate-500" data-testid="desk-playbook-band-filter-count">
-          {bandFilter === "all"
+          {cohortKey === UNFILTERED_COHORT
             ? `${record.signals.length} recorded signals, none hidden`
-            : `showing ${visibleSignals.length} of ${record.signals.length} recorded signals — a display filter; every signal stays recorded and served`}
+            : `showing ${visibleSignals.length} of ${record.signals.length} recorded signals, and the pooled means above are this cohort's own — a display filter; every signal stays recorded and served`}
         </span>
       </div>
       <TableSortNote sort={sort} />
@@ -6536,13 +6598,23 @@ function PlaybookOccurrenceList({
   poolKey,
   id,
   contextIndex,
+  cohorts,
+  cohortKey,
 }: {
   record: DeskPlaybookRecord;
   poolKey: string;
   id: string;
   contextIndex: Map<string, DeskPlaybookBandContext>;
+  cohorts: DeskPlaybookCohortSummaries | null;
+  cohortKey: string;
 }) {
-  const occurrences = record.signals.filter((signal) => playbookPoolKey(signal) === poolKey);
+  const pooled = record.signals.filter((signal) => playbookPoolKey(signal) === poolKey);
+  // The display filter narrows this list the same way it narrows the flat table and the pooled
+  // means above, reading the SAME served cohort membership.
+  const occurrences =
+    cohortKey === UNFILTERED_COHORT
+      ? pooled
+      : pooled.filter((signal) => playbookInCohort(cohorts, signal, cohortKey));
   const cap = record.parameters.rail_max_touches_per_row ?? null;
   const detectTimeframe = record.parameters.detect_timeframe ?? "";
   const labels = playbookHorizonLabels(record);
@@ -6590,8 +6662,10 @@ function PlaybookOccurrenceList({
   return (
     <div id={id} data-testid="desk-playbook-occurrences">
       <p data-testid="desk-playbook-occurrences-count" className="mb-1 text-[11px] text-slate-500">
-        {occurrences.length} occurrence(s) of {poolKey} in this session
-        {cap !== null && occurrences.length > cap
+        {occurrences.length}
+        {occurrences.length === pooled.length ? "" : ` of ${pooled.length}`} occurrence(s) of{" "}
+        {poolKey} in this session
+        {cap !== null && pooled.length > cap
           ? ` — the first ${cap} are pooled into the means above; the rest are recorded but outside the pool.`
           : ". Click one to open its chart in Structure."}
       </p>
@@ -6619,7 +6693,7 @@ function PlaybookOccurrenceList({
                 bandContext={contextIndex.get(playbookSignalContextKey(entry.item))}
                 recordId={record.id}
                 detectTimeframe={detectTimeframe}
-                beyondCap={cap !== null && entry.servedIndex >= cap}
+                beyondCap={playbookBeyondCap(cohorts, entry.item, cap)}
               />
             ))}
           </tbody>
@@ -6633,13 +6707,32 @@ function PlaybookOccurrenceList({
 function PlaybookSummaryView({
   record,
   contextIndex,
+  cohorts,
+  cohortKey,
 }: {
   record: DeskPlaybookRecord;
   contextIndex: Map<string, DeskPlaybookBandContext>;
+  cohorts: DeskPlaybookCohortSummaries | null;
+  cohortKey: string;
 }) {
   const measureKeys = record.parameters.signal_measures;
-  // Memoised so the sorted entries are not rebuilt on every render by a fresh key array.
-  const poolKeys = useMemo(() => Object.keys(record.summary), [record]);
+  // The pooled means for the ACTIVE cohort — pooled by the BACKEND from the same already-recorded
+  // measurements the record pooled, through the same rail helpers, over the same per-setup cap.
+  // The unfiltered cohort is the record's own summary value for value, so falling back to
+  // `record.summary` before anything is served shows the same numbers rather than a blank table.
+  const cohort = cohorts?.cohorts?.[cohortKey] ?? null;
+  const activeSummary = cohort?.summary ?? record.summary;
+  const cohortPools = cohort?.pools ?? null;
+  const narrowed = cohortKey !== UNFILTERED_COHORT;
+  // A pool row shows while the active cohort still pooled a signal into it, so the row set follows
+  // the filter exactly as the row lists below do.
+  const poolKeys = useMemo(
+    () =>
+      Object.keys(record.summary).filter(
+        (poolKey) => !narrowed || (cohortPools?.[poolKey]?.n_signals ?? 0) > 0,
+      ),
+    [record, narrowed, cohortPools],
+  );
   // Which pools are expanded to show their own occurrences. Local to this component (unlike
   // `selectedSignalKey`, which has to be hoisted because it drives a panel rendered by a SIBLING
   // of the signals table) — nothing outside this view reads it. The call site's `key={record.id}`
@@ -6668,10 +6761,10 @@ function PlaybookSummaryView({
         kind: "number" as const,
         align: "right" as const,
         note: "sorts by the signals line",
-        value: (poolKey) => record.summary[poolKey]?.[measureKey]?.signals?.mean_pct ?? null,
+        value: (poolKey) => activeSummary[poolKey]?.[measureKey]?.signals?.mean_pct ?? null,
       })),
     ],
-    [measureKeys, record],
+    [measureKeys, activeSummary],
   );
   const sort = useTableSort(poolKeys, columns);
   if (poolKeys.length === 0) return null;
@@ -6725,7 +6818,7 @@ function PlaybookSummaryView({
                 </td>
                 <td className={`${ROW_BADGE_CELL} text-[11px] text-slate-300`}>signals</td>
                 <PlaybookSummaryCells
-                  pool={record.summary[poolKey]}
+                  pool={activeSummary[poolKey]}
                   source="signals"
                   measureKeys={measureKeys}
                 />
@@ -6733,7 +6826,7 @@ function PlaybookSummaryView({
               <tr data-testid="desk-playbook-summary-baseline" className="border-t border-slate-800/40">
                 <td className={`${ROW_BADGE_CELL} text-[11px] text-slate-500`}>baseline</td>
                 <PlaybookSummaryCells
-                  pool={record.summary[poolKey]}
+                  pool={activeSummary[poolKey]}
                   source="baseline"
                   measureKeys={measureKeys}
                 />
@@ -6753,8 +6846,10 @@ function PlaybookSummaryView({
                       record={record}
                       poolKey={poolKey}
                       id={`playbook-occurrences-${poolKey.replace(":", "-")}`}
-                    contextIndex={contextIndex}
-                      />
+                      contextIndex={contextIndex}
+                      cohorts={cohorts}
+                      cohortKey={cohortKey}
+                    />
                   </td>
                 </tr>
               )}
@@ -6857,6 +6952,9 @@ function PlaybookRecordView({
   context,
   bandFilter,
   onBandFilterChange,
+  insideFilter,
+  onInsideFilterChange,
+  cohorts,
   selectedSignalKey,
   onSelectSignal,
 }: {
@@ -6866,6 +6964,9 @@ function PlaybookRecordView({
   context: DeskPlaybookContext | null;
   bandFilter: PlaybookBandFilter;
   onBandFilterChange: (next: PlaybookBandFilter) => void;
+  insideFilter: PlaybookInsideFilter;
+  onInsideFilterChange: (next: PlaybookInsideFilter) => void;
+  cohorts: DeskPlaybookCohortSummaries | null;
   selectedSignalKey: string | null;
   onSelectSignal: (key: string | null) => void;
 }) {
@@ -6918,6 +7019,9 @@ function PlaybookRecordView({
   const contextIndex = playbookContextIndex(
     context !== null && context.playbook_id === record.id ? context : null,
   );
+  // The served cohorts are only ever applied to the record they were folded from.
+  const recordCohorts = cohorts !== null && cohorts.playbook_id === record.id ? cohorts : null;
+  const cohortKey = playbookCohortKey(bandFilter, insideFilter);
   const selectedSignal =
     selectedSignalKey === null
       ? null
@@ -6967,6 +7071,8 @@ function PlaybookRecordView({
         key={`playbook-summary-${record.id}`}
         record={record}
         contextIndex={contextIndex}
+        cohorts={recordCohorts}
+        cohortKey={cohortKey}
       />
       <PlaybookSignalsTable
         key={`playbook-signals-${record.id}`}
@@ -6975,6 +7081,9 @@ function PlaybookRecordView({
         contextIndex={contextIndex}
         bandFilter={bandFilter}
         onBandFilterChange={onBandFilterChange}
+        insideFilter={insideFilter}
+        onInsideFilterChange={onInsideFilterChange}
+        cohorts={recordCohorts}
         selectedSignalKey={selectedSignalKey}
         onSelectSignal={onSelectSignal}
       />
@@ -7006,6 +7115,9 @@ function PlaybookSection({
   context,
   bandFilter,
   onBandFilterChange,
+  insideFilter,
+  onInsideFilterChange,
+  cohorts,
   selectedSignalKey,
   onSelectSignal,
 }: {
@@ -7018,6 +7130,9 @@ function PlaybookSection({
   context: DeskPlaybookContext | null;
   bandFilter: PlaybookBandFilter;
   onBandFilterChange: (next: PlaybookBandFilter) => void;
+  insideFilter: PlaybookInsideFilter;
+  onInsideFilterChange: (next: PlaybookInsideFilter) => void;
+  cohorts: DeskPlaybookCohortSummaries | null;
   selectedSignalKey: string | null;
   onSelectSignal: (key: string | null) => void;
 }) {
@@ -7068,6 +7183,9 @@ function PlaybookSection({
         context={context}
         bandFilter={bandFilter}
         onBandFilterChange={onBandFilterChange}
+        insideFilter={insideFilter}
+        onInsideFilterChange={onInsideFilterChange}
+        cohorts={cohorts}
         selectedSignalKey={selectedSignalKey}
         onSelectSignal={onSelectSignal}
       />
@@ -7281,6 +7399,12 @@ export default function DeskPage() {
   const [playbookContext, setPlaybookContext] = useState<DeskPlaybookContext | null>(null);
   // The band DISPLAY filter, default "all" — nothing is hidden until an operator asks.
   const [playbookBandFilter, setPlaybookBandFilter] = useState<PlaybookBandFilter>("all");
+  // The second, independent axis: did the entry sit INSIDE a band. Also default "all".
+  const [playbookInsideFilter, setPlaybookInsideFilter] = useState<PlaybookInsideFilter>("all");
+  // The record's own pooled means, re-pooled by the BACKEND per location cohort — the only way the
+  // summary table's numbers can follow the filters without the browser re-pooling a served
+  // aggregate. Rides the same chained fetch as the context, so a filter change costs no request.
+  const [playbookCohorts, setPlaybookCohorts] = useState<DeskPlaybookCohortSummaries | null>(null);
   const playbookValidated = validatePlaybookSessionDay(playbookDateInput, sessionsResult);
 
   // goal-playbook-iter-7 (J-07): the Backscan section's own state — entirely independent of the
@@ -8641,6 +8765,7 @@ export default function DeskPage() {
       setPlaybookResult(null);
       setPlaybookRunsResult(null);
       setPlaybookContext(null);
+      setPlaybookCohorts(null);
       return;
     }
     let alive = true;
@@ -8654,10 +8779,14 @@ export default function DeskPage() {
       const recordId = result.ok ? (result.data?.playbook?.id ?? null) : null;
       if (recordId === null) {
         setPlaybookContext(null);
+        setPlaybookCohorts(null);
         return;
       }
-      const context = await fetchDeskPlaybookContext({ id: recordId });
-      if (alive) setPlaybookContext(context.ok ? context.data : null);
+      const context = await fetchDeskPlaybookContext({ id: recordId, cohorts: true });
+      if (alive) {
+        setPlaybookContext(context.ok ? context.data : null);
+        setPlaybookCohorts(context.ok ? (context.cohortSummaries ?? null) : null);
+      }
     });
     fetchDeskPlaybookRuns(date).then((result) => {
       if (alive) setPlaybookRunsResult(result);
@@ -9094,6 +9223,9 @@ export default function DeskPage() {
               context={playbookContext}
               bandFilter={playbookBandFilter}
               onBandFilterChange={setPlaybookBandFilter}
+              insideFilter={playbookInsideFilter}
+              onInsideFilterChange={setPlaybookInsideFilter}
+              cohorts={playbookCohorts}
               selectedSignalKey={selectedPlaybookSignal}
               onSelectSignal={setSelectedPlaybookSignal}
             />

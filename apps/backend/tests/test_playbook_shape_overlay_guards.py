@@ -370,7 +370,13 @@ def test_occurrence_rows_default_to_the_records_own_served_order():
     assert "useTableSort(occurrences" in body, (
         "PlaybookOccurrenceList no longer reaches its display order through the shared sort hook"
     )
-    assert "beyondCap={cap !== null && entry.servedIndex >= cap}" in body, (
+    # NAMED REVISION: the chip used to read the row's POSITION (`entry.servedIndex >= cap`), which
+    # was correct only while this list was always the record's whole pool. It now narrows with the
+    # section's display filters, and a filtered array re-origins that index — moving the chip onto
+    # occurrences that DID feed the pooled means and off ones that did not. It now reads the
+    # SERVED `in_cap` flag, which is the fact itself rather than a proxy for it. The intent this
+    # guard protects is unchanged: the chip must never be derived from render position.
+    assert "beyondCap={playbookBeyondCap(cohorts, entry.item, cap)}" in body, (
         "the beyond-cap chip no longer follows the occurrence's SERVED position -- under a sort it "
         "would mark the wrong occurrences as outside the pool"
     )
