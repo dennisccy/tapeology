@@ -3,13 +3,12 @@
     "J-01": {
       "id": "J-01",
       "name": "The era transition stands — reconciliation made testable",
-      "status": "passing",
-      "last_verified_iter": "goal-referee-iter-1",
-      "last_passing_iter": "goal-referee-iter-1",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-referee-iter-0",
-      "last_evidence_path": "reports/qa/goal-referee-iter-1-evidence/UT-J-01-result.png",
-      "spec_hash": "9fe67344e7c7ae71546d205bbd134263e172265ee542963f4b483f564c0e228e",
-      "notes": "GET /research/desk/referee/evidence live on the QA rig, HTTP 200, screenshot shows the full per-family readiness shape: playbook_occurrence{detector_basis 02bebbe17e7b8769, config_fingerprint 08e471b10130e1e2, records 4, distinct_sessions 3, signals_at_current_basis 21, 7 per_setup_side cells} and strategy_trade{dataset_count 0, per_split_counts, trade_count 0, tick_gate_met false, tick_gate_statement naming the >=150 symbol-day gate and '150 short of the gate', basis_caveats naming levels._bars_as_of / epoch <= as_of}. Evaluator re-ran the 15 new tests itself: tests/test_referee_evidence.py (7, hand-computed exact counts incl. newest-per-date supersession, stale-basis exclusion, zero-corpus 200) + tests/test_referee_guards.py (8: band-context-v3 spec pin, desk_playbook_context zero-diff source hash, catalog-reconciliation pins, each with a seeded can-fail counter-test) — 15 passed. Evaluator also re-ran test_mcp_server/test_no_execution_path/test_copy_discipline/test_desk_ui_guards = 156 passed, and printed Config().config_fingerprint() == 08e471b10130e1e2. Reviewer's independent full-suite run: 2433 pass / 8 skip / 0 fail (era-open floor 2418). Diff is only apps/backend/app/main.py (7 additive lines) + 4 new backend files; zero diff to desk_playbook*.py / desk_forward.py / levels.py / tradability.py / setups.py / pnl_scan.py / app/config.py. Open rider (not a defect): the additive integrity_errors key is outside the pinned 6-key response shape — fold it into the documented contract when J-02 extends it."
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-01",
+      "spec_hash": "9fe67344e7c7ae71546d205bbd134263e172265ee542963f4b483f564c0e228e"
     },
     "J-02": {
       "id": "J-02",
@@ -95,14 +94,14 @@
       "id": "J-10",
       "name": "The kept product stands — regression sentinel",
       "status": "partial",
-      "last_verified_iter": "goal-referee-iter-1",
+      "last_verified_iter": "goal-referee-iter-0",
       "last_passing_iter": null,
       "first_seen_iter": "goal-referee-iter-0",
-      "last_evidence_path": "reports/qa/goal-referee-iter-1-evidence/J-10-verify.png",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-10-result.png",
       "spec_hash": "d14682891de7794bb3728ade717e6a1ed805f44384087a9bf18d75d09348fd9a",
-      "notes": "Kept-product half RE-VERIFIED this iteration by deterministic replay of the stored golden (runs/goal-session-referee/journey-scripts/J-10.json, 9 steps: cockpit watch SIM-BUYER -> 'Buyer Control', /structure AAPL as-of 2026-06-22 Load -> '2026-06-18', /desk 'Playbook Signals' + Playbook Evidence expand -> 'Built from signature') — PASS, screenshot J-10-verify.png. Supporting checks this iteration: store-scope guard CLEAN (11,274 protected files unchanged), fingerprint 08e471b10130e1e2, MCP still exactly 20 tools (test_mcp_server.py green), copy discipline + no-execution-path green (156 guard tests re-run by the evaluator). Era-completion clauses still structurally unmeetable until J-09 lands: the three Referee /desk sections do not exist and MCP advertises 20 tools, not 22. Note the golden covers a slice of /desk, not literally every shipped section — the full walk is an era-end (J-09/J-10 closure) obligation."
+      "notes": "Kept-product half VERIFIED at baseline: cockpit sim tape + chart (J-10-result.png), /structure pinned-AAPL Load with the era-5B 300.11-302.2 wall (J-10-structure.png), /desk shipped sections + honest empty states on the fixture rig (J-07-fail.png), nav = 3 routes, suite 2,418 pass / 8 skip (era-open floor), fingerprint 08e471b10130e1e2, store-scope guard CLEAN (11,274 protected files unchanged). Era-completion clauses NOT met and structurally unmeetable until J-09 lands: the three Referee /desk sections do not exist and MCP advertises 20 tools, not 22."
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-08-14T18:05:00Z"
+  "updated_at": "2026-08-14T15:37:59Z"
 }

@@ -17,3 +17,17 @@ iteration re-does that work. Consequence: a future break of the kept product wou
 frozen-foundations anti-goal violation rather than by the `passing → failing` regression rule, and
 J-10 closes only when J-09 lands.
 **Reversible:** yes
+
+## iter-1 — goal-evaluator
+
+**Ambiguity:** J-01's acceptance requires the strategy family to carry "the `basis_caveats`
+forming-bar disclosure verbatim", but no verbatim text for it exists in `docs/goal.md` or
+`docs/referee-statistical-spec.md` — only a description of what it must disclose. So there was
+nothing to compare the served sentence against.
+**We chose:** Accepted this iteration's first authoring as satisfying "verbatim" — the exported
+constant `REFEREE_FORMING_BAR_BASIS_CAVEAT` (`apps/backend/app/research/referee_evidence.py`),
+whose served text names `levels._bars_as_of`, the `epoch <= as_of` admission, and the Card 6.4
+deferral (screenshot `reports/qa/goal-referee-iter-1-evidence/UT-J-01-result.png`). It is now the
+single source of truth J-06 and J-08 must import rather than re-word. The owner may want to read
+that sentence once and edit it now, while only one caller exists.
+**Reversible:** yes

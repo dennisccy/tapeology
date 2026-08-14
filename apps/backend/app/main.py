@@ -40,6 +40,7 @@ from .providers.adapters.base import (
 from .providers.historical import HistoricalProvider
 from .providers.live import LiveProvider
 from .research.desk_routes import router as desk_router
+from .research.referee_routes import router as referee_router
 from .research.routes import (
     ResearchRegistry,
     get_registry_or_none,
@@ -200,6 +201,12 @@ app.include_router(research_router)
 # Era B "The Desk" (J-01): the universe-ingestion namespace, under the SAME /research prefix but
 # its own module (routes.py is already large) — mounted separately, alongside research_router.
 app.include_router(desk_router)
+
+# Era 6 "The Referee" (J-01): the readiness fold, under /research/desk/referee — its own module
+# for the SAME reason desk_routes.py itself is separate from routes.py (already large; see
+# referee_routes.py's own docstring). Reached by the MCP get_endpoint's existing /research/
+# prefix allowlist automatically — no MCP change needed.
+app.include_router(referee_router)
 
 # The meta namespace (Data Contract row 35, J-01): the canonical UI route map. The rendered nav
 # and the MCP ``ui_route_map`` tool read it — never a hand-maintained duplicate list.
