@@ -731,3 +731,31 @@ probe), not marked `unknown` for lacking a screenshot it was never supposed to h
 **Reversible:** yes — J-09 renders the Referee panels and J-10's browser walk covers the kept
 product; if the owner wants a browser artifact for the promotion refusal, it would have to become a
 new rendered surface, which this era's own OUT OF SCOPE explicitly defers.
+
+## iter-10 — goal-decomposer
+
+**Ambiguity:** Iteration 9's evaluator next-step recommendation offered two ways to close the
+still-open MINOR anti-goal entry (a strategy-family certificate's declared `candidate` is never
+checked against the identity of the evidence it was minted from — iter-9's own reproduced
+exploit): "make the certificate's evidence actually belong to the strategy it names, or get an
+owner ruling that a caller-declared name is enough while the minting path stays unreachable."
+Neither `docs/referee-statistical-spec.md` §3.7 nor §8 states whether the dataset-clustered
+pooling itself must be scoped to the certificate's named `(strategy_id, profile)`, or only that
+the certificate's own recorded fields must be internally consistent.
+**We chose:** the code fix, not an owner-ruling closure. `_pool_strategy_trades` gains an
+optional `candidate: {"strategy_id": str, "profile": str} | None` filter, matched against the
+SAME `strategy_id`/`profile` fields `backtests.py`'s result block already stamps on every
+journal record (no new field, no second identity join); `run_evaluation_and_record` passes
+`certificate_mint["candidate"]` through it ONLY on the path that could ever mint a certificate
+(`certificate_mint` supplied — still zero production callers this era). `certificate_mint=None`
+(every existing route/CLI caller, and every monitoring/non-mint evaluation) keeps pooling
+whole-corpus and unfiltered, byte-identical to today's shipped behavior, so the already-passing
+iter-9 TC-10 real-corpus `insufficient_sample` reading is untouched. This was weighted over the
+owner-ruling option because the anti-goal is critical, the exploit is fully reproduced against
+the real rail (not merely theoretical), the fix reuses already-stamped fields with zero
+schema/store change, and this iteration already carries full-depth budget the prior evaluator
+explicitly earmarked for exactly this closure.
+**Reversible:** yes — `_pool_strategy_trades`'s new parameter defaults to `None` (today's exact
+behavior); reverting to the caller-declared-name-suffices reading is deleting the one new
+call-site argument, with nothing stored to migrate since zero certificates exist on file either
+way.

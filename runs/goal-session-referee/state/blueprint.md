@@ -294,3 +294,19 @@ _starter_context_readiness already uses, via one shared helper -- closing the it
 evaluator-found gap where a context-based candidate's registered-row numbers (ignoring context)
 could disagree with its own shortlist row's live readiness (which already applied it) for the
 identical cell. -->
+
+<!-- iter-10 note (J-09): renders three ALREADY-REGISTERED Data Contract rows for the first time
+-- no new row, no new field, no owner/endpoint change. "Referee Adjudications" and "Referee Runs"
+(the pre-registered J-06 and J-04 IA rows above) go live on /desk, reading
+GET /research/desk/referee/adjudications and GET .../nulls/runs + GET .../evaluate/runs (+ their
+POST compute/cancel triggers) verbatim -- zero client-side verdict/number derivation. MCP gains
+desk_referee -> /research/desk/referee/adjudications and desk_referee_registry ->
+/research/desk/referee/registry as two more byte-identical GET-proxy tools (_STATIC_PATHS,
+20 -> 22 tools); no selector arguments, matching every other no-required-param tool's shape.
+
+Rider (no Data-Contract shape change): _pool_strategy_trades (referee_adjudicate.py) gains an
+optional candidate filter, applied only on the certificate-mint path (certificate_mint
+supplied), closing the iter-9-recorded MINOR anti-goal entry (a certificate's declared candidate
+was never checked against its pooled evidence's own identity) -- see state/assumptions.md
+iter-10 entry. The Certificate record's own field shape (iter-6/iter-9 notes) is unchanged;
+still zero certificates on file against the operator's real store. -->
