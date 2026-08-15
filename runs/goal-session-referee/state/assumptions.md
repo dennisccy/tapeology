@@ -637,3 +637,97 @@ verbatim), rather than escalating for a human ruling or leaving the drop unrecor
 candidate is only ever SELECTABLE, never auto-registered, so nothing is written until an operator
 explicitly approves it through the real registration act. If a future owner ruling disagrees,
 removing the sixth module-constant entry is a one-line change with nothing stored to migrate.
+
+## iter-9 — developer
+
+**Ambiguity:** J-08 Step 1 (spec §3.7) asks for a "strategy-family evaluation branch" reusing
+`run_evaluation_and_record`'s existing role/attestation/snapshot machinery, and blueprint.md's
+iter-9 note says this needs "No new field" on the evaluation record. But the SAME hypothesis
+record schema `_REQUIRED_HYPOTHESIS_FIELDS` enforces uniformly across both evidence families
+still requires `setup_id`/`side` — fields with no natural strategy-family meaning (spec §3.7's own
+pooling is "cluster = dataset", never setup/side-filtered) — and nowhere does the spec or the
+iteration's Data-contract additions name a field carrying WHICH `(strategy_id, profile)` candidate
+a strategy-family hypothesis is about, or which live `pnl_scan` train/holdout pins a certificate
+minted from it should pin.
+**We chose:** (1) `_pool_strategy_trades` pools EVERY recorded candidate/null trade across the
+WHOLE `JournalStore`, grouped by `cluster_key` = dataset id, with zero filtering by the
+hypothesis's own `setup_id`/`side` — those two fields stay schema-required but functionally
+vestigial for this branch (a test/registration payload may supply any schema-valid placeholder).
+(2) The certificate mint call site (`_mint_strategy_certificate`, reached only from
+`run_evaluation_and_record`'s own fresh-checkpoint path) takes `candidate`/
+`champion_identity_at_scan_time`/`train_dataset`/`holdout_dataset` as an EXPLICIT, caller-supplied
+`certificate_mint` dict rather than deriving them from the hypothesis record — the caller (the one
+entity that actually knows which live `pnl_scan` scan this certificate authorizes) supplies them;
+omitting `certificate_mint` (every route/CLI caller today) mints nothing, matching goal.md's own
+"no strategy certificate can honestly exist this era". Both choices keep the hypothesis record and
+the evaluation record byte-shape-identical to the playbook family's (blueprint.md's own "no new
+field"), at the cost of `setup_id`/`side` not doing real work for this one evidence family.
+**Reversible:** yes — no real strategy-family hypothesis is registered against the operator's
+store this era (Out of Scope: fixture-only); if a future era needs a real per-candidate identity
+on the hypothesis record, adding one is an additive field with nothing stored to migrate.
+
+## iter-9 — developer
+
+**Ambiguity:** TC-10 says "the recorded verdict is `insufficient_sample`" for the strategy-family
+branch at today's real (tiny) corpus, but the full `insufficient_sample` VERDICT vocabulary token
+is only ever produced by `adjudications_response()`'s fold (`_snapshot_fold`'s attestation-refusal
+branch, or `_fold_one_hypothesis`'s snapshot-integrity-failure branch) — never by the live
+(pre-checkpoint) fold, which only ever reads `"registered"`/`"pending_forward_confirmation"`. With
+so few registered datasets, a strategy-family hypothesis's `role` stays `"pending"` forever (never
+reaches `"checkpoint"`), so it never produces a snapshot and never reaches EITHER of those two
+existing `insufficient_sample`-producing branches either.
+**We chose:** Read "the recorded verdict is insufficient_sample" as referring to the evaluation
+RECORD's own `ci_cluster` field, which already carries the literal `INSUFFICIENT_SAMPLE`
+("insufficient_sample") sentinel string whenever `bootstrap_ci_cluster` sees fewer than
+`REFEREE_MIN_CLUSTERS_FOR_CI` (8) informative clusters (this branch's dataset clusters, exactly as
+today's real corpus produces) — rather than adding a NEW strategy-family-specific branch to
+`_live_fold`/`adjudications_response` that would report a bespoke "insufficient_sample" verdict
+for a pre-checkpoint strategy hypothesis (a change to the READ-side fold that is not itself named
+anywhere in this iteration's IN SCOPE list, and that would need its own new interpretation of what
+"forward confirmation" honestly means for a family whose informative unit does not accrue with
+wall-clock time the way Playbook sessions do). `test_referee_adjudicate.py`'s
+`test_tc10_todays_real_corpus_shape_serves_insufficient_sample_with_caveats_and_null_disclosure`
+asserts this literal field, not a full adjudications-fold verdict token.
+**Reversible:** yes — a future era wiring `adjudications_response()`/`_live_fold` for a genuine,
+registered strategy-family hypothesis (out of scope this era) can add that branch without
+touching anything built this iteration; nothing here would need to move.
+
+## iter-9 — goal-evaluator
+
+**Ambiguity:** The critical anti-goal "Promotion is certificate-locked. No champion promotion
+without a valid **candidate-specific** Referee certificate" does not say whether "candidate-specific"
+constrains only the certificate's recorded `candidate` pin (which `authorize_promotion` does compare
+exactly) or also the EVIDENCE the certificate's statistics were computed from. This iteration's mint
+satisfies the first reading and not the second: `_pool_strategy_trades`/`strategy_observations` pool
+every recorded backtest trade unfiltered by `strategy_id`/`profile`, and the `candidate` dict is
+supplied by the mint's caller and never cross-checked against the pooled evidence's own identity.
+I reproduced this: 12 planted `v1/default` backtests minted an attested, gate-passing certificate
+naming `totally-unrelated-strategy/totally-unrelated-profile`, and `authorize_promotion` then
+returned `authorized: True` for that unrelated candidate.
+**We chose:** Scored it a MINOR, still-OPEN anti-goal entry (so the verdict is ESCALATE, not
+REGRESSION) rather than critical, because it is unreachable by any operator action this era —
+neither production call site of `run_evaluation_and_record` (`referee_adjudicate.py:1512`, the
+compute manager; `:1854`, the CLI) supplies `journal_store` or `certificate_mint`, the operator's
+real registry directory does not exist on disk, zero certificates are on file, and therefore every
+live promotion today is refused with `no_certificate` — exactly what goal.md itself declares. It is
+left `resolved: false` so it must be closed before any future era wires the mint into the
+`/evaluate` route. Consequence if the owner reads "candidate-specific" the stricter way today: this
+becomes a critical violation and the verdict would be REGRESSION with a halt.
+**Reversible:** yes — nothing is stored and no certificate exists; closing it is either scoping the
+strategy pool to the certificate's own `(strategy_id, profile)` plus a cross-check at the mint, or a
+one-line owner ruling recorded here that a caller-declared pin suffices while the mint stays
+route-unreachable.
+
+## iter-9 — goal-evaluator
+
+**Ambiguity:** goal.md J-08 says its acceptance is "*(Keyless; automated.)*", and the browser lane
+recorded `UT-J-08 … SKIP — no browser action exists to execute`. Trap T-10 says "No screenshot ⇒
+`unknown`, never `passing`", which read literally would make every keyless journey unscorable.
+**We chose:** Read T-10 as governing BROWSER acceptances only (its own next clause, "backend-only
+proof never satisfies a browser acceptance", says so), so J-08 — which goal.md itself scopes as
+having no browser step — is scored from its pytest acceptance plus my own direct verification
+(signature probe, single-call-site greps, source-scan replication, and a live real-rail mint/tamper
+probe), not marked `unknown` for lacking a screenshot it was never supposed to have.
+**Reversible:** yes — J-09 renders the Referee panels and J-10's browser walk covers the kept
+product; if the owner wants a browser artifact for the promotion refusal, it would have to become a
+new rendered surface, which this era's own OUT OF SCOPE explicitly defers.

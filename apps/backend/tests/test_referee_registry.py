@@ -532,12 +532,14 @@ def test_tc13_cli_and_post_produce_byte_identical_stored_hypothesis_records(tmp_
     assert cli_record == post_record  # byte-identical stored records, two isolated stores
 
 
-# === TC-14: the five starter-family candidates (spec Sec7 S-1..S-5) all register cleanly =============
+# === TC-14: the six starter-family candidates (spec Sec7 S-1..S-5 + iter-9's S-6) all register
+# cleanly ===============================================================================================
 
 
 def _starter_family_payloads() -> list[dict]:
-    """spec Sec7's shortlist, verbatim (S-1..S-5) -- one family, the complete planned list."""
-    ids = ["hyp-s1", "hyp-s2", "hyp-s3", "hyp-s4", "hyp-s5"]
+    """spec Sec7's shortlist, verbatim (S-1..S-5) plus iter-9's own S-6 rider (the S-4 short-side
+    sibling) -- one family, the complete planned list."""
+    ids = ["hyp-s1", "hyp-s2", "hyp-s3", "hyp-s4", "hyp-s5", "hyp-s6"]
     family_kwargs = {
         "family_id": "fam-starter", "family_q": 0.10, "family_candidate_hypothesis_ids": ids,
     }
@@ -584,29 +586,42 @@ def _starter_family_payloads() -> list[dict]:
             "target_sessions": REFEREE_MIN_SESSIONS, "min_occurrences": REFEREE_MIN_OCCURRENCES,
             "registered_at": _REGISTERED_AT,
         },
+        {  # S-6 (iter-9 rider): B, range_trade:short at_wall vs other same-setup contexts, 1h
+            "hypothesis_id": "hyp-s6", **family_kwargs, "evidence_family": "playbook",
+            "estimand": "B", "setup_id": "range_trade", "side": "short",
+            "context_predicate": {"backing_bucket": "at_wall"}, "primary_measure_key": "1h",
+            "primary_horizon": "1h", "sidedness": "greater", "null_spec_id": None,
+            "test_spec_id": REFEREE_TEST_PERM_SPEC_ID, "target_sessions": REFEREE_MIN_SESSIONS,
+            "min_occurrences": REFEREE_MIN_OCCURRENCES, "registered_at": _REGISTERED_AT,
+        },
     ]
 
 
-def test_tc14_all_five_starter_candidates_register_cleanly_with_distinct_ids(stores):
+def test_tc14_all_six_starter_candidates_register_cleanly_with_distinct_ids(stores):
     family_store, hypothesis_store, _wd, _cert, _pb = stores
     recorded = []
     for payload in _starter_family_payloads():
         recorded.append(register_hypothesis(family_store, hypothesis_store, payload, confirm=True))
 
     hypothesis_ids = {r["hypothesis_id"] for r in recorded}
-    assert len(hypothesis_ids) == 5  # five DISTINCT ids
-    assert hypothesis_ids == {"hyp-s1", "hyp-s2", "hyp-s3", "hyp-s4", "hyp-s5"}
+    assert len(hypothesis_ids) == 6  # six DISTINCT ids
+    assert hypothesis_ids == {"hyp-s1", "hyp-s2", "hyp-s3", "hyp-s4", "hyp-s5", "hyp-s6"}
 
     by_id = {r["hypothesis_id"]: r for r in recorded}
     assert by_id["hyp-s1"]["estimand"] == "A" and by_id["hyp-s1"]["primary_horizon"] == "5m"
     assert by_id["hyp-s2"]["estimand"] == "A" and by_id["hyp-s2"]["primary_horizon"] == "1h"
     assert by_id["hyp-s3"]["estimand"] == "A" and by_id["hyp-s3"]["primary_horizon"] == "to_close"
     assert by_id["hyp-s4"]["estimand"] == "B" and by_id["hyp-s4"]["null_spec_id"] is None
+    assert by_id["hyp-s4"]["side"] == "long"
     assert by_id["hyp-s5"]["estimand"] == "C" and by_id["hyp-s5"]["null_spec_id"] == "referee-null-context-v1"
+    assert by_id["hyp-s6"]["estimand"] == "B" and by_id["hyp-s6"]["null_spec_id"] is None
+    assert by_id["hyp-s6"]["side"] == "short"  # the S-4 short-side sibling
 
     families, _errors = family_store.list()
     assert len(families) == 1  # one shared family -- the starter family
-    assert families[0]["candidate_hypothesis_ids"] == ["hyp-s1", "hyp-s2", "hyp-s3", "hyp-s4", "hyp-s5"]
+    assert families[0]["candidate_hypothesis_ids"] == [
+        "hyp-s1", "hyp-s2", "hyp-s3", "hyp-s4", "hyp-s5", "hyp-s6",
+    ]
 
 
 # === J-07 (iter-8): the starter-family shortlist -- GET .../registry/shortlist =========================
@@ -619,16 +634,20 @@ def test_tc14_all_five_starter_candidates_register_cleanly_with_distinct_ids(sto
 # the non-vacuous proof that the S-4/S-5 wiring genuinely discriminates.
 
 
-def test_tc1_shortlist_serves_exactly_five_pinned_candidates_with_non_negative_readiness(
+def test_tc1_shortlist_serves_six_pinned_candidates_with_non_negative_readiness(
     stores, bar_store,
 ):
+    """TC-16 (the S-6 half) + TC-17 (the family_id/family_q half), both folded into this file's
+    own pre-existing TC-1 shortlist test rather than duplicated: the shortlist now serves SIX
+    pinned candidates (S-1..S-5 plus iter-9's own S-4 short-side sibling, S-6) beside the
+    starter family's own registration-mechanics fields."""
     _fam, _hyp, _wd, _cert, playbook_store = stores  # an EMPTY corpus -- the honest baseline
     response = shortlist_response(
         playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
         bar_store=bar_store, config=CONFIG,
     )
     candidates = response["candidates"]
-    assert [c["candidate_id"] for c in candidates] == ["S-1", "S-2", "S-3", "S-4", "S-5"]
+    assert [c["candidate_id"] for c in candidates] == ["S-1", "S-2", "S-3", "S-4", "S-5", "S-6"]
     for candidate in candidates:
         assert candidate["n"] >= 0
         assert candidate["n_sessions"] >= 0
@@ -652,14 +671,29 @@ def test_tc1_shortlist_serves_exactly_five_pinned_candidates_with_non_negative_r
         "backing_bucket": "at_wall",
     }
     assert by_id["S-4"]["null_spec_id"] is None  # Estimand B: no null population (spec Sec3.2)
+    assert by_id["S-4"]["side"] == "long"
     assert by_id["S-5"]["estimand"] == "C" and by_id["S-5"]["null_spec_id"] == "referee-null-context-v1"
+    # TC-16: S-6 is S-4's own short-side sibling -- same estimand/context/measure/horizon shape,
+    # ``_starter_context_readiness`` computed identically (the SAME primitive, just filtered on
+    # side="short" instead of "long").
+    assert (by_id["S-6"]["estimand"], by_id["S-6"]["setup_id"], by_id["S-6"]["side"]) == (
+        "B", "range_trade", "short",
+    )
+    assert by_id["S-6"]["context_predicate"] == {"backing_bucket": "at_wall"}
+    assert by_id["S-6"]["null_spec_id"] is None
+    assert by_id["S-6"]["primary_measure_key"] == by_id["S-4"]["primary_measure_key"] == "1h"
 
-    # These five are the exact SAME pinned definitions test_tc14 already registers through the
+    # These six are the exact SAME pinned definitions test_tc14 already registers through the
     # write path -- proof the shortlist's own module constants and the registration fixture stay
     # in lockstep (never two independently-drifting copies).
     assert [c["candidate_id"] for c in REFEREE_STARTER_FAMILY_SHORTLIST] == [
-        "S-1", "S-2", "S-3", "S-4", "S-5",
+        "S-1", "S-2", "S-3", "S-4", "S-5", "S-6",
     ]
+
+    # TC-17: family_id/family_q are served top-level, previously only an unowned frontend literal
+    # (apps/frontend/app/desk/page.tsx's REFEREE_STARTER_FAMILY_ID/REFEREE_STARTER_FAMILY_Q).
+    assert response["family_id"] == "referee-starter-family"
+    assert response["family_q"] == pytest.approx(0.10)
 
 
 def test_tc2_zero_jbe_long_signals_amid_a_nonempty_corpus_serves_zero_never_a_divide_by_zero(
@@ -716,13 +750,15 @@ def test_shortlist_projected_days_is_measured_from_zero_never_net_of_historical_
 
 def test_get_registry_shortlist_route_honest_state_against_a_real_empty_store(route_ctx):
     """TC-6 (the shortlist half): against the real store, with no operator action taken, the
-    shortlist still serves 5 candidates and the registry's own hypotheses list stays empty -- the
-    honest not-yet-acted state, never fabricated."""
+    shortlist still serves 6 candidates (S-1..S-5 plus iter-9's S-6) and the registry's own
+    hypotheses list stays empty -- the honest not-yet-acted state, never fabricated."""
     client, _tmp = route_ctx
     resp = client.get("/research/desk/referee/registry/shortlist")
     assert resp.status_code == 200
     body = resp.json()
-    assert [c["candidate_id"] for c in body["candidates"]] == ["S-1", "S-2", "S-3", "S-4", "S-5"]
+    assert [c["candidate_id"] for c in body["candidates"]] == ["S-1", "S-2", "S-3", "S-4", "S-5", "S-6"]
+    assert body["family_id"] == "referee-starter-family"
+    assert body["family_q"] == pytest.approx(0.10)
 
     registry = client.get("/research/desk/referee/registry")
     assert registry.json()["hypotheses"] == []
@@ -746,9 +782,9 @@ class _FakeWallResolver:
         }
 
 
-def _context_signal(*, entry: float, symbol: str) -> dict:
+def _context_signal(*, entry: float, symbol: str, side: str = "long") -> dict:
     return {
-        "setup_id": "range_trade", "side": "long", "symbol": symbol,
+        "setup_id": "range_trade", "side": side, "symbol": symbol,
         "trigger_ts": _et_instant_iso(2026, 6, 21, 10, 0),  # fixed instant -- irrelevant to the fake
         "entry": entry, "invalidation_price": entry - 0.5,
     }
@@ -784,18 +820,45 @@ def test_starter_context_readiness_discriminates_at_wall_from_off_wall_and_dedup
     assert n_sessions == 2  # 2026-06-21 and 2026-06-22 -- the same-session pair dedupes to one date
 
 
-def test_shortlist_s4_s5_readiness_reflects_the_at_wall_context_resolve(
+def test_starter_context_readiness_discriminates_the_s6_short_side_too(stores):
+    """TC-16's own non-vacuous proof for S-6 specifically (the S-4 short-side sibling, iter-9): the
+    IDENTICAL ``_starter_context_readiness`` primitive, filtered on ``side="short"`` instead of
+    ``"long"``, genuinely discriminates a short-side ``at_wall`` occurrence from a long-side one at
+    the SAME price (never conflating the two sides into one pool)."""
+    _fam, _hyp, _wd, _cert, playbook_store = stores
+    _plant_playbook_signals(
+        playbook_store, "2026-06-21",
+        [
+            _context_signal(entry=100.0, symbol="RTS", side="short"),  # at_wall, SHORT
+            _context_signal(entry=100.0, symbol="RTL", side="long"),  # at_wall, but LONG -- never counts
+        ],
+    )
+    records, _errors = playbook_store.list()
+    newest_by_date = referee_registry_module._newest_per_session_date(records)
+    n, n_sessions = referee_registry_module._starter_context_readiness(
+        newest_by_date, CONFIG.config_fingerprint(),
+        setup_id="range_trade", side="short", backing_bucket="at_wall",
+        context_resolver=_FakeWallResolver(),
+    )
+    assert n == 1 and n_sessions == 1  # RTS only -- RTL's long side never leaks in
+
+
+def test_shortlist_s4_s5_s6_readiness_reflects_the_at_wall_context_resolve(
     stores, bar_store, monkeypatch,
 ):
     """End-to-end wiring proof (not just the isolated helper above): ``shortlist_response()``
-    itself serves nonzero S-4/S-5 readiness when the corpus genuinely carries ``at_wall``
-    ``range_trade:long`` occurrences, by constructing a REAL ``BandMapResolver`` whose class this
-    test monkeypatches to the fake wall (the class-level substitution ``referee_adjudicate.py``'s
-    own estimand-B/C tests never needed, since those call the pooling function directly with an
-    injected resolver instead of letting it construct one)."""
+    itself serves nonzero S-4/S-5/S-6 readiness when the corpus genuinely carries ``at_wall``
+    ``range_trade`` occurrences on the matching side, by constructing a REAL ``BandMapResolver``
+    whose class this test monkeypatches to the fake wall (the class-level substitution
+    ``referee_adjudicate.py``'s own estimand-B/C tests never needed, since those call the pooling
+    function directly with an injected resolver instead of letting it construct one)."""
     _fam, _hyp, _wd, _cert, playbook_store = stores
     _plant_playbook_signals(
-        playbook_store, "2026-06-21", [_context_signal(entry=100.0, symbol="RTA")],
+        playbook_store, "2026-06-21",
+        [
+            _context_signal(entry=100.0, symbol="RTA", side="long"),
+            _context_signal(entry=100.0, symbol="RTB", side="short"),
+        ],
     )
     monkeypatch.setattr(
         referee_registry_module, "BandMapResolver", lambda *args, **kwargs: _FakeWallResolver()
@@ -806,6 +869,8 @@ def test_shortlist_s4_s5_readiness_reflects_the_at_wall_context_resolve(
     )
     by_id = {c["candidate_id"]: c for c in response["candidates"]}
     assert by_id["S-4"]["n"] == 1 and by_id["S-4"]["n_sessions"] == 1
+    assert by_id["S-5"]["n"] == 1 and by_id["S-5"]["n_sessions"] == 1
+    assert by_id["S-6"]["n"] == 1 and by_id["S-6"]["n_sessions"] == 1
     assert by_id["S-5"]["n"] == 1 and by_id["S-5"]["n_sessions"] == 1
 
 
@@ -850,6 +915,93 @@ def test_tc10_a_deep_backfilled_pre_boundary_record_lands_in_discovery_never_acc
     assert folded["discovery"]["n_sessions"] == 2  # 2026-05-01 and _BOUNDARY itself
     assert folded["discovery"]["n"] == 2
     assert folded["accrual"]["informative_post_boundary_sessions"] == 1  # 2026-06-11 only
+
+
+# === TC-15 (goal-referee-iter-9 rider): a B/C hypothesis's accrual/discovery now apply the SAME
+# context_predicate/backing-bucket check the shortlist's own live readiness already applies ===========
+
+
+def test_tc15_a_context_hypothesis_accrual_and_discovery_agree_with_the_shortlist_readiness(
+    stores, bar_store, monkeypatch,
+):
+    """TC-15: before this rider, ``_hypothesis_accrual``/``_hypothesis_discovery`` counted EVERY
+    ``range_trade:long`` signal regardless of context, disagreeing with the shortlist's own S-4/S-5
+    live readiness (which already applied the ``at_wall`` predicate). A registered Estimand-B
+    hypothesis's own ``accrual``/``discovery`` now agree with ``_starter_context_readiness`` for the
+    IDENTICAL ``(setup_id, side, context_predicate)`` cell: an ``off_wall`` occurrence in the SAME
+    session as an ``at_wall`` one must never count toward either block."""
+    family_store, hypothesis_store, withdrawal_store, cert_store, playbook_store = stores
+    payload = _estimand_a_payload(
+        "hyp-tc15-b", "fam-tc15-b", estimand="B", setup_id="range_trade", side="long",
+        context_predicate={"backing_bucket": "at_wall"}, null_spec_id=None,
+    )
+    register_hypothesis(family_store, hypothesis_store, payload, confirm=True)
+
+    # Pre-boundary (discovery-only): one at_wall, one off_wall -- only the at_wall one counts.
+    _plant_playbook_signals(
+        playbook_store, "2026-06-01",
+        [
+            _context_signal(entry=100.0, symbol="RTA", side="long"),  # at_wall
+            _context_signal(entry=110.0, symbol="RTB", side="long"),  # off_wall -- must NEVER count
+        ],
+    )
+    # Post-boundary (accrual): one at_wall, one off_wall in the SAME session -- only at_wall counts.
+    _plant_playbook_signals(
+        playbook_store, "2026-06-11",
+        [
+            _context_signal(entry=99.95, symbol="RTC", side="long"),  # at_wall
+            _context_signal(entry=120.0, symbol="RTD", side="long"),  # off_wall -- must NEVER count
+        ],
+    )
+    # A SECOND post-boundary session, off_wall only -- must contribute to neither block.
+    _plant_playbook_signals(
+        playbook_store, "2026-06-12", [_context_signal(entry=130.0, symbol="RTE", side="long")],
+    )
+
+    monkeypatch.setattr(
+        referee_registry_module, "BandMapResolver", lambda *args, **kwargs: _FakeWallResolver()
+    )
+    response = registry_response(
+        family_store=family_store, hypothesis_store=hypothesis_store,
+        withdrawal_store=withdrawal_store, certificate_store=cert_store,
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store, config=CONFIG,
+    )
+    folded = next(h for h in response["hypotheses"] if h["hypothesis_id"] == "hyp-tc15-b")
+    # Before this rider these would have read 2 (both signals per session counted blindly).
+    assert folded["discovery"]["n_sessions"] == 1  # 2026-06-01 only (its at_wall signal)
+    assert folded["discovery"]["n"] == 1
+    assert folded["accrual"]["informative_post_boundary_sessions"] == 1  # 2026-06-11 only
+
+    # Cross-check against the shortlist's own live readiness for the IDENTICAL cell (S-4:
+    # range_trade:long at_wall) -- both readers must agree, never independently drift.
+    shortlist = shortlist_response(
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store, config=CONFIG,
+    )
+    s4 = next(c for c in shortlist["candidates"] if c["candidate_id"] == "S-4")
+    # The shortlist pools the WHOLE corpus (pre+post boundary, exploratory forever): RTA (06-01) +
+    # RTC (06-11) are the only two at_wall occurrences, across 2 distinct sessions.
+    assert s4["n"] == 2 and s4["n_sessions"] == 2
+
+
+def test_registry_call_sites_without_bar_store_are_unaffected_estimand_a_only(stores):
+    """Backward-compatibility proof: EVERY caller omitting the new optional ``bar_store``/
+    ``config`` (the pre-iter-9 call shape) still folds correctly for an Estimand-A hypothesis
+    (``context_predicate is None``, the ONLY kind this era's OWN real registrations use) -- the
+    short-circuit in the shared helper never even looks at ``context_resolver``."""
+    family_store, hypothesis_store, withdrawal_store, cert_store, playbook_store = stores
+    payload = _estimand_a_payload("hyp-tc15-compat", "fam-tc15-compat")
+    register_hypothesis(family_store, hypothesis_store, payload, confirm=True)
+    _plant_playbook_signals(playbook_store, "2026-06-11", [_signal("capitulation", "long")])
+
+    response = registry_response(  # no bar_store/config -- the pre-iter-9 call shape
+        family_store=family_store, hypothesis_store=hypothesis_store,
+        withdrawal_store=withdrawal_store, certificate_store=cert_store,
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+    )
+    folded = next(h for h in response["hypotheses"] if h["hypothesis_id"] == "hyp-tc15-compat")
+    assert folded["accrual"]["informative_post_boundary_sessions"] == 1
 
 
 # === family/hypothesis coupling: consistency + "no candidate joins retroactively" =====================

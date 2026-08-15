@@ -2156,8 +2156,13 @@ export interface RefereeShortlistCandidate {
   projected_days_to_target: number | null;
 }
 
+// goal-referee-iter-9 rider: `family_id`/`family_q` are the starter family's own
+// registration-mechanics fields, moved backend-side (previously only an unowned
+// apps/frontend/app/desk/page.tsx literal) -- served here for the first time.
 export interface RefereeShortlistResponse {
   candidates: RefereeShortlistCandidate[];
+  family_id: string;
+  family_q: number;
 }
 
 // The read-side fold additions GET /research/desk/referee/registry adds to every hypothesis

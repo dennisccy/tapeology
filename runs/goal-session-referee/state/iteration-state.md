@@ -1,39 +1,40 @@
 # Iteration State — referee
 
-**After iteration:** 8 · **Date:** 2026-08-15 · **Verdict:** CONTINUE
+**After iteration:** 9 · **Date:** 2026-08-15 · **Verdict:** ESCALATE
 
 ## Journeys
 
-7 passing (J-01..J-07) · 2 failing (J-08 J-09) · 1 partial (J-10) — 10 total
+8 passing (J-01..J-08) · 1 failing (J-09) · 1 partial (J-10) — 10 total. J-01..J-04 were
+DEFERRED-BUDGET (kept prior status, sources unchanged); J-05/J-06 re-verified directly (their
+sources changed); J-07's stale-capture flag cleared by a fresh screenshot.
 
 ## Active blockers
 
-- none blocking the build. Human, non-blocking: iteration 8's 9 changed files are UNCOMMITTED —
-  the closure gate false-failed on a regex that read the words "backend-only" inside
-  `reports/phase-goal-referee-iter-8-user-visible-changes.md:14`, a sentence describing the NEW
-  visible section. Commit them; loosen that wording rule.
-- Human, non-blocking, other project (since iter 2): trendora backend on port 8255 not restarted.
+- **J-09, the only build work left** (dev): the two missing `/desk` Referee panels
+  (Adjudications, Runs) + MCP 20→22 (`EXPECTED_TOOLS`); J-10 cannot close until it ships.
+- **Open minor anti-goal** (dev): a certificate's candidate name is caller-declared and never
+  checked against its evidence — `referee_adjudicate.py:521` / `referee_evidence.py:826` pool
+  every backtest unfiltered. Unreachable today (no production caller passes
+  `journal_store`/`certificate_mint`); close before the mint reaches `POST .../evaluate`.
+- Human, non-blocking: iters 8+9 uncommitted; trendora :8255 not restarted.
 
 ## Last 2 verdicts
 
-- iter 8: CONTINUE — J-07 shipped and browser-verified (real registration write, boundary stamped
-  server-side); audit fixed 2 important defects in-iteration; coherence WARN, not FAIL.
-- iter 7: ESCALATE — J-06 shipped, but the round was demoted to lean and the evaluator's own probe
-  found two write-side gaps on the era's most permanent machinery.
+- iter 9: ESCALATE — J-08 interlock verified real (fail-closed, no bypass), but the planned full
+  pass was demoted to lean a 3rd time and the evaluator itself had to find the scoping gap.
+- iter 8: CONTINUE — J-07 shipped; audit caught the `projected_days_to_target` bug in-round.
 
 ## Do not redo
 
-- J-07 is DONE and browser-evidenced: shortlist fold + `GET /registry/shortlist`, `discovery` block,
-  the `/desk` Referee Registry section (select → confirm → real POST). Do not rebuild it.
-- Rider 1 + audit B1: BOTH snapshot-write sites in `referee_adjudicate.run_evaluation_and_record`
-  now gate on a verified attestation. Rider 2: `adjudications_response()` serves `integrity_errors`.
-- `projected_days_to_target = target_sessions / accrual_rate` (measured from zero) — settled by
-  audit B2 + `state/assumptions.md` iter-8 auditor entry. Do not restore the net-of-history reading.
-- The registration write path is deliberately generic (TC-9 registers `dbi:short`); the five
-  shortlist candidates are read-side module constants only. Settled in `state/assumptions.md`.
-- Suite 2,657 collected / 0 failed, pin `08e471b10130e1e2`, MCP 20 tools, store-scope guard CLEAN
-  (11,274 files) — all re-run by the evaluator at iter-8. No need to re-prove for unchanged code.
-- Open riders for J-08's round (NOT yet done): `discovery` ignores the candidate's context predicate
-  (shortlist 0 vs discovery 3) and carries no proxy marker; spec §7's S-4 short side was silently
-  dropped; `REFEREE_STARTER_FAMILY_Q = 0.1` is a browser literal; the UI-number guard misses
-  `hyp.accrual.*`; J-07's screenshots need a re-capture (`evidence_makeup`).
+- **J-08 is DONE** (`pnl_scan.py:349` authorizes before the ledger write at `:367`;
+  `certificate_store` required; TC-1..TC-7 cover all six refusal classes; no-bypass scan green).
+- **Riders done:** S-6 `range_trade:short at_wall`; `family_id`/`family_q` backend-owned and
+  served (closes iter-8 coherence F1); accrual/discovery context fix
+  (`_signal_matches_hypothesis_cell`); `_PRICE_ARITHMETIC_FIELDS` covers `hyp.accrual.*`.
+- **Settled** (`state/assumptions.md`, iter-9): strategy hypothesis `setup_id`/`side` are
+  deliberately vestigial; TC-10's `insufficient_sample` = the record's `ci_cluster` sentinel.
+- **Verified green this run:** suite 2,678 collected / 2,670 passed / 0 failed; pin
+  `08e471b10130e1e2`; MCP 20 tools; store guard CLEAN (11,274 files unchanged).
+- **Clean-ups, not new scope:** stale "unwired" docstring (`referee_adjudicate.py:6,1720`);
+  `test_pnl_scan.py:1239` can-fail proof inspects a string, not the real scan; duplicate
+  assertion `test_referee_registry.py:874`.

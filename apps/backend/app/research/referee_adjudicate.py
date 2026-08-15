@@ -102,9 +102,11 @@ from .bars import BarStore
 from .desk_playbook import PlaybookStore, resolve_desk_playbook_dir
 from .desk_playbook_features import side_sign
 from .referee_evidence import (
+    REFEREE_FORMING_BAR_BASIS_CAVEAT,
     _epoch_from_iso,
     current_playbook_detector_basis,
     playbook_observations,
+    strategy_observations,
 )
 from .referee_null import (
     REFEREE_NULL_CONTEXT_SPEC_ID,
@@ -113,12 +115,21 @@ from .referee_null import (
     _locate_measurement_series,
     _measure_one_anchor,
     _parse_observation_id,
+    null_context_spec_parameters,
     null_context_spec_signature,
+    null_tod_spec_parameters,
     null_tod_spec_signature,
     resolve_occurrence_backing_bucket,
     resolve_referee_null_dir,
+    test_perm_spec_parameters,
 )
-from .referee_registry import FamilyStore, HypothesisStore, resolve_referee_registry_dir
+from .referee_registry import (
+    CertificateAlreadyRecorded,
+    CertificateStore,
+    FamilyStore,
+    HypothesisStore,
+    resolve_referee_registry_dir,
+)
 from .referee_stats import (
     INSUFFICIENT_SAMPLE,
     REFEREE_B,
@@ -130,17 +141,22 @@ from .referee_stats import (
     bootstrap_ci_occurrence,
     equal_weight_t,
     permutation_test,
+    referee_stats_parameters,
     run_oracle_attestation,
     sign_flip_result,
     verify_oracle_attestation,
 )
 from .routes import get_bar_store
+from .store import JournalStore
 
 __all__ = [
     "REFEREE_GATE_VERSION",
     "REFEREE_REGISTER",
+    "REFEREE_STRATEGY_NULL_DESIGN_CAVEAT",
     "resolve_referee_eval_dir",
     "resolve_referee_eval_log_dir",
+    "referee_parameters",
+    "referee_parameters_hash",
     "EvaluationIntegrityError",
     "EvaluationAlreadyRecorded",
     "SnapshotAlreadyRecorded",
@@ -177,6 +193,53 @@ _EVAL_DIR_ENV = "TAPEOLOGY_DESK_REFEREE_EVAL_DIR"
 _EVAL_LOG_DIR_ENV = "TAPEOLOGY_DESK_REFEREE_EVAL_LOG_DIR"
 
 _ESTIMANDS_AGAINST_NULL = frozenset({"A", "C"})
+
+# goal-referee-iter-9 (J-08 Step 1, spec Sec3.7/Sec9 item 6): the strategy family's own null-design
+# disclosure -- served once per strategy-family evaluation record (``provenance.basis_caveats``,
+# alongside the Card-6.4 ``REFEREE_FORMING_BAR_BASIS_CAVEAT`` every strategy_trade observation
+# already carries), stated rather than hidden, exactly as the spec's own assumption ledger names
+# it. A static, config-independent string -- never wall-clock or per-run-random.
+REFEREE_STRATEGY_NULL_DESIGN_CAVEAT: str = (
+    "the strategy family's recorded random_null baseline is 100 uniform-random-timed entries per "
+    "backtest report (backtests.py's own seeded null baseline), not count- or time-of-day-matched "
+    "to the candidate strategy's own entries -- a materially weaker null than the Playbook family's "
+    "matched-anchor design (docs/referee-statistical-spec.md Sec3.7, Sec9 item 6). Card 6.6's "
+    "strategy-matched nulls remain future work, gated on the tick library."
+)
+
+
+# === spec Sec1's own aggregator: referee_parameters() ================================================
+#
+# "Every constant [Sec1's table] is read at call time by referee_parameters(), embedded verbatim in
+# every referee record, and hashed into that record's identity. A monkeypatched constant must move
+# the parameters AND the identity (counter-tested)." This module is the natural home: it already
+# defines REFEREE_GATE_VERSION and already imports every OTHER module's own existing `_parameters()`
+# stub (referee_stats_parameters, null_tod_spec_parameters, null_context_spec_parameters,
+# test_perm_spec_parameters) -- combined here ONCE rather than re-derived per caller, closing the
+# goal.md IN SCOPE bullet: "combines every referee module's existing `_parameters()` stub (stats,
+# null specs, test spec) plus REFEREE_GATE_VERSION into one dict, hashed once, read at call time."
+
+
+def referee_parameters() -> dict:
+    """Every referee module's own pre-registered constants, in one dict, read fresh at call time
+    (never cached) -- Parameters discipline: a test that monkeypatches ANY constant reachable from
+    the four stub calls below moves this dict's own return value (and therefore
+    ``referee_parameters_hash()``'s), never silently leaving a stale parameters identity behind."""
+    return {
+        "gate_version": REFEREE_GATE_VERSION,
+        "stats": referee_stats_parameters(),
+        "null_tod": null_tod_spec_parameters(),
+        "null_context": null_context_spec_parameters(),
+        "test_perm": test_perm_spec_parameters(),
+    }
+
+
+def referee_parameters_hash() -> str:
+    """``referee_parameters()``'s own content hash -- the ``referee_parameters_hash`` pin every
+    strategy-family certificate and ``authorize_promotion``'s ``live_scan_context`` carry (spec
+    Sec8; goal.md J-08 Step 2/3). Read at call time, exactly like ``referee_parameters()`` itself,
+    so a monkeypatched constant moves both together (TC-14)."""
+    return _sha256(_canonical(referee_parameters()))[:16]
 
 
 def resolve_referee_eval_dir(desk_universe_dir_resolved: str) -> str:
@@ -450,6 +513,66 @@ def _pool_for_estimand(
     if hypothesis["estimand"] in _ESTIMANDS_AGAINST_NULL:
         return _pool_against_null(occurrences, null_store, hypothesis["null_spec_id"])
     return _pool_cell_vs_complement(occurrences, hypothesis, context_resolver)
+
+
+# === J-08 Step 1: the strategy-family analog pooling (spec Sec3.7) ====================================
+
+
+def _pool_strategy_trades(journal_store: JournalStore) -> dict:
+    """The strategy-family analog of ``_pool_against_null`` (spec Sec3.7: "Cluster = dataset. Per
+    dataset d with >=1 candidate trade: Delta_d = mean(candidate net_r in d) - mean(recorded
+    random_null net_r in d)") -- reuses ``referee_evidence.strategy_observations()`` verbatim
+    (never a second join of trades to dataset identity) and groups by ``cluster_key`` = dataset id
+    (never ``session_date``, TC-9). Shaped IDENTICALLY to ``_pool_against_null``'s own return dict
+    so ``run_evaluation_and_record`` reuses every downstream step (coverage, permutation test,
+    both bootstrap CIs, BH, snapshot) with zero branching beyond the POOLING call itself.
+
+    ``occurrence_diffs`` is honestly ``None`` (``_pool_cell_vs_complement``'s own "not defined at
+    occurrence level" precedent, not ``_pool_against_null``'s occurrence-diff list): unlike
+    estimand A/C's ToD-matched null (exactly ``K`` anchors per occurrence, a natural per-occurrence
+    pairing), a candidate trade has no single designated partner among a dataset's ``random_null``
+    trades (``backtest_null_entry_count`` uniform-random draws per report, spec Sec9 item 6) --
+    only the DATASET-clustered ``Delta_d`` is spec-defined. Recorded as an explicit design choice
+    (T-1), not a silent gap: it structurally disables ``bootstrap_ci_occurrence``/the entry-basis
+    sensitivity for strategy-family evaluations (both already gated on non-empty
+    ``occurrence_diffs``/``_ESTIMANDS_AGAINST_NULL`` in ``run_evaluation_and_record``), which is
+    correct here -- there is no occurrence-level uncertainty quantity to disclose."""
+    obs = strategy_observations(journal_store)
+    by_cluster_candidate: dict[str, list[float]] = {}
+    by_cluster_null: dict[str, list[float]] = {}
+    observation_ids_by_cluster: dict[str, set[str]] = {}
+    for observation in obs["observations"]:
+        cluster_key = observation["cluster_key"]
+        by_cluster_candidate.setdefault(cluster_key, []).append(observation["value"])
+        observation_ids_by_cluster.setdefault(cluster_key, set()).add(observation["observation_id"])
+    for observation in obs["null_observations"]:
+        by_cluster_null.setdefault(observation["cluster_key"], []).append(observation["value"])
+
+    all_clusters = set(by_cluster_candidate) | set(by_cluster_null)
+    session_groups: dict[str, tuple[list[float], list[float]]] = {}
+    one_group_excluded = 0
+    for cluster_key in all_clusters:
+        candidate_values = by_cluster_candidate.get(cluster_key, [])
+        null_values = by_cluster_null.get(cluster_key, [])
+        if candidate_values and null_values:
+            session_groups[cluster_key] = (candidate_values, null_values)
+        else:
+            one_group_excluded += 1
+
+    observation_ids: set[str] = set()
+    for cluster_key in session_groups:
+        observation_ids |= observation_ids_by_cluster.get(cluster_key, set())
+
+    return {
+        "session_groups": session_groups,
+        "occurrence_diffs": None,
+        "occurrences_pooled": len(observation_ids),
+        "one_group_sessions_excluded": one_group_excluded,
+        "informative_sessions": len(session_groups),
+        "observation_ids": observation_ids,
+        "null_record_ids": set(),
+        "by_session": {},
+    }
 
 
 # === the entry-basis sensitivity (spec Sec4.3; A/C only) ==============================================
@@ -926,6 +1049,72 @@ def _build_and_record_snapshot(
         return existing
 
 
+# === J-08 Step 2: the certificate's REAL mint call site (spec Sec8) ===================================
+
+
+def _mint_strategy_certificate(
+    *,
+    hypothesis: dict,
+    recorded: dict,
+    snapshot: dict,
+    candidate: dict,
+    champion_identity_at_scan_time: dict,
+    train_dataset: dict,
+    holdout_dataset: dict,
+    certificate_store: CertificateStore,
+) -> dict | None:
+    """Mints ONE certificate record (spec Sec8) for a strategy-family hypothesis's own freshly
+    recorded, gate-passing confirmatory checkpoint -- called ONLY from
+    ``run_evaluation_and_record``'s own fresh-compute path (never a hand-written or fixture path
+    in production code), and only when its caller explicitly supplied ``certificate_mint`` (the
+    live scan identity this certificate is meant to authorize -- a hypothesis record alone names
+    no ``(strategy_id, profile)`` candidate, no champion, and no train/holdout dataset pair, so
+    this function cannot derive them; the caller, which DOES know which live ``pnl_scan`` run this
+    mint is for, supplies them verbatim).
+
+    Refuses (returns ``None``, mints nothing) unless the attestation RE-verifies (T-8, never
+    trusted from the stored ``passed`` flag) -- the exact gate ``_snapshot_fold``/
+    ``_build_and_record_snapshot`` already enforce, read here from the just-built
+    ``recorded``/``snapshot`` rather than re-derived a second way. ``gate_results.bh_pass`` is the
+    family BH pass ``snapshot["bh"]["bh_pass"]`` already computed; ``floors_met`` is
+    ``recorded["confirmatory_eligible"]`` (the SAME floor check that gated this evaluation into
+    ``role == "checkpoint"`` in the first place -- served explicitly on the certificate so
+    ``authorize_promotion`` never has to re-derive it from a foreign evaluation record). A
+    re-mint attempt for an identical ``(hypothesis_id, evaluation_basis, candidate)`` key -- e.g. a
+    caller retrying after a crash between this write and its own follow-up -- returns the
+    ALREADY-recorded certificate rather than raising (append-only idempotence, the
+    ``HypothesisStore``/``NullStore`` precedent elsewhere in this era)."""
+    if not verify_oracle_attestation(recorded.get("attestation")):
+        return None
+    ci_cluster = recorded.get("ci_cluster")
+    ci = ci_cluster if isinstance(ci_cluster, list) else None
+    certificate_id = _sha256(
+        _canonical([hypothesis["hypothesis_id"], recorded["evaluation_basis"], candidate])
+    )[:16]
+    fields = {
+        "certificate_id": certificate_id,
+        "candidate": dict(candidate),
+        "champion_identity_at_scan_time": dict(champion_identity_at_scan_time),
+        "train_dataset": dict(train_dataset),
+        "holdout_dataset": dict(holdout_dataset),
+        "config_fingerprint": recorded["provenance"]["config_fingerprint"],
+        "gate_version": REFEREE_GATE_VERSION,
+        "referee_parameters_hash": referee_parameters_hash(),
+        "family_id": hypothesis["family_id"],
+        "hypothesis_id": hypothesis["hypothesis_id"],
+        "gate_results": {
+            "calibrated_p": recorded["permutation_p"],
+            "bh_pass": snapshot["bh"]["bh_pass"],
+            "ci": ci,
+            "floors_met": recorded["confirmatory_eligible"],
+        },
+    }
+    try:
+        return certificate_store.record(fields)
+    except CertificateAlreadyRecorded:
+        return certificate_store.get(certificate_id)
+
+
 # === the compute walker: ONE evaluation act, start to finish ==========================================
 
 
@@ -943,14 +1132,33 @@ def run_evaluation_and_record(
     progress: Callable[[dict], None] | None = None,
     should_abort: Callable[[], bool] | None = None,
     run_store: RefereeEvaluationRunStore | None = None,
+    journal_store: JournalStore | None = None,
+    certificate_mint: dict | None = None,
 ) -> dict:
     """Runs ONE evaluation act for ``hypothesis_id`` (spec Sec3/Sec5) and records it -- resumable
     (TC-34: an unchanged store reuses the existing record under the exact ``evaluation_basis`` key,
     computing nothing new) and cancel-safe (``should_abort`` is checked before every named phase, so
     a cancel writes NO partial evaluation record, TC-33). Returns
-    ``{"cancelled": bool, "record": dict|None, "snapshot": dict|None, "reused": bool}``. Raises
-    ``ValueError`` for an unknown ``hypothesis_id`` (surfaced by the caller -- the CLI lets it
-    propagate; the route validates first and never reaches this function for one)."""
+    ``{"cancelled": bool, "record": dict|None, "snapshot": dict|None, "reused": bool,
+    "certificate": dict|None}``. Raises ``ValueError`` for an unknown ``hypothesis_id`` (surfaced
+    by the caller -- the CLI lets it propagate; the route validates first and never reaches this
+    function for one).
+
+    ``journal_store`` (goal-referee-iter-9, J-08 Step 1) is consulted ONLY for a
+    ``hypothesis["evidence_family"] == "strategy"`` hypothesis (the playbook path never touches
+    it) -- required for that branch to pool anything; ``None`` (the default -- every EXISTING
+    playbook-only caller is unaffected) makes a strategy-family evaluation pool an honest empty
+    corpus rather than raise.
+
+    ``certificate_mint`` (J-08 Step 2) is the CALLER's own live scan identity -- this function has
+    no way to derive "which pnl_scan run this certificate should authorize" from a hypothesis
+    record alone. ``None`` (the default -- every route/CLI caller today) mints nothing, matching
+    goal.md's own "no strategy certificate can honestly exist this era" (fixture-only, reachable
+    only by a caller that explicitly supplies one). When supplied, shaped
+    ``{"candidate": {"strategy_id": str, "profile": str}, "champion_identity_at_scan_time": dict,
+    "train_dataset": dict, "holdout_dataset": dict, "certificate_store": CertificateStore}`` -- see
+    ``_mint_strategy_certificate``, consulted ONLY at a FRESH strategy-family checkpoint (never on
+    the dedup/reused path)."""
     started_at = _iso_utc_now()
 
     def _log(*, state: str, done: int, total: int, error: str | None) -> None:
@@ -986,15 +1194,31 @@ def run_evaluation_and_record(
     try:
         config_fingerprint = config.config_fingerprint()
         estimand = hypothesis["estimand"]
-        context_resolver = (
-            BandMapResolver(bar_store, config, compute=False) if estimand in ("B", "C") else None
-        )
-        occurrences, _record_cache = _eligible_setup_side_occurrences(
-            hypothesis, playbook_store, config_fingerprint
-        )
-        pool = _pool_for_estimand(
-            hypothesis, occurrences, null_store=null_store, context_resolver=context_resolver
-        )
+        evidence_family = hypothesis["evidence_family"]
+        if evidence_family == "strategy":
+            # J-08 Step 1 (spec Sec3.7): the strategy-family analog -- cluster = dataset, never
+            # session_date (``_pool_strategy_trades``, never ``_pool_for_estimand``'s playbook-only
+            # occurrence gather). ``journal_store=None`` (no production caller reaches this branch
+            # without one this era) pools an honest empty corpus rather than raise.
+            pool = (
+                _pool_strategy_trades(journal_store)
+                if journal_store is not None
+                else {
+                    "session_groups": {}, "occurrence_diffs": None, "occurrences_pooled": 0,
+                    "one_group_sessions_excluded": 0, "informative_sessions": 0,
+                    "observation_ids": set(), "null_record_ids": set(), "by_session": {},
+                }
+            )
+        else:
+            context_resolver = (
+                BandMapResolver(bar_store, config, compute=False) if estimand in ("B", "C") else None
+            )
+            occurrences, _record_cache = _eligible_setup_side_occurrences(
+                hypothesis, playbook_store, config_fingerprint
+            )
+            pool = _pool_for_estimand(
+                hypothesis, occurrences, null_store=null_store, context_resolver=context_resolver
+            )
         _tick()
 
         coverage = {
@@ -1042,7 +1266,13 @@ def run_evaluation_and_record(
             elif existing["role"] == "checkpoint":
                 snapshot = snapshot_store.get_for_hypothesis(hypothesis_id)
             _log(state="completed", done=total_units, total=total_units, error=None)
-            return {"cancelled": False, "record": existing, "snapshot": snapshot, "reused": True}
+            # No mint attempt on the dedup/reused path (goal-referee-iter-9): a certificate mints
+            # only at the hypothesis's ONE fresh checkpoint compute, below -- a re-run over an
+            # unchanged store is by definition not that fresh compute.
+            return {
+                "cancelled": False, "record": existing, "snapshot": snapshot, "reused": True,
+                "certificate": None,
+            }
 
         if _aborted():
             _log(state="cancelled", done=done_units, total=total_units, error=None)
@@ -1081,6 +1311,13 @@ def run_evaluation_and_record(
             "attestation": None,
             "provenance": {"config_fingerprint": config_fingerprint, "computed_at": _iso_utc_now()},
         }
+        if evidence_family == "strategy":
+            # spec Sec3.7/Sec9 item 6 + goal.md J-08 Step 1: the Card-6.4 forming-bar caveat
+            # (already stamped per-observation by `_strategy_observation`) plus the null-design
+            # disclosure, served ONCE per evaluation record rather than re-served per observation.
+            fields["provenance"]["basis_caveats"] = [
+                REFEREE_FORMING_BAR_BASIS_CAVEAT, REFEREE_STRATEGY_NULL_DESIGN_CAVEAT,
+            ]
 
         if _aborted():
             _log(state="cancelled", done=done_units, total=total_units, error=None)
@@ -1168,6 +1405,7 @@ def run_evaluation_and_record(
         raise
 
     snapshot = None
+    certificate = None
     if recorded["role"] == "checkpoint":
         try:
             snapshot = _build_and_record_snapshot(
@@ -1177,9 +1415,24 @@ def run_evaluation_and_record(
         except Exception as exc:  # noqa: BLE001
             _log(state="failed", done=done_units, total=total_units, error=str(exc))
             raise
+        # J-08 Step 2 (spec Sec8): the certificate's REAL mint call site -- reachable ONLY through
+        # this fresh-compute path, and only for a strategy-family hypothesis whose caller supplied
+        # its own live scan identity (TC-11/TC-12: a Playbook checkpoint or an unsupplied
+        # `certificate_mint` mints nothing).
+        if evidence_family == "strategy" and certificate_mint is not None:
+            try:
+                certificate = _mint_strategy_certificate(
+                    hypothesis=hypothesis, recorded=recorded, snapshot=snapshot, **certificate_mint,
+                )
+            except Exception as exc:  # noqa: BLE001
+                _log(state="failed", done=done_units, total=total_units, error=str(exc))
+                raise
 
     _log(state="completed", done=total_units, total=total_units, error=None)
-    return {"cancelled": False, "record": recorded, "snapshot": snapshot, "reused": False}
+    return {
+        "cancelled": False, "record": recorded, "snapshot": snapshot, "reused": False,
+        "certificate": certificate,
+    }
 
 
 # === the single-flight-per-hypothesis compute manager ==================================================

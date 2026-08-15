@@ -258,10 +258,16 @@ def get_referee_registry(
     withdrawal_store: WithdrawalStore = Depends(get_referee_withdrawal_store),
     certificate_store: CertificateStore = Depends(get_referee_certificate_store),
     playbook_store: PlaybookStore = Depends(get_playbook_store),
+    bar_store: BarStore = Depends(get_bar_store),
 ) -> dict:
     """The pinned four-key registry fold (``families``/``hypotheses``/``withdrawals``/
     ``certificates``) — every hypothesis served with its read-side ``status``/``accrual``
-    additions, never persisted on the record itself. Never 404/500 on an empty registry."""
+    additions, never persisted on the record itself. Never 404/500 on an empty registry.
+
+    ``bar_store`` (goal-referee-iter-9 rider) lets a B/C hypothesis's own ``accrual``/
+    ``discovery`` resolve its context predicate (a ``compute=False`` lookup over the
+    ALREADY-RECORDED band map, T-8) so its registry-row numbers agree with its own shortlist
+    row's live readiness for the identical cell."""
     return registry_response(
         family_store=family_store,
         hypothesis_store=hypothesis_store,
@@ -269,6 +275,8 @@ def get_referee_registry(
         certificate_store=certificate_store,
         playbook_store=playbook_store,
         config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store,
+        config=CONFIG,
     )
 
 

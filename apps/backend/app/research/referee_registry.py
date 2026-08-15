@@ -130,7 +130,9 @@ from .referee_null import (
 __all__ = [
     "REFEREE_MIN_SESSIONS",
     "REFEREE_MIN_OCCURRENCES",
+    "REFEREE_DEFAULT_Q",
     "REFEREE_HYPOTHESIS_ORIGIN",
+    "REFEREE_STARTER_FAMILY_ID",
     "REFEREE_STARTER_FAMILY_SHORTLIST",
     "resolve_referee_registry_dir",
     "RegistryIntegrityError",
@@ -158,6 +160,16 @@ __all__ = [
 
 REFEREE_MIN_SESSIONS: int = 12
 REFEREE_MIN_OCCURRENCES: int = 12
+
+# goal-referee-iter-9 rider (closes the iter-8 coherence-audit F1 WARN): spec Sec1's own pinned
+# default BH q -- previously only an UNOWNED apps/frontend/app/desk/page.tsx literal
+# (REFEREE_STARTER_FAMILY_Q). Owned here, served by `shortlist_response()` below.
+REFEREE_DEFAULT_Q: float = 0.10
+
+# The starter family's own id (spec Sec7's single shared family) -- previously only an unowned
+# frontend literal (REFEREE_STARTER_FAMILY_ID in apps/frontend/app/desk/page.tsx), moved
+# backend-side this iteration (goal-referee-iter-9 rider) and served by `shortlist_response()`.
+REFEREE_STARTER_FAMILY_ID: str = "referee-starter-family"
 
 # Every hypothesis this era carries this exact origin label (goal.md: "the atlas was inspected
 # before these questions were written down") -- server-stamped, never caller-supplied.
@@ -785,21 +797,49 @@ def withdraw_hypothesis(
 # === the read-side fold: GET /research/desk/referee/registry =========================================
 
 
+def _signal_matches_hypothesis_cell(
+    hypothesis: dict, signal: dict, *, context_resolver: BandMapResolver | None,
+) -> bool:
+    """goal-referee-iter-9 rider: ``True`` iff ``signal`` belongs to ``hypothesis``'s own
+    ``(setup_id, side[, context_predicate])`` cell -- the SAME context_predicate/backing-bucket
+    check ``_starter_context_readiness`` already applies for the shortlist's own live readiness,
+    now shared by BOTH ``_hypothesis_accrual`` and ``_hypothesis_discovery`` below (one helper,
+    never two independently-drifting pooling walks) so a B/C hypothesis's registry-row numbers
+    agree with its own shortlist row's live readiness for the identical cell. Estimand A
+    (``context_predicate`` is ``None``) is a plain ``(setup_id, side)`` match, unchanged from
+    before this rider. A B/C hypothesis whose context cannot be resolved at all (no
+    ``context_resolver`` supplied, or the signal's own band map cannot be resolved) is honestly
+    EXCLUDED, never assumed a match (T-5)."""
+    if signal["setup_id"] != hypothesis["setup_id"] or signal["side"] != hypothesis["side"]:
+        return False
+    context_predicate = hypothesis.get("context_predicate")
+    if context_predicate is None:
+        return True
+    if context_resolver is None:
+        return False
+    cell = resolve_occurrence_backing_bucket(
+        signal, signal["symbol"], _epoch_from_iso(signal["trigger_ts"]),
+        signal.get("entry"), hypothesis["side"], context_resolver,
+    )
+    return cell == context_predicate["backing_bucket"]
+
+
 def _hypothesis_accrual(
     hypothesis: dict,
     newest_by_date: dict[str, dict],
     *,
     live_basis: str,
     config_fingerprint: str,
+    context_resolver: BandMapResolver | None = None,
 ) -> dict:
     """The disclosed readiness PROXY (module docstring): distinct post-boundary ``session_date``s
-    carrying >=1 observation in this hypothesis's own ``(setup_id, side)`` cell, walked against an
+    carrying >=1 observation in this hypothesis's own ``(setup_id, side[, context_predicate])``
+    cell (goal-referee-iter-9 rider: a B/C hypothesis's own context predicate now applies here
+    too, via the shared ``_signal_matches_hypothesis_cell`` helper), walked against an
     ALREADY-scanned ``newest_by_date`` map (never a second ``PlaybookStore.list()`` call --
     ``registry_response`` below scans exactly once and folds every hypothesis against that one
     scan) using the SAME shared pooling primitives ``playbook_occurrence_readiness`` itself uses."""
     boundary = hypothesis["confirmation_start_boundary"]
-    setup_id = hypothesis["setup_id"]
-    side = hypothesis["side"]
     informative_dates: set[str] = set()
     for session_date, record in newest_by_date.items():
         if session_date <= boundary:
@@ -813,7 +853,7 @@ def _hypothesis_accrual(
         ):
             continue  # T-6: pool only at the current (detector_basis, config_fingerprint)
         for signal in record["signals"]:
-            if signal["setup_id"] == setup_id and signal["side"] == side:
+            if _signal_matches_hypothesis_cell(hypothesis, signal, context_resolver=context_resolver):
                 informative_dates.add(session_date)
                 break
 
@@ -839,18 +879,20 @@ def _hypothesis_discovery(
     *,
     live_basis: str,
     config_fingerprint: str,
+    context_resolver: BandMapResolver | None = None,
 ) -> dict:
     """The ``discovery (exploratory)`` block (goal.md J-07 Step 4): pre-boundary (``session_date
-    <= confirmation_start_boundary``) observations in the hypothesis's own ``(setup_id, side)``
-    cell -- the exact COMPLEMENT of ``_hypothesis_accrual``'s own post-boundary walk, over the
-    SAME already-scanned ``newest_by_date`` map and the SAME current-basis filter (never a second
-    pooling implementation). ``state/assumptions.md`` (iter-8) rules the stale-basis exclusion
-    applies here too, for consistency with ``accrual``. Never contributes to the ``accrual``
-    block; a deep-backfilled pre-boundary record recorded AFTER registration still lands here,
-    keyed on ``session_date`` alone -- never ``recorded_at`` (TC-10)."""
+    <= confirmation_start_boundary``) observations in the hypothesis's own
+    ``(setup_id, side[, context_predicate])`` cell (goal-referee-iter-9 rider: the SAME
+    context-predicate check ``_hypothesis_accrual`` now applies, via the shared
+    ``_signal_matches_hypothesis_cell`` helper) -- the exact COMPLEMENT of ``_hypothesis_accrual``'s
+    own post-boundary walk, over the SAME already-scanned ``newest_by_date`` map and the SAME
+    current-basis filter (never a second pooling implementation). ``state/assumptions.md``
+    (iter-8) rules the stale-basis exclusion applies here too, for consistency with ``accrual``.
+    Never contributes to the ``accrual`` block; a deep-backfilled pre-boundary record recorded
+    AFTER registration still lands here, keyed on ``session_date`` alone -- never ``recorded_at``
+    (TC-10)."""
     boundary = hypothesis["confirmation_start_boundary"]
-    setup_id = hypothesis["setup_id"]
-    side = hypothesis["side"]
     n = 0
     discovery_dates: set[str] = set()
     for session_date, record in newest_by_date.items():
@@ -864,7 +906,7 @@ def _hypothesis_discovery(
         ):
             continue  # T-6: pool only at the current (detector_basis, config_fingerprint)
         for signal in record["signals"]:
-            if signal["setup_id"] == setup_id and signal["side"] == side:
+            if _signal_matches_hypothesis_cell(hypothesis, signal, context_resolver=context_resolver):
                 n += 1
                 discovery_dates.add(session_date)
     return {"n": n, "n_sessions": len(discovery_dates), "label": "discovery (exploratory)"}
@@ -878,6 +920,8 @@ def registry_response(
     certificate_store: CertificateStore,
     playbook_store: PlaybookStore,
     config_fingerprint: str,
+    bar_store: BarStore | None = None,
+    config: Config | None = None,
 ) -> dict:
     """The whole ``GET /research/desk/referee/registry`` body -- the pinned five-key shape
     (``runs/goal-session-referee/state/blueprint.md`` iter-6/iter-7/iter-8 notes): ``families``,
@@ -888,7 +932,14 @@ def registry_response(
     ``get_referee_nulls``'s own ``{"records": [...], "integrity_errors": [...]}`` disclosure
     pattern, reused here rather than inventing a second shape -- each of the four stores' own
     ``.list()`` errors is tagged with its ``store`` kind and concatenated into ONE flat list, so a
-    corrupted file is surfaced explicitly instead of silently vanishing from the response."""
+    corrupted file is surfaced explicitly instead of silently vanishing from the response.
+
+    ``bar_store``/``config`` (goal-referee-iter-9 rider) are OPTIONAL: supplied by the real route
+    so a B/C hypothesis's ``accrual``/``discovery`` can resolve its own context predicate (the
+    SAME ``compute=False`` ``BandMapResolver`` lookup ``shortlist_response`` already builds, over
+    the ALREADY-RECORDED band map, never a fresh compute, T-8); omitted, every hypothesis in this
+    era's own registered set is Estimand A (``context_predicate is None``), which never touches
+    the resolver at all -- so every EXISTING caller of this function is unaffected either way."""
     families, family_errors = family_store.list()
     hypotheses, hypothesis_errors = hypothesis_store.list()
     withdrawals, withdrawal_errors = withdrawal_store.list()
@@ -908,14 +959,21 @@ def registry_response(
     live_basis = current_playbook_detector_basis()
     records, _integrity_errors = playbook_store.list()
     newest_by_date = _newest_per_session_date(records)
+    context_resolver = (
+        BandMapResolver(bar_store, config, compute=False)
+        if bar_store is not None and config is not None
+        else None
+    )
 
     folded_hypotheses = []
     for hypothesis in hypotheses:
         accrual = _hypothesis_accrual(
-            hypothesis, newest_by_date, live_basis=live_basis, config_fingerprint=config_fingerprint
+            hypothesis, newest_by_date, live_basis=live_basis, config_fingerprint=config_fingerprint,
+            context_resolver=context_resolver,
         )
         discovery = _hypothesis_discovery(
-            hypothesis, newest_by_date, live_basis=live_basis, config_fingerprint=config_fingerprint
+            hypothesis, newest_by_date, live_basis=live_basis, config_fingerprint=config_fingerprint,
+            context_resolver=context_resolver,
         )
         status = "withdrawn" if hypothesis["hypothesis_id"] in withdrawn_ids else "active"
         folded_hypotheses.append(
@@ -1000,6 +1058,25 @@ REFEREE_STARTER_FAMILY_SHORTLIST: tuple[dict, ...] = (
         "rationale": (
             "the combined claim: a wall-backed bounce is priced better than chance at that time "
             "and place"
+        ),
+    },
+    # goal-referee-iter-9 rider: spec Sec7's own S-4 row reads "range_trade (registered PER SIDE)
+    # at_wall vs other same-setup contexts" -- only the long side shipped at iter-8, dropped
+    # without a recorded reason (state/assumptions.md iter-9 entry rules this a plain instruction,
+    # not a human-ruling question). The short-side sibling, otherwise byte-identical to S-4
+    # (estimand B, same measure/horizon/sidedness/rationale shape), reusing
+    # `_starter_context_readiness` verbatim.
+    {
+        "candidate_id": "S-6", "estimand": "B", "evidence_family": "playbook",
+        "setup_id": "range_trade", "side": "short",
+        "context_predicate": {"backing_bucket": AT_WALL},
+        "primary_measure_key": "1h", "primary_horizon": "1h", "sidedness": "greater",
+        "null_spec_id": None, "test_spec_id": REFEREE_TEST_PERM_SPEC_ID,
+        "target_sessions": REFEREE_MIN_SESSIONS, "min_occurrences": REFEREE_MIN_OCCURRENCES,
+        "rationale": (
+            "the short-side sibling of S-4 (spec Sec7's own \"registered per side\" wording): a "
+            "range bounce plays out over the traverse toward the opposite boundary; to_close "
+            "would contaminate with post-breakout regimes"
         ),
     },
 )
@@ -1144,7 +1221,15 @@ def shortlist_response(
                 "projected_days_to_target": projected_days,
             }
         )
-    return {"candidates": candidates}
+    # goal-referee-iter-9 rider (closes iter-8 coherence-audit F1 WARN): `family_id`/`family_q`
+    # served here for the first time -- the starter family's own registration-mechanics fields,
+    # previously only an unowned apps/frontend/app/desk/page.tsx literal. The frontend now reads
+    # both from this response instead of a local constant.
+    return {
+        "candidates": candidates,
+        "family_id": REFEREE_STARTER_FAMILY_ID,
+        "family_q": REFEREE_DEFAULT_Q,
+    }
 
 
 # --- The CLI (register / withdraw) --------------------------------------------------------------------

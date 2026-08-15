@@ -251,6 +251,11 @@ _PRICE_ARITHMETIC_FIELDS = (
     # and a registered hypothesis's discovery count (never combined with its accrual siblings).
     r"|candidate\.(?:n|n_sessions|accrual_rate_sessions_per_day|projected_days_to_target)"
     r"|hyp\.discovery\.(?:n|n_sessions)"
+    # goal-referee-iter-9 (J-08 rider): the Referee Registry section's own accrual numerics --
+    # mirrors the existing `hyp.discovery.*` entry above (a "sessions accrued so far" readout is
+    # the obvious client-side subtraction to reach for and the obvious thing to get wrong; the
+    # backend already served both halves of the ratio as computed numbers).
+    r"|hyp\.accrual\.(?:informative_post_boundary_sessions|target_sessions)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -481,6 +486,31 @@ def test_desk_page_price_arithmetic_guard_catches_referee_shortlist_and_discover
     # the SAME "X / Y" display idiom this component actually uses.
     assert _PRICE_ARITHMETIC_PATTERN.search(
         "const label = `${hyp.discovery.n} / ${hyp.discovery.n_sessions}`;"
+    ) is None
+
+
+def test_desk_page_price_arithmetic_guard_catches_hyp_accrual_arithmetic_in_isolation():
+    """goal-referee-iter-9 rider (TC-18): ``hyp.accrual.*`` isolated -- never paired with a
+    ``hyp.discovery.*`` field, so this proves THIS iteration's own extension is what catches it
+    (the pre-existing seeded string above already matched on its own ``hyp.discovery.n`` half,
+    which would have passed even before this rider). A mutated-to-arithmetic "sessions remaining"
+    readout fails; the shipped pass-through rendering (the exact
+    ``{hyp.accrual.informative_post_boundary_sessions} / {hyp.accrual.target_sessions}`` JSX line)
+    passes clean."""
+    seeded_remaining = (
+        "const remaining = hyp.accrual.target_sessions - "
+        "hyp.accrual.informative_post_boundary_sessions;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_remaining) is not None
+
+    seeded_ratio = (
+        "const pct = hyp.accrual.informative_post_boundary_sessions / hyp.accrual.target_sessions;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_ratio) is not None
+
+    # The shipped pass-through rendering (page.tsx's own "X / Y" JSX line) stays clean.
+    assert _PRICE_ARITHMETIC_PATTERN.search(
+        "{hyp.accrual.informative_post_boundary_sessions} / {hyp.accrual.target_sessions}"
     ) is None
 
 

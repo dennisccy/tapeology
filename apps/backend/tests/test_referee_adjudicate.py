@@ -24,7 +24,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.research.referee_adjudicate as referee_adjudicate_module
-from app.config import CONFIG
+from app.config import CONFIG, PROFILE_DEFAULT, STRATEGY_V1_ID
 from app.main import app
 from app.providers.adapters.base import RawBar
 from app.research.bars import BarStore
@@ -34,6 +34,7 @@ from app.research.desk_playbook_features import side_sign
 from app.research.referee_adjudicate import (
     REFEREE_GATE_VERSION,
     REFEREE_REGISTER,
+    REFEREE_STRATEGY_NULL_DESIGN_CAVEAT,
     AdjudicationSnapshotStore,
     RefereeEvaluationComputeManager,
     RefereeEvaluationRunStore,
@@ -41,14 +42,18 @@ from app.research.referee_adjudicate import (
     _build_and_record_snapshot,
     _canonical,
     _family_bh_fold,
+    _mint_strategy_certificate,
     _pool_against_null,
     _pool_cell_vs_complement,
+    _pool_strategy_trades,
     _sha256,
     adjudications_response,
     authorize_promotion,
+    referee_parameters,
+    referee_parameters_hash,
     run_evaluation_and_record,
 )
-from app.research.referee_evidence import playbook_observations
+from app.research.referee_evidence import REFEREE_FORMING_BAR_BASIS_CAVEAT, playbook_observations
 from app.research.referee_null import (
     REFEREE_NULL_CONTEXT_SPEC_ID,
     REFEREE_NULL_TOD_SPEC_ID,
@@ -57,6 +62,8 @@ from app.research.referee_null import (
     build_null_record,
 )
 from app.research.referee_registry import (
+    REFEREE_MIN_OCCURRENCES,
+    REFEREE_MIN_SESSIONS,
     CertificateStore,
     FamilyStore,
     HypothesisStore,
@@ -68,6 +75,7 @@ from app.research.referee_registry import (
 from app.research.referee_routes import get_referee_eval_compute_manager
 import app.research.referee_stats as referee_stats_module
 from app.research.referee_stats import run_oracle_attestation, verify_oracle_attestation
+from app.research.store import BacktestRecord, JournalStore
 
 _ET = ZoneInfo("America/New_York")
 
@@ -1027,6 +1035,383 @@ def test_get_adjudications_route_serves_integrity_errors_key_on_a_healthy_store(
     body = resp.json()
     assert body["integrity_errors"] == []
     assert set(body) == {"entries", "register", "integrity_errors"}
+
+
+# === goal-referee-iter-9 (J-08 Step 1): the strategy-family evaluation branch (spec Sec3.7) ===========
+#
+# Fixture builders mirror ``test_referee_evidence.py``'s own ``_trade``/``_plant_backtest_result``
+# precedent (a minimal ``_close_trade``-shaped trade, a hand-built ``result`` block planted directly
+# via ``JournalStore.insert_backtest`` — never a real replay) rather than importing across test
+# files, matching this file's own established local-copy convention.
+
+
+def _strategy_trade(*, direction: str = "long", logical_ts: float = 100.0, net_r: float = 1.0) -> dict:
+    return {
+        "setup_type": "v1", "direction": direction,
+        "entry": {"logical_ts": logical_ts, "price": 100.0, "fill_price": 100.0, "spread": 0.0},
+        "exit": {
+            "logical_ts": logical_ts + 60.0, "price": 101.0, "fill_price": 101.0, "spread": 0.0,
+            "reason": "horizon",
+        },
+        "invalidation_price": 99.0, "r_basis": 1.0, "shares": 1.0,
+        "gross_r": net_r, "net_r": net_r, "gross_usd": 0.0, "net_usd": 0.0,
+        "fees_usd": 0.0, "slippage_usd": 0.0,
+    }
+
+
+def _plant_strategy_backtest(
+    journal_store: JournalStore, *, backtest_id: str, dataset_id: str,
+    candidate_net_rs: list[float], null_net_rs: list[float], symbol: str = "SYN-STRAT",
+) -> None:
+    payload = {
+        "id": backtest_id, "status": "done",
+        "result": {
+            "dataset": {
+                "id": dataset_id, "checksum": f"cksum-{dataset_id}", "split": "train",
+                "symbol": symbol, "epoch_anchor": 1_800_000_000.0,
+            },
+            "strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT,
+            "config_fingerprint": CONFIG.config_fingerprint(),
+            "trades": [_strategy_trade(net_r=r) for r in candidate_net_rs],
+            "null_baseline": {
+                "seed": 1729, "entry_count": len(null_net_rs),
+                "trades": [_strategy_trade(net_r=r) for r in null_net_rs],
+            },
+        },
+    }
+    journal_store.insert_backtest(
+        BacktestRecord(id=backtest_id, payload=payload, created_wall_ts=time_module.time())
+    )
+
+
+def _register_strategy_hypothesis(
+    family_store: FamilyStore, hypothesis_store: HypothesisStore, hypothesis_id: str, family_id: str,
+    *, target_sessions: int = REFEREE_MIN_SESSIONS, min_occurrences: int = REFEREE_MIN_OCCURRENCES,
+) -> dict:
+    """A strategy-family hypothesis registration payload -- ``setup_id``/``side`` are schema-required
+    (``_REQUIRED_HYPOTHESIS_FIELDS`` applies uniformly across both evidence families) but carry no
+    functional meaning for THIS branch (spec Sec3.7's own pooling is dataset-clustered, not
+    setup/side-filtered; blueprint.md's iter-9 note: "No new field" -- no per-candidate strategy_id/
+    profile field exists on the hypothesis record this era). Logged as a T-1 interpretation:
+    ``state/assumptions.md`` iter-9 (developer)."""
+    payload = {
+        "hypothesis_id": hypothesis_id, "family_id": family_id, "family_q": 0.10,
+        "family_candidate_hypothesis_ids": [hypothesis_id],
+        "evidence_family": "strategy", "estimand": "A",
+        "setup_id": "structure_tape", "side": "long", "context_predicate": None,
+        "primary_measure_key": "net_r", "primary_horizon": "trade", "sidedness": "greater",
+        "null_spec_id": None, "test_spec_id": REFEREE_TEST_PERM_SPEC_ID,
+        "target_sessions": target_sessions, "min_occurrences": min_occurrences,
+        "registered_at": _REGISTERED_AT,
+    }
+    return register_hypothesis(family_store, hypothesis_store, payload, confirm=True)
+
+
+@pytest.fixture
+def journal_store(tmp_path):
+    js = JournalStore(str(tmp_path / "strategy-journal.db"), CONFIG)
+    yield js
+    js.close()
+
+
+def test_tc9_strategy_pooling_groups_by_dataset_cluster_key_never_session_date(journal_store):
+    """TC-9: ``_pool_strategy_trades`` groups ``referee_evidence.strategy_observations()``'s
+    primary/null trade lists by ``cluster_key`` = dataset id -- TWO backtest reports over the SAME
+    dataset id (planted as if from different runs) pool into ONE cluster; a report over a DIFFERENT
+    dataset id pools into its own. Never grouped by ``session_date`` (every trade below shares the
+    identical fixed ``epoch_anchor``, so a session_date-keyed pool would collapse to ONE cluster --
+    proving the grouping key genuinely is the dataset id, not an accidentally-identical date)."""
+    _plant_strategy_backtest(
+        journal_store, backtest_id="bt-1", dataset_id="ds-1",
+        candidate_net_rs=[1.0], null_net_rs=[-1.0],
+    )
+    _plant_strategy_backtest(
+        journal_store, backtest_id="bt-2", dataset_id="ds-1",
+        candidate_net_rs=[0.5], null_net_rs=[-0.5],
+    )
+    _plant_strategy_backtest(
+        journal_store, backtest_id="bt-3", dataset_id="ds-2",
+        candidate_net_rs=[2.0], null_net_rs=[-2.0],
+    )
+
+    pool = _pool_strategy_trades(journal_store)
+
+    assert set(pool["session_groups"]) == {"ds-1", "ds-2"}
+    ds1_candidates, ds1_nulls = pool["session_groups"]["ds-1"]
+    assert sorted(ds1_candidates) == [0.5, 1.0]  # bt-1 + bt-2's own candidate trades, pooled
+    assert sorted(ds1_nulls) == [-1.0, -0.5]
+    ds2_candidates, ds2_nulls = pool["session_groups"]["ds-2"]
+    assert ds2_candidates == [2.0] and ds2_nulls == [-2.0]
+    assert pool["informative_sessions"] == 2  # 2 dataset clusters, never 1 (session_date collapse)
+    assert pool["occurrence_diffs"] is None  # not defined at occurrence level for strategy family
+    assert pool["occurrences_pooled"] == 3  # 3 candidate trades total, across both clusters
+
+
+def test_tc9_a_dataset_with_only_candidate_or_only_null_trades_is_excluded_and_counted(journal_store):
+    """A dataset cluster carrying candidate trades but NO recorded null (or vice versa) is honestly
+    excluded from ``session_groups`` and counted in ``one_group_sessions_excluded`` -- never
+    silently substituted (T-5), mirroring ``_pool_against_null``'s own one-sided-session handling."""
+    _plant_strategy_backtest(
+        journal_store, backtest_id="bt-both", dataset_id="ds-both",
+        candidate_net_rs=[1.0], null_net_rs=[-1.0],
+    )
+    _plant_strategy_backtest(
+        journal_store, backtest_id="bt-candidate-only", dataset_id="ds-candidate-only",
+        candidate_net_rs=[1.0], null_net_rs=[],
+    )
+
+    pool = _pool_strategy_trades(journal_store)
+
+    assert set(pool["session_groups"]) == {"ds-both"}
+    assert pool["one_group_sessions_excluded"] == 1  # ds-candidate-only
+
+
+def test_tc10_todays_real_corpus_shape_serves_insufficient_sample_with_caveats_and_null_disclosure(
+    journal_store, tmp_path,
+):
+    """TC-10: at today's real corpus shape (champion holdout n=1, far below
+    ``promotion_min_sample_size``=5 -- reproduced here as a SINGLE dataset cluster, far below
+    ``REFEREE_MIN_CLUSTERS_FOR_CI``=8 and ``REFEREE_MIN_SESSIONS``=12), the strategy-family
+    evaluation's own clustered-CI reads the literal ``insufficient_sample`` sentinel (never a
+    fabricated interval), the recorded ``provenance.basis_caveats`` includes the Card-6.4
+    forming-bar caveat, and the served null-design disclosure states the recorded null is
+    uniform-random, not count/ToD-matched -- stated, not hidden."""
+    _plant_strategy_backtest(
+        journal_store, backtest_id="bt-real-shape", dataset_id="ds-real-shape",
+        candidate_net_rs=[1.0], null_net_rs=[-0.2, 0.1, -0.3],
+    )
+    registry_dir = tmp_path / "registry"
+    family_store = FamilyStore(registry_dir)
+    hypothesis_store = HypothesisStore(registry_dir)
+    _register_strategy_hypothesis(family_store, hypothesis_store, "hyp-real-shape", "fam-real-shape")
+
+    result = run_evaluation_and_record(
+        "hyp-real-shape",
+        hypothesis_store=hypothesis_store, family_store=family_store,
+        playbook_store=PlaybookStore(tmp_path / "unused-playbook"),
+        bar_store=BarStore(tmp_path / "unused-bars"), config=CONFIG,
+        null_store=RefereeNullStore(tmp_path / "unused-nulls"),
+        evaluation_store=RefereeEvaluationStore(tmp_path / "eval"),
+        snapshot_store=AdjudicationSnapshotStore(tmp_path / "eval"),
+        journal_store=journal_store,
+    )
+    record = result["record"]
+    assert record["evidence_family"] == "strategy"
+    assert record["confirmatory_eligible"] is False  # 1 cluster << REFEREE_MIN_SESSIONS (12)
+    assert record["role"] == "pending"
+    assert record["T"] is None and record["permutation_p"] is None  # T-4: no confirmatory p pre-floor
+    assert record["ci_cluster"] == "insufficient_sample"  # never a fabricated interval
+    assert record["ci_occurrence"] is None  # not defined at occurrence level (this branch's design)
+
+    basis_caveats = record["provenance"]["basis_caveats"]
+    assert REFEREE_FORMING_BAR_BASIS_CAVEAT in basis_caveats
+    assert REFEREE_STRATEGY_NULL_DESIGN_CAVEAT in basis_caveats
+    assert "100" in REFEREE_STRATEGY_NULL_DESIGN_CAVEAT  # backtest_null_entry_count's real default
+    assert "uniform-random" in REFEREE_STRATEGY_NULL_DESIGN_CAVEAT
+    assert "not count- or time-of-day-matched" in REFEREE_STRATEGY_NULL_DESIGN_CAVEAT
+    assert result["certificate"] is None  # never checkpoint -> never even attempted
+
+
+def _plant_strong_strategy_effect(journal_store: JournalStore, *, n_clusters: int = 12) -> None:
+    """``n_clusters`` independent dataset clusters, each carrying exactly ONE candidate trade at a
+    strongly positive net_r and ONE recorded null trade at an equally strongly NEGATIVE net_r -- an
+    IDENTICAL per-cluster Delta_d by construction (the ``_plant_known_corpus`` precedent above),
+    reaching a deterministic, hand-verifiable p = 2/(2**n_clusters + 1) under exact enumeration
+    (n1=n2=1 per cluster -> 2**n_clusters total combinations, comfortably <=
+    REFEREE_ENUMERATION_THRESHOLD at n_clusters=12), comfortably under any registered q."""
+    for i in range(n_clusters):
+        _plant_strategy_backtest(
+            journal_store, backtest_id=f"strong-bt-{i}", dataset_id=f"strong-ds-{i}",
+            candidate_net_rs=[1.0], null_net_rs=[-1.0],
+        )
+
+
+def test_tc11_a_playbook_checkpoint_never_mints_a_certificate(stores):
+    """TC-11: a Playbook-family hypothesis reaching its confirmatory checkpoint gains no new
+    ``CertificateStore`` record -- the mint path fires only for ``evidence_family == "strategy"``
+    checkpoints, even when a (deliberately mismatched-looking, never actually usable) ``certificate_
+    mint`` happens to be supplied."""
+    _plant_known_corpus(
+        stores, "hyp-tc11-playbook", "fam-tc11-playbook", n_sessions=13,
+        trigger_close=100.0, flat_close=102.0,
+    )
+    certificate_store = CertificateStore(stores["hypothesis_store"].root)
+    result = _run_eval(
+        stores, "hyp-tc11-playbook",
+        certificate_mint={
+            "candidate": {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT},
+            "champion_identity_at_scan_time": {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT},
+            "train_dataset": {"id": "ds-train", "checksum": "abc", "split": "train"},
+            "holdout_dataset": {"id": "ds-holdout", "checksum": "def", "split": "holdout"},
+            "certificate_store": certificate_store,
+        },
+    )
+    assert result["record"]["role"] == "checkpoint"
+    assert result["snapshot"]["verdict"] == "corroborated"
+    assert result["certificate"] is None  # the mint path never fires for a playbook checkpoint
+
+    records, errors = certificate_store.list()
+    assert errors == []
+    assert records == []
+
+
+def test_tc12_a_strategy_checkpoint_mints_exactly_one_certificate_through_the_real_rail(
+    journal_store, tmp_path,
+):
+    """TC-12: a strategy-family hypothesis reaching an attested, gate-passing confirmatory
+    checkpoint mints EXACTLY one certificate, pinning every named field, reachable ONLY through
+    ``run_evaluation_and_record`` itself (never a hand-written fixture path in production code)."""
+    _plant_strong_strategy_effect(journal_store, n_clusters=12)
+    registry_dir = tmp_path / "registry"
+    family_store = FamilyStore(registry_dir)
+    hypothesis_store = HypothesisStore(registry_dir)
+    _register_strategy_hypothesis(family_store, hypothesis_store, "hyp-tc12", "fam-tc12")
+    certificate_store = CertificateStore(registry_dir)
+    candidate = {"strategy_id": "structure_tape", "profile": PROFILE_DEFAULT}
+    champion_identity = {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
+    train_dataset = {"id": "ds-train-pin", "checksum": "train-checksum", "split": "train"}
+    holdout_dataset = {"id": "ds-holdout-pin", "checksum": "holdout-checksum", "split": "holdout"}
+
+    result = run_evaluation_and_record(
+        "hyp-tc12",
+        hypothesis_store=hypothesis_store, family_store=family_store,
+        playbook_store=PlaybookStore(tmp_path / "unused-playbook"),
+        bar_store=BarStore(tmp_path / "unused-bars"), config=CONFIG,
+        null_store=RefereeNullStore(tmp_path / "unused-nulls"),
+        evaluation_store=RefereeEvaluationStore(tmp_path / "eval"),
+        snapshot_store=AdjudicationSnapshotStore(tmp_path / "eval"),
+        journal_store=journal_store,
+        certificate_mint={
+            "candidate": candidate, "champion_identity_at_scan_time": champion_identity,
+            "train_dataset": train_dataset, "holdout_dataset": holdout_dataset,
+            "certificate_store": certificate_store,
+        },
+    )
+    assert result["record"]["role"] == "checkpoint"
+    assert result["record"]["permutation_p"] == pytest.approx(2.0 / (2**12 + 1))
+    assert result["snapshot"]["bh"]["bh_pass"] is True
+    certificate = result["certificate"]
+    assert certificate is not None
+    assert certificate["candidate"] == candidate
+    assert certificate["champion_identity_at_scan_time"] == champion_identity
+    assert certificate["train_dataset"] == train_dataset
+    assert certificate["holdout_dataset"] == holdout_dataset
+    assert certificate["config_fingerprint"] == CONFIG.config_fingerprint()
+    assert certificate["gate_version"] == REFEREE_GATE_VERSION
+    assert certificate["referee_parameters_hash"] == referee_parameters_hash()
+    assert certificate["family_id"] == "fam-tc12"
+    assert certificate["hypothesis_id"] == "hyp-tc12"
+    assert certificate["gate_results"] == {
+        "calibrated_p": result["record"]["permutation_p"],
+        "bh_pass": True,
+        "ci": result["record"]["ci_cluster"],
+        "floors_met": True,
+    }
+
+    records, errors = certificate_store.list()
+    assert errors == []
+    assert len(records) == 1
+    assert records[0]["certificate_id"] == certificate["certificate_id"]
+
+    # A second evaluation act against the SAME (unchanged) store dedupes -- reused, never a second
+    # certificate minted.
+    second = run_evaluation_and_record(
+        "hyp-tc12",
+        hypothesis_store=hypothesis_store, family_store=family_store,
+        playbook_store=PlaybookStore(tmp_path / "unused-playbook"),
+        bar_store=BarStore(tmp_path / "unused-bars"), config=CONFIG,
+        null_store=RefereeNullStore(tmp_path / "unused-nulls"),
+        evaluation_store=RefereeEvaluationStore(tmp_path / "eval"),
+        snapshot_store=AdjudicationSnapshotStore(tmp_path / "eval"),
+        journal_store=journal_store,
+        certificate_mint={
+            "candidate": candidate, "champion_identity_at_scan_time": champion_identity,
+            "train_dataset": train_dataset, "holdout_dataset": holdout_dataset,
+            "certificate_store": certificate_store,
+        },
+    )
+    assert second["reused"] is True
+    assert second["certificate"] is None  # no mint attempt on the dedup/reused path
+    records_after, _errors = certificate_store.list()
+    assert len(records_after) == 1  # still exactly one
+
+
+def test_tc13_a_failed_attestation_never_mints_a_strategy_certificate_role_stays_pending(
+    journal_store, tmp_path, monkeypatch,
+):
+    """TC-13 (the Rider-1 gate, applied to the strategy family): the SAME otherwise-checkpoint-
+    eligible fixture as TC-12, forced through a deliberately failing oracle attestation --
+    ``role`` stays ``"pending"`` (never ``"checkpoint"``), no snapshot, and therefore no
+    certificate (the mint call site is only ever reached from inside the
+    ``recorded["role"] == "checkpoint"`` branch)."""
+    _plant_strong_strategy_effect(journal_store, n_clusters=12)
+    registry_dir = tmp_path / "registry"
+    family_store = FamilyStore(registry_dir)
+    hypothesis_store = HypothesisStore(registry_dir)
+    _register_strategy_hypothesis(family_store, hypothesis_store, "hyp-tc13", "fam-tc13")
+    certificate_store = CertificateStore(registry_dir)
+    real_attestation = run_oracle_attestation()
+    assert real_attestation["passed"] is True
+    monkeypatch.setattr(
+        referee_adjudicate_module, "run_oracle_attestation",
+        lambda: {**real_attestation, "passed": False},
+    )
+
+    result = run_evaluation_and_record(
+        "hyp-tc13",
+        hypothesis_store=hypothesis_store, family_store=family_store,
+        playbook_store=PlaybookStore(tmp_path / "unused-playbook"),
+        bar_store=BarStore(tmp_path / "unused-bars"), config=CONFIG,
+        null_store=RefereeNullStore(tmp_path / "unused-nulls"),
+        evaluation_store=RefereeEvaluationStore(tmp_path / "eval"),
+        snapshot_store=AdjudicationSnapshotStore(tmp_path / "eval"),
+        journal_store=journal_store,
+        certificate_mint={
+            "candidate": {"strategy_id": "structure_tape", "profile": PROFILE_DEFAULT},
+            "champion_identity_at_scan_time": {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT},
+            "train_dataset": {"id": "ds-train", "checksum": "abc", "split": "train"},
+            "holdout_dataset": {"id": "ds-holdout", "checksum": "def", "split": "holdout"},
+            "certificate_store": certificate_store,
+        },
+    )
+    assert result["record"]["confirmatory_eligible"] is True  # coverage floors WERE met
+    assert result["record"]["role"] == "pending"  # never "checkpoint" -- the write-side gate
+    assert result["snapshot"] is None
+    assert result["certificate"] is None
+
+    records, errors = certificate_store.list()
+    assert errors == []
+    assert records == []
+
+
+# === TC-14: referee_parameters()/referee_parameters_hash() -- the aggregator + Parameters
+# discipline counter-test ================================================================================
+
+
+def test_tc14_referee_parameters_is_stable_across_calls_with_unchanged_constants():
+    first = referee_parameters()
+    second = referee_parameters()
+    assert first == second
+    assert referee_parameters_hash() == referee_parameters_hash()
+    # Combines every named stub, plus REFEREE_GATE_VERSION -- spec Sec1's own enumerated contents.
+    assert first["gate_version"] == REFEREE_GATE_VERSION
+    assert set(first) == {"gate_version", "stats", "null_tod", "null_context", "test_perm"}
+
+
+def test_tc14_a_monkeypatched_referee_constant_moves_both_the_dict_and_the_hash(monkeypatch):
+    """Parameters discipline counter-test: a monkeypatched module constant reachable from any ONE
+    of the four aggregated stubs moves BOTH ``referee_parameters()``'s own returned dict AND
+    ``referee_parameters_hash()``'s return value -- never a stale identity left behind."""
+    before_dict = referee_parameters()
+    before_hash = referee_parameters_hash()
+
+    monkeypatch.setattr(referee_stats_module, "REFEREE_B", referee_stats_module.REFEREE_B + 1)
+
+    after_dict = referee_parameters()
+    after_hash = referee_parameters_hash()
+    assert after_dict != before_dict
+    assert after_dict["stats"]["b"] == before_dict["stats"]["b"] + 1
+    assert after_hash != before_hash
 
 
 # === TC-26, TC-27, TC-28: authorize_promotion ==========================================================

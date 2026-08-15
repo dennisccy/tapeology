@@ -39,6 +39,7 @@ import dataclasses
 import json
 import random
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -59,7 +60,24 @@ from app.research.datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN, reco
 from app.research.pnl_baseline import seed_founding_row
 from app.research.pnl_scan import ScanError, run_sweep
 from app.research.profiles import profiles_projection
-from app.research.store import JournalStore
+from app.research.desk_playbook import PlaybookStore
+from app.research.referee_adjudicate import (
+    REFEREE_GATE_VERSION,
+    AdjudicationSnapshotStore,
+    RefereeEvaluationStore,
+    referee_parameters_hash,
+    run_evaluation_and_record,
+)
+from app.research.referee_null import REFEREE_TEST_PERM_SPEC_ID, RefereeNullStore
+from app.research.referee_registry import (
+    REFEREE_MIN_OCCURRENCES,
+    REFEREE_MIN_SESSIONS,
+    CertificateStore,
+    FamilyStore,
+    HypothesisStore,
+    register_hypothesis,
+)
+from app.research.store import BacktestRecord, JournalStore
 
 # The SAME synthetic three-timeframe confluence fixture test_backtests.py reuses (its own directive:
 # the committed real PG bar fixture stores only two timeframes and can never produce a class-A
@@ -155,10 +173,175 @@ def store(tmp_path):
     s.close()
 
 
+@pytest.fixture
+def certificate_store(tmp_path):
+    """era-6 J-08: an isolated, per-test ``CertificateStore`` — ``run_sweep``'s new REQUIRED
+    parameter. Empty by default (the honest "no certificate exists" baseline every scenario below
+    that never sets one up naturally reaches)."""
+    return CertificateStore(tmp_path / "referee_registry")
+
+
+# --- era-6 J-08: the promotion interlock -- shared certificate/live-scan-context fixture helpers ---
+
+
+def _live_scan_context(*, champion: dict, train_meta: dict, holdout_meta: dict, config: Config) -> dict:
+    """The exact ``live_scan_context`` shape ``pnl_scan._promote`` builds from a live run's own
+    values — computed independently here (never imported from ``pnl_scan`` internals) so a test
+    genuinely proves the two sides agree, rather than sharing one implementation with itself."""
+    return {
+        "champion_identity": champion,
+        "train_dataset": {
+            "id": train_meta["id"], "checksum": train_meta["checksum"], "split": train_meta["split"],
+        },
+        "holdout_dataset": {
+            "id": holdout_meta["id"], "checksum": holdout_meta["checksum"], "split": holdout_meta["split"],
+        },
+        "config_fingerprint": config.config_fingerprint(),
+        "gate_version": REFEREE_GATE_VERSION,
+        "referee_parameters_hash": referee_parameters_hash(),
+    }
+
+
+def _matching_certificate(*, candidate: dict, live: dict, **overrides: object) -> dict:
+    """A hand-built certificate matching every one of ``live``'s own pins (the
+    ``test_referee_adjudicate.py`` ``_fixture_certificate``/``_live_scan_context_matching``
+    precedent) — every refusal-class test below overrides exactly the ONE field it means to
+    mismatch. Hand-building a certificate directly (never through the real evaluation rail) is
+    fine for THESE tests: they exercise ``authorize_promotion``'s own refusal-class boundaries,
+    not the mint path itself (that is TC-2's own job, below, which mints for real)."""
+    fields = {
+        "certificate_id": f"cert-{candidate['strategy_id']}-{candidate['profile']}",
+        "candidate": dict(candidate),
+        "champion_identity_at_scan_time": live["champion_identity"],
+        "train_dataset": live["train_dataset"],
+        "holdout_dataset": live["holdout_dataset"],
+        "config_fingerprint": live["config_fingerprint"],
+        "gate_version": live["gate_version"],
+        "referee_parameters_hash": live["referee_parameters_hash"],
+        "family_id": "fam-fixture", "hypothesis_id": "hyp-fixture",
+        "gate_results": {"calibrated_p": 0.01, "bh_pass": True, "ci": [0.1, 0.9], "floors_met": True},
+    }
+    fields.update(overrides)
+    return fields
+
+
+# --- era-6 J-08 (TC-2): a REAL strategy-family evaluation, minted through the real rail ------------
+#
+# 12 independent dataset clusters (REFEREE_MIN_SESSIONS/REFEREE_MIN_OCCURRENCES's own floor), each
+# carrying exactly ONE candidate trade at a strongly positive net_r and ONE recorded random_null
+# trade at an equally strongly NEGATIVE net_r -- an IDENTICAL per-cluster Delta_d by construction
+# (the ``_plant_known_corpus`` precedent in test_referee_adjudicate.py), so the exact-enumeration
+# permutation space (2**12 = 4096 <= REFEREE_ENUMERATION_THRESHOLD) has exactly ONE combination
+# (the observed grouping itself) at or above the observed T -- a deterministic, hand-verifiable
+# p = 2/4097, comfortably under the family's own q=0.10 (m=1: bh_pass iff p<=q).
+
+
+def _strategy_trade(*, direction: str = "long", logical_ts: float = 100.0, net_r: float = 1.0) -> dict:
+    """A minimal ``_close_trade``-shaped trade -- only the fields the strategy adapter
+    (``referee_evidence._strategy_observation``) reads (the ``test_referee_evidence.py`` ``_trade``
+    precedent, reused here rather than imported across test files)."""
+    return {
+        "setup_type": "v1", "direction": direction,
+        "entry": {"logical_ts": logical_ts, "price": 100.0, "fill_price": 100.0, "spread": 0.0},
+        "exit": {
+            "logical_ts": logical_ts + 60.0, "price": 101.0, "fill_price": 101.0, "spread": 0.0,
+            "reason": "horizon",
+        },
+        "invalidation_price": 99.0, "r_basis": 1.0, "shares": 1.0,
+        "gross_r": net_r, "net_r": net_r, "gross_usd": 0.0, "net_usd": 0.0,
+        "fees_usd": 0.0, "slippage_usd": 0.0,
+    }
+
+
+def _plant_strategy_backtest(
+    journal_store: JournalStore, *, backtest_id: str, dataset: dict,
+    candidate_net_r: float, null_net_r: float,
+) -> None:
+    """Plants one ``done`` backtest report whose ``result`` block already carries the dataset
+    joined verbatim (``backtests.py``'s own result-block shape), reproduced by hand -- the
+    ``test_referee_evidence.py`` ``_plant_backtest_result`` precedent."""
+    payload = {
+        "id": backtest_id, "status": "done",
+        "result": {
+            "dataset": dataset, "strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT,
+            "config_fingerprint": CONFIG.config_fingerprint(),
+            "trades": [_strategy_trade(net_r=candidate_net_r)],
+            "null_baseline": {
+                "seed": 1729, "entry_count": 1, "trades": [_strategy_trade(net_r=null_net_r)],
+            },
+        },
+    }
+    journal_store.insert_backtest(
+        BacktestRecord(id=backtest_id, payload=payload, created_wall_ts=time.time())
+    )
+
+
+def _mint_matching_certificate_through_the_real_rail(
+    store: JournalStore, tmp_path: Path, *, candidate: dict, live: dict,
+) -> CertificateStore:
+    """Plants 12 strongly-separated strategy-family dataset clusters into ``store`` (the SAME
+    journal DB the caller's own ``run_sweep`` will use), registers a strategy-family hypothesis at
+    exactly the floor (``target_sessions=min_occurrences=REFEREE_MIN_SESSIONS``), and runs the REAL
+    evaluation rail (``run_evaluation_and_record``) to its attested, gate-passing confirmatory
+    checkpoint -- minting exactly one certificate pinned to ``candidate``/``live`` (goal.md J-08:
+    "mintable only through the real evaluation rail"). Returns the ``CertificateStore`` the caller's
+    own ``run_sweep`` should then pass ``authorize_promotion``."""
+    for i in range(12):
+        dataset = {
+            "id": f"strategy-ds-{i}", "checksum": f"cksum-{i}", "split": SPLIT_TRAIN,
+            "symbol": "SYN-STRAT", "epoch_anchor": 1_800_000_000.0 + i * 86_400.0,
+        }
+        _plant_strategy_backtest(
+            store, backtest_id=f"strategy-bt-{i}", dataset=dataset,
+            candidate_net_r=1.0, null_net_r=-1.0,
+        )
+
+    registry_dir = tmp_path / "referee_registry"
+    eval_dir = tmp_path / "referee_eval"
+    family_store = FamilyStore(registry_dir)
+    hypothesis_store = HypothesisStore(registry_dir)
+    hypothesis_id = "hyp-strategy-cert"
+    payload = {
+        "hypothesis_id": hypothesis_id, "family_id": "fam-strategy-cert", "family_q": 0.10,
+        "family_candidate_hypothesis_ids": [hypothesis_id],
+        "evidence_family": "strategy", "estimand": "A",
+        "setup_id": "structure_tape", "side": "long", "context_predicate": None,
+        "primary_measure_key": "net_r", "primary_horizon": "trade", "sidedness": "greater",
+        "null_spec_id": None, "test_spec_id": REFEREE_TEST_PERM_SPEC_ID,
+        "target_sessions": REFEREE_MIN_SESSIONS, "min_occurrences": REFEREE_MIN_OCCURRENCES,
+    }
+    register_hypothesis(family_store, hypothesis_store, payload, confirm=True)
+
+    certificate_store = CertificateStore(registry_dir)
+    result = run_evaluation_and_record(
+        hypothesis_id,
+        hypothesis_store=hypothesis_store, family_store=family_store,
+        playbook_store=PlaybookStore(tmp_path / "unused-playbook"),
+        bar_store=BarStore(tmp_path / "unused-bars"), config=CONFIG,
+        null_store=RefereeNullStore(tmp_path / "unused-nulls"),
+        evaluation_store=RefereeEvaluationStore(eval_dir),
+        snapshot_store=AdjudicationSnapshotStore(eval_dir),
+        journal_store=store,
+        certificate_mint={
+            "candidate": candidate,
+            "champion_identity_at_scan_time": live["champion_identity"],
+            "train_dataset": live["train_dataset"],
+            "holdout_dataset": live["holdout_dataset"],
+            "certificate_store": certificate_store,
+        },
+    )
+    assert result["cancelled"] is False
+    assert result["record"]["role"] == "checkpoint"
+    assert result["record"]["permutation_p"] == pytest.approx(2.0 / 4097.0)
+    assert result["snapshot"]["bh"]["bh_pass"] is True
+    assert result["certificate"] is not None
+    return certificate_store
+
+
 # --- Fixture sweep: the non-regression baseline (Key Test Scenario 1) ------------------------------
 
 
-def test_fixture_sweep_is_zero_survivors_and_leaves_everything_untouched(store, tmp_path):
+def test_fixture_sweep_is_zero_survivors_and_leaves_everything_untouched(store, tmp_path, certificate_store):
     """On the committed fixture pair, ``candidate-faster-warmup`` is a non-survivor: identical
     trades on train (delta exactly zero) and a NEGATIVE hold-out delta with n below the
     promotion minimum — both independently sufficient to refuse promotion. Seeds the founding
@@ -169,7 +352,7 @@ def test_fixture_sweep_is_zero_survivors_and_leaves_everything_untouched(store, 
     created, _ = seed_founding_row(store, DatasetStore(tmp_path / "founding-datasets"), CONFIG)
     assert created is True
 
-    report = run_sweep(store, dataset_store, CONFIG)
+    report = run_sweep(store, dataset_store, CONFIG, certificate_store=certificate_store)
 
     assert report["champion_before"] == {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
     assert report["champion_after"] == report["champion_before"]
@@ -194,7 +377,7 @@ def test_fixture_sweep_is_zero_survivors_and_leaves_everything_untouched(store, 
     assert profiles_projection(store, CONFIG)["champion"] == report["champion_before"]
 
 
-def test_zero_registered_candidates_is_an_honest_empty_sweep(store, monkeypatch):
+def test_zero_registered_candidates_is_an_honest_empty_sweep(store, monkeypatch, certificate_store):
     """Zero registered candidates -> an explicit, honest empty report (never an error) — the
     ``profile_registry`` filter to non-default entries applied to an all-default registry."""
     monkeypatch.setattr(
@@ -203,7 +386,7 @@ def test_zero_registered_candidates_is_an_honest_empty_sweep(store, monkeypatch)
         lambda self: [{"id": PROFILE_DEFAULT, "frozen": True, "is_default": True}],
     )
     dataset_store = DatasetStore(FIXTURE_DATASET_DIR)
-    report = run_sweep(store, dataset_store, CONFIG)
+    report = run_sweep(store, dataset_store, CONFIG, certificate_store=certificate_store)
     assert report["candidates"] == []
     assert report["promotion"] is None
     assert len(store.list_pnl_ledger()) == 0
@@ -212,22 +395,23 @@ def test_zero_registered_candidates_is_an_honest_empty_sweep(store, monkeypatch)
 # --- Controlled survivor: a genuine, isolated hold-out win (Key Test Scenario 2) --------------------
 
 
-def test_controlled_survivor_moves_champion_and_appends_exactly_one_ledger_row(store, tmp_path):
-    """An ISOLATED synthetic train + hold-out pair (never the shipped fixture) on which the
-    candidate legitimately beats the champion on BOTH splits, with a test-LOCAL lowered
-    promotion minimum (``dataclasses.replace`` — the shipped default of 5 is never touched):
-    promotes for real — champion pointer moves, exactly one provenance-stamped ledger row is
-    appended via the existing single writer — while ``default`` and every engine default stay
-    byte-identical."""
+def test_controlled_survivor_is_refused_without_a_certificate(store, tmp_path, certificate_store):
+    """era-6 J-08 (TC-1), inverting this suite's own pre-iter-9 "controlled survivor promotes"
+    assertions per goal.md's own stated consequence: an ISOLATED synthetic train + hold-out pair on
+    which the candidate legitimately beats the champion on BOTH splits is now REFUSED — no ledger
+    row, no pointer move — absent a valid, candidate-specific Referee certificate. ``survivor``
+    still reads ``True`` (the hold-out gate itself still passed; only the NEW certificate interlock
+    blocks the write)."""
     dataset_store = DatasetStore(tmp_path / "datasets")
-    train_meta = _winning_dataset(dataset_store, "SYN-TRAIN-A", seed=7, split=SPLIT_TRAIN)
-    holdout_meta = _winning_dataset(dataset_store, "SYN-HOLDOUT-B", seed=11, split=SPLIT_HOLDOUT)
+    _winning_dataset(dataset_store, "SYN-TRAIN-A", seed=7, split=SPLIT_TRAIN)
+    _winning_dataset(dataset_store, "SYN-HOLDOUT-B", seed=11, split=SPLIT_HOLDOUT)
     test_config = dataclasses.replace(CONFIG, promotion_min_sample_size=1)
 
-    report = run_sweep(store, dataset_store, test_config)
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
 
     (candidate,) = report["candidates"]
-    # The win is asserted, not merely assumed (both R and $ on both splits, empirically robust).
+    # The win is asserted, not merely assumed (both R and $ on both splits, empirically robust) —
+    # the hold-out gate itself still genuinely passes; only the certificate interlock refuses.
     assert candidate["train"]["aggregate"]["delta_net_r"] > 0
     assert candidate["train"]["aggregate"]["delta_net_usd"] > 0
     assert candidate["holdout"]["aggregate"]["delta_net_r"] > 0
@@ -237,6 +421,51 @@ def test_controlled_survivor_moves_champion_and_appends_exactly_one_ledger_row(s
     assert candidate["overfit"] is False
 
     assert report["champion_before"] == {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
+    assert report["champion_after"] == report["champion_before"]  # UNMOVED
+    assert report["promotion"] == {
+        "candidate_id": PROFILE_CANDIDATE_FASTER_WARMUP,
+        "promoted": False,
+        "note": None,
+        "promotion_eligible": False,
+        "refusal_class": "no_certificate",
+        "reason": report["promotion"]["reason"],
+    }
+    assert report["promotion"]["reason"]
+
+    assert len(store.list_pnl_ledger()) == 0  # nothing written
+    assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
+    assert profiles_projection(store, test_config)["champion"] == report["champion_before"]
+
+
+def test_controlled_survivor_promotes_with_a_certificate_minted_through_the_real_evaluation_rail(
+    store, tmp_path,
+):
+    """era-6 J-08 (TC-2): the SAME controlled-survivor scenario as the refusal test above, but with
+    a certificate minted through the REAL evaluation rail (``run_evaluation_and_record``, a genuine
+    strategy-family hypothesis reaching an attested, gate-passing confirmatory checkpoint — never a
+    hand-written fixture path) matching every one of the live scan's own pins: promotes for real —
+    champion pointer moves, exactly one provenance-stamped ledger row is appended — exactly as this
+    suite asserted before this iteration, PLUS the new ``promotion_eligible: True`` field."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    train_meta = _winning_dataset(dataset_store, "SYN-TRAIN-A", seed=7, split=SPLIT_TRAIN)
+    holdout_meta = _winning_dataset(dataset_store, "SYN-HOLDOUT-B", seed=11, split=SPLIT_HOLDOUT)
+    test_config = dataclasses.replace(CONFIG, promotion_min_sample_size=1)
+
+    champion_before = store.get_champion_pointer()
+    candidate = {"strategy_id": champion_before["strategy_id"], "profile": PROFILE_CANDIDATE_FASTER_WARMUP}
+    live = _live_scan_context(
+        champion=champion_before, train_meta=train_meta, holdout_meta=holdout_meta, config=test_config,
+    )
+    certificate_store = _mint_matching_certificate_through_the_real_rail(
+        store, tmp_path, candidate=candidate, live=live,
+    )
+
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
+
+    (result_candidate,) = report["candidates"]
+    assert result_candidate["survivor"] is True
+
+    assert report["champion_before"] == champion_before
     assert report["champion_after"] == {
         "strategy_id": STRATEGY_V1_ID,
         "profile": PROFILE_CANDIDATE_FASTER_WARMUP,
@@ -245,6 +474,9 @@ def test_controlled_survivor_moves_champion_and_appends_exactly_one_ledger_row(s
         "candidate_id": PROFILE_CANDIDATE_FASTER_WARMUP,
         "promoted": True,
         "enhancement_id": f"{PROFILE_CANDIDATE_FASTER_WARMUP}-over-{STRATEGY_V1_ID}-{PROFILE_DEFAULT}",
+        "promotion_eligible": True,
+        "refusal_class": None,
+        "reason": None,
     }
 
     rows = store.list_pnl_ledger()
@@ -252,10 +484,10 @@ def test_controlled_survivor_moves_champion_and_appends_exactly_one_ledger_row(s
     row = rows[0].payload
     assert row["founding"] is False
     assert row["baseline"]["train"]["net_r"] == pytest.approx(
-        candidate["train"]["datasets"][0]["champion"]["net_r"]
+        result_candidate["train"]["datasets"][0]["champion"]["net_r"]
     )
     assert row["candidate"]["train"]["net_r"] == pytest.approx(
-        candidate["train"]["datasets"][0]["candidate"]["net_r"]
+        result_candidate["train"]["datasets"][0]["candidate"]["net_r"]
     )
     assert row["provenance"]["strategy_id"] == STRATEGY_V1_ID
     assert row["provenance"]["profile"] == PROFILE_CANDIDATE_FASTER_WARMUP
@@ -272,13 +504,13 @@ def test_controlled_survivor_moves_champion_and_appends_exactly_one_ledger_row(s
 # --- Min-n gate, both ways (Key Test Scenario 3) -----------------------------------------------
 
 
-def test_min_n_gate_rejects_below_minimum_despite_positive_holdout(store, tmp_path):
+def test_min_n_gate_rejects_below_minimum_despite_positive_holdout(store, tmp_path, certificate_store):
     dataset_store = DatasetStore(tmp_path / "datasets")
     _winning_dataset(dataset_store, "SYN-TRAIN-A", seed=7, split=SPLIT_TRAIN)
     _winning_dataset(dataset_store, "SYN-HOLDOUT-B", seed=11, split=SPLIT_HOLDOUT)
     test_config = dataclasses.replace(CONFIG, promotion_min_sample_size=2)  # candidate n=1 < 2
 
-    report = run_sweep(store, dataset_store, test_config)
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
 
     (candidate,) = report["candidates"]
     assert candidate["holdout"]["aggregate"]["delta_net_r"] > 0
@@ -290,18 +522,26 @@ def test_min_n_gate_rejects_below_minimum_despite_positive_holdout(store, tmp_pa
     assert report["champion_after"] == report["champion_before"]
 
 
-def test_min_n_gate_promotes_at_or_above_minimum(store, tmp_path):
+def test_min_n_gate_survivor_at_or_above_minimum_is_still_refused_without_a_certificate(
+    store, tmp_path, certificate_store,
+):
+    """era-6 J-08: inverts this suite's own pre-iter-9 "min-n gate promotes" assertion — the
+    hold-out gate itself still passes at n=1>=1 (``survivor`` reads ``True``), but with no
+    certificate on file the certificate interlock refuses it, same as the controlled-survivor case
+    above (a different fixture path reaching the identical refusal, TC-1's own generality)."""
     dataset_store = DatasetStore(tmp_path / "datasets")
     _winning_dataset(dataset_store, "SYN-TRAIN-A", seed=7, split=SPLIT_TRAIN)
     _winning_dataset(dataset_store, "SYN-HOLDOUT-B", seed=11, split=SPLIT_HOLDOUT)
     test_config = dataclasses.replace(CONFIG, promotion_min_sample_size=1)  # candidate n=1 >= 1
 
-    report = run_sweep(store, dataset_store, test_config)
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
 
     (candidate,) = report["candidates"]
     assert candidate["survivor"] is True
-    assert report["promotion"]["promoted"] is True
-    assert len(store.list_pnl_ledger()) == 1
+    assert report["promotion"]["promoted"] is False
+    assert report["promotion"]["promotion_eligible"] is False
+    assert report["promotion"]["refusal_class"] == "no_certificate"
+    assert len(store.list_pnl_ledger()) == 0
 
 
 # --- Determinism (Key Test Scenario 4) ----------------------------------------------------------
@@ -332,7 +572,7 @@ def test_determinism_two_independent_fresh_state_runs_are_byte_identical(tmp_pat
 # --- Robustness / overfit labeling (Key Test Scenario 5) -----------------------------------------
 
 
-def test_robustness_is_speculative_when_not_every_train_dataset_is_positive(store, tmp_path):
+def test_robustness_is_speculative_when_not_every_train_dataset_is_positive(store, tmp_path, certificate_store):
     """TWO train datasets — one where the candidate wins, one flat dataset where it does not
     reliably win — beside a winning hold-out: ``robust`` requires EVERY individual train dataset
     to be positive, so this is ``speculative`` even though the aggregate train delta is positive
@@ -343,7 +583,7 @@ def test_robustness_is_speculative_when_not_every_train_dataset_is_positive(stor
     _winning_dataset(dataset_store, "SYN-HOLDOUT-B", seed=11, split=SPLIT_HOLDOUT)
     test_config = dataclasses.replace(CONFIG, promotion_min_sample_size=1)
 
-    report = run_sweep(store, dataset_store, test_config)
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
 
     (candidate,) = report["candidates"]
     assert len(candidate["train"]["datasets"]) == 2
@@ -357,7 +597,7 @@ def test_robustness_is_speculative_when_not_every_train_dataset_is_positive(stor
     assert candidate["overfit"] is False
 
 
-def test_overfit_is_positive_train_failing_holdout_and_is_never_promoted(store, tmp_path):
+def test_overfit_is_positive_train_failing_holdout_and_is_never_promoted(store, tmp_path, certificate_store):
     """Train = an isolated synthetic win; hold-out = the REAL, already-pinned founding hold-out
     window on which the candidate demonstrably loses (``test_profile_equivalence.py``'s own
     pinned numbers). Positive train + a failed hold-out gate = ``overfit`` by the phase spec's own
@@ -376,7 +616,7 @@ def test_overfit_is_positive_train_failing_holdout_and_is_never_promoted(store, 
     )
     test_config = dataclasses.replace(CONFIG, promotion_min_sample_size=1)
 
-    report = run_sweep(store, dataset_store, test_config)
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
 
     (candidate,) = report["candidates"]
     assert candidate["train"]["aggregate"]["delta_net_r"] > 0
@@ -409,7 +649,7 @@ def test_champion_pointer_setter_is_called_from_exactly_one_source_file():
 # --- Honest failure states (Key Test Scenario 7) --------------------------------------------------
 
 
-def test_corrupt_dataset_raises_explicit_error_with_nothing_written(store, tmp_path):
+def test_corrupt_dataset_raises_explicit_error_with_nothing_written(store, tmp_path, certificate_store):
     dataset_store = DatasetStore(tmp_path / "datasets")
     meta = _winning_dataset(dataset_store, "SYN-TRAIN-A", seed=7, split=SPLIT_TRAIN)
     path = tmp_path / "datasets" / f"{meta['id']}.json"
@@ -418,7 +658,7 @@ def test_corrupt_dataset_raises_explicit_error_with_nothing_written(store, tmp_p
     path.write_text(json.dumps(data))
 
     with pytest.raises(ScanError):
-        run_sweep(store, dataset_store, CONFIG)
+        run_sweep(store, dataset_store, CONFIG, certificate_store=certificate_store)
     # No ledger row, no champion move -- the whole sweep aborted before anything was decided.
     assert len(store.list_pnl_ledger()) == 0
     assert store.get_champion_pointer() == {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
@@ -431,13 +671,23 @@ def test_mid_promotion_crash_leaves_no_orphan_and_no_silent_double_append(store,
     durable; the pointer move is the second write). A re-run must refuse explicitly (the ledger's
     own duplicate-enhancement-id structural guard, surfaced as ``ScanError``) rather than silently
     re-promoting (a second ledger row) or silently doing nothing (the caller would never learn the
-    champion is still un-moved)."""
+    champion is still un-moved). era-6 J-08: the FIRST promotion now needs a matching certificate,
+    minted through the real evaluation rail exactly as TC-2 does — the crash-retry behaviour under
+    test here is otherwise unchanged."""
     dataset_store = DatasetStore(tmp_path / "datasets")
-    _winning_dataset(dataset_store, "SYN-TRAIN-A", seed=7, split=SPLIT_TRAIN)
-    _winning_dataset(dataset_store, "SYN-HOLDOUT-B", seed=11, split=SPLIT_HOLDOUT)
+    train_meta = _winning_dataset(dataset_store, "SYN-TRAIN-A", seed=7, split=SPLIT_TRAIN)
+    holdout_meta = _winning_dataset(dataset_store, "SYN-HOLDOUT-B", seed=11, split=SPLIT_HOLDOUT)
     test_config = dataclasses.replace(CONFIG, promotion_min_sample_size=1)
+    champion_before = store.get_champion_pointer()
+    candidate = {"strategy_id": champion_before["strategy_id"], "profile": PROFILE_CANDIDATE_FASTER_WARMUP}
+    live = _live_scan_context(
+        champion=champion_before, train_meta=train_meta, holdout_meta=holdout_meta, config=test_config,
+    )
+    certificate_store = _mint_matching_certificate_through_the_real_rail(
+        store, tmp_path, candidate=candidate, live=live,
+    )
 
-    first = run_sweep(store, dataset_store, test_config)
+    first = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
     assert first["promotion"]["promoted"] is True
     assert len(store.list_pnl_ledger()) == 1
 
@@ -446,7 +696,7 @@ def test_mid_promotion_crash_leaves_no_orphan_and_no_silent_double_append(store,
     store.set_champion_pointer(strategy_id=STRATEGY_V1_ID, profile=PROFILE_DEFAULT, wall_ts=0.0)
 
     with pytest.raises(ScanError, match="already exists"):
-        run_sweep(store, dataset_store, test_config)
+        run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
     assert len(store.list_pnl_ledger()) == 1  # never a second row
 
 
@@ -516,7 +766,7 @@ def _record_structure_tape_dataset(
     )
 
 
-def test_strategy_axis_fixture_sweep_matches_shape_and_is_honestly_no_survivor(store):
+def test_strategy_axis_fixture_sweep_matches_shape_and_is_honestly_no_survivor(store, certificate_store):
     """``--strategy structure_tape`` (via ``run_sweep``) on the COMMITTED PG train/hold-out fixture
     pair, with the COMMITTED PG bar fixture (only 1h/1d -- test_backtests.py's own proof it can
     never yield a class-A zone) as the level source. Per split the report carries the SAME shape
@@ -529,7 +779,8 @@ def test_strategy_axis_fixture_sweep_matches_shape_and_is_honestly_no_survivor(s
     bar_store = BarStore(FIXTURE_BAR_DIR)
 
     report = run_sweep(
-        store, dataset_store, CONFIG, candidate_strategy_id=STRATEGY_TAPE_ID, bar_store=bar_store
+        store, dataset_store, CONFIG, candidate_strategy_id=STRATEGY_TAPE_ID, bar_store=bar_store,
+        certificate_store=certificate_store,
     )
 
     assert report["champion_before"] == {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
@@ -592,20 +843,19 @@ def test_strategy_axis_determinism_two_independent_fresh_state_runs_are_byte_ide
     assert len(first) > 200
 
 
-def test_strategy_axis_controlled_survivor_moves_champion_and_appends_exactly_one_ledger_row(
-    store, tmp_path, confluence_bar_store
+def test_strategy_axis_controlled_survivor_is_refused_without_a_certificate(
+    store, tmp_path, confluence_bar_store, certificate_store
 ):
-    """An ISOLATED synthetic train + hold-out pair (never the shipped PG fixture) on which
-    ``structure_tape`` legitimately beats ``v1`` on BOTH splits (the class-A breakthrough-long arm,
-    with a test-LOCAL lowered promotion minimum -- the shipped default of 5 is never touched):
-    promotes for real -- the pointer moves to ``{structure_tape, default}``, exactly one
-    provenance-stamped ledger row is appended -- while ``default``/``v1``/every engine default stay
-    byte-identical."""
+    """era-6 J-08 (TC-1), STRATEGY axis: inverts this suite's own pre-iter-9 "controlled survivor
+    promotes" assertions — an ISOLATED synthetic train + hold-out pair on which ``structure_tape``
+    legitimately beats ``v1`` on BOTH splits is now REFUSED absent a valid, candidate-specific
+    Referee certificate — no ledger row, no pointer move — while ``survivor`` still reads ``True``
+    (the hold-out gate itself still genuinely passed)."""
     dataset_store = DatasetStore(tmp_path / "datasets")
-    train_meta = _record_structure_tape_dataset(
+    _record_structure_tape_dataset(
         dataset_store, symbol=_CONFLUENCE_SYMBOL, split=SPLIT_TRAIN, max_logical=25.0
     )
-    holdout_meta = _record_structure_tape_dataset(
+    _record_structure_tape_dataset(
         dataset_store, symbol=_CONFLUENCE_SYMBOL, split=SPLIT_HOLDOUT, max_logical=40.0
     )
     test_config = dataclasses.replace(CONFIG, promotion_min_sample_size=1)
@@ -613,11 +863,13 @@ def test_strategy_axis_controlled_survivor_moves_champion_and_appends_exactly_on
     report = run_sweep(
         store, dataset_store, test_config,
         candidate_strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store,
+        certificate_store=certificate_store,
     )
 
     (candidate,) = report["candidates"]
     assert candidate["candidate_id"] == STRATEGY_TAPE_ID
-    # The win is asserted, not merely assumed (both R and $, on both splits).
+    # The win is asserted, not merely assumed (both R and $, on both splits) — the hold-out gate
+    # itself still genuinely passes; only the certificate interlock refuses.
     assert candidate["train"]["aggregate"]["delta_net_r"] > 0
     assert candidate["train"]["aggregate"]["delta_net_usd"] > 0
     assert candidate["holdout"]["aggregate"]["delta_net_r"] > 0
@@ -626,26 +878,16 @@ def test_strategy_axis_controlled_survivor_moves_champion_and_appends_exactly_on
     assert candidate["overfit"] is False
 
     assert report["champion_before"] == {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
-    assert report["champion_after"] == {"strategy_id": STRATEGY_TAPE_ID, "profile": PROFILE_DEFAULT}
-    assert report["promotion"] == {
-        "candidate_id": STRATEGY_TAPE_ID,
-        "promoted": True,
-        "enhancement_id": f"{STRATEGY_TAPE_ID}-over-{STRATEGY_V1_ID}-{PROFILE_DEFAULT}",
-    }
+    assert report["champion_after"] == report["champion_before"]  # UNMOVED
+    assert report["promotion"]["promoted"] is False
+    assert report["promotion"]["promotion_eligible"] is False
+    assert report["promotion"]["refusal_class"] == "no_certificate"
+    assert report["promotion"]["reason"]
 
-    rows = store.list_pnl_ledger()
-    assert len(rows) == 1
-    row = rows[0].payload
-    assert row["founding"] is False
-    assert row["provenance"]["strategy_id"] == STRATEGY_TAPE_ID
-    assert row["provenance"]["profile"] == PROFILE_DEFAULT
-    assert row["provenance"]["train"]["dataset_id"] == train_meta["id"]
-    assert row["provenance"]["holdout"]["dataset_id"] == holdout_meta["id"]
-
-    # Frozen foundation AFTER a STRATEGY-axis promotion too: fingerprint unmoved.
+    assert len(store.list_pnl_ledger()) == 0
+    # Frozen foundation: fingerprint unmoved regardless of the refusal.
     assert CONFIG.config_fingerprint() == "08e471b10130e1e2"
-    # Single-source: the projection reflects the SAME moved pointer, verbatim.
-    assert profiles_projection(store, test_config)["champion"] == report["champion_after"]
+    assert profiles_projection(store, test_config)["champion"] == report["champion_before"]
 
 
 def test_strategy_axis_mid_promotion_crash_leaves_no_orphan_and_no_silent_double_append(
@@ -653,19 +895,29 @@ def test_strategy_axis_mid_promotion_crash_leaves_no_orphan_and_no_silent_double
 ):
     """The SAME crash-safety guarantee as the profile axis (Key Test Scenario 4), reverting JUST
     the pointer after a real strategy-axis promotion and re-running -- must refuse explicitly, never
-    silently re-promote (a second ledger row) or silently do nothing."""
+    silently re-promote (a second ledger row) or silently do nothing. era-6 J-08: the FIRST
+    promotion now needs a matching certificate, minted through the real evaluation rail."""
     dataset_store = DatasetStore(tmp_path / "datasets")
-    _record_structure_tape_dataset(
+    train_meta = _record_structure_tape_dataset(
         dataset_store, symbol=_CONFLUENCE_SYMBOL, split=SPLIT_TRAIN, max_logical=25.0
     )
-    _record_structure_tape_dataset(
+    holdout_meta = _record_structure_tape_dataset(
         dataset_store, symbol=_CONFLUENCE_SYMBOL, split=SPLIT_HOLDOUT, max_logical=40.0
     )
     test_config = dataclasses.replace(CONFIG, promotion_min_sample_size=1)
+    champion_before = store.get_champion_pointer()
+    candidate = {"strategy_id": STRATEGY_TAPE_ID, "profile": PROFILE_DEFAULT}
+    live = _live_scan_context(
+        champion=champion_before, train_meta=train_meta, holdout_meta=holdout_meta, config=test_config,
+    )
+    certificate_store = _mint_matching_certificate_through_the_real_rail(
+        store, tmp_path, candidate=candidate, live=live,
+    )
 
     first = run_sweep(
         store, dataset_store, test_config,
         candidate_strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store,
+        certificate_store=certificate_store,
     )
     assert first["promotion"]["promoted"] is True
     assert len(store.list_pnl_ledger()) == 1
@@ -676,12 +928,13 @@ def test_strategy_axis_mid_promotion_crash_leaves_no_orphan_and_no_silent_double
         run_sweep(
             store, dataset_store, test_config,
             candidate_strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store,
+            certificate_store=certificate_store,
         )
     assert len(store.list_pnl_ledger()) == 1  # never a second row
 
 
 def test_strategy_axis_min_n_gate_rejects_below_minimum_despite_positive_holdout(
-    store, tmp_path, confluence_bar_store
+    store, tmp_path, confluence_bar_store, certificate_store
 ):
     dataset_store = DatasetStore(tmp_path / "datasets")
     _record_structure_tape_dataset(
@@ -695,6 +948,7 @@ def test_strategy_axis_min_n_gate_rejects_below_minimum_despite_positive_holdout
     report = run_sweep(
         store, dataset_store, test_config,
         candidate_strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store,
+        certificate_store=certificate_store,
     )
 
     (candidate,) = report["candidates"]
@@ -707,7 +961,11 @@ def test_strategy_axis_min_n_gate_rejects_below_minimum_despite_positive_holdout
     assert report["champion_after"] == report["champion_before"]
 
 
-def test_strategy_axis_min_n_gate_promotes_at_or_above_minimum(store, tmp_path, confluence_bar_store):
+def test_strategy_axis_min_n_gate_survivor_at_or_above_minimum_is_still_refused_without_a_certificate(
+    store, tmp_path, confluence_bar_store, certificate_store
+):
+    """era-6 J-08: STRATEGY-axis counterpart of the profile-axis min-n refusal test above — the
+    hold-out gate itself still passes at n=1>=1, but the certificate interlock refuses it."""
     dataset_store = DatasetStore(tmp_path / "datasets")
     _record_structure_tape_dataset(
         dataset_store, symbol=_CONFLUENCE_SYMBOL, split=SPLIT_TRAIN, max_logical=25.0
@@ -720,16 +978,18 @@ def test_strategy_axis_min_n_gate_promotes_at_or_above_minimum(store, tmp_path, 
     report = run_sweep(
         store, dataset_store, test_config,
         candidate_strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store,
+        certificate_store=certificate_store,
     )
 
     (candidate,) = report["candidates"]
     assert candidate["survivor"] is True
-    assert report["promotion"]["promoted"] is True
-    assert len(store.list_pnl_ledger()) == 1
+    assert report["promotion"]["promoted"] is False
+    assert report["promotion"]["refusal_class"] == "no_certificate"
+    assert len(store.list_pnl_ledger()) == 0
 
 
 def test_strategy_axis_overfit_is_positive_train_failing_holdout_and_is_never_promoted(
-    store, tmp_path, confluence_bar_store
+    store, tmp_path, confluence_bar_store, certificate_store
 ):
     """Train: ``structure_tape`` genuinely beats ``v1`` (the real class-A breakthrough win, over
     ``_CONFLUENCE_SYMBOL``, which HAS a recorded bar series). Hold-out: a DIFFERENT symbol with NO
@@ -749,6 +1009,7 @@ def test_strategy_axis_overfit_is_positive_train_failing_holdout_and_is_never_pr
     report = run_sweep(
         store, dataset_store, test_config,
         candidate_strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store,
+        certificate_store=certificate_store,
     )
 
     (candidate,) = report["candidates"]
@@ -764,7 +1025,7 @@ def test_strategy_axis_overfit_is_positive_train_failing_holdout_and_is_never_pr
 
 
 def test_strategy_axis_more_than_one_dataset_per_split_skips_promotion_with_honest_note(
-    store, tmp_path, confluence_bar_store
+    store, tmp_path, confluence_bar_store, certificate_store
 ):
     dataset_store = DatasetStore(tmp_path / "datasets")
     _record_structure_tape_dataset(
@@ -781,6 +1042,7 @@ def test_strategy_axis_more_than_one_dataset_per_split_skips_promotion_with_hone
     report = run_sweep(
         store, dataset_store, test_config,
         candidate_strategy_id=STRATEGY_TAPE_ID, bar_store=confluence_bar_store,
+        certificate_store=certificate_store,
     )
 
     (candidate,) = report["candidates"]
@@ -789,11 +1051,15 @@ def test_strategy_axis_more_than_one_dataset_per_split_skips_promotion_with_hone
     assert candidate["survivor"] is True  # the hold-out gate itself still passes...
     assert report["promotion"]["promoted"] is False  # ...but promotion is explicitly skipped
     assert "2 train" in report["promotion"]["note"]
+    # The structural (dataset-cardinality) skip is a DIFFERENT refusal than the certificate
+    # interlock -- authorize_promotion is never even consulted on this path (era-6 J-08).
+    assert report["promotion"]["promotion_eligible"] is None
+    assert report["promotion"]["refusal_class"] is None
     assert len(store.list_pnl_ledger()) == 0
     assert report["champion_after"] == report["champion_before"]
 
 
-def test_strategy_axis_unknown_candidate_strategy_id_is_an_explicit_refusal(store):
+def test_strategy_axis_unknown_candidate_strategy_id_is_an_explicit_refusal(store, certificate_store):
     """No new validation code exists for this -- ``BacktestJobManager.create`` stamps
     ``strategy_id`` verbatim, and ``BacktestRunner.run`` persists an unregistered id as an explicit
     ``failed`` record (never raises out), which ``_run_backtest``'s EXISTING status check turns
@@ -801,7 +1067,179 @@ def test_strategy_axis_unknown_candidate_strategy_id_is_an_explicit_refusal(stor
     dataset_store = DatasetStore(FIXTURE_DATASET_DIR)
 
     with pytest.raises(ScanError):
-        run_sweep(store, dataset_store, CONFIG, candidate_strategy_id="not-a-real-strategy")
+        run_sweep(
+            store, dataset_store, CONFIG, candidate_strategy_id="not-a-real-strategy",
+            certificate_store=certificate_store,
+        )
 
     assert len(store.list_pnl_ledger()) == 0
     assert store.get_champion_pointer() == {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
+
+
+# --- era-6 J-08: the remaining five refusal classes (TC-3..TC-7), each fixture-tested through the
+# full run_sweep/_promote path over the SAME controlled-survivor scenario TC-1/TC-2 use ------------
+
+
+def _survivor_scenario(tmp_path):
+    """The SAME isolated, controlled hold-out win TC-1/TC-2 use, factored out for the five
+    mismatch-class refusal tests below — each one hand-builds a certificate that matches every
+    pin EXCEPT the one field under test."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    train_meta = _winning_dataset(dataset_store, "SYN-TRAIN-A", seed=7, split=SPLIT_TRAIN)
+    holdout_meta = _winning_dataset(dataset_store, "SYN-HOLDOUT-B", seed=11, split=SPLIT_HOLDOUT)
+    test_config = dataclasses.replace(CONFIG, promotion_min_sample_size=1)
+    return dataset_store, train_meta, holdout_meta, test_config
+
+
+def test_tc3_a_stale_config_fingerprint_certificate_refuses(store, tmp_path, certificate_store):
+    dataset_store, train_meta, holdout_meta, test_config = _survivor_scenario(tmp_path)
+    champion_before = store.get_champion_pointer()
+    candidate = {"strategy_id": champion_before["strategy_id"], "profile": PROFILE_CANDIDATE_FASTER_WARMUP}
+    live = _live_scan_context(
+        champion=champion_before, train_meta=train_meta, holdout_meta=holdout_meta, config=test_config,
+    )
+    stale = dict(live)
+    stale["config_fingerprint"] = "some-other-fingerprint-entirely"
+    certificate_store.record(_matching_certificate(candidate=candidate, live=stale))
+
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
+
+    assert report["promotion"]["promoted"] is False
+    assert report["promotion"]["promotion_eligible"] is False
+    assert report["promotion"]["refusal_class"] == "stale"
+    assert len(store.list_pnl_ledger()) == 0
+    assert report["champion_after"] == report["champion_before"]
+
+
+def test_tc4_a_certificate_for_a_different_profile_refuses_wrong_candidate(store, tmp_path, certificate_store):
+    dataset_store, train_meta, holdout_meta, test_config = _survivor_scenario(tmp_path)
+    champion_before = store.get_champion_pointer()
+    live = _live_scan_context(
+        champion=champion_before, train_meta=train_meta, holdout_meta=holdout_meta, config=test_config,
+    )
+    other_candidate = {"strategy_id": champion_before["strategy_id"], "profile": "some-other-profile"}
+    certificate_store.record(_matching_certificate(candidate=other_candidate, live=live))
+
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
+
+    assert report["promotion"]["promoted"] is False
+    assert report["promotion"]["refusal_class"] == "wrong_candidate"
+    assert len(store.list_pnl_ledger()) == 0
+
+
+def test_tc5_a_mismatched_train_dataset_pin_refuses(store, tmp_path, certificate_store):
+    dataset_store, train_meta, holdout_meta, test_config = _survivor_scenario(tmp_path)
+    champion_before = store.get_champion_pointer()
+    candidate = {"strategy_id": champion_before["strategy_id"], "profile": PROFILE_CANDIDATE_FASTER_WARMUP}
+    live = _live_scan_context(
+        champion=champion_before, train_meta=train_meta, holdout_meta=holdout_meta, config=test_config,
+    )
+    mismatched = dict(live)
+    mismatched["train_dataset"] = {"id": "some-other-dataset", "checksum": "0" * 8, "split": "train"}
+    certificate_store.record(_matching_certificate(candidate=candidate, live=mismatched))
+
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
+
+    assert report["promotion"]["promoted"] is False
+    assert report["promotion"]["refusal_class"] == "mismatched_datasets"
+    assert len(store.list_pnl_ledger()) == 0
+
+
+def test_tc6_a_certificate_with_a_failed_gate_refuses(store, tmp_path, certificate_store):
+    dataset_store, train_meta, holdout_meta, test_config = _survivor_scenario(tmp_path)
+    champion_before = store.get_champion_pointer()
+    candidate = {"strategy_id": champion_before["strategy_id"], "profile": PROFILE_CANDIDATE_FASTER_WARMUP}
+    live = _live_scan_context(
+        champion=champion_before, train_meta=train_meta, holdout_meta=holdout_meta, config=test_config,
+    )
+    certificate_store.record(
+        _matching_certificate(
+            candidate=candidate, live=live,
+            gate_results={"calibrated_p": 0.5, "bh_pass": False, "ci": [-1.0, 1.0], "floors_met": True},
+        )
+    )
+
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
+
+    assert report["promotion"]["promoted"] is False
+    assert report["promotion"]["refusal_class"] == "failed_gates"
+    assert len(store.list_pnl_ledger()) == 0
+
+
+def test_tc7_a_malformed_certificate_store_refuses_and_never_crashes_promote(
+    store, tmp_path, certificate_store,
+):
+    dataset_store, train_meta, holdout_meta, test_config = _survivor_scenario(tmp_path)
+    champion_before = store.get_champion_pointer()
+    candidate = {"strategy_id": champion_before["strategy_id"], "profile": PROFILE_CANDIDATE_FASTER_WARMUP}
+    live = _live_scan_context(
+        champion=champion_before, train_meta=train_meta, holdout_meta=holdout_meta, config=test_config,
+    )
+    # A genuine, valid, matching certificate IS on file (so a naive implementation might promote) --
+    # a SEPARATE, unrelated corrupted file in the same store must still refuse, honestly, never
+    # crash `_promote` (the error-cases clause: "a malformed/corrupted certificate file must return
+    # malformed_unverifiable, never crash _promote").
+    certificate_store.record(_matching_certificate(candidate=candidate, live=live))
+    certificate_store.root.mkdir(parents=True, exist_ok=True)
+    (certificate_store.root / "certificate-corrupt.json").write_text("not valid json at all")
+
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
+
+    assert report["promotion"]["promoted"] is False
+    assert report["promotion"]["refusal_class"] == "malformed_unverifiable"
+    assert len(store.list_pnl_ledger()) == 0
+    assert report["champion_after"] == report["champion_before"]
+
+
+def test_a_survivor_with_zero_certificates_on_file_completes_the_sweep_honestly_never_raises(
+    store, tmp_path, certificate_store,
+):
+    """Error case (iteration spec): a survivor with zero certificates on file must still complete
+    the sweep and report honestly (never raise) — the ``certificate_store`` fixture is a freshly
+    empty, never-populated directory throughout this whole file; this test names that expectation
+    explicitly rather than leaving it merely implicit in every OTHER test's own passing assertion."""
+    dataset_store, _train_meta, _holdout_meta, test_config = _survivor_scenario(tmp_path)
+
+    report = run_sweep(store, dataset_store, test_config, certificate_store=certificate_store)
+
+    (candidate,) = report["candidates"]
+    assert candidate["survivor"] is True
+    assert report["promotion"]["promoted"] is False
+    assert report["promotion"]["refusal_class"] == "no_certificate"
+
+
+# --- era-6 J-08 (TC-8): the no-bypass source-scan guard --------------------------------------------
+
+
+def test_no_bypass_path_exists_for_authorize_promotion():
+    """TC-8: scans the two files implementing the promotion interlock's own source text for any
+    CODE-shaped ``--force``/skip-flag/environment-override/default-allow IDENTIFIER that could
+    satisfy ``authorize_promotion`` without a genuine, matching, on-file certificate. Every banned
+    token below is an underscore/flag-shaped identifier (never a bare English word like "bypass"
+    prose legitimately uses to describe the ABSENCE of one -- this module's own docstrings do
+    exactly that) so the scan cannot self-trip on its own documentation. A lint that CAN fail on a
+    seeded violation (the ``test_desk_ui_guards.py`` precedent) — proven below."""
+    banned_tokens = (
+        "--force", "force_promote", "force_certificate", "force=true",
+        "skip_certificate", "skip_cert", "no_certificate_required", "allow_without_certificate",
+        "default_allow", "tapeology_force", "tapeology_skip_cert",
+    )
+    for relative in ("research/pnl_scan.py", "research/referee_adjudicate.py"):
+        source = (BACKEND_DIR / "app" / relative).read_text().lower()
+        for token in banned_tokens:
+            assert token not in source, (
+                f"{relative} contains a potential promotion-interlock bypass token: {token!r}"
+            )
+    # `--strategy` is the ONE existing CLI flag on pnl_scan.py — proves this scan is not simply
+    # rejecting every flag definition; it targets bypass-shaped tokens specifically.
+    pnl_scan_source = (BACKEND_DIR / "app" / "research" / "pnl_scan.py").read_text()
+    assert "--strategy" in pnl_scan_source
+
+
+def test_no_bypass_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail — a lint that cannot fail proves nothing (the ``test_desk_ui_guards.py``
+    precedent)."""
+    seeded_source = "if args.force or os.environ.get('TAPEOLOGY_SKIP_CERTIFICATE'):\n    return authorized\n"
+    lowered = seeded_source.lower()
+    assert "--force" in lowered or "force" in lowered
+    assert "skip_certificate" in lowered

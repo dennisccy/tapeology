@@ -438,3 +438,69 @@ inside a sentence that was actually describing the new visible screen, so the ro
 files are still uncommitted — they should be committed, and that check's wording rule loosened.
 Still outstanding for a person, from iteration 2 and outside this project: the unrelated trendora
 backend on port 8255 has not been restarted.
+
+## Iteration 9 — goal-referee-iter-9
+
+**Date:** 2026-08-15T17:10:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (the spec asked for full; the engine demoted it — telemetry
+`depth_demoted`, `reason: budget-breach`, the third such demotion this session)
+**Journey deltas:**
+- Newly passing: J-08 "The strategy family and the promotion lock — fail closed, no bypass"
+- Newly failing: none
+- Regressed: none
+- Partial: J-10 "The kept product stands" (unchanged status; its kept half was re-checked green
+  by the replay lane with a fresh dated picture; its era-end clauses — three Referee panels and
+  22 tools for the Claude connector — still wait on J-09)
+- Cleared this run: J-07 "The starter family" carried a stale-picture flag from last round; the
+  fresh picture shows the corrected number, so the flag is gone
+- Re-verified directly rather than carried: J-05 "The registry" and J-06 "Estimand engines and
+  adjudication" — the browser lane deferred both, but both of their own source files changed this
+  run, so I checked the changes and their tests myself
+- Not re-tested this run: J-01 "The era transition stands", J-02 "The evidence contract", J-03 "The
+  statistics core" and J-04 "Matched nulls" — all four marked DEFERRED-BUDGET in the results file,
+  so all four keep their recorded passing status. None of their own source files changed
+- Anti-goal violations: one new minor, still open (details below). The two earlier ones stay
+  closed; the iteration-6 critical one was re-confirmed closed from a fourth side
+
+**Reasoning:** The promotion lock is real and I proved it myself rather than reading it in a
+report. The champion trading strategy can no longer be replaced — however good its numbers — unless
+a matching certificate from the new statistics machinery is on file. I checked this from four
+sides: the code asks for permission before it writes anything; the permission handle is a required
+argument, so it cannot be skipped by forgetting it (I called the function without it and got an
+error); there is exactly one place in the whole codebase that moves the champion, and it sits after
+the permission check; and I minted a real certificate in an isolated scratch area, then spoiled each
+pinned detail in turn — every one came back refused with its own distinct, honest reason. I ran the
+whole test suite myself (2,678 collected, 2,670 passed, 8 skipped, none failed), printed the
+settings pin myself (08e471b10130e1e2), counted the Claude connector's tools myself (still 20), and
+confirmed the guard over the owner's saved data reports all 11,274 files unchanged — and that the
+owner's real record folder does not exist at all, so nothing was written there. Then I found
+something nobody else demonstrated: the certificate says which strategy it is for, but nothing ever
+checks that the evidence behind it came from that strategy. I planted twelve results all belonging
+to one strategy and minted a passing certificate naming a completely different, made-up strategy —
+and the lock then approved that made-up strategy. Nobody can reach that path today (no page, no
+button, and no command-line act passes the arguments needed to mint anything, and there are zero
+certificates on file), so I scored it minor and left it open rather than halting. Two smaller
+things stay open: the lock's own description still tells readers it is not connected to anything,
+and the "this check can fail" proof for the no-bypass scan inspects a hand-typed sentence instead
+of running the real scan.
+
+**Next-step recommendation:** Build J-09 "The Referee on the Desk page and the 22-tool Claude
+connector" next, on its own, at full depth — the two missing Referee panels (verdicts, and compute
+controls with run history), their honest empty-state wording, and growing the Claude connector from
+20 tools to 22. I am raising the depth rather than simply continuing because this round was planned
+as the deep pass and was cut back to the short one for time for the third time in this session, and
+every one of the three rounds where the deep lane actually ran found a real fault the ordinary
+checks missed — this time the short lane shipped the era's one production-changing surface and I
+had to find the weakness myself. J-09 also re-derives two protective counters that may be changed
+only once, deliberately, with a written reason, and it needs real browser pictures of three panels.
+Four items ride inside that round instead of becoming their own: (1) close the open lock weakness —
+make the certificate's evidence actually belong to the strategy it names, or get an owner ruling
+that a caller-declared name is enough while the minting path stays unreachable; (2) correct the
+lock function's stale description; (3) make the no-bypass check's own failure proof run the real
+scan; (4) delete a duplicated assertion line in the registry tests. For a person: approve "build the
+last Referee screens and the two new Claude connector tools next, using the deeper pipeline, and fix
+the four small items along the way". Two things for a person, neither blocking: this round's ten
+changed files and the previous round's are still uncommitted and should be committed; and from
+iteration 2, outside this project, the unrelated trendora backend on port 8255 has still not been
+restarted.

@@ -159,3 +159,27 @@ table and 3 in the other for the same wall-based candidate (evaluator probe, ite
 **Applies to:** any iteration adding a served numeric to `referee_registry.py` /
 `referee_adjudicate.py`, any "complement/mirror of an existing fold" work, and every browser
 acceptance that reads numbers off the fixture-scoped rig.
+
+## iter-9 — 2026-08-15T17:10:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A gate that compares PINS is not the same as a gate that validates EVIDENCE. J-08's
+`authorize_promotion` compares every certificate field against the live scan correctly, yet
+`referee_adjudicate._pool_strategy_trades` / `referee_evidence.strategy_observations` take only a
+`JournalStore` and pool every recorded backtest trade unfiltered by `strategy_id`/`profile`, and
+`_mint_strategy_certificate` stamps whatever `candidate` dict its caller hands it — so a certificate
+can honestly pass every pin check while its statistics came from a different strategy entirely
+(I reproduced this end-to-end in an isolated store). When a future iteration wires
+`journal_store`/`certificate_mint` into `POST /research/desk/referee/evaluate`, the interlock
+becomes ceremonial unless the pooled evidence's own identity is checked against the certificate's
+named candidate.
+**Applies to:** any iteration touching `referee_adjudicate.py`'s mint/evaluation rail,
+`referee_evidence.strategy_observations`, or wiring the `/evaluate` route — and generally, any
+"X-specific certificate/token" gate: test that the token's SUBJECT matches the DATA it was derived
+from, not only that its recorded fields equal the caller's.
+
+**Second lesson (process):** `depth_full_granted` fires only on `reason: prior-verdict-ESCALATE`.
+A `CONTINUE` verdict carrying `next_depth: full` was demoted to lean by the wall-clock budget in
+iters 7 and 9 despite the iteration spec pleading against it. If a round genuinely needs the hard
+audit lane, the verdict itself must be ESCALATE — a depth recommendation attached to CONTINUE is
+advisory only.

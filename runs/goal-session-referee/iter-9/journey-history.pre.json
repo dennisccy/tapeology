@@ -1,0 +1,134 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The era transition stands — reconciliation made testable",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-2-ui-test-results.md",
+      "spec_hash": "9fe67344e7c7ae71546d205bbd134263e172265ee542963f4b483f564c0e228e",
+      "note": "iter-8: DEFERRED-BUDGET row in reports/phase-goal-referee-iter-8-ui-test-results.md:45 — not re-tested this run, keeps its recorded status. Its own source (referee_evidence.py) is NOT in this iteration's 9-file diff, so its prior evidence stays valid (evidence durability)."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The evidence contract — two families, one observation shape",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-2-ui-test-results.md",
+      "spec_hash": "853e7be61a1ba27f0c8baf57dff1914d3aa54c01f82471f990133afab378850a",
+      "note": "iter-8: DEFERRED-BUDGET row (results file :46) — not re-tested. referee_evidence.py unchanged this iteration; prior evidence stays valid."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The statistics core — calibrated, seeded, oracle-proven, fail-closed",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-5",
+      "last_passing_iter": "goal-referee-iter-5",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-5-ui-test-results.md",
+      "spec_hash": "f00b804c40b2b60e1b9bf6209033d53796c98d86c14248ea079ef3a507291ae0",
+      "note": "iter-8: DEFERRED-BUDGET row (results file :47) — not re-tested. referee_stats.py unchanged this iteration; its oracle suite ran green inside the evaluator's own full-suite run (2,657 collected / 0 failed)."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Matched nulls — comparable times, identical measurement",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-6",
+      "last_passing_iter": "goal-referee-iter-6",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-6-ui-test-results.md",
+      "spec_hash": "c16455f3b0356910d9d0e1062edea7531b45b5ee68f58df527ba8d182516e611",
+      "note": "iter-8: DEFERRED-BUDGET row (results file :48) — not re-tested. referee_null.py unchanged this iteration (imported FROM by the new shortlist fold, never modified); prior evidence stays valid."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The registry — pre-registration with an immutable boundary",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-8",
+      "last_passing_iter": "goal-referee-iter-8",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-8-evidence/UT-06-result.png",
+      "spec_hash": "2af99b40b3062ff02f0d57470dbb3085479c4232b5f509e4361bbf3e8562aa5e",
+      "note": "iter-8: its own source file (referee_registry.py) changed this run, so the evaluator re-verified it directly instead of carrying it past the DEFERRED-BUDGET row: the registration write path, boundary derivation, family-consistency validation and all four stores are untouched by the diff (additive folds only); the evaluator's own isolated probe registered a hypothesis end to end and the boundary was server-stamped 2026-08-15; every J-05 test green in the evaluator's own full-suite run."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Estimand engines + adjudication — one checkpoint, recorded forever",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-8",
+      "last_passing_iter": "goal-referee-iter-8",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-referee-iter-8-audit.md#B1",
+      "spec_hash": "f0a370fab0515b423625b8fbe8694180875d0839d8ca105230bcc0179b8ca2e8",
+      "note": "iter-8: referee_adjudicate.py changed this run (Rider 1 write-side attestation gate, audit finding B1's second snapshot-write site, Rider 2 integrity_errors disclosure) — all three strengthen J-06 and each ships with a can-fail companion test; all five named tests green in the evaluator's own full-suite run. The iteration-7 evaluator's open interpretive risk (an unattested confirmatory verdict could be WRITTEN into the one permanent snapshot even though the served fold refused it) is now closed at BOTH write sites."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The starter family — historical exploration becomes registered questions",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-8",
+      "last_passing_iter": "goal-referee-iter-8",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-8-evidence/UT-06-result.png",
+      "spec_hash": "473e2966a4c3fc78ec62b1ce97a0a6ada59891a625c9c88daf0964e8ec1c9f66",
+      "evidence_makeup": true,
+      "note": "iter-8: newly passing. Browser evidence opened directly by the evaluator — UT-02-result.png (five spec-pinned candidates S-1..S-5 with rationale + readiness, honest 'No hypotheses registered.' empty state) and UT-06-result.png (a real select -> confirm -> write registration: row 'S-1 / capitulation:long / 2026-08-15 / historical-exploration / active / 0 / 12 / 1 / 1 discovery (exploratory)', the S-1 action button now disabled 'Registered'). UT-08 proves the write persisted across a page reload. capture-defect (evidence_makeup): the screenshots' 'Projected days' column (517) predates the same iteration's audit fix B2; the current code serves 564 for that same rig corpus — reproduced by the evaluator. Every other pixel of those screenshots is still current. Re-capture rides the next iteration as a passenger task, never as its goal."
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The strategy family + the promotion interlock — fail closed, no bypass",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": null,
+      "spec_hash": "04cecc16df051077401e5a4c694d6d81422554e3d45fccfcf3615b2722de9808",
+      "note": "Not built. authorize_promotion exists as a pure, unwired decision function (iter-7); pnl_scan._promote is not yet interlocked."
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The Referee on /desk + MCP contract v5 — 22 read-only tools",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": null,
+      "spec_hash": "26f414b65f170424797c6c23ab3c013a3648e2db090af16db72c52d2b781bf9d",
+      "note": "Not built. iter-8 shipped the FIRST of its three sections (Referee Registry); Referee Adjudications and Referee Runs are absent, and the MCP surface is still 20 tools (verified by the evaluator) against the required 22."
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — regression sentinel",
+      "status": "partial",
+      "last_verified_iter": "goal-referee-iter-8",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-8-evidence/J-10-verify.png",
+      "spec_hash": "d14682891de7794bb3728ade717e6a1ed805f44384087a9bf18d75d09348fd9a",
+      "note": "iter-8: the kept-product half re-verified — golden replay PASS with a genuinely fresh screenshot (J-10-verify.png, opened by the evaluator), UT-10 confirms every shipped /desk section still renders with the new section strictly last, and the evaluator ran the full suite itself (2,657 collected / 2,649 passed / 8 skipped / 0 failed), printed the pin 08e471b10130e1e2 itself and counted the MCP tools itself (20). The store-scope guard reports all 11,274 protected files unchanged. STILL partial: its era-end clauses (three Referee sections rendered, MCP = 22 tools) cannot be met until J-09 ships."
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-referee-iter-6",
+      "anti_goal": "The historical atlas is exploratory forever. No historical observation is ever served, labeled, or counted as forward confirmation; discovery data renders only under its exploratory label. (critical)",
+      "severity": "critical",
+      "evidence": "docs/handoffs/goal-referee-iter-6-audit.md finding B1 — apps/backend/app/research/referee_routes.py exposed `registered_at: Optional[str]` on the registration body and forwarded it into register_hypothesis, where apps/backend/app/research/referee_registry.py:665 makes it the sole input to the boundary derivation; the CLI carried the same `--registered-at` knob. Proven live pre-fix: a POST with registered_at 2025-01-01 stored confirmation_start_boundary 2024-12-31 and made three pre-existing historical sessions accrue as post-boundary confirmation, in an append-only record with no delete path.",
+      "resolved": true,
+      "resolution": "Fixed inside iteration 6 by the full pipeline's hard-audit lane and re-verified live by the evaluator there (a caller-supplied 2025-01-01 instant is ignored; today's honest ET date is stored). RE-CONFIRMED STILL CLOSED IN ITERATION 7: the iter-7 diff touches referee_registry.py only for Rider 2 (integrity_errors disclosure) and Rider 3 (dead-import removal) — no boundary-derivation code changed, and iteration 7 independently re-verifies the same rail from the other side (TC-8: an on-boundary and a deep-backfilled record both contribute zero to coverage and to T). RE-CONFIRMED STILL CLOSED IN ITERATION 8 from a third side: the new /desk registration UI cannot reach the boundary seam (its POST body carries no registered_at field at all), and the evaluator's own isolated probe registered through the same path and got a server-stamped 2026-08-15 boundary."
+    },
+    {
+      "iter": "goal-referee-iter-8",
+      "anti_goal": "The historical atlas is exploratory forever. No historical observation is ever served, labeled, or counted as forward confirmation; discovery data renders only under its exploratory label. (critical)",
+      "severity": "minor",
+      "evidence": "docs/handoffs/goal-referee-iter-8-audit.md finding B2 — referee_registry.shortlist_response served `projected_days_to_target = max(0.0, (target_sessions - n_sessions) / accrual_rate)`, subtracting a candidate's PRE-boundary historical sessions from a target that is a post-boundary count everywhere else it is used. Against the operator's real corpus every estimand-A candidate rendered '0 days — ready now' for honest waits of 74 / 119 / 50 days.",
+      "resolved": true,
+      "resolution": "Found and fixed INSIDE this same iteration by the hard-audit lane (`projected_days_to_target = target_sessions / accrual_rate`, measured from zero; the divide-by-zero guard unchanged) with its own replacement test, and independently reproduced by the evaluator on an isolated fixture corpus (pre-fix 517 vs post-fix 564 on the browser rig's own 47-day / 1-session corpus). Scored MINOR rather than critical because the value is a pure read-side projection with zero persisted output, no record ever counted it toward confirmation, and it never reached the operator's real screen — the only capture of it is the QA rig screenshot, which is why J-07 carries evidence_makeup."
+    }
+  ],
+  "updated_at": "2026-08-15T15:30:00Z"
+}

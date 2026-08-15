@@ -350,16 +350,12 @@ const PRIMARY_BUTTON_CLASS =
 const CANCEL_BUTTON_CLASS =
   "mt-1 rounded-md border border-slate-700 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50";
 
-// goal-referee-iter-8 (J-07): the starter family's own registration-mechanics constants -- the
-// shortlist response (RefereeShortlistCandidate) carries every OTHER field a registration payload
-// needs verbatim, but not these three (spec Sec7's shortlist describes research QUESTIONS, not
-// registration mechanics). `family_q` mirrors REFEREE_DEFAULT_Q (0.10,
-// docs/referee-statistical-spec.md Sec1) -- the same value test_referee_registry.py's own
-// `_starter_family_payloads()` fixture already uses for all five candidates. The candidate id SET
-// itself is never hard-coded here — it is read live off the fetched shortlist's own
-// `candidate_id`s at submit time (goal.md J-07 Step 2: "no hard-coded hypothesis set").
-const REFEREE_STARTER_FAMILY_ID = "referee-starter-family";
-const REFEREE_STARTER_FAMILY_Q = 0.1;
+// goal-referee-iter-8 (J-07) / goal-referee-iter-9 (rider): the starter family's own
+// registration-mechanics fields -- `family_id`/`family_q` are now read live off the fetched
+// shortlist response itself (RefereeShortlistResponse, backend-owned as of iter-9; previously two
+// unowned local literals here). The candidate id SET is likewise never hard-coded — it is read
+// live off the fetched shortlist's own `candidate_id`s at submit time (goal.md J-07 Step 2: "no
+// hard-coded hypothesis set"). See `handleRegisterRefereeCandidate` below.
 
 // The as-of day text fields (forward-test era) — mirrors structure/page.tsx's own `INPUT_CLASS`
 // shape (each page owns its own copy of this tiny constant per this project's established
@@ -7763,6 +7759,8 @@ export default function DeskPage() {
   // candidate's OWN fields verbatim (never hand-typed or re-derived) plus the caller's own family
   // framing; on success, re-fetches the registry so the new row renders complete with its
   // status/accrual/discovery fold additions (which the POST response itself does not carry).
+  // goal-referee-iter-9 rider: `family_id`/`family_q` are now read live off the fetched shortlist
+  // response itself (backend-owned as of this iteration), never a local literal.
   async function handleRegisterRefereeCandidate(candidate: RefereeShortlistCandidate) {
     const shortlist = refereeShortlistResult?.data;
     if (!shortlist) return;
@@ -7771,8 +7769,8 @@ export default function DeskPage() {
     const result = await postRefereeRegistryHypothesis({
       confirm: true,
       hypothesis_id: candidate.candidate_id,
-      family_id: REFEREE_STARTER_FAMILY_ID,
-      family_q: REFEREE_STARTER_FAMILY_Q,
+      family_id: shortlist.family_id,
+      family_q: shortlist.family_q,
       family_candidate_hypothesis_ids: shortlist.candidates.map((c) => c.candidate_id),
       evidence_family: candidate.evidence_family,
       estimand: candidate.estimand,

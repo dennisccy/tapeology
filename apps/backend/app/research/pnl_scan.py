@@ -113,6 +113,25 @@ branch alongside the profile axis above, never a refactor of it.
     reported edge for one measured under a tighter crossing rule. A static, config-independent string
     — present on every report, on every axis — so it never perturbs the byte-identical-rerun
     guarantee.
+
+era-6 "The Referee" J-08 — the promotion interlock (spec Sec8): the ONE deliberate exception the
+goal-6 constitution names to "every KEPT surface stays byte-identical" — ``_promote`` now consults
+``referee_adjudicate.authorize_promotion`` BEFORE ``append_validation_row`` (the ledger-row-first /
+pointer-second write order is UNCHANGED after authorization — authorization gates whether that
+sequence starts at all, never reorders it). Sweep computation, candidate evaluation, and survivor
+labelling are entirely unaffected — a candidate can be ``survivor: true`` and still, honestly,
+``promotion_eligible: false``. ``run_sweep``/``_promote`` gain ONE new required parameter,
+``certificate_store`` (a ``CertificateStore`` handle — REQUIRED, never optional, so the interlock can
+never be silently skipped by omission); ``main()`` resolves the operator's real one the SAME way
+``referee_adjudicate.py``'s own CLI does (``resolve_referee_registry_dir``). ``live_scan_context`` —
+``{champion_identity, train_dataset, holdout_dataset, config_fingerprint, gate_version,
+referee_parameters_hash}`` — is built FRESH from this run's own values every time, never cached, never
+caller-overridable; ``train_dataset``/``holdout_dataset`` are narrowed to exactly ``{id, checksum,
+split}`` (spec Sec8's own certificate shape) via ``_dataset_pin`` so a certificate's pins and a live
+scan's pins are directly, byte-comparably equal. NO bypass flag, environment override, or
+default-allow path exists anywhere in this chain (source-scan guard-tested,
+``test_no_bypass_path_exists_for_authorize_promotion``) — a certificate is either on file and
+matching, or promotion is refused with a distinct, honest ``refusal_class``.
 """
 
 from __future__ import annotations
@@ -128,6 +147,8 @@ from .backtests import BacktestJobManager, REGISTER, STATUS_DONE
 from .bars import BarStore
 from .datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN
 from .pnl_ledger import LedgerCompositionError, append_validation_row
+from .referee_adjudicate import REFEREE_GATE_VERSION, authorize_promotion, referee_parameters_hash
+from .referee_registry import CertificateStore, resolve_referee_registry_dir
 from .store import DuplicateEnhancementError, JournalStore
 
 __all__ = ["ScanError", "run_sweep", "main"]
@@ -263,6 +284,14 @@ def _is_positive(aggregate: dict) -> bool:
     return aggregate["delta_net_r"] > 0 and aggregate["delta_net_usd"] > 0
 
 
+def _dataset_pin(dataset_meta: dict) -> dict:
+    """The exact ``{id, checksum, split}`` shape spec Sec8's certificate pins (and
+    ``live_scan_context`` below) carry for a dataset — narrowed off the full, richer
+    ``DatasetStore`` metadata dict so a certificate's OWN pin and a live scan's own pin are
+    directly, byte-comparably equal (never a superset vs. a subset that "happen" to overlap)."""
+    return {"id": dataset_meta["id"], "checksum": dataset_meta["checksum"], "split": dataset_meta["split"]}
+
+
 def _promote(
     store: JournalStore,
     config: Config,
@@ -275,6 +304,7 @@ def _promote(
     holdout_datasets: list[dict],
     train_rows: list[dict],
     holdout_rows: list[dict],
+    certificate_store: CertificateStore,
 ) -> dict:
     """Promote a genuine hold-out survivor: append ONE PnL-ledger row (the EXISTING single
     writer) THEN move the persisted champion pointer — in that crash-safe order (see the module
@@ -287,7 +317,12 @@ def _promote(
     pair the winning candidate's OWN backtests ran at — the profile axis passes
     ``(champion['strategy_id'], candidate_id)`` (unchanged); the strategy axis passes
     ``(candidate_id, PROFILE_DEFAULT)``. Either way the pointer moves to precisely what was
-    measured — never a third, re-derived pair."""
+    measured — never a third, re-derived pair.
+
+    era-6 J-08: with EXACTLY one train/hold-out dataset registered, ``authorize_promotion`` is
+    consulted BEFORE ``append_validation_row`` — a valid, candidate-specific Referee certificate
+    is REQUIRED or nothing is written and nothing moves (fail closed; no bypass of any kind).
+    ``live_scan_context`` is built FRESH from this run's own values every call, never cached."""
     if len(train_datasets) != 1 or len(holdout_datasets) != 1:
         return {
             "candidate_id": candidate_id,
@@ -297,7 +332,31 @@ def _promote(
                 f"registered — automatic promotion requires exactly one of each (the existing "
                 f"ledger writer's shape); nothing was promoted this run"
             ),
+            "promotion_eligible": None,
+            "refusal_class": None,
+            "reason": None,
         }
+
+    live_scan_context = {
+        "champion_identity": champion,
+        "train_dataset": _dataset_pin(train_datasets[0]),
+        "holdout_dataset": _dataset_pin(holdout_datasets[0]),
+        "config_fingerprint": config.config_fingerprint(),
+        "gate_version": REFEREE_GATE_VERSION,
+        "referee_parameters_hash": referee_parameters_hash(),
+    }
+    candidate = {"strategy_id": new_strategy_id, "profile": new_profile}
+    authorization = authorize_promotion(candidate, certificate_store, live_scan_context)
+    if not authorization["authorized"]:
+        return {
+            "candidate_id": candidate_id,
+            "promoted": False,
+            "note": None,
+            "promotion_eligible": False,
+            "refusal_class": authorization["refusal_class"],
+            "reason": authorization["reason"],
+        }
+
     enhancement_id = f"{candidate_id}-over-{champion['strategy_id']}-{champion['profile']}"
     title = (
         f"candidate '{candidate_id}' over champion "
@@ -324,7 +383,14 @@ def _promote(
     # The ledger row is now durably committed — safe to move the pointer. A crash AFTER this
     # point leaves a correctly-attributed ledger row and a moved pointer: fully consistent.
     store.set_champion_pointer(strategy_id=new_strategy_id, profile=new_profile, wall_ts=time.time())
-    return {"candidate_id": candidate_id, "promoted": True, "enhancement_id": enhancement_id}
+    return {
+        "candidate_id": candidate_id,
+        "promoted": True,
+        "enhancement_id": enhancement_id,
+        "promotion_eligible": True,
+        "refusal_class": None,
+        "reason": None,
+    }
 
 
 # --- the ONE computer of Data Contract row 36 --------------------------------------------------
@@ -337,6 +403,7 @@ def run_sweep(
     *,
     candidate_strategy_id: str | None = None,
     bar_store: BarStore | None = None,
+    certificate_store: CertificateStore,
 ) -> dict:
     """Run the full candidate sweep ONCE. Returns the complete report dict — the SAME shape
     persisted to ``--out`` (the CLI is a thin wrapper). A genuine hold-out survivor is promoted
@@ -355,7 +422,13 @@ def run_sweep(
         champion's CURRENT ``strategy_id`` (never hardcoded), also at ``profile=PROFILE_DEFAULT``.
 
     ``bar_store`` (era-4 J-04's row-39 level source) is threaded through every backtest this run
-    makes, on either axis — ``v1`` ignores it; only a ``structure_tape`` run ever reads it."""
+    makes, on either axis — ``v1`` ignores it; only a ``structure_tape`` run ever reads it.
+
+    ``certificate_store`` (era-6 J-08) is REQUIRED — never optional, never defaulted — so the
+    promotion interlock can never be silently skipped by omission (an accidentally-missing
+    argument is a loud ``TypeError`` at the call site, not a silent bypass). Sweep computation,
+    candidate evaluation, and survivor labelling never touch it; only ``_promote`` does, and only
+    once a genuine hold-out survivor is found."""
     champion = store.get_champion_pointer()
     jobs = BacktestJobManager(store, config)
 
@@ -458,6 +531,7 @@ def run_sweep(
                 holdout_datasets=holdout_datasets,
                 train_rows=train_rows,
                 holdout_rows=holdout_rows,
+                certificate_store=certificate_store,
             )
 
     return {
@@ -514,10 +588,15 @@ def main() -> int:
     try:
         dataset_store = DatasetStore(config.dataset_dir_resolved())
         bar_store = BarStore(config.bar_dir_resolved())
+        # era-6 J-08: the SAME resolved registry directory referee_adjudicate.py's own CLI/routes
+        # read/write (TAPEOLOGY_DESK_REFEREE_REGISTRY_DIR or the sibling-of-universe-dir default)
+        # — never a second, independently-resolved certificate location.
+        certificate_store = CertificateStore(resolve_referee_registry_dir(config.desk_universe_dir_resolved()))
         try:
             report = run_sweep(
                 store, dataset_store, config,
                 candidate_strategy_id=args.strategy, bar_store=bar_store,
+                certificate_store=certificate_store,
             )
         except ScanError as exc:
             print(f"error: {exc}", file=sys.stderr)
