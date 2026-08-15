@@ -177,15 +177,73 @@ def _referee_modules() -> list[pathlib.Path]:
     return sorted(_RESEARCH_DIR.glob("referee_*.py"))
 
 
-def test_no_referee_module_imports_the_detect_or_context_modules():
-    """TC-10 (first direction): zero imports of ``desk_playbook_detect`` or
-    ``desk_playbook_context`` inside any ``referee_*.py`` module."""
+def test_no_referee_module_imports_the_detect_module():
+    """TC-10 (first direction, (a)): zero imports of ``desk_playbook_detect`` inside ANY
+    ``referee_*.py`` module -- UNCHANGED, zero exceptions (iter-5 IN SCOPE: this half of the
+    original combined guard is untouched; only the ``desk_playbook_context`` half below is
+    corrected)."""
     referee_modules = _referee_modules()
     assert referee_modules, "no referee_*.py module found -- has the glob/location changed?"
     for path in referee_modules:
         imported = _imported_module_names(path)
-        hit = _mentioning(imported, "desk_playbook_detect") | _mentioning(imported, "desk_playbook_context")
+        hit = _mentioning(imported, "desk_playbook_detect")
         assert not hit, f"{path.name} imports the banned module(s) {hit}"
+
+
+# iter-5: `docs/goal.md`'s own Read-side law states, precisely and asymmetrically -- "the Referee
+# imports the rail (`desk_forward._measure_from`, `_draw_anchor_indices`, the averaging helpers)
+# **and the context resolver (`BandMapResolver`)** -- ... import-ban guards prove
+# `desk_playbook_detect`/`desk_playbook_context` never import referee modules **and referee
+# modules never import the detect module**." That second clause names only the DETECT module, not
+# the context module -- by design, since spec Sec4.2 (`docs/referee-statistical-spec.md`) requires
+# reading the recorded band map through `BandMapResolver` (the context layer's OWN machinery)
+# rather than re-deriving band membership a second time (anti-goal 6, single source of truth). The
+# guard BEFORE this iteration banned `desk_playbook_context` for every `referee_*.py` module with
+# zero exceptions -- vacuously passing only because no referee module needed `BandMapResolver`
+# until `referee_null.py`'s J-04 context-matched null (`referee-null-context-v1`) landed. This is
+# an EXTENSION to match what the canonical spec always said, not a weakening: the ban still holds
+# for every OTHER referee module (`referee_evidence.py`, `referee_stats.py`, `referee_routes.py`,
+# and any future `referee_*.py` module) -- only the ONE module that actually needs the resolver
+# gets the exception, nothing wider.
+_CONTEXT_MODULE_ALLOWED_IMPORTER = "referee_null.py"
+
+
+def test_no_referee_module_other_than_referee_null_imports_the_context_module():
+    """TC-10 (first direction, (b), corrected this iteration): zero imports of
+    ``desk_playbook_context`` inside any ``referee_*.py`` module EXCEPT ``referee_null.py`` (see
+    the module-level comment above for the exact ``docs/goal.md`` sentence this narrows against).
+    ``referee_stats.py``'s OWN separate, STRICTER ban (``test_referee_stats_module_imports_none_
+    of_the_banned_rail_detector_context_modules`` below) is untouched -- it still bans
+    ``desk_playbook_context`` too, since that module stays estimand-agnostic."""
+    referee_modules = _referee_modules()
+    assert referee_modules, "no referee_*.py module found -- has the glob/location changed?"
+    checked_the_allowed_importer = False
+    for path in referee_modules:
+        imported = _imported_module_names(path)
+        hit = _mentioning(imported, "desk_playbook_context")
+        if path.name == _CONTEXT_MODULE_ALLOWED_IMPORTER:
+            checked_the_allowed_importer = True
+            continue  # sanctioned -- spec Sec4.2's own context-matched null needs BandMapResolver
+        assert not hit, f"{path.name} imports the banned module desk_playbook_context {hit}"
+    # This guard's own point only holds if `referee_null.py` actually exists to be exempted --
+    # otherwise the loop above silently never reaches the branch this test exists to prove.
+    assert checked_the_allowed_importer, (
+        f"{_CONTEXT_MODULE_ALLOWED_IMPORTER} not found among referee_*.py modules -- has it moved "
+        f"or not been built yet?"
+    )
+
+
+def test_no_referee_module_other_than_referee_null_context_ban_can_fail_on_a_seeded_violation():
+    """The narrower rule's own can-fail counter-test (this file's established per-guard pattern):
+    a seeded fixture simulating ANY referee module OTHER than ``referee_null.py`` (including
+    ``referee_evidence.py``, which carries no such import today) importing ``desk_playbook_context``
+    is still correctly caught as a violation."""
+    seeded_imports = {"app.research.desk_playbook_context", "app.research.other"}
+    hit = _mentioning(seeded_imports, "desk_playbook_context")
+    assert hit == {"app.research.desk_playbook_context"}  # the violation IS detected
+    # ... and the one sanctioned importer is correctly recognised as the exempted filename, not
+    # swept up as a violation itself.
+    assert _CONTEXT_MODULE_ALLOWED_IMPORTER == "referee_null.py"
 
 
 def test_the_detect_and_context_modules_import_no_referee_module():

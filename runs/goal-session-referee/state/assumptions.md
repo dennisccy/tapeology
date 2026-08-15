@@ -186,3 +186,24 @@ assertions, landing inside iteration 5 rather than blocking on an unavailable hu
 this reading by editing the one conditional line, and per the spec's own change-control rule,
 doing so after any real evaluation record exists would be a named revision that re-keys results,
 never a silent edit.
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** J-04's Acceptance opens with "fixture goldens with hand-computed draws (including a
+shortfall case, a zero-eligible exclusion, and a remaining-time boundary case at 15:05/1h)". The
+three named cases are all met and hand-verified. The leading "hand-computed draws" clause is met
+only degenerately: every shipped fixture has `eligible_count <= K (=4)`, so the seeded
+Fisher–Yates SELECTION is never discriminated by any test — TC-1 asserts a set that any
+permutation (and a broken selector) would also produce. The goal text does not say whether the
+draw must be pinned against an independently hand-computed subset or only that the recorded
+draw be reproducible.
+**We chose:** Scored J-04 `passing` after verifying the selection MYSELF rather than withholding
+the pass for the literal clause. My probe (7 eligible, K=4, run against the real module) showed a
+genuine non-trivial subset [2,4,5,6], byte-identical reproduction on a second call, the trigger
+bar never drawn, and a different subset for a different observation ([2,4,6,7] vs [1,3,5,6]) —
+positive evidence that anti-goal 7 (deterministic and seeded) holds in the shipped behaviour.
+Consequence: the SHIPPED suite still cannot catch a future regression in the selection step, on a
+module whose records are append-only forever; that test gap is carried as a binding rider on the
+next iteration rather than as a blocker. If the owner prefers the literal reading, J-04 can be
+held until a >K-eligible golden with a pinned expected subset exists.
+**Reversible:** yes

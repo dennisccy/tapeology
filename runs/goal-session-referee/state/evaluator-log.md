@@ -204,3 +204,55 @@ accepts anything inside a wide band. Two items for a person, neither blocking: t
 blocked because its own paperwork (`what-to-click.md`) still holds a "fill in" placeholder, so its
 five changed files are still uncommitted and should be committed; and from iteration 2, the
 unrelated trendora backend on port 8255 has still not been restarted.
+
+## Iteration 5 — goal-referee-iter-5
+
+**Date:** 2026-08-15T08:45:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (the spec asked for full; the engine demoted it — telemetry
+`depth_demoted`, `reason: full-cap`)
+**Journey deltas:**
+- Newly passing: J-04 "Matched nulls — comparable times, identical measurement"
+- Newly failing: none
+- Partial: J-10 "The kept product stands" (kept half re-verified green by golden replay with a
+  fresh screenshot; its era-end clauses — three Referee sections and 22 tools for the Claude
+  connector — still wait on J-09)
+- Not re-tested this run: J-01 "The era transition stands", J-02 "The evidence contract" and
+  J-03 "The statistics core" — all three marked DEFERRED-BUDGET in the results file, so all
+  three keep their recorded passing status. J-03's own source file changed this run, so I
+  re-verified it directly instead of carrying it
+- Regressed: none
+- Anti-goal violations: none
+
+**Reasoning:** The new work really does what it claims. Every recorded trading signal can now be
+compared against fair "nothing special happened" moments from the same stock, at the same time of
+day, with the same trading time left, measured through the identical ruler — and the comparison
+moments are recorded in a file store that has no way to edit or delete anything. I checked this
+myself rather than reading the report: I read the new 1,101-line module line by line (it is a new
+file, so it never appears in the change list), ran the whole test suite myself (2,553 collected,
+2,545 passed, 8 skipped, nothing failed — 40 more tests than last round), printed the settings pin
+myself (`08e471b10130e1e2`), counted the Claude connector's tools myself (still 20), ran the
+statistics proof record live (it passes, and the four values it pins do not include the number this
+round fixed, so no version bump was owed), and confirmed the guard over the owner's saved data
+reports all 11,274 files unchanged. Then I found a gap nobody else did: every shipped test gives
+the code four or fewer comparison moments to choose from while it must pick four — so the random
+picking is never actually tested. I wrote my own test with seven to choose from: the code picked
+moments 2, 4, 5 and 6 (not simply the first four), repeated the identical pick on a second run,
+never picked the signal's own bar, and picked a different set for a different signal. So the
+behaviour is right; only the test coverage is thin. Three older weaknesses in the statistics core
+are now genuinely closed (the over-promised smallest-possible-surprise value, unusable readings
+sneaking in, and a too-forgiving shortcut test).
+
+**Next-step recommendation:** Build J-05 "The registry" next, alone, at full depth — the part that
+writes each question down before its answer data exists and stamps a date after which only new
+trading days may count. Those records can never be edited afterwards, so they must be right the
+first time, and the deeper pipeline is exactly what caught the fault this round just fixed. This
+round asked for the deeper pipeline in its own plan and was cut back to the short one for time,
+so permanent, uneditable machinery shipped without the hard audit — that is why I am raising the
+depth rather than simply continuing. Four small items ride along instead of becoming their own
+round: a test where more comparison moments exist than the four picked; a test for the
+window-overlap number, whose formula the builder invented; a decision on whether comparison sets
+should be filed under a real question id once questions exist; and serving "unknown" instead of
+"0" for the share of eligible moments when there is nothing to measure. Still outstanding for a
+person, from iteration 2 and outside this project: the unrelated trendora backend on port 8255 has
+not been restarted.

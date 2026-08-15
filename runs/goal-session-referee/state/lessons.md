@@ -90,3 +90,17 @@ actually reached and (b) assert how many cases reached it.
 **Applies to:** any iteration adding a property/oracle test for `referee_stats.py` or its
 consumers (J-04 nulls, J-06 estimands, J-08 gates) — especially any test asserting an inequality
 against a mathematical floor, ceiling, or exact-attainability bound.
+
+## iter-5 — 2026-08-15T08:45:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A "hand-verified draw" test can be structurally vacuous: every fixture in
+`apps/backend/tests/test_referee_null.py` gives the builder at most K=4 eligible anchors while it
+must draw K=4, so the seeded Fisher–Yates SELECTION is never exercised — any permutation, and even
+a broken selector, passes. Reviewer and coherence both missed it; the evaluator only caught it by
+counting each fixture's `range(n)`. Whenever a test claims to verify a seeded/random choice, check
+that the candidate pool is strictly LARGER than the number drawn, and that two different keys
+produce different draws.
+**Applies to:** any iteration whose acceptance names a seeded draw, sample, shuffle, or bootstrap
+— `referee_null.py`, `referee_stats.py`, `desk_forward._draw_anchor_indices`, and the J-06
+estimand evaluators that will reuse all three.

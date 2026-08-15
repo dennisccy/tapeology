@@ -233,7 +233,10 @@ def _t_statistic(
     implementation. ``equal_weight=True`` is the Sec3.5 robustness variant (``w_s = 1`` for every
     session). Returns ``(T, delta_by_session, weight_by_session)`` -- the per-session components are
     returned too, since ``permutation_test``/``sign_flip_result`` reuse them directly rather than
-    recomputing."""
+    recomputing. Raises ``ValueError`` immediately on any non-finite (NaN/inf) input value (iter-5
+    fail-loud guard) -- protects every caller that reaches this function first: ``permutation_
+    test``, ``sign_flip_result``, ``equal_weight_t``."""
+    _require_finite_session_groups(session_groups, "_t_statistic")
     deltas: dict[str, float] = {}
     weights: dict[str, float] = {}
     for session, (group1, group2) in session_groups.items():
@@ -274,6 +277,47 @@ def _is_extreme(t_star: float, t_obs: float, sidedness: str) -> bool:
 _SIDEDNESS_VALUES = frozenset({"greater", "less", "two-sided"})
 
 
+# === iter-5: fail-loud non-finite guard at the stats core's own door ================================
+#
+# Checked ONCE at each public entry point (`_t_statistic` -- which `permutation_test`/
+# `sign_flip_result`/`equal_weight_t` all call FIRST, before touching any value arithmetically, so
+# one check there protects all three -- plus `bootstrap_ci_occurrence`/`bootstrap_ci_cluster`'s own
+# inputs directly): sums/differences/quotients of already-finite numbers stay finite by
+# construction, so no per-draw re-validation is needed. Defense in depth against the exact shape of
+# silent failure iteration 3 found -- a NaN comparison is always `False` in Python, so an unguarded
+# `_is_extreme` would silently UNDER-COUNT extremes (never raise, never even show up as an outlier)
+# rather than error -- and the natural place for a normal, per-observation "unmeasurable" case
+# (T-5) is the null adapter's own door (`referee_null.py`), never here: at this layer a non-finite
+# value can only mean an upstream adapter bug, since the stats core has no per-observation identity
+# left to attach a disclosure to (see this module's own NOTES-cited reasoning in the iter-5 spec).
+
+
+def _require_finite_values(values: list[float], caller: str) -> None:
+    for value in values:
+        if not math.isfinite(value):
+            raise ValueError(
+                f"{caller}: non-finite value ({value!r}) -- refusing to compute a statistic over it"
+            )
+
+
+def _require_finite_session_groups(
+    session_groups: dict[str, tuple[list[float], list[float]]], caller: str
+) -> None:
+    for session, (group1, group2) in session_groups.items():
+        for value in group1:
+            if not math.isfinite(value):
+                raise ValueError(
+                    f"{caller}: non-finite value ({value!r}) in session {session!r}'s group1 -- "
+                    f"refusing to compute a statistic over it"
+                )
+        for value in group2:
+            if not math.isfinite(value):
+                raise ValueError(
+                    f"{caller}: non-finite value ({value!r}) in session {session!r}'s group2 -- "
+                    f"refusing to compute a statistic over it"
+                )
+
+
 # === Sec3.6: percentile bootstrap confidence intervals ===============================================
 
 
@@ -288,7 +332,9 @@ def bootstrap_ci_occurrence(
     already-computed paired per-occurrence differences) WITH replacement, ``b`` seeded draws
     (``purpose="boot-occ"``, one flat stream for the whole call -- no session structure at this
     level), take the percentile bounds of the resampled means. Descriptive only: this function
-    returns an uncertainty interval, never a p-value (T-3)."""
+    returns an uncertainty interval, never a p-value (T-3). Raises ``ValueError`` immediately on
+    any non-finite (NaN/inf) input value (iter-5 fail-loud guard)."""
+    _require_finite_values(values, "bootstrap_ci_occurrence")
     n = len(values)
     if n == 0:
         return {"state": INSUFFICIENT_SAMPLE, "n": 0}
@@ -324,7 +370,11 @@ def bootstrap_ci_cluster(
     (both groups), and the statistic recomputed on each resample is ``T`` (``_t_statistic``, the
     SAME combined statistic the primary test uses). Below ``min_clusters`` informative sessions,
     returns the literal ``insufficient_sample`` state, never a fabricated interval (TC-3). MDE
-    (``z_{1-alpha} * sd*(T)``) is served as the power disclosure alongside the interval."""
+    (``z_{1-alpha} * sd*(T)``) is served as the power disclosure alongside the interval. Raises
+    ``ValueError`` immediately on any non-finite (NaN/inf) input value (iter-5 fail-loud guard) --
+    checked explicitly here (not merely relying on the internal ``_t_statistic`` call below) so an
+    ``insufficient_sample`` short-circuit can never mask a bad input."""
+    _require_finite_session_groups(session_groups, "bootstrap_ci_cluster")
     informative = _informative_sessions(session_groups)
     n_clusters = len(informative)
     if n_clusters < min_clusters:
@@ -506,6 +556,17 @@ def permutation_test(
         draws_used = b
 
     p = (1 + extreme) / (draws_used + 1)
+    # iter-5 fix (the field's own literal name, "minimum ATTAINABLE"): in exact-enumeration mode
+    # the OBSERVED grouping is always one guaranteed member of the enumerated space and therefore
+    # always self-extreme (`_is_extreme(t_obs, t_obs, sidedness)` holds for every sidedness value
+    # above), so the true floor is 2/(draws_used+1), not 1/(draws_used+1) -- a value the
+    # already-fixed method can never actually produce (iteration 4's own 2,500-case sweep found
+    # zero violations, 448 landing exactly on 2/(draws_used+1)). The seeded (Monte Carlo) branch is
+    # UNCHANGED: a random draw is not guaranteed to reproduce the observed grouping, so
+    # 1/(draws_used+1) stays its own true floor there. Touches no `_ATTESTATION_EXPECTED` field
+    # (see this module's own attestation section) -- no `STATS_CORE_VERSION` bump follows. Ruling
+    # recorded in runs/goal-session-referee/state/assumptions.md, iter-5 entry.
+    min_attainable_p = (2.0 if use_enumeration else 1.0) / (draws_used + 1)
     return {
         "state": "ok",
         "t": t_obs,
@@ -514,7 +575,7 @@ def permutation_test(
         "n_informative_sessions": len(informative),
         "enumeration": use_enumeration,
         "draws_used": draws_used,
-        "min_attainable_p": 1.0 / (draws_used + 1),
+        "min_attainable_p": min_attainable_p,
         "delta_by_session": deltas,
         "weight_by_session": weights,
     }

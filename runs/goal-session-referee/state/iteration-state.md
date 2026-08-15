@@ -1,40 +1,39 @@
 # Iteration State — referee
 
-**After iteration:** 4 · **Date:** 2026-08-15 · **Verdict:** CONTINUE
+**After iteration:** 5 · **Date:** 2026-08-15 · **Verdict:** ESCALATE
 
 ## Journeys
 
-3 passing (J-01 J-02 J-03) · 6 failing (J-04..J-09) · 1 partial (J-10 — kept half green; era-end
-clauses wait on J-09) — 10 total
+4 passing (J-01 J-02 J-03 J-04) · 5 failing (J-05 J-06 J-07 J-08 J-09) · 1 partial (J-10 — kept
+half green, era-end clauses wait on J-09) — 10 total
 
 ## Active blockers
 
-- none blocking the build. Riders for J-04 (dev): (1) OWNER RULING — `min_attainable_p` is served
-  as `1/(draws_used+1)` in exact mode, half what the fixed method can reach (`referee_stats.py`,
-  `permutation_test`'s return dict); spec:168 reads both ways; settle before J-04–J-08 read it.
-  (2) non-finite (NaN/inf) observations silently break the exact-mode floor guarantee — J-04's
-  adapters are the first producers: reject at the door, count the exclusion. (3) TC-8's `n2==1`
-  fast-path test asserts only a wide ~6-SE band.
-- carried from J-02, open under T-1, needs a ruling before J-06: `_strategy_observation()`'s
-  `epoch_anchor = dataset.get("epoch_anchor") or 0.0` turns a legitimate `None` into a 1969
-  session date (`referee_evidence.py`).
-- human-owned, non-blocking: a "fill in" placeholder in `what-to-click.md` ended iteration 4 as
-  `closure_failed`, leaving its 5 source files UNCOMMITTED; trendora's port-8255 backend is down.
+- none blocking the build. J-05 is unblocked and buildable today (keyless, fixture-based).
+- human, non-blocking, outside this project: trendora's backend on port 8255 is still down since
+  iteration 2 and needs a person to restart it.
+- process: iteration 5 asked for full depth in its own spec and was demoted to lean
+  (`depth_demoted`, `reason: full-cap`), so permanent append-only machinery shipped without the
+  hard-audit lane — the reason this verdict is ESCALATE.
 
 ## Last 2 verdicts
 
-- iter 4: CONTINUE — J-03 fixed and independently re-proven (exact repro now 2/7 not 1/7; my own
-  2,500-case sweep, 0 violations / 448 exactly on the floor); suite 2,505 pass / 8 skip.
-- iter 3: ESCALATE — the statistics core's exact-enumeration p could fall below its own floor.
+- iter 5: ESCALATE — J-04 matched nulls verified passing (suite 2,545 passed / 8 skipped, own
+  run; own probe proved the seeded subset draw is real), but next depth must be full.
+- iter 4: CONTINUE — J-03 statistics core moved partial → passing after the exact-mode p floor
+  fix was independently re-proven.
 
 ## Do not redo
 
-- The exact-enumeration floor fix is DONE and proven both directions (`referee_stats.py`
-  `permutation_test`); do not rewrite the module, re-derive its constants, or touch the seeded
-  branch. `STATS_CORE_VERSION` is already v2 with the attestation re-pinned — do not re-bump.
-- Lead 1 is CLOSED: shared `_is_stale_basis` + additive `stale_basis_dates` on both call sites; do
-  NOT change the newest-then-filter order (that IS spec T-6's identity).
-- The oracle suite now enters the enumeration branch (TC-3) with an anti-conservative mutant (TC-4)
-  and a tail-regime floor guard; 83s of the 120s budget — new cases must fit ~37s.
-- J-01/J-02 are green with unchanged served values; ride as Required-still-passing, never re-target.
-- UT-07's FAIL is a mis-specified supplementary check (two Desk panels render only once a screen is recorded), not a regression.
+- J-04 is DONE: `app/research/referee_null.py` (both variants, three signature-bearing spec ids,
+  append-only store + run ledger + compute manager + CLI) and its 5 `/research/desk/referee/nulls*`
+  routes in `referee_routes.py`. Do not rebuild or re-scope them.
+- `min_attainable_p` is SETTLED: `2/(draws_used+1)` exact, `1/(draws_used+1)` seeded
+  (`referee_stats.py`; ruling in `state/assumptions.md`). No `STATS_CORE_VERSION` bump is owed.
+- The non-finite fail-loud guard exists at `_t_statistic` / `bootstrap_ci_occurrence` /
+  `bootstrap_ci_cluster`; the null adapter excludes-and-counts instead. Both are correct as-is.
+- The import-topology guard split in `tests/test_referee_guards.py` matches goal.md's Read-side
+  law — do not re-widen or re-merge it. TC-8 is already tightened 6.0 → 3.5 SE with a mutation test.
+- STILL OPEN (do not treat as done): no shipped test discriminates the seeded SUBSET draw (every
+  fixture has eligible ≤ K); `window_overlap_fraction`'s formula is gated by no test; the J-02
+  `epoch_anchor or 0.0` lead must be settled before J-06.

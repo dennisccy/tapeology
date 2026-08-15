@@ -301,7 +301,14 @@ def test_permutation_test_enumeration_matches_a_hand_computed_p_value():
       - group1={1.0}: delta* = 1.0 - mean(5.0,2.0) = 1.0 - 3.5 = -2.5
       - group1={2.0}: delta* = 2.0 - mean(5.0,1.0) = 2.0 - 3.0 = -1.0
     T_obs = 3.5 (single session, so T == its own delta regardless of weight). For "greater"
-    sidedness, #{T* >= 3.5} = 1 (only the observed grouping itself) -> p = (1+1)/(3+1) = 0.5."""
+    sidedness, #{T* >= 3.5} = 1 (only the observed grouping itself) -> p = (1+1)/(3+1) = 0.5.
+
+    iter-5 update: `min_attainable_p` now reads `2 / (draws_used + 1) == 0.5` in enumeration mode
+    (was `0.25` through iter-4) -- this fixture is itself the proof the OLD value was wrong: the
+    observed grouping IS one guaranteed member of the enumerated space, so it is ALWAYS
+    self-extreme (`p` above is exactly this fixture's own `min_attainable_p`, not merely close to
+    it), making `1 / (draws_used + 1)` a floor this method can never actually produce. See the
+    iter-5 owner ruling in runs/goal-session-referee/state/assumptions.md."""
     session_groups = {"2026-06-08": ([5.0], [1.0, 2.0])}
     result = permutation_test(session_groups, "hyp-enum", sidedness="greater")
     assert result["state"] == "ok"
@@ -309,7 +316,7 @@ def test_permutation_test_enumeration_matches_a_hand_computed_p_value():
     assert result["draws_used"] == 3
     assert abs(result["t"] - 3.5) < 1e-9  # float division noise, not a rounding bug
     assert result["p"] == 0.5
-    assert result["min_attainable_p"] == 0.25
+    assert result["min_attainable_p"] == 0.5
 
 
 def test_permutation_test_enumeration_is_deterministic_with_zero_rng_draws():
@@ -436,6 +443,171 @@ def test_iter4_tc2_the_exact_mode_floor_holds_in_the_extreme_tail_regime_too():
         f"only {at_the_floor} of {n_cases} cases landed exactly on the floor -- this generator is "
         f"no longer in the tail regime, so it can no longer guard the cross-session half of the fix"
     )
+
+
+# === iter-5 TC-10/TC-11: `min_attainable_p` is a TRUE floor (own spec, own numbering) =================
+#
+# iter-4's own tests directly above prove `p >= 2 / (draws_used + 1)` -- but iter-4 never fixed the
+# SERVED `min_attainable_p` FIELD itself (it stayed the wrong `1 / (draws_used + 1)` through iter-4);
+# neither iter-4 test above asserts anything about that field. This section closes that gap: the
+# field now reads the TRUE floor in enumeration mode, proven both by a hand fixture and by a fresh
+# >=1,000-case tail-regime sweep (the iter-4-taught lesson, applied here again per this iteration's
+# own NOTES: "every new floor-adjacent test ... generates in the sensitive regime and asserts HOW
+# OFTEN the boundary is actually reached, not just that it is never crossed") -- reusing the
+# `shift = -3.0 if sidedness == "less" else 3.0` idiom iter-4's own tail-regime test above already
+# established, so every sidedness value gets genuine floor-adjacent coverage.
+
+
+def test_iter5_tc10_min_attainable_p_hand_fixture():
+    """iter-5 TC-10 (hand fixture): the same TC-4 fixture (occurrence [5.0] vs anchors [1.0, 2.0],
+    space=3) whose `p == 0.5` is already hand-verified above -- `min_attainable_p` now reads the
+    TRUE floor `2 / (draws_used + 1) == 2/4 == 0.5`, matching `p` itself here (the observed
+    grouping IS this fixture's own unique extreme)."""
+    session_groups = {"2026-06-08": ([5.0], [1.0, 2.0])}
+    result = permutation_test(session_groups, "hyp-tc10-fixture", sidedness="greater")
+    assert result["enumeration"] is True
+    assert result["draws_used"] == 3
+    assert result["min_attainable_p"] == 2.0 / 4 == 0.5
+    assert result["p"] == result["min_attainable_p"]
+
+
+def test_iter5_tc10_min_attainable_p_true_floor_tail_regime_sweep():
+    """iter-5 TC-10 (the >=1,000-case sweep): across the SAME tail-regime generator shape iter-4's
+    own audit-rider test uses (strong group separation, all three sidedness values, the mirrored
+    shift for "less"), the SERVED `min_attainable_p` field always equals `2 / (draws_used + 1)`
+    exactly, `p` is never below it, and at least 100 of the 1,200 cases land with `p` exactly ON
+    that floor (the can-fail guard: a generator too tame to ever reach the boundary would prove
+    nothing about the fix)."""
+    rng = random.Random("iter5-tc10-tail-regime-seed-v1")
+    shapes = [(2, 2), (1, 4), (4, 1)]
+    sidedness_values = ("greater", "less", "two-sided")
+    n_cases = 1200
+    violations = []
+    field_mismatches = []
+    at_the_floor = 0
+    for i in range(n_cases):
+        n_sessions = rng.randint(1, 3)
+        n1, n2 = rng.choice(shapes)
+        sidedness = rng.choice(sidedness_values)
+        shift = -3.0 if sidedness == "less" else 3.0
+        session_groups = {
+            f"s{j:03d}": (
+                [rng.gauss(shift, 1.0) for _ in range(n1)],
+                [rng.gauss(-shift, 1.0) for _ in range(n2)],
+            )
+            for j in range(n_sessions)
+        }
+        result = permutation_test(session_groups, f"iter5-tc10-case-{i}", sidedness=sidedness)
+        assert result["enumeration"] is True, f"case {i} unexpectedly used the seeded branch"
+        floor = 2.0 / (result["draws_used"] + 1)
+        if result["min_attainable_p"] != floor:
+            field_mismatches.append((i, result["min_attainable_p"], floor))
+        if result["p"] < result["min_attainable_p"]:
+            violations.append((i, n_sessions, (n1, n2), sidedness, result["p"], floor))
+        elif result["p"] == result["min_attainable_p"]:
+            at_the_floor += 1
+    assert field_mismatches == [], (
+        f"{len(field_mismatches)} case(s) served a min_attainable_p != 2/(draws_used+1), first 3: "
+        f"{field_mismatches[:3]}"
+    )
+    assert violations == [], f"{len(violations)} floor violation(s), first 3: {violations[:3]}"
+    assert at_the_floor >= 100, (
+        f"only {at_the_floor} of {n_cases} tail-regime cases landed exactly on the floor -- this "
+        f"generator is not reaching the boundary it claims to test"
+    )
+
+
+def test_iter5_tc11_min_attainable_p_seeded_branch_is_unchanged():
+    """iter-5 TC-11 (regression guard): the seeded (Monte Carlo) branch's own `min_attainable_p`
+    stays `1 / (draws_used + 1)`, byte-unchanged from before this iteration -- this iteration's fix
+    touches the enumeration branch's own computation ONLY. (`test_permutation_test_seeded_branch_
+    uses_exactly_b_draws_and_the_p_formula` above, from iter-3, already asserts this exact field
+    for the seeded branch and continues to pass unmodified; this test adds a second, independently
+    -shaped fixture so the regression guard does not depend on that one test file location alone.)"""
+    rng = random.Random("iter5-tc11-seeded-branch-seed-v1")
+    session_groups = {
+        f"2026-04-{i + 1:02d}": (
+            [rng.gauss(0, 1) for _ in range(4)],
+            [rng.gauss(0, 1) for _ in range(4)],
+        )
+        for i in range(5)  # C(8,4)=70 per session, 70**5 >> REFEREE_ENUMERATION_THRESHOLD
+    }
+    b = 300
+    result = permutation_test(session_groups, "hyp-tc11-seeded", sidedness="greater", b=b)
+    assert result["enumeration"] is False
+    assert result["draws_used"] == b
+    assert result["min_attainable_p"] == 1.0 / (b + 1)
+
+
+# === iter-5 TC-12: the non-finite (NaN/inf) fail-loud guard ===========================================
+
+
+def test_iter5_tc12_t_statistic_raises_on_non_finite_input():
+    """iter-5 TC-12: a NaN in either group raises `ValueError` immediately from `_t_statistic` --
+    the shared entry point `permutation_test`/`sign_flip_result`/`equal_weight_t` all call first."""
+    bad = {"2026-06-08": ([1.0, float("nan")], [2.0, 3.0])}
+    try:
+        rs._t_statistic(bad)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError: non-finite value in group1")
+
+
+def test_iter5_tc12_permutation_test_sign_flip_equal_weight_all_raise_on_non_finite_input():
+    """iter-5 TC-12: every NAMED caller of `_t_statistic` propagates the identical fail-loud guard
+    -- an `inf` value raises from each of the three, never a silently-wrong p/t."""
+    bad = {"2026-06-08": ([1.0, float("inf")], [2.0, 3.0]), "2026-06-09": ([1.0], [2.0])}
+    for fn, args in (
+        (permutation_test, (bad, "hyp-nonfinite")),
+        (sign_flip_result, (bad, "hyp-nonfinite")),
+        (equal_weight_t, (bad,)),  # equal_weight_t takes no hypothesis_id -- it draws nothing
+    ):
+        try:
+            fn(*args)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"expected ValueError from {fn.__name__} on a non-finite input")
+
+
+def test_iter5_tc12_bootstrap_ci_occurrence_raises_on_non_finite_input():
+    """iter-5 TC-12: `bootstrap_ci_occurrence`'s own input is checked directly, not only via
+    `_t_statistic` (this function never calls it)."""
+    try:
+        bootstrap_ci_occurrence([1.0, 2.0, float("nan")], "hyp-nonfinite-occ")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError: non-finite value in bootstrap_ci_occurrence")
+
+
+def test_iter5_tc12_bootstrap_ci_cluster_raises_on_non_finite_input():
+    """iter-5 TC-12: `bootstrap_ci_cluster`'s own input is checked BEFORE the `min_clusters` floor
+    short-circuit, so an `insufficient_sample` return can never mask a non-finite value -- this
+    fixture is deliberately BELOW `REFEREE_MIN_CLUSTERS_FOR_CI` (2 informative sessions)."""
+    sg = {
+        "2026-05-01": ([1.0, float("inf")], [2.0, 3.0]),
+        "2026-05-02": ([1.0], [2.0]),
+    }
+    assert len(sg) < REFEREE_MIN_CLUSTERS_FOR_CI
+    try:
+        bootstrap_ci_cluster(sg, "hyp-nonfinite-cluster")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError: non-finite value in bootstrap_ci_cluster")
+
+
+def test_iter5_tc12_finite_inputs_are_unaffected_can_fail_companion():
+    """Can-fail companion: an all-finite input never raises -- the guard is a targeted non-finite
+    check, not an accidental blanket rejection of every input."""
+    sg = {"2026-06-08": ([1.0, 2.0], [0.5, 0.7])}
+    t, _deltas, _weights = rs._t_statistic(sg)
+    assert math.isfinite(t)
+    assert bootstrap_ci_occurrence([1.0, 2.0, 3.0], "hyp-finite")["state"] == "ok"
+    assert sign_flip_result(sg, "hyp-finite", b=10)["state"] == "ok"
+    assert equal_weight_t(sg)["state"] == "ok"
 
 
 # === TC-5: the seeded B-draw branch ====================================================================
@@ -611,7 +783,11 @@ def test_iter4_tc8_n2_equals_1_fast_path_matches_a_from_scratch_general_algorith
             extreme_general += 1
     p_general = (1 + extreme_general) / (b + 1)
 
-    tolerance = 6.0 * math.sqrt(p_star * (1 - p_star) / b)
+    # iter-5 TC-14: tightened from 6.0 to 3.5 standard errors -- 6.0 SE was wide enough to hide a
+    # real regression (proven directly below by TC-15's mutation counter-test); both estimators
+    # measured well inside the tighter band during development (real ~0.30 SE, general-reference
+    # ~0.17 SE off ground truth), so 3.5 stays comfortably non-flaky on this fixture's pinned seed.
+    tolerance = 3.5 * math.sqrt(p_star * (1 - p_star) / b)
     assert abs(real["p"] - p_star) <= tolerance, (
         f"fast-path p={real['p']!r} strayed {abs(real['p'] - p_star):.5f} from ground truth "
         f"{p_star!r} (tolerance {tolerance:.5f})"
@@ -619,6 +795,77 @@ def test_iter4_tc8_n2_equals_1_fast_path_matches_a_from_scratch_general_algorith
     assert abs(p_general - p_star) <= tolerance, (
         f"general-algorithm reference p={p_general!r} strayed {abs(p_general - p_star):.5f} from "
         f"ground truth {p_star!r} (tolerance {tolerance:.5f})"
+    )
+
+
+# === iter-5 TC-15: the tightened TC-8 band actually discriminates a real regression ====================
+
+
+def test_iter5_tc15_reintroduced_incorrect_n2_equals_1_fast_path_fails_the_tightened_tc8_band():
+    """iter-5 TC-15: a deliberately-reintroduced INCORRECT `n2 == 1` fast-path formula -- dropping
+    the `total -` complement, i.e. reusing the `n1 == 1` branch's own formula by mistake (a
+    realistic copy-paste bug: both branches consume exactly one `stream.randrange(n)` call) -- is
+    run through the identical from-scratch Monte-Carlo estimator TC-8's own "independently-coded
+    general-algorithm reference" uses, against TC-8's SAME ground truth and SAME tightened (3.5 SE)
+    tolerance. The mutant's `p` must FAIL that band -- proving the tightened band in
+    `test_iter4_tc8_n2_equals_1_fast_path_matches_a_from_scratch_general_algorithm_reference` above
+    actually discriminates a real regression, not merely that its number happens to be smaller.
+    Never touches `referee_stats.py` itself -- the mutant formula lives ENTIRELY inside this test."""
+    rng = random.Random("iter4-tc8-fixture-seed-v1")  # the SAME fixture TC-8 uses, for a fair test
+    n_sessions = 7
+    session_groups = {
+        f"2026-10-{i + 1:02d}": ([rng.gauss(0, 1) for _ in range(3)], [rng.gauss(0, 1)])
+        for i in range(n_sessions)
+    }
+    sessions = sorted(session_groups)
+    weight_by_s = {s: (3 * 1) / (3 + 1) for s in sessions}
+    total_weight = sum(weight_by_s.values())
+    delta_by_s = {
+        s: sum(session_groups[s][0]) / 3 - sum(session_groups[s][1]) / 1 for s in sessions
+    }
+    t_obs_ref = sum(weight_by_s[s] * delta_by_s[s] for s in sessions) / total_weight
+    pooled = {s: session_groups[s][0] + session_groups[s][1] for s in sessions}
+
+    # --- ground truth: the SAME brute-force full enumeration TC-8 computes ---
+    combos_by_session = [list(itertools.combinations(range(4), 3)) for _ in sessions]
+    extreme_exact = 0
+    total_combos = 0
+    for joint in itertools.product(*combos_by_session):
+        acc = 0.0
+        for s, combo in zip(sessions, joint):
+            values = pooled[s]
+            g1 = sum(values[idx] for idx in combo)
+            g2 = sum(values) - g1
+            acc += weight_by_s[s] * (g1 / 3 - g2 / 1)
+        if (acc / total_weight) >= t_obs_ref:
+            extreme_exact += 1
+        total_combos += 1
+    p_star = (1 + extreme_exact) / (total_combos + 1)
+
+    # --- the MUTANT: n2 == 1's fast path with the complement dropped ---
+    b = 8000
+    streams = {s: random.Random(f"iter5-tc15-mutant-seed:{s}") for s in sessions}
+    extreme_mutant = 0
+    for _ in range(b):
+        acc = 0.0
+        for s in sessions:
+            values = pooled[s]
+            n1, n = 3, 4
+            rstream = streams[s]
+            # BUG: should be `total - values[rstream.randrange(n)]` (the excluded element belongs
+            # to group2 when n2 == 1) -- this reuses the n1 == 1 branch's formula instead.
+            g1_sum = values[rstream.randrange(n)]
+            g2_sum = sum(values) - g1_sum
+            acc += weight_by_s[s] * (g1_sum / n1 - g2_sum / 1)
+        if (acc / total_weight) >= t_obs_ref:
+            extreme_mutant += 1
+    p_mutant = (1 + extreme_mutant) / (b + 1)
+
+    tolerance = 3.5 * math.sqrt(p_star * (1 - p_star) / b)  # TC-8's own tightened band, reused
+    assert abs(p_mutant - p_star) > tolerance, (
+        f"the mutant formula's p={p_mutant!r} stayed inside the tightened tolerance "
+        f"({abs(p_mutant - p_star):.5f} <= {tolerance:.5f} from ground truth {p_star!r}) -- the "
+        f"tightened TC-8 band would NOT have caught this regression"
     )
 
 

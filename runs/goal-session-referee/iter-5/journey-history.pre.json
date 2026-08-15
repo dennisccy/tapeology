@@ -1,0 +1,113 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The era transition stands — reconciliation made testable",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-2-evidence/UT-J-01-result.png",
+      "spec_hash": "9fe67344e7c7ae71546d205bbd134263e172265ee542963f4b483f564c0e228e",
+      "notes": "NOT re-verified as a browser/endpoint capture this iteration: the merged results file carries UT-J-01 as DEFERRED-BUDGET again (reports/phase-goal-referee-iter-4-ui-test-results.md, Deferred table), so it keeps its iter-2 status and its iter-2 evidence path. UNLIKE iter-3, its OWN source did change this iteration — referee_evidence.py gained the Lead-1 `stale_basis_dates` disclosure — so evidence durability does not apply automatically and the evaluator checked the change directly instead: (a) `git diff -- apps/backend/tests/ | grep '^-'` returns ZERO removed lines, so every pre-existing J-01 fixture assertion (records == 4, distinct_sessions == 3, signals_at_current_basis == 5, per_setup_side) survives verbatim; (b) the served dict gains exactly one key, `stale_basis_dates`, and loses none (referee_evidence.py:300-304 in the diff); (c) the one behavioral nuance — the readiness loop now walks `sorted(newest_by_date)` instead of `newest_by_date.values()` — is value-preserving: `per_setup_side` is emitted from `sorted(cells.items())`, `cell['sessions']` is a set consumed only by `len()`, and `signals_at_current_basis` is an integer count, so no order-sensitive float accumulation exists (independently traced by the auditor, B3, and re-derived by the evaluator from the diff); (d) full backend suite re-run by the evaluator: 2,513 collected / 2,505 passed / 8 skipped / 0 failed / 0 errors in 245.8s (own --junit-xml run). Prior spec_hash carried forward unchanged; goal.md text for J-01 is unchanged anyway (hash recomputed and identical). CLOSED THIS ITERATION: the iter-2 'UNVERIFIED LEAD' on this journey (a date whose newest record sits at a stale detector_basis silently contributes zero) was investigated to root cause and closed additively — the newest-then-filter ORDER is kept (it is spec T-6's own pooling identity), and the previously silent exclusion is now named in `stale_basis_dates`. Empty on every fixture and on the real corpus, since no detector revision has happened this era."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The evidence contract — two families, one observation shape",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-2-ui-test-results.md#UT-J-02",
+      "spec_hash": "853e7be61a1ba27f0c8baf57dff1914d3aa54c01f82471f990133afab378850a",
+      "notes": "NOT re-verified as a capture this iteration: UT-J-02 is DEFERRED-BUDGET in the merged results file, so it keeps its iter-2 status. Its adapter DID change (the same shared `_is_stale_basis` predicate + the additive `stale_basis_dates` list, referee_evidence.py:709-782 in the diff), so the evaluator checked the change directly rather than leaning on durability: zero removed lines anywhere in tests/, the served dict gains exactly one key and loses none, `observations`/`coverage_by_date`/`coverage_shrink_disclosures`/`session_completeness` computation untouched, and the full suite is green under the evaluator's own run (2,505 passed / 8 skipped). Prior spec_hash carried forward unchanged (goal.md text identical). STILL OPEN (deliberately dropped this iteration under T-1, with the full investigation recorded in docs/phases/goal-referee-iter-4.md NOTES and state/assumptions.md): `_strategy_observation()`'s `epoch_anchor = dataset.get('epoch_anchor') or 0.0` conflates a genuinely-missing/None anchor with an explicitly-present 0.0 one, collapsing such trades onto a 1969/1970 session_date and pooling them into one synthetic cluster. The identical pattern is frozen, shipped behavior in edge_report.py:489, and the shared `_plant_dataset` fixture sets 0.0 deliberately, so a correct fix must distinguish None from 0.0 and decide whether to match or diverge from edge_report's convention. J-06 is its first real consumer — settle it before then."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The statistics core — calibrated, seeded, oracle-proven, fail-closed",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-4",
+      "last_passing_iter": "goal-referee-iter-4",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-referee-iter-4-audit.md#1-executive-verdict",
+      "spec_hash": "f00b804c40b2b60e1b9bf6209033d53796c98d86c14248ea079ef3a507291ae0",
+      "notes": "TARGET this iteration; moved partial -> passing. The iter-3 blocking defect is FIXED and the fix was re-proven by the evaluator independently, not accepted from any report. Mechanism check, read from source: the exact-enumeration branch now accumulates each enumerated combination's group-2 sum DIRECTLY over that combination's own complement (referee_stats.py, `if use_enumeration:` block) — the identical method `_t_statistic` uses (`math.fsum(group2)`) — instead of `total - g1_sum`; because `pooled[session]` stores `values = group1 + group2`, the observed grouping's combination reproduces `t_obs` BIT-identically, so its own `_is_extreme` self-comparison can no longer fail and `extreme >= 1` is guaranteed. The developer additionally combined the per-session terms with `math.fsum(terms)` (matching `_t_statistic`'s own numerator) after finding the g2_sum fix alone still left ~7% of 3+-session cases able to violate the floor; disclosed in the dev handoff, reviewed PASS, coherence flagged it visibility-only. EVALUATOR'S OWN MEASUREMENTS: (1) the iter-3 minimal repro now returns p == 2/7 == 0.2857142857142857 exactly (was 1/7); (2) an independent sweep the evaluator wrote from scratch — 2,500 enumeration-mode cases, 1-3 sessions, shapes 2v2/1v4/4v1/3v2/2v3, all three sidedness values, deliberately including a TAIL regime (shifted groups) — found ZERO floor violations with 448 cases sitting EXACTLY on the floor, proving the sweep was in the sensitive regime rather than vacuous; (3) determinism: two independent calls return byte-identical result dicts; (4) `run_oracle_attestation()` executed live returns passed=True with stats_core_version 'referee-stats-v2', `verify_oracle_attestation` returns True for it and False for both a stale-'referee-stats-v1' copy and a tampered-`actual` copy; (5) full backend suite run by the evaluator: 2,513 collected / 2,505 passed / 8 skipped / 0 failed / 0 errors (above the >=2,495/8 floor; 1 test more than QA's own 2,504 because the audit lane added the tail-regime guard after QA ran); (6) Config().config_fingerprint() printed 08e471b10130e1e2; (7) requirements.txt/pyproject.toml zero diff, tests/ zero removed lines. The hard auditor's independent generator agrees (7,035 cases, zero violations post-fix vs 395 on a reconstructed pre-fix build). TWO OPEN GAPS CARRIED FORWARD, neither blocking this journey's own written acceptance: (B1, needs an OWNER RULING) `min_attainable_p` is still served as 1/(draws_used+1) in BOTH branches, a value exact mode provably can never produce — measured by the evaluator on the iter-3 repro: p == 2/7 sits ON the floor while min_attainable_p reads 1/7. docs/referee-statistical-spec.md:168 says 'the minimum attainable p (granularity)', which supports either reading, so per T-1 it is surfaced rather than improvised; it is consumed by nothing today and J-04-J-08 are its first readers. (B2) with a non-finite observation the floor guarantee silently breaks (`_t_statistic` returns NaN, no draw is extreme, the branch returns a below-floor p; `inf` yields a meaningless p) — no input validation exists and none was specified; J-04's adapters are the first producers. (T2) TC-8 checks the n2==1 fast path against a brute-force ground truth within a wide ~6-SE band rather than a deterministic scripted-RNG equivalence, so a small bias could pass."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Matched nulls — comparable times, identical measurement",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-04",
+      "spec_hash": "c16455f3b0356910d9d0e1062edea7531b45b5ee68f58df527ba8d182516e611",
+      "notes": "Not targeted or re-tested this iteration; carries its iter-0 recorded state. Now UNBLOCKED — its named dependency J-03 closed this iteration. It is the natural home for the two open statistics-core gaps: B2 (reject or refuse non-finite observations at the adapter or in the stats core) and the B1 owner ruling on min_attainable_p, both of which J-04's own spec-id minting freezes into immutable references."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The registry — pre-registration with an immutable boundary",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-05",
+      "spec_hash": "2af99b40b3062ff02f0d57470dbb3085479c4232b5f509e4361bbf3e8562aa5e"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Estimand engines + adjudication — one checkpoint, recorded forever",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-06",
+      "spec_hash": "f0a370fab0515b423625b8fbe8694180875d0839d8ca105230bcc0179b8ca2e8",
+      "notes": "Not targeted or re-tested this iteration. Carries the J-02 epoch_anchor lead (Lead 2) as a must-settle before it pools strategy trades into session clusters."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The starter family — historical exploration becomes registered questions",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-07-fail.png",
+      "spec_hash": "473e2966a4c3fc78ec62b1ce97a0a6ada59891a625c9c88daf0964e8ec1c9f66"
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The strategy family + the promotion interlock — fail closed, no bypass",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-08",
+      "spec_hash": "04cecc16df051077401e5a4c694d6d81422554e3d45fccfcf3615b2722de9808"
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The Referee on /desk + MCP contract v5 — 22 read-only tools",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-09-fail.png",
+      "spec_hash": "26f414b65f170424797c6c23ab3c013a3648e2db090af16db72c52d2b781bf9d",
+      "notes": "Not targeted this iteration. Independently re-confirmed unbuilt by the evaluator: tests/test_mcp_server.py's EXPECTED_TOOLS parses to exactly 20 tool names, not 22, and zero frontend files appear in this iteration's diff."
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — regression sentinel",
+      "status": "partial",
+      "last_verified_iter": "goal-referee-iter-4",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-4-evidence/J-10-verify.png",
+      "spec_hash": "d14682891de7794bb3728ade717e6a1ed805f44384087a9bf18d75d09348fd9a",
+      "notes": "Kept-product half RE-VERIFIED this iteration: deterministic replay of the stored golden passed (UT-J-10 PASS in both reports/phase-goal-referee-iter-4-regression-replay-results.md and the merged results file) with a FRESH screenshot the evaluator opened — J-10-verify.png shows the three-route nav (Cockpit/Structure/Desk, Desk active), the honest 'Playbook not computed for this session.' state with its Run Playbook control, the Backscan panel, 'No back-scan runs recorded yet.', and the PLAYBOOK EVIDENCE header with its signature. The evaluator also opened J-10-desk.png (full Desk page: honest 'Desk screen not computed yet.' panel, Refresh Data / Top-up / Reconcile Index / Run Screen / Deep Backfill controls, TOP-UP RUNS, INDEX RECONCILIATION, SCREEN RUNS, PLAYBOOK SIGNALS sections). Supporting checks re-run by the evaluator: full suite 2,505 passed / 8 skipped / 0 failed (includes test_no_execution_path, test_copy_discipline, test_desk_ui_guards, the annualization guard and the 20-tool MCP pin); Config().config_fingerprint() == 08e471b10130e1e2; store-scope guard CLEAN with all 11,274 protected files byte-identical; zero diff to apps/frontend/ and to every frozen backend module. ONE FAIL ROW, NOT A REGRESSION: the browser lane invented a supplementary P2 check (UT-07) expecting five Desk reference sections to expand; two of them (screenComparison, provenance) do not exist because the rig has no recorded screen (`latest === null` gates them). That state is the SAME honest empty state recorded at iteration 0's baseline walk, the diff is backend-only, and the auditor independently opened the same screenshot and reached the same conclusion (F1). Treated as a mis-specified expectation, not a product failure. STILL PARTIAL: the era-completion clauses remain structurally unmeetable until J-09 — the three Referee /desk sections do not exist and MCP advertises 20 tools, not 22."
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-08-15T07:05:00Z"
+}
