@@ -853,3 +853,31 @@ desk_playbook*/backtests/store/engine.
 **Reversible:** yes — if the owner wants the enumerated panels photographed with data, a screen can
 be computed on the fixture rig (an operator act the rig permits) and the walk repeated; nothing is
 stored either way.
+
+## iter-11 — goal-decomposer
+
+**Ambiguity:** Iteration 10's evaluator next-step recommendation names three required actions for
+"one short verification round with no new building": (1) re-check the seven skipped journeys via
+their own backend acceptance tests, (2) capture J-09's owed single-flight-refusal screenshot, and
+(3) "fix the walk-through recorder, whose script still contains an action type ('scroll') the
+player does not understand." The evaluator's own binding depth recommendation for this iteration
+is `evidence`, which structurally skips developer/reviewer — so item (3), a code fix, cannot
+execute at that depth — and the goal-decomposer's own rule 7 exception for writing
+`Depth: evidence` requires the next-step to ask ONLY for evidence on already-passing journeys.
+**We chose:** Read the recorder fix as OUT OF this iteration's scope rather than as grounds to
+deviate from the binding `evidence` depth recommendation. Two reasons: first,
+`incredible_auto_dev/scripts/automation/lib/demo_runner.py` (`_VALID_ACTIONS = {"goto", "click",
+"fill", "expect", "wait_for"}` — confirmed by reading the source; "scroll" is not a member) is
+vendored FRAMEWORK tooling that authors this project's demo-narrator script, not Tapeology product
+code — the same category of item the desk session's own `goal-desk-iter-25.md` spec named
+explicitly "out of a goal-decomposer's remit" (`closure_gate.py`'s substring guard, `goal_gate.py`'s
+regex miss). Second, a sibling goal session's own recorded lesson (`goal-playbook-iter-12.md`
+BACKGROUND, citing that session's `lessons.md` iter-11) states plainly: "A `Depth: evidence`
+micro-path silently deletes planned code work... Never plan code work under it." Planning the
+recorder fix as an IN SCOPE item here would either silently vanish (if the engine actually
+dispatches evidence-only) or force the engine's arbiter to demote/reject the whole spec. It rides
+in NOTES/OUT OF SCOPE for a human or a future framework-maintenance pass instead.
+**Reversible:** yes — nothing here is a product commitment; a future iteration (or a
+framework-maintenance session outside goal-mode) can fix `demo_runner.py`'s action vocabulary (or
+change what the demo-narrator emits) independent of any Tapeology store/schema, and re-recording
+the walkthrough costs nothing stored today.
