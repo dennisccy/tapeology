@@ -154,3 +154,53 @@ dataset with no time anchor becomes a 1969 date and lumps unrelated trades into 
 person: approve "fix and prove the p-value floor in the statistics engine, at full depth, then
 continue to matched nulls". Still outstanding for a human, from iteration 2: the unrelated trendora
 backend on port 8255 has not been restarted.
+
+## Iteration 4 — goal-referee-iter-4
+
+**Date:** 2026-08-15T07:05:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-03 "The statistics core" (moved partial -> passing)
+- Newly failing: none
+- Partial: J-10 "The kept product stands" (kept half re-verified green by golden replay with a
+  fresh screenshot; its era-end clauses — three Referee sections and 22 MCP tools — still wait
+  on J-09)
+- Not re-tested this run: J-01 "The era transition stands" and J-02 "The evidence contract" —
+  both marked DEFERRED-BUDGET again in the results file, so both keep their recorded passing
+  status; their shared source file DID change this run, so I checked that change directly
+  instead of leaning on old evidence
+- Regressed: none
+- Anti-goal violations: none
+
+**Reasoning:** The fault I found last iteration is really fixed, and I proved it myself rather
+than reading it in a report. The exact example that used to come out at 1/7 now comes out at 2/7,
+the lowest value the method can honestly produce. I wrote my own fresh test of 2,500 small cases —
+one to three trading days, five different group shapes, all three directions, and deliberately
+including the hard cases where the two groups sit far apart — and found zero bad answers, with 448
+of them landing exactly on that lowest allowed value, which proves my test was actually looking in
+the right place. I also ran the whole test suite myself (2,513 collected, 2,505 passed, 8 skipped,
+none failed), printed the settings pin myself (08e471b10130e1e2), counted the Claude connector's
+tools myself (still 20), ran the proof record live (it passes, and it correctly refuses both an
+out-of-date copy and a doctored one), and confirmed the guard over the owner's saved data reports
+all 11,274 files unchanged. The one FAIL line in the results file is not a break: it is a new
+supplementary check that expected two Desk panels which only appear once a desk screen has been
+recorded, and the test machine has none — the same honest empty state we recorded at the very
+first iteration, on a run that changed no page code at all. Three smaller weaknesses stay open and
+are written into the next step; none of them affects any number shown to anyone today, because
+nothing reads this code yet.
+
+**Next-step recommendation:** Build J-04 "Matched nulls" next, alone, at full depth — the part
+that compares each recorded signal against fair comparison moments from the same stock, at the
+same time of day, with the same trading time left, measured through the identical rail. Full depth
+because this iteration also creates permanent name-tags for those comparison rules that later
+registered questions will point at forever. Three riders travel with it instead of becoming their
+own iteration: settle what "the smallest possible surprise value" means (the maths core still
+advertises a value half as small as its exact method can reach — an owner ruling, since the
+written specification reads both ways, and it is free to settle while nothing consumes it);
+refuse unusable readings such as "not a number" or "infinity" at the door instead of silently
+producing a meaningless answer; and tighten the one-against-many shortcut test, which currently
+accepts anything inside a wide band. Two items for a person, neither blocking: this run finished
+blocked because its own paperwork (`what-to-click.md`) still holds a "fill in" placeholder, so its
+five changed files are still uncommitted and should be committed; and from iteration 2, the
+unrelated trendora backend on port 8255 has still not been restarted.

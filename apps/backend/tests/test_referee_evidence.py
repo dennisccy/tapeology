@@ -36,6 +36,7 @@ from app.research.referee_evidence import (
     REFEREE_SESSION_COMPLETE_ET,
     REFEREE_TICK_GATE_SYMBOL_DAYS,
     RefereeObservationCache,
+    _record_detector_basis,
     _signal_reaches_session_complete,
     _tick_gate_state,
     current_playbook_detector_basis,
@@ -194,6 +195,17 @@ def test_playbook_readiness_pools_newest_per_date_at_the_current_basis(client):
     assert per_cell[("capitulation", "long")]["n_sessions"] == 2  # D1, D2
     assert per_cell[("jbe", "short")]["n"] == 2  # R1b's 1 + R2's 1
     assert per_cell[("jbe", "short")]["n_sessions"] == 2  # D1, D2
+
+    # iter-4 TC-9 (Lead 1): the D3 stale-basis record is now DISCLOSED, not silently dropped --
+    # exactly one entry, naming D3's own record_detector_basis (the SAME formula
+    # `_record_detector_basis` applies to any recorded record, independent of which record's
+    # parameters are passed in).
+    assert occurrence["stale_basis_dates"] == [
+        {
+            "session_date": "2026-06-10",
+            "record_detector_basis": _record_detector_basis({"parameters": stale_parameters}),
+        }
+    ]
 
 
 # --- TC-3: the strategy readiness fold ---------------------------------------------------------------
@@ -623,6 +635,57 @@ def test_playbook_observations_dedup_selects_newest_and_discloses_coverage_shrin
             "newest_symbol_count": 2,
             "superseded_record_id": older["id"],
             "superseded_symbol_count": 3,
+        }
+    ]
+
+
+# --- iter-4 TC-10 (Lead 1): the sibling stale-basis disclosure for playbook_observations() -----------
+
+
+def test_playbook_observations_discloses_stale_basis_dates_with_zero_change_to_other_fields(client):
+    """iter-4 TC-10: one live-basis date (contributes its observations normally) and one
+    stale-basis date (parameters deliberately different from the LIVE playbook_parameters() --
+    the SAME construction TC-9's own D3 fixture in
+    test_playbook_readiness_pools_newest_per_date_at_the_current_basis uses) -- the stale date is
+    named in result["stale_basis_dates"] and excluded from observations/coverage_by_date/
+    session_completeness exactly as it was (silently) before this iteration, with zero change to
+    any other field's value."""
+    c, store, _dataset_store, _journal_store = client
+    fingerprint = CONFIG.config_fingerprint()
+
+    live_forward = _full_forward("2026-06-08T13:35:00.000000Z")
+    live_signal = _measured_signal(
+        symbol="AAPL", side="long", setup_id="capitulation",
+        trigger_ts="2026-06-08T13:35:00.000000Z", forward=live_forward,
+    )
+    _plant_playbook_record(
+        store, session_date="2026-06-08", signature="sig-live", signals=[live_signal],
+    )
+
+    stale_parameters = {**playbook_parameters(), "min_n_disclosure": 999}
+    stale_forward = _full_forward("2026-06-09T13:35:00.000000Z")
+    stale_signal = _measured_signal(
+        symbol="MSFT", side="short", setup_id="jbe",
+        trigger_ts="2026-06-09T13:35:00.000000Z", forward=stale_forward,
+    )
+    _plant_playbook_record(
+        store, session_date="2026-06-09", signature="sig-stale", signals=[stale_signal],
+        parameters=stale_parameters,
+    )
+
+    result = playbook_observations(store, fingerprint)
+
+    assert result["detector_basis"] == current_playbook_detector_basis()
+    assert result["config_fingerprint"] == fingerprint
+    assert {o["symbol"] for o in result["observations"]} == {"AAPL"}  # the stale date excluded
+    assert result["excluded_leaves"] == 0
+    assert result["coverage_by_date"] == [{"session_date": "2026-06-08", "symbol_count": 1}]
+    assert result["coverage_shrink_disclosures"] == []
+    assert {s["session_date"] for s in result["session_completeness"]} == {"2026-06-08"}
+    assert result["stale_basis_dates"] == [
+        {
+            "session_date": "2026-06-09",
+            "record_detector_basis": _record_detector_basis({"parameters": stale_parameters}),
         }
     ]
 

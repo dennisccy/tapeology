@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-referee-iter-4",
+  "base_url": "http://localhost:3301",
+  "not_yet": true,
+  "steps": [
+    {
+      "n": 1,
+      "title": "This iteration: backend statistics foundation",
+      "narration": "This iteration fixed a floating-point accuracy bug in the statistical analysis engine so it can never report a result as more significant than its own formula allows. All changes were backend-only; no new user-facing features were added.",
+      "point_out": "The app continues to work as before — regression testing confirmed the existing product surfaces remain unchanged.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "No ticker watched" }
+    }
+  ]
+}

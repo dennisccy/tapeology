@@ -73,3 +73,20 @@ generators' own shapes before trusting a green suite; (3) a mutation fixture who
 conservative by construction (here: every mutant p == 1.0, rejection rate exactly 0.0) proves the
 suite catches over-cautious bugs only — pair it with an ANTI-conservative mutant, since that is
 the direction that manufactures false findings.
+
+## iter-4 — 2026-08-15T07:05:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A boundary-property test is only as good as the regime its generator samples. The
+developer's 3,000-case floor test in `apps/backend/tests/test_referee_stats.py` drew BOTH groups
+from the same zero-mean generator, where the observed grouping is the unique maximum with
+probability only `1/draws_used` — so the floor was almost never approached and the test passed
+even against a build with half the fix reverted (the auditor proved this by mutation). The
+tail-regime variant (groups deliberately shifted apart) hits the floor constantly: my own 2,500-case
+sweep landed 448 cases exactly ON the floor, and the audit-added tail block carries an
+`assert at_the_floor >= 100` can-fail guard so it cannot silently drift out of the sensitive regime.
+Any floor/boundary property test in this era must (a) generate in the regime where the boundary is
+actually reached and (b) assert how many cases reached it.
+**Applies to:** any iteration adding a property/oracle test for `referee_stats.py` or its
+consumers (J-04 nulls, J-06 estimands, J-08 gates) — especially any test asserting an inequality
+against a mathematical floor, ceiling, or exact-attainability bound.

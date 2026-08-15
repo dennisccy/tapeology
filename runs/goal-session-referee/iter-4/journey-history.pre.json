@@ -1,0 +1,110 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The era transition stands — reconciliation made testable",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-2-evidence/UT-J-01-result.png",
+      "spec_hash": "9fe67344e7c7ae71546d205bbd134263e172265ee542963f4b483f564c0e228e",
+      "notes": "NOT re-verified this iteration: the merged results file carries UT-J-01 as DEFERRED-BUDGET (the wall-clock budget cut the no-golden regression re-check), so it keeps its iter-2 status and its iter-2 evidence. Evidence durability holds (methodology A.6): referee_evidence.py's own SOURCE has zero diff this iteration — verified by the evaluator with `git status --porcelain -- apps/backend/app/` (the only entry under app/ is the new untracked referee_stats.py) — so the iter-2 capture still describes the live code. EVALUATOR SPOT-CHECK (methodology A.4): re-opened UT-J-01-result.png and confirmed it still shows the recorded readiness body (detector_basis 02bebbe17e7b8769, config_fingerprint 08e471b10130e1e2, records 4, distinct_sessions 3, signals_at_current_basis 21, seven per_setup_side cells, strategy_trade dataset_count 0 / tick_gate_met false / the '150 short of the gate' statement / the basis_caveats sentence naming levels._bars_as_of); and re-ran tests/test_referee_evidence.py + tests/test_referee_guards.py myself — green, with every pre-existing J-01 fixture assertion unmodified (the file only GAINED the two rider tests). Prior spec_hash carried forward unchanged (not re-verified this iteration); goal.md text for J-01 is unchanged anyway (hash re-computed and identical). UNVERIFIED LEAD for the next iteration's audit lane (pre-existing code, NOT introduced this iteration, NOT re-derived by me): referee_evidence.py ~:234 selects `_newest_per_session_date(records)` BEFORE filtering on detector_basis, so a newer record recorded at a different (stale) basis could zero out a date whose older record IS at the current basis. Confirm or refute against spec T-6 before J-06 pools on this fold."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The evidence contract — two families, one observation shape",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-2-ui-test-results.md#UT-J-02",
+      "spec_hash": "853e7be61a1ba27f0c8baf57dff1914d3aa54c01f82471f990133afab378850a",
+      "notes": "NOT re-verified this iteration: UT-J-02 is DEFERRED-BUDGET in the merged results file, so it keeps its iter-2 status. Evidence durability applies — referee_evidence.py's SOURCE is byte-unchanged this iteration (only its test file grew by the two carried riders). EVALUATOR SPOT-CHECK: re-ran the whole J-02 acceptance lane myself (tests/test_referee_evidence.py, including the hand-typed two-family goldens, the cache cold/warm/deleted parity, the pooling/split tests, the coverage-shrink disclosure, and the SHA-256 no-write listing) — all green, plus the full backend suite 2503 collected / 2495 passed / 0 failed / 0 errors / 8 skipped, run by me. CARRIED RIDERS NOW CLOSED by iteration 3: rider (2) resolve_referee_obs_cache_db_path is now tested on both branches, and rider (3) detector_basis=None is now stated in docs/referee-statistical-spec.md Sec2 (documentation-only, zero .py diff). Rider (1) session_completeness is PARTLY closed — _signal_reaches_session_complete now has real boundary assertions (at / -1s / +1s of the 15:55 ET pin) plus a named test for its bar-gap-blind limitation; the wider 'finest-series reach' predicate is still an estimate. UNVERIFIED LEAD for the next iteration's audit lane (pre-existing code, NOT introduced this iteration, NOT re-derived by me): referee_evidence.py ~:748 `epoch_anchor = dataset.get(\"epoch_anchor\") or 0.0` — datasets.py types epoch_anchor as `float | None`, so a legitimate None becomes 0.0 and the observation's session_date/anchor_ts collapse to a 1969/1970 date. That would pool every such trade under one synthetic session cluster key, which J-06's session-clustered null and J-08's strategy family would then consume. Confirm or refute before J-06."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The statistics core — calibrated, seeded, oracle-proven, fail-closed",
+      "status": "partial",
+      "last_verified_iter": "goal-referee-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-3-ui-test-results.md#UT-J-03",
+      "spec_hash": "f00b804c40b2b60e1b9bf6209033d53796c98d86c14248ea079ef3a507291ae0",
+      "notes": "TARGET this iteration. Substantial, real work landed and MOST of the acceptance is met — every clause below re-run by the evaluator, not taken from the handoff: (a) the seeded oracle suite exists and is green — tests/test_referee_oracles.py + test_referee_stats.py + test_referee_evidence.py + test_referee_guards.py = 77 passed in 80.8s, inside the 120s REFEREE_ORACLE_BUDGET_SECONDS the module-scoped autouse fixture self-asserts; (b) full backend suite 2503 collected / 2495 passed / 0 failed / 0 errors / 8 skipped in 243.8s (my own --junit-xml run), above the >=2446/8 floor; (c) Config().config_fingerprint() == 08e471b10130e1e2 printed by me; (d) EXPECTED_TOOLS still 20, parsed by me; (e) requirements.txt / pyproject.toml zero diff (my own git diff vs snapshot f2e1e43); (f) determinism — permutation_test p, bootstrap_ci_occurrence bounds, bootstrap_ci_cluster bounds+MDE, and run_oracle_attestation() all byte-identical across two independent calls I made; (g) the clustered CI at 7 informative sessions returns the literal insufficient_sample state (never a fabricated interval); (h) the attestation round-trips AND verify_oracle_attestation returns False on a tampered `actual` whose own passed flag still claims True, on a stale stats_core_version, and on a tampered `expected` — all four executed by me. BLOCKING DEFECT (evaluator-discovered and reproduced, NOT reported by dev/review/coherence): permutation_test's EXACT-ENUMERATION branch can return a p BELOW the exact permutation test's own mathematical floor. Mechanism, traced in source: referee_stats.py:424 derives `g2_sum = total - g1_sum` by subtraction, while _t_statistic (referee_stats.py:454) builds t_obs from a direct math.fsum(group2); the two differ by ~1 ULP, so the OBSERVED grouping's own t_star lands just under t_obs, fails _is_extreme (referee_stats.py:430), and is not counted — p becomes 1/(N+1) instead of 2/(N+1), i.e. below even the exact test's 1/N minimum. Measured by the evaluator over 60,000 fresh fixtures: 343/20000 = 1.72% of one-session 2-vs-2 N(0,1) fixtures (p served as 1/7 where the floor is 2/7), 171/20000 = 0.86% of one-session 1-vs-4 fixtures, 49/20000 = 0.25% of two-session 2-vs-2 fixtures. The bias is ANTI-CONSERVATIVE and concentrated on exactly the most extreme results (those are the ones where the identity permutation is the only extreme one). Blast radius TODAY is zero — the module is imported by no route, page, MCP tool, or other module (verified) and writes nothing — but J-04/J-06/J-08 will call it for real verdict math. Confined to the enumeration branch (space <= REFEREE_ENUMERATION_THRESHOLD = 8,192, i.e. roughly <= 5 informative sessions); the seeded branch is unaffected because its (1 + #extreme)/(B + 1) numerator IS the observed statistic rather than a drawn one. COVERAGE GAP behind it: no oracle case exercises the enumeration branch at all (every generator's permutation space is astronomically over 8,192), and the single enumeration test (TC-4, test_referee_stats.py:258) uses 5.0/1.0/2.0 — exactly representable in binary, so it is structurally blind to this class of defect. The mutation fixture is conservative-only by construction (every mutant p == 1.0, rejection rate exactly 0.0), so it cannot demonstrate the suite catching an anti-conservative mutant. NOT scored `passing`: the journey is titled 'calibrated ... oracle-proven' and this is a demonstrated, reproducible calibration breach in the primary confirmatory procedure. NOT scored `failing` either: the module, the oracle suite, the attestation, and the riders are all real and verified. Fix + re-verify next iteration at FULL depth."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Matched nulls — comparable times, identical measurement",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-04",
+      "spec_hash": "c16455f3b0356910d9d0e1062edea7531b45b5ee68f58df527ba8d182516e611"
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The registry — pre-registration with an immutable boundary",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-05",
+      "spec_hash": "2af99b40b3062ff02f0d57470dbb3085479c4232b5f509e4361bbf3e8562aa5e"
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Estimand engines + adjudication — one checkpoint, recorded forever",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-06",
+      "spec_hash": "f0a370fab0515b423625b8fbe8694180875d0839d8ca105230bcc0179b8ca2e8"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The starter family — historical exploration becomes registered questions",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-07-fail.png",
+      "spec_hash": "473e2966a4c3fc78ec62b1ce97a0a6ada59891a625c9c88daf0964e8ec1c9f66"
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The strategy family + the promotion interlock — fail closed, no bypass",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-08",
+      "spec_hash": "04cecc16df051077401e5a4c694d6d81422554e3d45fccfcf3615b2722de9808"
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The Referee on /desk + MCP contract v5 — 22 read-only tools",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-09-fail.png",
+      "spec_hash": "26f414b65f170424797c6c23ab3c013a3648e2db090af16db72c52d2b781bf9d"
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — regression sentinel",
+      "status": "partial",
+      "last_verified_iter": "goal-referee-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-3-evidence/J-10-verify.png",
+      "spec_hash": "d14682891de7794bb3728ade717e6a1ed805f44384087a9bf18d75d09348fd9a",
+      "notes": "Kept-product half RE-VERIFIED this iteration by deterministic replay of the stored golden — UT-J-10 PASS in both reports/phase-goal-referee-iter-3-regression-replay-results.md and the merged results file. The evaluator opened J-10-verify.png: it shows the three-route nav (Cockpit / Structure / Desk with Desk active), the honest 'Playbook not computed for this session.' empty state with its Run Playbook control, the Backscan panel, 'No back-scan runs recorded yet.', and the PLAYBOOK EVIDENCE header — the kept /desk surface rendering as shipped. Supporting checks re-run by the evaluator: full suite 2503 collected / 2495 passed / 0 failed / 0 errors / 8 skipped (includes test_no_execution_path, test_copy_discipline, test_desk_ui_guards, the annualization guard, and the test_mcp_server 20-tool pin); Config().config_fingerprint() printed 08e471b10130e1e2; store-scope guard CLEAN with all 11,274 protected files byte-identical; zero diff to apps/frontend/ and to every frozen backend module. STILL PARTIAL, not passing: its era-completion clauses are structurally unmeetable until J-09 — the three Referee /desk sections do not exist and MCP advertises 20 tools, not 22. The replayed golden also covers a slice of /desk rather than literally every shipped section; the full walk is an era-end obligation."
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-08-14T22:05:00Z"
+}

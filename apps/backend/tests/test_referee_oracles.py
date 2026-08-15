@@ -30,10 +30,23 @@ applied at file scope instead of a single call.
   5. The 20-null + 1-positive BH sweep                                  -> TC-13
   6. CI coverage at S=40, and the S=6 insufficient_sample case          -> TC-14
   Mutation fixture (a mis-implemented test statistic fails calibration) -> TC-15
+
+**iter-4 additions** (``docs/phases/goal-referee-iter-4.md`` — its OWN, separate TC-numbering;
+every iter-4 test below is explicitly labeled "iter-4" to avoid ambiguity with the iter-3 TC
+numbers above). Closes the exact coverage hole ``lessons.md``'s iter-3 entry names: every case
+above uses S>=16 sessions, so the deterministic ENUMERATION branch (the one this iteration's own
+floor-violation fix touches) is NEVER exercised anywhere in this suite before iter-4:
+  iter-4 TC-3. A calibration case small enough to genuinely enter the enumeration branch on
+               every replication — checked for calibration AND the exact-mode floor property.
+  iter-4 TC-4. A SECOND mutation fixture, independently reproducing the PRE-FIX subtraction bug
+               (the anti-conservative direction — makes results look MORE significant than
+               warranted) — paired with the existing TC-15 mutant (which fails in the OVER-
+               cautious direction, always p=1.0) to prove this suite catches BOTH directions.
 """
 
 from __future__ import annotations
 
+import itertools
 import math
 import random
 import time
@@ -405,6 +418,54 @@ def test_oracle_case6_clustered_ci_below_the_floor_serves_insufficient_sample():
     assert ci["n_clusters"] == 6
 
 
+# === iter-4 TC-3: a calibration case that genuinely ENTERS the enumeration branch ====================
+#
+# Every case above uses S>=16 sessions of shape n_s=1/K=4 (space per session = C(5,1) = 5;
+# 5**16 is astronomically over REFEREE_ENUMERATION_THRESHOLD), so `permutation_test`'s
+# deterministic `use_enumeration` path -- the ONE branch this iteration's own floor-violation fix
+# touches -- is NEVER exercised anywhere in this suite before this case. S=5 (same n1=1, K=4 shape,
+# same generator style as cases 1/2) keeps every replication's space at 5**5 == 3,125, comfortably
+# under the 8,192 threshold, so every one of REFEREE_ORACLE_REPLICATIONS runs full enumeration.
+
+_CASE_ENUM_SESSIONS = 5
+_CASE_ENUM_N1 = 1
+_CASE_ENUM_K = 4
+
+
+def test_oracle_iter4_tc3_enumeration_branch_holds_calibration_and_the_exact_floor():
+    """iter-4 TC-3: a pure null (both groups drawn from the SAME zero-mean generator,
+    independently -- no true effect) at S small enough to force full enumeration on EVERY
+    replication. Checks BOTH the calibration property every other case in this file checks
+    (empirical rejection rate inside REFEREE_ORACLE_SIZE_TOLERANCE) AND the exact-mode floor
+    property this whole iteration exists to guarantee (no single replication's `p` below its own
+    `2 / (draws_used + 1)` floor) -- now proven inside the oracle suite itself, not only the
+    fixture-level property test in `test_referee_stats.py` (goal.md's own J-03 acceptance: "the
+    oracle suite IS the acceptance")."""
+    gen_rng = random.Random("oracle-case-enum-branch-seed")
+    p_values = []
+    for rep in range(REFEREE_ORACLE_REPLICATIONS):
+        sg = _iid_session_groups(
+            gen_rng, _CASE_ENUM_SESSIONS, _CASE_ENUM_N1, _CASE_ENUM_K, lambda r: r.gauss(0.0, 1.0)
+        )
+        result = permutation_test(
+            sg, f"oracle-case-enum-{rep}", sidedness="greater", b=REFEREE_ORACLE_B
+        )
+        assert result["enumeration"] is True, (
+            f"replication {rep} did not enter the enumeration branch -- this case's own space "
+            f"bound is wrong"
+        )
+        floor = 2.0 / (result["draws_used"] + 1)
+        assert result["p"] >= floor, (
+            f"replication {rep}: p={result['p']!r} fell below its own exact-mode floor {floor!r}"
+        )
+        p_values.append(result["p"])
+    rate = _empirical_rejection_rate(p_values)
+    assert _TOLERANCE_LOW <= rate <= _TOLERANCE_HIGH, (
+        f"the enumeration-branch calibration case's rejection rate {rate:.4f} outside "
+        f"[{_TOLERANCE_LOW}, {_TOLERANCE_HIGH}]"
+    )
+
+
 # === Mutation fixture (TC-15): a deliberately mis-implemented test statistic fails calibration =======
 
 
@@ -446,4 +507,100 @@ def test_mutation_fixture_fails_calibration():
     assert not (_TOLERANCE_LOW <= rate <= _TOLERANCE_HIGH), (
         f"the mutant should FAIL calibration (fall outside "
         f"[{_TOLERANCE_LOW}, {_TOLERANCE_HIGH}]); got {rate:.4f}"
+    )
+
+
+# === iter-4 TC-4: a SECOND mutation fixture -- the PRE-FIX subtraction bug, ANTI-conservative =========
+#
+# TC-15 above demonstrates the OVER-cautious direction (a mutant that always reports p=1.0 --
+# never significant, never dangerous). This case demonstrates the OPPOSITE, ANTI-conservative
+# direction: a mutant that can make a result look MORE significant than it legitimately is -- the
+# actual PRE-FIX shipped defect this iteration's own fix corrects (`permutation_test`'s exact-
+# enumeration branch computing group-2's sum by subtracting from a separately-accumulated session
+# total instead of a direct accumulation over the complement). Reproduced independently HERE
+# (never by calling into `referee_stats.py`'s own enumeration code path with a flag flipped -- this
+# file's own stated convention), reusing only the UNCHANGED, non-buggy `_t_statistic`/`_is_extreme`/
+# `_informative_sessions` helpers exactly as the existing TC-15 mutant above already does.
+
+
+def _prefix_bug_enumeration_p(
+    session_groups: dict[str, tuple[list[float], list[float]]], sidedness: str
+) -> tuple[float, int]:
+    """Independent reproduction of the ACTUAL pre-iter-4 shipped defect: each enumerated
+    combination's group-2 sum computed as `total - g1_sum` (a separately `math.fsum`-accumulated
+    session total, minus the combination's own g1_sum) instead of a direct accumulation over the
+    combination's own complement values -- the exact bug `permutation_test`'s own inline comment
+    now documents. Returns `(p, draws_used)`."""
+    informative = _informative_sessions(session_groups)
+    t_obs, deltas, weights = _t_statistic(informative)
+    total_weight = math.fsum(weights.values())
+    sessions = sorted(informative)
+    combos_by_session = []
+    for session in sessions:
+        group1, group2 = informative[session]
+        values = group1 + group2
+        n1 = len(group1)
+        total = math.fsum(values)  # the buggy separately-accumulated session total (PRE-FIX)
+        combos_by_session.append(
+            (values, n1, total, list(itertools.combinations(range(len(values)), n1)))
+        )
+    extreme = 0
+    draws_used = 0
+    for joint in itertools.product(*(c[3] for c in combos_by_session)):
+        acc = 0.0
+        for session, combo, (values, n1, total, _combos) in zip(sessions, joint, combos_by_session):
+            g1_sum = math.fsum(values[idx] for idx in combo)
+            g2_sum = total - g1_sum  # THE PRE-FIX BUG (never a direct complement accumulation)
+            n2 = len(values) - n1
+            delta_star = g1_sum / n1 - g2_sum / n2
+            acc += weights[session] * delta_star
+        t_star = acc / total_weight
+        draws_used += 1
+        if _is_extreme(t_star, t_obs, sidedness):
+            extreme += 1
+    return (1 + extreme) / (draws_used + 1), draws_used
+
+
+def _small_enumeration_fixtures(rng, n_cases, max_sessions=4):
+    """Freshly seeded-generated small enumeration-mode fixtures -- 2-vs-2, 1-vs-4, and 4-vs-1
+    group shapes (matching the evaluator's own reproduction shapes, `test_referee_stats.py`'s
+    iter-4 TC-2 property test's own design), 1 to `max_sessions` informative sessions, all three
+    `sidedness` values. Independent of that file's own generator (this file's own "written from
+    scratch HERE" convention) -- same design, separately seeded."""
+    shapes = [(2, 2), (1, 4), (4, 1)]
+    sidedness_values = ("greater", "less", "two-sided")
+    for i in range(n_cases):
+        n_sessions = rng.randint(1, max_sessions)
+        n1, n2 = rng.choice(shapes)
+        sidedness = rng.choice(sidedness_values)
+        session_groups = {
+            f"s{j:03d}": (
+                [rng.gauss(0.0, 1.0) for _ in range(n1)],
+                [rng.gauss(0.0, 1.0) for _ in range(n2)],
+            )
+            for j in range(n_sessions)
+        }
+        yield session_groups, sidedness
+
+
+def test_oracle_iter4_tc4_the_anti_conservative_mutant_is_detected():
+    """iter-4 TC-4: the pre-fix subtraction-bug mutant, run over a batch of freshly seeded small
+    enumeration-mode fixtures (the SAME style TC-2's own property test in `test_referee_stats.py`
+    uses), is DETECTED via at least one floor violation -- `p` falling below its own exact-mode
+    floor `2 / (draws_used + 1)`, which can never legitimately happen (the observed grouping is
+    always one guaranteed member of the enumerated space). Proves this suite catches an OVER-
+    confident implementation bug, not only TC-15's existing over-cautious one. (Re-run against the
+    FIXED `permutation_test` on the identical generator/seed as a sanity check during development:
+    zero floor violations -- confirming this is a property of the MUTANT, not the fixture design.)
+    """
+    rng = random.Random("iter4-tc4-mutant-batch-seed-v1")
+    violations = []
+    for i, (session_groups, sidedness) in enumerate(_small_enumeration_fixtures(rng, n_cases=3000)):
+        p, draws_used = _prefix_bug_enumeration_p(session_groups, sidedness)
+        floor = 2.0 / (draws_used + 1)
+        if p < floor:
+            violations.append((i, p, floor))
+    assert len(violations) >= 1, (
+        "the anti-conservative mutant should produce at least one exact-mode floor violation "
+        "across this batch -- none found, the mutant went undetected"
     )

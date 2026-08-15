@@ -60,6 +60,16 @@ onward: ``playbook_occurrence.integrity_errors`` and ``strategy_trade.integrity_
 served on every response, empty lists on a healthy corpus, and a corrupted/unparseable store file
 is surfaced there rather than crashing the endpoint or being silently dropped.
 
+**Lead 1 (iter-4): ``stale_basis_dates``.** ``playbook_occurrence_readiness()`` (this section) and
+``playbook_observations()`` (J-02, below) each additively serve a ``stale_basis_dates:
+[{"session_date", "record_detector_basis"}, ...]`` list — every date whose NEWEST record's own
+``(detector_basis, config_fingerprint)`` does not match the live values, named explicitly instead
+of silently contributing zero to the current-basis counts (T-6). One shared predicate,
+``_is_stale_basis``, replaces the two functions' previously-independent copies of this identical
+check (single source of truth); the value of every OTHER already-served field is unchanged, and
+the list is empty on every fixture — including today's real corpus — with no stale-basis record
+(no detector revision has happened this era).
+
 **J-02 — the typed observation contract, two families, one shape.** ``docs/referee-statistical-
 spec.md`` §2 pins ONE observation record implemented ONCE, below, via the shared ``_observation``
 builder: ``{evidence_family, observation_id, symbol, session_date, anchor_ts, side, measure_key,
@@ -222,12 +232,33 @@ def _newest_per_session_date(records: list[dict]) -> dict[str, dict]:
     return newest
 
 
+def _is_stale_basis(
+    record_basis: str,
+    record_config_fingerprint: str,
+    *,
+    live_basis: str,
+    live_config_fingerprint: str,
+) -> bool:
+    """The ONE ``(detector_basis, config_fingerprint)`` staleness predicate (T-6) --
+    ``playbook_occurrence_readiness()`` and ``playbook_observations()`` each used to implement
+    this identical check independently (iter-4's Lead 1: a genuine duplication this helper
+    removes, CLAUDE.md anti-goal 6 -- single source of truth). Callers pass their own
+    ALREADY-RESOLVED basis/fingerprint values rather than a record: the two call sites hold
+    different record shapes (a raw ``PlaybookStore`` record vs. a pre-built projection dict that
+    already carries its own ``record_detector_basis``), so this helper assumes nothing about
+    record shape. ``True`` means STALE -- excluded from current-basis pooling, and (iter-4)
+    disclosed in the caller's own ``stale_basis_dates`` list instead of silently contributing
+    zero."""
+    return record_basis != live_basis or record_config_fingerprint != live_config_fingerprint
+
+
 def playbook_occurrence_readiness(store: PlaybookStore, config_fingerprint: str) -> dict:
     """The ``playbook_occurrence`` block: ``records``/``distinct_sessions`` are the store's raw,
     UNFILTERED content (every file on disk, every date it spans); ``signals_at_current_basis`` and
     ``per_setup_side`` pool only the newest-per-date records whose own ``(detector_basis,
     config_fingerprint)`` match today's live values (T-6) -- a stale-basis record still counts
-    toward the first two, never the last two. ``per_setup_side`` is SPARSE (only cells with at
+    toward the first two, never the last two, and (iter-4) is named in ``stale_basis_dates``
+    instead of silently contributing nothing. ``per_setup_side`` is SPARSE (only cells with at
     least one recorded signal), so a zero-corpus store serves ``[]``, never a padded zero-filled
     cross product."""
     records, errors = store.list()
@@ -236,13 +267,20 @@ def playbook_occurrence_readiness(store: PlaybookStore, config_fingerprint: str)
 
     cells: dict[tuple[str, str], dict[str, object]] = {}
     signals_at_current_basis = 0
-    for record in newest_by_date.values():
-        if (
-            _record_detector_basis(record) != basis
-            or record["config_fingerprint"] != config_fingerprint
+    stale_basis_dates: list[dict[str, str]] = []
+    for session_date in sorted(newest_by_date):
+        record = newest_by_date[session_date]
+        record_basis = _record_detector_basis(record)
+        if _is_stale_basis(
+            record_basis,
+            record["config_fingerprint"],
+            live_basis=basis,
+            live_config_fingerprint=config_fingerprint,
         ):
+            stale_basis_dates.append(
+                {"session_date": session_date, "record_detector_basis": record_basis}
+            )
             continue
-        session_date = record["session_date"]
         for signal in record["signals"]:
             signals_at_current_basis += 1
             key = (signal["setup_id"], signal["side"])
@@ -262,6 +300,7 @@ def playbook_occurrence_readiness(store: PlaybookStore, config_fingerprint: str)
         "distinct_sessions": len(newest_by_date),
         "signals_at_current_basis": signals_at_current_basis,
         "per_setup_side": per_setup_side,
+        "stale_basis_dates": stale_basis_dates,
         "integrity_errors": errors,
     }
 
@@ -670,6 +709,7 @@ def playbook_observations(
           "session_completeness": [{"session_date", "symbol", "complete"}, ...],
           "detector_basis": str,                  # the LIVE basis this call pooled against
           "config_fingerprint": str,
+          "stale_basis_dates": [{"session_date", "record_detector_basis"}, ...],  # iter-4
         }
     """
     live_basis = current_playbook_detector_basis()
@@ -690,13 +730,22 @@ def playbook_observations(
     coverage_by_date: list[dict] = []
     coverage_shrink_disclosures: list[dict] = []
     session_completeness: list[dict] = []
+    stale_basis_dates: list[dict[str, str]] = []
 
     for session_date in sorted(newest_by_date):
         newest = newest_by_date[session_date]
-        if (
-            newest["record_detector_basis"] != live_basis
-            or newest["config_fingerprint"] != config_fingerprint
+        if _is_stale_basis(
+            newest["record_detector_basis"],
+            newest["config_fingerprint"],
+            live_basis=live_basis,
+            live_config_fingerprint=config_fingerprint,
         ):
+            stale_basis_dates.append(
+                {
+                    "session_date": session_date,
+                    "record_detector_basis": newest["record_detector_basis"],
+                }
+            )
             continue
         observations.extend(newest["observations"])
         excluded_leaves += newest["excluded_leaves"]
@@ -729,6 +778,7 @@ def playbook_observations(
         "session_completeness": session_completeness,
         "detector_basis": live_basis,
         "config_fingerprint": config_fingerprint,
+        "stale_basis_dates": stale_basis_dates,
     }
 
 

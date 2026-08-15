@@ -5,6 +5,12 @@ TC-15, TC-18 — the six spec Sec6 cases plus the mutation fixture, all seeded s
 fit inside ``REFEREE_ORACLE_BUDGET_SECONDS``) lives separately in ``test_referee_oracles.py``, so
 this file's own tests stay fast and this file never risks the runtime budget.
 
+**iter-4 additions** (``docs/phases/goal-referee-iter-4.md`` — its OWN, separate TC-numbering;
+every iter-4 section below is explicitly labeled "iter-4" to avoid ambiguity with the iter-3 TC
+numbers above): the exact-enumeration p-value floor fix's own proof (TC-1/TC-2), direct coverage
+for `_draw_indices_without_replacement` (TC-7) and the seeded branch's `n2 == 1` fast path (TC-8),
+and the version-bump attestation check (TC-5/TC-6).
+
 Every expected value below is derived independently of ``referee_stats.py``'s own implementation
 -- either by literal hand arithmetic (documented inline) or by a from-scratch reference
 computation written in this file using only ``random.Random``/``itertools``/plain arithmetic,
@@ -25,6 +31,7 @@ from app.research.referee_stats import (
     REFEREE_CI_LEVEL,
     REFEREE_MIN_CLUSTERS_FOR_CI,
     REFEREE_SEED,
+    STATS_CORE_VERSION,
     benjamini_hochberg,
     bootstrap_ci_cluster,
     bootstrap_ci_occurrence,
@@ -130,6 +137,37 @@ def test_referee_stats_imports_only_stdlib_never_scipy_never_numpy():
     assert top_level_modules == {"itertools", "math", "random", "statistics"}
     assert "numpy" not in top_level_modules
     assert "scipy" not in top_level_modules
+
+
+# === iter-4 TC-7: `_draw_indices_without_replacement` direct coverage ================================
+#
+# docs/phases/goal-referee-iter-4.md's OWN TC-numbering -- distinct from this file's iter-3 TC-1
+# through TC-19 above (goal-referee-iter-3.md). Every iter-4 section in this file is explicitly
+# labeled "iter-4" to avoid ambiguity with the pre-existing iter-3 TC numbers. Reviewer-flagged
+# gap: zero direct assertions existed for this primitive before this iteration. KEPT, not deleted
+# -- its own docstring already frames it as the documented without-replacement primitive J-04's
+# real anchor draws are expected to reuse.
+
+
+def test_iter4_tc7_draw_indices_without_replacement_is_deterministic_for_identical_seeds():
+    """iter-4 TC-7 (determinism half): two INDEPENDENTLY-CONSTRUCTED `random.Random` instances,
+    built from the identical seed, produce the byte-identical sorted k-element result -- k
+    distinct indices in range(population)."""
+    a = rs._draw_indices_without_replacement(random.Random("iter4-tc7-seed"), population=7, k=3)
+    b = rs._draw_indices_without_replacement(random.Random("iter4-tc7-seed"), population=7, k=3)
+    assert a == b
+    assert a == sorted(a)
+    assert len(set(a)) == 3
+    assert all(0 <= idx < 7 for idx in a)
+
+
+def test_iter4_tc7_draw_indices_without_replacement_covers_the_full_population_when_k_equals_it():
+    """iter-4 TC-7 (full-population half): `k == population` returns every index in
+    `range(population)` exactly once."""
+    result = rs._draw_indices_without_replacement(
+        random.Random("iter4-tc7-full-seed"), population=5, k=5
+    )
+    assert result == list(range(5))
 
 
 # === TC-2: occurrence-level percentile bootstrap CI ===================================================
@@ -284,6 +322,122 @@ def test_permutation_test_enumeration_is_deterministic_with_zero_rng_draws():
     assert a == b
 
 
+# === iter-4 TC-1/TC-2: the exact-enumeration p-value floor guarantee =================================
+#
+# Fixes the evaluator's own reproduced defect (docs/phases/goal-referee-iter-4.md): the exact-
+# enumeration branch's `g2_sum = total - g1_sum` could disagree with `_t_statistic`'s own direct
+# `math.fsum(group2)` in the last representable digit, letting the TRUE observed grouping narrowly
+# fail its own `_is_extreme` self-comparison and silently drop from the extreme count -- so the
+# returned `p` could fall to HALF its own mathematical floor `2 / (draws_used + 1)` (the floor
+# holds because the observed grouping is always one guaranteed member of the enumerated space).
+
+
+def test_iter4_tc1_the_evaluators_exact_minimal_repro_now_hits_the_correct_floor():
+    """iter-4 TC-1: the evaluator's own exact minimal reproduction -- one session, `sidedness=
+    "greater"` -- now returns `p == 2/7` (`draws_used == 6`, the exact floor `2 / (draws_used +
+    1)`), not the previously-served `1/7` the pre-fix subtraction bug produced."""
+    g1 = [0.9571299431380904, 0.23675146939940733]
+    g2 = [-0.2015364333714562, -0.47887435876092443]
+    result = permutation_test({"s0": (g1, g2)}, "probe", sidedness="greater")
+    assert result["enumeration"] is True
+    assert result["draws_used"] == 6
+    assert result["p"] == 2 / 7 == 0.2857142857142857
+
+
+def test_iter4_tc2_the_exact_mode_floor_never_falls_below_its_own_mathematical_minimum():
+    """iter-4 TC-2: a freshly seeded-generated property test across thousands of small
+    enumeration-mode fixtures -- 2-vs-2, 1-vs-4, and 4-vs-1 group shapes (matching the evaluator's
+    own reproduction shapes), 1 to 4 informative sessions (multi-session is where the pre-fix bug
+    actually manifests -- a single-session fixture like TC-1's own repro can never trigger the
+    CROSS-session accumulation half of the defect), all three `sidedness` values -- asserting
+    `p >= 2 / (draws_used + 1)` with ZERO violations across the entire generated set. Every
+    fixture is generated here from scratch (never derived from the module under test); every case
+    is confirmed to genuinely enter the enumeration branch, the only branch this iteration's fix
+    touches. (Re-run against the PRE-FIX code during development: this exact generator/seed finds
+    12 violations in the first 3,000 cases -- proof this property test would have caught the
+    original defect, not merely failed to exercise it.)"""
+    rng = random.Random("iter4-tc2-property-seed-v1")
+    shapes = [(2, 2), (1, 4), (4, 1)]
+    sidedness_values = ("greater", "less", "two-sided")
+    n_cases = 3000
+    violations = []
+    for i in range(n_cases):
+        n_sessions = rng.randint(1, 4)
+        n1, n2 = rng.choice(shapes)
+        sidedness = rng.choice(sidedness_values)
+        session_groups = {
+            f"s{j:03d}": (
+                [rng.gauss(0.0, 1.0) for _ in range(n1)],
+                [rng.gauss(0.0, 1.0) for _ in range(n2)],
+            )
+            for j in range(n_sessions)
+        }
+        result = permutation_test(session_groups, f"iter4-tc2-case-{i}", sidedness=sidedness)
+        assert result["enumeration"] is True, f"case {i} unexpectedly used the seeded branch"
+        floor = 2.0 / (result["draws_used"] + 1)
+        if result["p"] < floor:
+            violations.append((i, n_sessions, (n1, n2), sidedness, result["p"], floor))
+    assert violations == [], f"{len(violations)} floor violation(s), first 3: {violations[:3]}"
+
+
+def test_iter4_tc2_the_exact_mode_floor_holds_in_the_extreme_tail_regime_too():
+    """iter-4 TC-2 (audit rider, goal-referee-iter-4 audit finding T1): the SAME floor property as
+    the test directly above, generated in the regime where the floor actually BINDS -- a strong
+    separation between the two groups, so the OBSERVED grouping is very often the unique most
+    extreme member of its own enumerated space (`p` sitting exactly at `2 / (draws_used + 1)`).
+
+    Why this second block exists, when the null-regime one above already passes: under a pure null
+    (both groups drawn from the identical zero-mean generator, as above) the observed grouping is
+    the unique maximum with probability only `1 / draws_used`, so with `draws_used` in the hundreds
+    or thousands the floor is essentially never approached and a floor bug has almost nothing to
+    bite on. The fix this iteration ships has TWO halves -- the per-combination `g2_sum` direct
+    complement accumulation AND the cross-session `math.fsum` combination of the weighted per-
+    session terms -- and the null-regime generator above is only sensitive to the FIRST. Measured
+    during the audit: reverting ONLY the cross-session half (keeping the `g2_sum` half) produces
+    ZERO floor violations across the whole 3,000-case null set above, but 58 violations across
+    this block's own 1,000 tail-regime cases (and ~8% of a 18,000-case independent sweep). Without
+    this block the second half of the fix is shipped unguarded -- a later refactor could quietly
+    restore the naive running `acc +=` and the entire suite would stay green.
+
+    Everything else matches the block above: fixtures generated here from scratch, the same three
+    group shapes, all three `sidedness` values, every case confirmed to enter the enumeration
+    branch, and the identical assertion `p >= 2 / (draws_used + 1)` with zero violations."""
+    rng = random.Random("iter4-tc2-tail-regime-seed-v1")
+    shapes = [(2, 2), (1, 4), (4, 1)]
+    sidedness_values = ("greater", "less", "two-sided")
+    n_cases = 1000
+    violations = []
+    at_the_floor = 0
+    for i in range(n_cases):
+        n_sessions = rng.randint(2, 4)
+        n1, n2 = rng.choice(shapes)
+        sidedness = rng.choice(sidedness_values)
+        # `less` needs the separation mirrored, so its own observed grouping is the extreme one
+        # under ITS tail; `two-sided` binds under either orientation.
+        shift = -3.0 if sidedness == "less" else 3.0
+        session_groups = {
+            f"s{j:03d}": (
+                [rng.gauss(shift, 1.0) for _ in range(n1)],
+                [rng.gauss(-shift, 1.0) for _ in range(n2)],
+            )
+            for j in range(n_sessions)
+        }
+        result = permutation_test(session_groups, f"iter4-tc2-tail-case-{i}", sidedness=sidedness)
+        assert result["enumeration"] is True, f"case {i} unexpectedly used the seeded branch"
+        floor = 2.0 / (result["draws_used"] + 1)
+        if result["p"] < floor:
+            violations.append((i, n_sessions, (n1, n2), sidedness, result["p"], floor))
+        elif result["p"] == floor:
+            at_the_floor += 1
+    assert violations == [], f"{len(violations)} floor violation(s), first 3: {violations[:3]}"
+    # The guard's own can-fail check: this generator must actually PUT cases on the floor,
+    # otherwise it is testing the same insensitive regime as the block above and proves nothing.
+    assert at_the_floor >= 100, (
+        f"only {at_the_floor} of {n_cases} cases landed exactly on the floor -- this generator is "
+        f"no longer in the tail regime, so it can no longer guard the cross-session half of the fix"
+    )
+
+
 # === TC-5: the seeded B-draw branch ====================================================================
 
 
@@ -379,6 +533,93 @@ def test_permutation_test_no_informative_sessions_is_insufficient_sample():
     sg = {"2026-06-08": ([], [1.0, 2.0]), "2026-06-09": ([1.0], [])}
     result = permutation_test(sg, "hyp-none-informative")
     assert result == {"state": INSUFFICIENT_SAMPLE, "n_informative_sessions": 0}
+
+
+# === iter-4 TC-8: the seeded branch's `n1 > 1, n2 == 1` fast path ====================================
+
+
+def test_iter4_tc8_n2_equals_1_fast_path_matches_a_from_scratch_general_algorithm_reference():
+    """iter-4 TC-8: n1=3, n2=1 -- the `elif n2 == 1` fast path -- across enough sessions to force
+    the SEEDED (non-enumeration) branch, mirroring the `n1 == 1` fast path's own already-hand-
+    verified equivalence (the reviewer's own check during development, and this function's own
+    inline comment). The fast path consumes exactly ONE `stream.randrange` call per draw while the
+    GENERAL Fisher-Yates algorithm consumes `n1` calls per draw, so a same-keyed-stream reference
+    would diverge after the very first draw (verified during development -- it does: a materially
+    different p). "Matches a from-scratch general-algorithm reference" therefore means the
+    mathematically meaningful thing: both the module's own fast path AND an INDEPENDENTLY-coded
+    general-algorithm reference (its own, unrelated stream) are unbiased Monte-Carlo estimators of
+    the IDENTICAL exact target -- computed here by brute-force full enumeration (deterministic,
+    zero RNG), exactly what the module's own `use_enumeration` path would compute if this
+    fixture's space did not exceed `REFEREE_ENUMERATION_THRESHOLD`. Both estimates must land
+    within a wide, honestly-derived (binomial standard-error) tolerance of that ground truth."""
+    rng = random.Random("iter4-tc8-fixture-seed-v1")
+    n_sessions = 7  # C(4,3)=4 per session; 4**7 = 16,384 > REFEREE_ENUMERATION_THRESHOLD (8,192)
+    session_groups = {
+        f"2026-10-{i + 1:02d}": ([rng.gauss(0, 1) for _ in range(3)], [rng.gauss(0, 1)])
+        for i in range(n_sessions)
+    }
+    sidedness = "greater"
+
+    # --- ground truth: brute-force full enumeration, independent of `permutation_test` ---
+    sessions = sorted(session_groups)
+    weight_by_s = {s: (3 * 1) / (3 + 1) for s in sessions}
+    total_weight = sum(weight_by_s.values())
+    delta_by_s = {
+        s: sum(session_groups[s][0]) / 3 - sum(session_groups[s][1]) / 1 for s in sessions
+    }
+    t_obs_ref = sum(weight_by_s[s] * delta_by_s[s] for s in sessions) / total_weight
+    pooled = {s: session_groups[s][0] + session_groups[s][1] for s in sessions}
+    combos_by_session = [list(itertools.combinations(range(4), 3)) for _ in sessions]
+    extreme_exact = 0
+    total_combos = 0
+    for joint in itertools.product(*combos_by_session):
+        acc = 0.0
+        for s, combo in zip(sessions, joint):
+            values = pooled[s]
+            g1 = sum(values[idx] for idx in combo)
+            g2 = sum(values) - g1
+            acc += weight_by_s[s] * (g1 / 3 - g2 / 1)
+        if (acc / total_weight) >= t_obs_ref:
+            extreme_exact += 1
+        total_combos += 1
+    assert total_combos == 4**n_sessions
+    p_star = (1 + extreme_exact) / (total_combos + 1)
+
+    # --- the module's own fast path ---
+    b = 8000
+    real = permutation_test(session_groups, "iter4-tc8-hyp", sidedness=sidedness, b=b)
+    assert real["enumeration"] is False  # sanity: this fixture genuinely forces the seeded branch
+    assert abs(real["t"] - t_obs_ref) < 1e-9
+
+    # --- an INDEPENDENTLY-coded general-algorithm reference, its own unrelated stream ---
+    streams = {s: random.Random(f"iter4-tc8-general-reference-seed:{s}") for s in sessions}
+    extreme_general = 0
+    for _ in range(b):
+        acc = 0.0
+        for s in sessions:
+            values = pooled[s]
+            n1, n = 3, 4
+            rstream = streams[s]
+            pool = list(range(n))
+            for idx in range(n1):
+                j = rstream.randrange(idx, n)
+                pool[idx], pool[j] = pool[j], pool[idx]
+            g1 = sum(values[idx] for idx in pool[:n1])
+            g2 = sum(values) - g1
+            acc += weight_by_s[s] * (g1 / n1 - g2 / (n - n1))
+        if (acc / total_weight) >= t_obs_ref:
+            extreme_general += 1
+    p_general = (1 + extreme_general) / (b + 1)
+
+    tolerance = 6.0 * math.sqrt(p_star * (1 - p_star) / b)
+    assert abs(real["p"] - p_star) <= tolerance, (
+        f"fast-path p={real['p']!r} strayed {abs(real['p'] - p_star):.5f} from ground truth "
+        f"{p_star!r} (tolerance {tolerance:.5f})"
+    )
+    assert abs(p_general - p_star) <= tolerance, (
+        f"general-algorithm reference p={p_general!r} strayed {abs(p_general - p_star):.5f} from "
+        f"ground truth {p_star!r} (tolerance {tolerance:.5f})"
+    )
 
 
 # === TC-6: robustness variants are served, never substituted ==========================================
@@ -549,3 +790,33 @@ def test_verify_oracle_attestation_rejects_a_non_dict_input():
     assert verify_oracle_attestation(None) is False
     assert verify_oracle_attestation({}) is False
     assert verify_oracle_attestation("not a dict") is False
+
+
+# === iter-4 TC-5/TC-6: the version bump this iteration's fix makes real ================================
+
+
+def test_iter4_tc5_tc6_the_version_bump_is_real_and_a_stale_version_is_rejected():
+    """iter-4 TC-5: `STATS_CORE_VERSION` reads the bumped `"referee-stats-v2"` (a genuine
+    algorithmic revision to this file's exact-enumeration branch -- the module's own documented
+    policy: "bumped only on a genuine algorithmic revision... a named revision, never silently"),
+    and `run_oracle_attestation()` embeds it; two independent calls return byte-identical `actual`
+    values (re-verifying TC-16/TC-17's own byte-identity guarantee still holds post-fix).
+
+    iter-4 TC-6: an attestation record identical to the current pin except `stats_core_version`
+    reads the OLD `"referee-stats-v1"` string is rejected as version-stale by
+    `verify_oracle_attestation`, even though `expected`/`tolerance`/`actual` all otherwise match
+    the CURRENT build's own pin exactly -- the fail-closed discipline (T-8) this iteration's
+    version bump makes real for the first time (before this iteration, no build had ever changed
+    `STATS_CORE_VERSION`, so this rejection path was unexercised)."""
+    assert STATS_CORE_VERSION == "referee-stats-v2"
+
+    record_a = run_oracle_attestation()
+    record_b = run_oracle_attestation()
+    assert record_a["stats_core_version"] == "referee-stats-v2"
+    assert record_a["actual"] == record_b["actual"]
+    assert record_a["passed"] is True
+    assert verify_oracle_attestation(record_a) is True
+
+    stale = dict(record_a)
+    stale["stats_core_version"] = "referee-stats-v1"
+    assert verify_oracle_attestation(stale) is False

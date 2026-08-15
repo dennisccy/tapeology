@@ -136,3 +136,25 @@ improvised.
 **Reversible:** yes — Lead 1's disclosure field has no consumer yet and can be renamed or removed
 freely before J-09 (its first UI reader); Lead 2 is untouched, unchanged from today's shipped
 behavior, so nothing here forecloses any future fix or owner ruling.
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** J-03's Acceptance is "the oracle suite is green and IS the acceptance", and every
+clause it names is now met and independently re-verified by me. But the hard auditor left one
+IMPORTANT finding open (B1): `permutation_test` still serves `min_attainable_p = 1/(draws_used+1)`
+in exact-enumeration mode, a value the just-fixed method provably can never produce (I measured it
+myself: on the iteration-3 repro `p == 2/7` sits exactly ON the floor while `min_attainable_p`
+reads `1/7`). `docs/referee-statistical-spec.md:168` says "the minimum attainable p (granularity)"
+— "granularity" supports the shipped value, "minimum attainable" supports `2/(draws_used+1)`. The
+goal text does not say whether a served disclosure that over-promises reachability blocks a
+journey whose written acceptance clauses all pass.
+**We chose:** Scored J-03 `passing` and carried B1 as a binding rider on J-04 rather than holding
+the journey a second iteration. Reasons: the defect I withheld the pass for last time was the p
+that feeds BH contradicting its own formula — this is a secondary disclosure field matching one
+defensible reading of the canonical spec, consumed by nothing today; and this project's own T-1
+rule says an ambiguous spec clause is surfaced for an owner ruling, never improvised, which is
+exactly what the auditor did. Consequence: a served field currently tells a future reader that a
+smaller p is reachable than the method can reach, which could let a hypothesis be registered with
+a target it can never meet. The fix is one line plus two test assertions if the owner rules for the
+"attainable" reading; J-04–J-08 are its first readers, so it must be settled before then.
+**Reversible:** yes

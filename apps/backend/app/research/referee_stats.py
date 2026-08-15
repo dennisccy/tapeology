@@ -117,8 +117,12 @@ _REFEREE_STREAM_PURPOSES: frozenset[str] = frozenset(
 INSUFFICIENT_SAMPLE: str = "insufficient_sample"
 
 # This module's own version, embedded in every attestation record (spec Sec6) -- bumped only on a
-# genuine algorithmic revision to this file (a named revision, never silently).
-STATS_CORE_VERSION: str = "referee-stats-v1"
+# genuine algorithmic revision to this file (a named revision, never silently). Bumped to v2 in
+# iter-4: the exact-enumeration branch's group-2-sum computation (and its cross-session
+# accumulation) changed to close a real floor-violation defect (see `permutation_test`'s own
+# inline comment) -- a genuine algorithmic revision to this file, so the version moves even though
+# the pinned attestation fixture below happens to re-verify to the identical numeric value.
+STATS_CORE_VERSION: str = "referee-stats-v2"
 
 # z_{1-alpha} at alpha = 1 - REFEREE_CI_LEVEL (spec Sec3.6's MDE formula) -- derived from stdlib's
 # own `statistics.NormalDist` (available since Python 3.8; a documented, deterministic rational
@@ -407,25 +411,55 @@ def permutation_test(
     use_enumeration = space <= enumeration_threshold
 
     if use_enumeration:
+        # iter-4 fix (the evaluator's own floor-violation finding): the ENUMERATED combination's
+        # own group-2 sum must be a DIRECT accumulation over that combination's own complement
+        # values -- the identical method `_t_statistic` uses for the observed grouping
+        # (`math.fsum(group2)`) -- never `total - g1_sum`. Subtracting from a separately
+        # `math.fsum`-accumulated session `total` disagrees with a direct `math.fsum(group2)` in
+        # the last representable digit (each is an INDEPENDENTLY correctly-rounded result; their
+        # difference is not guaranteed to equal a third independently-rounded sum), which let the
+        # TRUE observed grouping narrowly fail its own `_is_extreme` self-comparison and silently
+        # drop out of the extreme count -- the floor `2 / (draws_used + 1)` requires that
+        # self-comparison to hold, unconditionally, since the observed grouping IS one guaranteed
+        # member of the enumerated space. `pooled[session]`'s own `total` field (still read by the
+        # OUT-OF-SCOPE seeded branch below) is intentionally unused here now.
+        #
+        # The per-session terms are also combined via `math.fsum` here, not the running `acc +=`
+        # naive accumulation the (Monte-Carlo, out-of-scope) seeded branch below still uses: with
+        # 3+ informative sessions, naive left-to-right addition is not guaranteed to reproduce
+        # `_t_statistic`'s own `math.fsum(weights[s] * deltas[s] for s in deltas)` numerator even
+        # when every per-session term is itself bit-identical (`math.fsum` is order-independent and
+        # rounds once at the very end; naive `+=` rounds at every step) -- re-verified empirically
+        # (20,000 seeded multi-session fixtures) that a g2_sum-only fix still leaves ~7% of
+        # 3-to-5-session cases able to violate the floor, and that adding this second `math.fsum`
+        # closes it to zero. Both changes stay strictly inside the deterministic enumeration
+        # branch -- required by the spec's own blanket "persisted aggregate numbers use
+        # `math.fsum`-class accumulation" clause (`docs/referee-statistical-spec.md`'s
+        # Determinism paragraph), and necessary for the unconditional floor guarantee this
+        # iteration's own acceptance names ("the returned p can never fall below the exact mode's
+        # own mathematical floor").
         combos_by_session = []
         for session in sessions:
-            values, n1, _n2, total = pooled[session]
+            values, n1, _n2, _total = pooled[session]
             combos_by_session.append(
-                (values, n1, total, list(itertools.combinations(range(len(values)), n1)))
+                (values, n1, list(itertools.combinations(range(len(values)), n1)))
             )
         extreme = 0
         draws_used = 0
-        for joint in itertools.product(*(c[3] for c in combos_by_session)):
-            acc = 0.0
-            for session, combo, (values, n1, total, _combos) in zip(
+        for joint in itertools.product(*(c[2] for c in combos_by_session)):
+            terms = []
+            for session, combo, (values, n1, _combos) in zip(
                 sessions, joint, combos_by_session
             ):
+                combo_set = set(combo)
                 g1_sum = math.fsum(values[idx] for idx in combo)
-                g2_sum = total - g1_sum
+                g2_sum = math.fsum(
+                    values[idx] for idx in range(len(values)) if idx not in combo_set
+                )
                 n2 = len(values) - n1
                 delta_star = g1_sum / n1 - g2_sum / n2
-                acc += weights[session] * delta_star
-            t_star = acc / total_weight
+                terms.append(weights[session] * delta_star)
+            t_star = math.fsum(terms) / total_weight
             draws_used += 1
             if _is_extreme(t_star, t_obs, sidedness):
                 extreme += 1
@@ -609,6 +643,14 @@ _ATTESTATION_CI_VALUES: list[float] = [1.0, 2.0, 1.5, 3.0, 0.5, 2.5]
 # `tests/test_referee_oracles.py`'s own independently hand-derived and simulation-based proof of
 # correctness (a materially larger, separate exercise). See the module docstring's own paragraph on
 # this distinction.
+#
+# Re-captured in iter-4 against the FIXED `permutation_test` (this fixture's own 3-session,
+# multi-shape ``_ATTESTATION_SESSION_GROUPS`` genuinely lands in the enumeration branch the fix
+# touches -- confirmed by ``permutation_enumeration: True`` below). The re-run numeric values are
+# byte-identical to the pre-fix pin: this specific tiny fixture's data does not happen to trigger
+# the floor-violation defect (an empirically rare event -- see ``permutation_test``'s own inline
+# comment), so only ``STATS_CORE_VERSION`` moves, not these values. Re-verified honestly, not
+# assumed unchanged.
 _ATTESTATION_EXPECTED: dict[str, object] = {
     "permutation_p": 0.006644518272425249,
     "permutation_enumeration": True,
