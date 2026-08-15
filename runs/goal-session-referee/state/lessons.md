@@ -125,3 +125,19 @@ either server-stamped or refused, not just the value's own name-alike field. Als
 `Required-still-passing` DoD item silently does not run (auditor gap T3); a backend-only
 iteration must still schedule the kept-product replay, or the sentinel journey accumulates
 unverified iterations.
+
+## iter-7 — 2026-08-15T12:45:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A fail-closed rail that only guards the SERVED response leaves the append-only record
+unguarded: `referee_adjudicate.run_evaluation_and_record` computes `run_oracle_attestation()`,
+then proceeds regardless of its `passed` flag — so a failed attestation still mints the
+hypothesis's one permanent `corroborated` snapshot while `adjudications_response()` correctly
+refuses to serve it (evaluator probe, iter-7). On an append-only store the write side needs the
+same gate as the read side, because the read side can be re-run and the record cannot. Second half
+of the same lesson: an integrity-error disclosure must be added to EVERY reader of a store, not
+just the endpoint whose audit finding named it — Rider 2 fixed `GET /registry`, and the brand-new
+`GET /adjudications` shipped the identical silent-drop on the same hypothesis store.
+**Applies to:** any iteration touching the `referee_*` append-only stores (evaluations,
+adjudication snapshots, registry, nulls, certificates) — especially J-07/J-08, which add the first
+real operator write acts and the certificate mint path.

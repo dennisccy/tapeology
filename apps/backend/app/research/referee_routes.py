@@ -30,6 +30,15 @@ from .bars import BarStore
 from .datasets import DatasetStore
 from .desk_playbook import PlaybookStore
 from .desk_routes import get_playbook_store
+from .referee_adjudicate import (
+    AdjudicationSnapshotStore,
+    RefereeEvaluationComputeManager,
+    RefereeEvaluationRunStore,
+    RefereeEvaluationStore,
+    adjudications_response,
+    resolve_referee_eval_dir,
+    resolve_referee_eval_log_dir,
+)
 from .referee_evidence import referee_evidence
 from .referee_null import (
     REFEREE_NULL_CONTEXT_SPEC_ID,
@@ -64,6 +73,7 @@ router = APIRouter(prefix="/research/desk/referee", tags=["referee"])
 # rebuilt per-request. Living here (not on ``ResearchRegistry``) matches ``referee_routes.py``'s
 # own existing shape: this module owns its own wiring end to end.
 _referee_null_compute_manager = RefereeNullComputeManager()
+_referee_eval_compute_manager = RefereeEvaluationComputeManager()
 
 
 @router.get("/evidence")
@@ -319,3 +329,155 @@ def post_referee_registry_hypothesis(
     except (FamilyAlreadyRecorded, HypothesisAlreadyRecorded) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return record
+
+
+# === J-06: estimand engines + adjudication -- evaluation store + compute-control + read-side fold =====
+#
+# See ``referee_adjudicate.py``'s own module docstring for the mechanics (estimand A/B/C pooling,
+# evaluation as a recorded operator act, the single confirmatory checkpoint, the read-side fold).
+# GET never computes (T-8): ``/evaluations``/``/evaluate`` (GET)/``/evaluate/runs``/
+# ``/adjudications`` are plain reads -- only ``POST /evaluate`` starts a background evaluation.
+
+
+def get_referee_eval_store() -> RefereeEvaluationStore:
+    """The durable evaluation store, rooted at a bare env-var-or-sibling-of-the-universe-dir
+    default (zero new ``Config`` field -- ``referee_adjudicate.resolve_referee_eval_dir``) -- a
+    FastAPI dependency so a test overrides it via the env var or outright."""
+    return RefereeEvaluationStore(resolve_referee_eval_dir(CONFIG.desk_universe_dir_resolved()))
+
+
+def get_referee_snapshot_store() -> AdjudicationSnapshotStore:
+    """The durable adjudication-snapshot store, rooted at the SAME resolved directory as the
+    evaluation store (distinct filename prefix -- ``referee_adjudicate.py``'s own module
+    docstring)."""
+    return AdjudicationSnapshotStore(resolve_referee_eval_dir(CONFIG.desk_universe_dir_resolved()))
+
+
+def get_referee_eval_run_store() -> RefereeEvaluationRunStore:
+    return RefereeEvaluationRunStore(
+        resolve_referee_eval_log_dir(CONFIG.desk_universe_dir_resolved())
+    )
+
+
+def get_referee_eval_compute_manager() -> RefereeEvaluationComputeManager:
+    """The single-flight-per-hypothesis compute manager -- a FastAPI dependency (the
+    ``get_referee_null_compute_manager`` pattern) so a test overrides it outright via
+    ``app.dependency_overrides`` for complete test-to-test isolation."""
+    return _referee_eval_compute_manager
+
+
+@router.get("/evaluations")
+def get_referee_evaluations(
+    hypothesis_id: str | None = None, store: RefereeEvaluationStore = Depends(get_referee_eval_store)
+) -> dict:
+    """Every recorded evaluation act, honest absence (T-8: GETs never compute). ``?hypothesis_id=``
+    narrows to that hypothesis's own evaluations only; otherwise every recorded record
+    (``{"records": [...], "integrity_errors": [...]}``). Never 404/500 on an empty corpus (TC-30's
+    own established pattern -- a corrupted evaluation file is surfaced, never a silent drop)."""
+    records, errors = store.list()
+    if hypothesis_id is not None:
+        records = [record for record in records if record.get("hypothesis_id") == hypothesis_id]
+    return {"records": records, "integrity_errors": errors}
+
+
+class RefereeEvaluateRequest(BaseModel):
+    """Body for ``POST /research/desk/referee/evaluate`` -- ``hypothesis_id`` is REQUIRED; any
+    OTHER field (e.g. an attempted informative-session count or evaluation timestamp) is silently
+    ignored by pydantic's own default ``extra="ignore"`` behaviour -- the server ALWAYS recomputes
+    coverage itself, never trusting a caller-supplied value for anything it can recompute (the
+    iteration spec's own error-case clause)."""
+
+    hypothesis_id: str
+
+
+@router.post("/evaluate")
+def trigger_referee_evaluate(
+    body: RefereeEvaluateRequest,
+    hypothesis_store: HypothesisStore = Depends(get_referee_hypothesis_store),
+    family_store: FamilyStore = Depends(get_referee_family_store),
+    playbook_store: PlaybookStore = Depends(get_playbook_store),
+    bar_store: BarStore = Depends(get_bar_store),
+    null_store: RefereeNullStore = Depends(get_referee_null_store),
+    evaluation_store: RefereeEvaluationStore = Depends(get_referee_eval_store),
+    snapshot_store: AdjudicationSnapshotStore = Depends(get_referee_snapshot_store),
+    run_store: RefereeEvaluationRunStore = Depends(get_referee_eval_run_store),
+    manager: RefereeEvaluationComputeManager = Depends(get_referee_eval_compute_manager),
+) -> dict:
+    """Start (or, if one is already ``status`` in (``"running"``, ``"cancelling"``) for THIS
+    ``hypothesis_id``, return UNCHANGED -- ``started: False``, single-flight PER hypothesis) the
+    evaluation job for ``body.hypothesis_id``. 422s -- no job started -- on an unknown
+    ``hypothesis_id``."""
+    if hypothesis_store.get(body.hypothesis_id) is None:
+        raise HTTPException(
+            status_code=422, detail=f"unknown hypothesis_id {body.hypothesis_id!r}"
+        )
+    return manager.trigger(
+        body.hypothesis_id, hypothesis_store=hypothesis_store, family_store=family_store,
+        playbook_store=playbook_store, bar_store=bar_store, config=CONFIG, null_store=null_store,
+        evaluation_store=evaluation_store, snapshot_store=snapshot_store, run_store=run_store,
+    )
+
+
+@router.get("/evaluate")
+def get_referee_evaluate_compute(
+    hypothesis_id: str, manager: RefereeEvaluationComputeManager = Depends(get_referee_eval_compute_manager)
+) -> dict:
+    """The named hypothesis's evaluation-compute job current/last snapshot, served VERBATIM --
+    ALWAYS a body (never ``null``). A plain read: never triggers a compute as a side effect."""
+    return manager.snapshot(hypothesis_id)
+
+
+class RefereeEvaluateCancelRequest(BaseModel):
+    hypothesis_id: str
+
+
+@router.post("/evaluate/cancel")
+def cancel_referee_evaluate(
+    body: RefereeEvaluateCancelRequest,
+    manager: RefereeEvaluationComputeManager = Depends(get_referee_eval_compute_manager),
+) -> dict:
+    """Cancel the in-flight evaluation for ``body.hypothesis_id`` (cooperative -- observed between
+    named phases). ``409`` when idle (no job has ever run for this key, or the last job already
+    reached a terminal state)."""
+    snapshot = manager.snapshot(body.hypothesis_id)
+    if snapshot["status"] != "running":
+        raise HTTPException(
+            status_code=409,
+            detail=f"no referee evaluation is currently running for {body.hypothesis_id!r}",
+        )
+    manager.cancel(body.hypothesis_id)
+    return {"cancelling": True}
+
+
+@router.get("/evaluate/runs")
+def get_referee_evaluate_runs(
+    hypothesis_id: str | None = None,
+    store: RefereeEvaluationRunStore = Depends(get_referee_eval_run_store),
+) -> dict:
+    """``{"runs": [...], "latest": <record>|null, "integrity_errors": [...]}`` -- the durable
+    terminal-state-only log of what every evaluation act attempted. ``?hypothesis_id=`` narrows to
+    one hypothesis's own runs, and then ``latest`` is that hypothesis's newest run rather than the
+    store's."""
+    records, errors = store.list()
+    if hypothesis_id is not None:
+        records = [record for record in records if record.get("hypothesis_id") == hypothesis_id]
+    return {
+        "runs": records,
+        "latest": records[-1] if records else None,
+        "integrity_errors": errors,
+    }
+
+
+@router.get("/adjudications")
+def get_referee_adjudications(
+    hypothesis_store: HypothesisStore = Depends(get_referee_hypothesis_store),
+    snapshot_store: AdjudicationSnapshotStore = Depends(get_referee_snapshot_store),
+    playbook_store: PlaybookStore = Depends(get_playbook_store),
+) -> dict:
+    """The read-side adjudication fold (goal.md J-06 Step 4): every registered hypothesis's
+    recorded snapshot verbatim if one exists, else a live pure-function fold -- plus the served
+    ``REFEREE_REGISTER`` disclosure text. Never 404/500 on an empty registry."""
+    return adjudications_response(
+        hypothesis_store=hypothesis_store, snapshot_store=snapshot_store,
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+    )

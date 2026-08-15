@@ -761,6 +761,48 @@ def test_strategy_observations_keeps_random_null_trades_separately_labeled(clien
     )
 
 
+def test_tc29_a_dataset_with_no_epoch_anchor_excludes_its_trades_and_counts_them(client):
+    """iter-7 Rider 1 / TC-29: a dataset record carrying NO ``epoch_anchor`` field (as opposed to
+    an explicit ``epoch_anchor == 0.0``, which the SIBLING tests above already prove behaves as a
+    real anchor) can never honestly place its trades in time -- they are excluded from BOTH
+    ``observations``/``null_observations`` and counted in ``excluded_missing_epoch_anchor``, never
+    silently anchored at the Unix epoch (the "1969 date" bug)."""
+    c, _playbook_store, dataset_store, journal_store = client
+    dataset = _plant_dataset(dataset_store, symbol="AAPL", split=SPLIT_TRAIN, source_id="ds-1")
+    dataset_without_anchor = {k: v for k, v in dataset.items() if k != "epoch_anchor"}
+    assert "epoch_anchor" not in dataset_without_anchor  # sanity: genuinely absent, not None
+
+    _plant_backtest_result(
+        journal_store, backtest_id="bt-tc29", dataset=dataset_without_anchor,
+        trades=[_trade(net_r=1.0), _trade(net_r=-0.5)],
+        null_trades=[_trade(net_r=0.2)],
+    )
+
+    result = strategy_observations(journal_store)
+
+    assert result["observations"] == []
+    assert result["null_observations"] == []
+    assert result["excluded_missing_epoch_anchor"] == 3  # 2 primary + 1 null trade, all excluded
+
+
+def test_tc29_an_explicit_zero_epoch_anchor_is_not_excluded(client):
+    """The can-fail counter-test: ``epoch_anchor == 0.0`` (present, explicit) is a REAL anchor and
+    must NOT be swept up by the same exclusion -- only a genuinely absent/``None`` value is."""
+    c, _playbook_store, dataset_store, journal_store = client
+    dataset = _plant_dataset(dataset_store, symbol="AAPL", split=SPLIT_TRAIN, source_id="ds-1")
+    assert dataset["epoch_anchor"] == 0.0
+
+    _plant_backtest_result(
+        journal_store, backtest_id="bt-tc29b", dataset=dataset,
+        trades=[_trade(net_r=1.0)], null_trades=[],
+    )
+
+    result = strategy_observations(journal_store)
+
+    assert len(result["observations"]) == 1
+    assert result["excluded_missing_epoch_anchor"] == 0
+
+
 def test_strategy_observations_skips_a_report_with_no_dataset_block(client):
     """Defensive completeness (never produced by the shipped runner, read defensively anyway): a
     ``result`` block with no ``dataset`` key contributes zero observations, never a
@@ -777,7 +819,11 @@ def test_strategy_observations_skips_a_report_with_no_dataset_block(client):
 
     result = strategy_observations(journal_store)
 
-    assert result == {"observations": [], "null_observations": []}
+    assert result == {
+        "observations": [],
+        "null_observations": [],
+        "excluded_missing_epoch_anchor": 0,
+    }
 
 
 # --- TC-9: neither adapter writes to any pre-existing store --------------------------------------------

@@ -1,0 +1,26 @@
+{
+  "phase": "goal-referee-iter-7",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-08-15T11:50:00.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/research/referee_adjudicate.py",
+    "apps/backend/app/research/referee_null.py",
+    "apps/backend/app/research/referee_registry.py",
+    "apps/backend/app/research/referee_evidence.py",
+    "apps/backend/app/research/referee_routes.py",
+    "apps/backend/tests/test_referee_adjudicate.py",
+    "apps/backend/tests/test_referee_null.py",
+    "apps/backend/tests/test_referee_registry.py",
+    "apps/backend/tests/test_referee_evidence.py",
+    "apps/backend/tests/test_referee_guards.py",
+    "runs/goal-session-referee/state/assumptions.md",
+    "docs/handoffs/goal-referee-iter-7-dev.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "qa_passed": null,
+  "next_action": "review"
+}

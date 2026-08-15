@@ -90,12 +90,11 @@ import argparse
 import hashlib
 import json
 import os
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..config import CONFIG, Config
-from .desk_playbook import PlaybookStore, resolve_desk_playbook_dir
+from ..config import CONFIG
+from .desk_playbook import PlaybookStore
 from .referee_evidence import (
     _epoch_from_iso,
     _et_session_date,
@@ -825,15 +824,29 @@ def registry_response(
     playbook_store: PlaybookStore,
     config_fingerprint: str,
 ) -> dict:
-    """The whole ``GET /research/desk/referee/registry`` body -- the pinned four-key shape
-    (``runs/goal-session-referee/state/blueprint.md`` iter-6 note): ``families``, ``hypotheses``
-    (each folded with ``status`` + ``accrual``), ``withdrawals``, ``certificates``. Never
-    404/500 on an empty registry (the desk router's established never-404-on-absence
-    convention)."""
-    families, _family_errors = family_store.list()
-    hypotheses, _hypothesis_errors = hypothesis_store.list()
-    withdrawals, _withdrawal_errors = withdrawal_store.list()
-    certificates, _certificate_errors = certificate_store.list()
+    """The whole ``GET /research/desk/referee/registry`` body -- the pinned five-key shape
+    (``runs/goal-session-referee/state/blueprint.md`` iter-6/iter-7 notes): ``families``,
+    ``hypotheses`` (each folded with ``status`` + ``accrual``), ``withdrawals``, ``certificates``,
+    plus ``integrity_errors`` (iter-7 Rider 2, audit gap B4). Never 404/500 on an empty or
+    partially-corrupted registry (the desk router's established never-404-on-absence convention;
+    ``get_referee_nulls``'s own ``{"records": [...], "integrity_errors": [...]}`` disclosure
+    pattern, reused here rather than inventing a second shape -- each of the four stores' own
+    ``.list()`` errors is tagged with its ``store`` kind and concatenated into ONE flat list, so a
+    corrupted file is surfaced explicitly instead of silently vanishing from the response."""
+    families, family_errors = family_store.list()
+    hypotheses, hypothesis_errors = hypothesis_store.list()
+    withdrawals, withdrawal_errors = withdrawal_store.list()
+    certificates, certificate_errors = certificate_store.list()
+    integrity_errors = [
+        {"store": store_kind, **error}
+        for store_kind, errors in (
+            ("family", family_errors),
+            ("hypothesis", hypothesis_errors),
+            ("withdrawal", withdrawal_errors),
+            ("certificate", certificate_errors),
+        )
+        for error in errors
+    ]
     withdrawn_ids = {w["hypothesis_id"] for w in withdrawals}
 
     live_basis = current_playbook_detector_basis()
@@ -853,6 +866,7 @@ def registry_response(
         "hypotheses": folded_hypotheses,
         "withdrawals": withdrawals,
         "certificates": certificates,
+        "integrity_errors": integrity_errors,
     }
 
 

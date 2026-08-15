@@ -374,3 +374,120 @@ copy a concrete boolean + reason to key its distinct wording off of.
 consumers today (J-09 is the first UI reader); if a future owner ruling prefers a distinct
 verdict token instead, this is a one-line change to the fold function with no stored data to
 migrate, since no real evaluation has ever run against the production store.
+
+## iter-7 — developer
+
+**Ambiguity:** Spec §8 names all six `authorize_promotion` refusal classes (`no_certificate`,
+`stale`, `wrong_candidate`, `mismatched_datasets`, `failed_gates`, `malformed_unverifiable`) but
+its own prose bundles several under one parenthetical ("stale (ANY pin differs from the live
+scan's own report values)"), which reads as if it subsumes `wrong_candidate`/
+`mismatched_datasets` too — yet the iteration's own TC-27 requires a `config_fingerprint`
+mismatch specifically to fold to `stale` (not `mismatched_datasets`), so the six tokens must
+partition somehow, and the spec text alone does not fully disambiguate the boundary.
+**We chose:** malformed_unverifiable (the certificate store itself reports an integrity error,
+checked first, fail closed) -> no_certificate (zero certificates for this `strategy_id` at all)
+-> wrong_candidate (certificates exist for the `strategy_id` but none for the exact `profile`) ->
+stale (champion identity, config_fingerprint, gate_version, or referee_parameters_hash differ —
+i.e. the world moved since the cert was minted, matching TC-27 literally) -> mismatched_datasets
+(train/holdout dataset id/checksum/split differ) -> failed_gates
+(`gate_results.bh_pass`/`floors_met` is not exactly `True`) -> otherwise authorized. Chosen to
+satisfy TC-26/27/28 literally while giving each of the other three classes ITS OWN
+non-overlapping trigger rather than leaving them structurally unreachable.
+**Reversible:** yes — `authorize_promotion` is a pure, unwired function this iteration (J-08's job
+to call it from `pnl_scan._promote`); the CertificateStore stays empty in production, so no stored
+data depends on this exact partition, and only TC-26/27/28 (no_certificate/stale/success) are
+DoD-required to be fixture-tested — the remaining four classes carry their own honest reasons and
+one fixture test each, but "full fixture coverage rides with J-08" per the iteration spec.
+
+## iter-7 — developer
+
+**Ambiguity:** Spec §5's `fragile` rule says a checkpoint is fragile when BH passes but "any
+§3.5/§4.3 sensitivity flips T's sign" — the Data Contract names four discrete fragility-trigger
+strings (`by_fail`, `sign_flip`, `entry_basis_sign_flip`, `cluster_ci_includes_zero`), and
+`entry_basis_sign_flip`/`cluster_ci_includes_zero` map unambiguously to §4.3/§3.6, but it is not
+stated which §3.5 item the bare `"sign_flip"` token names. §3.5 lists the session-level sign-flip
+(`sign_flip_result`) FIRST — the token's own name could be misread as naming that function.
+**We chose:** `"sign_flip"` = `sign(equal_weight_T) != sign(T)` (the §3.5 item-2 equal-session-
+weight sensitivity), NOT `sign_flip_result`'s own output — because `sign_flip_result` computes
+the IDENTICAL `T` (`_t_statistic` on the same informative sessions) as the primary permutation
+test; only its null distribution differs. Its own `t` field can therefore never differ in sign
+from the primary's `T` by construction, so it structurally cannot be the source of a "T sign
+flip" trigger — only the equal-weight variant's recomputed `T` can genuinely differ in sign.
+**Reversible:** yes — a one-line change inside `_build_and_record_snapshot` if a future spec
+revision states the intended mapping explicitly; no confirmatory verdict has ever been computed
+against the real production store this era (the starter family is J-07's job), so no stored
+snapshot would need migrating.
+
+## iter-7 — developer
+
+**Ambiguity:** Spec §4.3's entry-basis sensitivity is framed entirely around the occurrence-vs-
+matched-null comparison ("occurrences enter at detector-decided entry/entry_kind; anchors enter
+at bar close... re-measure each occurrence close-anchored... recompute T"), which only makes
+literal sense for estimand A/C (which have an anchor to compare a basis against); estimand B (no
+null, a cell-vs-complement comparison of two REAL occurrence groups) has no stated entry-basis
+treatment at all.
+**We chose:** `entry_basis_T`/`entry_basis_sign_flip` are computed for estimand A/C only and are
+honestly `None` on every B evaluation record — the same "`None` when structurally inapplicable"
+convention `context_algorithm_version`/`detector_basis` already use elsewhere this era, rather
+than inventing an unstated B-specific entry-basis treatment (T-1: vagueness is a drop).
+**Reversible:** yes — a future spec revision naming a B-specific entry-basis treatment is a
+one-line addition to `run_evaluation_and_record`'s estimand branch, and every field involved is
+already `None`-typed in the Data Contract for exactly this "not yet computed" case.
+
+## iter-7 — developer
+
+**Ambiguity:** Spec §5's verdict vocabulary lists `exploratory` ("basis not registered") as a
+live-fold token alongside `registered`/`pending_forward_confirmation`, and this iteration's own
+IN SCOPE bullet includes it in the read-side fold's documented return set — but
+`adjudications_response()` folds ONLY hypotheses already present in the registry (every entry is,
+by construction, already registered), so no entry it ever serves can honestly be described as
+"basis not registered." TC-20 independently confirms the zero-accrual baseline is `"registered"`,
+not `"exploratory"`.
+**We chose:** Treated `exploratory` as a documented, currently-UNREACHABLE enum member from
+`adjudications_response()` — the exact same treatment iteration 7's own `killed` drop already
+uses (T-1), rather than inventing a code path (e.g. serving it for some OTHER, non-hypothesis
+entity this endpoint does not enumerate) the spec never named for this specific fold.
+**Reversible:** yes — no code path anywhere computes or returns `"exploratory"`; if a future
+reading finds a genuine referent for it, adding that branch is additive with no migration, since
+the token has never appeared in any served response.
+
+## iter-7 — developer
+
+**Ambiguity:** Spec §3.6 states confirmatory fields (`T`/`permutation_p`) are withheld below the
+registered floors ("earlier runs record pending accrual states with NO confirmatory p" — T-4's
+optional-stopping guard) but does not say whether the DESCRIPTIVE companions
+(`ci_occurrence`/`ci_cluster`/`sign_flip_p`/`equal_weight_T`/entry-basis) are ALSO withheld pre-
+eligibility, or computed whenever there is pooled data regardless of role.
+**We chose:** Gated `T`/`permutation_p`/`permutation_enumeration`/`min_attainable_p` strictly on
+`confirmatory_eligible` (`None` otherwise) — the literal T-4 guard. Left the descriptive
+companions computed whenever `session_groups`/`occurrence_diffs` is non-empty, REGARDLESS of
+eligibility: spec Sec3.5/Sec3.6 states plainly that CIs/sensitivities are "descriptive
+companions... NEVER a decision rule" (T-3), so showing them before checkpoint carries none of the
+p-value peeking risk T-4 exists to prevent — the verdict-computing BH/fragility machinery only
+ever runs at the checkpoint moment (`role == "checkpoint"`), never before, regardless of what the
+descriptive fields show.
+**Reversible:** yes — a one-line change (gate everything on `confirmatory_eligible` uniformly) if
+a future owner ruling disagrees; no evaluation has ever run against the production store this
+era, so nothing stored would need migrating.
+
+## iter-7 — goal-evaluator
+
+**Ambiguity:** The era anti-goal "No confirmatory output without a verified oracle attestation"
+reads, in its own text, as a rule about the FOLD ("the adjudication fold never serves a
+confirmatory verdict from an evaluation whose attestation is missing, mismatched, or
+version-stale — it serves the refusal state with its reason"). My probe showed the write side is
+not gated at all: with a deliberately broken attestation injected at evaluation time, the run
+still recorded `role: "checkpoint"` and appended a permanent snapshot whose stored `verdict` is
+`"corroborated"`; only the served fold refuses (`confirmatory_output_refused: true`, verdict
+`insufficient_sample`). The goal text does not say whether writing an unattested confirmatory
+verdict into an append-only record — never served, never correctable, and consuming the
+hypothesis's ONE allowed checkpoint — counts as "confirmatory output".
+**We chose:** Read the anti-goal as scoped to SERVED output (its own wording), so this is NOT a
+critical violation and the verdict is not REGRESSION; recorded it instead as a named,
+must-fix-next weakness on J-06's journey note and as rider 1 of the next-step recommendation.
+Consequence: if the owner reads the rail as covering the recorded artifact too, this is a critical
+anti-goal breach and iteration 7 should be re-scored REGRESSION.
+**Reversible:** yes — no real hypothesis has ever been registered or evaluated against the
+production store (the real registry is empty, store-scope guard CLEAN), so nothing recorded
+anywhere is affected; gating the checkpoint on `attestation["passed"]` is a small change with no
+data to migrate.

@@ -115,6 +115,7 @@ __all__ = [
     "test_perm_spec_signature",
     "NullIntegrityError",
     "NullAlreadyRecorded",
+    "resolve_occurrence_backing_bucket",
     "RefereeNullStore",
     "RefereeNullRunStore",
     "record_null_run",
@@ -605,6 +606,49 @@ def build_null_record(
         "context_algorithm_version": PLAYBOOK_CONTEXT_ALGORITHM_VERSION if is_context else None,
         "provenance": {"config_fingerprint": config_fingerprint, "computed_at": _iso_utc_now()},
     }
+
+
+# === iter-7 (J-06): the occurrence's OWN context-cell membership, for Estimand B ======================
+#
+# Estimand B (spec Sec3.2, "among occurrences of setup S, do occurrences in context cell C differ
+# from same-setup occurrences outside C?") needs, per OCCURRENCE, whether ITS OWN entry satisfies a
+# named backing-bucket predicate -- a live band-map resolve, exactly the operation
+# `build_null_record`'s context branch already performs for an ANCHOR bar above, applied here to the
+# occurrence itself instead. `referee_adjudicate.py` (J-06) is banned from importing
+# `desk_playbook_context` directly (the import-topology guard narrows that exception to THIS module
+# alone, per this file's own module docstring) -- it reaches this through the module boundary below
+# instead, mirroring how `referee_registry.py` already imports `PLAYBOOK_CONTEXT_BACKING_BUCKETS`
+# transitively rather than importing `desk_playbook_context` itself. Nothing here mutates,
+# re-tunes, or feeds back into `desk_playbook_context.py`/`desk_playbook.py` -- a read-only lookup,
+# `compute=False` context resolvers only (GETs/evaluations never compute a NEW band map, T-8).
+
+
+def resolve_occurrence_backing_bucket(
+    signal: dict, symbol: str, trigger_epoch: float, price: float, side: str,
+    context_resolver: BandMapResolver,
+) -> str | None:
+    """The occurrence's OWN ``backing_bucket`` at ``price`` (its own entry, or a close-anchored
+    re-measurement price for the entry-basis sensitivity) -- the SAME ``band_context_block()`` call
+    ``build_null_record``'s context branch already makes for an anchor bar's own close, applied here
+    to the OCCURRENCE itself. ``None`` when the band map cannot be resolved AT ALL for this
+    ``(symbol, trigger_epoch)`` (an honest "not evaluable" absence -- the caller excludes and counts
+    this occurrence, never substituting a fallback bucket, T-5)."""
+    entry = signal.get("entry")
+    invalidation = signal.get("invalidation_price")
+    risk_bps = (
+        abs(entry - invalidation) / entry * 10_000.0
+        if isinstance(entry, (int, float))
+        and isinstance(invalidation, (int, float))
+        and entry != 0
+        else None
+    )
+    map_result = context_resolver.resolve(symbol, trigger_epoch)
+    if map_result is None:
+        return None
+    context = band_context_block(
+        map_result, price, side, risk_bps=risk_bps, risk_source="paired_signal"
+    )
+    return context["backing_bucket"]
 
 
 # === the append-only null store =======================================================================

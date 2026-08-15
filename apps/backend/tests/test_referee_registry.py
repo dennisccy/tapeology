@@ -415,7 +415,10 @@ def test_tc11_accrual_matches_a_hand_counted_value_over_two_distinct_setup_side_
     assert folded_cap["accrual"]["basis_current"] is True
     assert folded_jbe["accrual"]["basis_current"] is True
 
-    assert set(response) == {"families", "hypotheses", "withdrawals", "certificates"}
+    assert set(response) == {
+        "families", "hypotheses", "withdrawals", "certificates", "integrity_errors",
+    }
+    assert response["integrity_errors"] == []
 
 
 # === TC-12: CertificateStore -- shape-only, fixture-seeded, duplicate raises ==========================
@@ -663,7 +666,10 @@ def test_get_registry_honest_empty_state(route_ctx):
     client, _tmp = route_ctx
     resp = client.get("/research/desk/referee/registry")
     assert resp.status_code == 200
-    assert resp.json() == {"families": [], "hypotheses": [], "withdrawals": [], "certificates": []}
+    assert resp.json() == {
+        "families": [], "hypotheses": [], "withdrawals": [], "certificates": [],
+        "integrity_errors": [],
+    }
 
 
 def test_post_then_get_registry_round_trips_through_the_real_route(route_ctx):
@@ -684,6 +690,33 @@ def test_post_then_get_registry_round_trips_through_the_real_route(route_ctx):
     assert hyp["hypothesis_id"] == "hyp-route"
     assert hyp["status"] == "active"
     assert hyp["accrual"]["is_proxy"] is True
+
+
+# === iter-7 Rider 2 / TC-30: a corrupted registry file is surfaced, never a silent drop / 500 =========
+
+
+def test_tc30_a_corrupted_hypothesis_file_is_surfaced_in_integrity_errors_never_500(route_ctx):
+    client, tmp_path = route_ctx
+    payload = _estimand_a_payload("hyp-tc30-ok", "fam-tc30")
+    resp = client.post(
+        "/research/desk/referee/registry/hypotheses", json={**payload, "confirm": True}
+    )
+    assert resp.status_code == 200
+
+    registry_dir = tmp_path / "registry"
+    corrupt_path = registry_dir / "hypothesis-corrupt.json"
+    corrupt_path.write_text("not valid json at all")
+
+    listed = client.get("/research/desk/referee/registry")
+    assert listed.status_code == 200
+    body = listed.json()
+    assert len(body["hypotheses"]) == 1  # the healthy record still lists
+    assert body["hypotheses"][0]["hypothesis_id"] == "hyp-tc30-ok"
+    assert len(body["integrity_errors"]) == 1
+    error = body["integrity_errors"][0]
+    assert error["store"] == "hypothesis"
+    assert error["file"] == "hypothesis-corrupt.json"
+    assert "error" in error and error["error"]
 
 
 def test_post_missing_confirm_is_refused_422_and_writes_nothing(route_ctx):

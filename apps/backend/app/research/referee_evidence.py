@@ -793,9 +793,17 @@ def _strategy_observation(
     trade: dict,
     dataset: dict,
     config_fingerprint: str | None,
-) -> dict:
+) -> dict | None:
+    """One strategy-family observation, or ``None`` when ``dataset`` carries no ``epoch_anchor``
+    (iter-7 Rider 1, the "1969 date" bug fix). A missing/``None`` ``epoch_anchor`` cannot honestly
+    place this trade in time -- the caller counts this as an exclusion (T-5: "unmeasurable = counted
+    exclusion, never zero") instead of silently anchoring at the Unix epoch. ``epoch_anchor == 0.0``
+    (an explicit, present value -- see ``test_referee_evidence.py``'s own fixture) is a real anchor
+    and is NOT excluded; only a genuinely ABSENT/``None`` value is."""
     entry = trade["entry"]
-    epoch_anchor = dataset.get("epoch_anchor") or 0.0
+    epoch_anchor = dataset.get("epoch_anchor")
+    if epoch_anchor is None:
+        return None
     anchor_epoch = epoch_anchor + entry["logical_ts"]
     return _observation(
         evidence_family="strategy_trade",
@@ -825,11 +833,15 @@ def strategy_observations(journal_store: JournalStore) -> dict:
     ``RefereeObservationCache``'s own docstring for why. A report missing its ``dataset`` block
     entirely (never produced by the shipped runner, read defensively anyway) contributes zero
     observations rather than emitting one with a fabricated identity. Returns
-    ``{"observations": [...], "null_observations": [...]}`` -- the recorded ``random_null`` trades
-    kept as a SEPARATE, labeled set, never merged into the primary trades (TC-8)."""
+    ``{"observations": [...], "null_observations": [...], "excluded_missing_epoch_anchor": int}``
+    -- the recorded ``random_null`` trades kept as a SEPARATE, labeled set, never merged into the
+    primary trades (TC-8); ``excluded_missing_epoch_anchor`` (iter-7 Rider 1) counts trades (from
+    EITHER list) whose dataset carries no ``epoch_anchor`` and were therefore excluded rather than
+    silently anchored at the Unix epoch (T-5's "unmeasurable = counted exclusion" discipline)."""
     backtests = journal_store.list_backtests(limit=_ALL_BACKTESTS_SCAN_LIMIT)
     observations: list[dict] = []
     null_observations: list[dict] = []
+    excluded_missing_epoch_anchor = 0
     for record in backtests:
         result = record.payload.get("result") or {}
         if not result:
@@ -839,26 +851,34 @@ def strategy_observations(journal_store: JournalStore) -> dict:
             continue
         config_fingerprint = result.get("config_fingerprint")
         for index, trade in enumerate(result.get("trades", [])):
-            observations.append(
-                _strategy_observation(
-                    backtest_id=record.id,
-                    index=index,
-                    kind="trade",
-                    trade=trade,
-                    dataset=dataset,
-                    config_fingerprint=config_fingerprint,
-                )
+            observation = _strategy_observation(
+                backtest_id=record.id,
+                index=index,
+                kind="trade",
+                trade=trade,
+                dataset=dataset,
+                config_fingerprint=config_fingerprint,
             )
+            if observation is None:
+                excluded_missing_epoch_anchor += 1
+                continue
+            observations.append(observation)
         null_trades = (result.get("null_baseline") or {}).get("trades", [])
         for index, trade in enumerate(null_trades):
-            null_observations.append(
-                _strategy_observation(
-                    backtest_id=record.id,
-                    index=index,
-                    kind="null",
-                    trade=trade,
-                    dataset=dataset,
-                    config_fingerprint=config_fingerprint,
-                )
+            null_observation = _strategy_observation(
+                backtest_id=record.id,
+                index=index,
+                kind="null",
+                trade=trade,
+                dataset=dataset,
+                config_fingerprint=config_fingerprint,
             )
-    return {"observations": observations, "null_observations": null_observations}
+            if null_observation is None:
+                excluded_missing_epoch_anchor += 1
+                continue
+            null_observations.append(null_observation)
+    return {
+        "observations": observations,
+        "null_observations": null_observations,
+        "excluded_missing_epoch_anchor": excluded_missing_epoch_anchor,
+    }

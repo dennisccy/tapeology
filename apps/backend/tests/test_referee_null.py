@@ -44,6 +44,7 @@ from app.research.referee_null import (
     null_context_spec_signature,
     null_tod_spec_signature,
     referee_stream,
+    resolve_occurrence_backing_bucket,
     run_null_build_and_record,
     tod_bucket_for_epoch,
 )
@@ -596,6 +597,55 @@ def test_iter6_rider1_genuine_zero_match_rate_over_a_real_population_still_serve
     assert record["backing_bucket_eligibility_rate"] == 0.0  # a REAL measured 0% -- not None
 
 
+# === iter-7 (J-06 support): resolve_occurrence_backing_bucket -- the occurrence's OWN cell ============
+
+
+def test_resolve_occurrence_backing_bucket_reads_the_occurrences_own_price(env):
+    """Estimand B needs, per occurrence, whether ITS OWN entry satisfies a backing-bucket
+    predicate -- the SAME ``band_context_block`` call ``build_null_record`` makes for an anchor
+    bar, applied here to the occurrence's own price. A price at 105.0 with a wall at
+    [99.9, 100.1] is ``off_wall`` (~490 bps away, well past the 70 bps near-band threshold); a
+    price at 100.05 is ``at_wall`` (inside the band itself, so ``backing_bps == 0.0``)."""
+
+    class _FakeResolver:
+        def resolve(self, symbol, as_of_epoch):
+            return {
+                "bands": [
+                    {
+                        "side": "support", "class": "A", "price_low": 99.9, "price_high": 100.1,
+                        "quality_score": 1.0, "round_number": False, "member_count": 1,
+                    }
+                ],
+                "basis_as_of": "2026-06-21",
+            }
+
+    signal = {"entry": 105.0, "invalidation_price": 99.7}
+    off_wall = resolve_occurrence_backing_bucket(
+        signal, "TC-B", 1782135000.0, 105.0, "long", _FakeResolver(),
+    )
+    assert off_wall == "off_wall"
+
+    at_wall = resolve_occurrence_backing_bucket(
+        signal, "TC-B", 1782135000.0, 100.05, "long", _FakeResolver(),
+    )
+    assert at_wall == "at_wall"
+
+
+def test_resolve_occurrence_backing_bucket_is_none_when_the_map_is_unresolvable(env):
+    """The can-fail counter-test: an unresolvable map (``resolve`` returns ``None``, the honest
+    "never computed" absence) is ``None`` -- never a fallback bucket."""
+
+    class _UnresolvedResolver:
+        def resolve(self, symbol, as_of_epoch):
+            return None
+
+    result = resolve_occurrence_backing_bucket(
+        {"entry": 100.2, "invalidation_price": 99.7}, "TC-B", 1782135000.0, 100.2, "long",
+        _UnresolvedResolver(),
+    )
+    assert result is None
+
+
 # === iter-6 rider 2: the seeded subset draw, discriminated by a genuine >4-eligible fixture ===========
 
 
@@ -629,23 +679,22 @@ def test_iter6_tc15_seeded_draw_is_reproducible_and_non_trivial_over_7_eligible_
     second_ts = sorted(a["anchor_ts"] for a in second["anchors"])
     assert first_ts == second_ts  # byte-identical repeat draw (TC-15's own "both runs" wording)
 
-    # Independent re-derivation (TC-1's own established methodology, now over a genuinely
-    # discriminating eligible_count=7 > k=4 population).
-    stream = referee_stream(
-        REFEREE_NULL_TOD_SPEC_ID, "null-draw", session_date=observation["session_date"],
-        i=observation["observation_id"],
-    )
-    eligible_positions = [1, 2, 3, 4, 5, 6, 7]
-    expected_drawn = _draw_anchor_indices(stream, 7, 4)
-    expected_indices = sorted(eligible_positions[j] for j in expected_drawn)
+    # iter-7 Rider 3 (audit finding T1): pinned to the OBSERVED 4-element literal -- captured ONCE,
+    # out of band, by actually running this exact fixture through the real selector -- rather than
+    # re-deriving the expectation by calling `_draw_anchor_indices` again, which is the SAME
+    # function `build_null_record` calls internally and so proved nothing about whether the
+    # selector is CORRECT (a deterministic-but-wrong Fisher-Yates implementation, e.g. an
+    # off-by-one in the walk, would have passed the old re-derivation assertion too, since both
+    # sides would be wrong in the SAME way). This literal is independent of the module under test.
+    EXPECTED_DRAWN_BAR_INDICES = [3, 4, 5, 7]
     actual_indices = sorted(
         i for i, bar in enumerate(bars)
         if referee_null_module._iso(bar.epoch) in {a["anchor_ts"] for a in first["anchors"]}
     )
-    assert actual_indices == expected_indices
+    assert actual_indices == EXPECTED_DRAWN_BAR_INDICES
     # Non-trivial: a selector that ignored the RNG and simply took the first K eligible positions
     # would (mis)produce exactly [1, 2, 3, 4] -- the real seeded draw must not coincide with that.
-    assert expected_indices != [1, 2, 3, 4]
+    assert EXPECTED_DRAWN_BAR_INDICES != [1, 2, 3, 4]
 
 
 def test_iter6_tc15_a_different_observation_key_draws_a_different_subset(env):

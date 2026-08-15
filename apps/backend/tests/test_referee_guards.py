@@ -342,3 +342,34 @@ def test_referee_registry_import_ban_guard_can_fail_on_a_seeded_violation():
     assert _mentioning(seeded_imports, "desk_playbook_context") == {
         "app.research.desk_playbook_context"
     }
+
+
+# --- goal-referee-iter-7: referee_adjudicate.py sits inside the same Read-side-law boundary --------
+#
+# `referee_adjudicate.py`'s Estimand-B cell/complement pooling needs a LIVE per-occurrence band-map
+# resolve, but reads it TRANSITIVELY through `referee_null.py`
+# (`from .referee_null import BandMapResolver, resolve_occurrence_backing_bucket`) rather than
+# importing `desk_playbook_context` itself -- it never touches the module directly. The glob-based
+# guards above already cover this new file automatically (they iterate every `referee_*.py` module
+# on disk), so no existing assertion needed editing -- this explicit, file-named test makes that
+# coverage undeniable to a reviewer rather than leaving it merely implicit in a glob (the
+# `test_referee_registry_module_imports_neither_the_detect_nor_the_context_module` precedent).
+
+
+def test_referee_adjudicate_module_imports_neither_the_detect_nor_the_context_module():
+    """iter-7 IN SCOPE: ``referee_adjudicate.py`` may import the rail/other referee modules, but --
+    like every referee module except ``referee_null.py`` -- never ``desk_playbook_detect`` or
+    ``desk_playbook_context`` directly."""
+    path = _RESEARCH_DIR / "referee_adjudicate.py"
+    assert path.exists(), "referee_adjudicate.py not found at the expected location -- has it moved?"
+    imported = _imported_module_names(path)
+    assert not _mentioning(imported, "desk_playbook_detect")
+    assert not _mentioning(imported, "desk_playbook_context")
+
+
+def test_referee_adjudicate_import_ban_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- a lint that cannot fail proves nothing."""
+    seeded_imports = {"app.research.desk_playbook_context", "app.research.other"}
+    assert _mentioning(seeded_imports, "desk_playbook_context") == {
+        "app.research.desk_playbook_context"
+    }

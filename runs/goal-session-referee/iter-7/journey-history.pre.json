@@ -1,0 +1,125 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The era transition stands — reconciliation made testable",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-2-evidence/UT-J-01-result.png",
+      "spec_hash": "9fe67344e7c7ae71546d205bbd134263e172265ee542963f4b483f564c0e228e",
+      "notes": "NOT re-verified as a capture this iteration, and this time not even deferred — the whole browser/replay lane was SKIPPED wholesale (status.json browser_checks_run: false; reports/phase-goal-referee-iter-6-ui-test-results.md reads 'Browser QA Verdict: SKIPPED — Backend-only phase'), which the auditor independently flagged as gap T3. Evidence durability (methodology A.6) carries the iter-2 status, evidence path and spec_hash: its source module referee_evidence.py is NOT in this iteration's changed-file set (git status --porcelain + git diff --numstat: only referee_null.py 8/1, referee_routes.py 125/0, test_referee_guards.py 32/0, test_referee_null.py 170/0, plus two NEW untracked files). Supporting positive evidence from the evaluator's OWN full-suite run this iteration: tests/test_referee_evidence.py 24 cases green inside 2,595 collected / 2,587 passed / 8 skipped / 0 failed / 0 errors (own --junit-xml, 253.5s). STILL OPEN, carried: nothing specific to J-01."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The evidence contract — two families, one observation shape",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-2-ui-test-results.md#UT-J-02",
+      "spec_hash": "853e7be61a1ba27f0c8baf57dff1914d3aa54c01f82471f990133afab378850a",
+      "notes": "Not re-verified this iteration (browser/replay lane SKIPPED wholesale, auditor gap T3). Durability applies — referee_evidence.py is unchanged this iteration; the NEW referee_registry.py IMPORTS its helpers (_epoch_from_iso, _et_session_date, _is_stale_basis, _newest_per_session_date, _record_detector_basis, current_playbook_detector_basis) rather than re-deriving them, which the coherence audit independently confirmed (runs/goal-session-referee/iter-6/coherence.md, 'ET-calendar boundary conversion' + 'accrual fold' rows). tests/test_referee_evidence.py 24 cases green inside the evaluator's own full-suite run (2,587 passed / 8 skipped / 0 failed). STILL OPEN (dropped under T-1 since iter-2/4): _strategy_observation()'s `epoch_anchor = dataset.get('epoch_anchor') or 0.0` conflates a missing/None anchor with an explicit 0.0, collapsing such trades onto a 1969/1970 session_date and one synthetic cluster. J-06 is its first real consumer — settle it before J-06 builds."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The statistics core — calibrated, seeded, oracle-proven, fail-closed",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-5",
+      "last_passing_iter": "goal-referee-iter-5",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-5-ui-test-results.md#UT-J-05-stats",
+      "spec_hash": "f00b804c40b2b60e1b9bf6209033d53796c98d86c14248ea079ef3a507291ae0",
+      "notes": "Not re-verified this iteration (browser/replay lane SKIPPED wholesale, auditor gap T3). Durability applies this time (unlike iter-5): referee_stats.py is NOT in this iteration's changed-file set — git diff --numstat lists only referee_null.py, referee_routes.py and two test files, and git status --porcelain shows referee_stats.py unmodified. Supporting positive evidence from the evaluator's own full-suite run: tests/test_referee_stats.py 48 cases + tests/test_referee_oracles.py 11 cases all green inside 2,595 collected / 2,587 passed / 8 skipped / 0 failed. Iter-4's B1 (over-promising min_attainable_p) and B2 (non-finite inputs) remain closed."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Matched nulls — comparable times, identical measurement",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-6",
+      "last_passing_iter": "goal-referee-iter-6",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "runs/goal-session-referee/iter-6/iter-diff.md (referee_null.py hunk @529-537 + tests/test_referee_null.py riders)",
+      "spec_hash": "c16455f3b0356910d9d0e1062edea7531b45b5ee68f58df527ba8d182516e611",
+      "notes": "J-04's OWN module changed this iteration (referee_null.py, 8 insertions / 1 deletion), so durability does NOT apply and the evaluator re-verified it directly instead of carrying it. The change is iteration-5's carried rider, read line-by-line by the evaluator in runs/goal-session-referee/iter-6/iter-diff.md: `backing_rate = None if map_result is None else 0.0` -> `backing_rate = None` inside the `tod_eligible_count == 0` branch only. It NARROWS a disclosure toward honesty (nothing was ever checked => None, not a fabricated 'measured 0% match rate'), and the genuine measured-zero case is left in the untouched else-branch — proven by the rider's own can-fail counter-test pair (test_iter6_rider1_backing_rate_is_none_when_map_resolves_but_zero_candidates_are_tod_eligible / ..._genuine_zero_match_rate_over_a_real_population_still_serves_0_0). ITER-5's CARRIED TEST GAP IS NOW CLOSED: TC-15's new 7-eligible/K=4 fixture finally discriminates the seeded Fisher-Yates subset draw, and TC-16 pins window_overlap_fraction against hand-computed values. Evaluator's own full-suite run: tests/test_referee_null.py 34 cases green inside 2,595 collected / 2,587 passed / 8 skipped / 0 failed. RESIDUAL (auditor gap T1, carried): TC-15 builds its expectation by calling the production selector (_draw_anchor_indices) instead of a pinned literal, so a deterministic-but-wrong selector would still pass; the non-triviality assert (!= [1,2,3,4]) and the different-key assert do kill the obvious broken selectors. One-line follow-up for the next iteration."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The registry — pre-registration with an immutable boundary",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-6",
+      "last_passing_iter": "goal-referee-iter-6",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-referee-iter-6-audit.md (PASS_WITH_GAPS, B1/B2 fixed) + evaluator's own 27-check acceptance probe, all pass",
+      "spec_hash": "2af99b40b3062ff02f0d57470dbb3085479c4232b5f509e4361bbf3e8562aa5e",
+      "notes": "TARGET this iteration; failing -> passing. J-05's own goal.md acceptance ends '(Keyless; automated.)' and names NO browser action, so the T-10 no-screenshot rail does not apply — the same standard under which J-01/J-02/J-03/J-04 were scored in this session. NOTE the lane fact: browser QA was SKIPPED wholesale this iteration (Frontend Present: no), so there is no results row for ANY journey; J-05's status therefore rests entirely on evidence the evaluator produced itself. EVALUATOR'S OWN VERIFICATION (nothing accepted from the dev handoff, review or QA): a 27-check probe run against the real module and the real HTTP route with isolated tmp stores — (A1) all four store classes (Family/Hypothesis/Withdrawal/Certificate) expose exactly {root,get,list,record}; no `def update|delete|supersede|overwrite` anywhere in the 954-line module; (A1b) a duplicate hypothesis_id raises HypothesisAlreadyRecorded and the store still holds exactly one record; (A2) an explicit confirmation_start_boundary AT the registered_at ET date AND one strictly before it are both refused RetroactiveBoundary with zero family and zero hypothesis records written; (A3) a withdrawal is refused when post_boundary_evaluation_exists=True with no WITHDRAWAL record written, and ACCEPTED when False (discriminating, not a blanket refusal); (A4) the 23:30-ET boundary case stores 2026-06-22 from an instant that is genuinely 2026-06-23T03:30Z, and the evaluator added the OTHER DST side itself (23:30 ET on 2026-01-14 -> 2026-01-15T04:30Z -> stored 2026-01-14); (A5) accrual counts only STRICTLY post-boundary matching-cell dates — 2 of 5 hand-planted dates, with the ON-boundary date and the wrong-cell date both correctly excluded — served with is_proxy: true, and the GET body carries exactly the pinned 4 keys; (A6) the auditor's own CRITICAL backdating vector re-run live through the real POST: a caller-supplied registered_at of 2025-01-01 is now IGNORED and the stored boundary is today's ET date 2026-08-15; POST without confirm=True 422s; an unknown null_spec_id 422s; (A7) Config().config_fingerprint() printed live: 08e471b10130e1e2. Full suite re-run by the evaluator: 2,595 collected / 2,587 passed / 8 skipped / 0 failed / 0 errors (253.5s, own --junit-xml), including tests/test_referee_registry.py 35 cases; EXPECTED_TOOLS parsed by AST = exactly 20 names. Store-scope: `find apps/backend/.data -iname '*referee*'` returns nothing (no real registration ever touched the owner's store) and the only files under .data/ with mtimes after the iteration start are four transient SQLite WAL/SHM sidecars — zero .json record files modified today. CRITICAL DEFECT FOUND AND FIXED IN-ITERATION by the full pipeline's hard audit (docs/handoffs/goal-referee-iter-6-audit.md B1): the POST body's sibling `registered_at` field let a caller backdate the immutable boundary (proven live to make 3 historical sessions accrue as post-boundary confirmation) — a breach of the era's 'the historical atlas is exploratory forever' rail, into an append-only record with no delete path. Review said spec_alignment: complete and QA said PASS; only the audit lane caught it. RESIDUAL GAPS CARRIED (none blocking, all disclosed): B3 WithdrawalStore.record() reports a corrupted file as 'already withdrawn' (fail-closed, wrong reason); B4 registry_response() discards all four stores' integrity_errors; B5 three dead imports (sys, Config, resolve_desk_playbook_dir); B6 _resolve_boundary compares the override as a string so 'not-a-date' is silently ignored rather than refused. The 'folds as p=1' half of J-05's own acceptance sentence is structurally J-06's BH fold and is not measurable until J-06 exists."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Estimand engines + adjudication — one checkpoint, recorded forever",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-06",
+      "spec_hash": "f0a370fab0515b423625b8fbe8694180875d0839d8ca105230bcc0179b8ca2e8",
+      "notes": "Not targeted or re-tested this iteration; carries its iter-0 recorded state. Now UNBLOCKED — every named dependency (J-02 contract, J-03 stats core, J-04 nulls, J-05 registry) is passing. Carries three must-settle items before it pools anything: the J-02 epoch_anchor-or-0.0 lead; J-05's B4 integrity_errors invisibility (a corrupted hypothesis file vanishes silently from GET /registry, in an era whose T-6 convention is to disclose); and the fact that J-05's accrual is an explicitly-labelled PROXY (is_proxy: true) that J-06's real spec-3.1 informative-session count must supersede, never inherit."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The starter family — historical exploration becomes registered questions",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-07-fail.png",
+      "spec_hash": "473e2966a4c3fc78ec62b1ce97a0a6ada59891a625c9c88daf0964e8ec1c9f66",
+      "notes": "Not targeted this iteration. Its registration MECHANISM now exists (J-05); what remains is the shortlist + /desk registration UI and the operator's real approval act. Zero frontend files changed this iteration (git status --porcelain shows no .tsx/.ts change)."
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The strategy family + the promotion interlock — fail closed, no bypass",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-08",
+      "spec_hash": "04cecc16df051077401e5a4c694d6d81422554e3d45fccfcf3615b2722de9808",
+      "notes": "Not targeted this iteration. J-05 shipped the CertificateStore's append-only SHAPE only (no mint path, unreachable from any route or CLI — deliberate, per the iteration spec's OUT OF SCOPE). pnl_scan.py is untouched (tests/test_pnl_scan.py 21 cases green in the evaluator's own suite run) — the interlock does not exist yet."
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The Referee on /desk + MCP contract v5 — 22 read-only tools",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-09-fail.png",
+      "spec_hash": "26f414b65f170424797c6c23ab3c013a3648e2db090af16db72c52d2b781bf9d",
+      "notes": "Not targeted this iteration. Independently re-confirmed unbuilt by the evaluator: tests/test_mcp_server.py's EXPECTED_TOOLS parses (AST) to exactly 20 tool names, not 22, and zero frontend files appear in this iteration's diff."
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — regression sentinel",
+      "status": "partial",
+      "last_verified_iter": "goal-referee-iter-5",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-5-evidence/J-10-verify.png",
+      "spec_hash": "d14682891de7794bb3728ade717e6a1ed805f44384087a9bf18d75d09348fd9a",
+      "notes": "Kept-product half NOT re-verified this iteration — unlike every prior iteration in this session, the browser/replay lane did not run at all (status.json browser_checks_run: false; reports/phase-goal-referee-iter-6-ui-test-results.md 'Browser QA Verdict: SKIPPED — Backend-only phase'), contradicting this iteration's own TESTING REQUIREMENTS which asked for 'the standard regression replay + a fresh screenshot'. The auditor independently flagged this as gap T3. Status is HELD at partial (not downgraded) under evidence durability, methodology A.6, because the code behind the kept surfaces is provably unchanged: git status --porcelain shows zero apps/frontend/ diff; git diff --numstat shows referee_routes.py at 125 insertions / 0 DELETIONS (no shipped route body touched, verified by the evaluator: `git diff -U0 -- referee_routes.py | grep -c '^-[^-]'` == 0); desk_forward.py, desk_playbook*.py, levels.py, tradability.py, setups.py, edge_report*.py, backtests.py, pnl_scan.py, app/config.py and app/main.py are all untouched. Supporting checks re-run by the evaluator itself: full suite 2,595 collected / 2,587 passed / 8 skipped / 0 failed (includes test_no_execution_path 6, test_copy_discipline 30, test_desk_ui_guards 74, test_mcp_server 46, test_desk_refresh_chain_guard 29, test_pnl_scan 21 — all green); Config().config_fingerprint() == 08e471b10130e1e2 printed live; only four transient SQLite WAL/SHM sidecars under .data/ carry post-iteration-start mtimes and zero .json record files were modified. The only regression surface this iteration can reach is GET /nulls' backing_bucket_eligibility_rate field, covered by the rider's can-fail counter-test pair. STILL PARTIAL: the era-completion clauses remain structurally unmeetable until J-09 — the three Referee /desk sections do not exist and MCP advertises 20 tools, not 22. NEXT ITERATION MUST RUN THE REPLAY LANE: two consecutive skipped verifications would be a real evidence hole, not a durability case."
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-referee-iter-6",
+      "anti_goal": "The historical atlas is exploratory forever. No historical observation is ever served, labeled, or counted as forward confirmation; discovery data renders only under its exploratory label. (critical)",
+      "severity": "critical",
+      "evidence": "docs/handoffs/goal-referee-iter-6-audit.md finding B1 — apps/backend/app/research/referee_routes.py exposed `registered_at: Optional[str]` on the registration body and forwarded it into register_hypothesis, where apps/backend/app/research/referee_registry.py:665 makes it the sole input to the boundary derivation; the CLI carried the same `--registered-at` knob. Proven live pre-fix: a POST with registered_at 2025-01-01 stored confirmation_start_boundary 2024-12-31 and made three pre-existing historical sessions accrue as post-boundary confirmation, in an append-only record with no delete path.",
+      "resolved": true,
+      "resolution": "Fixed inside this same iteration by the full pipeline's hard-audit lane before the iteration closed (review reported spec_alignment: complete and QA reported PASS — only the audit caught it). `registered_at` removed from RefereeHypothesisRegistrationRequest and `--registered-at` removed from the CLI; the payload key survives only as a hermetic test seam no operator surface can reach. Two regression tests added, both failing against the pre-fix code. INDEPENDENTLY RE-VERIFIED BY THE EVALUATOR: the exact pre-fix vector re-run through the real POST route now ignores the caller's 2025-01-01 instant and stores today's honest ET date, 2026-08-15 (probe check A6). Nothing was committed carrying the defect."
+    }
+  ],
+  "updated_at": "2026-08-15T10:30:00Z"
+}

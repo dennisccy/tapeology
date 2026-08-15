@@ -314,3 +314,60 @@ slip again: the browser walk-through of the old product did not run this round, 
 must run it and save a picture. Still outstanding for a person, from iteration 2 and outside
 this project: the unrelated trendora backend on port 8255 has not been restarted. Approve
 building J-06 next at full depth; nothing needs a human unblock to start.
+
+## Iteration 7 — goal-referee-iter-7
+
+**Date:** 2026-08-15T12:45:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (the spec asked for full; the engine demoted it — telemetry
+`depth_demoted`, `reason: budget-breach`)
+**Journey deltas:**
+- Newly passing: J-06 "Estimand engines and adjudication — one checkpoint, recorded forever"
+- Newly failing: none
+- Regressed: none
+- Partial: J-10 "The kept product stands" (unchanged status, but its kept half was re-checked
+  green by the replay lane WITH a fresh dated picture — last round's evidence hole is closed; its
+  era-end clauses still wait on J-09)
+- Not re-tested this run: J-01 "The era transition stands", J-02 "The evidence contract", J-03
+  "The statistics core", J-04 "Matched nulls" and J-05 "The registry" — all five marked
+  DEFERRED-BUDGET in the results file, so all five keep their recorded passing status. Four of
+  them (all but J-03) had their own source files changed this run, so I re-verified those
+  directly instead of carrying them
+- Anti-goal violations: none new; iteration 6's critical one stays resolved and was re-confirmed
+  closed from the other side by this round's own boundary counter-test
+
+**Reasoning:** The new judging machinery really does what it claims, and I checked it myself. A
+written-down question can now be measured against its fair comparison moments and come back with
+one permanent answer no later run can change. I ran the new test file myself (40 checks, none
+failed) and read the two main round-trip checks line by line: they build real price bars, real
+recorded signals and real comparison records, then call the real code — a made-up "there is
+something here" case comes back "corroborated", a made-up "there is nothing here" case comes back
+"no evidence" with a measurement of exactly zero. I read the counter-test that keeps old days out
+of new proof and confirmed it can genuinely fail. I read the storage code: nothing can be edited
+or deleted, and writing the same record twice is refused. I ran the whole suite myself (2,642
+collected, 2,634 passed, 8 skipped, none failed), printed the settings pin myself
+(`08e471b10130e1e2`), counted the Claude connector's tools myself (still 20), and confirmed the
+guard over the owner's saved data reports all 11,274 files unchanged. The old product was replayed
+in a browser with a genuinely fresh picture. Then I found two things nobody else did, by writing my
+own probe. First: if the maths self-check fails, the system still writes the question's ONE
+permanent answer as "corroborated" — what a person is shown is correctly refused, but the stored
+record is wrong forever and that single answer can never be re-earned. Second: a damaged question
+file silently disappears from the answers page with no notice, even though the storage layer does
+report it — the very gap this round just fixed for the registry page. Neither harms anyone today
+(no real question has ever been written down), but both sit on the most permanent surface of the
+era. That, plus the fact that this round was planned as the deep pass and was cut to the short one
+for time, is why I am raising the depth instead of simply continuing.
+
+**Next-step recommendation:** Build J-07 "The starter family" next, on its own, at full depth —
+the first Referee screen a person can use: the shortlist of candidate questions with live
+readiness numbers, a pick-and-confirm step, and the real act of writing a question down, which
+stamps a start date that can never be edited. Full depth because it is the first Referee page (so
+it needs real browser pictures) and because the act it performs is permanent. Three fixes ride
+inside that round rather than becoming their own: (1) when the maths self-check fails, do not
+write the question's one permanent answer at all — record it as still pending with an honest
+reason; (2) report a damaged question file on the answers page instead of letting it vanish; (3)
+correct two paperwork slips — the shared design note still says the registry answer has four parts
+when it now has five, and the builder's write-up claims it was already updated when it was not.
+Approve building J-07 next at full depth; nothing needs a human unblock. Still outstanding for a
+person, from iteration 2 and outside this project: the unrelated trendora backend on port 8255 has
+not been restarted.
