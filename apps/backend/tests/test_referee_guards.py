@@ -310,3 +310,35 @@ def test_referee_stats_import_ban_guard_can_fail_on_a_seeded_violation():
     for banned in _REFEREE_STATS_BANNED_MODULES:
         hits |= _mentioning(seeded_imports, banned)
     assert hits == {"app.research.desk_forward", "app.research.levels"}
+
+
+# --- goal-referee-iter-6: referee_registry.py sits inside the same Read-side-law boundary --------
+#
+# `referee_registry.py`'s Estimand-C structural check (spec Sec3.3) needs the fixed backing-bucket
+# vocabulary, but reads it TRANSITIVELY through `referee_null.py` (`from .referee_null import
+# PLAYBOOK_CONTEXT_BACKING_BUCKETS`) rather than importing `desk_playbook_context` itself -- it
+# never touches `BandMapResolver` or any live map computation. The glob-based guards above
+# (`test_no_referee_module_imports_the_detect_module` /
+# `test_no_referee_module_other_than_referee_null_imports_the_context_module`) already cover this
+# new file automatically (they iterate every `referee_*.py` module on disk), so no existing
+# assertion needed editing -- this explicit, file-named test makes that coverage undeniable to a
+# reviewer rather than leaving it merely implicit in a glob.
+
+
+def test_referee_registry_module_imports_neither_the_detect_nor_the_context_module():
+    """goal-referee-iter-6 IN SCOPE: ``referee_registry.py`` may import the rail/``referee_
+    evidence``/other referee modules, but -- like every referee module except ``referee_null.py``
+    -- never ``desk_playbook_detect`` or ``desk_playbook_context`` directly."""
+    path = _RESEARCH_DIR / "referee_registry.py"
+    assert path.exists(), "referee_registry.py not found at the expected location -- has it moved?"
+    imported = _imported_module_names(path)
+    assert not _mentioning(imported, "desk_playbook_detect")
+    assert not _mentioning(imported, "desk_playbook_context")
+
+
+def test_referee_registry_import_ban_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- a lint that cannot fail proves nothing."""
+    seeded_imports = {"app.research.desk_playbook_context", "app.research.other"}
+    assert _mentioning(seeded_imports, "desk_playbook_context") == {
+        "app.research.desk_playbook_context"
+    }

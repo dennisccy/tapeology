@@ -529,8 +529,15 @@ def build_null_record(
             # substitution" (spec Sec4.2) -- an unresolvable map means NO candidate can be
             # VERIFIED to satisfy the predicate, so the honest eligible population is empty, not a
             # fallback to the unfiltered ToD population.
+            #
+            # iter-6 rider (reviewer NOTE carried from iteration 5): when `tod_eligible_count == 0`
+            # but `map_result` WAS resolved, zero candidates were even CHECKED against the
+            # predicate -- `None` ("nothing measurable") is the honest reading, not `0.0` (which
+            # implies a measured 0% match rate over a real, non-empty candidate population). The
+            # genuine `len(matched) / tod_eligible_count == 0.0` case (real candidates checked,
+            # zero matched) is unaffected -- it stays in the `else` branch below, untouched.
             eligible_positions = []
-            backing_rate = None if map_result is None else 0.0
+            backing_rate = None
         else:
             matched: list[int] = []
             for idx in tod_eligible:

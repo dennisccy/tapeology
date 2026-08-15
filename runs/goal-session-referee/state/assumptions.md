@@ -252,3 +252,83 @@ one.
 **Reversible:** yes — this is a storage/query-key decision, not a statistical redefinition; no
 null record has ever been filed any other way, so there is nothing to migrate if a future owner
 ruling disagrees.
+
+## iter-6 — developer
+
+**Ambiguity:** The Data-contract note says `null_spec_id: str|None (None for
+evidence_family="strategy"...)`, read in isolation this could imply every PLAYBOOK-family
+hypothesis (any estimand) requires a non-null `null_spec_id`. But `docs/referee-statistical-
+spec.md` §3.2 defines Estimand B as a cell-vs-complement comparison ("do occurrences in context
+cell C differ from same-setup occurrences outside C?") with NO null population anywhere in its
+definition, and spec §7's own starter-family table names a null for S-1/S-2/S-3 (Estimand A) and
+S-5 (Estimand C) but explicitly none for S-4 (Estimand B: "at_wall vs other same-setup
+contexts"). The Data Contract's parenthetical only explains the strategy case; it does not claim
+to be an exhaustive enumeration of every `None` case.
+**We chose:** `null_spec_id` is required-and-validated against the pinned set only for a
+playbook-family hypothesis whose estimand is A or C; for Estimand B it is forced to `None`
+regardless of what a payload supplies (mirroring how `context_predicate` is already scoped to
+B/C only rather than validated uniformly). The substantive estimand definitions (§3.2/§7) are
+weighted as more authoritative than a summary parenthetical that was never claiming completeness.
+**Reversible:** yes — zero downstream consumer yet (J-06 is the first real reader of this
+field); if this reading is wrong, tightening the check to require `null_spec_id` for every
+playbook hypothesis regardless of estimand is a one-line change with no stored data to migrate
+(no real hypothesis has been registered against the production store this era).
+
+## iter-6 — developer
+
+**Ambiguity:** `docs/referee-statistical-spec.md` §5 states a definitional equality
+("confirmation_start_boundary = the ET calendar date of registered_at"), but the iteration's own
+TC-4 requires the registration payload to accept an explicit `confirmation_start_boundary`
+override field and refuse it when supplied "at or before registered_at's own ET calendar date" —
+implying the field is caller-visible at all, which the definitional equality alone would not
+require.
+**We chose:** the override field exists purely as a defensive/adversarial-input check, never a
+real caller-facing feature: a supplied value at-or-before the honest computed one is refused
+(`RetroactiveBoundary`, TC-4); a supplied value strictly AFTER the honest one is silently ignored
+(the stored value is always exactly the computed one) rather than honored, since spec §5 names no
+"delay the boundary" feature anywhere and honoring it would let an operator quietly choose a
+later start date than their registration instant actually earned.
+**Reversible:** yes — no caller (CLI, POST, or any planned future UI) is documented as ever
+needing to set this field in production; it exists in the payload schema for TC-4's own
+adversarial-input test to exercise.
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** This iteration's DEFINITION OF DONE requires "Required-still-passing journeys
+(J-01, J-02, J-03, J-04; J-10's kept-product half) remain green — deterministic replay + LLM
+fallback", but the browser/replay lane self-skipped wholesale on `Frontend Present: no`
+(`status.json` `browser_checks_run: false`; `ui-test-results.md` = SKIPPED), so there is no
+results row — not even a `DEFERRED-BUDGET` row — for any of the five. The goal text does not say
+whether an un-run required-still-passing lane voids those journeys' recorded status or whether
+evidence durability covers it.
+**We chose:** Held all five at their recorded statuses (J-01/J-02/J-03 `passing`, J-04
+`passing`, J-10 `partial`) under methodology A.6 evidence durability, after proving the code
+behind each is unchanged rather than assuming it: zero `apps/frontend/` diff; `referee_routes.py`
+at 125 insertions / 0 deletions with `git diff -U0 | grep -c '^-[^-]'` == 0 (no shipped route
+body touched); every frozen backend module untouched. J-04 was the one exception — its own
+module changed, so I re-verified it directly instead of carrying it. Consequence: J-10's
+kept-product browser walk now stands on iteration-5 evidence, and two consecutive skipped
+verifications would become a real evidence hole rather than a durability case — recorded as a
+binding next-iteration requirement in its journey note and in the next-step recommendation. If
+the owner prefers the strict reading, J-01/J-02/J-03/J-10 drop to `unknown` until a replay pass
+runs.
+**Reversible:** yes
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** J-05's Acceptance ends "a withdrawal after a post-boundary evaluation exists is
+refused **and the hypothesis folds as p=1**". The refusal half is fully testable today and is
+met. The "folds as p=1" half is a Benjamini-Hochberg fold behaviour that structurally cannot
+exist until J-06 builds the evaluation records and the BH computation — no evaluation store
+exists this iteration at all (the withdrawal check takes an injected boolean instead).
+**We chose:** Scored J-05 `passing` on the refusal half alone, treating "folds as p=1" as a
+forward clause J-06 owns, consistent with the iteration spec's own DEFINITION OF DONE (which
+lists only "a withdrawal after a post-boundary evaluation exists is refused") and with the
+era's own dependency order (J-05 -> J-06). Consequence: nothing in the shipped code yet proves a
+late-withdrawn candidate stays in the BH denominator as p=1 — the era's "Never shrink the BH
+denominator" anti-goal is currently protected only structurally (the family's
+`candidate_hypothesis_ids` list is frozen at first sighting and membership is checked at
+registration). J-06 must carry the p=1 fold as an explicit acceptance item, not inherit it as
+already-done.
+**Reversible:** yes — no evaluation or BH record exists anywhere yet, so nothing has to be
+migrated if the owner prefers J-05 held open until the fold is real.

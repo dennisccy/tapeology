@@ -1,0 +1,114 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The era transition stands — reconciliation made testable",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-2-evidence/UT-J-01-result.png",
+      "spec_hash": "9fe67344e7c7ae71546d205bbd134263e172265ee542963f4b483f564c0e228e",
+      "notes": "NOT re-verified as a capture this iteration: UT-J-01 is DEFERRED-BUDGET again in the merged results file (reports/phase-goal-referee-iter-5-ui-test-results.md, Deferred table), so it keeps its iter-2 status, evidence path and spec_hash. Evidence durability DOES apply this time (unlike iter-4): its source module referee_evidence.py is NOT in this iteration's changed-file set (git status --porcelain: only referee_null.py, referee_stats.py, referee_routes.py + three test files), so the iter-2 capture still describes the running code. Supporting positive evidence from the evaluator's own full-suite run this iteration: tests/test_referee_evidence.py green inside 2,553 collected / 2,545 passed / 8 skipped / 0 failed / 0 errors (own --junit-xml run, 252.4s). STILL OPEN, carried: nothing specific to J-01."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The evidence contract — two families, one observation shape",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-2-ui-test-results.md#UT-J-02",
+      "spec_hash": "853e7be61a1ba27f0c8baf57dff1914d3aa54c01f82471f990133afab378850a",
+      "notes": "NOT re-verified as a capture this iteration: UT-J-02 is DEFERRED-BUDGET in the merged results file, so it keeps its iter-2 status and spec_hash. Durability applies — referee_evidence.py is unchanged this iteration; J-04's new module IMPORTS its contract (playbook_observations, _resolve_leaf, _HORIZON_LABELS, _epoch_from_iso, _iso) rather than re-deriving anything, which the coherence audit independently confirmed (runs/goal-session-referee/iter-5/coherence.md, 'Anchor measurement value' row). tests/test_referee_evidence.py green inside the evaluator's own full-suite run (2,545 passed / 8 skipped / 0 failed). STILL OPEN (dropped under T-1 since iter-2/4): _strategy_observation()'s `epoch_anchor = dataset.get('epoch_anchor') or 0.0` conflates a missing/None anchor with an explicit 0.0, collapsing such trades onto a 1969/1970 session_date and one synthetic cluster. J-06 is its first real consumer — settle it before J-06 builds."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The statistics core — calibrated, seeded, oracle-proven, fail-closed",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-5",
+      "last_passing_iter": "goal-referee-iter-5",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-5-ui-test-results.md#UT-J-03",
+      "spec_hash": "f00b804c40b2b60e1b9bf6209033d53796c98d86c14248ea079ef3a507291ae0",
+      "notes": "UT-J-03 is DEFERRED-BUDGET in the merged results file, BUT referee_stats.py CHANGED this iteration, so durability does not apply and the evaluator re-verified it directly instead of carrying it (J-03's own acceptance is automated: 'the oracle suite is green and IS the acceptance'). EVALUATOR'S OWN MEASUREMENTS: (1) full backend suite re-run — 2,553 collected / 2,545 passed / 8 skipped / 0 failed / 0 errors in 252.4s (own --junit-xml), covering tests/test_referee_stats.py and tests/test_referee_oracles.py; (2) run_oracle_attestation() executed live returns passed=True at stats_core_version 'referee-stats-v2' (UNCHANGED — no bump, none needed); (3) _ATTESTATION_EXPECTED parsed live pins exactly {ci_high, ci_low, permutation_enumeration, permutation_p} — min_attainable_p is NOT among them, confirming the fix's claimed zero blast radius; (4) an independent 400-case tail-regime sweep written by the evaluator confirms the served min_attainable_p == 2/(draws_used+1) in every exact-enumeration case, p never below it, 400/400 landing exactly on the floor, and the seeded branch still 1/(b+1). B1 FROM ITER-4 IS NOW CLOSED (the over-promising floor disclosure is fixed, ruled per assumptions.md iter-5). B2 FROM ITER-4 IS NOW CLOSED (a non-finite value raises ValueError at _t_statistic / bootstrap_ci_occurrence / bootstrap_ci_cluster, the latter checked BEFORE the min_clusters short-circuit). T2 (TC-8's wide band) CLOSED: tolerance 6.0 -> 3.5 SE with a mutation counter-test proving the tighter band discriminates. Only the pre-existing iter-3 assertion 0.25 -> 0.5 was edited, and the fixture's own docstring math (p == 2/(3+1)) proves the new value is the correct one — verified by the evaluator, not accepted from the handoff."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Matched nulls — comparable times, identical measurement",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-5",
+      "last_passing_iter": "goal-referee-iter-5",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-5-ui-test-results.md#UT-J-04",
+      "spec_hash": "c16455f3b0356910d9d0e1062edea7531b45b5ee68f58df527ba8d182516e611",
+      "notes": "TARGET this iteration; failing -> passing. J-04's own goal.md acceptance ends '(Keyless; automated.)' and names NO browser action, so the browser lane correctly recorded UT-J-04 as SKIP with an explicit reason (no browser-testable surface) — the T-10 no-screenshot rail does not apply to a journey with no browser acceptance, matching how J-01/J-02/J-03 were scored in this same session. EVALUATOR'S OWN VERIFICATION (not accepted from the dev handoff or the review): (1) read apps/backend/app/research/referee_null.py directly (1,101 lines, untracked so absent from git diff) — both variants present, K=4 seeded anchors via the IMPORTED desk_forward._draw_anchor_indices, measurement via the IMPORTED desk_forward._measure_from at entry_kind='close', context variant filtering through the IMPORTED desk_playbook_context.BandMapResolver/band_context_block, no local re-derivation of either; RefereeNullStore/RefereeNullRunStore expose no update/delete/supersede method at all; (2) full suite re-run by the evaluator: 2,553 collected / 2,545 passed / 8 skipped / 0 failed / 0 errors (iter-4 floor was 2,513/2,505/8 — +40 exactly as claimed), including all 29 tests of the new tests/test_referee_null.py (TC-1..TC-9, TC-13, TC-16..TC-20, store discipline, single-flight, cancel, CLI); (3) Config().config_fingerprint() printed live by the evaluator: 08e471b10130e1e2; (4) tests/test_mcp_server.py EXPECTED_TOOLS parsed by AST: exactly 20 names, unchanged; (5) store-scope guard CLEAN — all 11,274 protected files byte-identical (reports/qa/goal-referee-iter-5-store-scope-guard.md). GAP THE EVALUATOR FOUND AND CLOSED ITSELF: every shipped fixture has eligible_count <= K, so no shipped test discriminates the seeded Fisher-Yates SUBSET selection (TC-1's 'hand-verified draw' is degenerate — with 4 eligible and K=4 every permutation yields the same set). The evaluator wrote and ran its own probe (7 eligible, K=4): the module drew indices [2,4,5,6] (not the trivial first four), reproduced byte-identically on a second call, never drew the trigger bar, and a different observation drew a different subset [2,4,6,7] vs [1,3,5,6] — proving the per-row seed stream is genuinely consulted. Behaviour is correct; the SHIPPED TEST GAP remains and is a binding rider on the next iteration. OTHER RIDERS CARRIED (from the dev handoff's own Known Issues, none audited this iteration because the pipeline was demoted to lean): window_overlap_fraction's formula is an original design gated by no TC; the seed stream's hypothesis_id slot is filled with the null-spec id (J-05 may re-scope it); referee-test-perm-v1's minting function lives in referee_null.py, not referee_stats.py; the reviewer's NOTE that backing_bucket_eligibility_rate serves 0.0 rather than None in the 0-candidate sub-case."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The registry — pre-registration with an immutable boundary",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-05",
+      "spec_hash": "2af99b40b3062ff02f0d57470dbb3085479c4232b5f509e4361bbf3e8562aa5e",
+      "notes": "Not targeted or re-tested this iteration; carries its iter-0 recorded state. Now UNBLOCKED — its named dependency J-04 closed this iteration, and the three permanent spec ids its hypothesis records must reference immutably (referee-null-tod-v1, referee-null-context-v1, referee-test-perm-v1) now exist and are signature-stable (TC-16, counter-tested per id)."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Estimand engines + adjudication — one checkpoint, recorded forever",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-06",
+      "spec_hash": "f0a370fab0515b423625b8fbe8694180875d0839d8ca105230bcc0179b8ca2e8",
+      "notes": "Not targeted or re-tested this iteration. Carries the J-02 epoch_anchor lead (Lead 2) as a must-settle before it pools strategy trades into session clusters."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The starter family — historical exploration becomes registered questions",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-07-fail.png",
+      "spec_hash": "473e2966a4c3fc78ec62b1ce97a0a6ada59891a625c9c88daf0964e8ec1c9f66"
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The strategy family + the promotion interlock — fail closed, no bypass",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-08",
+      "spec_hash": "04cecc16df051077401e5a4c694d6d81422554e3d45fccfcf3615b2722de9808"
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The Referee on /desk + MCP contract v5 — 22 read-only tools",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-09-fail.png",
+      "spec_hash": "26f414b65f170424797c6c23ab3c013a3648e2db090af16db72c52d2b781bf9d",
+      "notes": "Not targeted this iteration. Independently re-confirmed unbuilt by the evaluator: tests/test_mcp_server.py's EXPECTED_TOOLS parses (AST) to exactly 20 tool names, not 22, and zero frontend files appear in this iteration's diff (git status --porcelain shows no .tsx/.ts change)."
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — regression sentinel",
+      "status": "partial",
+      "last_verified_iter": "goal-referee-iter-5",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-5-evidence/J-10-verify.png",
+      "spec_hash": "d14682891de7794bb3728ade717e6a1ed805f44384087a9bf18d75d09348fd9a",
+      "notes": "Kept-product half RE-VERIFIED this iteration: deterministic replay of the stored golden PASSED (UT-J-10 in reports/phase-goal-referee-iter-5-regression-replay-results.md and in the merged results file) with a FRESH screenshot the evaluator opened — J-10-verify.png (2026-08-15 07:53) shows the three-route nav (Cockpit / Structure / Desk, Desk active), the honest 'Playbook not computed for this session.' panel with its Run Playbook control, the Backscan panel with 'No back-scan runs recorded yet.', and the PLAYBOOK EVIDENCE header with its signature and pooled-record basis. Supporting checks re-run by the evaluator itself: full suite 2,553 collected / 2,545 passed / 8 skipped / 0 failed (includes test_no_execution_path, test_copy_discipline, test_desk_ui_guards, the annualization guard and the 20-tool MCP pin); Config().config_fingerprint() == 08e471b10130e1e2; store-scope guard CLEAN with all 11,274 protected files byte-identical; zero diff to apps/frontend/ and to every frozen backend module (desk_forward.py, desk_playbook*.py, levels.py, tradability.py, setups.py, edge_report*.py, backtests.py, pnl_scan.py, app/config.py, app/main.py). No FAIL row anywhere this iteration. STILL PARTIAL: the era-completion clauses remain structurally unmeetable until J-09 — the three Referee /desk sections do not exist and MCP advertises 20 tools, not 22."
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-08-15T08:40:00Z"
+}

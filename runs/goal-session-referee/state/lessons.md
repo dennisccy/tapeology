@@ -104,3 +104,24 @@ produce different draws.
 **Applies to:** any iteration whose acceptance names a seeded draw, sample, shuffle, or bootstrap
 — `referee_null.py`, `referee_stats.py`, `desk_forward._draw_anchor_indices`, and the J-06
 estimand evaluators that will reuse all three.
+
+## iter-6 — 2026-08-15T10:30:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A validation that guards one field is worthless if a SIBLING field on the same
+request reaches the same derived value by another route. `referee_registry.py`'s
+`RetroactiveBoundary` carefully refused a caller-supplied `confirmation_start_boundary` while
+`registered_at` — the sole input the boundary is *computed from* — sat unguarded on the same
+POST body and the same CLI, letting a caller backdate the immutable boundary to any date and
+make already-recorded historical sessions accrue as forward confirmation. Reviewer
+(`spec_alignment: complete`) and QA (`PASS`) both cleared it; only the full pipeline's hard
+audit ran the adversarial payload. The iteration's own `assumptions.md` entry had reasoned
+correctly about the guarded field and never applied the identical argument to the field behind
+it.
+**Applies to:** any iteration adding validation to a DERIVED value (boundaries, identities,
+signatures, hashes) — enumerate every input the value is derived from and confirm each is
+either server-stamped or refused, not just the value's own name-alike field. Also: any
+`Frontend Present: no` iteration — the browser/replay lane self-skips wholesale, so the
+`Required-still-passing` DoD item silently does not run (auditor gap T3); a backend-only
+iteration must still schedule the kept-product replay, or the sentinel journey accumulates
+unverified iterations.

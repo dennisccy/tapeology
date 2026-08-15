@@ -256,3 +256,61 @@ should be filed under a real question id once questions exist; and serving "unkn
 "0" for the share of eligible moments when there is nothing to measure. Still outstanding for a
 person, from iteration 2 and outside this project: the unrelated trendora backend on port 8255 has
 not been restarted.
+
+## Iteration 6 — goal-referee-iter-6
+
+**Date:** 2026-08-15T10:30:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-05 "The registry — pre-registration with an immutable boundary"
+- Newly failing: none
+- Regressed: none
+- Partial: J-10 "The kept product stands" (unchanged status; its kept half was NOT re-checked
+  this run — see below)
+- Not re-tested this run: J-01 "The era transition stands", J-02 "The evidence contract",
+  J-03 "The statistics core" and J-10's kept half — the browser/replay lane did not run at all
+  this iteration, so all four keep their recorded status. J-04's own source file DID change, so
+  I re-verified it directly instead of carrying it.
+- Anti-goal violations: one critical, found AND fixed inside this same iteration, then
+  re-checked by me — recorded resolved (details below).
+
+**Reasoning:** The new work really does what it says. A person can now write a trading question
+down before its answer data exists, and the system stamps the start date itself from the moment
+of writing — that date can never be edited, and the question can never be quietly changed or
+deleted afterwards. I did not take anyone's word for it. I wrote and ran my own 27-check probe
+against the real code and the real web address: all four record stores offer only read and
+append — no edit, no delete anywhere in the 954-line file; writing the same question twice is
+refused and leaves exactly one copy; a start date set to the day of writing or earlier is
+refused and writes nothing at all; a request to cancel a question is refused once an assessment
+of it already exists, and accepted when none does; a question written at 23:30 New York time
+lands on that same New York day, not the next one — and I added the winter-time case the tests
+did not cover, which also lands right; and the readiness count only counts trading days strictly
+after the start date, so old days can never be counted as new proof. The deeper checking lane
+earned its place this round: it found that the start date was secretly choosable by the person
+sending the request — they could set it years in the past and make three already-recorded
+historical days count as fresh proof. The ordinary review and the routine test pass had both
+called this work complete. It was fixed before the round ended; I re-ran the exact attack myself
+and it now stores today's honest date. I also ran the whole test suite myself (2,595 collected,
+2,587 passed, 8 skipped, nothing failed), printed the settings pin myself (`08e471b10130e1e2`),
+counted the Claude connector's tools myself (still 20), and confirmed no real question was ever
+written into the owner's saved data — no saved record file was touched today at all. One honest
+gap: the routine walk-through of the old product in a browser did not run this round, so I did
+not downgrade anything for it — no page code changed at all, and no existing web address lost a
+single line — but it must run next round.
+
+**Next-step recommendation:** Build J-06 "Estimand engines and adjudication" next, on its own, at
+full depth — the part that actually compares each recorded signal against its fair comparison
+moments and writes down one permanent verdict per question that no later run can change. Full
+depth because this is the most permanent machinery in the whole era and because the deeper lane
+has now caught a serious fault twice in this session that the lighter checks missed. Three items
+must be settled inside that round rather than becoming their own: the old strategy-trade date
+bug where a missing time-stamp becomes a 1969 date and lumps unrelated trades together; making
+damaged registry files visible instead of silently disappearing from the page; and replacing the
+registry's temporary readiness estimate with the real count. Two small clean-ups ride along:
+remove three unused lines flagged by the reviewer, and pin the random-draw test to a fixed
+expected answer instead of asking the code under test what it expects. One thing that must not
+slip again: the browser walk-through of the old product did not run this round, so next round
+must run it and save a picture. Still outstanding for a person, from iteration 2 and outside
+this project: the unrelated trendora backend on port 8255 has not been restarted. Approve
+building J-06 next at full depth; nothing needs a human unblock to start.
