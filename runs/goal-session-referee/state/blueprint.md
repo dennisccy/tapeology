@@ -51,7 +51,7 @@ do not re-derive):
 | Referee evidence coverage + per-family readiness | new `app/research/referee_evidence.py` | `GET /research/desk/referee/evidence` |
 | Matched-null records | new `app/research/referee_null.py` | `GET /research/desk/referee/nulls` (`?id=`) |
 | Null compute progress + runs | same module + its log | `POST/GET/POST-cancel /research/desk/referee/nulls/compute`, `GET .../nulls/runs` |
-| Registry (families, hypotheses, withdrawals, certificates) | new `app/research/referee_registry.py` | `GET /research/desk/referee/registry`; `POST /research/desk/referee/registry/hypotheses` (operator act) |
+| Registry (families, hypotheses, withdrawals, certificates) | new `app/research/referee_registry.py` | `GET /research/desk/referee/registry`; `POST /research/desk/referee/registry/hypotheses` (operator act); `GET /research/desk/referee/registry/shortlist` (J-07, live readiness over spec §7's pinned S-1..S-5 candidates) |
 | Evaluation records + runs | new `app/research/referee_adjudicate.py` + its log | `GET /research/desk/referee/evaluations`, `POST/GET/POST-cancel .../evaluate`, `GET .../evaluate/runs` |
 | Adjudications (snapshots + pending fold) | `referee_adjudicate.py` | `GET /research/desk/referee/adjudications` |
 | Promotion authorization verdict | `referee_adjudicate.py` (`authorize_promotion`) | consumed inside `pnl_scan._promote`; surfaced in the scan report's `promotion` block |
@@ -146,9 +146,11 @@ holdout_dataset: {id: str, checksum: str, split: str}, config_fingerprint: str, 
 str, referee_parameters_hash: str, family_id: str, hypothesis_id: str, gate_results:
 {calibrated_p: float, bh_pass: bool, ci: [float, float], floors_met: bool}.
 
-GET /research/desk/referee/registry response: {families: [FamilyRecord...], hypotheses:
-[HypothesisRecord + status + accrual...], withdrawals: [WithdrawalRecord...], certificates:
-[CertificateRecord...] (empty this iteration)}. -->
+GET /research/desk/referee/registry response (superseded by the iter-8 note below -- Rider 2
+added a fifth key the same iteration this note was never updated for; left here only for the
+historical field-level shapes above, which are still exactly correct): {families:
+[FamilyRecord...], hypotheses: [HypothesisRecord + status + accrual...], withdrawals:
+[WithdrawalRecord...], certificates: [CertificateRecord...] (empty this iteration)}. -->
 
 <!-- iter-7 note: the "Evaluation records + runs" and "Adjudications (snapshots + pending
 fold)" rows (owner new referee_adjudicate.py, endpoints as registered above) gain their first
@@ -170,7 +172,8 @@ float]|"insufficient_sample"|None, ci_cluster: [float, float]|"insufficient_samp
 sign_flip_p: float|None, equal_weight_T: float|None, entry_basis_T: float|None,
 entry_basis_sign_flip: bool|None, attestation: {passed: bool, expected: dict, actual: dict,
 tolerance: dict, stats_core_version: str}, provenance: {config_fingerprint: str, computed_at:
-str}.
+str}. (iter-8 Rider 1 note: `role` MUST fold to "pending", never "checkpoint", when
+`attestation.passed` is false -- see the iter-8 note below.)
 
 Adjudication snapshot record (append-only, exactly ONE per hypothesis, written only at its
 checkpoint evaluation, immutable thereafter): snapshot_id: str, hypothesis_id: str, family_id:
@@ -194,7 +197,9 @@ register: REFEREE_REGISTER}. "killed" is a documented, never-emitted enum member
 schema -- dropped per T-1, see state/assumptions.md iter-7 entry); "basis_retired" and
 confirmatory-output-refusal are both computed by referee_adjudicate.py itself, reusing
 referee_evidence.py's current_playbook_detector_basis()/_is_stale_basis-style comparison and
-referee_stats.py's verify_oracle_attestation() rather than re-deriving either check.
+referee_stats.py's verify_oracle_attestation() rather than re-deriving either check. (iter-8
+Rider 2 note: this response gains an `integrity_errors: [...]` key this iteration, mirroring
+`GET /registry`'s existing disclosure -- see the iter-8 note below.)
 
 authorize_promotion(candidate, certificate_store, live_scan_context) return shape (not yet a
 served HTTP value -- J-08 surfaces it inside pnl_scan's report, per this table's existing
@@ -203,3 +208,43 @@ served HTTP value -- J-08 surfaces it inside pnl_scan's report, per this table's
 "malformed_unverifiable"|None, reason: str|None}. Reads the CertificateStore that already
 exists (J-05 SHAPE-only, still empty -- no mint path until J-08); this iteration adds no writer
 to it. -->
+
+<!-- iter-8 note (J-07): fixes the iter-7 coherence-auditor's advisory (blueprint.md:149-151
+was stale after Rider 2 added a fifth response key the same iteration this note went
+unupdated) -- the corrected, current shape of GET /research/desk/referee/registry is:
+
+{families: [FamilyRecord...], hypotheses: [HypothesisRecord + status + accrual + discovery...],
+withdrawals: [WithdrawalRecord...], certificates: [CertificateRecord...] (empty until J-08),
+integrity_errors: [...] (iter-7 Rider 2)}.
+
+Two pieces this iteration, both under the SAME owner (referee_registry.py) and the SAME
+Registry row the top table already names -- only the top table's endpoint CELL gained a third
+endpoint (see above); no new Data Contract row:
+
+1. NEW endpoint `GET /research/desk/referee/registry/shortlist`: serves spec Sec7's five
+pre-registered candidates (S-1..S-5) beside LIVE readiness -- {candidates: [{candidate_id:
+"S-1".."S-5", estimand: "A"|"B"|"C", evidence_family: "playbook", setup_id: str, side:
+"long"|"short", context_predicate: dict|None, primary_measure_key: str, primary_horizon: str,
+sidedness: "greater"|"less"|"two-sided", null_spec_id: str|None, test_spec_id: str, rationale:
+str, n: int >= 0, n_sessions: int >= 0, target_sessions: int, min_occurrences: int,
+accrual_rate_sessions_per_day: float >= 0, projected_days_to_target: float|None (None when
+accrual_rate is 0 -- never a divide-by-zero value)}, ...]}. The n/n_sessions readiness numbers
+for the three estimand-A candidates reuse referee_evidence.playbook_occurrence_readiness()'s
+existing per_setup_side pooling verbatim; the two at_wall-context candidates (S-4/S-5) reuse the
+existing band-context/backing-bucket resolution already imported elsewhere in this era (never a
+second pooling implementation). The five candidate definitions themselves are spec Sec7-pinned
+module constants (parameters, mirroring test_referee_registry.py's already-established
+_starter_family_payloads() shape) -- "no hard-coded hypothesis set" (goal.md J-07 Step 2)
+governs the REGISTRATION WRITE PATH staying generic (POST /registry/hypotheses accepts any valid
+hypothesis, never only the five shortlist candidates), not the shortlist's own spec-pinned
+candidate list (state/assumptions.md iter-8 entry).
+
+2. FIELD ADDITION on the Registry row's existing hypothesis entries (not a new row, not a new
+endpoint): discovery: {n: int >= 0, n_sessions: int >= 0, label: "discovery (exploratory)"} --
+pre-boundary (session_date <= confirmation_start_boundary) observations in the hypothesis's own
+(setup_id, side) cell, reusing the SAME shared pooling primitives _hypothesis_accrual already
+uses (never a second pooling implementation), keyed off the ALREADY-immutable
+confirmation_start_boundary field (iter-6's RetroactiveBoundary hardening covers this field; the
+discovery fold reads it, never re-derives or accepts a client-supplied alternative). Never
+contributes to the existing accrual block; a deep-backfilled pre-boundary record recorded after
+registration still contributes to discovery, never to accrual (counter-tested). -->

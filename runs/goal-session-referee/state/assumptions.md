@@ -491,3 +491,25 @@ anti-goal breach and iteration 7 should be re-scored REGRESSION.
 production store (the real registry is empty, store-scope guard CLEAN), so nothing recorded
 anywhere is affected; gating the checkpoint on `attestation["passed"]` is a small change with no
 data to migrate.
+
+## iter-8 — goal-decomposer
+
+**Ambiguity:** J-07 Step 2 says the `/desk` registration flow must have "no special-casing, no
+hard-coded hypothesis set anywhere in code," but spec §7 itself is a fixed, five-candidate,
+pre-registered shortlist (S-1..S-5, each with a spec-pinned setup/side/estimand/measure/horizon)
+that goal.md's own T-1 discipline requires implementing verbatim, never derived dynamically. It
+is unclear whether "no hard-coded hypothesis set" forbids the shortlist's five candidate
+definitions from existing as code/data constants at all, or governs only the registration WRITE
+PATH.
+**We chose:** Read it as governing the write path only: `POST /registry/hypotheses` (already
+built in J-05) stays fully generic and accepts any valid hypothesis payload, never restricted to
+the five shortlist candidates (this iteration's TC-9 tests that directly by registering a
+non-shortlist setup/side). The shortlist's five candidate definitions ARE spec-pinned module
+constants — parameters, exactly like `REFEREE_MIN_SESSIONS` or the null-spec ids already are —
+mirroring the shape `test_referee_registry.py::_starter_family_payloads()` already established.
+This follows the Parameters discipline ("every referee constant is a module constant read at
+call time") rather than reading "hard-coded" as banning the spec's own pinned list from
+appearing in code, which would make spec §7 unimplementable.
+**Reversible:** yes — the shortlist fold is a pure read with no persisted output; if a future
+owner ruling wants the five candidates sourced from a config file or the registry instead of
+module constants, that is a one-line refactor with nothing stored to migrate.
