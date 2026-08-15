@@ -149,3 +149,57 @@ str, referee_parameters_hash: str, family_id: str, hypothesis_id: str, gate_resu
 GET /research/desk/referee/registry response: {families: [FamilyRecord...], hypotheses:
 [HypothesisRecord + status + accrual...], withdrawals: [WithdrawalRecord...], certificates:
 [CertificateRecord...] (empty this iteration)}. -->
+
+<!-- iter-7 note: the "Evaluation records + runs" and "Adjudications (snapshots + pending
+fold)" rows (owner new referee_adjudicate.py, endpoints as registered above) gain their first
+field-level shape this iteration -- both rows existed as owner+endpoint stubs since iter-0;
+nothing about either row's owner or endpoint changes. Still not rendered anywhere (J-09 remains
+their first UI consumer, per the IA table above); this iteration's own test suite + the
+evaluator's live-code checks are the only current readers.
+
+Evaluation record (append-only, one per evaluation act -- NOT only the checkpoint):
+evaluation_id: str, hypothesis_id: str, family_id: str, evaluated_at: str (ISO-8601 UTC),
+evidence_family: "playbook"|"strategy", estimand: "A"|"B"|"C", evaluation_basis: str
+(sha256[:16] of the dedup record-id set + coverage counts, null record ids, null/test-spec ids,
+seeds, B, STATS_CORE_VERSION), coverage: {post_boundary_informative_sessions: int,
+target_sessions: int, min_occurrences: int, occurrences_pooled: int,
+one_group_sessions_excluded: int}, confirmatory_eligible: bool, role:
+"pending"|"checkpoint"|"monitoring", T: float|None, permutation_p: float|None,
+permutation_enumeration: bool|None, min_attainable_p: float|None, ci_occurrence: [float,
+float]|"insufficient_sample"|None, ci_cluster: [float, float]|"insufficient_sample"|None,
+sign_flip_p: float|None, equal_weight_T: float|None, entry_basis_T: float|None,
+entry_basis_sign_flip: bool|None, attestation: {passed: bool, expected: dict, actual: dict,
+tolerance: dict, stats_core_version: str}, provenance: {config_fingerprint: str, computed_at:
+str}.
+
+Adjudication snapshot record (append-only, exactly ONE per hypothesis, written only at its
+checkpoint evaluation, immutable thereafter): snapshot_id: str, hypothesis_id: str, family_id:
+str, checkpoint_evaluation_id: str, snapshot_at: str (ISO-8601 UTC), bh: {q: float, m: int,
+k_star: int, bh_pass: bool, by_adjusted_p: float, by_pass: bool} (m = the family's frozen
+planned candidate count, never the count actually evaluated), fragility_triggers: list[str]
+(subset of "by_fail"|"sign_flip"|"entry_basis_sign_flip"|"cluster_ci_includes_zero"), verdict:
+"no_evidence"|"insufficient_sample"|"fragile"|"corroborated", evaluation_basis: str (frozen
+copy of the checkpoint evaluation's own), attestation: dict (frozen copy).
+
+Evaluation run-ledger record: run_id: str, hypothesis_id: str, state:
+"running"|"completed"|"failed"|"cancelled", started_at: str, finished_at: str|None, progress:
+{done: int, total: int}, error: str|None -- mirrors the J-04 null run-ledger shape exactly.
+
+GET /research/desk/referee/adjudications response: {entries: [{hypothesis_id: str, verdict:
+"exploratory"|"registered"|"pending_forward_confirmation"|"insufficient_sample"|"fragile"|
+"no_evidence"|"corroborated"|"basis_retired", confirmatory_output_refused: bool,
+refusal_reason: str|None, snapshot: SnapshotRecord|None, live_coverage: {...}|None}...],
+register: REFEREE_REGISTER}. "killed" is a documented, never-emitted enum member this iteration
+(no registered kill-condition mechanism exists anywhere in the spec or the Hypothesis record
+schema -- dropped per T-1, see state/assumptions.md iter-7 entry); "basis_retired" and
+confirmatory-output-refusal are both computed by referee_adjudicate.py itself, reusing
+referee_evidence.py's current_playbook_detector_basis()/_is_stale_basis-style comparison and
+referee_stats.py's verify_oracle_attestation() rather than re-deriving either check.
+
+authorize_promotion(candidate, certificate_store, live_scan_context) return shape (not yet a
+served HTTP value -- J-08 surfaces it inside pnl_scan's report, per this table's existing
+"Promotion authorization verdict" row): {authorized: bool, refusal_class:
+"no_certificate"|"stale"|"wrong_candidate"|"mismatched_datasets"|"failed_gates"|
+"malformed_unverifiable"|None, reason: str|None}. Reads the CertificateStore that already
+exists (J-05 SHAPE-only, still empty -- no mint path until J-08); this iteration adds no writer
+to it. -->

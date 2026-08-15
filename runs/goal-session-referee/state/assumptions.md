@@ -332,3 +332,45 @@ registration). J-06 must carry the p=1 fold as an explicit acceptance item, not 
 already-done.
 **Reversible:** yes — no evaluation or BH record exists anywhere yet, so nothing has to be
 migrated if the owner prefers J-05 held open until the fold is real.
+
+## iter-7 — goal-decomposer
+
+**Ambiguity:** `docs/referee-statistical-spec.md` §5 lists nine verdict tokens including
+`killed` ("a registered kill condition met") but defines no kill-condition mechanism anywhere —
+no field on the Hypothesis record, no Step in J-05 or J-06, no trigger rule stated in the spec
+or in `docs/goal.md`. It is unclear whether J-06 is expected to invent a minimal kill trigger
+(e.g. re-using withdrawal) or leave the token unreachable this era.
+**We chose:** Drop `killed` from this iteration's built verdict set entirely — no code path in
+`referee_adjudicate.py` computes or returns it. The verdict vocabulary's return type documents
+the literal string as a future enum member (so a later, explicitly-specified kill mechanism can
+be added without a breaking rename), but nothing this iteration can produce it. This follows
+T-1 verbatim ("a developer who finds the spec ambiguous or unimplementable for a procedure DROPS
+that procedure ... never improvises") rather than inventing a kill rule the spec never named,
+which risked exactly the kind of unreviewed, silently-tuned gate this era's anti-goals forbid
+("No gate loosens mid-era... every eligibility rule are fixed at registration").
+**Reversible:** yes — zero hypotheses have ever been evaluated against the production store
+this era (J-07's real registration act has not yet run), so no recorded snapshot anywhere could
+be mis-labeled by this drop; a future owner ruling can add the trigger and the enum value
+becomes reachable with no migration of existing records.
+
+## iter-7 — goal-decomposer
+
+**Ambiguity:** J-06's Acceptance requires "an evaluation with a tampered attestation folds to
+the refusal state," and spec §5/§6 both describe the fold refusing "confirmatory output" on a
+missing/mismatched/version-stale attestation "with honest served copy" — but the verdict
+vocabulary enumerated in spec §5 names exactly nine tokens (`exploratory`, `registered`,
+`pending_forward_confirmation`, `insufficient_sample`, `fragile`, `no_evidence`, `corroborated`,
+`killed`, `basis_retired`) and none of them is named as "the attestation-refusal state." It is
+unclear whether the refusal is meant to reuse one of the nine tokens or requires a distinct
+representation the spec never named.
+**We chose:** Represent attestation refusal as a dedicated `confirmatory_output_refused: bool`
++ `refusal_reason: str|None` pair layered onto the response, which forces the served `verdict`
+to the most conservative already-named non-claim token (`insufficient_sample`) rather than
+inventing a tenth vocabulary string. This reading treats the nine-token list as the closed,
+spec-authoritative verdict enum (consistent with T-2's "vocabulary minefield" discipline of
+using named tokens exactly) while still giving J-09's planned "attestation-refusal sentence"
+copy a concrete boolean + reason to key its distinct wording off of.
+**Reversible:** yes — `confirmatory_output_refused`/`refusal_reason` are new fields with zero
+consumers today (J-09 is the first UI reader); if a future owner ruling prefers a distinct
+verdict token instead, this is a one-line change to the fold function with no stored data to
+migrate, since no real evaluation has ever run against the production store.
