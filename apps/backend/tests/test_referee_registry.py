@@ -871,7 +871,6 @@ def test_shortlist_s4_s5_s6_readiness_reflects_the_at_wall_context_resolve(
     assert by_id["S-4"]["n"] == 1 and by_id["S-4"]["n_sessions"] == 1
     assert by_id["S-5"]["n"] == 1 and by_id["S-5"]["n_sessions"] == 1
     assert by_id["S-6"]["n"] == 1 and by_id["S-6"]["n_sessions"] == 1
-    assert by_id["S-5"]["n"] == 1 and by_id["S-5"]["n_sessions"] == 1
 
 
 # === TC-9 / TC-10 (iter-8): the write path stays generic; discovery is boundary-gated on

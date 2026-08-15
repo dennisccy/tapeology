@@ -157,8 +157,27 @@ _UNIVERSE_FETCH_PATH = "/research/desk/universe/fetch"
 # `forwardComputeRef` precedent, which that effect's own comment already anticipated), they start
 # no interval, and they wait on the chain's one existing sleep. A future step that cannot say the
 # same must re-derive these three numbers here rather than loosen them.
-_EXPECTED_EFFECT_COUNT = 19
-_EXPECTED_INTERVAL_COUNT = 7
+#
+# 19 -> 21 and 7 -> 9 for Referee Runs (goal-referee-iter-10, J-09) -- the EIGHTH and NINTH compute
+# managers (`RefereeNullComputeManager`, `RefereeEvaluationComputeManager`), and the first two that
+# are single-flight PER KEY (`null_spec_id` / `hypothesis_id`) rather than one page-wide singleton.
+# Neither joins the refresh chain (an operator-run null-build/evaluation is its own act, never an
+# eighth/ninth chain step) NOR the existing nine-GET mount effect (the `forwardComputeRef`-mirror
+# precedent does not apply here: unlike every prior manager, this page does not know WHICH keys
+# exist until the registry read resolves on first expand of "Referee Adjudications"/"Referee Runs" --
+# there is no fixed key to seed a live snapshot for at mount time, so none is fetched; an absent key
+# renders as idle, the backend's own `_IDLE_SNAPSHOT_TEMPLATE`-when-absent convention). +2 effects,
+# +2 intervals: ONE poll effect PER MANAGER (never per key -- each effect polls EVERY currently-
+# running key from a single `setInterval`, since the key set is dynamic and unbounded in principle,
+# unlike the fixed-arity managers before it), each mirroring the Backscan poll's own "stop on any
+# non-running status, refresh the ledger once on that terminal tick" shape. The Referee Adjudications
+# section's OWN deferred read (and Referee Runs' own registry/run-ledger reads) add NO effect at all
+# -- `toggleSection` is a plain event handler, never an effect (the `refereeRegistry` precedent
+# directly above). The timeout is untouched -- neither section has a wait-tick of its own; neither is
+# part of the chain. Neither new effect can reach a trigger, which is the property the scan below
+# actually polices; the counts are here so that scan stays provably complete.
+_EXPECTED_EFFECT_COUNT = 21
+_EXPECTED_INTERVAL_COUNT = 9
 _EXPECTED_TIMEOUT_COUNT = 1
 
 # Everything that could start real work. The chain's own driver is included: an effect that calls
@@ -188,6 +207,15 @@ _TRIGGER_CALLS = (
     # now a path to a trigger and must be as unreachable from an effect as the core it wraps.
     "handleRunPlaybookClick(",
     "handleRunBackscanClick(",
+    # goal-referee-iter-10 (J-09): Referee Runs' own handler/client pairs -- the SAME mirror, keyed
+    # per null_spec_id / hypothesis_id rather than a page-wide singleton. Neither pair ever joins
+    # the refresh chain (an operator-run null-build/evaluation is its own act, never an eighth/ninth
+    # chain step -- see _EXPECTED_EFFECT_COUNT's own rationale above), so both stay in
+    # _TRIGGER_CALLS with no REVERSED counterpart below: no useEffect may reach either.
+    "handleTriggerRefereeNullBuild(",
+    "triggerRefereeNullsCompute(",
+    "handleTriggerRefereeEvaluate(",
+    "triggerRefereeEvaluate(",
 )
 
 # Machinery that can invoke a handler without a user click. None of it is used by this page today;

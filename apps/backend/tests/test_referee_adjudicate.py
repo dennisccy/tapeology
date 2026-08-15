@@ -1260,14 +1260,21 @@ def test_tc12_a_strategy_checkpoint_mints_exactly_one_certificate_through_the_re
 ):
     """TC-12: a strategy-family hypothesis reaching an attested, gate-passing confirmatory
     checkpoint mints EXACTLY one certificate, pinning every named field, reachable ONLY through
-    ``run_evaluation_and_record`` itself (never a hand-written fixture path in production code)."""
+    ``run_evaluation_and_record`` itself (never a hand-written fixture path in production code).
+
+    ``candidate`` is ``STRATEGY_V1_ID``/``PROFILE_DEFAULT`` (goal-referee-iter-10 rider 1) --
+    ``_plant_strong_strategy_effect``'s own planted trades are always recorded under that exact
+    identity, and the rider-1 pooling fix now genuinely requires the certificate's declared
+    candidate to match the evidence it is minted from (before this rider, an unrelated candidate
+    name here was harmless because pooling was unfiltered -- see the iter-9-recorded MINOR
+    anti-goal entry this rider closes)."""
     _plant_strong_strategy_effect(journal_store, n_clusters=12)
     registry_dir = tmp_path / "registry"
     family_store = FamilyStore(registry_dir)
     hypothesis_store = HypothesisStore(registry_dir)
     _register_strategy_hypothesis(family_store, hypothesis_store, "hyp-tc12", "fam-tc12")
     certificate_store = CertificateStore(registry_dir)
-    candidate = {"strategy_id": "structure_tape", "profile": PROFILE_DEFAULT}
+    candidate = {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
     champion_identity = {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
     train_dataset = {"id": "ds-train-pin", "checksum": "train-checksum", "split": "train"}
     holdout_dataset = {"id": "ds-holdout-pin", "checksum": "holdout-checksum", "split": "holdout"}
@@ -1343,7 +1350,12 @@ def test_tc13_a_failed_attestation_never_mints_a_strategy_certificate_role_stays
     eligible fixture as TC-12, forced through a deliberately failing oracle attestation --
     ``role`` stays ``"pending"`` (never ``"checkpoint"``), no snapshot, and therefore no
     certificate (the mint call site is only ever reached from inside the
-    ``recorded["role"] == "checkpoint"`` branch)."""
+    ``recorded["role"] == "checkpoint"`` branch).
+
+    ``candidate`` is ``STRATEGY_V1_ID``/``PROFILE_DEFAULT`` (goal-referee-iter-10 rider 1, the SAME
+    fix as TC-12 above) so ``confirmatory_eligible`` genuinely reflects real, matching pooled
+    coverage -- otherwise the rider-1 candidate filter would ALSO zero out coverage here, and this
+    test would no longer be isolating the attestation-failure gate it means to prove."""
     _plant_strong_strategy_effect(journal_store, n_clusters=12)
     registry_dir = tmp_path / "registry"
     family_store = FamilyStore(registry_dir)
@@ -1367,7 +1379,7 @@ def test_tc13_a_failed_attestation_never_mints_a_strategy_certificate_role_stays
         snapshot_store=AdjudicationSnapshotStore(tmp_path / "eval"),
         journal_store=journal_store,
         certificate_mint={
-            "candidate": {"strategy_id": "structure_tape", "profile": PROFILE_DEFAULT},
+            "candidate": {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT},
             "champion_identity_at_scan_time": {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT},
             "train_dataset": {"id": "ds-train", "checksum": "abc", "split": "train"},
             "holdout_dataset": {"id": "ds-holdout", "checksum": "def", "split": "holdout"},
@@ -1382,6 +1394,158 @@ def test_tc13_a_failed_attestation_never_mints_a_strategy_certificate_role_stays
     records, errors = certificate_store.list()
     assert errors == []
     assert records == []
+
+
+# === goal-referee-iter-10 rider 1 (TC-13/14/15): the candidate-evidence-identity fix, closing the
+# iter-9-recorded MINOR anti-goal entry ("a strategy-family certificate's declared candidate was
+# never checked against the evidence it was minted from") =============================================
+
+
+def test_iter10_tc13_a_candidate_mismatched_mint_pools_none_of_the_unrelated_evidence_and_mints_nothing(
+    journal_store, tmp_path,
+):
+    """goal-referee-iter-10 TC-13: reproduces and closes the iter-9 evaluator's own probe
+    (``state/assumptions.md`` iter-9, goal-evaluator) -- 12 planted backtest trades all recorded
+    under ``strategy_id=STRATEGY_V1_ID``/``profile=PROFILE_DEFAULT`` (``_plant_strong_strategy_
+    effect``, the SAME fixture TC-12 above already proves mints a certificate for the MATCHING
+    candidate), evaluated with ``certificate_mint["candidate"]`` naming a totally unrelated
+    strategy/profile. Before this rider, ``_pool_strategy_trades`` pooled the whole corpus
+    unfiltered regardless of ``candidate``, so this unrelated candidate minted an attested,
+    gate-passing certificate anyway -- the exact exploit the iter-9 evaluator reproduced and
+    recorded as an open MINOR anti-goal entry. After this rider: the unrelated candidate's own
+    pool is empty (zero of the planted trades belong to it), so this evaluation is never even
+    confirmatory-eligible, and no certificate is minted naming the unrelated candidate."""
+    _plant_strong_strategy_effect(journal_store, n_clusters=12)
+    registry_dir = tmp_path / "registry"
+    family_store = FamilyStore(registry_dir)
+    hypothesis_store = HypothesisStore(registry_dir)
+    _register_strategy_hypothesis(family_store, hypothesis_store, "hyp-iter10-tc13", "fam-iter10-tc13")
+    certificate_store = CertificateStore(registry_dir)
+    unrelated_candidate = {
+        "strategy_id": "totally-unrelated-strategy", "profile": "totally-unrelated-profile",
+    }
+
+    result = run_evaluation_and_record(
+        "hyp-iter10-tc13",
+        hypothesis_store=hypothesis_store, family_store=family_store,
+        playbook_store=PlaybookStore(tmp_path / "unused-playbook"),
+        bar_store=BarStore(tmp_path / "unused-bars"), config=CONFIG,
+        null_store=RefereeNullStore(tmp_path / "unused-nulls"),
+        evaluation_store=RefereeEvaluationStore(tmp_path / "eval"),
+        snapshot_store=AdjudicationSnapshotStore(tmp_path / "eval"),
+        journal_store=journal_store,
+        certificate_mint={
+            "candidate": unrelated_candidate,
+            "champion_identity_at_scan_time": {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT},
+            "train_dataset": {"id": "ds-train", "checksum": "abc", "split": "train"},
+            "holdout_dataset": {"id": "ds-holdout", "checksum": "def", "split": "holdout"},
+            "certificate_store": certificate_store,
+        },
+    )
+    # Zero pooled evidence for the unrelated candidate -- never even confirmatory-eligible, so the
+    # write-side "checkpoint" role (the ONLY role that can reach the mint call site) is never
+    # reached.
+    assert result["record"]["coverage"]["post_boundary_informative_sessions"] == 0
+    assert result["record"]["coverage"]["occurrences_pooled"] == 0
+    assert result["record"]["confirmatory_eligible"] is False
+    assert result["record"]["role"] == "pending"
+    assert result["snapshot"] is None
+    assert result["certificate"] is None
+
+    records, errors = certificate_store.list()
+    assert errors == []
+    assert records == []  # no certificate minted naming the unrelated candidate
+
+
+def test_iter10_tc14_a_candidate_matched_mint_pools_the_evidence_and_mints_the_certificate(
+    journal_store, tmp_path,
+):
+    """goal-referee-iter-10 TC-14: the SAME 12 planted v1/default trades, evaluated with
+    ``certificate_mint["candidate"]`` naming the candidate the evidence ACTUALLY belongs to
+    (``STRATEGY_V1_ID``/``PROFILE_DEFAULT``) -- proves the rider-1 filter does not also break the
+    honest-match path: a certificate IS minted, with the identical p-value/gate-pass shape TC-12
+    above already proved for the unfiltered (``candidate=None``) path, since every planted trade
+    belongs to this exact candidate anyway (a filter that changes nothing when everything already
+    matches)."""
+    _plant_strong_strategy_effect(journal_store, n_clusters=12)
+    registry_dir = tmp_path / "registry"
+    family_store = FamilyStore(registry_dir)
+    hypothesis_store = HypothesisStore(registry_dir)
+    _register_strategy_hypothesis(family_store, hypothesis_store, "hyp-iter10-tc14", "fam-iter10-tc14")
+    certificate_store = CertificateStore(registry_dir)
+    matching_candidate = {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT}
+
+    result = run_evaluation_and_record(
+        "hyp-iter10-tc14",
+        hypothesis_store=hypothesis_store, family_store=family_store,
+        playbook_store=PlaybookStore(tmp_path / "unused-playbook"),
+        bar_store=BarStore(tmp_path / "unused-bars"), config=CONFIG,
+        null_store=RefereeNullStore(tmp_path / "unused-nulls"),
+        evaluation_store=RefereeEvaluationStore(tmp_path / "eval"),
+        snapshot_store=AdjudicationSnapshotStore(tmp_path / "eval"),
+        journal_store=journal_store,
+        certificate_mint={
+            "candidate": matching_candidate,
+            "champion_identity_at_scan_time": {"strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT},
+            "train_dataset": {"id": "ds-train", "checksum": "abc", "split": "train"},
+            "holdout_dataset": {"id": "ds-holdout", "checksum": "def", "split": "holdout"},
+            "certificate_store": certificate_store,
+        },
+    )
+    assert result["record"]["role"] == "checkpoint"
+    assert result["record"]["coverage"]["occurrences_pooled"] == 12  # all 12 candidate trades matched
+    assert result["record"]["permutation_p"] == pytest.approx(2.0 / (2**12 + 1))  # unchanged shape
+    assert result["snapshot"]["bh"]["bh_pass"] is True
+    certificate = result["certificate"]
+    assert certificate is not None
+    assert certificate["candidate"] == matching_candidate
+
+    records, errors = certificate_store.list()
+    assert errors == []
+    assert len(records) == 1
+    assert records[0]["candidate"] == matching_candidate
+
+
+def test_iter10_tc15_certificate_mint_none_keeps_whole_corpus_pooling_unfiltered_and_byte_identical(
+    journal_store,
+):
+    """goal-referee-iter-10 TC-15: ``candidate=None`` (the default -- every existing route/CLI
+    caller today, since ``certificate_mint`` still has zero production callers this era) pools the
+    whole ``JournalStore`` exactly as before this rider -- explicitly passing ``candidate=None``
+    produces the IDENTICAL pool as calling ``_pool_strategy_trades`` with no ``candidate`` argument
+    at all (the pre-rider call shape), proving the new parameter changes nothing for every caller
+    that does not supply it. Plants a MIXED corpus (never all one dataset cluster) so a real filter
+    regression would be visible here. The complementary real-corpus proof --
+    iter-9's own ``insufficient_sample``-on-real-corpus acceptance staying unchanged -- is
+    ``test_tc10_todays_real_corpus_shape_serves_insufficient_sample_with_caveats_and_null_
+    disclosure`` above, itself untouched by this rider and still exercised as-is."""
+    _plant_strategy_backtest(
+        journal_store, backtest_id="bt-1", dataset_id="ds-1",
+        candidate_net_rs=[1.0], null_net_rs=[-1.0],
+    )
+    _plant_strategy_backtest(
+        journal_store, backtest_id="bt-2", dataset_id="ds-1",
+        candidate_net_rs=[0.5], null_net_rs=[-0.5],
+    )
+    _plant_strategy_backtest(
+        journal_store, backtest_id="bt-3", dataset_id="ds-2",
+        candidate_net_rs=[2.0], null_net_rs=[-2.0],
+    )
+
+    default_pool = _pool_strategy_trades(journal_store)
+    explicit_none_pool = _pool_strategy_trades(journal_store, candidate=None)
+
+    assert explicit_none_pool["occurrences_pooled"] == default_pool["occurrences_pooled"] == 3
+    assert explicit_none_pool["informative_sessions"] == default_pool["informative_sessions"] == 2
+    assert (
+        set(explicit_none_pool["session_groups"]) == set(default_pool["session_groups"])
+        == {"ds-1", "ds-2"}
+    )
+    for cluster_key in default_pool["session_groups"]:
+        assert (
+            explicit_none_pool["session_groups"][cluster_key]
+            == default_pool["session_groups"][cluster_key]
+        )
 
 
 # === TC-14: referee_parameters()/referee_parameters_hash() -- the aggregator + Parameters

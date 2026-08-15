@@ -759,3 +759,97 @@ explicitly earmarked for exactly this closure.
 behavior); reverting to the caller-declared-name-suffices reading is deleting the one new
 call-site argument, with nothing stored to migrate since zero certificates exist on file either
 way.
+
+## iter-10 — developer
+
+**Ambiguity:** goal.md J-09 Step 1 / the phase spec's "New information displayed" list both name
+"seed identity" as a Referee Adjudications provenance line to render per entry, beside
+`evaluation_basis` hash, null/test-spec ids, and attestation pass/fail. But no served field
+anywhere carries a raw seed VALUE: `REFEREE_SEED` (271828) is a single GLOBAL module constant,
+never persisted per-hypothesis or per-evaluation, and `referee_parameters()`/
+`referee_stats_parameters()` (the only functions that surface it as JSON) are not wired to any
+route this era. The spec's own pinned seed recipe is
+`f"{REFEREE_SEED}:{hypothesis_id}:{purpose}[:{session_date}[:{i}]]"` — the only PER-HYPOTHESIS
+component of that recipe is `hypothesis_id` itself.
+**We chose:** render "seed identity" as the entry's own `hypothesis_id` (already served per-entry
+on the adjudications response, already displayed as the row's primary key) rather than fabricate,
+hardcode, or newly-serve the raw `REFEREE_SEED` constant. Hardcoding `271828` client-side would
+create a second, unverified copy of a backend constant with no test tying the two together
+(a single-source-of-truth risk); adding a new served field for it would be a Data Contract
+addition this iteration's own goal.md scope explicitly rules out ("Data-contract additions: None").
+Re-displaying `hypothesis_id` under an explicit "seed identity" label is zero-cost, zero-new-
+computation, and technically accurate — it IS the per-hypothesis identity that seeds that
+hypothesis's own reproducible draw stream.
+**Reversible:** yes — if a future era serves `referee_parameters()` (or a per-record seed
+derivative) on a route, the Adjudications provenance line can read that field directly instead,
+with no store migration needed (nothing is persisted from this rendering choice).
+
+**Ambiguity:** the Referee Adjudications entry needs its own hypothesis's `null_spec_id`/
+`test_spec_id` for its provenance line, but `adjudications_response()`'s own per-entry shape
+(`{hypothesis_id, verdict, confirmatory_output_refused, refusal_reason, snapshot, live_coverage}`)
+does not carry them — those fields live only on the RAW hypothesis record served by
+`GET /research/desk/referee/registry`, a sibling endpoint. Also unclear: should "Referee Runs"'
+trigger controls assume "Referee Registry" was already expanded (and its data already fetched)
+before either new section is opened?
+**We chose:** both new sections issue their OWN `fetchRefereeRegistry()` call on first expand (in
+addition to their own primary read), writing into the SAME shared `refereeRegistryResult` state
+the existing Referee Registry section already owns — rather than coupling to whether that section
+happens to have been expanded first, or threading a prop down from it. This is an extra,
+harmless, side-effect-free GET (T-8: GETs never compute) against an already-shipped endpoint, not
+a new computation or a second implementation of anything `referee_registry.py` already owns; it
+makes both new sections correct regardless of click order, matching how every other `/desk`
+section already owns its own deferred fetch independently.
+**Reversible:** yes — trivial to remove the redundant fetch call from either section if a future
+iteration wants strict fetch-count minimization instead; no stored state depends on it.
+
+**Note (not an ambiguity, a scope call under Auto Mode):** the phase spec's QA fixture-setup
+bullet (seed a `fragile` hypothesis and a refused-attestation hypothesis on the fixture-scoped
+rig) is left to the browser-qa-agent's own preparatory step, following the iter-9 precedent (the
+developer does live-server verification of already-shipped read paths, not browser-fixture
+construction for an upcoming QA pass). The dev handoff documents the exact mechanics (which unit
+tests demonstrate the identical construction) so QA does not have to reverse-engineer them.
+
+## iter-10 — goal-evaluator
+
+**Ambiguity:** goal.md J-09's acceptance names three screenshots, one of them "an in-flight second
+evaluation trigger is refused single-flight (screenshot)", and the era's own T-10 rail says "no
+screenshot ⇒ `unknown`, never `passing`". That clause's artifact does not exist: UT-09 cites an
+image byte-identical to UT-07's and UT-10's (md5 `d3065788c71ecfcc5623b7704ad6de73`) showing no
+refusal, because the shipped UI disables the trigger on click so a second request is never
+dispatched. The framework's own methodology (A.7) says the opposite for this shape: an evidence gap
+on a feature whose behaviour is confirmed rides `evidence_makeup` and must never block.
+**We chose:** scored J-09 `passing` with `evidence_makeup: true` and the gap recorded as
+`capture-defect`, reading T-10's "none ⇒ unknown" as governing a journey with NO browser evidence
+(J-09 has five screenshots I opened myself covering its other clauses) rather than a single
+unphotographed clause whose behaviour is proven three independent ways: TC-32
+(`tests/test_referee_adjudicate.py:1744`, second trigger → `started False`, same compute id),
+QA's 5-concurrent-POST probe (exactly one `started: true`, no duplicate ledger row), and the UI's
+own reachable refusal path (`page.tsx:8547/8606` set `triggerError`; `:5170/:5280` render it with
+their own testids). The make-up capture is named as the next round's work.
+**Reversible:** yes — the flag stays set until a fresh capture lands; if the owner reads T-10
+clause-by-clause, J-09 drops to `partial` with the identical next step and nothing stored changes.
+
+## iter-10 — goal-evaluator
+
+**Ambiguity:** J-10 Step 2 asks the kept-product browser walk to cover "EVERY shipped `/desk`
+section (screen history, forward returns, refresh chain, briefing, skipped,
+runs/pins/compare/provenance, ...)", and Step 3 asks for "kept-route byte-identity vs a baseline
+captured from the era-open commit". Neither is literally producible as written: the browser lane
+runs against the fixture-scoped rig, whose store has no computed desk screen, so the
+screen-dependent panels (Screen History, Forward Returns, Briefing, Skipped Members, Screen
+Comparison, Provenance — `page.tsx:6485-6558`) render the shipped "Desk screen not computed yet."
+state instead of populated tables; and no era-6 iteration ever captured a kept-route response
+baseline artifact (only Era B's `reports/goal-desk-iter-8-kept-route-baseline.md` exists).
+**We chose:** scored J-10 `passing`, reading "renders exactly as shipped" as satisfied for the rig's
+own data state (the not-computed panel IS the shipped behaviour for an empty screen store, and the
+rig is the era-long precedent), and reading Step 3's byte-identity as satisfied by something
+stronger than a response baseline: SOURCE-level identity of every kept route handler. I ran the
+era-cumulative product diff myself (`git diff --stat e875972` over `apps/backend/app`,
+`apps/frontend/app`, `apps/frontend/lib`): 12 files, 8,641 insertions, 6 deletions, and the only
+non-new-referee files touched in the entire era are `main.py` (+7 route registration),
+`mcp/__init__.py` (20→22, named exemption a), `pnl_scan.py` (the J-08 interlock, exemption c) and
+the `/desk` page + api/types (exemption d) — zero diff to levels/tradability/setups/desk_forward/
+desk_playbook*/backtests/store/engine.
+**Reversible:** yes — if the owner wants the enumerated panels photographed with data, a screen can
+be computed on the fixture rig (an operator act the rig permits) and the walk repeated; nothing is
+stored either way.

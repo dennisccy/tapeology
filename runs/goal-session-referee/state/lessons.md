@@ -183,3 +183,17 @@ A `CONTINUE` verdict carrying `next_depth: full` was demoted to lean by the wall
 iters 7 and 9 despite the iteration spec pleading against it. If a round genuinely needs the hard
 audit lane, the verdict itself must be ESCALATE — a depth recommendation attached to CONTINUE is
 advisory only.
+
+## iter-10 — 2026-08-15T22:40:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** Three UI tests in this round cited the SAME screenshot file (identical md5
+`d3065788c71ecfcc5623b7704ad6de73` for UT-07/UT-09/UT-10), and the prose in the results table
+described a refusal that the shared image never shows — a missing acceptance artifact hid behind a
+PASS row. Checksum the evidence images whenever one journey's clauses each demand a DIFFERENT
+on-screen state. The root cause is a design/spec mismatch worth remembering: `/desk` disables the
+compute trigger the instant it is clicked, so the spec's "second in-flight trigger is refused"
+state is unreachable through the natural click flow — the refusal copy in `page.tsx:8547/8606` only
+appears when a run was started elsewhere (second tab, CLI) — and no test asserts that string.
+**Applies to:** any iteration whose acceptance enumerates several distinct screenshots; any
+single-flight/idempotency acceptance on a UI that guards the control client-side.

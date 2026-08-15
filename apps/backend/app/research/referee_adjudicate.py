@@ -3,7 +3,8 @@ J-02 (``referee_evidence.py``) -> J-03 (``referee_stats.py``) -> J-04 (``referee
 (``referee_registry.py``) built for. Implements ``docs/referee-statistical-spec.md`` Sec3/Sec5/Sec8
 verbatim: the three estimand engines (A/B/C), evaluation as a recorded operator act, the single
 append-only confirmatory checkpoint with its family BH fold, the read-side adjudication fold, and
-``authorize_promotion`` (the J-08 interlock's pure decision function, unwired this iteration).
+``authorize_promotion`` (the J-08 interlock's pure decision function -- wired into
+``pnl_scan._promote`` as of iteration 9).
 
 **"Eligible occurrence" for a hypothesis, restated.** A hypothesis registers exactly ONE primary
 ``(measure_key, horizon)`` (spec Sec3) over ONE ``(setup_id, side)`` cell. The J-02 observation
@@ -518,7 +519,38 @@ def _pool_for_estimand(
 # === J-08 Step 1: the strategy-family analog pooling (spec Sec3.7) ====================================
 
 
-def _pool_strategy_trades(journal_store: JournalStore) -> dict:
+def _strategy_backtest_id(observation_id: str) -> str:
+    """The backtest id embedded in a strategy-family observation id -- the inverse of
+    ``referee_evidence._strategy_observation``'s own
+    ``f"strategy:{backtest_id}:{kind}:{index}"`` construction (mirrors
+    ``referee_null._parse_observation_id``'s identical parsing precedent for the Playbook
+    family's own ``f"playbook:{record_id}:{index}:{measure_key}"`` id shape)."""
+    prefix, backtest_id, _kind, _index_str = observation_id.split(":", 3)
+    if prefix != "strategy":
+        raise ValueError(f"not a strategy observation id: {observation_id!r}")
+    return backtest_id
+
+
+def _candidate_matches_observation(
+    journal_store: JournalStore, observation_id: str, candidate: dict, cache: dict[str, tuple]
+) -> bool:
+    """Whether ``observation_id``'s own backtest report was recorded under ``candidate``'s exact
+    ``(strategy_id, profile)`` -- read from the SAME ``result["strategy_id"]``/``result["profile"]``
+    fields ``backtests.py``'s result block already stamps on every journal record (no new field, no
+    second identity join: this is a single ``JournalStore.get_backtest`` read of a field
+    ``strategy_observations()`` itself never surfaces on the observation, not a re-derivation of
+    dataset identity). Memoized per ``backtest_id`` in ``cache`` so a dataset's many trades cost one
+    lookup each, never a rescan of the whole journal."""
+    backtest_id = _strategy_backtest_id(observation_id)
+    if backtest_id not in cache:
+        record = journal_store.get_backtest(backtest_id)
+        result = (record.payload.get("result") or {}) if record is not None else {}
+        cache[backtest_id] = (result.get("strategy_id"), result.get("profile"))
+    strategy_id, profile = cache[backtest_id]
+    return strategy_id == candidate.get("strategy_id") and profile == candidate.get("profile")
+
+
+def _pool_strategy_trades(journal_store: JournalStore, *, candidate: dict | None = None) -> dict:
     """The strategy-family analog of ``_pool_against_null`` (spec Sec3.7: "Cluster = dataset. Per
     dataset d with >=1 candidate trade: Delta_d = mean(candidate net_r in d) - mean(recorded
     random_null net_r in d)") -- reuses ``referee_evidence.strategy_observations()`` verbatim
@@ -526,6 +558,17 @@ def _pool_strategy_trades(journal_store: JournalStore) -> dict:
     (never ``session_date``, TC-9). Shaped IDENTICALLY to ``_pool_against_null``'s own return dict
     so ``run_evaluation_and_record`` reuses every downstream step (coverage, permutation test,
     both bootstrap CIs, BH, snapshot) with zero branching beyond the POOLING call itself.
+
+    ``candidate`` (goal-referee-iter-10 rider 1, closing the iter-9-recorded MINOR anti-goal entry:
+    a certificate's declared candidate was never checked against the evidence it was minted from)
+    is an optional ``{"strategy_id": str, "profile": str}`` filter: when supplied, BOTH the
+    candidate trades and the recorded ``random_null`` trades are narrowed to observations whose own
+    backtest report was recorded under this EXACT ``(strategy_id, profile)``
+    (``_candidate_matches_observation``) before pooling -- so a dataset carrying trades from an
+    unrelated strategy's report can never leak into this candidate's evidence, and the paired
+    ``random_null`` values stay drawn from the SAME report as the candidate trades they are diffed
+    against (never a foreign strategy's null baseline). ``None`` (the default -- every existing
+    route/CLI caller today) pools the whole corpus unfiltered, byte-identical to before this rider.
 
     ``occurrence_diffs`` is honestly ``None`` (``_pool_cell_vs_complement``'s own "not defined at
     occurrence level" precedent, not ``_pool_against_null``'s occurrence-diff list): unlike
@@ -538,14 +581,26 @@ def _pool_strategy_trades(journal_store: JournalStore) -> dict:
     ``occurrence_diffs``/``_ESTIMANDS_AGAINST_NULL`` in ``run_evaluation_and_record``), which is
     correct here -- there is no occurrence-level uncertainty quantity to disclose."""
     obs = strategy_observations(journal_store)
+    observations = obs["observations"]
+    null_observations = obs["null_observations"]
+    if candidate is not None:
+        match_cache: dict[str, tuple] = {}
+        observations = [
+            o for o in observations
+            if _candidate_matches_observation(journal_store, o["observation_id"], candidate, match_cache)
+        ]
+        null_observations = [
+            o for o in null_observations
+            if _candidate_matches_observation(journal_store, o["observation_id"], candidate, match_cache)
+        ]
     by_cluster_candidate: dict[str, list[float]] = {}
     by_cluster_null: dict[str, list[float]] = {}
     observation_ids_by_cluster: dict[str, set[str]] = {}
-    for observation in obs["observations"]:
+    for observation in observations:
         cluster_key = observation["cluster_key"]
         by_cluster_candidate.setdefault(cluster_key, []).append(observation["value"])
         observation_ids_by_cluster.setdefault(cluster_key, set()).add(observation["observation_id"])
-    for observation in obs["null_observations"]:
+    for observation in null_observations:
         by_cluster_null.setdefault(observation["cluster_key"], []).append(observation["value"])
 
     all_clusters = set(by_cluster_candidate) | set(by_cluster_null)
@@ -1200,8 +1255,20 @@ def run_evaluation_and_record(
             # session_date (``_pool_strategy_trades``, never ``_pool_for_estimand``'s playbook-only
             # occurrence gather). ``journal_store=None`` (no production caller reaches this branch
             # without one this era) pools an honest empty corpus rather than raise.
+            #
+            # goal-referee-iter-10 rider 1: ``candidate`` is passed through ONLY when
+            # ``certificate_mint`` is supplied -- the only path that can ever mint a certificate
+            # (still zero production callers this era) -- so the pooled evidence is narrowed to the
+            # exact ``(strategy_id, profile)`` the certificate is about to name. Every other caller
+            # (``certificate_mint=None``) keeps pooling whole-corpus and unfiltered, byte-identical
+            # to before this rider.
             pool = (
-                _pool_strategy_trades(journal_store)
+                _pool_strategy_trades(
+                    journal_store,
+                    candidate=(
+                        certificate_mint["candidate"] if certificate_mint is not None else None
+                    ),
+                )
                 if journal_store is not None
                 else {
                     "session_groups": {}, "occurrence_diffs": None, "occurrences_pooled": 0,
@@ -1717,19 +1784,20 @@ def adjudications_response(
     }
 
 
-# === authorize_promotion: the J-08 interlock's pure decision function (unwired this iteration) ========
+# === authorize_promotion: the J-08 interlock's pure decision function ==================================
 
 
 def authorize_promotion(
     candidate: dict, certificate_store, live_scan_context: dict,
 ) -> dict:
     """A pure function (spec Sec8): does a valid, candidate-specific Referee certificate authorize
-    promoting ``candidate = {"strategy_id": str, "profile": str}``? Reads the (still-empty this
-    iteration) ``CertificateStore`` and ``live_scan_context`` (the live scan's OWN current report
-    values: ``{"champion_identity": dict, "train_dataset": dict, "holdout_dataset": dict,
+    promoting ``candidate = {"strategy_id": str, "profile": str}``? Reads the ``CertificateStore``
+    and ``live_scan_context`` (the live scan's OWN current report values:
+    ``{"champion_identity": dict, "train_dataset": dict, "holdout_dataset": dict,
     "config_fingerprint": str, "gate_version": str, "referee_parameters_hash": str}``) -- returns
-    ``{"authorized": bool, "refusal_class": str|None, "reason": str|None}``. NOT wired into
-    ``pnl_scan._promote`` this iteration (J-08's job) -- a pure, unwired function only.
+    ``{"authorized": bool, "refusal_class": str|None, "reason": str|None}``. Wired into
+    ``pnl_scan._promote`` as of iteration 9 (J-08) -- called there BEFORE
+    ``append_validation_row``, so an unauthorized candidate is refused before anything is written.
 
     **The six refusal classes, partitioned** (spec Sec8 names all six but does not fully
     disambiguate their boundaries -- this partition is an iter-7 interpretation call, logged to

@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-referee-iter-10",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open Desk to see the Referee panels",
+      "narration": "Navigate to the Desk page where all three Referee sections are now visible.",
+      "point_out": "The Desk heading appears with the navigation bar showing Cockpit, Structure, and Desk.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Scroll down to see the three Referee sections",
+      "narration": "Scroll to the bottom of the page to find the newly added Referee Adjudications and Referee Runs sections.",
+      "point_out": "Three section headers appear in order: Referee Registry, Referee Adjudications, and Referee Runs (all collapsed).",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "heading",
+          "name": "Referee Registry"
+        }
+      },
+      "expect": {
+        "text": "Referee Adjudications"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Expand Referee Adjudications to see hypothesis verdicts",
+      "narration": "Click the Referee Adjudications section header to reveal registered hypotheses and their verdict chips.",
+      "point_out": "The section expands to show a disclosure paragraph about statistical verdicts, followed by hypothesis rows with verdict chips.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-section-expand-refereeAdjudications']"
+        }
+      },
+      "expect": {
+        "text": "Referee verdicts are statistical statements"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Review verdict vocabulary and provenance",
+      "narration": "Examine the verdict chip for any hypothesis—each shows one of seven vocabulary words and full evidentiary provenance.",
+      "point_out": "Verdict chips display words like 'registered' or 'insufficient_sample' in plain text, with provenance lines showing basis hash, spec ids, seed identity, and attestation status.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-section-expand-refereeRuns']"
+        }
+      },
+      "expect": {
+        "text": "Null Builds"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Expand Referee Runs to see compute controls and ledgers",
+      "narration": "Click the Referee Runs section header to reveal null-build and evaluation compute triggers with their run history tables.",
+      "point_out": "Two sub-blocks appear: 'Null Builds' with a build control per null spec, and 'Evaluations' with a control per hypothesis, each showing their run ledger below.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "scroll",
+        "target": {
+          "css": "[data-testid='referee-evaluate-runs-table']"
+        }
+      },
+      "expect": {
+        "text": "Evaluations"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Verify Referee Registry remains unchanged",
+      "narration": "Scroll back up and check that the pre-existing Referee Registry section still renders its registered hypotheses shortlist without any changes.",
+      "point_out": "The Referee Registry section above the new sections displays its original 5-row shortlist table and Registered Hypotheses table unchanged.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-section-expand-refereeRegistry']"
+        }
+      },
+      "expect": {
+        "text": "Registered Hypotheses"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Check that Playbook Evidence renders correctly",
+      "narration": "Scroll up further and expand the Playbook Evidence section to confirm it still displays setup signal data without regression.",
+      "point_out": "The Playbook Evidence section expands to show its signal table, basis block, and cohort views rendering real data.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "link",
+          "name": "Cockpit"
+        }
+      },
+      "expect": {
+        "text": "Cockpit"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Verify Cockpit page still works",
+      "narration": "Navigate to the Cockpit page to confirm that this iteration's backend and frontend changes did not regress the product's other kept pages.",
+      "point_out": "The Cockpit page loads with its chart visible, nav bar showing Cockpit/Structure/Desk, and no error messages.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/"
+      },
+      "expect": {
+        "text": "SIM-BUYER"
+      }
+    }
+  ]
+}

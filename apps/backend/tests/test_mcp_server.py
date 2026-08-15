@@ -43,16 +43,20 @@ from app.research.desk_forward import FORWARD_REGISTER, ForwardStore, forward_pa
 from app.research.desk_playbook import PLAYBOOK_REGISTER, PlaybookStore, playbook_parameters
 from app.research.desk_screen import ScreenStore
 from app.research.desk_universe import UniverseStore
+from app.research.referee_adjudicate import REFEREE_REGISTER
+from app.research.referee_null import REFEREE_NULL_TOD_SPEC_ID, REFEREE_TEST_PERM_SPEC_ID
+from app.research.referee_registry import REFEREE_MIN_OCCURRENCES, REFEREE_MIN_SESSIONS
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 # Capability 6, verbatim — order and content are the advertised contract. ``bars`` (era-4 J-01),
 # ``levels`` (era-4 J-02), ``strategies`` (era-4 J-04), ``tradability`` (era-5B J-01), ``setups``
 # (era-5B J-02), ``desk_universe``/``desk_screen`` (era-desk J-06, MCP contract v3 -- 15 -> 17
-# tools), ``desk_forward`` (forward-test era, 17 -> 18 tools), and ``desk_playbook``/
+# tools), ``desk_forward`` (forward-test era, 17 -> 18 tools), ``desk_playbook``/
 # ``desk_playbook_evidence`` (Era B2 "The Playbook" J-09, the era's own MCP contract v4 -- 18 -> 20
-# tools) are the newest additions, each positioned right after its dependency-order sibling (the
-# same store/registry+route+MCP shape, mirrored end to end).
+# tools), and ``desk_referee``/``desk_referee_registry`` (Era 6 "The Referee" J-09, MCP contract v5
+# -- 20 -> 22 tools) are the newest additions, each positioned right after its dependency-order
+# sibling (the same store/registry+route+MCP shape, mirrored end to end).
 EXPECTED_TOOLS = (
     "tape_state",
     "tape_features",
@@ -70,6 +74,8 @@ EXPECTED_TOOLS = (
     "desk_forward",
     "desk_playbook",
     "desk_playbook_evidence",
+    "desk_referee",
+    "desk_referee_registry",
     "pnl_ledger",
     "taxonomy",
     "ui_route_map",
@@ -753,6 +759,155 @@ async def test_desk_playbook_evidence_tool_byte_identical_on_a_populated_state(m
     assert result.content[0].text.encode("utf-8") == rest.content, "desk_playbook_evidence not byte-identical"
 
 
+# --- Era 6 "The Referee" J-09: desk_referee / desk_referee_registry (MCP contract v5, 20 -> 22
+# tools; empty + populated + a corrupted-file honest-error state) -----------------------------------
+#
+# Both routes read stores rooted at env-var-or-sibling-of-the-universe-dir defaults
+# (`resolve_referee_registry_dir`/`resolve_referee_eval_dir`, neither a `Config` field) -- SIBLINGS
+# of `backend_paths`' own `TAPEOLOGY_DESK_UNIVERSE_DIR`, so they resolve to their own fresh
+# env-scoped temp dirs automatically, with no new fixture entry needed. Nothing else in this module
+# ever registers a hypothesis, so the honest-empty states below are genuinely observed BEFORE the
+# populated-state tests register one -- file order matters here, same as every other store in this
+# module. The populated-state tests register ONE real hypothesis through the actual
+# `POST /research/desk/referee/registry/hypotheses` route (the real operator act, never a
+# hand-crafted store file), and the corrupted-file tests run LAST (after both populated-state tests)
+# since they plant a permanently-broken file into the SAME shared registry dir.
+
+_REFEREE_MCP_HYPOTHESIS_PAYLOAD = {
+    "confirm": True,
+    "hypothesis_id": "mcp-referee-hyp-1",
+    "family_id": "mcp-referee-fam-1",
+    "family_q": 0.10,
+    "family_candidate_hypothesis_ids": ["mcp-referee-hyp-1"],
+    "evidence_family": "playbook",
+    "estimand": "A",
+    "setup_id": "capitulation",
+    "side": "long",
+    "context_predicate": None,
+    "primary_measure_key": "5m",
+    "primary_horizon": "5m",
+    "sidedness": "greater",
+    "null_spec_id": REFEREE_NULL_TOD_SPEC_ID,
+    "test_spec_id": REFEREE_TEST_PERM_SPEC_ID,
+    "target_sessions": REFEREE_MIN_SESSIONS,
+    "min_occurrences": REFEREE_MIN_OCCURRENCES,
+}
+
+
+@pytest.mark.anyio
+async def test_desk_referee_registry_tool_byte_identical_on_the_honest_empty_state(mcp_env):
+    """Before any hypothesis has ever been registered, `desk_referee_registry` proxies
+    `GET /research/desk/referee/registry`'s explicit HTTP 200 honest-empty payload -- never a 404
+    (the `desk_playbook` convention `referee_registry.py` itself follows)."""
+    result = await call_tool("desk_referee_registry", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/referee/registry", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json() == {
+        "families": [], "hypotheses": [], "withdrawals": [], "certificates": [],
+        "integrity_errors": [],
+    }
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_referee_registry not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_referee_tool_byte_identical_on_the_honest_empty_state(mcp_env):
+    """Before any hypothesis has ever been registered, `desk_referee` proxies
+    `GET /research/desk/referee/adjudications`'s explicit HTTP 200 honest-empty payload -- an empty
+    `entries` list beside the served `REFEREE_REGISTER` disclosure text, never a 404. Runs BEFORE
+    the populated-state test below registers anything into the shared env-scoped registry dir."""
+    result = await call_tool("desk_referee", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/referee/adjudications", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json() == {"entries": [], "register": REFEREE_REGISTER, "integrity_errors": []}
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_referee not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_referee_registry_tool_byte_identical_on_a_populated_state(mcp_env):
+    """Registers ONE real hypothesis through the actual registration route (the real operator act,
+    never a hand-crafted store file), then proves `desk_referee_registry` is still byte-identical
+    to curl on a NON-EMPTY result."""
+    resp = httpx.post(
+        f"{mcp_env}/research/desk/referee/registry/hypotheses",
+        json=_REFEREE_MCP_HYPOTHESIS_PAYLOAD, timeout=5.0,
+    )
+    assert resp.status_code == 200, resp.text
+
+    result = await call_tool("desk_referee_registry", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/referee/registry", timeout=5.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert len(body["hypotheses"]) >= 1, "the live registry must be non-empty for this proof"
+    assert any(h["hypothesis_id"] == "mcp-referee-hyp-1" for h in body["hypotheses"])
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_referee_registry not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_referee_tool_byte_identical_on_a_populated_state(mcp_env):
+    """After the registration above, the fresh hypothesis has accrued zero post-boundary sessions
+    (no playbook signal was ever recorded in this module's own isolated playbook dir), so its live
+    fold reads `verdict: "registered"` -- `desk_referee` still proxies byte-identical over this
+    non-empty, still-pre-checkpoint entry."""
+    result = await call_tool("desk_referee", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/referee/adjudications", timeout=5.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert len(body["entries"]) >= 1, "the live adjudications fold must be non-empty for this proof"
+    entry = next(e for e in body["entries"] if e["hypothesis_id"] == "mcp-referee-hyp-1")
+    assert entry["verdict"] == "registered"
+    assert body["register"] == REFEREE_REGISTER
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_referee not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_referee_registry_tool_byte_identical_with_a_corrupted_hypothesis_file(
+    mcp_env, backend_paths,
+):
+    """Error case: an integrity-broken hypothesis file makes `GET /research/desk/referee/registry`
+    surface an honest `integrity_errors` entry rather than a 404/500 (the `test_referee_registry.py`
+    TC-30 precedent) -- `desk_referee_registry` still proxies byte-identical over that
+    degraded-but-200 body, never raising itself."""
+    universe_dir = Path(backend_paths["TAPEOLOGY_DESK_UNIVERSE_DIR"])
+    registry_dir = universe_dir.parent / "referee_registry"
+    registry_dir.mkdir(parents=True, exist_ok=True)
+    (registry_dir / "hypothesis-mcp-corrupt.json").write_text("not valid json at all")
+
+    result = await call_tool("desk_referee_registry", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/referee/registry", timeout=5.0)
+    assert rest.status_code == 200
+    assert len(rest.json()["integrity_errors"]) >= 1
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, (
+        "desk_referee_registry not byte-identical on a corrupted-file integrity-error state"
+    )
+
+
+@pytest.mark.anyio
+async def test_desk_referee_tool_byte_identical_with_a_corrupted_hypothesis_file(mcp_env):
+    """The SAME corrupted hypothesis file (seeded by the test above, into the shared env-scoped
+    registry dir) also surfaces through `GET /research/desk/referee/adjudications`'s own
+    `hypothesis_store.list()` read (`adjudications_response`'s iter-8 Rider-2 `integrity_errors`
+    disclosure) -- `desk_referee` still proxies byte-identical, never erroring."""
+    result = await call_tool("desk_referee", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/referee/adjudications", timeout=5.0)
+    assert rest.status_code == 200
+    assert len(rest.json()["integrity_errors"]) >= 1
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, (
+        "desk_referee not byte-identical on a corrupted-file integrity-error state"
+    )
+
+
 @pytest.mark.anyio
 async def test_desk_screen_reference_close_field_proxies_verbatim(mcp_env, backend_paths):
     """goal-desk-iter-17 (J-13) TC-10: `reference_close` -- `desk_screen.py`'s new ranked-row field
@@ -1368,7 +1523,9 @@ async def test_get_endpoint_desk_topup_runs_byte_identical_with_no_new_tool(mcp_
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "topup/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
-    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 20
+    # goal-referee-iter-10: the total grew 20 -> 22 (desk_referee/desk_referee_registry) -- this
+    # route's own no-new-tool claim is unaffected, so only the tracked total is re-derived here.
+    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 22
 
 
 @pytest.mark.anyio
@@ -1387,7 +1544,9 @@ async def test_get_endpoint_desk_screen_runs_byte_identical_with_no_new_tool(mcp
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "screen/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
-    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 20
+    # goal-referee-iter-10: the total grew 20 -> 22 (desk_referee/desk_referee_registry) -- this
+    # route's own no-new-tool claim is unaffected, so only the tracked total is re-derived here.
+    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 22
 
 
 @pytest.mark.anyio

@@ -41,8 +41,13 @@ import type {
   PnlLedger,
   ProfilesPayload,
   RecordBarSeriesResult,
+  RefereeAdjudicationsResponse,
+  RefereeEvaluateRunsListResult,
+  RefereeEvaluationComputeSnapshot,
   RefereeHypothesis,
   RefereeHypothesisRegistrationPayload,
+  RefereeNullComputeSnapshot,
+  RefereeNullRunsListResult,
   RefereeRegistryResponse,
   RefereeShortlistResponse,
   ResearchTaxonomy,
@@ -2139,5 +2144,234 @@ export async function postRefereeRegistryHypothesis(
     return { ok: false, data: null, error };
   } catch {
     return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// --- Era 6 "The Referee" (goal-referee-iter-10, J-09) -- Referee Adjudications + Referee Runs, the
+// era's LAST two `/desk` sections. Every function below mirrors the established `{ok, data,
+// error?}`/compute-trigger-triplet shape every other function in this file already uses.
+
+// GET /research/desk/referee/adjudications -- the read-side adjudication fold, served VERBATIM,
+// beside the served REFEREE_REGISTER disclosure text.
+export async function fetchRefereeAdjudications(): Promise<{
+  ok: boolean;
+  data: RefereeAdjudicationsResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/referee/adjudications`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as RefereeAdjudicationsResponse };
+    }
+    let error = "The referee adjudications could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/referee/nulls/runs -- the durable null-build run ledger, served VERBATIM.
+export async function fetchRefereeNullRuns(): Promise<{
+  ok: boolean;
+  data: RefereeNullRunsListResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/referee/nulls/runs`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as RefereeNullRunsListResult };
+    }
+    let error = "The referee null-build run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/referee/evaluate/runs -- the durable evaluation run ledger, served VERBATIM.
+export async function fetchRefereeEvaluateRuns(): Promise<{
+  ok: boolean;
+  data: RefereeEvaluateRunsListResult | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/referee/evaluate/runs`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as RefereeEvaluateRunsListResult };
+    }
+    let error = "The referee evaluation run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/referee/nulls/compute -- start (or, while one is already running for this
+// EXACT null_spec_id, observe UNCHANGED) the single-flight null-build job. Mirrors
+// `triggerDeskPlaybookBackscanCompute`'s exact shape; the backend's 422 (unknown null_spec_id)
+// `detail` is surfaced VERBATIM.
+export async function triggerRefereeNullsCompute(nullSpecId: string): Promise<{
+  ok: boolean;
+  data?: { started: boolean; compute: RefereeNullComputeSnapshot };
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/referee/nulls/compute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ null_spec_id: nullSpecId }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data };
+    }
+    let error = "The null build could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/referee/nulls/compute?null_spec_id= -- the named null-spec's compute job
+// current/last snapshot, served VERBATIM. Always a body (never null) -- "idle" before any compute
+// has ever run this process for this key.
+export async function fetchRefereeNullsCompute(nullSpecId: string): Promise<{
+  ok: boolean;
+  data: RefereeNullComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/desk/referee/nulls/compute?null_spec_id=${encodeURIComponent(nullSpecId)}`,
+    );
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as RefereeNullComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+// POST /research/desk/referee/nulls/compute/cancel -- cancel the in-flight null build for this
+// EXACT null_spec_id. The backend's 409 (idle) `detail` is surfaced verbatim.
+export async function cancelRefereeNullsCompute(nullSpecId: string): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/referee/nulls/compute/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ null_spec_id: nullSpecId }),
+    });
+    if (res.ok) return { ok: true };
+    let error = "The null build could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/referee/evaluate -- start (or, while one is already running for this EXACT
+// hypothesis_id, observe UNCHANGED) the single-flight evaluation job. 422s (no job started) on an
+// unknown hypothesis_id, surfaced verbatim.
+export async function triggerRefereeEvaluate(hypothesisId: string): Promise<{
+  ok: boolean;
+  data?: { started: boolean; compute: RefereeEvaluationComputeSnapshot };
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/referee/evaluate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hypothesis_id: hypothesisId }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, data };
+    }
+    let error = "The evaluation could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/referee/evaluate?hypothesis_id= -- the named hypothesis's evaluation-compute
+// job current/last snapshot, served VERBATIM. Always a body (never null).
+export async function fetchRefereeEvaluate(hypothesisId: string): Promise<{
+  ok: boolean;
+  data: RefereeEvaluationComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/research/desk/referee/evaluate?hypothesis_id=${encodeURIComponent(hypothesisId)}`,
+    );
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as RefereeEvaluationComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+// POST /research/desk/referee/evaluate/cancel -- cancel the in-flight evaluation for this EXACT
+// hypothesis_id. The backend's 409 (idle) `detail` is surfaced verbatim.
+export async function cancelRefereeEvaluate(hypothesisId: string): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/referee/evaluate/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hypothesis_id: hypothesisId }),
+    });
+    if (res.ok) return { ok: true };
+    let error = "The evaluation could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
   }
 }

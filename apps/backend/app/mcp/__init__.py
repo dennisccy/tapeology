@@ -19,8 +19,9 @@ Result contract (locked by ``tests/test_mcp_server.py``):
     via ``get_endpoint`` — at J-05; ``bars`` at era-4 J-01; ``levels`` at era-4 J-02; ``strategies``
     at era-4 J-04; ``tradability`` at era-5B J-01; ``setups`` at era-5B J-02; ``edge_report`` at
     era-5B J-04; ``desk_universe``/``desk_screen`` at era-desk J-06; ``desk_playbook``/
-    ``desk_playbook_evidence`` at Era B2 J-09); an allowlisted-but-UNKNOWN path (any unshipped
-    ``/research/*``) still surfaces the backend's honest 404 this way — never placeholder data.
+    ``desk_playbook_evidence`` at Era B2 J-09; ``desk_referee``/``desk_referee_registry`` at Era 6
+    "The Referee" J-09); an allowlisted-but-UNKNOWN path (any unshipped ``/research/*``) still
+    surfaces the backend's honest 404 this way — never placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
     no offline snapshot exists anywhere in this module).
@@ -127,6 +128,16 @@ _STATIC_PATHS: dict[str, str] = {
     # cross-product cell shape, honest `n: 0` before any playbook has ever been recorded -- never a
     # 404). The `?signature=` inspect-mode variant stays reachable only through `get_endpoint`.
     "desk_playbook_evidence": "/research/desk/playbook/evidence",
+    # `desk_referee`/`desk_referee_registry` (Era 6 "The Referee" J-09, MCP contract v5 -- 20 -> 22
+    # tools) are the IDENTICAL no-required-param shape as `desk_playbook`/`desk_playbook_evidence`
+    # directly above: each proxies an endpoint that already serves an explicit HTTP 200
+    # honest-empty/honest-live payload before any hypothesis is ever registered or evaluated (never
+    # a 404). `desk_referee` is the read-side adjudication fold (verdict + provenance per
+    # hypothesis, plus the served REFEREE_REGISTER text); `desk_referee_registry` is the
+    # family/hypothesis/withdrawal/certificate registry. Neither exposes any query-param variant --
+    # both routes take none.
+    "desk_referee": "/research/desk/referee/adjudications",
+    "desk_referee_registry": "/research/desk/referee/registry",
 }
 
 _TAPE_PATHS: dict[str, str] = {
@@ -367,6 +378,32 @@ TOOLS: tuple[types.Tool, ...] = (
             "is always served (a combination with zero recorded signals reads n: 0, never omitted); "
             "other recorded signatures are listed, never pooled, JSON verbatim. Takes no arguments "
             "here; `get_endpoint` reaches the `?signature=` inspect variant."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_referee",
+        description=(
+            "Read-only proxy of GET /research/desk/referee/adjudications -- Era 6 \"The Referee\" "
+            "J-06's read-side adjudication fold: for every registered hypothesis, its verdict in "
+            "the exact vocabulary (registered / pending_forward_confirmation / "
+            "insufficient_sample / fragile / no_evidence / corroborated / basis_retired), its "
+            "confirmatory_output_refused state and refusal_reason when refused, its recorded "
+            "checkpoint snapshot when one exists (family BH fold, fragility_triggers, "
+            "evaluation_basis hash, attestation pass/fail) or an honest live pre-checkpoint "
+            "accrual fold when none does yet, beside the served REFEREE_REGISTER disclosure text "
+            "(what a verdict does NOT mean), JSON verbatim. Never 404/500 on an empty or "
+            "partially-corrupted registry."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_referee_registry",
+        description=(
+            "Read-only proxy of GET /research/desk/referee/registry -- Era 6 \"The Referee\" "
+            "J-05's append-only pre-registration registry: every recorded family, hypothesis "
+            "(with its read-side status/discovery/accrual additions), withdrawal, and "
+            "certificate, JSON verbatim. Never 404/500 on an empty registry."
         ),
         inputSchema=_object_schema({}),
     ),

@@ -43,9 +43,18 @@ import {
   triggerDeskScreenCompute,
   triggerDeskTopupCompute,
   triggerDeskUniverseFetch,
+  cancelRefereeEvaluate,
+  cancelRefereeNullsCompute,
+  fetchRefereeAdjudications,
+  fetchRefereeEvaluate,
+  fetchRefereeEvaluateRuns,
+  fetchRefereeNullRuns,
+  fetchRefereeNullsCompute,
   fetchRefereeRegistry,
   fetchRefereeShortlist,
   postRefereeRegistryHypothesis,
+  triggerRefereeEvaluate,
+  triggerRefereeNullsCompute,
 } from "@/lib/api";
 import type {
   DeskDeepBackfillComputeSnapshot,
@@ -109,7 +118,15 @@ import type {
   DeskTopupRun,
   DeskTopupRunMeta,
   DeskTopupRunsListResult,
+  RefereeAdjudicationEntry,
+  RefereeAdjudicationsResponse,
+  RefereeEvaluateRunsListResult,
+  RefereeEvaluationComputeSnapshot,
+  RefereeEvaluationRun,
   RefereeHypothesis,
+  RefereeNullComputeSnapshot,
+  RefereeNullRun,
+  RefereeNullRunsListResult,
   RefereeRegistryResponse,
   RefereeShortlistCandidate,
   RefereeShortlistResponse,
@@ -341,7 +358,9 @@ type DeskCollapsibleSection =
   | "screenComparison"
   | "provenance"
   | "playbookEvidence"
-  | "refereeRegistry";
+  | "refereeRegistry"
+  | "refereeAdjudications"
+  | "refereeRuns";
 // DESK-COLLAPSED-END
 
 const PRIMARY_BUTTON_CLASS =
@@ -4920,6 +4939,653 @@ function RefereeHypothesesTable({
   );
 }
 
+// goal-referee-iter-10 (J-09): the Referee Adjudications section -- the read-side adjudication fold
+// (verdict chips in the exact vocabulary + full provenance), rendered directly BELOW Referee
+// Registry. A single deferred GET, no compute manager, no poll (GET never computes, T-8) -- the
+// SAME "simplest state shape" pattern `PlaybookEvidenceSection` already uses. `hypothesesById` is a
+// plain lookup (never arithmetic) into the ALREADY-FETCHED registry response, cross-referencing
+// each entry's own `null_spec_id`/`test_spec_id` -- fields the adjudications response itself does
+// not carry (they are baked, unrecoverably, into its opaque `evaluation_basis` hash). Logged as a
+// T-1 interpretation: state/assumptions.md (goal-referee-iter-10, developer) -- "seed identity" is
+// rendered as the hypothesis_id itself, the one per-hypothesis component of the spec's pinned seed
+// recipe (`f"{REFEREE_SEED}:{hypothesis_id}:{purpose}..."`) that is not otherwise a numeric field
+// any endpoint serves.
+function RefereeAdjudicationEntryRow({
+  entry,
+  hypothesis,
+}: {
+  entry: RefereeAdjudicationEntry;
+  hypothesis: RefereeHypothesis | undefined;
+}) {
+  const snapshot = entry.snapshot;
+  return (
+    <tr
+      data-testid={`referee-adjudication-row-${entry.hypothesis_id}`}
+      className="border-b border-slate-900"
+    >
+      <td className="px-1.5 py-1.5 font-mono text-slate-300">{entry.hypothesis_id}</td>
+      <td className="px-1.5 py-1.5">
+        <span
+          data-testid={`referee-adjudication-verdict-${entry.hypothesis_id}`}
+          className={CHIP_CLASS}
+        >
+          {entry.verdict}
+        </span>
+      </td>
+      <td className="px-1.5 py-1.5 text-slate-400">
+        {entry.confirmatory_output_refused ? (
+          <span
+            data-testid={`referee-adjudication-refusal-${entry.hypothesis_id}`}
+            className="text-amber-200/70"
+          >
+            {entry.refusal_reason}
+          </span>
+        ) : snapshot ? (
+          <span className="text-slate-500">checkpointed {formatDateTimeET(snapshot.snapshot_at)}</span>
+        ) : (
+          <span className="font-mono text-slate-300">
+            {entry.live_coverage?.post_boundary_sessions ?? 0} /{" "}
+            {entry.live_coverage?.target_sessions ?? 0} sessions
+          </span>
+        )}
+      </td>
+      <td
+        className="px-1.5 py-1.5 text-slate-500"
+        data-testid={`referee-adjudication-provenance-${entry.hypothesis_id}`}
+      >
+        <div className="flex flex-col gap-0.5 font-mono text-[11px]">
+          <span>basis: {snapshot ? snapshot.evaluation_basis : "—"}</span>
+          <span>null spec: {hypothesis?.null_spec_id ?? "—"}</span>
+          <span>test spec: {hypothesis?.test_spec_id ?? "—"}</span>
+          <span>seed identity: {entry.hypothesis_id}</span>
+          <span>attestation: {snapshot ? (snapshot.attestation.passed ? "pass" : "fail") : "—"}</span>
+          <span>
+            BH:{" "}
+            {snapshot
+              ? `${snapshot.bh.k_star} / ${snapshot.bh.m} (q=${snapshot.bh.q})`
+              : "—"}
+          </span>
+        </div>
+      </td>
+      <td className="px-1.5 py-1.5 text-slate-500">
+        {snapshot && snapshot.fragility_triggers.length > 0
+          ? snapshot.fragility_triggers.join(", ")
+          : "—"}
+      </td>
+    </tr>
+  );
+}
+
+function RefereeAdjudicationsSection({
+  adjudicationsResult,
+  registryResult,
+}: {
+  adjudicationsResult: {
+    ok: boolean;
+    data: RefereeAdjudicationsResponse | null;
+    error?: string;
+  } | null;
+  registryResult: { ok: boolean; data: RefereeRegistryResponse | null; error?: string } | null;
+}) {
+  if (adjudicationsResult === null) {
+    return <LoadingPanel testid="referee-adjudications-loading" />;
+  }
+  if (!adjudicationsResult.ok || adjudicationsResult.data === null) {
+    return (
+      <UnavailablePanel
+        testid="referee-adjudications-unavailable"
+        message={adjudicationsResult.error ?? "The referee adjudications could not be loaded."}
+      />
+    );
+  }
+  const data = adjudicationsResult.data;
+  const hypothesesById = new Map(
+    registryResult?.ok && registryResult.data
+      ? registryResult.data.hypotheses.map((h) => [h.hypothesis_id, h] as const)
+      : [],
+  );
+  return (
+    <div data-testid="referee-adjudications-section">
+      <p className="mb-3 text-xs text-slate-500" data-testid="referee-adjudications-register">
+        {data.register}
+      </p>
+      {data.entries.length === 0 ? (
+        <EmptyState testid="referee-adjudications-empty" title="No hypotheses registered." />
+      ) : (
+        <div className="overflow-x-auto">
+          <table
+            data-testid="referee-adjudications-table"
+            className="w-full min-w-[980px] border-collapse text-xs"
+          >
+            <thead>
+              <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
+                <th className="px-1.5 py-1 text-left">Hypothesis</th>
+                <th className="px-1.5 py-1 text-left">Verdict</th>
+                <th className="px-1.5 py-1 text-left">Status</th>
+                <th className="px-1.5 py-1 text-left">Provenance</th>
+                <th className="px-1.5 py-1 text-left">Fragility triggers</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.entries.map((entry) => (
+                <RefereeAdjudicationEntryRow
+                  key={entry.hypothesis_id}
+                  entry={entry}
+                  hypothesis={hypothesesById.get(entry.hypothesis_id)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <IntegrityErrorsNote
+        errors={data.integrity_errors}
+        testid="referee-adjudications-integrity-errors"
+      />
+    </div>
+  );
+}
+
+// goal-referee-iter-10 (J-09): the Referee Runs section -- null-build + evaluation compute controls
+// with live progress + cancel, plus both durable run ledgers, rendered directly BELOW Referee
+// Adjudications (the era's THIRD and LAST Referee section). Both compute managers are single-flight
+// PER KEY (`null_spec_id` / `hypothesis_id`), never a page-wide singleton like every other desk
+// compute control -- so control/progress state here is keyed by `Record<key, ...>` rather than one
+// flat value per manager, and ONE shared `RefereeComputeControlState` shape (not four separate flat
+// maps) covers the trigger/cancel state both managers need identically.
+
+interface RefereeComputeControlState {
+  triggering: boolean;
+  triggerError: string | null;
+  cancelRequested: boolean;
+  cancelError: string | null;
+}
+
+const REFEREE_COMPUTE_CONTROL_IDLE: RefereeComputeControlState = {
+  triggering: false,
+  triggerError: null,
+  cancelRequested: false,
+  cancelError: null,
+};
+
+// The distinct null_spec_ids actually in play, read off the ALREADY-FETCHED registry's own
+// hypotheses (never a hand-typed constant list client-side -- a B-estimand hypothesis's
+// `null_spec_id` is honestly `null` and is excluded). Order is first-encountered in the registry's
+// OWN served hypothesis order (a `Set`'s iteration order is insertion order, never re-sorted --
+// this page's reorder guard permits exactly one sanctioned `.sort(`/`.reverse(` in the whole file,
+// already spent on `resolvedRange`'s own max-of-a-set idiom) -- deterministic given an unchanged
+// registry response, never a hand-rolled comparator.
+function distinctRefereeNullSpecIds(
+  registryResult: { ok: boolean; data: RefereeRegistryResponse | null } | null,
+): string[] {
+  if (!registryResult?.ok || !registryResult.data) return [];
+  const ids = new Set<string>();
+  for (const hyp of registryResult.data.hypotheses) {
+    if (hyp.null_spec_id !== null) ids.add(hyp.null_spec_id);
+  }
+  return Array.from(ids);
+}
+
+function RefereeNullBuildControl({
+  nullSpecId,
+  compute,
+  control,
+  onTrigger,
+  onCancel,
+}: {
+  nullSpecId: string;
+  compute: RefereeNullComputeSnapshot | undefined;
+  control: RefereeComputeControlState;
+  onTrigger: () => void;
+  onCancel: () => void;
+}) {
+  const isRunning = compute?.status === "running" || compute?.status === "cancelling";
+  return (
+    <div
+      data-testid={`referee-null-build-control-${nullSpecId}`}
+      className="flex flex-col items-start gap-1 rounded-md border border-slate-800 p-2"
+    >
+      <span className="font-mono text-[11px] text-slate-400">{nullSpecId}</span>
+      <button
+        type="button"
+        data-testid={`referee-null-build-trigger-${nullSpecId}`}
+        onClick={onTrigger}
+        disabled={control.triggering || isRunning}
+        className={PRIMARY_BUTTON_CLASS}
+      >
+        {isRunning ? "Building…" : "Build Null"}
+      </button>
+      {isRunning && (
+        <p
+          data-testid={`referee-null-build-progress-${nullSpecId}`}
+          className="text-xs text-amber-200/70"
+        >
+          <span
+            aria-hidden="true"
+            className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle"
+          />
+          {fmt(compute?.done ?? 0, 0)} / {fmt(compute?.total ?? 0, 0)}
+        </p>
+      )}
+      {control.triggerError && (
+        <p
+          data-testid={`referee-null-build-trigger-error-${nullSpecId}`}
+          className="text-xs text-red-300"
+        >
+          {control.triggerError}
+        </p>
+      )}
+      {isRunning && (
+        <button
+          type="button"
+          data-testid={`referee-null-build-cancel-${nullSpecId}`}
+          onClick={onCancel}
+          disabled={control.cancelRequested}
+          className={CANCEL_BUTTON_CLASS}
+        >
+          {control.cancelRequested ? "Cancelling…" : "Cancel"}
+        </button>
+      )}
+      {control.cancelError && (
+        <p
+          data-testid={`referee-null-build-cancel-error-${nullSpecId}`}
+          className="text-xs text-red-300"
+        >
+          {control.cancelError}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function RefereeNullBuildsBlock({
+  registryResult,
+  compute,
+  controls,
+  onTrigger,
+  onCancel,
+}: {
+  registryResult: { ok: boolean; data: RefereeRegistryResponse | null; error?: string } | null;
+  compute: Record<string, RefereeNullComputeSnapshot>;
+  controls: Record<string, RefereeComputeControlState>;
+  onTrigger: (nullSpecId: string) => void;
+  onCancel: (nullSpecId: string) => void;
+}) {
+  const nullSpecIds = distinctRefereeNullSpecIds(registryResult);
+  if (nullSpecIds.length === 0) {
+    return (
+      <EmptyState
+        testid="referee-null-build-controls-empty"
+        title="No hypotheses registered — nothing to build a null for yet."
+      />
+    );
+  }
+  return (
+    <div data-testid="referee-null-build-controls" className="flex flex-wrap gap-2">
+      {nullSpecIds.map((nullSpecId) => (
+        <RefereeNullBuildControl
+          key={nullSpecId}
+          nullSpecId={nullSpecId}
+          compute={compute[nullSpecId]}
+          control={controls[nullSpecId] ?? REFEREE_COMPUTE_CONTROL_IDLE}
+          onTrigger={() => onTrigger(nullSpecId)}
+          onCancel={() => onCancel(nullSpecId)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RefereeEvaluateControl({
+  hypothesisId,
+  compute,
+  control,
+  onTrigger,
+  onCancel,
+}: {
+  hypothesisId: string;
+  compute: RefereeEvaluationComputeSnapshot | undefined;
+  control: RefereeComputeControlState;
+  onTrigger: () => void;
+  onCancel: () => void;
+}) {
+  const isRunning = compute?.status === "running" || compute?.status === "cancelling";
+  return (
+    <div
+      data-testid={`referee-evaluate-control-${hypothesisId}`}
+      className="flex flex-col items-start gap-1 rounded-md border border-slate-800 p-2"
+    >
+      <span className="font-mono text-[11px] text-slate-400">{hypothesisId}</span>
+      <button
+        type="button"
+        data-testid={`referee-evaluate-trigger-${hypothesisId}`}
+        onClick={onTrigger}
+        disabled={control.triggering || isRunning}
+        className={PRIMARY_BUTTON_CLASS}
+      >
+        {isRunning ? "Evaluating…" : "Evaluate"}
+      </button>
+      {isRunning && (
+        <p
+          data-testid={`referee-evaluate-progress-${hypothesisId}`}
+          className="text-xs text-amber-200/70"
+        >
+          <span
+            aria-hidden="true"
+            className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle"
+          />
+          {fmt(compute?.done ?? 0, 0)} / {fmt(compute?.total ?? 0, 0)}
+        </p>
+      )}
+      {control.triggerError && (
+        <p
+          data-testid={`referee-evaluate-trigger-error-${hypothesisId}`}
+          className="text-xs text-red-300"
+        >
+          {control.triggerError}
+        </p>
+      )}
+      {isRunning && (
+        <button
+          type="button"
+          data-testid={`referee-evaluate-cancel-${hypothesisId}`}
+          onClick={onCancel}
+          disabled={control.cancelRequested}
+          className={CANCEL_BUTTON_CLASS}
+        >
+          {control.cancelRequested ? "Cancelling…" : "Cancel"}
+        </button>
+      )}
+      {control.cancelError && (
+        <p
+          data-testid={`referee-evaluate-cancel-error-${hypothesisId}`}
+          className="text-xs text-red-300"
+        >
+          {control.cancelError}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function RefereeEvaluateControlsBlock({
+  registryResult,
+  compute,
+  controls,
+  onTrigger,
+  onCancel,
+}: {
+  registryResult: { ok: boolean; data: RefereeRegistryResponse | null; error?: string } | null;
+  compute: Record<string, RefereeEvaluationComputeSnapshot>;
+  controls: Record<string, RefereeComputeControlState>;
+  onTrigger: (hypothesisId: string) => void;
+  onCancel: (hypothesisId: string) => void;
+}) {
+  const hypotheses = registryResult?.ok && registryResult.data ? registryResult.data.hypotheses : [];
+  if (hypotheses.length === 0) {
+    return (
+      <EmptyState
+        testid="referee-evaluate-controls-empty"
+        title="No hypotheses registered — nothing to evaluate yet."
+      />
+    );
+  }
+  return (
+    <div data-testid="referee-evaluate-controls" className="flex flex-wrap gap-2">
+      {hypotheses.map((hyp) => (
+        <RefereeEvaluateControl
+          key={hyp.hypothesis_id}
+          hypothesisId={hyp.hypothesis_id}
+          compute={compute[hyp.hypothesis_id]}
+          control={controls[hyp.hypothesis_id] ?? REFEREE_COMPUTE_CONTROL_IDLE}
+          onTrigger={() => onTrigger(hyp.hypothesis_id)}
+          onCancel={() => onCancel(hyp.hypothesis_id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+const REFEREE_NULL_RUN_COLUMNS: readonly SortableColumn<RefereeNullRun>[] = [
+  { id: "run_id", label: "run", kind: "text", value: (run) => run.run_id },
+  { id: "null_spec_id", label: "null spec", kind: "text", value: (run) => run.null_spec_id },
+  { id: "state", label: "state", kind: "text", value: (run) => run.state },
+  { id: "progress", label: "progress", kind: "text", sortable: false, value: () => null },
+  { id: "started", label: "started", kind: "instant", value: (run) => run.started_at },
+  { id: "finished", label: "finished", kind: "instant", value: (run) => run.finished_at },
+  { id: "error", label: "error", kind: "text", sortable: false, value: () => null },
+];
+
+function RefereeNullRunRow({ run }: { run: RefereeNullRun }) {
+  return (
+    <tr data-testid="referee-null-run-row" className="border-b border-slate-900">
+      <td className="px-2 py-1 text-left font-mono text-[11px] text-slate-400">{run.run_id}</td>
+      <td className="px-2 py-1 text-left text-xs font-mono text-slate-300">{run.null_spec_id}</td>
+      <td data-testid="referee-null-run-state" className="px-2 py-1 text-left text-xs text-slate-300">
+        {run.state}
+      </td>
+      <td className="px-2 py-1 text-right text-xs font-mono text-slate-400">
+        {run.progress.done} / {run.progress.total}
+      </td>
+      <td className="px-2 py-1 text-left text-xs text-slate-500">{formatDateTimeET(run.started_at)}</td>
+      <td className="px-2 py-1 text-left text-xs text-slate-500">{formatDateTimeET(run.finished_at)}</td>
+      <td className="px-2 py-1 text-left text-xs text-red-300">{run.error ?? "—"}</td>
+    </tr>
+  );
+}
+
+function RefereeNullRunsTable({ runs }: { runs: RefereeNullRun[] }) {
+  const sort = useTableSort(runs, REFEREE_NULL_RUN_COLUMNS);
+  if (runs.length === 0) {
+    return <EmptyState testid="referee-null-runs-empty" title="No null-build runs recorded yet." />;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <TableSortNote sort={sort} />
+      <table data-testid="referee-null-runs-table" className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-slate-800">
+            {REFEREE_NULL_RUN_COLUMNS.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={column.id === "progress" ? HEADER_CELL : HEADER_CELL_LEFT}
+              />
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sort.entries.map(({ item: run }) => (
+            <RefereeNullRunRow key={run.run_id} run={run} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RefereeNullRunsSection({
+  result,
+}: {
+  result: { ok: boolean; data: RefereeNullRunsListResult | null; error?: string } | null;
+}) {
+  if (result === null) {
+    return <LoadingPanel testid="referee-null-runs-loading" />;
+  }
+  if (!result.ok || result.data === null) {
+    return (
+      <UnavailablePanel
+        testid="referee-null-runs-unavailable"
+        message={result.error ?? "The referee null-build run history could not be loaded."}
+      />
+    );
+  }
+  return (
+    <div>
+      <RefereeNullRunsTable runs={result.data.runs} />
+      <IntegrityErrorsNote
+        errors={result.data.integrity_errors}
+        testid="referee-null-runs-integrity-errors"
+      />
+    </div>
+  );
+}
+
+const REFEREE_EVALUATE_RUN_COLUMNS: readonly SortableColumn<RefereeEvaluationRun>[] = [
+  { id: "run_id", label: "run", kind: "text", value: (run) => run.run_id },
+  { id: "hypothesis_id", label: "hypothesis", kind: "text", value: (run) => run.hypothesis_id },
+  { id: "state", label: "state", kind: "text", value: (run) => run.state },
+  { id: "progress", label: "progress", kind: "text", sortable: false, value: () => null },
+  { id: "started", label: "started", kind: "instant", value: (run) => run.started_at },
+  { id: "finished", label: "finished", kind: "instant", value: (run) => run.finished_at },
+  { id: "error", label: "error", kind: "text", sortable: false, value: () => null },
+];
+
+function RefereeEvaluationRunRow({ run }: { run: RefereeEvaluationRun }) {
+  return (
+    <tr data-testid="referee-evaluate-run-row" className="border-b border-slate-900">
+      <td className="px-2 py-1 text-left font-mono text-[11px] text-slate-400">{run.run_id}</td>
+      <td className="px-2 py-1 text-left text-xs font-mono text-slate-300">{run.hypothesis_id}</td>
+      <td
+        data-testid="referee-evaluate-run-state"
+        className="px-2 py-1 text-left text-xs text-slate-300"
+      >
+        {run.state}
+      </td>
+      <td className="px-2 py-1 text-right text-xs font-mono text-slate-400">
+        {run.progress.done} / {run.progress.total}
+      </td>
+      <td className="px-2 py-1 text-left text-xs text-slate-500">{formatDateTimeET(run.started_at)}</td>
+      <td className="px-2 py-1 text-left text-xs text-slate-500">{formatDateTimeET(run.finished_at)}</td>
+      <td className="px-2 py-1 text-left text-xs text-red-300">{run.error ?? "—"}</td>
+    </tr>
+  );
+}
+
+function RefereeEvaluateRunsTable({ runs }: { runs: RefereeEvaluationRun[] }) {
+  const sort = useTableSort(runs, REFEREE_EVALUATE_RUN_COLUMNS);
+  if (runs.length === 0) {
+    return <EmptyState testid="referee-evaluate-runs-empty" title="No evaluation runs recorded yet." />;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <TableSortNote sort={sort} />
+      <table data-testid="referee-evaluate-runs-table" className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-slate-800">
+            {REFEREE_EVALUATE_RUN_COLUMNS.map((column) => (
+              <SortableHeader
+                key={column.id}
+                column={column}
+                sort={sort}
+                className={column.id === "progress" ? HEADER_CELL : HEADER_CELL_LEFT}
+              />
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sort.entries.map(({ item: run }) => (
+            <RefereeEvaluationRunRow key={run.run_id} run={run} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RefereeEvaluateRunsSection({
+  result,
+}: {
+  result: { ok: boolean; data: RefereeEvaluateRunsListResult | null; error?: string } | null;
+}) {
+  if (result === null) {
+    return <LoadingPanel testid="referee-evaluate-runs-loading" />;
+  }
+  if (!result.ok || result.data === null) {
+    return (
+      <UnavailablePanel
+        testid="referee-evaluate-runs-unavailable"
+        message={result.error ?? "The referee evaluation run history could not be loaded."}
+      />
+    );
+  }
+  return (
+    <div>
+      <RefereeEvaluateRunsTable runs={result.data.runs} />
+      <IntegrityErrorsNote
+        errors={result.data.integrity_errors}
+        testid="referee-evaluate-runs-integrity-errors"
+      />
+    </div>
+  );
+}
+
+function RefereeRunsSection({
+  registryResult,
+  nullRunsResult,
+  evaluateRunsResult,
+  nullCompute,
+  nullControls,
+  onTriggerNullBuild,
+  onCancelNullBuild,
+  evalCompute,
+  evalControls,
+  onTriggerEvaluate,
+  onCancelEvaluate,
+}: {
+  registryResult: { ok: boolean; data: RefereeRegistryResponse | null; error?: string } | null;
+  nullRunsResult: { ok: boolean; data: RefereeNullRunsListResult | null; error?: string } | null;
+  evaluateRunsResult: {
+    ok: boolean;
+    data: RefereeEvaluateRunsListResult | null;
+    error?: string;
+  } | null;
+  nullCompute: Record<string, RefereeNullComputeSnapshot>;
+  nullControls: Record<string, RefereeComputeControlState>;
+  onTriggerNullBuild: (nullSpecId: string) => void;
+  onCancelNullBuild: (nullSpecId: string) => void;
+  evalCompute: Record<string, RefereeEvaluationComputeSnapshot>;
+  evalControls: Record<string, RefereeComputeControlState>;
+  onTriggerEvaluate: (hypothesisId: string) => void;
+  onCancelEvaluate: (hypothesisId: string) => void;
+}) {
+  return (
+    <div data-testid="referee-runs-section">
+      <div className="mb-4">
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Null Builds
+        </h3>
+        <RefereeNullBuildsBlock
+          registryResult={registryResult}
+          compute={nullCompute}
+          controls={nullControls}
+          onTrigger={onTriggerNullBuild}
+          onCancel={onCancelNullBuild}
+        />
+        <div className="mt-3 border-t border-slate-800 pt-3">
+          <RefereeNullRunsSection result={nullRunsResult} />
+        </div>
+      </div>
+      <div>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Evaluations
+        </h3>
+        <RefereeEvaluateControlsBlock
+          registryResult={registryResult}
+          compute={evalCompute}
+          controls={evalControls}
+          onTrigger={onTriggerEvaluate}
+          onCancel={onCancelEvaluate}
+        />
+        <div className="mt-3 border-t border-slate-800 pt-3">
+          <RefereeEvaluateRunsSection result={evaluateRunsResult} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // era-desk-iter-14 (J-10): a third compute control, wired exactly like `TopupComputeControl` — the
 // operation has no per-pair counters (it is a single classify-repair-verify walk, not a walk over
 // many pairs), so the running indicator shows the compute's own `progress.phase` label instead of
@@ -7713,6 +8379,43 @@ export default function DeskPage() {
   const [refereeRegistering, setRefereeRegistering] = useState(false);
   const [refereeRegisterError, setRefereeRegisterError] = useState<string | null>(null);
 
+  // goal-referee-iter-10 (J-09): the Referee Adjudications + Referee Runs sections' own state --
+  // the era's last two Referee sections. Adjudications is a plain deferred read (no compute
+  // manager, T-8). Runs hosts TWO single-flight-PER-KEY compute managers (null builds keyed by
+  // `null_spec_id`, evaluations keyed by `hypothesis_id`) -- unlike every other desk compute
+  // control on this page (a page-wide singleton), so their live snapshots and trigger/cancel state
+  // are `Record<key, ...>` maps rather than one flat value each. A key absent from `nullCompute`/
+  // `evalCompute` renders as idle (the backend's own `_IDLE_SNAPSHOT_TEMPLATE`-when-absent
+  // convention) -- no mount-time seed is fetched for either map (the keys themselves are not known
+  // until the registry read resolves, on first expand of either section).
+  const [refereeAdjudicationsResult, setRefereeAdjudicationsResult] = useState<{
+    ok: boolean;
+    data: RefereeAdjudicationsResponse | null;
+    error?: string;
+  } | null>(null);
+  const [refereeNullRunsResult, setRefereeNullRunsResult] = useState<{
+    ok: boolean;
+    data: RefereeNullRunsListResult | null;
+    error?: string;
+  } | null>(null);
+  const [refereeEvaluateRunsResult, setRefereeEvaluateRunsResult] = useState<{
+    ok: boolean;
+    data: RefereeEvaluateRunsListResult | null;
+    error?: string;
+  } | null>(null);
+  const [refereeNullCompute, setRefereeNullCompute] = useState<
+    Record<string, RefereeNullComputeSnapshot>
+  >({});
+  const [refereeNullControls, setRefereeNullControls] = useState<
+    Record<string, RefereeComputeControlState>
+  >({});
+  const [refereeEvalCompute, setRefereeEvalCompute] = useState<
+    Record<string, RefereeEvaluationComputeSnapshot>
+  >({});
+  const [refereeEvalControls, setRefereeEvalControls] = useState<
+    Record<string, RefereeComputeControlState>
+  >({});
+
   // --- the six collapsed sections (see the DESK-COLLAPSED block at the top of this file) ---------
   // Which are currently open. A Set keyed by section, mirroring `PlaybookSummaryView`'s own
   // `expandedPools` — nothing outside this component reads it, and it is deliberately NOT
@@ -7751,6 +8454,20 @@ export default function DeskPage() {
     } else if (section === "refereeRegistry") {
       fetchRefereeShortlist().then(setRefereeShortlistResult);
       fetchRefereeRegistry().then(setRefereeRegistryResult);
+    } else if (section === "refereeAdjudications") {
+      fetchRefereeAdjudications().then(setRefereeAdjudicationsResult);
+      // Also (re)fetches the registry -- Adjudications cross-references each entry's own
+      // null_spec_id/test_spec_id off it (fields the adjudications response itself does not carry;
+      // see RefereeAdjudicationsSection's own comment), and this section may be expanded before
+      // "Referee Registry" ever is.
+      fetchRefereeRegistry().then(setRefereeRegistryResult);
+    } else if (section === "refereeRuns") {
+      // Same reasoning: the trigger controls below are keyed off the registry's own hypotheses
+      // (distinct null_spec_ids + one row per hypothesis), so this section fetches it too rather
+      // than assuming "Referee Registry" was expanded first.
+      fetchRefereeRegistry().then(setRefereeRegistryResult);
+      fetchRefereeNullRuns().then(setRefereeNullRunsResult);
+      fetchRefereeEvaluateRuns().then(setRefereeEvaluateRunsResult);
     }
   }
 
@@ -7793,6 +8510,176 @@ export default function DeskPage() {
     setRefereeSelectedCandidateId(null);
     fetchRefereeRegistry().then(setRefereeRegistryResult);
   }
+
+  // goal-referee-iter-10 (J-09): Referee Runs' own trigger/cancel handlers -- plain async handlers
+  // (never effects; this page pins an exact effect census, test_desk_refresh_chain_guard.py), keyed
+  // per null_spec_id / hypothesis_id since both compute managers are single-flight PER KEY. Each
+  // mirrors `handleTriggerBackscan`/`handleRunBackscanClick`/`handleCancelBackscan`'s exact shape,
+  // including the backend-authoritative `started: false` single-flight refusal rendered inline via
+  // `triggerError` (TC-8).
+  async function handleTriggerRefereeNullBuild(nullSpecId: string) {
+    setRefereeNullControls((previous) => ({
+      ...previous,
+      [nullSpecId]: { triggering: true, triggerError: null, cancelRequested: false, cancelError: null },
+    }));
+    const result = await triggerRefereeNullsCompute(nullSpecId);
+    if (!result.ok || result.data === undefined) {
+      setRefereeNullControls((previous) => ({
+        ...previous,
+        [nullSpecId]: {
+          ...(previous[nullSpecId] ?? REFEREE_COMPUTE_CONTROL_IDLE),
+          triggering: false,
+          triggerError: result.error ?? "The null build could not be started.",
+        },
+      }));
+      return;
+    }
+    const started = result.data.started;
+    const compute = result.data.compute;
+    setRefereeNullCompute((previous) => ({ ...previous, [nullSpecId]: compute }));
+    setRefereeNullControls((previous) => ({
+      ...previous,
+      [nullSpecId]: {
+        ...(previous[nullSpecId] ?? REFEREE_COMPUTE_CONTROL_IDLE),
+        triggering: false,
+        triggerError: started
+          ? null
+          : "Refused — a null build is already running for this spec. Wait for it to finish, then try again.",
+      },
+    }));
+  }
+
+  async function handleCancelRefereeNullBuild(nullSpecId: string) {
+    setRefereeNullControls((previous) => ({
+      ...previous,
+      [nullSpecId]: {
+        ...(previous[nullSpecId] ?? REFEREE_COMPUTE_CONTROL_IDLE),
+        cancelRequested: true,
+        cancelError: null,
+      },
+    }));
+    const result = await cancelRefereeNullsCompute(nullSpecId);
+    if (!result.ok) {
+      setRefereeNullControls((previous) => ({
+        ...previous,
+        [nullSpecId]: {
+          ...(previous[nullSpecId] ?? REFEREE_COMPUTE_CONTROL_IDLE),
+          cancelRequested: false,
+          cancelError: result.error ?? "The null build could not be cancelled.",
+        },
+      }));
+    }
+  }
+
+  async function handleTriggerRefereeEvaluate(hypothesisId: string) {
+    setRefereeEvalControls((previous) => ({
+      ...previous,
+      [hypothesisId]: {
+        triggering: true,
+        triggerError: null,
+        cancelRequested: false,
+        cancelError: null,
+      },
+    }));
+    const result = await triggerRefereeEvaluate(hypothesisId);
+    if (!result.ok || result.data === undefined) {
+      setRefereeEvalControls((previous) => ({
+        ...previous,
+        [hypothesisId]: {
+          ...(previous[hypothesisId] ?? REFEREE_COMPUTE_CONTROL_IDLE),
+          triggering: false,
+          triggerError: result.error ?? "The evaluation could not be started.",
+        },
+      }));
+      return;
+    }
+    const started = result.data.started;
+    const compute = result.data.compute;
+    setRefereeEvalCompute((previous) => ({ ...previous, [hypothesisId]: compute }));
+    setRefereeEvalControls((previous) => ({
+      ...previous,
+      [hypothesisId]: {
+        ...(previous[hypothesisId] ?? REFEREE_COMPUTE_CONTROL_IDLE),
+        triggering: false,
+        triggerError: started
+          ? null
+          : "Refused — an evaluation is already running for this hypothesis. Wait for it to finish, then try again.",
+      },
+    }));
+  }
+
+  async function handleCancelRefereeEvaluate(hypothesisId: string) {
+    setRefereeEvalControls((previous) => ({
+      ...previous,
+      [hypothesisId]: {
+        ...(previous[hypothesisId] ?? REFEREE_COMPUTE_CONTROL_IDLE),
+        cancelRequested: true,
+        cancelError: null,
+      },
+    }));
+    const result = await cancelRefereeEvaluate(hypothesisId);
+    if (!result.ok) {
+      setRefereeEvalControls((previous) => ({
+        ...previous,
+        [hypothesisId]: {
+          ...(previous[hypothesisId] ?? REFEREE_COMPUTE_CONTROL_IDLE),
+          cancelRequested: false,
+          cancelError: result.error ?? "The evaluation could not be cancelled.",
+        },
+      }));
+    }
+  }
+
+  // The Referee Runs polling pair (goal-referee-iter-10, J-09) -- TWO new effects/intervals (the
+  // era's 21st/9th), re-derived at test_desk_refresh_chain_guard.py's own
+  // _EXPECTED_EFFECT_COUNT/_EXPECTED_INTERVAL_COUNT. ONE effect per manager polls EVERY currently-
+  // running key at once (never one effect per key -- the key set is dynamic and unbounded in
+  // principle), mirroring the Backscan poll's own "stop on any non-running status, refresh the
+  // ledger once on that terminal tick" shape. Neither effect can reach a trigger -- both only ever
+  // call the two `fetchReferee*` GETs.
+  useEffect(() => {
+    const runningIds = Object.entries(refereeNullCompute)
+      .filter(([, snap]) => snap.status === "running" || snap.status === "cancelling")
+      .map(([id]) => id);
+    if (runningIds.length === 0) return;
+    const handle = setInterval(async () => {
+      for (const nullSpecId of runningIds) {
+        const next = await fetchRefereeNullsCompute(nullSpecId);
+        if (!next.ok || !next.data) continue;
+        const snapshot = next.data;
+        setRefereeNullCompute((previous) => ({ ...previous, [nullSpecId]: snapshot }));
+        if (snapshot.status !== "running" && snapshot.status !== "cancelling") {
+          const refreshed = await fetchRefereeNullRuns();
+          setRefereeNullRunsResult((previous) =>
+            refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
+          );
+        }
+      }
+    }, 700);
+    return () => clearInterval(handle);
+  }, [refereeNullCompute]);
+
+  useEffect(() => {
+    const runningIds = Object.entries(refereeEvalCompute)
+      .filter(([, snap]) => snap.status === "running" || snap.status === "cancelling")
+      .map(([id]) => id);
+    if (runningIds.length === 0) return;
+    const handle = setInterval(async () => {
+      for (const hypothesisId of runningIds) {
+        const next = await fetchRefereeEvaluate(hypothesisId);
+        if (!next.ok || !next.data) continue;
+        const snapshot = next.data;
+        setRefereeEvalCompute((previous) => ({ ...previous, [hypothesisId]: snapshot }));
+        if (snapshot.status !== "running" && snapshot.status !== "cancelling") {
+          const refreshed = await fetchRefereeEvaluateRuns();
+          setRefereeEvaluateRunsResult((previous) =>
+            refreshed.ok || previous === null || !previous.ok ? refreshed : previous,
+          );
+        }
+      }
+    }, 700);
+    return () => clearInterval(handle);
+  }, [refereeEvalCompute]);
 
   // The chained refresh (see the REFRESH-CHAIN block above). `refreshChain` is plain state and is
   // deliberately NOT persisted: a reload clears it and nothing resumes, which is what keeps "every
@@ -9611,6 +10498,48 @@ export default function DeskPage() {
               onConfirm={handleRegisterRefereeCandidate}
               registering={refereeRegistering}
               registerError={refereeRegisterError}
+            />
+          </CollapsibleSection>
+        </section>
+
+        {/* goal-referee-iter-10 (J-09): the Referee Adjudications section -- rendered directly BELOW
+            the shipped Referee Registry section above (T-11: new data-testids only, no shipped
+            data-testid or heading string reused). */}
+        <section aria-label="Referee Adjudications" className="mt-6">
+          <CollapsibleSection
+            id="refereeAdjudications"
+            title="Referee Adjudications"
+            open={expandedSections.has("refereeAdjudications")}
+            onToggle={() => toggleSection("refereeAdjudications")}
+          >
+            <RefereeAdjudicationsSection
+              adjudicationsResult={refereeAdjudicationsResult}
+              registryResult={refereeRegistryResult}
+            />
+          </CollapsibleSection>
+        </section>
+
+        {/* goal-referee-iter-10 (J-09): the Referee Runs section -- the era's LAST section, rendered
+            directly BELOW Referee Adjudications and below every other shipped section (T-11). */}
+        <section aria-label="Referee Runs" className="mt-6">
+          <CollapsibleSection
+            id="refereeRuns"
+            title="Referee Runs"
+            open={expandedSections.has("refereeRuns")}
+            onToggle={() => toggleSection("refereeRuns")}
+          >
+            <RefereeRunsSection
+              registryResult={refereeRegistryResult}
+              nullRunsResult={refereeNullRunsResult}
+              evaluateRunsResult={refereeEvaluateRunsResult}
+              nullCompute={refereeNullCompute}
+              nullControls={refereeNullControls}
+              onTriggerNullBuild={handleTriggerRefereeNullBuild}
+              onCancelNullBuild={handleCancelRefereeNullBuild}
+              evalCompute={refereeEvalCompute}
+              evalControls={refereeEvalControls}
+              onTriggerEvaluate={handleTriggerRefereeEvaluate}
+              onCancelEvaluate={handleCancelRefereeEvaluate}
             />
           </CollapsibleSection>
         </section>

@@ -256,14 +256,24 @@ def _strategy_trade(*, direction: str = "long", logical_ts: float = 100.0, net_r
 def _plant_strategy_backtest(
     journal_store: JournalStore, *, backtest_id: str, dataset: dict,
     candidate_net_r: float, null_net_r: float,
+    strategy_id: str = STRATEGY_V1_ID, profile: str = PROFILE_DEFAULT,
 ) -> None:
     """Plants one ``done`` backtest report whose ``result`` block already carries the dataset
     joined verbatim (``backtests.py``'s own result-block shape), reproduced by hand -- the
-    ``test_referee_evidence.py`` ``_plant_backtest_result`` precedent."""
+    ``test_referee_evidence.py`` ``_plant_backtest_result`` precedent.
+
+    ``strategy_id``/``profile`` (goal-referee-iter-10 rider 1) default to the champion identity but
+    are ALWAYS overridden by ``_mint_matching_certificate_through_the_real_rail`` below to match its
+    own caller-supplied ``candidate`` exactly -- before this rider, ``_pool_strategy_trades`` pooled
+    the whole journal unfiltered, so a hardcoded ``STRATEGY_V1_ID``/``PROFILE_DEFAULT`` stamp here
+    was harmless even when a caller's own ``candidate`` named a DIFFERENT strategy/profile (e.g.
+    ``STRATEGY_TAPE_ID``, or ``PROFILE_CANDIDATE_FASTER_WARMUP``); after the rider, the mint only
+    ever pools evidence whose OWN recorded identity matches the certificate's declared candidate, so
+    the planted fixture must genuinely BE that candidate's own evidence."""
     payload = {
         "id": backtest_id, "status": "done",
         "result": {
-            "dataset": dataset, "strategy_id": STRATEGY_V1_ID, "profile": PROFILE_DEFAULT,
+            "dataset": dataset, "strategy_id": strategy_id, "profile": profile,
             "config_fingerprint": CONFIG.config_fingerprint(),
             "trades": [_strategy_trade(net_r=candidate_net_r)],
             "null_baseline": {
@@ -294,6 +304,7 @@ def _mint_matching_certificate_through_the_real_rail(
         _plant_strategy_backtest(
             store, backtest_id=f"strategy-bt-{i}", dataset=dataset,
             candidate_net_r=1.0, null_net_r=-1.0,
+            strategy_id=candidate["strategy_id"], profile=candidate["profile"],
         )
 
     registry_dir = tmp_path / "referee_registry"
@@ -1210,26 +1221,43 @@ def test_a_survivor_with_zero_certificates_on_file_completes_the_sweep_honestly_
 
 # --- era-6 J-08 (TC-8): the no-bypass source-scan guard --------------------------------------------
 
+# goal-referee-iter-10 rider 3 (TC-17): the banned-token list and the scan assertion now live in ONE
+# helper (`_assert_no_bypass_tokens`) that BOTH the production lint below and its own can-fail proof
+# call -- before this rider, the can-fail test was a hand-typed string check
+# (`"--force" in lowered or "force" in lowered`) that never touched the real scan logic at all, so it
+# would have kept passing even if the production lint's own loop/assertion were gutted. Now the
+# can-fail test runs the SAME helper against a seeded, mutated copy of the real `pnl_scan.py` source,
+# so it genuinely fails only if that helper still does its job.
+_NO_BYPASS_BANNED_TOKENS = (
+    "--force", "force_promote", "force_certificate", "force=true",
+    "skip_certificate", "skip_cert", "no_certificate_required", "allow_without_certificate",
+    "default_allow", "tapeology_force", "tapeology_skip_cert",
+)
+
+
+def _assert_no_bypass_tokens(source: str, *, label: str) -> None:
+    """The promotion-interlock no-bypass scan itself (TC-8/TC-17): asserts none of
+    ``_NO_BYPASS_BANNED_TOKENS`` appears in ``source`` (case-insensitively), naming ``label`` and
+    the first offending token on failure. Every banned token is an underscore/flag-shaped
+    identifier (never a bare English word like "bypass" prose legitimately uses to describe the
+    ABSENCE of one -- this module's own docstrings do exactly that) so the scan cannot self-trip on
+    its own documentation."""
+    lowered = source.lower()
+    for token in _NO_BYPASS_BANNED_TOKENS:
+        assert token not in lowered, (
+            f"{label} contains a potential promotion-interlock bypass token: {token!r}"
+        )
+
 
 def test_no_bypass_path_exists_for_authorize_promotion():
     """TC-8: scans the two files implementing the promotion interlock's own source text for any
     CODE-shaped ``--force``/skip-flag/environment-override/default-allow IDENTIFIER that could
-    satisfy ``authorize_promotion`` without a genuine, matching, on-file certificate. Every banned
-    token below is an underscore/flag-shaped identifier (never a bare English word like "bypass"
-    prose legitimately uses to describe the ABSENCE of one -- this module's own docstrings do
-    exactly that) so the scan cannot self-trip on its own documentation. A lint that CAN fail on a
-    seeded violation (the ``test_desk_ui_guards.py`` precedent) — proven below."""
-    banned_tokens = (
-        "--force", "force_promote", "force_certificate", "force=true",
-        "skip_certificate", "skip_cert", "no_certificate_required", "allow_without_certificate",
-        "default_allow", "tapeology_force", "tapeology_skip_cert",
-    )
+    satisfy ``authorize_promotion`` without a genuine, matching, on-file certificate, via the SAME
+    ``_assert_no_bypass_tokens`` helper the can-fail proof below exercises. A lint that CAN fail on
+    a seeded violation (the ``test_desk_ui_guards.py`` precedent) — proven below."""
     for relative in ("research/pnl_scan.py", "research/referee_adjudicate.py"):
-        source = (BACKEND_DIR / "app" / relative).read_text().lower()
-        for token in banned_tokens:
-            assert token not in source, (
-                f"{relative} contains a potential promotion-interlock bypass token: {token!r}"
-            )
+        source = (BACKEND_DIR / "app" / relative).read_text()
+        _assert_no_bypass_tokens(source, label=relative)
     # `--strategy` is the ONE existing CLI flag on pnl_scan.py — proves this scan is not simply
     # rejecting every flag definition; it targets bypass-shaped tokens specifically.
     pnl_scan_source = (BACKEND_DIR / "app" / "research" / "pnl_scan.py").read_text()
@@ -1237,9 +1265,16 @@ def test_no_bypass_path_exists_for_authorize_promotion():
 
 
 def test_no_bypass_guard_can_fail_on_a_seeded_violation():
-    """The lint CAN fail — a lint that cannot fail proves nothing (the ``test_desk_ui_guards.py``
-    precedent)."""
-    seeded_source = "if args.force or os.environ.get('TAPEOLOGY_SKIP_CERTIFICATE'):\n    return authorized\n"
-    lowered = seeded_source.lower()
-    assert "--force" in lowered or "force" in lowered
-    assert "skip_certificate" in lowered
+    """TC-17: the lint CAN fail — a lint that cannot fail proves nothing (the
+    ``test_desk_ui_guards.py`` precedent). Exercises the REAL scan helper
+    (``_assert_no_bypass_tokens``), not a hand-typed string check, against a seeded, mutated copy of
+    the REAL ``pnl_scan.py`` source (the genuine, unmodified source passes it above) with a banned
+    bypass token appended -- so this test genuinely fails if the scan itself were gutted, rather
+    than merely proving an unrelated string contains "force"."""
+    real_source = (BACKEND_DIR / "app" / "research" / "pnl_scan.py").read_text()
+    seeded_source = (
+        real_source
+        + "\nif args.force or os.environ.get('TAPEOLOGY_SKIP_CERTIFICATE'):\n    return authorized\n"
+    )
+    with pytest.raises(AssertionError):
+        _assert_no_bypass_tokens(seeded_source, label="seeded pnl_scan.py")

@@ -504,3 +504,63 @@ the four small items along the way". Two things for a person, neither blocking: 
 changed files and the previous round's are still uncommitted and should be committed; and from
 iteration 2, outside this project, the unrelated trendora backend on port 8255 has still not been
 restarted.
+
+## Iteration 10 — goal-referee-iter-10
+
+**Date:** 2026-08-15T22:40:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-09 "The Referee on the Desk page and the 22-tool Claude connector" (with one
+  missing picture — see below), J-10 "The kept product stands" (its era-end clauses are now met)
+- Newly failing: none
+- Regressed: none
+- Not re-tested this run: J-01 "The era transition stands", J-02 "The evidence contract",
+  J-04 "Matched nulls" and J-05 "The registry" — DEFERRED-BUDGET rows in the results file, so all
+  four keep their recorded passing status
+- Re-verified directly rather than carried: J-03 "The statistics core", J-06 "Estimand engines and
+  adjudication" and J-08 "The strategy family and the promotion lock" — their rows were also
+  deferred, but I probed each one live myself
+- Anti-goal violations: none new. The minor one left open last round (a certificate could name a
+  strategy whose trades were never in its evidence) is now CLOSED and I reproduced the closure
+
+**Reasoning:** The two new Desk panels really do what they claim, and I opened the pictures rather
+than trusting the words. On an empty rig the Referee sections say "No hypotheses registered." and
+"No null-build runs recorded yet." On a seeded rig, three questions show three different verdict
+words: one reads "fragile" with its trigger named, one reads "insufficient_sample" and carries the
+exact sentence saying the checkpoint's self-check failed so no confirmatory answer will be given,
+and one reads "registered" with 0 of 12 sessions counted — each with its own basis hash, null and
+test specification names and pass/fail self-check line. The Runs panel shows a real ledger: many
+finished jobs at 126 of 126 and seven genuinely cancelled ones stopped part-way (45, 112, 4 of 126)
+— proof the cancel button really reaches the server. I counted the Claude connector's tools myself
+in the running code: exactly 22, all read-only. I ran the whole test suite myself (2,688 collected,
+2,680 passed, 8 skipped, nothing failed) and printed the settings pin myself (08e471b10130e1e2). I
+also proved the round's main fix myself instead of reading it: with twelve planted trades all
+belonging to one strategy, the old code pooled all twelve for any name a caller asked for; now the
+unrelated name pools zero and the true name still pools twelve, so a certificate can no longer be
+stamped with evidence that is not its own. The kept product still stands: the cockpit reaches
+"Buyer Control" with a live chart, /structure loads the pinned AAPL date with a nine-band map and
+years of case studies, and every shipped Desk section renders as shipped. Two honest gaps. First,
+seven of the eight older journeys were skipped for time; the automatic finish check treats a skipped
+row exactly like a failure, so the era cannot be declared done this round. Second, one promised
+picture is missing: nobody photographed the screen refusing a second job while the first was still
+running. The picture cited for it is the very same file as two other tests (identical checksum) and
+shows no refusal. The behaviour itself is proven three ways — a unit test, a five-at-once request
+probe, and the refusal text in the page's own code — so I kept the journey passing and flagged the
+picture as owed, rather than pretending the feature is broken.
+
+**Next-step recommendation:** Run one short verification round with no new building. Re-check the
+seven journeys this round skipped — for the ones with no screen of their own, that means running
+their named backend acceptance tests and writing the result into the results table, not
+photographing pages that do not exist. Take the one missing picture by starting a job from a second
+tab or the command line and then clicking the button on a freshly loaded page, so the red
+"Refused — a null build is already running for this spec." line appears. And fix the walk-through
+recorder, whose script still contains an action ("scroll") the player does not understand. Four
+small clean-ups can ride along whenever a builder is next in this area, none of them blocking: a
+certificate check that treats "both names unknown" as a match; a plain dash shown when a second data
+request fails, which looks the same as an honest "no value"; a stale comment quoting the old counts
+19/7/1; and adding the four Referee storage folders to the guard that watches the owner's real data.
+For a person: approve one short verification round; nothing needs a human unblock. Two carried
+items, neither blocking — this round's eleven changed files are still uncommitted (iterations 8 and
+9 are already committed), and, from iteration 2 and outside this project, the unrelated trendora
+backend on port 8255 has still not been restarted.

@@ -256,6 +256,24 @@ _PRICE_ARITHMETIC_FIELDS = (
     # the obvious client-side subtraction to reach for and the obvious thing to get wrong; the
     # backend already served both halves of the ratio as computed numbers).
     r"|hyp\.accrual\.(?:informative_post_boundary_sessions|target_sessions)"
+    # goal-referee-iter-10 (J-09): the Referee Adjudications section's own served numerics -- the
+    # live pre-checkpoint accrual pair (the SAME "sessions accrued so far" risk the `hyp.accrual.*`
+    # entry above already guards, applied to the adjudications response's own `live_coverage` fold
+    # -- `entry.live_coverage?.post_boundary_sessions`/`?.target_sessions` in
+    # `RefereeAdjudicationEntryRow`, `\??` covering the optional-chaining `?.` the JSX actually
+    # uses) and the recorded checkpoint snapshot's own Benjamini-Hochberg fold (`snapshot.bh.k_star`/
+    # `.m`/`.q` -- never combined into a client-computed pass rate or "how many below threshold"
+    # count).
+    r"|entry\.live_coverage\??\.(?:post_boundary_sessions|target_sessions)"
+    r"|snapshot\.bh\.(?:k_star|m|q)"
+    # goal-referee-iter-10 (J-09): the Referee Runs section's own served numerics -- both
+    # single-flight-PER-KEY compute managers' live `{done,total}` progress pair
+    # (`compute?.done`/`compute?.total` in `RefereeNullBuildControl`/`RefereeEvaluateControl`,
+    # `\??` covering the same optional-chaining usage), and the durable run-ledger's own
+    # `{done,total}` progress pair, nested one level deeper under `run.progress` (`RefereeNullRunRow`/
+    # `RefereeEvaluationRunRow`).
+    r"|compute\??\.(?:done|total)"
+    r"|run\.progress\.(?:done|total)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -507,6 +525,57 @@ def test_desk_page_price_arithmetic_guard_catches_hyp_accrual_arithmetic_in_isol
         "const pct = hyp.accrual.informative_post_boundary_sessions / hyp.accrual.target_sessions;"
     )
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_ratio) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_referee_adjudications_and_runs_field_arithmetic():
+    """goal-referee-iter-10 (J-09) counter-test: the extended guard catches arithmetic on the new
+    Referee Adjudications section's `entry.live_coverage.*`/`snapshot.bh.*` bindings and the new
+    Referee Runs section's `compute.*`/`run.progress.*` bindings -- covering BOTH the
+    optional-chaining (`?.`) and plain-dot forms the guard's `\\??` now accepts, proving each new
+    field path is genuinely covered (not just listed, TC-20)."""
+    seeded_live_coverage = (
+        "const remaining = entry.live_coverage.target_sessions - "
+        "entry.live_coverage.post_boundary_sessions;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_live_coverage) is not None
+
+    seeded_live_coverage_optional = (
+        "const remaining = entry.live_coverage?.target_sessions - "
+        "entry.live_coverage?.post_boundary_sessions;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_live_coverage_optional) is not None
+
+    seeded_bh = "const nonSignificant = snapshot.bh.m - snapshot.bh.k_star;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_bh) is not None
+
+    seeded_bh_rate = "const passRate = snapshot.bh.k_star / snapshot.bh.m;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_bh_rate) is not None
+
+    seeded_compute = "const remaining = compute.total - compute.done;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_compute) is not None
+
+    seeded_compute_optional = "const remaining = compute?.total - compute?.done;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_compute_optional) is not None
+
+    seeded_run_progress = "const remaining = run.progress.total - run.progress.done;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_run_progress) is not None
+
+    # And the pattern does NOT over-match: the real page's own pass-through renderings -- the
+    # optional-chaining accrual pair, the BH template-literal display, the fmt()-wrapped compute
+    # progress, and the run-ledger progress pair -- stay clean (the EXACT JSX/template-literal
+    # idioms RefereeAdjudicationEntryRow/RefereeNullBuildControl/RefereeEvaluateControl/
+    # RefereeNullRunRow/RefereeEvaluationRunRow actually use).
+    assert _PRICE_ARITHMETIC_PATTERN.search(
+        '{entry.live_coverage?.post_boundary_sessions ?? 0} /{" "}\n'
+        "{entry.live_coverage?.target_sessions ?? 0} sessions"
+    ) is None
+    assert _PRICE_ARITHMETIC_PATTERN.search(
+        "`${snapshot.bh.k_star} / ${snapshot.bh.m} (q=${snapshot.bh.q})`"
+    ) is None
+    assert _PRICE_ARITHMETIC_PATTERN.search(
+        "{fmt(compute?.done ?? 0, 0)} / {fmt(compute?.total ?? 0, 0)}"
+    ) is None
+    assert _PRICE_ARITHMETIC_PATTERN.search("{run.progress.done} / {run.progress.total}") is None
 
     # The shipped pass-through rendering (page.tsx's own "X / Y" JSX line) stays clean.
     assert _PRICE_ARITHMETIC_PATTERN.search(

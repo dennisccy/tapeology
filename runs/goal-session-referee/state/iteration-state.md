@@ -1,40 +1,40 @@
 # Iteration State — referee
 
-**After iteration:** 9 · **Date:** 2026-08-15 · **Verdict:** ESCALATE
+**After iteration:** 10 · **Date:** 2026-08-15 · **Verdict:** CONTINUE
 
 ## Journeys
 
-8 passing (J-01..J-08) · 1 failing (J-09) · 1 partial (J-10) — 10 total. J-01..J-04 were
-DEFERRED-BUDGET (kept prior status, sources unchanged); J-05/J-06 re-verified directly (their
-sources changed); J-07's stale-capture flag cleared by a fresh screenshot.
+10 passing (J-01..J-10) — 10 total · BUT 7 required rows are DEFERRED-BUDGET (J-01..J-06, J-08 in
+`reports/phase-goal-referee-iter-10-ui-test-results.md:49-55`); `goal_gate.py:448` blocks
+GOAL_ACHIEVED while any deferred row stands.
 
 ## Active blockers
 
-- **J-09, the only build work left** (dev): the two missing `/desk` Referee panels
-  (Adjudications, Runs) + MCP 20→22 (`EXPECTED_TOOLS`); J-10 cannot close until it ships.
-- **Open minor anti-goal** (dev): a certificate's candidate name is caller-declared and never
-  checked against its evidence — `referee_adjudicate.py:521` / `referee_evidence.py:826` pool
-  every backtest unfiltered. Unreachable today (no production caller passes
-  `journal_store`/`certificate_mint`); close before the mint reaches `POST .../evaluate`.
-- Human, non-blocking: iters 8+9 uncommitted; trendora :8255 not restarted.
+- **Deferred re-verification (dev/QA lane)** — the 7 rows above never ran. J-01/J-02 goldens are
+  `.invalid`; only J-07/J-09/J-10 goldens are valid, so keyless journeys re-verify via their own
+  backend acceptance tests recorded as results rows, not screenshots.
+- **Owed capture (QA lane)** — J-09's 3rd acceptance screenshot (2nd in-flight trigger visibly
+  refused); `evidence_makeup: true`. Start a run from a 2nd tab/CLI, then click on a fresh `/desk`.
+- **Broken walkthrough script (dev)** — demo SKIPPED: `step[4] invalid action type 'scroll'`.
 
 ## Last 2 verdicts
 
-- iter 9: ESCALATE — J-08 interlock verified real (fail-closed, no bypass), but the planned full
-  pass was demoted to lean a 3rd time and the evaluator itself had to find the scoping gap.
-- iter 8: CONTINUE — J-07 shipped; audit caught the `projected_days_to_target` bug in-round.
+- iter 10: CONTINUE — J-09 + J-10 verified (22 MCP tools, 3 Referee panels, kept walk, suite
+  2,688/2,680 passed, pin `08e471b10130e1e2`); deferred rows block the finish gate.
+- iter 9: ESCALATE — J-08 passed but the lean lane shipped production surface unaudited and left an
+  open MINOR certificate-evidence gap.
 
 ## Do not redo
 
-- **J-08 is DONE** (`pnl_scan.py:349` authorizes before the ledger write at `:367`;
-  `certificate_store` required; TC-1..TC-7 cover all six refusal classes; no-bypass scan green).
-- **Riders done:** S-6 `range_trade:short at_wall`; `family_id`/`family_q` backend-owned and
-  served (closes iter-8 coherence F1); accrual/discovery context fix
-  (`_signal_matches_hypothesis_cell`); `_PRICE_ARITHMETIC_FIELDS` covers `hyp.accrual.*`.
-- **Settled** (`state/assumptions.md`, iter-9): strategy hypothesis `setup_id`/`side` are
-  deliberately vestigial; TC-10's `insufficient_sample` = the record's `ci_cluster` sentinel.
-- **Verified green this run:** suite 2,678 collected / 2,670 passed / 0 failed; pin
-  `08e471b10130e1e2`; MCP 20 tools; store guard CLEAN (11,274 files unchanged).
-- **Clean-ups, not new scope:** stale "unwired" docstring (`referee_adjudicate.py:6,1720`);
-  `test_pnl_scan.py:1239` can-fail proof inspects a string, not the real scan; duplicate
-  assertion `test_referee_registry.py:874`.
+- J-09 is BUILT + verified: Adjudications + Runs on `/desk`, MCP 20→22 (`app/mcp/__init__.py:141`).
+  Only the one owed screenshot remains.
+- iter-9 MINOR anti-goal CLOSED + re-probed: `_pool_strategy_trades` candidate filter
+  (`referee_adjudicate.py:533-596`, call site `:1266`), TC-13/14/15 — `resolved: true`.
+- Riders 2-4 done: no "unwired" text; no-bypass can-fail proof runs the real scan; duplicate S-5
+  assertion gone.
+- Guard counters re-derived ONCE with rationale: `_EXPECTED_EFFECT_COUNT = 21` / intervals 9
+  (`test_desk_refresh_chain_guard.py:160-181`); `_PRICE_ARITHMETIC_FIELDS` + counter-tests.
+- Era-cumulative diff verified in-inventory (`git diff --stat e875972`): zero diff to
+  levels/tradability/setups/desk_forward/desk_playbook*/backtests/store/engine.
+- Non-blocking follow-ups (never an iteration goal): audit B1 `candidate={}`, F1 dash-vs-unknown,
+  stale `19/7/1` comment (`page.tsx:8701`), 4 referee dirs into the store-scope guard.

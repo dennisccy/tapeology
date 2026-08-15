@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "journey": "J-09",
+  "name": "The Referee on /desk + MCP contract v5 — 22 read-only tools",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {"n": 1, "journey": "J-09", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Referee Registry"}},
+    {"n": 2, "journey": "J-09", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeAdjudications"}}, "expect": {"text": "Referee verdicts are statistical statements about recorded history under stated assumptions"}},
+    {"n": 3, "journey": "J-09", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeRuns"}}, "expect": {"text": "Evaluations"}},
+    {"n": 4, "journey": "J-09", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeRegistry"}}, "expect": {"text": "Spec-pinned starter-family candidates"}}
+  ]
+}

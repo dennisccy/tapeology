@@ -1,7 +1,7 @@
 {
   "session_id": "referee",
   "started_at": "2026-08-14T14:31:07.936147Z",
-  "current_iter": 10,
+  "current_iter": 11,
   "cli": "claude",
   "agent_backend": "interactive",
   "halt_config": {
@@ -10,8 +10,8 @@
     "regression_halt": true
   },
   "status": "in_progress",
-  "last_verdict": "ESCALATE",
-  "next_depth": "full",
+  "last_verdict": "CONTINUE",
+  "next_depth": "evidence",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/referee",
@@ -19,5 +19,5 @@
   "total_iterations": 4,
   "wall_time_seconds": 51569,
   "quota_pause_count": 0,
-  "updated_at": "2026-08-15T15:56:02.826482Z"
+  "updated_at": "2026-08-15T21:24:17.754543Z"
 }

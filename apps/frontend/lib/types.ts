@@ -2259,3 +2259,142 @@ export interface RefereeHypothesisRegistrationPayload {
   target_sessions: number;
   min_occurrences: number;
 }
+
+// --- Era 6 "The Referee" (goal-referee-iter-10, J-09) -- Referee Adjudications + Referee Runs, the
+// era's LAST two `/desk` sections. Every field below is served VERBATIM by its owning backend fold
+// (referee_adjudicate.py's `adjudications_response()`, `RefereeNullComputeManager`/
+// `RefereeEvaluationComputeManager`, `RefereeNullRunStore`/`RefereeEvaluationRunStore`) -- no
+// client-side arithmetic or verdict derivation anywhere downstream
+// (test_desk_ui_guards.py's extended `_PRICE_ARITHMETIC_FIELDS` covers the numerics this
+// iteration's JSX actually reads).
+
+export interface RefereeBhFold {
+  q: number;
+  m: number;
+  k_star: number;
+  bh_pass: boolean;
+  by_adjusted_p: number;
+  by_pass: boolean;
+}
+
+// `expected`/`actual`/`tolerance` share one shape (referee_stats.py's `_ATTESTATION_EXPECTED`/
+// `_ATTESTATION_TOLERANCE`).
+export interface RefereeAttestationQuantities {
+  permutation_p: number;
+  permutation_enumeration: boolean;
+  ci_low: number;
+  ci_high: number;
+}
+
+export interface RefereeAttestation {
+  expected: RefereeAttestationQuantities;
+  actual: RefereeAttestationQuantities;
+  tolerance: RefereeAttestationQuantities;
+  stats_core_version: string;
+  passed: boolean;
+}
+
+// A hypothesis's ONE permanent, append-only confirmatory checkpoint -- present on an adjudication
+// entry only once that hypothesis has reached its checkpoint evaluation.
+export interface RefereeAdjudicationSnapshot {
+  snapshot_id: string;
+  hypothesis_id: string;
+  family_id: string;
+  checkpoint_evaluation_id: string;
+  snapshot_at: string;
+  bh: RefereeBhFold;
+  fragility_triggers: string[];
+  verdict: "no_evidence" | "fragile" | "corroborated";
+  evaluation_basis: string;
+  attestation: RefereeAttestation;
+}
+
+export type RefereeVerdict =
+  | "registered"
+  | "pending_forward_confirmation"
+  | "insufficient_sample"
+  | "fragile"
+  | "no_evidence"
+  | "corroborated"
+  | "basis_retired";
+
+// The live (pre-checkpoint) accrual fold -- present only when `snapshot` is `null`.
+export interface RefereeLiveCoverage {
+  post_boundary_sessions: number;
+  target_sessions: number;
+}
+
+export interface RefereeAdjudicationEntry {
+  hypothesis_id: string;
+  verdict: RefereeVerdict;
+  confirmatory_output_refused: boolean;
+  refusal_reason: string | null;
+  snapshot: RefereeAdjudicationSnapshot | null;
+  live_coverage: RefereeLiveCoverage | null;
+}
+
+// GET /research/desk/referee/adjudications -- the read-side adjudication fold, served verbatim,
+// beside the served REFEREE_REGISTER disclosure text (what a verdict does NOT mean).
+export interface RefereeAdjudicationsResponse {
+  entries: RefereeAdjudicationEntry[];
+  register: string;
+  integrity_errors: RefereeIntegrityError[];
+}
+
+// The process-scoped snapshot of ONE in-flight (or last-terminal) null-build / evaluation job --
+// mirrors `DeskPlaybookBackscanComputeSnapshot`'s `status`/`"idle"` shape. Keyed PER null_spec_id /
+// hypothesis_id in this page's own state (never a single page-wide singleton): both compute
+// managers are single-flight PER KEY, not process-global, unlike every other desk compute control.
+export interface RefereeNullComputeSnapshot {
+  id: string | null;
+  status: "idle" | "running" | "cancelling" | "done" | "error";
+  null_spec_id: string | null;
+  done: number;
+  total: number;
+  error: string | null;
+}
+
+export interface RefereeEvaluationComputeSnapshot {
+  id: string | null;
+  status: "idle" | "running" | "cancelling" | "done" | "error";
+  hypothesis_id: string | null;
+  done: number;
+  total: number;
+  error: string | null;
+}
+
+// One terminal null-build attempt from the durable, append-only, terminal-state-only run log.
+export interface RefereeNullRun {
+  run_id: string;
+  null_spec_id: string;
+  state: "completed" | "failed" | "cancelled";
+  started_at: string;
+  finished_at: string;
+  progress: { done: number; total: number };
+  error: string | null;
+}
+
+// GET /research/desk/referee/nulls/runs -- honest-empty-or-populated, HTTP 200 always, never 404.
+export interface RefereeNullRunsListResult {
+  runs: RefereeNullRun[];
+  latest: RefereeNullRun | null;
+  integrity_errors: RefereeIntegrityError[];
+}
+
+// One terminal evaluation attempt from the durable, append-only, terminal-state-only run log.
+export interface RefereeEvaluationRun {
+  run_id: string;
+  hypothesis_id: string;
+  state: "completed" | "failed" | "cancelled";
+  started_at: string;
+  finished_at: string;
+  progress: { done: number; total: number };
+  error: string | null;
+}
+
+// GET /research/desk/referee/evaluate/runs -- honest-empty-or-populated, HTTP 200 always, never 404.
+export interface RefereeEvaluateRunsListResult {
+  runs: RefereeEvaluationRun[];
+  latest: RefereeEvaluationRun | null;
+  integrity_errors: RefereeIntegrityError[];
+}
